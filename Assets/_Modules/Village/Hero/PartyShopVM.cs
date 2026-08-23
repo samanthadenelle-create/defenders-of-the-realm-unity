@@ -1352,9 +1352,8 @@ namespace DeNelle.Village.Hero
                 return;
             }
             VillageInventory.Instance?.Add(w.id, 1);
-            EquipWeapon(w);   // auto-equip to the selected member on purchase (spec point 3)
             PushHud();
-            Status = "Bought + equipped " + Display(w.name, w.id) + " to " + MemberName() + ".";
+            Status = "Bought " + Display(w.name, w.id) + ". Tap again to equip; your current loadout was kept.";
             Rebuild();
         }
 
@@ -1369,9 +1368,8 @@ namespace DeNelle.Village.Hero
                 return;
             }
             VillageInventory.Instance?.Add(a.id, 1);
-            EquipArmor(a);
             PushHud();
-            Status = "Bought + equipped " + Display(a.name, a.id) + " to " + MemberName() + ".";
+            Status = "Bought " + Display(a.name, a.id) + ". Tap again to equip; your current loadout was kept.";
             Rebuild();
         }
 
@@ -1507,13 +1505,13 @@ namespace DeNelle.Village.Hero
                 // Damage: a derived whole number from the multiplier (the "damage" the player
                 // reads). WO-808: BOTH sides resolve through the gear-level ladder so an owned
                 // improved piece (and the equipped comparison) show their LIVE power.
-                float dmg = DerivedDamage(GearStatResolver.EffectiveDamageMult(w, GearLevel(w.id)));
+                float dmg = DamageOutputPct(GearStatResolver.EffectiveDamageMult(w, GearLevel(w.id)));
                 bool cmp = compare && m != null && m.EquippedWeapon != null
                            && !string.Equals(m.EquippedWeapon.id, w.id, StringComparison.OrdinalIgnoreCase);
                 float curDmg = cmp
-                    ? DerivedDamage(GearStatResolver.EffectiveDamageMult(m.EquippedWeapon, GearLevel(m.EquippedWeapon.id)))
+                    ? DamageOutputPct(GearStatResolver.EffectiveDamageMult(m.EquippedWeapon, GearLevel(m.EquippedWeapon.id)))
                     : 0f;
-                list.Add(MakeSpec("Damage", Fmt0(dmg), cmp, dmg - curDmg, 0f));
+                list.Add(MakeSpec("Damage output", Fmt0(dmg) + "%", cmp, dmg - curDmg, 0.05f, "%"));
 
                 if (w.reach > 0f || (cmp && m.EquippedWeapon.reach > 0f))
                 {
@@ -1521,15 +1519,44 @@ namespace DeNelle.Village.Hero
                     list.Add(MakeSpec("Reach", Fmt1(w.reach) + "m", cmp, w.reach - curReach, 0.05f, "m"));
                 }
 
+                string hand = w.IsTwoHanded ? "Two-handed - shield removed when equipped"
+                    : w.IsOffHandItem ? "Off-hand shield" : "One-handed";
+                list.Add(new PartyShopSpec("Hands", hand, "", 0));
+
+                var element = DeNelle.Core.Combat.ElementalDamageResolver.ParseElement(w.element);
+                if (element != DeNelle.Core.Combat.DamageElement.None)
+                {
+                    string e = element.ToString();
+                    list.Add(new PartyShopSpec("Affinity", e, "", 0));
+                    list.Add(new PartyShopSpec("Matchup", "Strong +25% / resisted -25%", "", 0));
+                }
+
+                string effectKind = !string.IsNullOrEmpty(w.effectKind) ? w.effectKind : w.ammoEffect;
+                if (!string.IsNullOrEmpty(effectKind))
+                {
+                    float effectSeconds = w.effectDurationSeconds > 0f ? w.effectDurationSeconds : w.ammoSeconds;
+                    string chance = w.effectChance > 0f ? Fmt0(w.effectChance * 100f) + "% " : "";
+                    string duration = effectSeconds > 0f ? " for " + Fmt1(effectSeconds) + " sec" : "";
+                    string stacks = w.effectMaxStacks > 0 ? " - max " + w.effectMaxStacks : "";
+                    list.Add(new PartyShopSpec("Special", chance + Cap(effectKind) + duration + stacks, "", 0));
+                }
+
+                string style = w.IsTwoHanded ? "Heavy" : element == DeNelle.Core.Combat.DamageElement.Flame
+                    ? "Burn" : element == DeNelle.Core.Combat.DamageElement.Ice ? "Control" : "Reliable";
+                bool hotSwapReady = _store != null && _store.OwnedQuantity(w.id) > 0;
+                list.Add(new PartyShopSpec("Hot swap",
+                    hotSwapReady ? "READY - " + style : "Available after purchase - " + style, "", 0));
+                list.Add(new PartyShopSpec("Purchase", "Keeps current gear and assignments", "", 0));
+
                 // WO-808: owned + improvable -> the before->after preview the owner specced
                 // ("Lcurrent -> Lnext, damage before -> after"). Green (+1) — an Improve is
                 // always an upgrade; the ladder never authors a downgrade.
                 int lvl = GearLevel(w.id);
                 if (_store != null && _store.OwnedQuantity(w.id) > 0 && GearProgression.HasNextLevel(w.rarity, lvl))
                 {
-                    float nextDmg = DerivedDamage(GearStatResolver.EffectiveDamageMult(w, lvl + 1));
+                    float nextDmg = DamageOutputPct(GearStatResolver.EffectiveDamageMult(w, lvl + 1));
                     list.Add(new PartyShopSpec("Improve", "Lv " + lvl + " -> " + (lvl + 1),
-                        FmtDelta(nextDmg - dmg, " dmg"), 1));
+                        FmtDelta(nextDmg - dmg, "% output"), 1));
                 }
                 return list;
             }
@@ -1581,10 +1608,9 @@ namespace DeNelle.Village.Hero
             return new PartyShopSpec(label, value, ds, sign);
         }
 
-        // A readable whole-number "damage" from the multiplier baseline (e.g. 1.18x -> 18 over a base).
-        // Uses a nominal base of 20 so a +X% weapon reads as a sensible attack number; the delta math
-        // is consistent because both sides go through the same transform.
-        private static float DerivedDamage(float mult) => Max(0f, (Max(0.1f, mult)) * 20f);
+        // Truthful applied weapon-output factor. The former nominal-base-20 number looked absolute
+        // but was not the selected hero's damage authority. A percentage is exact for every class.
+        private static float DamageOutputPct(float mult) => Max(0f, Max(0.1f, mult) * 100f);
 
         private static string FmtDelta(float v, string suffix)
         {

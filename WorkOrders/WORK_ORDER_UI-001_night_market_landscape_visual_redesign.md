@@ -1,7 +1,7 @@
 # WORK ORDER UI-001 — Night Market landscape visual redesign
 
 **Series:** UI (intentionally separate from numbered BOARD work)
-**Status:** GUIDANCE + FOUR-LANE SME REVIEW FOLDED 2026-08-22 — READY FOR UI IMPLEMENTATION
+**Status:** REBUILD SPEC v2 RULED 2026-08-22 — **READY FOR CLI REBUILD. Build §R below.** The first delivery’s KEEP list survives; its geometry does not (see DELIVERY REVIEW). WO-1060 oracle lands first so the rebuild is verified by marker, not by another owner device pass.
 **Owner lane:** UI / Store presentation
 **Date:** 2026-08-22
 **Tracking:** Not tracked on `BOARD.html`. Do not edit or rebuild the board for this document.
@@ -9,6 +9,131 @@
 **Design reference (interactive wireframe, SME-folded):** https://claude.ai/code/artifact/5b8dc821-9290-4936-b202-6e3974854955
 - drive the UI-002 commerce states live, toggle thumb zones and greyscale; the badge moves and
   the single bottom band are drawn in. The wireframe is the visual acceptance target.
+
+## §R. REBUILD SPEC v2 — build THIS (2026-08-22; supersedes any conflicting geometry elsewhere in this document)
+
+### R1. The wireframe is the acceptance target, and it is measurable
+
+The Money Screen artifact (link above) is drawn at **0.5x** the 2340x1080 screen. Conversion:
+**wireframe CSS px x 1.812 = CanvasScaler reference units** (screen px = css x 2; ref = screen /
+1.104, §0.4). Anything not numbered below is measured off the wireframe with that factor.
+
+### R2. Screen composition (reference units, of the 2120 x 978 usable canvas)
+
+| Region | Size |
+|---|---|
+| Top bar — wordmark + covenant line + wallet rail; **display-only** (§8 hard-reach) | full width x **100** |
+| Body — three columns | spotlight **576** / market **~1058** (fluid) / commerce **486** |
+| Single bottom band — legal left, `Close` centre (canon word-bar), promise right | full width x **132** (`CanonCtaHeight`) |
+
+Body height = 978 - 100 - 132 = **746**. No other band exists; the §0.5 cavity must be gone.
+
+### R3. THE CARD (owner rulings 4 + 5 — this is the heart of the rebuild)
+
+**One template** — the single §2 helper `StorePackCard` — with `featured` / `standard` / `compact`
+variants. Per card:
+
+- **Rounded rectangle**, corner radius **~25 ref**; 1px border in the band colour at **.5 alpha**.
+- **Glow**: outer bloom in the band colour at **.20 alpha** (selected: **.35** + a 1px inset ring);
+  background = a top-centre radial of the band colour at **.28** over a dark vertical gradient
+  (`#1A1424 -> #110D19`).
+- **Art well on TOP**: standard **152 ref** tall, compact **101**. Until real pack art exists: a
+  deliberate two-tone gradient per pack + a centred glyph + a bottom scrim — **never near-black**.
+  ⚠ The wireframe’s emoji glyphs are stand-ins only — **TMP is ASCII-only**; in-game the glyph is
+  an `RpgUiCatalog`/`ConceptIconResolver` icon sprite, or two-letter ASCII initials. No emoji.
+- **Below the art, in order**: name (bold) · contents line (mono, dim — top goods, then `+N more`,
+  then convenience) · the goods-per-dollar caption · price row = coin glyph + **SKR amount in
+  gold** + USD small.
+- **Badge**: a pill, top-right, gold, uppercase — only badges the arithmetic supports (§7).
+- **The whole card is the tap target.** Every variant authored **>= 112 ref on both axes**
+  (compact ≈ 228 tall — comfortably above); `ClampMinTouch` must be a **no-op** (WO-1060).
+
+**Assets: exactly TWO new sprites** — one white rounded-rect 9-slice, one white radial-glow —
+tinted per band through `UiStyle`. No per-band textures, no particles, **zero VFX loop slots**.
+
+### R4. Colour (data-driven — the WO-1050 Lane A `band`/`orbTint` fields, never hardcoded)
+
+| Band | Accent | Wireframe art-well placeholder |
+|---|---|---|
+| Baskets | aether `#8B5CF6` | `#4A2A72 -> #180F2E` (hearth) · `#3E2E6E -> #150F26` (starters) · `#452C6B -> #160F28` (folks) |
+| Gap | ember `#FF7A33` | `#5A3316 -> #221007` (wagon) · `#4A4A55 -> #17171D` (crate) · `#57431C -> #201806` (cart) |
+| Patronage | gold `#F0C24A` | `#54401E -> #221808` (patron) · `#5A431A -> #241A08` (vow) |
+| Free | verdant `#3ED598` | the plate under the spotlight (§7 free-band reality) |
+
+The four-light luminance ladder holds (195/177/145/113) and **words/badges still carry meaning** —
+the greyscale capture is the gate.
+
+### R5. CTA and states
+
+Gradient **pill** (gold `#F0C24A -> #FFDF9A`), fully rounded, its own soft glow, **price on the
+face** (`Buy - 36 SKR`). Disabled reasons are **plates, not buttons** (UI-002); the specular sweep
+runs **only while `actionable == true`**. The commerce column sits in the right thumb arc (§8).
+
+### R6. Ground and columns
+
+Phone ground = deep radial `#1D1235 -> #0C0817 -> #070510`; spotlight and commerce columns are
+translucent (`stall` at ~.72) so the ground reads through. Type comes from the kit via
+`EnsureFont`/`UiStyle` — **the wireframe’s web faces are direction, not an import order.** Text
+floors per §0.6/§8.
+
+### R7. Build order
+
+1. **WO-1060 oracle first** + the store into the `UICaptureLaunch` enumeration.
+2. Re-derive every rect on the **978-unit** budget (§0.4); `SetSurfaceOverride(2340,1080)` in tests.
+3. The card template + the two tinted sprites (R3).
+4. Compose: bands + spotlight + commerce + the single bottom band (R2).
+5. The two `packs.json` badge edits (§7).
+6. Captures: the six review frames re-shot, plus greyscale — `UI_TOUCH_OK` green before any device
+   pass.
+
+### R8. Ruling 5’s keep-out table binds this rebuild
+
+Adopt the reference’s finish; import none of its banned mechanics. Same shine, none of the pressure.
+
+## DELIVERY REVIEW — 2026-08-22, six owner device frames (Seeker, live build)
+
+### KEEP — the design language landed; fix by diff, do not rebuild
+
+- Four bands with eyebrow headers AND their one-line promises, verbatim from the design
+  (`CLOSE THE GAP / One resource, nothing else.` - `GET THE HEART MOVING / Baskets - everything at
+  once.` - `FREE TONIGHT / Nothing is asked for before something is given.` - `PATRONAGE / Status,
+  never power.`).
+- The spotlight ledger — `What it holds`, per-good bars, printed numbers — and the arithmetic
+  compare line (`7x the Hearth Spark's food, for 1.5x the price.`). Exactly the design.
+- The trust strip: all four claims + the covenant verbatim + `Token price moves with the market.`
+- UI-002 language is LIVE on device: `Wallet identity bound - authorize to purchase`,
+  `[PENDING] Confirmation delayed - do not pay again`, the per-offer reconcile line, and the
+  spotlight `[PENDING] Reconcile purchase - do not pay again`.
+- Full contents printed on every card. Transparency held.
+
+### REJECT — P0 first, every row maps to a section already written in this document
+
+| # | Evidence (frame) | Defect | The fix is already written at |
+|---|---|---|---|
+| **P0-1** | Folk's Thanks shows **`20 SKR / $9.99`** | The real price is **120 SKR** — the leading digit is occluded by the overlapping Starter's Hand card. **The money screen is displaying a WRONG PRICE.** | §0.4 / §0.6 (the 978-unit budget) |
+| **P0-2** | Ingot Crate shows **`6 SKR`** | Real price **36 SKR**, same occlusion by the Grain Cart card | same |
+| **P0-3** | Grain Cart card drawn ON TOP of Timber Wagon; buries the `GET THE HEART MOVING` header; Starter's Hand covers Folk's Thanks; Patron of Elarion covers the `PATRONAGE` header and a price | Card-on-card overlap through the whole shelf — cards were authored against the 1920-unit reference while the real landscape budget is **978** (§0.4), so every fixed height lands double-size relative to its row | §0.4, §0.6 |
+| **P0-4** | FREE TONIGHT: two giant `OPEN` slabs + a `Redeem a Code` slab drawn over their own cards | `ClampMinTouch` inflation — controls authored under 112 and force-grown over their neighbours | §0.7; WO-1060 Assert A |
+| P1-5 | The two status lines overlap each other and clip under the band top | One status surface, stacked bands — original defect #8, unchanged | §3 hierarchy |
+| P1-6 | Bottom ~35% of the panel is an empty grey slab with an oversized Close floating in it | The §0.5 close-band cavity, byte-for-byte as computed. The single bottom band (§6) was not implemented | §0.5, §6 |
+| P1-7 | Every art well is a near-black embossed placeholder presented as product art | §4's rule: deliberate neutral placeholder + initials, never near-black | §4 |
+| P2-8 | `BEST VALUE` still on Hearth Spark; `LAUNCH ONLY` still on Founder's Vow | The §7 merchandising corrections are data edits (`packs.json`) and were not applied | §7 |
+
+**Acceptance criteria of THIS document objectively violated by the delivery:** "no large unexplained
+black cavity" - "no text overlap, accidental clipping" - "quantities and currency must never be
+clipped" - "store content, HUD, and Close behavior form one clear modal hierarchy".
+
+### The routing — oracle first, then geometry
+
+**Implement WO-1060 (clamp/overlap oracle) BEFORE re-attempting this screen, and add the store to
+the `UICaptureLaunch` enumeration.** Every frame in this six-shot set becomes an automated FAIL
+under Assert A (the inflated `OPEN` slabs) or Assert B (every occlusion, including both wrong-price
+frames). The geometry fix is then verified by marker, not by another owner device pass — the owner
+must never again be the detector for a defect class an oracle can see (CLAUDE.md §14).
+
+Then the §0 pass, in order: re-derive every store rect against the **978-unit** budget (§0.4);
+author every control >=112 both axes so the clamp is a NO-OP (§0.7); the single bottom band (§6);
+one status surface (§3); placeholder art wells (§4); the two `packs.json` badge edits (§7).
 
 ## OWNER RULINGS 2026-08-22 (verbal, this session — bind every section below)
 
@@ -20,6 +145,34 @@
 3. **"GET SME team on this"** — a four-lane SME review (merchandising, Unity kit feasibility, crypto
    payment UX, accessibility/ergonomics) was convened 2026-08-22; its findings are folded into this
    document below. Sections marked **[SME]** carry that provenance.
+4. **"each pack in a sleek rounded rectangle with an image for the pack and below show what they
+   are getting - different colors with backgrounds glowing"** (2026-08-22, later) — **the card
+   template is RULED.** Rounded rectangle; art well on TOP; contents printed BENEATH; a per-band
+   coloured GLOW background. Implementation notes, binding: the glow is a static tinted
+   gradient/sprite behind the card — **zero VFX loop slots, never a particle**; rounded corners via
+   the kit's existing rounded path, not a new chrome family; **colour + glow never carry meaning
+   alone** — band eyebrow words and badges remain (owner is red/green colourblind; the four-light
+   luminance ladder holds). ⚠ **ART DEPENDENCY:** pack art does not exist yet — until owner-supplied
+   art lands, the art well is a deliberate two-tone gradient + glyph placeholder (§4), never the
+   near-black wells the first delivery shipped. The wireframe shows the ruled card.
+5. **The reference shop (2026-08-22, eight frames: "this is how my friend does his and i love it"),
+   clarified same session: "it doesnt have to be the same but its sleek elegant"** — the friend's
+   "Gear Up SHOP" is the AESTHETIC REFERENCE as a **QUALITY BAR, not a clone**. The Night Market
+   keeps its own identity — Fraunces wordmark, the four-light luminance ladder, obsidian ground —
+   **finished to his level of sleekness**. Adopt the finish; a handful of his MECHANICS are banned
+   by this project's own standing rulings and must not ride in with the styling:
+
+   | ADOPT (the finish) | KEEP OUT (and the standing rule that bans it) |
+   |---|---|
+   | Deep near-black ground with a subtle cast; soft outer bloom on cards | Mystery Eggs / "boosted chance to unlock" — **gacha; monetization spec C3 bans randomized spend** |
+   | Rounded glow cards, one accent per category | "100/100 left" / "3 per account - 100 total ever" — **manufactured scarcity; this WO's own non-goal** |
+   | Item rows: icon chip + name + xN quantity | Strike-through prices + "-10%" chips — **WO-1050 bans a strike-through on a price never charged**. (The one mechanic that COULD be made honest: real discounts need a true prior-price history — owner call.) |
+   | Gradient pill CTA, price on the face | Energy scrolls / boss keys — **energy-gating; the arena is free, unlimited** |
+   | Top currency rail with pill chips | Gear sets sold with +ATK/+DEF/+Crit — **zero combat power; the firewall validator rejects** |
+   | Category colour coding + pill badges | "Pre-order" packs — **vapor; WO-1118 honest shelf** |
+
+   The covenant IS the differentiator against exactly this kind of shop: same shine, none of the
+   pressure. Print that contrast; do not blur it.
 
 ## Outcome
 
@@ -284,3 +437,116 @@ Stop and return to the owner/commerce lane rather than guessing if:
 ## Handoff evidence
 
 Implementation result must list exact changed files, regression commands/results, device/build identity, and before/after screenshot paths. The implementing seat must not commit unrelated dirty-tree files.
+
+---
+
+## PARTIAL DELIVERY — 2026-08-22 (UI implementation seat, edit-only; NOT gated, NOT committed)
+
+**Status of §R: steps 1 and 3 and 5 LANDED. Steps 2, 4 and 6 are BLOCKED — see the blocker below.**
+
+### THE BLOCKER, stated first because it changes what this document can claim
+
+`Assets/_Modules/Wallet/PackStore.cs` was **OFF LIMITS to this seat** — the monetization lane held
+it for the night, alongside `PackStoreVM.cs`, `PurchaseGate.cs`, `PurchaseEntitlementVerifier.cs`,
+`SolanaWalletProvider.cs`, `WalletEndpoints.cs` and everything under `api/`.
+
+**Every composition item in §R lives in that one file.** `NightMarketLayout`
+(`PackStore.cs:87-104`), `EnsureBuilt` (`:265`), `BuildCard` (`:700`), `BuildTrustStrip`, the status
+banner and the close band are all authored there. So §R2 (the 100 / 746 / 132 three-band screen),
+§R7 step 2 (the 978-unit re-derivation), §R7 step 4 (composition), the single bottom band (§6) and
+the one status surface (§3 / P1-5) **could not be attempted** and the P0 rows remain OPEN.
+
+What landed is everything §R needs that lives OUTSIDE that file, so the composition pass is a
+one-file change against a card template and an oracle that already exist.
+
+### Landed
+
+| §R step | File | What |
+|---|---|---|
+| 1 (oracle) | `Assets/Editor/UICaptureLaunch.cs` | `CaptureNightMarketStore` added to the capture enumeration — the store is no longer invisible to `AuditGeometry` |
+| 1 (oracle) | `Assets/Editor/UICaptureLaunch.cs` | Assert B widened to cross-parent pairs; `UI_TOUCH_OK` marker; WO-1060 §5 baseline allow-list |
+| 1 (oracle) | `Assets/_Modules/Core/UI/ElarionUiKit.cs` | `ClampMinTouch` growth RECORDER (Assert A). Clamp behaviour unchanged |
+| 3 (card) | `Assets/_Modules/Wallet/StorePackCard.cs` (new) | The ONE card template, three variants, §R3 to the number |
+| 3 (sprites) | `Assets/_Modules/Core/UI/ElarionUiKit.cs` | `RadialGlowSprite` + `ApplyRounded(img, radiusPx)`. Asset bill honoured: the rounded 9-slice already existed, so exactly ONE sprite was added |
+| 5 (badges) | `packs.json` (both canonical copies) | `BEST VALUE` moved hearth-spark -> patron-of-elarion; `LAUNCH ONLY` -> `Founders are named on the Heart.` |
+
+### One owner call this seat resolved, and how
+
+§7 leaves `BEST VALUE` as **"move it to `patron-of-elarion` or delete it — OWNER CALL which."** It was
+**MOVED**, not deleted: patron-of-elarion is the arithmetic winner at 1,968 total goods/$, so the
+badge now sits on a claim the numbers support, and the shelf keeps a merchandising anchor. Deleting
+was the other honest answer; say the word and it is a one-line revert. The reasoning is recorded in
+both packs' `_shelfNote`, at source, not only here.
+
+### Two residual defects found in `PackStore.cs` that this seat could not fix
+
+1. **`PackStore.cs:1331` and `:1333` hardcode player-facing English** — `"Wallet {addr} bound -
+   authorize to purchase"` and `"Wallet identity bound - authorize to purchase"`. CLAUDE.md §7 puts
+   every player-facing string in `canon-strings.json`; these two are the UI-002 wallet-identity
+   sentences and they are the only store copy living in code.
+2. **UI-002 §4 is unsatisfiable as the file stands.** `storeBalanceUnavailable` renders "Wallet
+   balance unavailable in this build." from a `BalanceState.Unavailable` branch that has already
+   DROPPED the bound address, so the required "retain identity, offer retry" state cannot be
+   rendered without a `PackStore` change — and there is no retry control to point at. The copy was
+   deliberately LEFT ALONE: changing it to "Balance unavailable - retry" with nothing to tap would
+   trade an honest sentence for a false one.
+
+
+---
+
+## COMPOSITION DELIVERY — 2026-08-22 (UI implementation seat #2, edit-only; NOT gated, NOT committed)
+
+**The blocker above is CLEARED.** `PackStore.cs` was free this pass, so §R steps 2, 4 and 6's build
+work landed. Every P0/P1 row now has a mechanism against it, stated at source.
+
+### The root cause the previous pass could not reach, named
+
+`BuildScrollColumn` set `VerticalLayoutGroup.childControlHeight = false`
+(`PackStore.cs`, the scroll helper). With that flag OFF a `VerticalLayoutGroup` **ignores
+`LayoutElement.preferredHeight` entirely** and lays each child out at its own rect height — which for
+a code-built row GameObject is `RectTransform`'s default **100 units**. So every authored 168/240-unit
+row resolved to 100, the cards inside were force-expanded down onto it, and `ClampMinTouch` then grew
+each card back to the 112 floor **symmetrically about its centre**, i.e. straight over the row above
+and below. **That is P0-3's card-on-card overlap, and through it both wrong prices (P0-1, P0-2).**
+The flag is now TRUE and the row's height is a PARAMETER taken from `StorePackCard.CardHeight(variant)`,
+so the row and the card are one number.
+
+### Landed (all in `Assets/_Modules/Wallet/PackStore.cs` unless stated)
+
+| § | What |
+|---|---|
+| R2 / R7-2 | `NightMarketLayout` re-authored in REFERENCE PX on the 2120x978 budget: top bar **100**, body **746** (spotlight 576 / market fluid / commerce 486), bottom band **132**. New `Region(...)` helper anchors by anchors+offset-px; the fraction-only `ZoneRect` is deleted |
+| R2 / owner ruling 1 | Panel anchors are **(0,0)-(1,1)** and `frameName: null` — the portrait `FrameMerchant` is dropped (§0.3) and the procedural obsidian panel carries the full-bleed surface |
+| §6 / P1-6 | **ONE bottom band.** `BuildTrustStrip` builds INTO it (legal left, promise right) and `SeatCloseInBottomBand()` re-parents the canon Close into its centre. The kit's close-band reservation now has nothing to reserve — the cavity is gone by construction, not by tuning |
+| §3 / P1-5 | **ONE status surface.** `_statusBanner` moved into the commerce column and is NOT torn down on focus change; the spotlight's own second pending line is gone |
+| R7-4 | `BuildPackCard` no longer draws a card — it resolves a `StorePackCardModel` and calls `StorePackCard.Build`. The parallel rail/Outline/orb/4x MakeText card implementation is deleted, as are `_cardRails`/`_cardBorders` (one `_cardHandles` map) |
+| R5 / §8 | The CTA moved to the **commerce column**, bottom-right thumb arc, authored 438x134 ref px. Balance-after moved with it |
+| §0.6 | `MakeText` now clamps every store string to `ElarionUi.FontFloorMobile(30)` at the one place store text is made; call sites raised to the §8 floors (names 44-52, body 30-40, price 54 in-card). New `FitInto` wraps `FitBlock` so no block can overflow its rect |
+| §0.7 / P0-4 | Free-band doors authored at 228 with their buttons at ~116 px tall **stopping below their own blurb** — the giant `OPEN` slabs are gone and no button sits on its card's copy |
+| §0.9 | `ApplySafeArea` — the FIRST `Screen.safeArea` read in the kit paths, applied once on the screen host. No-op in batchmode (full-rect safe area), so captures still measure the phone's rects |
+| §R6 | `BuildGround` — one tinted radial (sprite two of the two-sprite bill) behind everything; spotlight/commerce stalls at .72 alpha so the ground reads through. **Zero new sprites, zero VFX slots** |
+| CLAUDE.md §7 | The two hardcoded wallet sentences at the old `:1331/:1333` are now `storeBalanceBoundAddress` / `storeBalanceBoundIdentity` in **both** canon copies (byte-identical, ASCII). `storeValuePerDollar` added for the new goods-per-$ caption |
+
+### Deviations from the letter of §R, and why
+
+1. **The covenant is in the TOP BAR only; the bottom band's "promise right" is
+   `storeTrustNeverPower` + the treasury claim.** §R2 lists the covenant in the top bar AND §6 wants a
+   promise on the right of the bottom band. Printing the same sentence twice on one screen blunts the
+   one line this shop is built around, so each string appears exactly once and all four trust claims
+   are still on screen.
+2. **The spotlight art is still the existing `Orb` gem, not a `Featured` card.** The spotlight is a
+   ledger, not a card; `StorePackCardVariant.Featured` is therefore built but unused by this file.
+   P1-7's near-black wells were a CARD defect and are fixed in the template.
+3. **`FlowTrace` event strings still say `BuildSpotlightCta`** inside the renamed `BuildCommerce` —
+   this document's non-goals forbid renaming trace events without an approved migration.
+
+### Still open
+
+- **UI-002 §4** (the `Unavailable` branch that has already dropped the bound address, with no retry
+  control to point at) is UNCHANGED and still unsatisfiable. It needs a commerce decision, not a
+  layout one.
+- **§R7-6 captures are NOT run** — this seat is edit-only. Verify with
+  `UICaptureLaunch` → `UI_TOUCH_OK`, `UI_GEOMETRY_OK`, `UI_CAPTURE_OK`, then open
+  `Builds/ui-capture/NightMarket_*.png` for all three targets (1920x1080, 2340x1080, 2670x1200).
+  NightMarket is deliberately NOT on the touch baseline allow-list, so it is expected to be able to
+  go RED — read the failures, they are the proving line.

@@ -174,7 +174,24 @@ namespace DeNelle.Village
             foreach (var path in CandidateModels)
             {
                 // Tripo FBX exports import lying on their side at identity — apply the SAME upright
-                // correction every other hub structure gets (pitch -90 stand up + yaw 90 face plaza).
+                // correction every other hub structure gets (pitch +90 stand up + yaw 90 face plaza).
+                //
+                // ⛔ PITCH WAS -90 HERE AND IT SHIPPED THE BENCH UPSIDE DOWN (fixed 2026-08-22).
+                // The comment claimed it was matching "every other hub structure", but every row in
+                // CastleHubBuilder.OwnerUprightSkins is +90 — so the comment was wrong and the code
+                // followed the comment. Render-proven, from a capture taken at BOTH signs off one
+                // camera: docs/proof/2026-08-20-overnight-jeweler-and-offline/jeweler-PLUS90-upright.png
+                // vs jeweler-MINUS90-inverted.png. The filenames say it outright.
+                //
+                // ⚠ WHY THIS SURVIVED SO LONG: +90 and -90 are AABB-IDENTICAL. Bounds, height,
+                // footprint and every gate in this repo read the same for both, so nothing except a
+                // rendered frame can tell them apart. It also hid behind a NAME COLLISION — this is
+                // the "JewelersBenchStation (runtime)" at (-11, 0.08, 2), a DIFFERENT object from
+                // "Jeweler_Gems_Storefront" at (18.35, 0, -35.20), which HubStructureVisualInjector
+                // owns and which was already correct. Both log as 'jeweler'. Hours went into fixing
+                // the storefront while the bench was the one on screen. If a jeweler ever looks wrong
+                // again, FIRST establish WHICH of the two you are looking at — the log line
+                // "[Flow:Vendor] ... anchored to '<name>' ... @ (x,y,z)" names it.
                 // SeatOnGround (set by SkinOptions.Structure) lands the bounds-base on the holder y;
                 // bake the 0.7 size into the FIT (6 * 0.7 = 4.2) so the seat measures the final size.
                 // Owner 2026-07-03 ("the jeweler is too large, scale ... down 50%"): halve the fit
@@ -182,7 +199,7 @@ namespace DeNelle.Village
                 // SeatOnGround runs AFTER the fit and re-seats the smaller bounds base onto the
                 // holder's y — the bench stays seated on the ground at the new size (no floating).
                 var opts = SkinOptions.Structure(6f * 0.35f);
-                opts.LocalRotation = Quaternion.Euler(-90f, 90f, 0f);
+                opts.LocalRotation = Quaternion.Euler(90f, 90f, 0f);
                 visual = Guard.Try("Crafting", $"skin jeweler's bench visual '{path}'",
                     () => VisualFactory.Skin(holder.transform, path, opts),
                     fallback: null);

@@ -83,35 +83,67 @@ namespace DeNelle.Wallet
         // post-open VerifyOpenedVisible sees a panel actually recorded open.
         private PanelHandle _panelHandle;
 
-        // UI-001: one responsive landscape composition. These values live in one component-style
-        // table rather than being scattered through individual card builders.
+        // =====================================================================
+        //  UI-001 §R2 — THE LANDSCAPE COMPOSITION, IN AUTHORED REFERENCE PIXELS.
+        // ---------------------------------------------------------------------
+        //  ⛔ EVERY NUMBER HERE IS REFERENCE PX, NEVER A FRACTION OF A PARENT, and
+        //  that is the whole of the P0-3 fix. The CanvasScaler resolves 1080x1920 at
+        //  match 0.5 to scale 1.104 on a 2340x1080 landscape phone, so the usable
+        //  canvas is 2120 x 978 reference units (UI-001 §0.4) — vertically HALF the
+        //  1920 this screen's fractions were measured against. A row authored as a
+        //  share of "the panel" therefore landed at roughly double its intended share
+        //  of the height it really had, which is how the owner's 2026-08-22 device
+        //  frames showed the Grain Cart drawn ON TOP of the Timber Wagon and a 120 SKR
+        //  pack reading "20 SKR" with its leading digit occluded. Author the number;
+        //  let the market column scroll.
+        //
+        //  THE SCREEN IS THREE BANDS AND THERE IS EXACTLY ONE AT THE BOTTOM (§6):
+        //     top bar   100  — wordmark + covenant + wallet rail; DISPLAY ONLY (§8)
+        //     body      746  — spotlight 576 | market (fluid) | commerce 486
+        //     bottom    132  — legal left, the canon Close centre, promise right
+        //  100 + 746 + 132 = 978, exactly.
+        //
+        //  ⛔ NEVER ADD A SECOND BOTTOM BAND. The 2026-08-22 frames' "bottom ~35% is
+        //  an empty grey slab with an oversized Close floating in it" (P1-6) was a
+        //  close-band reservation UNDER a separate trust strip — two bands stacked in
+        //  a 978-unit budget. The trust copy and the Close now share this ONE row, and
+        //  the Close is re-seated INSIDE it, so there is no cavity left to reclaim.
+        // =====================================================================
         private static class NightMarketLayout
         {
-            internal static readonly Vector2 PanelMin     = new Vector2(0.055f, 0.045f);
-            internal static readonly Vector2 PanelMax     = new Vector2(0.945f, 0.955f);
-            internal static readonly Vector2 HeaderMin    = new Vector2(0.018f, 0.925f);
-            internal static readonly Vector2 HeaderMax    = new Vector2(0.982f, 0.995f);
-            internal static readonly Vector2 StatusMin    = new Vector2(0.018f, 0.865f);
-            internal static readonly Vector2 StatusMax    = new Vector2(0.982f, 0.920f);
-            internal static readonly Vector2 SpotlightMin = new Vector2(0.018f, 0.135f);
-            internal static readonly Vector2 SpotlightMax = new Vector2(0.365f, 0.855f);
-            internal static readonly Vector2 ShelfMin     = new Vector2(0.382f, 0.135f);
-            internal static readonly Vector2 ShelfMax     = new Vector2(0.982f, 0.855f);
-            internal static readonly Vector2 TrustMin     = new Vector2(0.018f, 0.012f);
-            internal static readonly Vector2 TrustMax     = new Vector2(0.982f, 0.118f);
-            internal const float CardHeightPx = 240f;
+            /// <summary>The usable landscape canvas, reference units (UI-001 §0.4).</summary>
+            internal const float UsableWidthPx  = 2120f;
+            internal const float UsableHeightPx = 978f;
+
+            /// <summary>Top bar height. Hard-reach zone (§8): read, never tapped.</summary>
+            internal const float TopBarPx = 100f;
+
+            /// <summary>The ONE bottom band. It IS <see cref="ElarionUiKit.CanonCtaHeight"/> because
+            /// the canon bottom-centre Close is seated in it — the band and the button are the same
+            /// row, which is what makes a second band structurally impossible here.</summary>
+            internal const float BottomBandPx = ElarionUiKit.CanonCtaHeight;
+
+            /// <summary>Everything left over. 978 - 100 - 132 = 746.</summary>
+            internal const float BodyPx = UsableHeightPx - TopBarPx - BottomBandPx;
+
+            internal const float SpotlightWidthPx = 576f;
+            internal const float CommerceWidthPx  = 486f;
+            internal const float ColumnGapPx      = 20f;
+            internal const float EdgePadPx        = 18f;
+
+            /// <summary>Half the Close's canon width plus breathing room — the centre of the bottom
+            /// band the legal/promise copy must stay OUT of, or AuditGeometry rule 3 reports the
+            /// Close covering it.</summary>
+            internal const float CloseKeepOutPx = ElarionUiKit.CanonCtaWidth * 0.5f + 40f;
+
+            /// <summary>FULL-BLEED. Owner ruling 1 (2026-08-22): "maximize whole screen". The old
+            /// 0.055-0.945 column is retired; safe-area insets are applied in px on the screen host
+            /// (<see cref="PackStore.ApplySafeArea"/>), never by shrinking the panel.</summary>
+            internal static readonly Vector2 PanelMin = new Vector2(0f, 0f);
+            internal static readonly Vector2 PanelMax = new Vector2(1f, 1f);
+
             internal const int CardsPerRow = 2;
         }
-
-        /// <summary>
-        /// Card height in reference px. ⛔ BOTH SIDES OF A CARD MUST CLEAR
-        /// <see cref="ElarionUiKit.MinTouchPx"/> (112) so <see cref="ElarionUiKit.ClampMinTouch"/> is
-        /// a NO-OP — a stronger statement than "it passes". A sub-112 control does not fail the
-        /// clamp, it INFLATES past its authored rect and stacks into its neighbours; that is the
-        /// precise defect that produced the grey-plate shelf the owner saw clip the frame on
-        /// 2026-07-16. Author above the floor; never rely on the clamp being kind.
-        /// </summary>
-        private const float CardHeightPx = NightMarketLayout.CardHeightPx;
 
         /// <summary>
         /// Cards per shelf row. Two is the device-verified readability ruling: the earlier three-up
@@ -120,9 +152,28 @@ namespace DeNelle.Wallet
         /// </summary>
         private const int CardsPerRow = NightMarketLayout.CardsPerRow;
 
+        /// <summary>
+        /// The card variant a band's rows are drawn at. ⛔ THE HEIGHT COMES FROM
+        /// <see cref="StorePackCard"/>, WHICH AUTHORS IT IN REFERENCE PX — this file no longer
+        /// carries a card height of its own, because two places holding one measurement is how the
+        /// row and the card came to disagree in the first place.
+        /// </summary>
+        private static StorePackCardVariant VariantFor(StoreBand band)
+            => band == StoreBand.Gap ? StorePackCardVariant.Compact : StorePackCardVariant.Standard;
+
+        /// <summary>Free-band doors are drawn on the dense rung, so the free row can never out-size
+        /// the priced shelf above it.</summary>
+        private const float FreeRowHeightPx = StorePackCard.CompactHeightPx;
+
         // Kit modal (lazy-built on first open) + the surfaces Render() fills.
         private ElarionUiKit.ObsidianModal _modal;
-        private Transform _body;
+        private RectTransform _screen;                  // safe-area host: the three bands hang here
+        private RectTransform _topBar;                  // §R2 band 1 — 100 ref px, DISPLAY ONLY
+        private RectTransform _bodyHost;                // §R2 band 2 — 746 ref px, three columns
+        private RectTransform _bottomBand;              // §R2 band 3 — the ONE 132 ref px row
+        private RectTransform _marketHost;              // centre column (fluid) — the banded shelf
+        private RectTransform _commerceHost;            // right column — status + the ONE Buy control
+        private RectTransform _ctaHost;                 // cleared per focus; the CTA lives here
         private Transform _shelfContent;                // band strips + card rows
         private int _persistentShelfChildren;           // the FREE band, built once, never re-rendered
         private Transform _spotlightHost;               // rebuilt whole on each focus change
@@ -154,8 +205,11 @@ namespace DeNelle.Wallet
         private int _pendingShortfallMissing;
 
         // Selection marks, so a focus change repaints two cards instead of the whole shelf.
-        private readonly Dictionary<string, Image> _cardRails = new Dictionary<string, Image>();
-        private readonly Dictionary<string, Outline> _cardBorders = new Dictionary<string, Outline>();
+        // ⛔ ONE HANDLE PER CARD, HANDED BACK BY THE ONE TEMPLATE. The two parallel dictionaries
+        // that used to live here (rails + Outlines) were this file's own second card implementation;
+        // UI-001 §2 permits exactly one, and it is StorePackCard.
+        private readonly Dictionary<string, StorePackCardHandle> _cardHandles =
+            new Dictionary<string, StorePackCardHandle>(StringComparer.Ordinal);
 
         // ── The wallet mirror ────────────────────────────────────────────────
         private enum BalanceState { NoWallet, Checking, Unavailable, Known }
@@ -269,11 +323,16 @@ namespace DeNelle.Wallet
             if (_modal != null && _modal.canvas != null) return;
             using var _ = FlowTrace.Enter("Store", "EnsureBuilt (Night Market)");
 
-            // UI-001: the Night Market is a browse surface, not a portrait vendor card. It keeps
-            // the shared Obsidian chrome and ONE shared Close while using a landscape footprint.
+            // ⛔ FULL-BLEED, AND frameName: null IS DELIBERATE (UI-001 §0.1 + §0.3).
+            // FrameMerchant is PORTRAIT art (1005x1507) drawn Image.Type.Simple with no 9-slice, so
+            // at 2340x1080 it is a 3.25x horizontal STRETCH of an ornate border and its pixel-measured
+            // medallion/header fractions stop landing on art features entirely. The procedural
+            // obsidian panel is aspect-agnostic, which is the only reason this screen can be the
+            // whole screen. Do not "restore" the frame here; it is not a style choice, it is a
+            // resolution fact.
             _modal = ElarionUiKit.BuildObsidianModal("PackStoreUI", StoreStrings.Get(StoreStrings.KeyWordmark),
                 NightMarketLayout.PanelMin, NightMarketLayout.PanelMax, CloseStore,
-                frameName: RpgUiCatalog.FrameMerchant, medallionIcon: "coin");
+                frameName: null, medallionIcon: null);
 
             if (_modal == null || _modal.canvas == null)
             {
@@ -281,30 +340,81 @@ namespace DeNelle.Wallet
                 return;
             }
 
-            var layout = _modal.chrome.layout;
-            _body = layout != null && layout.body != null
-                ? (Transform)layout.body
-                : _modal.chrome.content.transform;
+            // ⛔ THE STORE COMPOSES ITS OWN THREE BANDS ON chrome.content — NOT ON chrome.layout.body.
+            // The kit's body zone carries the CLOSE-BAND RESERVATION (ElarionUiKit.cs:626-668), which
+            // divides the fixed CanonCtaHeight(132) by the SHRUNKEN landscape height and lands the body
+            // floor at ~0.28 of the panel. On a 978-unit budget that reservation IS the P1-6 cavity:
+            // "the bottom ~35% is an empty grey slab with an oversized Close floating in it". We
+            // reclaim it by seating the Close INSIDE our own single bottom band below, so the
+            // reservation has nothing left to protect and nothing left to waste.
+            var content = _modal.chrome.content != null ? _modal.chrome.content.transform
+                        : (_modal.chrome.root != null ? _modal.chrome.root.transform : null);
+            if (content == null)
+            {
+                FlowTrace.Fail("Store", "EnsureBuilt: chrome.content is null — nothing to compose on; the store cannot draw.");
+                return;
+            }
+
+            // The kit's wordmark is the ONE title (§3). Seat it in the top bar rather than adding a
+            // second header label — defect #2 was the title printed twice.
+            SeatWordmark(content);
 
             // Lane G host. Built ONCE and reused; under the reduced-motion preference it disables
             // itself on enable and registers nothing, so the flat lights remain.
             _aurora = _modal.canvas.GetComponent<StoreAurora>();
             if (_aurora == null) _aurora = _modal.canvas.AddComponent<StoreAurora>();
 
-            BuildHeader(_body);
+            // ── THE THREE BANDS, IN REFERENCE PX (§R2) ────────────────────
+            _screen = Region(content, "NightMarket", Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero);
+            ApplySafeArea(_screen);
+            BuildGround(_screen);
 
-            // Purchase status banner — the only purchase-feedback surface. It holds STILL: it is
-            // read to make a decision, so nothing animates near it (Lane G rule 2).
-            _statusBanner = MakeText(_body, string.Empty, 20, ElarionUi.Gold,
-                FontStyles.Normal, TextAlignmentOptions.Center, NightMarketLayout.StatusMin, NightMarketLayout.StatusMax);
+            float pad = NightMarketLayout.EdgePadPx;
+            _topBar = Region(_screen, "TopBar", new Vector2(0f, 1f), new Vector2(1f, 1f),
+                new Vector2(pad, -NightMarketLayout.TopBarPx), new Vector2(-pad, 0f));
+            _bodyHost = Region(_screen, "Body", Vector2.zero, Vector2.one,
+                new Vector2(pad, NightMarketLayout.BottomBandPx), new Vector2(-pad, -NightMarketLayout.TopBarPx));
+            _bottomBand = Region(_screen, "BottomBand", Vector2.zero, new Vector2(1f, 0f),
+                new Vector2(pad, 0f), new Vector2(-pad, NightMarketLayout.BottomBandPx));
 
-            // Left column — the spotlight. Rebuilt whole on each focus change.
-            _spotlightHost = ZoneRect(_body, "Spotlight", NightMarketLayout.SpotlightMin, NightMarketLayout.SpotlightMax);
-            Plate(_spotlightHost, NightMarketPalette.GroundRaised);
+            BuildHeader(_topBar);
 
-            // Right column — the banded shelf.
-            var shelfHost = ZoneRect(_body, "Shelf", NightMarketLayout.ShelfMin, NightMarketLayout.ShelfMax);
-            _shelfContent = BuildScrollColumn(shelfHost);
+            // ── BODY, THREE COLUMNS. WIDTH IS THE ABUNDANT AXIS — SPEND IT ────
+            // Landscape gives ~2120 horizontal units against 978 vertical. Every one of the
+            // 2026-08-22 defects was a VERTICAL crowding defect, so the fix is to move work
+            // sideways: the spotlight and the commerce column are fixed-width rails and the market
+            // takes the rest, instead of a taller stack anywhere.
+            float gap = NightMarketLayout.ColumnGapPx;
+            _spotlightHost = Region(_bodyHost, "Spotlight", new Vector2(0f, 0f), new Vector2(0f, 1f),
+                Vector2.zero, new Vector2(NightMarketLayout.SpotlightWidthPx, 0f));
+            // Translucent stalls (§R6): the ground reads THROUGH the columns, so the screen is one
+            // lit space rather than three opaque boxes on black.
+            Plate(_spotlightHost, Translucent(NightMarketPalette.GroundRaised, 0.72f));
+
+            _commerceHost = Region(_bodyHost, "Commerce", new Vector2(1f, 0f), new Vector2(1f, 1f),
+                new Vector2(-NightMarketLayout.CommerceWidthPx, 0f), Vector2.zero);
+            Plate(_commerceHost, Translucent(NightMarketPalette.GroundRaised, 0.72f));
+
+            _marketHost = Region(_bodyHost, "Market", Vector2.zero, Vector2.one,
+                new Vector2(NightMarketLayout.SpotlightWidthPx + gap, 0f),
+                new Vector2(-(NightMarketLayout.CommerceWidthPx + gap), 0f));
+
+            // ⛔ ONE STATUS SURFACE, AND IT LIVES IN THE COMMERCE COLUMN (§3 / P1-5).
+            // It used to be a full-width band across the top of the panel while the spotlight drew a
+            // SECOND pending line of its own — the owner's frames show the two overlapping each other
+            // and clipping under the band top. There is now exactly one, it sits beside the control
+            // it describes, and it HOLDS STILL: nothing animates next to text read to make a decision
+            // (Lane G rule 2).
+            _statusBanner = MakeText(_commerceHost, string.Empty, 30, ElarionUi.Gold,
+                FontStyles.Normal, TextAlignmentOptions.TopLeft,
+                new Vector2(0.06f, 0.62f), new Vector2(0.94f, 0.97f));
+
+            // The CTA sub-host. Cleared and rebuilt per focus so the spotlight column never has to be
+            // torn down to repaint a button — and so the status surface above it SURVIVES a rebuild.
+            _ctaHost = Region(_commerceHost, "CommerceCta", Vector2.zero, new Vector2(1f, 0f),
+                Vector2.zero, new Vector2(0f, 440f));
+
+            _shelfContent = BuildScrollColumn(_marketHost);
 
             // ── BAND 1 — FREE TONIGHT, built HERE and never rebuilt ──────────
             // ⛔ THE PROMO DOOR IS CONSTRUCTED AT BUILD TIME, NOT AT RENDER TIME, AND THAT IS THE
@@ -322,7 +432,8 @@ namespace DeNelle.Wallet
             BuildFreeBand(PromoStrings.Get(PromoStrings.KeyEntry));
             _persistentShelfChildren = _shelfContent != null ? _shelfContent.childCount : 0;
 
-            BuildTrustStrip(_body);
+            BuildTrustStrip(_bottomBand);
+            SeatCloseInBottomBand();
 
             _modal.canvas.SetActive(false);   // built hidden; OnEnable shows it
 
@@ -334,10 +445,23 @@ namespace DeNelle.Wallet
                 FlowTrace.Step("Store", "EnsureBuilt: Night Market built — header, spotlight, banded shelf, trust strip.");
         }
 
-        /// <summary>Wordmark on the left, the read-only wallet mirror on the right.</summary>
-        private void BuildHeader(Transform body)
+        /// <summary>
+        /// The 100 ref px top bar: covenant left, the ONE wordmark centre (seated by
+        /// <see cref="SeatWordmark"/>), the read-only wallet mirror right.
+        /// <para>⛔ DISPLAY ONLY. UI-001 §8 puts y 0-240 screen px in the HARD-REACH zone: it is read,
+        /// never tapped. Nothing in this band is a Button, and nothing that takes an action may be
+        /// moved into it — the commerce column exists precisely so actions live in the thumb arc.</para>
+        /// </summary>
+        private void BuildHeader(Transform host)
         {
-            var host = ZoneRect(body, "StoreHeader", NightMarketLayout.HeaderMin, NightMarketLayout.HeaderMax);
+            if (host == null) return;
+
+            // The covenant, first in the reading path (§7's three-second read: 0-1s is wordmark +
+            // YOUR balance + the covenant). It is the differentiator against every shop this screen
+            // was benchmarked on, so it is not footer legalese here.
+            MakeText(host, StoreStrings.Get(StoreStrings.KeyCovenant), 30, ElarionUi.Gold,
+                FontStyles.Italic, TextAlignmentOptions.Left,
+                new Vector2(0f, 0f), new Vector2(0.33f, 1f));
 
             // ── The wallet mirror ────────────────────────────────────────────
             // ⛔ THE GAME NEVER HOLDS SKR AND MUST NEVER READ AS IF IT DOES. SKR is Solana Mobile's
@@ -347,37 +471,120 @@ namespace DeNelle.Wallet
             // never be one. This label is a READ-ONLY MIRROR of the player's OWN wallet, read
             // through the existing SolanaWalletProvider.GetBalance path. Never written, never
             // granted, never deducted in-game. The copy says "your wallet" for exactly that reason.
-            _balanceLabel = MakeText(host, string.Empty, 20, ElarionUi.Parchment,
-                FontStyles.Normal, TextAlignmentOptions.Right, new Vector2(0.35f, 0f), new Vector2(1f, 1f));
+            _balanceLabel = MakeText(host, string.Empty, 30, ElarionUi.Parchment,
+                FontStyles.Normal, TextAlignmentOptions.Right, new Vector2(0.67f, 0f), new Vector2(1f, 1f));
         }
 
         /// <summary>
-        /// Lane E — four claims, each verifiable, promoted from footer legalese to a permanent floor.
-        /// Nothing here animates: it is the part of the screen a sceptical player reads slowest.
+        /// Seat the kit's own title (and its drop-shadow twin) inside the top bar's centre third.
+        /// <para>⛔ IT IS RE-ANCHORED, NEVER RE-CREATED. Header() builds the title spanning x
+        /// 0.06-0.94 of the panel, which on a FULL-SCREEN panel is a rect straddling both the
+        /// covenant and the wallet rail — three texts in one place, and AuditGeometry reports the
+        /// overlap it deserves. Adding a second store-local title instead would reproduce defect #2
+        /// ("The Night Market" printed twice). One title, moved.</para>
         /// </summary>
-        private void BuildTrustStrip(Transform body)
+        private static void SeatWordmark(Transform content)
         {
-            var host = ZoneRect(body, "StoreLegalFooter", NightMarketLayout.TrustMin, NightMarketLayout.TrustMax);
+            if (content == null) return;
+            float bandTop = 1f - (NightMarketLayout.TopBarPx / NightMarketLayout.UsableHeightPx);
+            for (int i = 0; i < content.childCount; i++)
+            {
+                var label = content.GetChild(i).GetComponent<TextMeshProUGUI>();
+                if (label == null) continue;
+                var rt = label.rectTransform;
+                rt.anchorMin = new Vector2(0.34f, bandTop);
+                rt.anchorMax = new Vector2(0.66f, 1f);
+                rt.offsetMin = Vector2.zero; rt.offsetMax = Vector2.zero;
+                // Header()'s shadow copy is a dark, semi-transparent twin drawn 1.5 px behind the
+                // gilt title. Re-anchoring both would stack them exactly; keep the offset so the
+                // shadow still reads as a shadow.
+                if (label.color.r < 0.25f && label.color.a < 0.85f)
+                {
+                    rt.offsetMin = new Vector2(1.5f, -1.5f);
+                    rt.offsetMax = new Vector2(1.5f, -1.5f);
+                }
+                ElarionUiKit.FitSingleLine(label);
+            }
+        }
+
+        /// <summary>
+        /// Move the ONE canon Close into the ONE bottom band.
+        /// <para>⛔ THIS IS WHAT MAKES A SECOND BAND IMPOSSIBLE. Canon (2026-07-03) bans an X-close
+        /// and puts the Close bottom-centre; the kit therefore seats a fixed 360x132 box at 0.050 of
+        /// the PANEL, which on a full-screen store is a button floating in its own reserved strip
+        /// BELOW the trust strip — P1-6 exactly. Re-parenting it into the band makes the band and the
+        /// button the same row: legal left, Close centre, promise right, 132 units, once.</para>
+        /// <para>Position only. The canon SIZE is untouched — CanonCtaWidth/CanonCtaHeight are derived
+        /// from by ~25 files and are not this screen's to re-tune — and the onClick wiring is the
+        /// kit's, carried across by the reparent.</para>
+        /// </summary>
+        private void SeatCloseInBottomBand()
+        {
+            var close = _modal != null && _modal.chrome != null ? _modal.chrome.close : null;
+            if (close == null || _bottomBand == null)
+            {
+                FlowTrace.Warn("Store", "SeatCloseInBottomBand: no close button or no bottom band — " +
+                                        "the Close keeps the kit's default band and the single-band rule is NOT held.");
+                return;
+            }
+            var rt = close.transform as RectTransform;
+            if (rt == null) return;
+            close.transform.SetParent(_bottomBand, false);
+            rt.anchorMin = new Vector2(0.5f, 0.5f);
+            rt.anchorMax = new Vector2(0.5f, 0.5f);
+            rt.pivot = new Vector2(0.5f, 0.5f);
+            rt.anchoredPosition = Vector2.zero;
+            rt.sizeDelta = new Vector2(ElarionUiKit.CanonCtaWidth, ElarionUiKit.CanonCtaHeight);
+            close.transform.SetAsLastSibling();
+            FlowTrace.Step("Store", "SeatCloseInBottomBand: canon Close seated INSIDE the single 132-unit bottom band.");
+        }
+
+        /// <summary>
+        /// Lane E — the verifiable claims, and §R2's ONE bottom band. Legal LEFT, the canon Close
+        /// CENTRE, the promise RIGHT: one 132-unit row, not a trust strip with a close band under it.
+        ///
+        /// <para>⛔ THE CENTRE OF THIS BAND IS RESERVED AND THAT IS LOAD-BEARING. The Close is a
+        /// 360-px visible button seated dead centre; any copy that reaches under it is reported by
+        /// AuditGeometry rule 3 as BUTTON OVER TEXT, and on a device it is simply unreadable. The
+        /// keep-out is derived from <see cref="ElarionUiKit.CanonCtaWidth"/> rather than typed as a
+        /// fraction, so a future change to the canon button width moves the copy with it.</para>
+        ///
+        /// <para>Nothing here animates: it is the part of the screen a sceptical player reads slowest.
+        /// The COVENANT is not repeated here — it is the top bar's first line (§7's three-second
+        /// read). Printing it twice on one screen would blunt the one sentence this shop is built
+        /// around; all four claims are still on screen, once each.</para>
+        /// </summary>
+        private void BuildTrustStrip(Transform host)
+        {
+            if (host == null) return;
             Plate(host, new Color(0f, 0f, 0f, 0.30f));
 
+            // Derived, never typed: half the canon Close plus breathing room, as a fraction of the
+            // band's own width.
+            float keep = NightMarketLayout.CloseKeepOutPx / NightMarketLayout.UsableWidthPx;
+            float leftX1 = 0.5f - keep;
+            float rightX0 = 0.5f + keep;
+
             string treasury = Shorten(WalletService.RewardsDistributorAddress);
-            string claims = string.Join("   -   ", new[]
-            {
-                StoreStrings.Get(StoreStrings.KeyTrustFee),
-                StoreStrings.Format(StoreStrings.KeyTrustTreasury, treasury),
-                StoreStrings.Get(StoreStrings.KeyTrustNeverPower),
-            });
 
-            MakeText(host, claims, 16, ElarionUi.Parchment, FontStyles.Bold,
-                TextAlignmentOptions.Center, new Vector2(0.01f, 0.52f), new Vector2(0.99f, 0.98f));
-
-            // The covenant is VERBATIM, italic, right-anchored and the LAST thing read.
-            MakeText(host, StoreStrings.Get(StoreStrings.KeyCovenant), 16, ElarionUi.Gold,
-                FontStyles.Italic, TextAlignmentOptions.Right, new Vector2(0.01f, 0.06f), new Vector2(0.99f, 0.50f));
+            // LEFT — the legal half.
+            MakeText(host, StoreStrings.Get(StoreStrings.KeyTrustFee), 30, ElarionUi.Parchment,
+                FontStyles.Bold, TextAlignmentOptions.Left,
+                new Vector2(0f, 0.52f), new Vector2(leftX1, 0.98f));
 
             // The market disclaimer keeps its place beneath the claims.
-            _disclaimerLabel = MakeText(host, PackCatalog.CurrencyDisclaimer, 15, ElarionUi.Parchment,
-                FontStyles.Normal, TextAlignmentOptions.Left, new Vector2(0.01f, 0.06f), new Vector2(0.55f, 0.50f));
+            _disclaimerLabel = MakeText(host, PackCatalog.CurrencyDisclaimer, 30, ElarionUi.Parchment,
+                FontStyles.Normal, TextAlignmentOptions.Left,
+                new Vector2(0f, 0.04f), new Vector2(leftX1, 0.50f));
+
+            // RIGHT — the promise half.
+            MakeText(host, StoreStrings.Get(StoreStrings.KeyTrustNeverPower), 30, ElarionUi.Gold,
+                FontStyles.Bold, TextAlignmentOptions.Right,
+                new Vector2(rightX0, 0.52f), new Vector2(1f, 0.98f));
+
+            MakeText(host, StoreStrings.Format(StoreStrings.KeyTrustTreasury, treasury), 30,
+                ElarionUi.Parchment, FontStyles.Normal, TextAlignmentOptions.Right,
+                new Vector2(rightX0, 0.04f), new Vector2(1f, 0.50f));
         }
 
         /// <summary>
@@ -427,8 +634,7 @@ namespace DeNelle.Wallet
             // it (see the note at that build site).
             for (int i = _shelfContent.childCount - 1; i >= _persistentShelfChildren; i--)
                 Destroy(_shelfContent.GetChild(i).gameObject);
-            _cardRails.Clear();
-            _cardBorders.Clear();
+            _cardHandles.Clear();
 
             if (_disclaimerLabel != null)
                 _disclaimerLabel.text = PackCatalog.CurrencyDisclaimer;
@@ -452,14 +658,19 @@ namespace DeNelle.Wallet
 
                 BuildBandHead(band);
 
+                // ⛔ THE ROW IS AUTHORED AT THE CARD'S OWN HEIGHT. Two places holding one
+                // measurement is how a 100-unit row came to carry a 168-unit card.
+                var variant = VariantFor(band);
+                float rowHeight = StorePackCard.CardHeight(variant);
+
                 for (int i = 0; i < rows.Count; i += CardsPerRow)
                 {
-                    var strip = BuildCardRow();
+                    var strip = BuildCardRow(rowHeight);
                     for (int c = 0; c < CardsPerRow; c++)
                     {
                         if (i + c < rows.Count)
                         {
-                            if (BuildPackCard(strip, rows[i + c], band) != null) built++;
+                            if (BuildPackCard(strip, rows[i + c], band, variant) != null) built++;
                             else FlowTrace.Warn("Store", $"Render: BuildPackCard returned null for pack '{rows[i + c].Sku}' — card skipped.");
                         }
                         else
@@ -525,7 +736,10 @@ namespace DeNelle.Wallet
         {
             var go = new GameObject("band-" + band, typeof(RectTransform), typeof(LayoutElement));
             go.transform.SetParent(_shelfContent, false);
-            go.GetComponent<LayoutElement>().preferredHeight = 46f;
+            // 76, not 46: every store string now clears ElarionUi.FontFloorMobile(30) (UI-001 §0.6),
+            // and a 46-unit band cannot hold a 30-unit eyebrow plus its sub-label without one of them
+            // spilling onto the card row beneath it.
+            go.GetComponent<LayoutElement>().preferredHeight = 76f;
             var host = go.transform;
 
             var light = NightMarketPalette.For(band);
@@ -540,10 +754,10 @@ namespace DeNelle.Wallet
                 rt.offsetMin = Vector2.zero; rt.offsetMax = Vector2.zero;
             }
 
-            MakeText(host, BandEyebrow(band), 15, ElarionUi.Parchment, FontStyles.Bold,
-                TextAlignmentOptions.BottomLeft, new Vector2(0.03f, 0.10f), new Vector2(0.55f, 0.92f));
-            MakeText(host, BandSubLabel(band), 12, ElarionUi.ParchmentDim, FontStyles.Italic,
-                TextAlignmentOptions.BottomRight, new Vector2(0.55f, 0.10f), new Vector2(0.99f, 0.80f));
+            MakeText(host, BandEyebrow(band), 34, ElarionUi.Parchment, FontStyles.Bold,
+                TextAlignmentOptions.Left, new Vector2(0.03f, 0.06f), new Vector2(0.52f, 0.94f));
+            MakeText(host, BandSubLabel(band), 30, ElarionUi.ParchmentDim, FontStyles.Italic,
+                TextAlignmentOptions.Right, new Vector2(0.54f, 0.06f), new Vector2(0.99f, 0.94f));
 
             // G4 — the patronage sheen. A slow iridescent roll along the band head's top edge.
             // ⚠ ON THE BAND HEAD, NOT ON EACH CARD (Grok drew it per-row). One strip is one extra
@@ -605,48 +819,51 @@ namespace DeNelle.Wallet
             if (_shelfContent == null) return;
             BuildBandHead(StoreBand.Free);
             // Keep every free-door row genuinely two-up, matching the priced shelf.
-            var firstStrip = BuildCardRow();
+            var firstStrip = BuildCardRow(FreeRowHeightPx);
 
             var slot = new GameObject("free-redeem", typeof(RectTransform), typeof(LayoutElement));
             slot.transform.SetParent(firstStrip, false);
             var le = slot.GetComponent<LayoutElement>();
-            le.preferredHeight = CardHeightPx;
+            le.preferredHeight = FreeRowHeightPx;
+            le.minHeight = FreeRowHeightPx;
             le.flexibleWidth = 1f;
-            le.minWidth = ElarionUiKit.MinTouchPx;
+            le.minWidth = StorePackCard.MinCardWidthPx;
 
             Plate(slot.transform, NightMarketPalette.GroundRaised);
             var light = NightMarketPalette.For(StoreBand.Free);
             Orb(slot.transform, light);
 
-            MakeText(slot.transform, PromoStrings.Get(PromoStrings.KeyTitle), 15, ElarionUi.Parchment,
+            FitInto(MakeText(slot.transform, PromoStrings.Get(PromoStrings.KeyTitle), 34, ElarionUi.Parchment,
                 FontStyles.Bold, TextAlignmentOptions.TopLeft,
-                new Vector2(0.24f, 0.70f), new Vector2(0.96f, 0.92f));
-            MakeText(slot.transform, PromoStrings.Get(PromoStrings.KeyBlurb), 11, ElarionUi.ParchmentDim,
+                new Vector2(0.26f, 0.74f), new Vector2(0.96f, 0.98f)), 34);
+            FitInto(MakeText(slot.transform, PromoStrings.Get(PromoStrings.KeyBlurb), 30, ElarionUi.ParchmentDim,
                 FontStyles.Italic, TextAlignmentOptions.TopLeft,
-                new Vector2(0.06f, 0.54f), new Vector2(0.96f, 0.70f));
+                new Vector2(0.06f, 0.56f), new Vector2(0.96f, 0.73f)), 30);
 
-            // The button fills the lower half of a 168 px card: ~78 px tall, which is UNDER the
-            // 112 px floor, so ClampMinTouch would grow it. Give it the whole card height instead
-            // and let the plate carry the label above it — authored over the floor, clamp is a
-            // no-op, nothing inflates into the row beside it.
+            // ⛔ AUTHORED AT 0.02-0.53 OF A 228-UNIT CARD = ~116 px TALL, AND THAT IS BOTH ENDS OF
+            // THE RULE. Above MinTouchPx(112), so ClampMinTouch is a no-op and nothing inflates into
+            // the row beside it — and it stops BELOW the blurb (0.56), so the button cannot be drawn
+            // over its own card's copy, which is what P0-4's "two giant OPEN slabs drawn over their
+            // own cards" was: a control given the whole lower half of a card that also had text there.
             var redeemBtn = ElarionUiKit.BuildObsidianButton(slot.transform,
                 entryLabel,
                 ElarionUiKit.ObsidianButtonStyle.Style1,
                 ElarionUiKit.ObsidianButtonColor.Yellow,
-                new Vector2(0.06f, 0.04f), new Vector2(0.94f, 0.54f),
+                new Vector2(0.06f, 0.02f), new Vector2(0.60f, 0.53f),
                 OpenRedeemPanel);
             if (redeemBtn == null)
                 FlowTrace.Fail("Store", "BuildFreeBand: Redeem-a-Code button failed to build — the promo system has NO player entry point again.");
             else
             {
                 var redeemLabel = redeemBtn.GetComponentInChildren<TMP_Text>(true);
-                if (redeemLabel != null) ElarionUiKit.FitSingleLine(redeemLabel, 20f, 28f);
+                if (redeemLabel != null)
+                    ElarionUiKit.FitSingleLine(redeemLabel, ElarionUi.FontFloorMobile, 34f);
                 FlowTrace.Step("Store", "BuildFreeBand: Redeem-a-Code entry built (ungated by design — the purchase flag gates BUYING only).");
             }
 
             BuildFreeDoor(firstStrip, "SEASON TRACK", "Play battles. Earn every tier.", PanelId.BattlePass);
 
-            var secondStrip = BuildCardRow();
+            var secondStrip = BuildCardRow(FreeRowHeightPx);
             BuildFreeDoor(secondStrip, "MONTHLY LEDGER", "Thirty claims. Missed days stay yours.", PanelId.MonthlyLedger);
             Spacer(secondStrip);
         }
@@ -655,24 +872,44 @@ namespace DeNelle.Wallet
         {
             var slot = new GameObject("free-" + panel, typeof(RectTransform), typeof(LayoutElement));
             slot.transform.SetParent(strip, false);
-            var le = slot.GetComponent<LayoutElement>(); le.preferredHeight = CardHeightPx; le.flexibleWidth = 1f; le.minWidth = ElarionUiKit.MinTouchPx;
+            var le = slot.GetComponent<LayoutElement>();
+            le.preferredHeight = FreeRowHeightPx;
+            le.minHeight = FreeRowHeightPx;
+            le.flexibleWidth = 1f;
+            le.minWidth = StorePackCard.MinCardWidthPx;
             Plate(slot.transform, NightMarketPalette.GroundRaised);
             Orb(slot.transform, NightMarketPalette.For(StoreBand.Free));
-            MakeText(slot.transform, title, 15, ElarionUi.Parchment, FontStyles.Bold,
-                TextAlignmentOptions.TopLeft, new Vector2(0.24f, 0.70f), new Vector2(0.96f, 0.92f));
-            MakeText(slot.transform, blurb, 11, ElarionUi.ParchmentDim, FontStyles.Italic,
-                TextAlignmentOptions.TopLeft, new Vector2(0.06f, 0.54f), new Vector2(0.96f, 0.70f));
-            ElarionUiKit.BuildObsidianButton(slot.transform, "OPEN",
+            FitInto(MakeText(slot.transform, title, 34, ElarionUi.Parchment, FontStyles.Bold,
+                TextAlignmentOptions.TopLeft, new Vector2(0.26f, 0.74f), new Vector2(0.96f, 0.98f)), 34);
+            FitInto(MakeText(slot.transform, blurb, 30, ElarionUi.ParchmentDim, FontStyles.Italic,
+                TextAlignmentOptions.TopLeft, new Vector2(0.06f, 0.56f), new Vector2(0.96f, 0.73f)), 30);
+            // Same authored band as the redeem door: >= 112 on both axes, and it stops below the
+            // blurb so no button is ever drawn over its own card's copy.
+            var open = ElarionUiKit.BuildObsidianButton(slot.transform, "OPEN",
                 ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Gray,
-                new Vector2(0.06f, 0.04f), new Vector2(0.94f, 0.54f), () => PanelRouter.Open(panel));
+                new Vector2(0.06f, 0.02f), new Vector2(0.60f, 0.53f), () => PanelRouter.Open(panel));
+            var openLabel = open != null ? open.GetComponentInChildren<TMP_Text>(true) : null;
+            if (openLabel != null) ElarionUiKit.FitSingleLine(openLabel, ElarionUi.FontFloorMobile, 34f);
         }
 
-        /// <summary>One horizontal strip of <see cref="CardsPerRow"/> flex cards.</summary>
-        private Transform BuildCardRow()
+        /// <summary>
+        /// One horizontal strip of <see cref="CardsPerRow"/> flex cards, AUTHORED AT
+        /// <paramref name="heightPx"/> reference px.
+        /// <para>⛔ THE HEIGHT IS A PARAMETER BECAUSE THE ROW AND THE CARD MUST BE ONE NUMBER. The
+        /// row used to hold its own constant while the card held another, and the scroll column did
+        /// not control child height at all — so every row resolved to a bare RectTransform's default
+        /// 100 units, the cards inside were force-expanded down onto it, and ClampMinTouch then grew
+        /// each one back to 112 SYMMETRICALLY ABOUT ITS CENTRE, i.e. straight over the row above and
+        /// below. That is the mechanism behind P0-3's card-on-card overlap and, through it, the two
+        /// WRONG PRICES on the owner's device.</para>
+        /// </summary>
+        private Transform BuildCardRow(float heightPx)
         {
             var go = new GameObject("row", typeof(RectTransform), typeof(HorizontalLayoutGroup), typeof(LayoutElement));
             go.transform.SetParent(_shelfContent, false);
-            go.GetComponent<LayoutElement>().preferredHeight = CardHeightPx;
+            var rowLe = go.GetComponent<LayoutElement>();
+            rowLe.preferredHeight = heightPx;
+            rowLe.minHeight = heightPx;
             var h = go.GetComponent<HorizontalLayoutGroup>();
             h.spacing = 9f;
             h.padding = new RectOffset(4, 4, 3, 3);
@@ -690,7 +927,25 @@ namespace DeNelle.Wallet
             go.GetComponent<LayoutElement>().flexibleWidth = 1f;
         }
 
-        private GameObject BuildPackCard(Transform strip, PackDef pack, StoreBand band)
+        /// <summary>
+        /// One shelf card, built by <see cref="StorePackCard"/> — the ONE template (UI-001 §2 / §R3,
+        /// owner ruling 4).
+        ///
+        /// <para>⛔ THIS METHOD NO LONGER DRAWS A CARD. It RESOLVES one: every string, state word,
+        /// badge and tint is looked up here and handed to the template as data. The inline card this
+        /// used to be — its own plate, orb, rail, Outline, four MakeText calls and its own touch
+        /// clamp — was a second card implementation living beside the shared kit, which is exactly the
+        /// parallel-design-system failure §2 exists to forbid. It is also why the art wells shipped
+        /// near-black (P1-7) and why the price could be occluded (P0-1/P0-2): there was nowhere
+        /// central to fix either.</para>
+        ///
+        /// <para>⛔ AND IT ASKS NO COMMERCE QUESTION. <see cref="PurchaseGate"/> is the sole client
+        /// authority; the card renders a state WORD the caller resolved and carries no Buy control at
+        /// all — the one Buy control on this screen is the commerce column's CTA, which consults the
+        /// same gate the charge path does.</para>
+        /// </summary>
+        private GameObject BuildPackCard(Transform strip, PackDef pack, StoreBand band,
+                                         StorePackCardVariant variant)
         {
             if (pack == null)
             {
@@ -710,82 +965,38 @@ namespace DeNelle.Wallet
                 });
             });
 
-            var cardGo = new GameObject($"pack-{pack.Sku}", typeof(RectTransform), typeof(Image),
-                typeof(LayoutElement), typeof(Button), typeof(Outline));
-            cardGo.transform.SetParent(strip, false);
-
-            var le = cardGo.GetComponent<LayoutElement>();
-            le.preferredHeight = CardHeightPx;
-            le.minHeight = CardHeightPx;
-            le.flexibleWidth = 1f;
-            le.minWidth = ElarionUiKit.MinTouchPx;
-
-            var bg = cardGo.GetComponent<Image>();
-            var slotSprite = RpgUiCatalog.Get(RpgUiCatalog.RoleSlot, "slot_item");
-            if (slotSprite != null) { bg.sprite = slotSprite; bg.type = Image.Type.Sliced; bg.color = Color.white; }
-            else bg.color = NightMarketPalette.GroundRaised;
-
-            var card = cardGo.transform;
-            var light = NightMarketPalette.For(band);
-            var orbTint = NightMarketPalette.ParseTint(pack.OrbTint, light);
-
-            // ── SELECTION IS NEVER COLOUR-ONLY ────────────────────────────────
-            // Three simultaneous carriers: a 2 px left RAIL in the band light, a BORDER, and — the
-            // one that cannot be missed by any eye — the card MOVES TO THE SPOTLIGHT. Colour is the
-            // third-most-important of the three and the only one that can be lost.
-            var rail = Plate(card, light);
-            if (rail != null)
-            {
-                var rt = rail.rectTransform;
-                rt.anchorMin = new Vector2(0.012f, 0.06f);
-                rt.anchorMax = new Vector2(0.028f, 0.94f);
-                rt.offsetMin = Vector2.zero; rt.offsetMax = Vector2.zero;
-                _cardRails[pack.Sku] = rail;
-            }
-            var border = cardGo.GetComponent<Outline>();
-            border.effectColor = new Color(light.r, light.g, light.b, 0f);
-            border.effectDistance = new Vector2(2f, 2f);
-            _cardBorders[pack.Sku] = border;
-
-            Orb(card, orbTint);
-
-            MakeText(card, pack.Name, 24, ElarionUi.Parchment, FontStyles.Bold,
-                TextAlignmentOptions.TopLeft, new Vector2(0.24f, 0.58f), new Vector2(0.97f, 0.82f));
-
-            // ONE goods line, sourced from the same describer the spotlight ledger draws from, so
-            // the card and the spotlight can never disagree about what a pack contains.
-            MakeText(card, DescribeContents(pack), 18, new Color(0.90f, 0.93f, 0.98f, 1f),
-                FontStyles.Normal, TextAlignmentOptions.TopLeft,
-                new Vector2(0.06f, 0.30f), new Vector2(0.97f, 0.66f));
-
-            // Price block: SKR large, USD small. HOLDS STILL — it is read to decide (Lane G rule 2).
-            MakeText(card, pack.AmountLabel(_defaultCurrency), 26, ElarionUi.Gilt, FontStyles.Bold,
-                TextAlignmentOptions.BottomLeft, new Vector2(0.06f, 0.04f), new Vector2(0.60f, 0.28f));
-            MakeText(card, pack.UsdReference, 18, ElarionUi.Parchment, FontStyles.Normal,
-                TextAlignmentOptions.BottomRight, new Vector2(0.60f, 0.04f), new Vector2(0.97f, 0.24f));
-
-            // ── EVERY STATE CARRIES A WORD ───────────────────────────────────
-            string flag = CardStateWord(pack);
-            if (!string.IsNullOrEmpty(flag))
-                MakeText(card, flag, 15, ElarionUi.Gold, FontStyles.Bold,
-                    TextAlignmentOptions.TopRight, new Vector2(0.24f, 0.83f), new Vector2(0.97f, 0.97f));
-            else if (!string.IsNullOrEmpty(pack.StoreBadge))
-                MakeText(card, pack.StoreBadge, 15, ElarionUi.Gold, FontStyles.Bold,
-                    TextAlignmentOptions.TopRight, new Vector2(0.24f, 0.83f), new Vector2(0.97f, 0.97f));
-
-            // Tapping the card moves the spotlight. It NEVER buys — the only Buy control on this
-            // screen is the spotlight CTA, which runs through PurchaseGate.
             string sku = pack.Sku;
-            var btn = cardGo.GetComponent<Button>();
-            btn.targetGraphic = bg;
-            btn.onClick.AddListener(() => FocusPack(sku, null, animate: true));
+            var model = new StorePackCardModel
+            {
+                Sku          = sku,
+                Name         = pack.Name,
+                // ONE goods line, from the SAME describer the spotlight ledger draws from, so the
+                // card and the spotlight can never disagree about what a pack contains.
+                Contents     = DescribeContents(pack),
+                ValueCaption = ValueCaption(pack),
+                PriceMajor   = pack.AmountLabel(_defaultCurrency),
+                PriceMinor   = pack.UsdReference,
+                Badge        = pack.StoreBadge,
+                StateWord    = CardStateWord(pack),
+                Band         = band,
+                OrbTint      = pack.OrbTint,
+                GlyphConcepts = GlyphConceptsFor(pack),
+                Selected     = !string.IsNullOrEmpty(_focusSku) &&
+                               string.Equals(sku, _focusSku, StringComparison.Ordinal),
+            };
 
-            // ⛔ THE CLAMP MUST HAVE NOTHING TO DO. The card is ~225 x 168 reference px — both sides
-            // clear MinTouchPx(112) — so this call is a NO-OP and is here to PROVE it is, at the one
-            // site where a future re-layout could quietly drop under the floor and start inflating.
-            ElarionUiKit.ClampMinTouch(btn);
+            // Tapping the card moves the spotlight. It NEVER buys.
+            var handle = StorePackCard.Build(strip, model, variant,
+                () => FocusPack(sku, null, animate: true));
+            if (handle == null || handle.Root == null)
+            {
+                FlowTrace.Fail("Store", $"BuildPackCard '{sku}': the card template returned no root - " +
+                                        "this row is missing from the shelf entirely.");
+                return null;
+            }
 
-            return cardGo;
+            _cardHandles[sku] = handle;
+            return handle.Root;
         }
 
         /// <summary>
@@ -800,6 +1011,37 @@ namespace DeNelle.Wallet
                 string.Equals(pack.ImpulseResource, _pendingShortfallLabel, StringComparison.OrdinalIgnoreCase))
                 return StoreStrings.Get(StoreStrings.KeyCardGap);
             return string.Empty;
+        }
+
+        /// <summary>
+        /// The goods-per-dollar caption, or EMPTY.
+        /// <para>⛔ PURE ARITHMETIC OVER THE GRANTED BAG, on the same rule as the spotlight's compare
+        /// line: it sums the very keys <c>ApplyPackContents</c> pays out, so the caption can never
+        /// advertise a figure the grant seam does not deliver. No price, no goods, no caption — an
+        /// invented value line is the claim-the-arithmetic-contradicts defect (§7).</para>
+        /// </summary>
+        private static string ValueCaption(PackDef pack)
+        {
+            if (pack == null || pack.Pricing == null || pack.Pricing.Usd <= 0d) return string.Empty;
+            long goods = 0;
+            foreach (string key in PackCatalog.LedgerEconomyKeys) goods += pack.EconomyAmount(key);
+            if (goods <= 0) return string.Empty;
+            double per = goods / pack.Pricing.Usd;
+            return StoreStrings.Format(StoreStrings.KeyValuePerDollar, per.ToString("N0"));
+        }
+
+        /// <summary>
+        /// Concept ids the card's art well tries, in order, for its glyph.
+        /// <para>⛔ NEVER AN EMOJI — TMP's shipped font renders one as a tofu box, and the template
+        /// falls back to two-letter ASCII initials when none of these resolve. The ids come from the
+        /// pack's own authored data (its impulse resource), never from a SKU-name branch.</para>
+        /// </summary>
+        private static string[] GlyphConceptsFor(PackDef pack)
+        {
+            if (pack == null) return null;
+            if (!string.IsNullOrEmpty(pack.ImpulseResource))
+                return new[] { pack.ImpulseResource.Trim().ToLowerInvariant(), "chest", "coin" };
+            return new[] { "chest", "coin", "crest" };
         }
 
         // =====================================================================
@@ -852,23 +1094,23 @@ namespace DeNelle.Wallet
             var band = pack != null ? PackCatalog.BandOf(pack) : StoreBand.Basket;
             var light = NightMarketPalette.For(band);
 
-            // Repaint the marks. Rails carry the band light on the focused card and a dim version
-            // elsewhere; the border only appears on the focused one.
-            foreach (var kv in _cardRails)
+            // ── REPAINT SELECTION — THREE CARRIERS, AND THE HUE IS THE WEAKEST ───
+            // The owner is red/green colourblind, so selection may never be a colour swap. It is
+            // carried by (1) the card MOVING TO THE SPOTLIGHT — unmissable by any eye, (2) the ring's
+            // ALPHA stepping .5 -> 1.0, which is a luminance change and survives greyscale, and only
+            // then (3) the bloom brightening. Strip every hue and the selection still reads.
+            foreach (var kv in _cardHandles)
             {
-                if (kv.Value == null) continue;
+                var handle = kv.Value;
+                if (handle == null) continue;
                 bool on = string.Equals(kv.Key, sku, StringComparison.Ordinal);
-                var c = kv.Value.color;
-                c.a = on ? 1f : 0.35f;
-                kv.Value.color = c;
-            }
-            foreach (var kv in _cardBorders)
-            {
-                if (kv.Value == null) continue;
-                bool on = string.Equals(kv.Key, sku, StringComparison.Ordinal);
-                var c = kv.Value.effectColor;
-                c = new Color(light.r, light.g, light.b, on ? 0.95f : 0f);
-                kv.Value.effectColor = c;
+                StorePackCard.SetSelected(handle, on);
+                if (handle.Ring != null)
+                {
+                    var c = handle.Ring.color;
+                    c.a = on ? 1f : 0.5f;
+                    handle.Ring.color = c;
+                }
             }
 
             BuildSpotlight(pack, band, scale ?? BuildLedgerScale());
@@ -901,9 +1143,12 @@ namespace DeNelle.Wallet
 
             if (pack == null)
             {
-                MakeText(_spotlightHost, StoreStrings.Get(StoreStrings.KeySpotlightEmpty), 12,
+                MakeText(_spotlightHost, StoreStrings.Get(StoreStrings.KeySpotlightEmpty), 30,
                     ElarionUi.ParchmentDim, FontStyles.Italic, TextAlignmentOptions.Center,
                     new Vector2(0.06f, 0.44f), new Vector2(0.94f, 0.60f));
+                // The commerce column is cleared too: a CTA left standing beside an empty spotlight
+                // would offer to buy a pack that is not on screen.
+                BuildCommerce(null);
                 FlowTrace.Warn("Store", "BuildSpotlight: no focused pack — the spotlight shows its empty line.");
                 return;
             }
@@ -912,19 +1157,26 @@ namespace DeNelle.Wallet
             Orb(_spotlightHost, orbTint, new Vector2(0.08f, 0.79f), new Vector2(0.30f, 0.95f));
 
             if (!string.IsNullOrEmpty(pack.StoreBadge))
-                MakeText(_spotlightHost, pack.StoreBadge, 15, ElarionUi.Gold, FontStyles.Bold,
+                MakeText(_spotlightHost, pack.StoreBadge, 30, ElarionUi.Gold, FontStyles.Bold,
                     TextAlignmentOptions.TopRight, new Vector2(0.40f, 0.90f), new Vector2(0.94f, 0.97f));
 
-            MakeText(_spotlightHost, pack.Name, 26, ElarionUi.Parchment, FontStyles.Bold,
-                TextAlignmentOptions.BottomLeft, new Vector2(0.06f, 0.70f), new Vector2(0.94f, 0.80f));
-            MakeText(_spotlightHost, pack.Tagline, 17, ElarionUi.Parchment, FontStyles.Italic,
-                TextAlignmentOptions.TopLeft, new Vector2(0.06f, 0.575f), new Vector2(0.94f, 0.695f));
+            // ⛔ EVERY SIZE BELOW IS AT OR ABOVE ElarionUi.FontFloorMobile(30). UI-001 §0.6 measured
+            // the old 12-17 pt store strings at ~10 PHYSICAL px on the device — defects #4 and #8 were
+            // never a panel-width problem, they were a font-floor problem, and widening the panel
+            // would have left them exactly as unreadable.
+            FitInto(MakeText(_spotlightHost, pack.Name, 52, ElarionUi.Parchment, FontStyles.Bold,
+                TextAlignmentOptions.BottomLeft, new Vector2(0.06f, 0.695f), new Vector2(0.94f, 0.80f)), 52);
+            FitInto(MakeText(_spotlightHost, pack.Tagline, 32, ElarionUi.Parchment, FontStyles.Italic,
+                TextAlignmentOptions.TopLeft, new Vector2(0.06f, 0.575f), new Vector2(0.94f, 0.690f)), 32);
 
             // ── The bar ledger ───────────────────────────────────────────────
-            MakeText(_spotlightHost, StoreStrings.Get(StoreStrings.KeyLedgerHeading), 15,
+            MakeText(_spotlightHost, StoreStrings.Get(StoreStrings.KeyLedgerHeading), 30,
                 ElarionUi.ParchmentDim, FontStyles.Bold, TextAlignmentOptions.BottomLeft,
-                new Vector2(0.06f, 0.535f), new Vector2(0.94f, 0.575f));
-            float ledgerTop = 0.525f, rowH = 0.052f;
+                new Vector2(0.06f, 0.520f), new Vector2(0.94f, 0.570f));
+            // 0.058 of a 746-unit column is ~43 px, which holds a 30-unit row without the next row
+            // climbing onto it. The CTA moved to the commerce column, so this ladder now owns the
+            // whole lower half of the spotlight instead of sharing it with a button.
+            float ledgerTop = 0.510f, rowH = 0.058f;
             int drawn = 0;
             foreach (string key in PackCatalog.LedgerEconomyKeys)
             {
@@ -947,24 +1199,14 @@ namespace DeNelle.Wallet
             string compare = BuildComparisonLine(pack);
             if (!string.IsNullOrEmpty(compare))
             {
-                MakeText(_spotlightHost, compare, 15, ElarionUi.Parchment, FontStyles.Normal,
-                    TextAlignmentOptions.TopLeft, new Vector2(0.06f, cursor - 0.055f), new Vector2(0.94f, cursor));
-                cursor -= 0.065f;
+                FitInto(MakeText(_spotlightHost, compare, 30, ElarionUi.Parchment, FontStyles.Normal,
+                    TextAlignmentOptions.TopLeft, new Vector2(0.06f, cursor - 0.11f), new Vector2(0.94f, cursor)), 30);
+                cursor -= 0.12f;
             }
 
-            // ── Balance-after preview, above the CTA ─────────────────────────
-            // Only when the wallet mirror actually KNOWS a number. Never computed from an assumed
-            // balance: "what you will have left" is a promise, and a promise off a guessed figure is
-            // the same lie as a fabricated balance.
-            if (_balanceState == BalanceState.Known)
-            {
-                double after = _balanceSkr - pack.AmountFor(CurrencyKind.Skr);
-                MakeText(_spotlightHost, StoreStrings.Format(StoreStrings.KeyBalanceAfter, after.ToString("N0")),
-                    15, ElarionUi.Parchment, FontStyles.Normal, TextAlignmentOptions.TopLeft,
-                    new Vector2(0.06f, cursor - 0.05f), new Vector2(0.94f, cursor));
-            }
+            // The balance-after preview moved to the commerce column, beside the button it qualifies.
 
-            BuildSpotlightCta(pack);
+            BuildCommerce(pack);
         }
 
         /// <summary>
@@ -982,10 +1224,15 @@ namespace DeNelle.Wallet
             rt.anchorMin = new Vector2(0.06f, y0); rt.anchorMax = new Vector2(0.94f, y1);
             rt.offsetMin = Vector2.zero; rt.offsetMax = Vector2.zero;
 
-            MakeText(go.transform, key, 14, ElarionUi.Parchment, FontStyles.Normal,
+            MakeText(go.transform, key, 30, ElarionUi.Parchment, FontStyles.Normal,
                 TextAlignmentOptions.Left, new Vector2(0f, 0f), new Vector2(0.26f, 1f));
-            MakeText(go.transform, amount.ToString("N0"), 15, ElarionUi.Parchment, FontStyles.Bold,
-                TextAlignmentOptions.Right, new Vector2(0.72f, 0f), new Vector2(1f, 1f));
+            // ⛔ THE PRINTED NUMBER IS THE TRUTH AND IT MUST NEVER CLIP (§5). The bar is only the
+            // comparison; if a figure ever had to shrink, it shrinks toward the floor — it is never
+            // truncated, because a truncated quantity on a money screen is a wrong quantity.
+            ElarionUiKit.FitSingleLine(
+                MakeText(go.transform, amount.ToString("N0"), 32, ElarionUi.Parchment, FontStyles.Bold,
+                    TextAlignmentOptions.Right, new Vector2(0.70f, 0f), new Vector2(1f, 1f)),
+                ElarionUi.FontFloorMobile, 32f);
 
             var track = Plate(go.transform, new Color(1f, 1f, 1f, 0.10f));
             if (track != null)
@@ -1070,16 +1317,52 @@ namespace DeNelle.Wallet
         }
 
         /// <summary>
-        /// The ONE Buy control on this screen. Same gate, same refusals, same words as before — the
-        /// only change is that it lives in the spotlight rather than on every row.
+        /// The commerce column: the ONE Buy control on this screen, plus the balance-after line that
+        /// qualifies it. Same gate, same refusals, same words — what changed is WHERE it sits.
+        ///
+        /// <para>⛔ IT LIVES IN THE RIGHT THUMB ARC ON PURPOSE (UI-001 §8). At 2340x1080 the natural
+        /// reach zones are x 0-720 and x 1620-2340 below y 480; the 486-unit commerce column lands
+        /// inside the right one. A purchase control in the dead centre of a landscape phone is a
+        /// two-handed control.</para>
+        ///
+        /// <para>⛔ AND THE GATE IS STILL THE ONLY AUTHORITY. <see cref="PurchaseGate.CanBuy"/> is
+        /// consulted here and by <c>Purchase()</c>, so the button and the charge can never disagree;
+        /// this method renders that decision and never makes one.</para>
         /// </summary>
-        private void BuildSpotlightCta(PackDef pack)
+        private void BuildCommerce(PackDef pack)
         {
-            // ⛔ THE CTA IS AUTHORED AT ~115 px TALL AND FULL COLUMN WIDTH, both over
-            // MinTouchPx(112), so ClampMinTouch is a NO-OP. That is the same discipline the 2026-07-16
-            // buy-column fix landed: a sub-112 control does not fail, it INFLATES and overlaps.
-            var ctaMin = new Vector2(0.06f, 0.025f);
-            var ctaMax = new Vector2(0.94f, 0.245f);
+            // The status surface lives ABOVE this host and is deliberately NOT cleared: it is the one
+            // status surface (§3), and a purchase message must survive the focus change that a
+            // player makes while reading it.
+            if (_ctaHost == null)
+            {
+                FlowTrace.Warn("Store", "BuildCommerce: no commerce host — the store cannot draw a Buy control.");
+                return;
+            }
+            for (int i = _ctaHost.childCount - 1; i >= 0; i--)
+                Destroy(_ctaHost.GetChild(i).gameObject);
+            if (pack == null) return;
+
+            Transform host = _ctaHost;
+
+            // ⛔ AUTHORED 438 x 134 REFERENCE PX (0.06-0.94 of a 486-unit column, 0.03-0.335 of a
+            // 440-unit host), both over MinTouchPx(112) and over the canon 360x132, so ClampMinTouch
+            // is a NO-OP. A sub-112 control does not fail the clamp — it INFLATES about its centre
+            // and overlaps whatever is beside it.
+            var ctaMin = new Vector2(0.06f, 0.030f);
+            var ctaMax = new Vector2(0.94f, 0.335f);
+
+            // ── Balance-after preview, directly above the CTA ──────────────
+            // Only when the wallet mirror actually KNOWS a number. Never computed from an assumed
+            // balance: "what you will have left" is a promise, and a promise off a guessed figure is
+            // the same lie as a fabricated balance.
+            if (_balanceState == BalanceState.Known)
+            {
+                double after = _balanceSkr - pack.AmountFor(CurrencyKind.Skr);
+                MakeText(host, StoreStrings.Format(StoreStrings.KeyBalanceAfter, after.ToString("N0")),
+                    30, ElarionUi.Parchment, FontStyles.Normal, TextAlignmentOptions.Left,
+                    new Vector2(0.06f, 0.42f), new Vector2(0.94f, 0.55f));
+            }
 
             // ── anchorOnly: NO BUY CONTROL IS EVER BUILT ─────────────────────
             // On EITHER side of the purchase flag. The row renders fully priced and simply has no
@@ -1088,7 +1371,7 @@ namespace DeNelle.Wallet
             // rungs buyable behind the wallet rule, and flagging one here would walk that back).
             if (pack.AnchorOnly)
             {
-                MakeText(_spotlightHost, StoreStrings.Get(StoreStrings.KeyCardAnchor), 15,
+                MakeText(host, StoreStrings.Get(StoreStrings.KeyCardAnchor), 32,
                     ElarionUi.ParchmentDim, FontStyles.Italic, TextAlignmentOptions.Center, ctaMin, ctaMax);
                 FlowTrace.Step("Store", $"BuildSpotlightCta '{pack.Sku}': anchorOnly — NO Buy control built (either side of the flag).");
                 return;
@@ -1096,7 +1379,7 @@ namespace DeNelle.Wallet
 
             if (_vm.IsOwned(pack.Sku))
             {
-                MakeText(_spotlightHost, StoreStrings.Get(StoreStrings.KeyCardOwned), 18,
+                MakeText(host, StoreStrings.Get(StoreStrings.KeyCardOwned), 38,
                     new Color(0.55f, 0.90f, 0.55f, 1f), FontStyles.Bold,
                     TextAlignmentOptions.Center, ctaMin, ctaMax);
                 return;
@@ -1111,7 +1394,7 @@ namespace DeNelle.Wallet
                 // label, leaving a finalized payment permanently undeliverable. This is deliberately
                 // a REAL button which re-enters Purchase(). Purchase() sees HasPending before it can
                 // call SendPayment, so this path verifies the recorded receipt and cannot pay twice.
-                var reconcile = ElarionUiKit.BuildObsidianButton(_spotlightHost,
+                var reconcile = ElarionUiKit.BuildObsidianButton(host,
                     "Reconcile - no new payment",
                     ElarionUiKit.ObsidianButtonStyle.Style1,
                     _purchaseInFlight ? ElarionUiKit.ObsidianButtonColor.Gray
@@ -1123,7 +1406,7 @@ namespace DeNelle.Wallet
                 var reconcileLabel = reconcile != null
                     ? reconcile.GetComponentInChildren<TMP_Text>(true)
                     : null;
-                if (reconcileLabel != null) ElarionUiKit.FitSingleLine(reconcileLabel, 18f, 24f);
+                if (reconcileLabel != null) ElarionUiKit.FitSingleLine(reconcileLabel, ElarionUi.FontFloorMobile, 38f);
                 return;
             }
 
@@ -1147,13 +1430,15 @@ namespace DeNelle.Wallet
 
                 if (!walletIsTheBlocker)
                 {
-                    MakeText(_spotlightHost, blockedLabel, 15, ElarionUi.ParchmentDim, FontStyles.Italic,
-                        TextAlignmentOptions.Center, ctaMin, ctaMax);
+                    // A refusal is a PLATE, never a button (UI-002): nothing here invites a tap that
+                    // nothing answers.
+                    FitInto(MakeText(host, blockedLabel, 32, ElarionUi.ParchmentDim, FontStyles.Italic,
+                        TextAlignmentOptions.Center, ctaMin, ctaMax), 32);
                 }
                 else
                 {
                     string reasonForBanner = gateReason;
-                    var connect = ElarionUiKit.BuildObsidianButton(_spotlightHost,
+                    var connect = ElarionUiKit.BuildObsidianButton(host,
                         blockedLabel,
                         ElarionUiKit.ObsidianButtonStyle.Style1,
                         _purchaseInFlight ? ElarionUiKit.ObsidianButtonColor.Gray
@@ -1163,7 +1448,7 @@ namespace DeNelle.Wallet
                     if (connect != null) connect.interactable = !_purchaseInFlight;
 
                     var connectLabel = connect != null ? connect.GetComponentInChildren<TMP_Text>(true) : null;
-                    if (connectLabel != null) ElarionUiKit.FitSingleLine(connectLabel, 20f, 26f);
+                    if (connectLabel != null) ElarionUiKit.FitSingleLine(connectLabel, ElarionUi.FontFloorMobile, 38f);
                 }
 
                 FlowTrace.Step("Store", $"BuildSpotlightCta '{pack.Sku}': Buy REFUSED by PurchaseGate — \"{gateReason}\" " +
@@ -1173,10 +1458,10 @@ namespace DeNelle.Wallet
 
             var rail = SelectedCurrency(pack.Sku);   // SKR canary by default (MON-1147)
             if (_wallet != null && _wallet.Network == WalletNetwork.Devnet)
-                MakeText(_spotlightHost, "DEVNET - TEST TOKEN", 12, ElarionUi.Gold,
+                MakeText(host, "DEVNET - TEST TOKEN", 30, ElarionUi.Gold,
                     FontStyles.Bold, TextAlignmentOptions.Center,
-                    new Vector2(0.06f, 0.245f), new Vector2(0.94f, 0.285f));
-            var buy = ElarionUiKit.BuildObsidianButton(_spotlightHost,
+                    new Vector2(0.06f, 0.345f), new Vector2(0.94f, 0.415f));
+            var buy = ElarionUiKit.BuildObsidianButton(host,
                 $"Buy - {pack.AmountLabel(rail)}",
                 ElarionUiKit.ObsidianButtonStyle.Style1,
                 _purchaseInFlight ? ElarionUiKit.ObsidianButtonColor.Gray
@@ -1186,7 +1471,7 @@ namespace DeNelle.Wallet
             if (buy != null) buy.interactable = !_purchaseInFlight;
 
             var buyLabel = buy != null ? buy.GetComponentInChildren<TMP_Text>(true) : null;
-            if (buyLabel != null) ElarionUiKit.FitSingleLine(buyLabel, 20f, 26f);
+            if (buyLabel != null) ElarionUiKit.FitSingleLine(buyLabel, ElarionUi.FontFloorMobile, 42f);
 
             // G3 — the specular sweep. The one element that must never look asleep. It rides ON the
             // button and carries no information: strip it and the CTA is identical.
@@ -1327,10 +1612,16 @@ namespace DeNelle.Wallet
             switch (_balanceState)
             {
                 case BalanceState.NoWallet:
+                    // ⛔ THESE TWO SENTENCES ARE CANON KEYS, NOT LITERALS. They were the only store
+                    // copy still living in code (CLAUDE.md §7 puts every player-facing string in
+                    // canon-strings.json, both canonical copies, ASCII only) — and they are UI-002's
+                    // wallet-identity wording, which is exactly the class of sentence that must be
+                    // reviewable in data rather than buried in a switch on a money screen.
                     if (_wallet != null && _wallet.Account.IsValid)
-                        _balanceLabel.text = $"Wallet {Shorten(_wallet.Account.Address)} bound - authorize to purchase";
+                        _balanceLabel.text = StoreStrings.Format(StoreStrings.KeyBalanceBoundAddress,
+                            Shorten(_wallet.Account.Address));
                     else if (PurchaseGate.HasDurableIdentity)
-                        _balanceLabel.text = "Wallet identity bound - authorize to purchase";
+                        _balanceLabel.text = StoreStrings.Get(StoreStrings.KeyBalanceBoundIdentity);
                     else
                         _balanceLabel.text = StoreStrings.Get(StoreStrings.KeyBalanceNoWallet);
                     return;
@@ -1922,15 +2213,121 @@ namespace DeNelle.Wallet
         //  uGUI helpers (same shapes as LeaderboardPanel / CosmeticShopPanel)
         // =====================================================================
 
-        private static Transform ZoneRect(Transform parent, string name, Vector2 min, Vector2 max)
+        /// <summary>
+        /// A layout region: anchors PLUS an offset pair in REFERENCE PIXELS.
+        ///
+        /// <para>⛔ THE OFFSETS ARE THE POINT, AND THEY REPLACE THE OLD FRACTION-ONLY HELPER.
+        /// A rect authored as "0.135 to 0.855 of the parent" silently re-scales with whatever the
+        /// parent turned out to be — and on this screen the parent turned out to be 978 units tall,
+        /// not the 1920 the fractions were eyeballed against (UI-001 §0.4). Every band and column
+        /// here therefore states its size as a NUMBER and lets the remaining axis stretch, which is
+        /// what makes 100 + 746 + 132 = 978 hold at 1920x1080, 2340x1080 and the Seeker's 2670x1200
+        /// alike.</para>
+        /// </summary>
+        private static RectTransform Region(Transform parent, string name,
+                                            Vector2 anchorMin, Vector2 anchorMax,
+                                            Vector2 offsetMin, Vector2 offsetMax)
         {
             var go = new GameObject(name, typeof(RectTransform));
             go.transform.SetParent(parent, false);
             var rt = go.GetComponent<RectTransform>();
-            rt.anchorMin = min; rt.anchorMax = max;
-            rt.offsetMin = Vector2.zero; rt.offsetMax = Vector2.zero;
-            return go.transform;
+            rt.anchorMin = anchorMin; rt.anchorMax = anchorMax;
+            rt.pivot = new Vector2(0.5f, 0.5f);
+            rt.offsetMin = offsetMin; rt.offsetMax = offsetMax;
+            return rt;
         }
+
+        /// <summary>
+        /// Inset the screen host by the device's safe area, in reference px.
+        ///
+        /// <para>⛔ THIS IS NEW WORK, NOT AN INHERITED GUARANTEE (UI-001 §0.9): nothing in the kit
+        /// reads <c>Screen.safeArea</c>, so a full-bleed store would otherwise run its Close and its
+        /// price rail under a cutout or a gesture bar. It is applied ONCE, on the host every band
+        /// hangs from, so no individual band can forget it — and it inset the HOST rather than
+        /// shrinking the panel, because the owner's ruling is that the surface IS the screen.</para>
+        ///
+        /// <para>A device with no insets (and every batchmode capture, where <c>Screen.safeArea</c>
+        /// is the full rect) takes the early return and the geometry is untouched — which is why the
+        /// captured pngs measure the same rects the phone gets, minus its notch.</para>
+        /// </summary>
+        private static void ApplySafeArea(RectTransform rt)
+        {
+            if (rt == null) return;
+            try
+            {
+                float w = Mathf.Max(1f, Screen.width);
+                float h = Mathf.Max(1f, Screen.height);
+                Rect safe = Screen.safeArea;
+                if (safe.width <= 0f || safe.height <= 0f) return;
+
+                float left   = Mathf.Clamp01(safe.xMin / w);
+                float right  = Mathf.Clamp01((w - safe.xMax) / w);
+                float bottom = Mathf.Clamp01(safe.yMin / h);
+                float top    = Mathf.Clamp01((h - safe.yMax) / h);
+                if (left <= 0f && right <= 0f && bottom <= 0f && top <= 0f) return;
+
+                float refW = NightMarketLayout.UsableWidthPx;
+                float refH = NightMarketLayout.UsableHeightPx;
+                rt.offsetMin = new Vector2(left * refW, bottom * refH);
+                rt.offsetMax = new Vector2(-right * refW, -top * refH);
+
+                FlowTrace.Step("Store", string.Format(
+                    "ApplySafeArea: inset L{0:F0} R{1:F0} B{2:F0} T{3:F0} ref px from Screen.safeArea " +
+                    "{4} on a {5}x{6} surface.",
+                    left * refW, right * refW, bottom * refH, top * refH, safe, w, h));
+            }
+            catch (Exception e)
+            {
+                // Never a silent catch (CLAUDE.md §12.2): an un-inset store is a real defect on a
+                // notched device, so it is reported rather than swallowed — but it must not stop the
+                // store from opening.
+                FlowTrace.Warn("Store", "ApplySafeArea threw (" + e.GetType().Name +
+                                        ") - the store draws full-bleed with NO safe-area inset.");
+            }
+        }
+
+        /// <summary>
+        /// Fit a block of copy inside the rect it was authored in: auto-size DOWN toward
+        /// <see cref="ElarionUi.FontFloorMobile"/> and only then let TMP truncate.
+        /// <para>⛔ NEVER A RAW OVERFLOW. Unfitted copy draws OUTSIDE its rect and onto whatever is
+        /// next to it, which AuditGeometry reports and a player simply reads as a broken screen.
+        /// Returns the same label so it can wrap a MakeText call inline.</para>
+        /// </summary>
+        private static TextMeshProUGUI FitInto(TextMeshProUGUI label, float maxSize)
+        {
+            if (label == null) return null;
+            ElarionUiKit.FitBlock(label, ElarionUi.FontFloorMobile, maxSize);
+            return label;
+        }
+
+        /// <summary>
+        /// The obsidian ground (§R6): one soft radial bloom over the panel's own near-black fill.
+        /// <para>⛔ SPRITE TWO OF THE TWO-SPRITE BILL, TINTED — not a third texture, not a particle,
+        /// and not a VFX loop slot. It is raycast-off and sits behind everything, so it can neither
+        /// eat a tap nor be reported by any geometry rule; if the sprite fails to build the screen
+        /// simply keeps its flat fill.</para>
+        /// </summary>
+        private static void BuildGround(Transform host)
+        {
+            var sprite = ElarionUiKit.RadialGlowSprite;
+            if (host == null || sprite == null) return;
+            var go = new GameObject("Ground", typeof(RectTransform), typeof(Image));
+            go.transform.SetParent(host, false);
+            var rt = (RectTransform)go.transform;
+            rt.anchorMin = new Vector2(-0.10f, -0.20f);
+            rt.anchorMax = new Vector2(1.10f, 1.25f);
+            rt.offsetMin = Vector2.zero; rt.offsetMax = Vector2.zero;
+            var img = go.GetComponent<Image>();
+            img.sprite = sprite;
+            img.color = new Color(0.114f, 0.071f, 0.208f, 0.85f);   // #1D1235 falling to the panel fill
+            img.raycastTarget = false;
+            go.transform.SetAsFirstSibling();
+        }
+
+        /// <summary>The same colour at a stated alpha — named so a translucency is never a magic
+        /// literal buried in a Plate call.</summary>
+        private static Color Translucent(Color c, float alpha)
+            => new Color(c.r, c.g, c.b, Mathf.Clamp01(alpha));
 
         /// <summary>A flat, non-interactive colour plate filling its parent. Never eats a tap.</summary>
         private static Image Plate(Transform parent, Color color)
@@ -1985,7 +2382,14 @@ namespace DeNelle.Wallet
             var layout = contentGo.GetComponent<VerticalLayoutGroup>();
             layout.spacing = 6f;
             layout.padding = new RectOffset(8, 8, 8, 8);
-            layout.childControlHeight = false;
+            // ⛔ TRUE, AND THIS ONE FLAG IS THE P0-3 ROOT CAUSE. With childControlHeight FALSE a
+            // VerticalLayoutGroup ignores LayoutElement.preferredHeight entirely and lays children out
+            // at their own rect height — which for a code-built row is RectTransform's default 100
+            // units. Every authored 168/240-unit row therefore resolved to 100, the cards inside were
+            // squeezed onto it, and ClampMinTouch grew each back to the touch floor by expanding it
+            // about its centre INTO ITS NEIGHBOURS. Turning this on is what makes an authored height
+            // an authored height.
+            layout.childControlHeight = true;
             layout.childControlWidth = true;
             layout.childForceExpandHeight = false;
             contentGo.GetComponent<ContentSizeFitter>().verticalFit = ContentSizeFitter.FitMode.PreferredSize;
@@ -1999,6 +2403,16 @@ namespace DeNelle.Wallet
             return contentGo.transform;
         }
 
+        /// <summary>
+        /// One store label, anchored by fraction of its (already reference-px-sized) region.
+        ///
+        /// <para>⛔ THE FONT FLOOR IS ENFORCED HERE, AT THE ONE PLACE STORE TEXT IS MADE, and that
+        /// is deliberate rather than trusted to twenty call sites. This method used to set the raw
+        /// <c>fontSize</c> it was handed — 9 to 17 — with no guard against
+        /// <see cref="ElarionUi.FontFloorMobile"/>(30). At the kit's landscape scale those rendered
+        /// around TEN PHYSICAL PIXELS, which is what defects #4 and #8 ("too small to scan",
+        /// "Redee...") actually were. Widening the panel would not have moved them a pixel.</para>
+        /// </summary>
         private static TextMeshProUGUI MakeText(Transform parent, string text, float size,
             Color color, FontStyles style, TextAlignmentOptions align, Vector2 min, Vector2 max)
         {
@@ -2009,6 +2423,7 @@ namespace DeNelle.Wallet
             rt.offsetMin = Vector2.zero; rt.offsetMax = Vector2.zero;
             var t = go.AddComponent<TextMeshProUGUI>();
             t.text = text;
+            size = Mathf.Max(size, ElarionUi.FontFloorMobile);
             t.fontSize = size;
             t.color = color;
             t.fontStyle = style;

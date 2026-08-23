@@ -111,9 +111,13 @@ namespace DeNelle.Village
         private readonly Dictionary<GameObject, string> _hovlKeyOf
             = new Dictionary<GameObject, string>();
 
-        // Loop objects, so the shared _activeLoops counter is decremented for the
-        // right bucket on return (mirrors _loopObjects for the VFXType path).
-        private readonly HashSet<GameObject> _hovlLoopObjects = new HashSet<GameObject>();
+        // Loop objects, so the shared _activeLoops count covers the right bucket on
+        // return (mirrors _loopObjects for the VFXType path).
+        // WO-1057: keyed registry, not a bare set — the value names the loop (key, owner, start
+        // time, position) so an F8 capture can print WHICH loops are live, not just how many. The
+        // shared count is DERIVED from Count on both registries; nothing increments an int.
+        private readonly Dictionary<GameObject, LoopRecord> _hovlLoopObjects
+            = new Dictionary<GameObject, LoopRecord>();
 
         // WO-VFX #2 (hue-shift tint): the AUTHORED startColor of each child ParticleSystem,
         // cached the first time that PS is recolored. Every pooled reuse then hue-shifts from
@@ -424,8 +428,9 @@ namespace DeNelle.Village
 
             if (row.IsLoop && !loopIsTimed)
             {
-                _activeLoops++;
-                _hovlLoopObjects.Add(go);
+                // WO-1057: registering IS the increment. `key` is the OWNER-AUTHORED catalog key
+                // and it is stored + printed VERBATIM — never resolved, prettified or substituted.
+                RegisterLoop(_hovlLoopObjects, go, VFXType.None, key, parent);
                 return new VFXHandle(go, key);
             }
 
@@ -626,9 +631,10 @@ namespace DeNelle.Village
             // loop has stopped, so its slot is free this instant. Only the ENQUEUE is allowed
             // to wait. (Moved above the pooling branch by WO-955 — leaving it after a branch
             // that can defer or drop would have turned a pooling decision into a budget leak.)
+            // WO-1057: the registry Remove IS the decrement — the shared loop count is derived
+            // from the two registries' Count, so there is no int that can drift from the set.
             bool wasLoop = _hovlLoopObjects.Remove(go);
-            if (wasLoop) { if (_activeLoops > 0) _activeLoops--; }
-            else         { UnregisterOneshot(go); }   // removing the live-set slot IS the decrement
+            if (!wasLoop) UnregisterOneshot(go);   // removing the live-set slot IS the decrement
 
             // WO-955 — the write side. The branch above deliberately SKIPS the reparent while
             // the host is mid-(de)activation (that non-throwing Unity refusal is what the

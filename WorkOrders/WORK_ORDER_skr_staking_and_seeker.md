@@ -1,3 +1,22 @@
+<!-- status-reconcile-2026-08-22 -->
+> # CONTRADICTS CANON WHERE IT ASSUMES A HELD BALANCE - AND IT IS ALREADY CLOSED.
+> **Flagged 2026-08-22 by the status/evidence audit. Status was already `CLOSED - ALREADY DONE`
+> (owner ruling 2026-08-21); this banner records WHY the unbuilt half must never be revived.**
+>
+> Wherever this document assumes an **in-game SKR balance we credit, debit or pay yield from**, it is
+> **forbidden by name in the shipping code** - `Assets/_Modules/Wallet/PackStore.cs:467-473`:
+> *"THE GAME NEVER HOLDS SKR AND MUST NEVER READ AS IF IT DOES ... There is NO in-game SKR ledger, earn loop
+> or spend loop and there must never be one."* SKR is **Solana Mobile's governance token** - never ours,
+> never minted, never held.
+>
+> **What actually shipped is the non-custodial shape, and it is the ONLY sanctioned one:**
+> `Assets/_Modules/Core/Platform/StakeRewardsResolver.cs:5-7` ("we NEVER mint it, NEVER custody it, NEVER
+> hold a withdrawable in-game balance - the player STAKES SKR *natively* via Solana Mobile"),
+> `Assets/_Modules/Core/UI/StakeRewardsPanel.cs:6-9,58` ("Stake natively at Stake.solanamobile - rewards
+> apply automatically. We never hold your SKR"), and `SkrShowcasePanel.cs:13-14,69-71`. What staking grants
+> is **ATTEMPTS-ONLY** and never a probability (`Assets/_Modules/Core/FeatureFlags.cs:836,869`).
+> Also note the 2026-08-17 era-sweep banner below ("still READY") is stale - the Status is CLOSED.
+
 <!-- era-sweep-2026-08-17 -->
 > ### ⚠ AGED 2026-08-17 — still READY, but unverified since 2026-06-28
 > The 2026-08-17 era sweep found **no evidence** that this WO's subject was deleted or superseded, so its **Status stays READY** and nothing else was changed. It is simply OLD (git first-add 2026-06-28) and has not been re-verified against current canon (`CANON_GROUND_TRUTH_*.md`, CLAUDE.md §7). **Re-verify before pulling it.**

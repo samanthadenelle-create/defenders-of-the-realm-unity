@@ -160,3 +160,51 @@ rather than prevent them.
 
 **Read:** `Assets/Editor/UICaptureLaunch.cs` (the enumeration to reuse) · `ElarionUiKit.cs:1057`
 (the post-scaler trap) · WO-1051 §3.5, WO-1056 §1, WO-1058 §1 (the measured cases).
+
+---
+
+## PROGRESS — 2026-08-22 (UI-001 implementation seat, edit-only; NOT gated, NOT committed)
+
+**Status stays READY TO IMPLEMENT.** A substantial part landed as a side-effect of UI-001's §R7 step
+1 ("the oracle first"), but §6 acceptance is NOT met — read the gap list before closing this.
+
+### The finding that changed the shape of the work
+
+**§8 said "Create `Assets/Editor/Regression/UiTouchClampRegression.cs`". That file was not created,
+deliberately: MOST OF THIS ORACLE ALREADY EXISTED** as `UICaptureLaunch.AuditGeometry` (~:3660), and
+building a second one would have left two oracles disagreeing about the same canvases.
+
+Measured against §2: rule 4 already IS Assert A (it measures the AUTHORED band against `MinTouchPx`
+post-scaler, which catches the defect *before* the clamp would rescue it), rule 2 was Assert B but
+narrowed to SIBLINGS, and rule 3 was Assert B's occlusion half. It already runs at three aspects
+(§3), already derives its panel set from the capture enumeration (§4/§5), and already measures in
+root-canvas reference px. **The oracle did not lack the asserts. It lacked two things:** the store
+was not in the enumeration, and cross-parent overlap walked free.
+
+### Landed
+
+- `ElarionUiKit.cs` — `ClampGrowth` + `ClampGrowths` + `ClearClampGrowths`, recorded inside
+  `UiKitMinTouchGuard.LateUpdate`. **Clamp behaviour is byte-for-byte unchanged** (§2's ⛔).
+- `UICaptureLaunch.cs` — Assert B widened past the sibling test; ancestor/descendant pairs excluded
+  as composition. **Cross-parent hits are routed to the NEW marker only**, so the pre-existing
+  `UI_GEOMETRY_OK` gate keeps its exact behaviour and this cannot redden unrelated commits.
+- `UICaptureLaunch.cs` — `UI_TOUCH_OK <clean>/<checked> panels` / `UI_TOUCH_FAIL`, reported from
+  `ReportTouchOracle()` beside the other three distinct markers.
+- `UICaptureLaunch.cs` — the §5 baseline allow-list, exactly four entries, each naming its WO,
+  with the shrink-only and delete-when-empty rules written at the site.
+- `UICaptureLaunch.cs` — `CaptureNightMarketStore`, so the money screen is measured at all three
+  aspects. It is deliberately NOT baselined: it must be able to go red.
+
+### NOT done — what still stands between this and §6 acceptance
+
+1. **§6.2, the RED PROOF.** Nothing here has been run. `UI_TOUCH_FAIL` has never been seen red, and
+   PROD-008's rule is that an oracle never seen red is not evidence. Run the capture and capture the
+   FAIL naming ArmyMusterPanel's 4.5x growth **before** trusting any green.
+2. **§6.3, the two synthetic cases** — a deliberately shrunk control and two deliberately overlapping
+   ones — are not written.
+3. **§4, `DataRegression.RunAll` registration.** The marker rides `RunCaptureHeadless`, not the
+   standard `REGRESSION_OK` gate.
+4. **The runtime half of Assert A is inert in batchmode.** `LateUpdate` never fires in an edit-mode
+   capture, so `ClampGrowths` is expected EMPTY on a headless run; the gate-time assert there is
+   rule 4. The recorder earns its keep on a device/play session. **Do not read an empty ring as a
+   pass** — that misreading is the exact shape of the blindness this WO exists to end.

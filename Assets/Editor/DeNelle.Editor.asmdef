@@ -5,6 +5,7 @@
         "DeNelle.EditorRegression",
         "DeNelle.Core",
         "DeNelle.Village",
+        "DeNelle.Wallet",
         "DeNelle.Data",
         "DeNelle.Dungeons",
         "DeNelle.Sandbox",

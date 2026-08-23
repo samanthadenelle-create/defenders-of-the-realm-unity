@@ -100,6 +100,9 @@ namespace DeNelle.Wallet
         public const string KeyLedgerHeading  = "storeLedgerHeading";
         /// <summary>{0}=goods ratio, {1}=other pack name, {2}=good, {3}=price ratio. PURE ARITHMETIC.</summary>
         public const string KeyCompareLine    = "storeCompareLine";
+        /// <summary>{0}=total granted goods per US dollar. Summed from the SAME bag the grant seam
+        /// pays out, or the caption is absent — never an invented value index.</summary>
+        public const string KeyValuePerDollar = "storeValuePerDollar";
         /// <summary>{0}=the player's own wallet balance minus this pack's price.</summary>
         public const string KeyBalanceAfter   = "storeBalanceAfter";
 
@@ -115,6 +118,10 @@ namespace DeNelle.Wallet
         // class that got keepers-satchel hidden. The game NEVER holds SKR; this is a read-only
         // mirror of the player's own wallet, which is why the copy says "your wallet".
         public const string KeyBalanceNoWallet    = "storeBalanceNoWallet";
+        /// <summary>{0}=the shortened bound address. UI-002: identity is bound, authorization is not.</summary>
+        public const string KeyBalanceBoundAddress  = "storeBalanceBoundAddress";
+        /// <summary>A durable identity exists but no live account is attached to read a balance from.</summary>
+        public const string KeyBalanceBoundIdentity = "storeBalanceBoundIdentity";
         public const string KeyBalanceChecking    = "storeBalanceChecking";
         public const string KeyBalanceUnavailable = "storeBalanceUnavailable";
         public const string KeyBalanceValue       = "storeBalanceValue";
@@ -147,9 +154,10 @@ namespace DeNelle.Wallet
             KeyWordmark,
             KeyBandFree, KeyBandFreeSub, KeyBandGap, KeyBandGapSub,
             KeyBandBasket, KeyBandBasketSub, KeyBandPatronage, KeyBandPatronageSub,
-            KeySpotlightEmpty, KeyLedgerHeading, KeyCompareLine, KeyBalanceAfter,
+            KeySpotlightEmpty, KeyLedgerHeading, KeyCompareLine, KeyValuePerDollar, KeyBalanceAfter,
             KeyCardOwned, KeyCardAnchor, KeyCardGap,
-            KeyBalanceNoWallet, KeyBalanceChecking, KeyBalanceUnavailable,
+            KeyBalanceNoWallet, KeyBalanceBoundAddress, KeyBalanceBoundIdentity,
+            KeyBalanceChecking, KeyBalanceUnavailable,
             KeyBalanceValue, KeyBalanceFiat,
             KeyCommerceReady, KeyCommerceOpeningWallet, KeyCommerceAwaitingApproval,
             KeyCommerceSubmitted, KeyCommerceVerifying, KeyCommerceDelivering,

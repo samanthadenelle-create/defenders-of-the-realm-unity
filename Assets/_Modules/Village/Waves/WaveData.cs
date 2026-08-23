@@ -117,6 +117,14 @@ namespace DeNelle.Village
         /// <summary>Codex flavour line — narrative-bible voice.</summary>
         [JsonProperty("flavor")] public string Flavor;
 
+        // WO-1065: authored combat truth. Empty/unknown stays neutral; never infer
+        // affinity from ids, names, models, families, biomes or regions.
+        [JsonProperty("affinity")] public string Affinity;
+        [JsonProperty("vulnerableTo", ObjectCreationHandling = ObjectCreationHandling.Replace)]
+        public List<string> VulnerableTo = new List<string>();
+        [JsonProperty("traits", ObjectCreationHandling = ObjectCreationHandling.Replace)]
+        public List<string> Traits = new List<string>();
+
         // ── Tactical (DEF-83) ─────────────────────────────────────────────────
         /// <summary>Override NavMeshAgent speed (world units/sec). Defaults to MoveSpeed when absent in JSON.</summary>
         [Header("Tactical")]

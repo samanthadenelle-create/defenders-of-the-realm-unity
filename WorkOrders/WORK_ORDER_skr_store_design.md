@@ -1,3 +1,27 @@
+<!-- status-reconcile-2026-08-22 -->
+> # CONTRADICTS CANON - DO NOT IMPLEMENT. **WE NEVER HOLD SKR.**
+> **Flagged 2026-08-22 by the status/evidence audit. Body preserved as history; do not act on it.**
+>
+> This WO specs an **in-game SKR balance we credit, debit and spend from** (a held-SKR premium store, an
+> `ISkrLedger`). That is **forbidden by name, in the shipping code**:
+>
+> > `Assets/_Modules/Wallet/PackStore.cs:467-473` -
+> > *"THE GAME NEVER HOLDS SKR AND MUST NEVER READ AS IF IT DOES. SKR is Solana Mobile's own governance
+> > token - the owner did not mint it, does not own it, and is not releasing a token of her own; it is the
+> > settlement rail a dApp Store title converts out through. There is NO in-game SKR ledger, earn loop or
+> > spend loop and there must never be one. This label is a READ-ONLY MIRROR of the player's OWN wallet ...
+> > Never written, never granted, never deducted in-game."*
+>
+> Same ruling in `Assets/_Modules/Core/Platform/StakeRewardsResolver.cs:5-7` ("we NEVER mint it, NEVER
+> custody it, NEVER hold a withdrawable in-game balance") and in the user-level canon
+> (*SKR is Solana Mobile's governance token - not ours, never minted, never held; the only real balance is
+> the player's wallet, read-only*).
+>
+> **The only sanctioned SKR surface is a read-only mirror of the player's own wallet.** Any successor WO
+> must start from that constraint, not from this document's ledger model.
+> Also note the 2026-08-17 era-sweep banner below is superseded by this one: the subject **was** superseded,
+> the sweep simply had no evidence of it.
+
 <!-- era-sweep-2026-08-17 -->
 > ### ⚠ AGED 2026-08-17 — still READY, but unverified since 2026-06-28
 > The 2026-08-17 era sweep found **no evidence** that this WO's subject was deleted or superseded, so its **Status stays READY** and nothing else was changed. It is simply OLD (git first-add 2026-06-28) and has not been re-verified against current canon (`CANON_GROUND_TRUTH_*.md`, CLAUDE.md §7). **Re-verify before pulling it.**

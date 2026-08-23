@@ -1,4 +1,24 @@
-**Status:** READY - PARTIAL - 2026-08-21 CLI, gate-green (COMPILE_GATE_OK + REGRESSION_OK 234/234).
+**Status:** BLOCKED — CODE COMPLETE, GATED OFF BY A FLAG (reconciled 2026-08-22). R1, R2 and R3 are ALL closed
+in code; acceptance is blocked on `FeatureFlags.MapTab`, which is `defaultOn: false`. *(Was: READY - PARTIAL -
+2026-08-21 CLI, gate-green (COMPILE_GATE_OK + REGRESSION_OK 234/234).)*
+
+> ### VERIFIED AT SOURCE 2026-08-22 — the "REMAINING R1/R2/R3" table below is STALE. All three are closed.
+> * **R1 (parchment never paints atmosphere) — CLOSED.** `Assets/_Modules/Village/Hero/RealmMapPanel.cs:38`
+>   now imports `DeNelle.Core.World` for `RealmPin`/`RealmPinKind`; the Withering band is real
+>   (`WitheringOuterPx :167`, `WitheringInnerPx :170`, `WitheringCartouchePx :172`, `BuildWithering` built at
+>   `:291` and defined at `:447-461`), and the panel subscribes to `RealmPinBoard.Changed` at `:232`.
+> * **R2 (VM has no biome field) — CLOSED.** `Assets/_Modules/Village/Hero/RealmMapVM.cs:87`
+>   (`public readonly string Biome;`), assigned at `:101`, surfaced as `SelectedBiome` at `:218-224`, fed from
+>   `RealmRegionDef.Biome` at `:382`.
+> * **R3 (pin board stays empty — no producer) — CLOSED.** `Assets/_Modules/Village/World/RealmPinProducers.cs`
+>   exists and publishes per-source (`RealmPinSources.Hero` / `.Dungeons` / `.Raids` / `.Army`, `:91-94`);
+>   consumers read `RealmPinBoard.Pins` at `RealmMapVM.cs:264` and `HudMinimapWidget.cs:370`.
+>
+> **THE REAL BLOCKER IS THE FLAG, NOT THE CODE:** `Assets/_Modules/Core/FeatureFlags.cs:734` —
+> `public static bool MapTab => Get("maptab", defaultOn: false);`. Per CLAUDE.md 7, Map is a Bag tab held OFF
+> because realm travel is a WO-827 stub. **Nobody can felt-verify this WO until the owner turns the flag on**
+> (PlayerPrefs `ff.maptab`), so it cannot be closed by writing more code.
+
 
 # WORK ORDER 829 — Map atmosphere + content pins (Withering, biomes, raids/dungeons/rumors)
 

@@ -55,6 +55,29 @@ namespace DeNelle.Village
         // effect (never hardcoded to one weapon id). Newtonsoft leaves it null when the row omits it.
         public string element;
 
+        // WO-1066: mechanical identity and presentation-neutral semantic VFX intent.
+        // Catalog data never carries third-party prefab keys. Missing fields mean no effect/VFX.
+        public string subtitle;
+        public string effectKind;
+        public float effectChance;
+        public float effectDamagePct;
+        public float effectDurationSeconds;
+        public int effectMaxStacks;
+        public float effectCooldownSeconds;
+        public string vfxHeld;
+        public string vfxAttack;
+        public string vfxHit;
+        public string vfxProc;
+
+        // WO-1067 owner-authored certification. Only "ready" is sellable at the Forge once
+        // certification is enabled by data; bounds/address registration alone never set it.
+        public string visualReadiness;
+        public string visualEvidence;
+        public string visualFailureReason;
+
+        public bool IsVisuallyReady => string.Equals(visualReadiness, "ready", StringComparison.OrdinalIgnoreCase);
+        public bool HasVisualCertification => !string.IsNullOrWhiteSpace(visualReadiness);
+
         // HAND-SLOT model (owner 2026-06-18, docs/STORE_EQUIP_SPEC.md "Equip-slot rules").
         // These three fields exist in the canonical weapons.json but were previously DROPPED on
         // deserialize because WeaponDef didn't declare them. Now read so the equip layer can
@@ -209,6 +232,12 @@ namespace DeNelle.Village
         // GearCatalog.ClassWeight / ArmorFitsClass.
         public string weight;
         public string rarity;
+        // WO-1067: armor is certified from its normalized 2D identity sheet + live stat proof.
+        public string visualReadiness;
+        public string visualEvidence;
+        public string visualFailureReason;
+        public bool IsVisuallyReady => string.Equals(visualReadiness, "ready", StringComparison.OrdinalIgnoreCase);
+        public bool HasVisualCertification => !string.IsNullOrWhiteSpace(visualReadiness);
         public float defense;     // 0..0.9 fractional damage reduction
         public float hpBonus;     // carried for a later pass; v1 applies defense only
         public GearReq req;

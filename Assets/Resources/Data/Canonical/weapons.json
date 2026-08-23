@@ -603,7 +603,7 @@
     },
     {
       "id": "blink_axe1h_12",
-      "name": "Reaver's Hatchet",
+      "name": "Warden's Camp Axe",
       "icon": "🪓",
       "kind": "Weapon",
       "category": "axe",
@@ -1448,7 +1448,7 @@
     },
     {
       "id": "blink_shield1h_04",
-      "name": "Oakband Heater",
+      "name": "Oathbound Heater",
       "icon": "🛡",
       "kind": "Weapon",
       "category": "shield",
@@ -2291,11 +2291,19 @@
     },
     {
       "id": "knight_flameblade",
-      "name": "Flameblade",
+      "name": "Emberhand Brand",
+      "subtitle": "Uncommon Flame Sword",
       "icon": "🗡️",
       "job": "knight",
       "rarity": "uncommon",
       "element": "fire",
+      "effectKind": "burn",
+      "effectChance": 0.2,
+      "effectDamagePct": 0.1,
+      "effectDurationSeconds": 4,
+      "effectMaxStacks": 1,
+      "vfxHit": "weapon.hit.flame",
+      "vfxProc": "status.apply.burn",
       "damageMult": 1.2,
       "reach": 3.2,
       "req": {
@@ -2304,7 +2312,7 @@
       "buyWood": 40,
       "buyIron": 120,
       "makersMark": "Emberhand",
-      "flavor": "Quenched in ember-oil at the Emberhand forge, its edge wakes to fire when it bites. A cheap early brand a warden can carry to SEE what an elemental edge does."
+      "flavor": "Emberhand steel quenched in ember-oil; its edge wakes to fire when it bites."
     }
   ],
   "_generated": "GearCurationExporter (additive merge) from StreamingAssets library + GearCurationPicks.json - DO NOT hand-edit"

@@ -206,6 +206,11 @@ namespace DeNelle.Village
         /// null element / HELD element -> null).</summary>
         public static string ElementalOnHitKey(WeaponDef w)
         {
+            // WO-1066: new content asks for semantic intent. This table is owner-authored and
+            // verbatim; an untagged verb is HELD (null), never inferred or substituted.
+            if (w != null && !string.IsNullOrWhiteSpace(w.vfxHit))
+                return ResolveSemanticVerb(w.vfxHit);
+
             switch (Normalize(w != null ? w.element : null))
             {
                 // fire — full multi-layer Hovl fire impact (IsLoop:0, one-shot). Already wired; keep.
@@ -238,6 +243,21 @@ namespace DeNelle.Village
                 // HELD (no owner-tagged on-hit key yet): holy, water, earth, nature, ... -> no elemental layer.
                 default:
                     return null;
+            }
+        }
+
+        /// <summary>Owner-authored semantic verb to approved Hovl key. Unknown means HELD.</summary>
+        public static string ResolveSemanticVerb(string verb)
+        {
+            switch (Normalize(verb))
+            {
+                case "weapon.hit.flame": return "Fireball_Impact";
+                case "weapon.hit.ice": return "Frost_Impact";
+                case "weapon.hit.aether": return "Arcane_Impact";
+                case "status.apply.burn": return "Fireball_Impact";
+                case "status.apply.poison": return "PosionCloud_Cast";
+                case "status.apply.slow": return "Frost_Impact";
+                default: return null;
             }
         }
     }

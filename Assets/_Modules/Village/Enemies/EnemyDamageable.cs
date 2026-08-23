@@ -120,7 +120,8 @@ namespace DeNelle.Village
             E.SetNextImpactElement(element);
             // Element resist / bonus math is a later tuning pass — enemies.json
             // does not yet carry per-element resistances. Forward raw damage.
-            E.TakeDamage(amount);
+            var resolved = ElementalDamageResolver.Resolve(amount, element, E.Affinity, E.ElementalVulnerabilities);
+            E.TakeDamage(resolved.FinalAmount);
         }
 
         /// <summary>Forwards the source tint to the Enemy, which colours the next

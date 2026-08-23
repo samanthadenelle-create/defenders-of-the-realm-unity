@@ -21,6 +21,21 @@
 // field-for-field MIRROR of those rows in structures-catalog.json â€” see the
 // banner on RegisterFallback; BuildEconomyRegression gate 12 enforces it.
 //
+// WO-1137 (2026-08-21) - INSTRUMENTATION HALF ONLY. The owner's (a)-delete-it vs
+// (b)-codegen-it ruling on the fallback itself is still OPEN; nothing about WHICH
+// rows load or what the fallback contains changed here. What changed is that this
+// file is no longer blind:
+//   * success is judged on the ROW COUNT (registered vs rows in the parsed file),
+//     not on `loaded > 0` -- one good row out of 28 used to read as a healthy boot;
+//   * every previously-silent path (dropped row, defaulted RepoProps, empty read,
+//     empty parse) now names the id and the reason via FlowTrace;
+//   * the fallback's own announcement is FlowTrace.Fail, not a Debug.LogWarning
+//     that neither break-log.jsonl nor the Flow tail keeps;
+//   * every boot emits "CATALOG BOOT COUNT registered=<n> sourceRows=<n> path=<json|
+//     fallback>", so a 28-row boot is finally distinguishable from a 3- or 1-row one.
+// The FlowTrace calls are PERMANENT (CLAUDE.md 12): flag them off if a system ever
+// goes quiet, never delete them.
+//
 // Pattern mirrors WaveSystemBridgeBootstrap / AudioBootstrap: a
 // [RuntimeInitializeOnLoadMethod] that Clear()s then registers, guarded so a
 // domain-reload-off second Play re-registers cleanly. behaviorId strings resolve
@@ -35,6 +50,7 @@ using UnityEngine;
 using DeNelle.Core;
 using DeNelle.Core.Catalog;
 using DeNelle.Core.Combat;
+using DeNelle.Core.Diagnostics; // FlowTrace - WO-1137 instrumentation (CLAUDE.md 12). PERMANENT.
 
 namespace DeNelle.Village
 {
@@ -65,11 +81,65 @@ namespace DeNelle.Village
             // Clear first so a domain-reload-off second Play doesn't double-register.
             CatalogRegistry.Clear();
 
-            int loaded = LoadFromJson();
+            // WO-1137 INSTRUMENTATION. `loaded > 0` USED TO BE THE SUCCESS TEST, and that is the
+            // real defect behind this ticket: LoadFromJson silently `continue`s past any rejected
+            // row, so ONE good row out of 28 returned 1, `loaded > 0` was true, the fallback never
+            // fired, and the cheerful "data-driven path is live" log printed over a 27-row content
+            // hole. A failure path that prints success text. The test is now the ROW COUNT: rows
+            // registered vs rows present in the parsed source file. A shortfall is FlowTrace.Fail,
+            // which is error severity AND "[Flow:"-prefixed, so it survives BOTH capture filters
+            // (BreakCaptureHarness.cs:250 keeps only Error/Exception/Assert; :686-688 keeps only
+            // lines containing "[Flow:"). A bare Debug.LogWarning reaches NEITHER artifact -- it is
+            // functionally silent on a device, which is how a wrong-game boot stayed invisible.
+            // No behaviour changes here: the same rows load and the same fallback fires. Only
+            // visibility changes. This instrumentation is PERMANENT (CLAUDE.md 12) -- never
+            // #if-gate it out, never strip it.
+            int rowsInFile;
+            int loaded = LoadFromJson(out rowsInFile);
+            int registered = CatalogRegistry.Count;
             if (loaded > 0)
             {
-                Debug.Log($"[CatalogBootstrap] Registered {CatalogRegistry.Count} catalog " +
+                if (rowsInFile > loaded)
+                {
+                    FlowTrace.Fail("Catalog",
+                        $"CATALOG SHORTFALL: registered {loaded} of {rowsInFile} row(s) from " +
+                        $"{CatalogRelativePath} -- {rowsInFile - loaded} row(s) were DROPPED. The " +
+                        "build palette is INCOMPLETE: the player gets a smaller game than the " +
+                        "authored content with nothing on screen saying so. See the preceding " +
+                        "[Flow:Catalog] 'dropped row' lines for the id and reason of each.");
+                }
+                else
+                {
+                    FlowTrace.Step("Catalog",
+                        $"catalog load OK: registered {loaded} of {rowsInFile} row(s) from " +
+                        $"{CatalogRelativePath} -- data-driven path is live.");
+                }
+
+                // Accepted-but-not-present means two rows shared an id and the later one REPLACED
+                // the earlier (CatalogRegistry.Register logs that replacement). Content loss the
+                // count-vs-count check above cannot see, so it gets its own assertion.
+                if (registered != loaded)
+                {
+                    FlowTrace.Fail("Catalog",
+                        $"CATALOG ID COLLISION: {loaded} row(s) were accepted but CatalogRegistry " +
+                        $"holds {registered} -- {loaded - registered} row(s) overwrote an earlier " +
+                        "id. The [Flow:Catalog] REPLACED lines above name the duplicates.");
+                }
+
+                // The one line that makes a 28-row boot distinguishable from a 3-row or a 1-row
+                // boot. NOTHING could tell them apart before WO-1137 -- that is the heart of the
+                // ticket. Emitted on EVERY boot, on BOTH paths, in a fixed greppable shape.
+                FlowTrace.Step("Catalog",
+                    $"CATALOG BOOT COUNT registered={registered} sourceRows={rowsInFile} path=json");
+
+                // The legacy "data-driven path is live" line is now gated on a COMPLETE load, so it
+                // can never again narrate a partial one as success.
+                if (rowsInFile <= loaded)
+                {
+                Debug.Log($"[CatalogBootstrap] Registered {registered} of {rowsInFile} catalog " +
                           $"entrie(s) from structures-catalog.json â€” data-driven path is live.");
+                }
+
                 // Owner-dialed poses saved by the Orient tool overlay the shipped data
                 // (local wins â€” the 2026-07-08 "save locally" directive; gear-offsets pattern).
                 StructureOrientationLocalStore.ApplyAll();
@@ -81,6 +151,20 @@ namespace DeNelle.Village
             RegisterFallback();
             Debug.LogWarning($"[CatalogBootstrap] structures-catalog.json unavailable â€” " +
                              $"registered {CatalogRegistry.Count} hardcoded fallback entrie(s).");
+
+            // WO-1137: shipping a 3-of-28-row palette is NOT a warning-level event. The
+            // Debug.LogWarning above announces it into a severity that NEITHER capture artifact
+            // keeps (BreakCaptureHarness.cs:250 error-only; :686-688 "[Flow:"-only), so on a device
+            // the wrong game shipped announced-but-unheard. FlowTrace.Fail is error severity AND
+            // "[Flow:"-prefixed, so it survives both. PERMANENT (CLAUDE.md 12) -- never strip.
+            FlowTrace.Fail("Catalog",
+                $"FALLBACK PALETTE ACTIVE: {CatalogRelativePath} yielded 0 rows -- registered " +
+                $"{CatalogRegistry.Count} hardcoded fallback entrie(s) INSTEAD OF the authored " +
+                "catalog. This is not a safety net: it is a different, silent game with a 3-row " +
+                "build palette and nothing on screen saying the content failed to load. The " +
+                "preceding [Flow:Catalog] read/parse/empty lines name the cause.");
+            FlowTrace.Step("Catalog",
+                $"CATALOG BOOT COUNT registered={CatalogRegistry.Count} sourceRows=0 path=fallback");
         }
 
         /// <summary>
@@ -88,8 +172,14 @@ namespace DeNelle.Village
         /// into a <see cref="CatalogEntry"/>, and registers it. Returns the number of
         /// entries registered (0 = load/parse failure, caller falls back).
         /// </summary>
-        private static int LoadFromJson()
+        /// <param name="rowsInFile">
+        /// WO-1137: rows PRESENT in the parsed source file, so the caller can assert the row COUNT
+        /// instead of `loaded > 0`. 0 when the file could not be read or parsed at all.
+        /// </param>
+        private static int LoadFromJson(out int rowsInFile)
         {
+            rowsInFile = 0;
+
             string json;
             try
             {
@@ -97,12 +187,25 @@ namespace DeNelle.Village
             }
             catch (System.Exception ex)
             {
+                // WO-1137: was Debug.LogWarning -- a severity neither capture artifact keeps, so a
+                // hard read failure was invisible on device. Fail is error + "[Flow:"-prefixed.
+                FlowTrace.Fail("Catalog",
+                    $"catalog READ THREW for {CatalogRelativePath}: {ex.GetType().Name}: {ex.Message} " +
+                    "-- zero rows load and the hardcoded fallback palette will take over.");
                 Debug.LogWarning($"[CatalogBootstrap] read of {CatalogRelativePath} threw: {ex.Message}");
                 return 0;
             }
 
             if (string.IsNullOrEmpty(json))
+            {
+                // WO-1137: this path was COMPLETELY silent -- an empty resolve returned 0 with no
+                // log of any kind, and the fallback then took over unexplained.
+                FlowTrace.Fail("Catalog",
+                    $"catalog READ EMPTY for {CatalogRelativePath}: CanonicalJson.Read returned " +
+                    "null/empty (neither the Resources copy nor the StreamingAssets copy resolved) " +
+                    "-- zero rows load and the hardcoded fallback palette will take over.");
                 return 0;
+            }
 
             CatalogFile file;
             try
@@ -119,19 +222,70 @@ namespace DeNelle.Village
             }
             catch (System.Exception ex)
             {
+                // WO-1137: was Debug.LogWarning -- invisible to both capture artifacts.
+                FlowTrace.Fail("Catalog",
+                    $"catalog PARSE FAILED for {CatalogRelativePath}: {ex.GetType().Name}: {ex.Message} " +
+                    $"(json length={json.Length}) -- zero rows load and the hardcoded fallback " +
+                    "palette will take over.");
                 Debug.LogWarning($"[CatalogBootstrap] parse of {CatalogRelativePath} failed: {ex.Message}");
                 return 0;
             }
 
             if (file == null || file.Entries == null || file.Entries.Count == 0)
+            {
+                // WO-1137: another path that was COMPLETELY silent. A structurally valid but
+                // entry-less catalog looked exactly like a missing file, with no log either way.
+                FlowTrace.Fail("Catalog",
+                    $"catalog PARSED BUT EMPTY for {CatalogRelativePath}: " +
+                    $"file={(file == null ? "null" : "ok")} " +
+                    $"entries={(file == null || file.Entries == null ? "null" : file.Entries.Count.ToString())} " +
+                    "-- zero rows load and the hardcoded fallback palette will take over.");
                 return 0;
+            }
+
+            rowsInFile = file.Entries.Count;
 
             int count = 0;
+            int index = -1;
             foreach (var entry in file.Entries)
             {
-                if (entry == null || string.IsNullOrEmpty(entry.id)) continue;
-                if (entry.repo == null) entry.repo = new RepoProps();
-                if (entry.repo.placement == null) entry.repo.placement = new PlacementRules();
+                index++;
+
+                // WO-1137: this `continue` was PURE SILENT CONTENT LOSS -- a dropped catalog row
+                // emitted no log of any kind, and because the caller only tested `loaded > 0` the
+                // drop never surfaced anywhere. Name the row and the reason.
+                if (entry == null || string.IsNullOrEmpty(entry.id))
+                {
+                    FlowTrace.Warn("Catalog",
+                        $"dropped row at index {index} of {rowsInFile} in {CatalogRelativePath}: " +
+                        (entry == null
+                            ? "the row deserialized to null (malformed JSON object)."
+                            : "the row has a null/empty 'id', which is the registry key.") +
+                        " This row's content is NOT in the build palette.");
+                    continue;
+                }
+
+                // WO-1137: a malformed row silently degraded to an ALL-DEFAULT placeholder -- zero
+                // cost, zero range, zero damage, footprint 0 -- and was then registered as a real
+                // catalog entry. Unbuildable/unbalanced content that looked like a successful load.
+                if (entry.repo == null)
+                {
+                    FlowTrace.Warn("Catalog",
+                        $"row id='{entry.id}' (index {index} of {rowsInFile}) has NO 'repo' block: " +
+                        "substituting an all-default RepoProps placeholder (cost 0, range 0, " +
+                        "damage 0, footprint 0). It registers as a real entry but carries no " +
+                        "authored values -- fix the catalog row.");
+                    entry.repo = new RepoProps();
+                }
+                if (entry.repo.placement == null)
+                {
+                    FlowTrace.Warn("Catalog",
+                        $"row id='{entry.id}' (index {index} of {rowsInFile}) has NO " +
+                        "'repo.placement' block: substituting default PlacementRules (footprint 0, " +
+                        "no surface constraint), so placement validation for this row is inert.");
+                    entry.repo.placement = new PlacementRules();
+                }
+
                 CatalogRegistry.Register(entry);
                 count++;
             }

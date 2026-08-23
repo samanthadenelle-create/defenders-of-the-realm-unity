@@ -727,7 +727,23 @@ namespace DeNelle.Village
                 FlowTrace.Step("Combat",
                     $"hero MELEE hit '{col.transform.root.name}' faction={damageable.Faction} " +
                     $"dealtByHero=True amount={damage:F1} (perfect={isPerfect} riposte={riposte} crit={isCrit}).");
-                damageable.TakeDamage(damage, DamageElement.None);
+                DamageElement weaponElement = ElementalDamageResolver.ParseElement(
+                    _gear != null && _gear.EquippedWeapon != null ? _gear.EquippedWeapon.element : null);
+                damageable.TakeDamage(damage, weaponElement);
+
+                // WO-1066: bounded catalog effect. Reuse the existing burn/slow/poison
+                // consumers; a missing/unknown effect remains inert and must not be advertised.
+                var effectWeapon = _gear != null ? _gear.EquippedWeapon : null;
+                if (_abilities != null && effectWeapon != null && !string.IsNullOrEmpty(effectWeapon.effectKind))
+                {
+                    float chance = Mathf.Clamp01(effectWeapon.effectChance);
+                    if (chance >= 1f || (chance > 0f && Random.value < chance))
+                    {
+                        float seconds = Mathf.Max(0f, effectWeapon.effectDurationSeconds);
+                        float dps = seconds > 0f ? damage * Mathf.Max(0f, effectWeapon.effectDamagePct) / seconds : 0f;
+                        _abilities.ApplyAmmoRider(damageable, effectWeapon.effectKind, dps, seconds, 0f);
+                    }
+                }
                 anyHit = true;
                 lastHitDamage = damage;
 

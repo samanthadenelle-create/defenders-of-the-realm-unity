@@ -1,6 +1,11 @@
-# WORK ORDER 1035 — Portal VFX is huge and free-floating: seat it INSIDE the portal mesh, derived from bounds
+# WORK ORDER 1035 — Portal VFX is huge and free-floating: seat it INSIDE the portal mesh, derived from bounds  — **OWNER CLOSED 2026-08-22** (felt-verified by the owner; PO closes, section 13).
 
-**Status:** DONE (shipped 2026-08-16; status flipped 2026-08-17 by the READY-staleness audit)
+**Status:** DONE (shipped 2026-08-16; status flipped 2026-08-17 by the READY-staleness audit) - re-confirmed 2026-08-22 by the status/evidence audit. Owner felt-verify still owed (PO closes, CLAUDE.md 13).
+
+> **NUMBER NOTE (2026-08-22):** `grep -rn "WO-1035"` over `Assets/` returns the *BuildHud Done-button* WO-1035
+> (`Assets/_Modules/Village/BuildMode/BuildHudController.cs:39,155,301,387,477,583,773,935`), which is a
+> **different** ticket sharing this number. Do not read those hits as this ticket's evidence.
+
 
 > Shipped in **68082bf6b** — *"fix(vfx): WO-1035 - portal effects sit INSIDE the arch (units bug, not art)"*.
 > Live at `Assets/_Modules/Village/World/DungeonWorldPortalSpawner.cs:866, 968, 1057, 1082` — a MEASURED

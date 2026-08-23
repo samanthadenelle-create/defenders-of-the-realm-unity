@@ -1,4 +1,18 @@
-**Status:** READY TO IMPLEMENT — the instrument has already named the layer; fix the source, not the panel
+**Status:** DONE — reconciled 2026-08-22 by the status/evidence audit. Owner felt-verify still owed (PO closes, CLAUDE.md 13). *(Was: READY TO IMPLEMENT.)*  — **OWNER CLOSED 2026-08-22** (felt-verified by the owner; PO closes, section 13).
+
+> ### VERIFIED AT SOURCE 2026-08-22 — the fix is present AND proven by a real GPU readback, not a source grep
+> **Fix, at source:** `Assets/_Modules/Village/Hero/HeroPreviewViewer.cs` — `NeutralizeEffectRenderers(_model)`
+> is called before `ComputeBounds` at `:132`, `:298` and `:302`; the framing rewrite is `:669-729`
+> ("WO-1059 — THE FIX. Frame from MODEL GEOMETRY ONLY", excluding non-mesh effect renderers), and the second
+> half — forcing `updateWhenOffscreen` on skinned renderers — is `:744-791`. The late weapon-attach case is
+> handled at `:267`.
+> **Oracle:** `Assets/Editor/Regression/HeroPreviewFramingRegression.cs`, registered at
+> `Assets/Editor/Regression/DataRegression.cs:893` as the `hero-preview-framing suite`
+> (markers `HERO_PREVIEW_FRAMING_OK` / `_FAIL`). Its **Case B drives the real shipping `HeroPreviewViewer` rig
+> end to end and judges it by the rig's OWN render-texture readback (`DrewContent`), on a real graphics device**;
+> it stands down VISIBLY via `RegressionOutcome.PartialSkip` under `-nographics` rather than reporting a silent
+> green (see the suite header, `:22-38`). That is a measured GPU result, not a source-text lint.
+
 
 # WORK ORDER 1059 — The hero preview render texture is blank AT THE SOURCE
 

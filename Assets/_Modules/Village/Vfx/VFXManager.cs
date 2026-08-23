@@ -99,6 +99,12 @@ namespace DeNelle.Village
             // alongside the VFXType catalog. See VFXManager.Hovl.cs.
             EnsureHovlCatalog();
             InitialiseHovlPools();
+
+            // WO-1057: every F8 capture prints the live loop table. Subscribing here (not from a
+            // debug menu, not behind a build fence) is what makes the instrument present at the
+            // moment the owner actually flags "random vfx stuck around" — she presses F8 and moves
+            // on, and the table is already in the log.
+            BreakCaptureHarness.CaptureSnapshotRequested += DumpLiveLoops;
         }
 
         // WO-504: the VFXCatalog is a ScriptableObject asset (VFXType -> authored prefab).
@@ -128,6 +134,9 @@ namespace DeNelle.Village
         private void OnDestroy()
         {
             VfxLoopBudget.CapChanged -= OnLoopBudgetChanged;
+            // WO-1057: a static event holding a destroyed MonoBehaviour would dump against a dead
+            // manager on the next capture (and leak it across an editor domain reload).
+            BreakCaptureHarness.CaptureSnapshotRequested -= DumpLiveLoops;
             if (Instance == this) Instance = null;
         }
 
@@ -194,14 +203,76 @@ namespace DeNelle.Village
         // Tracking how many active effects we currently have.
         // WO-VFX oneshot-leak fix: the oneshot count is NO LONGER a raw ++/-- int (which pinned at
         // the cap when a return never ran) - it is DERIVED from _oneshotSlots (the live checked-out
-        // set) via ActiveOneshotCount(). _activeLoops stays an int (loops are held by long-lived
-        // VFXHandles with no deadline) but SweepOneshots still reclaims loops whose host GameObject
+        // set) via ActiveOneshotCount(). SweepOneshots also reclaims loops whose host GameObject
         // was destroyed, so neither bucket can pin at its cap.
-        private int _activeLoops;
+        //
+        // WO-1057 — THE LOOP BUCKET IS NOW DERIVED TOO, AND IT HAS NAMES.
+        // _activeLoops used to be a bare `int` and the loop sets held BARE GameObjects, so the pool
+        // knew HOW MANY loops were live and never WHICH. A leaked loop was, by construction,
+        // invisible: the number climbed and nothing in the repo could name the culprit. Every
+        // "random VFX stuck around" F8 flag (seq 3583, 2026-08-22) therefore arrived with no RCA
+        // attached and no way to get one.
+        //
+        // Both loop sets are now keyed registries (host GameObject -> LoopRecord) carrying key,
+        // owner, start time and start position, and the count is DERIVED from them. Consequences,
+        // all deliberate:
+        //   • the cap check is bit-identical (same value, read the same way, same message);
+        //   • the `Mathf.Max(0, ...)` clamp in ReclaimDestroyedLoops is GONE — a Count cannot go
+        //     negative, so there is no longer a floor that could hide accounting drift;
+        //   • DumpLiveLoops() can print an age-sorted table on every F8 capture (see the
+        //     BreakCaptureHarness.CaptureSnapshotRequested subscription in Awake);
+        //   • AuditLoopAges() self-reports a loop that outlives its owner or a sane age, once per
+        //     handle, so the NEXT occurrence does not need the owner to notice it on screen.
+        // This is instrumentation and it is PERMANENT (CLAUDE.md §12) — never fence it behind
+        // DEVELOPMENT_BUILD, and never fork a second set alongside these two.
+        private int _activeLoops => _loopObjects.Count + _hovlLoopObjects.Count;
+
+        /// <summary>Identity of ONE live loop. Allocated once at loop start (never per frame) so a
+        /// capture can name what is playing, who started it, and how long it has been running.
+        /// A class (not a struct) so <see cref="AuditLoopAges"/> can stamp Warned in place while
+        /// enumerating the registry.</summary>
+        internal sealed class LoopRecord
+        {
+            public VFXType   Type;        // VFXType-pool identity (None on the Hovl string-key path)
+            public string    HovlKey;     // owner-authored Hovl key, printed VERBATIM (never resolved)
+            public GameObject Host;       // the pooled instance — the registry key, kept for live position
+            public Transform Owner;       // the parent the caller attached to (Unity-null once destroyed)
+            public bool      Unparented;  // world-positioned loop: it never HAD an owner, so a null
+                                          // Owner here is normal and must not read as "orphaned"
+            public string    OwnerName;   // captured AT START — survives the owner's destruction, which
+                                          // is precisely the case worth naming
+            public int       OwnerId;     // GetInstanceID(), so two same-named owners stay distinct
+            public float     StartedAt;   // Time.realtimeSinceStartup — AGE IS THE LEAK SIGNAL
+            public Vector3   StartPos;    // fallback for the dump when the host is already gone
+            public bool      Warned;      // one-per-handle Warn latch (age or orphaned owner)
+
+            public string Key => string.IsNullOrEmpty(HovlKey) ? Type.ToString() : HovlKey;
+        }
+
         // bug-triage P1: track which pooled objects are loops so ReturnToPool decrements the
-        // RIGHT counter (the old code guessed oneshot-first, drifting counters until VFX of a
+        // RIGHT bucket (the old code guessed oneshot-first, drifting counters until VFX of a
         // class hit their cap and were silently skipped — combat went quiet mid-run).
-        private readonly HashSet<GameObject> _loopObjects = new HashSet<GameObject>();
+        // WO-1057: the value side is the identity that makes a leak nameable.
+        private readonly Dictionary<GameObject, LoopRecord> _loopObjects
+            = new Dictionary<GameObject, LoopRecord>();
+
+        // ── WO-1057 loop audit / dump state ───────────────────────────────────
+        // A loop still running this long after it started is reportable on its own. Generous on
+        // purpose: real endless loops exist (the Heart aura, POI markers), so this is a "nothing
+        // legitimate in a town session runs this long unnoticed" threshold, not a lifetime cap.
+        // It NEVER stops or reclaims anything — WO-1057 is the finding instrument, and loop
+        // release POLICY (timeout vs OnDisable/OnDestroy) belongs to the follow-up ticket.
+        private const float STUCK_LOOP_AGE_SECONDS = 300f;
+        private const float LOOP_AUDIT_INTERVAL    = 5f;   // the audit is NOT a per-frame cost
+        // Rows printed per dump. The tail ring the F8 harvest reads keeps 80 lines total
+        // (BreakCaptureHarness.TailCap), so an unbounded 48-row dungeon dump would evict the very
+        // context it is meant to sit next to. Sorted OLDEST FIRST, so the suspect is always inside
+        // the printed window and only the young tail is elided (and the elision is counted).
+        private const int   LOOP_DUMP_MAX_ROWS     = 24;
+        private float _nextLoopAudit;
+        // Reused scratch — the per-frame prune and the capture-time sort must not allocate.
+        private readonly List<GameObject> _loopPruneScratch = new List<GameObject>();
+        private readonly List<LoopRecord> _loopDumpScratch  = new List<LoopRecord>();
 
         // ── Leak-proof oneshot accounting (WO-VFX) ────────────────────────────
         // ROOT CAUSE the old code hit: PlayOneshot did _activeOneshots++ then relied on a return
@@ -544,8 +615,9 @@ namespace DeNelle.Village
                     go.SetActive(true);
                     VerifyHasParticles(go, type, "loop");
                     PlayAllParticles(go);
-                    _activeLoops++;
-                    _loopObjects.Add(go);   // bug-triage P1: tag as loop for correct return-decrement
+                    // WO-1057: registering IS the increment (the count is derived from the two loop
+                    // registries) — there is no int left to bump out of step with the set.
+                    RegisterLoop(_loopObjects, go, type, null, parent);
                     return new VFXHandle(go, type);
                 }
             }
@@ -975,12 +1047,13 @@ namespace DeNelle.Village
                 _pools[type].Enqueue(go);
             }
 
-            // bug-triage P1: decrement the counter for the bucket this object actually came
-            // from (tracked in _loopObjects at acquire), instead of guessing oneshot-first
-            // and drifting until a class hit its cap and went silent.
+            // bug-triage P1: release the slot in the bucket this object actually came from
+            // (tracked in _loopObjects at acquire), instead of guessing oneshot-first and
+            // drifting until a class hit its cap and went silent.
+            // WO-1057: the registry Remove IS the decrement for the loop bucket, exactly as the
+            // oneshot line below has always worked — there is no separate int to keep in step.
             bool wasLoop = _loopObjects.Remove(go);
-            if (wasLoop) { if (_activeLoops > 0) _activeLoops--; }
-            else         { UnregisterOneshot(go); }   // removing the live-set slot IS the decrement
+            if (!wasLoop) UnregisterOneshot(go);   // removing the live-set slot IS the decrement
         }
 
         /// <summary>Defer pool return by <paramref name="delay"/> seconds (for graceful stop).</summary>
@@ -1101,31 +1174,190 @@ namespace DeNelle.Village
             }
 
             ReclaimDestroyedLoops();
+
+            // WO-1057: age/orphan audit. Deliberately NOT per-frame — it walks the registries on a
+            // 5 s cadence and allocates nothing until it actually has something to report.
+            if (Time.realtimeSinceStartup >= _nextLoopAudit)
+            {
+                _nextLoopAudit = Time.realtimeSinceStartup + LOOP_AUDIT_INTERVAL;
+                AuditLoopAges();
+            }
         }
 
         /// <summary>Reclaim loop budget for any aura/trail whose host GameObject was destroyed before
         /// its VFXHandle.Stop() ran (the loop-bucket twin of the oneshot leak). Section 12 FlowTrace on free.</summary>
         private void ReclaimDestroyedLoops()
         {
-            int freed = PruneDestroyedFromSet(_loopObjects) + PruneDestroyedFromSet(_hovlLoopObjects);
+            int freed = PruneDestroyedFromRegistry(_loopObjects) + PruneDestroyedFromRegistry(_hovlLoopObjects);
             if (freed > 0)
             {
-                _activeLoops = Mathf.Max(0, _activeLoops - freed);
+                // WO-1057 — the `_activeLoops = Mathf.Max(0, _activeLoops - freed)` clamp that USED
+                // to live on this line is GONE, and its deletion is the point, not a tidy-up. The
+                // count is now derived from the registries, so removing the entries above IS the
+                // decrement and the value cannot go negative. The old clamp only mattered if
+                // decrements could outrun increments — i.e. exactly when the pool was silently
+                // UNDER-counting and the cap had stopped protecting anything. A clamp that hides
+                // the drift it implies is the bug; do not reintroduce one.
                 FlowTrace.Step("VFXManager",
                     "SweepOneshots: reclaimed " + freed + " loop slot(s) whose host was destroyed before " +
                     "Stop() (active loops now " + _activeLoops + "/" + _maxActiveLoops + ").");
             }
         }
 
-        /// <summary>Remove every Unity-destroyed GameObject from <paramref name="set"/>; returns how
-        /// many were dropped. A destroyed GO keeps its managed hash, so RemoveWhere matches it via the
-        /// overloaded == null.</summary>
-        private static int PruneDestroyedFromSet(HashSet<GameObject> set)
+        /// <summary>Remove every Unity-destroyed host from <paramref name="registry"/>; returns how
+        /// many were dropped. A destroyed GO keeps its managed hash, so the lookup still matches it
+        /// and the overloaded == null identifies it. Runs per frame, so it reuses
+        /// <see cref="_loopPruneScratch"/> rather than allocating a key list.</summary>
+        private int PruneDestroyedFromRegistry(Dictionary<GameObject, LoopRecord> registry)
         {
-            if (set == null || set.Count == 0) return 0;
-            int before = set.Count;
-            set.RemoveWhere(go => go == null);
-            return before - set.Count;
+            if (registry == null || registry.Count == 0) return 0;
+            _loopPruneScratch.Clear();
+            foreach (var kv in registry)
+                if (kv.Key == null) _loopPruneScratch.Add(kv.Key);
+            for (int i = 0; i < _loopPruneScratch.Count; i++)
+                registry.Remove(_loopPruneScratch[i]);
+            int freed = _loopPruneScratch.Count;
+            _loopPruneScratch.Clear();
+            return freed;
+        }
+
+        // ─────────────────────────────────────────────────────────────────────
+        // ── WO-1057: the loop registry — identity, self-report, capture dump ──
+        // ─────────────────────────────────────────────────────────────────────
+        //
+        // THE ONE-LINE TRUTH THIS SECTION EXISTS FOR: the pool knew HOW MANY loops were live and
+        // never WHICH. "Random VFX stuck around" (F8 seq 3583) was structurally unanswerable —
+        // the capture had zero [Flow:Vfx] lines because no such line existed anywhere in the tree.
+        // These three methods are the instrument. They do NOT fix any leak; they make one nameable.
+
+        /// <summary>Register one live loop under its host. Called on EVERY path that takes a loop
+        /// slot (VFXType prefab, procedural fallback, Hovl string key) — the Add IS the increment.</summary>
+        private void RegisterLoop(Dictionary<GameObject, LoopRecord> registry, GameObject host,
+                                  VFXType type, string hovlKey, Transform owner)
+        {
+            if (host == null || registry == null) return;
+
+            // Owner name is captured HERE, at start, not read at dump time: a loop that outlives
+            // the thing that started it is the single most useful row in the table, and by then
+            // owner.name is unreachable. One small string per loop START — never per frame.
+            bool   unparented = owner == null;
+            string ownerName;
+            int    ownerId;
+            if (!unparented)
+            {
+                ownerName = owner.name;
+                ownerId   = owner.gameObject.GetInstanceID();
+            }
+            else
+            {
+                // Unparented loop (world-positioned aura/marker). The host itself is the only
+                // identity there is; say so rather than printing a bare "?" nobody can act on.
+                ownerName = "(unparented) " + host.name;
+                ownerId   = host.GetInstanceID();
+            }
+
+            registry[host] = new LoopRecord
+            {
+                Type       = type,
+                HovlKey    = hovlKey,
+                Host       = host,
+                Owner      = owner,
+                Unparented = unparented,
+                OwnerName  = ownerName,
+                OwnerId    = ownerId,
+                StartedAt  = Time.realtimeSinceStartup,
+                StartPos   = host.transform.position,
+                Warned     = false,
+            };
+        }
+
+        /// <summary>Self-report a loop that has outlived its owner or a sane age — ONCE per handle,
+        /// naming the owner. This is what turns the NEXT occurrence from "the owner noticed a stuck
+        /// effect and pressed F8" into a line already sitting in the log (CLAUDE.md §14).
+        /// <para/>
+        /// ⚠ Reports ONLY. It never stops, reclaims or reparents anything: whether a stranded loop
+        /// should time out, or be released from OnDisable/OnDestroy, is loop POLICY and belongs to
+        /// the follow-up ticket. A finder must not quietly set policy.</summary>
+        private void AuditLoopAges()
+        {
+            AuditRegistryAges(_loopObjects);
+            AuditRegistryAges(_hovlLoopObjects);
+        }
+
+        private void AuditRegistryAges(Dictionary<GameObject, LoopRecord> registry)
+        {
+            if (registry == null || registry.Count == 0) return;
+            float now = Time.realtimeSinceStartup;
+            // Dictionary's enumerator is a struct, so this foreach allocates nothing. LoopRecord is
+            // a class precisely so Warned can be latched in place without re-assigning the entry.
+            foreach (var kv in registry)
+            {
+                var rec = kv.Value;
+                if (rec == null || rec.Warned) continue;
+
+                float age = now - rec.StartedAt;
+                // An orphan is reportable IMMEDIATELY (its owner is gone, so nothing can Stop() it);
+                // an old-but-owned loop waits out the generous age threshold.
+                bool orphaned = !rec.Unparented && rec.Owner == null;
+                if (!orphaned && age < STUCK_LOOP_AGE_SECONDS) continue;
+
+                rec.Warned = true;   // one per handle, forever — never a per-frame log storm
+                FlowTrace.Warn("Vfx",
+                    "STUCK LOOP " + rec.Key + " owner='" + rec.OwnerName + "'#" + rec.OwnerId +
+                    " age=" + age.ToString("F0") + "s " +
+                    (orphaned
+                        ? "— ITS OWNER IS DESTROYED, so nothing can Stop() it: this slot is stranded for the session. "
+                        : "— older than the " + STUCK_LOOP_AGE_SECONDS + "s report threshold. ") +
+                    "Holding 1 of " + _maxActiveLoops + " loop slots (now " + _activeLoops + "/" + _maxActiveLoops +
+                    "). Reported only — release policy is the follow-up to WO-1057.");
+            }
+        }
+
+        /// <summary>Print an age-sorted table of every live loop, one line per loop, tagged
+        /// [Flow:Vfx] so it lands in the F8 harvest. Wired to
+        /// BreakCaptureHarness.CaptureSnapshotRequested in Awake, so the owner presses F8 and the
+        /// table is simply THERE — it is never a debug menu she has to remember to open, and it is
+        /// never fenced behind DEVELOPMENT_BUILD (instrumentation is permanent, CLAUDE.md §12).
+        /// <para/>Costs nothing until a capture: no allocation, no string building on the hot path.</summary>
+        public void DumpLiveLoops()
+        {
+            // Reclaim first so the table never lists a loop whose host is already gone.
+            ReclaimDestroyedLoops();
+
+            _loopDumpScratch.Clear();
+            foreach (var kv in _loopObjects)     if (kv.Value != null) _loopDumpScratch.Add(kv.Value);
+            foreach (var kv in _hovlLoopObjects) if (kv.Value != null) _loopDumpScratch.Add(kv.Value);
+
+            // OLDEST FIRST — age is the leak signal, so the suspect is row one.
+            _loopDumpScratch.Sort((a, b) => a.StartedAt.CompareTo(b.StartedAt));
+
+            int shown = _loopDumpScratch.Count < LOOP_DUMP_MAX_ROWS
+                      ? _loopDumpScratch.Count : LOOP_DUMP_MAX_ROWS;
+
+            FlowTrace.Step("Vfx",
+                "LOOPS " + _activeLoops + "/" + _maxActiveLoops +
+                " (live loop registry, oldest first" +
+                (shown < _loopDumpScratch.Count ? "; showing " + shown + " oldest" : "") + ")");
+
+            float now = Time.realtimeSinceStartup;
+            for (int i = 0; i < shown; i++)
+            {
+                var rec = _loopDumpScratch[i];
+                // Live host position where we still have one — the row has to tie to the thing the
+                // owner can actually see on screen. Falls back to where it started otherwise.
+                Vector3 pos = rec.Host != null ? rec.Host.transform.position : rec.StartPos;
+                FlowTrace.Step("Vfx",
+                    "  " + rec.Key +
+                    "  owner='" + rec.OwnerName + "'#" + rec.OwnerId +
+                    "  age=" + (now - rec.StartedAt).ToString("F0") + "s" +
+                    "  pos=(" + pos.x.ToString("F1") + ", " + pos.y.ToString("F1") + ", " + pos.z.ToString("F1") + ")" +
+                    (!rec.Unparented && rec.Owner == null ? "  <-- OWNER DESTROYED, nothing can Stop() it" : ""));
+            }
+            if (shown < _loopDumpScratch.Count)
+                FlowTrace.Step("Vfx", "  ... and " + (_loopDumpScratch.Count - shown) +
+                    " younger loop(s) not listed (row cap keeps the capture tail readable).");
+
+            _loopDumpScratch.Clear();   // do not hold the records past the capture
         }
 
         // ── Helpers ───────────────────────────────────────────────────────────
@@ -1507,8 +1739,9 @@ namespace DeNelle.Village
             var sh = ps.shape;   sh.enabled = true; sh.shapeType = ParticleSystemShapeType.Sphere; sh.radius = 0.3f;
             ps.Play();
 
-            _activeLoops++;
-            _loopObjects.Add(host);   // bug-triage P1: tag as loop for correct return-decrement
+            // WO-1057: registering IS the increment. The procedural fallback holds a real loop
+            // slot exactly like an authored prefab does, so it must be named in the dump too.
+            RegisterLoop(_loopObjects, host, type, null, parent);
             return host;
         }
     }

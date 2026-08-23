@@ -2,10 +2,43 @@
 # to the recurring-issues ledger, then CLEAR the live logs so the next run is clean.
 # Keeps signal (recurrence), drops noise (raw logs of already-fixed stuff).
 # Usage: powershell -NoProfile -File .claude/skills/run-defenders/triage-archive.ps1 [-Label "free-text"]
-param([string]$Label = "")
+#
+# WO-1018 (2026-08-22): this script is now ALSO the F8 inbox's prune step. logs/f8-inbox/ had never
+# had one -- 2914 capture files had accumulated and f8-check-inbox.ps1 timed out walking them. ACKED
+# captures older than -InboxDays are MOVED to logs/f8-inbox/archive/; nothing is ever deleted (this
+# repo's rule is "never wipe a ticket"), un-acked captures and sweep orphans are left where they are,
+# and the archive stays indexed so an archived capture is still resolvable by seq.
+#   -InboxOnly  run ONLY the inbox prune - does not zip or clear any live log.
+param(
+    [string]$Label = "",
+    [int]$InboxDays = 14,
+    [switch]$InboxOnly,
+    [switch]$SkipInbox
+)
 
 $ErrorActionPreference = "Stop"
 $repo    = (Resolve-Path "$PSScriptRoot\..\..\..").Path
+
+# -- 0) F8 INBOX PRUNE (WO-1018) -------------------------------------------------
+if (-not $SkipInbox) {
+    # the lib is defensive by design (try/catch + Set-StrictMode -Off); this script's global
+    # ErrorActionPreference=Stop would turn its benign misses into a hard exit, so scope it down.
+    $savedEap = $ErrorActionPreference
+    $ErrorActionPreference = "Continue"
+    try {
+        . (Join-Path $PSScriptRoot 'f8-inbox-lib.ps1')
+        $inbox = Join-Path $repo 'logs\f8-inbox'
+        if (Test-Path $inbox) {
+            [void](Invoke-F8InboxArchive -Inbox $inbox -Days $InboxDays)
+        } else {
+            Write-Host "F8_ARCHIVE_FAIL no inbox at $inbox"
+        }
+    } catch {
+        Write-Host ("F8_ARCHIVE_FAIL inbox prune threw: {0}" -f $_.Exception.Message)
+    }
+    $ErrorActionPreference = $savedEap
+}
+if ($InboxOnly) { Write-Host "[triage-archive] -InboxOnly: live logs untouched"; exit 0 }
 # LocalLow\<companyName>\<productName>; productName became "Echoes of Elarion" 2026-08-08.
 $ll      = "$env:USERPROFILE\AppData\LocalLow\DeNelle\Echoes of Elarion"
 $llLegacy = "$env:USERPROFILE\AppData\LocalLow\DeNelle\Defenders of the Realm"

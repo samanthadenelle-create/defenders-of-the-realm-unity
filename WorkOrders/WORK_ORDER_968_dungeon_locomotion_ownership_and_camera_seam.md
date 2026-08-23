@@ -1,8 +1,21 @@
-# WORK ORDER 968 — Dungeon locomotion: mover ownership, dead camera basis, frozen camera
+# WORK ORDER 968 — Dungeon locomotion: mover ownership, dead camera basis, frozen camera  — **OWNER CLOSED 2026-08-22** (felt-verified by the owner; PO closes, section 13).
 
 **Status:** DONE — shipped `e3539f5b` (instrumentation) + `5e464578` (camera heal) + `c7761156` (PROVEN by a headed re-run). All four seams verified against `docs/proof/2026-08-10-dungeon-headed-AFTER-camera-fix/`: ONE transform owner, the animator tracks real movement, the stick basis is correct with no 180 inversion, and the camera heal fired once and worked. The **camera FRAMING** question the working camera then exposed is a SEPARATE ticket — **WO-980**, not this one. Owner felt-verify owed; RESULT file still owed (not fabricated). *(Status corrected 2026-08-14: the line still read READY after all three commits landed.)*
+
+> ### VERIFIED AT SOURCE 2026-08-22 (status audit)
+> All named fixes are present - `Assets/_Modules/Dungeons/DungeonCameraRig.cs` carries the WO-968 seam work at
+> `:167`, `:270-300`, `:599` and `:809`; the mover-ownership half is in `DungeonController.cs:66` and `:199-202`.
+> **AND** both symptoms are now structurally unreachable - see the `Scene:` annotation above.
+> Owner felt-verify still owed (PO closes, CLAUDE.md 13).
+
 **Priority:** **HIGHEST** (owner ruling, F8 seq 2312)
-**Scene:** `Dungeon_HealersCottage` (hand-built dungeon pipeline)
+**Scene:** `Dungeon_HealersCottage` - **LEGACY / SUPERSEDED PIPELINE (verified 2026-08-22).** This is the
+**hand-built** dungeon scene. The game now loads **COMPOSED** dungeons, which carry the **town hero** across
+(`Assets/_Modules/Dungeons/ComposedDungeonHost.cs:13-23` and `:92-99` -
+`GameObject.FindGameObjectWithTag("Player")`, the carried hero winning `HeroControlEnsurer.DedupeHeroes`).
+`ComposedDungeonHost.cs` and `ComposedDungeonBootstrap.cs` contain **zero** references to `DungeonHero` or
+`DungeonCameraRig` (grep, 2026-08-22), so **both symptoms in this ticket are structurally unreachable on the
+composed path.** Do not re-triage this scene - it is not what the game loads.
 **Silo:** Dungeons / Hero locomotion / Dungeon camera
 **Raised by:** owner F8 seq **2312** + **2313**, 2026-08-10, ~18:33 local
 **Related but SEPARATE:** WO-966 (Mage body-yaw constant). See §5 — do not conflate.

@@ -1,3 +1,26 @@
+<!-- status-reconcile-2026-08-22 -->
+> # DO NOT IMPLEMENT - THIS WO'S DESIGN WAS REMOVED AS A P0 BUG, AND NONE OF ITS CITED FILES EXIST.
+> **Flagged 2026-08-22 by the status/evidence audit. Body preserved; do not act on it.**
+>
+> **1. The perimeter moat carve this WO specifies is the exact thing that was DELETED as a P0
+> hero-confinement defect.** `Assets/_Modules/Village/World/CastleMoatBuilder.cs:199-228`:
+> `// P0 HERO-CONFINEMENT GUARD (owner 2026-07-04, WO-608)` - on the merged overworld the moat is
+> **"SKIPPED ENTIRELY ... no water, no r=44 off-navmesh carve, no BoxCollider seal ring; seam gone, nothing
+> to build"**. The guard keys on the **SCENE NAME** (`OnMergedScene()`, `:205-211`) and is deliberately
+> **flag-INDEPENDENT** so that no feature-flag toggle can ever re-confine the hero. Re-adding the carve
+> re-ships a P0.
+>
+> **2. The premise is gone.** The moat/water/lip/bridge apparatus existed **only to mask and cross the
+> castle<->overworld SEAM**, and the merged single scene has **no seam** (same comment block, `:216-221`).
+> This WO is 4 cardinal crossings of a boundary that no longer exists.
+>
+> **3. Every artefact it cites is ABSENT from the tree (`find` + `grep`, 2026-08-22):**
+> `region-gates.json` - no such file. `RuntimeRegionGate` - **no `.cs` file**; the name survives only in
+> stale comments (`Assets/Editor/CastleGateNavVerify.cs:104,304`, `Assets/Editor/CastleHubBuilder.cs:1087,1128,1675`).
+> `WorldGeometry` - no such file. `OuterWorld.unity` - **DELETED** (CLAUDE.md 7).
+> The Status line's claim that the SOUTH bridge "already shipped via RuntimeRegionGate" therefore cites a
+> class that is not in the repo.
+
 > ⚠ **NUMBER COLLISION — this document does not own WO-467; `WORK_ORDER_467_region_gate_system.md` does.**
 > Referred to hereafter as **WO-467-B (moat bridges / seam geometry)**.
 > Flagged by the 2026-08-16 Sunday board-grooming pass (`python tools/board_build.py` → `DUPLICATE_WO_NUMBERS`);

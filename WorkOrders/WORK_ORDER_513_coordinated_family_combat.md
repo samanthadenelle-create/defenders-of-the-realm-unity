@@ -1,3 +1,21 @@
+<!-- status-reconcile-2026-08-22 -->
+> # PARTIALLY STALE 2026-08-22 - THE HEADLINE ASK IS STILL REAL; THE RCA BELOW IS WRONG.
+> **The feature this WO asks for - a family that GANGS the hero (surround / flank / expressed roles after
+> arrival) - is genuinely UNBUILT, so the Status stays READY. But do not trust section "Diagnosed current
+> state": it has drifted and will send you to the wrong code.**
+>
+> **The specific claim that is now FALSE: "all 3 orcs run identical solo melee-Rush - no roles expressed."**
+> Arena orcs **DO** get role tactics today. `Assets/_Modules/Village/Arena/BattleArena.cs:1529-1539`:
+> `EnemyRole role = EnemyBrain.RoleForId(id); brain.Role = role;` ... `brain.RosterId = id;` ...
+> `EnemyBrain.ApplyRoleTactics(brain, role);` (line **1538**), followed by
+> `FlowTrace.Step("BattleArena", $"ROLE '{id}': tactics applied for {role}.")`. The same block also sets
+> `brain.SetHeroOnlyTarget(true)` (WO-482) so the orcs no longer mill toward a 7000m-away Heart - which is
+> the behaviour the original felt-test read as "LAX".
+>
+> **Every line citation in that section is stale.** It cites `BattleArena.SpawnFamily (~L707-713)` and
+> `MaybeDisbandOnArrival (~L728-739)`; the spawn/role/family-wiring block now lives around **L1520-1545**.
+> Re-survey `BattleArena.cs`, `FamilyLeader.cs` and `FamilyMember.cs` at HEAD before scoping this.
+
 # WORK_ORDER_513 — coordinated family combat AI (the orc family GANGS the hero)
 
 **Status:** READY TO IMPLEMENT (owner-driven, felt-test 2026-06-24) · Combat/AI lane · the "real feature" slice (vs the quick pathing/role tuning done inline)

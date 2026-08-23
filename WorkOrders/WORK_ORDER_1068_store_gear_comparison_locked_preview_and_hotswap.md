@@ -1,6 +1,6 @@
 # WORK ORDER 1068 — Store comparison, future preview, and hot-swap value
 
-**Status:** READY FOR CLI REVIEW — NOT YET ASSIGNED  
+**Status:** IMPLEMENTED — AWAITING COMBINED OWNER GATE
 **Parent:** WO-1063 · **Requires:** WO-1064 through WO-1067
 
 > ### ⛔ TWO OF THE THREE THINGS IN THIS TITLE ALREADY SHIP. DO NOT GREENFIELD.
@@ -87,4 +87,3 @@ image—never an empty 3D cavity. Color supplements signs/words; it is never the
 - Do not use a blank armor model cavity.
 - Do not auto-replace player attack style on purchase.
 - Do not expose the full catalog on the primary shelf.
-

@@ -31,6 +31,8 @@
 // =============================================================================
 
 using System;
+using System.Collections.Generic;   // WO-1060: the clamp-growth ring
+using System.Text;                  // WO-1060: control-path formatting
 using UnityEngine;
 using UnityEngine.EventSystems;   // WO-899 analog stick: pointer down/drag/up on the move widget
 using UnityEngine.UI;
@@ -1050,6 +1052,74 @@ namespace DeNelle.Core.UI
             guard.Arm();
         }
 
+        // =====================================================================
+        //  WO-1060 ASSERT A — MAKE THE CLAMP'S FIRING VISIBLE (record-only).
+        // ---------------------------------------------------------------------
+        //  ⛔ ClampMinTouch's BEHAVIOUR IS DELIBERATELY UNCHANGED. It is the correct
+        //  runtime rescue for a build that shipped wrong, and weakening it would turn
+        //  a visible defect into an untappable one. What was missing is that it fired
+        //  in TOTAL SILENCE: by the time the clamp grows a control, the layout it was
+        //  meant to protect is already spilled into its neighbours, and nothing
+        //  anywhere says so. Four panels shipped that way in three days.
+        //
+        //  So every growth is APPENDED to a ring here and to the log. A gate reads
+        //  the ring; a device log reads the line. Neither changes a pixel.
+        //
+        //  ⚠ THIS IS NOT THE WHOLE ORACLE, and must not be mistaken for it. LateUpdate
+        //  never runs in an edit-mode batchmode capture, so a headless run records
+        //  ZERO growths on a genuinely broken panel. The gate-time assert is the
+        //  AUTHORED-BAND measurement in UICaptureLaunch.AuditGeometry (rule 4), which
+        //  measures the settled rect against MinTouchPx and therefore catches the same
+        //  defect BEFORE the clamp would have rescued it. This ring is the runtime
+        //  half: it is what turns an owner device session into evidence.
+        // =====================================================================
+
+        /// <summary>One recorded <see cref="ClampMinTouch"/> rescue. Presentation telemetry only.</summary>
+        public readonly struct ClampGrowth
+        {
+            public readonly string ControlPath;
+            public readonly float AuthoredW, AuthoredH, GrownW, GrownH;
+
+            public ClampGrowth(string controlPath, float aw, float ah, float gw, float gh)
+            {
+                ControlPath = controlPath; AuthoredW = aw; AuthoredH = ah; GrownW = gw; GrownH = gh;
+            }
+
+            public override string ToString() =>
+                ControlPath + ": authored " + AuthoredW.ToString("0.#") + "x" + AuthoredH.ToString("0.#") +
+                " -> grown " + GrownW.ToString("0.#") + "x" + GrownH.ToString("0.#") +
+                " (" + (AuthoredW > 0.5f ? (GrownW / AuthoredW) : 1f).ToString("0.0#") + "x on W, " +
+                (AuthoredH > 0.5f ? (GrownH / AuthoredH) : 1f).ToString("0.0#") + "x on H). " +
+                "Author the band above MinTouchPx(" + MinTouchPx.ToString("0.#") + "); do not rely on the clamp.";
+        }
+
+        private const int ClampGrowthRingMax = 128;   // bounded: a hot loop can never grow this unboundedly
+        private static readonly List<ClampGrowth> _clampGrowths = new List<ClampGrowth>();
+
+        /// <summary>Every clamp rescue recorded since the last <see cref="ClearClampGrowths"/>.
+        /// A non-empty list on a panel under test is a WO-1060 Assert A FAILURE.</summary>
+        public static IReadOnlyList<ClampGrowth> ClampGrowths => _clampGrowths;
+
+        /// <summary>Reset the ring — call before building a panel you are about to assert on.</summary>
+        public static void ClearClampGrowths() { _clampGrowths.Clear(); }
+
+        private static void RecordClampGrowth(RectTransform rt, float aw, float ah, float gw, float gh)
+        {
+            string path;
+            try
+            {
+                var sb = new StringBuilder(rt.name);
+                var t = rt.parent;
+                for (int i = 0; i < 4 && t != null; i++, t = t.parent) sb.Insert(0, t.name + "/");
+                path = sb.ToString();
+            }
+            catch { path = rt != null ? rt.name : "<null>"; }
+
+            var growth = new ClampGrowth(path, aw, ah, gw, gh);
+            if (_clampGrowths.Count < ClampGrowthRingMax) _clampGrowths.Add(growth);
+            Debug.LogWarning("[touch-oracle] CLAMP FIRED " + growth);
+        }
+
         /// <summary>One-shot post-layout enforcer for <see cref="ClampMinTouch"/>.</summary>
         private sealed class UiKitMinTouchGuard : MonoBehaviour
         {
@@ -1074,18 +1144,26 @@ namespace DeNelle.Core.UI
                     return;
                 }
 
+                bool grew = false;
                 if (w > 0f && w < MinTouchPx)
                 {
                     float half = (MinTouchPx - w) * 0.5f;
                     _rt.offsetMin = new Vector2(_rt.offsetMin.x - half, _rt.offsetMin.y);
                     _rt.offsetMax = new Vector2(_rt.offsetMax.x + half, _rt.offsetMax.y);
+                    grew = true;
                 }
                 if (h > 0f && h < MinTouchPx)
                 {
                     float half = (MinTouchPx - h) * 0.5f;
                     _rt.offsetMin = new Vector2(_rt.offsetMin.x, _rt.offsetMin.y - half);
                     _rt.offsetMax = new Vector2(_rt.offsetMax.x, _rt.offsetMax.y + half);
+                    grew = true;
                 }
+
+                // WO-1060 Assert A: the rescue is recorded, never suppressed. Behaviour above is
+                // byte-for-byte what it was; this line is the only thing that changed.
+                if (grew) RecordClampGrowth(_rt, w, h, Mathf.Max(w, MinTouchPx), Mathf.Max(h, MinTouchPx));
+
                 enabled = false;                           // one-shot floor; re-armed by ClampMinTouch if reused
             }
         }
@@ -2451,6 +2529,82 @@ namespace DeNelle.Core.UI
             if (img == null) return;
             var sprite = RoundedSprite;
             if (sprite != null) { img.sprite = sprite; img.type = Image.Type.Sliced; }
+        }
+
+        /// <summary>
+        /// UI-001 §R3: the shared rounded 9-slice at an AUTHORED corner radius in reference px.
+        /// <para>⛔ THIS IS NOT A SECOND SPRITE. The asset bill for the Night Market card is exactly
+        /// two white sprites and this is the FIRST of them — the same <see cref="RoundedSprite"/>
+        /// every rounded corner in the game already uses. Only the 9-slice border SCALE moves:
+        /// the sprite's baked border is 6 px, so <c>pixelsPerUnitMultiplier = 6 / radius</c> makes
+        /// that border resolve to <paramref name="cornerRadiusPx"/> reference px. Authoring a new
+        /// texture per radius is how a parallel chrome family starts (§2).</para>
+        /// </summary>
+        public static void ApplyRounded(Image img, float cornerRadiusPx)
+        {
+            if (img == null) return;
+            ApplyRounded(img);
+            if (img.sprite != null && cornerRadiusPx > 0.5f)
+                img.pixelsPerUnitMultiplier = 6f / cornerRadiusPx;   // sprite border = 6 px
+        }
+
+        // ── Procedural RADIAL GLOW sprite (lazily built once; WebGL failure-safe) ──
+        //
+        //  UI-001 §R3 asset bill, sprite TWO of exactly two: a white radial falloff, tinted at
+        //  the call site through the band light. It exists because the card's bloom must be a
+        //  STATIC TINTED IMAGE and never a particle — the owner's ruling 4 is explicit that the
+        //  glow costs ZERO VFX loop slots. CircleSprite cannot stand in: it is a HARD-EDGED disc
+        //  (BuildCircleSprite antialiases one pixel and stops), so scaling it up reads as a pale
+        //  coin, not a bloom.
+        //
+        //  The falloff is a smoothstep on radius rather than a linear ramp: a linear alpha ramp
+        //  leaves a visible ring where it meets the ground because the human eye finds the
+        //  first-derivative discontinuity. Squared smoothstep has zero slope at both ends.
+        private static Sprite _radialGlow;
+        private static bool _radialGlowTried;
+
+        /// <summary>A white radial bloom (alpha 1 at centre -> 0 at the rim). Tint at the call
+        /// site. Null only if the texture build threw; callers must null-check and skip the
+        /// glow rather than draw a white quad.</summary>
+        public static Sprite RadialGlowSprite
+        {
+            get
+            {
+                if (!_radialGlowTried)
+                {
+                    _radialGlowTried = true;
+                    try { _radialGlow = BuildRadialGlowSprite(); }
+                    catch (Exception e)
+                    {
+                        Debug.LogWarning("[ElarionUiKit] radial glow sprite build failed (no bloom): " + e.Message);
+                        _radialGlow = null;
+                    }
+                }
+                return _radialGlow;
+            }
+        }
+
+        private static Sprite BuildRadialGlowSprite()
+        {
+            const int size = 64;
+            float cx = (size - 1) * 0.5f, cy = (size - 1) * 0.5f;
+            float r = size * 0.5f;
+            var tex = new Texture2D(size, size, TextureFormat.RGBA32, false)
+            { wrapMode = TextureWrapMode.Clamp, filterMode = FilterMode.Bilinear };
+            var px = new Color32[size * size];
+            for (int y = 0; y < size; y++)
+            {
+                for (int x = 0; x < size; x++)
+                {
+                    float d = Mathf.Sqrt((x - cx) * (x - cx) + (y - cy) * (y - cy)) / r;
+                    float t = Mathf.Clamp01(1f - d);
+                    float a = t * t * (3f - 2f * t);        // smoothstep: no visible ring at the rim
+                    px[y * size + x] = new Color32(255, 255, 255, (byte)Mathf.Clamp((int)(a * 255f), 0, 255));
+                }
+            }
+            tex.SetPixels32(px);
+            tex.Apply();
+            return Sprite.Create(tex, new Rect(0, 0, size, size), new Vector2(0.5f, 0.5f));
         }
 
         /// <summary>A single faint gold rule hugging a panel's bottom edge (sleek accent).</summary>

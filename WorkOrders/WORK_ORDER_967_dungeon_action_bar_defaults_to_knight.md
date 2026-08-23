@@ -1,6 +1,16 @@
-# WORK ORDER 967 — The dungeon action bar defaults to the KNIGHT kit (hardcoded literal)
+# WORK ORDER 967 — The dungeon action bar defaults to the KNIGHT kit (hardcoded literal)  — **OWNER CLOSED 2026-08-22** (felt-verified by the owner; PO closes, section 13).
 
 **Status:** DONE — shipped `70eaf1c6` ("fix(hud): WO-967"); owner felt-verify owed (PO closes, §13). RESULT file still owed (not fabricated). *(Status corrected 2026-08-14: the line still read READY after the commit landed.)*
+
+> ### VERIFIED AT SOURCE 2026-08-22 (status audit) - and the symptom is now unreachable
+> **Scene: `Dungeon_HealersCottage` - LEGACY / SUPERSEDED PIPELINE.** This ticket targeted the **hand-built**
+> dungeon. The game now loads **COMPOSED** dungeons, which **carry the town hero across** rather than spawning a
+> baked one - `Assets/_Modules/Dungeons/ComposedDungeonHost.cs:13-23` ("SceneRouter.GoDungeonScene now CARRIES
+> the town hero into a composed dungeon, because the baked Keeper has no HeroAbilities") and `:92-99`.
+> `ComposedDungeonHost.cs` and `ComposedDungeonBootstrap.cs` reference **no** `DungeonHero` / `DungeonCameraRig`
+> (grep, 2026-08-22), so the hardcoded-Knight literal this WO removed can no longer be reached on the live path.
+> Owner felt-verify still owed (PO closes, CLAUDE.md 13).
+
 **Minted:** 2026-08-10 (F8 seq 2312 lane)
 **Silo:** HUD presentation (`DeNelle.Village/HUD`) — file-disjoint from the locomotion + tutorial lanes live on this same scene
 **Stage:** QA RCA complete → CLI implements → PO felt-verifies + closes

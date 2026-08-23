@@ -9,12 +9,13 @@
 #   seq= / kind= / firedAt= / latest= / capture= lines still printed.
 # What changed: seq=/kind=/capture= now name the OLDEST pending capture (the one to triage NEXT),
 # and pending= / PENDING lines list the rest. latest= still points at LATEST_CAPTURE.md.
-param([switch]$Quiet)
+param([switch]$Quiet, [string]$InboxOverride = '')   # -InboxOverride: tests only
 
 . (Join-Path $PSScriptRoot 'f8-inbox-lib.ps1')
 
 $RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..\..')).Path
 $Inbox    = Join-Path $RepoRoot 'logs\f8-inbox'
+if (-not [string]::IsNullOrWhiteSpace($InboxOverride)) { $Inbox = $InboxOverride }
 $PingFile = Join-Path $Inbox 'PING.json'
 $AckFile  = Join-Path $Inbox 'ACK.json'
 $Latest   = Join-Path $Inbox 'LATEST_CAPTURE.md'
@@ -27,8 +28,32 @@ if (-not (Test-Path $PingFile)) {
 $ack     = Get-F8AckState $Inbox
 $pending = @(Get-F8Pending $Inbox)
 
+# WO-1018 -- 'CLEAN' MUST BE PROVEN, NOT ASSUMED. Get-F8Pending only ever looked ABOVE the ack
+# watermark, so a capture buried underneath it read as clean forever. Before printing NO_CAPTURE we
+# reconcile against the capture files actually on disk; if any un-acked file exists, or the inbox
+# has never been swept (so nothing under the watermark has ever been reconciled), we say so LOUDLY
+# and do not claim the inbox is clean.
 if ($pending.Count -eq 0) {
-    $ping = Get-F8PingSeq $Inbox
+    $ping  = Get-F8PingSeq $Inbox
+    $state = Test-F8InboxClean $Inbox
+
+    if (@($state.Unacked).Count -gt 0) {
+        Write-Host 'NEW_CAPTURE'
+        Write-Host ("seq={0}" -f @($state.Unacked)[0])
+        Write-Host 'kind=on-disk-unacked'
+        Write-Host "latest=$Latest"
+        Write-Host ("capture={0}" -f (Resolve-F8CaptureFile $Inbox ([int]@($state.Unacked)[0])))
+        Write-Host ("pending={0}" -f @($state.Unacked).Count)
+        Write-Host ''
+        Write-Host ("ERROR_UNRECONCILED {0} capture file(s) on disk are above the ack watermark ({1}) and NOT acked: {2}" -f @($state.Unacked).Count, $ack.lastAckSeq, (@($state.Unacked) -join ','))
+        Write-Host 'ERROR_UNRECONCILED The queue and the disk disagree. Run f8-backfill-sweep.ps1 before trusting any ack.'
+        exit 0
+    }
+
+    if (-not $state.Swept) {
+        Write-Host ("WARN_NO_SWEEP inbox has NEVER been reconciled below the watermark ({0} capture files on disk, {1} pre-queue). Nothing under ack={2} has been proven triaged." -f $state.Files, $state.Legacy, $ack.lastAckSeq)
+        Write-Host 'WARN_NO_SWEEP Run: powershell -File .claude\skills\run-defenders\f8-backfill-sweep.ps1'
+    }
     if (-not $Quiet) { Write-Host "NO_CAPTURE ack=$($ack.lastAckSeq) ping=$ping" }
     exit 1
 }

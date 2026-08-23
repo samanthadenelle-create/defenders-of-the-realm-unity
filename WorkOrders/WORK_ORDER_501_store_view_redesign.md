@@ -1,3 +1,29 @@
+<!-- status-reconcile-2026-08-22 -->
+> # STALE 2026-08-22 - RE-SURVEY BEFORE PULLING THIS. EVERY `file:line` IN SECTION 1 IS INVALIDATED.
+>
+> **This is the GEAR shop, not the Night Market.** The screen this WO redesigns is `PartyShopPanelMvvm` /
+> `PartyShopVM`, routed as **`PanelId.PartyShop = 5`** (`Assets/_Modules/Core/UI/PanelRouter.cs:54`). The
+> Night Market is a **different** screen (`Assets/_Modules/Wallet/PackStore.cs`). Do not conflate them.
+>
+> **The header's flag statement is now FALSE.** It reads "ships behind the existing FeatureFlags.PartyShop
+> (OFF)". At source today: `Assets/_Modules/Core/FeatureFlags.cs:157` -
+> `public static bool PartyShop => Get("partyshop", defaultOn: true);` - **defaultOn: TRUE.** The panel is live.
+>
+> **All four owner points in section 0 have SHIPPED** (verified at source 2026-08-22 in
+> `Assets/_Modules/Village/Hero/PartyShopPanelMvvm.cs`):
+> 1. hero/type filter - the Buy list is built from `ShopCatalog.Shoppable(ctx, job, level)` in `PartyShopVM`;
+> 2. slim name list - the list column was narrowed to pair with the preview pane (`:1004`);
+> 3. the larger 3D render preview - `_previewRoot` well at `:1004`, `RawImage _previewImage` at `:86`,
+>    live `RenderTexture _rigRt` created at `:1354`, async Addressables model load at `:1264`, price line
+>    fitted at `:1096`;
+> 4. the bottom action bar - "WO-501 owner point 4: Purchase/Sell toggle + Equip" at `:472-500`, with the
+>    toggling label logic at `:1491-1527`.
+>
+> **The survey is arithmetically stale:** `PartyShopPanelMvvm.cs` is **1727 lines** today (`wc -l`,
+> 2026-08-22) against the ~583-line file section 1 cites, so every `:217-319` / `:583-667` / `:520-570`
+> style citation below points at unrelated code. **Body preserved for its design intent only** - treat
+> section 1 as history, not as a map.
+
 # WORK ORDER 501 - Store/Shop View Redesign (hero-filtered, slim list + 3D preview)
 
 **Status:** PROPOSAL / READY TO IMPLEMENT (DESIGN pass - read-only survey done)

@@ -438,6 +438,26 @@ namespace DeNelle.Village
         /// <summary>The <c>enemies.json</c> def id this enemy was spawned from.</summary>
         public string EnemyDefId => _enemyDefId;
 
+        /// <summary>Authored affinity; missing and unknown values are neutral.</summary>
+        public DeNelle.Core.Combat.DamageElement Affinity =>
+            DeNelle.Core.Combat.ElementalDamageResolver.ParseElement(_def != null ? _def.Affinity : null);
+
+        /// <summary>Authored vulnerabilities converted without identity inference.</summary>
+        public System.Collections.Generic.IReadOnlyList<DeNelle.Core.Combat.DamageElement> ElementalVulnerabilities
+        {
+            get
+            {
+                var result = new System.Collections.Generic.List<DeNelle.Core.Combat.DamageElement>(1);
+                if (_def?.VulnerableTo == null) return result;
+                for (int i = 0; i < _def.VulnerableTo.Count; i++)
+                {
+                    var parsed = DeNelle.Core.Combat.ElementalDamageResolver.ParseElement(_def.VulnerableTo[i]);
+                    if (parsed != DeNelle.Core.Combat.DamageElement.None && !result.Contains(parsed)) result.Add(parsed);
+                }
+                return result;
+            }
+        }
+
         /// <summary>
         /// The PRECISE catalog display name for this enemy ("Orcish Mage"), sourced from
         /// the def it was configured with (enemies.json / BuildEncounterDef / garrison

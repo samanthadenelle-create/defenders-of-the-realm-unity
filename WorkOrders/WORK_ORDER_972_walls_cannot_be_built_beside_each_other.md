@@ -1,6 +1,23 @@
-# WORK ORDER 972 — Walls cannot be built beside each other (the 2x2 claim on a 1-cell tile)
+# WORK ORDER 972 — Walls cannot be built beside each other (the 2x2 claim on a 1-cell tile)  — **OWNER CLOSED 2026-08-22** (felt-verified by the owner; PO closes, section 13).
 
 **Status:** DONE — shipped `66b5628c` ("fix(build): WO-972"). The code landed AND `WallAdjacencyRegression` is registered in `DataRegression` as the `[wall-adjacency]` suite, so the fix is regression-covered. Owner felt-verify owed; RESULT file still owed (not fabricated). *(Status corrected 2026-08-14: the line still read READY after the commit landed.)*
+
+> ### VERIFIED AT SOURCE 2026-08-22 (status audit) - the fix is present on BOTH paths
+> * `StructureFactory.MeasureClaimFootprintXZ` (`Assets/_Modules/Village/Catalog/StructureFactory.cs:965-979`) returns the **authored** `repo.placement.footprint` on both axes for `CatalogType.Wall`; the mesh is not resized.
+> * **PLACEMENT** path: `Assets/_Modules/Village/BuildMode/BuildModeController.cs:1566` - `_grid.FootprintCells(StructureFactory.MeasureClaimFootprintXZ(entry), ArmedYawDegrees)`.
+> * **REPLAY / load** path: `Assets/_Modules/Village/BuildMode/BaseLayoutLoader.cs:326` - `Vector2 claimXz = StructureFactory.MeasureClaimFootprintXZ(entry);`.
+> * Oracle registered: `Assets/Editor/Regression/DataRegression.cs:900` -> `[wall-adjacency]` (`WallAdjacencyRegression`).
+>
+> Owner felt-verify still owed - the PO closes, not an agent (CLAUDE.md 13).
+
+> ### GAP THIS WO NEVER TESTED - **GATES ARE NOT COVERED** (found 2026-08-22)
+> `MeasureClaimFootprintXZ` special-cases **`CatalogType.Wall` ONLY** (`StructureFactory.cs:968`:
+> `if (entry == null || entry.type != CatalogType.Wall) return measured;`).
+> `gate_stone` is authored **`"type": "Gate"`** (`Assets/Resources/Data/Canonical/structures-catalog.json:383`,
+> with `repo.placement.footprint: 2.8`), so a gate still claims its **measured mesh**, not its authored footprint.
+> **Gate-beside-wall may therefore still reject**, and WO-972 never exercised a gate. Do not read this ticket's
+> DONE as covering gates - that needs its own ticket and its own oracle case.
+
 **Silo:** Build-mode placement (Village / BuildMode)
 **Source:** Owner F8 capture **seq 2327**, scene `Main_Castle_Overworld`, 2026-08-11 02:05:32 UTC
 **Capture:** `logs/f8-inbox/capture-20260810-210535-seq2327.md`

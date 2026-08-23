@@ -1,6 +1,13 @@
-# WORK ORDER 969 — Opening Pause over the victory summary destroys the pending home return
+# WORK ORDER 969 — Opening Pause over the victory summary destroys the pending home return  — **OWNER CLOSED 2026-08-22** (felt-verified by the owner; PO closes, section 13).
 
 **Status:** DONE — shipped `9e07db86` ("fix(arena): WO-969"); owner felt-verify owed (PO closes, §13). RESULT file still owed (not fabricated). *(Status corrected 2026-08-14: the line still read READY after the commit landed.)*
+
+> ### VERIFIED AT SOURCE 2026-08-22 - **the oracle IS registered; this ticket's note saying registration is still owed is WRONG**
+> `Assets/Editor/Regression/DataRegression.cs:877` registers the `endstate-handoff suite` and logs `[endstate-handoff]`.
+> The suite is `Assets/Editor/Regression/EndStateTransitionHandoffRegression.cs` (tag declared at `:2`, failure
+> string at `:105`). Nothing about registration is outstanding.
+> Owner felt-verify still owed (PO closes, CLAUDE.md 13).
+
 **Silo:** UI / Arena return path
 **Source:** Owner F8 seq **2315**, scene `Dungeon_HealersCottage`, 2026-08-10
 **Stage:** CLI implemented + edit-only (no Unity run, no gate, no commit in this lane)

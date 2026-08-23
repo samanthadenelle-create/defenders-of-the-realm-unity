@@ -1,4 +1,4 @@
-**Status:** DONE 2026-08-22 - owner-verified in game. X+90 applied to the L3 prefab's renderer-bearing child (`DeNelle.Editor.ArcherTowerL3Pitch`). Bounds went `0.59 x 0.58 x 1.00 LYING DOWN` -> `0.59 x 1.00 x 0.58 UPRIGHT`; prefab and model now agree. Evidence: `docs/ui-evidence/structure-pose-2026-08-22/Tower_Wooden_Watchtower_L3__prefab.png`.
+**Status:** DONE 2026-08-22 - owner-verified in game. X+90 applied to the L3 prefab's renderer-bearing child (`DeNelle.Editor.ArcherTowerL3Pitch`). Bounds went `0.59 x 0.58 x 1.00 LYING DOWN` -> `0.59 x 1.00 x 0.58 UPRIGHT`; prefab and model now agree. Evidence: `docs/ui-evidence/structure-pose-2026-08-22/Tower_Wooden_Watchtower_L3__prefab.png`.  — **OWNER CLOSED 2026-08-22** (felt-verified by the owner; PO closes, section 13).
 
 > ### WHY THE FIX LANDED ON THE PREFAB CHILD AND NOWHERE ELSE
 > `StructurePoseCapture` measured the two layers separately and they DISAGREED - the FBX

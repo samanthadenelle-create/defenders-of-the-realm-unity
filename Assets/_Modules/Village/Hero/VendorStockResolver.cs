@@ -280,6 +280,8 @@ namespace DeNelle.Village.Hero
             // WO-960: the locked PREVIEW window ("greyed out with lvl, only the next 5 levels").
             // 0 = pre-960 behaviour on every shelf mode.
             int lockedPreviewLevels = vendor != null ? vendor.LockedPreviewLevels : 0;
+            bool weaponCertificationActive = HasWeaponCertification();
+            bool armorCertificationActive = HasArmorCertification();
 
             foreach (var rawCat in categories)
             {
@@ -295,6 +297,7 @@ namespace DeNelle.Village.Hero
                         Guard.TryEach("Vendor", "stock weapon", GearCatalog.AllWeapons(), w =>
                         {
                             if (w == null) return;
+                            if (weaponCertificationActive && !w.IsVisuallyReady) return;
                             // ROSTER gate (the flag_08 fix): a class NO playable hero has is not
                             // aspiration, it's noise — excluded, never a locked row.
                             if (rosterFilter && !WeaponRosterObtainable(w, roster)) return;
@@ -333,6 +336,7 @@ namespace DeNelle.Village.Hero
                         Guard.TryEach("Vendor", "stock armor", GearCatalog.AllArmors(), a =>
                         {
                             if (a == null) return;
+                            if (armorCertificationActive && !a.IsVisuallyReady) return;
                             if (rosterFilter && !ArmorRosterObtainable(a, roster)) return;
                             if (OverLevelCap(a.req, levelCap)) return;
                             if (IsExcludedId(a.id, excludePrefixes)) return;
@@ -477,6 +481,20 @@ namespace DeNelle.Village.Hero
                     $"{vendorId} footer SHOWN under {result.Count} row(s) (cap dropped {cappedDrops}): \"{footer}\"");
 
             return result;
+        }
+
+        private static bool HasWeaponCertification()
+        {
+            foreach (var w in GearCatalog.AllWeapons())
+                if (w != null && w.HasVisualCertification) return true;
+            return false;
+        }
+
+        private static bool HasArmorCertification()
+        {
+            foreach (var a in GearCatalog.AllArmors())
+                if (a != null && a.HasVisualCertification) return true;
+            return false;
         }
 
         // ── WO-860 Part B3: the per-level cap ────────────────────────────────────

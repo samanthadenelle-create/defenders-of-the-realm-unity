@@ -1,6 +1,25 @@
 ﻿# WO-1114 â€” Dungeon Status: a remotely-flippable, in-world door state
 
-**Status:** READY - PARTIAL - 2026-08-21 CLI, gate-green (COMPILE_GATE_OK + REGRESSION_OK 234/234).
+**Status:** BLOCKED ON DEPLOY — BUILT, NOT DEPLOYED (reconciled 2026-08-22). R1-R6 landed and the oracle is
+registered; nothing further is owed in the Unity tree. *(Was: READY - PARTIAL - 2026-08-21 CLI, gate-green
+(COMPILE_GATE_OK + REGRESSION_OK 234/234).)*
+
+> ### VERIFIED AT SOURCE 2026-08-22 — what is done, and the exact three things that are not
+> **Done:** the oracle is registered at `Assets/Editor/Regression/DataRegression.cs:718` as the
+> `dungeon-status suite` (`DungeonStatusRegression`, logs `[dungeon-status]`). The backend half exists in-repo:
+> `api/schema.sql:810-848` declares `CREATE TABLE IF NOT EXISTS dungeon_status` (`dungeon_id` PK, `status`,
+> `updated_at`), read by `api/dungeon-status.js` (public GET, per `schema.sql:831`).
+>
+> **NOT done — all three are deploy/data steps, none of them code:**
+> 1. `api/schema.sql` has not been run against Neon (the table does not exist in the live DB).
+> 2. `vercel --prod` has not been run, so `api/dungeon-status.js` is not live.
+> 3. **SEED ROWS ARE MISSING for the two REAL dungeons.** `schema.sql:843-848` seeds only
+>    `dg_starter_loop`, `dg_sunken_vault`, `dg_bonecrypt` and `dg_ember_deep`. There is **no**
+>    `dg_healers_cottage` and **no** `dg_folks_granary` row — and the `INSERT` is
+>    `ON CONFLICT (dungeon_id) DO NOTHING`, so simply re-running the file will never add them.
+>    Add those two rows before the schema is applied, or the two shipped dungeons fall to the
+>    client default with no server row behind them.
+
 **Minted:** 2026-08-17 (CLI seat, main line â€” banner bumped 1113 â†’ 1114 in this same edit)
 **Owner ruling captured:** *"I want to have a line that reads if any dungeon is closed for dev work,
 that it's under construction, or states mine collapse, rescue in process, or anything that allows us

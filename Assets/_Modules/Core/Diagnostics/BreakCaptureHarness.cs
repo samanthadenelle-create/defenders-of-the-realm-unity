@@ -881,9 +881,66 @@ namespace DeNelle.Core.Diagnostics
             catch { /* a diagnostic must never break its caller */ }
         }
 
+        // ---- capture-time state snapshots (WO-1057) ---------------------------
+        //
+        // WHY THIS SEAM EXISTS. The harvest the F8 daemon reads is a PASSIVE log tail: OnTailLog
+        // keeps recent [Flow:*] lines and hard breaks, and RecentTraceTail() hands back whatever
+        // happened to have been logged. There is nothing to ask. So a system whose state is only
+        // in memory — VFXManager's live loop registry being the case that forced this — is
+        // invisible in every capture no matter how good its instrumentation is, because it had no
+        // reason to log at the moment the owner pressed F8.
+        //
+        // This gives it one: subscribers emit their FlowTrace state dump HERE, immediately before
+        // the break record is written, so the lines are already in the tail ring and in Player.log
+        // right next to the capture. Cost when nobody is capturing: zero (nothing is invoked).
+        //
+        // ⛔ Deliberately NOT inside the #if UNITY_EDITOR || DEVELOPMENT_BUILD fence that guards
+        // FlagHere()'s typed-note path above. The owner's F8 on a release device is exactly the
+        // capture we most need state from; a dev-only dump would be absent every time it mattered.
+        // Instrumentation is permanent (CLAUDE.md §12).
+        //
+        // Subscribers MUST be cheap and MUST NOT throw — each is individually guarded below, but a
+        // diagnostic that stalls a capture is a diagnostic that gets turned off.
+        /// <summary>Raised immediately before a real capture is recorded (F8 flag, error,
+        /// exception, softlock — never the session_start / scene_loaded / note bookkeeping kinds).
+        /// Subscribers dump their in-memory state as [Flow:*] lines so it lands in the harvest.</summary>
+        public static event Action CaptureSnapshotRequested;
+
+        static bool s_inSnapshot;
+
+        static void EmitCaptureSnapshots()
+        {
+            if (s_inSnapshot) return;              // a snapshot that logs an error must not recurse
+            var handlers = CaptureSnapshotRequested;
+            if (handlers == null) return;
+            s_inSnapshot = true;
+            try
+            {
+                foreach (Delegate d in handlers.GetInvocationList())
+                {
+                    // One bad subscriber must never cost the owner the whole capture.
+                    try { ((Action)d)(); }
+                    catch (Exception e)
+                    {
+                        try { Debug.LogWarning("[BreakCapture] capture snapshot threw: " + e.Message); }
+                        catch { }
+                    }
+                }
+            }
+            catch { }
+            finally { s_inSnapshot = false; }
+        }
+
         // ---- the one place a break is recorded --------------------------------
         void Record(string kind, string message, string stack, bool screenshot)
         {
+            // WO-1057: pull in-memory state into the log BEFORE the record is written, so the
+            // dump sits in the tail ring the harvest reads (and immediately above the [BREAK]
+            // line in Player.log). Same kind filter the console line and the daemon use — the
+            // startup/bookkeeping kinds are not captures and must not trigger a dump.
+            if (kind != "session_start" && kind != "scene_loaded" && kind != "note")
+                EmitCaptureSnapshots();
+
             string scene = "?";
             try { scene = SceneManager.GetActiveScene().name; } catch { }
 

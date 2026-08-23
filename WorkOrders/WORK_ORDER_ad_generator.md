@@ -1,3 +1,27 @@
+<!-- status-reconcile-2026-08-22 -->
+> # HALF OF THIS SHIPPED, AND THE OTHER HALF WOULD REBUILD TWO **BANNED** PLACEMENTS. RE-SCOPE BEFORE PULLING.
+> **Flagged 2026-08-22 by the status/evidence audit. Body preserved; sense A is history, sense B is the only
+> live work.**
+>
+> **SENSE A (rewarded-ad HOOK LOGIC) HAS SHIPPED - do NOT rebuild it.** `AdGateService` exists and is
+> hardened: `Assets/_Modules/Village/Monetization/AdGateService.cs` (delivered by **WO-1120**), sitting over
+> `AdPlacementCatalog.cs`, `RewardedAdManager` (WO-1125) and the `IAdService`/`AdServices` LevelPlay seam.
+> Its header (`:17-42`) states five enforced laws, including **"GRANT ONLY ON THE GENUINE EARNED-REWARD
+> CALLBACK ... Granting on show is fraud against the network"** and a server-anchored `TimeSource` clock so a
+> device-clock rollback cannot mint **fabricated impressions** against a live ad account (`:32-37`, `:420-424`).
+>
+> **TWO THINGS THIS WO WOULD RE-CREATE ARE BANNED BY OWNER RULING D7 (2026-08-07)** - see
+> `Assets/Resources/Data/Canonical/ad-placements.json:70-72`, where each is recorded as **DELETED**:
+> * `place.store.crystals` (a store crystals placement) - DELETED; no ad reward may grant premium currency.
+> * `place.defeat.continue` / `reward.revive.freeContinue` (a defeat-continue revive) - DELETED, because
+>   *"a battle-continue is COMBAT POWER, and the covenant is convenience-only."*
+> `AdGateService`'s laws 1 and 3 re-enforce both in code: *"No revive / battle-continue ... there is no grant
+> path for it here. Never restore one."*
+>
+> **SENSE B (the creative AD GENERATOR) IS THE ONLY UNBUILT PART.** No `AdCreativeGenerator` exists anywhere
+> in `Assets/` (`find`, 2026-08-22); `ad-creatives.json` still has no interpreter. Scope any successor WO to
+> sense B alone.
+
 # WORK ORDER — Ad Generator (Rewarded-Ad Hook Logic + Creative Ad Generator)
 
 **Status:** READY TO IMPLEMENT (design complete; data + schema shipped)

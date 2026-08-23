@@ -75,16 +75,28 @@ namespace DeNelle.Editor
                             float meshUp = Mathf.Abs(dotUp) >= Mathf.Abs(dotFwd) ? dotUp : dotFwd;
                             string axis = Mathf.Abs(dotUp) >= Mathf.Abs(dotFwd) ? "up" : "fwd";
 
-                            string verdict = (tall && meshUp > 0.90f) ? "<<< UPRIGHT" :
-                                             (tall && meshUp < -0.90f) ? "UPSIDE DOWN" :
-                                             (!tall ? "FLAT / ON ITS SIDE" : "ambiguous");
+                            // ⭐ THE TAPER TEST - owner's idea, and the only signal here that reads
+                            // the GEOMETRY rather than a convention. A building has a BROAD BASE and
+                            // a NARROW PEAK, so sample the real vertices in the top 20% of the Y
+                            // range against the bottom 20%: top narrower => roof is up => UPRIGHT.
+                            // This cannot be fooled by AABB symmetry (+90 and -90 are AABB-identical,
+                            // which is what hid this bug for days) and it needs no assumption about
+                            // whether the mesh is Y-up or Z-up.
+                            float taper = TaperRatio(inst.transform, b);   // <1 = narrow on top
 
-                            float score = (tall ? 1f : 0f) + meshUp;
+                            string verdict;
+                            if (!tall) verdict = "FLAT / ON ITS SIDE";
+                            else if (taper < 0.80f) verdict = "<<< UPRIGHT (peak up)";
+                            else if (taper > 1.25f) verdict = "UPSIDE DOWN (peak down)";
+                            else verdict = "ambiguous taper";
+
+                            float score = (tall ? 1f : 0f) + (taper < 1f ? (1f - taper) : -(taper - 1f));
                             if (score > bestScore) { bestScore = score; best = pitch.ToString("0"); }
 
                             Debug.Log($"[PITCH] {name,-10} pitch {pitch,6:0} : bounds " +
                                       $"{b.size.x:0.00} x {b.size.y:0.00} x {b.size.z:0.00}  " +
-                                      $"tall={tall,-5} meshUp({axis})={meshUp:+0.00;-0.00}  {verdict}");
+                                      $"tall={tall,-5} meshUp({axis})={meshUp:+0.00;-0.00} " +
+                                      $"taper(top/bottom)={taper:0.00}  {verdict}");
                         }
                         finally { UnityEngine.Object.DestroyImmediate(inst); }
                     }
@@ -100,6 +112,46 @@ namespace DeNelle.Editor
             {
                 Debug.LogError("PITCH_SOLVE_FAIL - " + ex.GetType().Name + ": " + ex.Message);
             }
+        }
+
+        /// <summary>
+        /// Horizontal spread of the mesh in the TOP 20% of its height, divided by the spread in the
+        /// BOTTOM 20%. A building tapers - broad base, narrow peak - so upright reads well below 1
+        /// and upside-down well above. Returns 1.0 when it cannot decide, so an unreadable mesh is
+        /// reported "ambiguous" and never becomes a false pass.
+        /// </summary>
+        private static float TaperRatio(Transform root, Bounds b)
+        {
+            var filters = root.GetComponentsInChildren<MeshFilter>(true);
+            if (filters.Length == 0 || b.size.y <= 0.0001f) return 1f;
+
+            float yMin = b.min.y, ySpan = b.size.y;
+            float topCut = yMin + ySpan * 0.80f;
+            float botCut = yMin + ySpan * 0.20f;
+
+            // Spread = mean horizontal distance from the bounds centre, so a wide eave and a wide
+            // plinth are compared on equal terms.
+            double topSum = 0, botSum = 0; int topN = 0, botN = 0;
+            Vector3 c = b.center;
+
+            foreach (var mf in filters)
+            {
+                var mesh = mf.sharedMesh;
+                if (mesh == null) continue;
+                var verts = mesh.vertices;
+                for (int i = 0; i < verts.Length; i++)
+                {
+                    Vector3 w = mf.transform.TransformPoint(verts[i]);
+                    float d = new Vector2(w.x - c.x, w.z - c.z).magnitude;
+                    if (w.y >= topCut) { topSum += d; topN++; }
+                    else if (w.y <= botCut) { botSum += d; botN++; }
+                }
+            }
+
+            if (topN == 0 || botN == 0) return 1f;
+            double bot = botSum / botN;
+            if (bot <= 0.0001) return 1f;
+            return (float)((topSum / topN) / bot);
         }
     }
 }

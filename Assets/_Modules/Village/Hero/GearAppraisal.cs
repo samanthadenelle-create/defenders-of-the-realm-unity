@@ -167,16 +167,19 @@ namespace DeNelle.Village
         //   value = round( BaseByTier(tier) + StatWorth )
         // A legendary / Elarion-marked piece carries a prestige premium on top.
 
-        /// <summary>Flat floor per crafting tier (crystals). Tune here, no recompile of data.</summary>
+        /// <summary>
+        /// WO-1064 Gold acquisition floor. The 1,000-Gold rewarded daily chest is the denominator:
+        /// common alternative 1 day, fine 2, master 6, epic-band 12, true legendary 25.
+        /// </summary>
         public static int TierBaseValue(GearTier tier)
         {
             switch (tier)
             {
-                case GearTier.Fine:      return 40;
-                case GearTier.Master:    return 120;
-                case GearTier.Legendary: return 400;
+                case GearTier.Fine:      return 2000;
+                case GearTier.Master:    return 6000;
+                case GearTier.Legendary: return 12000;
                 case GearTier.Common:
-                default:                 return 15;
+                default:                 return 1000;
             }
         }
 
@@ -185,16 +188,19 @@ namespace DeNelle.Village
             // A weapon's worth scales with how much extra damage it grants over a
             // baseline 1.0 multiplier (50 crystals per +1.0 mult), plus a small
             // bonus for melee reach beyond the default 3.2m hitbox.
-            float statWorth = Math.Max(0f, w.damageMult - 1f) * 50f;
-            if (w.reach > 3.2f) statWorth += (w.reach - 3.2f) * 8f;
-            return FinishValue(TierBaseValue(tier), statWorth, tier, IsElarionMark(ResolveMark(w.makersMark, w.saga, w.IsAegis)));
+            float statWorth = Math.Max(0f, w.damageMult - 1f) * 1000f;
+            if (w.reach > 3.2f) statWorth += (w.reach - 3.2f) * 200f;
+            float effectPremium = string.IsNullOrEmpty(w.effectKind) ? 0f : TierBaseValue(tier) * 0.20f;
+            int floor = string.Equals(w.rarity, "legendary", StringComparison.OrdinalIgnoreCase)
+                ? 25000 : TierBaseValue(tier);
+            return FinishValue(floor, statWorth + effectPremium, tier, w.IsAegis);
         }
 
         private static int EstimateArmorValue(ArmorDef a, GearTier tier)
         {
             // Armor's worth scales with its fractional damage reduction (300 crystals
             // per full 1.0 of defense -> 0.28 plate ~= 84) plus a touch per hpBonus.
-            float statWorth = Math.Max(0f, a.defense) * 300f + Math.Max(0f, a.hpBonus) * 0.5f;
+            float statWorth = Math.Max(0f, a.defense) * 4000f + Math.Max(0f, a.hpBonus) * 20f;
             return FinishValue(TierBaseValue(tier), statWorth, tier, IsElarionMark(ResolveMark(a.makersMark, a.saga, a.IsAegis)));
         }
 
@@ -214,8 +220,9 @@ namespace DeNelle.Village
             // Prestige premium: a recognised Elarion mark, and especially a legendary
             // saga piece, commands far more than its raw stats — "buy an Elarion blade,
             // and bury your gold with it." (LORE §2)
-            if (tier == GearTier.Legendary) v *= 1.5f;
-            if (elarionMarked) v *= 1.25f;
+            // Lore and ordinary maker marks carry no power price. A true set/saga item may
+            // carry the explicit prestige premium supplied by the caller.
+            if (elarionMarked) v *= 1.15f;
             return Mathf_RoundToInt(v);
         }
 
