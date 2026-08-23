@@ -129,7 +129,12 @@
 > fine as history. A copied number is the bug **even when it was right the day it was written** -
 > that is exactly how the retired 860-899 UI block kept re-seeding collisions from CLAUDE.md sec.2.
 
-> ## ⚠ RECONCILED 2026-08-22 (CLI): main line next free = **1152**.
+> ## ⚠ RECONCILED 2026-08-22 (CLI): main line next free = **1154**.
+> *(CLI seat minted **WO-1152** and **WO-1153** and bumped 1152 -> 1154 in this SAME edit.
+> **1152** = WoodenWatchtowerBuilder NO LONGER RUNS - it aborts on L1, a level that renders fine,
+> so the repo has no working way to regenerate the wrapper prefabs that are the ORIENTATION
+> AUTHORITY. **1153** = gates are not covered by the WO-972 wall footprint carve-out; gate_stone
+> is type Gate so it still claims its measured mesh, and WO-972 never tested a gate.)*
 > *(CLI seat minted **WO-1151** and bumped 1151 -> 1152 in this SAME edit. **1151** = the ARCANE
 > TOWER PLANS BEACON IS UNDISCOVERABLE - the VFX is owner-APPROVED and untouched; the gap is that
 > nothing tells the player what the light is. Owner ruling: the Echo speaks a one-line nudge. The
