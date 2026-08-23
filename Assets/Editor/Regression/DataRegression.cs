@@ -1145,6 +1145,14 @@ namespace DeNelle.Editor
             // real run it immediately caught the tilt-90 ballista rows. That is the cost of the
             // defect class: the check existed the whole time and proved nothing.
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "night-market-ui suite", () => { if (!DeNelle.Editor.Regression.NightMarketUiRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[night-market-ui] " + r); });
+            // --- WO-1162 §1 FIX 3: the source oracle above proves the NUMBERS are sane; this one
+            //     builds a canvas at four surfaces plus a notched safe area, calls the SAME
+            //     NightMarketComposition.Compose / StorePackCard.Build the player gets, forces the
+            //     layout, and MEASURES the resolved RectTransforms for sibling overlap, safe-area
+            //     intrusion, touch floors and text truncation. A constant can be legal and still
+            //     resolve on top of its neighbour - the contents-block-over-price-lane defect was
+            //     three legal literals summing to a card that overdrew itself.
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "night-market-runtime-layout suite", () => { if (!DeNelle.Editor.Regression.NightMarketRuntimeLayoutRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[night-market-runtime-layout] " + r); });
             // --- WO-1149 (owner, on device 2026-08-22: "we need to stop game during transactions got
             //     killed while making purchase test"): a transaction freezes the world through the
             //     single WorldHold owner, and EVERY exit unfreezes it. The suite measures the clock

@@ -140,17 +140,17 @@ namespace DeNelle.Editor.Regression
 
             if (refPlan.Mode == DeNelle.Wallet.NightMarketMode.StackedTwoColumn)
                 failures.Add("the REFERENCE landscape surface (2120x978) no longer resolves to three " +
-                             "columns — the derived minimums have grown past the surface the store " +
+                             "columns - the derived minimums have grown past the surface the store " +
                              "ships on. Composition: " +
                              DeNelle.Wallet.NightMarketComposition.Describe(refPlan));
             if (refPlan.Deficit)
                 failures.Add("the reference landscape surface resolves to a DEFICIT composition (" +
-                             refPlan.DeficitPx.ToString("0") + "px short) — cards would overrun the shelf mask.");
+                             refPlan.DeficitPx.ToString("0") + "px short) - cards would overrun the shelf mask.");
 
             // The formula itself must stay a derivation, not drift back into a literal.
             Require(Read(Application.dataPath + CompositionRel, failures),
                 "SpotlightMinPx + ShelfMinForTwoCardsPx + CommerceMinPx + 2f * ColumnGapPx",
-                "the three-column breakpoint is no longer derived from the content minimums — a " +
+                "the three-column breakpoint is no longer derived from the content minimums - a " +
                 "hardcoded breakpoint cannot know what it is protecting.", failures);
 
             // The ONE bottom band IS the canon CTA height — that identity is what makes a second
@@ -202,7 +202,7 @@ namespace DeNelle.Editor.Regression
                                    + StorePackCard.ContentsBlockPx + StorePackCard.PriceBlockPx;
             if (standard < requiredStandard)
                 failures.Add($"standard card ({standard:0}px) is shorter than the blocks it must carry " +
-                             $"({requiredStandard:0}px of art + name + contents + price, before any gap) — " +
+                             $"({requiredStandard:0}px of art + name + contents + price, before any gap) - " +
                              "the text stack will reach into the bottom-pinned price lane.");
 
             if (standard < MinStandardCardPx)
@@ -239,10 +239,10 @@ namespace DeNelle.Editor.Regression
                 "pill can occupy the same lane.", failures);
             Require(card, "float priceLaneTop = cardH - (BottomPadPx + PriceBlockPx)",
                 "the card's text stack no longer reserves the bottom-pinned price lane before it " +
-                "spends its budget — that is the 268..330 contents-over-price overlap (WO-1162 FIX 2).",
+                "spends its budget - that is the 268..330 contents-over-price overlap (WO-1162 FIX 2).",
                 failures);
             Require(card, "budget >= CaptionBlockPx",
-                "the OPTIONAL value caption is drawn without checking the remaining budget — it was " +
+                "the OPTIONAL value caption is drawn without checking the remaining budget - it was " +
                 "landing 62px BELOW the card's own bottom edge.", failures);
             Require(card, "BuildPill(card, Ascii(pill), cardH, artH)",
                 "the state/badge pill is no longer seated against the art well.", failures);
@@ -311,7 +311,7 @@ namespace DeNelle.Editor.Regression
             // clears the touch floor in EVERY composition, not just the one the literals were
             // measured in. The old fraction-of-a-fixed-440 form could not see the stacked case.
             Require(store, "NightMarketComposition.CtaBottomPadPx / ctaHostPx",
-                "the Buy control's height is no longer authored in pixels against its real host — a " +
+                "the Buy control's height is no longer authored in pixels against its real host - a " +
                 "fraction of a host that shrinks lands the button under the touch floor, where the " +
                 "clamp GROWS it over its neighbour.", failures);
 
@@ -333,7 +333,7 @@ namespace DeNelle.Editor.Regression
 
                 if (plan.CardWidthPx < StorePackCard.MinCardWidthPx)
                     failures.Add($"[{probe.name}] shelf card resolves to {plan.CardWidthPx:0}px, under the " +
-                                 $"{StorePackCard.MinCardWidthPx:0}px readable minimum — the row will overrun " +
+                                 $"{StorePackCard.MinCardWidthPx:0}px readable minimum - the row will overrun " +
                                  "its mask and clip a price.");
             }
         }

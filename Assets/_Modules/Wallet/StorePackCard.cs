@@ -239,6 +239,88 @@ namespace DeNelle.Wallet
         private const int FontMinor   = 32;
         private const int FontBadge   = 30;
 
+        // =====================================================================
+        //  ⭐ THE STATE / BADGE PILL IS DERIVED FROM ITS FONT (WO-1162 FIX 4).
+        // ---------------------------------------------------------------------
+        //  WHAT WAS WRONG, in arithmetic anyone can redo: the pill was authored
+        //  44 px tall and its label was a CentredText, which insets 8 px on every
+        //  side. 44 - 2*8 = a 28 px BOX FOR A 30 px FONT. TMP's Ellipsis overflow
+        //  CULLS THE WHOLE LINE when the line box does not seat in the rect (the
+        //  mechanism ElarionUiKit's UiKitTextFitGuard header records), and
+        //  LiberationSans' line box is 98.89/86 = 1.15 em, i.e. 34.5 px at font
+        //  30. 34.5 > 28, so the pill drew ZERO GLYPHS - on every surface, in
+        //  both states. "BEST VALUE" was invisible, and so was "Owned", which is
+        //  the serious half: a player was shown NOTHING to say they already own
+        //  the pack they are being invited to buy.
+        //
+        //  So the box is now derived from the font and the font is never touched:
+        //  text box = BlockPx(FontBadge, 1) = ceil(30 * 1.25) = 38 px, which
+        //  clears the 34.5 px line by 10%, and the pill is that plus its own
+        //  padding. Nothing here may be "fixed" by lowering FontBadge - 30 IS
+        //  ElarionUi.FontFloorMobile, and there is nothing under it.
+        //
+        //  WIDTH IS THE SAME DEFECT LYING DOWN. The old band was x 0.42..0.96 of
+        //  the card (0.54) less 2*8 px of CentredText inset. On the narrowest
+        //  shipped shelf card (375 px at 1920x1080) that is a 186 px box, and
+        //  "BEST VALUE" MEASURES 219 px bold at font 30 with characterSpacing 4 -
+        //  so the moment the height was fixed, the width would have truncated it
+        //  instead. The band is widened to 0.26..0.96 (0.70) and the letter-spacing
+        //  halved, which gives 234 px at that same card against 213 px of text: a
+        //  10% margin at the WORST of the five measured surfaces, and 34% at the
+        //  best. Overlong authored copy (founders-vow's ruled SENTENCE) still
+        //  degrades through FitSingleLine's ellipsis - which is a readable
+        //  shortening, not an invisible label.
+        // =====================================================================
+
+        /// <summary>Horizontal breathing room inside the pill, per side.</summary>
+        private const float PillPadXPx = 14f;
+        /// <summary>Vertical breathing room inside the pill, per side.</summary>
+        private const float PillPadYPx = 5f;
+        /// <summary>Letter-spacing on the pill face, in TMP's 1/100 em. Halved from 4 as part of
+        /// the width budget above: at font 30 each unit costs 0.3 px per character.</summary>
+        private const float PillLetterSpacing = 2f;
+        /// <summary>The pill's x band as fractions of the CARD width.</summary>
+        private const float PillX0 = 0.26f;
+        private const float PillX1 = 0.96f;
+
+        /// <summary>The pill's LABEL box - one line at <see cref="FontBadge"/>. The pill is sized
+        /// from this; this is never sized from the pill.</summary>
+        public static float PillTextBoxPx => BlockPx(FontBadge, 1);
+
+        /// <summary>The pill itself: its label's own line box plus its padding.</summary>
+        public static float PillHeightPx => PillTextBoxPx + 2f * PillPadYPx;
+
+        // =====================================================================
+        //  ⭐ THE PRICE ROW'S X BAND (WO-1162 FIX 4).
+        // ---------------------------------------------------------------------
+        //  The major price took x 0.06..0.62 ALWAYS, because the fiat minor sat
+        //  at 0.64..0.94 - even on the cards that have no fiat minor to draw. The
+        //  card was reserving a lane for a string it was not rendering, and the
+        //  bill was paid by the one string the owner is looking at right now:
+        //  with no server quote every card prints "Price unavailable", which
+        //  MEASURES 267 px bold at the font floor and got 0.56 * card =
+        //  210 px at 1920x1080, 218 px notched, 251 px at 2340x1080. It clipped -
+        //  the player reads a cut-off sentence where the price belongs.
+        //
+        //  The fix is to give the lane the width it already had lying idle: when
+        //  PriceMinor is empty the major spans the WHOLE row, 0.06..0.94. That is
+        //  330 px at the narrowest measured card and 413 px at the widest, against
+        //  267 px of text - a 23% margin at the worst surface, with the font
+        //  untouched at its authored 54 / floor 30. The string is NOT shortened:
+        //  "Price unavailable" is a REQUIRED state sentence and re-wording it to
+        //  fit a lane we were wasting would be fixing the measurement instead of
+        //  the card.
+        // =====================================================================
+
+        /// <summary>Left edge of the price row, as a fraction of the card width.</summary>
+        private const float PriceRowX0 = 0.06f;
+        /// <summary>Right edge of the price row.</summary>
+        private const float PriceRowX1 = 0.94f;
+        /// <summary>Where the MAJOR stops when a fiat minor shares the lane with it.</summary>
+        private const float PriceMajorX1WithMinor = 0.62f;
+        /// <summary>Where the fiat minor starts. Disjoint from the major's band by construction.</summary>
+        private const float PriceMinorX0 = 0.64f;
+
         /// <summary>Art-well height for a variant, reference px.</summary>
         public static float ArtWellHeight(StorePackCardVariant v) =>
             v == StorePackCardVariant.Featured ? FeaturedArtPx :
@@ -396,22 +478,29 @@ namespace DeNelle.Wallet
             // Bottom-pinned, so a two-line name above can never push the price out of the card —
             // "quantities and currency must never be clipped" is an acceptance criterion, and the
             // 2026-08-22 frames failed it by showing "20 SKR" for a 120 SKR pack.
+            // ⛔ THE MAJOR TAKES THE WHOLE ROW WHEN THERE IS NO MINOR TO SHARE IT WITH. Reserving
+            // the fiat band on a card that draws no fiat is how "Price unavailable" - the string
+            // EVERY card prints while the store has no server quote - got 210px for 267px of text.
+            bool hasMinor = !string.IsNullOrEmpty(model.PriceMinor);
+            float priceMajorX1 = hasMinor ? PriceMajorX1WithMinor : PriceRowX1;
             handle.PriceLabel = BottomAnchoredText(card, model.PriceMajor, FontPrice, ElarionUi.Gilt,
-                FontStyles.Bold, TextAlignmentOptions.BottomLeft, BottomPadPx, PriceBlockPx, 0.06f, 0.62f);
+                FontStyles.Bold, TextAlignmentOptions.BottomLeft, BottomPadPx, PriceBlockPx,
+                PriceRowX0, priceMajorX1);
             // ⛔ THE PRICE IS THE ONE STRING ON THIS SCREEN THAT MUST NOT CLIP. On 2026-08-22 the
             // owner's device showed "20 SKR" for a 120 SKR pack and "6 SKR" for a 36 SKR pack --
             // the leading digit occluded. FitSingleLine shrinks toward the floor before it would
             // ever truncate, so the digits survive a narrower column.
             if (handle.PriceLabel != null)
                 ElarionUiKit.FitSingleLine(handle.PriceLabel, ElarionUi.FontFloorMobile, FontPrice);
-            if (!string.IsNullOrEmpty(model.PriceMinor))
+            if (hasMinor)
             {
                 // ⛔ THE MINOR REFERENCE SHARES THE PRICE LANE, IT DOES NOT SIT ABOVE IT. It used to
                 // be bottom-offset 18 in a 44 px box while the major was 14/62 - two overlapping
                 // boxes in one lane whose only separation was that they happened not to be wide
                 // enough to meet. Same bottom pad, same block height, disjoint x bands.
                 var minor = BottomAnchoredText(card, model.PriceMinor, FontMinor, ElarionUi.Parchment,
-                    FontStyles.Normal, TextAlignmentOptions.BottomRight, BottomPadPx, PriceBlockPx, 0.64f, 0.94f);
+                    FontStyles.Normal, TextAlignmentOptions.BottomRight, BottomPadPx, PriceBlockPx,
+                    PriceMinorX0, PriceRowX1);
                 // The dollars FLOAT (WO-1158 section 5) but they still must not clip: a "$49.99"
                 // that reads "$4" is the same defect as the occluded SKR digit, one currency over.
                 if (minor != null)
@@ -540,12 +629,15 @@ namespace DeNelle.Wallet
         private static TextMeshProUGUI BuildPill(Transform card, string text, float cardH, float artH)
         {
             float wellTop = 1f - (artH / Mathf.Max(1f, cardH));
-            float pillH = 44f;
+            // ⛔ DERIVED FROM THE FONT, NEVER THE OTHER WAY ROUND. See the pill budget above: a
+            // literal 44 here, minus a text child's 8px inset per side, gave a 30px font a 28px
+            // box and TMP culled the line whole - the badge and, worse, "Owned" drew NOTHING.
+            float pillH = PillHeightPx;
 
             var go = new GameObject("Badge", typeof(RectTransform), typeof(Image));
             go.transform.SetParent(card, false);
             var rt = (RectTransform)go.transform;
-            rt.anchorMin = new Vector2(0.42f, 1f); rt.anchorMax = new Vector2(0.96f, 1f);
+            rt.anchorMin = new Vector2(PillX0, 1f); rt.anchorMax = new Vector2(PillX1, 1f);
             rt.pivot = new Vector2(0.5f, 1f);
             rt.anchoredPosition = new Vector2(0f, -12f);
             rt.sizeDelta = new Vector2(0f, pillH);
@@ -558,11 +650,14 @@ namespace DeNelle.Wallet
             // WO-1060 Assert B reports as an overlap — and it would also swallow the card's tap.
             img.raycastTarget = false;
 
-            var t = CentredText(go.transform, text, FontBadge, new Color(0.08f, 0.06f, 0.03f, 1f));
+            // The label's own box is PillTextBoxPx by construction: the pill is pillH tall and the
+            // inset below is PillPadYPx per side, so the line box the font needs is what is left.
+            var t = CentredText(go.transform, text, FontBadge, new Color(0.08f, 0.06f, 0.03f, 1f),
+                                PillPadXPx, PillPadYPx);
             if (t != null)
             {
                 t.fontStyle = FontStyles.Bold;
-                t.characterSpacing = 4f;
+                t.characterSpacing = PillLetterSpacing;
                 ElarionUiKit.FitSingleLine(t, ElarionUi.FontFloorMobile, FontBadge);
             }
             // Unused wellTop kept out of the layout deliberately: the pill anchors to the CARD top,
@@ -655,13 +750,20 @@ namespace DeNelle.Wallet
             return t;
         }
 
-        private static TextMeshProUGUI CentredText(Transform parent, string text, int size, Color color)
+        /// <summary>
+        /// A centred label filling its parent, inset by <paramref name="padX"/> / <paramref name="padY"/>.
+        /// ⛔ THE PADDING IS A PARAMETER BECAUSE IT IS PART OF A LINE-BOX BUDGET. A hardcoded 8px
+        /// inset here is what turned a 44px pill into a 28px box for a 30px font and culled the
+        /// badge - callers that size their host FROM the font must be able to say so.
+        /// </summary>
+        private static TextMeshProUGUI CentredText(Transform parent, string text, int size, Color color,
+                                                   float padX = 8f, float padY = 8f)
         {
             var t = NewText(parent, text, size, color, FontStyles.Bold, TextAlignmentOptions.Center);
             if (t == null) return null;
             var rt = t.rectTransform;
             rt.anchorMin = Vector2.zero; rt.anchorMax = Vector2.one;
-            rt.offsetMin = new Vector2(8f, 8f); rt.offsetMax = new Vector2(-8f, -8f);
+            rt.offsetMin = new Vector2(padX, padY); rt.offsetMax = new Vector2(-padX, -padY);
             return t;
         }
 

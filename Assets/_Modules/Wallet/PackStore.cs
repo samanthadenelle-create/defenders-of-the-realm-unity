@@ -486,11 +486,13 @@ namespace DeNelle.Wallet
 
             BuildHeader(_topBar);
 
-            // ── BODY, THREE COLUMNS. WIDTH IS THE ABUNDANT AXIS — SPEND IT ────
+            // ── BODY. WIDTH IS THE ABUNDANT AXIS — SPEND IT ───────────────────
             // Landscape gives ~2120 horizontal units against 978 vertical. Every one of the
             // 2026-08-22 defects was a VERTICAL crowding defect, so the fix is to move work
-            // sideways: the spotlight and the commerce column are fixed-width rails and the market
-            // takes the rest, instead of a taller stack anywhere.
+            // sideways. HOW MANY COLUMNS that buys is no longer assumed: the plan resolved above
+            // says three (rails at comfort width), three (rails narrowed to their content minimum),
+            // or two (commerce stacked under the spotlight) — chosen so a card, a glyph and a tap
+            // target never shrink to keep a column.
             // ⛔ ONE OWNER PLACES THE COLUMNS. NightMarketComposition.Compose is the same call the
             // runtime layout oracle makes, so what the oracle measures is what the player gets — an
             // oracle that placed its own rects would only be proving its own arithmetic.
