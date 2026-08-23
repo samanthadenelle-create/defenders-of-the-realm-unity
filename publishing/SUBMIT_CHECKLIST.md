@@ -72,7 +72,7 @@ evidence record and reviewer copy.
 - [x] Backend verifies finalized chain data, signer, server-owned recipient, exact
       mint, decimals, and exact `amountBaseUnits`.
 - [x] Mainnet production authority recorded internally: official SKR mint
-      `SKRbvo6Gf7GondiT3BbTfuRDPqLWei4j2Qy2NPGZhW3`, decimals `9`.
+      `SKRbvo6Gf7GondiT3BbTfuRDPqLWei4j2Qy2NPGZhW3`, decimals `6` (CORRECTED 2026-08-22 - read off the chain; the 9 came from OUR Devnet TEST mint and is wrong for the real token. 1 SKR = 1_000_000 base units).
 - [x] Daily Chest physical-device happy path previously proved a completed ad
       granted the displayed 1,000 Gold exactly once.
 - [x] Current monetization integration regression passed 264/264 with zero skipped
@@ -142,7 +142,7 @@ recipient/mint/amount assertions on the production-configured build.
 - [ ] Timeout/network loss grants nothing and leaves a recoverable pending state.
 - [ ] Wrong mint, amount, signer, recipient, or network is rejected.
 - [ ] Production-configured build identifies official Mainnet SKR mint
-      `SKRbvo6Gf7GondiT3BbTfuRDPqLWei4j2Qy2NPGZhW3` with 9 decimals.
+      `SKRbvo6Gf7GondiT3BbTfuRDPqLWei4j2Qy2NPGZhW3` with 6 decimals (CORRECTED 2026-08-22 - the 9 was our Devnet test mint's value).
 - [ ] Attach transaction, database row, device log, and restart evidence:
       `________________`.
 

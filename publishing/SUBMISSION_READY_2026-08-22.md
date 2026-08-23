@@ -124,7 +124,7 @@ Official sources:
   Purchased game content is non-transferable, has no cash-out, and is not required
   to complete the game.
 - Mainnet SKR authority for production: mint
-  `SKRbvo6Gf7GondiT3BbTfuRDPqLWei4j2Qy2NPGZhW3`, decimals `9`.
+  `SKRbvo6Gf7GondiT3BbTfuRDPqLWei4j2Qy2NPGZhW3`, decimals `6` (CORRECTED 2026-08-22 - read off the chain; the 9 came from OUR Devnet TEST mint and is wrong for the real token. 1 SKR = 1_000_000 base units).
 - Devnet-only integration authority: mint
   `3BwWSAUZmyngXDSZiCawEnP7iLgY5ANNopBDz94AB77N`, decimals `9`.
   This is an engineering record only; do not publish it or a tester wallet in the
