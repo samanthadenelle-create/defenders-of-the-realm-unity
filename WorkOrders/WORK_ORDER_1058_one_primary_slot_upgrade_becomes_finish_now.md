@@ -28,7 +28,36 @@ right now.
 
 | Row state | Control | x range | Source |
 |---|---|---|---|
-| Upgrade candidate | **`Upgrade`** (green) | **0.76 – 0.98** | `ManageScreenPanel.cs:725-727` |
+| Upgrade candidate | **`Upgrade`** (Yellow/Gray) | **0.84 – 0.98** | `ManageScreenPanel.cs:968-973` (`AddBrowseRow`) |
+
+> ### ⚠ CITATIONS CORRECTED 2026-08-22 — READ THIS BEFORE "VERIFYING" §1
+> The row above previously cited `ManageScreenPanel.cs:725-727`, "green", and band `0.76–0.98`.
+> All three were wrong at HEAD. `:719-729` is `AddActionNoteRow`, whose only live caller is the
+> **Repair** offer — not the upgrade CTA. The real upgrade CTA is `AddBrowseRow` at `:968-973`,
+> band **0.84–0.98**, coloured Yellow/Gray. `Cancel` is `:856-860`, band `0.885–0.98`, Red.
+> An implementer checking the ticket against those old numbers finds a function that has
+> nothing to do with the defect and concludes the report is bogus.
+>
+> **The x-overlap is real but is NOT the mechanism.** `Upgrade` and `Cancel` live in DIFFERENT
+> SECTIONS — `Cancel` in "IN QUEUE", `Upgrade` in "UPGRADES" below it — and the list re-renders
+> wholesale on `QueueChanged`. So they are never the same row. The plausible mechanism is that
+> starting a job INSERTS a queue row in the section above, shifting every browse row DOWN by
+> `RowHeightPx`, so the second tap lands on whatever slid under the finger — most often the NEXT
+> structure's `Upgrade` (an unintended second purchase), and only `Cancel` when scroll position
+> happens to put a queue row there.
+>
+> ⛔ **THE FORBIDDEN FIX.** The tempting way to make a "Finish Now" face exist is to guarantee the
+> job is RUNNING rather than queued, i.e. raise `BuildTimerConfig.freeBuildSlots`. Do not.
+> `queueDepthPerLine = 5` and `freeBuildSlots = 2` are DIFFERENT AXES and the config says so in
+> its own comment block: "DO NOT implement the cap of 5 by raising freeBuildSlots." Also do not
+> add a confirm or lockout on the second tap — §2.2 forbids it.
+>
+> This is a PRESENTATION ticket in ONE file (`AddQueueRow` `:808-871` + `AddBrowseRow`
+> `:952-974`). The VM is read-only; slot accounting is not involved at all.
+>
+> Still missing: the two owner screenshots this ticket cites as Evidence are not on disk under
+> `WorkOrders/` or `logs/f8-inbox/`. The re-layout can proceed without them (it is an owner
+> ruling); the §1 hazard narrative cannot be verified without them.
 | Running / queued job | **`Cancel`** (red) | **0.885 – 0.98** | `:856-858` |
 | Running / queued job | `Finish` (yellow) | 0.455 – 0.655 | `:822-824` |
 
