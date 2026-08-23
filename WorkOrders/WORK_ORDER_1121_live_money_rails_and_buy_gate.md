@@ -1,4 +1,6 @@
-# WO-1121 — Live money rails: Buy gate, mainnet/SKR checklist, post-pay reliability
+**Status:** DONE 2026-08-22 (owner) - the live money rail is proven end to end. SKR mints are populated for BOTH networks (WalletEndpoints.cs:54/:56) and decimals are network-parameterised (:61 devnet 9, :62 mainnet 6). Idempotent grant confirmed at PurchaseGate.cs:285 TryClaimGrant (claims BEFORE granting, true exactly once); paid-but-not-granted has a loud path at :317. The stub/free-purchase hole (WO-931) was closed 2026-08-10. Mainnet stays blocked two ways: the canary+owner allowlist at SolanaWalletProvider.cs:582 then the blanket block at :591.
+
+> ⚠ CARRIED FORWARD, not part of this closure: the ticket body's "Known gaps" table is ~60% STALE and its footer cites dead line numbers (FeatureFlags.cs:659/:651 - the real ones are :681 and SolanaWalletProvider.cs:591). Also worth amending §2: "SKR mint set for the network you claim to support" should read "mint AND decimals" - as written, that checklist would have passed the build that authorised 1,000 SKR instead of 1.
 
 **Status:** READY TO IMPLEMENT after owner R5 (WO-1117) + WO-915 rulings  
 **Minted:** 2026-08-17 (CLI seat) — program WO-1117  

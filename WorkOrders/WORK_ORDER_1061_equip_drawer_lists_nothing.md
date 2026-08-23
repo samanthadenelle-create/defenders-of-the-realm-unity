@@ -1,4 +1,8 @@
-**Status:** READY TO TRIAGE — three candidates, ONE log line separates them (§2). ⛔ No edit before it (CLAUDE.md §12).
+**Status:** DONE 2026-08-22 (owner: "1061 was already redone today").
+
+> ⚠ RECORDED HONESTLY SO A REGRESSION IS CHEAP TO FIND: the only change to EquipVM.cs / EquipmentPanel.cs / InventoryStore.cs today was INSTRUMENTATION (commit 9f26ad71e) - no fix is visible in the drawer code itself, and there were no pending changes to those files at closure. So whatever fixed it lives UPSTREAM, most likely in the WO-1063..1068 gear work through PartyShop. If the drawer ever lists nothing again, start there and not in EquipVM.
+>
+> Also note: EquipDrawerContentsRegression is behavioural (it counts ROWS, not method names) but its fixture PASSED on the day the defect was live in the owner's build - so a green EQUIP_DRAWER_OK does NOT prove this ticket. The diagnostic that would: one F8 with the Weapon row open, carrying the [Flow:Equip] drawer slot line and its CAUSE= verdict.
 
 # WORK ORDER 1061 — The equip drawer lists NOTHING — you cannot change your weapon
 
