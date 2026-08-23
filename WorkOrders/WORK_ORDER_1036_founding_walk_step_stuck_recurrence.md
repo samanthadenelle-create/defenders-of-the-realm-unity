@@ -4,7 +4,7 @@
 > TRUNCATED capture and is **FALSE**: a watchdog rescues the step (§1b). Left visible rather than
 > silently reworded, because the wrong title is what a skimming seat would have scheduled off.
 
-**Status:** DONE — audit-verified as shipped (2026-08-21 backlog audit).
+**Status:** FIXED — AWAITING OWNER FELT-TEST TO CLOSE. Prior status: DONE — audit-verified as shipped (2026-08-21 backlog audit).
 **Minted:** 2026-08-16 (UI seat) — provenance stack bumped 1036 → 1037 in the same edit
 **Lane:** Tutorial V2 / guide gate. ⚠ Interacts with WO-1031's guide despawn — see §4.
 **Priority:** **MEDIUM** (was HIGH — corrected 2026-08-17, see §1b: a watchdog RESCUES the step, so

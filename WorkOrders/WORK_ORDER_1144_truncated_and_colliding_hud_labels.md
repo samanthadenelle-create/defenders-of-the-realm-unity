@@ -1,4 +1,4 @@
-**Status:** DONE 2026-08-22 - four defects, four different causes, all measured from the captured frame. Also found a latent touch-floor violation: the old Start Wave button resolved ~66px UNDER MinTouchPx because ClampMinTouch no-ops pre-layout. Gate-green.
+**Status:** FIXED — AWAITING OWNER FELT-TEST TO CLOSE. Prior status: DONE 2026-08-22 - four defects, four different causes, all measured from the captured frame. Also found a latent touch-floor violation: the old Start Wave button resolved ~66px UNDER MinTouchPx because ClampMinTouch no-ops pre-layout. Gate-green.
 
 # WORK ORDER 1144 - Truncated and colliding HUD labels in the town
 

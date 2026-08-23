@@ -1,6 +1,6 @@
 # WORK ORDER 1130 — The R2 push is part of the ship chain, not a step a human remembers
 
-**Status:** DONE — implemented in the working tree 2026-08-20 (`tools/r2-ship.ps1` new; `morning-ship-chain.ps1`, `overnight-apk-build.ps1`, `install-apk-to-seeker.ps1` rewired to call it). ⚠ NOT YET COMMITTED at the time this WO was minted — the sole committer stages it; and ⚠ ONE BYPASS REMAINS OPEN (§5).
+**Status:** FIXED — AWAITING OWNER FELT-TEST TO CLOSE. Prior status: DONE — implemented in the working tree 2026-08-20 (`tools/r2-ship.ps1` new; `morning-ship-chain.ps1`, `overnight-apk-build.ps1`, `install-apk-to-seeker.ps1` rewired to call it). ⚠ NOT YET COMMITTED at the time this WO was minted — the sole committer stages it; and ⚠ ONE BYPASS REMAINS OPEN (§5).
 **Minted:** 2026-08-20 (CLI seat, main line — banner bumped 1130 → 1131 in this SAME edit)
 **Silo:** Build/ship tooling (`tools/`, root `*.ps1`) — touches no game code, no scene, no catalog
 **Priority:** HIGH — this failure costs whole owner play sessions and is invisible on device

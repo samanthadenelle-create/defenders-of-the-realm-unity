@@ -1,6 +1,6 @@
 # WORK ORDER 1037 — Turn "Missing resources" into a pack offer (STUBBED, flag-gated off prod)
 
-**Status:** DONE — audit-verified as shipped (2026-08-21 backlog audit).
+**Status:** FIXED — AWAITING OWNER FELT-TEST TO CLOSE. Prior status: DONE — audit-verified as shipped (2026-08-21 backlog audit).
 
 > ⚠ THE OLD STATUS LINE WAS STALE BY A DAY. It read *"needs owner ruling on §3 (no pack can currently
 > fulfil this offer)"* — but §3 already carries `⛔ RULED 2026-08-16 — OPTION (b)` with the owner's

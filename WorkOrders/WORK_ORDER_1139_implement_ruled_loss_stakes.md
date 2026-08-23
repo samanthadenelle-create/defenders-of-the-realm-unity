@@ -1,4 +1,4 @@
-**Status:** IMPLEMENTED 2026-08-22 - COLLECTOR LOOTING ONLY. The bank-theft rival was deleted and made unbuildable (reflection fails the gate if its methods return). Crystal collectors exempt in two independent places. FeatureFlags.Siege is now ON and PROVEN - all four siege suites green on a fresh log.
+**Status:** FIXED — AWAITING OWNER FELT-TEST TO CLOSE. Prior status: IMPLEMENTED 2026-08-22 - COLLECTOR LOOTING ONLY. The bank-theft rival was deleted and made unbuildable (reflection fails the gate if its methods return). Crystal collectors exempt in two independent places. FeatureFlags.Siege is now ON and PROVEN - all four siege suites green on a fresh log.
 
 # WORK ORDER 1139 — Implement the ruled loss stakes: theft, the repair bill, and turning the siege on
 

@@ -1,6 +1,6 @@
 # WORK ORDER 1038 — FIVE undeclared tags are used in code; each is a live `UnityException`
 
-**Status:** DONE — audit-verified as shipped (2026-08-21 backlog audit).
+**Status:** FIXED — AWAITING OWNER FELT-TEST TO CLOSE. Prior status: DONE — audit-verified as shipped (2026-08-21 backlog audit).
 **Minted:** 2026-08-16 (UI seat) — provenance stack bumped 1038 → 1039 in the same edit
 **Lane:** Project settings + tag call sites + a new regression. ⚠ Touches `ProjectSettings/TagManager.asset`.
 **Priority:** **HIGH** — one is crashing in the owner's live session; the others are latent crashes

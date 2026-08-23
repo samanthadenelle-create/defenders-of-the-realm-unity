@@ -1,6 +1,6 @@
 # WO-1120 — Ads: effective free path (stop free grants; real SDK; placements)
 
-**Status:** DONE - 2026-08-21 CLI, gate-green (COMPILE_GATE_OK + REGRESSION_OK 234/234).
+**Status:** FIXED — AWAITING OWNER FELT-TEST TO CLOSE. Prior status: DONE - 2026-08-21 CLI, gate-green (COMPILE_GATE_OK + REGRESSION_OK 234/234).
 **Minted:** 2026-08-17 (CLI seat) — program WO-1117  
 **Lane:** Monetization / Ads  
 **Depends on:** WO-912 (seam + rulings); pairs with WO-1119 harvest boost for ad reward  

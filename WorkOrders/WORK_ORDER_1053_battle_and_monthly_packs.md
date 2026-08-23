@@ -12,7 +12,7 @@
 > 1053 -> 1054 in the SAME edit, file moved with `git mv` so history follows. **Content unchanged.**
 
 **Type:** DESIGN SPEC (ideas + data schema + sample data). **No `.cs` in this WO** — implementation is a follow-up WO.
-**Status:** IMPLEMENTED 2026-08-21 - 30-tier season + two monthly cards, firewall enforced at load on three axes. Cosmetic and SKR rows DELIBERATELY UNAUTHORED (no art; no ISkrLedger) with the regression failing the build if either is authored early. Monetization stays OFF.
+**Status:** FIXED — AWAITING OWNER FELT-TEST TO CLOSE. Prior status: IMPLEMENTED 2026-08-21 - 30-tier season + two monthly cards, firewall enforced at load on three axes. Cosmetic and SKR rows DELIBERATELY UNAUTHORED (no art; no ISkrLedger) with the regression failing the build if either is authored early. Monetization stays OFF.
 **Author lane:** Monetization/Backend (§9 parallel lane — fully isolated; no scene/combat files).
 **Assigned:** **CLI seat implements.** The DESIGN pass is DONE — authored by the **UI seat (Claude UI)**
 2026-08-21: the re-verification (§V), the four owner rulings (§R) and the two missing screens (§U).

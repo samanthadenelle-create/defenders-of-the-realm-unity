@@ -1,6 +1,6 @@
 # PROD-002 — NPCs: retire the doors that lead nowhere, cast the people we bought
 
-**Status:** DONE — **both deliverables shipped**, PENDING OWNER FELT-VERIFY (§4 boxes 4/5). ⚠ **TWO 2026-08-20 FOLLOW-UPS ARE RECORDED IN §0 BELOW** — one of Deliverable A's stated reasons was FALSE when written and has since been MADE TRUE (`890ff5656`), and Deliverable B grew a second half nobody knew was missing (`79c1e61b`, `9a2d1faae`).
+**Status:** FIXED — AWAITING OWNER FELT-TEST TO CLOSE. Prior status: DONE — **both deliverables shipped**, PENDING OWNER FELT-VERIFY (§4 boxes 4/5). ⚠ **TWO 2026-08-20 FOLLOW-UPS ARE RECORDED IN §0 BELOW** — one of Deliverable A's stated reasons was FALSE when written and has since been MADE TRUE (`890ff5656`), and Deliverable B grew a second half nobody knew was missing (`79c1e61b`, `9a2d1faae`).
 
 **Deliverable A (retire the dead interact doors) is DONE** (2026-08-18, commit `233613615`, owner
 ruled **(a)**): all three doors are shut — `collector_lumbermill` + `arcane-tower` earlier, and

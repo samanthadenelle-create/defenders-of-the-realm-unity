@@ -1,6 +1,6 @@
 # WORK ORDER 1043 — PENDING BAKE: the dungeon exit trim is committed but not yet on screen
 
-**Status:** DONE — audit-verified as shipped (2026-08-21 backlog audit).
+**Status:** FIXED — AWAITING OWNER FELT-TEST TO CLOSE. Prior status: DONE — audit-verified as shipped (2026-08-21 backlog audit).
 **Minted:** 2026-08-16 (CLI seat, Sunday sweep) — banner bumped in the same edit
 **Lane:** Dungeon scenes. ⚠ Bake-only; the code and data work is DONE and committed (`dd17a793`).
 

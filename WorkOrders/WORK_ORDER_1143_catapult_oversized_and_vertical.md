@@ -1,4 +1,4 @@
-**Status:** READY TO IMPLEMENT (owner felt-test 2026-08-22)
+**Status:** FIXED 2026-08-23 — shipped in `51de6bd31` (the catapult `FitHeight` split), capture-verified. AWAITING OWNER FELT-TEST TO CLOSE.
 
 # WORK ORDER 1143 - The siege catapult renders oversized and vertical in raids
 

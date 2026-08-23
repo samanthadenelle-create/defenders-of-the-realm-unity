@@ -1,6 +1,6 @@
 # WORK ORDER 1102 - Fleet instances discard Step-level stdout (no per-instance -logFile)
 
-**Status:** IMPLEMENTED - pending committer gate
+**Status:** FIXED — AWAITING OWNER FELT-TEST TO CLOSE. Prior status: IMPLEMENTED - pending committer gate
 **Minted:** 2026-08-16 (orchestrator; banner bumped 1102 -> 1103 in the same edit)
 **Silo:** QA harness / autopilot fleet
 **Lane:** tools + DevTools only. Disjoint from Hero/Equipment, HUD, VFX lanes.

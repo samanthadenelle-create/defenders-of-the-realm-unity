@@ -1,6 +1,6 @@
 # WORK ORDER 1105 — Sylas the Ranger plays like a swordsman: give the archer his bow, his target, and his icons
 
-**Status:** DONE 2026-08-16 (`562f3d3e5`, `14a2c66ed`, `682c6f595`, `998ca0751`) — the §5 ruling was taken live (R5); RESULT filed; pending PO felt-verify
+**Status:** FIXED — AWAITING OWNER FELT-TEST TO CLOSE. Prior status: DONE 2026-08-16 (`562f3d3e5`, `14a2c66ed`, `682c6f595`, `998ca0751`) — the §5 ruling was taken live (R5); RESULT filed; pending PO felt-verify
 
 > ## ⭐ R5 — OWNER REVISION 2026-08-16, SUPERSEDES §3(a) AND §4 BULLET 1 (BINDING)
 > Owner, verbatim: *"change the bow and arrow attack to the action bar and leave the attack as the

@@ -1,6 +1,6 @@
 # WORK ORDER 1067 — Certify every gear visual before sale
 
-**Status:** IMPLEMENTED FOUNDATION — OWNER CAPTURE APPROVAL PENDING  
+**Status:** FIXED — AWAITING OWNER FELT-TEST TO CLOSE. Prior status: IMPLEMENTED FOUNDATION — OWNER CAPTURE APPROVAL PENDING
 **Parent:** WO-1063 · **Silo:** gear art, offsets, captures and gates
 
 ## Baseline

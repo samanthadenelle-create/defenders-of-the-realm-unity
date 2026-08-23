@@ -1,6 +1,6 @@
 # WORK ORDER 1045 — Queue full = a dead upgrade button. Disable it, say why, offer the slot.
 
-**Status:** DONE — pending PO felt-verify
+**Status:** FIXED — AWAITING OWNER FELT-TEST TO CLOSE. Prior status: DONE — pending PO felt-verify
 ⚠ **STATUS WAS STALE FOR TWO DAYS.** The work SHIPPED in `c1e9636f2` ("feat(upgrade): say WHY the
 button is dead, and show what the upgrade actually buys", 2026-08-17 10:28) but that commit did not
 flip this line, so `BOARD.html` — which is DERIVED from it — kept rendering WO-1045 as Ready and the

@@ -1,6 +1,6 @@
 # WORK ORDER 1024 — Structures burn with NO repair surface: the install gate runs once, before the town exists
 
-**Status:** IMPLEMENTED 2026-08-20 — AWAITING OWNER FELT-VERIFY (PO closes, §13). Option **(a)** taken:
+**Status:** FIXED — AWAITING OWNER FELT-TEST TO CLOSE. Prior status: IMPLEMENTED 2026-08-20 — AWAITING OWNER FELT-VERIFY (PO closes, §13). Option **(a)** taken:
 `StructureDamageVisuals` raises `HubRepairAffordance.NotifyRepairableAppeared()` the moment it tracks a
 structure, so the repair surface follows the town instead of racing it; and the §"remaining defect"
 below is closed too — `WaveFeedbackDirector`'s deferral now re-arms on a new `CoreServices.HudRegistered`

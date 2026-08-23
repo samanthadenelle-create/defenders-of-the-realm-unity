@@ -1,6 +1,6 @@
 # WORK ORDER 1127 — Battle-end quiescence gate: assert the world is back to baseline, and name what isn't
 
-**Status:** IMPLEMENTED 2026-08-20 — AWAITING OWNER FELT-VERIFY (PO closes, §13).
+**Status:** FIXED — AWAITING OWNER FELT-TEST TO CLOSE. Prior status: IMPLEMENTED 2026-08-20 — AWAITING OWNER FELT-VERIFY (PO closes, §13).
 `BattleQuiescenceGate` (Core/Combat) + `BattleQuiescenceRegression` (registered suite), armed from
 `BattleArena` resolve on BOTH outcomes. All six suite groups green, including the originating defect:
 `[defect-2026-08-20] timeScale 0.04 reported with the value AND the 4% speed`. Gates: `COMPILE_GATE_OK`;

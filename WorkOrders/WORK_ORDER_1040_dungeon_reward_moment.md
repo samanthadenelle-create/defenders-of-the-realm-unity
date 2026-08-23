@@ -1,6 +1,6 @@
 # WORK ORDER 1040 — Dungeon completion: overlapping text, and a payout that feeds nothing
 
-**Status:** §2 DONE (2026-08-17, commit-verified) · §3 SPEC pending owner ruling
+**Status:** FIXED — AWAITING OWNER FELT-TEST TO CLOSE. Prior status: §2 DONE (2026-08-17, commit-verified) · §3 SPEC pending owner ruling
 
 > **§2 — the three-block text collision — IS FIXED.** Shipped inside **eff761fcc**
 > (`feat(dungeon): the rough stone economy`), not under this WO's own number, which is why the board

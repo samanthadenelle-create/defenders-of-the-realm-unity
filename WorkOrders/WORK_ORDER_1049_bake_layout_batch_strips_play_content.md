@@ -1,6 +1,6 @@
 # WORK ORDER 1049 — `BakeLayoutBatch` silently strips every piece of play content
 
-**Status:** DONE - 2026-08-21 CLI, gate-green (COMPILE_GATE_OK + REGRESSION_OK 234/234).
+**Status:** FIXED — AWAITING OWNER FELT-TEST TO CLOSE. Prior status: DONE - 2026-08-21 CLI, gate-green (COMPILE_GATE_OK + REGRESSION_OK 234/234).
 **Minted:** 2026-08-17 (CLI seat, UI block) as 1048, RENUMBERED to 1049 the same hour — see §7
 **Priority:** **HIGH.** It is a one-word defect that empties a dungeon, reports success, and exits 0.
 **Provenance:** owner F8 seq 2515 (*"[dg_bonecrypt] LEave still on all steps with an exit portal in

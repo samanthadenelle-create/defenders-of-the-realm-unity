@@ -1,6 +1,6 @@
 # WO-1118 — Honest SKU shelf: hide vapor, keep impulse, rewrite the $2/$5 ladder
 
-**Status:** DONE - 2026-08-21 CLI, gate-green (COMPILE_GATE_OK + REGRESSION_OK 234/234).
+**Status:** FIXED — AWAITING OWNER FELT-TEST TO CLOSE. Prior status: DONE - 2026-08-21 CLI, gate-green (COMPILE_GATE_OK + REGRESSION_OK 234/234).
 **Minted:** 2026-08-17 (CLI seat) — program WO-1117  
 **Lane:** Monetization / data (`packs.json` dual-copy) + PackStore filter  
 **Depends on:** WO-1117 rulings R1–R3  

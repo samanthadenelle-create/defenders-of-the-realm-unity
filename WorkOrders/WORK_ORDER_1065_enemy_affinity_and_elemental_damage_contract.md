@@ -1,6 +1,6 @@
 # WORK ORDER 1065 — Enemy affinity and elemental damage contract
 
-**Status:** IMPLEMENTED — AWAITING COMBINED OWNER GATE  
+**Status:** FIXED — AWAITING OWNER FELT-TEST TO CLOSE. Prior status: IMPLEMENTED — AWAITING COMBINED OWNER GATE
 **Parent:** WO-1063 · **Silo:** Core combat contract and enemy data/runtime
 
 ## Current truth

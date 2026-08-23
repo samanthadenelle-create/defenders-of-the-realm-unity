@@ -1,6 +1,6 @@
 # WORK ORDER 1064 — Measure daily Gold and rebuild the gear price ladder
 
-**Status:** IMPLEMENTED — AWAITING COMBINED OWNER GATE  
+**Status:** FIXED — AWAITING OWNER FELT-TEST TO CLOSE. Prior status: IMPLEMENTED — AWAITING COMBINED OWNER GATE
 **Parent:** WO-1063 · **Silo:** economy/pricing/regression
 
 ## Problem

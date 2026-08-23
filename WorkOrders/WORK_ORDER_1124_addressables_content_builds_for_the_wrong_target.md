@@ -1,6 +1,6 @@
 # WORK ORDER 1124 — The APK builds its Addressables content for whatever target the editor was last on
 
-**Status:** IMPLEMENTED 2026-08-20 — AWAITING PO CLOSE (§13). **All five acceptance criteria met.** ⚠ **THE 2026-08-20 CAPSULE-ENEMIES INCIDENT WAS *NOT* A REGRESSION OF THIS TICKET** — different cause, filed as **WO-1130**; see the note under the criteria.
+**Status:** FIXED — AWAITING OWNER FELT-TEST TO CLOSE. Prior status: IMPLEMENTED 2026-08-20 — AWAITING PO CLOSE (§13). **All five acceptance criteria met.** ⚠ **THE 2026-08-20 CAPSULE-ENEMIES INCIDENT WAS *NOT* A REGRESSION OF THIS TICKET** — different cause, filed as **WO-1130**; see the note under the criteria.
 
 > ### ⚠ NOTE 2026-08-20 — do not read that day's incident as this fix failing
 > Later the same day the owner played a build in which **every enemy rendered as a tinted capsule**.
