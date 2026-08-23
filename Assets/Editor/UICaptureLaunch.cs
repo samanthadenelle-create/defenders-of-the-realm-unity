@@ -3643,10 +3643,6 @@ namespace DeNelle.Editor
 
         /// <summary>Containment slack, reference px. Sub-pixel seams are not defects.</summary>
         private const float GeoContainSlackPx = 1.5f;
-        /// <summary>Overlap must exceed this on BOTH axes to count, reference px.</summary>
-        private const float GeoOverlapPadPx = 2f;
-        /// <summary>A Button covering this fraction of the canvas is a scrim, not a control.</summary>
-        private const float GeoScrimAreaFraction = 0.80f;
         /// <summary>Cap on printed failure lines (all are still counted in the marker).</summary>
         private const int GeoMaxPrintedLines = 60;
 
@@ -3692,95 +3688,32 @@ namespace DeNelle.Editor
                                   ". This is the founding-Echo-card defect: copy rendered off the black.");
                 }
 
-                // ---- RULE 2: NO TWO INTERACTIVE RECTS MAY INTERSECT ----------------
+                // ---- RULES 2, 3, 4: DELEGATED TO DeNelle.Core.UI.LayoutOracle ------
                 //
-                //  ⚠ THIS RULE USED TO REQUIRE `a.parent == b.parent`, AND THAT NARROWING
-                //  IS WHY IT MISSED THE DEFECT IT WAS WRITTEN FOR. WO-1060 Assert B is
-                //  stated over "every pair of interactive rects sharing a canvas" for a
-                //  reason: the overlaps that actually shipped were between DIFFERENT
-                //  parents -- WO-1058's Cancel(0.885-0.98) sitting inside where
-                //  Upgrade(0.76-0.98) was, and the 2026-08-22 Night Market frames where a
-                //  card in one shelf ROW was drawn over the card in the row above it,
-                //  occluding a price's leading digit (120 SKR read as "20 SKR"). Two rows
-                //  are two parents, so the sibling test walked straight past a wrong price
-                //  on the money screen.
+                //  ⛔ THESE THREE RULES USED TO LIVE HERE, AND THAT IS WHY NOBODY HAD EVER
+                //  SEEN THEM GO RED. They ran only on the headless screenshot path, and
+                //  nothing could reach them from a regression suite (DeNelle.Editor
+                //  references DeNelle.EditorRegression, so the reverse reference is a
+                //  cycle). WO-1060 section 6.2 requires the oracle be PROVEN red before
+                //  anyone trusts it green, so the rules moved to Core where BOTH callers
+                //  share one implementation:
+                //      this harness       -> every captured panel, three aspects
+                //      UiTouchClampRegression -> synthetic canvases with authored defects
+                //  Two oracles disagreeing about the same canvas would have been worse
+                //  than none; there is exactly one, and it is LayoutOracle.Audit.
                 //
-                //  The ONLY pairs excluded now are ANCESTOR/DESCENDANT ones: a button
-                //  nested inside another button's subtree is a composition (a card that is
-                //  itself tappable, with a tappable child), which is a different defect
-                //  class and is not what this rule adjudicates. Everything else that
-                //  overlaps is reported, because only one of two stacked rects can win the
-                //  raycast and NOTHING tells the player which.
-                //
-                //  ⛔ WHERE THE WIDENED HALF IS REPORTED, AND WHY IT IS NOT HERE.
-                //  SIBLING overlaps stay in `fails` -- that is the pre-existing UI_GEOMETRY
-                //  gate and its behaviour is byte-for-byte unchanged. The NEW cross-parent
-                //  pairs go to `crossFails`, which feeds ONLY the WO-1060 touch marker.
-                //  WO-1060 section 5 is explicit about why: four panels are known-bad
-                //  TODAY, so a widened assert wired straight into a live gate would turn
-                //  every commit red and be suppressed within the week. Land it reporting
-                //  -only behind its own marker, let each fix remove its own allow-list
-                //  entry, and DELETE the allow-list mechanism when it empties.
-                for (int i = 0; i < buttons.Length; i++)
+                //  ROUTING IS UNCHANGED, deliberately. SIBLING overlaps stay in `fails`
+                //  -- that is the pre-existing UI_GEOMETRY gate, byte-for-byte. The NEW
+                //  cross-parent pairs go to `crossFails`, which feeds ONLY the WO-1060
+                //  touch marker, because section 5 is explicit: four panels are known-bad
+                //  today and a widened assert wired straight into a live gate would turn
+                //  every commit red and be suppressed within the week.
+                foreach (var f in LayoutOracle.Audit(canvasGo, label, w, h))
                 {
-                    var a = buttons[i];
-                    if (!ButtonUsable(a, root, canvasGo.transform, canvasArea, out Rect ar)) continue;
-                    for (int j = i + 1; j < buttons.Length; j++)
-                    {
-                        var b = buttons[j];
-                        if (b == null) continue;
-                        if (IsDescendantOf(a.transform, b.transform)) continue;   // composition, not collision
-                        if (IsDescendantOf(b.transform, a.transform)) continue;
-                        if (!ButtonUsable(b, root, canvasGo.transform, canvasArea, out Rect br)) continue;
-                        if (!Overlaps(ar, br, GeoOverlapPadPx, out float ow, out float oh)) continue;
-                        string line = "BUTTONS OVERLAP" + at + " '" +
-                                  PathOf(a.transform, canvasGo.transform) + "' " + RectStr(ar) + " and '" +
-                                  PathOf(b.transform, canvasGo.transform) + "' " + RectStr(br) +
-                                  " share " + ow.ToString("0.#") + "x" + oh.ToString("0.#") +
-                                  " ref px -- two tap targets in one place; only one can win the raycast.";
-                        if (a.transform.parent == b.transform.parent) fails.Add(line);   // unchanged gate
-                        else crossFails.Add(line);                                       // WO-1060 Assert B
-                    }
-                }
-
-                // ---- RULE 3: a visible button must not sit on foreign text ---------
-                foreach (var b in buttons)
-                {
-                    if (!ButtonUsable(b, root, canvasGo.transform, canvasArea, out Rect br)) continue;
-                    if (!HasVisibleGraphic(b)) continue;     // hit areas / scrims cannot collide visually
-                    foreach (var t in texts)
-                    {
-                        if (t == null || !t.enabled || !t.gameObject.activeInHierarchy) continue;
-                        if (string.IsNullOrEmpty(t.text) || t.color.a < 0.05f) continue;
-                        if (IsDescendantOf(t.transform, b.transform)) continue;   // its own label
-                        if (IsDescendantOf(b.transform, t.transform)) continue;
-                        if (ClippedOut(t.transform, canvasGo.transform, root)) continue;
-                        var trt = t.transform as RectTransform;
-                        if (!TryRectInRoot(trt, root, out Rect tr)) continue;
-                        if (!Overlaps(br, tr, GeoOverlapPadPx, out float ow, out float oh)) continue;
-                        fails.Add("BUTTON OVER TEXT" + at + " '" + PathOf(b.transform, canvasGo.transform) +
-                                  "' " + RectStr(br) + " covers '" + PathOf(t.transform, canvasGo.transform) +
-                                  "' (\"" + Snippet(t.text) + "\") " + RectStr(tr) + " by " +
-                                  ow.ToString("0.#") + "x" + oh.ToString("0.#") + " ref px.");
-                    }
-                }
-
-                // ---- RULE 4: authored band under the kit touch floor ---------------
-                foreach (var b in buttons)
-                {
-                    if (b == null || !b.gameObject.activeInHierarchy) continue;
-                    if (!HasMinTouchGuard(b)) continue;      // not a kit button; not this rule's contract
-                    var brt = b.transform as RectTransform;
-                    if (!TryRectInRoot(brt, root, out Rect br)) continue;
-                    float shortest = Mathf.Min(br.width, br.height);
-                    if (shortest >= ElarionUiKit.MinTouchPx - 0.5f) continue;
-                    fails.Add("SUB-TOUCH-FLOOR BAND" + at + " '" + PathOf(b.transform, canvasGo.transform) +
-                              "' resolves " + br.width.ToString("0.#") + "x" + br.height.ToString("0.#") +
-                              " ref px -- shortest side " + shortest.ToString("0.#") + " is " +
-                              (ElarionUiKit.MinTouchPx - shortest).ToString("0.#") + " px UNDER " +
-                              "ElarionUiKit.MinTouchPx (" + ElarionUiKit.MinTouchPx.ToString("0.#") +
-                              "). ClampMinTouch will grow it SYMMETRICALLY about its centre at runtime and " +
-                              "spill it into both neighbours. Author the band AT the floor.");
+                    if (f.Kind == LayoutOracle.FindingKind.ButtonsOverlap && !f.SameParent)
+                        crossFails.Add(f.Message);   // WO-1060 Assert B, cross-parent half
+                    else
+                        fails.Add(f.Message);        // unchanged gate
                 }
             }
             catch (Exception e)
@@ -3964,12 +3897,6 @@ namespace DeNelle.Editor
             return Mathf.Max(Mathf.Max(left, right), Mathf.Max(bottom, top));
         }
 
-        private static bool Overlaps(Rect a, Rect b, float pad, out float ow, out float oh)
-        {
-            ow = Mathf.Min(a.xMax, b.xMax) - Mathf.Max(a.xMin, b.xMin);
-            oh = Mathf.Min(a.yMax, b.yMax) - Mathf.Max(a.yMin, b.yMin);
-            return ow > pad && oh > pad;
-        }
 
         /// <summary>The kit body zone above <paramref name="t"/>, if any (ElarionUiKit names it Zone_Body).</summary>
         private static RectTransform ZoneBodyAbove(Transform t)
@@ -4004,52 +3931,10 @@ namespace DeNelle.Editor
             return null;
         }
 
-        /// <summary>True when the element is clipped and not FULLY inside its clipper (scrolled out).</summary>
-        private static bool ClippedOut(Transform t, Transform canvasRoot, RectTransform root)
-        {
-            RectTransform clip = NearestClipper(t, canvasRoot);
-            if (clip == null) return false;
-            var rt = t as RectTransform;
-            if (!TryRectInRoot(rt, root, out Rect er)) return true;
-            if (!TryRectInRoot(clip, root, out Rect cr)) return true;
-            return OutsideBy(er, cr) > GeoContainSlackPx;
-        }
-
-        private static bool ButtonUsable(Button b, RectTransform root, Transform canvasRoot,
-                                         float canvasArea, out Rect r)
-        {
-            r = default(Rect);
-            if (b == null || !b.gameObject.activeInHierarchy) return false;
-            var brt = b.transform as RectTransform;
-            if (!TryRectInRoot(brt, root, out r)) return false;
-            if (r.width * r.height >= canvasArea * GeoScrimAreaFraction) return false;   // scrim
-            if (ClippedOut(b.transform, canvasRoot, root)) return false;
-            return true;
-        }
-
-        private static bool HasVisibleGraphic(Button b)
-        {
-            var g = b != null ? b.targetGraphic : null;
-            return g != null && g.enabled && g.color.a >= 0.05f;
-        }
-
-        /// <summary>The ClampMinTouch guard is a PRIVATE nested type in the kit -- match by name.</summary>
-        private static bool HasMinTouchGuard(Button b)
-        {
-            if (b == null) return false;
-            foreach (var mb in b.GetComponents<MonoBehaviour>())
-                if (mb != null && string.Equals(mb.GetType().Name, "UiKitMinTouchGuard", StringComparison.Ordinal))
-                    return true;
-            return false;
-        }
-
-        private static bool IsDescendantOf(Transform child, Transform ancestor)
-        {
-            if (child == null || ancestor == null) return false;
-            for (Transform p = child; p != null; p = p.parent)
-                if (p == ancestor) return true;
-            return false;
-        }
+        // NOTE: Overlaps / ButtonUsable / ClippedOut / HasVisibleGraphic / HasMinTouchGuard /
+        // IsDescendantOf and the pad+scrim constants MOVED to DeNelle.Core.UI.LayoutOracle
+        // (WO-1060). They are not re-declared here: two copies of a predicate are two oracles
+        // waiting to disagree about the same canvas. Call LayoutOracle's public helpers.
 
         private static string PathOf(Transform t, Transform stopAt)
         {

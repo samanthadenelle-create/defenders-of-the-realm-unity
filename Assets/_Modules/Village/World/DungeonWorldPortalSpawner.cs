@@ -1142,9 +1142,28 @@ namespace DeNelle.Village.World
         //
         // "ROTATED" is the owner's key word: the prefab is authored as a FLAT GROUND
         // circle (face up, +Y normal). For the portals it STANDS VERTICAL in the arch
-        // opening: root.rotation * Euler(+90, 0, 0) maps the circle's +Y face-normal
-        // onto the portal's forward, and Root already carries the authored FacingYawDeg
-        // (BuildPortal), so the circle reads as the portal SURFACE facing the approach.
+        // opening, with its face-normal pointing OUT THROUGH THE DOORWAY.
+        //
+        // ⛔ THE DOORWAY NORMAL ON THIS ART IS Root.RIGHT, NOT Root.forward. MEASURED,
+        // not assumed: DeNelle.Editor.StructurePoseCapture.RunPortalAngles orbits the
+        // real 'dungeon/exit/portal' art (Assets/Art/Dungeon/Exit/Portal.fbx) at eight
+        // headings and writes a PNG of each. At heading 0/180 - i.e. along Root.forward -
+        // the camera sees the arch's SOLID STONE SIDE and the opening is not visible at
+        // all. The doorway is face-on at heading 90/270, which is +-Root.right. Rotating
+        // about local X (Euler +-90,0,0) puts the circle's face-normal on Root.forward,
+        // which is PERPENDICULAR to the doorway - so both approaches saw the disc EDGE-ON
+        // as a grey shard. That is the owner's 2026-08-22 defect, and the earlier X-axis
+        // fix did not remove it. The rotation therefore goes on local Z, which is the
+        // axis WO-1062 section 2 explicitly authorised choosing:
+        // "if the arch's local axes make a literal +90/-90 point the planes somewhere
+        //  other than outward along the doorway, the intent is 'one facing each way out
+        //  of the arch' - implement that and state which axis you applied it on."
+        // Evidence: docs/ui-evidence/portal-angles-2026-08-23/*.png.
+        //
+        // ⚠ The code-built cube-arch FALLBACK is the other way round - BuildArch puts its
+        // pillar rings at +-ArchHalfDepth on Z, so you walk through it along Root.forward.
+        // The axis is therefore chosen PER GEOMETRY off MeasurePortalBounds' own `src`,
+        // never hardcoded; see AttachPortalCircle.
         //
         // ADDITIVE to the existing threshold aura (portalBlue vortex) + PP_GroundFog
         // mist, per the routing note: the owner said "use this for the portals", which
@@ -1290,27 +1309,52 @@ namespace DeNelle.Village.World
             // =================================================================
             // WO-1062 (owner ruling 2026-08-22): TWO planes, each facing OUTWARD.
             // -----------------------------------------------------------------
-            // ONE plane has ONE good viewing hemisphere: Euler(+90,0,0) maps the flat
-            // circle's +Y face-normal onto Root.forward (the authored FacingYawDeg), so
-            // the OPPOSITE approach saw the unlit BACK FACE - the owner's "black shards"
-            // from the NE. Two planes, back to back, delete that by construction.
+            // ONE plane has ONE good viewing hemisphere, so the OPPOSITE approach saw the
+            // unlit BACK FACE - the owner's "black shards". Two planes, back to back,
+            // delete that by construction.
             //
             // OWNER-AUTHORED VALUES, not invented: "one rotated 90 other rotated -90" and
-            // "put .25 between them". The rotation is applied on the LOCAL X axis (the same
-            // axis the original single +90 used), because that is the axis that tips the flat
-            // ground circle upright; +90 puts its face-normal on +forward, -90 on -forward.
-            // Each plane is pushed HALF the 0.25m separation along the threshold normal, to
-            // its own side, so the pair stays centred on the measured opening and the two are
-            // never coplanar (no z-fighting).
+            // "put .25 between them". WHICH AXIS carries the +-90 is a MEASURED choice, not a
+            // preference, and it is NOT THE SAME FOR BOTH GEOMETRIES - which is exactly why it
+            // cannot be a constant:
+            //
+            //   sharedArt (Assets/Art/Dungeon/Exit/Portal.fbx, what ships) - the doorway opens
+            //     along +-Root.RIGHT. Proven by the eight-heading orbit in
+            //     docs/ui-evidence/portal-angles-2026-08-23/: at heading 0/180 (Root.forward)
+            //     the camera sees SOLID STONE and no opening at all; the doorway is face-on at
+            //     90/270. So the +-90 goes on local Z:
+            //         Euler(0,0,-90) * up = +Root.right   (one approach)
+            //         Euler(0,0,+90) * up = -Root.right   (the other approach)
+            //
+            //   cubeArch (the code-built fallback, BuildArch) - the OPPOSITE. Its pillar rings
+            //     sit at +-ArchHalfDepth on Z and it is ArchHalfWidth wide on X, so you walk
+            //     through along +-Root.FORWARD and the +-90 goes on local X, as before.
+            //
+            // The earlier version hardcoded the X axis for BOTH, so on the shipping art both
+            // normals landed on the arch's solid stone SIDE, both doorway approaches read the
+            // discs EDGE-ON, and the owner's defect survived its own fix. ⛔ Do not collapse
+            // this back to one axis: the two geometries genuinely disagree, and this is
+            // re-evaluated on the swap because AttachPortalCircle is re-run there (:1078).
+            //
+            // The branch reads off `src` - the SAME string MeasurePortalBounds already returns
+            // for which geometry it measured - so the seat and the facing can never disagree
+            // about which portal is standing.
+            //
+            // Each plane is pushed HALF the 0.25m separation along that SAME doorway normal,
+            // to its own side, so the pair stays centred on the measured opening and the two
+            // are never coplanar (no z-fighting).
             //
             // SAME prefab, SAME owner-tagged key for both - nothing is picked or substituted
             // (memory: vfx-map-owner-tags-no-creative-pick). Still ZERO VFXManager loop slots:
             // these are plain Instantiate children of Root, so two of them is still two of
             // nothing as far as the loop budget is concerned.
             // =================================================================
-            Quaternion rotFront = p.Root.rotation * Quaternion.Euler(90f, 0f, 0f);
-            Quaternion rotBack = p.Root.rotation * Quaternion.Euler(-90f, 0f, 0f);
-            Vector3 normal = p.Root.forward;
+            bool doorwayOnRight = src == "sharedArt";
+            Quaternion rotFront = p.Root.rotation *
+                (doorwayOnRight ? Quaternion.Euler(0f, 0f, -90f) : Quaternion.Euler(90f, 0f, 0f));
+            Quaternion rotBack = p.Root.rotation *
+                (doorwayOnRight ? Quaternion.Euler(0f, 0f, 90f) : Quaternion.Euler(-90f, 0f, 0f));
+            Vector3 normal = doorwayOnRight ? p.Root.right : p.Root.forward;
             Vector3 halfGap = normal * (CircleSeparation * 0.5f);
 
             var go = Instantiate(_circlePrefab, centre + halfGap, rotFront, p.Root);
@@ -1328,9 +1372,11 @@ namespace DeNelle.Village.World
             FlowTrace.Step("Portal",
                 $"AttachPortalCircle: '{CirclePrefabResourcePath}' stood vertical INSIDE the opening of portal " +
                 $"'{p.Key}' at ({centre.x:F1}, {centre.y:F1}, {centre.z:F1}) as TWO outward-facing planes " +
-                $"(WO-1062) - front rot=+90X at ({front.x:F1}, {front.y:F1}, {front.z:F1}), " +
-                $"back rot=-90X at ({back.x:F1}, {back.y:F1}, {back.z:F1}), gap={CircleSeparation:0.00}m " +
-                $"along the threshold normal - over facingYaw " +
+                $"(WO-1062) - axis={(doorwayOnRight ? "Z/Root.right" : "X/Root.forward")} for geometry '{src}', " +
+                $"doorwayNormal=({normal.x:F2},{normal.y:F2},{normal.z:F2}), " +
+                $"front at ({front.x:F1}, {front.y:F1}, {front.z:F1}), " +
+                $"back at ({back.x:F1}, {back.y:F1}, {back.z:F1}), gap={CircleSeparation:0.00}m " +
+                $"along that doorway normal - over facingYaw " +
                 $"{p.Root.eulerAngles.y:F0} - {BoundsLine(b, src)} target={target:0.00}m " +
                 $"authored={VFXManager.MeasureVisualSize(_circlePrefab):0.00}m -> scale={scale:0.000} " +
                 "(owner pick 2026-08-16: Magic circle dark star as the portal face; 0 loop slots).");

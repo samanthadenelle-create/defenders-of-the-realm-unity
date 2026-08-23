@@ -11,6 +11,8 @@
         "DeNelle.Dungeons",
         "DeNelle.Wallet",
         "UniTask",
+        "UnityEngine.UI",
+        "Unity.TextMeshPro",
         "Unity.AI.Navigation",
         "Unity.Addressables",
         "Unity.Addressables.Editor",

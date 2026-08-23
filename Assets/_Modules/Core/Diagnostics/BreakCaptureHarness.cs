@@ -749,6 +749,15 @@ namespace DeNelle.Core.Diagnostics
         public static System.Collections.IEnumerator CaptureForReport(Action<ReportCapture> onDone)
         {
             var result = new ReportCapture();
+            // WO-1057: pull the subscribers' in-memory state (the VFXManager live-loop table, and
+            // anything else that subscribes) into the tail ring BEFORE it is snapshotted. Record()
+            // already does this for the F8 / FLAG-button path, but the in-game BUG REPORT form is a
+            // SECOND capture seam that reads the tail directly — and it read it one line too early,
+            // so an owner who typed "random vfx stuck around" into the report form submitted a tail
+            // with no loop table in it, which is precisely the report this instrument exists to
+            // answer. The emit MUST stay above RecentTraceTail(): the ordering IS the fix.
+            // Re-entrant-safe and per-subscriber guarded (see EmitCaptureSnapshots).
+            EmitCaptureSnapshots();
             result.TraceTail = RecentTraceTail();
             try { result.Scene = SceneManager.GetActiveScene().name; } catch { result.Scene = "?"; }
 

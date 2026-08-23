@@ -157,11 +157,94 @@ Assert 'NOTHING is deleted - every file is still on disk, in archive/' ((@(Get-C
 Clear-F8IndexCache $Root
 Assert 'an archived capture is still resolvable by seq' ((@(Resolve-F8CaptureFiles $Root 11)).Count -eq 2) ''
 
+# -- WO-1145 -------------------------------------------------------------------------------------
+# F/G/H drive the REAL scripts (never a re-implementation of their arithmetic) against their OWN
+# throwaway inbox, so nothing here can be contaminated by A-E's fixture state.
+$script:Extra = @()
+function New-F8Fixture([int[]]$Seqs, [string[]]$Summaries, [int]$Wm) {
+    $dir = Join-Path $env:TEMP ('f8-selftest-1145-' + [Guid]::NewGuid().ToString('N').Substring(0, 8))
+    New-Item -ItemType Directory -Force $dir | Out-Null
+    $script:Extra += $dir
+    $rows = @()
+    $last = ''
+    for ($i = 0; $i -lt $Seqs.Count; $i++) {
+        $s    = [int]$Seqs[$i]
+        $sum  = [string]$Summaries[$i]
+        $path = Join-Path $dir ("capture-20260822-0000{0:d2}-seq{1}.md" -f $i, $s)
+        Utf8 $path ("# F8 Capture (auto-inbox seq=$s)`r`n`r`n**Kind:** flagged`r`n`r`n$sum")
+        $rows += ('{"source":"f8","capturePath":"' + ($path -replace '\\','\\') + '","kind":"flagged","seq":' + $s + ',"utc":"2026-08-22T20:0' + $i + ':00Z","summary":"' + $sum + '"}')
+        $last = $path
+    }
+    Utf8 (Join-Path $dir 'QUEUE.jsonl') (($rows -join "`r`n") + "`r`n")
+    Utf8 (Join-Path $dir 'PING.json') ('{"seq":' + [int]$Seqs[-1] + ',"kind":"flagged","capturePath":"' + ($last -replace '\\','\\') + '","firedAtUtc":"2026-08-22T20:09:00Z","summary":"x"}')
+    Utf8 (Join-Path $dir 'LATEST_CAPTURE.md') 'latest'
+    Utf8 (Join-Path $dir 'ACK.json') ('{"lastAckSeq":' + $Wm + ',"acked":[],"ackedFiles":[]}')
+    return $dir
+}
+function Run-In([string]$Dir, [string]$Name, [string[]]$ExtraArgs) {
+    $argv = @('-NoProfile','-ExecutionPolicy','Bypass','-File', (Join-Path $Skill $Name), '-InboxOverride', $Dir)
+    if ($ExtraArgs) { $argv += $ExtraArgs }
+    return ((& powershell.exe @argv 2>&1 | Out-String))
+}
+
+Write-Host ''
+Write-Host 'F. WO-1145 - acking the NEWER seq must not close the older (the live 3582/3583 case)'
+$F = New-F8Fixture @(3582,3583) @('owner flag A','random vfx stuck around') 3581
+$out = Run-In $F 'f8-check-inbox.ps1' @()
+Assert 'check surfaces the OLDEST, and counts both' (($out -match 'seq=3582') -and ($out -match 'pending=2')) $out
+
+$out = Run-In $F 'f8-ack.ps1' @('-Seq','3583')
+Assert 'acking the newer is announced as OUT OF ORDER, never silently' ($out -match 'OUT OF ORDER') $out
+Assert 'and the out-of-order notice names the older capture' ($out -match 'Oldest = seq=3582') $out
+
+$out = Run-In $F 'f8-check-inbox.ps1' @()
+Assert 'the OLDER capture SURVIVES the newer ack' (($out -match 'NEW_CAPTURE') -and ($out -match 'seq=3582') -and ($out -match 'pending=1')) $out
+
+$out = Run-In $F 'f8-ack.ps1' @()
+Assert 'a no-arg ack then takes that oldest and clears the inbox' (($out -match 'Acknowledged seq=3582') -and ($out -match 'Inbox clean')) $out
+
+Write-Host ''
+Write-Host 'G. WO-1145 - the 2026-08-10 shape: a burst of 3 needs 3 acks'
+$G = New-F8Fixture @(2306,2307,2308) @('capture 2306','both NPC and echo but no movement','Tutorial STEP-STUCK') 2305
+$out = Run-In $G 'f8-ack.ps1' @('-Seq','2306')
+Assert 'acking 2306 leaves TWO pending (2307 + 2308 are not buried)' ($out -match 'STILL PENDING: 2') $out
+
+$out = Run-In $G 'f8-check-inbox.ps1' @()
+Assert "the owner's 2307 is still reachable, and is next" (($out -match 'seq=2307') -and ($out -match 'pending=2')) $out
+
+$out = Run-In $G 'f8-ack.ps1' @()
+Assert 'ack 2 of 3 takes 2307' ($out -match 'Acknowledged seq=2307') $out
+Assert 'and 2308 is still pending' ($out -match 'STILL PENDING: 1') $out
+
+$out = Run-In $G 'f8-ack.ps1' @()
+Assert 'ack 3 of 3 takes 2308 and only then is the inbox clean' (($out -match 'Acknowledged seq=2308') -and ($out -match 'Inbox clean')) $out
+
+$out = Run-In $G 'f8-check-inbox.ps1' @()
+Assert 'and check-inbox agrees: NO_CAPTURE only after every one was acked' ($out -match 'NO_CAPTURE') $out
+
+Write-Host ''
+Write-Host 'H. WO-1145 - a seq that is NOT pending can never be pre-acked'
+$H = New-F8Fixture @(2306) @('capture 2306') 2305
+$ackBefore = (Get-Content (Join-Path $H 'ACK.json') -Raw)
+$out = Run-In $H 'f8-ack.ps1' @('-Seq','2308')
+Assert 'acking an unarrived seq is REFUSED' ($out -match 'REFUSED') $out
+Assert 'and the refusal names what is still pending' ($out -match 'STILL PENDING: 1') $out
+Assert 'ACK.json is not touched by a refusal' ((Get-Content (Join-Path $H 'ACK.json') -Raw) -eq $ackBefore) ''
+
+# the capture numbered 2308 now actually arrives - it must NOT be born acked
+$capL = Join-Path $H 'capture-20260822-000099-seq2308.md'
+Utf8 $capL "# F8 Capture (auto-inbox seq=2308)`r`n`r`n**Kind:** flagged`r`n`r`nowner flag 2308"
+Add-Content (Join-Path $H 'QUEUE.jsonl') ('{"source":"f8","capturePath":"' + ($capL -replace '\\','\\') + '","kind":"flagged","seq":2308,"utc":"2026-08-22T20:09:00Z","summary":"owner flag 2308"}')
+Utf8 (Join-Path $H 'PING.json') ('{"seq":2308,"kind":"flagged","capturePath":"' + ($capL -replace '\\','\\') + '","firedAtUtc":"2026-08-22T20:09:00Z","summary":"x"}')
+$out = Run-In $H 'f8-check-inbox.ps1' @()
+Assert 'the capture that later takes that number still reaches a seat' ($out -match 'capture-20260822-000099-seq2308\.md') $out
+
 $total = $script:Pass + $script:Fail
 Write-Host ''
 if (-not $KeepFixture) {
     Remove-Item $Root  -Recurse -Force -ErrorAction SilentlyContinue
     Remove-Item $Empty -Recurse -Force -ErrorAction SilentlyContinue
+    foreach ($d in $script:Extra) { Remove-Item $d -Recurse -Force -ErrorAction SilentlyContinue }
 }
 if ($script:Fail -gt 0) { Write-Host ("F8_SELFTEST_FAIL {0}/{1}" -f $script:Pass, $total); exit 0 }
 if ($total -eq 0)       { Write-Host 'F8_SELFTEST_FAIL 0/0 - no cases ran'; exit 0 }

@@ -1151,6 +1151,16 @@ namespace DeNelle.Editor
             //     after driving real paths rather than grepping for a Resume() call, because the only
             //     failure that matters is the branch that returns without releasing. ---
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "world-hold suite", () => { if (!DeNelle.Editor.Regression.TransactionWorldHoldRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[world-hold] " + r); });
+            // --- WO-1060 (owner, 2026-08-22 "yes do this"): the clamp/overlap oracle's OWN oracle.
+            //     UICaptureLaunch measures the real panels, but it can only report what it found --
+            //     it can never show that it is CAPABLE of finding anything, and a rule with an
+            //     inverted comparison reports a clean run that looks exactly like a healthy one.
+            //     This suite hands DeNelle.Core.UI.LayoutOracle canvases whose defects are authored
+            //     on purpose (a 21.6px band; two controls stacked, as siblings AND across parents)
+            //     and fails if the oracle stays quiet -- then proves it silent on the same controls
+            //     laid apart, at two landscape aspects. PROD-008's rule: an oracle never seen red is
+            //     not evidence, so until this line is green a clean UI_TOUCH_OK proves nothing. ---
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "ui-touch-oracle suite", () => { if (!DeNelle.Editor.Regression.UiTouchClampRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[ui-touch-oracle] " + r); });
 
             // =====================================================================
             //  >>> REGISTERED ORACLE SUITES — END FENCE <<<  (new lines go ABOVE)
