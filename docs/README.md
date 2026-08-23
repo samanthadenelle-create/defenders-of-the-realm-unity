@@ -20,6 +20,8 @@ separately in `../PROJECT_INDEX.md`.
 - `NORTH_STAR.md`, `NORTH_STAR_PROGRESS.md` — vision + progress against it
 - `DESIGN-DECISIONS.md` — **binding creative decisions** (Elarion naming, no Keep, etc.)
 - `GAME_DESCRIPTION.md`, `BRAND_BIBLE.md`, `PI_PITCH.md`, `whitepaper.md`
+- `TREASURY_PLAIN_ENGLISH.md` — **the treasury explained without jargon**: which address is which, the two that are coin names rather than destinations, the 1-of-1 threshold to fix before public sales, and the 6-vs-9 decimals near-miss
+- `TREASURY_RUNBOOK_2026-08-23.md` — the step-by-step the owner signs; `tools/treasury-verify.mjs` is the read-only checker
 - `MONETIZATION_STATE_2026-08-23.md` — **where the money rail actually stands**: everything code-complete and gated, the live Mainnet 1-SKR canary the only thing outstanding (fail-closed on provisioning, not engineering) + the 6-vs-9 decimals trap
 
 ## Asset catalogs & pack notes (check before referencing any prefab)
