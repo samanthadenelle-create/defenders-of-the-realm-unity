@@ -641,3 +641,8 @@ Assets/Resources/PerformanceTestRunSettings.json.meta
 # and uploaded to Cloudflare R2 by tools/r2_sync.py. Tracking it would commit ~80 MB of
 # bundles per build, and the CDN — not git — is where the player fetches them from.
 /ServerData/
+
+# Python bytecode - never tracked (slipped in 2026-08-23 via a directory-wide add)
+tools/__pycache__/
+__pycache__/
+*.pyc
