@@ -1,6 +1,6 @@
 # WORK ORDER 827 — Realm Map discovery, zone identity, and travel
 
-**Status: READY TO IMPLEMENT — UNBLOCKED (826 shell shipped eb5d0710).**  
+**Status: READY TO IMPLEMENT — the WO-826 gate is LIFTED (826 shell shipped eb5d0710). ⚠ 2026-08-23 board reconcile: `RegionProgress` exists in GameState/SaveSchema/SaveMigrator and `RealmMapVM` is wired at HEAD — this ticket may be partly shipped; a CLI acceptance pass is owed before anyone re-implements it.**  
 **Minted:** 2026-08-01  
 **Program:** WO-825  
 **Silo:** Core state + Village world + map panel wiring  

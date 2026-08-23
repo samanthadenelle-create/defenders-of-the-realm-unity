@@ -81,6 +81,35 @@ def bucket_of(status_text, has_result, is_wo=True):
     # Companion docs are out of the status workflow entirely - never Unlabeled, never a defect.
     if not is_wo: return "Doc"
     s = (status_text or "").upper()
+    # ⛔ THE VERDICT IS THE FIRST WORD. Everything after it is commentary (2026-08-23).
+    #
+    # Every keyword below except FIXED used to be tested as a bare SUBSTRING, so a status whose
+    # verdict was READY/BLOCKED/SPEC was yanked into Done or Closed because the word appeared
+    # LATER in the sentence: "the PRE-ACK hole closed" read as Closed; "design complete, can be
+    # implemented" read as Done; "UNBLOCKED" read as Blocked. A board sweep found FOURTEEN
+    # tickets mis-bucketed this way.
+    #
+    # ⚠ AND THE ERROR ONLY EVER RAN ONE WAY: toward "finished". Live work rendered as done, so
+    # nobody looked at it again. A board that hides open work is worse than no board.
+    #
+    # Rewording the fourteen statuses cured the instances and not the mechanism - the next author
+    # who writes "hole closed" in a Fixed line reopens it. So the leading-word test that FIXED
+    # already had (see the block below, added the same day after it bit) is now promoted to ALL
+    # of them.
+    #
+    # THE SUBSTRING PASS IS KEPT AS A FALLBACK, deliberately: many legacy statuses lead with a
+    # non-canonical word ("PARTIAL 2026-08-22 - ..."), and a leading-word-only rule would dump
+    # every one of them into Unlabeled, trading a silent mis-bucket for a loud false defect.
+    # First word wins when it is canonical; otherwise we fall back to the old behaviour.
+    lead = s.lstrip().split(None, 1)
+    lead = lead[0].strip("*:-—,.") if lead else ""
+    if lead in ("SUPERSEDED", "CLOSED", "CANCELLED"): return "Closed"
+    if lead == "FIXED": return "Fixed"
+    if lead in ("DONE", "IMPLEMENTED", "COMPLETE"): return "Done"
+    if lead == "BLOCKED": return "Blocked"
+    if lead in ("READY", "SPEC", "DRAFT", "PROPOSAL", "PARKED", "FUTURE", "LATENT"):
+        return "Ready" if lead == "READY" else "Spec"
+
     if "SUPERSEDED" in s or "CLOSED" in s or "CANCELLED" in s: return "Closed"
     # FIXED = built, gated and on disk, but NOT closed: it is waiting on the owner's felt test
     # (CLAUDE.md 13 - "PO felt-verifies + CLOSES"; headless cannot judge feel). Owner ruling

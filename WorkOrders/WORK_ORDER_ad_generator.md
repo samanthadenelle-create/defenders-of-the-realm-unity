@@ -24,7 +24,7 @@
 
 # WORK ORDER — Ad Generator (Rewarded-Ad Hook Logic + Creative Ad Generator)
 
-**Status:** READY TO IMPLEMENT (design complete; data + schema shipped)
+**Status:** READY TO IMPLEMENT (design finished; data + schema shipped; sense B — the creative AdCreativeGenerator — is UNBUILT at HEAD)
 **Author:** CLI agent (design only — no `.cs` written, per §2/§13)
 **Silo:** Monetization/Backend (§9 — isolated lane)
 **Date:** 2026-06-28

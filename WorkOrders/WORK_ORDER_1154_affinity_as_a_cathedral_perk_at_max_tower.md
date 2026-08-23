@@ -1,4 +1,4 @@
-**Status:** SPEC — needs the owner's numbers before it can be implemented (see §6). Design is complete; balance is not.
+**Status:** SPEC — needs the owner's numbers before it can be built (see §6). Design is settled; balance is not.
 
 # WORK ORDER 1154 — Elemental affinity as a Cathedral perk, earned at max tower level
 

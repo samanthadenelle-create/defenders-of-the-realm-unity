@@ -1,6 +1,6 @@
 # WORK ORDER 1126 — Glimmer was retired in design years ago and is still wired into the money path
 
-**Status:** READY TO IMPLEMENT — ⚠ **BLOCKED ON ONE OWNER RULING (§3). Do not start without it.**
+**Status:** FIXED 2026-08-23 (51de6bd31, Codex lane) — the glimmer purge landed: `Assets/_Modules/Cosmetics/GlimmerCurrencyService.cs` (329 lines) and `BattlePassManager.cs` (342 lines) DELETED with their metas, `CosmeticOwnershipService.cs` added, cosmetics/quests/daily-quests canonical JSON rewritten in both copies, wardrobe preserved (dotr-cosmetics-v1 untouched, save still v38). Only comment residue remains in the tree (`BattlePassService.cs:66`, `BuildTimerConfig.cs:170`). Prior status: "READY TO IMPLEMENT — ⚠ BLOCKED ON ONE OWNER RULING (§3)" — the work landed and the line never moved. ⚠ NOT PROVEN: no felt-test; and the same commit records that the purge WRONGLY DELETED two lore quests (petbond.glimmermoth, vendor.market) which had to be restored — re-verify quest counts (24 quests / 63 stages) when felt-testing. AWAITING OWNER FELT-TEST TO CLOSE.
 **Minted:** 2026-08-19 (CLI seat) — banner bumped 1126 → 1127 in the SAME edit
 **Lane:** Economy / monetization. Touches Wallet, Cosmetics, Quests, Enemies, HUD, and 11 data files.
 **Priority:** HIGH — it sits on the PAYMENT path. Not urgent only because payments cannot complete today

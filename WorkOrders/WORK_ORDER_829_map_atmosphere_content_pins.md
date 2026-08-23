@@ -1,4 +1,4 @@
-**Status:** BLOCKED — CODE COMPLETE, GATED OFF BY A FLAG (reconciled 2026-08-22). R1, R2 and R3 are ALL closed
+**Status:** BLOCKED — THE CODE IS BUILT, GATED OFF BY A FLAG (reconciled 2026-08-22). R1, R2 and R3 are ALL RESOLVED
 in code; acceptance is blocked on `FeatureFlags.MapTab`, which is `defaultOn: false`. *(Was: READY - PARTIAL -
 2026-08-21 CLI, gate-green (COMPILE_GATE_OK + REGRESSION_OK 234/234).)*
 

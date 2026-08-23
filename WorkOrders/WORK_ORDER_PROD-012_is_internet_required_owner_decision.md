@@ -1,6 +1,6 @@
 # PROD-012 — Is an internet connection REQUIRED on first run? An OWNER DECISION, not a defect
 
-**Status:** BLOCKED — SPEC only, awaiting owner rulings. No answer is proposed here and none may be implemented until she rules.
+**Status:** BLOCKED — SPEC only, awaiting owner rulings. No answer is proposed here and none may be built until she rules.
 **Minted:** 2026-08-18 (docs seat) — PROD series.
 **Priority:** MEDIUM — but it gates a **store-listing** claim on a LIVE published app, so it cannot sit indefinitely.
 **Silo:** Product / content delivery policy. **Lane:** decision first; implementation scope depends entirely on the ruling.

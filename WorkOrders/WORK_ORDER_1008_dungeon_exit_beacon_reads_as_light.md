@@ -1,6 +1,6 @@
 # WO-1008 — The dungeon EXIT beacon must read as LIGHT, not as a green box
 
-**Status: READY TO IMPLEMENT (PARTIAL - RE-BAKE DONE 2026-08-14: all 7 dungeons re-composed, COMPOSE_ALL_OK 7/7, 13 pads now bake label='Leave' and every layout emits exitRoomId. The code half landed + gated 2026-08-10. REMAINING: exitRoomId is the 'entry' FALLBACK everywhere - WHERE the one true exit sits is still an owner design pick; the per-layout one-beacon regression is still unwritten; Assets/Resources/Dungeon/Exit/ still absent so a PLAYER build takes the primitive-arch fallback. See the 2026-08-14 note at the bottom)**
+**Status: READY TO IMPLEMENT (PARTIAL - RE-BAKE LANDED 2026-08-14: all 7 dungeons re-composed, COMPOSE_ALL_OK 7/7, 13 pads now bake label='Leave' and every layout emits exitRoomId. The code half landed + gated 2026-08-10. REMAINING: exitRoomId is the 'entry' FALLBACK everywhere - WHERE the one true exit sits is still an owner design pick; the per-layout one-beacon regression is still unwritten; Assets/Resources/Dungeon/Exit/ still absent so a PLAYER build takes the primitive-arch fallback. See the 2026-08-14 note at the bottom)**
 **Date:** 2026-08-08 · **Priority:** Medium-High (it is the most visually wrong thing in a dungeon)
 **Block:** UI seat (1000-1099) · **Lane:** Dungeons / VFX / UI cohesion
 **Owner ruling 2026-08-08:** felt-test, verbatim — *"big green bar doesnt make sense"*

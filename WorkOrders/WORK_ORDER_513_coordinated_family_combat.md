@@ -18,7 +18,7 @@
 
 # WORK_ORDER_513 — coordinated family combat AI (the orc family GANGS the hero)
 
-**Status:** READY TO IMPLEMENT (owner-driven, felt-test 2026-06-24) · Combat/AI lane · the "real feature" slice (vs the quick pathing/role tuning done inline)
+**Status:** READY TO IMPLEMENT (owner-driven, felt-test 2026-06-24) · Combat/AI lane · the "real feature" slice (vs the quick pathing/role tuning handled inline)
 **Origin:** owner felt-test — "I thought they would FORMATION attack but they seem LAX." Diagnosis (this session) proved the family formation is TRAVEL-ONLY and disbands on arrival, after which all 3 orcs run identical solo melee-Rush — no surround, no flank, no roles expressed. This WO delivers the coordinated-family threat she pictures.
 
 ## Diagnosed current state (the seams to build on — verified from code)

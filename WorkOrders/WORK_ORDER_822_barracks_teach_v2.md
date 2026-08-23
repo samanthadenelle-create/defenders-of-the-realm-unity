@@ -1,6 +1,6 @@
 # WORK ORDER 822 — Barracks teach v2 (813b): discovery beats, not toasts
 
-**Status: READY TO IMPLEMENT — UNBLOCKED (WO-823 phase A ArmyReadiness landed 8560fced).**
+**Status: READY TO IMPLEMENT — the WO-823 gate is LIFTED (phase A ArmyReadiness landed 8560fced). ⚠ 2026-08-23 board reconcile: `barracks_intro` and `BarracksNpcInjector`/`BarracksBlankTownRegression` EXIST at HEAD — this ticket may be partly or wholly shipped; a CLI acceptance pass is owed before anyone re-implements it.**
 **Source:** WO-813 shipped only the safety half (intro toast + empty-army redirect); PM review
 2026-08-01 verdict: "Toasts are not teach. Players will still miss the drillmaster if they never
 walk the right pad." This WO is the full discovery loop 813 specced but did not land.

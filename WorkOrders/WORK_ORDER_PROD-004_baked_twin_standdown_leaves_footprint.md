@@ -1,6 +1,6 @@
 # PROD-004 — Standing down a baked twin hides the building and leaves its footprint
 
-**Status:** IN PROGRESS — **the §3 branch is CLOSED** (see §3b: it is a NAVMESH CARVE, not a decal
+**Status:** IN PROGRESS — **the §3 branch is SETTLED** (see §3b: it is a NAVMESH CARVE, not a decal
 and not terrain paint; owner confirmed *"there is some invisible footprint there"*). No owner ruling
 is outstanding on this ticket.
 - **Cause 1 (bake ran before the rotation) — LANDED + GATED.** `NavMeshBakeFinal` (commit `15944d9f4`):

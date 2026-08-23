@@ -30,7 +30,7 @@
 
 # WORK_ORDER_467 (extension) — MOATED CASTLE + 4 CARDINAL PATHS (seam geometry)
 
-**Status:** SPEC / DESIGN-READY · World/Environment lane (serial, editor-closed bakes) · extends WO-467 RegionGate.
+**Status:** SPEC (design settled, awaiting schedule) · World/Environment lane (serial, bakes require the editor SHUT) · extends WO-467 RegionGate.
 **Scope:** SOUTH bridge = the V1 crossing (already shipped via RuntimeRegionGate); **N/E/W = polish.** The full
 4-path moat + the outposts/camps it connects = **V2 world-building** (uses existing systems, not greenfield).
 

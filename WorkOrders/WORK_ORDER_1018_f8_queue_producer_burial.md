@@ -1,6 +1,6 @@
 # WORK ORDER 1018 — F8 captures are STILL being buried: the QUEUE producer half of WO-965 never landed
 
-**Status:** READY TO IMPLEMENT — scope reduced 2026-08-10: **Evidence A is CLOSED** (a stale daemon
+**Status:** READY TO IMPLEMENT — scope reduced 2026-08-10: **Evidence A is RESOLVED** (a stale daemon
 process, not missing code — see the CORRECTION block below). **Evidence B + C remain OPEN** (recovery
 loses captures; the empty `acked` set lets the watermark bury un-triaged seqs) and are the work.
 **Minted:** 2026-08-10 (UI seat) — provenance stack bumped 1018 → 1019 in the same edit
