@@ -205,9 +205,11 @@ namespace DeNelle.Editor
             // AdGateAndArenaReturnRegression.CheckAdGate.
             //
             // PROVE IT BITES: in Assets/_Modules/Core/FeatureFlags.cs change the one token
-            // on the RealmStorePurchase line - Get("realmstorepurchase", defaultOn: false)
-            // to defaultOn: true - and re-run DataRegression.RunAll. [wallet-provider] must
-            // go RED with the free-pack message below. Revert the token; it must go green.
+            // on the RealmStorePurchase line - Get("realmstorepurchase", defaultOn: true)
+            // to defaultOn: false - and re-run DataRegression.RunAll. [wallet-provider] must
+            // go RED with the message below. Revert the token; it must go green.
+            // (The direction of this instruction FLIPPED with WO-1159. It is written out
+            // rather than deleted because a pin nobody can re-prove is a pin nobody trusts.)
             //
             string flagsPath = Path.Combine(Application.dataPath, "_Modules/Core/FeatureFlags.cs");
             if (!File.Exists(flagsPath))
@@ -220,26 +222,39 @@ namespace DeNelle.Editor
                 // flag's defaultOn can satisfy it. Whitespace-tolerant around =>, the comma
                 // and the colon; the trailing \s*\) is what stops "defaultOn: falsey" or
                 // any other false-prefixed token from passing.
+                // ── GO LIVE (WO-1159, owner explicit 2026-08-23) ────────────────────────
+                // Was `defaultOn: false`. RE-POINTED, not deleted and not softened: the
+                // ruled state moved, so the pin moves with it. The free-pack hazard this
+                // pin was written against is CLOSED at a stronger seam than the flag -
+                // WO-931 made WalletService.Pay AND PayFlat refuse a stub-typed provider
+                // UNCONDITIONALLY (not #if-guarded), which section 8 of this same suite
+                // asserts at runtime AND by source pin. That is why flipping the default is
+                // now safe and was not before: the gate did not weaken, a better one landed
+                // underneath it.
                 const string declPattern =
-                    @"RealmStorePurchase\s*=>\s*Get\(\s*""realmstorepurchase""\s*,\s*defaultOn\s*:\s*false\s*\)";
+                    @"RealmStorePurchase\s*=>\s*Get\(\s*""realmstorepurchase""\s*,\s*defaultOn\s*:\s*true\s*\)";
 
                 if (!Regex.IsMatch(flagsSrc, @"bool\s+RealmStorePurchase\s*=>"))
                     failures.Add("FeatureFlags.RealmStorePurchase is GONE - the pack-store purchase rail " +
                                  "has no gate at all. StubWalletProvider (see below) then grants packs for free " +
                                  "in every shipped build.");
                 else if (!Regex.IsMatch(flagsSrc, declPattern))
-                    failures.Add("FeatureFlags.RealmStorePurchase no longer declares defaultOn: false - the pack " +
-                                 "purchase rail is ON for FRESH INSTALLS. That is a FREE-PACK hole, not a dead " +
-                                 "button: StubWalletProvider has NO #if UNITY_EDITOR / DEVELOPMENT_BUILD guard, so " +
-                                 "it compiles into EVERY shipped build, and on release desktop/WebGL (and on " +
-                                 "Android without SOLANA_SDK) WalletService auto-selects it. The chain is then " +
-                                 "Buy -> stub Connect (fabricates a wallet address) -> SendPayment (checks a MOCK " +
-                                 "balance seeded at 2000 SKR) -> fabricated base58 signature -> " +
-                                 "PackStore.ApplyPackContents grants the pack IN FULL for ZERO payment, and fires " +
-                                 "a purchase_completed analytics event carrying the fake txSig. This flag is the " +
-                                 "ONLY gate on that path. Do NOT re-flip it until the unguarded stub is closed " +
-                                 "(separate fix) AND a real settling payment rail ships - see the DO NOT TURN THIS " +
-                                 "BACK ON block above the declaration in FeatureFlags.cs.");
+                    failures.Add("FeatureFlags.RealmStorePurchase is not in its ruled GO-LIVE state " +
+                                 "(defaultOn: true, WO-1159, owner explicit 2026-08-23). Either it was reverted " +
+                                 "to defaultOn: false, or the declaration was reshaped so this pin no longer " +
+                                 "reads it. Both matter: the flag is the FRESH-INSTALL answer, and a store build " +
+                                 "whose Buy rail is closed sells nothing while reporting success everywhere else. " +
+                                 "If the revert was DELIBERATE (pulling sales), say so here and in the four-step " +
+                                 "block in FeatureFlags.cs in the SAME edit, and check whether " +
+                                 "WalletService.DefaultNetwork moved too - MonetizationActivationRegression pins " +
+                                 "those two as a MATCHED PAIR, because ON+Devnet grants real packs for free test " +
+                                 "tokens. HISTORY, kept because it is why this pin exists: the original hazard " +
+                                 "was StubWalletProvider, which has NO #if UNITY_EDITOR / DEVELOPMENT_BUILD guard " +
+                                 "and compiles into EVERY shipped build (Buy -> stub Connect -> MOCK 2000 SKR " +
+                                 "balance -> fabricated signature -> ApplyPackContents grants IN FULL for ZERO " +
+                                 "payment + a purchase_completed event with the fake txSig). That hole is now " +
+                                 "closed at a stronger seam than this flag - WO-931's unconditional stub refusal " +
+                                 "in WalletService.Pay/PayFlat, asserted by section 8 below.");
             }
 
             // -- 5. MWA manifest wiring ---------------------------------------

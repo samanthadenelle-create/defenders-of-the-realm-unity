@@ -1,6 +1,13 @@
-> ## ▶ LIVE ANCHOR = `CANON_GROUND_TRUTH_2026-08-21.md` — read it FIRST (re-stamped here 2026-08-21)
+> ## ▶ LIVE ANCHOR = `CANON_GROUND_TRUTH_2026-08-23.md` — read it FIRST (re-stamped here 2026-08-23)
 >
-> The `Latest (2026-08-21)` section immediately below is current. **Older dated `Latest (...)` sections
+> ⛔ **THE PAY PATH IS ACTIVATED (owner explicit, 2026-08-23, WO-1159).** The single most repeated
+> line in this repo's canon — *"the game is published but nobody has ever bought anything"* — is now
+> **FALSE**. It appears below in the 08-21 section, in `SESSION_CANON_LOADER.md`, in
+> `docs/HANDOVER.md` and in the North Star bullet on this very page. Expect to keep meeting it; the
+> **08-23 anchor wins**. Consequence that bites: an economy REMOVAL is **no longer a clean purge**,
+> and the "nobody to grandfather or compensate" licence is **WITHDRAWN**.
+>
+> The `Latest (2026-08-23)` section immediately below is current. **Older dated `Latest (...)` sections
 > are history — where one disagrees with a newer section or with the anchor, the newer wins.**
 > The 08-18, 08-16 and 08-08 anchors are bannered SUPERSEDED. The 08-08 one is additionally
 > **INVERTED** on its two headline sections (the machine block is resolved; the dungeon-stair hunt is
@@ -50,7 +57,59 @@
 - **The operating dream:** the owner plays and rules; agents build in parallel lanes; every bug is
   a captured line; every system self-reports; the fleet + web bots verify before she ever has to.
 
+## Latest (2026-08-23) — GO LIVE: the pay path is activated
+
+*Anchor: `CANON_GROUND_TRUTH_2026-08-23.md`. Read it before this summary.*
+
+- **⛔ THE HEADLINE, AND IT INVERTS THE 08-21 SECTION BELOW: the game now takes real money.**
+  `FeatureFlags.RealmStorePurchase` is `defaultOn: **true**`; `WalletService.DefaultNetwork` is
+  **Mainnet**; the unconditional mainnet refusal in `SolanaWalletProvider.SendPayment` is replaced
+  by the ruled condition. Owner explicit: *"we test everything and make live"*, *"by owner
+  explicitly"*. **WO-1159.** Scope ruled: **the full authored ladder, $1.99–$49.99** — the old $5
+  early-access cap is **superseded**.
+- **The four-step order in `FeatureFlags.cs` was followed, and the order is the whole safety
+  argument.** Mainnet decision + lift the block · `DefaultNetwork` off Devnet (`6802e2292`) · a real
+  signed transaction SETTLES (the 1-SKR mainnet canaries, owner: *"canary 2 success recorded"*) ·
+  **THEN** the flag. Flipping the flag first only ever produces a Buy button in front of free goods.
+- **⛔ THE MATCHED PAIR — the one invariant to carry forward.** `RealmStorePurchase = true` is safe
+  ONLY while `DefaultNetwork = Mainnet`. On Devnet the tokens are free test tokens and the purchase
+  chain COMPLETES: real packs granted for worthless SKR, `purchase_completed` indistinguishable from
+  real revenue. `MonetizationActivationRegression` now pins **both**, so moving either one alone
+  turns the suite red. Move them together or not at all.
+- **⛔ THE CANARIES DO NOT TEST THE QUOTE.** Both answer `pinned: true` with **no quote row and no
+  rate** — their amount is a protocol constant. A canary purchase proves the transfer rail and
+  proves NOTHING about the WO-1158 quote path. **Verifying "the quote matches" needs a real ladder SKU.**
+- **The provider guard carries NO SKU allowlist, on purpose.** Authority over what is sellable and at
+  what amount is the SERVER quote (`quotableSkus` in `api/_lib/purchase-catalog.js`); the guard
+  asserts only SKR-rail + a positive quoted amount. A second sellable-SKU list on the client would be
+  the next "one fact written twice" bug (§2 WO numbers, §5 the assembly table, §16 the R2 push,
+  WO-1137's 3-of-28 fallback catalog).
+- **⚠ ONE PROMPT IS ACTUALLY TWO ON THE FIRST BUY.** WO-1157's session is minted **lazily on the
+  first authed call** (`BackendRequestSigner.cs:230`), not at connect: first purchase of a session =
+  session mint + transfer = **2 prompts**; every one after, within 15 min = **1**. That is 3 → 2 → 1,
+  not 3 → 1. Minting at connect would make it one throughout — small, contained, NOT done.
+- **⛔ STILL OPEN, and it is a TREASURY item, not code: the revenue vault is 1-of-1.**
+  `wallets.json:41` says it itself — *"ACCEPTABLE FOR THE 1-SKR CANARY, NOT FOR PUBLIC SALES — raise
+  to 2-of-3 first"*. Vault otherwise sound (off-curve Squads PDA
+  `9wbHbKuirtKai5e3ajvdpzdRYVpuxpAH4DUnERkVtBzj`, SKR ATA present, official mint, **decimals 6 read
+  from chain**). One key controls all revenue with no co-signer. Raising it changes no address and no
+  code. **Owner's to rule; it stands between "tested" and "public sales".**
+- **Gates, off fresh logs:** `COMPILE_GATE_OK` (0 `error CS`) · **`REGRESSION_OK 270/270 suites`** ·
+  backend **37/37**. The 08-21 two-red asset gap (245/247) is CLOSED. `FeatureFlags.Siege` is ON and
+  proven (WO-1139, 08-22).
+- **LESSON — re-point a pin, never soften it.** Two source pins asserted `defaultOn: false`; the
+  ruling moved so both were **re-pointed, neither deleted nor weakened**, and the replacement is
+  STRICTER (one value → the matched pair). `MonetizationActivationRegression`'s success string also
+  had to be corrected — it claimed *"both public flags remain OFF"*, which after the flip would have
+  been a **false success string** (the WO-1138 hollow-pass class, through a door nobody watched).
+  **Proven red-then-green:** reverting the flag drove exactly 2 suites RED naming the reason;
+  restoring returned 270/270. A money-path pin never seen red is not evidence of anything.
+
 ## Latest (2026-08-21) — siege cadence, the Night Market, and the pay-path correction
+
+> ⚠ **SUPERSEDED 2026-08-23 on its headline.** The "PAY PATH HAS NEVER BEEN ACTIVATED" correction
+> below was true when written and is now FALSE (see the 08-23 section above). The rest of this
+> section stands.
 
 *Anchor: `CANON_GROUND_TRUTH_2026-08-21.md` (file:line citations and the full ruling table live there).*
 

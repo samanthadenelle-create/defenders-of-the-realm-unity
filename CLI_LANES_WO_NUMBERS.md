@@ -129,7 +129,17 @@
 > fine as history. A copied number is the bug **even when it was right the day it was written** -
 > that is exactly how the retired 860-899 UI block kept re-seeding collisions from CLAUDE.md sec.2.
 
-> ## ⚠ RECONCILED 2026-08-23 (CLI): main line next free = **1159**.
+> ## ⚠ RECONCILED 2026-08-23 (CLI): main line next free = **1160**.
+> *(CLI seat minted **WO-1159** and bumped 1159 -> 1160 in this SAME edit. **1159** = GO LIVE —
+> take the four go-live steps FeatureFlags.cs itself prescribes, in order: the unconditional
+> mainnet refusal in SolanaWalletProvider.SendPayment's non-canary branch is replaced by the
+> ruled condition (SKR rail + a positive server-quoted amount, deliberately NO client SKU
+> allowlist), and RealmStorePurchase defaults ON. Owner ruled explicitly 2026-08-23: full
+> authored ladder $1.99-$49.99. Two source pins RE-POINTED, not softened, and the new one is
+> STRICTER — it pins the flag and WalletService.DefaultNetwork as a MATCHED PAIR, because
+> ON+Devnet grants real packs for free test tokens. Proven red-then-green.)*
+>
+> ### superseded: RECONCILED 2026-08-23 (CLI): main line next free = **1159**.
 > *(CLI seat minted **WO-1157** and **WO-1158** and bumped 1157 -> 1159 in this SAME edit.
 > **1157** = a purchase asks the wallet three times and should ask once (session token).
 > **1158** = the SERVER must quote the SKR price; a client-resolved price against a

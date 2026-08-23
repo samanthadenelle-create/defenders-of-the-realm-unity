@@ -34,6 +34,8 @@ namespace DeNelle.Editor.Regression
                 string featureFlags = Read(root + "/_Modules/Core/FeatureFlags.cs", failures);
                 string endpoints = Read(root + "/_Modules/Wallet/WalletEndpoints.cs", failures);
                 string mainnetCanary = Read(root + "/_Modules/Wallet/MainnetCanaryCatalog.cs", failures);
+                // WO-1159: the go-live pin below needs the network default, not just the flag.
+                string walletService = Read(root + "/_Modules/Wallet/WalletService.cs", failures);
                 string api = Read(Directory.GetParent(Application.dataPath).FullName.Replace('\\', '/') +
                                   "/api/purchases/verify.js", failures);
                 string catalog = Read(Directory.GetParent(Application.dataPath).FullName.Replace('\\', '/') +
@@ -142,8 +144,26 @@ namespace DeNelle.Editor.Regression
                 Require(mainnetCanary, "#if MAINNET_CANARY_TEST",
                     "Mainnet canary product is not compiled behind its isolated symbol", failures);
 
-                Require(featureFlags, "RealmStorePurchase => Get(\"realmstorepurchase\", defaultOn: false)",
-                    "public purchase flag no longer defaults OFF", failures);
+                // ── GO LIVE (WO-1159, owner explicit 2026-08-23) ────────────────────────────
+                // This Require asserted `defaultOn: false`. The owner has now taken all four
+                // go-live steps in the order FeatureFlags.cs itself prescribes, so the ruled
+                // state CHANGED and the pin is RE-POINTED to it. It is deliberately NOT
+                // deleted and NOT softened: an oracle that stops asserting because the answer
+                // moved is exactly the hollow pass this repo pays most for (WO-1138).
+                //
+                // ⛔ AND IT IS NOW STRICTER THAN IT WAS. The old pin watched ONE value. The
+                // real invariant is a PAIR: a public Buy button is only safe while the wallet
+                // is on MAINNET, because on Devnet the tokens are free test tokens and the
+                // purchase chain completes - worthless tokens move, real pack contents are
+                // granted, and `purchase_completed` fires indistinguishably from real revenue
+                // (FeatureFlags.cs states that hazard in as many words). So both halves are
+                // pinned here, and moving EITHER one back alone turns this suite red.
+                Require(featureFlags, "RealmStorePurchase => Get(\"realmstorepurchase\", defaultOn: true)",
+                    "public purchase flag is not in the ruled GO-LIVE state (WO-1159)", failures);
+                Require(walletService, "public const WalletNetwork DefaultNetwork = WalletNetwork.Mainnet;",
+                    "purchase flag is ON while the wallet default network is not Mainnet - a public " +
+                    "Buy button in front of FREE test tokens (grants real packs for worthless SKR)",
+                    failures);
                 Require(featureFlags, "RewardedAdSkip => Get(\"rewardedadskip\", defaultOn: false)",
                     "public rewarded-ad flag no longer defaults OFF", failures);
             }
@@ -153,7 +173,7 @@ namespace DeNelle.Editor.Regression
             }
 
             reason = failures.Count == 0
-                ? "ads have one async placement-gated reward path + main-thread ILRD telemetry; purchases use targeted MWA, finalized server verification, a pinned canary contract, and exactly-once fulfilment; both public flags remain OFF"
+                ? "ads have one async placement-gated reward path + main-thread ILRD telemetry; purchases use targeted MWA, finalized server verification, a pinned canary contract, and exactly-once fulfilment; the rewarded-ad flag remains OFF and the purchase flag is in its ruled GO-LIVE state (defaultOn true, matched to DefaultNetwork = Mainnet)"
                 : string.Join(" | ", failures);
             return failures.Count == 0;
         }

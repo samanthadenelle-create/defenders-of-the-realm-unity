@@ -1,3 +1,15 @@
+> # ⚠ SUPERSEDED 2026-08-23 — read `CANON_GROUND_TRUTH_2026-08-23.md` FIRST
+>
+> ⛔ **This file is INVERTED on its own headline.** Its top section says the pay path has never been
+> activated and nobody has ever bought anything. **That is no longer true as of 2026-08-23:** the
+> owner took the go-live decision explicitly, `FeatureFlags.RealmStorePurchase` defaults ON,
+> `WalletService.DefaultNetwork` is Mainnet, and the mainnet payment refusal is replaced by the
+> ruled condition (WO-1159). The "clean purge, nobody to compensate" licence recorded below is
+> **WITHDRAWN**. Also stale here: `FeatureFlags.Siege` is ON and proven (WO-1139, 08-22), and the
+> 245/247 gate posture is now 270/270.
+>
+> Kept as history, not as guidance (CLAUDE.md §15 — banner, never rewrite the body).
+
 # CANON GROUND TRUTH — 2026-08-21
 
 **This supersedes `CANON_GROUND_TRUTH_2026-08-18.md`.** Keep exactly ONE current; supersede by date.

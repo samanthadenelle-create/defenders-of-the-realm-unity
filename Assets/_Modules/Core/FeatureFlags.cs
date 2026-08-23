@@ -673,12 +673,40 @@ namespace DeNelle.Core
         //   3. verify a real signed transaction settles on-chain
         //   4. THEN this default, with the WO-931 seam refusal left exactly as it is.
         // Flipping this one first only ever produces a Buy button in front of free goods.
+        //
+        // ── ALL FOUR TAKEN, IN ORDER — GO LIVE (WO-1159, owner explicit 2026-08-23) ────────
+        // The default below is now TRUE. Every step above was executed in sequence, and the
+        // order is the whole reason this is not the "Buy button in front of free goods" case
+        // the block warns about:
+        //   1. Mainnet decision made by the owner explicitly, and the unconditional mainnet
+        //      refusal in SolanaWalletProvider.SendPayment's non-canary branch is REPLACED by
+        //      the ruled condition (SKR rail + a positive server-quoted amount). See that file
+        //      for why it deliberately carries NO SKU allowlist.
+        //   2. WalletService.DefaultNetwork moved off Devnet (6802e2292).
+        //   3. Real signed transactions SETTLED on mainnet - the 1-SKR canaries, success
+        //      recorded by the owner. The rail is proven, not theorised.
+        //   4. This default, with the WO-931 seam refusal untouched and still unconditional.
+        //
+        // ⛔ THE DEVNET FREE-PACKS HAZARD ABOVE IS CLOSED BY STEP 2, NOT BY THIS FLAG. The
+        // warning was "on a devnet build with this flag on, worthless tokens move and real
+        // pack contents are granted". DefaultNetwork is Mainnet now, so the tokens are real.
+        // If anyone ever moves DefaultNetwork back to Devnet, this default must come back to
+        // false in the SAME edit - those two values are only safe as a matched pair.
+        //
+        // ⚠ STILL OPEN, and it is a TREASURY item, not a code item: the revenue vault's
+        // Squads threshold is 1-of-1 (wallets.json:41 - "NOT FOR PUBLIC SALES - raise to
+        // 2-of-3 first"). One key controls all revenue with no co-signer. Raising it changes
+        // no address and no code. Surfaced to the owner 2026-08-23; hers to rule.
+        //
+        // NOTE (unchanged and still true): Get() reads PlayerPrefs FIRST. A device that ever
+        // stored "ff.realmstorepurchase" = 0 keeps the Buy rail CLOSED until that key is
+        // cleared. This default governs fresh installs.
 #if STORE_RAIL_LOCAL_TEST || MAINNET_CANARY_TEST
         // An explicit owner-test build must win over a stale production PlayerPrefs value.
         // The symbol is command-line-only and is never present in a distributed build.
         public static bool RealmStorePurchase => true;
 #else
-        public static bool RealmStorePurchase => Get("realmstorepurchase", defaultOn: false);
+        public static bool RealmStorePurchase => Get("realmstorepurchase", defaultOn: true);
 #endif
 
         /// <summary>RELEASE BLOCKER GATE (2026-08-07) — gates the WHOLE rewarded-ad timer-skip path:
