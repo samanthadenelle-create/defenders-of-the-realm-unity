@@ -1137,6 +1137,13 @@ namespace DeNelle.Editor
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "monetization-activation suite", () => { if (!DeNelle.Editor.Regression.MonetizationActivationRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[monetization-activation] " + r); });
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "store-commerce-state suite", () => { if (!DeNelle.Editor.Regression.StoreCommerceStateRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[store-commerce-state] " + r); });
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "structure-orientation suite", () => { if (!DeNelle.Editor.StructureOrientationOracle.Run(out var r)) failures.Add(r); else log.AppendLine("[structure-orientation] " + r); });
+            // Registered 2026-08-22 in the same breath as the marker failure that caught it: this
+            // oracle exposed Run(out string) and was referenced by NOTHING, which the marker suite
+            // words exactly right -- "an unregistered oracle is a file that never runs." Second one
+            // found today; StructureOrientationOracle above sat unregistered too, and on its FIRST
+            // real run it immediately caught the tilt-90 ballista rows. That is the cost of the
+            // defect class: the check existed the whole time and proved nothing.
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "night-market-ui suite", () => { if (!DeNelle.Editor.Regression.NightMarketUiRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[night-market-ui] " + r); });
             // --- WO-1149 (owner, on device 2026-08-22: "we need to stop game during transactions got
             //     killed while making purchase test"): a transaction freezes the world through the
             //     single WorldHold owner, and EVERY exit unfreezes it. The suite measures the clock

@@ -76,7 +76,13 @@ namespace DeNelle.Editor.Regression
                     "private async UniTask<bool> CompleteVerifiedPurchaseAsync", fail);
                 if (restore.Contains("ShowFulfillmentReceipt") || restore.Contains("ShowToast"))
                     fail.Add("fulfilled reinstall ownership restore replays the purchase receipt/reward feedback");
-                string preFulfilled = Slice(code, "private async UniTask<PaymentResult> Purchase",
+                // NOT "private async ..." (2026-08-22): the real method at PackStore.cs:1457 is
+                // PUBLIC, so this slice found nothing and the suite failed on correct code. The
+                // accessibility modifier is incidental to what this oracle asserts -- slice on the
+                // return type + name, which is the part that actually identifies the charge path.
+                // Third stale oracle ADDRESS found today (see [suite-count] and contract.lamports):
+                // when a suite fails on code you believe is right, check what it is pointed at.
+                string preFulfilled = Slice(code, "UniTask<PaymentResult> Purchase",
                     "private static PaymentResult Indeterminate", fail);
                 if (preFulfilled.Contains("ShowFulfillmentReceipt"))
                     fail.Add("submitted/pending/failed purchase path can show the fulfillment receipt");
