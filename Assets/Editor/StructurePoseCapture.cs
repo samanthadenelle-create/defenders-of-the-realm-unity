@@ -56,6 +56,9 @@ namespace DeNelle.Editor
             "jeweler",
             "armorer",
             "barracks",
+            // WO-1153: gate_stone claims its MEASURED mesh (the carve-out is Wall-only).
+            // Its native XZ:Y aspect is what decides whether it over-claims the 3.00 m cell.
+            "Gate_Medieval_Medium",
         };
 
         [MenuItem("Defenders/Art/Capture Structure Poses")]

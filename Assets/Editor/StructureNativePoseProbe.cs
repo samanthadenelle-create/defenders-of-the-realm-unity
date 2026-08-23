@@ -47,6 +47,7 @@ namespace DeNelle.Editor
             "Tower_Wooden_Watchtower_L3",    // FAILS   - aspect 0.58
             "Ballista_L1",                   // FAILS   - root tilt 90
             "Ballista_L2",                   // FAILS   - root tilt 90
+            "Gate_Medieval_Medium",          // WO-1153 - does it over-claim vs the 3.00 m cell?
         };
 
         [MenuItem("Defenders/Art/Probe Structure Native Pose")]
