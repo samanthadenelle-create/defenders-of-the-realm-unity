@@ -19,6 +19,21 @@ purges, not balance-preserving migrations — there is nobody to grandfather or 
 read-migrate a removed save field so existing dev/test saves LOAD (ordinary defensive
 deserialisation, not value preservation).
 
+### ⬆ UPDATED 2026-08-23 — the rail is now PROVEN, and the sentence above still holds
+
+A live **Devnet** SKR purchase completed end to end on 2026-08-22 (verified signature, exactly-once
+entitlement, `/fulfill` acknowledged before the receipt, wallet unchanged afterwards). So the code
+path is no longer theoretical.
+
+⚠ **That does NOT make the statement above false.** Devnet is play money on a mint we control.
+**No real money has still ever moved**, `RealmStorePurchase` is still `defaultOn:false`, and
+`WalletService.DefaultNetwork` is still a compile-time `const` pinned to Devnet. The one remaining
+gap is the **live Mainnet 1-SKR canary**, which is **fail-closed on missing configuration** (no
+mainnet RPC, recipient or ATA) — engineering is done, provisioning is not.
+
+**Full detail, including the 1000x decimals error that almost shipped:
+`docs/MONETIZATION_STATE_2026-08-23.md`.** Read it before touching any on-chain amount.
+
 ⚠ This does NOT license flipping the payment flags. Monetization stays OFF until R5 is ruled.
 
 ---
