@@ -46,6 +46,15 @@
 //       may abut walls, and the refusal still speaks in WORDS (the owner is red/green
 //       colourblind, so a red ghost tint is not a refusal message).
 //
+//   (e) WO-1153 GATES SHARE THE CARVE-OUT - a gate exists to INTERRUPT a wall run, but WO-972
+//       only ever branched on Wall. Measured 2026-08-23: gate_stone fits to 5.99 m across on a
+//       3 m cell, so it claimed TWO cells against an authored 2.8 and could not be seated flush
+//       in the run. Case 5 proves the branch live and PREFAB-FREE (a sub-1 m authored probe
+//       separates the carve-out from the measured path with no Addressables load), pins the
+//       gate row, and pins that the carve-out stayed Wall+Gate: generalising it to every row
+//       with an authored footprint would GROW some claims, and WO-972's save-compat argument
+//       only holds for a SHRINKING claim.
+//
 //   NOT provable here: that the run LOOKS continuous and that enemies still cannot walk
 //   through it - that is the owner's felt-verify (PO closes, per docs/TICKET_PIPELINE.md).
 //
@@ -79,6 +88,17 @@ namespace DeNelle.Editor.Regression
         /// <summary>Her captured body width. Kept as the oracle for the mesh-driven claim.</summary>
         private const float CapturedWallWidthMetres = 3.03f;
 
+        /// <summary>WO-1153: the gate row that must share the wall carve-out (it interrupts a run).</summary>
+        private const string GateId = "gate_stone";
+
+        /// <summary>
+        /// WO-1153 measured oracle (2026-08-23): Gate_Medieval_Medium's native bounds are
+        /// 15.75 x 10.52 x 5.22, and gate_stone authors heightMul 1.0 with no maxFootprint, so
+        /// fit-to-height (YHeightVariable = 4 m) lands its X at 5.99 m. On a 3 m cell that CEILS to
+        /// TWO cells while the row's authored footprint (2.8) says ONE - the over-claim this pins.
+        /// </summary>
+        private const float FittedGateWidthMetres = 5.99f;
+
         /// <summary>Standalone batch entry - prints the marker.</summary>
         public static void RunAll()
         {
@@ -97,6 +117,7 @@ namespace DeNelle.Editor.Regression
                 Case(failures, "decoupling", () => Case2_ClaimIsDecoupledFromMesh(failures, created));
                 Case(failures, "data-pins",  () => Case3_CatalogPins(failures));
                 Case(failures, "wiring",     () => Case4_SourceWiringLint(failures));
+                Case(failures, "gate-claim", () => Case5_GateSharesTheWallCarveOut(failures, created));
             }
             catch (Exception ex)
             {
@@ -118,7 +139,11 @@ namespace DeNelle.Editor.Regression
                          "and the cell beside a wall (17,17) are both placeable while the wall's own " +
                          "cell stays refused; the claim is decoupled from the 3.03 m mesh (which still " +
                          "ceils to 2x2); wall rows keep a one-cell authored footprint and no heightMul; " +
-                         "both claim sites, the abut allowance and the words-based refusal are wired.";
+                         "both claim sites, the abut allowance and the words-based refusal are wired; " +
+                         "and (WO-1153) a GATE takes the same authored-footprint carve-out, so it claims " +
+                         "ONE cell instead of the two its 5.99 m fitted body would ceil to and seats " +
+                         "flush beside the wall run it interrupts - while a Tower still claims off its " +
+                         "mesh, i.e. the carve-out stayed Wall+Gate and was not generalised.";
                 return true;
             }
 
@@ -366,7 +391,153 @@ namespace DeNelle.Editor.Regression
             }
         }
 
+        // =====================================================================
+        //  CASE 5 - WO-1153: a GATE takes the same authored-footprint carve-out
+        // =====================================================================
+        // WO-972 gave WALLS the authored-footprint claim and never included gates, even though a
+        // gate exists to INTERRUPT a wall run and must seat flush inside it. Measured 2026-08-23:
+        // gate_stone fits to 5.99 m across on a 3 m cell -> a 2-cell claim against an authored 2.8,
+        // so a gate owned a full extra cell and could not be dropped beside the wall it joins.
+        //
+        // THE LIVE PROOF IS PREFAB-FREE AND WOULD HAVE FAILED BEFORE THE FIX. With no
+        // visualPrefabPath, MeasureUprightFootprintXZ returns Max(1f, footprint) squared while
+        // MeasureClaimFootprintXZ's carve-out returns Max(0.01f, footprint). Author 0.5 and the two
+        // paths separate cleanly: carve-out => 0.5, measured => 1.0. Before this change a Gate row
+        // read 1.0 (the measured path) and this case goes red - no Addressables, no play session.
+        private static void Case5_GateSharesTheWallCarveOut(List<string> failures, List<GameObject> created)
+        {
+            // (a) LIVE: the claim seam branches on Gate as well as Wall.
+            const float ProbeFootprint = 0.5f;   // below MeasureUpright's Max(1f, ..) floor, on purpose
+            Vector2 gateClaim  = ClaimFor(DeNelle.Core.Catalog.CatalogType.Gate,  ProbeFootprint);
+            Vector2 wallClaim  = ClaimFor(DeNelle.Core.Catalog.CatalogType.Wall,  ProbeFootprint);
+            Vector2 towerClaim = ClaimFor(DeNelle.Core.Catalog.CatalogType.Tower, ProbeFootprint);
+
+            if (Mathf.Abs(gateClaim.x - ProbeFootprint) > 0.001f ||
+                Mathf.Abs(gateClaim.y - ProbeFootprint) > 0.001f)
+                failures.Add("[gate-claim] StructureFactory.MeasureClaimFootprintXZ returned (" +
+                             gateClaim.x.ToString("0.###") + " x " + gateClaim.y.ToString("0.###") +
+                             ") for a CatalogType.Gate authoring footprint " + ProbeFootprint.ToString("0.##") +
+                             "m - the AUTHORED carve-out is not being taken, so a gate is back on the " +
+                             "measured mesh. gate_stone fits to " + FittedGateWidthMetres.ToString("0.##") +
+                             "m across, which CEILS to TWO 3 m cells against its authored 2.8 - the gate " +
+                             "over-claims a full extra cell and cannot seat flush in the wall run it interrupts.");
+
+            if (Mathf.Abs(wallClaim.x - ProbeFootprint) > 0.001f)
+                failures.Add("[gate-claim] the WALL carve-out itself has regressed (claim " +
+                             wallClaim.x.ToString("0.###") + "m for an authored " + ProbeFootprint.ToString("0.##") +
+                             "m) - WO-972 is undone; the gate assertions above are meaningless until it is back.");
+
+            // The carve-out must stay a TWO-TYPE carve-out. Generalising it to "any row with an
+            // authored placement.footprint" remaps all 28 rows, and WO-972's safety argument only
+            // covers a SHRINKING claim - a row whose authored number EXCEEDS its mesh would GROW
+            // its claim and can invalidate an already-saved town on replay.
+            if (Mathf.Abs(towerClaim.x - ProbeFootprint) <= 0.001f)
+                failures.Add("[gate-claim] a CatalogType.Tower row also claims off its AUTHORED " +
+                             "footprint - the Wall+Gate carve-out has been generalised to every type. " +
+                             "That is a repo-wide claim remap: any row authoring MORE than it measures " +
+                             "would GROW its claim, which can break an already-saved layout on replay " +
+                             "(WO-972's safety argument only holds for a shrinking claim).");
+
+            // (b) LIVE GRID: a gate seats beside a wall, and its claim is decoupled from its mesh.
+            PlacementGrid grid = NewGrid(created);
+            float authoredGate = AuthoredFootprintMetres(GateId, failures);
+            if (authoredGate <= 0f) return;   // (c) below reports the data problem
+
+            Vector2Int gateCells = grid.FootprintCells(authoredGate, 0f);
+            Vector2Int meshCells = grid.FootprintCells(FittedGateWidthMetres, 0f);
+
+            if (meshCells.x < 2)
+                failures.Add("[gate-claim] FootprintCells(" + FittedGateWidthMetres.ToString("0.##") +
+                             "m) is now " + meshCells.x + "x" + meshCells.y + ", not the 2-cell claim the " +
+                             "2026-08-23 measurement recorded. The cell math changed under this fix - " +
+                             "re-measure the gate prefab before trusting the rest of this case.");
+            else if (gateCells == meshCells)
+                failures.Add("[gate-claim] the gate's claim (" + gateCells.x + "x" + gateCells.y +
+                             ") equals the MESH-driven claim (" + meshCells.x + "x" + meshCells.y +
+                             ") - the gate is claiming off its fitted 5.99 m body again, exactly the " +
+                             "coupling WO-1153 removed.");
+
+            if (gateCells.x != 1 || gateCells.y != 1)
+            {
+                failures.Add("[gate-claim] a gate claims " + gateCells.x + "x" + gateCells.y + " cells from " +
+                             "its authored footprint " + authoredGate.ToString("0.###") + "m on a " +
+                             grid.cellSize.ToString("0.##") + "m cell - a gate is a ONE-CELL tile like the " +
+                             "wall it interrupts, or the run cannot close around it.");
+                return;
+            }
+
+            // A finished wall at (16,17); the gate goes immediately beside it, then the run continues.
+            var wallCell = new Vector2Int(16, 17);
+            grid.Occupy(wallCell, new Vector2Int(1, 1), "wall_wood");
+
+            var gateCell = new Vector2Int(17, 17);
+            if (!grid.CanPlace(gateCell, gateCells))
+                failures.Add("[gate-claim] the cell immediately beside a wall (17,17) refuses a GATE - the " +
+                             "player cannot put a gate in the wall run she just built, which is the only " +
+                             "way a walled town gets a door.");
+            grid.Occupy(gateCell, gateCells, GateId);
+
+            if (!grid.CanPlace(new Vector2Int(18, 17), gateCells))
+                failures.Add("[gate-claim] the cell on the far side of a placed gate (18,17) is refused - the " +
+                             "gate is owning its neighbour's square, so the wall run cannot be continued " +
+                             "past it (the seq-2327 failure, moved onto gates).");
+            if (!grid.CanPlace(new Vector2Int(17, 16), gateCells))
+                failures.Add("[gate-claim] the cell in front of a placed gate (17,16) is refused - the SQUARED " +
+                             "mesh claim is back on gates and is eating the row the gate opens onto.");
+            if (grid.CanPlace(gateCell, gateCells))
+                failures.Add("[gate-claim] the gate's OWN cell (17,17) is still placeable - the one-cell claim " +
+                             "has stopped registering occupancy, which would stack a gate on a wall.");
+
+            grid.Free(gateCell, gateCells);
+            if (!grid.CanPlace(gateCell, gateCells))
+                failures.Add("[gate-claim] Free did not release the gate's cell - selling or moving a gate " +
+                             "would leave a permanent dead square in the wall run.");
+
+            // (c) DATA PIN - the row the claim stands on.
+            JObject root = ReadCatalog(failures);
+            var entries = root != null ? root["entries"] as JArray : null;
+            JObject gateRow = entries != null ? FindRow(entries, GateId) : null;
+            if (gateRow == null)
+            {
+                failures.Add("[gate-claim] catalog row '" + GateId + "' is missing - saved towns replay gates " +
+                             "through CatalogRegistry, so a removed row loses every placed gate.");
+            }
+            else
+            {
+                var gateType = (string)gateRow["type"];
+                if (!string.Equals(gateType, "Gate", StringComparison.Ordinal))
+                    failures.Add("[gate-claim] '" + GateId + "' has type '" + (gateType ?? "<null>") + "', not " +
+                                 "'Gate' - the authored-footprint claim is keyed on CatalogType.Gate, so this " +
+                                 "row would fall straight back to the 2-cell mesh claim.");
+                if (authoredGate > grid.cellSize)
+                    failures.Add("[gate-claim] '" + GateId + "' authors placement.footprint=" +
+                                 authoredGate.ToString("0.###") + "m, which does not fit ONE " +
+                                 grid.cellSize.ToString("0.##") + "m cell - the carve-out would hand the gate a " +
+                                 ">1 cell claim from DATA instead of from the mesh.");
+            }
+
+            // (d) SOURCE INVARIANT - the branch itself, comment-stripped so doc text cannot match.
+            string factory = ReadStripped(FactorySrc, failures);
+            if (factory != null && !Regex.IsMatch(factory, @"CatalogType\s*\.\s*Gate"))
+                failures.Add("[gate-claim] " + FactorySrc + " no longer names CatalogType.Gate - the claim seam " +
+                             "has dropped the gate carve-out and gates are back on the measured mesh.");
+        }
+
         // ── helpers ───────────────────────────────────────────────────────────
+
+        /// <summary>
+        /// The live claim for a synthetic row of <paramref name="type"/> authoring
+        /// <paramref name="footprint"/> and NO visual prefab. Prefab-free on purpose: with no
+        /// visualPrefabPath the measured path returns Max(1f, footprint) squared and the
+        /// authored carve-out returns Max(0.01f, footprint), so a sub-1 m probe separates the two
+        /// branches with no Addressables load and no play session.
+        /// </summary>
+        private static Vector2 ClaimFor(DeNelle.Core.Catalog.CatalogType type, float footprint)
+        {
+            var entry = new DeNelle.Core.Catalog.CatalogEntry { id = "regression_probe_" + type, type = type };
+            entry.repo.placement.footprint = footprint;
+            return StructureFactory.MeasureClaimFootprintXZ(entry);
+        }
 
         /// <summary>
         /// A real PlacementGrid with the SAME origin centring Awake applies (editmode

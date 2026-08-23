@@ -120,6 +120,9 @@ namespace DeNelle.Village
             if (!string.IsNullOrEmpty(entry.visualPrefabPath))
             {
                 float targetHeight = EffectiveVisualHeight(entry, out bool heightOverride);
+                // WO-1142: true once the pending-art proxy + its ONE WhenSettled retry are armed,
+                // so the render-verify degrade below never arms a rival second subscription.
+                bool pendingArtArmed = false;
 
                 // WO-928: build the opts through the ONE shared helper instead of assembling them
                 // inline. The inline copy here had drifted from ReskinForLevel's OptsFor - it carried
@@ -149,6 +152,7 @@ namespace DeNelle.Village
                         "is not resident yet — retaining a visible pending-art proxy and arming one " +
                         "WhenSettled retry (the building, footprint and behaviour remain present).");
                     visual = BuildPendingArtProxy(root, entry);
+                    pendingArtArmed = true;
                     GameObject capturedProxy = visual;
                     DeNelle.Core.StructureContentWarmer.WhenSettled(() =>
                         TryReplacePendingArt(root, entry, capturedProxy));
@@ -216,13 +220,32 @@ namespace DeNelle.Village
 
                 // V + R: PROVE the skinned structure can render (>=1 enabled renderer with a
                 // sharedMesh) — the grey-foundation / floating-untextured class self-reports here.
-                // On a render-broken create, Fail + destroy + return null so the caller falls back,
-                // never seats a silent broken structure. A NavMeshObstacle/collider footprint is
-                // logged so an "invisible blocker" announces its size.
+                // A NavMeshObstacle/collider footprint is logged so an "invisible blocker"
+                // announces its size.
+                //
+                // WO-1142 residual: this used to Fail + DestroyRoot + return null, which made it the
+                // LAST path in the game that destroyed a PAID building (BaseLayoutLoader then printed
+                // "structure NOT built (one building lost…)"). A render-BROKEN visual must not be
+                // worth less than a not-yet-RESIDENT one, so it now degrades to the SAME pending-art
+                // proxy + WhenSettled retry the residency miss above uses — one mechanism, not two.
+                // The wording below is deliberately distinct from the residency Fail so the two
+                // causes stay tellable apart in a log.
                 if (!VerifyStructureRenders(root, entry.id))
                 {
-                    DestroyRoot(root);
-                    return null;
+                    FlowTrace.Fail("Structure", $"'{entry.id}': skinned visual " +
+                        $"'{entry.visualPrefabPath}' FAILED RENDER VERIFICATION (no enabled renderer " +
+                        "with a mesh) — discarding that broken body, retaining a visible pending-art " +
+                        "proxy and arming one WhenSettled retry (the building, footprint and behaviour " +
+                        "remain present; nothing paid-for is destroyed).");
+                    // When the residency miss above already installed a proxy and armed the ONE
+                    // retry, keep them: arming a second WhenSettled would be a rival authority.
+                    if (!pendingArtArmed)
+                    {
+                        if (visual != null) DestroyRoot(visual);
+                        GameObject renderProxy = BuildPendingArtProxy(root, entry);
+                        DeNelle.Core.StructureContentWarmer.WhenSettled(() =>
+                            TryReplacePendingArt(root, entry, renderProxy));
+                    }
                 }
             }
 
@@ -957,24 +980,44 @@ namespace DeNelle.Village
         }
 
         /// <summary>
-        /// WO-986 / WO-972 claim metric as non-square metres (x, z).
-        /// Walls: both axes use authored placement.footprint (one-cell tile, CoC wall runs).
+        /// WO-986 / WO-972 / WO-1153 claim metric as non-square metres (x, z).
+        /// Walls AND GATES: both axes use authored placement.footprint (one-cell tile, CoC wall runs).
         /// Everything else: measured upright mesh XZ (no squaring of max).
         /// Shrinking a prior square claim on load is safe; never expands phantom cells.
+        ///
+        /// WO-1153 — WHY THE GATE JOINED THE WALL CARVE-OUT (measured 2026-08-23, not inferred):
+        /// Gate_Medieval_Medium's native bounds are 15.75 x 10.52 x 5.22; gate_stone authors
+        /// heightMul 1.0 and no maxFootprint, so fit-to-height (YHeightVariable = 4 m) lands its
+        /// X at 5.99 m — against PlacementGrid.cellSize = 3 m that CEILS to TWO cells, where its
+        /// authored footprint 2.8 says ONE. A gate over-claimed a full extra cell, so it could not
+        /// be seated flush in the wall run it is supposed to interrupt.
+        ///
+        /// ⛔ DELIBERATELY NOT GENERALISED to "any row with an authored placement.footprint".
+        /// ALL 28 catalog rows author one, so that would be a repo-wide claim remap — and WO-972's
+        /// safety argument above holds ONLY for a SHRINKING claim ("a shrinking claim can never
+        /// invalidate a saved layout"). A row whose authored number EXCEEDS its measured mesh would
+        /// GROW its claim and can break an already-saved town on replay. Wall + Gate only; adding a
+        /// third type means proving authored &lt;= measured for every row of that type first.
         /// </summary>
         public static Vector2 MeasureClaimFootprintXZ(CatalogEntry entry)
         {
             Vector2 measured = MeasureUprightFootprintXZ(entry);
-            if (entry == null || entry.type != CatalogType.Wall) return measured;
+            if (entry == null ||
+                (entry.type != CatalogType.Wall && entry.type != CatalogType.Gate)) return measured;
 
             float authored = entry.repo != null && entry.repo.placement != null
                 ? Mathf.Max(0.01f, entry.repo.placement.footprint)
                 : Mathf.Max(measured.x, measured.y);
 
-            FlowTrace.Once("Build", "wall-claim-" + entry.id,
-                $"WALL CLAIM '{entry.id}': grid claim AUTHORED placement.footprint={authored:0.###}m " +
-                $"(both axes → one-cell tile), mesh measures ({measured.x:0.###} x {measured.y:0.###})m. " +
-                "Mesh is NOT resized — claim only (WO-972 + WO-986).");
+            // WO-1153: name the TYPE that took the carve-out. The line said "WALL CLAIM"
+            // unconditionally, so a gate on the authored path logged as a wall — a trace that
+            // misreports which branch ran is worse than no trace (CLAUDE.md §12).
+            string typeName = entry.type.ToString().ToUpperInvariant();
+            FlowTrace.Once("Build", typeName.ToLowerInvariant() + "-claim-" + entry.id,
+                $"{typeName} CLAIM '{entry.id}' (type={entry.type}): grid claim AUTHORED " +
+                $"placement.footprint={authored:0.###}m (both axes → one-cell tile), mesh measures " +
+                $"({measured.x:0.###} x {measured.y:0.###})m. " +
+                "Mesh is NOT resized — claim only (WO-972 + WO-986 + WO-1153).");
             return new Vector2(authored, authored);
         }
 
