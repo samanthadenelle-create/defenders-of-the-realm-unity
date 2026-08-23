@@ -129,7 +129,12 @@
 > fine as history. A copied number is the bug **even when it was right the day it was written** -
 > that is exactly how the retired 860-899 UI block kept re-seeding collisions from CLAUDE.md sec.2.
 
-> ## ⚠ RECONCILED 2026-08-22 (CLI): main line next free = **1150**.
+> ## ⚠ RECONCILED 2026-08-22 (CLI): main line next free = **1151**.
+> *(CLI seat minted **WO-1150** and bumped 1150 -> 1151 in this SAME edit. **1150** = THE MONTHLY
+> LEDGER (season pass) PANEL IS UNREADABLE - Close clipped off the top of the screen, the Echoes
+> HUD chip drawing THROUGH the modal, the build notice truncated AND overhanging, no obsidian
+> frame, thirty identical day cards, and four colour-only signals. Written from a Seeker capture,
+> not a description.)*
 > *(CLI seat minted **WO-1149 - MON** and bumped 1149 -> 1150 in this SAME edit. **1149** = the
 > world keeps running during a purchase - the owner was KILLED mid purchase-test. MON lane.)*
 > *(CLI seat minted **WO-1148** and bumped 1148 -> 1149 in this SAME edit. **1148** = EVERY HUD
@@ -274,6 +279,10 @@
 > strings and get a REGRESSION ORACLE, not a comment, because that is the rule most likely to rot.
 > Status READY TO IMPLEMENT, 3 open rulings. No code yet.)*
 > ## âš  RECONCILED 2026-08-17 (UI seat): UI seat next free = **1063**.
+> *(UI seat minted **WO-1063 through WO-1068** and bumped 1063 -> 1069 in this SAME edit. Gear program:
+> 1063 program authority; 1064 measured daily-Gold pricing; 1065 affinity runtime; 1066 weapon effects,
+> Elarion naming and semantic VFX verbs; 1067 visual certification; 1068 store comparison/hot swap.
+> Specifications only until the owner assigns implementation. Regenerate BOARD.html; never hand-edit it.)*
 > *(UI seat minted **WO-1062** and bumped 1062 -> 1063 in this SAME edit. **WO-1062** = THE DUNGEON
 > PORTAL IS A FLAT PLANE and reads differently from every angle - owner shot the SAME Stoneback Tier-2
 > portal from NE/NW/SW and got three different objects. CAUSE IS IN THE CODE'S OWN COMMENT: the owner
@@ -2391,5 +2400,4 @@ the old 414 file is marked SUPERSEDED. Notion's 414 stands.
 **Hard rules:** ONE agent in Lane 1. `GameState.cs`/`SaveSchema` field-adds (Lanes 5/6/7/11/301/339) additive,
 one-at-a-time. **Do early:** 164 (zone), wallet/economy merge, 290 (QuestService), 339 (SaveSchema anchor) â€” many lanes depend on them.
 Overlaps: 108 (5/11), 282 (10/11), 80 (7/8), 111 (0/9), 295 (3/6), 340 (7/301).
-
 
