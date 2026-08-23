@@ -129,7 +129,15 @@
 > fine as history. A copied number is the bug **even when it was right the day it was written** -
 > that is exactly how the retired 860-899 UI block kept re-seeding collisions from CLAUDE.md sec.2.
 
-> ## ⚠ RECONCILED 2026-08-23 (CLI): main line next free = **1162**.
+> ## ⚠ RECONCILED 2026-08-23 (CLI): main line next free = **1163**.
+> *(CLI seat minted **WO-1162** and bumped 1162 -> 1163 in this SAME edit. **1162** = the Codex
+> handoff: Night Market responsive layout proof + REPLACE the `low_24h` pricing policy with a
+> short-lived current/executable server quote. CLI-VERIFIED at source before handoff - the
+> `low_24h` claim is TRUE (`api/_lib/purchase-catalog.js:113,235`) and `ceil()` at `:196`
+> compounds it in the same direction, which Codex missed. ⛔ Pricing policy is an OWNER RULING,
+> flagged as owed in the code itself - and it is LIVE MONEY as of WO-1159 today.)*
+>
+> ### superseded: RECONCILED 2026-08-23 (CLI): main line next free = **1162**.
 > *(CLI seat minted **WO-1161** and bumped 1161 -> 1162 in this SAME edit. **1161** = the structure
 > ROLE table - an OPEN, data-authored `role` on every catalog row, resolved through
 > `StructureRoles.By[...]`, so ids stay frozen save keys and adding a building needs NO code.
