@@ -47,6 +47,15 @@ namespace DeNelle.Editor
             "Tower_Wooden_Watchtower_L3",    // FAILS - aspect 0.58
             "Ballista_L1",                   // FAILS - native 90, lying down
             "Ballista_L2",                   // FAILS
+            // Owner-reported 2026-08-22, reproduced on a fresh HEAD build: the jeweler
+            // renders UPSIDE DOWN on default-village load (stone base up, roof into the
+            // ground) while the runtime seats it at euler=(90,0,0) with uniform scale.
+            // armorer/barracks are the CONTROLS: same Tripo family, same
+            // bakeAxisConversion:1, and both look correct - so whatever is wrong is
+            // specific to this mesh, not to the flag.
+            "jeweler",
+            "armorer",
+            "barracks",
         };
 
         [MenuItem("Defenders/Art/Capture Structure Poses")]
