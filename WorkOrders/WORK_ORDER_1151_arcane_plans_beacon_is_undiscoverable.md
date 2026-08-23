@@ -1,4 +1,4 @@
-**Status:** READY TO IMPLEMENT
+**Status:** FIXED 2026-08-23 (Codex, 51de6bd31) — once-ever persisted 2D Echo dialogue when the beacon becomes visible; no Echo actor or VFX changes. ⚠ NO DEVICE SCREENSHOTS YET. AWAITING OWNER FELT-TEST.
 
 # WORK ORDER 1151 — The Arcane Tower plans beacon is perfect, and nobody knows what it is
 

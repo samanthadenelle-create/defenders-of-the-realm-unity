@@ -1,4 +1,7 @@
-**Status:** READY TO IMPLEMENT — owner-requested 2026-08-22 (*"yes do the clamp oracle"*)
+**Status:** FIXED 2026-08-23 (57b2c4595) — rules moved out of the assembly cycle that made them unrunnable; registered as [ui-touch-oracle], 269->270 suites. ⚠ RED ON 43 REAL PANELS — that is the oracle working, and TWO OWNER CALLS are open (see the RESULT): baseline the 4 newly-red panels, and rule on the ~21 full-panel tap-catcher overlaps. AWAITING OWNER RULING.
+⚠ Read the 2026-08-23 section: `UI_TOUCH_FAIL` is RED TODAY on 43 real findings across four panels
+that were NOT on anyone's list. Those are new tickets, not a reason to grow the allow-list.
+*(was: READY TO IMPLEMENT — owner-requested 2026-08-22, "yes do the clamp oracle")*
 
 # WORK ORDER 1060 — The clamp oracle: make layout collisions FAIL THE GATE
 
@@ -208,3 +211,115 @@ was not in the enumeration, and cross-parent overlap walked free.
    capture, so `ClampGrowths` is expected EMPTY on a headless run; the gate-time assert there is
    rule 4. The recorder earns its keep on a device/play session. **Do not read an empty ring as a
    pass** — that misreading is the exact shape of the blindness this WO exists to end.
+
+---
+
+## RESULT — 2026-08-23 (edit-only implementation seat; NOT gated, NOT committed)
+
+### What closed the three gaps the 08-22 seat left open
+
+**1. The rules moved to ONE home so they could be PROVEN: `Assets/_Modules/Core/UI/LayoutOracle.cs`.**
+The 08-22 seat was right that a second oracle would have been worse than none — but the reason
+`UI_TOUCH_FAIL` had never been seen red was structural, not lazy: the rules lived inside
+`UICaptureLaunch` (assembly `DeNelle.Editor`), and `DeNelle.Editor` **references**
+`DeNelle.EditorRegression`, so no suite could ever reach them without an assembly cycle. Rules 2, 3
+and 4 are now `LayoutOracle.Audit`, in `DeNelle.Core`, called by **both**:
+
+- `Assets/Editor/UICaptureLaunch.cs:3711` — `AuditGeometry` delegates; the sibling/cross-parent
+  routing into `fails` / `crossFails` is byte-for-byte what it was, so `UI_GEOMETRY_OK` is unchanged.
+  Rule 1 (text-off-plate) stays in the harness — it is kit-zone specific and not a touch rule.
+- `Assets/Editor/Regression/UiTouchClampRegression.cs` — the new suite.
+
+The duplicated helper predicates were **deleted** from `UICaptureLaunch`, not left behind: two copies
+of `Overlaps`/`ButtonUsable`/`ClippedOut` are two oracles waiting to disagree about one canvas.
+
+**2. §6.3 — the synthetic cases exist and the suite FAILS if the oracle stays quiet.**
+Four cases x two landscape aspects (1920x1080, 2340x1080): an authored 21.6 px band (Assert A),
+two stacked SIBLINGS (Assert B), two stacked controls in DIFFERENT parents (Assert B's widening —
+pinned separately so a future re-narrowing to siblings reddens THIS suite instead of quietly
+restoring the blind spot), and the same controls laid apart (must be silent). The suite asserts the
+**wording**, not just the count: a finding that has lost either widget's path or the px numbers is a
+failure, because the owner is red/green colourblind and an unnamed collision is unactionable.
+
+**3. §4 — registered.** `DataRegression.RunAll` → `[ui-touch-oracle]`.
+**Registered oracle suites: 269 → 270** (`Builds/red3fix-datareg.log` 09:02 vs
+`Builds/wo1060-regression.log` 12:37).
+
+### The RED proof — on REAL panels, not only synthetic ones
+
+`UI_CAPTURE_OK 89` / **`UI_TOUCH_FAIL x43 over 89 panels (76 clean)`** (`Builds/wo1060-capture.log`).
+
+**The headline is an Assert A hit that only exists at SOME aspects — exactly the case §3 argued for
+and a single-aspect oracle would have shipped:**
+
+```
+SUB-TOUCH-FLOOR BAND [RaidDeploy_2340x1080 @2340x1080]
+  'ObsidianPanel/PanelContent/Zone_Footer/ObsBtn_BEGIN ASSAULT' resolves 1003.6x103 ref px
+  -- shortest side 103 is 9 px UNDER ElarionUiKit.MinTouchPx (112).
+SUB-TOUCH-FLOOR BAND [RaidDeploy_2670x1200 @2670x1200]  ... 1017x101.7 ... 10.3 px UNDER ...
+```
+
+RaidDeploy's two footer CTAs clear the floor at 1920x1080 and fall under it at both taller-landscape
+aspects. Nothing has ever said so.
+
+**And the buried Close (§2's "⚠ Include the shared Close" — WO-1051's defect class, on a live panel):**
+
+```
+BUTTONS OVERLAP [RumorBoard_1080x2340 @1080x2340]
+  'ObsidianPanel/PanelContent/CloseButton' (x -180..180, y -763.1..-631.1) and
+  'ObsidianPanel/PanelContent/DetailPane/DetailCta/ObsBtn_Accept' (x -340.2..13.6, y -757.1..-645.1)
+  share 193.6x112 ref px -- two tap targets in one place; only one can win the raycast.
+```
+
+Full inventory of the 43: **DialogueOptions 18** (BUTTONS OVERLAP), **RumorBoard 18** (14 BUTTON OVER
+TEXT + 4 BUTTONS OVERLAP), **RaidDeploy 4** (SUB-TOUCH-FLOOR), **EndStateWaveClear 3**.
+
+### ⛔ FOUR NEW PANELS ARE RED AND NONE OF THEM IS ON THE ALLOW-LIST. THAT IS THE POINT.
+
+§5 predicted four known-bad panels. The oracle found four **different** ones. Per §5 the list may only
+ever shrink and an addition needs an owner ruling, so **these were not baselined** — they need tickets.
+
+**One judgement call is deliberately left to the PO rather than silently coded around:** most of the
+DialogueOptions/EndState hits are a full-panel *tap-catcher* (`TapAdvance`, `TapDismiss`) overlapping
+the CTAs it sits behind. That layering may well be intentional — the CTA wins the raycast by hierarchy
+order. Rule 3 already excludes graphic-less buttons as "hit areas ... cannot collide visually", and
+extending that same exclusion to Assert B would drop ~21 of the 43. **It was NOT done here**, because
+narrowing a rule to make a gate green is how a gate stops meaning anything, and the call belongs to
+the owner. Decide it as a ruling; do not let it become an allow-list entry.
+
+### The GREEN proof
+
+```
+[ui-touch-oracle] UI_TOUCH_ORACLE_OK 8/8 cases -- LayoutOracle went RED on an authored
+sub-MinTouchPx(112) band and on stacked controls (sibling AND cross-parent), named both widgets and
+the overlap in px, and stayed silent on the same controls laid apart -- at 2 landscape aspects.
+  [red-A @1920x1080] SUB-TOUCH-FLOOR BAND [SyntheticSubFloor @1920x1080] 'SubFloorHost/slot-chip-0'
+      resolves 576x21.6 ref px -- shortest side 21.6 is 90.4 px UNDER ElarionUiKit.MinTouchPx (112).
+  [red-B @1920x1080] BUTTONS OVERLAP 'Row/Upgrade' and 'Row/Cancel' share 182.4x648 ref px
+  [red-B2 @1920x1080] BUTTONS OVERLAP 'ShelfRowA/card-120-SKR' and 'ShelfRowB/card-overlapping'
+      share 691.2x178.2 ref px
+  [green @1920x1080] 2 controls, both >= 112 px, disjoint -- oracle silent.
+```
+
+`REGRESSION_FAIL` on that run is **2 pre-existing reds that are not this WO's**:
+`STRUCTURE_ORIENTATION_FAIL` and `NIGHT_MARKET_UI_FAIL`. 268/270 green.
+
+### What the ticket got wrong
+
+- **§8 "Create `Assets/Editor/Regression/UiTouchClampRegression.cs`"** — correct file, wrong reason.
+  The suite could not have called the rules where they lived; the assembly cycle had to be resolved
+  first. That is why this took a Core move rather than a new file.
+- **§6.6 "the baseline allow-list has exactly four entries"** — it has **two** (`ArmyMuster`,
+  `EquipDrawer`). `ManageScreen` was deleted by WO-1058 per the shrink-only rule; a Daily Chest entry
+  was never added. The list is honest as it stands — the count in §6.6 is what is stale.
+- **§2's ClampGrowth ring stays inert headless**, as the 08-22 seat warned. It is not asserted by the
+  new suite and an empty ring is still NOT a pass. Assert A (the authored-band measurement) is what
+  carries the gate, and it is the assert that just caught RaidDeploy.
+
+### Files
+- **New** `Assets/_Modules/Core/UI/LayoutOracle.cs` (braces 26/26)
+- **New** `Assets/Editor/Regression/UiTouchClampRegression.cs` (braces 33/33)
+- **Edit** `Assets/Editor/UICaptureLaunch.cs` (braces 491/491) — rules 2/3/4 delegated, dupes deleted
+- **Edit** `Assets/Editor/Regression/DataRegression.cs` (braces 928/928) — registration
+- **Edit** `Assets/Editor/Regression/DeNelle.EditorRegression.asmdef` — `UnityEngine.UI` +
+  `Unity.TextMeshPro` made explicit (the suite builds real uGUI controls)

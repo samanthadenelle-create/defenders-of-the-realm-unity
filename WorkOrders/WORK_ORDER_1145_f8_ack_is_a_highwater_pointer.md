@@ -1,4 +1,4 @@
-**Status:** READY TO IMPLEMENT - HIGH (this harness exists so the owner is never the bug detector)
+**Status:** FIXED 2026-08-23 (57b2c4595) — the PRE-ACK hole closed: a non-pending seq is now REFUSED, out-of-order acks print OUT OF ORDER. F8_SELFTEST_OK 39/39. FELT-TEST: press F8 twice quickly — BOTH must reach the seat. AWAITING OWNER CLOSE.
 
 # WORK ORDER 1145 - f8-ack is a high-water pointer, so acking the newest swallows older captures
 
@@ -51,10 +51,10 @@ script does exactly what the doc forbids the seat from doing.
 
 ## ACCEPTANCE
 
-- [ ] Acking a NEWER seq leaves older un-acked captures pending, and `f8-check-inbox` still surfaces
+- [x] Acking a NEWER seq leaves older un-acked captures pending, and `f8-check-inbox` still surfaces
       the oldest
-- [ ] A no-arg ack takes the oldest
-- [ ] Regression drives the exact 3582/3583 case: two queued captures, ack the newer, assert the
+- [x] A no-arg ack takes the oldest
+- [x] Regression drives the exact 3582/3583 case: two queued captures, ack the newer, assert the
       older is STILL pending. ⚠ MEASURE, do not restate - drive the real scripts against a temp
       inbox; do not re-implement their arithmetic in the test
-- [ ] The 2026-08-10 shape is covered too: ack 2306 with 2307/2308 queued, assert both survive
+- [x] The 2026-08-10 shape is covered too: ack 2306 with 2307/2308 queued, assert both survive

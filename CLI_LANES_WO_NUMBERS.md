@@ -129,7 +129,16 @@
 > fine as history. A copied number is the bug **even when it was right the day it was written** -
 > that is exactly how the retired 860-899 UI block kept re-seeding collisions from CLAUDE.md sec.2.
 
-> ## ⚠ RECONCILED 2026-08-23 (CLI): main line next free = **1155**.
+> ## ⚠ RECONCILED 2026-08-23 (CLI): main line next free = **1157**.
+> *(CLI seat minted **WO-1156** and bumped 1156 -> 1157 in this SAME edit. **WO-1156** = portal
+> foliage clearance (split from WO-1062 §4) + whether the threshold aura inherits the same wrong
+> axis WO-1062 just corrected.)*
+>
+> ### superseded: RECONCILED 2026-08-23 (CLI): main line next free = **1156**.
+> *(CLI seat minted **WO-1155** and bumped 1155 -> 1156 in this SAME edit. **WO-1155** = a
+> projectile torn down in flight strands its VFX loop slot forever -- found by the WO-1057 lane.)*
+>
+> ### superseded: RECONCILED 2026-08-23 (CLI): main line next free = **1155**.
 > *(CLI seat minted **WO-1154** and bumped 1154 -> 1155 in this SAME edit. **WO-1154** = elemental
 > affinity offered as a Cathedral of Magic PERK earned at MAX tower level -- owner ask 2026-08-23,
 > child of WO-907.)*

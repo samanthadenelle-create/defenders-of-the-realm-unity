@@ -1,4 +1,4 @@
-**Status:** READY TO IMPLEMENT
+**Status:** FIXED 2026-08-23 (Codex, 51de6bd31) — five weekly tabs, readable day cards, milestone/state words, obsidian modal, contained Close. ⚠ NO DEVICE SCREENSHOTS YET — this is a LOOK, so nothing is proven until seen. AWAITING OWNER FELT-TEST.
 
 # WORK ORDER 1150 — The Monthly Ledger panel is unreadable, unframed, and colour-only
 

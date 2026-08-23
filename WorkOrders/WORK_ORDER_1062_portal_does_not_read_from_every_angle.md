@@ -1,4 +1,4 @@
-**Status:** READY TO IMPLEMENT — fully settled; the owner ruled §2 on 2026-08-22 (two VFX facing outwards)
+**Status:** FIXED 2026-08-23 (57b2c4595) — the doorway normal is Root.right, not Root.forward; the previously-shipped fix aimed both rune planes at the arch’s stone side. 24 captures, magenta 0. §4 split to WO-1156. FELT-TEST: walk up to a dungeon portal from several angles. AWAITING OWNER CLOSE.
 
 # WORK ORDER 1062 — The dungeon portal is a flat plane: it reads differently from every angle
 
