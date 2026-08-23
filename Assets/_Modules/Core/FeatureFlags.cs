@@ -673,7 +673,7 @@ namespace DeNelle.Core
         //   3. verify a real signed transaction settles on-chain
         //   4. THEN this default, with the WO-931 seam refusal left exactly as it is.
         // Flipping this one first only ever produces a Buy button in front of free goods.
-#if STORE_RAIL_LOCAL_TEST
+#if STORE_RAIL_LOCAL_TEST || MAINNET_CANARY_TEST
         // An explicit owner-test build must win over a stale production PlayerPrefs value.
         // The symbol is command-line-only and is never present in a distributed build.
         public static bool RealmStorePurchase => true;

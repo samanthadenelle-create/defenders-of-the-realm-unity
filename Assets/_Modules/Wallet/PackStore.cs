@@ -1489,6 +1489,18 @@ namespace DeNelle.Wallet
                 return PaymentResult.Failure(string.Empty, currency, "Pack is null.");
             }
 
+#if MAINNET_CANARY_TEST
+            bool isMainnetCanary = string.Equals(pack.Sku, PurchaseGate.MainnetCanarySku,
+                StringComparison.Ordinal);
+            if (isMainnetCanary)
+            {
+                // MWA authorization is chain-scoped. Reconnect after selecting Mainnet instead of
+                // reusing an earlier Devnet association for this real-value canary.
+                if (_wallet.IsConnected) await _wallet.Disconnect();
+                _wallet.SetNetwork(WalletNetwork.Mainnet);
+            }
+#endif
+
             // ⛔ THE GATE, ON THE CHARGE PATH ITSELF (WO-1121). Defense-in-depth is the weak reading
             // of this check; the strong one is that THIS is where the rule is actually enforced. The
             // CTA builder calls the same PurchaseGate.CanBuy(pack, ...) and can only ever REMOVE a
@@ -1541,6 +1553,17 @@ namespace DeNelle.Wallet
                         return PaymentResult.Failure(pack.Sku, currency, "Wallet not connected.");
                     }
                 }
+
+#if MAINNET_CANARY_TEST
+                if (isMainnetCanary &&
+                    !string.Equals(_wallet.Account.Address, MainnetCanaryCatalog.OwnerWallet,
+                        StringComparison.Ordinal))
+                {
+                    const string ownerOnly = "Mainnet Verification is restricted to the owner test wallet.";
+                    SetCommerceState(CommerceState.Failed, ownerOnly);
+                    return PaymentResult.Failure(pack.Sku, currency, ownerOnly);
+                }
+#endif
 
 #if STORE_RAIL_LOCAL_TEST
                 // One-time recovery of the owner's first successful Devnet canary. The transfer

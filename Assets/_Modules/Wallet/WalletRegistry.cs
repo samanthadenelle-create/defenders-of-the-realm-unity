@@ -71,6 +71,8 @@ namespace DeNelle.Wallet
         [JsonProperty("rewardsDistributor")] public WalletEntry RewardsDistributor;
         /// <summary>The devnet pack-purchase recipient (§3 — dev/staging wallet).</summary>
         [JsonProperty("devnetPurchaseRecipient")] public WalletEntry DevnetPurchaseRecipient;
+        /// <summary>Optional Mainnet revenue/canary recipient. No fallback: absent means refuse.</summary>
+        [JsonProperty("mainnetPurchaseRecipient")] public WalletEntry MainnetPurchaseRecipient;
     }
 
     /// <summary>
@@ -104,6 +106,12 @@ namespace DeNelle.Wallet
             get { EnsureLoaded(); return _data.DevnetPurchaseRecipient; }
         }
 
+        /// <summary>The optional owner-approved Mainnet purchase recipient.</summary>
+        public static WalletEntry MainnetPurchaseRecipient
+        {
+            get { EnsureLoaded(); return _data.MainnetPurchaseRecipient; }
+        }
+
         /// <summary>The public Rewards Distributor base58 address (convenience).</summary>
         public static string RewardsDistributorAddress
         {
@@ -121,6 +129,19 @@ namespace DeNelle.Wallet
             {
                 var e = DevnetPurchaseRecipient;
                 return e != null && e.IsValid ? e.Address : FallbackDevnetRecipient;
+            }
+        }
+
+        /// <summary>
+        /// Mainnet payment recipient. Deliberately empty until an owner-approved revenue wallet is
+        /// authored in both canonical mirrors; never falls back to a devnet or rewards wallet.
+        /// </summary>
+        public static string MainnetPurchaseRecipientAddress
+        {
+            get
+            {
+                var e = MainnetPurchaseRecipient;
+                return e != null && e.IsValid ? e.Address : string.Empty;
             }
         }
 

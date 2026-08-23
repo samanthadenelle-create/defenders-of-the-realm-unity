@@ -32,6 +32,8 @@ namespace DeNelle.Editor.Regression
                 string solana = Read(root + "/_Modules/Wallet/SolanaWalletProvider.cs", failures);
                 string scenario = Read(root + "/_Modules/Wallet/TargetedLocalAssociationScenario.cs", failures);
                 string featureFlags = Read(root + "/_Modules/Core/FeatureFlags.cs", failures);
+                string endpoints = Read(root + "/_Modules/Wallet/WalletEndpoints.cs", failures);
+                string mainnetCanary = Read(root + "/_Modules/Wallet/MainnetCanaryCatalog.cs", failures);
                 string api = Read(Directory.GetParent(Application.dataPath).FullName.Replace('\\', '/') +
                                   "/api/purchases/verify.js", failures);
                 string catalog = Read(Directory.GetParent(Application.dataPath).FullName.Replace('\\', '/') +
@@ -112,6 +114,25 @@ namespace DeNelle.Editor.Regression
                 Require(api, "contract.mint", "backend does not pin the Devnet SKR mint", failures);
                 Require(api, "tokenAmount.decimals", "backend does not pin mint decimals", failures);
 
+                // MON002 independent hard pins. These expectations are deliberately not derived
+                // from the server catalog they police.
+                Require(catalog, "MAINNET_CANARY_SKU = 'mainnet-wood-canary'",
+                    "Mainnet canary SKU drifted", failures);
+                Require(catalog, "amountBaseUnits: 1_000_000, decimals: 6",
+                    "Mainnet canary is not exactly 1 SKR at 6 decimals", failures);
+                Require(catalog, "MAINNET_CANARY_ENABLED", "Mainnet server canary has no fail-closed switch", failures);
+                Require(catalog, "MAINNET_CANARY_OWNER", "Mainnet server canary has no owner allowlist", failures);
+                Require(api, "walletAllowed(network, sku, playerId)",
+                    "Mainnet verifier does not enforce the owner allowlist", failures);
+                Require(endpoints, "SKRbvo6Gf7GondiT3BbTfuRDPqLWei4j2Qy2NPGZhW3",
+                    "client does not pin the official Mainnet SKR mint", failures);
+                Require(mainnetCanary, "internal const double SkrPrice = 1d",
+                    "client Mainnet canary price is not exactly 1 SKR", failures);
+                Require(mainnetCanary, "internal const int WoodReward = 1",
+                    "client Mainnet canary reward is not exactly 1 wood", failures);
+                Require(mainnetCanary, "#if MAINNET_CANARY_TEST",
+                    "Mainnet canary product is not compiled behind its isolated symbol", failures);
+
                 Require(featureFlags, "RealmStorePurchase => Get(\"realmstorepurchase\", defaultOn: false)",
                     "public purchase flag no longer defaults OFF", failures);
                 Require(featureFlags, "RewardedAdSkip => Get(\"rewardedadskip\", defaultOn: false)",
@@ -153,9 +174,14 @@ namespace DeNelle.Editor.Regression
                     return;
                 }
 
-                MatchCollection serverRows = Regex.Matches(server, @"Object\.freeze\(\{\s*currency:",
-                    RegexOptions.CultureInvariant);
-                if (serverRows.Count != 1)
+                int devnetStart = server.IndexOf("const DEVNET_PACKS", StringComparison.Ordinal);
+                int mainnetStart = server.IndexOf("const MAINNET_PACKS", StringComparison.Ordinal);
+                string devnetBlock = devnetStart >= 0 && mainnetStart > devnetStart
+                    ? server.Substring(devnetStart, mainnetStart - devnetStart)
+                    : string.Empty;
+                MatchCollection serverRows = Regex.Matches(devnetBlock,
+                    @"Object\.freeze\(\{\s*currency:", RegexOptions.CultureInvariant);
+                if (string.IsNullOrEmpty(devnetBlock) || serverRows.Count != 1)
                     failures.Add("missing or extra Devnet server canary");
 
                 string sku = canary.Groups[1].Value;

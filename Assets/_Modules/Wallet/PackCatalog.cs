@@ -569,6 +569,11 @@ namespace DeNelle.Wallet
         {
             if (_data != null) return;
             _data = LoadCatalog();
+#if MAINNET_CANARY_TEST
+            // Isolated from canonical production data. The compile symbol is forwarded only to an
+            // owner sideload; clean builds cannot load, find, render, or grant this SKU.
+            _data.Packs.Add(MainnetCanaryCatalog.Create());
+#endif
             EnforceCovenant(_data);
         }
 

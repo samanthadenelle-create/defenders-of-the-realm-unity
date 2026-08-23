@@ -67,6 +67,7 @@ namespace DeNelle.Wallet
         /// reject after the player paid. Expand client and server allowlists in the same reviewed WO.
         /// </summary>
         public const string DevnetCanarySku = "hearth-spark";
+        public const string MainnetCanarySku = "mainnet-wood-canary";
         private const string GrantedPrefix = "purchase.granted.";
         private const string GrantedIndex = "purchase.granted.index";
 
@@ -187,6 +188,19 @@ namespace DeNelle.Wallet
                 return false;
             }
 
+#if MAINNET_CANARY_TEST
+            if (!string.Equals(pack.Sku, MainnetCanarySku, StringComparison.Ordinal))
+            {
+                reason = "This owner test build can purchase only Mainnet Verification.";
+                return false;
+            }
+            if (string.IsNullOrEmpty(WalletRegistry.MainnetPurchaseRecipientAddress))
+            {
+                reason = "Mainnet verification is waiting for the approved treasury address.";
+                FlowTrace.Fail("Store", "MON002 refused before wallet approval: no owner-approved Mainnet recipient is configured.");
+                return false;
+            }
+#else
             if (WalletService.DefaultNetwork == WalletNetwork.Devnet &&
                 !string.Equals(pack.Sku, DevnetCanarySku, StringComparison.Ordinal))
             {
@@ -196,6 +210,7 @@ namespace DeNelle.Wallet
                     $"authorizes only '{DevnetCanarySku}' on devnet.");
                 return false;
             }
+#endif
 
             double usd = pack.Pricing != null ? pack.Pricing.Usd : 0d;
             if (RequiresWallet(usd) && !HasDurableIdentity)

@@ -107,6 +107,43 @@ namespace DeNelle.Editor.Regression
         /// <summary>A wider window for methods whose banner comment precedes the body.</summary>
         private const int WideWindowChars = 1600;
 
+        /// <summary>
+        /// The body of the method whose signature match starts at <paramref name="from"/>, found by
+        /// BRACE MATCHING rather than a character window.
+        ///
+        /// <para>⛔ WHY THIS EXISTS (2026-08-22): the checks below used to slice a fixed
+        /// <see cref="WideWindowChars"/> window after the signature. That makes an assertion's
+        /// coverage a function of SOURCE FORMATTING - the least reliable signal available. Adding one
+        /// capture entry to <c>RunCaptureHeadless</c> pushed <c>ProveGeometryMoves()</c> (still
+        /// present, 34 lines below the signature) past the 1600-char edge, and the suite reported it
+        /// as "gone ... the most convincing kind of dead code" while it was sitting right there.
+        /// A false RED is cheaper than a false green but it still costs a debugging cycle, and the
+        /// same window would eventually hide a real deletion behind a long comment.</para>
+        ///
+        /// <para>This is the identical defect the hollow-pass ratchet was widened to fix on the same
+        /// day (its 4-line window missed 5 of 6 real sites). Match STRUCTURE, never proximity.</para>
+        ///
+        /// <para>Returns the whole remainder if the braces do not balance, so a malformed file
+        /// degrades to the old over-broad behaviour instead of silently asserting nothing.</para>
+        /// </summary>
+        private static string MethodBody(string src, int from)
+        {
+            int open = src.IndexOf('{', from);
+            if (open < 0) return src.Substring(from);
+
+            int depth = 0;
+            for (int i = open; i < src.Length; i++)
+            {
+                if (src[i] == '{') depth++;
+                else if (src[i] == '}')
+                {
+                    depth--;
+                    if (depth == 0) return src.Substring(open, i - open + 1);
+                }
+            }
+            return src.Substring(open);
+        }
+
         /// <summary>Standalone batch entry - prints the distinct marker a gate can grep.</summary>
         public static void RunAll()
         {
@@ -372,8 +409,7 @@ namespace DeNelle.Editor.Regression
 
             var call = Regex.Match(src, @"public\s+static\s+void\s+RunCaptureHeadless\s*\(\s*\)");
             if (!call.Success ||
-                src.Substring(call.Index, Math.Min(WideWindowChars, src.Length - call.Index))
-                   .IndexOf("ProveGeometryMoves", StringComparison.Ordinal) < 0)
+                MethodBody(src, call.Index).IndexOf("ProveGeometryMoves", StringComparison.Ordinal) < 0)
                 failures.Add("[aspect-divergence] RunCaptureHeadless no longer runs ProveGeometryMoves, " +
                              "so the proof exists but never executes - the most convincing kind of dead code.");
             else
@@ -383,7 +419,7 @@ namespace DeNelle.Editor.Regression
             // stops tracking the matrix the moment a target is added or retired.
             var sig = Regex.Match(src, @"private\s+static\s+void\s+ProveGeometryMoves\s*\(\s*\)");
             if (sig.Success &&
-                src.Substring(sig.Index, Math.Min(WideWindowChars, src.Length - sig.Index))
+                MethodBody(src, sig.Index)
                    .IndexOf("LandscapeTargets", StringComparison.Ordinal) < 0)
                 failures.Add("[aspect-divergence] ProveGeometryMoves no longer derives its two aspects " +
                              "from LandscapeTargets, so the proof can drift away from the matrix the " +

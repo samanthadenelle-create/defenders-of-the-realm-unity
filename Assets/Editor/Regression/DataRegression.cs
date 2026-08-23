@@ -1135,6 +1135,7 @@ namespace DeNelle.Editor
             //     the browsable shelf and the same-day "no glimmer in any pack" ruling. ---
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "buy-gate suite", () => { if (!DeNelle.Editor.Regression.BuyGateAndPriceLadderRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[buy-gate] " + r); });
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "monetization-activation suite", () => { if (!DeNelle.Editor.Regression.MonetizationActivationRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[monetization-activation] " + r); });
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "mainnet-canary suite", () => { if (!DeNelle.Editor.Regression.MainnetCanaryRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[mainnet-canary] " + r); });
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "store-commerce-state suite", () => { if (!DeNelle.Editor.Regression.StoreCommerceStateRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[store-commerce-state] " + r); });
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "structure-orientation suite", () => { if (!DeNelle.Editor.StructureOrientationOracle.Run(out var r)) failures.Add(r); else log.AppendLine("[structure-orientation] " + r); });
             // Registered 2026-08-22 in the same breath as the marker failure that caught it: this

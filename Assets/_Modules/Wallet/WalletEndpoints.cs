@@ -53,12 +53,13 @@ namespace DeNelle.Wallet
         // Left empty so an SKR transfer fails loudly instead of sending wrongly.
         public const string SkrMintDevnet = "3BwWSAUZmyngXDSZiCawEnP7iLgY5ANNopBDz94AB77N";
         // SKR mainnet mint — owner-gated; not the agent's to provision.
-        public const string SkrMintMainnet = "";
+        public const string SkrMintMainnet = "SKRbvo6Gf7GondiT3BbTfuRDPqLWei4j2Qy2NPGZhW3";
 
         // Decimals — SOL is 9 (lamports); USDC and SKR are 6 by SPL convention.
         public const int SolDecimals = 9;
         public const int UsdcDecimals = 6;
-        public const int SkrDecimals = 9;
+        public const int SkrDecimalsDevnet = 9;
+        public const int SkrDecimalsMainnet = 6;
 
         /// <summary>The HTTP RPC URL for a network.</summary>
         public static string RpcUrl(WalletNetwork network)
@@ -88,6 +89,20 @@ namespace DeNelle.Wallet
             => network == WalletNetwork.Mainnet ? SkrMintMainnet : SkrMintDevnet;
 
         /// <summary>
+        /// SKR decimals for the given network. ⛔ THERE IS NO NETWORK-AGNOSTIC ANSWER, which is why
+        /// the old flat <c>SkrDecimals</c> constant is gone and this takes a network.
+        ///
+        /// <para>The two mints genuinely differ: our DEVNET TEST mint is 9 decimals, Solana Mobile's
+        /// real MAINNET SKR is 6. Reading one for the other is a 1000x error on a real transfer -
+        /// on 2026-08-22 the mainnet canary was authored at 1_000_000_000 base units with decimals 9,
+        /// which against the 6-decimal mint is 1,000 SKR on a row whose whole purpose is to move
+        /// exactly 1. And the backend cannot save it: /verify runs AFTER the transfer settles, so the
+        /// mismatch fails with the money already gone.</para>
+        /// </summary>
+        public static int SkrDecimals(WalletNetwork network)
+            => network == WalletNetwork.Mainnet ? SkrDecimalsMainnet : SkrDecimalsDevnet;
+
+        /// <summary>
         /// The SPL mint for an SPL-token currency rail (USDC / SKR), or empty for
         /// native SOL (which has no mint).
         /// </summary>
@@ -102,12 +117,13 @@ namespace DeNelle.Wallet
         }
 
         /// <summary>Decimal places for a currency rail.</summary>
-        public static int DecimalsFor(CurrencyKind currency)
+        public static int DecimalsFor(CurrencyKind currency, WalletNetwork network)
         {
             switch (currency)
             {
                 case CurrencyKind.Usdc: return UsdcDecimals;
-                case CurrencyKind.Skr: return SkrDecimals;
+                case CurrencyKind.Skr: return network == WalletNetwork.Mainnet
+                    ? SkrDecimalsMainnet : SkrDecimalsDevnet;
                 default: return SolDecimals;
             }
         }
