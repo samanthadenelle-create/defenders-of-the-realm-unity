@@ -120,7 +120,7 @@ namespace DeNelle.Editor
         /// and upside-down well above. Returns 1.0 when it cannot decide, so an unreadable mesh is
         /// reported "ambiguous" and never becomes a false pass.
         /// </summary>
-        private static float TaperRatio(Transform root, Bounds b)
+        internal static float TaperRatio(Transform root, Bounds b)
         {
             var filters = root.GetComponentsInChildren<MeshFilter>(true);
             if (filters.Length == 0 || b.size.y <= 0.0001f) return 1f;

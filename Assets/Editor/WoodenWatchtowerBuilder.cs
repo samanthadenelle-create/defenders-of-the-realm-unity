@@ -276,6 +276,13 @@ namespace DeNelle.Editor
         // trap) and to prove the baked result actually stands.
         private const float UprightAspectMin = 1.2f;
 
+        // "Is this model the RIGHT WAY UP?" - the aspect above cannot answer that, because
+        // +90 and -90 produce an IDENTICAL AABB. Mesh taper can: broad base, narrow peak.
+        // JewelerPitchSolver's own verdict bands (its [PITCH] report) are < 0.80 upright,
+        // > 1.25 upside down, 1.0 = cannot decide. This builder fails only on the
+        // unambiguous upside-down band, so an untaperable mesh is reported, never failed.
+        private const float UpsideDownTaperMax = 1.25f;
+
         // -- How a level's textures are laid out -------------------------------
         private enum TexLayout
         {
@@ -309,8 +316,13 @@ namespace DeNelle.Editor
                 Layout     = layout;
             }
 
-            /// <summary>The Resources-relative path the catalog uses (no extension).</summary>
-            public string ResourcesPath =>
+            /// <summary>
+            /// The ADDRESSABLES ADDRESS the catalog resolves this level through. The string is
+            /// unchanged from when it was a Resources-relative path ("Structures/&lt;stem&gt;") and
+            /// matches the m_Address rows in the Structure_Art group - but Resources/Structures
+            /// itself is retired, so it is an address now and only an address (WO-1152).
+            /// </summary>
+            public string CatalogAddress =>
                 "Structures/" + Path.GetFileNameWithoutExtension(PrefabPath);
         }
 
@@ -1064,8 +1076,26 @@ namespace DeNelle.Editor
                 var srcModel = AssetDatabase.LoadAssetAtPath<GameObject>(spec.FbxPath);
                 if (srcModel != null)
                 {
-                    var srcChild = FindModelChild(srcModel.transform, spec.Level);
-                    if (srcChild != null) importPose = srcChild.localRotation;
+                    // THE IMPORT POSE IS THE FBX ROOT'S OWN ROTATION - there is no child to
+                    // look for (WO-1152, measured, not theorised).
+                    //
+                    // This used to call FindModelChild on the FBX ASSET ROOT, which THREW and
+                    // aborted the entire build from a read the very next lines document as
+                    // optional. It could never have succeeded: FindModelChild looks for the
+                    // wrapper+model shape, and an imported FBX is not that shape. Dumped from
+                    // the three assets:
+                    //   L1  root 'Tower_Wooden_Watchtower'    childCount=0, renderer ON THE ROOT
+                    //   L2  root 'Tower_Wooden_Watchtower_L2' childCount=9, NINE renderer children
+                    //   L3  root 'Tower_Wooden_Watchtower_L3' childCount=0, renderer ON THE ROOT
+                    // So L1/L3 hit the zero-candidate throw and L2 hit the ambiguous-candidate
+                    // throw - three assets, two different exceptions, one wrong assumption.
+                    //
+                    // The wrapper's model child is a nested PrefabInstance OF THIS FBX, so the
+                    // child's transform IS the FBX root's transform. Proven by the two levels
+                    // that were never drifted: L2's child reads 270 and its FBX root reads 270;
+                    // L3's child reads 90 and its FBX root reads 90 - exact matches. Reading the
+                    // root is therefore not a fallback, it is the correct read.
+                    importPose = srcModel.transform.localRotation;
                 }
                 if (importPose == null)
                     Debug.LogWarning(Tag + "L" + spec.Level + ": could not read the FBX import pose from '" +
@@ -1089,7 +1119,7 @@ namespace DeNelle.Editor
                     contents.transform.localRotation = Quaternion.identity;
                 }
 
-                Transform child = FindModelChild(contents.transform, spec.Level);
+                Transform child = FindModelChild(contents.transform, spec.Level, spec.PrefabPath);
 
                 Vector3 before = child.localEulerAngles;
 
@@ -1185,7 +1215,33 @@ namespace DeNelle.Editor
         /// carries the correction. Ambiguity is a hard FAIL rather than a guess: picking
         /// the wrong child would rotate part of the tower and leave the rest standing.
         /// </summary>
-        private static Transform FindModelChild(Transform root, int level)
+        private static Transform FindModelChild(Transform root, int level, string what)
+        {
+            var candidates = Candidates(root);
+
+            if (candidates.Count == 1) return candidates[0];
+
+            // REPORT THE HIERARCHY, do not assert a shape. Three asset-layer theories have
+            // already been wrong on this family (WO-1152); a dump of what is ACTUALLY there
+            // ends the guessing in one read, where "not the shape this builder authors" only
+            // ever starts a fourth theory.
+            string dump = DescribeHierarchy(root);
+
+            if (candidates.Count == 0)
+                throw new Exception("L" + level + ": '" + what + "' has NO renderer-bearing child to carry " +
+                                    "the upright correction. Actual hierarchy: " + dump +
+                                    " -- if every child reports 0 renderers the MODEL DID NOT IMPORT " +
+                                    "(check the .fbx.meta importer settings, then run " +
+                                    "DeNelle.Editor.StructureContentReimport.Run); if there are no " +
+                                    "children at all the wrapper is empty and the prefab should be " +
+                                    "deleted and rebuilt.");
+
+            throw new Exception("L" + level + ": '" + what + "' has " + candidates.Count + " renderer-bearing " +
+                                "children, so the model child is ambiguous. Refusing to rotate one of them " +
+                                "and leave the rest standing. Actual hierarchy: " + dump);
+        }
+
+        private static List<Transform> Candidates(Transform root)
         {
             var candidates = new List<Transform>();
             for (int i = 0; i < root.childCount; i++)
@@ -1193,15 +1249,33 @@ namespace DeNelle.Editor
                 var c = root.GetChild(i);
                 if (c.GetComponentInChildren<Renderer>(true) != null) candidates.Add(c);
             }
+            return candidates;
+        }
 
-            if (candidates.Count == 1) return candidates[0];
-            if (candidates.Count == 0)
-                throw new Exception("L" + level + ": the prefab has no renderer-bearing child to carry the " +
-                                    "upright correction - its structure is not the wrapper+model shape this " +
-                                    "builder authors. Delete the prefab and re-run for a clean rebuild.");
-            throw new Exception("L" + level + ": the prefab has " + candidates.Count + " renderer-bearing " +
-                                "children, so the model child is ambiguous. Refusing to rotate one of them " +
-                                "and leave the rest standing. Delete the prefab and re-run.");
+        /// <summary>childCount + per-child name and renderer count - the data that names the cause.</summary>
+        private static string DescribeHierarchy(Transform root)
+        {
+            var sb = new StringBuilder();
+            sb.Append("root '").Append(root.name).Append("' childCount=").Append(root.childCount);
+            if (root.childCount == 0)
+            {
+                sb.Append(" (EMPTY), self renderers=")
+                  .Append(root.GetComponentsInChildren<Renderer>(true).Length);
+                return sb.ToString();
+            }
+            sb.Append(" [");
+            for (int i = 0; i < root.childCount; i++)
+            {
+                var c = root.GetChild(i);
+                if (i > 0) sb.Append(", ");
+                sb.Append('\'').Append(c.name).Append("' renderers=")
+                  .Append(c.GetComponentsInChildren<Renderer>(true).Length)
+                  .Append(" meshFilters=")
+                  .Append(c.GetComponentsInChildren<MeshFilter>(true).Length)
+                  .Append(" grandChildren=").Append(c.childCount);
+            }
+            sb.Append(']');
+            return sb.ToString();
         }
 
         // =====================================================================
@@ -1222,13 +1296,22 @@ namespace DeNelle.Editor
                 throw new Exception("L" + spec.Level + ": prefab '" + spec.PrefabPath +
                                     "' would not load back after authoring.");
 
-            // The catalog loads by Resources path, not by asset path - prove THAT works.
-            var viaResources = Resources.Load<GameObject>(spec.ResourcesPath);
-            if (viaResources == null)
-                throw new Exception("L" + spec.Level + ": Resources.Load(\"" + spec.ResourcesPath +
-                                    "\") returned null even though the asset exists. The catalog " +
-                                    "resolves visuals through exactly this call, so the tower would " +
-                                    "fail to skin and StructureFactory would destroy the root.");
+            // The catalog resolves visuals by ADDRESSABLE ADDRESS, not by Resources path -
+            // prove THAT works.
+            //
+            // WO-1152: this assert used to be Resources.Load(that same string), and it was
+            // guaranteed to throw. Assets/Resources/Structures NO LONGER EXISTS - the content
+            // moved to AssetRoots.StructureContent and the ladder is served by the
+            // Structure_Art Addressables group (CLAUDE.md section 16: art is CDN-served, there
+            // is no local Resources fallback). The ADDRESS string is unchanged
+            // ("Structures/<stem>"), so only the lookup moves.
+            //
+            // Checked against the AddressableAssetSettings ENTRY rather than by
+            // Addressables.LoadAssetAsync: in an editor batchmode run with no content build the
+            // runtime load resolves through whatever catalog happens to be on disk, so a green
+            // load would prove the stale catalog, not this asset. The entry is what the next
+            // content build packs.
+            AssertAddressableEntry(spec);
 
             var probe = (GameObject)PrefabUtility.InstantiatePrefab(prefab);
             if (probe == null)
@@ -1264,6 +1347,31 @@ namespace DeNelle.Editor
                                         "reimport (see tower_arcane_spire, which needed -90 before its " +
                                         "reimport and 0 after).");
 
+                // *** AABB CANNOT PROVE ORIENTATION. *** +90 and -90 are bounds-IDENTICAL, so the
+                // aspect test above only proves the model is TALL - an upside-down tower passes it
+                // every time (F8 2026-08-21 caught exactly that on L3). The basis-vector test is no
+                // better on these Tripo meshes: at the jeweler's CORRECT pitch meshUp(forward) reads
+                // -1.00. On 2026-08-22 both signals lied and only the GEOMETRY told the truth, so the
+                // geometry is what is asserted here.
+                //
+                // Taper = mean horizontal spread in the top 20% of the bounds over the bottom 20%
+                // (JewelerPitchSolver.TaperRatio - the SINGLE authority; never copy it here). A
+                // building tapers, so upright reads well below 1 and upside-down well above.
+                // 1.0 is its explicit "cannot decide" value, which is reported, not failed.
+                float taper = JewelerPitchSolver.TaperRatio(probe.transform, b);
+                report.Append("taper(top/bottom)=")
+                      .Append(taper.ToString("0.00", CultureInfo.InvariantCulture)).Append(' ');
+                if (taper > UpsideDownTaperMax)
+                    throw new Exception("L" + spec.Level + ": the model measures TALL (aspect " +
+                                        aspect.ToString("0.00", CultureInfo.InvariantCulture) +
+                                        ") but its geometry is BROADER AT THE TOP THAN AT THE BOTTOM - " +
+                                        "taper " + taper.ToString("0.00", CultureInfo.InvariantCulture) +
+                                        " > " + UpsideDownTaperMax.ToString("0.00", CultureInfo.InvariantCulture) +
+                                        ". That is an UPSIDE-DOWN tower, which the bounds aspect can never " +
+                                        "detect (+90 and -90 are AABB-identical). Re-measure this model's " +
+                                        "pitch (DeNelle.Editor.JewelerPitchSolver) rather than trusting the " +
+                                        "aspect.");
+
                 float target = YHeightVariable * TowerHeightMul;   // 4.8 m - reported, never written
                 if (b.size.y < 0.0001f)
                     throw new Exception("L" + spec.Level + ": measured bounds height is ~0 - " +
@@ -1287,6 +1395,39 @@ namespace DeNelle.Editor
             {
                 UnityEngine.Object.DestroyImmediate(probe);
             }
+        }
+
+        /// <summary>
+        /// Proves the prefab is registered in Addressables under the address the catalog
+        /// asks for. This replaced a Resources.Load assert that could only ever throw:
+        /// Assets/Resources/Structures was retired (AssetRoots names the old location
+        /// StructureContentLegacyResources) and the ladder now ships in the Structure_Art
+        /// group. Art is CDN-served with NO local fallback (CLAUDE.md section 16), so an
+        /// unaddressed prefab is an invisible structure on the device even though the asset
+        /// sits right there in the project.
+        /// </summary>
+        private static void AssertAddressableEntry(LevelSpec spec)
+        {
+            var settings = UnityEditor.AddressableAssets.AddressableAssetSettingsDefaultObject.Settings;
+            if (settings == null)
+                throw new Exception("L" + spec.Level + ": Addressables settings are missing, so the " +
+                                    "address the catalog resolves ('" + spec.CatalogAddress + "') cannot " +
+                                    "be proven. Art is CDN-served with no Resources fallback - refusing " +
+                                    "to report a green build that may ship an invisible tower.");
+
+            string guid = AssetDatabase.AssetPathToGUID(spec.PrefabPath);
+            var entry = settings.FindAssetEntry(guid);
+            if (entry == null)
+                throw new Exception("L" + spec.Level + ": '" + spec.PrefabPath + "' is NOT an Addressables " +
+                                    "entry, so the catalog's load of '" + spec.CatalogAddress + "' would " +
+                                    "resolve nothing and StructureFactory would destroy the root. Add it " +
+                                    "to the Structure_Art group with that address.");
+
+            if (!string.Equals(entry.address, spec.CatalogAddress, StringComparison.Ordinal))
+                throw new Exception("L" + spec.Level + ": '" + spec.PrefabPath + "' is addressed '" +
+                                    entry.address + "' but the catalog asks for '" + spec.CatalogAddress +
+                                    "'. Addresses are matched by exact string, so this ships an invisible " +
+                                    "tower.");
         }
 
         // =====================================================================
@@ -1409,7 +1550,7 @@ namespace DeNelle.Editor
                 int cells45 = Mathf.Max(1, Mathf.CeilToInt(fp * Mathf.Sqrt(2f) / GridCellMetres));
                 float aspect = r.RawSize.y / Mathf.Max(0.0001f, Mathf.Max(r.RawSize.x, r.RawSize.z));
 
-                sb.AppendLine("  L" + r.Spec.Level + " " + r.Spec.ResourcesPath +
+                sb.AppendLine("  L" + r.Spec.Level + " " + r.Spec.CatalogAddress +
                               ": raw=" + Fmt(r.RawSize) +
                               " aspect(H/W)=" + aspect.ToString("0.00", CultureInfo.InvariantCulture) +
                               " fit=x" + r.FitScale.ToString("0.###", CultureInfo.InvariantCulture) +
