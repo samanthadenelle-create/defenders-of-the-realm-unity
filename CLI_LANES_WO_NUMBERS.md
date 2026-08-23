@@ -129,7 +129,12 @@
 > fine as history. A copied number is the bug **even when it was right the day it was written** -
 > that is exactly how the retired 860-899 UI block kept re-seeding collisions from CLAUDE.md sec.2.
 
-> ## ⚠ RECONCILED 2026-08-22 (CLI): main line next free = **1151**.
+> ## ⚠ RECONCILED 2026-08-22 (CLI): main line next free = **1152**.
+> *(CLI seat minted **WO-1151** and bumped 1151 -> 1152 in this SAME edit. **1151** = the ARCANE
+> TOWER PLANS BEACON IS UNDISCOVERABLE - the VFX is owner-APPROVED and untouched; the gap is that
+> nothing tells the player what the light is. Owner ruling: the Echo speaks a one-line nudge. The
+> ticket names the trap - it must be a DIALOGUE SCREEN, never a spawned Echo body, because
+> EchoWorldPresence is the single appearance owner.)*
 > *(CLI seat minted **WO-1150** and bumped 1150 -> 1151 in this SAME edit. **1150** = THE MONTHLY
 > LEDGER (season pass) PANEL IS UNREADABLE - Close clipped off the top of the screen, the Echoes
 > HUD chip drawing THROUGH the modal, the build notice truncated AND overhanging, no obsidian

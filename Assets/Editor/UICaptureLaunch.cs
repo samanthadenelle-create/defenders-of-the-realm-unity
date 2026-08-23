@@ -489,6 +489,9 @@ namespace DeNelle.Editor
             _geoMoveFailure = null;
             _geoFailures.Clear();
             _geoCanvasesChecked = 0;
+            _touchFailures.Clear();
+            _touchPanelsChecked = 0;
+            _touchPanelsClean = 0;
             _endStateFits.Clear();
             _endStateFitFailures.Clear();
             try
@@ -521,6 +524,10 @@ namespace DeNelle.Editor
                 count += CaptureBuildMenuUpgradeTower();
                 count += CaptureRumorBoard();
                 count += CaptureRealmMap();
+                count += CaptureNightMarketStore();  // UI-001 / WO-1060: THE MONEY SCREEN. Was not
+                                                     // in this list, so the geometry oracle was
+                                                     // structurally blind to the one screen that
+                                                     // takes money -- see CaptureNightMarketStore.
                 count += CaptureHeroSkillTree();
                 count += CaptureQueueRail();         // WO-864: the CoC queue card rail
                 count += CaptureBuildGhostChips();   // WO-1010 P1: chips on the ghost
@@ -547,6 +554,7 @@ namespace DeNelle.Editor
             // shared string -- that is how a 22-case pass once read as a full-suite pass).
             ReportFidelity();
             ReportGeometry();
+            ReportTouchOracle();   // WO-1060: UI_TOUCH_OK <clean>/<checked> panels
             ReportEndStateFit();
 
             // The marker a headless caller greps to confirm the run produced pixels.
@@ -1871,6 +1879,137 @@ namespace DeNelle.Editor
                 }
                 if (worstVm != null) worstVm.Dispose();
                 // Canvas FIRST so any later OnDestroy sees a dead _ui (edit-mode teardown contract).
+                if (canvasGo != null) UnityEngine.Object.DestroyImmediate(canvasGo);
+                if (hostGo != null) UnityEngine.Object.DestroyImmediate(hostGo);
+                if (tempEventSystem != null) UnityEngine.Object.DestroyImmediate(tempEventSystem);
+            }
+
+            return saved;
+        }
+
+        // =====================================================================
+        //  Panel: THE NIGHT MARKET (PackStore) -- UI-001 / WO-1060.
+        // ---------------------------------------------------------------------
+        //  ⛔ WHY THIS ENTRY EXISTS, AND WHY IT IS THE FIRST THING UI-001'S REBUILD
+        //  LANDS. The enumeration above is a HAND-WRITTEN list, and the money screen
+        //  was not on it. Everything downstream of the list -- AuditGeometry's four
+        //  numeric rules, the fidelity report, the pngs a human opens -- was therefore
+        //  STRUCTURALLY BLIND to the one screen that takes money, no matter how green
+        //  the markers read.
+        //
+        //  What that blindness cost, measured, on 2026-08-22: the owner's own device
+        //  frames showed Folk's Thanks priced "20 SKR" when the real price is 120 --
+        //  the leading digit occluded by an overlapping card -- and Ingot Crate "6 SKR"
+        //  against a real 36. A WRONG PRICE ON THE MONEY SCREEN, found by eye, days
+        //  late, after a fully green run. AuditGeometry rule 3 (BUTTON OVER TEXT) sees
+        //  exactly that occlusion, and rule 4 sees the inflated FREE-band OPEN slabs.
+        //  The oracle did not lack the ASSERTS; it lacked the CANVAS.
+        //
+        //  So this is deliberately NOT a new oracle -- adding one would leave the next
+        //  panel just as invisible. It adds the store to the set the existing oracle
+        //  already walks, which is WO-1060 section 4's rule: "a panel that can be
+        //  captured can be measured", never a hand-maintained second list.
+        //
+        //  BUILT, NOT FAKED. Awake() + EnsureBuilt() + Render() are the real build path
+        //  (kit modal -> bands -> spotlight -> trust strip), driven per target size by
+        //  ForEachTarget so the geometry measured is the geometry that resolution really
+        //  produces. Awake() constructs a WalletService and a PackStoreVM; with no live
+        //  GameStateService in edit mode both resolve to their empty defaults, which is
+        //  the honest first-run state -- rail closed, no wallet bound, "Coming soon" in
+        //  the CTA slot. That is one of the six required UI-001 review frames, free.
+        //
+        //  Each step is INDIVIDUALLY guarded: a store that refuses to open must log and
+        //  return 0, never throw the whole capture run away (the raid-screen contract).
+        // =====================================================================
+        private static int CaptureNightMarketStore()
+        {
+            return ForEachTarget("NightMarket", CaptureNightMarketStoreOnce);
+        }
+
+        private static int CaptureNightMarketStoreOnce(CaptureTarget target)
+        {
+            int saved = 0;
+            GameObject tempEventSystem = null;
+            GameObject hostGo = null;
+            GameObject canvasGo = null;
+            DeNelle.Wallet.PackStore store = null;
+
+            try
+            {
+                if (UnityEngine.Object.FindAnyObjectByType<UnityEngine.EventSystems.EventSystem>() == null)
+                {
+                    tempEventSystem = new GameObject("~UICapEventSystem");
+                    tempEventSystem.AddComponent<UnityEngine.EventSystems.EventSystem>();
+                }
+
+                // WO-1060 Assert A: clear the ring so any growth recorded below is THIS panel's.
+                ElarionUiKit.ClearClampGrowths();
+
+                // Left ACTIVE (the RealmMap pattern). Edit mode does not call Awake/OnEnable on a
+                // plain MonoBehaviour, so there is no race to dodge -- and an INACTIVE host would
+                // make any StartCoroutine on the build path throw instead of building.
+                hostGo = new GameObject("~UICapNightMarket");
+                store = hostGo.AddComponent<DeNelle.Wallet.PackStore>();
+
+                // Awake() is not called on an edit-mode AddComponent -- drive it by hand, guarded,
+                // because it is the only thing that creates the VM the render path reads.
+                try { InvokePrivate(store, "Awake"); }
+                catch (Exception ae)
+                {
+                    Debug.LogWarning("[UICap-HL] Night Market Awake threw (continuing to build): " + ae.Message);
+                }
+
+                InvokePrivate(store, "EnsureBuilt");
+
+                var modal = GetPrivateFieldValue(store, "_modal") as ElarionUiKit.ObsidianModal;
+                canvasGo = modal != null ? modal.canvas : null;
+                if (canvasGo == null)
+                {
+                    Debug.LogWarning("[UICap-HL] PackStore._modal.canvas null after EnsureBuilt -- " +
+                                     "Night Market skipped (the store cannot draw; that is itself the defect).");
+                    return 0;
+                }
+
+                canvasGo.SetActive(true);       // EnsureBuilt leaves it hidden for OnEnable to show
+
+                // Render() fills the priced bands from PackCatalog. Guarded separately: a catalogue
+                // failure must still leave the CHROME shot, because "the store opened empty" and
+                // "the store did not open" are different defects and the png must tell them apart.
+                try { store.Render(); }
+                catch (Exception re)
+                {
+                    Debug.LogWarning("[UICap-HL] Night Market Render threw (shooting the chrome anyway): " + re.Message);
+                }
+
+                if (RenderCanvasToPng(canvasGo, OutDir + "NightMarket_" + target.Tag + ".png",
+                    target.W, target.H)) saved++;
+
+                // The runtime half of Assert A. In edit mode ClampMinTouch's guard MonoBehaviour
+                // never gets a LateUpdate, so this is expected to stay empty -- the gate-time
+                // assert is AuditGeometry rule 4, which measures the AUTHORED band instead. Printed
+                // anyway so a play-mode or device run through this path is not silently discarded.
+                var growths = ElarionUiKit.ClampGrowths;
+                for (int i = 0; i < growths.Count; i++)
+                    Debug.LogError("[touch-oracle] FAIL NightMarket@" + target.Tag + " " + growths[i]);
+            }
+            catch (Exception e)
+            {
+                Debug.LogError("[UICap-HL] night market capture threw: " + e);
+            }
+            finally
+            {
+                // Awake() registered the panel with the arbiter; release it by hand -- the store's
+                // own CloseStore path uses runtime Destroy, which is edit-illegal.
+                try
+                {
+                    var handle = GetPrivateFieldValue(store, "_panelHandle") as PanelHandle;
+                    if (handle != null) PanelManager.NotifyClosed(handle);
+                }
+                catch (Exception pe)
+                {
+                    Debug.LogWarning("[UICap-HL] night market arbiter release failed (harmless): " + pe.Message);
+                }
+                // Canvas FIRST so any later OnDestroy sees a dead _modal (edit-mode teardown contract).
                 if (canvasGo != null) UnityEngine.Object.DestroyImmediate(canvasGo);
                 if (hostGo != null) UnityEngine.Object.DestroyImmediate(hostGo);
                 if (tempEventSystem != null) UnityEngine.Object.DestroyImmediate(tempEventSystem);
@@ -3518,6 +3657,7 @@ namespace DeNelle.Editor
 
             _geoCanvasesChecked++;
             var fails = new List<string>();
+            var crossFails = new List<string>();   // WO-1060 Assert B, cross-parent half (touch marker only)
             string at = " [" + label + " @" + w + "x" + h + "]";
 
             try
@@ -3552,7 +3692,35 @@ namespace DeNelle.Editor
                                   ". This is the founding-Echo-card defect: copy rendered off the black.");
                 }
 
-                // ---- RULE 2: sibling buttons must not overlap ----------------------
+                // ---- RULE 2: NO TWO INTERACTIVE RECTS MAY INTERSECT ----------------
+                //
+                //  ⚠ THIS RULE USED TO REQUIRE `a.parent == b.parent`, AND THAT NARROWING
+                //  IS WHY IT MISSED THE DEFECT IT WAS WRITTEN FOR. WO-1060 Assert B is
+                //  stated over "every pair of interactive rects sharing a canvas" for a
+                //  reason: the overlaps that actually shipped were between DIFFERENT
+                //  parents -- WO-1058's Cancel(0.885-0.98) sitting inside where
+                //  Upgrade(0.76-0.98) was, and the 2026-08-22 Night Market frames where a
+                //  card in one shelf ROW was drawn over the card in the row above it,
+                //  occluding a price's leading digit (120 SKR read as "20 SKR"). Two rows
+                //  are two parents, so the sibling test walked straight past a wrong price
+                //  on the money screen.
+                //
+                //  The ONLY pairs excluded now are ANCESTOR/DESCENDANT ones: a button
+                //  nested inside another button's subtree is a composition (a card that is
+                //  itself tappable, with a tappable child), which is a different defect
+                //  class and is not what this rule adjudicates. Everything else that
+                //  overlaps is reported, because only one of two stacked rects can win the
+                //  raycast and NOTHING tells the player which.
+                //
+                //  ⛔ WHERE THE WIDENED HALF IS REPORTED, AND WHY IT IS NOT HERE.
+                //  SIBLING overlaps stay in `fails` -- that is the pre-existing UI_GEOMETRY
+                //  gate and its behaviour is byte-for-byte unchanged. The NEW cross-parent
+                //  pairs go to `crossFails`, which feeds ONLY the WO-1060 touch marker.
+                //  WO-1060 section 5 is explicit about why: four panels are known-bad
+                //  TODAY, so a widened assert wired straight into a live gate would turn
+                //  every commit red and be suppressed within the week. Land it reporting
+                //  -only behind its own marker, let each fix remove its own allow-list
+                //  entry, and DELETE the allow-list mechanism when it empties.
                 for (int i = 0; i < buttons.Length; i++)
                 {
                     var a = buttons[i];
@@ -3560,14 +3728,18 @@ namespace DeNelle.Editor
                     for (int j = i + 1; j < buttons.Length; j++)
                     {
                         var b = buttons[j];
-                        if (b == null || a.transform.parent != b.transform.parent) continue;
+                        if (b == null) continue;
+                        if (IsDescendantOf(a.transform, b.transform)) continue;   // composition, not collision
+                        if (IsDescendantOf(b.transform, a.transform)) continue;
                         if (!ButtonUsable(b, root, canvasGo.transform, canvasArea, out Rect br)) continue;
                         if (!Overlaps(ar, br, GeoOverlapPadPx, out float ow, out float oh)) continue;
-                        fails.Add("BUTTONS OVERLAP" + at + " siblings '" +
+                        string line = "BUTTONS OVERLAP" + at + " '" +
                                   PathOf(a.transform, canvasGo.transform) + "' " + RectStr(ar) + " and '" +
                                   PathOf(b.transform, canvasGo.transform) + "' " + RectStr(br) +
                                   " share " + ow.ToString("0.#") + "x" + oh.ToString("0.#") +
-                                  " ref px -- two tap targets in one place; only one can win the raycast.");
+                                  " ref px -- two tap targets in one place; only one can win the raycast.";
+                        if (a.transform.parent == b.transform.parent) fails.Add(line);   // unchanged gate
+                        else crossFails.Add(line);                                       // WO-1060 Assert B
                     }
                 }
 
@@ -3617,6 +3789,111 @@ namespace DeNelle.Editor
             }
 
             _geoFailures.AddRange(fails);
+
+            // WO-1060: the CLAMP/OVERLAP subset gets its own tally so it can carry its own marker.
+            // Classified by each rule's own message prefix rather than by a parallel list, so a new
+            // rule cannot be added to one bucket and silently forgotten in the other.
+            _touchPanelsChecked++;
+            bool clean = true;
+            bool baselined = IsTouchBaselined(label);
+            for (int i = 0; i < fails.Count; i++)
+            {
+                string f = fails[i];
+                if (f.StartsWith("BUTTONS OVERLAP", StringComparison.Ordinal) ||       // Assert B
+                    f.StartsWith("BUTTON OVER TEXT", StringComparison.Ordinal) ||      // Assert B (occlusion)
+                    f.StartsWith("SUB-TOUCH-FLOOR BAND", StringComparison.Ordinal))    // Assert A
+                {
+                    clean = false;
+                    if (!baselined) _touchFailures.Add(f);
+                }
+            }
+            for (int i = 0; i < crossFails.Count; i++)
+            {
+                clean = false;
+                if (!baselined) _touchFailures.Add(crossFails[i]);
+            }
+            if (clean) _touchPanelsClean++;
+            else if (baselined)
+                Debug.LogWarning("[touch-oracle] BASELINED (known debt, still red) " + label +
+                                 " -- this panel's WO removes its own allow-list entry when it lands.");
+        }
+
+        // ---------------------------------------------------------------------
+        //  WO-1060 section 5 -- THE BASELINE ALLOW-LIST, AND ITS EXPIRY RULE.
+        //
+        //  Four panels are known-bad TODAY. Turning the oracle on red would block
+        //  every commit, and a gate that blocks everything gets switched off, not
+        //  fixed. So these four are reported as WARNINGS and excluded from the
+        //  marker -- and NOTHING ELSE IS.
+        //
+        //  ⛔ THIS LIST MAY ONLY EVER SHRINK. Each fix deletes its own entry in the
+        //  same commit; adding an entry requires an owner ruling. When the last one
+        //  goes, DELETE THE MECHANISM -- an empty suppression list is an invitation
+        //  to add to it.
+        //
+        //  ⚠ NightMarket is deliberately NOT here. It is the panel this oracle was
+        //  extended for; it must be able to go RED, or adding it to the capture set
+        //  bought nothing.
+        // ---------------------------------------------------------------------
+        private static readonly string[] TouchBaseline =
+        {
+            "ArmyMuster",    // WO-1056 -- slot-chip-0 grown 4.5x on H
+            "ManageScreen",  // WO-1058 section 5 -- Cancel(0.885-0.98) inside Upgrade(0.76-0.98)
+            "EquipDrawer",   // the 2026-08-22 screenshots
+        };
+
+        private static bool IsTouchBaselined(string label)
+        {
+            if (string.IsNullOrEmpty(label)) return false;
+            for (int i = 0; i < TouchBaseline.Length; i++)
+                if (label.IndexOf(TouchBaseline[i], StringComparison.OrdinalIgnoreCase) >= 0) return true;
+            return false;
+        }
+
+        // =====================================================================
+        //  WO-1060 -- THE CLAMP / OVERLAP ORACLE'S OWN MARKER.
+        // ---------------------------------------------------------------------
+        //  ⛔ A DISTINCT MARKER, NOT A SHARED STRING (CLAUDE.md 8). UI_GEOMETRY_OK
+        //  also covers text-off-plate, so a reader could not tell from it whether
+        //  the touch/overlap class specifically was clean. That is the same defect
+        //  that once let a 22-case suite's pass read as the full suite's pass.
+        //
+        //  Judge by THIS MARKER on a FRESH log, never by the exit code -- this
+        //  repo's runners exit 0 on refusals and FAILs. Marker absent on a fresh
+        //  log is a FAILURE, not an unknown.
+        // =====================================================================
+        private static readonly List<string> _touchFailures = new List<string>();
+        private static int _touchPanelsChecked;
+        private static int _touchPanelsClean;
+
+        private static void ReportTouchOracle()
+        {
+            if (_touchPanelsChecked == 0)
+            {
+                Debug.LogError("UI_TOUCH_FAIL x0 -- ZERO panels were measured, so the clamp/overlap " +
+                               "oracle proved nothing this run.");
+                return;
+            }
+            if (_touchFailures.Count == 0)
+            {
+                // <clean>/<checked> counts PANEL BUILDS, not distinct panels: ForEachTarget builds
+                // and measures every panel once per aspect (1920x1080 / 2340x1080 / 2670x1200), and
+                // a band that clears 112 at one aspect can fall under it at another -- so each build
+                // is its own assertion and each one is counted.
+                Debug.Log("UI_TOUCH_OK " + _touchPanelsClean + "/" + _touchPanelsChecked + " panels -- " +
+                          "no control authored under MinTouchPx(" + ElarionUiKit.MinTouchPx.ToString("0.#") +
+                          ") so the clamp had nothing to rescue, and no two interactive rects intersect.");
+                return;
+            }
+
+            int shown = Mathf.Min(_touchFailures.Count, GeoMaxPrintedLines);
+            for (int i = 0; i < shown; i++) Debug.LogError("[touch-oracle] " + _touchFailures[i]);
+            if (_touchFailures.Count > shown)
+                Debug.LogError("[touch-oracle] ... and " + (_touchFailures.Count - shown) + " more");
+
+            Debug.LogError("UI_TOUCH_FAIL x" + _touchFailures.Count + " over " + _touchPanelsChecked +
+                           " panels (" + _touchPanelsClean + " clean) -- each line names the panel, the " +
+                           "control and the numbers. Author the band above the floor; do not rely on the clamp.");
         }
 
         private static void ReportGeometry()
