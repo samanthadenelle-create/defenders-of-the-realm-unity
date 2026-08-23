@@ -1,4 +1,4 @@
-**Status:** READY TO IMPLEMENT - BLOCKED ON OWNER R5 FOR ACTIVATION ONLY (build may proceed)
+**Status:** DONE 2026-08-22 - OWNER-PROVEN END TO END. The owner completed a live Devnet SKR purchase: wallet-authenticated, signature backend-verified, entitlement claimed EXACTLY ONCE, Hearth Spark delivered, /fulfill acknowledged durably before the receipt, and the wallet balance unchanged afterwards (no double transfer). Verify/reconcile/fulfill are live. Public activation remains a separate release decision - the CODE is done.
 
 # WO-1147 - MON - Purchasing: verified on-chain payment to durable entitlement
 

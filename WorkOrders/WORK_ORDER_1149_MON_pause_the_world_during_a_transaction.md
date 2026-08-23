@@ -1,4 +1,4 @@
-**Status:** READY TO IMPLEMENT - HIGH. MON lane.
+**Status:** DONE 2026-08-22 - shipped and gated. WorldHold is the SINGLE writer of Time.timeScale; PauseController became a client. Acquired as a `using` declaration and the FIRST statement of PackStore.Purchase, so every exit releases by construction - including the exception path. Pinned by TransactionWorldHoldRegression + the [world-clock] assertions. OWNER-PROVEN: survived the live Devnet purchase.
 
 # WO-1149 - MON - The world keeps running during a purchase
 

@@ -1,6 +1,6 @@
 # MON002 — Mainnet SKR canary: 1 SKR for exactly 1 wood
 
-**Status:** READY TO IMPLEMENT — OWNER AUTHORIZED ONE LOW-VALUE MAINNET TEST; DO NOT OPEN GENERAL SALES
+**Status:** CODE DONE 2026-08-22 - BLOCKED ON CONFIG, FAIL-CLOSED, NO TRANSACTION AUTHORIZED. Mainnet contract, official mint, owner allowlist, isolated canary SKU, exact 1 SKR -> 1 wood, network-bound recovery and independent regressions all present ([mainnet-canary] green). It REFUSES BEFORE WALLET APPROVAL because no mainnet recipient/ATA/RPC is configured and there is no fallback. Blocked on: the Squads treasury owner pubkey (the address supplied so far is a plain on-curve wallet, fine for a 1 SKR canary, never as the production treasury).
 
 ---
 
@@ -80,7 +80,7 @@ The immutable commercial contract is:
 | Rail | SPL token transfer |
 | Currency | `SKR` |
 | Official Mainnet SKR mint | `SKRbvo6Gf7GondiT3BbTfuRDPqLWei4j2Qy2NPGZhW3` |
-| Decimals | `9` |
+| Decimals | `6` |   <!-- CORRECTED 2026-08-22: mainnet SKR is 6 decimals; the 9 was our Devnet TEST mint -->
 | Price | exactly `1 SKR` |
 | Price in base units | exactly `1_000_000` |
 | Reward | exactly `1 wood` |
