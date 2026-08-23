@@ -145,7 +145,12 @@ namespace DeNelle.Editor
             "Assets/_Modules/Village/Combat/ThreatSkullPlate.cs",
             "Assets/_Modules/Village/BuildMode/BuildPreviewModal.cs",
             "Assets/_Modules/Village/Buildings/NPCUpgradeStation.cs",
-            "Assets/_Modules/Village/Buildings/MobileInteractButton.cs",
+            // MobileInteractButton.cs REMOVED 2026-08-23 - genuinely resolved, and VERIFIED at
+            // source per the header's "do not drop a row on a resolved note alone": it now routes
+            // through the kit in real CODE, not a comment - ElarionUiKit.ObsidianButtonSpriteName
+            // (MobileInteractButton.cs:306-308) and ElarionUiKit.ObsidianButtonLabelColor (:357).
+            // Dropping it keeps the tracked-debt count honest; a row that no longer offends inflates
+            // the debt figure and buries the "resolved (refresh KnownBaseline)" note under noise.
             "Assets/_Modules/Village/Enemies/OverworldEncounterSpawner.cs",
             "Assets/_Modules/Village/NPCs/GearOfferChoiceUI.cs",
             "Assets/_Modules/Village/World/Camps/CampPromptUI.cs",

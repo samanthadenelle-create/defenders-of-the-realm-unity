@@ -1,7 +1,15 @@
 # WORK ORDER UI-002 — Store commerce-state clarity and truthful actions
 
 **Series:** UI (intentionally separate from numbered BOARD work)
-**Status:** PARTIAL 2026-08-22 - the card/string work landed with UI-001 (StorePackCard carries state as words not hue; three player-facing strings moved into both canon-strings copies, retiring the hardcoded English at the old PackStore.cs:1331/:1333). ⛔ §4 REMAINS UNSATISFIABLE AS WRITTEN and was deliberately left alone: the BalanceState.Unavailable branch has already DROPPED the bound address and there is no retry control, so "Balance unavailable - retry" would render a button with nothing to tap. That is a commerce decision (PurchaseGate is the sole authority), not a layout one - needs an owner ruling before anyone implements it.
+**Status:** BLOCKED 2026-08-23 — the remaining states need a WALLET-AUTHORITY decision that is the owner's, not an implementer's.
+
+> The card and string work SHIPPED with UI-001: `StorePackCard` carries state as WORDS, not hue (which is the
+> colourblind-safety requirement), and three player-facing strings moved into both canon-strings copies.
+>
+> Codex reported this ticket as RETIRED. ⚠ Recorded as **BLOCKED instead**, deliberately: "retired" and
+> "blocked on a decision nobody has made" look identical on a board and are not the same thing. Retiring is a
+> SCOPE call and belongs to the owner. The residual states are real and still unbuilt — if she rules them out,
+> this becomes CLOSED in one word; until then it must not read as finished.
 **Owner lane:** UI / Commerce presentation (security authorities preserved)
 **Date:** 2026-08-22
 **Tracking:** Not tracked on `BOARD.html`. Do not edit or rebuild the board for this document.

@@ -6,7 +6,21 @@
 
 # WORK ORDER 903 — Storage pallet fill stacks (logs / sacks / ingots, QUARTER intervals)
 
-**Status: READY TO IMPLEMENT** (revised 2026-08-21, UI seat — see "REVISION" below)  
+**Status:** FIXED 2026-08-23 (Codex implemented; CLI reviewed + gated) — AWAITING OWNER FELT-TEST TO CLOSE.
+
+> Five-tier pallet fill for lumberyard / foundry / silo: exact empty and full, quarter / half / three-quarter
+> tiers, 2% hysteresis on the internal boundaries, pooled log/ingot/sack props with add-remove transitions,
+> a full-tier overflow silhouette, and immediate (unanimated) reduction on upgrade. Works for freshly placed
+> AND save-replayed structures — `PlacedStructure.Start` is the one seam both paths share.
+>
+> ⚠ **DEVICE CAPTURES NOT TAKEN.** Codex had no device session, so this is compile- and gate-verified only.
+> The whole ticket is a LOOK, so nothing here is proven until it is seen — this is precisely the class of work
+> a green gate cannot speak for.
+>
+> **CLI addition at review:** the abstract fill-bar fallback degraded SILENTLY. The bar and the pallet look
+> nothing alike, so a player who gets the bar is looking at a different feature — and with props served from
+> the CDN (§16), a missing or unpushed prop is exactly how that happens. Now a `FlowTrace.Warn` naming WHICH
+> of the four conditions fired (parse / catalog null / row miss / prop null), per CLAUDE.md §12.
 **Owner ruling 2026-08-21:** quarter intervals, not ~5% steps. *"show the capacity as empty and full
 at 1/4 intervals."* The 20-step spec in §Goal is SUPERSEDED by §W3 — read that instead.  
 **Minted:** 2026-08-04 (CLI / Grok — owner: pallets show items as bank fills)  

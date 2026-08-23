@@ -23,6 +23,14 @@ namespace DeNelle.Village
     /// </summary>
     public sealed class PlacedStructure : MonoBehaviour
     {
+        private void Start()
+        {
+            // WO-903: storage pallets are ordinary placed structures, so this is the one seam
+            // shared by fresh placement and save replay. The presentation component validates
+            // the catalog row and no-ops for every non-storage structure.
+            Buildings.Progression.StorageStackView.Attach(this);
+        }
+
         /// <summary>CatalogEntry id this structure was built from.</summary>
         public string itemId;
 
