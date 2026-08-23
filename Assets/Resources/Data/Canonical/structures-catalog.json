@@ -119,7 +119,7 @@
         ],
         "_upgradeVisualNote": "WO-1046 asked whether the tower upgrade is 'just a reskin'; for this row it was not even that - maxLevel was already 3 with a two-step upgradeCost table, but there was NO upgradeVisualPath at all, so all three levels rendered the SAME borrowed wizard tower. The ladder was real in cost and stats and invisible to the player, which is the worst of both: paid for, never seen. Owner ruling 2026-08-17: 'i want it like Archer Tower - Lv2 -Lv3'. Wired to the owner-purchased Ballista_L1/L2/L3 set, mirroring tower_archer's authoring exactly. NO upgradeTexturePath: unlike the archer L3 (WO-928 defect B) each Ballista level is a SEPARATE model carrying its own basecolor, so there is no scraped-material problem to correct and a forced albedo would only override art that is already right.",
         "navSurface": "Blocker",
-        "heightMul": 1.2,
+        "heightMul": 0.75,
         "range": 22,
         "damage": 30,
         "fireRate": 0.5,
@@ -131,7 +131,8 @@
           "footprint": 1.4,
           "noOverlap": true,
           "checkAffordable": true
-        }
+        },
+        "_heightNote": "SIEGE ENGINE, not a tower silhouette — OWNER RULING 2026-08-23. It was typed Tower on the 1.2 tower cadence anchor, and STRUCTURE_ORIENTATION_FAIL flagged it 'NOT STANDING' (upright aspect 0.70 L1 / 0.94 L2, below the measured 1.2 floor). The oracle names exactly two ways to be there and they have different fixes: (a) the model is mis-oriented, or (b) the ROW is mis-classed. The owner ruled (b): a ballista is a wide machine on a carriage, so its heightMul belongs in the SIEGE-ENGINE group at 0.75 alongside tower_catapult and tower_siege_tower. ⛔ This is a RECLASS, not a widened floor — the row stops failing because it is correctly classed. Do NOT widen the oracle's 1.2 tower floor to accommodate it, and do NOT 're-orient' the art: the model was never lying down. `type` stays Tower because that field is a LIVE SAVE KEY and a behaviour selector (it still fires); only the height cadence moved."
       },
       "orientation": {
         "corrected": false,

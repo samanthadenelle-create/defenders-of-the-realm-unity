@@ -1,6 +1,6 @@
 # WORK ORDER 992 — Six classes ship in every build, compile clean, and are NEVER instantiated
 
-**Status:** READY - PARTIAL - 2026-08-21 CLI, gate-green (COMPILE_GATE_OK + REGRESSION_OK 234/234).
+**Status:** FIXED 2026-08-23 (Codex audit) — the leading status was STALE. Later work REMOVED BattlePassManager, CryptoPaymentManager, TorchFireController and AuraController, and wired the ruled classes. Nothing unwired remains. AWAITING OWNER CLOSE.
 **Minted:** 2026-08-14 (CLI)
 **Silo:** Codebase hygiene / dead code
 **Source:** the 2026-08-14 phantom sweep, plus owner dispositions the same day
