@@ -7,7 +7,8 @@
   "_schemaNotes": {
     "rewardsDistributor": "The hardware-backed Seeker Seed Vault wallet that pays SKR rewards to players (Streams A/B/C). PUBLIC, Solscan-lookup-safe. Shown verbatim in the v2 store/settings transparency line — it is NOT a payment recipient. Pack revenue never lands here (wallets-of-record §2).",
     "devnetPurchaseRecipient": "The devnet pack-purchase test transfers land here in the v2 foundation. wallets-of-record §4 SOL/USDC/SKR revenue-treasury wallets are NOT yet provisioned (blocked on Squads multisig setup), so the documented Dev/Staging wallet (§3 — used for 'pre-mainnet smoke tests verifying pack-purchase flow end-to-end on devnet') is the safe devnet sink until the real treasuries exist. This is a PUBLIC address; no key is held by the game.",
-    "mainnetGate": "When the §4 Squads multisig revenue treasuries are provisioned, the integrator adds them here under a 'mainnetTreasuries' block and the owner flips WalletService.ActiveNetwork to Mainnet. The agent does NOT do this (Part 10)."
+    "mainnetGate": "When the §4 Squads multisig revenue treasuries are provisioned, the integrator adds them here under a 'mainnetTreasuries' block and the owner flips WalletService.ActiveNetwork to Mainnet. The agent does NOT do this (Part 10).",
+    "mainnetPurchaseRecipient": "MAINNET revenue destination. VERIFIED ON CHAIN 2026-08-23 by tools/treasury-verify.mjs (TREASURY_VERIFY_OK): the address is OFF-CURVE (program-derived, i.e. a real Squads vault - the PREVIOUS candidate 2VePaneS3xX2EdzSbe4JdiovRffboLJV4yNVmVTkeuCg was ON-curve, a plain wallet, and nobody could tell from the address by looking), and its SKR associated token account exists, holds the OFFICIAL mint and is owned by the vault. Linkage PROVEN, not asserted: Squads multisig BcHLoNCsnGD6oegywkP19PALKMQYoFeQWTvmPLmp22no derives vault[0] == this address. MINT DECIMALS ARE 6, READ FROM CHAIN - never from a document: a doc carrying our DEVNET test mint's 9 would make 1 SKR into 1,000, and /verify runs AFTER settlement so the guard fails with the money already gone. 1 SKR = 1000000 base units. ⚠ THRESHOLD IS 1-of-1 (single member CHKKFkPGz8VZfjpsZjJTqfAUW7vMpdNkkqCVuCcZsfkC, timeLock 0). ACCEPTABLE FOR THE 1-SKR CANARY, NOT FOR PUBLIC SALES - raise to 2-of-3 first. The vault ADDRESS does not change when members are added, so nothing here needs re-authoring when it is fixed."
   },
   "version": 1,
   "rewardsDistributor": {
@@ -28,5 +29,19 @@
     "public": true,
     "network": "devnet",
     "explorerNote": "Public on-chain. The v2 foundation routes devnet pack-purchase transfers here. Holds gas-only balances; no production assets."
+  },
+  "mainnetPurchaseRecipient": {
+    "label": "Mainnet Pack-Purchase Recipient (Squads treasury vault - 'EoAAccount')",
+    "address": "9wbHbKuirtKai5e3ajvdpzdRYVpuxpAH4DUnERkVtBzj",
+    "skrAta": "6SVNy7VP7xSiniYD1RAh4DQN2YnCnpmtybC1SYKk3uL3",
+    "skrMint": "SKRbvo6Gf7GondiT3BbTfuRDPqLWei4j2Qy2NPGZhW3",
+    "skrDecimals": 6,
+    "tokenProgram": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+    "squadsMultisig": "BcHLoNCsnGD6oegywkP19PALKMQYoFeQWTvmPLmp22no",
+    "multisigThreshold": 1,
+    "multisigMembers": 1,
+    "verifiedOnChain": "2026-08-23",
+    "provider": "Squads V4 (SQDS4ep65T869zMMBKyuUq6aD6EgTu8psMjkvj52pCf)",
+    "_publicSalesBlocker": "1-of-1 threshold: a single key moves every cent, with timeLock 0. Raise to 2-of-3 before public sales are enabled."
   }
 }
