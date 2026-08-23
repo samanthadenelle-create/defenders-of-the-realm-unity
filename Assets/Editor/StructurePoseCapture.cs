@@ -160,6 +160,141 @@ namespace DeNelle.Editor
         }
 
         // =====================================================================
+        // ORIENTATION AUDIT (2026-08-23) - the five STRUCTURE_ORIENTATION_FAIL
+        // "DOUBLE-CORRECTED" rows: workshop/forge/armorer/jeweler/barracks.
+        //
+        // WHY A RENDER AND NOT A NUMBER: the oracle's A1 is a DATA check - it reads
+        // bakeAxisConversion off the .meta and the euler off the catalog and concludes
+        // both corrections apply. It never looks at geometry. If the importer flag was
+        // set but the mesh was never actually re-imported with it, the data reads
+        // "double-corrected" while the shipped pixels are correct, and zeroing the
+        // euler on the oracle's word would break a building the owner has confirmed.
+        // So: shoot each model at the two candidate pitches and print the TAPER
+        // (JewelerPitchSolver.TaperRatio) beside each image. AABB cannot tell +90 from
+        // -90 or upright from upside-down; the taper and the picture can.
+        //
+        //   run-unity-method.ps1 -Method DeNelle.Editor.StructurePoseCapture.RunOrientationAudit
+        //       -LogName orientaudit.log -ExpectMarker STRUCTURE_ORIENT_AUDIT_OK
+        // =====================================================================
+
+        private const string AuditOutDir = "docs/ui-evidence/structure-orientation-2026-08-23";
+
+        /// <summary>Model STEMS on disk for the five failing catalog rows (catalog id -> stem:
+        /// workshop -> ShopAndCrafting, forge -> Forge; the other three match).</summary>
+        private static readonly string[] AuditSubjects = { "ShopAndCrafting", "Forge", "armorer", "jeweler", "barracks" };
+
+        /// <summary>The two poses under test: identity (what the catalog would produce if the euler
+        /// were zeroed, i.e. the oracle's remedy) and X=90 (what the catalog authors today).</summary>
+        private static readonly float[] AuditPitches = { 0f, 90f };
+
+        [MenuItem("Defenders/Art/Capture Structure Orientation Audit")]
+        public static void RunOrientationAudit()
+        {
+            int shot = 0;
+            try
+            {
+                Directory.CreateDirectory(AuditOutDir);
+                foreach (string name in AuditSubjects)
+                    foreach (float pitch in AuditPitches)
+                        shot += CaptureAt(name, pitch) ? 1 : 0;
+
+                if (shot == 0)
+                {
+                    Debug.LogError("STRUCTURE_ORIENT_AUDIT_FAIL - zero images written. That is a failure, not a pass.");
+                    return;
+                }
+                AssetDatabase.Refresh();
+                Debug.Log("STRUCTURE_ORIENT_AUDIT_OK " + shot + " image(s) -> " + AuditOutDir);
+            }
+            catch (Exception ex)
+            {
+                Debug.LogError("STRUCTURE_ORIENT_AUDIT_FAIL - " + ex.GetType().Name + ": " + ex.Message);
+            }
+        }
+
+        private static bool CaptureAt(string name, float pitch)
+        {
+            string path = Root + "/" + name + ".fbx";
+            var asset = AssetDatabase.LoadAssetAtPath<GameObject>(path);
+            if (asset == null) { Debug.LogWarning("[OrientAudit] no asset at " + path); return false; }
+
+            GameObject inst = null;
+            GameObject lightGo = null;
+            Camera cam = null;
+            RenderTexture rt = null;
+            var prevActive = RenderTexture.active;
+            try
+            {
+                inst = (GameObject)PrefabUtility.InstantiatePrefab(asset);
+                if (inst == null) return false;
+                inst.transform.position = Vector3.zero;
+                inst.transform.localRotation = Quaternion.Euler(pitch, 0f, 0f);
+
+                var rs = inst.GetComponentsInChildren<Renderer>(true);
+                if (rs.Length == 0) { Debug.LogWarning("[OrientAudit] " + name + " has NO renderers."); return false; }
+
+                Bounds b = rs[0].bounds;
+                for (int i = 1; i < rs.Length; i++) b.Encapsulate(rs[i].bounds);
+
+                float taper = JewelerPitchSolver.TaperRatio(inst.transform, b);
+
+                // The stage owns its light - URP/Lit renders black without one, and a wall of
+                // black PNGs would read as "the model is missing" instead of "unlit".
+                lightGo = new GameObject("~AuditLight");
+                var light = lightGo.AddComponent<Light>();
+                light.type = LightType.Directional;
+                light.intensity = 1.4f;
+                light.transform.rotation = Quaternion.Euler(45f, 35f, 0f);
+
+                float radius = Mathf.Max(b.size.magnitude * 0.5f, 0.001f);
+                var camGo = new GameObject("OrientAuditCam");
+                cam = camGo.AddComponent<Camera>();
+                cam.clearFlags = CameraClearFlags.SolidColor;
+                cam.backgroundColor = new Color(0.10f, 0.10f, 0.12f, 1f);
+                cam.fieldOfView = 35f;
+                cam.nearClipPlane = 0.01f;
+                cam.farClipPlane = radius * 40f + 100f;
+
+                // Eye-level-ish 3/4 view. Deliberately NOT top-down: a top-down camera cannot
+                // show which end of a building is in the ground.
+                Vector3 dir = new Vector3(0.75f, 0.30f, -1f).normalized;
+                cam.transform.position = b.center + dir * (radius / Mathf.Tan(cam.fieldOfView * 0.5f * Mathf.Deg2Rad) * 1.25f);
+                cam.transform.LookAt(b.center);
+
+                rt = new RenderTexture(Size, Size, 24, RenderTextureFormat.ARGB32);
+                cam.targetTexture = rt;
+                cam.Render();
+
+                RenderTexture.active = rt;
+                var tex = new Texture2D(Size, Size, TextureFormat.RGB24, false);
+                tex.ReadPixels(new Rect(0, 0, Size, Size), 0, 0);
+                tex.Apply();
+
+                string outPath = AuditOutDir + "/" + name + "__pitch" +
+                                 Mathf.RoundToInt(pitch).ToString() + ".png";
+                File.WriteAllBytes(outPath, tex.EncodeToPNG());
+                UnityEngine.Object.DestroyImmediate(tex);
+
+                string verdict = taper < 0.80f ? "UPRIGHT (peak up)"
+                               : taper > 1.25f ? "UPSIDE DOWN (peak down)"
+                               : "ambiguous taper";
+                Debug.Log("[OrientAudit] " + outPath + "  pitch=" + pitch.ToString("0") +
+                          "  bounds=(" + b.size.x.ToString("0.00") + " x " + b.size.y.ToString("0.00") +
+                          " x " + b.size.z.ToString("0.00") + ")  taper=" + taper.ToString("0.00") +
+                          "  " + verdict);
+                return true;
+            }
+            finally
+            {
+                RenderTexture.active = prevActive;
+                if (cam != null) { cam.targetTexture = null; UnityEngine.Object.DestroyImmediate(cam.gameObject); }
+                if (rt != null) UnityEngine.Object.DestroyImmediate(rt);
+                if (lightGo != null) UnityEngine.Object.DestroyImmediate(lightGo);
+                if (inst != null) UnityEngine.Object.DestroyImmediate(inst);
+            }
+        }
+
+        // =====================================================================
         // WO-1062 - THE PORTAL ORBIT. "Does the portal read as a portal from every
         // heading?" is a question ONLY a picture can answer, and a single 3/4 shot
         // (everything above this line) structurally cannot: the defect the owner
@@ -204,6 +339,8 @@ namespace DeNelle.Editor
         /// DungeonWorldPortalSpawner.CirclePrefabResourcePath ("VFX/Portal/PortalCircleDarkStar")
         /// resolves at runtime. Nothing is substituted (memory: vfx-map-owner-tags-no-creative-pick).</summary>
         private const string PortalCirclePath = "Assets/Resources/VFX/Portal/PortalCircleDarkStar.prefab";
+        private const string PortalThresholdAuraPath =
+            "Assets/Mirza Beig/Particle Systems/Ultimate VFX/Prefabs/Loop/pf_vfx-ult_demo_psys_loop_portalBlue.prefab";
 
         /// <summary>DungeonWorldPortalSpawner.PortalHeight (6 m) - the height the live swap
         /// normalizes the art to (spawner :1032). Referenced, never re-guessed.</summary>
@@ -248,6 +385,7 @@ namespace DeNelle.Editor
 
                 var art = AssetDatabase.LoadAssetAtPath<GameObject>(PortalArtPath);
                 var circle = AssetDatabase.LoadAssetAtPath<GameObject>(PortalCirclePath);
+                var aura = AssetDatabase.LoadAssetAtPath<GameObject>(PortalThresholdAuraPath);
                 if (art == null)
                 {
                     Debug.LogError("PORTAL_ANGLE_CAPTURE_FAIL - portal art missing at " + PortalArtPath +
@@ -275,6 +413,19 @@ namespace DeNelle.Editor
                 shots += CapturePortalOrbit(art, circle, planes: 2, zAxis: false, tag: "before_2planes_xaxis");
                 shots += CapturePortalOrbit(art, circle, planes: 2, zAxis: true, tag: "after_2planes_zaxis");
 
+                // WO-1156 adjacent suspect: stage the EXACT threshold-aura prefab using today's
+                // Root.rotation (yaw 0), then the doorway-normal hypothesis (yaw +90 -> Root.right).
+                // Open the resulting images; this comparison is evidence, never a numeric gate.
+                if (aura != null)
+                {
+                    shots += CapturePortalOrbit(art, aura, planes: 1, zAxis: false,
+                                                tag: "threshold_current_root_rotation", localYaw: 0f);
+                    shots += CapturePortalOrbit(art, aura, planes: 1, zAxis: false,
+                                                tag: "threshold_doorway_right", localYaw: 90f);
+                }
+                else Debug.LogWarning("[PortalAngles] threshold aura source unavailable at " +
+                                      PortalThresholdAuraPath + " - circle captures still written.");
+
                 if (shots == 0)
                 {
                     Debug.LogError("PORTAL_ANGLE_CAPTURE_FAIL - zero images written. That is a failure, not a pass.");
@@ -294,7 +445,7 @@ namespace DeNelle.Editor
         /// destroyed in the finally - the light included, because a stage light that outlives its
         /// stage is a documented leak in this repo.</summary>
         private static int CapturePortalOrbit(GameObject art, GameObject circle, int planes,
-                                              bool zAxis, string tag)
+                                              bool zAxis, string tag, float localYaw = float.NaN)
         {
             GameObject stage = null;
             Camera cam = null;
@@ -337,8 +488,10 @@ namespace DeNelle.Editor
                 //   X axis (the OLD math):  Euler(+-90,0,0)  normal -> +-Root.forward
                 //   Z axis (the FIX):       Euler(0,0,-+90)  normal -> +-Root.right
                 //   halfGap                                 along that same normal
-                Quaternion rotFront = stage.transform.rotation *
-                    (zAxis ? Quaternion.Euler(0f, 0f, -90f) : Quaternion.Euler(90f, 0f, 0f));
+                Quaternion rotFront = !float.IsNaN(localYaw)
+                    ? stage.transform.rotation * Quaternion.Euler(0f, localYaw, 0f)
+                    : stage.transform.rotation *
+                      (zAxis ? Quaternion.Euler(0f, 0f, -90f) : Quaternion.Euler(90f, 0f, 0f));
                 Quaternion rotBack = stage.transform.rotation *
                     (zAxis ? Quaternion.Euler(0f, 0f, 90f) : Quaternion.Euler(-90f, 0f, 0f));
                 Vector3 normal = zAxis ? stage.transform.right : stage.transform.forward;
@@ -354,6 +507,11 @@ namespace DeNelle.Editor
                     StagePortalCircle(circle, stage.transform, centre + halfGap, rotFront, scale, "Front");
                     StagePortalCircle(circle, stage.transform, centre - halfGap, rotBack, scale, "Back");
                 }
+
+                // Mirror the runtime's post-load material sweep before judging magenta. The raw
+                // Mirza prefab bypasses VFXManager in this editor stage, so without this call the
+                // capture can photograph an editor-only shader miss the player never receives.
+                DeNelle.Core.MagentaGuard.SweepGameObject(stage, "StructurePoseCapture.PortalAngles");
 
                 // Drive the loops to steady state. Deterministic: same t, same frame, every run.
                 foreach (var ps in stage.GetComponentsInChildren<ParticleSystem>(true))

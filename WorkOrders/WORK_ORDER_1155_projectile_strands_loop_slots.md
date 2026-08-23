@@ -1,4 +1,4 @@
-**Status:** READY TO IMPLEMENT — but take the DUMP first (see §4). The evidence now exists; do not fix this from the static read alone.
+**Status:** READY TO IMPLEMENT — but DOWNGRADED. The dump was taken 2026-08-23 and it DISPROVED this ticket's original premise. Read §0 before anything else.
 
 # WORK ORDER 1155 — A projectile torn down in flight strands its VFX loop slot forever
 
@@ -6,6 +6,44 @@
 **Lane:** VFX / lifecycle. **Class:** A LEAK WITH NO RELEASE PATH.
 **Found by:** the WO-1057 lane, 2026-08-23, while verifying the loop registry.
 **Parent:** WO-1057 (the registry that makes this visible). §7 of that ticket anticipated this split.
+
+## ⛔ 0. CORRECTION 2026-08-23 — THE PREMISE BELOW WAS WRONG, AND THE DUMP IS WHY
+
+This ticket originally claimed the stranded slot was **"unreclaimable"**, that it "occupies a slot
+against the loop cap until the session ends", and that a player would eventually see **real effects
+stop appearing**. ⛔ **ALL THREE OF THOSE ARE FALSE.** I reasoned them from a static read of
+`ProjectileMover` and never checked whether anything downstream swept. Nothing in the code supported
+the escalation; I supplied it.
+
+**`VFXManager.SweepOneshots()` runs EVERY FRAME from `Update()` (`VFXManager.cs:1080`)**, and the
+third of its three documented jobs is *"reclaim loops whose host was destroyed before Stop()"*
+(`:1154-1157`). The slot comes back on the next frame.
+
+The device evidence Codex captured, which is what settled it:
+
+```
+SweepOneshots: reclaimed 4 loop slot(s) whose host was destroyed before Stop()
+live loops 7/24, later 10/24
+```
+
+⚠ **That line is the safety net WORKING, not the leak.** A reader who saw it and stopped there would
+have "confirmed" this ticket; reading it against `:1080` is what disproves it.
+
+**What is actually still true, and why this stays open at a lower priority:**
+- `ProjectileMover` genuinely has no `OnDisable`/`OnDestroy`/timeout, and `Arrive()` is still the only
+  `_onArrive` caller. The release is a *cleanup by sweep*, not a release by the owner.
+- So the slot IS held for up to a frame, and under heavy fire the count visibly walks (7 -> 10).
+- Relying on a global per-frame sweep to fix a per-object lifecycle bug is the wrong shape: the sweep
+  is a NET, and a net that is load-bearing stops being a net.
+
+**This is now a correctness/tidiness fix, NOT a player-facing defect.** Nobody's effects are
+disappearing. Do not schedule it as though they are, and do not re-inflate the language above.
+
+*(Left visible rather than rewritten, per CLAUDE.md §15: the mistake is the useful part. A ticket
+that quietly changed its story would teach nobody, and this one is a clean example of the §12 rule
+turned on its author — static reading LOCATED the candidate and then INVENTED its consequences.)*
+
+---
 
 ## THE FINDING
 

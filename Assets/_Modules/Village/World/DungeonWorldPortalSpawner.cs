@@ -672,6 +672,10 @@ namespace DeNelle.Village.World
             // already registered as protected art above.
             DeNelle.Core.MagentaGuard.SweepGameObject(root, "DungeonWorldPortalSpawner.BuildPortal");
 
+            // WO-1156: clear runtime foliage from the measured doorway and both camera approaches.
+            // This never moves the portal and is repeated after the async art swap below.
+            HubFoliageInjector.ClearPortalApproach(root.transform);
+
             FlowTrace.Step("DungeonPortals",
                 $"BuildPortal: '{def.ResolveName()}' portal committed at {pos} " +
                 $"(discovered={entry.Discovered}, liveRenderers={liveRenderers}).");
@@ -1063,6 +1067,8 @@ namespace DeNelle.Village.World
             DeNelle.Core.MagentaGuard.SweepGameObject(
                 swap.Instance, "DungeonWorldPortalSpawner.SwapInSharedStructureAsync");
 
+            HubFoliageInjector.ClearPortalApproach(p.Root);
+
             // The procedural glow quad / halo / vortex were the no-art fallback. With real art
             // and a real catalogued loop they are two additive billboards inside somebody else's
             // vortex - stand them down (the point light stays; it lights the arch geometry).
@@ -1105,8 +1111,12 @@ namespace DeNelle.Village.World
             Vector3 thresholdPos = OpeningCentre(p, b);
             float target = OpeningTargetSize(b);
             float scale = VFXManager.ResolveFitScale(ThresholdAuraKey, target, MinFitScale, MaxFitScale);
+            // WO-1156, visually measured by StructurePoseCapture.RunPortalAngles: portalBlue is
+            // directional. Root.rotation presents only a thin vertical trace from the real
+            // doorway approach; local +90Y aligns its face with the art's Root.right normal.
+            Quaternion auraRotation = p.Root.rotation * Quaternion.Euler(0f, 90f, 0f);
             p.ThresholdVfx = VFXManager.PlayKey(
-                ThresholdAuraKey, thresholdPos, p.Root.rotation, p.Root,
+                ThresholdAuraKey, thresholdPos, auraRotation, p.Root,
                 null, scale);
 
             if (p.ThresholdVfx != null)
@@ -1115,7 +1125,8 @@ namespace DeNelle.Village.World
                     $"AttachThresholdAura: '{ThresholdAuraKey}' aura seated at the measured opening centre " +
                     $"({thresholdPos.x:F1}, {thresholdPos.y:F1}, {thresholdPos.z:F1}) - {BoundsLine(b, src)} " +
                     $"target={target:0.00}m (x{OpeningSpanFraction:0.###} of the smaller measured span) " +
-                    $"authored={VFXManager.MeasureKeyVisualSize(ThresholdAuraKey):0.00}m -> scale={scale:0.000} (loop held).");
+                    $"authored={VFXManager.MeasureKeyVisualSize(ThresholdAuraKey):0.00}m -> scale={scale:0.000} " +
+                    $"normal=Root.right localYaw=+90 (loop held).");
                 return;
             }
 

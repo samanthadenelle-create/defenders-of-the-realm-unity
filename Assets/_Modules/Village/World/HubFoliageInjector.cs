@@ -341,6 +341,11 @@ namespace DeNelle.Village.World
             }
 
             int placed = placedTrees + placedRocks + placedBushes;
+
+            // WO-1156: portals can be built before OR after this scatter depending on bootstrap
+            // timing. Clear against every live doorway after the batch; the portal spawner also
+            // calls the single-door overload when its async owner art replaces the fallback.
+            ClearAllPortalApproaches();
             if (placed == 0)
             {
                 FlowTrace.Warn("HubFoliage",
@@ -376,6 +381,76 @@ namespace DeNelle.Village.World
         // =====================================================================
 
         private enum Tier { Tree, Rock, Bush }
+
+        /// <summary>
+        /// Removes runtime foliage whose measured renderer bounds enter a portal doorway or its
+        /// two-sided camera approach. The portal seat is never moved. Root.right is the measured
+        /// doorway normal (WO-1062); all distances derive from the live portal bounds rather than
+        /// a fixed world-radius guess.
+        /// </summary>
+        public static void ClearPortalApproach(Transform portalRoot)
+        {
+            if (portalRoot == null) return;
+            var holder = GameObject.Find(HolderName);
+            if (holder == null) return;
+
+            Bounds portal = MeasureBounds(portalRoot);
+            if (portal.size.sqrMagnitude < 0.001f) return;
+            float approach = Mathf.Max(portal.size.y, Mathf.Max(portal.size.x, portal.size.z)) * 1.5f;
+            float halfWidth = Mathf.Max(1.5f, Mathf.Min(portal.size.y, Mathf.Max(portal.size.x, portal.size.z)) * 0.65f);
+            int cleared = 0;
+
+            for (int i = holder.transform.childCount - 1; i >= 0; i--)
+            {
+                Transform prop = holder.transform.GetChild(i);
+                if (prop == null || !IntersectsApproach(prop, portalRoot, portal.center, approach, halfWidth)) continue;
+                prop.gameObject.SetActive(false);
+                Destroy(prop.gameObject);
+                cleared++;
+            }
+
+            FlowTrace.Step("HubFoliage",
+                $"portal approach clearance: root='{portalRoot.name}' cleared={cleared} " +
+                $"doorNormal=Root.right approach={approach:0.0}m halfWidth={halfWidth:0.0}m seat unchanged.");
+        }
+
+        private static void ClearAllPortalApproaches()
+        {
+            var portals = FindObjectsByType<DungeonPortal>(FindObjectsSortMode.None);
+            for (int i = 0; i < portals.Length; i++)
+                if (portals[i] != null) ClearPortalApproach(portals[i].transform);
+        }
+
+        private static bool IntersectsApproach(Transform prop, Transform portalRoot, Vector3 centre,
+                                               float approach, float halfWidth)
+        {
+            var renderers = prop.GetComponentsInChildren<Renderer>(true);
+            for (int i = 0; i < renderers.Length; i++)
+            {
+                if (renderers[i] == null) continue;
+                Bounds b = renderers[i].bounds;
+                Vector3 local = portalRoot.InverseTransformPoint(b.ClosestPoint(centre));
+                float radius = Mathf.Max(b.extents.x, b.extents.z);
+                // Local X is the measured doorway normal; local Z spans the opening.
+                if (Mathf.Abs(local.x) <= approach + radius && Mathf.Abs(local.z) <= halfWidth + radius)
+                    return true;
+            }
+            return false;
+        }
+
+        private static Bounds MeasureBounds(Transform root)
+        {
+            var renderers = root.GetComponentsInChildren<Renderer>(true);
+            Bounds b = default;
+            bool any = false;
+            for (int i = 0; i < renderers.Length; i++)
+            {
+                if (renderers[i] == null || !renderers[i].enabled) continue;
+                if (!any) { b = renderers[i].bounds; any = true; }
+                else b.Encapsulate(renderers[i].bounds);
+            }
+            return b;
+        }
 
         private static Tier PickTier(System.Random rng)
         {

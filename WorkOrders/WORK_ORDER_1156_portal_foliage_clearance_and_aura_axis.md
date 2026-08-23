@@ -1,4 +1,4 @@
-**Status:** READY TO IMPLEMENT
+**Status:** FIXED 2026-08-23 (Codex) — runtime foliage cleared from the measured portal bounds and both approach directions, derived from live renderer bounds; portal seat UNCHANGED so WO-1062’s evidence still applies; clearance re-runs after the async art swap. ⭐ THE AURA WAS DIRECTIONAL — confirmed by opening the images, and it inherited the same wrong axis WO-1062 corrected; now +90° Y onto the measured Root.right doorway normal. PORTAL_ANGLE_CAPTURE_OK 40. ⚠ Foliage clearance still needs a fresh DEVICE approach capture. AWAITING OWNER FELT-TEST.
 
 # WORK ORDER 1156 — Portal foliage clearance, and the threshold aura may inherit the wrong axis
 
