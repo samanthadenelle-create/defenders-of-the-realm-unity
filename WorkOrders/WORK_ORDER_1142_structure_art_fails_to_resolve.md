@@ -1,4 +1,4 @@
-**Status:** READY TO IMPLEMENT - HIGH (live, reproduces 8/8)
+**Status:** FIXED 2026-08-23 (1c04cb38b) — the render-verify path no longer destroys a paid building; it degrades to the pending-art proxy. AWAITING OWNER FELT-TEST.
 
 # WORK ORDER 1142 - Structure art fails to resolve: a building is lost on every boot
 

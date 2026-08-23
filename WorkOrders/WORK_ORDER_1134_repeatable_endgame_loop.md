@@ -1,4 +1,4 @@
-**Status:** READY TO IMPLEMENT
+**Status:** FIXED 2026-08-23 (1c023535c) — crystals pay once per UTC day; day-key promoted to DeNelle.Core.UtcDay. ⚠ Extreme crystal income halves 242 -> 121/day; the clear-count ladder is NOT built (owner numbers open). AWAITING OWNER FELT-TEST.
 
 ---
 

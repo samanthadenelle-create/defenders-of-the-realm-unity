@@ -1,4 +1,4 @@
-**Status:** READY TO IMPLEMENT
+**Status:** FIXED 2026-08-23 (1c04cb38b) — Gate joins the wall carve-out; measured 5.99 m fitted X vs authored 2.8. ⚠ LATENT: gate_stone is palette-locked, so nothing player-facing to feel yet. AWAITING OWNER CLOSE.
 
 # WORK ORDER 1153 — Gates are not covered by the wall footprint carve-out
 

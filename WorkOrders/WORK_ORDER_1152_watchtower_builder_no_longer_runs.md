@@ -1,4 +1,4 @@
-**Status:** READY TO IMPLEMENT
+**Status:** FIXED 2026-08-23 (f295971b6) — builder runs on all three levels, idempotency proven by re-run, taper-asserted. ⚠ R2 push owed: the L1 prefab was re-baked. AWAITING OWNER CLOSE.
 
 # WORK ORDER 1152 — WoodenWatchtowerBuilder no longer runs, and it fails on a level that looks fine
 
