@@ -297,10 +297,42 @@ namespace DeNelle.Wallet
             {
                 case CurrencyKind.Sol: return Pricing.Sol;
                 case CurrencyKind.Usdc: return Pricing.Usdc;
-                case CurrencyKind.Skr: return Pricing.Skr;
+                case CurrencyKind.Skr:
+                    // ⛔ SERVER-VERIFIED SKUs ARE NEVER REPRICED. The backend checks the on-chain
+                    // amount by EXACT EQUALITY against a fixed `amountBaseUnits`
+                    // (api/_lib/purchase-catalog.js), so a client that resolves a DIFFERENT number
+                    // sends a transfer the server then refuses - and /verify runs AFTER settlement,
+                    // so the money is already gone with no entitlement granted. That is the same
+                    // paid-but-not-granted shape as the 6-vs-9 decimals near-miss, arriving by a
+                    // different door.
+                    //
+                    // The mainnet canary is the live case and it is NOT hypothetical: it is priced
+                    // Usd 0.006 against a server contract of exactly 1_000_000 base units (1 SKR).
+                    // ceil(0.006 / skrPrice) is 1 only while SKR trades ABOVE $0.006. Below that it
+                    // silently becomes 2 and every purchase breaks. A market move is not a deploy -
+                    // nobody would be watching.
+                    //
+                    // The oracle is for DISPLAY and for rails the server does not pin. A price the
+                    // server verifies is a PROTOCOL CONSTANT, not a market quote.
+                    if (IsServerPinnedSku(Sku)) return Pricing.Skr;
+                    var valued = SkrValuationOracle.SkrForUsd(Pricing.Usd);
+                    return valued > 0d ? valued : Pricing.Skr;
                 default: return 0d;
             }
         }
+
+        /// <summary>
+        /// True when the BACKEND pins this SKU's on-chain amount and verifies it by exact equality
+        /// (<c>api/_lib/purchase-catalog.js</c>). Such a price may never be resolved from a market
+        /// oracle: client and server must agree to the base unit or the purchase is refused after
+        /// the funds have already moved.
+        /// <para>⚠ Keep this in step with the server catalog. If a SKU is added there, add it here
+        /// in the SAME change - a server-pinned SKU that is missing from this list is a silent
+        /// paid-but-not-granted bug that only fires when the market crosses the price.</para>
+        /// </summary>
+        private static bool IsServerPinnedSku(string sku)
+            => string.Equals(sku, MainnetCanaryCatalog.Sku, System.StringComparison.Ordinal)
+            || string.Equals(sku, PurchaseGate.DevnetCanarySku, System.StringComparison.Ordinal);
 
         /// <summary>The USD reference price string, e.g. <c>"$4.99"</c>.</summary>
         public string UsdReference => Pricing != null ? $"${Pricing.Usd:0.00}" : "$0.00";

@@ -34,7 +34,10 @@ namespace DeNelle.Editor
         private const string Root = DeNelle.Core.AssetRoots.StructureContent;
 
         // Every mesh the hub bake pitches, so the solver states the whole family at once.
-        private static readonly string[] Subjects = { "jeweler", "armorer", "barracks", "forge", "workshop" };
+        // STEMS, not catalog ids. WO orientation audit 2026-08-23: "workshop" and "forge" were
+        // listed by CATALOG ID, but the models on disk are ShopAndCrafting.fbx and Forge.fbx, so
+        // those two rows silently reported "no asset" and the family was never fully solved.
+        private static readonly string[] Subjects = { "jeweler", "armorer", "barracks", "Forge", "ShopAndCrafting" };
         private static readonly float[] Candidates = { 0f, 90f, -90f, 180f };
 
         [MenuItem("Defenders/Art/Solve Structure Pitch (no bake)")]
@@ -115,43 +118,10 @@ namespace DeNelle.Editor
         }
 
         /// <summary>
-        /// Horizontal spread of the mesh in the TOP 20% of its height, divided by the spread in the
-        /// BOTTOM 20%. A building tapers - broad base, narrow peak - so upright reads well below 1
-        /// and upside-down well above. Returns 1.0 when it cannot decide, so an unreadable mesh is
-        /// reported "ambiguous" and never becomes a false pass.
+        /// The TAPER TEST. Kept as a forwarder because this name is cited across the canon and
+        /// the WO trail; the one implementation now lives in MeshTaper (DeNelle.EditorRegression)
+        /// so StructureOrientationOracle can measure with the SAME body instead of a copy.
         /// </summary>
-        internal static float TaperRatio(Transform root, Bounds b)
-        {
-            var filters = root.GetComponentsInChildren<MeshFilter>(true);
-            if (filters.Length == 0 || b.size.y <= 0.0001f) return 1f;
-
-            float yMin = b.min.y, ySpan = b.size.y;
-            float topCut = yMin + ySpan * 0.80f;
-            float botCut = yMin + ySpan * 0.20f;
-
-            // Spread = mean horizontal distance from the bounds centre, so a wide eave and a wide
-            // plinth are compared on equal terms.
-            double topSum = 0, botSum = 0; int topN = 0, botN = 0;
-            Vector3 c = b.center;
-
-            foreach (var mf in filters)
-            {
-                var mesh = mf.sharedMesh;
-                if (mesh == null) continue;
-                var verts = mesh.vertices;
-                for (int i = 0; i < verts.Length; i++)
-                {
-                    Vector3 w = mf.transform.TransformPoint(verts[i]);
-                    float d = new Vector2(w.x - c.x, w.z - c.z).magnitude;
-                    if (w.y >= topCut) { topSum += d; topN++; }
-                    else if (w.y <= botCut) { botSum += d; botN++; }
-                }
-            }
-
-            if (topN == 0 || botN == 0) return 1f;
-            double bot = botSum / botN;
-            if (bot <= 0.0001) return 1f;
-            return (float)((topSum / topN) / bot);
-        }
+        internal static float TaperRatio(Transform root, Bounds b) => MeshTaper.Ratio(root, b);
     }
 }

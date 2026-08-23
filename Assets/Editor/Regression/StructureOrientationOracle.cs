@@ -69,16 +69,35 @@
 // =============================================================================
 // WHAT THIS ORACLE ASSERTS
 // =============================================================================
-// A1  CHANNEL COLLISION (data-only, threshold-free, every row + every tier).
-//     A source model whose ModelImporter has bakeAxisConversion == true carries
-//     the Z-up -> Y-up correction IN THE MESH (TripoAxisBake.cs: "the two halves
-//     must flip together or the model ends up upside down"). Such a model may NOT
-//     also receive a vertical-axis rotation from the catalog channel. FAILS when:
-//       (a) the row's orientation.manual euler tips world-up by more than 1 deg, or
+// A1  CHANNEL COLLISION (every row + every tier).
+//     A source model whose ModelImporter has bakeAxisConversion == true is MEANT to
+//     carry the Z-up -> Y-up correction IN THE MESH (TripoAxisBake.cs: "the two
+//     halves must flip together or the model ends up upside down"), and such a model
+//     may not also receive a vertical-axis rotation from the catalog channel.
+//     FAILS when:
+//       (a) the row's orientation.manual euler tips world-up by more than 1 deg
+//           AND the model MEASURABLY STANDS UP AT IDENTITY (NativelyUpright: height
+//           dominance AND MeshTaper must AGREE), or
 //       (b) repo.preservePrefabRotation is true AND the prefab's own ROOT carries
 //           a tilt (preserving an identity root is a no-op and is not flagged —
 //           asserting on the flag alone would be a claim we did not measure).
 //     This is the check that would have caught 2026-08-18 before the store build.
+//
+//     ⛔ (a) WAS DATA-ONLY UNTIL 2026-08-23 AND THAT MADE IT LIE. The flag says the
+//     bake was REQUESTED; it does not say the mesh came back standing. On this
+//     project's Tripo shop family (workshop / forge / armorer / jeweler / barracks)
+//     the flag is set, the catalog also authors euler=[90,0,0], and the buildings
+//     RENDER CORRECTLY IN GAME with both applied — owner-confirmed for the jeweler.
+//     The data-only form reported five DOUBLE-CORRECTED failures whose stated remedy
+//     ("zero the euler") would have tipped five correct buildings onto their sides.
+//     The counter-experiment is recorded: clearing the flag on four of them and
+//     force-reimporting turned all four UPSIDE DOWN at the shipped pitch (jeweler
+//     taper 0.79 -> 1.27). Renders on disk, before and after:
+//     docs/ui-evidence/structure-orientation-2026-08-23/.
+//     An oracle whose remedy breaks a correct town is worse than no oracle, so the
+//     accusation is now EARNED BY MEASUREMENT and unproven cases are LOGGED, not
+//     failed. Cost of that choice, stated rather than hidden: a genuine double
+//     correction on a model that does NOT stand at identity is not caught by A1.
 //
 // A2  HEIGHT FIDELITY (MEASURED, threshold-free target, the primary assert).
 //     Replays the pipeline above and asserts the final world bounds height equals
@@ -298,12 +317,48 @@ namespace DeNelle.Editor
                 float prefabRootTilt = TiltDegrees(prefab.transform.localRotation);
 
                 if (meshBaked && catalogTilt > TiltEpsilonDeg)
-                    failures.Add($"'{s.Label}' DOUBLE-CORRECTED: model '{bakedModelPath}' has " +
-                                 $"bakeAxisConversion=true (the Z-up->Y-up fix is in the MESH) AND the catalog row " +
-                                 $"still authors orientation.euler={Fmt(s.Entry.orientation.Euler)}, which tips " +
-                                 $"world-up by {catalogTilt:0.0} deg. Both corrections apply — this is the " +
-                                 "2026-08-18 defect exactly. Zero the euler (keep manual:true so no auto-baker " +
-                                 "re-tips the row) or clear bakeAxisConversion; never both.");
+                {
+                    // ⛔ MEASURED, NOT INFERRED (2026-08-23). The flag alone is NOT proof that the
+                    // mesh arrives standing up, and on this project's Tripo family it PROVABLY is
+                    // not: workshop/forge/armorer/jeweler/barracks all carry bakeAxisConversion=1
+                    // AND orientation.euler=[90,0,0], which read here as five double-corrections -
+                    // yet every one of them RENDERS CORRECTLY in game with both applied, which the
+                    // owner confirmed for the jeweler after a four-hour investigation.
+                    //
+                    // The renders are on disk; open them before doubting this:
+                    //   docs/ui-evidence/structure-orientation-2026-08-23/<stem>__pitch0.png   (lying down)
+                    //   docs/ui-evidence/structure-orientation-2026-08-23/<stem>__pitch90.png  (upright)
+                    // And the counter-experiment was run: clearing bakeAxisConversion on the four
+                    // and force-reimporting turned all four UPSIDE DOWN at the shipped pitch
+                    // (jeweler taper 0.79 -> 1.27, roof into the ground). The flag is NOT inert and
+                    // the euler is NOT redundant - they are two halves of one correct pose. The
+                    // metas were restored byte-identical.
+                    //
+                    // So the accusation now has to be EARNED by a measurement: the model must
+                    // already STAND UP on its own at identity before a catalog tilt can be called a
+                    // second correction. Two independent signals must AGREE (dominance AND taper),
+                    // because on 2026-08-22 each one lied alone.
+                    bool nativeStands = NativelyUpright(prefab, out float nativeTaper, out Vector3 nativeSize);
+                    string ev = $"native identity bounds {nativeSize.x:0.00} x {nativeSize.y:0.00} x " +
+                                $"{nativeSize.z:0.00}, taper {nativeTaper:0.00}";
+
+                    if (nativeStands)
+                        failures.Add($"'{s.Label}' DOUBLE-CORRECTED: model '{bakedModelPath}' has " +
+                                     $"bakeAxisConversion=true (the Z-up->Y-up fix is in the MESH - and it " +
+                                     $"MEASURABLY LANDED: {ev}, i.e. the model already stands at identity) " +
+                                     $"AND the catalog row still authors orientation.euler=" +
+                                     $"{Fmt(s.Entry.orientation.Euler)}, which tips world-up by " +
+                                     $"{catalogTilt:0.0} deg on top of it. Both corrections apply — this is " +
+                                     "the 2026-08-18 defect exactly. Zero the euler (keep manual:true so no " +
+                                     "auto-baker re-tips the row) or clear bakeAxisConversion; never both.");
+                    else
+                        log.Append($"\n  [A1 measured-clear] '{s.Label}': bakeAxisConversion=true on " +
+                                   $"'{bakedModelPath}' AND euler={Fmt(s.Entry.orientation.Euler)} " +
+                                   $"({catalogTilt:0.0} deg), but the model does NOT stand at identity " +
+                                   $"({ev}) - the bake did not deliver a Y-up mesh here, so the catalog " +
+                                   "tilt is the ONLY correction in play, not a second one. Render-proven " +
+                                   "2026-08-23 (docs/ui-evidence/structure-orientation-2026-08-23/).");
+                }
 
                 if (meshBaked && preserve && prefabRootTilt > TiltEpsilonDeg)
                     failures.Add($"'{s.Label}' DOUBLE-CORRECTED: model '{bakedModelPath}' has " +
@@ -503,6 +558,50 @@ namespace DeNelle.Editor
         /// lives in the MESH DATA and no consumer may apply it a second time
         /// (TripoAxisBake.cs: "the two halves must flip together").
         /// </summary>
+        /// <summary>
+        /// Does this model STAND UP on its own, with no catalog correction at all? Instantiated at
+        /// identity and judged on TWO signals that must AGREE:
+        ///   * height dominance - world Y is the longest axis (within 5%), and
+        ///   * MeshTaper.Ratio  - narrow on top, i.e. a roof rather than a plinth in the air.
+        ///
+        /// ⛔ WHY BOTH, AND WHY DISAGREEMENT MEANS "NO": on 2026-08-22 each signal lied ALONE - an
+        /// AABB cannot tell +90 from -90, and the taper scores a wide low COMPOUND (the barracks,
+        /// 0.95 tall vs 1.00 wide at identity, taper 0.82) as if its roof were down. Requiring
+        /// agreement makes the DEFAULT "not proven", which is the safe default for an assert whose
+        /// remedy is to edit a building that may currently be correct on screen. A green gate over
+        /// a broken town is strictly worse than a red gate over a correct one - and so is a red
+        /// gate that talks a seat into breaking one.
+        /// </summary>
+        private static bool NativelyUpright(GameObject prefab, out float taper, out Vector3 size)
+        {
+            taper = 1f;
+            size = Vector3.zero;
+            if (prefab == null) return false;
+
+            GameObject go = null;
+            try
+            {
+                go = Object.Instantiate(prefab);
+                go.hideFlags = HideFlags.HideAndDontSave;
+                go.transform.SetPositionAndRotation(Vector3.zero, Quaternion.identity);
+                if (!TryActiveWorldBounds(go, out Bounds b)) return false;
+
+                size = b.size;
+                taper = MeshTaper.Ratio(go.transform, b);
+                bool tall = b.size.y >= Mathf.Max(b.size.x, b.size.z) * 0.95f;
+                return tall && taper < MeshTaper.UprightBelow;
+            }
+            catch (Exception)
+            {
+                // An unmeasurable model is NOT evidence of a double correction.
+                return false;
+            }
+            finally
+            {
+                if (go != null) Object.DestroyImmediate(go);
+            }
+        }
+
         private static bool AnyModelAxisBaked(string assetPath, out string bakedModelPath)
         {
             bakedModelPath = null;

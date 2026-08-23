@@ -131,10 +131,10 @@ namespace DeNelle.Wallet
             internal const float ColumnGapPx      = 20f;
             internal const float EdgePadPx        = 18f;
 
-            /// <summary>Half the Close's canon width plus breathing room — the centre of the bottom
-            /// band the legal/promise copy must stay OUT of, or AuditGeometry rule 3 reports the
-            /// Close covering it.</summary>
-            internal const float CloseKeepOutPx = ElarionUiKit.CanonCtaWidth * 0.5f + 40f;
+            // ⛔ THE CLOSE KEEP-OUT IS NOT HERE. It moved to StoreLegalFooter.CloseKeepOutPx with
+            // the copy it protects — a keep-out authored in one file and consumed by the layout in
+            // another is the duplicated-measurement shape this file's own comments keep warning
+            // about. StoreLegalFooter owns the band's copy AND the space it must leave.
 
             /// <summary>FULL-BLEED. Owner ruling 1 (2026-08-22): "maximize whole screen". The old
             /// 0.055-0.945 column is retired; safe-area insets are applied in px on the screen host
@@ -143,6 +143,14 @@ namespace DeNelle.Wallet
             internal static readonly Vector2 PanelMax = new Vector2(1f, 1f);
 
             internal const int CardsPerRow = 2;
+
+            /// <summary>Height of the commerce column's CTA sub-host, reference px. ⛔ NAMED because
+            /// the CTA is authored as a FRACTION of it (0.030-0.335), so the button's real pixel
+            /// height is this number times that fraction. It was a bare 440f literal in one method
+            /// while the fraction lived in another and the resulting 134 px was only recorded in a
+            /// comment — two places holding one measurement, which is the exact shape that let the
+            /// card row and the card disagree (see BuildCardRow).</summary>
+            internal const float CtaHostPx = 440f;
         }
 
         /// <summary>
@@ -165,6 +173,16 @@ namespace DeNelle.Wallet
         /// the priced shelf above it.</summary>
         private const float FreeRowHeightPx = StorePackCard.CompactHeightPx;
 
+        /// <summary>Height of the FREE band's utility-tab row, reference px. ⛔ ONE NUMBER, and the
+        /// row and the slot both take it — the literal 132f used to be typed once in BuildFreeBand
+        /// and again in BuildUtilityTab, which is the two-places-one-measurement shape that produced
+        /// the card-on-card overlap this file's comments keep recording.</summary>
+        private const float FreeTabRowPx = 132f;
+
+        /// <summary>Narrowest a utility tab may be authored, reference px. Over MinTouchPx by
+        /// construction so three tabs can share the shelf without any of them inflating.</summary>
+        private const float FreeTabMinWidthPx = 210f;
+
         // Kit modal (lazy-built on first open) + the surfaces Render() fills.
         private ElarionUiKit.ObsidianModal _modal;
         private RectTransform _screen;                  // safe-area host: the three bands hang here
@@ -179,7 +197,7 @@ namespace DeNelle.Wallet
         private Transform _spotlightHost;               // rebuilt whole on each focus change
         private TextMeshProUGUI _statusBanner;          // purchase status surface
         private TextMeshProUGUI _balanceLabel;          // the read-only wallet mirror
-        private TextMeshProUGUI _disclaimerLabel;       // PackCatalog.CurrencyDisclaimer
+        private StoreLegalFooterHandle _legalFooter;    // the ONE legal/promise band (StoreLegalFooter)
         private StoreAurora _aurora;                    // Lane G — the four motion moments
 
         // The promo-code door. A CHILD overlay on this store's own canvas.
@@ -290,6 +308,13 @@ namespace DeNelle.Wallet
             _wallet = service;
             Render();
             RefreshWalletMirror().Forget();
+            RefreshSkrValuation().Forget();
+        }
+
+        private async UniTaskVoid RefreshSkrValuation()
+        {
+            if (await SkrValuationOracle.Refresh() && this != null && isActiveAndEnabled)
+                Render();
         }
 
         /// <summary>
@@ -412,7 +437,7 @@ namespace DeNelle.Wallet
             // The CTA sub-host. Cleared and rebuilt per focus so the spotlight column never has to be
             // torn down to repaint a button — and so the status surface above it SURVIVES a rebuild.
             _ctaHost = Region(_commerceHost, "CommerceCta", Vector2.zero, new Vector2(1f, 0f),
-                Vector2.zero, new Vector2(0f, 440f));
+                Vector2.zero, new Vector2(0f, NightMarketLayout.CtaHostPx));
 
             _shelfContent = BuildScrollColumn(_marketHost);
 
@@ -557,34 +582,15 @@ namespace DeNelle.Wallet
         private void BuildTrustStrip(Transform host)
         {
             if (host == null) return;
-            Plate(host, new Color(0f, 0f, 0f, 0.30f));
 
-            // Derived, never typed: half the canon Close plus breathing room, as a fraction of the
-            // band's own width.
-            float keep = NightMarketLayout.CloseKeepOutPx / NightMarketLayout.UsableWidthPx;
-            float leftX1 = 0.5f - keep;
-            float rightX0 = 0.5f + keep;
-
-            string treasury = Shorten(WalletService.RewardsDistributorAddress);
-
-            // LEFT — the legal half.
-            MakeText(host, StoreStrings.Get(StoreStrings.KeyTrustFee), 30, ElarionUi.Parchment,
-                FontStyles.Bold, TextAlignmentOptions.Left,
-                new Vector2(0f, 0.52f), new Vector2(leftX1, 0.98f));
-
-            // The market disclaimer keeps its place beneath the claims.
-            _disclaimerLabel = MakeText(host, PackCatalog.CurrencyDisclaimer, 30, ElarionUi.Parchment,
-                FontStyles.Normal, TextAlignmentOptions.Left,
-                new Vector2(0f, 0.04f), new Vector2(leftX1, 0.50f));
-
-            // RIGHT — the promise half.
-            MakeText(host, StoreStrings.Get(StoreStrings.KeyTrustNeverPower), 30, ElarionUi.Gold,
-                FontStyles.Bold, TextAlignmentOptions.Right,
-                new Vector2(rightX0, 0.52f), new Vector2(1f, 0.98f));
-
-            MakeText(host, StoreStrings.Format(StoreStrings.KeyTrustTreasury, treasury), 30,
-                ElarionUi.Parchment, FontStyles.Normal, TextAlignmentOptions.Right,
-                new Vector2(rightX0, 0.04f), new Vector2(1f, 0.50f));
+            // ⛔ THE COPY IS NOT AUTHORED HERE ANY MORE. StoreLegalFooter is the ONE owner of the
+            // store's legal/promise band — its four claims, the market disclaimer, and the keep-out
+            // the canon Close carves out of the centre of this row. It used to live inline in this
+            // method, which meant PackStore was the only surface that could ever print the claims
+            // correctly while SeasonTrackPanel already re-printed one of the same strings with its
+            // own geometry. One owner per concern (CLAUDE.md §7).
+            _legalFooter = StoreLegalFooter.Build(host, NightMarketLayout.UsableWidthPx,
+                Shorten(WalletService.RewardsDistributorAddress));
         }
 
         /// <summary>
@@ -636,8 +642,7 @@ namespace DeNelle.Wallet
                 Destroy(_shelfContent.GetChild(i).gameObject);
             _cardHandles.Clear();
 
-            if (_disclaimerLabel != null)
-                _disclaimerLabel.text = PackCatalog.CurrencyDisclaimer;
+            StoreLegalFooter.RefreshDisclaimer(_legalFooter);
 
             // Shared ledger scale, computed ONCE per render over every browsable pack. Per GOOD, not
             // global: one scale across all goods would make every crystals bar a sliver next to a
@@ -818,54 +823,39 @@ namespace DeNelle.Wallet
         {
             if (_shelfContent == null) return;
             BuildBandHead(StoreBand.Free);
-            // Keep every free-door row genuinely two-up, matching the priced shelf.
-            var firstStrip = BuildCardRow(FreeRowHeightPx);
+            var tabs = BuildCardRow(FreeTabRowPx);
+            BuildUtilityTab(tabs, entryLabel, OpenRedeemPanel, true);
+            BuildUtilityTab(tabs, "SEASON TRACK", () => PanelRouter.Open(PanelId.BattlePass), false);
+            BuildUtilityTab(tabs, "MONTHLY LEDGER", () => PanelRouter.Open(PanelId.MonthlyLedger), false);
+        }
 
-            var slot = new GameObject("free-redeem", typeof(RectTransform), typeof(LayoutElement));
-            slot.transform.SetParent(firstStrip, false);
+        /// <summary>
+        /// One FREE-band utility tab: a full-slot button and nothing else.
+        ///
+        /// <para>⛔ THE INSET IS 0.02, NOT 0.08, AND THAT IS THE WHOLE RULE HERE. At 0.08-0.92 of a
+        /// <see cref="FreeTabRowPx"/> slot minus the row's 6 px of padding, the button derived to
+        /// ~106 px tall — UNDER <see cref="ElarionUiKit.MinTouchPx"/>. A sub-floor control does not
+        /// fail the clamp; ClampMinTouch GROWS IT ABOUT ITS CENTRE, into the tab beside it. That is
+        /// P0-4 ("two giant OPEN slabs drawn over their own cards") re-entered by a different route,
+        /// and it is why every control on this screen is authored over the floor rather than rescued
+        /// by the clamp. The tab carries no copy of its own, so it can safely take the whole slot.</para>
+        /// </summary>
+        private void BuildUtilityTab(Transform strip, string label, Action action, bool accent)
+        {
+            var slot = new GameObject("utility-tab-" + label, typeof(RectTransform), typeof(LayoutElement));
+            slot.transform.SetParent(strip, false);
             var le = slot.GetComponent<LayoutElement>();
-            le.preferredHeight = FreeRowHeightPx;
-            le.minHeight = FreeRowHeightPx;
+            le.preferredHeight = FreeTabRowPx;
+            le.minHeight = FreeTabRowPx;
             le.flexibleWidth = 1f;
-            le.minWidth = StorePackCard.MinCardWidthPx;
-
+            le.minWidth = FreeTabMinWidthPx;
             Plate(slot.transform, NightMarketPalette.GroundRaised);
-            var light = NightMarketPalette.For(StoreBand.Free);
-            Orb(slot.transform, light);
-
-            FitInto(MakeText(slot.transform, PromoStrings.Get(PromoStrings.KeyTitle), 34, ElarionUi.Parchment,
-                FontStyles.Bold, TextAlignmentOptions.TopLeft,
-                new Vector2(0.26f, 0.74f), new Vector2(0.96f, 0.98f)), 34);
-            FitInto(MakeText(slot.transform, PromoStrings.Get(PromoStrings.KeyBlurb), 30, ElarionUi.ParchmentDim,
-                FontStyles.Italic, TextAlignmentOptions.TopLeft,
-                new Vector2(0.06f, 0.56f), new Vector2(0.96f, 0.73f)), 30);
-
-            // ⛔ AUTHORED AT 0.02-0.53 OF A 228-UNIT CARD = ~116 px TALL, AND THAT IS BOTH ENDS OF
-            // THE RULE. Above MinTouchPx(112), so ClampMinTouch is a no-op and nothing inflates into
-            // the row beside it — and it stops BELOW the blurb (0.56), so the button cannot be drawn
-            // over its own card's copy, which is what P0-4's "two giant OPEN slabs drawn over their
-            // own cards" was: a control given the whole lower half of a card that also had text there.
-            var redeemBtn = ElarionUiKit.BuildObsidianButton(slot.transform,
-                entryLabel,
+            var button = ElarionUiKit.BuildObsidianButton(slot.transform, label,
                 ElarionUiKit.ObsidianButtonStyle.Style1,
-                ElarionUiKit.ObsidianButtonColor.Yellow,
-                new Vector2(0.06f, 0.02f), new Vector2(0.60f, 0.53f),
-                OpenRedeemPanel);
-            if (redeemBtn == null)
-                FlowTrace.Fail("Store", "BuildFreeBand: Redeem-a-Code button failed to build — the promo system has NO player entry point again.");
-            else
-            {
-                var redeemLabel = redeemBtn.GetComponentInChildren<TMP_Text>(true);
-                if (redeemLabel != null)
-                    ElarionUiKit.FitSingleLine(redeemLabel, ElarionUi.FontFloorMobile, 34f);
-                FlowTrace.Step("Store", "BuildFreeBand: Redeem-a-Code entry built (ungated by design — the purchase flag gates BUYING only).");
-            }
-
-            BuildFreeDoor(firstStrip, "SEASON TRACK", "Play battles. Earn every tier.", PanelId.BattlePass);
-
-            var secondStrip = BuildCardRow(FreeRowHeightPx);
-            BuildFreeDoor(secondStrip, "MONTHLY LEDGER", "Thirty claims. Missed days stay yours.", PanelId.MonthlyLedger);
-            Spacer(secondStrip);
+                accent ? ElarionUiKit.ObsidianButtonColor.Yellow : ElarionUiKit.ObsidianButtonColor.Gray,
+                new Vector2(0.02f, 0.02f), new Vector2(0.98f, 0.98f), action);
+            var text = button != null ? button.GetComponentInChildren<TMP_Text>(true) : null;
+            if (text != null) ElarionUiKit.FitSingleLine(text, ElarionUi.FontFloorMobile, 28f);
         }
 
         private void BuildFreeDoor(Transform strip, string title, string blurb, PanelId panel)

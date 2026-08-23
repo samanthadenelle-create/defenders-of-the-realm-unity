@@ -129,7 +129,13 @@
 > fine as history. A copied number is the bug **even when it was right the day it was written** -
 > that is exactly how the retired 860-899 UI block kept re-seeding collisions from CLAUDE.md sec.2.
 
-> ## ⚠ RECONCILED 2026-08-23 (CLI): main line next free = **1157**.
+> ## ⚠ RECONCILED 2026-08-23 (CLI): main line next free = **1159**.
+> *(CLI seat minted **WO-1157** and **WO-1158** and bumped 1157 -> 1159 in this SAME edit.
+> **1157** = a purchase asks the wallet three times and should ask once (session token).
+> **1158** = the SERVER must quote the SKR price; a client-resolved price against a
+> server-pinned constant is paid-but-not-granted the moment the market moves.)*
+>
+> ### superseded: RECONCILED 2026-08-23 (CLI): main line next free = **1157**.
 > *(CLI seat minted **WO-1156** and bumped 1156 -> 1157 in this SAME edit. **WO-1156** = portal
 > foliage clearance (split from WO-1062 §4) + whether the threshold aura inherits the same wrong
 > axis WO-1062 just corrected.)*
