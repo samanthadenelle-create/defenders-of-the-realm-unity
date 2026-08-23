@@ -304,6 +304,10 @@ namespace DeNelle.Village.Monetization
             _adFace = AdFace.Unknown;
         }
 
-        private static string TodayKey() => DateTime.UtcNow.ToString("yyyy-MM-dd");
+        // WO-1134 — REPOINTED at the one Core definition (DeNelle.Core.UtcDay). This used to
+        // be its own `DateTime.UtcNow.ToString("yyyy-MM-dd")`, one of five identical private
+        // copies scattered across the monetization + raid paths. Kept as a local wrapper so
+        // the five call sites below read unchanged; the TRUTH now lives in exactly one file.
+        private static string TodayKey() => UtcDay.Key();
     }
 }

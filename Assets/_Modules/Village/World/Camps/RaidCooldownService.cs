@@ -81,18 +81,32 @@ namespace DeNelle.Village.World.Camps
         //
         //  WHY, recorded here so nobody "optimises" it later:
         //
-        //  ⭑ THIS NUMBER IS THE CRYSTAL BOUND. It is not pacing garnish.
-        //    RaidScoring.ComputeLoot returns a ResourceCost of FOOD and CRYSTALS and
-        //    NOTHING ELSE — raids pay zero wood and zero iron, while every troop costs
-        //    wood + iron + food. So the raid loop structurally cannot fund its own
-        //    input, food is already capped by storage, and CRYSTALS ARE THE ONE
-        //    UNBOUNDED FAUCET IN THE GAME. This cooldown is the only thing bounding it.
+        //  ⭑ WHY CRYSTALS NEED BOUNDING AT ALL. RaidScoring.ComputeLoot returns a
+        //    ResourceCost of FOOD and CRYSTALS and NOTHING ELSE — raids pay zero wood and
+        //    zero iron, while every troop costs wood + iron + food. So the raid loop
+        //    structurally cannot fund its own input, food is already capped by storage,
+        //    and CRYSTALS ARE THE ONE UNBOUNDED FAUCET IN THE GAME.
         //
-        //  ⭑ THE ARITHMETIC THE RULING WAS MADE ON: an Extreme clear at 3 stars / 100%
-        //    razed pays 121 crystals. At 12 h that is ~2 clears/day = ~242 crystals/day,
-        //    sitting alongside the 200-350/day committed income the WO-1129 economy
-        //    model measured. That roughly DOUBLES endgame crystal income without
-        //    trivialising the 45,690-crystal content ladder.
+        //  ⛔ THIS COOLDOWN IS NO LONGER THE CRYSTAL BOUND — THE UTC DAY IS (WO-1134).
+        //    ⚠ THIS BLOCK USED TO SAY "THIS NUMBER IS THE CRYSTAL BOUND" AND "12 h = ~2
+        //    clears/day = ~242 crystals/day". BOTH ARE NOW WRONG, and the second one is
+        //    wrong by 2x. Under the owner's daily ruling a camp pays crystals on the FIRST
+        //    clear of each UTC day ONLY (RaidClaimService.CrystalsPaidToday); the second
+        //    clear of a day pays reduced ORDINARY resources and ZERO crystals. So an
+        //    Extreme camp at 3 stars / 100% razed pays 121 crystals/day, NOT ~242 — and
+        //    the cooldown now bounds only WITHIN-day repeats, which pay no crystals anyway.
+        //
+        //    THE ARITHMETIC AS IT NOW STANDS: 121 crystals/day per Extreme camp against
+        //    the 200-350/day committed income the WO-1129 economy model measured. That is
+        //    a meaningful endgame supplement rather than the near-doubling the original
+        //    ruling was priced on, and it still does not trivialise the 45,690-crystal
+        //    content ladder.
+        //
+        //  ⚠ SEMANTIC CHANGE, FLAGGED NOT BURIED: the 12 h number itself is UNCHANGED and
+        //    is still an owner ruling — what changed is the RATIONALE UNDER IT. It is now
+        //    a PACING knob (how often a camp is re-fightable) rather than the crystal
+        //    bound. If crystal income is ever retuned, the lever is the day stamp, not
+        //    this table. Do not re-derive a crystal budget from these hours.
         //
         //  ⭑ WHY SHORTENING IT IS SELF-DEFEATING: crystals buy INSTANT-FINISH on the
         //    Obsidian queue. A shorter cooldown therefore defunds the very timer ladder

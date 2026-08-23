@@ -228,6 +228,14 @@ namespace DeNelle.Village.World.Camps
             // a repeat. The answer feeds the first-clear loot gate at STEP 3.5.
             bool repeatClear = RaidClaimService.IsClaimed(configId);
 
+            // STEP 1.6 (WO-1134) — HAVE THIS CAMP'S CRYSTALS ALREADY BEEN PAID TODAY (UTC)?
+            // A SECOND, INDEPENDENT question from repeatClear, kept on its own flag on purpose:
+            // repeatClear is "have I EVER taken this camp" (never expires, and also gates the
+            // one-time companion unlock), while this is "have I taken it TODAY" (resets at UTC
+            // midnight). They cross - the first clear of a NEW day is repeat:true, paid:false,
+            // and pays reduced resources but FULL crystals. Read BEFORE the grant stamps it.
+            bool crystalsPaidToday = RaidClaimService.CrystalsPaidToday(configId);
+
             // STEP 2 — claim the base (persist + flip ownership PLAYER-owned).
             bool newClaim = ClaimBase(configId);
 
@@ -250,8 +258,13 @@ namespace DeNelle.Village.World.Camps
             RaidScoring scoring = RaidScoring.Instance;
             RaidResult result = scoring != null ? scoring.Finalize(true) : null;
             ResourceCost loot = scoring != null ? scoring.LootFor(result) : default(ResourceCost);
-            loot = ApplyFirstClearGate(loot, repeatClear, configId);
+            loot = ApplyFirstClearGate(loot, repeatClear, crystalsPaidToday, configId);
             GrantLoot(loot);
+
+            // WO-1134 — stamp the crystal day AFTER the grant, and only when this payout
+            // actually carried crystals. Stamping before the grant (or unconditionally) would
+            // burn the player's one crystal clear of the day on a payout that paid none.
+            if (loot.Crystals > 0) RaidClaimService.MarkCrystalsPaid(configId);
 
             // STEP 3.6 - SETTLE THE ARMY. A WON raid must cost troops and pay veterancy
             // exactly as the retreat exit does. Before this, ReconcileAfterRaid had a single
@@ -306,8 +319,13 @@ namespace DeNelle.Village.World.Camps
         /// <summary>
         /// THE FIRST-CLEAR GATE (defect sweep 2026-08-15). A base pays its settled loot on
         /// the clear that CLAIMS it; a re-clear of an already-claimed base is scaled by
-        /// <see cref="RaidClaimService.RepeatClearLootMultiplier"/> (0 by default = pays
-        /// only reduced ordinary resources and never premium crystals).
+        /// <see cref="RaidClaimService.RepeatClearLootMultiplier"/>.
+        ///
+        /// <para>WO-1134 — CRYSTALS ARE NO LONGER ON THAT AXIS. This method used to be the
+        /// whole story ("a claimed base never pays crystals again"); the owner ruling replaced
+        /// that with a once-per-UTC-DAY stamp, so crystals are decided by
+        /// <c>crystalsPaidToday</c> and reset every day even on a long-claimed base, while the
+        /// multiplier keeps governing wood/food/iron/coins. Two flags, two questions.</para>
         ///
         /// <para>THE HOLE THIS CLOSES: loot was never gated on <c>newClaim</c> at all. The
         /// claim set was written and never read, so re-entering a cleared base and razing it
@@ -320,22 +338,41 @@ namespace DeNelle.Village.World.Camps
         /// must be able to see WHY in a capture, and a first clear must be able to prove it
         /// paid in full. Never silent.</para>
         /// </summary>
-        private static ResourceCost ApplyFirstClearGate(ResourceCost loot, bool repeatClear, string configId)
+        private static ResourceCost ApplyFirstClearGate(ResourceCost loot, bool repeatClear,
+                                                        bool crystalsPaidToday, string configId)
         {
+            ResourceCost scaled = RaidClaimService.ScaleLootForClear(loot, repeatClear, crystalsPaidToday);
+
+            // THE CRYSTAL DAY-STAMP DECISION (WO-1134) — reported on BOTH branches, because a
+            // player who cleared a camp twice and got crystals only once must be able to see
+            // WHY in a capture, and a paying clear must be able to prove it paid.
+            if (loot.Crystals > 0)
+            {
+                if (crystalsPaidToday)
+                    FlowTrace.Warn("Raid",
+                        $"CRYSTAL DAY-STAMP: '{configId}' already paid crystals this UTC day - " +
+                        $"withholding {loot.Crystals} crystals (paying {scaled.Crystals}). Crystals reset at " +
+                        "UTC midnight, so the DAY is the crystal bound now, not the cooldown; the ordinary " +
+                        "resources on this clear are unaffected by this axis.");
+                else
+                    FlowTrace.Step("Raid",
+                        $"CRYSTAL DAY-STAMP: '{configId}' has NOT paid crystals this UTC day - paying " +
+                        $"{scaled.Crystals} crystals IN FULL (repeatClear={repeatClear}).");
+            }
+
             if (!repeatClear)
             {
                 if (!loot.IsZero)
                     FlowTrace.Step("Raid", $"FIRST-CLEAR gate: '{configId}' was unclaimed - paying the settled " +
-                                           $"loot IN FULL ({Describe(loot)}).");
-                return loot;
+                                           $"ordinary loot IN FULL ({Describe(scaled)}).");
+                return scaled;
             }
 
-            ResourceCost scaled = RaidClaimService.ScaleLootForClear(loot, true);
             FlowTrace.Warn("Raid",
-                $"REPEAT CLEAR of '{configId}' (already claimed) - loot scaled by " +
+                $"REPEAT CLEAR of '{configId}' (already claimed) - ordinary loot scaled by " +
                 $"x{RaidClaimService.RepeatClearLootMultiplier:0.##}: {Describe(loot)} -> {Describe(scaled)}. " +
-                "A claimed base never pays premium crystals again; the reduced ordinary-resource " +
-                "payout keeps practice runs useful without creating a crystal farm.");
+                "The reduced ordinary-resource payout keeps practice runs useful; crystals on a repeat " +
+                "are decided by the UTC day-stamp above, NOT by this multiplier.");
             return scaled;
         }
 

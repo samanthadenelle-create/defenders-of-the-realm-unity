@@ -21,6 +21,16 @@
 //          claim set's ROUND TRIP (PlayerPrefs, on a scratch id), and the CALL ORDER
 //          in both victory controllers - the read must precede the claim that flips it.
 //
+//          WO-1134 EXTENDS PIN A WITH THE CRYSTAL DAY-STAMP. Crystals are now paid on
+//          the FIRST clear of each UTC DAY rather than only on the clear that claims
+//          the base, so the DAY - not the raid cooldown - is what bounds the game's one
+//          unbounded faucet. That is a SECOND, INDEPENDENT axis and the pin asserts it
+//          as a 3-case matrix, because the case that matters is the CROSS: an
+//          already-claimed base on a NEW day pays reduced ordinary resources AND full
+//          crystals. It also pins that the day stamp lives on its OWN PlayerPrefs key -
+//          folding it into the ownership key would day-scope the ONE-TIME companion
+//          unlock and re-grant a companion every day, forever.
+//
 //   PIN B  AN OFF-NAVMESH DEPLOY DOES NOT PRODUCE A COUNTED SURVIVOR.
 //          RaidDeployController raycast the deploy tap against ALL layers and never
 //          tested walkability; TroopFactory's SamplePosition then failed and SPAWNED
@@ -76,9 +86,12 @@ namespace DeNelle.Editor.Regression
             }
             finally
             {
-                // The scratch claim never survives this suite, however it exits.
+                // The scratch claim + the scratch crystal day-stamp never survive this suite,
+                // however it exits.
                 try { RaidClaimService.ClearClaim(ScratchId); }
                 catch (Exception ex) { Debug.LogWarning("raid-repeat-clear: scratch cleanup failed: " + ex.Message); }
+                try { RaidClaimService.ClearCrystalDayStamp(ScratchId); }
+                catch (Exception ex) { Debug.LogWarning("raid-repeat-clear: scratch day-stamp cleanup failed: " + ex.Message); }
             }
         }
 
@@ -107,7 +120,10 @@ namespace DeNelle.Editor.Regression
                 Debug.Log("RAID_REPEAT_CLEAR_OK");
                 reason = "RAID REPEAT CLEAR OK -- a re-clear of a claimed base pays x" +
                          RaidClaimService.RepeatClearLootMultiplier.ToString("0.##") +
-                         " of the settled loot (gate arithmetic + PlayerPrefs round trip verified live), " +
+                         " of the settled ORDINARY loot (gate arithmetic + PlayerPrefs round trip verified " +
+                         "live), CRYSTALS are paid only on the FIRST clear of each UTC day on an independent " +
+                         "stamp that never touches the one-time claim/companion flag (3-case matrix verified: " +
+                         "first-today full / repeat-today zero / first-of-a-new-day full again), " +
                          "both victory controllers read the claim BEFORE they write it, and an off-NavMesh " +
                          "deploy tap is refused at the input with a player tell + a FlowTrace line, so no " +
                          "inert body can reach the survivor ledger";
@@ -139,20 +155,20 @@ namespace DeNelle.Editor.Regression
             // --- A2: the gate ARITHMETIC, run for real against the pure static ---
             var full = new ResourceCost(wood: 400, food: 600, iron: 300, crystals: 500, coins: 200);
 
-            var first = RaidClaimService.ScaleLootForClear(full, false);
+            var first = RaidClaimService.ScaleLootForClear(full, false, false);
             if (first.Wood != full.Wood || first.Food != full.Food || first.Iron != full.Iron
                 || first.Crystals != full.Crystals || first.Coins != full.Coins)
-                fails.Add("ScaleLootForClear(loot, isRepeatClear:false) altered a FIRST clear's payout " +
-                          "(crystals " + first.Crystals + " of " + full.Crystals + ") - the gate must be " +
-                          "invisible on the clear that claims the base");
+                fails.Add("ScaleLootForClear(loot, isRepeatClear:false, crystalsAlreadyPaidToday:false) altered " +
+                          "a FIRST clear's payout (crystals " + first.Crystals + " of " + full.Crystals +
+                          ") - the gate must be invisible on the clear that claims the base");
 
-            var repeat = RaidClaimService.ScaleLootForClear(full, true);
+            var repeat = RaidClaimService.ScaleLootForClear(full, true, true);
             if (repeat.Crystals >= full.Crystals || repeat.Food >= full.Food || repeat.Wood >= full.Wood
                 || repeat.Iron >= full.Iron || repeat.Coins >= full.Coins)
-                fails.Add("ScaleLootForClear(loot, isRepeatClear:true) did NOT reduce the payout (crystals " +
-                          repeat.Crystals + " of " + full.Crystals + ", food " + repeat.Food + " of " +
-                          full.Food + ") - re-clearing a claimed base still pays what the first clear paid, " +
-                          "which is the infinite-faucet defect this pin exists to stop");
+                fails.Add("ScaleLootForClear(loot, isRepeatClear:true, crystalsAlreadyPaidToday:true) did NOT " +
+                          "reduce the payout (crystals " + repeat.Crystals + " of " + full.Crystals + ", food " +
+                          repeat.Food + " of " + full.Food + ") - re-clearing a claimed base still pays what the " +
+                          "first clear paid, which is the infinite-faucet defect this pin exists to stop");
 
             // The absolute floor, independent of whatever curve the owner later sets: a repeat
             // may never out-earn the first clear on ANY axis.
@@ -162,10 +178,97 @@ namespace DeNelle.Editor.Regression
                           "knob has been set above 1 and the defensive clamp in ScaleLootForClear is gone");
 
             // Zero in, zero out - a scaled nothing must never conjure a payout.
-            var nothing = RaidClaimService.ScaleLootForClear(default(ResourceCost), true);
+            var nothing = RaidClaimService.ScaleLootForClear(default(ResourceCost), true, true);
             if (!nothing.IsZero)
                 fails.Add("ScaleLootForClear(zero loot, repeat) returned a NON-ZERO payout - the gate is " +
                           "inventing resources out of an empty result");
+
+            // ------------------------------------------------------------------
+            //  A2b (WO-1134) - THE CRYSTAL DAY-STAMP IS A SECOND, INDEPENDENT AXIS
+            // ------------------------------------------------------------------
+            // The three cases the owner ruling actually describes, asserted as a MATRIX,
+            // because the interesting one is the CROSS: a base claimed months ago
+            // (repeatClear TRUE) whose crystal day has rolled over (paid FALSE) must pay
+            // reduced ordinary resources AND full crystals. A single overloaded flag cannot
+            // express that case, which is exactly what the old two-arg signature got wrong.
+            int expectRepeatWood = Mathf.FloorToInt(full.Wood * mult);
+            int expectRepeatFood = Mathf.FloorToInt(full.Food * mult);
+
+            // Case 1 - FIRST clear of the day (and of the base): everything in full.
+            var dayCase1 = RaidClaimService.ScaleLootForClear(full, false, false);
+            if (dayCase1.Crystals != full.Crystals)
+                fails.Add("crystal day-stamp case 1 (first clear today, crystals unpaid): paid " +
+                          dayCase1.Crystals + " crystals of " + full.Crystals + " - the first clear of a " +
+                          "UTC day must pay its crystals IN FULL");
+
+            // Case 2 - REPEAT clear the SAME day: crystals zero, ordinary resources still x0.25.
+            var dayCase2 = RaidClaimService.ScaleLootForClear(full, true, true);
+            if (dayCase2.Crystals != 0)
+                fails.Add("crystal day-stamp case 2 (repeat clear, same UTC day): paid " + dayCase2.Crystals +
+                          " crystals - a camp that has already paid crystals today must pay ZERO. Crystals " +
+                          "are the one unbounded faucet in the game and the day stamp is what bounds them");
+            if (dayCase2.Wood != expectRepeatWood || dayCase2.Food != expectRepeatFood)
+                fails.Add("crystal day-stamp case 2 (repeat clear, same UTC day): ordinary resources came " +
+                          "back wood " + dayCase2.Wood + "/food " + dayCase2.Food + ", expected " +
+                          expectRepeatWood + "/" + expectRepeatFood + " - the crystal axis has been allowed " +
+                          "to disturb the x" + mult.ToString("0.##") + " repeat-clear scaling it must not touch");
+
+            // Case 3 - the CROSS. First clear of a NEW day on an already-claimed base:
+            // ordinary resources still reduced, crystals FULL again.
+            var dayCase3 = RaidClaimService.ScaleLootForClear(full, true, false);
+            if (dayCase3.Crystals != full.Crystals)
+                fails.Add("crystal day-stamp case 3 (first clear of a NEW UTC day on a base claimed earlier): " +
+                          "paid " + dayCase3.Crystals + " crystals of " + full.Crystals + " - crystals RESET " +
+                          "daily under the owner ruling, so a long-claimed camp pays them again tomorrow. This " +
+                          "is the case the old two-arg signature got silently wrong by hardcoding crystals:0 " +
+                          "on every repeat");
+            if (dayCase3.Wood != expectRepeatWood || dayCase3.Food != expectRepeatFood)
+                fails.Add("crystal day-stamp case 3: ordinary resources came back wood " + dayCase3.Wood +
+                          "/food " + dayCase3.Food + ", expected " + expectRepeatWood + "/" + expectRepeatFood +
+                          " - a new crystal day must NOT restore the full ordinary payout; the two axes are " +
+                          "independent and repeatClear still governs wood/food/iron/coins");
+
+            // The remaining corner: unpaid crystals on a repeat must never come back SCALED.
+            // A fractional premium payout is how a bounded faucet quietly becomes an unbounded one.
+            if (dayCase3.Crystals != 0 && dayCase3.Crystals != full.Crystals)
+                fails.Add("crystal day-stamp: crystals were SCALED by the repeat multiplier (" +
+                          dayCase3.Crystals + " of " + full.Crystals + ") - crystals are all-or-nothing on " +
+                          "the day stamp, never a fraction");
+
+            // ------------------------------------------------------------------
+            //  A2c - the day stamp actually ROUND TRIPS through PlayerPrefs
+            // ------------------------------------------------------------------
+            RaidClaimService.ClearCrystalDayStamp(ScratchId);
+            if (RaidClaimService.CrystalsPaidToday(ScratchId))
+                fails.Add("RaidClaimService.CrystalsPaidToday reported TRUE on a camp with no stamp - every " +
+                          "raid would pay zero crystals forever");
+
+            RaidClaimService.MarkCrystalsPaid(ScratchId);
+            if (!RaidClaimService.CrystalsPaidToday(ScratchId))
+                fails.Add("RaidClaimService.CrystalsPaidToday returned FALSE immediately after MarkCrystalsPaid " +
+                          "- the day stamp does not persist, so every clear of the day would pay full crystals " +
+                          "and the cooldown would again be the only bound");
+
+            RaidClaimService.ClearCrystalDayStamp(ScratchId);
+            if (RaidClaimService.CrystalsPaidToday(ScratchId))
+                fails.Add("RaidClaimService.ClearCrystalDayStamp left the stamp in place - the dev/test reset " +
+                          "hook does not work");
+
+            // The stamp must NOT be the claim flag wearing a different name: claiming a base
+            // must never imply its crystals were paid, and vice versa. This separation is what
+            // stops a day-scoped flag from re-granting the ONE-TIME companion unlock every day.
+            RaidClaimService.ClearClaim(ScratchId);
+            RaidClaimService.MarkCrystalsPaid(ScratchId);
+            if (RaidClaimService.IsClaimed(ScratchId))
+                fails.Add("MarkCrystalsPaid also flipped the CLAIM flag - the daily crystal axis has been " +
+                          "wired into the one-time ownership key, which gates the next-companion unlock. " +
+                          "Day-scoping that key re-grants a companion every day, forever");
+            RaidClaimService.ClearCrystalDayStamp(ScratchId);
+            RaidClaimService.MarkClaimed(ScratchId);
+            if (RaidClaimService.CrystalsPaidToday(ScratchId))
+                fails.Add("MarkClaimed also stamped the CRYSTAL DAY - claiming a base would consume its " +
+                          "crystal payout for the day, so the very clear that claims it pays none");
+            RaidClaimService.ClearClaim(ScratchId);
 
             // --- A3: the claim set actually round-trips (it was write-only before) ---
             RaidClaimService.ClearClaim(ScratchId);
@@ -195,6 +298,19 @@ namespace DeNelle.Editor.Regression
             if (claim.IndexOf("ScaleLootForClear", StringComparison.Ordinal) < 0)
                 fails.Add("RaidClaimService no longer exposes ScaleLootForClear - the first-clear gate's " +
                           "single arithmetic authority is gone");
+            if (claim.IndexOf("CrystalsPaidToday", StringComparison.Ordinal) < 0)
+                fails.Add("RaidClaimService no longer exposes CrystalsPaidToday - the WO-1134 crystal " +
+                          "day-stamp is gone and crystals are unbounded within a day again");
+            if (claim.IndexOf("MarkCrystalsPaid", StringComparison.Ordinal) < 0)
+                fails.Add("RaidClaimService no longer exposes MarkCrystalsPaid - nothing records that a camp " +
+                          "paid its crystals today, so every clear of the day pays them again");
+            // Pinned on the IDENTIFIER, never on the key string: ReadCode strips string
+            // literals, so a pin on "dotr-raid-crystalday-" could never match anything.
+            if (claim.IndexOf("PrefCrystalDayKey", StringComparison.Ordinal) < 0)
+                fails.Add("RaidClaimService no longer declares PrefCrystalDayKey - the crystal day-stamp has " +
+                          "lost its OWN PlayerPrefs key. If it has been folded into PrefOwnerKey then the " +
+                          "ONE-TIME companion unlock is now day-scoped and re-grants a companion every day, " +
+                          "forever (RaidVictoryController + OutpostVictoryController both read that flag)");
 
             string handleVictory = Body(victory, @"void\s+HandleVictory\s*\([^)]*\)");
             if (string.IsNullOrEmpty(handleVictory))
@@ -223,6 +339,28 @@ namespace DeNelle.Editor.Regression
                     fails.Add("RaidVictoryController.HandleVictory grants the loot (at " + iGrant + ") BEFORE " +
                               "applying the first-clear gate (at " + iGate + ") - the full payout has already " +
                               "landed in the wallet by the time it is scaled");
+
+                // --- WO-1134: the crystal day-stamp's own read-before-write + write-after-grant ---
+                int iDayRead  = handleVictory.IndexOf("RaidClaimService.CrystalsPaidToday(", StringComparison.Ordinal);
+                int iDayWrite = handleVictory.IndexOf("RaidClaimService.MarkCrystalsPaid(", StringComparison.Ordinal);
+
+                if (iDayRead < 0)
+                    fails.Add("RaidVictoryController.HandleVictory no longer reads " +
+                              "RaidClaimService.CrystalsPaidToday - nothing tells the first clear of a UTC day " +
+                              "from the second, so every clear of the day pays full crystals again");
+                if (iDayWrite < 0)
+                    fails.Add("RaidVictoryController.HandleVictory no longer calls " +
+                              "RaidClaimService.MarkCrystalsPaid - the day is never stamped, so the gate reads " +
+                              "'unpaid' forever and bounds nothing");
+                if (iDayRead >= 0 && iDayWrite >= 0 && iDayRead > iDayWrite)
+                    fails.Add("RaidVictoryController.HandleVictory reads CrystalsPaidToday (at " + iDayRead +
+                              ") AFTER MarkCrystalsPaid (at " + iDayWrite + "), which is the call that WRITES " +
+                              "the stamp - so every clear would read as already-paid and no raid would ever pay " +
+                              "crystals. Read before you stamp, exactly as with the claim flag");
+                if (iDayWrite >= 0 && iGrant >= 0 && iDayWrite < iGrant)
+                    fails.Add("RaidVictoryController.HandleVictory stamps the crystal day (at " + iDayWrite +
+                              ") BEFORE GrantLoot (at " + iGrant + ") - a grant that then throws would have " +
+                              "burned the player's one crystal clear of the day for nothing");
             }
 
             string handleCleared = Body(v2, @"void\s+HandleCleared\s*\([^)]*\)");
