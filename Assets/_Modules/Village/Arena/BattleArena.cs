@@ -1674,28 +1674,26 @@ namespace DeNelle.Village.Arena
             else                            { display = "Orcish Raider";  hp = 65;  dmg = 10; spd = 3.0f; atk = 1.2f; height = 1.9f; }
 
             // WO-1103 item 2: REWARDS now read the CANONICAL CATALOG (the follow-up the
-            // 2026-07-01 note above promised) — base xp/coin/glimmer + rewardVariance come
+            // 2026-07-01 note above promised) — base xp/coin + rewardVariance come
             // from the enemies.json row for this id, threat-scaled by the same t multiplier
             // the stats use. Ids with no catalog row (the arena-only orc-warrior/tank/mage/
             // warlord synthetics) keep the legacy synthesized values plus a code-default
             // variance so they stay range-bound too. Combat stats stay synthesized either
             // way (this WO touches rewards only).
-            int xpBase, glimmerBase, coinBase; float variance;
+            int xpBase, coinBase; float variance;
             EnemyDef row = CatalogRow(id);
             if (row != null)
             {
                 xpBase      = Mathf.RoundToInt(row.XpReward * t);
-                glimmerBase = Mathf.RoundToInt(row.GlimmerReward * t);
                 coinBase    = row.CoinReward > 0 ? Mathf.RoundToInt(row.CoinReward * t) : 0;
                 variance    = row.RewardVariance;
                 FlowTrace.Step("BattleArena",
                     $"REWARD DEF id={id} source=catalog baseXp={row.XpReward} baseCoin={row.CoinReward} " +
-                    $"var={variance:0.00} threatScale={t:0.00} -> xp={xpBase} coin={coinBase} glimmer={glimmerBase}");
+                    $"var={variance:0.00} threatScale={t:0.00} -> xp={xpBase} coin={coinBase}");
             }
             else
             {
                 xpBase      = Mathf.RoundToInt(14 * t);
-                glimmerBase = Mathf.RoundToInt(3 * t);
                 coinBase    = 0;   // Enemy.Die's XP-derived gold fallback keeps the kill paying
                 variance    = FallbackRewardVariance;
                 FlowTrace.Warn("BattleArena",
@@ -1708,7 +1706,7 @@ namespace DeNelle.Village.Arena
                 Id = id, Name = display, DisplayName = display, Ai = "walker",
                 Hp = hp * t, MoveSpeed = spd, ContactDamage = dmg * t, AttackInterval = atk,
                 Height = height, AggroRadius = 18f,
-                XpReward = xpBase, GlimmerReward = glimmerBase, CoinReward = coinBase,
+                XpReward = xpBase, CoinReward = coinBase,
                 RewardVariance = variance,
             };
         }

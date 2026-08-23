@@ -42,8 +42,8 @@
 // 38 on a LIVE PUBLISHED game, and a schema bump there is an OWNER decision, not a
 // side effect of a monetization feature. PlayerPrefs is the pattern
 // ArenaProgressStore itself uses for exactly this reason (its own note: "until the
-// save owner wires ArenaProgress into SaveSchema"), and GlimmerCurrencyService and
-// BattlePassManager use it too. NO SCHEMA BUMP IS TAKEN OR NEEDED. When the save
+// save owner wires ArenaProgress into SaveSchema"). NO SCHEMA BUMP IS TAKEN OR
+// NEEDED. When the save
 // owner threads ArenaProgress through the round-trip, this state should ride along
 // in the same change.
 //
@@ -303,10 +303,14 @@ namespace DeNelle.Wallet
 
                 if (xp <= 0) return;
 
+                int priorTier = HighestTierReached;
                 int before2 = Xp;
                 PlayerPrefs.SetInt(KeyXp, before2 + xp);
                 SetTodayXp(dayXp + xp);
                 PlayerPrefs.Save();
+
+                int reachedTier = HighestTierReached;
+                if (reachedTier > priorTier) BattlePassLevelUpVfxBridge.Play(reachedTier);
 
                 FlowTrace.Step("BattlePass", "OnArenaResult(win=" + win + ", streak=" + streak + ", perfect=" +
                                              perfect + "): +" + xp + " XP -> " + Xp + " (tier " +

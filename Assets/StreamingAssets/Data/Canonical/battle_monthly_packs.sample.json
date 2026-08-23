@@ -8,7 +8,6 @@
   },
   "version": 1,
   "currencyDisclaimer": "Token price moves with the market.",
-
   "packs": [
     {
       "sku": "battle-crown-emberforged",
@@ -16,10 +15,22 @@
       "name": "Emberforged Crown",
       "tagline": "Wear your victories in living ember — the crown the arena remembers.",
       "theme": "Battle cosmetic — victory-crown skin (swaps crown_tier1/2/3 + perfect art). Presentation only.",
-      "pricing": { "usd": 4.99, "usdc": 4.99, "sol": 0.045, "skr": 60 },
+      "pricing": {
+        "usd": 4.99,
+        "usdc": 4.99,
+        "sol": 0.045,
+        "skr": 60
+      },
       "contents": {
-        "cosmetics": ["cosmetic.crown.emberforged", "cosmetic.crown.emberforged.exclusive"],
-        "economy": { "glimmer": 40, "crystals": 0, "food": 0, "coins": 0 },
+        "cosmetics": [
+          "cosmetic.crown.emberforged",
+          "cosmetic.crown.emberforged.exclusive"
+        ],
+        "economy": {
+          "crystals": 0,
+          "food": 0,
+          "coins": 0
+        },
         "convenience": []
       },
       "packExclusiveCosmetic": "cosmetic.crown.emberforged.exclusive"
@@ -30,10 +41,22 @@
       "name": "Ashen Coliseum",
       "tagline": "Fight where the old fires burned — an arena dressed in ash and gold.",
       "theme": "Battle cosmetic — arena ground/ambiance reskin for the BattleArena. No gameplay change.",
-      "pricing": { "usd": 4.99, "usdc": 4.99, "sol": 0.045, "skr": 60 },
+      "pricing": {
+        "usd": 4.99,
+        "usdc": 4.99,
+        "sol": 0.045,
+        "skr": 60
+      },
       "contents": {
-        "cosmetics": ["cosmetic.arena.ashen-coliseum", "cosmetic.arena.ashen-coliseum.exclusive"],
-        "economy": { "glimmer": 40, "crystals": 0, "food": 0, "coins": 0 },
+        "cosmetics": [
+          "cosmetic.arena.ashen-coliseum",
+          "cosmetic.arena.ashen-coliseum.exclusive"
+        ],
+        "economy": {
+          "crystals": 0,
+          "food": 0,
+          "coins": 0
+        },
         "convenience": []
       },
       "packExclusiveCosmetic": "cosmetic.arena.ashen-coliseum.exclusive"
@@ -44,10 +67,22 @@
       "name": "Emberglow Spellwork",
       "tagline": "Recolor your craft — the same skills, lit in ember.",
       "theme": "Battle cosmetic — spell-VFX colorway for the Knight's skills. Shader/particle TINT only; no damage/scale change.",
-      "pricing": { "usd": 1.99, "usdc": 1.99, "sol": 0.018, "skr": 25 },
+      "pricing": {
+        "usd": 1.99,
+        "usdc": 1.99,
+        "sol": 0.018,
+        "skr": 25
+      },
       "contents": {
-        "cosmetics": ["cosmetic.vfx.emberglow", "cosmetic.vfx.emberglow.exclusive"],
-        "economy": { "glimmer": 25, "crystals": 0, "food": 0, "coins": 0 },
+        "cosmetics": [
+          "cosmetic.vfx.emberglow",
+          "cosmetic.vfx.emberglow.exclusive"
+        ],
+        "economy": {
+          "crystals": 0,
+          "food": 0,
+          "coins": 0
+        },
         "convenience": []
       },
       "packExclusiveCosmetic": "cosmetic.vfx.emberglow.exclusive"
@@ -58,10 +93,23 @@
       "name": "Emberward Regalia",
       "tagline": "A champion's dress — gleaming, static, earned-looking. No edge but the eye's.",
       "theme": "Battle cosmetic — static weapon + armor cosmetic reskin (single-Knight pivot). Zero stat delta.",
-      "pricing": { "usd": 9.99, "usdc": 9.99, "sol": 0.09, "skr": 120 },
+      "pricing": {
+        "usd": 9.99,
+        "usdc": 9.99,
+        "sol": 0.09,
+        "skr": 120
+      },
       "contents": {
-        "cosmetics": ["cosmetic.armor.emberward", "cosmetic.weapon.emberward-blade", "cosmetic.armor.emberward.exclusive"],
-        "economy": { "glimmer": 100, "crystals": 0, "food": 0, "coins": 0 },
+        "cosmetics": [
+          "cosmetic.armor.emberward",
+          "cosmetic.weapon.emberward-blade",
+          "cosmetic.armor.emberward.exclusive"
+        ],
+        "economy": {
+          "crystals": 0,
+          "food": 0,
+          "coins": 0
+        },
         "convenience": []
       },
       "packExclusiveCosmetic": "cosmetic.armor.emberward.exclusive"
@@ -72,16 +120,24 @@
       "name": "Emberwake Season Pass",
       "tagline": "Unlock the premium path — every battle you fight now pays in ember.",
       "theme": "Battle Pass premium-lane UNLOCK SKU. Buying it flips the premium lane + retro-grants earned premium tiers. Does NOT buy tiers/power — you still climb by playing.",
-      "pricing": { "usd": 9.99, "usdc": 9.99, "sol": 0.09, "skr": 120 },
+      "pricing": {
+        "usd": 9.99,
+        "usdc": 9.99,
+        "sol": 0.09,
+        "skr": 120
+      },
       "contents": {
         "cosmetics": [],
-        "economy": { "glimmer": 0, "crystals": 0, "food": 0, "coins": 0 },
+        "economy": {
+          "crystals": 0,
+          "food": 0,
+          "coins": 0
+        },
         "convenience": []
       },
       "packExclusiveCosmetic": "cosmetic.banner.emberwake-premium"
     }
   ],
-
   "battlePassSeasons": [
     {
       "seasonId": "season-01-emberwake",
@@ -105,33 +161,74 @@
         {
           "tier": 1,
           "xpRequired": 100,
-          "free": { "kind": "economy", "economy": { "glimmer": 30, "crystals": 0, "food": 0, "coins": 100 } },
-          "premium": { "kind": "cosmetic_sku", "cosmeticSku": "cosmetic.crown.emberwake-bronze" },
+          "free": {
+            "kind": "economy",
+            "economy": {
+              "crystals": 0,
+              "food": 0,
+              "coins": 100
+            }
+          },
+          "premium": {
+            "kind": "cosmetic_sku",
+            "cosmeticSku": "cosmetic.crown.emberwake-bronze"
+          },
           "isCapstone": false
         },
         {
           "tier": 2,
           "xpRequired": 300,
-          "free": { "kind": "convenience_token", "token": { "kind": "instant-build", "count": 1 } },
-          "premium": { "kind": "skr", "skr": 5 },
+          "free": {
+            "kind": "convenience_token",
+            "token": {
+              "kind": "instant-build",
+              "count": 1
+            }
+          },
+          "premium": {
+            "kind": "skr",
+            "skr": 5
+          },
           "isCapstone": false
         },
         {
           "tier": 3,
           "xpRequired": 600,
-          "free": { "kind": "skr", "skr": 1 },
-          "premium": { "kind": "cosmetic_sku", "cosmeticSku": "cosmetic.vfx.emberwake-trail" },
+          "free": {
+            "kind": "skr",
+            "skr": 1
+          },
+          "premium": {
+            "kind": "cosmetic_sku",
+            "cosmeticSku": "cosmetic.vfx.emberwake-trail"
+          },
           "isCapstone": false
         },
         {
           "tier": 4,
           "xpRequired": 1000,
-          "free": { "kind": "economy", "economy": { "glimmer": 50, "crystals": 200, "food": 50, "coins": 0 } },
+          "free": {
+            "kind": "economy",
+            "economy": {
+              "crystals": 200,
+              "food": 50,
+              "coins": 0
+            }
+          },
           "premium": {
             "kind": "bundle",
             "items": [
-              { "kind": "cosmetic_sku", "cosmeticSku": "cosmetic.arena.emberwake-dais" },
-              { "kind": "convenience_token", "token": { "kind": "xp-weekend", "count": 1 } }
+              {
+                "kind": "cosmetic_sku",
+                "cosmeticSku": "cosmetic.arena.emberwake-dais"
+              },
+              {
+                "kind": "convenience_token",
+                "token": {
+                  "kind": "xp-weekend",
+                  "count": 1
+                }
+              }
             ]
           },
           "isCapstone": false
@@ -139,57 +236,224 @@
         {
           "tier": 5,
           "xpRequired": 1500,
-          "free": { "kind": "convenience_token", "token": { "kind": "harvest-auto-collect", "count": 1 } },
-          "premium": { "kind": "cosmetic_sku", "cosmeticSku": "cosmetic.crown.emberwake-silver" },
+          "free": {
+            "kind": "convenience_token",
+            "token": {
+              "kind": "harvest-auto-collect",
+              "count": 1
+            }
+          },
+          "premium": {
+            "kind": "cosmetic_sku",
+            "cosmeticSku": "cosmetic.crown.emberwake-silver"
+          },
           "isCapstone": false
         },
         {
           "tier": 6,
           "xpRequired": 2100,
-          "free": { "kind": "economy", "economy": { "glimmer": 60, "crystals": 0, "food": 0, "coins": 250 } },
-          "premium": { "kind": "skr", "skr": 10 },
+          "free": {
+            "kind": "economy",
+            "economy": {
+              "crystals": 0,
+              "food": 0,
+              "coins": 250
+            }
+          },
+          "premium": {
+            "kind": "skr",
+            "skr": 10
+          },
           "isCapstone": false
         },
         {
           "tier": 7,
           "xpRequired": 2800,
-          "free": { "kind": "cosmetic_sku", "cosmeticSku": "cosmetic.banner.emberwake-free" },
-          "premium": { "kind": "cosmetic_sku", "cosmeticSku": "cosmetic.weapon.emberwake-glow" },
+          "free": {
+            "kind": "cosmetic_sku",
+            "cosmeticSku": "cosmetic.banner.emberwake-free"
+          },
+          "premium": {
+            "kind": "cosmetic_sku",
+            "cosmeticSku": "cosmetic.weapon.emberwake-glow"
+          },
           "isCapstone": false
         },
         {
           "tier": 8,
           "xpRequired": 3800,
-          "free": { "kind": "skr", "skr": 2 },
-          "premium": { "kind": "cosmetic_sku", "cosmeticSku": "cosmetic.crown.emberwake-champion" },
+          "free": {
+            "kind": "skr",
+            "skr": 2
+          },
+          "premium": {
+            "kind": "cosmetic_sku",
+            "cosmeticSku": "cosmetic.crown.emberwake-champion"
+          },
           "isCapstone": true
         }
       ]
     }
   ],
-
   "monthlyCards": [
     {
       "sku": "monthly-wayfarer",
       "tier": 1,
       "name": "Wayfarer's Ledger",
       "tagline": "A month of small kindnesses — a little something each day you return.",
-      "pricing": { "usd": 4.99, "usdc": 4.99, "sol": 0.045, "skr": 60 },
+      "pricing": {
+        "usd": 4.99,
+        "usdc": 4.99,
+        "sol": 0.045,
+        "skr": 60
+      },
       "durationDays": 30,
       "exclusiveCosmetic": "cosmetic.banner.wayfarer-ledger",
       "claimModel": "pool",
       "stackable": true,
-      "_dailyTableNote": "30 entries required (durationDays). Shown compressed here with milestone highlights on day 7/14/30; the implementation expands uniform days. Daily grant = soft currency + glimmer + occasional convenience. NO SKR on tier 1, NO combat anything.",
+      "_dailyTableNote": "30 entries required (durationDays); implementation expands uniform days with milestone highlights.",
       "dailyTable": [
-        { "day": 1,  "grant": { "kind": "economy", "economy": { "glimmer": 15, "crystals": 100, "food": 25, "coins": 50 } }, "highlight": false },
-        { "day": 2,  "grant": { "kind": "economy", "economy": { "glimmer": 15, "crystals": 100, "food": 25, "coins": 50 } }, "highlight": false },
-        { "day": 3,  "grant": { "kind": "economy", "economy": { "glimmer": 15, "crystals": 100, "food": 25, "coins": 50 } }, "highlight": false },
-        { "day": 4,  "grant": { "kind": "economy", "economy": { "glimmer": 15, "crystals": 100, "food": 25, "coins": 50 } }, "highlight": false },
-        { "day": 5,  "grant": { "kind": "economy", "economy": { "glimmer": 20, "crystals": 150, "food": 25, "coins": 75 } }, "highlight": false },
-        { "day": 6,  "grant": { "kind": "economy", "economy": { "glimmer": 20, "crystals": 150, "food": 25, "coins": 75 } }, "highlight": false },
-        { "day": 7,  "grant": { "kind": "bundle", "items": [ { "kind": "economy", "economy": { "glimmer": 50, "crystals": 250, "food": 50, "coins": 150 } }, { "kind": "convenience_token", "token": { "kind": "instant-build", "count": 1 } } ] }, "highlight": true },
-        { "day": 14, "grant": { "kind": "bundle", "items": [ { "kind": "economy", "economy": { "glimmer": 60, "crystals": 300, "food": 75, "coins": 200 } }, { "kind": "convenience_token", "token": { "kind": "harvest-auto-collect", "count": 1 } } ] }, "highlight": true },
-        { "day": 30, "grant": { "kind": "bundle", "items": [ { "kind": "economy", "economy": { "glimmer": 100, "crystals": 500, "food": 100, "coins": 400 } }, { "kind": "cosmetic_sku", "cosmeticSku": "cosmetic.pet-skin.wayfarer-finale" } ] }, "highlight": true }
+        {
+          "day": 1,
+          "grant": {
+            "kind": "economy",
+            "economy": {
+              "crystals": 100,
+              "food": 25,
+              "coins": 50
+            }
+          },
+          "highlight": false
+        },
+        {
+          "day": 2,
+          "grant": {
+            "kind": "economy",
+            "economy": {
+              "crystals": 100,
+              "food": 25,
+              "coins": 50
+            }
+          },
+          "highlight": false
+        },
+        {
+          "day": 3,
+          "grant": {
+            "kind": "economy",
+            "economy": {
+              "crystals": 100,
+              "food": 25,
+              "coins": 50
+            }
+          },
+          "highlight": false
+        },
+        {
+          "day": 4,
+          "grant": {
+            "kind": "economy",
+            "economy": {
+              "crystals": 100,
+              "food": 25,
+              "coins": 50
+            }
+          },
+          "highlight": false
+        },
+        {
+          "day": 5,
+          "grant": {
+            "kind": "economy",
+            "economy": {
+              "crystals": 150,
+              "food": 25,
+              "coins": 75
+            }
+          },
+          "highlight": false
+        },
+        {
+          "day": 6,
+          "grant": {
+            "kind": "economy",
+            "economy": {
+              "crystals": 150,
+              "food": 25,
+              "coins": 75
+            }
+          },
+          "highlight": false
+        },
+        {
+          "day": 7,
+          "grant": {
+            "kind": "bundle",
+            "items": [
+              {
+                "kind": "economy",
+                "economy": {
+                  "crystals": 250,
+                  "food": 50,
+                  "coins": 150
+                }
+              },
+              {
+                "kind": "convenience_token",
+                "token": {
+                  "kind": "instant-build",
+                  "count": 1
+                }
+              }
+            ]
+          },
+          "highlight": true
+        },
+        {
+          "day": 14,
+          "grant": {
+            "kind": "bundle",
+            "items": [
+              {
+                "kind": "economy",
+                "economy": {
+                  "crystals": 300,
+                  "food": 75,
+                  "coins": 200
+                }
+              },
+              {
+                "kind": "convenience_token",
+                "token": {
+                  "kind": "harvest-auto-collect",
+                  "count": 1
+                }
+              }
+            ]
+          },
+          "highlight": true
+        },
+        {
+          "day": 30,
+          "grant": {
+            "kind": "bundle",
+            "items": [
+              {
+                "kind": "economy",
+                "economy": {
+                  "crystals": 500,
+                  "food": 100,
+                  "coins": 400
+                }
+              },
+              {
+                "kind": "cosmetic_sku",
+                "cosmeticSku": "cosmetic.pet-skin.wayfarer-finale"
+              }
+            ]
+          },
+          "highlight": true
+        }
       ]
     },
     {
@@ -197,20 +461,183 @@
       "tier": 2,
       "name": "Keeper's Ledger",
       "tagline": "The patron's month — richer daily gifts, a little ember in every return.",
-      "pricing": { "usd": 9.99, "usdc": 9.99, "sol": 0.09, "skr": 120 },
+      "pricing": {
+        "usd": 9.99,
+        "usdc": 9.99,
+        "sol": 0.09,
+        "skr": 120
+      },
       "durationDays": 30,
       "exclusiveCosmetic": "cosmetic.pet-skin.keeper-emberfox",
       "claimModel": "pool",
       "stackable": true,
-      "_dailyTableNote": "Premium tier adds a small daily SKR line + a 24h auto-collect on milestone days. Still cosmetic/convenience/soft + SKR only — zero combat power.",
+      "_dailyTableNote": "30 entries required (durationDays); implementation expands uniform days with milestone highlights.",
       "dailyTable": [
-        { "day": 1,  "grant": { "kind": "bundle", "items": [ { "kind": "economy", "economy": { "glimmer": 30, "crystals": 250, "food": 50, "coins": 100 } }, { "kind": "skr", "skr": 2 } ] }, "highlight": false },
-        { "day": 2,  "grant": { "kind": "bundle", "items": [ { "kind": "economy", "economy": { "glimmer": 30, "crystals": 250, "food": 50, "coins": 100 } }, { "kind": "skr", "skr": 2 } ] }, "highlight": false },
-        { "day": 3,  "grant": { "kind": "bundle", "items": [ { "kind": "economy", "economy": { "glimmer": 30, "crystals": 250, "food": 50, "coins": 100 } }, { "kind": "skr", "skr": 2 } ] }, "highlight": false },
-        { "day": 5,  "grant": { "kind": "bundle", "items": [ { "kind": "economy", "economy": { "glimmer": 40, "crystals": 300, "food": 75, "coins": 150 } }, { "kind": "skr", "skr": 3 } ] }, "highlight": false },
-        { "day": 7,  "grant": { "kind": "bundle", "items": [ { "kind": "economy", "economy": { "glimmer": 75, "crystals": 500, "food": 100, "coins": 250 } }, { "kind": "skr", "skr": 5 }, { "kind": "convenience_token", "token": { "kind": "harvest-auto-collect", "count": 1 } } ] }, "highlight": true },
-        { "day": 14, "grant": { "kind": "bundle", "items": [ { "kind": "economy", "economy": { "glimmer": 90, "crystals": 600, "food": 125, "coins": 350 } }, { "kind": "skr", "skr": 8 }, { "kind": "convenience_token", "token": { "kind": "xp-weekend", "count": 1 } } ] }, "highlight": true },
-        { "day": 30, "grant": { "kind": "bundle", "items": [ { "kind": "economy", "economy": { "glimmer": 150, "crystals": 1000, "food": 200, "coins": 600 } }, { "kind": "skr", "skr": 15 }, { "kind": "cosmetic_sku", "cosmeticSku": "cosmetic.crown.keeper-finale" } ] }, "highlight": true }
+        {
+          "day": 1,
+          "grant": {
+            "kind": "bundle",
+            "items": [
+              {
+                "kind": "economy",
+                "economy": {
+                  "crystals": 250,
+                  "food": 50,
+                  "coins": 100
+                }
+              },
+              {
+                "kind": "skr",
+                "skr": 2
+              }
+            ]
+          },
+          "highlight": false
+        },
+        {
+          "day": 2,
+          "grant": {
+            "kind": "bundle",
+            "items": [
+              {
+                "kind": "economy",
+                "economy": {
+                  "crystals": 250,
+                  "food": 50,
+                  "coins": 100
+                }
+              },
+              {
+                "kind": "skr",
+                "skr": 2
+              }
+            ]
+          },
+          "highlight": false
+        },
+        {
+          "day": 3,
+          "grant": {
+            "kind": "bundle",
+            "items": [
+              {
+                "kind": "economy",
+                "economy": {
+                  "crystals": 250,
+                  "food": 50,
+                  "coins": 100
+                }
+              },
+              {
+                "kind": "skr",
+                "skr": 2
+              }
+            ]
+          },
+          "highlight": false
+        },
+        {
+          "day": 5,
+          "grant": {
+            "kind": "bundle",
+            "items": [
+              {
+                "kind": "economy",
+                "economy": {
+                  "crystals": 300,
+                  "food": 75,
+                  "coins": 150
+                }
+              },
+              {
+                "kind": "skr",
+                "skr": 3
+              }
+            ]
+          },
+          "highlight": false
+        },
+        {
+          "day": 7,
+          "grant": {
+            "kind": "bundle",
+            "items": [
+              {
+                "kind": "economy",
+                "economy": {
+                  "crystals": 500,
+                  "food": 100,
+                  "coins": 250
+                }
+              },
+              {
+                "kind": "skr",
+                "skr": 5
+              },
+              {
+                "kind": "convenience_token",
+                "token": {
+                  "kind": "harvest-auto-collect",
+                  "count": 1
+                }
+              }
+            ]
+          },
+          "highlight": true
+        },
+        {
+          "day": 14,
+          "grant": {
+            "kind": "bundle",
+            "items": [
+              {
+                "kind": "economy",
+                "economy": {
+                  "crystals": 600,
+                  "food": 125,
+                  "coins": 350
+                }
+              },
+              {
+                "kind": "skr",
+                "skr": 8
+              },
+              {
+                "kind": "convenience_token",
+                "token": {
+                  "kind": "xp-weekend",
+                  "count": 1
+                }
+              }
+            ]
+          },
+          "highlight": true
+        },
+        {
+          "day": 30,
+          "grant": {
+            "kind": "bundle",
+            "items": [
+              {
+                "kind": "economy",
+                "economy": {
+                  "crystals": 1000,
+                  "food": 200,
+                  "coins": 600
+                }
+              },
+              {
+                "kind": "skr",
+                "skr": 15
+              },
+              {
+                "kind": "cosmetic_sku",
+                "cosmeticSku": "cosmetic.crown.keeper-finale"
+              }
+            ]
+          },
+          "highlight": true
+        }
       ]
     }
   ]

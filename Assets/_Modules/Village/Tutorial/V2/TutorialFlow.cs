@@ -1777,7 +1777,7 @@ namespace DeNelle.Village
                 Id = "orc-warrior", Name = "Orc Warleader", DisplayName = "Orc Warband", Ai = "walker",
                 Hp = 98f, MoveSpeed = 6.3f, ContactDamage = 0f,
                 AttackInterval = 1.5f, Height = 2.0f, AggroRadius = 8f,
-                XpReward = 42, GlimmerReward = 9,
+                XpReward = 42
             };
 
             Enemy enemy = null;

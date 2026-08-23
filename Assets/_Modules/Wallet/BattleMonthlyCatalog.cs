@@ -89,12 +89,7 @@ namespace DeNelle.Wallet
 
     /// <summary>
     /// The soft-economy payload of a grant.
-    /// <para>Note what is ABSENT: there is no <c>glimmer</c> field. The owner's 2026-08-21 ruling
-    /// stripped glimmer from every pack ("nothing real and money has never been active") and a pass
-    /// tier is pack contents by another name. Omitting the FIELD, rather than authoring zeros, means
-    /// a glimmer line cannot be re-added by a data edit alone.</para>
-    /// <para>Glimmer the CURRENCY is untouched - still earned and still spent elsewhere. Do not
-    /// "fix" anything here by deleting the currency.</para>
+    /// <para>The payload deliberately contains only live economy ledgers.</para>
     /// </summary>
     [Serializable]
     public sealed class RewardEconomy

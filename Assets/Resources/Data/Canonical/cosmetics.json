@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "_comment": "Seed cosmetic catalogue for the Cosmetic Shop + Glimmer system. Ported from docs/cosmetic-shop-spec.md in the React repo. Twelve launch items: 4 hero skins (one per class plus a free-path mage variant), 4 pet skins (aether / flame / ice plus a free-path ice variant), 4 village skins (heart lantern + 3 building palettes). Glimmer is a soft currency: earned in-game (wave milestones, daily quests, login streaks) or buyable in bundles. unlockMethod 'buy' = ordinary Glimmer purchase; 'achievement' = free-path item that is granted by gameplay milestones (Equip works once owned; TryPurchase will refuse). previewColor is the hex used as a swatch in the shop card before the proper preview portraits land.",
+  "_comment": "Cosmetic wardrobe catalogue. Items are unlocked by gameplay or entitlements and equipped through CosmeticOwnershipService.",
   "items": [
     {
       "id": "hero-mage-embergrove",
@@ -8,8 +8,7 @@
       "appliesTo": "mage",
       "displayName": "Embergrove Mage",
       "description": "Robes spun from autumn leaves and Heartwood ash.",
-      "glimmerCost": 80,
-      "unlockMethod": "buy",
+      "unlockMethod": "achievement",
       "previewColor": "#c8632a"
     },
     {
@@ -18,8 +17,7 @@
       "appliesTo": "knight",
       "displayName": "Frostfall Knight",
       "description": "Plate rimed with the breath of the high passes.",
-      "glimmerCost": 80,
-      "unlockMethod": "buy",
+      "unlockMethod": "achievement",
       "previewColor": "#7fb4d4"
     },
     {
@@ -28,8 +26,7 @@
       "appliesTo": "ranger",
       "displayName": "Bloomtide Ranger",
       "description": "Greens of the first thaw stitched into oilskin.",
-      "glimmerCost": 80,
-      "unlockMethod": "buy",
+      "unlockMethod": "achievement",
       "previewColor": "#7bc467"
     },
     {
@@ -38,7 +35,6 @@
       "appliesTo": "mage",
       "displayName": "Wanderer's Cloak",
       "description": "Earned by playing five days in season. Beauty is earned, never required.",
-      "glimmerCost": 0,
       "unlockMethod": "achievement",
       "previewColor": "#8a7bbd"
     },
@@ -48,8 +44,7 @@
       "appliesTo": "aether-sprite",
       "displayName": "Twilight Sprite (Glowing)",
       "description": "A crystal-fairy aether sprite wreathed in slow drifting violet glow. Special-sale launch cosmetic.",
-      "glimmerCost": 50,
-      "unlockMethod": "buy",
+      "unlockMethod": "achievement",
       "previewColor": "#7a4fcf",
       "meshPath": "Cosmetics/Pets/pet-aether-twilight",
       "specialSale": true
@@ -60,8 +55,7 @@
       "appliesTo": "flame-pup",
       "displayName": "Emberkin Pup",
       "description": "Coat the colour of a banked forge, sparks at the heel.",
-      "glimmerCost": 50,
-      "unlockMethod": "buy",
+      "unlockMethod": "achievement",
       "previewColor": "#e76a2f"
     },
     {
@@ -70,8 +64,7 @@
       "appliesTo": "ice-wolf",
       "displayName": "Glacierborn Wolf",
       "description": "Fur of pale frost; the snow remembers its tread.",
-      "glimmerCost": 50,
-      "unlockMethod": "buy",
+      "unlockMethod": "achievement",
       "previewColor": "#bfe0f3"
     },
     {
@@ -80,7 +73,6 @@
       "appliesTo": "ice-wolf",
       "displayName": "First-Friend Wolf",
       "description": "Reach Bond rank 3 with the Ice Wolf to unlock.",
-      "glimmerCost": 0,
       "unlockMethod": "achievement",
       "previewColor": "#9bb6c9"
     },
@@ -90,8 +82,7 @@
       "appliesTo": "heart-lantern",
       "displayName": "Frozen Hearth",
       "description": "The Heart's lantern glows pale blue through a rime of frost.",
-      "glimmerCost": 140,
-      "unlockMethod": "buy",
+      "unlockMethod": "achievement",
       "previewColor": "#a8d4ff"
     },
     {
@@ -100,8 +91,7 @@
       "appliesTo": "wall-tier-2",
       "displayName": "Stoneweave Walls",
       "description": "Granite blocks fitted by old craft, moss in every seam.",
-      "glimmerCost": 80,
-      "unlockMethod": "buy",
+      "unlockMethod": "achievement",
       "previewColor": "#7d7466"
     },
     {
@@ -110,8 +100,7 @@
       "appliesTo": "building-palette",
       "displayName": "Embergrove Palette",
       "description": "Echo Hollow, Workshop, Arcane Tower and Farm in autumn warmth.",
-      "glimmerCost": 140,
-      "unlockMethod": "buy",
+      "unlockMethod": "achievement",
       "previewColor": "#c47a3a"
     },
     {
@@ -120,18 +109,15 @@
       "appliesTo": "banners",
       "displayName": "Bloomtide Banners",
       "description": "Granted on the first ten-wave clear of the spring season.",
-      "glimmerCost": 0,
       "unlockMethod": "achievement",
       "previewColor": "#62b08e"
     },
-
     {
       "id": "cosmetic.frostfall-bundle.hero-outfit",
       "category": "hero",
       "appliesTo": "knight",
       "displayName": "Frostfall Knight Regalia",
       "description": "Plate rimed with the breath of the high passes — winter's own watch.",
-      "glimmerCost": 0,
       "unlockMethod": "achievement",
       "previewColor": "#7fb4d4"
     },
@@ -141,7 +127,6 @@
       "appliesTo": "ice-wolf",
       "displayName": "Glacierborn Companion",
       "description": "Fur of pale frost; the snow remembers its tread.",
-      "glimmerCost": 0,
       "unlockMethod": "achievement",
       "previewColor": "#bfe0f3"
     },
@@ -151,7 +136,6 @@
       "appliesTo": "building-palette",
       "displayName": "Frozen Hearth Palette",
       "description": "The Heart's lantern and the workshops glow pale blue through a rime of frost.",
-      "glimmerCost": 0,
       "unlockMethod": "achievement",
       "previewColor": "#a8d4ff"
     },
@@ -161,18 +145,15 @@
       "appliesTo": "emblem",
       "displayName": "Frostfall Crest",
       "description": "A crest of the winter watch, flown only by those who tended the Heart through the cold.",
-      "glimmerCost": 0,
       "unlockMethod": "achievement",
       "previewColor": "#6fa8cf"
     },
-
     {
       "id": "cosmetic.embergrove-bundle.hero-outfit",
       "category": "hero",
       "appliesTo": "mage",
       "displayName": "Embergrove Mage Vestments",
       "description": "Robes spun from autumn leaves and Heartwood ash.",
-      "glimmerCost": 0,
       "unlockMethod": "achievement",
       "previewColor": "#c8632a"
     },
@@ -182,7 +163,6 @@
       "appliesTo": "flame-pup",
       "displayName": "Emberkin Companion",
       "description": "Coat the colour of a banked forge, sparks at the heel.",
-      "glimmerCost": 0,
       "unlockMethod": "achievement",
       "previewColor": "#e76a2f"
     },
@@ -192,7 +172,6 @@
       "appliesTo": "building-palette",
       "displayName": "Embergrove Autumn Palette",
       "description": "Echo Hollow, Workshop, Arcane Tower and Farm in autumn warmth.",
-      "glimmerCost": 0,
       "unlockMethod": "achievement",
       "previewColor": "#c47a3a"
     },
@@ -202,18 +181,15 @@
       "appliesTo": "emblem",
       "displayName": "Embergrove Crest",
       "description": "An ember-gold crest for the keepers of the autumn grove.",
-      "glimmerCost": 0,
       "unlockMethod": "achievement",
       "previewColor": "#b8601f"
     },
-
     {
       "id": "cosmetic.bloomtide-bundle.hero-outfit",
       "category": "hero",
       "appliesTo": "ranger",
       "displayName": "Bloomtide Ranger Garb",
       "description": "Greens of the first thaw stitched into oilskin.",
-      "glimmerCost": 0,
       "unlockMethod": "achievement",
       "previewColor": "#7bc467"
     },
@@ -223,7 +199,6 @@
       "appliesTo": "banners",
       "displayName": "Bloomtide Banners",
       "description": "Banners of the spring season, green as the first thaw, flown over the village.",
-      "glimmerCost": 0,
       "unlockMethod": "achievement",
       "previewColor": "#62b08e"
     },
@@ -233,7 +208,6 @@
       "appliesTo": "building-palette",
       "displayName": "First-Thaw Green Palette",
       "description": "The realm's roofs and walls dressed in soft spring green.",
-      "glimmerCost": 0,
       "unlockMethod": "achievement",
       "previewColor": "#8ed07a"
     },
@@ -243,29 +217,24 @@
       "appliesTo": "emblem",
       "displayName": "Bloomtide Crest",
       "description": "A blossom-marked crest for those who welcomed the spring.",
-      "glimmerCost": 0,
       "unlockMethod": "achievement",
       "previewColor": "#57a37f"
     },
-
     {
       "id": "cosmetic.starters-hand.exclusive",
       "category": "village",
       "appliesTo": "emblem",
       "displayName": "Tender's First Token",
       "description": "A small token from the Heart to every new tender — the first mark of the watch.",
-      "glimmerCost": 0,
       "unlockMethod": "achievement",
       "previewColor": "#d9c27a"
     },
-
     {
       "id": "cosmetic.echo-patron-pack.building-palette",
       "category": "village",
       "appliesTo": "building-palette",
       "displayName": "Workshop Patron Palette",
       "description": "Brass-and-amber workshop trim for the patron who keeps the echoes working.",
-      "glimmerCost": 0,
       "unlockMethod": "achievement",
       "previewColor": "#c79a3e"
     },
@@ -275,18 +244,15 @@
       "appliesTo": "emblem",
       "displayName": "Echo Patron Sigil",
       "description": "The sigil of a patron of the harvest — worn by those who keep the workforce humming.",
-      "glimmerCost": 0,
       "unlockMethod": "achievement",
       "previewColor": "#b88a2e"
     },
-
     {
       "id": "cosmetic.hero-wardrobe-pack.hero-outfit-a",
       "category": "hero",
       "appliesTo": "knight",
       "displayName": "Wardrobe: Warden Plate",
       "description": "A heavy warden's plate, broad at the shoulder, for the long watch.",
-      "glimmerCost": 0,
       "unlockMethod": "achievement",
       "previewColor": "#9aa3ad"
     },
@@ -296,7 +262,6 @@
       "appliesTo": "knight",
       "displayName": "Wardrobe: Vigil Cloak",
       "description": "A travelling cloak over light plate, for the Knight who walks the borders.",
-      "glimmerCost": 0,
       "unlockMethod": "achievement",
       "previewColor": "#5d6b7a"
     },
@@ -306,7 +271,6 @@
       "appliesTo": "knight",
       "displayName": "Wardrobe: Gilded Pauldrons",
       "description": "Parade plate with gilded pauldrons, for the Knight who stands at the Heart.",
-      "glimmerCost": 0,
       "unlockMethod": "achievement",
       "previewColor": "#d4b65a"
     },
@@ -316,18 +280,15 @@
       "appliesTo": "knight",
       "displayName": "Wardrobe: Heartwood Surcoat",
       "description": "The pack-exclusive surcoat, embroidered with the world-tree of Elarion.",
-      "glimmerCost": 0,
       "unlockMethod": "achievement",
       "previewColor": "#7fae6b"
     },
-
     {
       "id": "cosmetic.realm-defender-bundle.weapon-flair",
       "category": "hero",
       "appliesTo": "weapon",
       "displayName": "Heartsteel Blade Flair",
       "description": "A purely cosmetic blade finish — Heartwood-green steel with a faint glow. No edge but the eye's.",
-      "glimmerCost": 0,
       "unlockMethod": "achievement",
       "previewColor": "#6fae8e"
     },
@@ -337,7 +298,6 @@
       "appliesTo": "shield",
       "displayName": "Aegis of Elarion Shield Flair",
       "description": "A cosmetic shield facing bearing the world-tree crest. Cosmetic only — zero combat power, per the covenant.",
-      "glimmerCost": 0,
       "unlockMethod": "achievement",
       "previewColor": "#c2a24a"
     },
@@ -347,7 +307,6 @@
       "appliesTo": "banners",
       "displayName": "Defender's Banner",
       "description": "The colours of the realm's defenders, flown permanently over the village.",
-      "glimmerCost": 0,
       "unlockMethod": "achievement",
       "previewColor": "#9c5b4a"
     },
@@ -357,18 +316,15 @@
       "appliesTo": "emblem",
       "displayName": "Realm Defender Crest",
       "description": "The crest worn by the sworn defenders of Elarion.",
-      "glimmerCost": 0,
       "unlockMethod": "achievement",
       "previewColor": "#8a4f40"
     },
-
     {
       "id": "cosmetic.builders-cache.building-palette",
       "category": "village",
       "appliesTo": "building-palette",
       "displayName": "Master Builder Palette",
       "description": "Clean stone and timber trim for the tender who builds without pause.",
-      "glimmerCost": 0,
       "unlockMethod": "achievement",
       "previewColor": "#a89070"
     },
@@ -378,7 +334,6 @@
       "appliesTo": "emblem",
       "displayName": "Builder's Cache Sigil",
       "description": "The sigil of a master builder of Elarion — flown by those who raised the realm.",
-      "glimmerCost": 0,
       "unlockMethod": "achievement",
       "previewColor": "#977f5f"
     }

@@ -952,7 +952,6 @@ namespace DeNelle.Village
                     ContactDamage = 0f,
                     AttackInterval = 1.5f, Height = 2.0f, AggroRadius = 8f,
                     XpReward = Mathf.RoundToInt(14 * bodies * levelScale),
-                    GlimmerReward = Mathf.RoundToInt(3 * bodies * levelScale),
                     RewardVariance = PackBountyRewardVariance,
                     PackBodies = bodies,
                 };
@@ -968,7 +967,7 @@ namespace DeNelle.Village
                 MoveSpeed = RepChaseSpeed * 0.95f,
                 ContactDamage = 0f,
                 AttackInterval = 1.5f, Height = 1.9f, AggroRadius = 0f,
-                XpReward = 0, GlimmerReward = 0,
+                XpReward = 0
             };
         }
     }

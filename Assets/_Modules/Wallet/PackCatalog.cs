@@ -58,8 +58,6 @@ namespace DeNelle.Wallet
     [Serializable]
     public sealed class PackEconomy
     {
-        /// <summary>Glimmer (cosmetic-shop currency - granted at runtime via GlimmerCurrencyService, ECON-01).</summary>
-        [JsonProperty("glimmer")] public int Glimmer;
         /// <summary>Crystals — the primary build currency.</summary>
         [JsonProperty("crystals")] public int Crystals;
         /// <summary>Food.</summary>
@@ -242,7 +240,6 @@ namespace DeNelle.Wallet
                 case "crystals": return e.Crystals;
                 case "food":     return e.Food;
                 case "coins":    return e.Coins;
-                case "glimmer":  return e.Glimmer;
                 default:         return 0;
             }
         }
@@ -411,12 +408,9 @@ namespace DeNelle.Wallet
         /// never be un-drawn, and a good that is NOT granted can never appear. If the grant seam ever
         /// learns a new currency, add it here in the SAME commit — the same rule that governs
         /// <c>RedeemableConvenienceKinds</c> above.</para>
-        /// <para><c>glimmer</c> is listed because the seam still routes it, even though the owner's
-        /// 2026-08-21 ruling stripped it from every pack (so every row is 0 and no bar draws). Listing
-        /// it costs nothing and removing it would re-open the drift this list exists to close.</para>
         /// </summary>
         public static readonly string[] LedgerEconomyKeys =
-            { "wood", "iron", "crystals", "food", "coins", "glimmer" };
+            { "wood", "iron", "crystals", "food", "coins" };
 
         /// <summary>
         /// The band a pack renders in. Reads the authored <c>band</c> first and falls back to the

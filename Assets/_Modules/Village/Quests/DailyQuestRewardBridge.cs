@@ -8,7 +8,7 @@
 // QuestRewardBridge / DailyQuestGateBridge).
 //
 // WHY A DEDICATED BRIDGE (WO-564): reward dispense was previously bolted onto
-// DailyQuestTowerBridge, which (a) only granted crystals/wisdom/glimmer — it
+// DailyQuestTowerBridge, which previously omitted several live reward seams — it
 // silently DROPPED the schema's rewardFood (exploration slot = 20 food) and
 // rewardRandomItem (wildcard slot) — and (b) mixed an unrelated tower-placement
 // hook into a "reward" responsibility. This bridge owns the WHOLE reward schema
@@ -18,13 +18,12 @@
 //
 // DATA-DRIVEN: every amount comes from DailyQuestCatalog.RewardFor(slot) (the
 // daily-quests.json `slots` block) — nothing is hardcoded per quest. The reward
-// schema (DailyQuestSlotReward) is: rewardCrystals, rewardFood, rewardGlimmer,
+// schema (DailyQuestSlotReward) is: rewardCrystals, rewardFood,
 // rewardWisdom, rewardRandomItem.
 //
 // Grant routes (all the canonical earn sites):
 //   crystals  -> GameStateService.AddCrystals (Resources.Crystals wallet)
 //   food      -> GameStateService.AddFood      (Resources.Food wallet)
-//   glimmer   -> GlimmerCurrencyService.TryAddGlimmer (cosmetic currency)
 //   wisdom    -> WisdomCurrencyService.Grant         (talent currency)
 //   item      -> VillageInventory.Add  (persisted larder/gear store -> GameState.GearInventory)
 //
@@ -177,7 +176,7 @@ namespace DeNelle.Village.Quests
         /// Dispenses every axis of the slot reward, counting how many were REQUESTED and how
         /// many actually CREDITED. WO-978: not one of these APIs returns a credited amount
         /// (<c>AddCrystals</c>/<c>AddFood</c>/<c>EconomyService.Grant</c> are all <c>void</c>;
-        /// <c>TryAddGlimmer</c> returns only a bool), so each grant is measured as a
+        /// each grant is measured as a
         /// BEFORE/AFTER delta on the wallet it targets — a measured quantity, never the catalog
         /// number we asked for. Every null service now names its consequence rather than
         /// no-oping silently, copying the idiom of this file's honest sibling
@@ -265,32 +264,6 @@ namespace DeNelle.Village.Quests
                     int credited = state.Resources.Crystals - before;
                     if (credited > 0) paidAxes++;
                     Report(q, "wisdom->crystals (WO-763)", credited, reward.RewardWisdom, state.Resources.Crystals);
-                }
-            }
-
-            // Glimmer -> the cosmetic-shop currency. A steady, non-grindy trickle.
-            // WO-978: the bool return was DISCARDED here. It is now checked AND cross-read
-            // against the balance, because a true return still only means "non-zero request".
-            if (reward.RewardGlimmer > 0)
-            {
-                requestedAxes++;
-                var glim = GlimmerCurrencyService.Instance;
-                if (glim == null)
-                {
-                    FlowTrace.Fail("Economy", $"DailyQuest '{q.TemplateId}' glimmer LOST — GlimmerCurrencyService not ready; " +
-                                              $"{reward.RewardGlimmer} glimmer was never credited.");
-                }
-                else
-                {
-                    int before = glim.Glimmer;
-                    bool ok = glim.TryAddGlimmer(reward.RewardGlimmer);
-                    int credited = glim.Glimmer - before;
-                    if (credited > 0) paidAxes++;
-                    if (!ok && credited == 0)
-                        FlowTrace.Warn("Economy", $"DailyQuest '{q.TemplateId}' glimmer REFUSED by TryAddGlimmer " +
-                                                  $"(requested {reward.RewardGlimmer}) — balance unchanged at {glim.Glimmer}.");
-                    else
-                        Report(q, "glimmer", credited, reward.RewardGlimmer, glim.Glimmer);
                 }
             }
 

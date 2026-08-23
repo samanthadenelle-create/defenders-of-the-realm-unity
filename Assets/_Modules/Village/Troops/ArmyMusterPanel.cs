@@ -30,6 +30,8 @@ namespace DeNelle.Village
         private RectTransform _listContent;
         private Transform _detailHost;
         private Transform _footerHost;
+        private RectTransform _selectorHost;
+        private RectTransform _actionHost;
         private Button _musterCta;
         private TextMeshProUGUI _musterCtaLabel;
         private ElarionUiKit.CurrencyChipHandle[] _wallet;
@@ -41,6 +43,8 @@ namespace DeNelle.Village
 
         private const float RowHeightPx = 112f;
         private const float RowGapPx = 8f;
+        private const float CommandBandPx = ElarionUiKit.MinTouchPx;
+        private const float CommandGapPx = 12f;
         private static readonly Color Ink = new Color(0.16f, 0.12f, 0.08f, 1f);
         private static readonly Color RowPlate = new Color(0.16f, 0.16f, 0.18f, 0.92f);
 
@@ -97,22 +101,17 @@ namespace DeNelle.Village
             _footerHost = layout != null && layout.footer != null
                 ? (Transform)layout.footer : chrome.content.transform;
 
+            // WO-1056: commands spend the full-width axis. Every child is authored at
+            // MinTouchPx high, so ClampMinTouch cannot grow it into a neighbour.
+            _selectorHost = MakeCommandBand(chrome.content.transform, "LoadoutSelectorBand", true);
+            _actionHost = MakeCommandBand(chrome.content.transform, "MusterActionBand", false);
+
             _wallet = ElarionUiKit.BuildWalletRow(_footerHost, new[]
             {
                 ElarionUiKit.CurrencyKind.Wood,
                 ElarionUiKit.CurrencyKind.Iron,
                 ElarionUiKit.CurrencyKind.Food,
             });
-
-            // Primary CTA pinned low on the detail well.
-            _musterCta = ElarionUiKit.Button(_detailHost, "Muster army", ElarionUiKit.ButtonKind.Confirm,
-                new Vector2(0.04f, 0.02f), new Vector2(0.96f, 0.11f), OnMuster);
-            if (_musterCta != null)
-            {
-                ElarionUiKit.PinCanonicalCtaSize(_musterCta);
-                ElarionUiKit.ClampMinTouch(_musterCta);
-                _musterCtaLabel = _musterCta.GetComponentInChildren<TextMeshProUGUI>();
-            }
 
             ElarionUiKit.AttachPanelOpenFx(_ui,
                 chrome.root != null ? chrome.root.transform as RectTransform : null);
@@ -144,6 +143,8 @@ namespace DeNelle.Village
             _listContent = null;
             _detailHost = null;
             _footerHost = null;
+            _selectorHost = null;
+            _actionHost = null;
             _musterCta = null;
             _musterCtaLabel = null;
         }
@@ -236,6 +237,7 @@ namespace DeNelle.Village
             if (_ui == null || _detailHost == null) return;
             UpdateWallet();
             BuildTroopLadder();
+            BuildCommandBands();
             BuildDetail();
             UpdateCta();
         }
@@ -295,23 +297,23 @@ namespace DeNelle.Village
             // Cap note for siege maxOwned
             string capTag = def.MaxOwned == 1 ? " (max 1)" : "";
             var nameLabel = ElarionUiKit.Label(row.transform, name + capTag, 0.52f, 0.94f,
-                ElarionUi.Parchment, ElarionUi.FontLabel, TextAlignmentOptions.MidlineLeft, 0.04f, 0.62f, bold: true);
+                ElarionUi.Parchment, ElarionUi.FontLabel, TextAlignmentOptions.MidlineLeft, 0.04f, 0.42f, bold: true);
             nameLabel.raycastTarget = false;
 
             var costLabel = ElarionUiKit.Label(row.transform, PerUnitLine(def), 0.08f, 0.48f,
-                ElarionUi.ParchmentDim, ElarionUi.FontMicro, TextAlignmentOptions.MidlineLeft, 0.04f, 0.62f);
+                ElarionUi.ParchmentDim, ElarionUi.FontMicro, TextAlignmentOptions.MidlineLeft, 0.04f, 0.42f);
             costLabel.raycastTarget = false;
 
             var minus = ElarionUiKit.Button(row.transform, "-", ElarionUiKit.ButtonKind.Quiet,
-                new Vector2(0.64f, 0.14f), new Vector2(0.745f, 0.86f), () => Step(id, -1));
+                new Vector2(0.43f, 0f), new Vector2(0.70f, 1f), () => Step(id, -1));
             if (minus != null) ElarionUiKit.ClampMinTouch(minus);
 
             var count = ElarionUiKit.Label(row.transform, s_composition.CountOf(id).ToString(),
-                0.14f, 0.86f, ElarionUi.Gilt, ElarionUi.FontBody, TextAlignmentOptions.Center, 0.755f, 0.845f, bold: true);
+                0.14f, 0.86f, ElarionUi.Gilt, ElarionUi.FontBody, TextAlignmentOptions.Center, 0.70f, 0.73f, bold: true);
             count.raycastTarget = false;
 
             var plus = ElarionUiKit.Button(row.transform, "+", ElarionUiKit.ButtonKind.Gold,
-                new Vector2(0.855f, 0.14f), new Vector2(0.96f, 0.86f), () => Step(id, 1));
+                new Vector2(0.73f, 0f), new Vector2(1f, 1f), () => Step(id, 1));
             if (plus != null) ElarionUiKit.ClampMinTouch(plus);
         }
 
@@ -349,44 +351,12 @@ namespace DeNelle.Village
             for (int i = _detailHost.childCount - 1; i >= 0; i--)
             {
                 var child = _detailHost.GetChild(i).gameObject;
-                if (_musterCta != null && child == _musterCta.gameObject) continue;
                 Destroy(child);
             }
 
             // ── Slot tabs (3 loadouts) ────────────────────────────────────────
-            float tabW = 0.30f;
-            float gap = 0.02f;
-            for (int s = 0; s < ArmyLoadoutService.SlotCount; s++)
-            {
-                float x0 = 0.04f + s * (tabW + gap);
-                float x1 = x0 + tabW;
-                bool active = s == _activeSlot;
-                int units = ArmyLoadoutService.SlotUnitCount(s);
-                string label = (s + 1) + " " + ShortName(ArmyLoadoutService.SlotName(s));
-                if (units > 0) label += " (" + units + ")";
-                int capture = s;
-                var kind = active ? ElarionUiKit.ButtonKind.Gold : ElarionUiKit.ButtonKind.Quiet;
-                var btn = ElarionUiKit.Button(_detailHost, label, kind,
-                    new Vector2(x0, 0.90f), new Vector2(x1, 0.98f), () => OnSelectSlot(capture));
-                if (btn != null) ElarionUiKit.ClampMinTouch(btn);
-            }
-
             // ── Quick recipes ─────────────────────────────────────────────────
-            ElarionUiKit.Button(_detailHost, "Raid", ElarionUiKit.ButtonKind.Quiet,
-                new Vector2(0.04f, 0.80f), new Vector2(0.27f, 0.88f), () => OnRecipe(0));
-            ElarionUiKit.Button(_detailHost, "Hold", ElarionUiKit.ButtonKind.Quiet,
-                new Vector2(0.29f, 0.80f), new Vector2(0.52f, 0.88f), () => OnRecipe(1));
-            ElarionUiKit.Button(_detailHost, "Siege", ElarionUiKit.ButtonKind.Quiet,
-                new Vector2(0.54f, 0.80f), new Vector2(0.77f, 0.88f), () => OnRecipe(2));
-            ElarionUiKit.Button(_detailHost, "Clear", ElarionUiKit.ButtonKind.Quiet,
-                new Vector2(0.79f, 0.80f), new Vector2(0.96f, 0.88f), () => OnRecipe(3));
-
             // ── Name + save ───────────────────────────────────────────────────
-            ElarionUiKit.Button(_detailHost, "Name: " + ShortName(s_composition.Name), ElarionUiKit.ButtonKind.Quiet,
-                new Vector2(0.04f, 0.70f), new Vector2(0.62f, 0.78f), OnCycleName);
-            ElarionUiKit.Button(_detailHost, "Save slot", ElarionUiKit.ButtonKind.Gold,
-                new Vector2(0.64f, 0.70f), new Vector2(0.96f, 0.78f), OnSaveSlot);
-
             // ── Composition body ──────────────────────────────────────────────
             var preview = ArmyMusterService.Preview(s_composition);
             var body = new System.Text.StringBuilder();
@@ -433,11 +403,65 @@ namespace DeNelle.Village
 
             body.Append("\nTip: Muster auto-saves this slot. Fill the army, then Raids.");
 
-            var text = ElarionUiKit.Label(_detailHost, body.ToString(), 0.13f, 0.68f,
+            var text = ElarionUiKit.Label(_detailHost, body.ToString(), 0.04f, 0.96f,
                 Ink, ElarionUi.FontLabel, TextAlignmentOptions.TopLeft, 0.05f, 0.95f);
             text.raycastTarget = false;
             text.enableWordWrapping = true;
             ElarionUiKit.FitBlock(text, 28f, ElarionUi.FontLabel);
+        }
+
+        private static RectTransform MakeCommandBand(Transform parent, string name, bool top)
+        {
+            var go = new GameObject(name, typeof(RectTransform));
+            go.transform.SetParent(parent, false);
+            var rt = (RectTransform)go.transform;
+            rt.anchorMin = rt.anchorMax = new Vector2(0.5f, top ? 1f : 0f);
+            rt.pivot = new Vector2(0.5f, top ? 1f : 0f);
+            rt.anchoredPosition = new Vector2(0f, top ? -8f : 8f);
+            rt.sizeDelta = new Vector2(900f, CommandBandPx);
+            return rt;
+        }
+
+        private void BuildCommandBands()
+        {
+            ClearChildren(_selectorHost);
+            ClearChildren(_actionHost);
+            if (_selectorHost == null || _actionHost == null) return;
+
+            string[] selectors = { "Raid", "Hold", "Siege", "Clear" };
+            float inset = CommandGapPx / 900f;
+            for (int i = 0; i < selectors.Length; i++)
+            {
+                int selection = i;
+                float x0 = i * 0.25f;
+                bool active = i < ArmyLoadoutService.SlotCount && i == _activeSlot;
+                var kind = active ? ElarionUiKit.ButtonKind.Gold : ElarionUiKit.ButtonKind.Quiet;
+                var button = ElarionUiKit.Button(_selectorHost, selectors[i], kind,
+                    new Vector2(x0 + inset * 0.5f, 0f),
+                    new Vector2(x0 + 0.25f - inset * 0.5f, 1f),
+                    () => { if (selection < ArmyLoadoutService.SlotCount) OnSelectSlot(selection); else OnRecipe(3); });
+                if (button != null) ElarionUiKit.ClampMinTouch(button);
+            }
+
+            var name = ElarionUiKit.Button(_actionHost, "Name: " + ShortName(s_composition.Name),
+                ElarionUiKit.ButtonKind.Quiet, new Vector2(0f, 0f), new Vector2(0.32f, 1f), OnCycleName);
+            var save = ElarionUiKit.Button(_actionHost, "Save slot " + (_activeSlot + 1),
+                ElarionUiKit.ButtonKind.Gold, new Vector2(0.34f, 0f), new Vector2(0.66f, 1f), OnSaveSlot);
+            _musterCta = ElarionUiKit.Button(_actionHost, "Muster army", ElarionUiKit.ButtonKind.Confirm,
+                new Vector2(0.68f, 0f), new Vector2(1f, 1f), OnMuster);
+            if (name != null) ElarionUiKit.ClampMinTouch(name);
+            if (save != null) ElarionUiKit.ClampMinTouch(save);
+            if (_musterCta != null)
+            {
+                ElarionUiKit.ClampMinTouch(_musterCta);
+                _musterCtaLabel = _musterCta.GetComponentInChildren<TextMeshProUGUI>();
+            }
+        }
+
+        private static void ClearChildren(Transform host)
+        {
+            if (host == null) return;
+            for (int i = host.childCount - 1; i >= 0; i--) Destroy(host.GetChild(i).gameObject);
         }
 
         private static string ShortName(string name)

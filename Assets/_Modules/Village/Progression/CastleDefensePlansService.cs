@@ -34,9 +34,13 @@
 // =============================================================================
 
 using System.Collections.Generic;
+using DeNelle.Core.Combat;
+using DeNelle.Core.Dialogue;
 using DeNelle.Core.Diagnostics;
 using DeNelle.Core.State;
+using DeNelle.Core.UI;
 using UnityEngine;
+using CoreDialogue = DeNelle.Core.Dialogue.DialogueService;
 
 namespace DeNelle.Village
 {
@@ -206,6 +210,7 @@ namespace DeNelle.Village
             rb.useGravity = false;
 
             _prop.AddComponent<CastleDefensePlansPickup>();
+            _prop.AddComponent<CastlePlansDiscoveryNudge>();
 
             FlowTrace.Step("Progression",
                 $"plans-drop-spawned @ {seat} (seat={seatSource}, wavesCompleted={wavesCompleted}, " +
@@ -456,6 +461,70 @@ namespace DeNelle.Village
                     else rend.material.color = color;
                 }
             });
+        }
+    }
+
+    /// <summary>WO-1151: once-ever 2D Echo nudge when the approved beacon enters view.</summary>
+    internal sealed class CastlePlansDiscoveryNudge : MonoBehaviour
+    {
+        public const string SeenKey = "spire_plans_beacon_nudge";
+        public const string CopyKey = "spirePlansBeaconNudge";
+        private const float MaxSightDistance = 140f;
+        private const float EdgeInset = 0.04f;
+        private float _nextCheck;
+        private bool _deliveredThisSession;
+
+        private void Update()
+        {
+            if (_deliveredThisSession || Time.unscaledTime < _nextCheck) return;
+            _nextCheck = Time.unscaledTime + 0.25f;
+
+            var svc = GameStateService.Instance;
+            var state = svc != null ? svc.State : null;
+            if (state == null || state.SeenTutorials == null) return;
+            if (state.SeenTutorials.TryGetValue(SeenKey, out bool seen) && seen)
+            {
+                _deliveredThisSession = true;
+                return;
+            }
+
+            // BattleLock is the existing battle/wave authority. The other two
+            // checks prevent a companion nudge from stacking over a live modal.
+            if (BattleLock.IsInBattle() || PanelManager.AnyOpen || CoreDialogue.IsRunning)
+                return;
+
+            var camera = Camera.main;
+            if (camera == null) return;
+            Vector3 sightPoint = transform.position + Vector3.up * 4f;
+            if ((camera.transform.position - sightPoint).sqrMagnitude > MaxSightDistance * MaxSightDistance)
+                return;
+            if (!IsInViewport(camera.WorldToViewportPoint(sightPoint), EdgeInset)) return;
+
+            if (!CoreDialogue.PlayDef(BuildDialogue(VillageStrings.Canon(CopyKey))))
+            {
+                FlowTrace.Warn("Progression",
+                    "plans beacon nudge could not open; seen flag remains clear for retry");
+                return;
+            }
+
+            _deliveredThisSession = true;
+            svc.MarkTutorialSeen(SeenKey);
+            FlowTrace.Step("Progression",
+                "plans beacon nudge SHOWN and persisted (2D guide portrait; no Echo body; beacon untouched)");
+        }
+
+        /// <summary>Pure viewport oracle for the focused regression.</summary>
+        public static bool IsInViewport(Vector3 viewport, float inset = EdgeInset)
+            => viewport.z > 0f && viewport.x >= inset && viewport.x <= 1f - inset &&
+               viewport.y >= inset && viewport.y <= 1f - inset;
+
+        private static DialogueDef BuildDialogue(string line)
+        {
+            var def = new DialogueDef { Id = SeenKey, StartNode = "notice" };
+            var node = new DialogueNode { Id = "notice" };
+            node.Lines.Add(new DialogueLine { Speaker = "{guide}", Text = line ?? string.Empty });
+            def.Nodes.Add(node);
+            return def;
         }
     }
 

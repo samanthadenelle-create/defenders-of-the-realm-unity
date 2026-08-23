@@ -123,3 +123,63 @@ devalue real purchases.
 9. Owner felt-verifies: play offline, reconnect, confirm resources are right (PO closes, §13).
 
 > **AUDIT 2026-08-21 (agent fleet, read-only):** OPEN — STILL VALID. Evidence: `api/game/ only load.js,save.js` — server accrual endpoint unbuilt. Status left at READY deliberately: this work is real and unbuilt. Verified against HEAD 2f0b97bb5, not against the ticket's own claims.
+
+---
+
+## 7. IMPLEMENTATION NOTES — 2026-08-23 (agent seat, EDIT-ONLY: not gated, not committed)
+
+> **⚠ THE AUDIT FOOTER ABOVE IS WRONG AND IS SUPERSEDED.** "`api/game/ only load.js,save.js` — server
+> accrual endpoint unbuilt" was a FILE-LISTING inference, not a read: the accrual reconciliation was
+> already built *inside* `api/game/save.js` as `reconcileAccrual()` (`:498`, invoked `:211` after
+> `applyGuards`; anchor `:180-199`; clamp audit row + response block `:212-224` / `:268`; runnable
+> self-test `:679-758`, marker `ACCRUAL_RECONCILE_OK 6/6`). §3.1, §3.2 and §3.5 were done, and so was
+> the client half's declaration (`OfflineClaimCoordinator`, `OfflineAccrualTrustRegression`). A ticket
+> is not unbuilt because a directory listing has the wrong number of files in it.
+
+**What this pass closed — the two that really were open:**
+
+**§3.3 — the server's answer was PARSED BY NOTHING.** `load.js:126` has been sending `serverLastSeenMs`
+and `BackendLoadResponse` parsed only `serverNowMs`; there was no `BackendSaveResponse` type at all, so
+the `accrual` clamp block `save.js:268` returns went into a `DownloadHandlerBuffer` nobody read — the
+server refused a fabricated gain, stored the reduced figure, and the device went on showing **and
+re-posting** the number it had been refused. Now:
+
+- `GameStateService.cs` — `BackendLoadResponse.ServerLastSeenMs`; new `BackendSaveResponse` +
+  public `AccrualReconcileReport` / `AccrualClamp`; `ReadSaveResponse` called from
+  `SendCurrentSnapshot`'s success arm; `ApplyAccrualClamps` + the two wire-key balance arms;
+  `ServerLastSeenMs` / `LastAccrualReconcile` readouts.
+
+**⛔ BALANCES ONLY, NEVER THE CLOCK.** `GameState.LastHarvestClaimMs` keeps its three legal writers, all
+inside `OfflineClaimCoordinator` (`AdvanceAndSave`, `StampClock`). The sync handler adds no fourth, and
+does NOT roll the local claim clock back to the server's window — that would leave the stretch in
+between RE-CLAIMABLE on the next launch, which is the same double-grant `save.js:459-461` refuses to
+commit server-side. **The adjustment can also only ever SUBTRACT**, floored at
+`min(current, serverPrior)`, so a player who spent down after the snapshot is never topped back up and
+a forged/stale `accrual` block can never be a grant path — the worst it can do is cost its sender.
+
+**§3.4 — `OfflineOptInPanel` now says the local-only truth**, as a STANDING label (the body string is
+rewritten four times by the size/verdict/download arms; copy that lives inside one of those strings
+vanishes at the moment the player is actually choosing). Keys `offlineLocalSaveTitle` /
+`offlineLocalSaveNote` in both canon copies, ASCII, worded not tinted. The modal grew to 0.14-0.86 so
+the note has room without pushing the body font toward the legibility floor; `CanonCtaWidth` /
+`CanonCtaHeight` untouched and the CTA band still clears `MinTouchPx`.
+
+**Verified by** `OfflineAccrualTrustRegression` cases 5-8 (new): `serverLastSeenMs` parses off a real
+wire body; a reported clamp lowers wood 1000 -> 400; `LastHarvestClaimMs` is unmoved by applying one;
+a spent-down balance is NOT raised and post-snapshot earnings survive the subtraction (1500 -> 900).
+Both wire bodies are typed out verbatim, so a key rename on either side fails the gate instead of
+quietly parsing to nulls. Server-side clamp stays gated by `node api/game/save.js`.
+
+### 7.1 REPORTED, NOT FIXED — the ratio's inputs are all client-supplied
+
+`reconcileAccrual` derives `clientWindowSec` entirely from numbers the client sent
+(`save.js:511-516`: the posted `lastHarvestClaimMs` minus the stored one). **A client that inflates
+balances while leaving `lastHarvestClaimMs` UNCHANGED declares a zero-length window, hits
+`no_forward_window` (`:524`), and is never reconciled at all** — the ratio has nothing to scale. The
+only thing bounding that path today is `applyGuards`' `MAX_RESOURCE` ceiling. This is the same shape as
+§2's container-capacity note: a bound doing security work that nobody chose for that job. Stated here
+rather than left implicit; closing it needs a server-derived window (or a per-field gain-rate ceiling),
+which is an owner call and a different ticket.
+
+**STILL OPEN on this ticket:** acceptance 8 (`COMPILE_GATE_OK` + `REGRESSION_OK <n>/<n>`, CLI seat) and
+acceptance 9 (owner felt-verify + PO close). No gate was run and nothing was committed by this seat.

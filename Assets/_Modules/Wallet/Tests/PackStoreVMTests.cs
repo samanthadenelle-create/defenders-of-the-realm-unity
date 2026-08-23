@@ -44,7 +44,7 @@ namespace DeNelle.Wallet.Tests
         [Test]
         public void apply_pack_records_owned_and_cosmetics()
         {
-            // Economy grants now route through the EconomyService / GlimmerCurrencyService seams
+            // Economy grants route through EconomyService and CosmeticOwnershipService.
             // (resolved by type-name reflection). Those singletons are ABSENT in EditMode (no scene),
             // so each grant self-reports a loud FlowTrace.Fail (Debug.LogError) and state.Resources is
             // left untouched — correct behaviour, so we no longer assert the resource top-up here (it
@@ -59,8 +59,8 @@ namespace DeNelle.Wallet.Tests
             // cosmetic) — self-reported via FlowTrace.Fail (Debug.LogError).
             LogAssert.Expect(LogType.Error, new System.Text.RegularExpressions.Regex("grant resources.*EconomyService missing"));
             LogAssert.Expect(LogType.Error, new System.Text.RegularExpressions.Regex("grant coins.*EconomyService missing"));
-            LogAssert.Expect(LogType.Error, new System.Text.RegularExpressions.Regex("grant cosmetic 'cos-a'.*GlimmerCurrencyService missing"));
-            LogAssert.Expect(LogType.Error, new System.Text.RegularExpressions.Regex("grant cosmetic 'cos-b'.*GlimmerCurrencyService missing"));
+            LogAssert.Expect(LogType.Error, new System.Text.RegularExpressions.Regex("grant cosmetic 'cos-a'.*CosmeticOwnershipService missing"));
+            LogAssert.Expect(LogType.Error, new System.Text.RegularExpressions.Regex("grant cosmetic 'cos-b'.*CosmeticOwnershipService missing"));
 
             vm.ApplyPackContents(pack);
 

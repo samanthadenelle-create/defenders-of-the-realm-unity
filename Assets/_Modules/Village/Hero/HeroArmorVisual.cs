@@ -366,7 +366,7 @@ namespace DeNelle.Village
             // WO-992 (2026-08-21): the VISIBLE BODY JUST CHANGED, so the equipped cosmetic has to be
             // re-applied to it. CosmeticApplier decorates whatever renderers it finds and re-resolves
             // that set on every Refresh — without this call an armour equip would silently strip the
-            // skin the player PAID for (Glimmer is sold for real money, packs.json). One line, no new
+            // skin the player owns. One line, no new
             // owner: this class still owns the body, the applier only re-decorates it.
             DeNelle.Cosmetics.CosmeticApplier.RefreshOn(gameObject);
 

@@ -243,7 +243,16 @@ namespace DeNelle.Village.World
             // instantiated child of Root (NOT pooled - loaded from the tracked mirror, so it
             // costs no VFXManager loop slot); held so the teardown loop and the art-swap
             // re-seat can destroy/re-attach it explicitly.
+            //
+            // WO-1062 (owner ruling 2026-08-22, "think we need two vfs each facing outwards"):
+            // there are now TWO of them - the SAME mirrored prefab, one facing each way out of
+            // the doorway, 0.25m apart along the threshold normal. CircleVfx is the +90 plane
+            // (facing Root.forward, the authored FacingYawDeg), CircleVfxBack is the -90 plane.
+            // ⛔ BOTH are held because BOTH must be torn down: this used to be a single handle
+            // and every teardown/re-seat site assumed one instance, so a second plane added
+            // without widening the field here leaks past every teardown.
             public GameObject CircleVfx;
+            public GameObject CircleVfxBack;
             // Owner 2026-08-14 ("all of the portals should be this"): the shared PortalStructure
             // art, swapped in over the code-built cube arch. Held so the Addressables handle is
             // released on teardown and so the discovery dim can retarget onto the real renderers.
@@ -856,7 +865,8 @@ namespace DeNelle.Village.World
                     p?.ThresholdVfx?.Stop(true);   // WO-753: no aura outlives its portal
                     // The circle is a plain child of Root, so it normally dies with it - this
                     // Destroy only matters if Root was cleared without a destroy. Same WO-753 rule.
-                    if (p != null && p.CircleVfx != null) Destroy(p.CircleVfx);
+                    // WO-1062: BOTH outward-facing planes, through the one teardown owner.
+                    ClearPortalCircle(p);
                     // Release the shared-structure bundle too, or it stays resident for the
                     // whole session once a portal is torn down.
                     if (p != null) PortalStructure.Release(ref p.Swap);
@@ -1043,6 +1053,16 @@ namespace DeNelle.Village.World
             for (int i = 0; i < real.Length; i++) p.BaseColors[i] = SafeColor(real[i]);
             ApplyDim(p, p.Discovered ? Mathf.Lerp(UndiscoveredDim, 1f, p.FadeT) : UndiscoveredDim);
 
+            // WO-1062: THE ONE REAL GAP IN THE MAGENTA NET ON THIS SCREEN. BuildPortal already
+            // sweeps this root (MagentaGuard.SweepGameObject) and registers the cube arch as
+            // protected art - but THIS art arrives AFTER that sweep, on an async continuation,
+            // so its renderers had never been looked at by anything. That is how a magenta patch
+            // survives on a portal in a project that has a global guard. Sweep the swapped-in
+            // instance here, on the same per-object seam, so the offender self-identifies in the
+            // break-log instead of costing a guess-and-rebuild cycle.
+            DeNelle.Core.MagentaGuard.SweepGameObject(
+                swap.Instance, "DungeonWorldPortalSpawner.SwapInSharedStructureAsync");
+
             // The procedural glow quad / halo / vortex were the no-art fallback. With real art
             // and a real catalogued loop they are two additive billboards inside somebody else's
             // vortex - stand them down (the point light stays; it lights the arch geometry).
@@ -1055,7 +1075,8 @@ namespace DeNelle.Village.World
             if (p.Discovered) AttachThresholdAura(p);
             // Re-seat the owner's dark-star circle the same way: it was centred + scaled on the
             // cube arch, and the loaded art's measured bounds are the only honest reference.
-            if (p.CircleVfx != null) { Destroy(p.CircleVfx); p.CircleVfx = null; }
+            // WO-1062: BOTH planes come off and BOTH go back on - one teardown owner.
+            ClearPortalCircle(p);
             if (p.Discovered) AttachPortalCircle(p);
 
             // WO-1114 CALL SITE 2 of 2 — THE RE-SEAT. Both measured VFX were just
@@ -1137,6 +1158,12 @@ namespace DeNelle.Village.World
         // =====================================================================
         private const string CirclePrefabResourcePath = "VFX/Portal/PortalCircleDarkStar";
 
+        // WO-1062, OWNER-AUTHORED 2026-08-22 (verbatim: "put .25 between them"). Distance in
+        // metres between the two outward-facing planes, measured along the threshold normal.
+        // ⛔ Not a tuning knob - do not re-tune it to "fix" the look; if the result is wrong
+        // it is the rotation axis, not this number (WO-1062 section 2).
+        private const float CircleSeparation = 0.25f;
+
         // Load-once cache; _circleLooked distinguishes "never tried" from "tried, absent"
         // so a missing mirror costs one Resources.Load per session, not one per portal.
         private static GameObject _circlePrefab;
@@ -1188,7 +1215,7 @@ namespace DeNelle.Village.World
             // Closed: take the invitation off. Same calls, same fields, same owner as the
             // WO-753 teardown - no second path.
             if (p.ThresholdVfx != null) { p.ThresholdVfx.Stop(true); p.ThresholdVfx = null; }
-            if (p.CircleVfx != null) { Destroy(p.CircleVfx); p.CircleVfx = null; }
+            ClearPortalCircle(p);   // WO-1062: both outward planes, one teardown owner
             var vfx = p.Root.GetComponent<PortalVFXController>();
             if (vfx != null) vfx.SuppressProceduralSurfaces("WO-1114: the door is closed - dark and inert");
 
@@ -1211,10 +1238,27 @@ namespace DeNelle.Village.World
                     $"{BoundsLine(b, src)} sigil='{(string.IsNullOrEmpty(info.Sigil) ? "none" : info.Sigil)}'.");
         }
 
+        // =====================================================================
+        // WO-1062 — THE ONE TEARDOWN OWNER FOR THE PORTAL FACE.
+        // ---------------------------------------------------------------------
+        // The face is TWO instances (see Portal.CircleVfx / CircleVfxBack). Every
+        // site that used to Destroy the single handle now calls this instead, so a
+        // plane can never be added or moved without every teardown path following
+        // it. ⛔ Do not re-inline a Destroy of one plane at a call site.
+        // =====================================================================
+        private void ClearPortalCircle(Portal p)
+        {
+            if (p == null) return;
+            if (p.CircleVfx != null) { Destroy(p.CircleVfx); p.CircleVfx = null; }
+            if (p.CircleVfxBack != null) { Destroy(p.CircleVfxBack); p.CircleVfxBack = null; }
+        }
+
         private void AttachPortalCircle(Portal p)
         {
             if (p == null || p.Root == null) return;
-            if (p.CircleVfx != null) return;   // idempotent
+            // Idempotent on EITHER handle: a half-attached face (one plane up, one not)
+            // is a state we never want to build a second plane on top of.
+            if (p.CircleVfx != null || p.CircleVfxBack != null) return;
 
             if (!_circleLooked)
             {
@@ -1243,19 +1287,53 @@ namespace DeNelle.Village.World
             float target = OpeningTargetSize(b);
             float scale = VFXManager.ResolveFitScale(_circlePrefab, target, MinFitScale, MaxFitScale);
 
-            Quaternion rot = p.Root.rotation * Quaternion.Euler(90f, 0f, 0f);
+            // =================================================================
+            // WO-1062 (owner ruling 2026-08-22): TWO planes, each facing OUTWARD.
+            // -----------------------------------------------------------------
+            // ONE plane has ONE good viewing hemisphere: Euler(+90,0,0) maps the flat
+            // circle's +Y face-normal onto Root.forward (the authored FacingYawDeg), so
+            // the OPPOSITE approach saw the unlit BACK FACE - the owner's "black shards"
+            // from the NE. Two planes, back to back, delete that by construction.
+            //
+            // OWNER-AUTHORED VALUES, not invented: "one rotated 90 other rotated -90" and
+            // "put .25 between them". The rotation is applied on the LOCAL X axis (the same
+            // axis the original single +90 used), because that is the axis that tips the flat
+            // ground circle upright; +90 puts its face-normal on +forward, -90 on -forward.
+            // Each plane is pushed HALF the 0.25m separation along the threshold normal, to
+            // its own side, so the pair stays centred on the measured opening and the two are
+            // never coplanar (no z-fighting).
+            //
+            // SAME prefab, SAME owner-tagged key for both - nothing is picked or substituted
+            // (memory: vfx-map-owner-tags-no-creative-pick). Still ZERO VFXManager loop slots:
+            // these are plain Instantiate children of Root, so two of them is still two of
+            // nothing as far as the loop budget is concerned.
+            // =================================================================
+            Quaternion rotFront = p.Root.rotation * Quaternion.Euler(90f, 0f, 0f);
+            Quaternion rotBack = p.Root.rotation * Quaternion.Euler(-90f, 0f, 0f);
+            Vector3 normal = p.Root.forward;
+            Vector3 halfGap = normal * (CircleSeparation * 0.5f);
 
-            var go = Instantiate(_circlePrefab, centre, rot, p.Root);
-            go.name = "[PortalCircle_DarkStar]";
+            var go = Instantiate(_circlePrefab, centre + halfGap, rotFront, p.Root);
+            go.name = "[PortalCircle_DarkStar_Front]";
             go.transform.localScale = Vector3.one * scale;
             p.CircleVfx = go;
 
+            var goBack = Instantiate(_circlePrefab, centre - halfGap, rotBack, p.Root);
+            goBack.name = "[PortalCircle_DarkStar_Back]";
+            goBack.transform.localScale = Vector3.one * scale;
+            p.CircleVfxBack = goBack;
+
+            Vector3 front = go.transform.position;
+            Vector3 back = goBack.transform.position;
             FlowTrace.Step("Portal",
                 $"AttachPortalCircle: '{CirclePrefabResourcePath}' stood vertical INSIDE the opening of portal " +
-                $"'{p.Key}' at ({centre.x:F1}, {centre.y:F1}, {centre.z:F1}) rot=+90X over facingYaw " +
+                $"'{p.Key}' at ({centre.x:F1}, {centre.y:F1}, {centre.z:F1}) as TWO outward-facing planes " +
+                $"(WO-1062) - front rot=+90X at ({front.x:F1}, {front.y:F1}, {front.z:F1}), " +
+                $"back rot=-90X at ({back.x:F1}, {back.y:F1}, {back.z:F1}), gap={CircleSeparation:0.00}m " +
+                $"along the threshold normal - over facingYaw " +
                 $"{p.Root.eulerAngles.y:F0} - {BoundsLine(b, src)} target={target:0.00}m " +
                 $"authored={VFXManager.MeasureVisualSize(_circlePrefab):0.00}m -> scale={scale:0.000} " +
-                "(owner pick 2026-08-16: Magic circle dark star as the portal face).");
+                "(owner pick 2026-08-16: Magic circle dark star as the portal face; 0 loop slots).");
         }
 
         // =====================================================================

@@ -2982,7 +2982,6 @@ namespace DeNelle.Village
             // 2026-08-16 "each enemy should have a base value with some random on it").
             // DEF-88 XP + WO-432/433 GOLD both roll through the ONE authority
             // (EnemyDef.RollReward); variance is the def's data-driven rewardVariance
-            // (0 when absent -> exact legacy values). Glimmer stays FLAT (cosmetic
             // trickle, not part of the combat-economy variance surface).
             if (killed && _def != null)
             {
@@ -3005,13 +3004,6 @@ namespace DeNelle.Village
                         creditedXp = Mathf.RoundToInt(heroProg.LifetimeXp - xpBefore);
                     }
                 }
-
-                // DEF-32: grant Glimmer (cosmetic currency) on kill. Resolved via
-                // reflection — GlimmerCurrencyService lives in DeNelle.Cosmetics,
-                // which DeNelle.Village does not reference (asmdef stays decoupled,
-                // mirroring PetDeployer's bridge).
-                if (_def.GlimmerReward > 0)
-                    TryAwardGlimmer(_def.GlimmerReward);
 
                 // WO-432/433: GOLD (Coins) on kill so the Gold-cost building research has a
                 // kill-driven source. Data-driven (EnemyDef.CoinReward) with the XP-derived
@@ -3447,44 +3439,6 @@ namespace DeNelle.Village
             if (float.IsInfinity(bottom)) return 0f;
             float gap = transform.position.y - bottom;
             return gap > 0f ? gap : 0f;
-        }
-
-        // ── Glimmer reflection bridge (DEF-32) ───────────────────────────────
-        // GlimmerCurrencyService lives in DeNelle.Cosmetics, which DeNelle.Village
-        // does not reference. Resolve + invoke by reflection so the asmdef stays
-        // decoupled (same pattern as PetDeployer). The Type/Method lookups are
-        // cached; the live singleton is re-fetched each call so a scene reload
-        // never leaves a stale (destroyed) instance reference.
-        private static System.Type _glimmerType;
-        private static System.Reflection.PropertyInfo _glimmerInstanceProp;
-        private static System.Reflection.MethodInfo _glimmerTryAdd;
-        private static bool _glimmerResolved;
-
-        private static void TryAwardGlimmer(int amount)
-        {
-            try
-            {
-                if (!_glimmerResolved)
-                {
-                    _glimmerResolved = true;
-                    foreach (var asm in System.AppDomain.CurrentDomain.GetAssemblies())
-                    {
-                        var t = asm.GetType("DeNelle.Cosmetics.GlimmerCurrencyService", false);
-                        if (t != null) { _glimmerType = t; break; }
-                    }
-                    if (_glimmerType != null)
-                    {
-                        _glimmerInstanceProp = _glimmerType.GetProperty("Instance",
-                            System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static);
-                        _glimmerTryAdd = _glimmerType.GetMethod("TryAddGlimmer", new[] { typeof(int) });
-                    }
-                }
-                if (_glimmerInstanceProp == null || _glimmerTryAdd == null) return;
-                var instance = _glimmerInstanceProp.GetValue(null);
-                if (instance == null) return;
-                _glimmerTryAdd.Invoke(instance, new object[] { amount });
-            }
-            catch (Exception e) { DeNelle.Core.Diagnostics.FlowTrace.Warn("Enemy", $"TryAwardGlimmer({amount}) reflected reward threw (best-effort, kill path unaffected): {e.GetType().Name}: {e.Message}"); }
         }
 
         /// <summary>

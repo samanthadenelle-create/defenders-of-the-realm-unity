@@ -62,9 +62,6 @@ namespace DeNelle.Core.UI
         /// <summary>Secondary / flavour text (muted parchment).</summary>
         public static readonly Color ParchmentDim = ElarionUi.ParchmentDim;
 
-        /// <summary>Glimmer / coin gold.</summary>
-        public static readonly Color Glimmer = ElarionUi.Gilt;
-
         /// <summary>Aether-violet — selected tabs / arcane accent (canon magic accent).</summary>
         public static readonly Color Aether = ElarionUi.Aether;
 
@@ -87,7 +84,7 @@ namespace DeNelle.Core.UI
         public static readonly Color Disabled = ElarionUi.Disabled;
 
         // Small decorative glyphs (no font dependency — plain unicode the default
-        // UI font renders). A crest before the title, a coin before Glimmer.
+        // UI font renders). A crest before the title, a coin before currency amounts.
         public const string CrestGlyph = "*";
         public const string CoinGlyph  = "*";
 
@@ -168,37 +165,6 @@ namespace DeNelle.Core.UI
         }
 
         // ── Currency display ─────────────────────────────────────────────────
-
-        /// <summary>
-        /// A styled Glimmer chip: coin glyph + amount in gold on a recessed slot.
-        /// Pass the Label back so the caller can update the amount later.
-        /// </summary>
-        public static VisualElement MakeGlimmerChip(out Label amountLabel, int amount)
-        {
-            var chip = new VisualElement();
-            chip.style.flexDirection = FlexDirection.Row;
-            chip.style.alignItems = Align.Center;
-            chip.style.paddingTop = 4; chip.style.paddingBottom = 4;
-            chip.style.paddingLeft = 10; chip.style.paddingRight = 12;
-            chip.style.backgroundColor = new Color(0.06f, 0.06f, 0.07f, 1f); // obsidian chip (WO-562)
-            SetBorderRadius(chip, 12);
-            SetBorderWidth(chip, 1);
-            SetBorderColor(chip, new Color(Gilt.r, Gilt.g, Gilt.b, 0.55f));
-
-            var coin = new Label(CoinGlyph);
-            coin.style.fontSize = 15;
-            coin.style.color = Glimmer;
-            coin.style.marginRight = 6;
-            chip.Add(coin);
-
-            amountLabel = new Label(amount.ToString("N0"));
-            amountLabel.style.fontSize = 15;
-            amountLabel.style.unityFontStyleAndWeight = FontStyle.Bold;
-            amountLabel.style.color = Glimmer;
-            chip.Add(amountLabel);
-
-            return chip;
-        }
 
         // ── Item icon slot ───────────────────────────────────────────────────
 

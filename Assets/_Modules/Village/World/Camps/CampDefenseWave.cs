@@ -322,8 +322,7 @@ namespace DeNelle.Village.World.Camps
                 AttackInterval = interval,
                 Height = height,
                 AggroRadius = 16f,
-                XpReward = xp + threat,
-                GlimmerReward = 3,
+                XpReward = xp + threat
             };
 
             float ease = Mathf.Lerp(0.35f, 1f,

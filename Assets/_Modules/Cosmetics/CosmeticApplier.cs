@@ -1,19 +1,16 @@
 // =============================================================================
 // CosmeticApplier — THE ONE APPEARANCE OWNER FOR A PURCHASED COSMETIC.
 // -----------------------------------------------------------------------------
-// Assembly: DeNelle.Cosmetics (same asmdef as GlimmerCurrencyService / CosmeticCatalog).
+// Assembly: DeNelle.Cosmetics (same asmdef as CosmeticOwnershipService / CosmeticCatalog).
 //
 // ── THE DEFECT THIS FILE EXISTS TO CLOSE (2026-08-21, WO-992 finding) ────────
 // Until today `ApplyCosmetic` was DEFINED HERE AND CALLED NOWHERE, and the GUID
 // of this component sat on ZERO prefabs and ZERO scenes (raw-byte scan of all 12
 // binary scenes). Equipping a cosmetic wrote a state flag
-// (GlimmerCurrencyService.Equip) and changed NOTHING the player could see.
+// (CosmeticOwnershipService.Equip) and changed NOTHING the player could see.
 //
 // That is not a dead-code curiosity, it is a paid-goods failure:
-//   • Glimmer is earned in play (TierSystem.cs:189, Enemy.cs:3356,
 //     DailyQuestRewardBridge, WaveFeedbackDirector.cs:143),
-//   • spent in play (GlimmerCurrencyService.cs:137, BattlePassManager.cs:175),
-//   • and SOLD FOR REAL MONEY (packs.json grants 25 glimmer with Hearth Spark,
 //     50 with Starter's Hand).
 // A player could pay cash, buy a skin in CosmeticShopPanel, equip it, and see
 // nothing change. Nothing in the repo asserted otherwise, which is exactly how
@@ -25,7 +22,7 @@
 // NOT fight HeroArmorVisual / HeroBodySwapper / GearVisualApplier for ownership
 // of the hero mesh, and does NOT keep its own copy of equip state. It attaches
 // to a host that ALREADY owns its body, reads the equip state from
-// GlimmerCurrencyService, and re-decorates whatever renderers that host is
+// CosmeticOwnershipService, and re-decorates whatever renderers that host is
 // currently showing. When the host rebuilds its body it calls RefreshOn(host)
 // and this re-resolves from scratch — the body owner stays the body owner.
 //
@@ -204,7 +201,7 @@ namespace DeNelle.Cosmetics
         private void Subscribe()
         {
             if (_subscribed) return;
-            var svc = GlimmerCurrencyService.Instance;
+            var svc = CosmeticOwnershipService.Instance;
             if (svc == null) return;          // bootstraps BeforeSceneLoad; Refresh re-tries.
             svc.Changed += Refresh;
             _subscribed = true;
@@ -213,7 +210,7 @@ namespace DeNelle.Cosmetics
         private void Unsubscribe()
         {
             if (!_subscribed) return;
-            var svc = GlimmerCurrencyService.Instance;
+            var svc = CosmeticOwnershipService.Instance;
             if (svc != null) svc.Changed -= Refresh;
             _subscribed = false;
         }
@@ -256,11 +253,11 @@ namespace DeNelle.Cosmetics
                 return;
             }
 
-            var svc = GlimmerCurrencyService.Instance;
+            var svc = CosmeticOwnershipService.Instance;
             if (svc == null)
             {
                 FlowTrace.Warn("Cosmetics",
-                    $"Refresh: GlimmerCurrencyService.Instance is null — '{name}' keeps its default look. " +
+                    $"Refresh: CosmeticOwnershipService.Instance is null — '{name}' keeps its default look. " +
                     "The service bootstraps BeforeSceneLoad; a null here means it was destroyed or never ran.");
                 return;
             }

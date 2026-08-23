@@ -1040,7 +1040,7 @@ namespace DeNelle.Village
             HookDialogueIdle();
 
             // ── COSMETICS (WO-992 fix, 2026-08-21) ────────────────────────────────────────
-            // THE SEAM THAT DID NOT EXIST. Until today a hero skin bought with Glimmer — a
+            // THE SEAM THAT DID NOT EXIST. Until today an equipped hero skin — a
             // currency that is earned in play AND SOLD FOR REAL MONEY (packs.json grants 25
             // with Hearth Spark, 50 with Starter's Hand) — changed a save flag and NOTHING the
             // player could see: CosmeticApplier.ApplyCosmetic was called from nowhere and its

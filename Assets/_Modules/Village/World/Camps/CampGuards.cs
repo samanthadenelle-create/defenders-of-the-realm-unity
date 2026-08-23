@@ -238,8 +238,7 @@ namespace DeNelle.Village.World.Camps
                 AttackInterval = interval,
                 Height = height,
                 AggroRadius = 14f,
-                XpReward = xp + threat,
-                GlimmerReward = 3,
+                XpReward = xp + threat
             };
 
             // Early-game ease (same ramp as RegionMobSpawner.SpawnMob): a brand-new

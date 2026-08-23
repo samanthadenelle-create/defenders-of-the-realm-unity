@@ -3838,7 +3838,14 @@ namespace DeNelle.Editor
         private static readonly string[] TouchBaseline =
         {
             "ArmyMuster",    // WO-1056 -- slot-chip-0 grown 4.5x on H
-            "ManageScreen",  // WO-1058 section 5 -- Cancel(0.885-0.98) inside Upgrade(0.76-0.98)
+            // "ManageScreen" -- ENTRY DELETED BY WO-1058 (2026-08-23), per this list's own
+            // shrink-only rule. The cited defect is gone at the source: Cancel no longer lives in
+            // the 0.76-0.98 primary band on ANY row type (it moved into the evenly-split secondary
+            // cluster at 0.455-0.72), so the panel has nothing left to suppress.
+            // ⚠ NOTE FOR THE NEXT SEAT: there is still no Capture*ManageScreen* entry point, so
+            // this entry was suppressing nothing measurable either way. Adding ManageScreen to the
+            // capture set is what would actually PROVE the fix; until then the proof is the
+            // [Flow:Manage] "row bands:" line plus eyes-on the PNGs.
             "EquipDrawer",   // the 2026-08-22 screenshots
         };
 

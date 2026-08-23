@@ -10,18 +10,36 @@
         {
           "stageId": "meet-elder",
           "objectiveText": "Speak with the Village Elder at the Heart of Elarion.",
-          "reward": { "crystals": 50, "food": 0, "magic": 0, "grantItemId": "" },
+          "reward": {
+            "crystals": 50,
+            "food": 0,
+            "magic": 0,
+            "grantItemId": ""
+          },
           "requiresFlag": "",
           "grantsKeystone": false,
-          "completeOn": { "kind": "talk", "targetId": "village_elder", "count": 1 }
+          "completeOn": {
+            "kind": "talk",
+            "targetId": "village_elder",
+            "count": 1
+          }
         },
         {
           "stageId": "first-defense",
           "objectiveText": "Survive the first wave at the gate.",
-          "reward": { "crystals": 100, "food": 20, "magic": 0, "grantItemId": "" },
+          "reward": {
+            "crystals": 100,
+            "food": 20,
+            "magic": 0,
+            "grantItemId": ""
+          },
           "requiresFlag": "",
           "grantsKeystone": true,
-          "completeOn": { "kind": "wave", "targetId": "", "count": 1 }
+          "completeOn": {
+            "kind": "wave",
+            "targetId": "",
+            "count": 1
+          }
         }
       ]
     },
@@ -33,18 +51,36 @@
         {
           "stageId": "gather-iron",
           "objectiveText": "Bring iron to Borin Emberhand at the Forge.",
-          "reward": { "crystals": 0, "food": 0, "magic": 0, "grantItemId": "" },
+          "reward": {
+            "crystals": 0,
+            "food": 0,
+            "magic": 0,
+            "grantItemId": ""
+          },
           "requiresFlag": "",
           "grantsKeystone": false,
-          "completeOn": { "kind": "talk", "targetId": "forge", "count": 1 }
+          "completeOn": {
+            "kind": "talk",
+            "targetId": "forge",
+            "count": 1
+          }
         },
         {
           "stageId": "claim-weapon",
           "objectiveText": "Claim the Iron Longsword Borin Emberhand forged - open your pack and take it up.",
-          "reward": { "crystals": 0, "food": 0, "magic": 10, "grantItemId": "knight_iron" },
+          "reward": {
+            "crystals": 0,
+            "food": 0,
+            "magic": 10,
+            "grantItemId": "knight_iron"
+          },
           "requiresFlag": "",
           "grantsKeystone": false,
-          "completeOn": { "kind": "panel", "targetId": "Inventory", "count": 1 }
+          "completeOn": {
+            "kind": "panel",
+            "targetId": "Inventory",
+            "count": 1
+          }
         }
       ]
     },
@@ -56,14 +92,22 @@
         {
           "stageId": "talk-vendor",
           "objectiveText": "Visit Coppin at the Store and take the supply run.",
-          "reward": { "crystals": 25, "food": 0, "magic": 0, "grantItemId": "" },
+          "reward": {
+            "crystals": 25,
+            "food": 0,
+            "magic": 0,
+            "grantItemId": ""
+          },
           "requiresFlag": "",
           "grantsKeystone": false,
-          "completeOn": { "kind": "talk", "targetId": "market", "count": 1 }
+          "completeOn": {
+            "kind": "talk",
+            "targetId": "market",
+            "count": 1
+          }
         }
       ]
     },
-
     {
       "id": "vendor.forge",
       "type": "gear",
@@ -72,26 +116,53 @@
         {
           "stageId": "relight-forge",
           "objectiveText": "Bring Borin Emberhand wood and iron to relight the forge.",
-          "reward": { "crystals": 0, "food": 0, "magic": 0, "grantItemId": "" },
+          "reward": {
+            "crystals": 0,
+            "food": 0,
+            "magic": 0,
+            "grantItemId": ""
+          },
           "requiresFlag": "",
           "grantsKeystone": false,
-          "completeOn": { "kind": "talk", "targetId": "forge", "count": 1 }
+          "completeOn": {
+            "kind": "talk",
+            "targetId": "forge",
+            "count": 1
+          }
         },
         {
           "stageId": "quench-blade",
           "objectiveText": "Raise a Crystal Mine and bring Borin Emberhand a flawless stone to quench the first true blade.",
-          "reward": { "crystals": 0, "food": 0, "magic": 10, "grantItemId": "" },
+          "reward": {
+            "crystals": 0,
+            "food": 0,
+            "magic": 10,
+            "grantItemId": ""
+          },
           "requiresFlag": "",
           "grantsKeystone": false,
-          "completeOn": { "kind": "build", "targetId": "mine_crystal", "count": 1 }
+          "completeOn": {
+            "kind": "build",
+            "targetId": "mine_crystal",
+            "count": 1
+          }
         },
         {
           "stageId": "field-test",
           "objectiveText": "Field-test the new blade: clear an Orc Raider wave at the west gate.",
-          "reward": { "crystals": 75, "food": 0, "magic": 0, "grantItemId": "" },
+          "reward": {
+            "crystals": 75,
+            "food": 0,
+            "magic": 0,
+            "grantItemId": ""
+          },
           "requiresFlag": "",
           "grantsKeystone": true,
-          "completeOn": { "kind": "wave", "targetId": "", "count": 1 }
+          "completeOn": {
+            "kind": "wave",
+            "targetId": "",
+            "count": 1
+          }
         }
       ]
     },
@@ -103,26 +174,53 @@
         {
           "stageId": "recover-salvage",
           "objectiveText": "Recover garrison salvage - win an encounter beyond the walls.",
-          "reward": { "crystals": 0, "food": 0, "magic": 0, "grantItemId": "" },
+          "reward": {
+            "crystals": 0,
+            "food": 0,
+            "magic": 0,
+            "grantItemId": ""
+          },
           "requiresFlag": "",
           "grantsKeystone": false,
-          "completeOn": { "kind": "arena", "targetId": "", "count": 1 }
+          "completeOn": {
+            "kind": "arena",
+            "targetId": "",
+            "count": 1
+          }
         },
         {
           "stageId": "reforge-plate",
           "objectiveText": "Reforge the plate with Halvard at the Blacksmith.",
-          "reward": { "crystals": 0, "food": 0, "magic": 0, "grantItemId": "" },
+          "reward": {
+            "crystals": 0,
+            "food": 0,
+            "magic": 0,
+            "grantItemId": ""
+          },
           "requiresFlag": "",
           "grantsKeystone": false,
-          "completeOn": { "kind": "talk", "targetId": "armorer", "count": 1 }
+          "completeOn": {
+            "kind": "talk",
+            "targetId": "armorer",
+            "count": 1
+          }
         },
         {
           "stageId": "hold-the-line",
           "objectiveText": "Hold the line: survive a wave in the new armor.",
-          "reward": { "crystals": 75, "food": 0, "magic": 0, "grantItemId": "" },
+          "reward": {
+            "crystals": 75,
+            "food": 0,
+            "magic": 0,
+            "grantItemId": ""
+          },
           "requiresFlag": "",
           "grantsKeystone": true,
-          "completeOn": { "kind": "wave", "targetId": "", "count": 1 }
+          "completeOn": {
+            "kind": "wave",
+            "targetId": "",
+            "count": 1
+          }
         }
       ]
     },
@@ -134,26 +232,53 @@
         {
           "stageId": "clear-grove",
           "objectiveText": "Clear the blight from Old Pell's grove at the edge of The Thornwood.",
-          "reward": { "crystals": 0, "food": 0, "magic": 0, "grantItemId": "" },
+          "reward": {
+            "crystals": 0,
+            "food": 0,
+            "magic": 0,
+            "grantItemId": ""
+          },
           "requiresFlag": "",
           "grantsKeystone": false,
-          "completeOn": { "kind": "arena", "targetId": "", "count": 1 }
+          "completeOn": {
+            "kind": "arena",
+            "targetId": "",
+            "count": 1
+          }
         },
         {
           "stageId": "plant-sapling",
           "objectiveText": "Carry a sapling from the Heart of Elarion, plant it, and raise a Lumber Mill to tend the new growth.",
-          "reward": { "crystals": 0, "food": 0, "magic": 0, "grantItemId": "" },
+          "reward": {
+            "crystals": 0,
+            "food": 0,
+            "magic": 0,
+            "grantItemId": ""
+          },
           "requiresFlag": "",
           "grantsKeystone": false,
-          "completeOn": { "kind": "build", "targetId": "lumbermill", "count": 1 }
+          "completeOn": {
+            "kind": "build",
+            "targetId": "lumbermill",
+            "count": 1
+          }
         },
         {
           "stageId": "defend-sapling",
           "objectiveText": "Defend the sapling through one night raid.",
-          "reward": { "crystals": 50, "food": 30, "magic": 0, "grantItemId": "" },
+          "reward": {
+            "crystals": 50,
+            "food": 30,
+            "magic": 0,
+            "grantItemId": ""
+          },
           "requiresFlag": "",
           "grantsKeystone": true,
-          "completeOn": { "kind": "wave", "targetId": "", "count": 1 }
+          "completeOn": {
+            "kind": "wave",
+            "targetId": "",
+            "count": 1
+          }
         }
       ]
     },
@@ -165,26 +290,53 @@
         {
           "stageId": "restore-mill",
           "objectiveText": "Restore food flow: open the upgrade for Mother Wren's Mill and raise what it yields.",
-          "reward": { "crystals": 0, "food": 40, "magic": 0, "grantItemId": "" },
+          "reward": {
+            "crystals": 0,
+            "food": 40,
+            "magic": 0,
+            "grantItemId": ""
+          },
           "requiresFlag": "",
           "grantsKeystone": false,
-          "completeOn": { "kind": "panel", "targetId": "BuildingUpgrade", "count": 1 }
+          "completeOn": {
+            "kind": "panel",
+            "targetId": "BuildingUpgrade",
+            "count": 1
+          }
         },
         {
           "stageId": "grow-population",
           "objectiveText": "Grow the stores so the ranks can grow: raise a Silo.",
-          "reward": { "crystals": 0, "food": 0, "magic": 0, "grantItemId": "" },
+          "reward": {
+            "crystals": 0,
+            "food": 0,
+            "magic": 0,
+            "grantItemId": ""
+          },
           "requiresFlag": "",
           "grantsKeystone": false,
-          "completeOn": { "kind": "build", "targetId": "silo", "count": 1 }
+          "completeOn": {
+            "kind": "build",
+            "targetId": "silo",
+            "count": 1
+          }
         },
         {
           "stageId": "assign-workers",
           "objectiveText": "Report the new harvest rota to Mother Wren.",
-          "reward": { "crystals": 50, "food": 50, "magic": 0, "grantItemId": "" },
+          "reward": {
+            "crystals": 50,
+            "food": 50,
+            "magic": 0,
+            "grantItemId": ""
+          },
           "requiresFlag": "",
           "grantsKeystone": true,
-          "completeOn": { "kind": "talk", "targetId": "farm", "count": 1 }
+          "completeOn": {
+            "kind": "talk",
+            "targetId": "farm",
+            "count": 1
+          }
         }
       ]
     },
@@ -196,26 +348,53 @@
         {
           "stageId": "chase-spawn",
           "objectiveText": "Raise a Crystal Mine and harvest a rare stone before the seam fades.",
-          "reward": { "crystals": 0, "food": 0, "magic": 0, "grantItemId": "" },
+          "reward": {
+            "crystals": 0,
+            "food": 0,
+            "magic": 0,
+            "grantItemId": ""
+          },
           "requiresFlag": "",
           "grantsKeystone": false,
-          "completeOn": { "kind": "build", "targetId": "mine_crystal", "count": 1 }
+          "completeOn": {
+            "kind": "build",
+            "targetId": "mine_crystal",
+            "count": 1
+          }
         },
         {
           "stageId": "cut-heartgem",
           "objectiveText": "Cut your first gem at the Jeweler bench and socket it.",
-          "reward": { "crystals": 0, "food": 0, "magic": 15, "grantItemId": "" },
+          "reward": {
+            "crystals": 0,
+            "food": 0,
+            "magic": 15,
+            "grantItemId": ""
+          },
           "requiresFlag": "",
           "grantsKeystone": false,
-          "completeOn": { "kind": "panel", "targetId": "JewelerCrafting", "count": 1 }
+          "completeOn": {
+            "kind": "panel",
+            "targetId": "JewelerCrafting",
+            "count": 1
+          }
         },
         {
           "stageId": "broker-choice",
           "objectiveText": "Decide what to do about Sable and the outside broker.",
-          "reward": { "crystals": 75, "food": 0, "magic": 0, "grantItemId": "" },
+          "reward": {
+            "crystals": 75,
+            "food": 0,
+            "magic": 0,
+            "grantItemId": ""
+          },
           "requiresFlag": "",
           "grantsKeystone": true,
-          "completeOn": { "kind": "talk", "targetId": "jeweler", "count": 1 }
+          "completeOn": {
+            "kind": "talk",
+            "targetId": "jeweler",
+            "count": 1
+          }
         }
       ]
     },
@@ -227,26 +406,53 @@
         {
           "stageId": "clear-road",
           "objectiveText": "Clear the trade road to the next outpost - win an encounter beyond the walls.",
-          "reward": { "crystals": 0, "food": 0, "magic": 0, "grantItemId": "" },
+          "reward": {
+            "crystals": 0,
+            "food": 0,
+            "magic": 0,
+            "grantItemId": ""
+          },
           "requiresFlag": "",
           "grantsKeystone": false,
-          "completeOn": { "kind": "arena", "targetId": "", "count": 1 }
+          "completeOn": {
+            "kind": "arena",
+            "targetId": "",
+            "count": 1
+          }
         },
         {
           "stageId": "establish-route",
           "objectiveText": "Establish a steady trade route with Coppin for a trickle of crystals.",
-          "reward": { "crystals": 50, "food": 0, "magic": 0, "grantItemId": "" },
+          "reward": {
+            "crystals": 50,
+            "food": 0,
+            "magic": 0,
+            "grantItemId": ""
+          },
           "requiresFlag": "",
           "grantsKeystone": false,
-          "completeOn": { "kind": "talk", "targetId": "market", "count": 1 }
+          "completeOn": {
+            "kind": "talk",
+            "targetId": "market",
+            "count": 1
+          }
         },
         {
           "stageId": "expand-network",
           "objectiveText": "Expand the network until the rumor board opens - Brom will have work waiting.",
-          "reward": { "crystals": 75, "food": 0, "magic": 0, "grantItemId": "" },
+          "reward": {
+            "crystals": 75,
+            "food": 0,
+            "magic": 0,
+            "grantItemId": ""
+          },
           "requiresFlag": "",
           "grantsKeystone": true,
-          "completeOn": { "kind": "panel", "targetId": "RumorBoard", "count": 1 }
+          "completeOn": {
+            "kind": "panel",
+            "targetId": "RumorBoard",
+            "count": 1
+          }
         }
       ]
     },
@@ -258,18 +464,36 @@
         {
           "stageId": "defend-inn",
           "objectiveText": "Defend the hall through a surprise raid.",
-          "reward": { "crystals": 50, "food": 30, "magic": 0, "grantItemId": "" },
+          "reward": {
+            "crystals": 50,
+            "food": 30,
+            "magic": 0,
+            "grantItemId": ""
+          },
           "requiresFlag": "",
           "grantsKeystone": false,
-          "completeOn": { "kind": "wave", "targetId": "", "count": 1 }
+          "completeOn": {
+            "kind": "wave",
+            "targetId": "",
+            "count": 1
+          }
         },
         {
           "stageId": "rally-point",
           "objectiveText": "Raise a Barracks as the rally and respawn point.",
-          "reward": { "crystals": 50, "food": 0, "magic": 0, "grantItemId": "" },
+          "reward": {
+            "crystals": 50,
+            "food": 0,
+            "magic": 0,
+            "grantItemId": ""
+          },
           "requiresFlag": "",
           "grantsKeystone": true,
-          "completeOn": { "kind": "build", "targetId": "barracks", "count": 1 }
+          "completeOn": {
+            "kind": "build",
+            "targetId": "barracks",
+            "count": 1
+          }
         }
       ]
     },
@@ -281,26 +505,53 @@
         {
           "stageId": "tame-beast",
           "objectiveText": "Track a wild echo beyond the walls and win its measure.",
-          "reward": { "crystals": 0, "food": 0, "magic": 0, "grantItemId": "" },
+          "reward": {
+            "crystals": 0,
+            "food": 0,
+            "magic": 0,
+            "grantItemId": ""
+          },
           "requiresFlag": "",
           "grantsKeystone": false,
-          "completeOn": { "kind": "arena", "targetId": "", "count": 1 }
+          "completeOn": {
+            "kind": "arena",
+            "targetId": "",
+            "count": 1
+          }
         },
         {
           "stageId": "train-ability",
           "objectiveText": "Train a pet ability with Fenn Wildmane.",
-          "reward": { "crystals": 0, "food": 0, "magic": 0, "grantItemId": "" },
+          "reward": {
+            "crystals": 0,
+            "food": 0,
+            "magic": 0,
+            "grantItemId": ""
+          },
           "requiresFlag": "",
           "grantsKeystone": false,
-          "completeOn": { "kind": "talk", "targetId": "fenn_wildmane", "count": 1 }
+          "completeOn": {
+            "kind": "talk",
+            "targetId": "fenn_wildmane",
+            "count": 1
+          }
         },
         {
           "stageId": "put-to-work",
           "objectiveText": "Ask the Echo Warden at the Echo Hollow to set your bonded pet to harvest.",
-          "reward": { "crystals": 50, "food": 0, "magic": 0, "grantItemId": "" },
+          "reward": {
+            "crystals": 50,
+            "food": 0,
+            "magic": 0,
+            "grantItemId": ""
+          },
           "requiresFlag": "",
           "grantsKeystone": true,
-          "completeOn": { "kind": "talk", "targetId": "pet-house", "count": 1 }
+          "completeOn": {
+            "kind": "talk",
+            "targetId": "pet-house",
+            "count": 1
+          }
         }
       ]
     },
@@ -312,38 +563,73 @@
         {
           "stageId": "raise-tier2",
           "objectiveText": "Raise Elarion to its second tier: raise a Silo so the stores can hold a season.",
-          "reward": { "crystals": 0, "food": 0, "magic": 0, "grantItemId": "" },
+          "reward": {
+            "crystals": 0,
+            "food": 0,
+            "magic": 0,
+            "grantItemId": ""
+          },
           "requiresFlag": "",
           "grantsKeystone": false,
-          "completeOn": { "kind": "build", "targetId": "silo", "count": 1 }
+          "completeOn": {
+            "kind": "build",
+            "targetId": "silo",
+            "count": 1
+          }
         },
         {
           "stageId": "rearm-walls",
           "objectiveText": "Re-arm the walls: raise a Stone Wall on the breach.",
-          "reward": { "crystals": 0, "food": 0, "magic": 0, "grantItemId": "" },
+          "reward": {
+            "crystals": 0,
+            "food": 0,
+            "magic": 0,
+            "grantItemId": ""
+          },
           "requiresFlag": "",
           "grantsKeystone": false,
-          "completeOn": { "kind": "build", "targetId": "wall_stone", "count": 1 }
+          "completeOn": {
+            "kind": "build",
+            "targetId": "wall_stone",
+            "count": 1
+          }
         },
         {
           "stageId": "rekindle-wards",
           "objectiveText": "Rekindle the wards: raise the Healing Caravan.",
-          "reward": { "crystals": 0, "food": 0, "magic": 0, "grantItemId": "" },
+          "reward": {
+            "crystals": 0,
+            "food": 0,
+            "magic": 0,
+            "grantItemId": ""
+          },
           "requiresFlag": "",
           "grantsKeystone": false,
-          "completeOn": { "kind": "build", "targetId": "healing_caravan", "count": 1 }
+          "completeOn": {
+            "kind": "build",
+            "targetId": "healing_caravan",
+            "count": 1
+          }
         },
         {
           "stageId": "awaken-spire",
           "objectiveText": "Rekindle the Heart of Elarion and march on the Warband Deathspeaker.",
-          "reward": { "crystals": 250, "food": 0, "magic": 50, "grantItemId": "" },
+          "reward": {
+            "crystals": 250,
+            "food": 0,
+            "magic": 50,
+            "grantItemId": ""
+          },
           "requiresFlag": "",
           "grantsKeystone": true,
-          "completeOn": { "kind": "arena", "targetId": "", "count": 1 }
+          "completeOn": {
+            "kind": "arena",
+            "targetId": "",
+            "count": 1
+          }
         }
       ]
     },
-
     {
       "id": "forgemasters_act1",
       "type": "main",
@@ -352,10 +638,19 @@
         {
           "stageId": "gather-the-four",
           "objectiveText": "Meet the four crafts of Elarion - the Forge, the Blacksmith, the Lumber Mill, the Mill - and hear Borin Emberhand tell the legend of the broken Aegis of Elarion.",
-          "reward": { "crystals": 0, "food": 0, "magic": 0, "grantItemId": "" },
+          "reward": {
+            "crystals": 0,
+            "food": 0,
+            "magic": 0,
+            "grantItemId": ""
+          },
           "requiresFlag": "",
           "grantsKeystone": false,
-          "completeOn": { "kind": "talk", "targetId": "forge", "count": 1 }
+          "completeOn": {
+            "kind": "talk",
+            "targetId": "forge",
+            "count": 1
+          }
         }
       ]
     },
@@ -368,34 +663,70 @@
         {
           "stageId": "steel-truth",
           "objectiveText": "Hear Halvard's side of the old quarrel at the Blacksmith - the truth of the fallen Aegis of Elarion.",
-          "reward": { "crystals": 0, "food": 0, "magic": 0, "grantItemId": "" },
+          "reward": {
+            "crystals": 0,
+            "food": 0,
+            "magic": 0,
+            "grantItemId": ""
+          },
           "requiresFlag": "",
           "grantsKeystone": false,
-          "completeOn": { "kind": "talk", "targetId": "armorer", "count": 1 }
+          "completeOn": {
+            "kind": "talk",
+            "targetId": "armorer",
+            "count": 1
+          }
         },
         {
           "stageId": "bough-for-tree",
           "objectiveText": "Reconcile Old Pell and the forge - prove the bough is cut to defend the Heart of Elarion, not to bleed it.",
-          "reward": { "crystals": 0, "food": 0, "magic": 0, "grantItemId": "" },
+          "reward": {
+            "crystals": 0,
+            "food": 0,
+            "magic": 0,
+            "grantItemId": ""
+          },
           "requiresFlag": "",
           "grantsKeystone": false,
-          "completeOn": { "kind": "talk", "targetId": "lumbermill", "count": 1 }
+          "completeOn": {
+            "kind": "talk",
+            "targetId": "lumbermill",
+            "count": 1
+          }
         },
         {
           "stageId": "one-hearth",
           "objectiveText": "Gather all four to Mother Wren's table for one shared meal - the night the wound closes.",
-          "reward": { "crystals": 100, "food": 60, "magic": 0, "grantItemId": "" },
+          "reward": {
+            "crystals": 100,
+            "food": 60,
+            "magic": 0,
+            "grantItemId": ""
+          },
           "requiresFlag": "",
           "grantsKeystone": false,
-          "completeOn": { "kind": "talk", "targetId": "farm", "count": 1 }
+          "completeOn": {
+            "kind": "talk",
+            "targetId": "farm",
+            "count": 1
+          }
         },
         {
           "stageId": "master-tier",
           "objectiveText": "Take the master's word from Borin Emberhand: the four crafts work as one again, and what was lost can be recovered.",
-          "reward": { "crystals": 0, "food": 0, "magic": 25, "grantItemId": "" },
+          "reward": {
+            "crystals": 0,
+            "food": 0,
+            "magic": 25,
+            "grantItemId": ""
+          },
           "requiresFlag": "",
           "grantsKeystone": true,
-          "completeOn": { "kind": "talk", "targetId": "forge", "count": 1 }
+          "completeOn": {
+            "kind": "talk",
+            "targetId": "forge",
+            "count": 1
+          }
         }
       ]
     },
@@ -408,18 +739,36 @@
         {
           "stageId": "gather-components",
           "objectiveText": "Recover the four scattered techniques - the threefold fold of The Starfall Reach, the oathweld of Hollowfrost Vale, the heartwood bough of The Thornwood, the last pressing of The Emberwastes. Win four encounters beyond the walls to bring them home.",
-          "reward": { "crystals": 0, "food": 0, "magic": 0, "grantItemId": "" },
+          "reward": {
+            "crystals": 0,
+            "food": 0,
+            "magic": 0,
+            "grantItemId": ""
+          },
           "requiresFlag": "",
           "grantsKeystone": false,
-          "completeOn": { "kind": "arena", "targetId": "", "count": 4 }
+          "completeOn": {
+            "kind": "arena",
+            "targetId": "",
+            "count": 4
+          }
         },
         {
           "stageId": "all-gathered",
           "objectiveText": "All four secured - bring them to Mother Wren's table for the reforging.",
-          "reward": { "crystals": 150, "food": 0, "magic": 50, "grantItemId": "" },
+          "reward": {
+            "crystals": 150,
+            "food": 0,
+            "magic": 50,
+            "grantItemId": ""
+          },
           "requiresFlag": "",
           "grantsKeystone": true,
-          "completeOn": { "kind": "talk", "targetId": "farm", "count": 1 }
+          "completeOn": {
+            "kind": "talk",
+            "targetId": "farm",
+            "count": 1
+          }
         }
       ]
     },
@@ -432,14 +781,22 @@
         {
           "stageId": "the-choice",
           "objectiveText": "Choose the aether for the quench - draw from the Heart of Elarion, or gather it from the cleansed lands - and reforge the Aegis of Elarion at the Workshop.",
-          "reward": { "crystals": 300, "food": 0, "magic": 100, "grantItemId": "" },
+          "reward": {
+            "crystals": 300,
+            "food": 0,
+            "magic": 100,
+            "grantItemId": ""
+          },
           "requiresFlag": "",
           "grantsKeystone": true,
-          "completeOn": { "kind": "panel", "targetId": "Crafting", "count": 1 }
+          "completeOn": {
+            "kind": "panel",
+            "targetId": "Crafting",
+            "count": 1
+          }
         }
       ]
     },
-
     {
       "id": "petbond.sproutling",
       "type": "side",
@@ -448,26 +805,53 @@
         {
           "stageId": "cleanse-site",
           "objectiveText": "Cleanse a blighted harvest site at the edge of The Thornwood and leave an offering.",
-          "reward": { "crystals": 0, "food": 0, "magic": 0, "grantItemId": "" },
+          "reward": {
+            "crystals": 0,
+            "food": 0,
+            "magic": 0,
+            "grantItemId": ""
+          },
           "requiresFlag": "",
           "grantsKeystone": false,
-          "completeOn": { "kind": "arena", "targetId": "", "count": 1 }
+          "completeOn": {
+            "kind": "arena",
+            "targetId": "",
+            "count": 1
+          }
         },
         {
           "stageId": "follow-home",
           "objectiveText": "Walk the Flame Pup home past Mother Wren's fields and let the bond set.",
-          "reward": { "crystals": 0, "food": 0, "magic": 0, "grantItemId": "" },
+          "reward": {
+            "crystals": 0,
+            "food": 0,
+            "magic": 0,
+            "grantItemId": ""
+          },
           "requiresFlag": "",
           "grantsKeystone": false,
-          "completeOn": { "kind": "talk", "targetId": "farm", "count": 1 }
+          "completeOn": {
+            "kind": "talk",
+            "targetId": "farm",
+            "count": 1
+          }
         },
         {
           "stageId": "bond-sproutling",
           "objectiveText": "Bond the Flame Pup - its hearth fire quickens what the fields give back.",
-          "reward": { "crystals": 0, "food": 30, "magic": 0, "grantItemId": "" },
+          "reward": {
+            "crystals": 0,
+            "food": 30,
+            "magic": 0,
+            "grantItemId": ""
+          },
           "requiresFlag": "",
           "grantsKeystone": false,
-          "completeOn": { "kind": "pet", "targetId": "flame-pup", "count": 1 }
+          "completeOn": {
+            "kind": "pet",
+            "targetId": "flame-pup",
+            "count": 1
+          }
         }
       ]
     },
@@ -479,26 +863,53 @@
         {
           "stageId": "shield-hound",
           "objectiveText": "Protect a wounded wolf through a raid at the walls.",
-          "reward": { "crystals": 0, "food": 0, "magic": 0, "grantItemId": "" },
+          "reward": {
+            "crystals": 0,
+            "food": 0,
+            "magic": 0,
+            "grantItemId": ""
+          },
           "requiresFlag": "",
           "grantsKeystone": false,
-          "completeOn": { "kind": "wave", "targetId": "", "count": 1 }
+          "completeOn": {
+            "kind": "wave",
+            "targetId": "",
+            "count": 1
+          }
         },
         {
           "stageId": "bring-to-wall",
           "objectiveText": "Bring the Ice Wolf home through the west gate to the Echo Hollow.",
-          "reward": { "crystals": 0, "food": 0, "magic": 0, "grantItemId": "" },
+          "reward": {
+            "crystals": 0,
+            "food": 0,
+            "magic": 0,
+            "grantItemId": ""
+          },
           "requiresFlag": "",
           "grantsKeystone": false,
-          "completeOn": { "kind": "talk", "targetId": "pet-house", "count": 1 }
+          "completeOn": {
+            "kind": "talk",
+            "targetId": "pet-house",
+            "count": 1
+          }
         },
         {
           "stageId": "bond-craghound",
           "objectiveText": "Bond the Ice Wolf - its frost hide turns a blow meant for the Heart of Elarion.",
-          "reward": { "crystals": 40, "food": 0, "magic": 0, "grantItemId": "" },
+          "reward": {
+            "crystals": 40,
+            "food": 0,
+            "magic": 0,
+            "grantItemId": ""
+          },
           "requiresFlag": "",
           "grantsKeystone": false,
-          "completeOn": { "kind": "pet", "targetId": "ice-wolf", "count": 1 }
+          "completeOn": {
+            "kind": "pet",
+            "targetId": "ice-wolf",
+            "count": 1
+          }
         }
       ]
     },
@@ -510,26 +921,53 @@
         {
           "stageId": "approach-frostkit",
           "objectiveText": "Make a slow, patient approach on the cold ground below Hollowfrost Vale.",
-          "reward": { "crystals": 0, "food": 0, "magic": 0, "grantItemId": "" },
+          "reward": {
+            "crystals": 0,
+            "food": 0,
+            "magic": 0,
+            "grantItemId": ""
+          },
           "requiresFlag": "",
           "grantsKeystone": false,
-          "completeOn": { "kind": "arena", "targetId": "", "count": 1 }
+          "completeOn": {
+            "kind": "arena",
+            "targetId": "",
+            "count": 1
+          }
         },
         {
           "stageId": "warm-stall",
           "objectiveText": "Bring the Ice Wolf down out of the cold - Fenn Wildmane will make it a warm stall.",
-          "reward": { "crystals": 0, "food": 0, "magic": 0, "grantItemId": "" },
+          "reward": {
+            "crystals": 0,
+            "food": 0,
+            "magic": 0,
+            "grantItemId": ""
+          },
           "requiresFlag": "",
           "grantsKeystone": false,
-          "completeOn": { "kind": "talk", "targetId": "fenn_wildmane", "count": 1 }
+          "completeOn": {
+            "kind": "talk",
+            "targetId": "fenn_wildmane",
+            "count": 1
+          }
         },
         {
           "stageId": "bond-frostkit",
           "objectiveText": "Bond the Ice Wolf - its bite leaves the cold behind in the wound.",
-          "reward": { "crystals": 40, "food": 0, "magic": 0, "grantItemId": "" },
+          "reward": {
+            "crystals": 40,
+            "food": 0,
+            "magic": 0,
+            "grantItemId": ""
+          },
           "requiresFlag": "",
           "grantsKeystone": false,
-          "completeOn": { "kind": "pet", "targetId": "ice-wolf", "count": 1 }
+          "completeOn": {
+            "kind": "pet",
+            "targetId": "ice-wolf",
+            "count": 1
+          }
         }
       ]
     },
@@ -541,26 +979,53 @@
         {
           "stageId": "stand-in-fire",
           "objectiveText": "Stand in the worst heat of The Emberwastes beside the Flame Pup.",
-          "reward": { "crystals": 0, "food": 0, "magic": 0, "grantItemId": "" },
+          "reward": {
+            "crystals": 0,
+            "food": 0,
+            "magic": 0,
+            "grantItemId": ""
+          },
           "requiresFlag": "",
           "grantsKeystone": false,
-          "completeOn": { "kind": "arena", "targetId": "", "count": 1 }
+          "completeOn": {
+            "kind": "arena",
+            "targetId": "",
+            "count": 1
+          }
         },
         {
           "stageId": "bring-home-ember",
           "objectiveText": "Bring the Flame Pup home to settle at the Echo Hollow.",
-          "reward": { "crystals": 0, "food": 0, "magic": 0, "grantItemId": "" },
+          "reward": {
+            "crystals": 0,
+            "food": 0,
+            "magic": 0,
+            "grantItemId": ""
+          },
           "requiresFlag": "",
           "grantsKeystone": false,
-          "completeOn": { "kind": "talk", "targetId": "pet-house", "count": 1 }
+          "completeOn": {
+            "kind": "talk",
+            "targetId": "pet-house",
+            "count": 1
+          }
         },
         {
           "stageId": "bond-emberpup",
           "objectiveText": "Bond the Flame Pup - its bite sets the enemy alight and the burn lingers.",
-          "reward": { "crystals": 40, "food": 0, "magic": 0, "grantItemId": "" },
+          "reward": {
+            "crystals": 40,
+            "food": 0,
+            "magic": 0,
+            "grantItemId": ""
+          },
           "requiresFlag": "",
           "grantsKeystone": false,
-          "completeOn": { "kind": "pet", "targetId": "flame-pup", "count": 1 }
+          "completeOn": {
+            "kind": "pet",
+            "targetId": "flame-pup",
+            "count": 1
+          }
         }
       ]
     },
@@ -572,26 +1037,53 @@
         {
           "stageId": "cleanse-mire",
           "objectiveText": "Cleanse the poisoned water of The Mirewood at its source.",
-          "reward": { "crystals": 0, "food": 0, "magic": 0, "grantItemId": "" },
+          "reward": {
+            "crystals": 0,
+            "food": 0,
+            "magic": 0,
+            "grantItemId": ""
+          },
           "requiresFlag": "",
           "grantsKeystone": false,
-          "completeOn": { "kind": "arena", "targetId": "", "count": 1 }
+          "completeOn": {
+            "kind": "arena",
+            "targetId": "",
+            "count": 1
+          }
         },
         {
           "stageId": "roost-mirewing",
           "objectiveText": "Bring the Aether Sprite home to roost at the Echo Hollow.",
-          "reward": { "crystals": 0, "food": 0, "magic": 0, "grantItemId": "" },
+          "reward": {
+            "crystals": 0,
+            "food": 0,
+            "magic": 0,
+            "grantItemId": ""
+          },
           "requiresFlag": "",
           "grantsKeystone": false,
-          "completeOn": { "kind": "talk", "targetId": "pet-house", "count": 1 }
+          "completeOn": {
+            "kind": "talk",
+            "targetId": "pet-house",
+            "count": 1
+          }
         },
         {
           "stageId": "bond-mirewing",
           "objectiveText": "Bond the Aether Sprite - its light eases what the mire left behind.",
-          "reward": { "crystals": 0, "food": 0, "magic": 15, "grantItemId": "" },
+          "reward": {
+            "crystals": 0,
+            "food": 0,
+            "magic": 15,
+            "grantItemId": ""
+          },
           "requiresFlag": "",
           "grantsKeystone": false,
-          "completeOn": { "kind": "pet", "targetId": "aether-sprite", "count": 1 }
+          "completeOn": {
+            "kind": "pet",
+            "targetId": "aether-sprite",
+            "count": 1
+          }
         }
       ]
     },
@@ -603,26 +1095,53 @@
         {
           "stageId": "flawless-gem",
           "objectiveText": "Obtain a flawless stone from Sable at the Jeweler.",
-          "reward": { "crystals": 0, "food": 0, "magic": 0, "grantItemId": "" },
+          "reward": {
+            "crystals": 0,
+            "food": 0,
+            "magic": 0,
+            "grantItemId": ""
+          },
           "requiresFlag": "",
           "grantsKeystone": false,
-          "completeOn": { "kind": "talk", "targetId": "jeweler", "count": 1 }
+          "completeOn": {
+            "kind": "talk",
+            "targetId": "jeweler",
+            "count": 1
+          }
         },
         {
           "stageId": "coax-moth",
           "objectiveText": "Raise a Crystal Mine and coax the Aether Sprite to the new seam with the flawless stone.",
-          "reward": { "crystals": 0, "food": 0, "magic": 0, "grantItemId": "" },
+          "reward": {
+            "crystals": 0,
+            "food": 0,
+            "magic": 0,
+            "grantItemId": ""
+          },
           "requiresFlag": "",
           "grantsKeystone": false,
-          "completeOn": { "kind": "build", "targetId": "mine_crystal", "count": 1 }
+          "completeOn": {
+            "kind": "build",
+            "targetId": "mine_crystal",
+            "count": 1
+          }
         },
         {
           "stageId": "bond-glimmermoth",
           "objectiveText": "Bond the Aether Sprite - it scents richer crystal than any hand can find.",
-          "reward": { "crystals": 60, "food": 0, "magic": 0, "grantItemId": "" },
+          "reward": {
+            "crystals": 60,
+            "food": 0,
+            "magic": 0,
+            "grantItemId": ""
+          },
           "requiresFlag": "",
           "grantsKeystone": false,
-          "completeOn": { "kind": "pet", "targetId": "aether-sprite", "count": 1 }
+          "completeOn": {
+            "kind": "pet",
+            "targetId": "aether-sprite",
+            "count": 1
+          }
         }
       ]
     },
@@ -634,18 +1153,36 @@
         {
           "stageId": "free-calf",
           "objectiveText": "Clear an Orc Raider camp beyond the walls and free the caged wolf.",
-          "reward": { "crystals": 0, "food": 0, "magic": 0, "grantItemId": "" },
+          "reward": {
+            "crystals": 0,
+            "food": 0,
+            "magic": 0,
+            "grantItemId": ""
+          },
           "requiresFlag": "",
           "grantsKeystone": false,
-          "completeOn": { "kind": "arena", "targetId": "", "count": 1 }
+          "completeOn": {
+            "kind": "arena",
+            "targetId": "",
+            "count": 1
+          }
         },
         {
           "stageId": "bond-stoneback",
           "objectiveText": "The freed Ice Wolf bonds at once - it will carry, and it will cover.",
-          "reward": { "crystals": 50, "food": 0, "magic": 0, "grantItemId": "" },
+          "reward": {
+            "crystals": 50,
+            "food": 0,
+            "magic": 0,
+            "grantItemId": ""
+          },
           "requiresFlag": "",
           "grantsKeystone": false,
-          "completeOn": { "kind": "pet", "targetId": "ice-wolf", "count": 1 }
+          "completeOn": {
+            "kind": "pet",
+            "targetId": "ice-wolf",
+            "count": 1
+          }
         }
       ]
     },
@@ -657,26 +1194,53 @@
         {
           "stageId": "walk-healed-ground",
           "objectiveText": "Hold the restored ground in the light of the Heart of Elarion and let the Aether Sprite find you worthy.",
-          "reward": { "crystals": 0, "food": 0, "magic": 0, "grantItemId": "" },
+          "reward": {
+            "crystals": 0,
+            "food": 0,
+            "magic": 0,
+            "grantItemId": ""
+          },
           "requiresFlag": "",
           "grantsKeystone": false,
-          "completeOn": { "kind": "wave", "targetId": "", "count": 1 }
+          "completeOn": {
+            "kind": "wave",
+            "targetId": "",
+            "count": 1
+          }
         },
         {
           "stageId": "witness-at-heart",
           "objectiveText": "Bring the Aether Sprite to the Village Elder at the Heart of Elarion.",
-          "reward": { "crystals": 0, "food": 0, "magic": 0, "grantItemId": "" },
+          "reward": {
+            "crystals": 0,
+            "food": 0,
+            "magic": 0,
+            "grantItemId": ""
+          },
           "requiresFlag": "",
           "grantsKeystone": false,
-          "completeOn": { "kind": "talk", "targetId": "village_elder", "count": 1 }
+          "completeOn": {
+            "kind": "talk",
+            "targetId": "village_elder",
+            "count": 1
+          }
         },
         {
           "stageId": "bond-aetherfox",
           "objectiveText": "Bond the Aether Sprite - its aura lightens every ability you spend.",
-          "reward": { "crystals": 100, "food": 0, "magic": 50, "grantItemId": "" },
+          "reward": {
+            "crystals": 100,
+            "food": 0,
+            "magic": 50,
+            "grantItemId": ""
+          },
           "requiresFlag": "",
           "grantsKeystone": false,
-          "completeOn": { "kind": "pet", "targetId": "aether-sprite", "count": 1 }
+          "completeOn": {
+            "kind": "pet",
+            "targetId": "aether-sprite",
+            "count": 1
+          }
         }
       ]
     }

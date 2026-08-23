@@ -3,7 +3,7 @@
 // integrity oracle: EVERY advertised pack cosmetic must be GRANTABLE (ECON-1).
 // -----------------------------------------------------------------------------
 // Assembly: DeNelle.EditorRegression. PackStoreVM / PackCatalog / PackDef live in
-// DeNelle.Wallet and GlimmerCurrencyService in DeNelle.Cosmetics -- neither asmdef
+// DeNelle.Wallet and CosmeticOwnershipService in DeNelle.Cosmetics -- neither asmdef
 // is referenced here, so this oracle drives them by AppDomain reflection (the same
 // bridge PackStoreVM itself uses and PackGrantRegression proved out for founders-vow).
 //
@@ -12,14 +12,14 @@
 // a cosmetic it cannot deliver -- a dangling / unredeemable SKU. PackGrantRegression
 // proves this for the 5 founders-vow SKUs only. This oracle GENERALIZES that to a
 // hard integrity guard over EVERY pack in the catalog: it installs the REAL
-// EconomyService + GlimmerCurrencyService singletons over a throwaway GameState,
+// EconomyService + CosmeticOwnershipService singletons over a throwaway GameState,
 // then for every pack calls the REAL PackStoreVM.ApplyPackContents(pack) and asserts
-// GlimmerCurrencyService.Owns(sku)==true for each advertised cosmetic SKU. A cosmetic
+// CosmeticOwnershipService.Owns(sku)==true for each advertised cosmetic SKU. A cosmetic
 // that stays unowned after its pack's grant = RED.
 //
 // This deliberately does NOT require the SKU to exist in cosmetics.json: founders-vow
 // (and other pack-exclusive) SKUs are pack-only entitlements, granted catalog-
-// independently via GlimmerCurrencyService.MarkCosmeticOwned. The contract is
+// independently via CosmeticOwnershipService.MarkCosmeticOwned. The contract is
 // "advertised => grantable/owned", not "in cosmetics.json".
 //
 // Marker: PACK_COSMETIC_INTEGRITY_OK / PACK_COSMETIC_INTEGRITY_FAIL. Expected: GREEN.
@@ -47,15 +47,15 @@ namespace DeNelle.Editor
         {
             var failures = new List<string>();
             var log = new StringBuilder();
-            log.AppendLine("--- PACK COSMETIC INTEGRITY (every pack: advertised cosmetic SKU => GlimmerCurrencyService.Owns after ApplyPackContents) ---");
+            log.AppendLine("--- PACK COSMETIC INTEGRITY (every pack: advertised cosmetic SKU => CosmeticOwnershipService.Owns after ApplyPackContents) ---");
 
             // Resolve the reflection-only types up front.
             Type vmType = FindType("DeNelle.Wallet.PackStoreVM");
             Type catType = FindType("DeNelle.Wallet.PackCatalog");
-            Type glimType = FindType("DeNelle.Cosmetics.GlimmerCurrencyService");
+            Type glimType = FindType("DeNelle.Cosmetics.CosmeticOwnershipService");
             if (vmType == null || catType == null || glimType == null)
             {
-                failures.Add($"pack types not loaded (PackStoreVM={vmType != null}, PackCatalog={catType != null}, GlimmerCurrencyService={glimType != null})");
+                failures.Add($"pack types not loaded (PackStoreVM={vmType != null}, PackCatalog={catType != null}, CosmeticOwnershipService={glimType != null})");
                 reason = Finish(failures, log);
                 return failures.Count == 0;
             }
@@ -97,13 +97,13 @@ namespace DeNelle.Editor
                 var econ = econGo.AddComponent<EconomyService>();
                 SetInstance(typeof(EconomyService), econ);
 
-                glimGo = new GameObject("GlimmerCurrencyService (pack-cosmetic-integrity oracle)");
+                glimGo = new GameObject("CosmeticOwnershipService (pack-cosmetic-integrity oracle)");
                 var glim = glimGo.AddComponent(glimType);
                 SetInstance(glimType, glim);
 
                 var ownsM = glimType.GetMethod("Owns", new[] { typeof(string) });
                 if (ownsM == null)
-                { failures.Add("GlimmerCurrencyService.Owns(string) not resolvable by reflection"); reason = Finish(failures, log); return false; }
+                { failures.Add("CosmeticOwnershipService.Owns(string) not resolvable by reflection"); reason = Finish(failures, log); return false; }
 
                 // Reload the real catalog + resolve the production grant seam.
                 catType.GetMethod("Reload", BindingFlags.Public | BindingFlags.Static)?.Invoke(null, null);
@@ -152,7 +152,7 @@ namespace DeNelle.Editor
                         var r = ownsM.Invoke(glim, new object[] { sku });
                         if (r is bool b) owned = b;
                         if (owned) { skusOwned++; ownedThisPack++; }
-                        else failures.Add($"[pack-cosmetic-integrity] pack '{packSku}' advertises cosmetic '{sku}' but GlimmerCurrencyService.Owns==false after ApplyPackContents -- DANGLING/UNREDEEMABLE SKU (ECON-1)");
+                        else failures.Add($"[pack-cosmetic-integrity] pack '{packSku}' advertises cosmetic '{sku}' but CosmeticOwnershipService.Owns==false after ApplyPackContents -- DANGLING/UNREDEEMABLE SKU (ECON-1)");
                     }
                     log.AppendLine($"  '{packSku}': cosmetics owned {ownedThisPack}/{cosmetics.Count}");
                 }

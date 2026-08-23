@@ -39,7 +39,7 @@ namespace DeNelle.Core.Platform
         Title = 1,
         /// <summary>A cosmetic flourish (banner sigil / aura / tint).</summary>
         Cosmetic = 2,
-        /// <summary>A SMALL soft-currency trickle (glimmer/crystals) — never game-breaking.</summary>
+        /// <summary>A small non-premium resource trickle.</summary>
         Trickle = 3,
         /// <summary>Anything else / unclassified.</summary>
         Other = 4,
@@ -308,7 +308,6 @@ namespace DeNelle.Core.Platform
                 new StakeTier("seeker", "Seeker", 1, "You stake with the realm.", new[]
                 {
                     new StakeReward("Seeker Badge", "A small profile badge marking you as a staker.", StakeRewardKind.Badge, "seeker", "Seeker"),
-                    new StakeReward("Glimmer Trickle", "+5 Glimmer per day — a gentle stipend, nothing game-breaking.", StakeRewardKind.Trickle, "seeker", "Seeker"),
                 }),
                 new StakeTier("vanguard", "Vanguard", 1000, "Your stake steadies the walls.", new[]
                 {

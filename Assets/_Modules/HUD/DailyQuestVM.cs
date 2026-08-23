@@ -54,12 +54,11 @@ namespace DeNelle.HUD
         {
             public readonly int Crystals;
             public readonly int Food;
-            public readonly int Glimmer;
             public readonly int Wisdom;
             public readonly bool RandomItem;
-            public RewardInfo(int crystals, int food, int glimmer, int wisdom, bool randomItem)
+            public RewardInfo(int crystals, int food, int wisdom, bool randomItem)
             {
-                Crystals = crystals; Food = food; Glimmer = glimmer;
+                Crystals = crystals; Food = food;
                 Wisdom = wisdom; RandomItem = randomItem;
             }
         }
@@ -260,7 +259,7 @@ namespace DeNelle.HUD
         {
             var r = _source?.RewardForSlot(slot);
             if (r == null) return default;
-            return new RewardInfo(r.RewardCrystals, r.RewardFood, r.RewardGlimmer, r.RewardWisdom, r.RewardRandomItem);
+            return new RewardInfo(r.RewardCrystals, r.RewardFood, r.RewardWisdom, r.RewardRandomItem);
         }
 
         private bool Contains(string id)

@@ -272,6 +272,12 @@
   "monthlyLedgerExclusiveNone": "This ledger has no month-exclusive keepsake yet. Nothing is promised here that cannot be shown to you.",
   "monthlyLedgerNotForSale": "Ledgers are not on sale in this build. The whole table is on this screen regardless.",
   "monthlyLedgerEmpty": "No ledgers are authored right now.",
+  "monthlyLedgerWeekTab": "WEEK {0} | DAYS {1}-{2}",
+  "monthlyLedgerWeekSelected": "SELECTED",
+  "monthlyLedgerWeekClaimable": "CLAIM HERE",
+  "monthlyLedgerDay": "DAY {0}",
+  "monthlyLedgerMilestone": "MILESTONE BONUS",
+  "spirePlansBeaconNudge": "See that light? Looks like something dropped. Let us take a closer look.",
   "_hudChipCopyNote": "WO-1144 HUD chip/face copy, shortened AT SOURCE after the 2026-08-22 headed-fleet capture (break_24_error.png) showed 'Tap to collec' cut mid-word on the Collectors chip and 'Manag...' ellipsised on the Manage bar face. NEITHER was a font bug: the Collectors chip is 220 ref px wide (== EchoUnlockFeedback.EchoChipWidthPx, a fixed rail width three chips share) so its label rect is ~202 ref px, and the action line 'Tap to collect' measures ~214 ref px at the 30 px FontFloor - it could not fit at ANY legible size. The Manage bar face is one sixth of a 46%-wide ActionBar zone, ~144 ref px of label rect, so the WO-1027 session-shape sentence 'Manage - 2 of 3 idle' was about 4x too long for the box it renders in. The fix is SHORTER WORDS HERE, never a smaller font (FontFloor/MinTouchPx are floors, not budget) and never a wider chip (the three rail chips share one right edge). ASCII only - TMP renders non-ASCII as tofu. Pinned by HudLabelFitRegression, which MEASURES each of these strings against its real box using the real font's glyph advances, at both landscape capture aspects.",
   "hudCollectorsTitle": "Collectors",
   "hudCollectorsCount": "Collectors {0}/{1} full",
@@ -324,5 +330,8 @@
   "invVerdictWearing": "This is what you are carrying now.",
   "invPurseGold": "GOLD",
   "invPurseCrystals": "CRYSTALS",
-  "invPurseFlasks": "FLASKS"
+  "invPurseFlasks": "FLASKS",
+  "_offlineOptInCopyNote": "WO-1128 section 3.4. The owner asked 'but then the save would only persist locally right?' and the offline opt-in screen did not answer it. These two lines answer it on the screen that offers the mode. ASCII only (TMP renders non-ASCII as tofu); no meaning by colour (the owner is red/green colourblind), so the consequence is WORDED, never tinted.",
+  "offlineLocalSaveTitle": "While offline, your progress is saved on this device only.",
+  "offlineLocalSaveNote": "It uploads the next time you connect. Anything not uploaded yet is lost if this device is lost, wiped, or the game is reinstalled."
 }

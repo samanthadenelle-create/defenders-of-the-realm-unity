@@ -735,10 +735,16 @@ namespace DeNelle.Editor.Regression
             // method that can construct a Buy control. Scanning the whole file would find the first
             // AnchorOnly read anywhere (the card's state WORD, which correctly returns a string) and
             // pass on an occurrence that was never the risk.
-            int cta = src.IndexOf("private void BuildSpotlightCta", StringComparison.Ordinal);
+            // RE-POINTED 2026-08-22: the CTA builder was renamed BuildSpotlightCta -> BuildCommerce by
+            // the UI-001 composition pass (it moved into the right-hand commerce column). The
+            // oracle asserted a NAME, so a legitimate rename read as "the anchor guard is gone".
+            // Fourth stale oracle ADDRESS found on 2026-08-22 - see also [suite-count],
+            // contract.lamports, and ProveGeometryMoves. When a suite fails on code you believe
+            // is correct, check what it is POINTED AT before changing the product.
+            int cta = src.IndexOf("private void BuildCommerce", StringComparison.Ordinal);
             if (cta < 0)
             {
-                failures.Add("[anchor-no-buy] PackStore.BuildSpotlightCta not found. If the CTA builder was " +
+                failures.Add("[anchor-no-buy] PackStore.BuildCommerce (the CTA builder) not found. If the CTA builder was " +
                              "renamed, RE-POINT THIS ORACLE IN THE SAME CHANGE - otherwise the anchor rule " +
                              "silently stops being checked, which is worse than never having had it.");
                 return;
@@ -746,7 +752,7 @@ namespace DeNelle.Editor.Regression
             int guard = IndexOfOutsideComments(src.Substring(cta), "pack.AnchorOnly");
             if (guard < 0)
             {
-                failures.Add("[anchor-no-buy] PackStore.BuildSpotlightCta does not test 'pack.AnchorOnly'. The CTA " +
+                failures.Add("[anchor-no-buy] PackStore.BuildCommerce does not test 'pack.AnchorOnly'. The CTA " +
                              "builder is the ONLY place a Buy control is constructed, so an anchor row would get one.");
                 return;
             }

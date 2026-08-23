@@ -233,7 +233,6 @@ namespace DeNelle.Wallet
             if (e.Food     > 0) nonZero.Add("food");
             if (e.Crystals > 0) nonZero.Add("crystals");
             if (e.Coins    > 0) nonZero.Add("coins");
-            if (e.Glimmer  > 0) nonZero.Add("glimmer");
 
             if (nonZero.Count != 1 || !string.Equals(nonZero[0], key, StringComparison.OrdinalIgnoreCase))
             {

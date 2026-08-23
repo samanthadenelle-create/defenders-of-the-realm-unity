@@ -133,14 +133,11 @@ namespace DeNelle.Village
             // The old flat +2/wave was the "every kill gives wisdom" leak — removed.
             // (See WisdomPerWave = 0 above; the grant is guarded so a future re-tune
             // to a non-zero value would re-enable it, but the oracle asserts it's 0.)
-            // Glimmer (DEF-29): cosmetic-shop income — the cosmetic costs 80 and the
             // player starts at 25, with the only other earn paths being level-5+ tier
             // milestones or IAP. A modest per-wave trickle lets a player reach the
             // first cosmetic over ~a dozen waves of normal play — earned, not grindy.
-            const int glimmerPerWave = 4;
             if (WisdomPerWave > 0)
                 try { DeNelle.Village.Talents.WisdomCurrencyService.Instance?.Grant(WisdomPerWave); } catch { }
-            try { DeNelle.Cosmetics.GlimmerCurrencyService.Instance?.TryAddGlimmer(glimmerPerWave); } catch { }
 
             // F8-45: Main_Castle_Overworld ships with NO editor-wired WallRepair object
             // (WallRepairSceneSetup only ever targeted the abandoned Village.unity), so

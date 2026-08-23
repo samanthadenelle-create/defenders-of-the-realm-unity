@@ -231,6 +231,8 @@ namespace DeNelle.Village
         private BuildWalletRow _wallet;
         private BuildHudState _state = BuildHudState.Browse;
         private TextMeshProUGUI _placeName;  // name + cost, floated above the ghost
+        private GameObject _blockReasonPlate; // WO-1106: opaque, worded refusal independent of the ghost pill
+        private TextMeshProUGUI _blockReasonText;
 
         // ── WO-1010 P1 state ───────────────────────────────────────────────────
         private RectTransform _canvasRect;
@@ -554,6 +556,48 @@ namespace DeNelle.Village
             _placeName.enableAutoSizing = true;
             _placeName.fontSizeMin = 14f;
             _placeName.fontSizeMax = 22f;
+
+            // WO-1106: a refusal is a sentence, not a suffix on the one-line name/cost pill.
+            // Pin it to the HUD's top band, below the pill, where world footprint geometry can
+            // never pass through it. Both layers are deliberately non-raycast so placement
+            // input and footprint/validity logic remain exactly as authored.
+            var reasonEdge = ElarionUiKit.AddImage(_intentBar.transform, "GhostBlockReason",
+                new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), ElarionUi.Gilt, rounded: true);
+            _blockReasonPlate = reasonEdge;
+            var reasonRt = reasonEdge.transform as RectTransform;
+            if (reasonRt != null)
+            {
+                reasonRt.anchorMin = reasonRt.anchorMax = new Vector2(0.5f, 1f);
+                reasonRt.pivot = new Vector2(0.5f, 1f);
+                reasonRt.anchoredPosition = new Vector2(0f, -CornerInsetPx - GhostPillH - 8f);
+                reasonRt.sizeDelta = new Vector2(760f, 84f);
+            }
+            var reasonEdgeImage = reasonEdge.GetComponent<Image>();
+            if (reasonEdgeImage != null) reasonEdgeImage.raycastTarget = false;
+
+            var reasonFill = ElarionUiKit.AddImage(reasonEdge.transform, "ReasonOpaqueFill",
+                Vector2.zero, Vector2.one, ElarionUiKit.ObsidianFill, rounded: true);
+            var reasonFillRt = reasonFill.transform as RectTransform;
+            if (reasonFillRt != null)
+            {
+                reasonFillRt.offsetMin = new Vector2(ChipEdgePx, ChipEdgePx);
+                reasonFillRt.offsetMax = new Vector2(-ChipEdgePx, -ChipEdgePx);
+            }
+            var reasonFillImage = reasonFill.GetComponent<Image>();
+            if (reasonFillImage != null)
+            {
+                reasonFillImage.color = new Color(ElarionUiKit.ObsidianFill.r,
+                    ElarionUiKit.ObsidianFill.g, ElarionUiKit.ObsidianFill.b, 1f);
+                reasonFillImage.raycastTarget = false;
+            }
+
+            _blockReasonText = MakeText(reasonFill.transform, string.Empty, 22f,
+                ElarionUi.Parchment, FontStyles.Bold, TextAlignmentOptions.Center,
+                new Vector2(0.035f, 0.08f), new Vector2(0.965f, 0.92f));
+            _blockReasonText.raycastTarget = false;
+            _blockReasonText.textWrappingMode = TextWrappingModes.Normal;
+            _blockReasonText.enableAutoSizing = false;
+            _blockReasonPlate.SetActive(false);
 
             // ── D14: THE LEAN HORIZONTAL VERB ROW (COLUMN-FIT 2026-08-16) ───────────────────────
             // A slim obsidian band with its own gold trim, seated in the bottom-RIGHT corner
@@ -1138,12 +1182,15 @@ namespace DeNelle.Village
 
             if (_placeName != null)
             {
-                string want = (!_ghostValid && !string.IsNullOrEmpty(_ghostBlockReason))
-                    ? _pillBase + " - " + _ghostBlockReason
-                    : _pillBase;
-                if (_placeName.text != want) _placeName.text = want;
-                _placeName.color = _ghostValid ? ElarionUi.Gilt : new Color(0.93f, 0.55f, 0.45f);
+                if (_placeName.text != _pillBase) _placeName.text = _pillBase;
+                _placeName.color = ElarionUi.Gilt;
             }
+
+            bool showReason = !_ghostValid && !string.IsNullOrWhiteSpace(_ghostBlockReason);
+            if (_blockReasonText != null && showReason && _blockReasonText.text != _ghostBlockReason)
+                _blockReasonText.text = _ghostBlockReason;
+            if (_blockReasonPlate != null && _blockReasonPlate.activeSelf != showReason)
+                _blockReasonPlate.SetActive(showReason);
         }
 
         /// <summary>Re-read the live wallet (called by the brain on transitions).</summary>

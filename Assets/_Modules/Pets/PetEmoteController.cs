@@ -20,7 +20,7 @@
 //
 // ARCHITECTURE:
 //   * Lives in DeNelle.Pets. Subscribes to WaveManager via reflection (same
-//     pattern as PetDeployer's Glimmer bridge) to avoid an asmdef cycle.
+//     pattern as PetDeployer's cosmetic-ownership bridge) to avoid an asmdef cycle.
 //   * Animator parameters "Happy", "Alert", "Celebrate" must exist in the pet's
 //     Animator controller (added by PetAnimatorSetup). All calls are null-guarded.
 //   * Enemy scan uses Physics.OverlapSphereNonAlloc on a throttled timer.

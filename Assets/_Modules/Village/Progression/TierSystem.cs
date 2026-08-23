@@ -11,9 +11,8 @@
 //
 //   Each milestone grants:
 //     • Bonus Wisdom  — talent-tree currency (WisdomCurrencyService.Grant)
-//     • Bonus Glimmer — cosmetic-shop currency (GlimmerCurrencyService.TryAddGlimmer)
 //     • Achievement cosmetic unlock (optional) — free achievement-gated items
-//       that the player can't buy; granted via GlimmerCurrencyService.GrantAchievement
+//       granted via CosmeticOwnershipService.GrantAchievement
 //
 //   A "TIER UP!" STAMP pops near the hero (CombatText, the §1.8 screen-space
 //   layer), and OnTierReached fires for any HUD banner / fanfare that wants to
@@ -33,13 +32,10 @@
 //   ⛔ Do not route a celebration back through SpawnLabel to make it "bigger".
 //
 // MILESTONES:
-//   Lv 5   Initiate  — +5 Wisdom, +10 Glimmer
-//   Lv 10  Defender  — +8 Wisdom, +20 Glimmer + "village-bloomtide-banners"
-//   Lv 15  Guardian  — +12 Wisdom, +30 Glimmer
-//   Lv 20  Warden    — +15 Wisdom, +50 Glimmer + "pet-ice-firstfriend"
-//   Lv 25  Champion  — +20 Wisdom, +75 Glimmer
-//   Lv 30  Legend    — +25 Wisdom, +100 Glimmer + "hero-mage-wanderer"
-//   Lv 40+ Mythic    — +30 Wisdom, +150 Glimmer (repeats every 10 levels)
+//   Lv 5 Initiate — +5 Wisdom; Lv 10 Defender — +8 Wisdom + cosmetic;
+//   Lv 15 Guardian — +12 Wisdom; Lv 20 Warden — +15 Wisdom + cosmetic;
+//   Lv 25 Champion — +20 Wisdom; Lv 30 Legend — +25 Wisdom + cosmetic;
+//   Lv 40+ Mythic — +30 Wisdom (repeats every 10 levels).
 //
 // ARCHITECTURE:
 //   * DontDestroyOnLoad singleton, BeforeSceneLoad bootstrap.
@@ -72,22 +68,18 @@ namespace DeNelle.Village
         /// <summary>Bonus Wisdom points granted on reaching this tier.</summary>
         public readonly int BonusWisdom;
 
-        /// <summary>Bonus Glimmer granted on reaching this tier.</summary>
-        public readonly int BonusGlimmer;
-
         /// <summary>
         /// Achievement-gated cosmetic id unlocked for free on reaching this tier.
         /// Null when the tier carries no cosmetic reward.
         /// </summary>
         public readonly string AchievementCosmeticId;
 
-        public TierMilestone(int level, string title, int wisdom, int glimmer,
+        public TierMilestone(int level, string title, int wisdom,
                              string achievementCosmeticId = null)
         {
             Level = level;
             Title = title;
             BonusWisdom = wisdom;
-            BonusGlimmer = glimmer;
             AchievementCosmeticId = achievementCosmeticId;
         }
     }
@@ -113,19 +105,18 @@ namespace DeNelle.Village
         // cosmetic ids match cosmetics.json "achievement" entries verbatim.
         private static readonly TierMilestone[] HandCraftedTiers =
         {
-            new TierMilestone( 5, "Initiate",  5,  10),
-            new TierMilestone(10, "Defender",  8,  20, "village-bloomtide-banners"),
-            new TierMilestone(15, "Guardian", 12,  30),
-            new TierMilestone(20, "Warden",   15,  50, "pet-ice-firstfriend"),
-            new TierMilestone(25, "Champion", 20,  75),
-            new TierMilestone(30, "Legend",   25, 100, "hero-mage-wanderer"),
+            new TierMilestone( 5, "Initiate",  5),
+            new TierMilestone(10, "Defender",  8, "village-bloomtide-banners"),
+            new TierMilestone(15, "Guardian", 12),
+            new TierMilestone(20, "Warden",   15, "pet-ice-firstfriend"),
+            new TierMilestone(25, "Champion", 20),
+            new TierMilestone(30, "Legend",   25, "hero-mage-wanderer"),
         };
 
         // Repeating tier for every 10 levels beyond the last hand-crafted one.
         private const int RepeatEvery    = 10;
         private const int RepeatStart    = 40;  // first repeating tier
         private const int RepeatWisdom   = 30;
-        private const int RepeatGlimmer  = 150;
 
         // ── Runtime state ─────────────────────────────────────────────────────
 
@@ -203,11 +194,8 @@ namespace DeNelle.Village
             if (milestone.BonusWisdom > 0)
                 WisdomCurrencyService.Instance?.Grant(milestone.BonusWisdom);
 
-            if (milestone.BonusGlimmer > 0)
-                GlimmerCurrencyService.Instance?.TryAddGlimmer(milestone.BonusGlimmer);
-
             if (!string.IsNullOrEmpty(milestone.AchievementCosmeticId))
-                GlimmerCurrencyService.Instance?.GrantAchievement(milestone.AchievementCosmeticId);
+                CosmeticOwnershipService.Instance?.GrantAchievement(milestone.AchievementCosmeticId);
 
             // ── Feedback ──────────────────────────────────────────────────────
 
@@ -243,7 +231,7 @@ namespace DeNelle.Village
 
             // Repeating milestone every RepeatEvery levels beyond RepeatStart.
             if (level >= RepeatStart && (level - RepeatStart) % RepeatEvery == 0)
-                return new TierMilestone(level, "Mythic", RepeatWisdom, RepeatGlimmer);
+                return new TierMilestone(level, "Mythic", RepeatWisdom);
 
             return null;
         }
@@ -265,7 +253,7 @@ namespace DeNelle.Village
             int next = currentLevel < RepeatStart
                 ? RepeatStart
                 : RepeatStart + ((currentLevel - RepeatStart) / RepeatEvery + 1) * RepeatEvery;
-            return new TierMilestone(next, "Mythic", RepeatWisdom, RepeatGlimmer);
+            return new TierMilestone(next, "Mythic", RepeatWisdom);
         }
     }
 }

@@ -188,8 +188,7 @@ namespace DeNelle.Editor.Regression
                     Category     = "hero",
                     AppliesTo    = "knight",
                     DisplayName  = "Regression Probe",
-                    GlimmerCost  = 1,
-                    UnlockMethod = "buy",
+                    UnlockMethod = "achievement",
                     PreviewColor = "#123456",
                 };
                 Color want = def.PreviewUnityColor;
@@ -580,8 +579,7 @@ namespace DeNelle.Editor.Regression
                     Category     = "village",
                     AppliesTo    = member,
                     DisplayName  = "Regression Probe Village",
-                    GlimmerCost  = 1,
-                    UnlockMethod = "buy",
+                    UnlockMethod = "achievement",
                     PreviewColor = "#65431F",
                 };
                 Color want = def.PreviewUnityColor;

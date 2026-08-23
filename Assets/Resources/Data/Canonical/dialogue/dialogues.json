@@ -1,1390 +1,1390 @@
 {
- "version": 8,
- "_note": "v8 (WO-1014, 2026-08-10): the LEGACY 'Sylas' TUTORIAL ARC IS RETIRED - tut_move_to_sylas, tut_meet_sylas, tut_first_tower, tut_first_tower_done, tut_world_encounter, tut_world_encounter_win, tut_world_encounter_retry, tut_return_home and tut_freedom are DELETED. Two complete, contradictory tutorial scripts were live at once (a human 'Sylas, Scout of the Reach' vs the founding arc's {guide} pet-Echo), which is the root of the owner's 2026-08-10 report ('a NPC and wolf both spawn together... no knowledge of who this wolf is... the intro is badly composed'). INVARIANT, regression-pinned by TutorialGuideIdentityRegression [tutorial-guide-identity]: EVERY dialogue whose id starts with 'tut_' speaks as the '{guide}' token and NOTHING else, and none of the retired ids may return. Sylas remains a real HERO name (HeroCanonNames) and keeps his non-tutorial 'SylasFirstMeeting' companion dialogue, which is a separate beat already stood down under ff.singlehero - only the tutorial ARC retires.",
- "speakers": [
-  {
-   "name": "Mother Wren",
-   "affiliation": "Windmill",
-   "portrait": "Portraits/farm"
-  },
-  {
-   "name": "Old Pell",
-   "affiliation": "Lumbermill",
-   "portrait": "Portraits/lumbermill"
-  },
-  {
-   "name": "Echo Warden",
-   "affiliation": "Echo Hollow",
-   "portrait": "Portraits/pet-house"
-  },
-  {
-   "name": "Arcanist",
-   "affiliation": "Arcane Tower",
-   "portrait": "Portraits/arcane-tower"
-  },
-  {
-   "name": "Drillmaster",
-   "affiliation": "Barracks",
-   "portrait": "Portraits/barracks"
-  },
-  {
-   "name": "Brom",
-   "affiliation": "Town Crier",
-   "portrait": "Portraits/brom"
-  },
-  {
-   "name": "Sylas",
-   "affiliation": "Ranger Companion",
-   "portrait": "Portraits/Sylas"
-  },
-  {
-   "name": "{guide}",
-   "affiliation": "Echo of Elarion",
-   "portrait": "Portraits/pet-house",
-   "_note": "WO-1012 P2: the tutorial GUIDE speaker token - resolved at runtime by the TutorialGuide identity seam (the pet-Echo; rotation parked). This record exists for the card/regression contract; the live name/affiliation/portrait come from the seam."
-  },
-  {
-   "name": "Coppin",
-   "affiliation": "Marketplace",
-   "portrait": "Portraits/market"
-  },
-  {
-   "name": "Borin Emberhand",
-   "affiliation": "Forge",
-   "portrait": "Portraits/forge"
-  },
-  {
-   "name": "Halvard",
-   "affiliation": "Armorer's Hall",
-   "portrait": "Portraits/armorer"
-  },
-  {
-   "name": "Sable",
-   "affiliation": "Jeweler's Bench",
-   "portrait": "Portraits/jeweler"
-  },
-  {
-   "name": "Herbalist",
-   "affiliation": "Apothecary",
-   "portrait": "Portraits/apothecary"
-  },
-  {
-   "name": "Echo",
-   "affiliation": "Spirit of the Tree",
-   "portrait": "Portraits/pet-house"
-  },
-  {
-   "name": "Bryn",
-   "affiliation": "The Wanderer",
-   "portrait": "Portraits/apothecary"
-  },
-  {
-   "name": "Village Elder",
-   "affiliation": "Heart of Elarion",
-   "portrait": "Portraits/arcane-tower"
-  },
-  {
-   "name": "Fenn Wildmane",
-   "affiliation": "Echo Hollow",
-   "portrait": "Portraits/pet-house"
-  },
-  {
-   "name": "Ember",
-   "affiliation": "Echo of Elarion",
-   "portrait": "PetPortraits/pet-flame-pup",
-   "_note": "WO-1031: the 'Frost' record was DELETED with the pet_engage prompt - the guide wolf is Echo #1, Aldwin, and 'Frost' was an invented name from PetTaskController.SpeakerName that bypassed EchoRosterCatalog. Ember/Aether/'Your Echo' are RETAINED pending an owner ruling (WO-1030 added them alongside Frost and they have no surviving producer either). Portraits are the Echoes' own rendered PetPortraits sprites - the same art the deployed billboard shows, not a creative substitution."
-  },
-  {
-   "name": "Aether",
-   "affiliation": "Echo of Elarion",
-   "portrait": "PetPortraits/pet-aether-sprite"
-  },
-  {
-   "name": "Your Echo",
-   "affiliation": "Echo of Elarion",
-   "portrait": "Portraits/pet-house"
-  }
- ],
- "dialogues": [
-  {
-   "id": "echo_first_meeting",
-   "startNode": "stir",
-   "nodes": [
+  "version": 8,
+  "_note": "v8 (WO-1014, 2026-08-10): the LEGACY 'Sylas' TUTORIAL ARC IS RETIRED - tut_move_to_sylas, tut_meet_sylas, tut_first_tower, tut_first_tower_done, tut_world_encounter, tut_world_encounter_win, tut_world_encounter_retry, tut_return_home and tut_freedom are DELETED. Two complete, contradictory tutorial scripts were live at once (a human 'Sylas, Scout of the Reach' vs the founding arc's {guide} pet-Echo), which is the root of the owner's 2026-08-10 report ('a NPC and wolf both spawn together... no knowledge of who this wolf is... the intro is badly composed'). INVARIANT, regression-pinned by TutorialGuideIdentityRegression [tutorial-guide-identity]: EVERY dialogue whose id starts with 'tut_' speaks as the '{guide}' token and NOTHING else, and none of the retired ids may return. Sylas remains a real HERO name (HeroCanonNames) and keeps his non-tutorial 'SylasFirstMeeting' companion dialogue, which is a separate beat already stood down under ff.singlehero - only the tutorial ARC retires.",
+  "speakers": [
     {
-     "id": "stir",
-     "commands": [
-      {
-       "verb": "portrait",
-       "args": [
-        "Portraits/pet-house"
-       ]
-      }
-     ],
-     "lines": [
-      {
-       "speaker": "Echo",
-       "text": "The Tree stirs - a spirit answers. It will gather for Elarion, even while you are away."
-      }
-     ]
-    }
-   ]
-  },
-  {
-   "id": "brom_intro",
-   "startNode": "greet",
-   "nodes": [
-    {
-     "id": "greet",
-     "lines": [
-      {
-       "speaker": "Brom",
-       "text": "Word travels in Elarion. What do you need, defender?"
-      }
-     ],
-     "options": [
-      {
-       "text": "Show me the rumor board.",
-       "goto": "open_board"
-      },
-      {
-       "text": "Tell me of the Dimming.",
-       "requires": "quest_dimming_active",
-       "goto": "dimming"
-      },
-      {
-       "text": "Just passing through.",
-       "goto": "end"
-      }
-     ]
+      "name": "Mother Wren",
+      "affiliation": "Windmill",
+      "portrait": "Portraits/farm"
     },
     {
-     "id": "open_board",
-     "commands": [
-      {
-       "verb": "OpenRumorBoard",
-       "args": []
-      }
-     ]
+      "name": "Old Pell",
+      "affiliation": "Lumbermill",
+      "portrait": "Portraits/lumbermill"
     },
     {
-     "id": "dimming",
-     "lines": [
-      {
-       "speaker": "Brom",
-       "text": "The light fails at the realm's edge. Few return who chase it."
-      },
-      {
-       "speaker": "Brom",
-       "text": "If you mean to, the board has the threads. Mind the dark."
-      }
-     ],
-     "next": "greet"
-    }
-   ]
-  },
-  {
-   "id": "pet-house",
-   "startNode": "warden",
-   "nodes": [
-    {
-     "id": "warden",
-     "commands": [
-      {
-       "verb": "portrait",
-       "args": [
-        "Portraits/pet-house"
-       ]
-      }
-     ],
-     "lines": [
-      {
-       "speaker": "Echo Warden",
-       "text": "Welcome to the Echo Hollow. The echoes here seek a bond. Choose one and it will fight at your side, guard Elarion, and return to you always."
-      }
-     ],
-     "options": [
-      {
-       "text": "A frost-warden - the Ice Wolf. Steady and tough.",
-       "requires": "pet_grantable_ice-wolf",
-       "goto": "grant_ice"
-      },
-      {
-       "text": "The Ice Wolf already walks with you.",
-       "requires": "pet_owned_ice-wolf",
-       "goto": "have_ice"
-      },
-      {
-       "text": "A hearth-hound - the Flame Pup. Fierce and fast.",
-       "requires": "pet_grantable_flame-pup",
-       "goto": "grant_flame"
-      },
-      {
-       "text": "The Flame Pup already walks with you.",
-       "requires": "pet_owned_flame-pup",
-       "goto": "have_flame"
-      },
-      {
-       "text": "A heart-ward - the Aether Sprite. Quick and arcane.",
-       "requires": "pet_grantable_aether-sprite",
-       "goto": "grant_aether"
-      },
-      {
-       "text": "The Aether Sprite already walks with you.",
-       "requires": "pet_owned_aether-sprite",
-       "goto": "have_aether"
-      },
-      {
-       "text": "I'll return when I can take another.",
-       "requires": "pet_select_closed",
-       "goto": "closed"
-      },
-      {
-       "text": "Not yet - I will return.",
-       "goto": "later"
-      }
-     ]
+      "name": "Echo Warden",
+      "affiliation": "Echo Hollow",
+      "portrait": "Portraits/pet-house"
     },
     {
-     "id": "grant_ice",
-     "commands": [
-      {
-       "verb": "spawn_named_pet",
-       "args": [
-        "ice-wolf"
-       ]
-      }
-     ],
-     "lines": [
-      {
-       "speaker": "Echo Warden",
-       "text": "The Ice Wolf is attuned to you. It will chill any foe that nears the Heart."
-      }
-     ]
+      "name": "Arcanist",
+      "affiliation": "Arcane Tower",
+      "portrait": "Portraits/arcane-tower"
     },
     {
-     "id": "have_ice",
-     "lines": [
-      {
-       "speaker": "Echo Warden",
-       "text": "The Ice Wolf is already bonded to you - it answers your call when you need it."
-      }
-     ]
+      "name": "Drillmaster",
+      "affiliation": "Barracks",
+      "portrait": "Portraits/barracks"
     },
     {
-     "id": "grant_flame",
-     "commands": [
-      {
-       "verb": "spawn_named_pet",
-       "args": [
-        "flame-pup"
-       ]
-      }
-     ],
-     "lines": [
-      {
-       "speaker": "Echo Warden",
-       "text": "The Flame Pup answers your call. Its embers will scorch the enemy."
-      }
-     ]
+      "name": "Brom",
+      "affiliation": "Town Crier",
+      "portrait": "Portraits/brom"
     },
     {
-     "id": "have_flame",
-     "lines": [
-      {
-       "speaker": "Echo Warden",
-       "text": "The Flame Pup is already bonded to you - its embers are yours to command."
-      }
-     ]
+      "name": "Sylas",
+      "affiliation": "Ranger Companion",
+      "portrait": "Portraits/Sylas"
     },
     {
-     "id": "grant_aether",
-     "commands": [
-      {
-       "verb": "spawn_named_pet",
-       "args": [
-        "aether-sprite"
-       ]
-      }
-     ],
-     "lines": [
-      {
-       "speaker": "Echo Warden",
-       "text": "The Aether Sprite flits to your side. It will ward the Heart with arcane light."
-      }
-     ]
+      "name": "{guide}",
+      "affiliation": "Echo of Elarion",
+      "portrait": "Portraits/pet-house",
+      "_note": "WO-1012 P2: the tutorial GUIDE speaker token - resolved at runtime by the TutorialGuide identity seam (the pet-Echo; rotation parked). This record exists for the card/regression contract; the live name/affiliation/portrait come from the seam."
     },
     {
-     "id": "have_aether",
-     "lines": [
-      {
-       "speaker": "Echo Warden",
-       "text": "The Aether Sprite is already bonded to you - its arcane light is ever at your side."
-      }
-     ]
+      "name": "Coppin",
+      "affiliation": "Marketplace",
+      "portrait": "Portraits/market"
     },
     {
-     "id": "closed",
-     "lines": [
-      {
-       "speaker": "Echo Warden",
-       "text": "Welcome back. Your echo already walks with you - the bond is whole. When your bond can hold another, the echoes will be waiting."
-      }
-     ]
+      "name": "Borin Emberhand",
+      "affiliation": "Forge",
+      "portrait": "Portraits/forge"
     },
     {
-     "id": "later",
-     "lines": [
-      {
-       "speaker": "Echo Warden",
-       "text": "The hollow is always open when you are ready."
-      }
-     ]
-    }
-   ]
-  },
-  {
-   "id": "SylasFirstMeeting",
-   "_note": "WO-854 Phase 3 (2026-08-04, owner ruling 'retarget onto what ships'). The StartQuest/SetQuestFlag verbs on node 'accept' and the CompleteQuest on the command-only node 'accept_close' all named quest id 'companion.sylas', which is not in quests.json - QuestService.StartQuest logs the unknown id and returns, so the beat played and no quest state moved. RESOLUTION = REMOVE, not repoint: the companion recruitment thread is RETIRED under ff.singlehero (default ON), and this node's only two hosts (SylasFirstMeeting.cs ShouldRun and CastleCompanionIntroducerInjector.Bootstrap) both stand down when that flag is on, so the beat is unreachable in the shipping build. No shipped quest serves a companion recruitment thread, so there was nothing honest to repoint at. Prose and the RecruitCompanion verb are untouched - the beat still plays intact with ff.singlehero OFF. Node 'accept_close' was deleted because it carried the CompleteQuest and nothing else; 'accept' is now terminal, the same shape as the sibling 'decline' node.",
-   "startNode": "encounter",
-   "nodes": [
-    {
-     "id": "encounter",
-     "lines": [
-      {
-       "speaker": "Sylas",
-       "text": "Hold - easy. Keep your hand off that hilt; if I wanted you down you'd not have heard me at all."
-      },
-      {
-       "speaker": "Sylas",
-       "text": "I've had eyes on you since the treeline. You're the new Keeper. The Heart's been louder since you came - even out here I felt it stir."
-      }
-     ],
-     "options": [
-      {
-       "text": "Who are you?",
-       "goto": "who"
-      },
-      {
-       "text": "You've been following me.",
-       "goto": "following"
-      }
-     ]
+      "name": "Halvard",
+      "affiliation": "Armorer's Hall",
+      "portrait": "Portraits/armorer"
     },
     {
-     "id": "who",
-     "lines": [
-      {
-       "speaker": "Sylas",
-       "text": "Sylas. Scout of the Reach. I've read these woods longer than the Hollow Ones have walked them."
-      },
-      {
-       "speaker": "Sylas",
-       "text": "I knew the people who gave themselves to that tree. Some of those Echoes were friends. So I keep the wild off the wall, and I don't ask for thanks."
-      }
-     ],
-     "next": "hook"
+      "name": "Sable",
+      "affiliation": "Jeweler's Bench",
+      "portrait": "Portraits/jeweler"
     },
     {
-     "id": "following",
-     "lines": [
-      {
-       "speaker": "Sylas",
-       "text": "Watching. There's a difference, and you'll learn it. A scout who follows gets seen. A scout who watches keeps you alive."
-      },
-      {
-       "speaker": "Sylas",
-       "text": "I'm Sylas - Scout of the Reach. And I don't trail just anyone through these trees."
-      }
-     ],
-     "next": "hook"
+      "name": "Herbalist",
+      "affiliation": "Apothecary",
+      "portrait": "Portraits/apothecary"
     },
     {
-     "id": "hook",
-     "lines": [
-      {
-       "speaker": "Sylas",
-       "text": "The wild's been restless. Something past the dark side of this land is pushing them toward Elarion - the Hollow Ones first, and worse behind them."
-      },
-      {
-       "speaker": "Sylas",
-       "text": "I can read a trail three days cold. You can hold a wall. Apart, we each lose slow. Together, maybe we don't."
-      }
-     ],
-     "options": [
-      {
-       "text": "Then walk with me.",
-       "goto": "accept"
-      },
-      {
-       "text": "Why should I trust a stranger in the woods?",
-       "goto": "doubt"
-      }
-     ]
+      "name": "Echo",
+      "affiliation": "Spirit of the Tree",
+      "portrait": "Portraits/pet-house"
     },
     {
-     "id": "doubt",
-     "lines": [
-      {
-       "speaker": "Sylas",
-       "text": "You shouldn't. Not on my word. So trust the arrow - I'll put one in whatever finds us first, and you can decide what I'm worth after."
-      }
-     ],
-     "options": [
-      {
-       "text": "...Fair. Walk with me, Sylas.",
-       "goto": "accept"
-      },
-      {
-       "text": "I work alone.",
-       "goto": "decline"
-      }
-     ]
+      "name": "Bryn",
+      "affiliation": "The Wanderer",
+      "portrait": "Portraits/apothecary"
     },
     {
-     "id": "accept",
-     "commands": [
-      {
-       "verb": "RecruitCompanion",
-       "args": [
-        "Ranger"
-       ]
-      }
-     ],
-     "lines": [
-      {
-       "speaker": "Sylas",
-       "text": "He lowers the bow, and something in his shoulders eases. Then it's settled. I walk where you walk, Keeper - and I put an arrow in whatever finds us first."
-      },
-      {
-       "speaker": "Sylas",
-       "text": "Stay near the wall when the horns sound. Out here, I'll go first - I always have."
-      },
-      {
-       "speaker": "Sylas",
-       "text": "Lead on. Let's see what the dark side of this land is hiding."
-      }
-     ]
+      "name": "Village Elder",
+      "affiliation": "Heart of Elarion",
+      "portrait": "Portraits/arcane-tower"
     },
     {
-     "id": "decline",
-     "lines": [
-      {
-       "speaker": "Sylas",
-       "text": "Suit yourself. Proud gets you killed out here, but it's your wall to bleed for."
-      },
-      {
-       "speaker": "Sylas",
-       "text": "He fades back toward the trees. I'll be in the treeline when you change your mind, Keeper. You will."
-      }
-     ]
-    }
-   ]
-  },
-  {
-   "id": "CompanionMeeting",
-   "_note": "WO-854 Phase 3 (2026-08-04, owner ruling 'retarget onto what ships'). Node 'charge' fired StartQuest/SetQuestFlag/CompleteQuest all naming quest id 'companion.sylas', which is not in quests.json - a silent no-op dressed as progress. RESOLUTION = REMOVE, not repoint. This beat is still REACHABLE (CompanionMeetingTrigger does not check ff.singlehero, so it hosts on the 'Play Intro' non-fast-path route), but read the prose: 'charge' is the FTUE orientation brief about the Heart and holding the line, not a recruitment contract - the quest verbs are leftovers of the retired companion framing. Repointing them at the shipped onboarding quest elarion.welcome would be strictly WORSE than the bug: the node fires Start and Complete together, and CompleteQuest jumps a quest straight to Completed without paying any stage reward or granting the keystone, so it would burn 'A New Defender' (both stages, 150 crystals, 20 food, the keystone) before the player ever met the Elder or survived a wave. The RecruitCompanion verb is left alone - it is not a quest verb and it is the ff.singlehero-OFF restore path.",
-   "startNode": "meet",
-   "nodes": [
-    {
-     "id": "meet",
-     "lines": [
-      {
-       "speaker": "Sylas",
-       "text": "You made it to the wall. Good. I'm Sylas - Scout of the Reach. I've kept the wild off these stones since long before you came."
-      },
-      {
-       "speaker": "Sylas",
-       "text": "The Heart's been louder since you arrived, Keeper. That's not nothing - it means the light still answers someone."
-      }
-     ],
-     "next": "charge"
+      "name": "Fenn Wildmane",
+      "affiliation": "Echo Hollow",
+      "portrait": "Portraits/pet-house"
     },
     {
-     "id": "charge",
-     "commands": [
-      {
-       "verb": "RecruitCompanion",
-       "args": [
-        "Ranger"
-       ]
-      }
-     ],
-     "lines": [
-      {
-       "speaker": "Sylas",
-       "text": "Here is the shape of it: drive the dark back from the Heart and the tree grows. A brighter Heart is a stronger Heart - and the echoes gather more for you while you fight."
-      },
-      {
-       "speaker": "Sylas",
-       "text": "When the horns sound, hold the line. I'll take the treeline. Let's see what the dark side of this land is hiding."
-      }
-     ]
-    }
-   ]
-  },
-  {
-   "id": "farm",
-   "startNode": "portrait",
-   "nodes": [
-    {
-     "id": "portrait",
-     "commands": [
-      {
-       "verb": "portrait",
-       "args": [
-        "Portraits/farm"
-       ]
-      }
-     ],
-     "next": "talk"
+      "name": "Ember",
+      "affiliation": "Echo of Elarion",
+      "portrait": "PetPortraits/pet-flame-pup",
+      "_note": "WO-1031: the 'Frost' record was DELETED with the pet_engage prompt - the guide wolf is Echo #1, Aldwin, and 'Frost' was an invented name from PetTaskController.SpeakerName that bypassed EchoRosterCatalog. Ember/Aether/'Your Echo' are RETAINED pending an owner ruling (WO-1030 added them alongside Frost and they have no surviving producer either). Portraits are the Echoes' own rendered PetPortraits sprites - the same art the deployed billboard shows, not a creative substitution."
     },
     {
-     "id": "talk",
-     "lines": [
-      {
-       "speaker": "Mother Wren",
-       "text": "Come in out of the wind, dearie. There is bread, and there is always a chair."
-      },
-      {
-       "speaker": "Mother Wren",
-       "text": "Get my stones turning again. Empty bellies, empty walls - it has never been more complicated than that."
-      }
-     ]
-    }
-   ]
-  },
-  {
-   "id": "lumbermill",
-   "startNode": "portrait",
-   "nodes": [
-    {
-     "id": "portrait",
-     "commands": [
-      {
-       "verb": "portrait",
-       "args": [
-        "Portraits/lumbermill"
-       ]
-      }
-     ],
-     "next": "talk"
+      "name": "Aether",
+      "affiliation": "Echo of Elarion",
+      "portrait": "PetPortraits/pet-aether-sprite"
     },
     {
-     "id": "talk",
-     "lines": [
-      {
-       "speaker": "Old Pell",
-       "text": "Mind where you put your boots, Keeper. Young roots under there, and they have had a hard century."
-      },
-      {
-       "speaker": "Old Pell",
-       "text": "The grove I grew up in has gone grey to the bark. Lift whatever is sitting on it and I will get the saws singing again."
-      }
-     ]
+      "name": "Your Echo",
+      "affiliation": "Echo of Elarion",
+      "portrait": "Portraits/pet-house"
     }
-   ]
-  },
-  {
-   "id": "arcane-tower",
-   "startNode": "portrait",
-   "nodes": [
+  ],
+  "dialogues": [
     {
-     "id": "portrait",
-     "commands": [
-      {
-       "verb": "portrait",
-       "args": [
-        "Portraits/arcane-tower"
-       ]
-      }
-     ],
-     "next": "talk"
+      "id": "echo_first_meeting",
+      "startNode": "stir",
+      "nodes": [
+        {
+          "id": "stir",
+          "commands": [
+            {
+              "verb": "portrait",
+              "args": [
+                "Portraits/pet-house"
+              ]
+            }
+          ],
+          "lines": [
+            {
+              "speaker": "Echo",
+              "text": "The Tree stirs - a spirit answers. It will gather for Elarion, even while you are away."
+            }
+          ]
+        }
+      ]
     },
     {
-     "id": "talk",
-     "lines": [
-      {
-       "speaker": "Arcanist",
-       "text": "The runes hum louder since you came, Keeper. The Heart's light feeds them, and through them the towers see far."
-      },
-      {
-       "speaker": "Arcanist",
-       "text": "When you would deepen the weave, the tower stands ready to learn."
-      }
-     ]
-    }
-   ]
-  },
-  {
-   "id": "barracks",
-   "startNode": "portrait",
-   "nodes": [
-    {
-     "id": "portrait",
-     "commands": [
-      {
-       "verb": "portrait",
-       "args": [
-        "Portraits/barracks"
-       ]
-      }
-     ],
-     "next": "talk"
+      "id": "brom_intro",
+      "startNode": "greet",
+      "nodes": [
+        {
+          "id": "greet",
+          "lines": [
+            {
+              "speaker": "Brom",
+              "text": "Word travels in Elarion. What do you need, defender?"
+            }
+          ],
+          "options": [
+            {
+              "text": "Show me the rumor board.",
+              "goto": "open_board"
+            },
+            {
+              "text": "Tell me of the Dimming.",
+              "requires": "quest_dimming_active",
+              "goto": "dimming"
+            },
+            {
+              "text": "Just passing through.",
+              "goto": "end"
+            }
+          ]
+        },
+        {
+          "id": "open_board",
+          "commands": [
+            {
+              "verb": "OpenRumorBoard",
+              "args": []
+            }
+          ]
+        },
+        {
+          "id": "dimming",
+          "lines": [
+            {
+              "speaker": "Brom",
+              "text": "The light fails at the realm's edge. Few return who chase it."
+            },
+            {
+              "speaker": "Brom",
+              "text": "If you mean to, the board has the threads. Mind the dark."
+            }
+          ],
+          "next": "greet"
+        }
+      ]
     },
     {
-     "id": "talk",
-     "lines": [
-      {
-       "speaker": "Drillmaster",
-       "text": "Recruits sharpen by the hour, Keeper. Give the word and they'll march - Elarion's walls won't hold themselves."
-      },
-      {
-       "speaker": "Drillmaster",
-       "text": "Strengthen the barracks and I'll turn out steadier blades for the line."
-      }
-     ]
-    }
-   ]
-  },
-  {
-   "id": "market",
-   "startNode": "talk",
-   "nodes": [
-    {
-     "id": "talk",
-     "lines": [
-      {
-       "speaker": "Coppin",
-       "text": "Fresh stock off the morning carts, Keeper - tools, trinkets, and whatever the caravans dared to carry through the Dimming."
-      },
-      {
-       "speaker": "Coppin",
-       "text": "Come, have a look before the good pieces go."
-      }
-     ],
-     "options": [
-      {
-       "text": "Show me the Realm Store.",
-       "goto": "open_realm"
-      },
-      {
-       "text": "I'd like to buy.",
-       "goto": "open_buy"
-      },
-      {
-       "text": "I'd like to sell.",
-       "goto": "open_sell"
-      },
-      {
-       "text": "Just passing through.",
-       "goto": "end"
-      }
-     ]
+      "id": "pet-house",
+      "startNode": "warden",
+      "nodes": [
+        {
+          "id": "warden",
+          "commands": [
+            {
+              "verb": "portrait",
+              "args": [
+                "Portraits/pet-house"
+              ]
+            }
+          ],
+          "lines": [
+            {
+              "speaker": "Echo Warden",
+              "text": "Welcome to the Echo Hollow. The echoes here seek a bond. Choose one and it will fight at your side, guard Elarion, and return to you always."
+            }
+          ],
+          "options": [
+            {
+              "text": "A frost-warden - the Ice Wolf. Steady and tough.",
+              "requires": "pet_grantable_ice-wolf",
+              "goto": "grant_ice"
+            },
+            {
+              "text": "The Ice Wolf already walks with you.",
+              "requires": "pet_owned_ice-wolf",
+              "goto": "have_ice"
+            },
+            {
+              "text": "A hearth-hound - the Flame Pup. Fierce and fast.",
+              "requires": "pet_grantable_flame-pup",
+              "goto": "grant_flame"
+            },
+            {
+              "text": "The Flame Pup already walks with you.",
+              "requires": "pet_owned_flame-pup",
+              "goto": "have_flame"
+            },
+            {
+              "text": "A heart-ward - the Aether Sprite. Quick and arcane.",
+              "requires": "pet_grantable_aether-sprite",
+              "goto": "grant_aether"
+            },
+            {
+              "text": "The Aether Sprite already walks with you.",
+              "requires": "pet_owned_aether-sprite",
+              "goto": "have_aether"
+            },
+            {
+              "text": "I'll return when I can take another.",
+              "requires": "pet_select_closed",
+              "goto": "closed"
+            },
+            {
+              "text": "Not yet - I will return.",
+              "goto": "later"
+            }
+          ]
+        },
+        {
+          "id": "grant_ice",
+          "commands": [
+            {
+              "verb": "spawn_named_pet",
+              "args": [
+                "ice-wolf"
+              ]
+            }
+          ],
+          "lines": [
+            {
+              "speaker": "Echo Warden",
+              "text": "The Ice Wolf is attuned to you. It will chill any foe that nears the Heart."
+            }
+          ]
+        },
+        {
+          "id": "have_ice",
+          "lines": [
+            {
+              "speaker": "Echo Warden",
+              "text": "The Ice Wolf is already bonded to you - it answers your call when you need it."
+            }
+          ]
+        },
+        {
+          "id": "grant_flame",
+          "commands": [
+            {
+              "verb": "spawn_named_pet",
+              "args": [
+                "flame-pup"
+              ]
+            }
+          ],
+          "lines": [
+            {
+              "speaker": "Echo Warden",
+              "text": "The Flame Pup answers your call. Its embers will scorch the enemy."
+            }
+          ]
+        },
+        {
+          "id": "have_flame",
+          "lines": [
+            {
+              "speaker": "Echo Warden",
+              "text": "The Flame Pup is already bonded to you - its embers are yours to command."
+            }
+          ]
+        },
+        {
+          "id": "grant_aether",
+          "commands": [
+            {
+              "verb": "spawn_named_pet",
+              "args": [
+                "aether-sprite"
+              ]
+            }
+          ],
+          "lines": [
+            {
+              "speaker": "Echo Warden",
+              "text": "The Aether Sprite flits to your side. It will ward the Heart with arcane light."
+            }
+          ]
+        },
+        {
+          "id": "have_aether",
+          "lines": [
+            {
+              "speaker": "Echo Warden",
+              "text": "The Aether Sprite is already bonded to you - its arcane light is ever at your side."
+            }
+          ]
+        },
+        {
+          "id": "closed",
+          "lines": [
+            {
+              "speaker": "Echo Warden",
+              "text": "Welcome back. Your echo already walks with you - the bond is whole. When your bond can hold another, the echoes will be waiting."
+            }
+          ]
+        },
+        {
+          "id": "later",
+          "lines": [
+            {
+              "speaker": "Echo Warden",
+              "text": "The hollow is always open when you are ready."
+            }
+          ]
+        }
+      ]
     },
     {
-     "id": "open_buy",
-     "commands": [
-      {
-       "verb": "OpenShop",
-       "args": [
-        "market",
-        "buy"
-       ]
-      }
-     ]
+      "id": "SylasFirstMeeting",
+      "_note": "WO-854 Phase 3 (2026-08-04, owner ruling 'retarget onto what ships'). The StartQuest/SetQuestFlag verbs on node 'accept' and the CompleteQuest on the command-only node 'accept_close' all named quest id 'companion.sylas', which is not in quests.json - QuestService.StartQuest logs the unknown id and returns, so the beat played and no quest state moved. RESOLUTION = REMOVE, not repoint: the companion recruitment thread is RETIRED under ff.singlehero (default ON), and this node's only two hosts (SylasFirstMeeting.cs ShouldRun and CastleCompanionIntroducerInjector.Bootstrap) both stand down when that flag is on, so the beat is unreachable in the shipping build. No shipped quest serves a companion recruitment thread, so there was nothing honest to repoint at. Prose and the RecruitCompanion verb are untouched - the beat still plays intact with ff.singlehero OFF. Node 'accept_close' was deleted because it carried the CompleteQuest and nothing else; 'accept' is now terminal, the same shape as the sibling 'decline' node.",
+      "startNode": "encounter",
+      "nodes": [
+        {
+          "id": "encounter",
+          "lines": [
+            {
+              "speaker": "Sylas",
+              "text": "Hold - easy. Keep your hand off that hilt; if I wanted you down you'd not have heard me at all."
+            },
+            {
+              "speaker": "Sylas",
+              "text": "I've had eyes on you since the treeline. You're the new Keeper. The Heart's been louder since you came - even out here I felt it stir."
+            }
+          ],
+          "options": [
+            {
+              "text": "Who are you?",
+              "goto": "who"
+            },
+            {
+              "text": "You've been following me.",
+              "goto": "following"
+            }
+          ]
+        },
+        {
+          "id": "who",
+          "lines": [
+            {
+              "speaker": "Sylas",
+              "text": "Sylas. Scout of the Reach. I've read these woods longer than the Hollow Ones have walked them."
+            },
+            {
+              "speaker": "Sylas",
+              "text": "I knew the people who gave themselves to that tree. Some of those Echoes were friends. So I keep the wild off the wall, and I don't ask for thanks."
+            }
+          ],
+          "next": "hook"
+        },
+        {
+          "id": "following",
+          "lines": [
+            {
+              "speaker": "Sylas",
+              "text": "Watching. There's a difference, and you'll learn it. A scout who follows gets seen. A scout who watches keeps you alive."
+            },
+            {
+              "speaker": "Sylas",
+              "text": "I'm Sylas - Scout of the Reach. And I don't trail just anyone through these trees."
+            }
+          ],
+          "next": "hook"
+        },
+        {
+          "id": "hook",
+          "lines": [
+            {
+              "speaker": "Sylas",
+              "text": "The wild's been restless. Something past the dark side of this land is pushing them toward Elarion - the Hollow Ones first, and worse behind them."
+            },
+            {
+              "speaker": "Sylas",
+              "text": "I can read a trail three days cold. You can hold a wall. Apart, we each lose slow. Together, maybe we don't."
+            }
+          ],
+          "options": [
+            {
+              "text": "Then walk with me.",
+              "goto": "accept"
+            },
+            {
+              "text": "Why should I trust a stranger in the woods?",
+              "goto": "doubt"
+            }
+          ]
+        },
+        {
+          "id": "doubt",
+          "lines": [
+            {
+              "speaker": "Sylas",
+              "text": "You shouldn't. Not on my word. So trust the arrow - I'll put one in whatever finds us first, and you can decide what I'm worth after."
+            }
+          ],
+          "options": [
+            {
+              "text": "...Fair. Walk with me, Sylas.",
+              "goto": "accept"
+            },
+            {
+              "text": "I work alone.",
+              "goto": "decline"
+            }
+          ]
+        },
+        {
+          "id": "accept",
+          "commands": [
+            {
+              "verb": "RecruitCompanion",
+              "args": [
+                "Ranger"
+              ]
+            }
+          ],
+          "lines": [
+            {
+              "speaker": "Sylas",
+              "text": "He lowers the bow, and something in his shoulders eases. Then it's settled. I walk where you walk, Keeper - and I put an arrow in whatever finds us first."
+            },
+            {
+              "speaker": "Sylas",
+              "text": "Stay near the wall when the horns sound. Out here, I'll go first - I always have."
+            },
+            {
+              "speaker": "Sylas",
+              "text": "Lead on. Let's see what the dark side of this land is hiding."
+            }
+          ]
+        },
+        {
+          "id": "decline",
+          "lines": [
+            {
+              "speaker": "Sylas",
+              "text": "Suit yourself. Proud gets you killed out here, but it's your wall to bleed for."
+            },
+            {
+              "speaker": "Sylas",
+              "text": "He fades back toward the trees. I'll be in the treeline when you change your mind, Keeper. You will."
+            }
+          ]
+        }
+      ]
     },
     {
-     "id": "open_sell",
-     "commands": [
-      {
-       "verb": "OpenShop",
-       "args": [
-        "market",
-        "sell"
-       ]
-      }
-     ]
+      "id": "CompanionMeeting",
+      "_note": "WO-854 Phase 3 (2026-08-04, owner ruling 'retarget onto what ships'). Node 'charge' fired StartQuest/SetQuestFlag/CompleteQuest all naming quest id 'companion.sylas', which is not in quests.json - a silent no-op dressed as progress. RESOLUTION = REMOVE, not repoint. This beat is still REACHABLE (CompanionMeetingTrigger does not check ff.singlehero, so it hosts on the 'Play Intro' non-fast-path route), but read the prose: 'charge' is the FTUE orientation brief about the Heart and holding the line, not a recruitment contract - the quest verbs are leftovers of the retired companion framing. Repointing them at the shipped onboarding quest elarion.welcome would be strictly WORSE than the bug: the node fires Start and Complete together, and CompleteQuest jumps a quest straight to Completed without paying any stage reward or granting the keystone, so it would burn 'A New Defender' (both stages, 150 crystals, 20 food, the keystone) before the player ever met the Elder or survived a wave. The RecruitCompanion verb is left alone - it is not a quest verb and it is the ff.singlehero-OFF restore path.",
+      "startNode": "meet",
+      "nodes": [
+        {
+          "id": "meet",
+          "lines": [
+            {
+              "speaker": "Sylas",
+              "text": "You made it to the wall. Good. I'm Sylas - Scout of the Reach. I've kept the wild off these stones since long before you came."
+            },
+            {
+              "speaker": "Sylas",
+              "text": "The Heart's been louder since you arrived, Keeper. That's not nothing - it means the light still answers someone."
+            }
+          ],
+          "next": "charge"
+        },
+        {
+          "id": "charge",
+          "commands": [
+            {
+              "verb": "RecruitCompanion",
+              "args": [
+                "Ranger"
+              ]
+            }
+          ],
+          "lines": [
+            {
+              "speaker": "Sylas",
+              "text": "Here is the shape of it: drive the dark back from the Heart and the tree grows. A brighter Heart is a stronger Heart - and the echoes gather more for you while you fight."
+            },
+            {
+              "speaker": "Sylas",
+              "text": "When the horns sound, hold the line. I'll take the treeline. Let's see what the dark side of this land is hiding."
+            }
+          ]
+        }
+      ]
     },
     {
-     "id": "open_realm",
-     "commands": [
-      {
-       "verb": "OpenRealmStore",
-       "args": []
-      }
-     ]
-    }
-   ]
-  },
-  {
-   "id": "forge",
-   "startNode": "talk",
-   "nodes": [
-    {
-     "id": "talk",
-     "lines": [
-      {
-       "speaker": "Borin Emberhand",
-       "text": "Emberhand. Yes, that Emberhand. Mind the broken hilt on the anvil - it does not move."
-      },
-      {
-       "speaker": "Borin Emberhand",
-       "text": "A thousand honest swords, Keeper. Not one great one. That is the bargain I keep."
-      }
-     ],
-     "options": [
-      {
-       "text": "I'd like to buy.",
-       "goto": "open_buy"
-      },
-      {
-       "text": "I'd like to sell.",
-       "goto": "open_sell"
-      },
-      {
-       "text": "Just passing through.",
-       "goto": "end"
-      }
-     ]
+      "id": "farm",
+      "startNode": "portrait",
+      "nodes": [
+        {
+          "id": "portrait",
+          "commands": [
+            {
+              "verb": "portrait",
+              "args": [
+                "Portraits/farm"
+              ]
+            }
+          ],
+          "next": "talk"
+        },
+        {
+          "id": "talk",
+          "lines": [
+            {
+              "speaker": "Mother Wren",
+              "text": "Come in out of the wind, dearie. There is bread, and there is always a chair."
+            },
+            {
+              "speaker": "Mother Wren",
+              "text": "Get my stones turning again. Empty bellies, empty walls - it has never been more complicated than that."
+            }
+          ]
+        }
+      ]
     },
     {
-     "id": "open_buy",
-     "commands": [
-      {
-       "verb": "OpenShop",
-       "args": [
-        "forge",
-        "buy"
-       ]
-      }
-     ]
+      "id": "lumbermill",
+      "startNode": "portrait",
+      "nodes": [
+        {
+          "id": "portrait",
+          "commands": [
+            {
+              "verb": "portrait",
+              "args": [
+                "Portraits/lumbermill"
+              ]
+            }
+          ],
+          "next": "talk"
+        },
+        {
+          "id": "talk",
+          "lines": [
+            {
+              "speaker": "Old Pell",
+              "text": "Mind where you put your boots, Keeper. Young roots under there, and they have had a hard century."
+            },
+            {
+              "speaker": "Old Pell",
+              "text": "The grove I grew up in has gone grey to the bark. Lift whatever is sitting on it and I will get the saws singing again."
+            }
+          ]
+        }
+      ]
     },
     {
-     "id": "open_sell",
-     "commands": [
-      {
-       "verb": "OpenShop",
-       "args": [
-        "forge",
-        "sell"
-       ]
-      }
-     ]
-    }
-   ]
-  },
-  {
-   "id": "armorer",
-   "startNode": "talk",
-   "nodes": [
-    {
-     "id": "talk",
-     "lines": [
-      {
-       "speaker": "Halvard",
-       "text": "Plate, mail, and good boiled leather, Keeper - armor that holds when the wall does not."
-      },
-      {
-       "speaker": "Halvard",
-       "text": "Step in and let's fit you proper."
-      }
-     ],
-     "options": [
-      {
-       "text": "I'd like to buy.",
-       "goto": "open_buy"
-      },
-      {
-       "text": "I'd like to sell.",
-       "goto": "open_sell"
-      },
-      {
-       "text": "Just passing through.",
-       "goto": "end"
-      }
-     ]
+      "id": "arcane-tower",
+      "startNode": "portrait",
+      "nodes": [
+        {
+          "id": "portrait",
+          "commands": [
+            {
+              "verb": "portrait",
+              "args": [
+                "Portraits/arcane-tower"
+              ]
+            }
+          ],
+          "next": "talk"
+        },
+        {
+          "id": "talk",
+          "lines": [
+            {
+              "speaker": "Arcanist",
+              "text": "The runes hum louder since you came, Keeper. The Heart's light feeds them, and through them the towers see far."
+            },
+            {
+              "speaker": "Arcanist",
+              "text": "When you would deepen the weave, the tower stands ready to learn."
+            }
+          ]
+        }
+      ]
     },
     {
-     "id": "open_buy",
-     "commands": [
-      {
-       "verb": "OpenShop",
-       "args": [
-        "armorer",
-        "buy"
-       ]
-      }
-     ]
+      "id": "barracks",
+      "startNode": "portrait",
+      "nodes": [
+        {
+          "id": "portrait",
+          "commands": [
+            {
+              "verb": "portrait",
+              "args": [
+                "Portraits/barracks"
+              ]
+            }
+          ],
+          "next": "talk"
+        },
+        {
+          "id": "talk",
+          "lines": [
+            {
+              "speaker": "Drillmaster",
+              "text": "Recruits sharpen by the hour, Keeper. Give the word and they'll march - Elarion's walls won't hold themselves."
+            },
+            {
+              "speaker": "Drillmaster",
+              "text": "Strengthen the barracks and I'll turn out steadier blades for the line."
+            }
+          ]
+        }
+      ]
     },
     {
-     "id": "open_sell",
-     "commands": [
-      {
-       "verb": "OpenShop",
-       "args": [
-        "armorer",
-        "sell"
-       ]
-      }
-     ]
-    }
-   ]
-  },
-  {
-   "id": "jeweler",
-   "startNode": "talk",
-   "nodes": [
-    {
-     "id": "talk",
-     "lines": [
-      {
-       "speaker": "Sable",
-       "text": "Careful hands, Keeper - everything on this bench remembers a purpose. Rings, amulets, stones that still hold a little light."
-      },
-      {
-       "speaker": "Sable",
-       "text": "Come, look closer."
-      }
-     ],
-     "options": [
-      {
-       "text": "I'd like to buy.",
-       "goto": "open_buy"
-      },
-      {
-       "text": "I'd like to sell.",
-       "goto": "open_sell"
-      },
-      {
-       "text": "Just passing through.",
-       "goto": "end"
-      }
-     ]
+      "id": "market",
+      "startNode": "talk",
+      "nodes": [
+        {
+          "id": "talk",
+          "lines": [
+            {
+              "speaker": "Coppin",
+              "text": "Fresh stock off the morning carts, Keeper - tools, trinkets, and whatever the caravans dared to carry through the Dimming."
+            },
+            {
+              "speaker": "Coppin",
+              "text": "Come, have a look before the good pieces go."
+            }
+          ],
+          "options": [
+            {
+              "text": "Show me the Realm Store.",
+              "goto": "open_realm"
+            },
+            {
+              "text": "I'd like to buy.",
+              "goto": "open_buy"
+            },
+            {
+              "text": "I'd like to sell.",
+              "goto": "open_sell"
+            },
+            {
+              "text": "Just passing through.",
+              "goto": "end"
+            }
+          ]
+        },
+        {
+          "id": "open_buy",
+          "commands": [
+            {
+              "verb": "OpenShop",
+              "args": [
+                "market",
+                "buy"
+              ]
+            }
+          ]
+        },
+        {
+          "id": "open_sell",
+          "commands": [
+            {
+              "verb": "OpenShop",
+              "args": [
+                "market",
+                "sell"
+              ]
+            }
+          ]
+        },
+        {
+          "id": "open_realm",
+          "commands": [
+            {
+              "verb": "OpenRealmStore",
+              "args": []
+            }
+          ]
+        }
+      ]
     },
     {
-     "id": "open_buy",
-     "commands": [
-      {
-       "verb": "OpenShop",
-       "args": [
-        "jeweler",
-        "buy"
-       ]
-      }
-     ]
+      "id": "forge",
+      "startNode": "talk",
+      "nodes": [
+        {
+          "id": "talk",
+          "lines": [
+            {
+              "speaker": "Borin Emberhand",
+              "text": "Emberhand. Yes, that Emberhand. Mind the broken hilt on the anvil - it does not move."
+            },
+            {
+              "speaker": "Borin Emberhand",
+              "text": "A thousand honest swords, Keeper. Not one great one. That is the bargain I keep."
+            }
+          ],
+          "options": [
+            {
+              "text": "I'd like to buy.",
+              "goto": "open_buy"
+            },
+            {
+              "text": "I'd like to sell.",
+              "goto": "open_sell"
+            },
+            {
+              "text": "Just passing through.",
+              "goto": "end"
+            }
+          ]
+        },
+        {
+          "id": "open_buy",
+          "commands": [
+            {
+              "verb": "OpenShop",
+              "args": [
+                "forge",
+                "buy"
+              ]
+            }
+          ]
+        },
+        {
+          "id": "open_sell",
+          "commands": [
+            {
+              "verb": "OpenShop",
+              "args": [
+                "forge",
+                "sell"
+              ]
+            }
+          ]
+        }
+      ]
     },
     {
-     "id": "open_sell",
-     "commands": [
-      {
-       "verb": "OpenShop",
-       "args": [
-        "jeweler",
-        "sell"
-       ]
-      }
-     ]
-    }
-   ]
-  },
-  {
-   "id": "apothecary",
-   "startNode": "talk",
-   "nodes": [
-    {
-     "id": "talk",
-     "lines": [
-      {
-       "speaker": "Herbalist",
-       "text": "Mind the fumes, Keeper - every tincture on this bench is a small argument with the Dimming."
-      },
-      {
-       "speaker": "Herbalist",
-       "text": "Bring me herbs and I'll bring you back from anything. Step up to the bench."
-      }
-     ],
-     "next": "open"
+      "id": "armorer",
+      "startNode": "talk",
+      "nodes": [
+        {
+          "id": "talk",
+          "lines": [
+            {
+              "speaker": "Halvard",
+              "text": "Plate, mail, and good boiled leather, Keeper - armor that holds when the wall does not."
+            },
+            {
+              "speaker": "Halvard",
+              "text": "Step in and let's fit you proper."
+            }
+          ],
+          "options": [
+            {
+              "text": "I'd like to buy.",
+              "goto": "open_buy"
+            },
+            {
+              "text": "I'd like to sell.",
+              "goto": "open_sell"
+            },
+            {
+              "text": "Just passing through.",
+              "goto": "end"
+            }
+          ]
+        },
+        {
+          "id": "open_buy",
+          "commands": [
+            {
+              "verb": "OpenShop",
+              "args": [
+                "armorer",
+                "buy"
+              ]
+            }
+          ]
+        },
+        {
+          "id": "open_sell",
+          "commands": [
+            {
+              "verb": "OpenShop",
+              "args": [
+                "armorer",
+                "sell"
+              ]
+            }
+          ]
+        }
+      ]
     },
     {
-     "id": "open",
-     "commands": [
-      {
-       "verb": "OpenAlchemy",
-       "args": []
-      }
-     ]
-    }
-   ]
-  },
-  {
-   "id": "jewelers-bench",
-   "startNode": "talk",
-   "nodes": [
-    {
-     "id": "talk",
-     "lines": [
-      {
-       "speaker": "Sable",
-       "text": "Careful hands, Keeper - everything on this bench remembers a purpose. Rings, amulets, stones that still hold a little light."
-      },
-      {
-       "speaker": "Sable",
-       "text": "Step up to the bench and we'll set a stone together."
-      }
-     ],
-     "next": "open"
+      "id": "jeweler",
+      "startNode": "talk",
+      "nodes": [
+        {
+          "id": "talk",
+          "lines": [
+            {
+              "speaker": "Sable",
+              "text": "Careful hands, Keeper - everything on this bench remembers a purpose. Rings, amulets, stones that still hold a little light."
+            },
+            {
+              "speaker": "Sable",
+              "text": "Come, look closer."
+            }
+          ],
+          "options": [
+            {
+              "text": "I'd like to buy.",
+              "goto": "open_buy"
+            },
+            {
+              "text": "I'd like to sell.",
+              "goto": "open_sell"
+            },
+            {
+              "text": "Just passing through.",
+              "goto": "end"
+            }
+          ]
+        },
+        {
+          "id": "open_buy",
+          "commands": [
+            {
+              "verb": "OpenShop",
+              "args": [
+                "jeweler",
+                "buy"
+              ]
+            }
+          ]
+        },
+        {
+          "id": "open_sell",
+          "commands": [
+            {
+              "verb": "OpenShop",
+              "args": [
+                "jeweler",
+                "sell"
+              ]
+            }
+          ]
+        }
+      ]
     },
     {
-     "id": "open",
-     "commands": [
-      {
-       "verb": "OpenJeweler",
-       "args": []
-      }
-     ]
-    }
-   ]
-  },
-  {
-   "id": "tut_town_wave",
-   "startNode": "start",
-   "nodes": [
+      "id": "apothecary",
+      "startNode": "talk",
+      "nodes": [
+        {
+          "id": "talk",
+          "lines": [
+            {
+              "speaker": "Herbalist",
+              "text": "Mind the fumes, Keeper - every tincture on this bench is a small argument with the Dimming."
+            },
+            {
+              "speaker": "Herbalist",
+              "text": "Bring me herbs and I'll bring you back from anything. Step up to the bench."
+            }
+          ],
+          "next": "open"
+        },
+        {
+          "id": "open",
+          "commands": [
+            {
+              "verb": "OpenAlchemy",
+              "args": []
+            }
+          ]
+        }
+      ]
+    },
     {
-     "id": "start",
-     "lines": [
-      {
-       "speaker": "{guide}",
-       "text": "In town they come in WAVES, at the gates. Your towers hold the line - and you fight beside them."
-      },
-      {
-       "speaker": "{guide}",
-       "text": "Horns! Here they come - to the gate, Keeper!"
-      }
-     ],
-     "commands": [
-      {
-       "verb": "play_sfx",
-       "args": [
-        "horn_warning"
-       ]
-      }
-     ]
-    }
-   ]
-  },
-  {
-   "id": "tut_town_wave_done",
-   "startNode": "start",
-   "nodes": [
+      "id": "jewelers-bench",
+      "startNode": "talk",
+      "nodes": [
+        {
+          "id": "talk",
+          "lines": [
+            {
+              "speaker": "Sable",
+              "text": "Careful hands, Keeper - everything on this bench remembers a purpose. Rings, amulets, stones that still hold a little light."
+            },
+            {
+              "speaker": "Sable",
+              "text": "Step up to the bench and we'll set a stone together."
+            }
+          ],
+          "next": "open"
+        },
+        {
+          "id": "open",
+          "commands": [
+            {
+              "verb": "OpenJeweler",
+              "args": []
+            }
+          ]
+        }
+      ]
+    },
     {
-     "id": "start",
-     "lines": [
-      {
-       "speaker": "{guide}",
-       "text": "The line held - you and that tower of yours, together. That is how home is kept."
-      },
-      {
-       "speaker": "{guide}",
-       "text": "Take your due - a defender earns their keep."
-      },
-      {
-       "speaker": "{guide}",
-       "text": "You are ready to defend Elarion. When you wish to venture beyond the walls, the road is yours to take. You can revisit this guide anytime under Settings, Game Guide."
-      }
-     ],
-     "commands": [
-      {
-       "verb": "grant_resources_for_towers",
-       "args": [
-        "1"
-       ]
-      }
-     ]
-    }
-   ]
-  },
-  {
-   "id": "tut_ctx_two_fights",
-   "_note": "WO-1014 2a SALVAGE. The retired legacy arc's one genuinely useful teach - the town-vs-open-world distinction, formerly tut_return_home ('Two fights, Keeper') - re-voiced as the {guide} pet-Echo so the WISDOM survives the SPEAKER's retirement. NOT WIRED YET: no step in tutorial-steps.json triggers it, because the trigger signal (first time the player leaves the walls / first open-world encounter) is an OWNER CREATIVE PIN - WO-1014 section 5 lists it. Wire it to a contextual one-shot the moment she rules the trigger; do not invent one.",
-   "startNode": "start",
-   "nodes": [
+      "id": "tut_town_wave",
+      "startNode": "start",
+      "nodes": [
+        {
+          "id": "start",
+          "lines": [
+            {
+              "speaker": "{guide}",
+              "text": "In town they come in WAVES, at the gates. Your towers hold the line - and you fight beside them."
+            },
+            {
+              "speaker": "{guide}",
+              "text": "Horns! Here they come - to the gate, Keeper!"
+            }
+          ],
+          "commands": [
+            {
+              "verb": "play_sfx",
+              "args": [
+                "horn_warning"
+              ]
+            }
+          ]
+        }
+      ]
+    },
     {
-     "id": "start",
-     "lines": [
-      {
-       "speaker": "{guide}",
-       "text": "Mark this, Keeper. In town they come in waves, at your gates, and your towers stand with you."
-      },
-      {
-       "speaker": "{guide}",
-       "text": "Beyond the walls there are no towers - only you and me. Two fights. Always know which one you are in."
-      }
-     ]
-    }
-   ]
-  },
-  {
-   "id": "tut_founding_greet",
-   "_note": "WO-1014 2c ORDERING FIX: the guide's UTILITY line ('I can farm. I can mend.') now lands HERE, in beat 1/8, BEFORE any ask - it used to be buried as the third line of tut_founding_hollow_done and (after WO-1012's re-author) sat in tut_founding_ack, both of which play AFTER the player has already been told to build. Owner report 2026-08-10, verbatim: 'the wolf asks what to do, but never explained that's what it does'. || OWNER CREATIVE PIN (WO-1014 2b / section 5, NOT authored by CLI): the guide's SELF-INTRODUCTION beat - the name it gives and whether it introduces itself BEFORE or AFTER the tree line - is the owner's call. When she rules, the name itself is NOT authored into this copy: it stays the runtime {guide} token and drops into the ONE seam, TutorialGuideIdentityInstaller.GuideCanonNameOverride. Only the intro SENTENCE is added here, in the slot she picks.",
-   "startNode": "start",
-   "nodes": [
+      "id": "tut_town_wave_done",
+      "startNode": "start",
+      "nodes": [
+        {
+          "id": "start",
+          "lines": [
+            {
+              "speaker": "{guide}",
+              "text": "The line held - you and that tower of yours, together. That is how home is kept."
+            },
+            {
+              "speaker": "{guide}",
+              "text": "Take your due - a defender earns their keep."
+            },
+            {
+              "speaker": "{guide}",
+              "text": "You are ready to defend Elarion. When you wish to venture beyond the walls, the road is yours to take. You can revisit this guide anytime under Settings, Game Guide."
+            }
+          ],
+          "commands": [
+            {
+              "verb": "grant_resources_for_towers",
+              "args": [
+                "1"
+              ]
+            }
+          ]
+        }
+      ]
+    },
     {
-     "id": "start",
-     "lines": [
-      {
-       "speaker": "{guide}",
-       "text": "This is your castle - and this tree is what we defend. Everything else is yours to build."
-      },
-      {
-       "speaker": "{guide}",
-       "text": "The old town is gone, Keeper. What stands next on this ground is your call, stone by stone."
-      },
-      {
-       "speaker": "{guide}",
-       "text": "I can farm. I can mend. Put me to work, Keeper."
-      }
-     ]
-    }
-   ]
-  },
-  {
-   "id": "tut_founding_hollow",
-   "startNode": "start",
-   "nodes": [
+      "id": "tut_ctx_two_fights",
+      "_note": "WO-1014 2a SALVAGE. The retired legacy arc's one genuinely useful teach - the town-vs-open-world distinction, formerly tut_return_home ('Two fights, Keeper') - re-voiced as the {guide} pet-Echo so the WISDOM survives the SPEAKER's retirement. NOT WIRED YET: no step in tutorial-steps.json triggers it, because the trigger signal (first time the player leaves the walls / first open-world encounter) is an OWNER CREATIVE PIN - WO-1014 section 5 lists it. Wire it to a contextual one-shot the moment she rules the trigger; do not invent one.",
+      "startNode": "start",
+      "nodes": [
+        {
+          "id": "start",
+          "lines": [
+            {
+              "speaker": "{guide}",
+              "text": "Mark this, Keeper. In town they come in waves, at your gates, and your towers stand with you."
+            },
+            {
+              "speaker": "{guide}",
+              "text": "Beyond the walls there are no towers - only you and me. Two fights. Always know which one you are in."
+            }
+          ]
+        }
+      ]
+    },
     {
-     "id": "start",
-     "lines": [
-      {
-       "speaker": "{guide}",
-       "text": "Start small. Tap BUILD and set down an Echo Hollow - anywhere you like. There is no wrong ground for it."
-      },
-      {
-       "speaker": "{guide}",
-       "text": "Build a thing, and the thing gives back. You'll see."
-      }
-     ]
-    }
-   ]
-  },
-  {
-   "id": "tut_founding_hollow_done",
-   "_note": "SUPERSEDED + UNREFERENCED: no step in tutorial-steps.json names tut_founding_hollow / _done / tut_founding_town / tut_founding_echo since WO-1012's P3 arc re-author (verified 2026-08-10 - the mandatory chain is greet -> walk -> stores -> ack -> defense -> timers -> defend -> win). WO-1014 2c stripped the buried UTILITY line that used to sit here as line 3 (after the ask) - it now opens the arc in tut_founding_greet. Kept, not deleted: still valid copy if the Hollow beat is ever re-armed, and it must NOT re-acquire the utility line.",
-   "startNode": "start",
-   "nodes": [
+      "id": "tut_founding_greet",
+      "_note": "WO-1014 2c ORDERING FIX: the guide's UTILITY line ('I can farm. I can mend.') now lands HERE, in beat 1/8, BEFORE any ask - it used to be buried as the third line of tut_founding_hollow_done and (after WO-1012's re-author) sat in tut_founding_ack, both of which play AFTER the player has already been told to build. Owner report 2026-08-10, verbatim: 'the wolf asks what to do, but never explained that's what it does'. || OWNER CREATIVE PIN (WO-1014 2b / section 5, NOT authored by CLI): the guide's SELF-INTRODUCTION beat - the name it gives and whether it introduces itself BEFORE or AFTER the tree line - is the owner's call. When she rules, the name itself is NOT authored into this copy: it stays the runtime {guide} token and drops into the ONE seam, TutorialGuideIdentityInstaller.GuideCanonNameOverride. Only the intro SENTENCE is added here, in the slot she picks.",
+      "startNode": "start",
+      "nodes": [
+        {
+          "id": "start",
+          "lines": [
+            {
+              "speaker": "{guide}",
+              "text": "This is your castle - and this tree is what we defend. Everything else is yours to build."
+            },
+            {
+              "speaker": "{guide}",
+              "text": "The old town is gone, Keeper. What stands next on this ground is your call, stone by stone."
+            },
+            {
+              "speaker": "{guide}",
+              "text": "I can farm. I can mend. Put me to work, Keeper."
+            }
+          ]
+        }
+      ]
+    },
     {
-     "id": "start",
-     "lines": [
-      {
-       "speaker": "{guide}",
-       "text": "There - your Hollow stands, and your first Echo has answered. That spirit is yours now, Keeper."
-      },
-      {
-       "speaker": "{guide}",
-       "text": "You'll find it under the Echoes button by the tree - it works for you now."
-      }
-     ]
-    }
-   ]
-  },
-  {
-   "id": "tut_founding_stores",
-   "startNode": "start",
-   "nodes": [
+      "id": "tut_founding_hollow",
+      "startNode": "start",
+      "nodes": [
+        {
+          "id": "start",
+          "lines": [
+            {
+              "speaker": "{guide}",
+              "text": "Start small. Tap BUILD and set down an Echo Hollow - anywhere you like. There is no wrong ground for it."
+            },
+            {
+              "speaker": "{guide}",
+              "text": "Build a thing, and the thing gives back. You'll see."
+            }
+          ]
+        }
+      ]
+    },
     {
-     "id": "start",
-     "lines": [
-      {
-       "speaker": "{guide}",
-       "text": "This one earns its keep. Some roofs work your land - grain, timber, coin - and a lumber yard turns the woods into planks."
-      },
-      {
-       "speaker": "{guide}",
-       "text": "Set your stores wherever the ground suits you. The raiders march on the Heart of Elarion - they pay your storehouses no mind."
-      },
-      {
-       "speaker": "{guide}",
-       "text": "Walls and towers are what hold a horde back. We'll raise those next - that is where your defense is won."
-      }
-     ]
-    }
-   ]
-  },
-  {
-   "id": "tut_founding_town",
-   "startNode": "start",
-   "nodes": [
+      "id": "tut_founding_hollow_done",
+      "_note": "SUPERSEDED + UNREFERENCED: no step in tutorial-steps.json names tut_founding_hollow / _done / tut_founding_town / tut_founding_echo since WO-1012's P3 arc re-author (verified 2026-08-10 - the mandatory chain is greet -> walk -> stores -> ack -> defense -> timers -> defend -> win). WO-1014 2c stripped the buried UTILITY line that used to sit here as line 3 (after the ask) - it now opens the arc in tut_founding_greet. Kept, not deleted: still valid copy if the Hollow beat is ever re-armed, and it must NOT re-acquire the utility line.",
+      "startNode": "start",
+      "nodes": [
+        {
+          "id": "start",
+          "lines": [
+            {
+              "speaker": "{guide}",
+              "text": "There - your Hollow stands, and your first Echo has answered. That spirit is yours now, Keeper."
+            },
+            {
+              "speaker": "{guide}",
+              "text": "You'll find it under the Echoes button by the tree - it works for you now."
+            }
+          ]
+        }
+      ]
+    },
     {
-     "id": "start",
-     "lines": [
-      {
-       "speaker": "{guide}",
-       "text": "Now the rest - the forge, the farm, the market. Lay them out; this town is yours."
-      },
-      {
-       "speaker": "{guide}",
-       "text": "Take your time. A town is a plan you walk through every day."
-      }
-     ]
-    }
-   ]
-  },
-  {
-   "id": "tut_founding_echo",
-   "startNode": "start",
-   "nodes": [
+      "id": "tut_founding_stores",
+      "startNode": "start",
+      "nodes": [
+        {
+          "id": "start",
+          "lines": [
+            {
+              "speaker": "{guide}",
+              "text": "This one earns its keep. Some roofs work your land - grain, timber, coin - and a lumber yard turns the woods into planks."
+            },
+            {
+              "speaker": "{guide}",
+              "text": "Set your stores wherever the ground suits you. The raiders march on the Heart of Elarion - they pay your storehouses no mind."
+            },
+            {
+              "speaker": "{guide}",
+              "text": "Walls and towers are what hold a horde back. We'll raise those next - that is where your defense is won."
+            }
+          ]
+        }
+      ]
+    },
     {
-     "id": "start",
-     "lines": [
-      {
-       "speaker": "{guide}",
-       "text": "Your first Echo has woken - a spirit of the tree, and it came with your Hollow."
-      },
-      {
-       "speaker": "{guide}",
-       "text": "Open the Echoes button by the tree to meet it, and choose what it gathers - wood, iron or grain. While you rest, it works."
-      }
-     ],
-     "_note": "WO-702: gathering only in player copy for now. When WO-701 (offline structure repair) ships, the copy pass adds the repair-while-away line here."
-    }
-   ]
-  },
-  {
-   "id": "tut_founding_defense",
-   "startNode": "start",
-   "nodes": [
+      "id": "tut_founding_town",
+      "startNode": "start",
+      "nodes": [
+        {
+          "id": "start",
+          "lines": [
+            {
+              "speaker": "{guide}",
+              "text": "Now the rest - the forge, the farm, the market. Lay them out; this town is yours."
+            },
+            {
+              "speaker": "{guide}",
+              "text": "Take your time. A town is a plan you walk through every day."
+            }
+          ]
+        }
+      ]
+    },
     {
-     "id": "start",
-     "lines": [
-      {
-       "speaker": "{guide}",
-       "text": "Roofs raised - now teeth. Open BUILD and look to the Defenses tab."
-      },
-      {
-       "speaker": "{guide}",
-       "text": "Raise a tower where your walls are weakest. When the horde comes, you'll be glad of every arrow."
-      }
-     ]
-    }
-   ]
-  },
-  {
-   "id": "tut_ctx_echo_assign",
-   "startNode": "start",
-   "nodes": [
+      "id": "tut_founding_echo",
+      "startNode": "start",
+      "nodes": [
+        {
+          "id": "start",
+          "lines": [
+            {
+              "speaker": "{guide}",
+              "text": "Your first Echo has woken - a spirit of the tree, and it came with your Hollow."
+            },
+            {
+              "speaker": "{guide}",
+              "text": "Open the Echoes button by the tree to meet it, and choose what it gathers - wood, iron or grain. While you rest, it works."
+            }
+          ],
+          "_note": "WO-702: gathering only in player copy for now. When WO-701 (offline structure repair) ships, the copy pass adds the repair-while-away line here."
+        }
+      ]
+    },
     {
-     "id": "start",
-     "lines": [
-      {
-       "speaker": "{guide}",
-       "text": "A new Echo has answered! Set it to a harvest - wood, iron or grain - and it will tend the work on its own."
-      }
-     ]
-    }
-   ]
-  },
-  {
-   "id": "tut_ctx_first_spend",
-   "startNode": "start",
-   "nodes": [
+      "id": "tut_founding_defense",
+      "startNode": "start",
+      "nodes": [
+        {
+          "id": "start",
+          "lines": [
+            {
+              "speaker": "{guide}",
+              "text": "Roofs raised - now teeth. Open BUILD and look to the Defenses tab."
+            },
+            {
+              "speaker": "{guide}",
+              "text": "Raise a tower where your walls are weakest. When the horde comes, you'll be glad of every arrow."
+            }
+          ]
+        }
+      ]
+    },
     {
-     "id": "start",
-     "lines": [
-      {
-       "speaker": "{guide}",
-       "text": "Coin enough to build, Keeper. Walls don't raise themselves - put it to work."
-      }
-     ]
-    }
-   ]
-  },
-  {
-   "id": "tut_ctx_gear_equip",
-   "startNode": "start",
-   "nodes": [
+      "id": "tut_ctx_echo_assign",
+      "startNode": "start",
+      "nodes": [
+        {
+          "id": "start",
+          "lines": [
+            {
+              "speaker": "{guide}",
+              "text": "A new Echo has answered! Set it to a harvest - wood, iron or grain - and it will tend the work on its own."
+            }
+          ]
+        }
+      ]
+    },
     {
-     "id": "start",
-     "lines": [
-      {
-       "speaker": "{guide}",
-       "text": "New steel in your pack? Iron serves no one in a chest - equip it."
-      }
-     ]
-    }
-   ]
-  },
-  {
-   "id": "tut_ctx_talents",
-   "startNode": "start",
-   "nodes": [
+      "id": "tut_ctx_first_spend",
+      "startNode": "start",
+      "nodes": [
+        {
+          "id": "start",
+          "lines": [
+            {
+              "speaker": "{guide}",
+              "text": "Coin enough to build, Keeper. Walls don't raise themselves - put it to work."
+            }
+          ]
+        }
+      ]
+    },
     {
-     "id": "start",
-     "lines": [
-      {
-       "speaker": "{guide}",
-       "text": "A talent earned! Open your talents and shape how you fight, Keeper."
-      }
-     ]
-    }
-   ]
-  },
-  {
-   "id": "tut_founding_walk",
-   "_note": "WO-1012 P3 beat 2/8 WALK ('Come with me.' - the WO's authored copy). No control text: the walk itself teaches joystick/camera (progressive disclosure law).",
-   "startNode": "start",
-   "nodes": [
+      "id": "tut_ctx_gear_equip",
+      "startNode": "start",
+      "nodes": [
+        {
+          "id": "start",
+          "lines": [
+            {
+              "speaker": "{guide}",
+              "text": "New steel in your pack? Iron serves no one in a chest - equip it."
+            }
+          ]
+        }
+      ]
+    },
     {
-     "id": "start",
-     "lines": [
-      {
-       "speaker": "{guide}",
-       "text": "Come with me, Keeper - the gate first. Stay close; I will show you the way."
-      }
-     ]
-    }
-   ]
-  },
-  {
-   "id": "tut_founding_ack",
-   "_note": "WO-1012 P3 beat 4/8 ACK: the acknowledgment beat (2b piece 6). Supersedes tut_founding_hollow_done as the chain's first acknowledgment (that record is now unreferenced by the mandatory chain). WO-1014 2c MOVED the utility line ('I can farm. I can mend.') OUT of this beat and into tut_founding_greet: an ACK plays AFTER the player has already built, so stating the guide's utility here still landed after the ask - the exact defect the owner reported on 2026-08-10. The Echo-system hook now opens the arc instead.",
-   "startNode": "start",
-   "nodes": [
+      "id": "tut_ctx_talents",
+      "startNode": "start",
+      "nodes": [
+        {
+          "id": "start",
+          "lines": [
+            {
+              "speaker": "{guide}",
+              "text": "A talent earned! Open your talents and shape how you fight, Keeper."
+            }
+          ]
+        }
+      ]
+    },
     {
-     "id": "start",
-     "lines": [
-      {
-       "speaker": "{guide}",
-       "text": "Good. You got it. Build a thing, and the thing gives back."
-      }
-     ]
-    }
-   ]
-  },
-  {
-   "id": "tut_founding_timers",
-   "_note": "WO-1012 P3 beat 6/8 TIMERS: ONE line on the queue chip, no lecture (the Manage deep-dive stays contextual).",
-   "startNode": "start",
-   "nodes": [
+      "id": "tut_founding_walk",
+      "_note": "WO-1012 P3 beat 2/8 WALK ('Come with me.' - the WO's authored copy). No control text: the walk itself teaches joystick/camera (progressive disclosure law).",
+      "startNode": "start",
+      "nodes": [
+        {
+          "id": "start",
+          "lines": [
+            {
+              "speaker": "{guide}",
+              "text": "Come with me, Keeper - the gate first. Stay close; I will show you the way."
+            }
+          ]
+        }
+      ]
+    },
     {
-     "id": "start",
-     "lines": [
-      {
-       "speaker": "{guide}",
-       "text": "Work takes time, Keeper. Watch the ledger - the Builders tally tells you what is still rising."
-      }
-     ]
-    }
-   ]
-  },
-  {
-   "id": "tut_founding_win",
-   "_note": "WO-1012 P3 beat 8/8 WIN + HANDOFF outro (the WO's authored line). Its dialogue.ended raise is the 2c-bis nudge chain's trigger - consumed by no mandatory step, so it reaches the contextual watchers.",
-   "startNode": "start",
-   "nodes": [
+      "id": "tut_founding_ack",
+      "_note": "WO-1012 P3 beat 4/8 ACK: the acknowledgment beat (2b piece 6). Supersedes tut_founding_hollow_done as the chain's first acknowledgment (that record is now unreferenced by the mandatory chain). WO-1014 2c MOVED the utility line ('I can farm. I can mend.') OUT of this beat and into tut_founding_greet: an ACK plays AFTER the player has already built, so stating the guide's utility here still landed after the ask - the exact defect the owner reported on 2026-08-10. The Echo-system hook now opens the arc instead.",
+      "startNode": "start",
+      "nodes": [
+        {
+          "id": "start",
+          "lines": [
+            {
+              "speaker": "{guide}",
+              "text": "Good. You got it. Build a thing, and the thing gives back."
+            }
+          ]
+        }
+      ]
+    },
     {
-     "id": "start",
-     "lines": [
-      {
-       "speaker": "{guide}",
-       "text": "The rest is yours, Keeper."
-      }
-     ]
-    }
-   ]
-  },
-  {
-   "id": "tut_ctx_build_weapons",
-   "_note": "WO-1012 2c-bis nudge 1/2 (owner 2026-08-10): the weapons building - catalog id 'workshop'. QR-5.7 pins display 'Forge'; the live catalog says 'Weaponsmith', so the copy names both until the owner rules the rename. Dismissible, never blocking.",
-   "startNode": "start",
-   "nodes": [
+      "id": "tut_founding_timers",
+      "_note": "WO-1012 P3 beat 6/8 TIMERS: ONE line on the queue chip, no lecture (the Manage deep-dive stays contextual).",
+      "startNode": "start",
+      "nodes": [
+        {
+          "id": "start",
+          "lines": [
+            {
+              "speaker": "{guide}",
+              "text": "Work takes time, Keeper. Watch the ledger - the Builders tally tells you what is still rising."
+            }
+          ]
+        }
+      ]
+    },
     {
-     "id": "start",
-     "lines": [
-      {
-       "speaker": "{guide}",
-       "text": "A thought, Keeper: a town needs proper steel. Set up a spot to buy weapons - raise the Forge, the weaponsmith's roof, when you are ready."
-      }
-     ]
-    }
-   ]
-  },
-  {
-   "id": "tut_ctx_build_armor",
-   "_note": "WO-1012 2c-bis nudge 2/2: armor - catalog id 'forge', display 'Armorer'. The chain's order past these two beats is an owner creative pin - do not author more without her sequence.",
-   "startNode": "start",
-   "nodes": [
+      "id": "tut_founding_win",
+      "_note": "WO-1012 P3 beat 8/8 WIN + HANDOFF outro (the WO's authored line). Its dialogue.ended raise is the 2c-bis nudge chain's trigger - consumed by no mandatory step, so it reaches the contextual watchers.",
+      "startNode": "start",
+      "nodes": [
+        {
+          "id": "start",
+          "lines": [
+            {
+              "speaker": "{guide}",
+              "text": "The rest is yours, Keeper."
+            }
+          ]
+        }
+      ]
+    },
     {
-     "id": "start",
-     "lines": [
-      {
-       "speaker": "{guide}",
-       "text": "Good steel wants good armor. An Armorer next, perhaps - in your own time, Keeper."
-      }
-     ]
-    }
-   ]
-  },
-  {
-   "id": "dun_torch_warden",
-   "startNode": "warn",
-   "nodes": [
+      "id": "tut_ctx_build_weapons",
+      "_note": "WO-1012 2c-bis nudge 1/2 (owner 2026-08-10): the weapons building - catalog id 'workshop'. QR-5.7 pins display 'Forge'; the live catalog says 'Weaponsmith', so the copy names both until the owner rules the rename. Dismissible, never blocking.",
+      "startNode": "start",
+      "nodes": [
+        {
+          "id": "start",
+          "lines": [
+            {
+              "speaker": "{guide}",
+              "text": "A thought, Keeper: a town needs proper steel. Set up a spot to buy weapons - raise the Forge, the weaponsmith's roof, when you are ready."
+            }
+          ]
+        }
+      ]
+    },
     {
-     "id": "warn",
-     "lines": [
-      {
-       "speaker": "Bryn",
-       "text": "No one walks the cottage dark. Take a torch - and mind it burning."
-      },
-      {
-       "speaker": "Bryn",
-       "text": "Your light feeds on oil and burns down as you walk. When the flame gutters, stand at the glowing oil stones - they fill it back up."
-      },
-      {
-       "speaker": "Bryn",
-       "text": "The deep rooms eat the unlit. Come back to me if your light dies."
-      }
-     ]
-    }
-   ]
-  },
-  {
-   "id": "village_elder",
-   "_note": "Quest cast (2026-08-03). Copy INSTALLED 2026-08-04 on the owner ruling 'dialogue approved'; source = docs/narrative/QUEST_CAST_VOICES_2026-08-03.md. Seated at the Heart by QuestCastNpcInjector. Addressed by quests.json elarion.welcome / stage meet-elder. Lines below are that doc's greeting + quest-give, which is exactly its own meet-elder mapping. NOT installed (no slot - this dialogue has one ungated node, so a state-specific line would play at the wrong time): the in-progress nudge, the turn-in and the idle-repeat. Owner Question 3 (is the Elder also Warden Alric / does he get a proper name) stays OPEN - neither line below names him, so neither depends on the answer. NOTE (WO-1014, 2026-08-10): the second half of that question - 'Sylas already covers this same welcome beat via tut_meet_sylas' - is now MOOT; tut_meet_sylas and the whole legacy Sylas tutorial arc were RETIRED, so there is no longer a second mouth on this beat.",
-   "startNode": "talk",
-   "nodes": [
+      "id": "tut_ctx_build_armor",
+      "_note": "WO-1012 2c-bis nudge 2/2: armor - catalog id 'forge', display 'Armorer'. The chain's order past these two beats is an owner creative pin - do not author more without her sequence.",
+      "startNode": "start",
+      "nodes": [
+        {
+          "id": "start",
+          "lines": [
+            {
+              "speaker": "{guide}",
+              "text": "Good steel wants good armor. An Armorer next, perhaps - in your own time, Keeper."
+            }
+          ]
+        }
+      ]
+    },
     {
-     "id": "talk",
-     "lines": [
-      {
-       "speaker": "Village Elder",
-       "text": "You came. I have kept a place at these roots a long while, child."
-      },
-      {
-       "speaker": "Village Elder",
-       "text": "The horns will sound before dusk. Go down to the gate and let the Folk see who holds it."
-      }
-     ]
-    }
-   ]
-  },
-  {
-   "id": "fenn_wildmane",
-   "_note": "Quest cast (2026-08-03). Copy INSTALLED 2026-08-04 on the owner ruling 'dialogue approved'; source = docs/narrative/QUEST_CAST_VOICES_2026-08-03.md. Seated at the pet-house by QuestCastNpcInjector - no stable structure exists. Addressed by quests.json vendor.stable / stage train-ability. Lines below are that doc's greeting + its train-ability give; both are deliberately neutral on Owner Question 1 (are Fenn's beasts Echoes or a second companion track), which is still OPEN. The 'stalls' in the greeting are corroborated by quests.json petbond.icewolf ('Fenn Wildmane will make it a warm stall'). HELD, pending Question 1: the turn-in line ('walked in behind you on its own four feet') asserts a quadruped, but quests.json vendor.stable/tame-beast now reads 'Track a wild echo' and the echo roster includes winged forms (Mirewing, Glimmermoth). ALSO NOT installed: the quest-give (tame-beast completes on 'arena', not a talk, so it has no node) and the put-to-work beat (that stage now targets the Echo Warden at pet-house, not Fenn).",
-   "startNode": "talk",
-   "nodes": [
+      "id": "dun_torch_warden",
+      "startNode": "warn",
+      "nodes": [
+        {
+          "id": "warn",
+          "lines": [
+            {
+              "speaker": "Bryn",
+              "text": "No one walks the cottage dark. Take a torch - and mind it burning."
+            },
+            {
+              "speaker": "Bryn",
+              "text": "Your light feeds on oil and burns down as you walk. When the flame gutters, stand at the glowing oil stones - they fill it back up."
+            },
+            {
+              "speaker": "Bryn",
+              "text": "The deep rooms eat the unlit. Come back to me if your light dies."
+            }
+          ]
+        }
+      ]
+    },
     {
-     "id": "talk",
-     "lines": [
-      {
-       "speaker": "Fenn Wildmane",
-       "text": "Stand still a moment. Not for my sake - for the ones watching you out of the stalls."
-      },
-      {
-       "speaker": "Fenn Wildmane",
-       "text": "It already knows how to fight, Keeper. What it does not know is when you want it to."
-      }
-     ]
+      "id": "village_elder",
+      "_note": "Quest cast (2026-08-03). Copy INSTALLED 2026-08-04 on the owner ruling 'dialogue approved'; source = docs/narrative/QUEST_CAST_VOICES_2026-08-03.md. Seated at the Heart by QuestCastNpcInjector. Addressed by quests.json elarion.welcome / stage meet-elder. Lines below are that doc's greeting + quest-give, which is exactly its own meet-elder mapping. NOT installed (no slot - this dialogue has one ungated node, so a state-specific line would play at the wrong time): the in-progress nudge, the turn-in and the idle-repeat. Owner Question 3 (is the Elder also Warden Alric / does he get a proper name) stays OPEN - neither line below names him, so neither depends on the answer. NOTE (WO-1014, 2026-08-10): the second half of that question - 'Sylas already covers this same welcome beat via tut_meet_sylas' - is now MOOT; tut_meet_sylas and the whole legacy Sylas tutorial arc were RETIRED, so there is no longer a second mouth on this beat.",
+      "startNode": "talk",
+      "nodes": [
+        {
+          "id": "talk",
+          "lines": [
+            {
+              "speaker": "Village Elder",
+              "text": "You came. I have kept a place at these roots a long while, child."
+            },
+            {
+              "speaker": "Village Elder",
+              "text": "The horns will sound before dusk. Go down to the gate and let the Folk see who holds it."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "fenn_wildmane",
+      "_note": "Quest cast (2026-08-03). Copy INSTALLED 2026-08-04 on the owner ruling 'dialogue approved'; source = docs/narrative/QUEST_CAST_VOICES_2026-08-03.md. Seated at the pet-house by QuestCastNpcInjector - no stable structure exists. Addressed by quests.json vendor.stable / stage train-ability. Lines below are that doc's greeting + its train-ability give; both are deliberately neutral on Owner Question 1 (are Fenn's beasts Echoes or a second companion track), which is still OPEN. The 'stalls' in the greeting are corroborated by quests.json petbond.icewolf ('Fenn Wildmane will make it a warm stall'). HELD, pending Question 1: the turn-in line ('walked in behind you on its own four feet') asserts a quadruped, but quests.json vendor.stable/tame-beast now reads 'Track a wild echo' and the echo roster includes winged forms (Mirewing, Glimmermoth). ALSO NOT installed: the quest-give (tame-beast completes on 'arena', not a talk, so it has no node) and the put-to-work beat (that stage now targets the Echo Warden at pet-house, not Fenn).",
+      "startNode": "talk",
+      "nodes": [
+        {
+          "id": "talk",
+          "lines": [
+            {
+              "speaker": "Fenn Wildmane",
+              "text": "Stand still a moment. Not for my sake - for the ones watching you out of the stalls."
+            },
+            {
+              "speaker": "Fenn Wildmane",
+              "text": "It already knows how to fight, Keeper. What it does not know is when you want it to."
+            }
+          ]
+        }
+      ]
     }
-   ]
-  }
- ]
+  ]
 }

@@ -581,7 +581,6 @@ namespace DeNelle.Village
             result.Hp *= scale;
             result.ContactDamage *= scale;
             result.XpReward = Mathf.RoundToInt(result.XpReward * scale);
-            result.GlimmerReward = Mathf.RoundToInt(result.GlimmerReward * scale);
             result.CoinReward = Mathf.RoundToInt(result.CoinReward * scale);
             return result;
         }
@@ -611,7 +610,6 @@ namespace DeNelle.Village
                 AggroRadius       = s.AggroRadius,
                 GroupStaggerDelay = s.GroupStaggerDelay,
                 XpReward          = s.XpReward,
-                GlimmerReward     = s.GlimmerReward,
                 CoinReward        = s.CoinReward,
             };
         }

@@ -600,8 +600,7 @@ namespace DeNelle.Village
                 AttackInterval = interval,
                 Height = height,
                 AggroRadius = 14f,
-                XpReward = xp + threat,
-                GlimmerReward = 3,
+                XpReward = xp + threat
             };
         }
 

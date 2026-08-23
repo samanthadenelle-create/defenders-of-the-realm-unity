@@ -9,7 +9,7 @@
 // Mirrors PetSkillTreeCatalog.cs: read once from
 // Application.streamingAssetsPath, cache, expose typed lookups. Reload() exists
 // so dev tools can swap in updated JSON without restarting the editor.
-// The GlimmerCurrencyService consumes this catalog through CosmeticCatalog.Find.
+// CosmeticOwnershipService consumes this catalog through CosmeticCatalog.Find.
 // =============================================================================
 
 using System;
@@ -43,9 +43,6 @@ namespace DeNelle.Cosmetics
         /// <summary>Short flavour line shown under the title.</summary>
         [JsonProperty("description")] public string Description;
 
-        /// <summary>Glimmer price; 0 for achievement-gated items.</summary>
-        [JsonProperty("glimmerCost")] public int GlimmerCost;
-
         /// <summary>How this cosmetic is unlocked: <c>buy</c> or <c>achievement</c>.</summary>
         [JsonProperty("unlockMethod")] public string UnlockMethod;
 
@@ -72,10 +69,6 @@ namespace DeNelle.Cosmetics
         public bool IsAchievement =>
             string.Equals(UnlockMethod, "achievement", StringComparison.OrdinalIgnoreCase);
 
-        /// <summary>True for items the player can buy with Glimmer.</summary>
-        public bool IsBuyable =>
-            string.Equals(UnlockMethod, "buy", StringComparison.OrdinalIgnoreCase);
-
         /// <summary>Preview hex parsed to a Unity Color; falls back to grey on a parse miss.</summary>
         public Color PreviewUnityColor =>
             ColorUtility.TryParseHtmlString(PreviewColor ?? "#888888", out var c)
@@ -93,7 +86,7 @@ namespace DeNelle.Cosmetics
 
     /// <summary>
     /// Static surface over cosmetics.json. Read-only; the wallet + ownership
-    /// state lives in GlimmerCurrencyService.
+    /// state lives in CosmeticOwnershipService.
     /// </summary>
     public static class CosmeticCatalog
     {

@@ -30,6 +30,16 @@
 //      ordered, and NowUnixMs matches the clock the coordinator persisted. Those two
 //      numbers ARE the server's evidence; a zero pair is an unreconcilable save.
 //
+//   5-8. THE SERVER'S ANSWER IS READ (WO-1128 s3.3). load.js's serverLastSeenMs
+//      parses; save.js's `accrual` clamp block parses and LOWERS the local balance
+//      to the figure the server stored; applying it does NOT move
+//      GameState.LastHarvestClaimMs (three legal writers, all in
+//      OfflineClaimCoordinator -- and a rolled-back stamp would make the refused
+//      stretch RE-CLAIMABLE next launch); and the adjustment can only ever
+//      SUBTRACT, so neither a spent-down balance nor a forged response is a grant
+//      path. Both wire bodies are typed out verbatim in the cases, so a key rename
+//      on either side fails here instead of quietly parsing to nulls.
+//
 // SAFETY: mirrors OfflineHarvestRegression — snapshots the PlayerPrefs save blob,
 // installs a THROWAWAY GameState + GameStateService by reflection (editmode never
 // runs Awake), restores the live singleton, and — specific to this oracle —
@@ -156,6 +166,14 @@ namespace DeNelle.Editor
                                      $"LastHarvestClaimMs ({state.LastHarvestClaimMs:0}) — the server would " +
                                      "reconcile against a stamp the client never reported");
                 }
+
+                // ── Cases 5-8: the server's ANSWER is parsed and applied (WO-1128 §3.3) ──
+                // Before these existed, load.js's serverLastSeenMs and save.js's `accrual`
+                // clamp block were both emitted and read by NOTHING: the server refused a
+                // fabricated gain, stored the reduced figure, and the device went on showing
+                // (and re-posting) the number it had been refused. Each case below fails on a
+                // real regression of that half.
+                RunReconcileCases(gss, state, failures);
             }
             catch (Exception ex)
             {
@@ -182,12 +200,111 @@ namespace DeNelle.Editor
             {
                 reason = "OFFLINE ACCRUAL TRUST OK — every window declares its clock " +
                          "(server-anchored vs device) and its own endpoints; an unanchored " +
-                         "window is reported, never reduced. Server clamp gated separately by " +
+                         "window is reported, never reduced; and the server's answer is READ — " +
+                         "serverLastSeenMs parses, a reported clamp lowers the balance to the " +
+                         "server's figure, the claim clock is untouched, and the adjustment only " +
+                         "ever subtracts. Server-side clamp itself gated separately by " +
                          "`node api/game/save.js` (ACCRUAL_RECONCILE_OK).";
                 return true;
             }
             reason = $"OFFLINE ACCRUAL TRUST FAIL x{failures.Count}: " + string.Join(" | ", failures);
             return false;
+        }
+
+        // =====================================================================
+        //  WO-1128 §3.3 — the client half of the reconciliation
+        // =====================================================================
+
+        /// <summary>
+        /// Feeds REAL wire bodies (the exact shapes api/game/load.js and api/game/save.js
+        /// emit) through the private response readers and asserts what lands on the state.
+        /// Reflection is used because both readers are private by design — the seam being
+        /// pinned is the WIRE CONTRACT, not the method's visibility.
+        /// </summary>
+        private static void RunReconcileCases(GameStateService gss, GameState state, List<string> failures)
+        {
+            // ── Case 5: load.js's serverLastSeenMs actually PARSES ────────────────
+            // The field has been on the wire since WO-1128 and BackendLoadResponse
+            // ignored it. A rename on either side silently returns us to that.
+            var loadType = typeof(GameStateService).GetNestedType("BackendLoadResponse",
+                BindingFlags.NonPublic);
+            if (loadType == null)
+            {
+                failures.Add("case5 GameStateService.BackendLoadResponse not found by reflection " +
+                             "(load response type renamed/removed)");
+            }
+            else
+            {
+                const string loadJson = "{\"ok\":true,\"success\":true,\"serverNowMs\":1700000000000," +
+                                        "\"serverLastSeenMs\":1699999000000,\"data\":null}";
+                object parsed = Newtonsoft.Json.JsonConvert.DeserializeObject(
+                    loadJson, loadType, SaveSchema.JsonSettings);
+                var prop = loadType.GetProperty("ServerLastSeenMs");
+                if (prop == null)
+                    failures.Add("case5 BackendLoadResponse has no ServerLastSeenMs member — load.js sends " +
+                                 "serverLastSeenMs and the client would discard the server's own anchor again");
+                else
+                {
+                    var got = prop.GetValue(parsed) as double?;
+                    if (got == null || Math.Abs(got.Value - 1699999000000.0) > 1.0)
+                        failures.Add($"case5 serverLastSeenMs parsed as '{got}', expected 1699999000000 " +
+                                     "(JsonProperty name drifted from the wire)");
+                }
+            }
+
+            var reader = typeof(GameStateService).GetMethod("ReadSaveResponse",
+                BindingFlags.NonPublic | BindingFlags.Instance);
+            if (reader == null)
+            {
+                failures.Add("case6 GameStateService.ReadSaveResponse not found by reflection — the save " +
+                             "response reader is gone, so every accrual clamp is discarded unread again");
+                return;
+            }
+
+            // The body save.js returns when it clamped wood: claimed 1000, allowed 400,
+            // prior 300. Written out verbatim rather than built from the C# type, so a
+            // key rename on either side FAILS here instead of silently parsing to nulls.
+            const string clampJson =
+                "{\"ok\":true,\"success\":true,\"serverNowMs\":1700000000000,\"accrual\":{" +
+                "\"reconciled\":true,\"reason\":\"clamped_to_server_window\"," +
+                "\"clientWindowSec\":36000,\"serverElapsedSec\":600,\"honestFraction\":0.0333," +
+                "\"clamps\":[{\"field\":\"wood\",\"claimed\":1000,\"allowed\":400,\"prior\":300," +
+                "\"claimedGain\":700,\"allowedGain\":100}],\"observed\":{}}}";
+
+            double clockBefore = state.LastHarvestClaimMs;
+
+            // ── Case 6: an over-claim is LOWERED to the server's figure ───────────
+            state.Wood = 1000;
+            reader.Invoke(gss, new object[] { clampJson });
+            if (state.Wood != 400)
+                failures.Add($"case6 clamped wood landed at {state.Wood}, expected 400 — the server refused " +
+                             "600 of the claimed gain and the device kept it (and would re-post it next save)");
+
+            // ── Case 7: ⛔ THE CLOCK IS NOT A CLAMP TARGET ────────────────────────
+            // LastHarvestClaimMs has three legal writers, all in OfflineClaimCoordinator.
+            // A fourth here would ALSO make the difference re-claimable next launch — the
+            // double-grant save.js refuses server-side for exactly the same reason.
+            if (Math.Abs(state.LastHarvestClaimMs - clockBefore) > 0.5)
+                failures.Add($"case7 applying an accrual clamp MOVED LastHarvestClaimMs " +
+                             $"({clockBefore:0} -> {state.LastHarvestClaimMs:0}) — the sync path must adjust " +
+                             "BALANCES ONLY; the coordinator is the single owner of that clock");
+
+            // ── Case 8: it can only ever SUBTRACT ────────────────────────────────
+            // A player who spent down to BELOW the server's prior must not be topped back
+            // up by a "clamp". Same arm protects against a forged/stale accrual block
+            // being turned into a grant path.
+            state.Wood = 50;
+            reader.Invoke(gss, new object[] { clampJson });
+            if (state.Wood != 50)
+                failures.Add($"case8 a clamp RAISED wood to {state.Wood} from 50 — reconciliation is a " +
+                             "subtraction, never a grant");
+
+            // And a gain earned AFTER the snapshot survives the subtraction intact.
+            state.Wood = 1500;                      // 1000 posted + 500 earned since
+            reader.Invoke(gss, new object[] { clampJson });
+            if (state.Wood != 900)
+                failures.Add($"case8 post-snapshot earnings were not preserved: wood landed at {state.Wood}, " +
+                             "expected 900 (1500 minus the 600 the server refused)");
         }
 
         // =====================================================================

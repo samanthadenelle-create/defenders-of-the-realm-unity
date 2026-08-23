@@ -128,14 +128,13 @@ namespace DeNelle.Village.Monetization
         /// <summary>
         /// Currency ids an ad reward may NEVER grant (_LAW_1). "coins"/"gold" are absent on purpose:
         /// they are SOFT currency with no purchase route, which is exactly what makes them legal.
-        /// glimmer is here because it is still SOLD in packs.json today - the file's own 2026-08-19
         /// tombstone records that its removed reward looked safe only because someone checked the
         /// SPEND side and not the SELL side. skr/usdc/sol are the money rails themselves.
         /// </summary>
         private static readonly string[] BannedCurrencies =
         {
             "crystal", "crystals", "aether", "aethercrystal", "aethercrystals",
-            "gem", "gems", "glimmer", "skr", "usdc", "sol", "token", "tokens"
+            "gem", "gems", "skr", "usdc", "sol", "token", "tokens"
         };
 
         private static bool s_loaded;

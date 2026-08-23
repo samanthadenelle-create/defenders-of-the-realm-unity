@@ -83,6 +83,73 @@ namespace DeNelle.Village.UI
         private const float RowCtrlY0 = 0.06f;      // 0.88 * RowHeightPx = 116px >= MinTouchPx (112),
         private const float RowCtrlY1 = 0.94f;      // so an in-row button is never GROWN out of its row
 
+        // =====================================================================
+        //  WO-1058 — ONE PRIMARY SLOT PER ROW. THE X-BANDS ARE THE WHOLE FIX.
+        // ---------------------------------------------------------------------
+        // The owner asked to "reuse the same button and make it finish now so you don't have to
+        // move", and ruled the double-tap a FEATURE ("they can double click and be done"). The
+        // arithmetic said the same gesture was ALSO destructive: `Upgrade` sat at 0.84-0.98 on a
+        // browse row and `Cancel` at 0.885-0.98 on a queue row — the same strip of glass — and
+        // starting a job INSERTS a queue row above the browse list, sliding a different row under
+        // a finger that has not moved.
+        //
+        // THE INVARIANT, and it is the only thing that makes a sanctioned double-tap safe:
+        //   EVERY row type puts exactly ONE control in PrimaryX0..PrimaryX1, it is ALWAYS the
+        //   action the player wants (Upgrade / Finish Now / Expand), and it is NEVER destructive
+        //   and NEVER free — the price is printed on the face BEFORE the finger arrives.
+        // So whichever row slides under the second tap, the worst outcome is a priced action the
+        // player could read, and `Cancel` is unreachable from that strip by construction.
+        //
+        // ⛔ NOT solved by a confirm dialog, a cooldown or a tap lockout (§2.2 forbids all three —
+        //    the fast path IS the feature), and NOT by raising BuildTimerConfig.freeBuildSlots to
+        //    guarantee a RUNNING job (queueDepthPerLine and freeBuildSlots are different axes and
+        //    that config says so in its own comment).
+        //
+        // Left of the primary sits a DEAD GAP that nothing may occupy, then the secondary cluster.
+        // The cluster is laid by EVEN SPLIT (ClusterSlot) rather than hand-authored bands: at the
+        // narrowest supported aspect (1920x1080) the list row resolves to ~1490 reference px, so
+        // three controls sharing 0.455-0.72 get 0.0817 each = ~122px — over MinTouchPx (112), so
+        // ClampMinTouch is a NO-OP. Hand-authored uneven bands could not clear the floor for three
+        // controls, and a clamp that fires is exactly WO-1056's root cause on the panel next door.
+        //
+        // ⚠ ClusterX0 is 0.455 and NOT the ticket's literal 0.40: the row's TEXT column owns
+        //   x <= 0.44 (name / state / refund), and a control authored at 0.40 would sit ON that
+        //   text — the "BUTTON OVER TEXT" failure the WO-1060 oracle exists to catch. The ticket's
+        //   §2.3 table was authored without the text column in view; the ORDER it specifies
+        //   (Ad, Cancel, Move up, then the primary) is preserved exactly, so Cancel is never
+        //   adjacent to the primary slot.
+        // =====================================================================
+        private const float PrimaryX0 = 0.76f;      // THE primary slot — identical on every row
+        private const float PrimaryX1 = 0.98f;      // 0.22 * ~1490px = ~328px: "Finish Now" fits flat
+        private const float PrimaryGuardX = 0.04f;  // dead gap — nothing tappable may enter it
+        private const float ClusterX0 = 0.455f;     // secondary cluster starts clear of the text column
+        private const float ClusterX1 = PrimaryX0 - PrimaryGuardX;   // 0.72
+        private const float ClusterGapX = 0.010f;
+
+        // Queue-row TEXT bands (WO-1058 clipping pass). Each band now HOLDS its line box
+        // (~1.16 * fontSize) instead of crowding it: the name line was authored at FontLabel(40)
+        // — a ~46px box — inside a 0.72-1.00 band that resolves to 37px, so every title bled ~5px
+        // over its band into the row above. Re-banded, NOT re-heighted: RowHeightPx stays 132
+        // because vertical is the scarce axis in landscape.
+        //   name   0.679-0.996 -> 41.8px, holds a 36px line box (41.8)   OK
+        //   state  0.386-0.671 -> 37.6px, holds a 32px line box (37.1)   OK
+        //   refund 0.093-0.378 -> 37.6px, holds a 32px line box (37.1)   OK
+        //   bar    0.012-0.085 ->  9.6px  (a progress strip should be thin)
+        // 126.6px of 132 spent, ~1px gutter between bands. Both text sizes stay at or above the
+        // kit's FontFloor (30) — this shrinks TEXT to fit its authored band, never a CONTROL.
+        private const float QueueNameFontPx = 36f;
+        private const float QueueLineFontPx = 32f;  // == ElarionUi.FontMicro, an authored role
+        private const float QRowNameY0 = 0.679f, QRowNameY1 = 0.996f;
+        private const float QRowStateY0 = 0.386f, QRowStateY1 = 0.671f;
+        private const float QRowRefundY0 = 0.093f, QRowRefundY1 = 0.378f;
+        private const float QRowBarY0 = 0.012f, QRowBarY1 = 0.085f;
+
+        /// <summary>Tail spacer under the last list row (WO-1058). At max scroll the last row then
+        /// clears the viewport's RectMask2D completely instead of being sliced mid-glyph at the
+        /// Close band edge — the "content runs under Close" the owner photographed. It lives INSIDE
+        /// the scrolling content, so the panel's fixed-band budget is untouched.</summary>
+        private const float ListTailPx = 28f;
+
         private ManageScreenVM _vm;
         private GameObject _ui;
         private RectTransform _listContent;
@@ -650,6 +717,10 @@ namespace DeNelle.Village.UI
             if (_listContent == null) return;
             for (int i = _listContent.childCount - 1; i >= 0; i--) Destroy(_listContent.GetChild(i).gameObject);
             _tickCells.Clear();
+            // The progress cells point at bars that were just destroyed with their rows. The tick
+            // already skips a Unity-null fill, so this never crashed — but without the clear the
+            // list grew by every rebuild for the life of the open panel.
+            _progressCells.Clear();
 
             var channel = ManageScreenVM.ChannelOf(_vm.Tab);
 
@@ -674,6 +745,22 @@ namespace DeNelle.Village.UI
                 AddNoteRow("Nothing to upgrade on this tab yet.");
             else
                 for (int i = 0; i < _vm.BrowseRows.Count; i++) AddBrowseRow(_vm.BrowseRows[i]);
+
+            // WO-1058 — TAIL SPACER. The list is a scroller inside a RectMask2D whose floor sits
+            // just above the shared Close, so at max scroll the last row used to end MID-GLYPH on
+            // that mask edge and read as "the content runs under Close" (owner frame 2026-08-22).
+            // An empty tail row lets the last real row clear the mask completely. It costs the
+            // panel NO height — the fixed-band budget in BuildChrome is untouched.
+            MakeRowHost("ListTailSpacer", ListTailPx);
+
+            // §12 — the geometry is PROVEN by a capture, not by an eyeball. One line naming the
+            // invariant this ticket exists to hold, so a screenshot can be checked against numbers.
+            FlowTrace.Step("Manage", string.Format(
+                "row bands: PRIMARY x{0:F3}-{1:F3} (never destructive: Upgrade / Finish Now / Expand / Repair) | " +
+                "dead gap {2:F3}-{3:F3} | secondary cluster {4:F3}-{5:F3} (Ad, Cancel, Move up, even split) | " +
+                "text column x<=0.44. queueRows={6} browseRows={7}",
+                PrimaryX0, PrimaryX1, ClusterX1, PrimaryX0, ClusterX0, ClusterX1,
+                _vm.QueueRows.Count, _vm.BrowseRows.Count));
         }
 
         private string FindSummary(ChannelId channel)
@@ -700,6 +787,22 @@ namespace DeNelle.Village.UI
             return rt;
         }
 
+        /// <summary>
+        /// WO-1058 — resolve the <paramref name="index"/>'th of <paramref name="count"/> SECONDARY
+        /// controls inside <see cref="ClusterX0"/>..<see cref="ClusterX1"/>, evenly split with a
+        /// fixed gutter. Even split is deliberate: it is the only division under which three
+        /// controls all clear MinTouchPx at the narrowest supported aspect, so ClampMinTouch never
+        /// fires and never inflates one control into its neighbour.
+        /// </summary>
+        private static void ClusterSlot(int index, int count, out Vector2 aMin, out Vector2 aMax)
+        {
+            if (count < 1) count = 1;
+            float w = ((ClusterX1 - ClusterX0) - ClusterGapX * (count - 1)) / count;
+            float x = ClusterX0 + index * (w + ClusterGapX);
+            aMin = new Vector2(x, RowCtrlY0);
+            aMax = new Vector2(x + w, RowCtrlY1);
+        }
+
         private void AddSectionHeader(string text)
         {
             var row = MakeRowHost("SectionHeader", SectionHeaderPx);
@@ -724,7 +827,9 @@ namespace DeNelle.Village.UI
             ElarionUiKit.FitSingleLine(t);
             var b = ElarionUiKit.BuildObsidianButton(row, action,
                 ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Green,
-                new Vector2(0.76f, RowCtrlY0), new Vector2(0.98f, RowCtrlY1), () => onTap?.Invoke());
+                // WO-1058: the Repair offer's CTA already sat on the primary band; it now names it
+                // by constant so a future move of the slot moves every row type at once.
+                new Vector2(PrimaryX0, RowCtrlY0), new Vector2(PrimaryX1, RowCtrlY1), () => onTap?.Invoke());
             ElarionUiKit.ClampMinTouch(b);
         }
 
@@ -745,13 +850,19 @@ namespace DeNelle.Village.UI
             // free a strip at the bottom for the progress bar. Re-banding beats growing the row:
             // the list well is measured and clamps to 0px when the bands no longer fit, which
             // degrades to "headers and no rows" with only a trace line to explain it.
-            var name = ElarionUiKit.Label(row, label, 0.72f, 1.00f, ElarionUi.Parchment,
-                                          (int)ElarionUi.FontLabel, TextAlignmentOptions.Left, x0, 0.44f, bold: true);
-            ElarionUiKit.FitSingleLine(name);
-            var state = ElarionUiKit.Label(row, ManageScreenVM.Ascii(r.StateText ?? ""), 0.44f, 0.70f,
-                                           ElarionUi.ParchmentDim, (int)ElarionUi.FontLabel,
+            //
+            // WO-1058 CLIPPING PASS: the three bands below were authored at FontLabel(40) — a
+            // ~46px line box — inside 34-37px bands, so every line bled over its band edge and the
+            // owner's 2026-08-22 frame shows the title sheared. The bands are re-seated (see the
+            // QRow* block) and each label is now capped at a size whose line box FITS, which is a
+            // TEXT change, never a control one: MinTouchPx and the CTA boxes are untouched.
+            var name = ElarionUiKit.Label(row, label, QRowNameY0, QRowNameY1, ElarionUi.Parchment,
+                                          (int)QueueNameFontPx, TextAlignmentOptions.Left, x0, 0.44f, bold: true);
+            ElarionUiKit.FitSingleLine(name, 0f, QueueNameFontPx);
+            var state = ElarionUiKit.Label(row, ManageScreenVM.Ascii(r.StateText ?? ""), QRowStateY0, QRowStateY1,
+                                           ElarionUi.ParchmentDim, (int)QueueLineFontPx,
                                            TextAlignmentOptions.Left, x0, 0.44f);
-            ElarionUiKit.FitSingleLine(state);
+            ElarionUiKit.FitSingleLine(state, 0f, QueueLineFontPx);
 
             // The bar itself. Drawn only for a job with a known duration (Progress01 >= 0), and
             // deliberately NOT for a collapsed stack header, which stands for several jobs at
@@ -763,7 +874,7 @@ namespace DeNelle.Village.UI
             if (r.Progress01 >= 0f && !r.IsStackHeader)
             {
                 var bar = ElarionUiKit.Bar(row, ElarionUiKit.BarKind.Castle,
-                                           new Vector2(x0, 0.02f), new Vector2(0.44f, 0.13f));
+                                           new Vector2(x0, QRowBarY0), new Vector2(0.44f, QRowBarY1));
                 if (bar?.fill != null)
                 {
                     bar.fill.fillAmount = Mathf.Clamp01(r.Progress01);
@@ -796,10 +907,15 @@ namespace DeNelle.Village.UI
                 // never act on an ambiguous aggregate (the same principle as Q11). The ONLY control
                 // here is the expander; cancel appears on the individual children it reveals, and
                 // the remaining items close the gap by themselves.
+                //
+                // WO-1058: the expander IS this row's primary, so it takes the PRIMARY SLOT like
+                // every other row's primary. It used to start at 0.62 and straddle the slot — a
+                // second tap landing on a stack header then hit an ambiguous strip. Now the whole
+                // slot is one harmless, non-spending verb.
                 string key = r.StackKey;
                 var expand = ElarionUiKit.BuildObsidianButton(row, r.Expanded ? "Collapse" : "Expand x" + r.StackCount,
                     ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Gray,
-                    new Vector2(0.62f, RowCtrlY0), new Vector2(0.98f, RowCtrlY1),
+                    new Vector2(PrimaryX0, RowCtrlY0), new Vector2(PrimaryX1, RowCtrlY1),
                     () => _vm?.ToggleStack(key));
                 ElarionUiKit.ClampMinTouch(expand);
                 return;
@@ -819,55 +935,74 @@ namespace DeNelle.Village.UI
                 // time remaining, and "(short)" silently meant "you cannot afford this" while
                 // reading like part of the price. Both strings are the VM's (FinishCostText); this
                 // only renders them.
-                var fin = BuildTwoLineCta(row, "Finish", r.FinishCostText,
+                //
+                // WO-1058: this is THE PRIMARY SLOT — the same strip of glass the browse row's
+                // `Upgrade` occupies, so the owner's "tap, tap again" gesture lands on the verb she
+                // wants without moving her finger. The verb reads "Finish Now" (not "Finish")
+                // because in the primary slot it is answering the question the previous tap asked;
+                // the cost line under it is unchanged and is what makes the second tap non-blind.
+                var fin = BuildTwoLineCta(row, "Finish Now", r.FinishCostText,
                     r.CanAffordFinish ? ElarionUiKit.ObsidianButtonColor.Yellow : ElarionUiKit.ObsidianButtonColor.Gray,
-                    new Vector2(0.455f, RowCtrlY0), new Vector2(0.655f, RowCtrlY1),
+                    new Vector2(PrimaryX0, RowCtrlY0), new Vector2(PrimaryX1, RowCtrlY1),
                     () => { _vm?.FinishNow(channel, jobId); FlushNotice(); });
                 ElarionUiKit.ClampMinTouch(fin);
             }
+
+            // ── THE SECONDARY CLUSTER (WO-1058) ──────────────────────────────────────────
+            // Everything that is NOT the primary lives LEFT of the dead gap, evenly split so no
+            // control is authored under MinTouchPx. Order is fixed — Ad, Cancel, Move up — which
+            // puts `Move up` between `Cancel` and the primary slot: the destructive control is
+            // never adjacent to the one the player is double-tapping.
+            bool wantAd = r.AdAvailable && DeNelle.Core.FeatureFlags.RewardedAdSkip;
+            int clusterCount = (wantAd ? 1 : 0) + (r.CanCancel ? 1 : 0) + (r.CanBumpUp ? 1 : 0);
+            int clusterIdx = 0;
+            Vector2 slotMin, slotMax;
 
             // RELEASE BLOCKER GATE (2026-08-07): the "Ad" control is NEVER CONSTRUCTED while
             // FeatureFlags.RewardedAdSkip is OFF (the shipping state - no ad SDK is wired anywhere
             // in the project). Absent, not present-and-disabled. The VM and BuildTimerService gate
             // on the same flag; this is the build site, so it is the one that guarantees absence.
-            if (r.AdAvailable && DeNelle.Core.FeatureFlags.RewardedAdSkip)
+            // Its slot is RESERVED by the even split (it simply is not counted while the flag is
+            // off), never drawn "disabled".
+            if (wantAd)
             {
+                ClusterSlot(clusterIdx++, clusterCount, out slotMin, out slotMax);
                 var ad = ElarionUiKit.BuildObsidianButton(row, "Ad",
                     ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Green,
-                    new Vector2(0.665f, RowCtrlY0), new Vector2(0.755f, RowCtrlY1),
+                    slotMin, slotMax,
                     () => { _vm?.WatchAd(channel, jobId); FlushNotice(); });
                 ElarionUiKit.ClampMinTouch(ad);
-            }
-
-            if (r.CanBumpUp)
-            {
-                int idx = r.PendingIndex;
-                var up = ElarionUiKit.BuildObsidianButton(row, "Move up",
-                    ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Gray,
-                    new Vector2(0.765f, RowCtrlY0), new Vector2(0.875f, RowCtrlY1),
-                    () => { _vm?.BumpUp(channel, jobId, idx); FlushNotice(); });
-                ElarionUiKit.ClampMinTouch(up);
             }
 
             if (r.CanCancel)
             {
                 // Refund is 100% flat (ruling Q1) and the face SAYS what comes back, so the player
                 // never has to infer it from a colour or a number that appears after the fact.
+                // WO-1058 moved the BOX, not the promise: same Red face, same refund line, and it
+                // is now the FURTHEST control from the primary slot instead of sitting inside it.
+                ClusterSlot(clusterIdx++, clusterCount, out slotMin, out slotMax);
                 var cancel = ElarionUiKit.BuildObsidianButton(row, "Cancel",
                     ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Red,
-                    new Vector2(0.885f, RowCtrlY0), new Vector2(0.98f, RowCtrlY1),
+                    slotMin, slotMax,
                     () => { _vm?.Cancel(channel, jobId); FlushNotice(); });
                 ElarionUiKit.ClampMinTouch(cancel);
 
                 // Third line of the TEXT column (never under the buttons — see the two-column note).
-                // Third text line, shifted up with the other two. Bands inside the 132px row:
-                // name 0.72-1.00 (~37px) | state 0.44-0.70 (~34px) | refund 0.16-0.42 (~34px) |
-                // bar 0.02-0.13 (~14px). Every text band keeps >= 34px; only the bar is thin,
-                // which is what a progress strip should be.
                 var refund = ElarionUiKit.Label(row, "Refund: " + ManageScreenVM.Ascii(r.RefundText ?? "nothing"),
-                                                0.16f, 0.42f, ElarionUi.ParchmentDim, (int)ElarionUi.FontLabel,
-                                                TextAlignmentOptions.Left, x0, 0.44f);
-                ElarionUiKit.FitSingleLine(refund);
+                                                QRowRefundY0, QRowRefundY1, ElarionUi.ParchmentDim,
+                                                (int)QueueLineFontPx, TextAlignmentOptions.Left, x0, 0.44f);
+                ElarionUiKit.FitSingleLine(refund, 0f, QueueLineFontPx);
+            }
+
+            if (r.CanBumpUp)
+            {
+                int idx = r.PendingIndex;
+                ClusterSlot(clusterIdx++, clusterCount, out slotMin, out slotMax);
+                var up = ElarionUiKit.BuildObsidianButton(row, "Move up",
+                    ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Gray,
+                    slotMin, slotMax,
+                    () => { _vm?.BumpUp(channel, jobId, idx); FlushNotice(); });
+                ElarionUiKit.ClampMinTouch(up);
             }
         }
 
@@ -953,22 +1088,26 @@ namespace DeNelle.Village.UI
         {
             var row = MakeRowHost("BrowseRow", RowHeightPx);
 
-            // Three disjoint x-columns: name+cost (0.02-0.55) | affordability (0.57-0.82) | CTA (0.84-0.98).
+            // Three disjoint x-columns: name+cost (0.02-0.50) | affordability (0.52-0.73) | CTA (0.76-0.98).
+            // WO-1058: the CTA moved LEFT from 0.84 to PrimaryX0 so it occupies the SAME primary
+            // slot as the queue row's "Finish Now". The affordability column was pulled back from
+            // 0.82 to 0.73 in the same edit — leaving it at 0.82 would have put a text box under
+            // the widened button ("BUTTON OVER TEXT", the WO-1060 oracle's own failure class).
             var name = ElarionUiKit.Label(row, ManageScreenVM.Ascii(r.Label ?? ""), 0.52f, 0.98f, ElarionUi.Parchment,
-                                          (int)ElarionUi.FontLabel, TextAlignmentOptions.Left, 0.02f, 0.55f, bold: true);
+                                          (int)ElarionUi.FontLabel, TextAlignmentOptions.Left, 0.02f, 0.50f, bold: true);
             ElarionUiKit.FitSingleLine(name);
             var cost = ElarionUiKit.Label(row, ManageScreenVM.Ascii(r.CostText ?? ""), 0.04f, 0.48f, ElarionUi.ParchmentDim,
-                                          (int)ElarionUi.FontLabel, TextAlignmentOptions.Left, 0.02f, 0.55f);
+                                          (int)ElarionUi.FontLabel, TextAlignmentOptions.Left, 0.02f, 0.50f);
             ElarionUiKit.FitSingleLine(cost);
             // Affordability is a SENTENCE ("Ready" / "Not enough Wood (400)") — never a tint alone.
             var state = ElarionUiKit.Label(row, ManageScreenVM.Ascii(r.StateText ?? ""), 0.20f, 0.80f, ElarionUi.Parchment,
-                                           (int)ElarionUi.FontLabel, TextAlignmentOptions.Left, 0.57f, 0.82f);
+                                           (int)ElarionUi.FontLabel, TextAlignmentOptions.Left, 0.52f, ClusterX1 + 0.01f);
             ElarionUiKit.FitBlock(state);   // a shortfall sentence may need two lines inside its box
 
             var act = ElarionUiKit.BuildObsidianButton(row, r.ActionText ?? "Open",
                 ElarionUiKit.ObsidianButtonStyle.Style1,
                 r.Affordable ? ElarionUiKit.ObsidianButtonColor.Yellow : ElarionUiKit.ObsidianButtonColor.Gray,
-                new Vector2(0.84f, RowCtrlY0), new Vector2(0.98f, RowCtrlY1),
+                new Vector2(PrimaryX0, RowCtrlY0), new Vector2(PrimaryX1, RowCtrlY1),
                 () => { Guard.Try("Manage", "browse drill-in", () => r.Activate?.Invoke()); });
             ElarionUiKit.ClampMinTouch(act);
         }

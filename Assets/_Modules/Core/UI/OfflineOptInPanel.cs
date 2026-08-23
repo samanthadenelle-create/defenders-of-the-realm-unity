@@ -38,7 +38,28 @@ namespace DeNelle.Core.UI
         private ElarionUiKit.ObsidianModal _modal;
         private TextMeshProUGUI _body;
         private TextMeshProUGUI _progress;
+        private TextMeshProUGUI _localSaveNote;
         private bool _downloading;
+
+        // ── WO-1128 §3.4 — the local-save truth, on the screen that offers the mode ──
+        // The owner asked "but then the save would only persist locally right?" and this
+        // panel had no answer on it: the body said "Download everything now so the game
+        // works without a connection? / Checking download size..." and stopped. A player
+        // deciding to rely on offline mode deserves the same answer she got.
+        //
+        // It is a STANDING label, not a line appended to the body text: the body is
+        // rewritten four times by the size/verdict/download arms below, and copy that
+        // lives inside a string one of those arms overwrites is copy that disappears at
+        // the exact moment it matters (the moment the player is choosing). Its own rect
+        // cannot be overwritten by any of them.
+        //
+        // Keys, not sentences (CLAUDE.md §7): both live in BOTH canon-strings.json copies,
+        // byte-identical and ASCII-only. HudStrings is the Core.UI canon resolver; the keys
+        // are deliberately NOT in HudStrings.AllKeys, because that array is what
+        // HudLabelFitRegression measures against CHIP and BAR-FACE boxes — this is modal
+        // body copy that wraps in a rect of its own and has no such geometry to fail.
+        private const string KeyLocalSaveTitle = "offlineLocalSaveTitle";
+        private const string KeyLocalSaveNote  = "offlineLocalSaveNote";
 
         // MODAL ARBITER. This builds a 31010-band modal with a scrim, so without a handle
         // PanelManager.AnyOpen stays FALSE while the panel covers the screen: the world
@@ -88,9 +109,15 @@ namespace DeNelle.Core.UI
 
         private void Build()
         {
+            // TALLER MODAL (was 0.24-0.76). Landscape vertical is scarce, so the local-save
+            // note is given ROOM rather than squeezed into the gap between the body and the
+            // buttons: the alternative was shrinking the body font toward the legibility
+            // floor, and the standing rule is that the words get shorter, never the type.
+            // The CTA band keeps its share (0.10-0.26 of a now-larger box, so the buttons
+            // grew), and nothing here touches CanonCtaWidth/CanonCtaHeight.
             _modal = ElarionUiKit.BuildObsidianModal(
                 "OfflineOptInUI", "Play Offline",
-                new Vector2(0.10f, 0.24f), new Vector2(0.90f, 0.76f),
+                new Vector2(0.10f, 0.14f), new Vector2(0.90f, 0.86f),
                 onClose: DeclineAndClose, sortingOrder: 31010);
 
             var content = _modal.chrome.content.transform;
@@ -98,16 +125,31 @@ namespace DeNelle.Core.UI
             _body = ElarionUiKit.Label(content,
                 "Download everything now so the game works without a connection?\n\n" +
                 "Checking download size...",
-                0.46f, 0.86f, ElarionUi.Parchment, 34, TextAlignmentOptions.Top);
+                0.52f, 0.92f, ElarionUi.Parchment, 34, TextAlignmentOptions.Top);
+
+            // The consequence is WORDED, in its own block, above the two buttons — never
+            // signalled by tint (the owner is red/green colourblind, so colour carries no
+            // meaning here; the dim parchment is hierarchy only).
+            _localSaveNote = ElarionUiKit.Label(content,
+                HudStrings.Get(KeyLocalSaveTitle) + "\n" + HudStrings.Get(KeyLocalSaveNote),
+                0.34f, 0.50f, ElarionUi.ParchmentDim, 26, TextAlignmentOptions.Top);
 
             _progress = ElarionUiKit.Label(content, "",
-                0.34f, 0.45f, ElarionUi.ParchmentDim, 28, TextAlignmentOptions.Center);
+                0.27f, 0.33f, ElarionUi.ParchmentDim, 28, TextAlignmentOptions.Center);
 
             ElarionUiKit.Button(content, "Download Now", ElarionUiKit.ButtonKind.Gold,
                 new Vector2(0.06f, 0.10f), new Vector2(0.48f, 0.26f), OnDownload);
 
             ElarionUiKit.Button(content, "Not Now", ElarionUiKit.ButtonKind.Quiet,
                 new Vector2(0.52f, 0.10f), new Vector2(0.94f, 0.26f), DeclineAndClose);
+
+            // PERMANENT (§12): a capture of this screen can then be read as "the player was
+            // told the save is device-only" rather than argued about from the source.
+            FlowTrace.Step("OfflineContent",
+                _localSaveNote != null
+                    ? "opt-in prompt built with the local-only save note: " + _localSaveNote.text
+                    : "opt-in prompt built WITHOUT the local-only save note label - the player is being " +
+                      "offered offline mode with its save consequence unstated (WO-1128 s3.4).");
 
             StartCoroutine(ShowSize());
         }

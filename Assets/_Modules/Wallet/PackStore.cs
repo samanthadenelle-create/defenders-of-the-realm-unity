@@ -1670,7 +1670,6 @@ namespace DeNelle.Wallet
                     AppendAmount(sb, econ.Crystals, "crystals");
                     AppendAmount(sb, econ.Food, "food");
                     AppendAmount(sb, econ.Coins, "coins");
-                    AppendAmount(sb, econ.Glimmer, "glimmer");
                 }
 
                 // WO-1118 §2.3 — a card may only list convenience the player can actually SPEND.
@@ -1710,7 +1709,6 @@ namespace DeNelle.Wallet
                 AppendAmount(sb, econ.Crystals, "crystals");
                 AppendAmount(sb, econ.Food, "food");
                 AppendAmount(sb, econ.Coins, "coins");
-                AppendAmount(sb, econ.Glimmer, "glimmer");
             }
             if (c.Cosmetics != null)
                 foreach (string sku in c.Cosmetics)

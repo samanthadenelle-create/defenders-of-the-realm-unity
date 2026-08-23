@@ -96,24 +96,20 @@ namespace DeNelle.Wallet
 
             // Economy layer - route EVERY advertised currency through its canonical, persisted,
             // HUD-refreshing grant seam (ECON-01 fix). The old code wrote state.Resources DIRECTLY
-            // and applied ONLY Crystals/Food/Coins, so Glimmer + Wood/Iron were silently dropped
-            // (a shipped lie on the pack card - every pack advertises glimmer and granted none). Now:
-            //   Glimmer                     -> GlimmerCurrencyService.TryAddGlimmer(int)
+            // and applied ONLY Crystals/Food/Coins, so Wood/Iron were silently dropped. Now:
             //   Wood/Iron/Food/Crystals     -> EconomyService.GrantSpendable(int,int,int,int)
             //   Coins (Gold)                -> EconomyService.AddCoins(int)
             // Each currency is passed to EXACTLY ONE seam, so nothing is double-granted.
             var econ = pack.Contents != null ? pack.Contents.Economy : null;
-            int gGlimmer = 0, gWood = 0, gIron = 0, gFood = 0, gCrystals = 0, gCoins = 0;
+            int gWood = 0, gIron = 0, gFood = 0, gCrystals = 0, gCoins = 0;
             if (econ != null)
             {
-                gGlimmer  = Mathf.Max(0, econ.Glimmer);
                 gWood     = Mathf.Max(0, econ.Wood);
                 gIron     = Mathf.Max(0, econ.Iron);
                 gFood     = Mathf.Max(0, econ.Food);
                 gCrystals = Mathf.Max(0, econ.Crystals);
                 gCoins    = Mathf.Max(0, econ.Coins);
 
-                if (gGlimmer > 0) TryGrantGlimmer(gGlimmer, pack.Sku);
                 // Wood/Iron/Food/Crystals land in a single GrantSpendable (mirrors Wood/Iron to the
                 // persisted GameState ledger AND routes Food/Crystals through AddFood/AddCrystals ->
                 // Save + ResourcesChanged); Coins(Gold) land via AddCoins.
@@ -129,10 +125,10 @@ namespace DeNelle.Wallet
                 foreach (var sku in pack.Contents.Cosmetics)
                 {
                     RecordOwned(state.OwnedItemIds, sku);
-                    // ECON-02 fix: the wardrobe / Cosmetic Shop reads GlimmerCurrencyService ownership,
+                    // ECON-02 fix: the wardrobe reads CosmeticOwnershipService ownership,
                     // NOT GameState.OwnedItemIds. Without this, a pack cosmetic is "owned" to the pack
-                    // system yet GlimmerCurrencyService.Owns(sku)==false and Equip(sku) no-ops (split-
-                    // brain, economy-meta FLAG #16). Grant ownership into the Glimmer store too via
+                    // system yet CosmeticOwnershipService.Owns(sku)==false and Equip(sku) no-ops (split-
+                    // brain, economy-meta FLAG #16). Grant ownership into the wardrobe store too via
                     // GrantAchievement (the outside-the-spend own-set writer). Write BOTH stores so the
                     // pack IsOwned check and the wardrobe agree; GrantAchievement is idempotent.
                     if (!string.IsNullOrEmpty(sku)) { TryGrantCosmeticOwnership(sku, pack.Sku); cosmeticCount++; }
@@ -165,9 +161,9 @@ namespace DeNelle.Wallet
             // cosmetic-ownership count) so a silent drop can never recur unseen. If any figure here reads
             // 0 for something the pack card advertised, the grant seam is broken and the trace shows it.
             FlowTrace.Step("Pack",
-                $"granted '{pack.Sku}': glimmer={gGlimmer} wood={gWood} iron={gIron} food={gFood} " +
+                $"granted '{pack.Sku}': wood={gWood} iron={gIron} food={gFood} " +
                 $"crystals={gCrystals} coins={gCoins} cosmetics={cosmeticCount} " +
-                "(each routed through its canonical persisted seam - TryAddGlimmer / GrantSpendable / AddCoins / GrantAchievement)");
+                "(each routed through its canonical persisted seam - GrantSpendable / AddCoins / GrantAchievement)");
 
             // Persist through the service so the save round-trips.
             FlowTrace.Try("Store", $"save after granting '{pack.Sku}'", () =>
@@ -208,8 +204,7 @@ namespace DeNelle.Wallet
         // PackStoreVM lives in DeNelle.Wallet, which cannot reference DeNelle.Cosmetics
         // (Cosmetics -> Wallet already, so a back-reference would be circular) nor DeNelle.Village
         // (one-way asmdef guard). So the canonical, persisted grant services are reached by
-        // AppDomain type-name reflection - the SAME bridge CryptoPaymentManager.GrantGlimmer and
-        // TryCloseViaInteractor below already use. Every miss Fails LOUDLY: by the time ApplyPackContents
+        // AppDomain type-name reflection. Every miss Fails LOUDLY: by the time ApplyPackContents
         // runs the payment has ALREADY confirmed, so a silent grant failure = a lost, paid-for entitlement.
 
         /// <summary>Resolves a singleton service's live Instance by type name across loaded assemblies.</summary>
@@ -226,42 +221,23 @@ namespace DeNelle.Wallet
                 System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.Public)?.GetValue(null);
         }
 
-        /// <summary>Glimmer -> GlimmerCurrencyService.TryAddGlimmer(int) (ECON-01). Persists to the cosmetic wallet.</summary>
-        private static void TryGrantGlimmer(int amount, string packSku)
-        {
-            var svc = ResolveServiceInstance("DeNelle.Cosmetics.GlimmerCurrencyService", out var t);
-            if (svc == null)
-            {
-                FlowTrace.Fail("Pack", $"grant glimmer +{amount} for '{packSku}' FAILED: GlimmerCurrencyService missing (service/type not loaded) - paid-for Glimmer LOST.");
-                return;
-            }
-            var m = t.GetMethod("TryAddGlimmer", new[] { typeof(int) });
-            if (m == null)
-            {
-                FlowTrace.Fail("Pack", $"grant glimmer +{amount} for '{packSku}' FAILED: TryAddGlimmer(int) not found - paid-for Glimmer LOST.");
-                return;
-            }
-            try { m.Invoke(svc, new object[] { amount }); }
-            catch (Exception ex) { FlowTrace.Fail("Pack", $"grant glimmer +{amount} for '{packSku}' THREW: {ex.GetType().Name}: {ex.Message} - paid-for Glimmer LOST."); }
-        }
-
         /// <summary>
-        /// Cosmetic SKU -> GlimmerCurrencyService ownership so the wardrobe can equip it (ECON-02).
-        /// The Cosmetic Shop / wardrobe reads GlimmerCurrencyService.Owns(sku) as the SSOT for cosmetic
+        /// Cosmetic SKU -> CosmeticOwnershipService so the wardrobe can equip it (ECON-02).
+        /// The wardrobe reads CosmeticOwnershipService.Owns(sku) as the SSOT for cosmetic
         /// ownership, and the pack-grant oracle asserts the same. GrantAchievement only registers SKUs
         /// that live in CosmeticCatalog (cosmetics.json) — pack cosmetic SKUs (e.g.
         /// "cosmetic.founders-vow.hero-outfit") are pack rewards, NOT shop-catalog items, so
         /// GrantAchievement no-ops on them and Owns(sku) stays false. So we ALSO call the
         /// catalog-independent MarkCosmeticOwned(string), which writes straight into the same owned-set
-        /// GlimmerCurrencyService.Owns reads and persists it — guaranteeing Owns(sku)==true post-grant.
+        /// CosmeticOwnershipService.Owns reads and persists it — guaranteeing Owns(sku)==true post-grant.
         /// Both writes are idempotent; the GameState.OwnedItemIds record (RecordOwned) is unchanged.
         /// </summary>
         private static void TryGrantCosmeticOwnership(string cosmeticSku, string packSku)
         {
-            var svc = ResolveServiceInstance("DeNelle.Cosmetics.GlimmerCurrencyService", out var t);
+            var svc = ResolveServiceInstance("DeNelle.Cosmetics.CosmeticOwnershipService", out var t);
             if (svc == null)
             {
-                FlowTrace.Fail("Pack", $"grant cosmetic '{cosmeticSku}' (pack '{packSku}') FAILED: GlimmerCurrencyService missing - pack cosmetic will be UNEQUIPPABLE.");
+                FlowTrace.Fail("Pack", $"grant cosmetic '{cosmeticSku}' (pack '{packSku}') FAILED: CosmeticOwnershipService missing - pack cosmetic will be UNEQUIPPABLE.");
                 return;
             }
 
@@ -284,7 +260,7 @@ namespace DeNelle.Wallet
             try { markM.Invoke(svc, new object[] { cosmeticSku }); }
             catch (Exception ex) { FlowTrace.Fail("Pack", $"grant cosmetic '{cosmeticSku}' (pack '{packSku}') MarkCosmeticOwned THREW: {ex.GetType().Name}: {ex.Message} - pack cosmetic will be UNEQUIPPABLE."); }
 
-            FlowTrace.Step("Pack", $"cosmetic '{cosmeticSku}' (pack '{packSku}') registered owned in GlimmerCurrencyService (Owns==true).");
+            FlowTrace.Step("Pack", $"cosmetic '{cosmeticSku}' (pack '{packSku}') registered owned in CosmeticOwnershipService (Owns==true).");
         }
 
         /// <summary>

@@ -13,7 +13,7 @@
 //
 // REWARD DISPENSE MOVED OUT (WO-564): paying out a completed daily quest's slot
 // reward now lives in the dedicated DailyQuestRewardBridge (DeNelle.Village.Quests),
-// which owns the WHOLE reward schema (crystals/food/glimmer/wisdom/random-item) in
+// which owns the whole live reward schema (crystals/food/wisdom/random-item) in
 // one place. Keeping reward logic here meant food + random-item were silently
 // dropped and two unrelated responsibilities shared a class. Exactly ONE listener
 // now subscribes to DailyQuestService.QuestCompleted, so the ClaimedAtUnix latch

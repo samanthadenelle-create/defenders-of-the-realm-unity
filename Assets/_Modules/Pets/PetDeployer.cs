@@ -765,7 +765,7 @@ namespace DeNelle.Pets
                 return null;
             }
 
-            // Cosmetic pet skin (Glimmer shop) overrides the base mesh. The
+            // An equipped cosmetic pet skin overrides the base mesh. The
             // cosmetic service lives in DeNelle.Cosmetics which DeNelle.Pets
             // cannot reference directly — resolve via reflection so the asmdef
             // stays decoupled.
@@ -802,34 +802,34 @@ namespace DeNelle.Pets
             return Instantiate(prefab);
         }
 
-        private static System.Type _glimmerType;
-        private static object _glimmerInstance;
+        private static System.Type _cosmeticOwnershipType;
+        private static object _cosmeticOwnershipInstance;
         private static System.Reflection.MethodInfo _equippedForMethod;
 
         private static string TryGetEquippedCosmeticForCategory(string category)
         {
             try
             {
-                if (_glimmerType == null)
+                if (_cosmeticOwnershipType == null)
                 {
                     foreach (var asm in System.AppDomain.CurrentDomain.GetAssemblies())
                     {
-                        var t = asm.GetType("DeNelle.Cosmetics.GlimmerCurrencyService", false);
-                        if (t != null) { _glimmerType = t; break; }
+                        var t = asm.GetType("DeNelle.Cosmetics.CosmeticOwnershipService", false);
+                        if (t != null) { _cosmeticOwnershipType = t; break; }
                     }
                 }
-                if (_glimmerType == null) return null;
-                if (_glimmerInstance == null)
+                if (_cosmeticOwnershipType == null) return null;
+                if (_cosmeticOwnershipInstance == null)
                 {
-                    var inst = _glimmerType.GetProperty("Instance",
+                    var inst = _cosmeticOwnershipType.GetProperty("Instance",
                         System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static);
-                    _glimmerInstance = inst?.GetValue(null);
+                    _cosmeticOwnershipInstance = inst?.GetValue(null);
                 }
-                if (_glimmerInstance == null) return null;
+                if (_cosmeticOwnershipInstance == null) return null;
                 if (_equippedForMethod == null)
-                    _equippedForMethod = _glimmerType.GetMethod("EquippedFor",
+                    _equippedForMethod = _cosmeticOwnershipType.GetMethod("EquippedFor",
                         new[] { typeof(string) });
-                return _equippedForMethod?.Invoke(_glimmerInstance, new object[] { category }) as string;
+                return _equippedForMethod?.Invoke(_cosmeticOwnershipInstance, new object[] { category }) as string;
             }
             catch (System.Exception ex)
             {

@@ -65,7 +65,7 @@ namespace DeNelle.Wallet
         // The seam names, held once so a rename is findable. Resolved by string because the
         // asmdef forbids the direct reference (see the header).
         private const string EconomyTypeName        = "DeNelle.Village.EconomyService";
-        private const string GlimmerTypeName        = "DeNelle.Cosmetics.GlimmerCurrencyService";
+        private const string CosmeticOwnershipTypeName = "DeNelle.Cosmetics.CosmeticOwnershipService";
         private const string GrantCappedMethod      = "GrantSpendable";
         private const string GrantPurchasedMethod   = "GrantSpendablePurchased";
         private const string AddCoinsMethod         = "AddCoins";
@@ -260,7 +260,7 @@ namespace DeNelle.Wallet
             if (string.IsNullOrEmpty(sku)) return true;
 
             // Write BOTH ownership stores, exactly as PackStoreVM does: GameState.OwnedItemIds is
-            // what the pack/entitlement side reads, GlimmerCurrencyService.Owns is what the wardrobe
+            // what the pack/entitlement side reads, CosmeticOwnershipService.Owns is what the wardrobe
             // reads. Writing one and not the other is the split-brain that makes a cosmetic "owned"
             // and un-equippable at the same time.
             bool ok = true;
@@ -277,10 +277,10 @@ namespace DeNelle.Wallet
                 ok = false;
             }
 
-            var svc = ResolveInstance(GlimmerTypeName, out var type);
+            var svc = ResolveInstance(CosmeticOwnershipTypeName, out var type);
             if (svc == null || type == null)
             {
-                FlowTrace.Fail("BattlePass", where + ": GlimmerCurrencyService unavailable - cosmetic '" + sku +
+                FlowTrace.Fail("BattlePass", where + ": CosmeticOwnershipService unavailable - cosmetic '" + sku +
                                              "' is not in the wardrobe's own-set, so the player cannot equip it.");
                 return false;
             }

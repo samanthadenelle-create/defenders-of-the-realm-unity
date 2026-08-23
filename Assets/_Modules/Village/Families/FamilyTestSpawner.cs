@@ -152,14 +152,14 @@ namespace DeNelle.Village
         {
             Id = "family-leader", Name = "Pack Alpha", DisplayName = "Pack Alpha", Ai = "walker",
             Hp = 160f, MoveSpeed = 2.4f, ContactDamage = 10f, AttackInterval = 1.4f, Height = 2.2f,
-            XpReward = 35, GlimmerReward = 6,
+            XpReward = 35
         };
 
         private static EnemyDef FollowerDef(int i) => new EnemyDef
         {
             Id = $"family-follower-{i}", Name = "Pack Runner", DisplayName = "Pack Runner", Ai = "walker",
             Hp = 55f, MoveSpeed = 2.8f, ContactDamage = 6f, AttackInterval = 1.2f, Height = 1.7f,
-            XpReward = 14, GlimmerReward = 2,
+            XpReward = 14
         };
 
         private static Transform ResolveHeart()

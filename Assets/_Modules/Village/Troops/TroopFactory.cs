@@ -115,9 +115,7 @@ namespace DeNelle.Village
                 $"-> Resources '{resourcesPath ?? "<none>"}' siege={isSiege}.");
             if (!string.IsNullOrEmpty(resourcesPath))
             {
-                var skinOpts = isSiege
-                    ? SkinOptions.Structure(bodyHeight)
-                    : SkinOptions.Enemy(bodyHeight);
+                var skinOpts = VisualOptionsFor(isSiege, bodyHeight);
                 skinOpts.StripColliders = true;
                 // Body facing is per-pack and authored on the def (Tripo bodies face +X → -90;
                 // Supercyan humanoids face +Z → 0). Default -90 keeps legacy bodies correct.
@@ -160,9 +158,7 @@ namespace DeNelle.Village
                     DeNelle.Core.StructureContentWarmer.WhenSettled(() =>
                     {
                         if (go == null || capturedFallback == null) return;
-                        var retryOpts = isSiege
-                            ? SkinOptions.Structure(bodyHeight)
-                            : SkinOptions.Enemy(bodyHeight);
+                        var retryOpts = VisualOptionsFor(isSiege, bodyHeight);
                         retryOpts.StripColliders = true;
                         if (def != null)
                             retryOpts.LocalRotation = Quaternion.Euler(0f, def.ModelYaw, 0f);
@@ -248,6 +244,23 @@ namespace DeNelle.Village
 
         private static bool IsAddressableModelPath(string resourcesPath)
             => !string.IsNullOrEmpty(resourcesPath) && resourcesPath.IndexOf('/') >= 0;
+
+        /// <summary>
+        /// Selects the visual fit contract for a troop body. Siege art still needs the
+        /// structure material/ground-seating policy, but its gameplay body height is a
+        /// HEIGHT target, not a largest-dimension target. Using Structure(bodyHeight)
+        /// made a wide horizontal catapult fit its width to 2.4 m and rendered it shorter
+        /// than the adjacent footman. Keep this shared by the first skin and async retry.
+        /// </summary>
+        public static SkinOptions VisualOptionsFor(bool isSiege, float bodyHeight)
+        {
+            if (!isSiege)
+                return SkinOptions.Enemy(bodyHeight);
+
+            var options = SkinOptions.Structure(0f); // retain seating/material policy; clear FitLargest
+            options.FitHeight = bodyHeight;
+            return options;
+        }
 
         private static GameObject BuildHumanoidFallback(Transform host, float bodyHeight)
         {

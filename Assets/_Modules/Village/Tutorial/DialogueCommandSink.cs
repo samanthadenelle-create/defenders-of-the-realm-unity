@@ -106,7 +106,7 @@ namespace DeNelle.Village
                 case "OpenTalents":    PanelRouter.Open(PanelId.HeroSkillTree); break;
                 case "OpenCosmetics":  if (!ShopsClosedForCombat("OpenCosmetics")) PanelRouter.Open(PanelId.CosmeticShop); break;
                 // Realm Store (SKR/SOL/USDC packs) — the merchant's "Realm Store" option opens the
-                // monetization PackStore, ALONGSIDE the existing Glimmer/gear paths (PackStoreBootstrap
+                // monetization PackStore, alongside the existing gear paths (PackStoreBootstrap
                 // registered the opener + find-or-spawns the store host-free on first open).
                 case "OpenRealmStore": if (!ShopsClosedForCombat("OpenRealmStore")) PanelRouter.Open(PanelId.RealmStore); break;
                 // RETIRED (2026-07-08): "OpenPetSkills" removed — the pet SKILL-TREE stack was deleted

@@ -12,7 +12,6 @@
       "slot": "combat",
       "rewardCrystals": 25,
       "rewardFood": 0,
-      "rewardGlimmer": 1,
       "rewardWisdom": 1,
       "rewardRandomItem": false
     },
@@ -20,7 +19,6 @@
       "slot": "exploration",
       "rewardCrystals": 15,
       "rewardFood": 20,
-      "rewardGlimmer": 1,
       "rewardWisdom": 0,
       "rewardRandomItem": false
     },
@@ -28,7 +26,6 @@
       "slot": "wildcard",
       "rewardCrystals": 0,
       "rewardFood": 0,
-      "rewardGlimmer": 1,
       "rewardWisdom": 1,
       "rewardRandomItem": true
     }
@@ -48,14 +45,14 @@
       "slot": "combat",
       "target": 1,
       "label": "Quick skirmish — clear {target} wave",
-      "weight": 1.0
+      "weight": 1
     },
     {
       "id": "combat.clear-waves.first-horn",
       "slot": "combat",
       "target": 1,
       "label": "Answer the first horn — clear {target} wave",
-      "weight": 1.0
+      "weight": 1
     },
     {
       "id": "combat.clear-waves.warm-up",
@@ -167,14 +164,14 @@
       "slot": "exploration",
       "target": 1,
       "label": "Quick gate check — pass {target} gate",
-      "weight": 1.0
+      "weight": 1
     },
     {
       "id": "explore.visit-gate.scout",
       "slot": "exploration",
       "target": 1,
       "label": "Scout a gate — pass {target} gate",
-      "weight": 1.0
+      "weight": 1
     },
     {
       "id": "explore.visit-gate.patrol",
@@ -247,60 +244,11 @@
       "weight": 0.4
     },
     {
-      "id": "wildcard.earn-glimmer.first-shine",
-      "slot": "wildcard",
-      "target": 3,
-      "label": "First shine — earn {target} glimmer",
-      "weight": 1.0
-    },
-    {
-      "id": "wildcard.earn-glimmer.trickle",
-      "slot": "wildcard",
-      "target": 5,
-      "label": "Earn {target} glimmer",
-      "weight": 1.0
-    },
-    {
-      "id": "wildcard.earn-glimmer.purse",
-      "slot": "wildcard",
-      "target": 10,
-      "label": "Fill a purse — earn {target} glimmer",
-      "weight": 0.9
-    },
-    {
-      "id": "wildcard.earn-glimmer.sable-favor",
-      "slot": "wildcard",
-      "target": 15,
-      "label": "Win Sable's favor — earn {target} glimmer",
-      "weight": 0.7
-    },
-    {
-      "id": "wildcard.earn-glimmer.jeweler-cut",
-      "slot": "wildcard",
-      "target": 20,
-      "label": "Bankroll a jeweler's cut — earn {target} glimmer",
-      "weight": 0.6
-    },
-    {
-      "id": "wildcard.earn-glimmer.hoard",
-      "slot": "wildcard",
-      "target": 25,
-      "label": "Start a hoard — earn {target} glimmer",
-      "weight": 0.55
-    },
-    {
-      "id": "wildcard.earn-glimmer.glimmer-road",
-      "slot": "wildcard",
-      "target": 30,
-      "label": "Walk the Glimmer Road — earn {target} glimmer",
-      "weight": 0.4
-    },
-    {
       "id": "wildcard.learn-talent.first-lesson",
       "slot": "wildcard",
       "target": 1,
       "label": "Learn a talent",
-      "weight": 1.0
+      "weight": 1
     },
     {
       "id": "wildcard.learn-talent.grow-wiser",
@@ -328,7 +276,7 @@
       "slot": "exploration",
       "target": 1,
       "label": "Walk the wall - approach {target} town gate",
-      "weight": 1.0,
+      "weight": 1,
       "requiresFeature": null
     },
     {
@@ -356,5 +304,5 @@
       "requiresFeature": null
     }
   ],
-  "notes": "WO-558 quest pack. Every template rides a WIRED Report() channel so it actually ticks to completion: combat.clear-waves (WaveManager.OnWaveCleared -> DailyQuestCombatBridge), explore.visit-gate (GateProximityOpener.OnHeroEntered), wildcard.earn-glimmer (GlimmerCurrencyService.TryAddGlimmer, reports amount), wildcard.learn-talent (WisdomCurrencyService.Unlock). Child ids (parent.child) tick on the parent event via DailyQuestService.Report StartsWith matching. The legacy non-ticking templates (frost-nova/sword-strike/hawks-eye/heart-below-30/no-ultimate/harvest-*/walk-all-gates/talk-heroes/increase-bond-rank/upgrade-tower/fortify-wall/equip-cosmetic/watch-intro) were REMOVED because no gameplay code reported them (dead quests that could roll but never complete) and the hero-specific ones conflict with the single-Knight north star. combat.build-towers is KEPT (day1Guaranteed; DailyQuestService.Day1QuestTemplateId const) but still has NO progress hook -- see WO-558 owner-decision flags. Labels only substitute {target} (the HUD does not substitute {element}). Reward dispensing on completion is not yet implemented (no QuestCompleted listener) -- slot rewards are config-only; see WO-558. Keep this file IDENTICAL to the StreamingAssets/Data/Canonical dual-copy."
+  "notes": "Daily quest templates use only wired Report channels. Child ids tick through parent-prefix matching. Keep this file identical to its canonical twin."
 }

@@ -3,8 +3,8 @@
 // holding the authored Battle Pass tier tracks for a season.
 // -----------------------------------------------------------------------------
 // Lives in DeNelle.Core.Data (existing DeNelle.Core asmdef — no new asmdef).
-// Pure authoring data: the runtime BattlePassManager (a follow-up deliverable)
-// reads these tracks and never mutates the SO.
+// Legacy authoring shape retained for asset compatibility. The live season runtime
+// is BattlePassService and canonical JSON; no runtime mutates this SO.
 //
 // Reconciliation note vs the broad DEF-69 description: the Linear spec sketched
 // a `BattlePassTier[]` keyed off CampaignManager Wisdom Points (DEF-68). This

@@ -872,8 +872,7 @@ namespace DeNelle.Village.World.Camps
                 AttackInterval = 1.4f,
                 Height = 2.6f,
                 AggroRadius = 16f,
-                XpReward = 80 + threat * 5,
-                GlimmerReward = 12,
+                XpReward = 80 + threat * 5
             };
             return ApplyEarlyEase(def);
         }
@@ -921,8 +920,7 @@ namespace DeNelle.Village.World.Camps
                 AttackInterval = interval,
                 Height = height,
                 AggroRadius = 14f,
-                XpReward = xp + threat,
-                GlimmerReward = 3,
+                XpReward = xp + threat
             };
             return ApplyEarlyEase(def);
         }

@@ -228,6 +228,13 @@ namespace DeNelle.Wallet
         public const string KeyMonthlyLedgerExclusiveNone  = "monthlyLedgerExclusiveNone";
         public const string KeyMonthlyLedgerNotForSale     = "monthlyLedgerNotForSale";
         public const string KeyMonthlyLedgerEmpty          = "monthlyLedgerEmpty";
+        /// <summary>{0}=week number, {1}=first day, {2}=last day.</summary>
+        public const string KeyMonthlyLedgerWeekTab        = "monthlyLedgerWeekTab";
+        public const string KeyMonthlyLedgerWeekSelected   = "monthlyLedgerWeekSelected";
+        public const string KeyMonthlyLedgerWeekClaimable  = "monthlyLedgerWeekClaimable";
+        /// <summary>{0}=day number.</summary>
+        public const string KeyMonthlyLedgerDay            = "monthlyLedgerDay";
+        public const string KeyMonthlyLedgerMilestone      = "monthlyLedgerMilestone";
 
         /// <summary>Every Season Track key, so an oracle can prove each resolves to a real sentence.</summary>
         public static readonly string[] SeasonTrackKeys =
@@ -250,6 +257,8 @@ namespace DeNelle.Wallet
             KeyMonthlyLedgerStateClaimed, KeyMonthlyLedgerStateToday, KeyMonthlyLedgerStateAvailable,
             KeyMonthlyLedgerStateUpcoming, KeyMonthlyLedgerExclusiveNone, KeyMonthlyLedgerNotForSale,
             KeyMonthlyLedgerEmpty,
+            KeyMonthlyLedgerWeekTab, KeyMonthlyLedgerWeekSelected,
+            KeyMonthlyLedgerWeekClaimable, KeyMonthlyLedgerDay, KeyMonthlyLedgerMilestone,
         };
 
         /// <summary>

@@ -6,13 +6,11 @@
 // CODE-BUILT uGUI. Not UXML - UXML renders EMPTY in player builds.
 //
 // =============================================================================
-//  IT IS A CALENDAR, BECAUSE THE THING BEING DESCRIBED IS A CALENDAR
+//  IT IS A WEEK-TABBED CALENDAR, BECAUSE THIRTY CARDS CANNOT READ ON SEEKER
 // -----------------------------------------------------------------------------
-// A 10 x 3 grid, all THIRTY days drawn at once, BEFORE the player has paid
-// anything. That is the WO's section 3.2 promise - "full 30-day table shown
-// pre-purchase, no hidden mystery day" - made STRUCTURAL rather than promised:
-// you cannot hide a day in a layout that draws every one of them. There is no
-// code path in this file that omits a cell.
+// Five tabs expose every authored day before purchase, seven days at a time (the
+// fifth tab is short). This preserves the full-disclosure promise while spending
+// landscape width on legible reward copy instead of shrinking thirty cards.
 //
 // =============================================================================
 //  ⛔ NO COUNTDOWN. ANYWHERE. THIS IS THE LOAD-BEARING RULE OF THE SCREEN.
@@ -49,7 +47,7 @@ using DeNelle.Core.Diagnostics;
 
 namespace DeNelle.Wallet
 {
-    /// <summary>The monthly ledger screen: header, 10x3 day grid, side panel, claim footer.</summary>
+    /// <summary>The monthly ledger screen: header, five week tabs, side panel, claim footer.</summary>
     [DisallowMultipleComponent]
     public sealed class MonthlyLedgerPanel : MonoBehaviour
     {
@@ -58,6 +56,8 @@ namespace DeNelle.Wallet
         private const float GridWidthFraction = 1700f / 2670f;
         private static readonly Vector2 HeaderMin = new Vector2(0.015f, 1f - 120f / 1200f);
         private static readonly Vector2 HeaderMax = new Vector2(0.985f, 0.99f);
+        private static readonly Vector2 TabsMin   = new Vector2(0.015f, 1f - 245f / 1200f);
+        private static readonly Vector2 TabsMax   = new Vector2(GridWidthFraction, 1f - 125f / 1200f);
         private static readonly Vector2 GridMin   = new Vector2(0.015f, 150f / 1200f);
         private static readonly Vector2 GridMax   = new Vector2(GridWidthFraction, 1f - 120f / 1200f);
         private static readonly Vector2 SideMin   = new Vector2(GridWidthFraction + 0.01f, 150f / 1200f);
@@ -65,17 +65,18 @@ namespace DeNelle.Wallet
         private static readonly Vector2 FooterMin = new Vector2(0.015f, 0.02f);
         private static readonly Vector2 FooterMax = new Vector2(0.985f, 150f / 1200f);
 
-        private const int GridColumns = 10;
-        private const int GridRows = 3;
+        private const int DaysPerWeek = 7;
+        private const int WeekCount = 5;
 
         /// <summary>Cell 158 x 158 from the wireframe, floored against the kit's touch minimum.</summary>
         private static readonly float CellSize = Mathf.Max(158f, ElarionUiKit.MinTouchPx);
 
         private GameObject _canvas;
-        private Transform  _body, _gridHost, _sideHost;
+        private Transform  _body, _tabsHost, _gridHost, _sideHost;
         private TextMeshProUGUI _titleLine, _claimsLine, _todayLine, _todayReward, _exclusiveLine;
         private Button _claimCta;
         private TextMeshProUGUI _claimCtaLabel;
+        private int _selectedWeek = -1;
 
         /// <summary>Which card the screen is showing. Defaults to the first authored card.</summary>
         private string _sku;
@@ -149,7 +150,10 @@ namespace DeNelle.Wallet
             if (_canvas != null) return;
             using var _ = FlowTrace.Enter("MonthlyCard", "MonthlyLedgerPanel.EnsureBuilt");
 
-            _canvas = ElarionUiKit.BuildModalCanvas("MonthlyLedgerUI", 621);
+            // Modal band: the HUD rail owns sorting order 4000. The old 621 canvas let
+            // its Echoes chip draw THROUGH this screen even though the modal arbiter
+            // correctly considered the ledger open.
+            _canvas = ElarionUiKit.BuildModalCanvas("MonthlyLedgerUI", 31000);
             if (_canvas == null)
             {
                 FlowTrace.Fail("MonthlyCard", "MonthlyLedgerPanel: modal canvas failed to build - screen not shown.");
@@ -160,10 +164,10 @@ namespace DeNelle.Wallet
             var panel = ElarionUiKit.Panel(_canvas.transform, new Vector2(0.02f, 0.03f), new Vector2(0.98f, 0.97f),
                                            deep: true);
             _body = panel.transform;
-            Plate(_body, NightMarketPalette.Ground);
 
             BuildHeader();
-            _gridHost = Zone(_body, "Grid", GridMin, GridMax);
+            _tabsHost = Zone(_body, "WeekTabs", TabsMin, TabsMax);
+            _gridHost = Zone(_body, "WeekGrid", GridMin, new Vector2(GridMax.x, TabsMin.y - 0.008f));
             _sideHost = Zone(_body, "Side", SideMin, SideMax);
             Plate(_sideHost, NightMarketPalette.GroundRaised);
             BuildSidePanel();
@@ -185,7 +189,11 @@ namespace DeNelle.Wallet
             _claimsLine = Text(host, string.Empty, 15, NightMarketPalette.Patronage, FontStyles.Bold,
                                TextAlignmentOptions.Right, new Vector2(0.55f, 0f), new Vector2(0.93f, 1f));
 
-            ElarionUiKit.ObsidianCloseButton(host, Close);
+            // The shared Close is a fixed 360x132 control. Parenting it to this
+            // shallow header band made it overhang the top edge. Seat it against the
+            // full panel body so the complete control remains inside the frame.
+            ElarionUiKit.ObsidianCloseButton(_body, Close,
+                new Vector4(0.79f, 0.84f, 0.97f, 0.96f));
         }
 
         private void BuildSidePanel()
@@ -239,7 +247,7 @@ namespace DeNelle.Wallet
         //  Render
         // =====================================================================
 
-        /// <summary>Rebuilds the 30-day grid and refreshes every live line.</summary>
+        /// <summary>Rebuilds the selected seven-day week and refreshes every live line.</summary>
         public void Render()
         {
             if (_gridHost == null) return;
@@ -250,12 +258,8 @@ namespace DeNelle.Wallet
             // renders, and the Changed event it raised renders again) — without the detach the
             // second pass would draw a second full grid over one that has not been reaped, and the
             // player would briefly see sixty days.
-            for (int i = _gridHost.childCount - 1; i >= 0; i--)
-            {
-                var child = _gridHost.GetChild(i);
-                child.SetParent(null, false);
-                Destroy(child.gameObject);
-            }
+            ClearChildren(_gridHost);
+            ClearChildren(_tabsHost);
 
             var card = ActiveCard;
             if (card == null)
@@ -274,39 +278,79 @@ namespace DeNelle.Wallet
                 _claimsLine.text = StoreStrings.Format(StoreStrings.KeyMonthlyLedgerClaimsLeft,
                                                        MonthlyCardService.ClaimsRemaining(card.Sku));
 
-            BuildGrid(card);
+            int total = Mathf.Max(0, card.DurationDays);
+            int nextDay = Mathf.Clamp(MonthlyCardService.NextDay(card.Sku), 1, Mathf.Max(1, total));
+            if (_selectedWeek < 0 || _selectedWeek >= WeekCount)
+                _selectedWeek = Mathf.Clamp((nextDay - 1) / DaysPerWeek, 0, WeekCount - 1);
+            BuildWeekTabs(card, total);
+            BuildGrid(card, total);
             RefreshSide(card);
             RefreshCta(card);
         }
 
         /// <summary>
-        /// Draws ALL <c>durationDays</c> cells, unconditionally.
-        /// <para>The loop bound is the card's own durationDays and there is no state test inside it
-        /// that can skip a cell. That is the "no hidden day" promise expressed as control flow.</para>
+        /// Draws every day in the selected week. The five persistent tabs expose the
+        /// complete authored duration before purchase without a thirty-card wall.
         /// </summary>
-        private void BuildGrid(MonthlyCard card)
+        private void BuildWeekTabs(MonthlyCard card, int total)
         {
-            int total = Mathf.Max(0, card.DurationDays);
-            float cellW = 1f / GridColumns;
-            float cellH = 1f / GridRows;
+            if (_tabsHost == null) return;
+            float tabW = 1f / WeekCount;
+            int claimDay = Mathf.Clamp(MonthlyCardService.NextDay(card.Sku), 1, Mathf.Max(1, total));
+            int claimWeek = Mathf.Clamp((claimDay - 1) / DaysPerWeek, 0, WeekCount - 1);
 
-            for (int i = 0; i < total; i++)
+            for (int week = 0; week < WeekCount; week++)
             {
-                int day = i + 1;
-                int col = i % GridColumns;
-                int row = i / GridColumns;
-                if (row >= GridRows) break;   // a longer table would need a taller grid, not a hidden day
+                int captured = week;
+                int first = week * DaysPerWeek + 1;
+                int last = Mathf.Min(total, first + DaysPerWeek - 1);
+                string label = StoreStrings.Format(StoreStrings.KeyMonthlyLedgerWeekTab,
+                    week + 1, first, last);
+                if (week == claimWeek)
+                    label += "\n" + StoreStrings.Get(StoreStrings.KeyMonthlyLedgerWeekClaimable);
 
-                var min = new Vector2(col * cellW + 0.004f, 1f - (row + 1) * cellH + 0.010f);
-                var max = new Vector2((col + 1) * cellW - 0.004f, 1f - row * cellH - 0.010f);
+                var button = ElarionUiKit.Button(_tabsHost, label, ElarionUiKit.ButtonKind.Quiet,
+                    new Vector2(week * tabW + 0.004f, 0f),
+                    new Vector2((week + 1) * tabW - 0.004f, 1f),
+                    () => { _selectedWeek = captured; Render(); });
+                if (button == null) continue;
+                var le = button.gameObject.AddComponent<LayoutElement>();
+                le.minHeight = ElarionUiKit.MinTouchPx;
+                le.minWidth = ElarionUiKit.MinTouchPx;
+
+                // Selected identity survives greyscale: a physical underline plus
+                // the word SELECTED, not a tint-only tab state.
+                if (week == _selectedWeek)
+                {
+                    var text = button.GetComponentInChildren<TextMeshProUGUI>();
+                    if (text != null)
+                        text.text += "\n" + StoreStrings.Get(StoreStrings.KeyMonthlyLedgerWeekSelected);
+                    var underline = new GameObject("SelectedUnderline", typeof(RectTransform), typeof(Image));
+                    underline.transform.SetParent(button.transform, false);
+                    var urt = underline.GetComponent<RectTransform>();
+                    urt.anchorMin = new Vector2(0.08f, 0f); urt.anchorMax = new Vector2(0.92f, 0.055f);
+                    urt.offsetMin = Vector2.zero; urt.offsetMax = Vector2.zero;
+                    underline.GetComponent<Image>().color = ElarionUi.Gold;
+                }
+            }
+        }
+
+        private void BuildGrid(MonthlyCard card, int total)
+        {
+            int firstDay = _selectedWeek * DaysPerWeek + 1;
+            int lastDay = Mathf.Min(total, firstDay + DaysPerWeek - 1);
+            int shown = Mathf.Max(0, lastDay - firstDay + 1);
+            if (shown == 0) return;
+            float cellW = 1f / DaysPerWeek;
+
+            for (int day = firstDay; day <= lastDay; day++)
+            {
+                int col = day - firstDay;
+
+                var min = new Vector2(col * cellW + 0.004f, 0.02f);
+                var max = new Vector2((col + 1) * cellW - 0.004f, 0.98f);
                 BuildDayCell(card, day, min, max);
             }
-
-            if (total > GridColumns * GridRows)
-                FlowTrace.Fail("MonthlyCard", "card '" + card.Sku + "' authors " + total + " days but the grid is " +
-                                              GridColumns + "x" + GridRows + " - days beyond " +
-                                              (GridColumns * GridRows) + " would be INVISIBLE. Widen the grid; " +
-                                              "never let a day go undrawn.");
         }
 
         private void BuildDayCell(MonthlyCard card, int day, Vector2 min, Vector2 max)
@@ -344,18 +388,22 @@ namespace DeNelle.Wallet
                 var mimg = mark.GetComponent<Image>();
                 mimg.color = NightMarketPalette.Patronage;
                 mimg.raycastTarget = false;
+                Text(cell.transform, StoreStrings.Get(StoreStrings.KeyMonthlyLedgerMilestone), 11,
+                     ElarionUi.Parchment, FontStyles.Bold, TextAlignmentOptions.Center,
+                     new Vector2(0.05f, 0.82f), new Vector2(0.95f, 0.94f));
             }
 
-            Text(cell.transform, day.ToString(), 12, ElarionUi.Parchment, FontStyles.Bold,
-                 TextAlignmentOptions.Center, new Vector2(0.05f, 0.66f), new Vector2(0.95f, 0.92f));
+            Text(cell.transform, StoreStrings.Format(StoreStrings.KeyMonthlyLedgerDay, day), 18,
+                 ElarionUi.Parchment, FontStyles.Bold,
+                 TextAlignmentOptions.Center, new Vector2(0.05f, 0.62f), new Vector2(0.95f, 0.82f));
 
             // The reward, always drawn - pre-purchase included. That is the point of the screen.
             string body = drip != null && drip.Grant != null ? drip.Grant.Describe() : "-";
-            Text(cell.transform, body, 8, ElarionUi.ParchmentDim, FontStyles.Normal,
-                 TextAlignmentOptions.Center, new Vector2(0.04f, 0.26f), new Vector2(0.96f, 0.64f));
+            Text(cell.transform, body, 13, ElarionUi.Parchment, FontStyles.Normal,
+                 TextAlignmentOptions.Center, new Vector2(0.04f, 0.25f), new Vector2(0.96f, 0.61f));
 
             // The WORD - what survives a greyscale read.
-            Text(cell.transform, DayStateWord(state), 8, DayStateColor(state), FontStyles.Bold,
+            Text(cell.transform, DayStateWord(state), 12, DayStateColor(state), FontStyles.Bold,
                  TextAlignmentOptions.Center, new Vector2(0.04f, 0.04f), new Vector2(0.96f, 0.24f));
 
             // THE ONE ANIMATION on this screen.
@@ -425,6 +473,17 @@ namespace DeNelle.Wallet
             bool ok = MonthlyCardService.Claim(card.Sku);
             FlowTrace.Step("MonthlyCard", "claim CTA tapped for '" + card.Sku + "': " + (ok ? "granted" : "refused"));
             Render();
+        }
+
+        private static void ClearChildren(Transform host)
+        {
+            if (host == null) return;
+            for (int i = host.childCount - 1; i >= 0; i--)
+            {
+                var child = host.GetChild(i);
+                child.SetParent(null, false);
+                Destroy(child.gameObject);
+            }
         }
 
         /// <summary>The single animated element: the TODAY cell breathes, and nothing else moves.</summary>

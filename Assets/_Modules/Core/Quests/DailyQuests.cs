@@ -50,7 +50,6 @@ namespace DeNelle.Core.Quests
         [JsonProperty("slot")] public string Slot;
         [JsonProperty("rewardCrystals")] public int RewardCrystals;
         [JsonProperty("rewardFood")] public int RewardFood;
-        [JsonProperty("rewardGlimmer")] public int RewardGlimmer;
         [JsonProperty("rewardWisdom")] public int RewardWisdom;
         [JsonProperty("rewardRandomItem")] public bool RewardRandomItem;
     }
@@ -422,7 +421,7 @@ namespace DeNelle.Core.Quests
             // FLAG-6: these were stale-gated false but their systems are now
             // shipped — harvesting (MineNode + OfflineHarvestService + WorkerManager),
             // tower-build (BuildModeController), cosmetic-shop (CosmeticCatalog +
-            // GlimmerCurrencyService + CosmeticShopPanel), hero-talents
+            // CosmeticOwnershipService + CosmeticShopPanel), hero-talents
             // (HeroTalentCatalog + WisdomCurrencyService + TalentTreePanel).
             "harvesting"    => true,
             "tower-build"   => true,

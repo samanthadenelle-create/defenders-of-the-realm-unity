@@ -6,7 +6,7 @@
 // WHY REFLECTION (the codebase's established cross-asmdef pattern):
 //   DeNelle.Pets already reaches Village-side systems this exact way —
 //   PetAttackVfxBridge (AbilityVfxKit), PetHeroLeash (HeroLocomotion), and the
-//   PetDeployer cosmetic resolver (GlimmerCurrencyService) all name-match a
+//   PetDeployer cosmetic resolver (CosmeticOwnershipService) all name-match a
 //   Village/Cosmetics type by reflection, cache the members, and best-effort
 //   invoke. MineNodeBridge follows the same shape so the pet auto-harvest loop
 //   adds NO new asmdef coupling.

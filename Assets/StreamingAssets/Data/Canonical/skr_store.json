@@ -17,9 +17,12 @@
       "tier": 1,
       "category": "cosmetic",
       "costSkr": 15,
-      "grant": { "kind": "cosmetic_sku", "cosmeticSku": "weapon_glow_ember" },
+      "grant": {
+        "kind": "cosmetic_sku",
+        "cosmeticSku": "weapon_glow_ember"
+      },
       "iconId": "ItemIcons/skr/glow_emberblade",
-      "earnableHint": "Also unlockable with Glimmer in the cosmetic shop, or by reaching Hero level 8.",
+      "earnableHint": "Also unlockable by reaching Hero level 8.",
       "repeatable": false
     },
     {
@@ -29,9 +32,12 @@
       "tier": 1,
       "category": "cosmetic",
       "costSkr": 20,
-      "grant": { "kind": "cosmetic_sku", "cosmeticSku": "shield_crest_lanternward" },
+      "grant": {
+        "kind": "cosmetic_sku",
+        "cosmeticSku": "shield_crest_lanternward"
+      },
       "iconId": "ItemIcons/skr/crest_lanternward",
-      "earnableHint": "Earnable with Glimmer in the cosmetic shop.",
+      "earnableHint": "Available through this offer.",
       "repeatable": false
     },
     {
@@ -41,7 +47,10 @@
       "tier": 2,
       "category": "cosmetic",
       "costSkr": 70,
-      "grant": { "kind": "cosmetic_sku", "cosmeticSku": "knight_outfit_ashenwarden" },
+      "grant": {
+        "kind": "cosmetic_sku",
+        "cosmeticSku": "knight_outfit_ashenwarden"
+      },
       "iconId": "ItemIcons/skr/attire_ashenwarden",
       "earnableHint": "Also reachable via the Keeper's Almanac seasonal pass free track.",
       "repeatable": false
@@ -53,7 +62,13 @@
       "tier": 3,
       "category": "convenience",
       "costSkr": 25,
-      "grant": { "kind": "convenience_token", "token": { "kind": "instant-build", "count": 5 } },
+      "grant": {
+        "kind": "convenience_token",
+        "token": {
+          "kind": "instant-build",
+          "count": 5
+        }
+      },
       "iconId": "ItemIcons/skr/token_instantbuild",
       "earnableHint": "Instant-build tokens also drop from completed questlines.",
       "repeatable": true
@@ -65,7 +80,13 @@
       "tier": 3,
       "category": "convenience",
       "costSkr": 40,
-      "grant": { "kind": "convenience_token", "token": { "kind": "harvest-auto-collect", "count": 1 } },
+      "grant": {
+        "kind": "convenience_token",
+        "token": {
+          "kind": "harvest-auto-collect",
+          "count": 1
+        }
+      },
       "iconId": "ItemIcons/skr/token_harvest",
       "earnableHint": "A 1-hour version is craftable at the Forge.",
       "repeatable": true
@@ -80,10 +101,29 @@
       "grant": {
         "kind": "bundle",
         "items": [
-          { "kind": "cosmetic_sku", "cosmeticSku": "knight_outfit_lanternlight" },
-          { "kind": "cosmetic_sku", "cosmeticSku": "pet_skin_lanternlight" },
-          { "kind": "convenience_token", "token": { "kind": "instant-build", "count": 3 } },
-          { "kind": "economy", "economy": { "glimmer": 75, "crystals": 700, "food": 200, "coins": 400 } }
+          {
+            "kind": "cosmetic_sku",
+            "cosmeticSku": "knight_outfit_lanternlight"
+          },
+          {
+            "kind": "cosmetic_sku",
+            "cosmeticSku": "pet_skin_lanternlight"
+          },
+          {
+            "kind": "convenience_token",
+            "token": {
+              "kind": "instant-build",
+              "count": 3
+            }
+          },
+          {
+            "kind": "economy",
+            "economy": {
+              "crystals": 700,
+              "food": 200,
+              "coins": 400
+            }
+          }
         ]
       },
       "iconId": "ItemIcons/skr/pack_lanternlight",
@@ -100,13 +140,26 @@
       "grant": {
         "kind": "bundle",
         "items": [
-          { "kind": "cosmetic_sku", "cosmeticSku": "crown_founder" },
-          { "kind": "cosmetic_sku", "cosmeticSku": "knight_outfit_founder" },
-          { "kind": "cosmetic_sku", "cosmeticSku": "banner_founder_inscribed" }
+          {
+            "kind": "cosmetic_sku",
+            "cosmeticSku": "crown_founder"
+          },
+          {
+            "kind": "cosmetic_sku",
+            "cosmeticSku": "knight_outfit_founder"
+          },
+          {
+            "kind": "cosmetic_sku",
+            "cosmeticSku": "banner_founder_inscribed"
+          }
         ]
       },
       "iconId": "ItemIcons/skr/crown_founder",
-      "availability": { "startUtc": null, "endUtc": null, "launchWindowOnly": true },
+      "availability": {
+        "startUtc": null,
+        "endUtc": null,
+        "launchWindowOnly": true
+      },
       "earnableHint": null,
       "repeatable": false
     }
@@ -117,7 +170,12 @@
       "name": "Token Pouch",
       "skrAmount": 100,
       "bonusSkr": 0,
-      "pricing": { "usd": 4.99, "usdc": 4.99, "sol": 0.045, "skr": 0 },
+      "pricing": {
+        "usd": 4.99,
+        "usdc": 4.99,
+        "sol": 0.045,
+        "skr": 0
+      },
       "founderOnly": false
     },
     {
@@ -125,7 +183,12 @@
       "name": "Token Satchel",
       "skrAmount": 250,
       "bonusSkr": 25,
-      "pricing": { "usd": 9.99, "usdc": 9.99, "sol": 0.09, "skr": 0 },
+      "pricing": {
+        "usd": 9.99,
+        "usdc": 9.99,
+        "sol": 0.09,
+        "skr": 0
+      },
       "founderOnly": false
     },
     {
@@ -133,7 +196,12 @@
       "name": "Token Coffer",
       "skrAmount": 600,
       "bonusSkr": 90,
-      "pricing": { "usd": 19.99, "usdc": 19.99, "sol": 0.18, "skr": 0 },
+      "pricing": {
+        "usd": 19.99,
+        "usdc": 19.99,
+        "sol": 0.18,
+        "skr": 0
+      },
       "founderOnly": false
     }
   ]

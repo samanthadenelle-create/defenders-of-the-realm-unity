@@ -76,7 +76,7 @@ namespace DeNelle.Core.UI
         /// <summary>Realm Store — the SKR/SOL/USDC five-pack monetization store (PackStore,
         /// DeNelle.Wallet). Host-free: PackStoreBootstrap registers this opener at boot and
         /// find-or-spawns the store on first open (merchant "Realm Store" option + ?realmstore=1
-        /// demo URL). SEPARATE from the Glimmer cosmetic shop (PanelId.CosmeticShop).</summary>
+        /// demo URL). Separate from the cosmetic wardrobe (PanelId.CosmeticShop).</summary>
         RealmStore = 13,
         /// <summary>Hero inventory (bag). Registered scene-independently by
         /// HeroInventoryController's boot hook (owner 07-06 "Clicking bag doesnt do anything":

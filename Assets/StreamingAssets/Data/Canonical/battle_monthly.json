@@ -1,7 +1,6 @@
 {
   "_comment": "battle_monthly.json - the Battle Pass season track and the Monthly Ledger cards (WORK_ORDER_battle_and_monthly_packs). ADDITIVE AND SEPARATE FROM packs.json ON PURPOSE: packs.json is the PackDef shelf and this file carries the two shapes PackDef lacks (a tiered season, a 30-day claim table). Neither file's loader reads the other.",
   "_firewall": "ZERO COMBAT POWER, and it is a BUILD GATE, not a comment. No revive, no mid-battle heal or shield, no damage/armor/crit/attack-speed/cooldown modifier of any duration, no permanent passive, no stat or level-cap raise, no extra arena entry, no loot box or randomized reward, and NOTHING that references a tier index for sale. There is no 'combat' grant kind and BattleMonthlyRegression rejects one. Battle XP is EARNED BY PLAYING ONLY - no grant in this file may credit XP and no SKU may sell a tier (owner ruling Q4: NEVER SELL TIERS).",
-  "_noGlimmer": "There is deliberately no 'glimmer' key anywhere in this schema. Owner ruling 2026-08-21 stripped glimmer from every pack ('nothing real and money has never been active') and a pass tier is pack contents by another name. Glimmer the CURRENCY is untouched and is still earned and spent elsewhere - do not 'fix' a failure here by deleting the currency.",
   "_grantSchema": "Grant.kind is one of: economy | convenience_token | cosmetic_sku | skr | bundle. economy carries wood/iron/food/crystals/coins. convenience_token carries {kind,count} and the kind must pass PackCatalog.IsRedeemableConvenience - LEGAL is not REDEEMABLE. cosmetic_sku and skr are declared so the shape is complete, and NO ROW IN THIS FILE USES EITHER: cosmetics cannot render (G1) and there is no SKR ledger (G2). bundle nests grants.",
   "version": 1,
   "battlePassSeasons": [
@@ -883,8 +882,8 @@
       "pricing": {
         "usd": 4.99,
         "usdc": 4.99,
-        "sol": 0.0,
-        "skr": 60.0
+        "sol": 0,
+        "skr": 60
       },
       "durationDays": 30,
       "exclusiveCosmetic": "",
@@ -1337,8 +1336,8 @@
       "pricing": {
         "usd": 9.99,
         "usdc": 9.99,
-        "sol": 0.0,
-        "skr": 120.0
+        "sol": 0,
+        "skr": 120
       },
       "durationDays": 30,
       "exclusiveCosmetic": "",

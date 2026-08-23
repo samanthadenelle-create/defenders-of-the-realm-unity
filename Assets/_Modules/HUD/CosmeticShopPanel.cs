@@ -2,7 +2,7 @@
 // CosmeticShopPanel - the in-game Cosmetic Shop UI. Opened via its world
 // interactable (Marketplace). Category tabs (Hero / Pet / Village) + a
 // scrollable card list; each card shows the preview, name, description,
-// Glimmer price (with DEF-197 "short by N" honesty) and ONE action button
+// Cosmetics price (with DEF-197 "short by N" honesty) and ONE action button
 // (Buy / Equip / Equipped / Locked).
 // -----------------------------------------------------------------------------
 // WO-F conversion (2026-07-03, coverage matrix row #4): UIDocument/UITK ->
@@ -36,7 +36,7 @@ namespace DeNelle.HUD
         private ElarionUiKit.ObsidianModal _modal;
         private Transform _tabHost;
         private Transform _listContent;      // ScrollRect content
-        private TextMeshProUGUI _glimmerLabel;
+        private TextMeshProUGUI _ownershipLabel;
         private ElarionUiKit.ToastParts _toast;
         private float _toastUntil;
         private string _activeCategory = "hero";
@@ -45,7 +45,7 @@ namespace DeNelle.HUD
         // Reflection handles into DeNelle.Cosmetics. Cached after first hit.
         private static Type s_serviceType;
         private static PropertyInfo s_instanceProp;
-        private static PropertyInfo s_glimmerProp;
+        private static PropertyInfo s_ownedProp;
         private static MethodInfo s_ownsMethod;
         private static MethodInfo s_equippedForMethod;
         private static MethodInfo s_tryPurchaseMethod;
@@ -60,7 +60,7 @@ namespace DeNelle.HUD
         private static FieldInfo s_defCategoryField;
         private static FieldInfo s_defDisplayNameField;
         private static FieldInfo s_defDescriptionField;
-        private static FieldInfo s_defGlimmerCostField;
+        private static FieldInfo s_defPriceField;
         private static FieldInfo s_defUnlockMethodField;
         private static PropertyInfo s_defPreviewColorProp;
 
@@ -117,7 +117,7 @@ namespace DeNelle.HUD
                 foreach (var asm in AppDomain.CurrentDomain.GetAssemblies())
                 {
                     if (s_serviceType == null)
-                        s_serviceType = asm.GetType("DeNelle.Cosmetics.GlimmerCurrencyService", false);
+                        s_serviceType = asm.GetType("DeNelle.Cosmetics.CosmeticOwnershipService", false);
                     if (s_catalogType == null)
                         s_catalogType = asm.GetType("DeNelle.Cosmetics.CosmeticCatalog", false);
                     if (s_defType == null)
@@ -128,10 +128,9 @@ namespace DeNelle.HUD
                 if (s_serviceType != null)
                 {
                     s_instanceProp = s_serviceType.GetProperty("Instance", BindingFlags.Public | BindingFlags.Static);
-                    s_glimmerProp  = s_serviceType.GetProperty("Glimmer", BindingFlags.Public | BindingFlags.Instance);
+                    s_ownedProp  = s_serviceType.GetProperty("OwnedCosmetics", BindingFlags.Public | BindingFlags.Instance);
                     s_ownsMethod          = s_serviceType.GetMethod("Owns",       new[] { typeof(string) });
                     s_equippedForMethod   = s_serviceType.GetMethod("EquippedFor", new[] { typeof(string) });
-                    s_tryPurchaseMethod   = s_serviceType.GetMethod("TryPurchase", new[] { typeof(string) });
                     s_equipMethod         = s_serviceType.GetMethod("Equip",       new[] { typeof(string) });
                     s_changedEvent        = s_serviceType.GetEvent("Changed");
                 }
@@ -146,7 +145,6 @@ namespace DeNelle.HUD
                     s_defCategoryField     = s_defType.GetField("Category");
                     s_defDisplayNameField  = s_defType.GetField("DisplayName");
                     s_defDescriptionField  = s_defType.GetField("Description");
-                    s_defGlimmerCostField  = s_defType.GetField("GlimmerCost");
                     s_defUnlockMethodField = s_defType.GetField("UnlockMethod");
                     s_defPreviewColorProp  = s_defType.GetProperty("PreviewUnityColor");
                 }
@@ -163,11 +161,15 @@ namespace DeNelle.HUD
             catch (Exception e) { FlowTrace.Warn("CosmeticShop", $"ResolveServiceInstance reflected get threw: {e.GetType().Name}: {e.Message}"); return null; }
         }
 
-        private int CurrentGlimmer()
+        private int OwnedCount()
         {
-            if (_serviceInstance == null || s_glimmerProp == null) return 0;
-            try { return (int)s_glimmerProp.GetValue(_serviceInstance); }
-            catch (Exception e) { FlowTrace.Warn("CosmeticShop", $"CurrentGlimmer reflected get threw: {e.GetType().Name}: {e.Message}"); return 0; }
+            if (_serviceInstance == null || s_ownedProp == null) return 0;
+            try
+            {
+                var owned = s_ownedProp.GetValue(_serviceInstance) as ICollection;
+                return owned != null ? owned.Count : 0;
+            }
+            catch (Exception e) { FlowTrace.Warn("CosmeticShop", $"OwnedCount reflected get threw: {e.GetType().Name}: {e.Message}"); return 0; }
         }
 
         private bool OwnsId(string id)
@@ -182,13 +184,6 @@ namespace DeNelle.HUD
             if (_serviceInstance == null || s_equippedForMethod == null) return null;
             try { return s_equippedForMethod.Invoke(_serviceInstance, new object[] { category }) as string; }
             catch (Exception e) { FlowTrace.Warn("CosmeticShop", $"EquippedFor('{category}') reflected call threw: {e.GetType().Name}: {e.Message}"); return null; }
-        }
-
-        private bool TryPurchase(string id)
-        {
-            if (_serviceInstance == null || s_tryPurchaseMethod == null) return false;
-            try { return (bool)s_tryPurchaseMethod.Invoke(_serviceInstance, new object[] { id }); }
-            catch (Exception e) { FlowTrace.Warn("CosmeticShop", $"TryPurchase('{id}') reflected call threw: {e.GetType().Name}: {e.Message}"); return false; }
         }
 
         private void EquipId(string id)
@@ -270,7 +265,7 @@ namespace DeNelle.HUD
             const float BandMin = 0.10f, BandMax = 0.90f;
 
             // ── PX BAND LADDER (UI audit 2026-08-01, F1) ────────────────────────────
-            // WAS: every band was a FRACTION of the body (Glimmer 0.955-0.995, TabRail
+            // WAS: every band was a FRACTION of the body (Cosmetics 0.955-0.995, TabRail
             // 0.875-0.945, CardScroll 0.09-0.865, footer 0.01-0.07) with the tab buttons
             // anchored 0.05-0.95 INSIDE the 0.07-tall rail. Worked arithmetic:
             //   panel = StorePanelAnchor (0.035 -> 0.965) = 0.93 of the modal canvas height
@@ -282,29 +277,29 @@ namespace DeNelle.HUD
             // BuildObsidianButton ends in ClampMinTouch (ElarionUiKitObsidian.cs:650,:685),
             // which grows a sub-floor button to MinTouchPx = 112 px (ElarionUiKit.cs:317)
             // SYMMETRICALLY ABOUT ITS CENTRE (ElarionUiKit.cs:979-988) -- ~+40 px ABOVE and
-            // ~+40 px BELOW the rail, so the tabs overran the Glimmer balance line above and
+            // ~+40 px BELOW the rail, so the tabs overran the Cosmetics balance line above and
             // the card list below. Identical geometry, identical bug, as LeaderboardPanel.
             //
             // NOW: fixed REFERENCE-PIXEL rungs (offsetMin/offsetMax on a CanvasScaler'd canvas
             // are canvas-local units == reference px, the same unit MinTouchPx is measured in).
             // Ladder (top -> bottom of the body):
-            //   Glimmer 40 | gap 8 | TabRail 120 | gap 8 | CardScroll (flex) | gap 8 | Footer 32
+            //   Cosmetics 40 | gap 8 | TabRail 120 | gap 8 | CardScroll (flex) | gap 8 | Footer 32
             //   fixed total = 40+8+120+8+8+32 = 216 px; the card list takes the remainder
             //   (~280 px landscape = ~3 of the 92 px cards / ~900 px portrait) and scrolls.
             // The 120 px rail is >= the 112 px floor, so ClampMinTouch is a NO-OP on the tabs.
-            const float GlimmerH = 40f, TabRailH = 120f, FooterH = 32f, Gap = 8f;
-            const float TabRailTop = GlimmerH + Gap;                 // 48
+            const float OwnershipH = 40f, TabRailH = 120f, FooterH = 32f, Gap = 8f;
+            const float TabRailTop = OwnershipH + Gap;                 // 48
             const float ListTop    = TabRailTop + TabRailH + Gap;    // 176
             const float ListBottom = FooterH + Gap;                  // 40
 
-            // Glimmer balance — its OWN band at the top of the body well. EYES-SWEEP 2026-07-06
+            // Cosmetics balance — its OWN band at the top of the body well. EYES-SWEEP 2026-07-06
             // (#6): the chip lived in the frame's HEADER zone (0.70–0.99) where the centered
             // "Cosmetic Shop" title painted straight over it on the narrow portrait frame. The
             // title keeps the header; the balance gets the first body band, right-aligned + fitted.
-            var glimmerHost = PxBandFromTop(body, "GlimmerBand", BandMin, BandMax, 0f, GlimmerH);
-            _glimmerLabel = MakeText(glimmerHost, "0", 16, ElarionUi.Gold, FontStyles.Bold,
+            var ownershipHost = PxBandFromTop(body, "OwnershipBand", BandMin, BandMax, 0f, OwnershipH);
+            _ownershipLabel = MakeText(ownershipHost, "0", 16, ElarionUi.Gold, FontStyles.Bold,
                 TextAlignmentOptions.Right, Vector2.zero, Vector2.one);
-            ElarionUiKit.FitSingleLine(_glimmerLabel);
+            ElarionUiKit.FitSingleLine(_ownershipLabel);
 
             // Category tabs — one 120 px rung below the balance line.
             _tabHost = PxBandFromTop(body, "TabRail", BandMin, BandMax, TabRailTop, TabRailH);
@@ -362,9 +357,9 @@ namespace DeNelle.HUD
             // Refresh service handle in case the bootstrap raced us.
             if (_serviceInstance == null) _serviceInstance = ResolveServiceInstance();
 
-            if (_glimmerLabel != null)
+            if (_ownershipLabel != null)
                 // WO-697: currency through the ONE kit formatter (compact >= 10k, no N0 grouping).
-                _glimmerLabel.text = ElarionUi.CompactNumber(CurrentGlimmer()) + "  Glimmer";
+                _ownershipLabel.text = ElarionUi.CompactNumber(OwnedCount()) + "  Cosmetics";
 
             for (int i = _listContent.childCount - 1; i >= 0; i--)
                 Destroy(_listContent.GetChild(i).gameObject);
@@ -398,7 +393,6 @@ namespace DeNelle.HUD
             string category    = s_defCategoryField?.GetValue(def) as string ?? string.Empty;
             string displayName = s_defDisplayNameField?.GetValue(def) as string ?? id;
             string description = s_defDescriptionField?.GetValue(def) as string ?? string.Empty;
-            int glimmerCost    = SafeInt(s_defGlimmerCostField?.GetValue(def));
             string unlockMethod = (s_defUnlockMethodField?.GetValue(def) as string ?? "buy").ToLowerInvariant();
             Color preview      = SafeColor(s_defPreviewColorProp?.GetValue(def));
 
@@ -407,10 +401,6 @@ namespace DeNelle.HUD
             bool isAchievement = unlockMethod == "achievement";
 
             // DEF-197: affordability computed once so the price line + button agree.
-            bool isBuyable  = !owned && !isAchievement && glimmerCost > 0;
-            int  balance    = CurrentGlimmer();
-            bool affordable = balance >= glimmerCost;
-            int  shortfall  = isBuyable && !affordable ? glimmerCost - balance : 0;
 
             var cardGo = new GameObject("Card", typeof(RectTransform), typeof(Image), typeof(LayoutElement));
             cardGo.transform.SetParent(_listContent, false);
@@ -449,9 +439,8 @@ namespace DeNelle.HUD
 
             string priceText;
             if (isAchievement) priceText = owned ? "Earned" : "Earn via play";
-            else if (glimmerCost > 0) priceText = $"{ElarionUi.CompactNumber(glimmerCost)} Glimmer" + (shortfall > 0 ? $"   (short {ElarionUi.CompactNumber(shortfall)})" : "");   // WO-697
-            else priceText = "Free";
-            Color priceTint = (isBuyable && !affordable) ? ElarionUi.ParchmentDim : ElarionUi.Gold;
+            else priceText = owned ? "Owned" : "Unavailable";
+            Color priceTint = owned ? ElarionUi.Gold : ElarionUi.ParchmentDim;
             MakeText(cardGo.transform, priceText, 13, priceTint, FontStyles.Normal,
                 TextAlignmentOptions.Left, new Vector2(0.13f, 0.05f), new Vector2(0.72f, 0.28f));
 
@@ -470,26 +459,12 @@ namespace DeNelle.HUD
                     new Vector2(0.74f, 0.28f), new Vector2(0.985f, 0.72f),
                     () => { EquipId(id); ShowToast($"Equipped {displayName}"); Repaint(); });
             }
-            else if (isAchievement)
+            else
             {
                 var b = ElarionUiKit.BuildObsidianButton(cardGo.transform, "Locked",
                     ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Gray,
                     new Vector2(0.74f, 0.28f), new Vector2(0.985f, 0.72f), null);
                 b.interactable = false;
-            }
-            else
-            {
-                var b = ElarionUiKit.BuildObsidianButton(cardGo.transform, "Buy",
-                    ElarionUiKit.ObsidianButtonStyle.Style1,
-                    affordable ? ElarionUiKit.ObsidianButtonColor.Yellow : ElarionUiKit.ObsidianButtonColor.Gray,
-                    new Vector2(0.74f, 0.28f), new Vector2(0.985f, 0.72f),
-                    () =>
-                    {
-                        if (TryPurchase(id)) { ShowToast($"Unlocked {displayName}"); EquipId(id); }
-                        else ShowToast("Not enough Glimmer.");
-                        Repaint();
-                    });
-                b.interactable = affordable;
             }
         }
 

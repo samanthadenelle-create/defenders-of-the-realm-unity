@@ -155,7 +155,7 @@ namespace DeNelle.Village
         {
             Id = id, Name = label, DisplayName = label, Ai = "walker",
             Hp = 80f, MoveSpeed = 2.6f, ContactDamage = 6f, AttackInterval = 1.2f, Height = 1.9f,
-            AggroRadius = 6f, XpReward = 15, GlimmerReward = 2,
+            AggroRadius = 6f, XpReward = 15
         };
 
         /// <summary>
@@ -221,7 +221,7 @@ namespace DeNelle.Village
             Id = $"scatter-elite-{i}", Name = "Hollow Reaver", DisplayName = "Hollow Reaver", Ai = "walker",
             Hp = level * 25f, MoveSpeed = 2.4f,
             ContactDamage = 8f * (1f + 0.10f * level), AttackInterval = 1.2f, Height = 2.0f,
-            AggroRadius = 18f, XpReward = level * 10, GlimmerReward = level,
+            AggroRadius = 18f, XpReward = level * 10
         };
 
         private void SpawnTestPack()
@@ -278,7 +278,7 @@ namespace DeNelle.Village
         {
             Id = $"grunt-{i}", Name = "Hollow Grunt", DisplayName = "Hollow Grunt", Ai = "walker",
             Hp = 40f, MoveSpeed = 3.0f, ContactDamage = 6f, AttackInterval = 1.2f, Height = 1.7f,
-            XpReward = 12, GlimmerReward = 2,
+            XpReward = 12
         };
 
         private static EnemyDef TankDef() => new EnemyDef
@@ -286,14 +286,14 @@ namespace DeNelle.Village
             Id = "tank", Name = "Hollow Bulwark", DisplayName = "Hollow Bulwark", Ai = "walker",
             // High HP + slow so it survives long enough to BE healed (shows the Healer working).
             Hp = 220f, MoveSpeed = 1.6f, ContactDamage = 14f, AttackInterval = 1.6f, Height = 2.4f,
-            AggroRadius = 12f, XpReward = 40, GlimmerReward = 8,
+            AggroRadius = 12f, XpReward = 40
         };
 
         private static EnemyDef HealerDef() => new EnemyDef
         {
             Id = "healer", Name = "Hollow Mender", DisplayName = "Hollow Mender", Ai = "walker",
             Hp = 70f, MoveSpeed = 2.6f, ContactDamage = 3f, AttackInterval = 1.5f, Height = 1.8f,
-            XpReward = 30, GlimmerReward = 6,
+            XpReward = 30
         };
 
         // ── Heart lookup (name/component, no hard dependency) ─────────────────

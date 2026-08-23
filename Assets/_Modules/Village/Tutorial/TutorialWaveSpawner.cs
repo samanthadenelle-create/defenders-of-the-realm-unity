@@ -235,7 +235,6 @@ namespace DeNelle.Village
                 AggroRadius    = src.AggroRadius,
                 GroupStaggerDelay = src.GroupStaggerDelay,
                 XpReward       = src.XpReward,
-                GlimmerReward  = src.GlimmerReward,
                 CoinReward     = src.CoinReward,
             };
             FlowTrace.Step("TutorialWave", $"teaching variant '{v.Id}' hp={v.Hp} contactDamage={v.ContactDamage} (from base hp={src.Hp}/dmg={src.ContactDamage})");

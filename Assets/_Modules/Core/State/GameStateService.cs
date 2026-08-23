@@ -156,6 +156,32 @@ namespace DeNelle.Core.State
         /// </summary>
         public ServerConfig ServerConfig { get; private set; } = ServerConfig.Default;
 
+        /// <summary>
+        /// WO-1128 §3.3 — the server's OWN last_seen for this player (unix-ms, same unit
+        /// as <c>serverNowMs</c>), as emitted by <c>api/game/load.js</c>. Null until a
+        /// cloud load has succeeded this process, and null forever on an older backend
+        /// that does not send the field.
+        /// <para>
+        /// ⛔ THIS IS A READOUT, NOT A CLOCK. It is the anchor the SERVER measures the
+        /// client's declared accrual window against; it must never be written into
+        /// <see cref="GameState.LastHarvestClaimMs"/>. That field has exactly THREE legal
+        /// writers, all inside <c>OfflineClaimCoordinator</c> (AdvanceAndSave / StampClock),
+        /// and a fourth writer here would break the single-owner rule the coordinator's
+        /// <c>IOfflineClaimConsumer</c> contract states out loud. Rolling the claim clock
+        /// back to the server's window would also hand the device a RE-CLAIMABLE stretch on
+        /// its next launch — the exact double-grant <c>api/game/save.js</c> refuses to do
+        /// server-side for the same reason.
+        /// </para>
+        /// </summary>
+        public double? ServerLastSeenMs { get; private set; }
+
+        /// <summary>
+        /// WO-1128 §3.3 — the most recent accrual clamp the server reported on a save, or
+        /// null when the last save was accepted whole. Kept for display/diagnostics ("your
+        /// offline haul was provisional") so a future screen needs no extra round trip.
+        /// </summary>
+        public AccrualReconcileReport LastAccrualReconcile { get; private set; }
+
         // ── Per-domain change events (improvement #1) ────────────────────────
         /// <summary>Raised when the resource wallet / materials / voidshards change.</summary>
         public readonly UnityEvent ResourcesChanged = new UnityEvent();
@@ -1491,6 +1517,22 @@ namespace DeNelle.Core.State
             // throwing that away because there was no save data would be a silent loss.
             if (resp?.ServerNowMs != null) ServerClock.Sync(resp.ServerNowMs.Value);
 
+            // WO-1128 §3.3 — RECORD the server's last_seen anchor; never write it to a clock.
+            // This is the number the server measures our declared accrual window against, so
+            // having it locally means a capture can show BOTH sides of a clamp. The one thing
+            // it must NOT do is touch GameState.LastHarvestClaimMs: OfflineClaimCoordinator is
+            // its single owner, and dragging that stamp backwards to the server's window would
+            // make the stretch in between re-claimable on the next launch.
+            if (resp?.ServerLastSeenMs != null && resp.ServerLastSeenMs.Value > 0d)
+            {
+                ServerLastSeenMs = resp.ServerLastSeenMs.Value;
+                double localClaimMs = _state != null ? _state.LastHarvestClaimMs : 0d;
+                FlowTrace.Step("Offline",
+                    $"server last_seen anchor = {ServerLastSeenMs.Value:0} (local claim clock {localClaimMs:0}, " +
+                    $"divergence {(localClaimMs - ServerLastSeenMs.Value) / 1000.0:F0}s) - recorded for display only; " +
+                    "the claim clock is NOT touched here (OfflineClaimCoordinator owns it).");
+            }
+
             if (resp?.Success != true || resp.Data == null) return;
 
             // Absorb remote config if present; keep existing config on null (older backend).
@@ -1838,11 +1880,169 @@ namespace DeNelle.Core.State
             if (req.result == UnityWebRequest.Result.Success)
             {
                 Debug.Log($"[Sync] Saved {body.Length} bytes (full snapshot).");
+                // WO-1128 §3.3 — the save response is no longer discarded. It carries the
+                // server's clock handshake AND, when the server refused part of a claimed
+                // time-derived gain, the clamp report. Reading it is what makes the offline
+                // number PROVISIONAL rather than final on the device that produced it.
+                ReadSaveResponse(req.downloadHandler != null ? req.downloadHandler.text : null);
                 return true;
             }
 
             Debug.LogWarning($"[Sync] Save failed ({req.responseCode}): {req.error}");
             return false;
+        }
+
+        // ── WO-1128 §3.3 — the server's reconciled figure lands on the client ──────
+        //
+        //  THE SHAPE, stated once so nobody re-derives it wrong:
+        //  the offline number the device computed is a DISPLAY ESTIMATE. It stays on
+        //  screen immediately (offline play must never wait on a round trip, §4), and
+        //  the save round trip is where it becomes final. api/game/save.js compares the
+        //  window the client DECLARED against the server's own elapsed time and, if the
+        //  device claimed hours it could not have been away for, stores a scaled-down
+        //  balance and reports exactly what it refused. This applies that refusal locally
+        //  so the two copies agree — otherwise the server row and the device disagree
+        //  forever, and the very next save re-posts the fabricated number.
+        //
+        //  ⛔ BALANCES ONLY. NEVER THE CLOCK. GameState.LastHarvestClaimMs has three legal
+        //  writers, all inside OfflineClaimCoordinator (AdvanceAndSave / StampClock). A
+        //  fourth writer here would break the single-owner contract that file states at
+        //  its IOfflineClaimConsumer declaration, and — worse — rolling the stamp back to
+        //  the server's window would leave the difference RE-CLAIMABLE on the next launch:
+        //  the double-grant the coordinator exists to prevent, and the reason
+        //  api/game/save.js explicitly refuses to lower the incoming claim clock too.
+        //
+        //  ⛔ AND IT ONLY EVER SUBTRACTS. Every arm below is bounded above by the CURRENT
+        //  local value, so a stale or malicious response can never be a grant path: the
+        //  worst a forged `accrual` block can do is cost the sender their own resources.
+
+        /// <summary>
+        /// Parses the /api/game/save response: anchors <see cref="ServerClock"/> and applies
+        /// any accrual clamp the server reported. Never throws — a save that succeeded must
+        /// stay succeeded even if the body is unreadable.
+        /// </summary>
+        private void ReadSaveResponse(string json)
+        {
+            if (string.IsNullOrEmpty(json)) return;
+
+            BackendSaveResponse resp = null;
+            try
+            {
+                resp = JsonConvert.DeserializeObject<BackendSaveResponse>(json, SaveSchema.JsonSettings);
+            }
+            catch (Exception ex)
+            {
+                // §12: no silent catch. The save landed; we just could not read the receipt.
+                FlowTrace.Warn("Sync",
+                    $"save response parse FAILED ({ex.GetType().Name}: {ex.Message}) - the write succeeded, but any " +
+                    "accrual clamp the server reported is unread this round trip. It will be re-reported on the next save.");
+                return;
+            }
+            if (resp == null) return;
+
+            // The save round trip is the most frequent handshake the client makes, so this
+            // is the main way ServerClock stays anchored during a session (WO-912 §7.2).
+            if (resp.ServerNowMs != null) ServerClock.Sync(resp.ServerNowMs.Value);
+
+            LastAccrualReconcile = resp.Accrual;
+            if (resp.Accrual != null) ApplyAccrualClamps(resp.Accrual);
+        }
+
+        /// <summary>
+        /// Lowers the local time-derived balances the server refused, by the amount it
+        /// refused — never below what the server already held, never below zero, and never
+        /// upwards. Does NOT touch <see cref="GameState.LastHarvestClaimMs"/>.
+        /// </summary>
+        private void ApplyAccrualClamps(AccrualReconcileReport report)
+        {
+            if (_state == null || report?.Clamps == null || report.Clamps.Count == 0) return;
+
+            int applied = 0;
+            foreach (var clamp in report.Clamps)
+            {
+                if (clamp == null || string.IsNullOrEmpty(clamp.Field)) continue;
+
+                double refused = clamp.Claimed - clamp.Allowed;
+                if (!(refused > 0d)) continue;      // the server accepted this field whole
+
+                Guard.Try("Sync", $"apply accrual clamp for '{clamp.Field}'", () =>
+                {
+                    int current = ReadTimeDerivedBalance(clamp.Field);
+                    if (current < 0) return;        // unknown field — reported below, never guessed at
+
+                    // FLOOR = whichever is lower of "what the server already banked" and
+                    // "what the player has right now". The first mirrors the server's own
+                    // refuse-don't-punish rule (a clamp never digs into a prior balance);
+                    // the second is what stops a player who has SPENT since the snapshot
+                    // from being handed resources back by a subtraction.
+                    int floor  = (int)Math.Max(0d, Math.Min(current, clamp.Prior));
+                    int target = (int)Math.Max(floor, current - refused);
+                    if (target >= current) return;  // nothing to take — never raise a balance
+
+                    WriteTimeDerivedBalance(clamp.Field, target);
+                    applied++;
+                    FlowTrace.Warn("Offline",
+                        $"server REFUSED part of the claimed {clamp.Field}: claimed={clamp.Claimed:0} " +
+                        $"allowed={clamp.Allowed:0} prior={clamp.Prior:0} -> local {current} to {target} " +
+                        $"(honest fraction {report.HonestFraction ?? 1d:F4}; client window " +
+                        $"{report.ClientWindowSec ?? 0d:F0}s vs server elapsed {report.ServerElapsedSec ?? 0d:F0}s). " +
+                        "Balance only - the claim clock is untouched.");
+                });
+            }
+
+            if (applied <= 0)
+            {
+                FlowTrace.Step("Offline",
+                    $"server reported {report.Clamps.Count} accrual clamp(s) ({report.Reason}) but nothing " +
+                    "needed lowering locally (already spent, or already at/below the allowed figure).");
+                return;
+            }
+
+            // Persist + tell the HUD, or the player keeps seeing the number the server
+            // just refused until something else happens to redraw.
+            Save();
+            ResourcesChanged.Invoke();
+        }
+
+        /// <summary>Reads one clamp-able balance by its lowercase WIRE key. -1 = unknown key.</summary>
+        private int ReadTimeDerivedBalance(string field)
+        {
+            switch (field)
+            {
+                case "wood":  return _state.Wood;
+                case "iron":  return _state.Iron;
+                case "stone": return _state.Stone;
+                case "food":  return _state.Resources.Food;
+                default:
+                    // Not silently skipped: a new TIME_DERIVED_BALANCES entry on the server
+                    // with no arm here would clamp on the server and NOT on the device, and
+                    // the two copies would drift apart with nothing said.
+                    FlowTrace.Fail("Offline",
+                        $"server clamped a balance this client cannot map: '{field}'. The server row and this " +
+                        "device now disagree on it. Add the arm in GameStateService.ReadTimeDerivedBalance/" +
+                        "WriteTimeDerivedBalance (mirrors TIME_DERIVED_BALANCES in api/game/save.js).");
+                    return -1;
+            }
+        }
+
+        /// <summary>Writes one clamp-able balance by its lowercase WIRE key. Subtractions only.</summary>
+        private void WriteTimeDerivedBalance(string field, int value)
+        {
+            switch (field)
+            {
+                case "wood":  _state.Wood  = value; break;
+                case "iron":  _state.Iron  = value; break;
+                case "stone": _state.Stone = value; break;
+                case "food":
+                {
+                    // ResourceBalance is a STRUCT — mutate a copy and assign it back, or the
+                    // write lands on a temporary and vanishes.
+                    var wallet = _state.Resources;
+                    wallet.Food = value;
+                    _state.Resources = wallet;
+                    break;
+                }
+            }
         }
 
         // ── Delta builder — compares snapshots via PersistedState ─────────
@@ -2070,6 +2270,63 @@ namespace DeNelle.Core.State
             /// normally rather than failing to parse, and the clock simply stays unanchored.
             /// </summary>
             [JsonProperty("serverNowMs")] public double?                ServerNowMs { get; set; }
+
+            /// <summary>
+            /// WO-1128 §3.3 — the server's own last_seen for this player (unix-ms).
+            /// <c>api/game/load.js</c> has been sending this since WO-1128 and NOTHING
+            /// parsed it, so the anchor the server reconciles against was invisible to the
+            /// client. Nullable for the same reason as <see cref="ServerNowMs"/>: an older
+            /// backend must still load.
+            /// </summary>
+            [JsonProperty("serverLastSeenMs")] public double?           ServerLastSeenMs { get; set; }
+        }
+
+        /// <summary>
+        /// WO-1128 §3.3 — the <c>accrual</c> block <c>api/game/save.js</c> returns when it
+        /// refused part of a claimed time-derived gain. Present ONLY when something was
+        /// clamped (the endpoint omits it otherwise), so a non-null value always means
+        /// "the server did not accept everything this device claimed".
+        /// </summary>
+        public sealed class AccrualReconcileReport
+        {
+            [JsonProperty("reconciled")]       public bool    Reconciled       { get; set; }
+            [JsonProperty("reason")]           public string  Reason           { get; set; }
+            /// <summary>Seconds the CLIENT declared between its stored and posted claim clocks.</summary>
+            [JsonProperty("clientWindowSec")]  public double? ClientWindowSec  { get; set; }
+            /// <summary>Seconds that actually elapsed on the SERVER's clock since last_seen.</summary>
+            [JsonProperty("serverElapsedSec")] public double? ServerElapsedSec { get; set; }
+            /// <summary>Fraction of the declared window the server judged honest (0..1).</summary>
+            [JsonProperty("honestFraction")]   public double? HonestFraction   { get; set; }
+            [JsonProperty("clamps")]           public List<AccrualClamp> Clamps { get; set; }
+        }
+
+        /// <summary>One clamped balance from <see cref="AccrualReconcileReport"/>.</summary>
+        public sealed class AccrualClamp
+        {
+            /// <summary>Lowercase wire key: "wood" | "iron" | "stone" | "food".</summary>
+            [JsonProperty("field")]       public string Field       { get; set; }
+            /// <summary>The balance the client posted.</summary>
+            [JsonProperty("claimed")]     public double Claimed     { get; set; }
+            /// <summary>The balance the server stored instead (always &gt;= <see cref="Prior"/>).</summary>
+            [JsonProperty("allowed")]     public double Allowed     { get; set; }
+            /// <summary>The balance the server already held before this save.</summary>
+            [JsonProperty("prior")]       public double Prior       { get; set; }
+            [JsonProperty("claimedGain")] public double ClaimedGain { get; set; }
+            [JsonProperty("allowedGain")] public double AllowedGain { get; set; }
+        }
+
+        /// <summary>
+        /// WO-1128 §3.3 — what <c>api/game/save.js</c> answers with. Before this type existed
+        /// the save response was thrown away entirely: the <c>accrual</c> clamp block AND the
+        /// <c>serverNowMs</c> handshake (the most frequent one the client makes) both landed
+        /// in a <c>DownloadHandlerBuffer</c> nobody read.
+        /// </summary>
+        private sealed class BackendSaveResponse
+        {
+            [JsonProperty("ok")]          public bool                     Ok          { get; set; }
+            [JsonProperty("success")]     public bool                     Success     { get; set; }
+            [JsonProperty("serverNowMs")] public double?                  ServerNowMs { get; set; }
+            [JsonProperty("accrual")]     public AccrualReconcileReport   Accrual     { get; set; }
         }
 
         // ── Conversions ──────────────────────────────────────────────────────
