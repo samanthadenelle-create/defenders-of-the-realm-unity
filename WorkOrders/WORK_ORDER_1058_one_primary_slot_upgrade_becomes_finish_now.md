@@ -55,9 +55,26 @@ right now.
 > This is a PRESENTATION ticket in ONE file (`AddQueueRow` `:808-871` + `AddBrowseRow`
 > `:952-974`). The VM is read-only; slot accounting is not involved at all.
 >
-> Still missing: the two owner screenshots this ticket cites as Evidence are not on disk under
-> `WorkOrders/` or `logs/f8-inbox/`. The re-layout can proceed without them (it is an owner
-> ruling); the §1 hazard narrative cannot be verified without them.
+> ✅ **EVIDENCE SUPPLIED BY THE OWNER 2026-08-22 and now in-repo:**
+> `docs/ui-evidence/wo1058/01_before_two_browse_rows.png`
+> `docs/ui-evidence/wo1058/02_after_queue_row_inserted.png`
+>
+> They CONFIRM the shift mechanism above, and they are the reason §1's x-overlap story
+> should not be implemented literally:
+> * **BEFORE** — two browse rows, `Arcane Spire -> L2` and `-> L3`, each `Ready | Upgrade`.
+> * **AFTER one tap** — a QUEUE row is INSERTED AT THE TOP (`Tower Arcane Spire -> L2 ·
+>   Building · 23s left · 60% done · Refund 480 iron, 1500 crystals`) carrying `Finish
+>   10 crystals` and `Cancel`. The browse list is pushed DOWN by that row's height. The
+>   second tap therefore lands on whatever slid under the finger.
+>
+> ⚠ **TWO FURTHER DEFECTS VISIBLE IN THE SAME FRAME, NOT IN THE ORIGINAL TICKET — fix them
+> in this pass or they will be re-reported as new bugs:**
+> 1. **Text is CLIPPED.** The queue row's title `Tower Arcane Spire -> L2` is cut off along
+>    its top edge, and the bottom-right CTA renders as `Upgrad...`. Measure against the real
+>    box; do not shrink the control to compensate (`MinTouchPx = 112`).
+> 2. **Content OVERFLOWS its band and runs under the `Close` button** — `Ready` and the last
+>    row are overlapped by the footer. The list needs its own clipped viewport with the
+>    footer reserved, not a taller stack (vertical is the scarce axis).
 | Running / queued job | **`Cancel`** (red) | **0.885 – 0.98** | `:856-858` |
 | Running / queued job | `Finish` (yellow) | 0.455 – 0.655 | `:822-824` |
 
