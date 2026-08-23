@@ -96,12 +96,30 @@ namespace DeNelle.Editor
             VendorRegistry.Reload();
             var cases = new (string ctx, GearKind expect)[]
             {
-                ("forge",       GearKind.Weapon | GearKind.Armor),          // registry (WO-598)
-                ("blacksmith",  GearKind.Armor),                            // heuristic (WO-444)
-                ("smith",       GearKind.Weapon),                           // heuristic
-                ("armor",       GearKind.Armor),
-                ("armory",      GearKind.Armor),
-                ("armorer",     GearKind.Armor),                            // registry (armor-only)
+                // ── RE-POINTED 2026-08-23 (WO-1161/1163). NOT softened — read why. ──
+                // The old rows below expected a SUBSTRING HEURISTIC ("blacksmith"/"smith"/
+                // "armor"/"armory") that has been retired. That heuristic is the mechanism
+                // that collapsed `forge` and `armorer` onto one another and produced the
+                // crossed cluster this whole lane exists to end: matching a vendor by a
+                // fragment of a WORD cannot distinguish two shops whose words were swapped.
+                // Identity now resolves by catalog id -> role, and a context that is neither
+                // a catalog id nor a vendors.json id is UNKNOWN — which must fall to the safe
+                // general default, never to a guess.
+                //
+                // ⚠ `("forge", Weapon|Armor)` WAS ALREADY STALE BEFORE THIS CHANGE, and that is
+                // worth keeping on the record: `vendors.json` authors `forge` with
+                // categories:["weapon"], so the registry has been returning Weapon alone while
+                // this row claimed Weapon|Armor. The case was passing for a reason unrelated to
+                // what it asserted. Corrected to the authored truth.
+                ("forge",       GearKind.Weapon),                           // registry: vendors.json categories ["weapon"]
+                ("armorer",     GearKind.Armor),                            // registry (armor-only) — a REAL catalog id, still resolves
+                // The four retired-heuristic contexts. These assert the RULED behaviour
+                // (unknown -> safe general default); they are kept, not deleted, so that a
+                // future seat re-introducing substring matching turns this suite RED.
+                ("blacksmith",  GearKind.Weapon | GearKind.Armor | GearKind.Potion),
+                ("smith",       GearKind.Weapon | GearKind.Armor | GearKind.Potion),
+                ("armor",       GearKind.Weapon | GearKind.Armor | GearKind.Potion),
+                ("armory",      GearKind.Weapon | GearKind.Armor | GearKind.Potion),
                 ("jeweler",     GearKind.Accessory | GearKind.Material),    // registry (rings/amulets + gems, WO-543/598)
                 ("market",      GearKind.Potion | GearKind.Material),       // registry (consumables + materials)
                 ("marketplace", GearKind.Potion | GearKind.Material),       // substring-matches the market row

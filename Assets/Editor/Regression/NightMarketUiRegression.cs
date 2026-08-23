@@ -39,6 +39,7 @@ using System.Text;
 using System.Text.RegularExpressions;
 using UnityEditor;
 using UnityEngine;
+using DeNelle.Wallet;   // WO-1162: the composition + card template are the live authority now
 
 namespace DeNelle.Editor.Regression
 {
@@ -48,6 +49,7 @@ namespace DeNelle.Editor.Regression
         private const string CardRel   = "/_Modules/Wallet/StorePackCard.cs";
         private const string FooterRel = "/_Modules/Wallet/StoreLegalFooter.cs";
         private const string HudRel    = "/_Modules/HUD/Kit/HudKitController.cs";
+        private const string CompositionRel = "/_Modules/Wallet/NightMarketComposition.cs";
         private const string KitRel    = "/_Modules/Core/UI/ElarionUiKit.cs";
         private const string UiRel     = "/_Modules/Core/UI/ElarionUi.cs";
 
@@ -86,7 +88,7 @@ namespace DeNelle.Editor.Regression
             CheckLandscapeBudget(store, ctaHeight, failures);
             CheckCard(card, minTouch, fontFloor, failures);
             CheckFreeBand(store, minTouch, failures);
-            CheckCommerceCta(store, minTouch, failures);
+            CheckCommerceCta(store, minTouch, ctaWidth, failures);
             CheckOneTitleAndOneLegalOwner(store, footer, ctaWidth, failures);
             CheckHudDoor(hud, failures);
 
@@ -113,7 +115,9 @@ namespace DeNelle.Editor.Regression
                 failures.Add($"Night Market panel uses only {(panelMax.x - panelMin.x):P0} of landscape width " +
                              $"(minimum {MinPanelWidthShare:P0}).");
 
-            float cardsPerRow = Scalar(store, "CardsPerRow", failures);
+            // WO-1162: CardsPerRow is owned by NightMarketComposition (the shelf minimum is stated
+            // in terms of it), so it is read off the live type rather than parsed as a literal.
+            float cardsPerRow = NightMarketComposition.CardsPerRow;
             if (Math.Abs(cardsPerRow - RequiredCardsPerRow) > 0.01f)
                 failures.Add($"priced shelf is {cardsPerRow:0}-up; the device-verified readability " +
                              $"ruling is {RequiredCardsPerRow}-up.");
@@ -121,10 +125,33 @@ namespace DeNelle.Editor.Regression
             float usableW = Scalar(store, "UsableWidthPx",   failures);
             float usableH = Scalar(store, "UsableHeightPx",  failures);
             float topBar  = Scalar(store, "TopBarPx",        failures);
-            float spot    = Scalar(store, "SpotlightWidthPx", failures);
-            float commerce = Scalar(store, "CommerceWidthPx", failures);
-            float gap     = Scalar(store, "ColumnGapPx",     failures);
-            float pad     = Scalar(store, "EdgePadPx",       failures);
+            // ⚠ RE-POINTED 2026-08-23 (WO-1162). The three column widths are no longer literals in
+            // PackStore: NightMarketComposition DERIVES each rail's minimum from the narrowest
+            // content it must hold and RESOLVES a composition for the surface. So this suite asks
+            // the live type for the plan it would resolve at the reference surface instead of
+            // parsing two numbers that no longer exist — the acceptance bounds below are unchanged.
+            float pad  = Scalar(store, "EdgePadPx", failures);
+            float gap  = DeNelle.Wallet.NightMarketComposition.ColumnGapPx;
+
+            var refPlan = DeNelle.Wallet.NightMarketComposition.Resolve(
+                usableW - 2f * pad, usableH - topBar - ctaHeight);
+            float spot     = refPlan.SpotlightWidthPx;
+            float commerce = refPlan.CommerceWidthPx;
+
+            if (refPlan.Mode == DeNelle.Wallet.NightMarketMode.StackedTwoColumn)
+                failures.Add("the REFERENCE landscape surface (2120x978) no longer resolves to three " +
+                             "columns — the derived minimums have grown past the surface the store " +
+                             "ships on. Composition: " +
+                             DeNelle.Wallet.NightMarketComposition.Describe(refPlan));
+            if (refPlan.Deficit)
+                failures.Add("the reference landscape surface resolves to a DEFICIT composition (" +
+                             refPlan.DeficitPx.ToString("0") + "px short) — cards would overrun the shelf mask.");
+
+            // The formula itself must stay a derivation, not drift back into a literal.
+            Require(Read(Application.dataPath + CompositionRel, failures),
+                "SpotlightMinPx + ShelfMinForTwoCardsPx + CommerceMinPx + 2f * ColumnGapPx",
+                "the three-column breakpoint is no longer derived from the content minimums — a " +
+                "hardcoded breakpoint cannot know what it is protecting.", failures);
 
             // The ONE bottom band IS the canon CTA height — that identity is what makes a second
             // band structurally impossible (§6 / P1-6). Assert the identity, do not restate 132.
@@ -162,9 +189,21 @@ namespace DeNelle.Editor.Regression
         // =====================================================================
         private static void CheckCard(string card, float minTouch, float fontFloor, List<string> failures)
         {
-            float standard = Scalar(card, "StandardHeightPx", failures);
-            float compact  = Scalar(card, "CompactHeightPx",  failures);
-            float minWidth = Scalar(card, "MinCardWidthPx",   failures);
+            // ⚠ RE-POINTED 2026-08-23 (WO-1162 FIX 2). The card heights are DERIVED from the block
+            // budget they must carry now, so they are properties, not parseable literals. Read them
+            // off the live type; the acceptance bounds below are unchanged.
+            float standard = StorePackCard.StandardHeightPx;
+            float compact  = StorePackCard.CompactHeightPx;
+            float minWidth = StorePackCard.MinCardWidthPx;
+
+            // The budget must SUM, or the stack overruns the price lane again (the 268..330 overlap).
+            float requiredStandard = StorePackCard.StandardArtPx
+                                   + StorePackCard.NameBlockPx(StorePackCardVariant.Standard)
+                                   + StorePackCard.ContentsBlockPx + StorePackCard.PriceBlockPx;
+            if (standard < requiredStandard)
+                failures.Add($"standard card ({standard:0}px) is shorter than the blocks it must carry " +
+                             $"({requiredStandard:0}px of art + name + contents + price, before any gap) — " +
+                             "the text stack will reach into the bottom-pinned price lane.");
 
             if (standard < MinStandardCardPx)
                 failures.Add($"standard card height {standard:0}px is below the {MinStandardCardPx:0}px " +
@@ -195,9 +234,16 @@ namespace DeNelle.Editor.Regression
             // Structure, so the name/state lanes CANNOT overlap: the pill lives in the art well and
             // the text stack starts BELOW it. (The old suite compared two anchored rects that the
             // rebuild retired; this asserts the property those rects were a proxy for.)
-            Require(card, "float y = artH + 14f",
+            Require(card, "float y = artH + TextGapPx",
                 "the card's text stack no longer starts below the art well — name and the state/badge " +
                 "pill can occupy the same lane.", failures);
+            Require(card, "float priceLaneTop = cardH - (BottomPadPx + PriceBlockPx)",
+                "the card's text stack no longer reserves the bottom-pinned price lane before it " +
+                "spends its budget — that is the 268..330 contents-over-price overlap (WO-1162 FIX 2).",
+                failures);
+            Require(card, "budget >= CaptionBlockPx",
+                "the OPTIONAL value caption is drawn without checking the remaining budget — it was " +
+                "landing 62px BELOW the card's own bottom edge.", failures);
             Require(card, "BuildPill(card, Ascii(pill), cardH, artH)",
                 "the state/badge pill is no longer seated against the art well.", failures);
             Require(card, "BottomAnchoredText(card, model.PriceMajor",
@@ -257,20 +303,65 @@ namespace DeNelle.Editor.Regression
         // =====================================================================
         //  The ONE Buy control, in the commerce column.
         // =====================================================================
-        private static void CheckCommerceCta(string store, float minTouch, List<string> failures)
+        private static void CheckCommerceCta(string store, float minTouch, float ctaWidth, List<string> failures)
         {
-            var ctaMin = Vector(store, "ctaMin", failures);
-            var ctaMax = Vector(store, "ctaMax", failures);
-            float ctaHostPx = Scalar(store, "CtaHostPx", failures);
-            float commerceW = Scalar(store, "CommerceWidthPx", failures);
+            // ⚠ RE-POINTED 2026-08-23 (WO-1162). The CTA is no longer a fraction pair typed into
+            // BuildCommerce; it is authored in PIXELS against the resolved plan's CTA sub-host. So
+            // the assertion is now the stronger one it was always a proxy for: the Buy control
+            // clears the touch floor in EVERY composition, not just the one the literals were
+            // measured in. The old fraction-of-a-fixed-440 form could not see the stacked case.
+            Require(store, "NightMarketComposition.CtaBottomPadPx / ctaHostPx",
+                "the Buy control's height is no longer authored in pixels against its real host — a " +
+                "fraction of a host that shrinks lands the button under the touch floor, where the " +
+                "clamp GROWS it over its neighbour.", failures);
 
-            float ctaPx = (ctaMax.y - ctaMin.y) * ctaHostPx;
-            if (ctaPx < minTouch)
-                failures.Add($"commerce CTA derives to only {ctaPx:0}px tall (floor {minTouch:0}px).");
+            foreach (var probe in CompositionProbes())
+            {
+                var plan = DeNelle.Wallet.NightMarketComposition.Resolve(probe.w, probe.h);
+                float ctaPx = DeNelle.Wallet.NightMarketComposition.CtaButtonPx;
+                if (ctaPx < minTouch)
+                    failures.Add($"[{probe.name}] commerce CTA is {ctaPx:0}px tall (floor {minTouch:0}px).");
+                if (plan.CtaHostPx < DeNelle.Wallet.NightMarketComposition.CtaHostMinPx)
+                    failures.Add($"[{probe.name}] CTA sub-host resolved to {plan.CtaHostPx:0}px, under the " +
+                                 $"{DeNelle.Wallet.NightMarketComposition.CtaHostMinPx:0}px the button + " +
+                                 "its padding needs - the button cannot be seated at canon size.");
 
-            float ctaWidthPx = (ctaMax.x - ctaMin.x) * commerceW;
-            if (ctaWidthPx < minTouch)
-                failures.Add($"commerce CTA derives to only {ctaWidthPx:0}px wide (floor {minTouch:0}px).");
+                float ctaWidthPx = plan.CommerceWidthPx - 2f * DeNelle.Wallet.NightMarketComposition.CommerceGutterPx;
+                if (ctaWidthPx < ctaWidth)
+                    failures.Add($"[{probe.name}] commerce rail leaves {ctaWidthPx:0}px for a canon " +
+                                 $"{ctaWidth:0}px-wide Buy control.");
+
+                if (plan.CardWidthPx < StorePackCard.MinCardWidthPx)
+                    failures.Add($"[{probe.name}] shelf card resolves to {plan.CardWidthPx:0}px, under the " +
+                                 $"{StorePackCard.MinCardWidthPx:0}px readable minimum — the row will overrun " +
+                                 "its mask and clip a price.");
+            }
+        }
+
+        /// <summary>
+        /// The body boxes this suite resolves a composition for. Landscape only — the store is a
+        /// landscape screen — and deliberately including a 4:3 tablet, which is the aspect that
+        /// actually crosses the two-column breakpoint.
+        /// </summary>
+        private static (string name, float w, float h)[] CompositionProbes()
+        {
+            // Reference box = sqrt(1080*1920/aspect) tall by aspect*that wide (CanvasScaler 1080x1920,
+            // MatchWidthOrHeight 0.5). Body = that minus 2*EdgePad(18) and the 100/132 bands.
+            (string name, float aspect)[] surfaces =
+            {
+                ("2340x1080 (phone)", 2340f / 1080f),
+                ("2670x1200 (Seeker)", 2670f / 1200f),
+                ("1920x1080",          1920f / 1080f),
+                ("1600x1200 (4:3)",    4f / 3f),
+            };
+            var probes = new (string, float, float)[surfaces.Length];
+            for (int i = 0; i < surfaces.Length; i++)
+            {
+                float h = Mathf.Sqrt(1080f * 1920f / surfaces[i].aspect);
+                float w = surfaces[i].aspect * h;
+                probes[i] = (surfaces[i].name, w - 36f, h - 100f - 132f);
+            }
+            return probes;
         }
 
         // =====================================================================

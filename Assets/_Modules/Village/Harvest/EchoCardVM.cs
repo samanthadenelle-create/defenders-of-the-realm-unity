@@ -170,8 +170,13 @@ namespace DeNelle.Village
                     // in WORDS instead of implying income that is not arriving. The
                     // assignment itself stays valid and starts paying when the building
                     // lands -- exactly the WO-811 honest-status pattern.
+                    // WO-1164 (2026-08-23): the article is chosen FROM THE RESOLVED WORD,
+                    // never written into the sentence. The building name now comes out of
+                    // the catalog role table (owner ruling: iron is the ARMORER's resource),
+                    // so it reads "waiting on an Armorer" today and stays grammatical
+                    // through any future rename. Hardcoding "an" would just move the bug.
                     if (TryGetFaucetNeed(token, out string needsBuilding))
-                        return $"{what} - waiting on a {needsBuilding}";   // no "Lv N": see the summary above
+                        return $"{what} - waiting on {ArticleFor(needsBuilding)} {needsBuilding}";   // no "Lv N": see the summary above
                 }
                 else
                 {
@@ -317,6 +322,19 @@ namespace DeNelle.Village
         /// picker resource token — food→farm, wood→lumbermill, iron→forge. Null for
         /// gold/crystals (no collector building exists for them, so no gate to surface).
         /// </summary>
+        /// <summary>
+        /// "a" or "an", decided by the NOUN ITSELF (WO-1164). The needed-building word is
+        /// data now — it comes off the catalog row that claims the role — so the sentence
+        /// must derive its own article rather than carry a literal that goes wrong the
+        /// next time a displayName changes. ASCII-only by construction.
+        /// </summary>
+        private static string ArticleFor(string noun)
+        {
+            if (string.IsNullOrEmpty(noun)) return "a";
+            char c = char.ToLowerInvariant(noun[0]);
+            return (c == 'a' || c == 'e' || c == 'i' || c == 'o' || c == 'u') ? "an" : "a";
+        }
+
         public static string FaucetBuildingIdFor(string resourceToken)
         {
             switch (resourceToken)
@@ -372,18 +390,43 @@ namespace DeNelle.Village
 
         /// <summary>
         /// The PLAYER-FACING name of the building that opens <paramref name="buildingId"/>'s
-        /// gate. WARNING - QR-5.7 NAME INVERSION: in canon-strings.json the key 'forge' names the
-        /// ARMORER storefront and 'workshop' names "Forge" (the weapons building) — so the
-        /// bare 'forge' progression id must NEVER be fed to canon-strings (it would tell
-        /// the player to build an armor shop for iron). For iron we resolve the COLLECTOR
-        /// card's own catalog displayName ("Forge" on collector_forge — the exact word on
-        /// the build-palette card the player must find), falling back to the progression
-        /// def. farm/lumbermill resolve via canon-strings (their keys are not inverted),
-        /// then the same fallbacks.
+        /// gate.
+        /// <para>
+        /// ⛔ THE "QR-5.7 NAME INVERSION" THIS SKIP WAS WRITTEN FOR IS GONE — AND THE SKIP
+        /// STILL HAS TO STAY. The old comment here said canon-strings key 'forge' named the
+        /// ARMORER storefront and 'workshop' named "Forge". That inversion was RETIRED
+        /// 2026-08-23 (WO-1161 straightened structures-catalog.json to v25 from vendors.json,
+        /// and the follow-up straightened building-tiers.json + canon-strings.json to match):
+        /// canon-strings now reads 'forge' -> "Forge", 'armorer' -> "Armorer",
+        /// 'workshop' -> "Crafting Station", identical to the catalog. Three naming
+        /// authorities finally agree.
+        /// </para>
+        /// <para>
+        /// ⛔ BUT THE SKIP IS NOT ABOUT NAMING ANY MORE — IT IS A NAMESPACE COLLISION, AND
+        /// REMOVING IT REINTRODUCES THE ORIGINAL DEFECT FOR A NEW REASON. This method takes a
+        /// PROGRESSION building id, and in that namespace "forge" means THE IRON FAUCET
+        /// (collector_forge's repo.collectorBuildingId). In the CATALOG / canon-strings
+        /// namespace the very same word "forge" means the WEAPONS SHOP — a different
+        /// building, which does NOT open the iron gate. Feeding the progression id to
+        /// canon-strings would once again print "Iron - NEEDS: Forge" and send the player to
+        /// build a weapons shop that earns her no iron: the same unfollowable instruction,
+        /// just arrived at from the other side. The row that DOES open the iron gate is
+        /// 'armorer' (owner ruling 2026-08-23, authored as
+        /// collector_forge.repo.satisfiedByStructureIds), and step 2 below is what finds it.
+        /// So: skip canon-strings for the iron faucet and let the DATA answer.
+        /// Delete this guard only together with the id-namespace collision itself.
+        /// </para>
+        /// <para>
+        /// farm/lumbermill resolve via canon-strings (their progression ids and catalog ids
+        /// name the same building), then the same fallbacks.
+        /// </para>
         /// </summary>
         public static string NeededBuildingDisplayName(string buildingId)
         {
-            // 1. canon-strings — SKIPPED for 'forge' (the QR-5.7 inversion trap).
+            // 1. canon-strings — SKIPPED for 'forge': progression 'forge' = the IRON FAUCET,
+            //    catalog/canon-strings 'forge' = the WEAPONS SHOP. Same word, different
+            //    building, and only the data (step 2) knows which one opens the gate.
+            //    See the namespace-collision note above before touching this line.
             if (buildingId != ResourceBuildingProgression.ForgeId)
             {
                 string canon = VillageStrings.Canon(buildingId);
@@ -391,8 +434,28 @@ namespace DeNelle.Village
                     return canon;
             }
 
-            // 2. The collector card's live catalog displayName (what the build palette
-            //    shows — the word the player can actually go find).
+            // 2. The live catalog displayName of a row that ACTUALLY OPENS THE GATE —
+            //    i.e. the word the player can go find and act on.
+            //
+            // ⛔ WO-1163: PREFER a `satisfiedByStructureIds` row when one is authored.
+            // The owner ruled 2026-08-23 that iron is the ARMORER's resource, and the
+            // cue must name the building that opens the gate, not the collector row
+            // that merely models the faucet. Naming the wrong one is what produced
+            // "Iron - NEEDS: Forge" against a `forge` already in her ever-built ledger:
+            // an instruction that could not be satisfied by obeying it. If the cue
+            // cannot name a building the player can actually build, it is worse than
+            // silent - so the satisfying row wins.
+            foreach (var cid in ResourceBuildingHarvester.CatalogIdsForBuilding(buildingId))
+            {
+                var ce = DeNelle.Core.Catalog.CatalogRegistry.Get(cid);
+                if (ce == null || ce.repo == null || ce.repo.satisfiedByStructureIds == null) continue;
+                foreach (var sid in ce.repo.satisfiedByStructureIds)
+                {
+                    var se = DeNelle.Core.Catalog.CatalogRegistry.Get(sid);
+                    if (se != null && !string.IsNullOrEmpty(se.displayName)) return se.displayName;
+                }
+            }
+
             foreach (var cid in ResourceBuildingHarvester.CatalogIdsForBuilding(buildingId))
             {
                 var e = DeNelle.Core.Catalog.CatalogRegistry.Get(cid);

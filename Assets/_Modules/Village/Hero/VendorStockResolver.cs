@@ -153,7 +153,13 @@ namespace DeNelle.Village.Hero
 
         // ── Query surface ────────────────────────────────────────────────────────
 
-        /// <summary>The vendor's declared layout, or Gear when unregistered (legacy behavior).</summary>
+        /// <summary>
+        /// The vendor's declared layout. vendors.json's `layout` field is its own small
+        /// PRESENTATION vocabulary (gear | goods | jeweler) and stays the authority.
+        /// <para>When a vendor is unregistered — or authored no layout — the catalog ROLE
+        /// decides which shelf it gets, rather than the shop silently rendering a gear
+        /// paper-doll for a jeweller. Gear remains the last-resort default (legacy).</para>
+        /// </summary>
         public static VendorLayout LayoutFor(string vendorContext)
         {
             var v = VendorRegistry.Find(vendorContext);
@@ -161,8 +167,58 @@ namespace DeNelle.Village.Hero
             {
                 case "goods":   return VendorLayout.Goods;
                 case "jeweler": return VendorLayout.Jeweler;
-                default:        return VendorLayout.Gear;
+                case "gear":    return VendorLayout.Gear;
             }
+
+            // Unregistered / unauthored: ask what the building IS, never what it is called.
+            switch (VendorStockContract.RoleFor(vendorContext))
+            {
+                case StructureRole.Jeweler:     return VendorLayout.Jeweler;
+                case StructureRole.Marketplace: return VendorLayout.Goods;
+            }
+
+            return VendorLayout.Gear;
+        }
+
+        /// <summary>
+        /// THE shop header, for every shop screen. ONE implementation — <c>ShopVM</c> and
+        /// <c>PartyShopVM</c> both call this.
+        ///
+        /// <para>⛔ Both VMs used to invent titles from substrings of the vendor context
+        /// ("Armorer's Shop", "The Forge", "Market Stalls", "Jeweler's Bench", "Lumbermill
+        /// Stores") — the SAME wrong fact written twice, and one copy ("Lumbermill Stores")
+        /// had already drifted from the catalog's "Lumber Mill". Two copies of one fact is
+        /// the drift this whole pass exists to end.</para>
+        ///
+        /// Resolution order:
+        ///   1. an explicit caller-supplied display name (the NPC/dialogue path passes one),
+        ///   2. the catalog row that claims this vendor's ROLE — the single naming authority
+        ///      (`StructureRoles.By[role].DisplayName`),
+        ///   3. the vendors.json `displayName` (an authored shop header for a vendor the
+        ///      catalog cannot answer for),
+        ///   4. a titleized fallback so an unknown vendor still reads as a shop.
+        /// </summary>
+        public static string TitleFor(string vendorContext, string displayNameOverride = null)
+        {
+            if (!string.IsNullOrEmpty(displayNameOverride)) return displayNameOverride;
+
+            string word = StructureRoles.By[VendorStockContract.RoleFor(vendorContext)].DisplayName;
+            if (!string.IsNullOrEmpty(word)) return word;
+
+            string authored = DisplayNameFor(vendorContext);
+            if (!string.IsNullOrEmpty(authored)) return authored;
+
+            if (string.IsNullOrEmpty(vendorContext)) return "Vendor Wares";
+            return TitleizeVendor(vendorContext) + " Wares";
+        }
+
+        /// <summary>"blacksmith_forge" -> "Blacksmith forge". Last-resort shop-header cosmetics.</summary>
+        private static string TitleizeVendor(string id)
+        {
+            if (string.IsNullOrEmpty(id)) return "Vendor";
+            id = id.Replace('-', ' ').Replace('_', ' ').Trim();
+            if (id.Length == 0) return "Vendor";
+            return char.ToUpper(id[0]) + (id.Length > 1 ? id.Substring(1) : "");
         }
 
         /// <summary>

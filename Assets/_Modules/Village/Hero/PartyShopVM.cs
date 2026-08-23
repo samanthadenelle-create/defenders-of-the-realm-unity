@@ -1411,28 +1411,17 @@ namespace DeNelle.Village.Hero
             DeNelle.Core.CoreServices.Hud?.SetResources(_economy.Wood, _economy.Iron, _economy.Food, _economy.Crystals);
         }
 
-        // -- Title (mirrors ShopVM.ResolveTitle) ----------------------------------
+        // -- Title ----------------------------------------------------------------
+        //
+        // ⛔ This was a COPY of ShopVM.ResolveTitle, and its own comment said so
+        // ("mirrors ShopVM.ResolveTitle"). Both copies invented the header from
+        // substrings of the vendor context, which is how the weapon shop and the armour
+        // shop wore each other's names. There is now exactly ONE implementation and both
+        // VMs call it; it resolves the word from the catalog row that claims the vendor's
+        // ROLE (StructureRoles), the single naming authority.
 
-        private string ResolveTitle()
-        {
-            if (!string.IsNullOrEmpty(_displayName)) return _displayName;
-            // WO-598: a registered vendor's header is CONTENT (vendors.json displayName).
-            string authored = VendorStockResolver.DisplayNameFor(_vendorContext);
-            if (!string.IsNullOrEmpty(authored)) return authored;
-            string vc = _vendorContext.ToLowerInvariant();
-            if (vc.Contains("armor") || vc.Contains("blacksmith")) return "Armorer's Shop";
-            if (vc.Contains("forge") || vc.Contains("smith")) return "The Forge";
-            if (string.IsNullOrEmpty(_vendorContext)) return "Gear Shop";
-            return TitleizeVendor(_vendorContext) + " Wares";
-        }
-
-        private static string TitleizeVendor(string id)
-        {
-            if (string.IsNullOrEmpty(id)) return "Vendor";
-            id = id.Replace('-', ' ').Replace('_', ' ').Trim();
-            if (id.Length == 0) return "Vendor";
-            return char.ToUpper(id[0]) + (id.Length > 1 ? id.Substring(1) : "");
-        }
+        private string ResolveTitle() =>
+            VendorStockResolver.TitleFor(_vendorContext, _displayName);
 
         // -- Stat / delta / cost formatting (pure; System.Math) --------------------
 

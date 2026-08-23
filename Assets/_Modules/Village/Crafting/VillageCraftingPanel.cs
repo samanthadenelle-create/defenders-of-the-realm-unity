@@ -18,6 +18,7 @@
 // PanelRouter.Register(PanelId.Crafting, Open); arbiter handle "Workshop".
 // =============================================================================
 
+using DeNelle.Core.Catalog;
 using DeNelle.Core.UI;
 using DeNelle.Core.UI.Mvvm;
 using TMPro;
@@ -51,6 +52,10 @@ namespace DeNelle.Village.Crafting
         {
             if (Instance != null && Instance != this) { Destroy(gameObject); return; }
             Instance = this;
+            // ⛔ "Workshop" here is an INTERNAL ARBITER KEY, not a player-facing word — it is
+            // the handle PanelManager routes close/back on, and it is NEVER rendered. Do NOT
+            // "fix" it to the catalog word: the visible title is set in EnsureBuilt from
+            // StructureRoles, and renaming this handle only breaks the arbiter's bookkeeping.
             _panelHandle = PanelManager.Register("Workshop", Close, () => IsOpen);
             // DEF-213: let the Workshop interaction open this panel by id.
             PanelRouter.Register(PanelId.Crafting, Open);
@@ -106,7 +111,11 @@ namespace DeNelle.Village.Crafting
         {
             if (_modal != null && _modal.canvas != null) return;
 
-            _modal = ElarionUiKit.BuildObsidianModal("WorkshopUI", "Workshop",
+            // Arg 1 ("WorkshopUI") is the GameObject name — internal, never rendered.
+            // Arg 2 is the VISIBLE header, so it comes from the catalog row that claims the
+            // crafting_station role ("Crafting Station"), never from a word typed here.
+            string title = StructureRoles.By[StructureRole.CraftingStation].DisplayName ?? "Crafting";
+            _modal = ElarionUiKit.BuildObsidianModal("WorkshopUI", title,
                 new Vector2(0.10f, 0.08f), new Vector2(0.90f, 0.92f), Close,
                 frameName: RpgUiCatalog.FrameCrafting, medallionIcon: "hammer");
 

@@ -362,18 +362,23 @@ namespace DeNelle.Editor
         // =====================================================================
         //  Group 7 — WO-953: faucet honesty (the NEEDS cue + waiting status)
         // ---------------------------------------------------------------------
-        //  Pins: (a) the token→building map; (b) the QR-5.7 name inversion guard —
-        //  iron's needed building must NEVER resolve to "Armorer" (canon-strings
-        //  'forge' names the armor storefront; the collector's card says "Forge");
+        //  Pins: (a) the token→building map; (b) the RULED name — iron's needed
+        //  building must resolve to the ARMORER-role row, and NEVER to the weapons
+        //  shop (the inversion guard, re-pointed 2026-08-23 — see the block comment
+        //  on case (b) for why the expectation is now the exact inverse);
         //  (c) closed gate → "NEEDS: <name>" IN the chip label with " (now)" still
         //  LAST (WO-883 order law) and the chip still tappable-shaped (cue, never a
         //  lock — the projection itself proves no disabled state exists); (d) the
-        //  StateText mirror "waiting on a <name>"; (e) gold/crystals NEVER cued;
+        //  StateText mirror "waiting on a/an <name>"; (e) gold/crystals NEVER cued;
         //  (f) reopening the gate clears the cue.
         // =====================================================================
         private static void CheckFaucetHonesty(GameState state, Action<string> Fail)
         {
-            // (a) token → building map is the gate's own vocabulary.
+            // (a) token → building map is the gate's own vocabulary. NOTE: "forge" here
+            // is the PROGRESSION id (ResourceBuildingProgression.ForgeId), i.e. the iron
+            // faucet's key — NOT the catalog row 'forge' (the weapons shop). They are
+            // different namespaces that happen to share a word; case (b) is what pins
+            // which BUILDING the player is actually told to raise.
             if (EchoCardVM.FaucetBuildingIdFor("iron") != "forge"
                 || EchoCardVM.FaucetBuildingIdFor("wood") != "lumbermill"
                 || EchoCardVM.FaucetBuildingIdFor("food") != "farm")
@@ -381,14 +386,50 @@ namespace DeNelle.Editor
             if (EchoCardVM.FaucetBuildingIdFor("gold") != null || EchoCardVM.FaucetBuildingIdFor("crystals") != null)
                 Fail("gold/crystals must have NO faucet building (no collector exists for them)");
 
-            // (b) the QR-5.7 inversion guard. Whatever source resolves (catalog or the
-            // progression fallback), iron's building must read "Forge" — never the
-            // canon-strings 'forge' value "Armorer" (the armor storefront).
+            // (b) THE RULED NAME + the inversion guard, RE-POINTED 2026-08-23.
+            //
+            // Owner ruling, verbatim: "It should be the armorer, the food is the farm,
+            // and the wood is the lumbermill, and there is none for crystals, since that
+            // is only available at lvl 6 echo."
+            //
+            // ⛔ THIS EXPECTATION IS THE EXACT INVERSE OF WHAT IT ASSERTED BEFORE THAT
+            // DATE, and the flip is deliberate, not a softening. The old case demanded
+            // the collector card word "Forge" and treated "Armorer" as proof that the
+            // QR-5.7 name inversion had leaked. That was only ever right while the
+            // catalog labels were CROSSED (row 'forge' displayed "Armorer" while selling
+            // WEAPONS). WO-1161 straightened the names from vendors.json — function is
+            // the authority — so under the ruling "Armorer" is the CORRECT answer and
+            // "Forge" (the weapons shop) is now the defect. The guard therefore SURVIVES
+            // with its polarity reversed: it still goes RED the moment iron's cue points
+            // the player back at the weapons shop.
+            //
+            // Neither word is hardcoded. Both are read out of the WO-1161 role table, so
+            // a future catalog rename carries this oracle with it instead of stranding a
+            // literal — which is the whole failure mode this cluster keeps re-living.
+            string armorShopName = DeNelle.Core.Catalog.StructureRoles
+                .By[DeNelle.Core.Catalog.StructureRole.Armorer].DisplayName;
+            string weaponShopName = DeNelle.Core.Catalog.StructureRoles
+                .By[DeNelle.Core.Catalog.StructureRole.Weaponsmith].DisplayName;
+            if (string.IsNullOrEmpty(armorShopName))
+                Fail($"NO catalog row claims role '{DeNelle.Core.Catalog.StructureRole.Armorer}' — iron's " +
+                     "NEEDS cue has no building to name, so the player is told to build nothing. " +
+                     "Author the role in structures-catalog.json (never a literal here).");
+            bool namesDiffer = !string.IsNullOrEmpty(weaponShopName) && !string.IsNullOrEmpty(armorShopName)
+                               && !string.Equals(weaponShopName, armorShopName, StringComparison.OrdinalIgnoreCase);
+
             string ironName = EchoCardVM.NeededBuildingDisplayName("forge");
-            if (string.IsNullOrEmpty(ironName) || ironName.IndexOf("Armorer", StringComparison.OrdinalIgnoreCase) >= 0)
-                Fail($"iron's needed building resolved to '{ironName}' — the QR-5.7 inversion (canon 'forge'=Armorer) leaked");
-            if (!ironName.Contains("Forge"))
-                Fail($"iron's needed building resolved to '{ironName}' (expected the collector card word 'Forge')");
+            if (string.IsNullOrEmpty(ironName))
+                Fail("iron's needed building resolved to nothing — a closed gate with no name to act on.");
+            else if (!string.IsNullOrEmpty(armorShopName)
+                     && !string.Equals(ironName, armorShopName, StringComparison.OrdinalIgnoreCase))
+                Fail($"iron's needed building resolved to '{ironName}', expected the ARMORER-role row " +
+                     $"'{armorShopName}' (owner 2026-08-23: iron is the armorer's resource).");
+            // The inversion guard itself: naming the WEAPONS shop is the defect now.
+            if (namesDiffer && !string.IsNullOrEmpty(ironName)
+                && ironName.IndexOf(weaponShopName, StringComparison.OrdinalIgnoreCase) >= 0)
+                Fail($"iron's needed building resolved to '{ironName}', which names the WEAPONS shop " +
+                     $"'{weaponShopName}' (role '{DeNelle.Core.Catalog.StructureRole.Weaponsmith}') — the " +
+                     "name inversion is back: the player would be sent to build a weapons roof to mine iron.");
             string foodName = EchoCardVM.NeededBuildingDisplayName("farm");
             if (foodName != "Farm")
                 Fail($"food's needed building resolved to '{foodName}' (expected canon 'Farm')");
@@ -439,8 +480,17 @@ namespace DeNelle.Editor
                             Fail($"cue label '{c.Label}' contains non-ASCII characters");
                         if (c.Id == "iron")
                         {
-                            if (c.Label.IndexOf("Armorer", StringComparison.OrdinalIgnoreCase) >= 0)
-                                Fail($"iron chip label '{c.Label}' names the Armorer (QR-5.7 inversion leaked into the UI)");
+                            // RE-POINTED 2026-08-23 (owner: "It should be the armorer"):
+                            // the chip must NAME the armorer now. This case used to fail on
+                            // the word "Armorer" appearing; that read the crossed labels as
+                            // canon. Same case, same strictness, ruled polarity.
+                            if (!string.IsNullOrEmpty(armorShopName)
+                                && c.Label.IndexOf(armorShopName, StringComparison.OrdinalIgnoreCase) < 0)
+                                Fail($"iron chip label '{c.Label}' does not name the ARMORER-role building " +
+                                     $"'{armorShopName}' — the NEEDS cue must name the building that opens the gate.");
+                            if (namesDiffer && c.Label.IndexOf(weaponShopName, StringComparison.OrdinalIgnoreCase) >= 0)
+                                Fail($"iron chip label '{c.Label}' names the WEAPONS shop '{weaponShopName}' — " +
+                                     "the name inversion leaked back into the UI.");
                             int iNow = c.Label.IndexOf("(now)", StringComparison.Ordinal);
                             int iNeeds = c.Label.IndexOf("NEEDS:", StringComparison.Ordinal);
                             if (iNow >= 0 && iNeeds >= 0 && iNow < iNeeds)
@@ -452,10 +502,24 @@ namespace DeNelle.Editor
 
                     // (d) the status mirror: assigned-iron StateText says it is waiting.
                     string st = scope.Vm.StateText;
-                    if (!st.Contains("Iron") || !st.Contains("waiting on a"))
-                        Fail($"gated StateText '{st}' does not read 'Gathering Iron ... waiting on a <building>'");
-                    if (st.IndexOf("Armorer", StringComparison.OrdinalIgnoreCase) >= 0)
-                        Fail($"gated StateText '{st}' names the Armorer (QR-5.7 inversion)");
+                    if (!st.Contains("Iron"))
+                        Fail($"gated StateText '{st}' does not name the assigned resource (expected 'Gathering Iron ...')");
+                    // RE-POINTED 2026-08-23: the mirror must name the ARMORER, with the
+                    // article agreeing with the word ("waiting on AN Armorer"). The expected
+                    // article is computed HERE from the resolved noun rather than written
+                    // out, because the noun comes from the catalog and can be renamed —
+                    // pinning the literal "an Armorer" would re-create the stranded-literal
+                    // bug this whole cluster came from.
+                    if (!string.IsNullOrEmpty(armorShopName))
+                    {
+                        string want = "waiting on " + ExpectedArticleFor(armorShopName) + " " + armorShopName;
+                        if (st.IndexOf(want, StringComparison.OrdinalIgnoreCase) < 0)
+                            Fail($"gated StateText '{st}' does not read '... {want}' — the status mirror must " +
+                                 "name the building that opens the gate, grammatically.");
+                    }
+                    if (namesDiffer && st.IndexOf(weaponShopName, StringComparison.OrdinalIgnoreCase) >= 0)
+                        Fail($"gated StateText '{st}' names the WEAPONS shop '{weaponShopName}' — the name " +
+                             "inversion is back in the status line.");
                     if (!IsAscii(st))
                         Fail($"gated StateText '{st}' contains non-ASCII characters");
                 }
@@ -470,6 +534,18 @@ namespace DeNelle.Editor
                 state.EverBuiltStructureIds.Clear();
                 state.EverBuiltStructureIds.AddRange(savedLedger);
             }
+        }
+
+        /// <summary>
+        /// The article the status line OUGHT to use for a noun — computed here, on purpose,
+        /// rather than borrowed from EchoCardVM. An oracle that calls the very helper it is
+        /// checking proves only that the helper equals itself; this second, independent
+        /// implementation is what makes "waiting on an Armorer" an assertion.
+        /// </summary>
+        private static string ExpectedArticleFor(string noun)
+        {
+            if (string.IsNullOrEmpty(noun)) return "a";
+            return "aeiouAEIOU".IndexOf(noun[0]) >= 0 ? "an" : "a";
         }
 
         /// <summary>Tiny disposable wrapper so each temporary VM always unsubscribes.</summary>

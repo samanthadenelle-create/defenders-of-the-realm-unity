@@ -36,6 +36,7 @@ using System.Collections.Generic;
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
+using DeNelle.Core.Catalog;  // StructureRoles — the single naming authority
 using DeNelle.Core.UI;
 using DeNelle.Core.UI.Mvvm;
 
@@ -64,6 +65,10 @@ namespace DeNelle.Village.Items
 
         private void Awake()
         {
+            // ⛔ "Jeweler's Bench" here is an INTERNAL ARBITER KEY, never rendered — it is the
+            // handle PanelManager routes close/back on. Do NOT "fix" it to the catalog word:
+            // the VISIBLE header is set in the build below from StructureRoles, and renaming
+            // this handle only breaks the arbiter's bookkeeping.
             _panelHandle = PanelManager.Register("Jeweler's Bench", Close, () => IsOpen);
             PanelRouter.Register(PanelId.JewelerCrafting, Open);
         }
@@ -287,7 +292,10 @@ namespace DeNelle.Village.Items
             // SHARED Obsidian chrome (FrameCrafting master-detail): black panel + gold trim +
             // gold header + medallion + the ONE shared Close — all built by the kit. The panel
             // adds NO chrome and NO close of its own.
-            var chrome = ElarionUiKit.BuildObsidianPanel(_ui.transform, "Jeweler's Bench",
+            // VISIBLE header: the catalog row that claims the jeweler role owns the word
+            // ("Jeweler"), never a literal here (WO-1161). Generic fallback only.
+            string header = StructureRoles.By[StructureRole.Jeweler].DisplayName ?? "Jewelry";
+            var chrome = ElarionUiKit.BuildObsidianPanel(_ui.transform, header,
                 new Vector2(0.10f, 0.08f), new Vector2(0.90f, 0.92f), () => { if (_vm != null) _vm.Close(); },
                 frameName: RpgUiCatalog.FrameCrafting, medallionIcon: "gem");
             _headerLabel = chrome.title;

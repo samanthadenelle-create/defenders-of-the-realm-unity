@@ -30,6 +30,7 @@
 // panel is open, and (c) open (never toggle) the one correct panel by id.
 // =============================================================================
 
+using DeNelle.Core.Catalog;
 using DeNelle.Core.Diagnostics;
 using DeNelle.Core.UI;
 using UnityEngine;
@@ -701,18 +702,30 @@ namespace DeNelle.Village
             return go;
         }
 
+        // The CATALOG is the single naming authority for player-facing building words
+        // (WO-1161: StructureRoles.By[role].DisplayName reads the row that claims the role).
+        // A word typed into this file drifts the moment creative renames a row — which is
+        // exactly how this dialogue TITLE BAR came to announce "Workshop" for the building
+        // the palette had already relabelled "Crafting Station". The fallback is reached
+        // ONLY when the catalog has not loaded, and is deliberately the GENERIC "Building",
+        // never a competing proper noun: say nothing rather than say something false.
+        private static string RoleWord(string role)
+            => StructureRoles.By[role].DisplayName ?? "Building";
+
         private static string LabelFor(BuildingType t) => t switch
         {
+            // ── Roles the catalog authors: the word comes from the row, never from here ──
+            BuildingType.Workshop    => RoleWord(StructureRole.CraftingStation), // id "workshop"   -> "Crafting Station"
+            BuildingType.Farm        => RoleWord(StructureRole.FoodFaucet),      // id "collector_farm"
+            BuildingType.Lumbermill  => RoleWord(StructureRole.WoodFaucet),      // id "collector_lumbermill" -> "Lumber Mill"
+            BuildingType.Forge       => RoleWord(StructureRole.Weaponsmith),     // id "forge" (SELLS WEAPONS)
+            BuildingType.Armorer     => RoleWord(StructureRole.Armorer),         // id "armorer" (SELLS ARMOUR)
+            BuildingType.JewelersBench => RoleWord(StructureRole.Jeweler),       // id "jeweler"
+            // ── No catalog row claims a role for these yet, so the word stays local ──
             BuildingType.CrystalMine => "Mine",
             BuildingType.PetHouse    => "Echo Hollow",
             BuildingType.ArcaneTower => "Tower",
-            BuildingType.Workshop    => "Workshop",
-            BuildingType.Farm        => "Farm",
-            BuildingType.Lumbermill  => "Lumbermill",
-            BuildingType.Forge       => "Forge",
-            BuildingType.Armorer     => "Armorer",
             BuildingType.ApothecaryWorkbench => "Apothecary",
-            BuildingType.JewelersBench => "Jeweler",
             _ => "Building",
         };
     }

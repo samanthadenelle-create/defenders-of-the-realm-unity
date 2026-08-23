@@ -123,13 +123,13 @@
       "skippable": true,
       "oneShot": true,
       "objective": { "text": "When you wish: raise a roof for proper weapons" },
-      "_note": "WO-1012 2c-bis nudge 1/2 (owner directive 2026-08-10, the post-handoff 'now what?' gap): suggest the WEAPONS building first - catalog id 'workshop' (QR-5.7 pins display 'Forge'; the live structures-catalog still says 'Weaponsmith' - flagged to the owner, copy names both). Fires off the WIN outro's dialogue.ended. Dismissible, never blocking - contextual one-shots never gate or pause pressure by construction. Closes the [Flow:Vendor] blank-town gap: no weapons vendor exists until the player builds one."
+      "_note": "WO-1012 2c-bis nudge 1/2 (owner directive 2026-08-10, the post-handoff 'now what?' gap): suggest the WEAPONS building first - catalog id 'forge', role 'weaponsmith', display 'Forge'. CORRECTED 2026-08-23 (WO-1161 follow-up): this note used to name catalog id 'workshop' and cite the QR-5.7 display pin, which was wrong on both counts - 'workshop' is the CRAFTING STATION and sells nothing. It only ever read correctly because the catalog labels were crossed ('forge' displayed 'Armorer' while selling weapons); vendors.json is the authority and it says 'forge' sells weapons. Fires off the WIN outro's dialogue.ended. Dismissible, never blocking - contextual one-shots never gate or pause pressure by construction. Closes the [Flow:Vendor] blank-town gap: no weapons vendor exists until the player builds one."
     },
     {
       "id": "ctx_build_armor",
       "order": 1060,
       "flowId": "contextual",
-      "trigger": { "type": "signal", "signal": "build.structure_placed:workshop" },
+      "trigger": { "type": "signal", "signal": "build.structure_placed:forge" },
       "pausePressure": false,
       "dialogue": { "intro": "tut_ctx_build_armor" },
       "highlight": ["hud.build_button"],
@@ -137,7 +137,7 @@
       "skippable": true,
       "oneShot": true,
       "objective": { "text": "Next along the road: an Armorer" },
-      "_note": "WO-1012 2c-bis nudge 2/2: once the weapons roof stands (trigger = its placement signal), suggest ARMOR - catalog id 'forge', display 'Armorer'. Dismissible, never blocking. THE CHAIN'S ORDER PAST THESE TWO BEATS IS AN OWNER CREATIVE PIN - propose the full sequence to the owner before authoring more (WO-1012 2c-bis, verbatim: 'not completely locked down that path... a gentle nudge')."
+      "_note": "WO-1012 2c-bis nudge 2/2: once the weapons roof stands (trigger = the placement of catalog id 'forge', role 'weaponsmith'), suggest ARMOR - catalog id 'armorer', role 'armorer', display 'Armorer'. CORRECTED 2026-08-23 (WO-1161 follow-up): BOTH references used to be the wrong row - it triggered on 'workshop' (the crafting station) and pointed the armour nudge at 'forge' (the WEAPONS shop). The beat only ever read correctly because the catalog labels were crossed; straightening them from vendors.json exposed it. The taught chain is weapons roof 'forge' -> armour 'armorer'. Only these two references moved: no beat was added, removed or reordered. Dismissible, never blocking. THE CHAIN'S ORDER PAST THESE TWO BEATS IS AN OWNER CREATIVE PIN - propose the full sequence to the owner before authoring more (WO-1012 2c-bis, verbatim: 'not completely locked down that path... a gentle nudge')."
     },
     {
       "id": "ctx_echo_assign",

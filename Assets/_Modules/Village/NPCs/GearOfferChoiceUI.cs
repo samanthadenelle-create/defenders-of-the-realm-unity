@@ -19,6 +19,7 @@
 // =============================================================================
 
 using System;
+using DeNelle.Core.Catalog;   // StructureRoles — the single naming authority
 using DeNelle.Core.Diagnostics;
 using UnityEngine;
 using UnityEngine.UI;
@@ -85,7 +86,11 @@ namespace DeNelle.Village
             prt.sizeDelta = new Vector2(720f, 96f);
             panel.GetComponent<Image>().color = new Color(0.05f, 0.06f, 0.09f, 0.0f); // invisible spacer
 
-            _forgeRect = MakeButton(panel.transform, "Visit the forge",
+            // The building word comes from the catalog row claiming the weaponsmith role
+            // (WO-1161) — a button that names a building by a word the town does not use
+            // sends the player hunting for the wrong sign. Generic fallback only. ASCII only.
+            string forgeWord = StructureRoles.By[StructureRole.Weaponsmith].DisplayName ?? "weaponsmith";
+            _forgeRect = MakeButton(panel.transform, $"Visit the {forgeWord}",
                 new Vector2(0f, 0f), new Vector2(0.5f, 1f), new Vector2(8f, 0f), new Vector2(-8f, 0f),
                 new Color(0.20f, 0.28f, 0.40f, 0.95f));
             _hereRect = MakeButton(panel.transform, "I'm already equipped",

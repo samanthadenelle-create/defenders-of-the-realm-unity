@@ -1293,7 +1293,7 @@
     },
     {
       "id": "tut_ctx_build_weapons",
-      "_note": "WO-1012 2c-bis nudge 1/2 (owner 2026-08-10): the weapons building - catalog id 'workshop'. QR-5.7 pins display 'Forge'; the live catalog says 'Weaponsmith', so the copy names both until the owner rules the rename. Dismissible, never blocking.",
+      "_note": "WO-1012 2c-bis nudge 1/2 (owner 2026-08-10): the weapons building - catalog id 'forge', role 'weaponsmith', display 'Forge'. CORRECTED 2026-08-23 (WO-1161 follow-up): the id used to read 'workshop' here, which is the crafting station and sells nothing; vendors.json says 'forge' sells weapons. The LINE below was always right ('raise the Forge, the weaponsmith's roof') - only the id it claimed to be about was wrong. Dismissible, never blocking.",
       "startNode": "start",
       "nodes": [
         {
@@ -1309,7 +1309,7 @@
     },
     {
       "id": "tut_ctx_build_armor",
-      "_note": "WO-1012 2c-bis nudge 2/2: armor - catalog id 'forge', display 'Armorer'. The chain's order past these two beats is an owner creative pin - do not author more without her sequence.",
+      "_note": "WO-1012 2c-bis nudge 2/2: armor - catalog id 'armorer', role 'armorer', display 'Armorer'. CORRECTED 2026-08-23 (WO-1161 follow-up): this used to name id 'forge', which is the WEAPONS shop - it only read correctly while the catalog labels were crossed. The line below is unchanged. The chain's order past these two beats is an owner creative pin - do not author more without her sequence.",
       "startNode": "start",
       "nodes": [
         {

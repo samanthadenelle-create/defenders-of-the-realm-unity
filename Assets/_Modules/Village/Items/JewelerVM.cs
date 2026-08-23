@@ -22,6 +22,7 @@
 
 using System;
 using System.Collections.Generic;
+using DeNelle.Core.Catalog;       // StructureRoles — the single naming authority
 using DeNelle.Core.UI.Mvvm;
 using DeNelle.Village;            // GearCatalog
 using DeNelle.Village.Crafting;   // JewelerRecipeCatalog, JewelerCraftingService, VillageInventory
@@ -133,7 +134,11 @@ namespace DeNelle.Village.Items
 
         public event Action Changed;
 
-        public string Title { get; private set; } = "Jeweler's Bench";
+        // The catalog row claiming the jeweler role owns this word (it reads "Jeweler", not
+        // "Jeweler's Bench"). WO-1161: never retype a player-facing building name — a literal
+        // here silently outlives the next creative rename. Generic fallback only.
+        public string Title { get; private set; } =
+            StructureRoles.By[StructureRole.Jeweler].DisplayName ?? "Jewelry";
 
         public void Close() => _onClose?.Invoke();
 

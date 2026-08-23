@@ -30,6 +30,7 @@
 // =============================================================================
 
 using System.Collections;
+using DeNelle.Core.Catalog;   // StructureRoles — the single naming authority
 using DeNelle.Core.Diagnostics;
 using DeNelle.Core.UI;
 using UnityEngine;
@@ -90,7 +91,10 @@ namespace DeNelle.Village
         // structureId mapping rationale (ids verified against
         // Buildings/Progression/ResourceBuildingProgression.cs + Resources/Portraits/*):
         //   - REAL data + portrait exist for: farm, lumbermill, forge, market, pet-house.
-        //   - Blacksmith -> "forge"     (metal/weapon trade shares the forge data)
+        //   - Blacksmith -> "armorer"   (2026-08-23: this line said "forge" and had been wrong
+        //                                since WO-444 — the BLACKSMITH sells ARMOUR, so the code
+        //                                below returns "armorer". Corrected, not deleted, so the
+        //                                next reader is not sent back to the pre-WO-444 mapping.)
         //   - Lumbermill -> "lumbermill"
         //   - Windmill   -> "farm"      (food production == Farm's Food resource)
         //   - EchoHollow -> "pet-house" (routes to the dedicated PetHouse Yarn node)
@@ -102,6 +106,19 @@ namespace DeNelle.Village
         // The "no def" ids (arcane-tower) are SAFE: CmdStructureStatus tolerates a null
         // Find() and a missing Portraits/<id> image, so the menu still shows + the Talk
         // path runs. See "Uncertainty" in the work-order report.
+        // ⛔ THE `StructureId` LITERALS BELOW ARE FROZEN JOIN KEYS — into dialogues.json
+        // conversations, VendorStockContract.AllowedFor and the save/ever-built ledgers. The
+        // game is LIVE, so an id never moves. Only the `Label` (the word the player reads on
+        // the interact prompt, via BuildingInteractable.Configure) is allowed to change, and
+        // it is now taken from the CATALOG rather than typed here (WO-1161).
+        //
+        // The catalog is the single naming authority: StructureRoles.By[role].DisplayName
+        // reads the word off the row that claims the role, so a creative rename reaches the
+        // NPC prompt with no code change. `neutral` is reached ONLY when the catalog has not
+        // loaded and is deliberately generic — never a rival proper noun.
+        private static string RoleWord(string role, string neutral)
+            => StructureRoles.By[role].DisplayName ?? neutral;
+
         private static Vendor VendorFor(string role)
         {
             switch (role.ToLowerInvariant())
@@ -111,21 +128,30 @@ namespace DeNelle.Village
                     // StructureId drives VendorStockContract.AllowedFor — "armorer" => Armor (was "forge"
                     // => Weapon, which made the blacksmith wrongly sell weapons). "armorer" is a recognized
                     // vendor context (AutoPilotDriver storefront set); missing portrait/def degrades gracefully.
-                    return new Vendor { BodyRes = BodySmith,    StructureId = "armorer",      Label = "Armorer", Arch = TownsfolkDialogue.Archetype.Blacksmith };
+                    return new Vendor { BodyRes = BodySmith,    StructureId = "armorer",      Label = RoleWord(StructureRole.Armorer, "Armorer"), Arch = TownsfolkDialogue.Archetype.Blacksmith };
                 case "lumbermill":
-                    return new Vendor { BodyRes = BodyPeasantB, StructureId = "lumbermill",   Label = "Lumbermill", Arch = TownsfolkDialogue.Archetype.Villager };
+                    // StructureId "lumbermill" is the DIALOGUE key and stays; the word the
+                    // player reads is the catalog's ("Lumber Mill", off collector_lumbermill).
+                    return new Vendor { BodyRes = BodyPeasantB, StructureId = "lumbermill",   Label = RoleWord(StructureRole.WoodFaucet, "Lumber Mill"), Arch = TownsfolkDialogue.Archetype.Villager };
                 case "windmill":
-                    return new Vendor { BodyRes = BodyPeasantA, StructureId = "farm",         Label = "Windmill",   Arch = TownsfolkDialogue.Archetype.Villager };
+                    // StructureId "farm" is the DIALOGUE key and stays. The label used to read
+                    // "Windmill" while the tile it anchors to (collector_farm) says "Farm" —
+                    // the catalog settles it.
+                    return new Vendor { BodyRes = BodyPeasantA, StructureId = "farm",         Label = RoleWord(StructureRole.FoodFaucet, "Farm"),   Arch = TownsfolkDialogue.Archetype.Villager };
                 case "echohollow":
+                    // No catalog row claims a role for the Echo Hollow yet — word stays local.
                     return new Vendor { BodyRes = BodyPeasantA, StructureId = "pet-house",    Label = "Echo Hollow", Arch = TownsfolkDialogue.Archetype.Villager };
                 case "forge":
-                    return new Vendor { BodyRes = BodySmith,    StructureId = "forge",        Label = "Forge",      Arch = TownsfolkDialogue.Archetype.Blacksmith };
+                    return new Vendor { BodyRes = BodySmith,    StructureId = "forge",        Label = RoleWord(StructureRole.Weaponsmith, "Forge"), Arch = TownsfolkDialogue.Archetype.Blacksmith };
                 case "arcanetower":
+                    // No catalog row claims a role for the Arcane Tower yet — word stays local.
                     return new Vendor { BodyRes = BodyPeasantB, StructureId = "arcane-tower", Label = "Arcane Tower", Arch = TownsfolkDialogue.Archetype.Elder };
                 case "jeweler":
-                    return new Vendor { BodyRes = BodyMerchant, StructureId = "jeweler",      Label = "Jeweler",    Arch = TownsfolkDialogue.Archetype.Quartermaster };
+                    return new Vendor { BodyRes = BodyMerchant, StructureId = "jeweler",      Label = RoleWord(StructureRole.Jeweler, "Jeweler"),   Arch = TownsfolkDialogue.Archetype.Quartermaster };
                 case "marketplace":
-                    return new Vendor { BodyRes = BodyMerchant, StructureId = "market",       Label = "Marketplace", Arch = TownsfolkDialogue.Archetype.Quartermaster };
+                    // StructureId "market" is the DIALOGUE key and stays. The label used to
+                    // read "Marketplace"; the catalog row calls it "Store".
+                    return new Vendor { BodyRes = BodyMerchant, StructureId = "market",       Label = RoleWord(StructureRole.Marketplace, "Store"), Arch = TownsfolkDialogue.Archetype.Quartermaster };
                 case "apothecary":
                     // Owner F8 2026-07-02 ("should have a NPC"): the Apothecary is a RUNTIME
                     // station (CraftingStationInjector) with no baked marker, so it's spawned by
@@ -142,7 +168,7 @@ namespace DeNelle.Village
                     // prompt to this NPC, and so PlayStructure finds the authored "jewelers-bench"
                     // conversation (Sable) that ends in OpenJeweler -> the SAME JewelerCrafting panel
                     // the station's BuildingInteractable opens. Mirrors the Apothecary/Herbalist wiring.
-                    return new Vendor { BodyRes = BodyMerchant, StructureId = "jewelers-bench", Label = "Jeweler", Arch = TownsfolkDialogue.Archetype.Quartermaster };
+                    return new Vendor { BodyRes = BodyMerchant, StructureId = "jewelers-bench", Label = RoleWord(StructureRole.Jeweler, "Jeweler"), Arch = TownsfolkDialogue.Archetype.Quartermaster };
             }
             // Unknown role -> generic merchant talking to the market. Never silently skip,
             // so a future storefront still gets a working NPC.
@@ -313,15 +339,42 @@ namespace DeNelle.Village
         // StationId constants.
         private static readonly (string Role, string BuildingId)[] AnchorRoles =
         {
-            ("Blacksmith",    "armorer"),        // no placed armorer catalog row yet (L1) — awaits one
+            // 2026-08-23 (WO-1161): this line used to read "no placed armorer catalog row yet
+            // (L1) - awaits one", an INSTRUCTION to go author something that already exists.
+            // The catalog carries a row id "armorer", displayName "Armorer", role `armorer`
+            // (the ARMOUR vendor). Nothing is awaited; this anchor resolves.
+            ("Blacksmith",    "armorer"),
             ("Lumbermill",    "collector_lumbermill"), // WO-707: Sawmill retires from the palette — anchor to the surviving Lumbermill tile; dialogue structureId stays "lumbermill" (VendorFor)
             ("Windmill",      "collector_farm"),       // WO-707: Mill retires from the palette — anchor to the Farm tile; dialogue structureId stays "farm" (VendorFor)
             ("EchoHollow",    "pet-house"),
-            // WO-840 (owner F8 2026-08-02): catalog id "forge" is the ARMOR-visual building the
-            // palette labels "Armorer" — it was anchored to the WEAPONS role ("Forge"), so the
-            // armor building opened the weapons shop. WO-444 law: BLACKSMITH sells armor, FORGE
-            // sells weapons -> the "forge" building seats the Blacksmith (armor) vendor; the
-            // weapons Forge vendor lives on the placeable collector_forge tile below.
+            // ⛔ STALE 2026-08-23 — THIS ROW'S PREMISE WAS RETIRED TODAY AND THE ROW IS
+            // DELIBERATELY LEFT ALONE. Read before touching it.
+            //
+            // The premise (WO-840, owner F8 2026-08-02) was: catalog id "forge" is the
+            // ARMOR-visual building the palette labels "Armorer", so the "forge" building
+            // seats the Blacksmith (armor) vendor and the weapons Forge vendor lives on the
+            // placeable collector_forge tile below. WO-444 law itself still stands —
+            // BLACKSMITH sells armor, FORGE sells weapons — but the LABEL half of that
+            // premise is gone: WO-1161 straightened structures-catalog.json from vendors.json
+            // (function is the authority), so id "forge" now displays "Forge" and SELLS
+            // WEAPONS (vendors.json id "forge", categories ["weapon"]), and id "armorer"
+            // displays "Armorer" and sells armour (categories ["armor"]).
+            //
+            // Read against the corrected names this row now says: when the player places the
+            // FORGE, seat the vendor whose VendorFor("Blacksmith") StructureId is "armorer" —
+            // i.e. standing at the weapons shop opens the ARMOUR shop. Role settle is
+            // first-come and "Blacksmith" also anchors to "armorer" above, so a town that
+            // builds the Forge first can consume its one Blacksmith NPC there; meanwhile the
+            // "Forge" role's only remaining anchor is collector_forge, which build-categories
+            // .json currently LOCKS OUT of the Town palette — so the weapons vendor may have
+            // no reachable anchor at all.
+            //
+            // ⛔ NOT REPOINTED HERE, ON PURPOSE (§12): the truthful table is almost certainly
+            // ("Forge","forge") + ("Blacksmith","armorer"), but that is a FELT change to which
+            // NPC stands at which door and nothing in this session captured a run proving the
+            // live seating. Static reading LOCATES; it never CONCLUDES. Owed: one captured
+            // play/headless run showing which vendor seats at a placed "forge", then the
+            // repoint as its own ticket. Fixing it blind is how this cluster got crossed.
             ("Blacksmith",    "forge"),
             ("Forge",         "collector_forge"), // WO-707 palette: the placeable Forge is a ResourceCollector
                                                   // (structures-catalog id "collector_forge", bare id "forge") — NOT a

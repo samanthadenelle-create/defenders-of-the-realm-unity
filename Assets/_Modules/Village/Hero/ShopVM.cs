@@ -242,33 +242,19 @@ namespace DeNelle.Village.Hero
 
         private void Raise() { if (!_disposed) Changed?.Invoke(); }
 
-        // ── Title (verbatim from ShopPanel.Open) ─────────────────────────────────
+        // ── Title ────────────────────────────────────────────────────────────────
+        //
+        // ⛔ ONE IMPLEMENTATION, and it is NOT here. This method used to invent the shop
+        // header from substrings of the vendor context — "Armorer's Shop", "The Forge",
+        // "Market Stalls", "Jeweler's Bench", "Lumbermill Stores" — and PartyShopVM
+        // carried a second copy of the same list, annotated "mirrors ShopVM.ResolveTitle".
+        // Two copies of one fact, and the copies had already diverged: the catalog says
+        // "Lumber Mill", this said "Lumbermill Stores". The name now comes from the
+        // catalog row that claims the vendor's ROLE (StructureRoles), which is the single
+        // naming authority, via the one shared resolver both VMs call.
 
-        private string ResolveTitle()
-        {
-            string vc = _vendorContext.ToLowerInvariant();
-            string title;
-            if (vc.Contains("armor")) title = "Armorer's Shop";
-            else if (vc.Contains("forge") || vc.Contains("blacksmith")) title = "The Forge";
-            else if (vc.Contains("market")) title = "Market Stalls";
-            else if (vc.Contains("jewel")) title = "Jeweler's Bench";
-            else if (vc.Contains("lumber")) title = "Lumbermill Stores";
-            else if (vc.Contains("granary") || vc.Contains("farm")) title = "Granary Goods";
-            else if (vc.Contains("stable")) title = "Stable Supplies";
-            else if (string.IsNullOrEmpty(_vendorContext)) title = "Vendor Wares";
-            else title = TitleizeVendor(_vendorContext) + " Wares";
-
-            if (!string.IsNullOrEmpty(_displayName)) title = _displayName;
-            return title;
-        }
-
-        private static string TitleizeVendor(string id)
-        {
-            if (string.IsNullOrEmpty(id)) return "Vendor";
-            id = id.Replace('-', ' ').Replace('_', ' ').Trim();
-            if (id.Length == 0) return "Vendor";
-            return char.ToUpper(id[0]) + (id.Length > 1 ? id.Substring(1) : "");
-        }
+        private string ResolveTitle() =>
+            VendorStockResolver.TitleFor(_vendorContext, _displayName);
 
         // ── List build (dispatch) ────────────────────────────────────────────────
 
@@ -649,27 +635,44 @@ namespace DeNelle.Village.Hero
             Rebuild();
         }
 
-        // ── Vendor gold pools (moved verbatim from ShopPanel) ─────────────────────
+        // ── Vendor gold pools ─────────────────────────────────────────────────────
+        //
+        // NOT PERSISTED, and that is what makes re-keying them safe. `_vendorGold` is a
+        // private static in-memory dictionary; it appears in no save schema, no
+        // PlayerPrefs, no server payload, and nothing outside this file reads it (checked
+        // 2026-08-23 before the change). The keys never outlive the process, so no saved
+        // pool can be stranded by renaming one.
+        //
+        // The key is now the vendor's catalog ROLE. It used to be a substring test that
+        // returned "blacksmith" — a word that is neither a catalog id nor a role, and
+        // which lumped the ARMOURER in with anything containing "armor". The pool sizes
+        // are unchanged; only the identity that selects them is honest now.
 
         private static readonly Dictionary<string, int> _vendorGold = new Dictionary<string, int>();
 
+        // The arcane tower has no catalog row and therefore no role, so it keeps a named
+        // residual key. When it earns a row with a role, delete this and add the role case.
+        private const string ArcaneKey = "arcane";
+        private const string GeneralKey = "general";
+
         private string VendorKey()
         {
-            string vc = _vendorContext.ToLowerInvariant();
-            if (vc.Contains("forge")) return "forge";
-            if (vc.Contains("blacksmith") || vc.Contains("armor")) return "blacksmith";
-            if (vc.Contains("arcane") || vc.Contains("tower") || vc.Contains("magic")) return "arcane";
-            return "general";
+            string role = VendorStockContract.RoleFor(_vendorContext);
+            if (role != DeNelle.Core.Catalog.StructureRole.None) return role;
+
+            string vc = (_vendorContext ?? string.Empty).ToLowerInvariant();
+            if (vc.Contains(ArcaneKey) || vc.Contains("tower") || vc.Contains("magic")) return ArcaneKey;
+            return GeneralKey;
         }
 
         private static int StartGoldFor(string key)
         {
             switch (key)
             {
-                case "forge":      return 8000;
-                case "blacksmith": return 9000;
-                case "arcane":     return 7000;
-                default:           return 5000;
+                case DeNelle.Core.Catalog.StructureRole.Weaponsmith: return 8000;   // was "forge"
+                case DeNelle.Core.Catalog.StructureRole.Armorer:     return 9000;   // was "blacksmith"
+                case ArcaneKey:                                      return 7000;
+                default:                                             return 5000;
             }
         }
 

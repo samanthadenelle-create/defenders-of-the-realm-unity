@@ -326,6 +326,22 @@ namespace DeNelle.Village.Buildings.Progression
                     result.Add(e.id);
             }
 
+            // WO-1163: a faucet may declare OTHER structures that also open its gate
+            // (repo.satisfiedByStructureIds). Owner ruling 2026-08-23: iron is the
+            // ARMORER's resource, so owning the Armorer pays iron. Authored in the
+            // catalog, never branched on here - which building pays what is DATA.
+            foreach (var e in DeNelle.Core.Catalog.CatalogRegistry.OfType(
+                         DeNelle.Core.Catalog.CatalogType.Collector))
+            {
+                if (e == null || e.repo == null || e.repo.satisfiedByStructureIds == null) continue;
+                string bid = !string.IsNullOrEmpty(e.repo.collectorBuildingId)
+                    ? e.repo.collectorBuildingId : e.id;
+                if (!string.Equals(bid, buildingId, System.StringComparison.OrdinalIgnoreCase)) continue;
+                foreach (var extra in e.repo.satisfiedByStructureIds)
+                    if (!string.IsNullOrEmpty(extra) && !result.Contains(extra))
+                        result.Add(extra);
+            }
+
             if (result.Count == 0) result.Add("collector_" + buildingId);   // catalog not loaded
             return result;
         }

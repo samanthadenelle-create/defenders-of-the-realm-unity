@@ -20,17 +20,24 @@
 // WHAT IT PROVES:
 //   (1) dual-copy      - the two structures-catalog.json copies are BYTE-identical and
 //                        the version was bumped past the pre-WO-963 15.
-//   (2) authored-order - the teaching ids (collector_lumbermill -> workshop -> forge)
+//   (2) authored-order - the SHELF ids (collector_lumbermill -> workshop -> forge)
 //                        all carry a displayOrder, strictly ascending in that order,
 //                        and the Lumbermill holds the LOWEST authored order in the file
 //                        (it is what the tutorial teaches first). Parsed through the
 //                        PRODUCTION serializer settings, so a field that does not
 //                        actually deserialize reads as unauthored and fails here.
-//   (3) tutorial-agree - the three anchors are still IN tutorial-steps.json and still in
-//                        that relative teaching order: step order 20 highlights
+//   (3) tutorial-agree - the anchors are still IN tutorial-steps.json and still in that
+//                        relative order: step order 20 highlights
 //                        'build.card.collector_lumbermill'; the armor nudge triggers on
-//                        'build.structure_placed:workshop'; that nudge's objective names
-//                        the catalog displayName of 'forge' ("Armorer").
+//                        'build.structure_placed:forge' (the WEAPONS roof); that nudge's
+//                        objective names the catalog displayName of 'armorer', and never
+//                        the weapons shop's.
+//                        ⛔ RE-POINTED 2026-08-23 (owner: iron is the ARMORER's resource).
+//                        This case used to demand the trigger 'workshop' and the word on
+//                        row 'forge'. Both were the CROSSED-label state: vendors.json has
+//                        'forge' selling weapons and 'workshop' selling nothing. Nothing
+//                        was relaxed - the case still fails if the armour beat stops
+//                        following the weapons roof, or starts naming the weapons shop.
 //   (4) stable-sort    - the REAL shipped seam (BuildPaletteVM.SortForDisplay) is driven
 //                        over a synthetic list AND over the live catalog: authored rows
 //                        lead in ascending order, and every UNAUTHORED row keeps its
@@ -78,11 +85,31 @@ namespace DeNelle.Editor.Regression
         private const int MinCatalogVersion = 16;
 
         private const string LumbermillId = "collector_lumbermill";
-        private const string WorkshopId    = "workshop";
-        private const string ArmorerId     = "forge";
 
-        /// <summary>The teaching sequence, in the order the tutorial presents it.</summary>
-        private static readonly string[] TeachingOrder = { LumbermillId, WorkshopId, ArmorerId };
+        // ── The 2c-bis nudge chain, RE-POINTED 2026-08-23 (WO-1161 follow-up) ──
+        // Owner ruling that day: iron is the ARMORER's resource. Straightening the catalog
+        // names from vendors.json (function is the authority) showed that the tutorial's
+        // armour beat had the crossing baked in: it triggered on 'workshop' - which sells
+        // NOTHING, it is the crafting station - and pointed the armour nudge at 'forge',
+        // which sells WEAPONS. The beat only ever read correctly because the labels were
+        // crossed to match it. The truthful chain is:
+        //     weapons roof = 'forge'   (role weaponsmith)
+        //  -> then armour  = 'armorer' (role armorer)
+        /// <summary>The row whose placement is the weapons roof - the armour nudge's trigger.</summary>
+        private const string WeaponsShopId = "forge";
+        /// <summary>The row the armour nudge points at; its displayName is the word taught.</summary>
+        private const string ArmorerId     = "armorer";
+
+        /// <summary>
+        /// The order the CATALOG authors on displayOrder, which is what cases 2 and 4 assert.
+        /// ⚠ This is the SHELF order, not the nudge chain above: `workshop` carries
+        /// displayOrder 20 in structures-catalog.json and the two must keep agreeing or the
+        /// carousel opens on rows nobody seeded. Re-seeding the shelf to the corrected chain
+        /// is a CATALOG edit (and forces a CatalogFallbackGenerator re-run, WO-1137), so it
+        /// is deliberately not smuggled in here - but nothing was weakened either: these
+        /// cases still pin the authored head exactly as they always did.
+        /// </summary>
+        private static readonly string[] AuthoredCarouselOrder = { LumbermillId, "workshop", WeaponsShopId };
 
         [Serializable]
         private sealed class CatalogFile
@@ -120,8 +147,9 @@ namespace DeNelle.Editor.Regression
             {
                 reason = "BUILD CAROUSEL ORDER OK - both structures-catalog copies are byte-identical " +
                          "at v" + MinCatalogVersion + "+, the authored displayOrder runs " +
-                         string.Join(" -> ", TeachingOrder) + " exactly as tutorial-steps.json teaches " +
-                         "them, the palette reads NO tutorial data, and BuildPaletteVM.SortForDisplay " +
+                         string.Join(" -> ", AuthoredCarouselOrder) + ", tutorial-steps.json still opens on " +
+                         "the Lumbermill and still teaches weapons ('" + WeaponsShopId + "') before armour ('" +
+                         ArmorerId + "'), the palette reads NO tutorial data, and BuildPaletteVM.SortForDisplay " +
                          "leads with the authored rows while every unauthored row keeps its catalog " +
                          "position (stable).";
                 return true;
@@ -210,26 +238,26 @@ namespace DeNelle.Editor.Regression
 
             int previous = 0;
             string previousId = null;
-            foreach (var id in TeachingOrder)
+            foreach (var id in AuthoredCarouselOrder)
             {
                 var e = Find(file, id);
                 if (e == null)
                 {
-                    failures.Add("[authored-order] the tutorial teaches '" + id + "' but no such catalog row " +
-                                 "exists - the shelf cannot present what the script names.");
+                    failures.Add("[authored-order] the carousel is seeded on '" + id + "' but no such catalog row " +
+                                 "exists - the shelf cannot present a row that is not there.");
                     continue;
                 }
                 if (e.displayOrder <= 0)
                 {
                     failures.Add("[authored-order] '" + id + "' carries NO displayOrder (" + e.displayOrder +
-                                 ") - the tutorial teaches it, so it must be authored or it sorts to the tail " +
+                                 ") - the shelf is seeded on it, so it must be authored or it sorts to the tail " +
                                  "with the unauthored rows.");
                     continue;
                 }
                 if (previousId != null && e.displayOrder <= previous)
                     failures.Add("[authored-order] '" + id + "' has displayOrder " + e.displayOrder +
                                  " which is NOT after '" + previousId + "' (" + previous + ") - the catalog " +
-                                 "order contradicts the teaching order " + string.Join(" -> ", TeachingOrder) + ".");
+                                 "order contradicts the seeded shelf order " + string.Join(" -> ", AuthoredCarouselOrder) + ".");
                 previous = e.displayOrder;
                 previousId = id;
             }
@@ -303,19 +331,23 @@ namespace DeNelle.Editor.Regression
                              "taught first (WO-963 sec3: the two must agree, and the palette must NOT read " +
                              "this file at runtime).");
 
-            // Anchor B - the armor nudge fires off the WORKSHOP placement signal.
+            // Anchor B - the armour nudge fires off the WEAPONS ROOF's placement signal.
+            // RE-POINTED 2026-08-23: that roof is catalog row 'forge' (role weaponsmith),
+            // not 'workshop' (the crafting station, which sells nothing). vendors.json is
+            // the authority; the old contract was written against the crossed labels.
             JToken armorStep = null;
             foreach (var s in steps)
             {
                 string sig = (string)(s["trigger"] != null ? s["trigger"]["signal"] : null);
-                if (string.Equals(sig, "build.structure_placed:" + WorkshopId, StringComparison.OrdinalIgnoreCase))
+                if (string.Equals(sig, "build.structure_placed:" + WeaponsShopId, StringComparison.OrdinalIgnoreCase))
                 { armorStep = s; break; }
             }
             if (armorStep == null)
             {
                 failures.Add("[tutorial-agree] NO tutorial step triggers on 'build.structure_placed:" +
-                             WorkshopId + "' - the workshop-then-armorer teaching chain the catalog order " +
-                             "mirrors is gone.");
+                             WeaponsShopId + "' - the weapons-roof-then-armourer teaching chain is gone. " +
+                             "The armour nudge must follow the placement of the row that actually sells " +
+                             "weapons (role '" + StructureRole.Weaponsmith + "').");
                 return;
             }
 
@@ -326,16 +358,44 @@ namespace DeNelle.Editor.Regression
                              "BEFORE the Lumbermill beat (order " + lumberStepOrder + ") - the catalog's " +
                              "displayOrder still puts the Lumbermill first.");
 
-            // Anchor C - that nudge names the Armorer, which is the display name of catalog row 'forge'.
+            // Anchor C - that nudge names the ARMOURER: the displayName of catalog row
+            // 'armorer'. RE-POINTED 2026-08-23 - it used to read the word off row 'forge',
+            // which is the WEAPONS shop; the beat only agreed because the labels were crossed.
+            // The word itself is never hardcoded: it comes off whichever row the catalog says
+            // it is, so a rename carries this oracle with it.
             var armorer = Find(file, ArmorerId);
+            var weapons = Find(file, WeaponsShopId);
             string objective = (string)(armorStep["objective"] != null ? armorStep["objective"]["text"] : null) ?? "";
+
+            // The two rows must still BE what the chain assumes - function is the authority
+            // (vendors.json), and the role field is where that is recorded. If these ever
+            // swap again, this is where it is caught, before the copy silently re-crosses.
+            if (weapons != null && !string.Equals(weapons.role, StructureRole.Weaponsmith, StringComparison.OrdinalIgnoreCase))
+                failures.Add("[tutorial-agree] catalog row '" + WeaponsShopId + "' claims role '" +
+                             (weapons.role ?? "<none>") + "', not '" + StructureRole.Weaponsmith + "' - the " +
+                             "armour nudge triggers off its placement precisely BECAUSE it is the weapons roof.");
+            if (armorer != null && !string.Equals(armorer.role, StructureRole.Armorer, StringComparison.OrdinalIgnoreCase))
+                failures.Add("[tutorial-agree] catalog row '" + ArmorerId + "' claims role '" +
+                             (armorer.role ?? "<none>") + "', not '" + StructureRole.Armorer + "' - the nudge " +
+                             "would be teaching the player to build something that is not the armourer.");
+
+            // The INVERSION GUARD, kept and re-pointed: naming the weapons shop is the defect
+            // now. It goes RED the moment the armour beat starts saying "Forge" again.
+            if (weapons != null && armorer != null &&
+                !string.IsNullOrEmpty(weapons.displayName) && !string.IsNullOrEmpty(armorer.displayName) &&
+                !string.Equals(weapons.displayName, armorer.displayName, StringComparison.OrdinalIgnoreCase) &&
+                objective.IndexOf(weapons.displayName, StringComparison.OrdinalIgnoreCase) >= 0)
+                failures.Add("[tutorial-agree] the armor nudge's objective (\"" + objective + "\") names the " +
+                             "WEAPONS shop '" + weapons.displayName + "' (catalog row '" + WeaponsShopId +
+                             "') - the name inversion is back in the teaching copy.");
+
             if (armorer == null || string.IsNullOrEmpty(armorer.displayName))
                 failures.Add("[tutorial-agree] catalog row '" + ArmorerId + "' is missing or has no displayName " +
-                             "- the third teaching slot points at nothing.");
+                             "- the armour nudge points at nothing.");
             else if (objective.IndexOf(armorer.displayName, StringComparison.OrdinalIgnoreCase) < 0)
                 failures.Add("[tutorial-agree] the armor nudge's objective (\"" + objective + "\") no longer " +
                              "names '" + armorer.displayName + "' (catalog row '" + ArmorerId + "') - the " +
-                             "third seeded slot no longer matches what is taught.");
+                             "armour beat no longer names the armourer.");
         }
 
         // =====================================================================
@@ -390,7 +450,7 @@ namespace DeNelle.Editor.Regression
                 head.Add(e.id);
             }
             string headGot = string.Join(",", head.ToArray());
-            string headWant = string.Join(",", TeachingOrder);
+            string headWant = string.Join(",", AuthoredCarouselOrder);
             if (headGot != headWant)
                 failures.Add("[stable-sort] the live catalog's authored head is [" + headGot + "], expected [" +
                              headWant + "] - the shipped carousel would not open on the tutorial's order.");

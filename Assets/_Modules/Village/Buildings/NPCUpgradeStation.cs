@@ -20,6 +20,7 @@
 using System;
 using UnityEngine;
 using UnityEngine.UI;
+using DeNelle.Core.Catalog; // StructureRoles — the single naming authority
 using DeNelle.Core.State; // for Economy if needed, but use the Village one
 
 namespace DeNelle.Village
@@ -31,8 +32,27 @@ namespace DeNelle.Village
     public sealed class NPCUpgradeStation : MonoBehaviour
     {
         [Header("Identity")]
-        public string BuildingName = "Workshop";
+        [Tooltip("Player-facing station name. LEAVE BLANK to take the word from the catalog " +
+                 "row that claims the crafting_station role.")]
+        // Was hardcoded "Workshop", which kept saying that after the catalog relabelled the
+        // crafting station. It is now BLANK by default and resolved through DisplayName below.
+        // ⛔ Do NOT put a catalog lookup in this field INITIALISER: a MonoBehaviour field
+        // initialiser runs during construction, where Unity forbids Resources.Load — the
+        // catalog read has to happen at USE time, which is what DisplayName does.
+        public string BuildingName = "";
         public string ResourceTypeHint = "General"; // e.g. "Food", "Iron" for flavor
+
+        /// <summary>
+        /// The word shown to the player. An inspector-authored <see cref="BuildingName"/> wins;
+        /// otherwise the CATALOG settles it (WO-1161 — StructureRoles is the single naming
+        /// authority, so a creative rename lands here with no code change). The final fallback
+        /// is a GENERIC word, reached only if the catalog has not loaded — never a rival
+        /// proper noun, because a wrong-but-present name is worse than a vague one.
+        /// </summary>
+        public string DisplayName =>
+            !string.IsNullOrEmpty(BuildingName)
+                ? BuildingName
+                : (StructureRoles.By[StructureRole.CraftingStation].DisplayName ?? "Station");
 
         [Header("Tiers")]
         public int CurrentTier = 1;
@@ -80,7 +100,7 @@ namespace DeNelle.Village
             if (_uiOpen) return;
             _uiOpen = true;
 
-            _upgradeUI = new GameObject("UpgradeUI_" + BuildingName);
+            _upgradeUI = new GameObject("UpgradeUI_" + DisplayName);
             _upgradeUI.transform.SetParent(transform, false);
 
             var canvas = _upgradeUI.AddComponent<Canvas>();
@@ -96,7 +116,7 @@ namespace DeNelle.Village
             panel.GetComponent<Image>().color = new Color(0.1f, 0.08f, 0.06f, 0.92f);
 
             // Title
-            CreateText(panel.transform, $"{BuildingName} (Tier {CurrentTier}/{MaxTier})", new Vector2(0, 1.1f), 22, Color.white);
+            CreateText(panel.transform, $"{DisplayName} (Tier {CurrentTier}/{MaxTier})", new Vector2(0, 1.1f), 22, Color.white);
 
             // Cost preview
             var nextCost = GetNextTierCost();
@@ -109,7 +129,7 @@ namespace DeNelle.Village
             CreateButton(panel.transform, "Upgrade", new Vector2(-0.8f, -0.9f), TryUpgrade);
             CreateButton(panel.transform, "Close", new Vector2(0.8f, -0.9f), CloseUI);
 
-            Debug.Log($"[NPCUpgradeStation] Opened upgrade UI for {BuildingName}");
+            Debug.Log($"[NPCUpgradeStation] Opened upgrade UI for {DisplayName}");
         }
 
         private void CreateText(Transform parent, string txt, Vector2 anchored, int size, Color c)
@@ -189,7 +209,7 @@ namespace DeNelle.Village
             if (_vm == null) _vm = NPCUpgradeVM.CreateDefault();
             if (!_vm.TryPurchaseUpgrade(cost))
             {
-                Debug.LogWarning($"[NPCUpgradeStation] Cannot afford upgrade for {BuildingName}.");
+                Debug.LogWarning($"[NPCUpgradeStation] Cannot afford upgrade for {DisplayName}.");
                 return;
             }
 
@@ -201,7 +221,7 @@ namespace DeNelle.Village
             // Economy benefit hook (example: grant a small immediate bonus + register for future)
             // In real system this could register a ProductionSource with Economy.
             _vm.GrantFirstHarvestBonus(); // symbolic "first harvest boost"
-            Debug.Log($"[NPCUpgradeStation] {BuildingName} upgraded to tier {CurrentTier}. Economy charged.");
+            Debug.Log($"[NPCUpgradeStation] {DisplayName} upgraded to tier {CurrentTier}. Economy charged.");
 
             // Refresh UI or close
             CloseUI();
@@ -222,7 +242,7 @@ namespace DeNelle.Village
                 // For now, simple scale bump as "growth"
                 BuildingVisualRoot.transform.localScale = Vector3.one * (0.95f + CurrentTier * 0.08f);
                 // TODO: full anim / particle "construction" burst
-                Debug.Log($"[NPCUpgradeStation] Applied tier visual via StructureTierVisual path for {BuildingName}");
+                Debug.Log($"[NPCUpgradeStation] Applied tier visual via StructureTierVisual path for {DisplayName}");
                 return;
             }
 
@@ -240,7 +260,7 @@ namespace DeNelle.Village
 
             // Optional: spawn a small "upgrade complete" effect (if VFX available)
             // For now just log + scale as proof of visual transformation.
-            Debug.Log($"[NPCUpgradeStation] Visual upgrade applied (scale + tint) for {BuildingName} tier {CurrentTier}");
+            Debug.Log($"[NPCUpgradeStation] Visual upgrade applied (scale + tint) for {DisplayName} tier {CurrentTier}");
         }
 
         private void CloseUI()

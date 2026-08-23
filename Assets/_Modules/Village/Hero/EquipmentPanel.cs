@@ -22,6 +22,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
+using DeNelle.Core.Catalog;   // StructureRoles — the single naming authority
 using DeNelle.Core.UI;
 using DeNelle.Core.UI.Mvvm;
 using DeNelle.Core.Diagnostics;
@@ -736,15 +737,21 @@ namespace DeNelle.Village.Hero
 
         // EMPTY slots route the player to the system that fills them (owner spec: a pointer,
         // never a bare "Empty"). ASCII only.
+        // The BUILDING WORDS come from the catalog (WO-1161: StructureRoles is the single
+        // naming authority) — a pointer that names a building the town no longer calls by
+        // that name sends the player looking for a sign that does not exist. Fallbacks are
+        // generic, reached only if the catalog has not loaded.
         private static string EmptySlotPointer(string slotKey)
         {
             switch (slotKey)
             {
                 case EquipVM.SlotAmulet:
-                case EquipVM.SlotRing:     return "Craft one at the Jeweler";
+                case EquipVM.SlotRing:
+                    return $"Craft one at the {StructureRoles.By[StructureRole.Jeweler].DisplayName ?? "jeweler"}";
                 case EquipVM.SlotMainhand:
                 case EquipVM.SlotOffHand:
-                case EquipVM.SlotChest:    return "Forge or buy gear in town";
+                case EquipVM.SlotChest:
+                    return $"{StructureRoles.By[StructureRole.Weaponsmith].DisplayName ?? "Craft"} or buy gear in town";
                 default:                   return "";
             }
         }

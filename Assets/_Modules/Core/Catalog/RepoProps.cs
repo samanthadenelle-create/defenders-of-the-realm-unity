@@ -142,6 +142,29 @@ namespace DeNelle.Core.Catalog
         public string collectorBuildingId = null;
 
         /// <summary>
+        /// WO-1163 — OTHER structure ids whose existence ALSO opens this faucet's WO-834
+        /// harvest gate. Data-authored, so which building pays a resource is a CATALOG fact.
+        ///
+        /// <para>⛔ WHY THIS EXISTS. `CatalogIdsForBuilding` deliberately refuses the BARE id
+        /// (see its own note: accepting `forge` would let the Forge STOREFRONT open the forge
+        /// COLLECTOR's gate). That rule is right in general and WRONG for iron, because the
+        /// owner ruled 2026-08-23 that iron IS the Armorer's resource — "It should be the
+        /// armorer, the food is the farm, and the wood is the lumbermill, and there is none
+        /// for crystals, since that is only available at lvl 6 echo". This field is how that
+        /// ruling is expressed as DATA rather than as a special case in the gate.</para>
+        ///
+        /// <para>⛔ AND IT IS WHY THE PLAYER WAS STUCK. The picker printed "Iron - NEEDS:
+        /// Forge" while `forge` already sat in her ever-built ledger — an instruction that
+        /// could not be satisfied by obeying it. With the pairing authored here the cue names
+        /// the building that actually opens the gate, so following it WORKS.</para>
+        ///
+        /// Null/empty = unchanged behaviour (collector row only). Never put a bare storefront
+        /// id here casually: each entry is a deliberate ruling that owning that building pays
+        /// this resource.
+        /// </summary>
+        public string[] satisfiedByStructureIds = null;
+
+        /// <summary>
         /// Phase 2 (owner): true = at most ONE of these may exist in the village (pet-house,
         /// forge, mill, arcane-tower, Heart). Pure-data flag only for now — the enforce /
         /// auto-find-existing wiring is a follow-up; this just carries the intent so build /

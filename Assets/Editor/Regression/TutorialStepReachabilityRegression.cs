@@ -776,11 +776,19 @@ namespace DeNelle.Editor.Regression
                     failures.Add("[arc-shape] ctx_build_weapons triggers on '" + (nudge1.TriggerSignal ?? "<null>") + "' but the " +
                                  "WIN outro raises '" + expected + "' - the nudge chain is disconnected from the handoff");
             }
+            // RE-POINTED 2026-08-23 (WO-1161 follow-up). This contract used to name
+            // 'workshop' as the weapons roof. That was never true of the DATA - vendors.json
+            // has 'forge' selling weapons and 'workshop' selling nothing (it is the crafting
+            // station); the beat only read correctly while the catalog labels were crossed.
+            // Straightening the names exposed it, so the trigger and this oracle both move to
+            // the row that actually is the weapons roof. Still strict: an armour nudge that
+            // fires off anything but the weapons building's placement is still a FAIL.
             if (nudge2 != null &&
                 !string.Equals(nudge2.TriggerSignal,
-                    DeNelle.Core.Tutorial.TutorialSignals.StructurePlacedPrefix + "workshop", StringComparison.OrdinalIgnoreCase))
+                    DeNelle.Core.Tutorial.TutorialSignals.StructurePlacedPrefix + "forge", StringComparison.OrdinalIgnoreCase))
                 failures.Add("[arc-shape] ctx_build_armor triggers on '" + (nudge2.TriggerSignal ?? "<null>") + "' - the chain " +
-                             "contract is build.structure_placed:workshop (armor follows the weapons roof)");
+                             "contract is build.structure_placed:forge (armor follows the weapons roof, and 'forge' " +
+                             "is the row that sells weapons per vendors.json)");
 
             // (f) Nudges are nudges: oneShot, never pausePressure (never blocking).
             foreach (var nudge in new[] { nudge1, nudge2 })
@@ -792,16 +800,18 @@ namespace DeNelle.Editor.Regression
                     failures.Add("[arc-shape] '" + nudge.Id + "' sets pausePressure - a post-handoff nudge must never gate free play");
             }
 
-            // (g) The nudged buildings exist in the catalog (id workshop = weapons, id forge
-            //     = armor - QR-5.7). A nudge toward a card that cannot render is the seq 632
-            //     defect wearing a new hat.
+            // (g) The nudged buildings exist in the catalog. RE-POINTED 2026-08-23: the pair
+            //     is now id 'forge' = WEAPONS (role weaponsmith) and id 'armorer' = ARMOUR
+            //     (role armorer), per vendors.json. It previously read "workshop = weapons,
+            //     forge = armor", which was the crossed-label state, not the function.
+            //     A nudge toward a card that cannot render is the seq 632 defect in a new hat.
             string catRaw = ReadText(StructuresRes, failures);
             if (catRaw != null)
             {
                 var entries = JObject.Parse(catRaw)["entries"] as JArray;
                 var ids = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
                 if (entries != null) foreach (var e in entries) { string id = (string)e["id"]; if (!string.IsNullOrEmpty(id)) ids.Add(id); }
-                foreach (var want in new[] { "workshop", "forge" })
+                foreach (var want in new[] { "forge", "armorer" })
                     if (!ids.Contains(want))
                         failures.Add("[arc-shape] nudge-chain building id '" + want + "' does not resolve in structures-catalog.json");
             }

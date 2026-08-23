@@ -129,10 +129,81 @@ namespace DeNelle.Wallet
         /// <summary>Card corner radius, reference px (§R3: "~25 ref").</summary>
         public const float CornerRadiusPx = 25f;
 
-        /// <summary>Card heights per variant, reference px.</summary>
-        public const float FeaturedHeightPx = 470f;
-        public const float StandardHeightPx = 344f;
-        public const float CompactHeightPx  = 228f;
+        // =====================================================================
+        //  ⭐ THE CARD IS A BUDGET NOW, NOT THREE LITERALS (WO-1162 FIX 2).
+        // ---------------------------------------------------------------------
+        //  WHAT WAS WRONG WITH 470 / 344 / 228, in arithmetic anyone can redo:
+        //  the STANDARD card is 344 px tall with a 152 px art well, and its text
+        //  stack was authored as fixed top offsets - name at art+14 in a 96 px
+        //  block, contents 6 px later in a 92 px block, the optional value
+        //  caption 6 px after THAT in a 40 px block:
+        //
+        //      name      166 .. 262
+        //      contents  268 .. 360      <- the card ENDS at 344
+        //      caption   366 .. 406      <- entirely OFF the card
+        //      price     268 .. 330      (bottom-pinned, 14 + 62 from the floor)
+        //
+        //  So the contents block and the PRICE ROW occupied the same 268..330
+        //  lane on every standard card, and the value caption was drawn 62 px
+        //  below the card's own bottom edge. Compact is the same defect one size
+        //  down: a 52 px name block at 115 ends at 167, and the price row starts
+        //  at 152. Nothing caught it because every constant involved was legal on
+        //  its own - which is exactly why the oracle for this is a MEASUREMENT of
+        //  real RectTransforms and not another arithmetic re-derivation.
+        //
+        //  THE FIX IS NOT TO SHRINK THE TYPE. A card must either FIT its required
+        //  content or DROP the optional value caption; price and state are never
+        //  what gives. So each variant's height is now the SUM of the blocks it
+        //  must carry, at the type sizes it renders them at, and the shelf - which
+        //  scrolls - absorbs the taller row. Card readability outranks catalogue
+        //  density; that ruling is already why the shelf is two-up.
+        // =====================================================================
+
+        /// <summary>TMP line box as a multiple of font size. Conservative: TMP's own line height for
+        /// these faces is under this, so a block budgeted here always holds its lines.</summary>
+        private const float LineBoxMul = 1.25f;
+
+        /// <summary>Art well -> first text block.</summary>
+        private const float TextGapPx = 14f;
+        /// <summary>Between two text blocks.</summary>
+        private const float BlockGapPx = 6f;
+        /// <summary>Last text block -> the bottom-pinned price row. Never zero: this gap is what
+        /// makes "the price row is a separate lane" true rather than merely intended.</summary>
+        private const float PriceGapPx = 10f;
+        /// <summary>Price row -> card bottom.</summary>
+        private const float BottomPadPx = 14f;
+
+        /// <summary>One block, sized for <paramref name="lines"/> lines at <paramref name="fontPx"/>.</summary>
+        private static float BlockPx(float fontPx, int lines) =>
+            Mathf.Ceil(fontPx * LineBoxMul * Mathf.Max(1, lines));
+
+        /// <summary>Name block: two lines everywhere but Compact, where the card is a dense rung.</summary>
+        public static float NameBlockPx(StorePackCardVariant v) =>
+            BlockPx(FontName, v == StorePackCardVariant.Compact ? 1 : 2);
+
+        /// <summary>Contents block: two lines. Absent on Compact.</summary>
+        public static float ContentsBlockPx => BlockPx(FontBody, 2);
+
+        /// <summary>The OPTIONAL goods-per-dollar caption. One line, and the FIRST thing dropped.</summary>
+        public static float CaptionBlockPx => BlockPx(FontCaption, 1);
+
+        /// <summary>The price row. REQUIRED, bottom-pinned, never traded away.</summary>
+        public static float PriceBlockPx => BlockPx(FontPrice, 1);
+
+        /// <summary>Card heights per variant, reference px — DERIVED from the blocks above.</summary>
+        public static float FeaturedHeightPx =>
+            FeaturedArtPx + TextGapPx + NameBlockPx(StorePackCardVariant.Featured)
+            + BlockGapPx + ContentsBlockPx + BlockGapPx + CaptionBlockPx
+            + PriceGapPx + PriceBlockPx + BottomPadPx;
+
+        public static float StandardHeightPx =>
+            StandardArtPx + TextGapPx + NameBlockPx(StorePackCardVariant.Standard)
+            + BlockGapPx + ContentsBlockPx
+            + PriceGapPx + PriceBlockPx + BottomPadPx;
+
+        public static float CompactHeightPx =>
+            CompactArtPx + TextGapPx + NameBlockPx(StorePackCardVariant.Compact)
+            + PriceGapPx + PriceBlockPx + BottomPadPx;
 
         /// <summary>Art-well heights per variant, reference px (§R3: standard 152, compact 101).</summary>
         public const float FeaturedArtPx = 228f;
@@ -245,10 +316,24 @@ namespace DeNelle.Wallet
             // ── TEXT STACK, BENEATH THE ART (ruling 4) ───────────────────────
             // Anchored from the TOP in reference px so each row's height is the authored number,
             // not a share of whatever the parent turned out to be.
-            float y = artH + 14f;
+            //
+            // ⛔ AND IT IS SPENT AGAINST A BUDGET (WO-1162 FIX 2). Every block below is drawn only
+            // if the space between the art well and the PRICE ROW'S OWN LANE still holds it. The
+            // price row is bottom-pinned and reserved FIRST, so no name length, no two-line badge
+            // and no long content summary can ever reach into it — that overlap is what shipped
+            // (see the budget header above), and "the price must never be clipped" is an acceptance
+            // criterion, not a preference.
+            float y = artH + TextGapPx;
+            float priceLaneTop = cardH - (BottomPadPx + PriceBlockPx);
+            float budget = priceLaneTop - PriceGapPx - y;
 
+            // ── NAME — REQUIRED ──────────────────────────────────────────────
+            // It takes its full block, or every remaining pixel if the budget is somehow tighter
+            // than the block (which the derived heights make unreachable; this is the guard, not
+            // the plan). FitBlock then auto-sizes the words down INSIDE that rect.
+            float nameH = Mathf.Min(NameBlockPx(variant), Mathf.Max(0f, budget));
             var name = TopAnchoredText(card, model.Name, FontName, ElarionUi.Parchment,
-                FontStyles.Bold, TextAlignmentOptions.TopLeft, y, variant == StorePackCardVariant.Compact ? 52f : 96f);
+                FontStyles.Bold, TextAlignmentOptions.TopLeft, y, nameH);
             if (name != null)
             {
                 name.textWrappingMode = TextWrappingModes.Normal;   // names WRAP (§5)
@@ -258,26 +343,52 @@ namespace DeNelle.Wallet
                 // class of spill AuditGeometry rule 1 exists to catch.
                 ElarionUiKit.FitBlock(name, ElarionUi.FontFloorMobile, FontName);
             }
-            y += (variant == StorePackCardVariant.Compact ? 52f : 96f) + 6f;
+            y += nameH + BlockGapPx;
+            budget -= nameH + BlockGapPx;
 
             if (variant != StorePackCardVariant.Compact)
             {
-                var contents = TopAnchoredText(card, model.Contents, FontBody,
-                    new Color(0.90f, 0.93f, 0.98f, 1f), FontStyles.Normal,
-                    TextAlignmentOptions.TopLeft, y, 92f);
-                if (contents != null)
+                // ── CONTENTS — REQUIRED on the priced variants ───────────────
+                // It may compress to a single line box before it is dropped; below one line box
+                // there is nothing honest to draw and the block is omitted rather than clipped.
+                float oneLine = BlockPx(FontBody, 1);
+                float contentsH = Mathf.Min(ContentsBlockPx, Mathf.Max(0f, budget));
+                if (contentsH >= oneLine)
                 {
-                    contents.textWrappingMode = TextWrappingModes.Normal;
-                    ElarionUiKit.FitBlock(contents, ElarionUi.FontFloorMobile, FontBody);
+                    var contents = TopAnchoredText(card, model.Contents, FontBody,
+                        new Color(0.90f, 0.93f, 0.98f, 1f), FontStyles.Normal,
+                        TextAlignmentOptions.TopLeft, y, contentsH);
+                    if (contents != null)
+                    {
+                        contents.textWrappingMode = TextWrappingModes.Normal;
+                        ElarionUiKit.FitBlock(contents, ElarionUi.FontFloorMobile, FontBody);
+                    }
+                    y += contentsH + BlockGapPx;
+                    budget -= contentsH + BlockGapPx;
                 }
-                y += 98f;
+                else if (!string.IsNullOrEmpty(model.Contents))
+                {
+                    DeNelle.Core.Diagnostics.FlowTrace.Warn("Store",
+                        "StorePackCard '" + (model.Sku ?? "?") + "': no line box left for the contents " +
+                        "summary in a " + variant + " card (" + cardH.ToString("0") + "px) - it is DROPPED " +
+                        "rather than drawn into the price lane.");
+                }
 
-                // The goods-per-dollar caption. ABSENT when the caller could not compute it —
-                // an invented value line is the claim-the-arithmetic-does-not-support defect (§7).
+                // ── VALUE CAPTION — OPTIONAL, AND THE FIRST THING TO GO ──────
+                // ABSENT when the caller could not compute it (an invented value line is the
+                // claim-the-arithmetic-does-not-support defect, §7) AND absent when the card has no
+                // room left. Dropping a nice-to-have is correct; drawing it 62 px below the card's
+                // own bottom edge, which is what shipped, is not.
                 if (!string.IsNullOrEmpty(model.ValueCaption))
                 {
-                    TopAnchoredText(card, model.ValueCaption, FontCaption, ElarionUi.ParchmentDim,
-                        FontStyles.Italic, TextAlignmentOptions.TopLeft, y, 40f);
+                    if (budget >= CaptionBlockPx)
+                        TopAnchoredText(card, model.ValueCaption, FontCaption, ElarionUi.ParchmentDim,
+                            FontStyles.Italic, TextAlignmentOptions.TopLeft, y, CaptionBlockPx);
+                    else
+                        DeNelle.Core.Diagnostics.FlowTrace.Step("Store",
+                            "StorePackCard '" + (model.Sku ?? "?") + "': value caption dropped - " +
+                            budget.ToString("0") + "px left, block needs " + CaptionBlockPx.ToString("0") +
+                            "px. Required price and state are unaffected.");
                 }
             }
 
@@ -286,7 +397,7 @@ namespace DeNelle.Wallet
             // "quantities and currency must never be clipped" is an acceptance criterion, and the
             // 2026-08-22 frames failed it by showing "20 SKR" for a 120 SKR pack.
             handle.PriceLabel = BottomAnchoredText(card, model.PriceMajor, FontPrice, ElarionUi.Gilt,
-                FontStyles.Bold, TextAlignmentOptions.BottomLeft, 14f, 62f, 0.06f, 0.62f);
+                FontStyles.Bold, TextAlignmentOptions.BottomLeft, BottomPadPx, PriceBlockPx, 0.06f, 0.62f);
             // ⛔ THE PRICE IS THE ONE STRING ON THIS SCREEN THAT MUST NOT CLIP. On 2026-08-22 the
             // owner's device showed "20 SKR" for a 120 SKR pack and "6 SKR" for a 36 SKR pack --
             // the leading digit occluded. FitSingleLine shrinks toward the floor before it would
@@ -294,8 +405,18 @@ namespace DeNelle.Wallet
             if (handle.PriceLabel != null)
                 ElarionUiKit.FitSingleLine(handle.PriceLabel, ElarionUi.FontFloorMobile, FontPrice);
             if (!string.IsNullOrEmpty(model.PriceMinor))
-                BottomAnchoredText(card, model.PriceMinor, FontMinor, ElarionUi.Parchment,
-                    FontStyles.Normal, TextAlignmentOptions.BottomRight, 18f, 44f, 0.62f, 0.94f);
+            {
+                // ⛔ THE MINOR REFERENCE SHARES THE PRICE LANE, IT DOES NOT SIT ABOVE IT. It used to
+                // be bottom-offset 18 in a 44 px box while the major was 14/62 - two overlapping
+                // boxes in one lane whose only separation was that they happened not to be wide
+                // enough to meet. Same bottom pad, same block height, disjoint x bands.
+                var minor = BottomAnchoredText(card, model.PriceMinor, FontMinor, ElarionUi.Parchment,
+                    FontStyles.Normal, TextAlignmentOptions.BottomRight, BottomPadPx, PriceBlockPx, 0.64f, 0.94f);
+                // The dollars FLOAT (WO-1158 section 5) but they still must not clip: a "$49.99"
+                // that reads "$4" is the same defect as the occluded SKR digit, one currency over.
+                if (minor != null)
+                    ElarionUiKit.FitSingleLine(minor, ElarionUi.FontFloorMobile, FontMinor);
+            }
 
             // ── THE STATE / BADGE PILL — top-right of the art well ───────────
             // The state WORD outranks the merchandising badge: "Owned" must never be hidden behind

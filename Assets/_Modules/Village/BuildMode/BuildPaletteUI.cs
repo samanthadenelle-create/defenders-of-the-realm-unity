@@ -1192,12 +1192,16 @@ namespace DeNelle.Village
                 // here would resolve on this machine and silently return null on a device.
                 { "wall_wood",  "Wooden_Wall" },
                 { "wall_stone", "Stone_Wall" },
-                // 'workshop' is the WEAPONS building (displayed "Weaponsmith" from 2026-08-09;
-                // it read "Forge" before). Its art had been resolving purely by the old
-                // display-name slug -> forge.jpg, so the rename would have silently turned the
-                // card into a letter glyph. Pinned to the file explicitly: a portrait must not
-                // hang off a label that creative can change at any time.
-                { "workshop",          "forge" },
+                // 2026-08-23 (WO-1161): the { "workshop" -> "forge" } alias that used to sit
+                // here is RETIRED, and the comment above it that told you to KEEP the pin was
+                // retired with it. Both were written when 'workshop' was believed to be the
+                // WEAPONS building; the naming pass settled that it is NOT — 'workshop' is the
+                // CRAFTING STATION (role crafting_station, displayName "Crafting Station") and
+                // 'forge' is the weaponsmith. The alias was therefore hanging the FORGE's
+                // picture on the Crafting Station's card: a confidently wrong portrait, which
+                // is worse than an obvious gap. With no alias the card falls through to the
+                // concept icon until Portraits/crafting-station art is authored — an honest
+                // placeholder that shows the gap instead of hiding it behind another building.
                 { "mine_crystal",      "Crystal_Mines" },
                 { "tower_siege_tower", "Sky_Ballista" },     // id says siege, the building is the anti-air ballista
                 { "healing_caravan",   "Healing_Caravan" },  // renamed 2026-08-09 (was fountain_healing)

@@ -111,7 +111,15 @@ namespace DeNelle.Wallet
         // =====================================================================
         private static class NightMarketLayout
         {
-            /// <summary>The usable landscape canvas, reference units (UI-001 §0.4).</summary>
+            /// <summary>The usable landscape canvas, reference units (UI-001 §0.4) — the value a
+            /// 2340x1080 phone resolves to.
+            /// <para>⚠ THESE ARE NOW THE FALLBACK, NOT THE MEASUREMENT (WO-1162). The live box comes
+            /// from <see cref="PackStore.SurfaceReferenceHeightPx"/> /
+            /// <see cref="PackStore.SurfaceReferenceWidthPx"/>, because a 4:3 landscape resolves to
+            /// ~1663x1247 and the Seeker's 2670x1200 to ~2149x966 — treating 2120x978 as universal is
+            /// how a "reference pixel" quietly became a magic number for one device. They survive as
+            /// the no-canvas / headless fallback and as the vertical budget's stated arithmetic
+            /// below.</para></summary>
             internal const float UsableWidthPx  = 2120f;
             internal const float UsableHeightPx = 978f;
 
@@ -126,9 +134,16 @@ namespace DeNelle.Wallet
             /// <summary>Everything left over. 978 - 100 - 132 = 746.</summary>
             internal const float BodyPx = UsableHeightPx - TopBarPx - BottomBandPx;
 
-            internal const float SpotlightWidthPx = 576f;
-            internal const float CommerceWidthPx  = 486f;
-            internal const float ColumnGapPx      = 20f;
+            // ⛔ THE THREE COLUMN WIDTHS ARE NOT HERE ANY MORE (WO-1162 FIX 1). They used to be
+            // two literals - spotlight 576, commerce 486 - measured against ONE surface, with
+            // nothing in the file saying what content 576 was protecting. They now come from
+            // NightMarketComposition, which DERIVES each rail's minimum from the narrowest thing it
+            // has to hold and picks a COMPOSITION (three columns / three narrowed columns / two
+            // columns with commerce stacked under the spotlight) instead of shrinking a card. The
+            // gap lives there too, because the breakpoint formula is stated in terms of it:
+            //     ThreeColumnMinBodyPx = SpotlightMin + ShelfMinForTwoCards + CommerceMin + 2*Gap
+            internal static float ColumnGapPx => NightMarketComposition.ColumnGapPx;
+
             internal const float EdgePadPx        = 18f;
 
             // ⛔ THE CLOSE KEEP-OUT IS NOT HERE. It moved to StoreLegalFooter.CloseKeepOutPx with
@@ -142,15 +157,15 @@ namespace DeNelle.Wallet
             internal static readonly Vector2 PanelMin = new Vector2(0f, 0f);
             internal static readonly Vector2 PanelMax = new Vector2(1f, 1f);
 
-            internal const int CardsPerRow = 2;
+            internal const int CardsPerRow = NightMarketComposition.CardsPerRow;
 
-            /// <summary>Height of the commerce column's CTA sub-host, reference px. ⛔ NAMED because
-            /// the CTA is authored as a FRACTION of it (0.030-0.335), so the button's real pixel
-            /// height is this number times that fraction. It was a bare 440f literal in one method
-            /// while the fraction lived in another and the resulting 134 px was only recorded in a
-            /// comment — two places holding one measurement, which is the exact shape that let the
-            /// card row and the card disagree (see BuildCardRow).</summary>
-            internal const float CtaHostPx = 440f;
+            // ⛔ THE CTA SUB-HOST HEIGHT IS NOT A CONSTANT ANY MORE (WO-1162 FIX 1). It was 440f,
+            // and the button inside it was authored as the FRACTION 0.030-0.335 of that number.
+            // A fraction of a host that shrinks (it does, in the stacked two-column composition)
+            // lands the button under MinTouchPx, and a sub-floor control does not fail the clamp -
+            // ClampMinTouch GROWS it about its centre, into whatever is beside it. The host height
+            // now comes from the resolved plan (NightMarketPlan.CtaHostPx) and the button is
+            // authored in PIXELS against it, so the Buy control is the canon size in every mode.
         }
 
         /// <summary>
@@ -171,7 +186,9 @@ namespace DeNelle.Wallet
 
         /// <summary>Free-band doors are drawn on the dense rung, so the free row can never out-size
         /// the priced shelf above it.</summary>
-        private const float FreeRowHeightPx = StorePackCard.CompactHeightPx;
+        /// <remarks>static readonly, not const: the card heights are DERIVED from their content
+        /// budget now (WO-1162 FIX 2), so they are properties rather than compile-time literals.</remarks>
+        private static float FreeRowHeightPx => StorePackCard.CompactHeightPx;
 
         /// <summary>Height of the FREE band's utility-tab row, reference px. ⛔ ONE NUMBER, and the
         /// row and the slot both take it — the literal 132f used to be typed once in BuildFreeBand
@@ -199,6 +216,15 @@ namespace DeNelle.Wallet
         private TextMeshProUGUI _balanceLabel;          // the read-only wallet mirror
         private StoreLegalFooterHandle _legalFooter;    // the ONE legal/promise band (StoreLegalFooter)
         private StoreAurora _aurora;                    // Lane G — the four motion moments
+
+        /// <summary>The resolved responsive body composition (WO-1162 FIX 1). Owned by
+        /// <see cref="NightMarketComposition"/>; this View only consumes it.</summary>
+        private NightMarketPlan _plan;
+
+        /// <summary>The surface the modal was BUILT for. A rotation, a resolution change or a
+        /// different device re-resolves the composition — a layout resolved once and then kept is
+        /// the same duplicated-state failure as a number copied into a second doc.</summary>
+        private Vector2Int _builtForSurface;
 
         // The promo-code door. A CHILD overlay on this store's own canvas.
         private RedeemCodePanel _redeem;
@@ -263,6 +289,13 @@ namespace DeNelle.Wallet
 
         private void OnEnable()
         {
+            // ⛔ A COMPOSITION RESOLVED ONCE AND THEN KEPT IS A STALE MEASUREMENT (WO-1162 FIX 1).
+            // The modal is built lazily and lives for the session, so a rotation, a resolution
+            // change or a capture driving the surface would otherwise leave three columns sized for
+            // a screen the player no longer has. Rebuilding on open is cheap (the store is not a
+            // per-frame surface) and it is the only way the plan can never disagree with the screen.
+            DiscardBuildIfSurfaceChanged();
+
             EnsureBuilt();
             if (_modal != null && _modal.canvas != null)
                 _modal.canvas.SetActive(true);
@@ -354,6 +387,32 @@ namespace DeNelle.Wallet
         //  UI construction (kit modal, lazy on first open)
         // =====================================================================
 
+        /// <summary>
+        /// Tear the built modal down when the surface it was composed for is gone, so the next
+        /// <see cref="EnsureBuilt"/> re-resolves the composition. Does nothing on the common path
+        /// (same device, same orientation) — it compares two ints.
+        /// </summary>
+        private void DiscardBuildIfSurfaceChanged()
+        {
+            if (_modal == null || _modal.canvas == null) return;
+            var now = new Vector2Int(ElarionUiKit.SurfaceWidth, ElarionUiKit.SurfaceHeight);
+            if (now == _builtForSurface || now.x <= 1 || now.y <= 1) return;
+
+            FlowTrace.Step("Store", $"surface changed {_builtForSurface.x}x{_builtForSurface.y} -> " +
+                                    $"{now.x}x{now.y}; rebuilding the Night Market so the responsive " +
+                                    "composition is re-resolved rather than carried over stale.");
+            if (_redeem != null) { _redeem.Close(); _redeem = null; }
+            Destroy(_modal.canvas);
+            _modal = null;
+            _shelfContent = null;
+            _statusBanner = null;
+            _balanceLabel = null;
+            _legalFooter = null;
+            _aurora = null;
+            _cardHandles.Clear();
+            _persistentShelfChildren = 0;
+        }
+
         private void EnsureBuilt()
         {
             if (_modal != null && _modal.canvas != null) return;
@@ -402,10 +461,22 @@ namespace DeNelle.Wallet
 
             // ── THE THREE BANDS, IN REFERENCE PX (§R2) ────────────────────
             _screen = Region(content, "NightMarket", Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero);
-            ApplySafeArea(_screen);
+            Vector4 safe = ApplySafeArea(_screen);
             BuildGround(_screen);
 
             float pad = NightMarketLayout.EdgePadPx;
+
+            // ── RESOLVE THE COMPOSITION BEFORE ANY COLUMN IS PLACED (WO-1162) ──
+            // The body box is what is LEFT after the safe-area inset and the edge padding, on THIS
+            // surface — not on the 2120x978 one the old literals were measured against. Everything
+            // horizontal below is a consequence of the plan; nothing re-derives a width of its own.
+            float surfaceH = SurfaceReferenceHeightPx(content);
+            float surfaceW = SurfaceReferenceWidthPx(surfaceH);
+            float bodyW = surfaceW - safe.x - safe.y - 2f * pad;
+            float bodyH = surfaceH - safe.z - safe.w
+                        - NightMarketLayout.TopBarPx - NightMarketLayout.BottomBandPx;
+            _plan = NightMarketComposition.Resolve(bodyW, bodyH);
+            _builtForSurface = new Vector2Int(ElarionUiKit.SurfaceWidth, ElarionUiKit.SurfaceHeight);
             _topBar = Region(_screen, "TopBar", new Vector2(0f, 1f), new Vector2(1f, 1f),
                 new Vector2(pad, -NightMarketLayout.TopBarPx), new Vector2(-pad, 0f));
             _bodyHost = Region(_screen, "Body", Vector2.zero, Vector2.one,
@@ -420,20 +491,18 @@ namespace DeNelle.Wallet
             // 2026-08-22 defects was a VERTICAL crowding defect, so the fix is to move work
             // sideways: the spotlight and the commerce column are fixed-width rails and the market
             // takes the rest, instead of a taller stack anywhere.
-            float gap = NightMarketLayout.ColumnGapPx;
-            _spotlightHost = Region(_bodyHost, "Spotlight", new Vector2(0f, 0f), new Vector2(0f, 1f),
-                Vector2.zero, new Vector2(NightMarketLayout.SpotlightWidthPx, 0f));
+            // ⛔ ONE OWNER PLACES THE COLUMNS. NightMarketComposition.Compose is the same call the
+            // runtime layout oracle makes, so what the oracle measures is what the player gets — an
+            // oracle that placed its own rects would only be proving its own arithmetic.
+            var columns = NightMarketComposition.Compose(_bodyHost, _plan);
+            _spotlightHost = columns.Spotlight;
+            _commerceHost  = columns.Commerce;
+            _marketHost    = columns.Market;
+
             // Translucent stalls (§R6): the ground reads THROUGH the columns, so the screen is one
             // lit space rather than three opaque boxes on black.
             Plate(_spotlightHost, Translucent(NightMarketPalette.GroundRaised, 0.72f));
-
-            _commerceHost = Region(_bodyHost, "Commerce", new Vector2(1f, 0f), new Vector2(1f, 1f),
-                new Vector2(-NightMarketLayout.CommerceWidthPx, 0f), Vector2.zero);
             Plate(_commerceHost, Translucent(NightMarketPalette.GroundRaised, 0.72f));
-
-            _marketHost = Region(_bodyHost, "Market", Vector2.zero, Vector2.one,
-                new Vector2(NightMarketLayout.SpotlightWidthPx + gap, 0f),
-                new Vector2(-(NightMarketLayout.CommerceWidthPx + gap), 0f));
 
             // ⛔ ONE STATUS SURFACE, AND IT LIVES IN THE COMMERCE COLUMN (§3 / P1-5).
             // It used to be a full-width band across the top of the panel while the spotlight drew a
@@ -441,14 +510,22 @@ namespace DeNelle.Wallet
             // and clipping under the band top. There is now exactly one, it sits beside the control
             // it describes, and it HOLDS STILL: nothing animates next to text read to make a decision
             // (Lane G rule 2).
-            _statusBanner = MakeText(_commerceHost, string.Empty, 30, ElarionUi.Gold,
+            // ⛔ AND IT IS AUTHORED IN PIXELS AGAINST THE PLAN, NOT AS 0.62-0.97 OF THE COLUMN.
+            // In the stacked two-column composition the commerce rail is ~254 units tall, where
+            // "35% of the column" is 89 px — under two line boxes, i.e. a status message that
+            // silently loses its second line. The plan states the band's height; the band takes it.
+            var statusBand = Region(_commerceHost, "CommerceStatus",
+                new Vector2(0f, 1f), new Vector2(1f, 1f),
+                new Vector2(NightMarketComposition.CommerceGutterPx, -_plan.StatusBandPx),
+                new Vector2(-NightMarketComposition.CommerceGutterPx, 0f));
+            _statusBanner = MakeText(statusBand, string.Empty, 30, ElarionUi.Gold,
                 FontStyles.Normal, TextAlignmentOptions.TopLeft,
-                new Vector2(0.06f, 0.62f), new Vector2(0.94f, 0.97f));
+                Vector2.zero, Vector2.one);
 
             // The CTA sub-host. Cleared and rebuilt per focus so the spotlight column never has to be
             // torn down to repaint a button — and so the status surface above it SURVIVES a rebuild.
             _ctaHost = Region(_commerceHost, "CommerceCta", Vector2.zero, new Vector2(1f, 0f),
-                Vector2.zero, new Vector2(0f, NightMarketLayout.CtaHostPx));
+                Vector2.zero, new Vector2(0f, _plan.CtaHostPx));
 
             _shelfContent = BuildScrollColumn(_marketHost);
 
@@ -522,7 +599,9 @@ namespace DeNelle.Wallet
         private static void SeatWordmark(Transform content)
         {
             if (content == null) return;
-            float bandTop = 1f - (NightMarketLayout.TopBarPx / NightMarketLayout.UsableHeightPx);
+            // The band's share of the LIVE canvas, not of the 2340x1080 one: on a 4:3 landscape the
+            // reference canvas is ~1247 units tall, where 100/978 would seat the wordmark 27% too low.
+            float bandTop = 1f - (NightMarketLayout.TopBarPx / SurfaceReferenceHeightPx(content));
             for (int i = 0; i < content.childCount; i++)
             {
                 var label = content.GetChild(i).GetComponent<TextMeshProUGUI>();
@@ -600,7 +679,10 @@ namespace DeNelle.Wallet
             // method, which meant PackStore was the only surface that could ever print the claims
             // correctly while SeasonTrackPanel already re-printed one of the same strings with its
             // own geometry. One owner per concern (CLAUDE.md §7).
-            _legalFooter = StoreLegalFooter.Build(host, NightMarketLayout.UsableWidthPx,
+            // ⚠ THE BAND'S REAL WIDTH, NOT THE 2120 REFERENCE. The Close keep-out is a FRACTION of
+            // whatever this band turned out to be; handing it a constant 2120 on a narrower surface
+            // under-reserved the centre and let the claim lane reach under the canon Close.
+            _legalFooter = StoreLegalFooter.Build(host, _plan.BodyWidthPx,
                 Shorten(WalletService.RewardsDistributorAddress));
         }
 
@@ -1351,12 +1433,33 @@ namespace DeNelle.Wallet
 
             Transform host = _ctaHost;
 
-            // ⛔ AUTHORED 438 x 134 REFERENCE PX (0.06-0.94 of a 486-unit column, 0.03-0.335 of a
-            // 440-unit host), both over MinTouchPx(112) and over the canon 360x132, so ClampMinTouch
-            // is a NO-OP. A sub-112 control does not fail the clamp — it INFLATES about its centre
-            // and overlaps whatever is beside it.
-            var ctaMin = new Vector2(0.06f, 0.030f);
-            var ctaMax = new Vector2(0.94f, 0.335f);
+            // ⛔ THE BUY CONTROL IS AUTHORED IN PIXELS AND THEN EXPRESSED AS A FRACTION OF THE HOST
+            // IT LANDED IN — never the other way round (WO-1162 FIX 1). It used to be the literal
+            // pair 0.030-0.335 of a fixed 440-unit host, which is 134 px only while the host is 440.
+            // The stacked two-column composition gives the rail a ~158-unit CTA host, where the same
+            // fractions derive 48 px: under MinTouchPx(112), and a sub-floor control does not fail
+            // the clamp — ClampMinTouch GROWS it about its centre, over whatever is beside it.
+            // Deriving the fraction from the REAL host height keeps the button the canon size in
+            // every composition, so the clamp stays the no-op it is meant to be.
+            float ctaHostPx = Mathf.Max(1f, _ctaHost.rect.height > 1f ? _ctaHost.rect.height : _plan.CtaHostPx);
+            float gutterFrac = Mathf.Clamp(NightMarketComposition.CommerceGutterPx /
+                                           Mathf.Max(1f, _plan.CommerceWidthPx), 0.02f, 0.20f);
+            float ctaY0 = NightMarketComposition.CtaBottomPadPx / ctaHostPx;
+            float ctaY1 = (NightMarketComposition.CtaBottomPadPx + NightMarketComposition.CtaButtonPx) / ctaHostPx;
+            var ctaMin = new Vector2(gutterFrac, ctaY0);
+            var ctaMax = new Vector2(1f - gutterFrac, Mathf.Min(1f, ctaY1));
+
+            // Everything ABOVE the button inside this host is OPTIONAL and is drawn only if it fits.
+            // One TMP line box each; when the host is the stacked minimum there is room for neither,
+            // and dropping a qualifier is correct where squeezing one on top of the Buy control is not.
+            float lineBox   = NightMarketComposition.LineBoxPx;
+            float aboveCta  = ctaHostPx - (NightMarketComposition.CtaBottomPadPx + NightMarketComposition.CtaButtonPx);
+            bool roomForNetwork = aboveCta >= lineBox + 6f;
+            bool roomForBalance = aboveCta >= 2f * lineBox + 12f;
+            float netY0 = ctaY1 + (6f / ctaHostPx);
+            float netY1 = netY0 + (lineBox / ctaHostPx);
+            float balY0 = netY1 + (6f / ctaHostPx);
+            float balY1 = balY0 + (lineBox / ctaHostPx);
 
             // ── Balance-after preview, directly above the CTA ──────────────
             // Only when the wallet mirror actually KNOWS a number. Never computed from an assumed
@@ -1365,12 +1468,15 @@ namespace DeNelle.Wallet
             // ⚠ AND ONLY WHEN A PRICE EXISTS. With no server quote AmountFor returns 0 (WO-1158),
             // and "what you will have left" would print the player's whole balance back at them as
             // if the pack were free.
-            if (_balanceState == BalanceState.Known && pack.AmountFor(CurrencyKind.Skr) > 0d)
+            // ⚠ AND ONLY WHEN THE HOST HAS A LINE BOX TO SPARE ABOVE THE BUTTON (WO-1162 FIX 2's
+            // rule, applied to the commerce rail): required is the Buy control and its price; the
+            // balance-after preview is the qualifier and it is the thing that gives.
+            if (roomForBalance && _balanceState == BalanceState.Known && pack.AmountFor(CurrencyKind.Skr) > 0d)
             {
                 double after = _balanceSkr - pack.AmountFor(CurrencyKind.Skr);
                 MakeText(host, StoreStrings.Format(StoreStrings.KeyBalanceAfter, after.ToString("N0")),
                     30, ElarionUi.Parchment, FontStyles.Normal, TextAlignmentOptions.Left,
-                    new Vector2(0.06f, 0.42f), new Vector2(0.94f, 0.55f));
+                    new Vector2(ctaMin.x, balY0), new Vector2(ctaMax.x, balY1));
             }
 
             // ── anchorOnly: NO BUY CONTROL IS EVER BUILT ─────────────────────
@@ -1483,10 +1589,14 @@ namespace DeNelle.Wallet
                 return;
             }
 
-            if (_wallet != null && _wallet.Network == WalletNetwork.Devnet)
+            if (roomForNetwork && _wallet != null && _wallet.Network == WalletNetwork.Devnet)
                 MakeText(host, "DEVNET - TEST TOKEN", 30, ElarionUi.Gold,
                     FontStyles.Bold, TextAlignmentOptions.Center,
-                    new Vector2(0.06f, 0.345f), new Vector2(0.94f, 0.415f));
+                    new Vector2(ctaMin.x, netY0), new Vector2(ctaMax.x, netY1));
+            else if (!roomForNetwork && _wallet != null && _wallet.Network == WalletNetwork.Devnet)
+                FlowTrace.Warn("Store", "BuildCommerce: no room above the Buy control for the DEVNET " +
+                                        "marker in this composition (" + NightMarketComposition.Describe(_plan) +
+                                        ") - the network label is DROPPED rather than drawn over the button.");
             var buy = ElarionUiKit.BuildObsidianButton(host,
                 $"Buy - {pack.AmountLabel(rail)}",
                 ElarionUiKit.ObsidianButtonStyle.Style1,
@@ -2322,31 +2432,41 @@ namespace DeNelle.Wallet
         /// is the full rect) takes the early return and the geometry is untouched — which is why the
         /// captured pngs measure the same rects the phone gets, minus its notch.</para>
         /// </summary>
-        private static void ApplySafeArea(RectTransform rt)
+        /// <returns>The applied inset in REFERENCE px as (left, right, bottom, top). WO-1162: the
+        /// responsive composition has to subtract this before it can resolve a body width, and a
+        /// caller that re-derived it from Screen.safeArea itself would be the second copy of a
+        /// measurement this method already owns.</returns>
+        private static Vector4 ApplySafeArea(RectTransform rt)
         {
-            if (rt == null) return;
+            if (rt == null) return Vector4.zero;
             try
             {
                 float w = Mathf.Max(1f, Screen.width);
                 float h = Mathf.Max(1f, Screen.height);
                 Rect safe = Screen.safeArea;
-                if (safe.width <= 0f || safe.height <= 0f) return;
+                if (safe.width <= 0f || safe.height <= 0f) return Vector4.zero;
 
                 float left   = Mathf.Clamp01(safe.xMin / w);
                 float right  = Mathf.Clamp01((w - safe.xMax) / w);
                 float bottom = Mathf.Clamp01(safe.yMin / h);
                 float top    = Mathf.Clamp01((h - safe.yMax) / h);
-                if (left <= 0f && right <= 0f && bottom <= 0f && top <= 0f) return;
+                if (left <= 0f && right <= 0f && bottom <= 0f && top <= 0f) return Vector4.zero;
 
-                float refW = NightMarketLayout.UsableWidthPx;
-                float refH = NightMarketLayout.UsableHeightPx;
+                // ⚠ THE REFERENCE BOX IS THE LIVE ONE, NOT THE 2120x978 LITERAL. The inset is a
+                // fraction of the SURFACE, converted into the reference units this canvas actually
+                // resolves to; on a 4:3 landscape those are ~1663x1247, and converting through
+                // 2120x978 would have over-inset the width and under-inset the height.
+                float refH = SurfaceReferenceHeightPx(rt);
+                float refW = SurfaceReferenceWidthPx(refH);
                 rt.offsetMin = new Vector2(left * refW, bottom * refH);
                 rt.offsetMax = new Vector2(-right * refW, -top * refH);
 
                 FlowTrace.Step("Store", string.Format(
                     "ApplySafeArea: inset L{0:F0} R{1:F0} B{2:F0} T{3:F0} ref px from Screen.safeArea " +
-                    "{4} on a {5}x{6} surface.",
-                    left * refW, right * refW, bottom * refH, top * refH, safe, w, h));
+                    "{4} on a {5}x{6} surface (reference box {7:F0}x{8:F0}).",
+                    left * refW, right * refW, bottom * refH, top * refH, safe, w, h, refW, refH));
+
+                return new Vector4(left * refW, right * refW, bottom * refH, top * refH);
             }
             catch (Exception e)
             {
@@ -2356,6 +2476,30 @@ namespace DeNelle.Wallet
                 FlowTrace.Warn("Store", "ApplySafeArea threw (" + e.GetType().Name +
                                         ") - the store draws full-bleed with NO safe-area inset.");
             }
+            return Vector4.zero;
+        }
+
+        /// <summary>
+        /// The canvas height this store's fraction anchors really resolve against, in REFERENCE px.
+        /// <para>⛔ NOT <c>NightMarketLayout.UsableHeightPx</c>. That 978 is the value the reference
+        /// canvas resolves to at 2340x1080 ONLY; a 4:3 landscape resolves to ~1247 and a 2670x1200
+        /// Seeker to ~966. Reading it off the kit means the composition is resolved against the
+        /// surface the player is holding rather than the one the literals were measured on.</para>
+        /// </summary>
+        private static float SurfaceReferenceHeightPx(Transform under)
+        {
+            float h = ElarionUiKit.PostScaleCanvasHeight(under);
+            return h > 100f ? h : NightMarketLayout.UsableHeightPx;
+        }
+
+        /// <summary>The matching reference WIDTH. The canvas preserves the surface aspect, so the
+        /// width is the height times it — one derivation, never a second literal.</summary>
+        private static float SurfaceReferenceWidthPx(float referenceHeightPx)
+        {
+            float sw = Mathf.Max(1f, ElarionUiKit.SurfaceWidth);
+            float sh = Mathf.Max(1f, ElarionUiKit.SurfaceHeight);
+            float w = referenceHeightPx * (sw / sh);
+            return w > 100f ? w : NightMarketLayout.UsableWidthPx;
         }
 
         /// <summary>

@@ -18,6 +18,7 @@ using System;
 using System.Collections.Generic;
 using System.Text;
 using UnityEngine;
+using DeNelle.Core.Catalog;
 using DeNelle.Core.UI.Mvvm;
 
 namespace DeNelle.Village.Crafting
@@ -88,7 +89,10 @@ namespace DeNelle.Village.Crafting
 
         // -- IPanelViewModel ----------------------------------------------------
         public event Action Changed;
-        public string Title => "Workshop";
+        // The player-facing word comes from the catalog row that claims the crafting_station
+        // role ("Crafting Station"), never from a literal here (WO-1161). The fallback is a
+        // GENERIC word reached only if the catalog has not loaded — never a rival proper noun.
+        public string Title => StructureRoles.By[StructureRole.CraftingStation].DisplayName ?? "Crafting";
         public void Close() => _onClose?.Invoke();
 
         public void Dispose()
