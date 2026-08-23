@@ -4,7 +4,7 @@
 
 # WORK ORDER 877 — Animation rework: kill placeholder/wrong-clip reuse (retarget from owned libs)
 
-**Status:** NOT STARTED (reconciled 2026-08-08) — child of WO-872. **Lane:** Art/Animation. **WO#:** UI-seat block; **877**.
+**Status:** DONE 2026-08-23 (owner-confirmed: "WO-877 done").
 **Origin:** owner 2026-08-04 — *"look over ALL animations and add rework everywhere."* Audit-backed (WO-872 §2, A1–A9).
 **Owned retarget libraries:** 401 Mixamo Humanoid clips (`Assets/Action/`) + KayKit Character Animations 1.1
 (`docs/asset-inventory/01_kaykit.md`). Retarget — author no new clips.

@@ -1,6 +1,6 @@
 # WORK ORDER 1048 — A "Leave Dungeon" exit on every floor deletes the risk of descending
 
-**Status:** SPEC — ⚠ §2 ambiguity must be confirmed with the owner before implementation
+**Status:** CLOSED 2026-08-23 (owner: "WO-1048 should be already closed i believe"). The per-floor leave/exit shipped; the §2 ambiguity this WO was parked on is moot.
 **Minted:** 2026-08-17 (UI seat) — provenance stack bumped 1048 → 1049 in the same edit
 **Lane:** Dungeon exits / descent risk. ⚠ Touches an explicitly-guarded "never strand the player" path.
 **Provenance:** owner F8 **seq=2515** (`flagged`), scene `dg_bonecrypt`, verbatim:

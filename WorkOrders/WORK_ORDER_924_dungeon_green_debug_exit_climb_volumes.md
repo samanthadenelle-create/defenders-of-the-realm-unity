@@ -4,7 +4,7 @@
 
 # WORK ORDER 924 — Kill neon-green climb/exit debug volumes (EXIT beams + portal placeholders)
 
-**Status: NOT STARTED** (reconciled 2026-08-08, see banner)  
+**Status:** DONE 2026-08-23 (owner-confirmed: "WO-924 / WO-918 Both Done"). The neon-green climb/exit debug volumes and portal placeholders are gone from the dungeon floors.
 **Minted:** 2026-08-07 (Grok Imagine visual review + owner 52s Development Build recording)  
 **Silo:** Dungeons / presentation  
 **Roles:** CLI implement  

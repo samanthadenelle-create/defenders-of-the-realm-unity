@@ -4,7 +4,7 @@
 
 # WORK ORDER 918 — Board hygiene: close shipped work orders + RESULT files (audit wave)
 
-**Status: NOT STARTED** (reconciled 2026-08-08, see banner)  
+**Status:** DONE 2026-08-23 (owner-confirmed: "WO-924 / WO-918 Both Done"). Board hygiene is now STRUCTURAL, not a sweep: BOARD.html is generated from WorkOrders/*.md (python tools/board_build.py), so a shipped WO cannot sit open on a board that is derived from its own Status line.
 **Minted:** 2026-08-07 (CLI / Grok — process residual after the five-findings audit + WO-899/1001 wave)  
 **Silo:** Process / Notion board / docs (no gameplay code required)  
 **Roles:** CLI (sole git committer for RESULT files) + whoever has Notion access for board rows  

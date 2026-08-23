@@ -1,4 +1,6 @@
-**Status:** PARTIAL 2026-08-22 - the bag is rebuilt and the dead preview box, ribbon, tab row and under-floor cell literal are REMOVED. ⛔ The gear-view PROMOTION is deliberately not shipped: owner F8 seq 3585/3586 proved EquipmentPanel's preview is blank AT THE SOURCE, so promoting it would promote an empty box. Blank-preview cause narrowed to two survivors; not fixed.
+**Status:** CLOSED 2026-08-23 (owner ruling: "WO-1133 closed"). The bag rebuild shipped and the dead preview box, ribbon, tab row and under-floor cell literal are REMOVED.
+
+> ⚠ **CLOSED WITH A CARVE-OUT — do not read this as "the preview works now."** The gear-view PROMOTION was deliberately never shipped: owner F8 seq 3585/3586 proved `EquipmentPanel`'s preview is blank AT THE SOURCE, so promoting it would have promoted an empty box. That blank preview is a SEPARATE defect and closing this redesign does not fix it. If no ticket carries it, it needs one — a closed parent is exactly how a live defect goes quiet.
 
 # WORK ORDER 1133 — Inventory screen: redesign the Bag, and justify the gear view or cut it
 

@@ -55,8 +55,25 @@ OUT = os.path.join(ROOT, "BOARD.html")
 # number instead would have laundered 5 real defects into the non-defect bucket.
 _WO_FILENAME = re.compile(r"^WORK_ORDER_", re.IGNORECASE)
 
+# A SECOND companion shape the prefix rule above cannot see (owner-reported 2026-08-23):
+# WORK_ORDER_<num>_<KIND>.md, where KIND is an ALL-CAPS document kind rather than a slug -
+# WORK_ORDER_1114_IMPLEMENTATION_PLAN.md, WORK_ORDER_1038_VERIFICATION.md. These carry the
+# WORK_ORDER_ prefix, so they parsed as work orders, owed a **Status:** they will never have,
+# and sat in Unlabeled - which docs/BOARD.md defines as a DEFECT. They are companions to a
+# numbered WO that already carries the status, not units of work.
+#
+# ⛔ SCOPED TO A NUMBER + AN EXPLICIT KIND WHITELIST, deliberately. A loose "is it ALL-CAPS"
+# test would swallow the 18 legacy UNNUMBERED work orders (WORK_ORDER_ad_generator.md and
+# friends) whose missing status IS a genuine defect - laundering real defects into the
+# non-defect bucket is the exact failure the comment above warns about. Add a kind here only
+# when it is genuinely a companion to a numbered WO.
+_WO_COMPANION_KIND = re.compile(
+    r"^WORK_ORDER_\d+_(IMPLEMENTATION_PLAN|VERIFICATION|AUDIT|INDEX|NOTES|ADDENDUM)",
+    re.IGNORECASE)
+
 def is_work_order(basename):
     """True for a real work order (numbered or legacy-unnumbered); False for a companion doc."""
+    if _WO_COMPANION_KIND.match(basename): return False
     return bool(_WO_FILENAME.match(basename))
 
 # ── status bucketing (keyword priority order) ─────────────────────────────────
@@ -65,14 +82,43 @@ def bucket_of(status_text, has_result, is_wo=True):
     if not is_wo: return "Doc"
     s = (status_text or "").upper()
     if "SUPERSEDED" in s or "CLOSED" in s or "CANCELLED" in s: return "Closed"
+    # FIXED = built, gated and on disk, but NOT closed: it is waiting on the owner's felt test
+    # (CLAUDE.md 13 - "PO felt-verifies + CLOSES"; headless cannot judge feel). Owner ruling
+    # 2026-08-23.
+    #
+    # THIS TEST MUST STAY ABOVE THE "Done" LINE, and the reason is the `has_result` term in it.
+    # A Fixed ticket normally DOES have a RESULT.md - that is what writing up the work produces.
+    # If Fixed were tested after, `has_result` would swallow it into Done and the ticket would
+    # read as finished the moment the write-up landed, silently skipping the felt test that is
+    # the entire point of the bucket. Ordering IS the guarantee here, not a style preference.
+    #
+    # ⛔ LEADING KEYWORD, NOT A SUBSTRING - and this one genuinely bit on the first build.
+    # A plain `"FIXED" in s` matched ELEVEN already-finished tickets whose prose merely contains
+    # the word: "DONE - owner-confirmed fixed", "CLOSED - SUPERSEDED ... fixed-layout castle",
+    # "PARTIAL - 2 fixed, 1 deferred". Because this test sits above the Done/Closed lines, every
+    # one of them was yanked back out of Done into the owner's to-test queue - handing her work
+    # she had already closed, which is the exact opposite of what the bucket is for. The status
+    # VERDICT is the first word of the line; anything later is commentary.
+    if s.lstrip().startswith("FIXED"): return "Fixed"
     if has_result or "DONE" in s or "IMPLEMENTED" in s or "COMPLETE" in s: return "Done"
     if "BLOCKED" in s: return "Blocked"
-    if "READY" in s: return "Ready"
-    if "DRAFT" in s or "SPEC" in s or "NOT STARTED" in s or "PROPOSAL" in s: return "Spec"
+    if "READY" in s or "IN PROGRESS" in s: return "Ready"
+    # PARKED / FUTURE / LATENT are all "real, understood, deliberately not scheduled" - the same
+    # shape as SPEC, and all three were in live use on WO status lines while landing in Unlabeled
+    # (owner-reported 2026-08-23: WO-1148 "FUTURE - not scheduled", WO-1140 "LATENT GUARD - NOT AN
+    # ACTIVE DEFECT"). Bucketing them is right BECAUSE they are considered decisions, not gaps.
+    if ("DRAFT" in s or "SPEC" in s or "NOT STARTED" in s or "PROPOSAL" in s
+            or "PARKED" in s or "FUTURE" in s or "LATENT" in s): return "Spec"
     return "Unlabeled"
 
-BUCKET_ORDER = ["Ready", "Blocked", "Spec", "Unlabeled", "Done", "Closed", "Doc"]
-BUCKET_COLOR = {"Ready": "#e0b341", "Blocked": "#d06060", "Spec": "#7fa8d9",
+# Fixed sits directly after Ready because that is the owner's queue: what is built and waiting
+# on her, before anything that is merely proposed. It is deliberately NOT next to Done - Done is
+# finished, Fixed is owed a test.
+BUCKET_ORDER = ["Ready", "Fixed", "Blocked", "Spec", "Unlabeled", "Done", "Closed", "Doc"]
+# Owner is RED/GREEN COLOURBLIND: every bucket is labelled in TEXT and the colour is decoration
+# only. Fixed is a cyan that also separates from Ready's amber and Done's green in GREYSCALE
+# (luminance ~0.62 vs 0.72 and 0.63) - but never let the hue carry the meaning.
+BUCKET_COLOR = {"Ready": "#e0b341", "Fixed": "#4fb3c4", "Blocked": "#d06060", "Spec": "#7fa8d9",
                 "Unlabeled": "#999999", "Done": "#6fae6f", "Closed": "#777777",
                 "Doc": "#a98fd0"}
 
@@ -416,7 +462,7 @@ def main():
     if unlabeled:
         # Named, not just counted — "91 Unlabeled" is unactionable; a list is a to-do.
         print(f"UNLABELED {len(unlabeled)} work order(s) — the **Status:** line carries no "
-              f"canonical keyword (READY / DONE / BLOCKED / SPEC / CLOSED). Fix the WO file:")
+              f"canonical keyword (READY / FIXED / DONE / BLOCKED / SPEC / CLOSED). Fix the WO file:")
         for r in unlabeled[:40]:
             print(f"    WO-{r.get('num','?')}  {r.get('file','?')}  status={r.get('status','') !r}")
         if len(unlabeled) > 40:

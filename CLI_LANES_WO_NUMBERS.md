@@ -129,7 +129,12 @@
 > fine as history. A copied number is the bug **even when it was right the day it was written** -
 > that is exactly how the retired 860-899 UI block kept re-seeding collisions from CLAUDE.md sec.2.
 
-> ## ⚠ RECONCILED 2026-08-22 (CLI): main line next free = **1154**.
+> ## ⚠ RECONCILED 2026-08-23 (CLI): main line next free = **1155**.
+> *(CLI seat minted **WO-1154** and bumped 1154 -> 1155 in this SAME edit. **WO-1154** = elemental
+> affinity offered as a Cathedral of Magic PERK earned at MAX tower level -- owner ask 2026-08-23,
+> child of WO-907.)*
+>
+> ### superseded: RECONCILED 2026-08-22 (CLI): main line next free = **1154**.
 > *(CLI seat minted **WO-1152** and **WO-1153** and bumped 1152 -> 1154 in this SAME edit.
 > **1152** = WoodenWatchtowerBuilder NO LONGER RUNS - it aborts on L1, a level that renders fine,
 > so the repo has no working way to regenerate the wrapper prefabs that are the ORIENTATION
