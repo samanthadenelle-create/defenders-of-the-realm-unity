@@ -12,5 +12,8 @@
     "@neondatabase/serverless": "^0.10.4",
     "bs58": "^5.0.0",
     "tweetnacl": "^1.0.3"
+  },
+  "devDependencies": {
+    "@sqds/multisig": "^2.1.4"
   }
 }

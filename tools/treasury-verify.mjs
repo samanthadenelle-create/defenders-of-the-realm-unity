@@ -133,6 +133,56 @@ try {
        `funded — never let the first transfer create it.`);
 }
 
+// ── 5. THE MULTISIG THAT CONTROLS IT ─────────────────────────────────────────────────────
+// Checks 2-4 prove this is A vault holding SKR. They do NOT prove WHO can spend it, and that
+// is the question that decides whether revenue is safe. Pass --multisig <addr> to close it:
+// we derive vault[0] from the multisig and require it to EQUAL the address above, then read
+// the threshold. Deriving is proof; a screenshot is testimony.
+//
+// The multisig address is NOT the one in the Squads UI's URL — that URL carries the VAULT.
+// Find it by deriving, or from the vault's transaction history (any Squads-owned account it
+// references).
+const msIdx = args.indexOf('--multisig');
+const msArg = msIdx >= 0 ? args[msIdx + 1] : null;
+if (msArg) {
+  let sdk = null;
+  try { sdk = await import('@sqds/multisig'); }
+  catch { fail(`--multisig needs the Squads SDK: run \`npm install\` (it is a devDependency).`); }
+  if (sdk) {
+    try {
+      const msPda = new PublicKey(msArg);
+      const [derived] = sdk.getVaultPda({ multisigPda: msPda, index: 0 });
+      if (derived.equals(vault)) {
+        ok(`multisig ${msArg} derives vault[0] == this address (linkage PROVEN, not asserted)`);
+      } else {
+        fail(`multisig ${msArg} derives vault[0] = ${derived.toBase58()}, which is NOT this ` +
+             `address. Either the wrong multisig, or the vault belongs to someone else.`);
+      }
+      const ms = await sdk.accounts.Multisig.fromAccountAddress(connection, msPda);
+      const threshold = Number(ms.threshold);
+      const members = ms.members.length;
+      // ⛔ THE PRODUCTION GATE. A 1-of-1 is a single key with extra steps: one signature moves
+      // every cent, instantly. It is fine for a throwaway canary and NOT fine for revenue.
+      // Adding members does not change the vault address, so raising this later re-authors
+      // nothing — which is exactly why there is no excuse for shipping without it.
+      if (threshold < 2 || members < 3) {
+        fail(`multisig is ${threshold}-of-${members}. ONE key can move every cent` +
+             (Number(ms.timeLock) === 0 ? ', instantly (timeLock 0)' : '') +
+             `. Acceptable for the 1-SKR canary; NOT acceptable for public sales — raise to ` +
+             `2-of-3 in the Squads UI first. The vault ADDRESS does not change, so nothing ` +
+             `here needs re-authoring afterwards.`);
+      } else {
+        ok(`multisig is ${threshold}-of-${members}, timeLock ${ms.timeLock}s — production-shaped`);
+      }
+    } catch (e) {
+      fail(`could not read the multisig: ${e.message}`);
+    }
+  }
+} else {
+  notes.push('  note  pass --multisig <addr> to PROVE which multisig owns this vault and check ' +
+             'its threshold — without it, checks 2-4 prove it is a vault but not whose');
+}
+
 // ── verdict ──────────────────────────────────────────────────────────────────────────────
 console.log(notes.join('\n'));
 if (problems.length === 0) {
