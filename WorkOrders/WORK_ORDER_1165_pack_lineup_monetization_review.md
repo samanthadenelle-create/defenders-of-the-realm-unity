@@ -172,7 +172,7 @@ they sell has no redeemer** — one `storeVisible` flip from selling nothing).
 
 The ruled policy costs ~6% over spot before `ceil()`. **The exposure is not the 6% — it is that a
 player can CHECK it** in ten seconds against a public token, with no App Store receipt to arbitrate,
-no refund path on an SPL transfer, and a 1-of-1 treasury behind any goodwill send.
+no refund path on an SPL transfer. *(The treasury half of this is fixed: 2-of-3 as of 2026-08-24.)*
 
 **Fixes that touch no pricing:** make **SKR the price and USD the reference** · show the rate,
 its source and the quote timer on the confirm sheet (already recorded in `buildQuoteBody`, just not

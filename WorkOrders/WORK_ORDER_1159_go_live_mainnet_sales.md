@@ -105,9 +105,10 @@ evidence of anything.
 `Assets/Resources/Data/Canonical/wallets.json:41`, written and verified on-chain earlier the same
 day (`TREASURY_VERIFY_OK`), says in its own words:
 
-> **THRESHOLD IS 1-of-1** (single member `CHKKFkPGz8VZfjpsZjJTqfAUW7vMpdNkkqCVuCcZsfkC`, timeLock 0).
-> **ACCEPTABLE FOR THE 1-SKR CANARY, NOT FOR PUBLIC SALES — raise to 2-of-3 first.** The vault
-> ADDRESS does not change when members are added, so nothing here needs re-authoring when it is fixed.
+> **⭐ RESOLVED 2026-08-24 — THRESHOLD IS 2-of-3, timeLock 0, "production-shaped".** Re-read from
+> chain with `tools/treasury-verify.mjs --multisig`. The 1-of-1 text this block used to quote was
+> **STALE**: the owner raised the threshold, and because doing so re-authors no address and no code,
+> nothing in the repo was forced to notice. **This was the last red on go-live.**
 
 The vault itself is sound — off-curve Squads PDA `9wbHbKuirtKai5e3ajvdpzdRYVpuxpAH4DUnERkVtBzj`,
 SKR ATA present, official mint, **decimals 6 read from chain**, linkage proven from multisig

@@ -35,9 +35,10 @@ impulse resource packs). The old **$5 early-access cap is superseded** by this r
 `Assets/Resources/Data/Canonical/wallets.json:41`, verified on chain earlier the same day
 (`TREASURY_VERIFY_OK`), in its own words:
 
-> **THRESHOLD IS 1-of-1** (single member `CHKK…sfkC`, timeLock 0). **ACCEPTABLE FOR THE 1-SKR
-> CANARY, NOT FOR PUBLIC SALES — raise to 2-of-3 first.** The vault ADDRESS does not change when
-> members are added.
+> **⭐ CLOSED 2026-08-24 — THRESHOLD IS 2-of-3, timeLock 0, "production-shaped".** Re-read from
+> chain with `tools/treasury-verify.mjs --multisig`. **The paragraph below described a 1-of-1 and
+> was STALE, not wrong-when-written** — the owner raised the threshold and every doc that had
+> cached the old shape kept asserting it. **The chain is the authority; a doc is a cache.**
 
 The vault is otherwise sound: off-curve Squads PDA `9wbHbKuirtKai5e3ajvdpzdRYVpuxpAH4DUnERkVtBzj`,
 SKR ATA present, official mint, **decimals 6 read from chain** (never from a doc — a doc carrying the
@@ -171,7 +172,7 @@ is not evidence of anything.
 
 1. **Owner felt-test** — the quote figure on the card vs the figure the wallet asks you to sign;
    the prompt count; a real ladder SKU, not a canary.
-2. **The 1-of-1 treasury threshold** (above) — owner ruling.
+2. ~~The 1-of-1 treasury threshold~~ — **DONE 2026-08-24: raised to 2-of-3, proven on chain.**
 3. Carried from 08-21: **WO-1137** (fallback catalog 3 of 28 rows) · **WO-1138** (the hollow-pass
    ratchet's 4-line window — the leveraged one) · **WO-874** · **WO-887** · **WO-1133** · **WO-1134**.
 4. Still owner-owed: **823** first-raid softness · **1029/PROD-012** backend + online-required.

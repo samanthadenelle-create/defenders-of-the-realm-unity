@@ -68,10 +68,19 @@ is a currency name. The thing you send money **to** is the vault (#1).
 
 ---
 
-## ⚠ The one real problem, and it is not urgent yet
+## ⭐ The one real problem — FIXED 2026-08-24
 
-Your treasury is set to **"1 of 1"**. That means **one key can move every cent, immediately, with
-nothing else required.** There is no second approval and no delay.
+**Your treasury is now "2 of 3".** Any two of three keys must approve a withdrawal, so losing one
+key is survivable and no single key can move the money alone. We read this straight off the
+blockchain rather than trusting any note in the project, and it came back *"2-of-3, timeLock 0 —
+production-shaped"*.
+
+**Everything below is the OLD problem, kept so the history reads straight. It no longer applies.**
+
+<details><summary>What the problem used to be (resolved)</summary>
+
+Your treasury was set to **"1 of 1"**. That meant **one key could move every cent, immediately, with
+nothing else required.** There was no second approval and no delay.
 
 That is still an improvement on what we had — the old address was an ordinary wallet, and this one
 at least has a proper control layer that can be upgraded. But it is not the protection we set out
@@ -85,8 +94,11 @@ That gives you "2 of 3" — any two of three keys approve a withdrawal, and losi
 
 **When:** before real players can buy anything. It is fine as-is for the single 1-SKR test.
 
-⭐ **The address does not change when you add members.** So doing this later costs nothing and
-breaks nothing — which is exactly why there is no reason to skip it.
+⭐ **The address does not change when you add members.** So doing it later cost nothing and broke
+nothing — which is also why the rest of the project never noticed it had been done, and eight files
+went on claiming "1 of 1" for a day after it was already fixed.
+
+</details>
 
 Also worth doing at the same time: set a **time lock** (currently 0). That puts a delay between
 approving a withdrawal and it happening, which is the difference between noticing a bad withdrawal
@@ -123,7 +135,7 @@ settings. The verifier does this every time it runs.
 3. **A rehearsal:** start a purchase and *cancel it*, and we confirm nothing moved.
 4. **One real 1 SKR purchase**, then we check that the blockchain, the server, your wallet, and the
    game all agree — and that the item is granted exactly once, even after a relaunch or reinstall.
-5. **Then** the threshold fix above, before anything opens to players.
+5. ~~Then the threshold fix above~~ — **done 2026-08-24.**
 
 ---
 

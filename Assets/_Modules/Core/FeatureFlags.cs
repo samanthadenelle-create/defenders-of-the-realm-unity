@@ -693,10 +693,11 @@ namespace DeNelle.Core
         // If anyone ever moves DefaultNetwork back to Devnet, this default must come back to
         // false in the SAME edit - those two values are only safe as a matched pair.
         //
-        // ⚠ STILL OPEN, and it is a TREASURY item, not a code item: the revenue vault's
-        // Squads threshold is 1-of-1 (wallets.json:41 - "NOT FOR PUBLIC SALES - raise to
-        // 2-of-3 first"). One key controls all revenue with no co-signer. Raising it changes
-        // no address and no code. Surfaced to the owner 2026-08-23; hers to rule.
+        // TREASURY: CLOSED. The revenue vault's Squads threshold is 2-of-3, timeLock 0 -
+        // re-verified on chain 2026-08-24 (tools/treasury-verify.mjs --multisig). No treasury
+        // precondition remains on this flag.
+        // ⚠ This comment said 1-of-1 until 2026-08-24 and was STALE - the owner had already
+        // raised it. Because raising it changes no code, nothing forced this line to update.
         //
         // NOTE (unchanged and still true): Get() reads PlayerPrefs FIRST. A device that ever
         // stored "ff.realmstorepurchase" = 0 keeps the Buy rail CLOSED until that key is

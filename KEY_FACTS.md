@@ -88,12 +88,14 @@
   first authed call** (`BackendRequestSigner.cs:230`), not at connect: first purchase of a session =
   session mint + transfer = **2 prompts**; every one after, within 15 min = **1**. That is 3 → 2 → 1,
   not 3 → 1. Minting at connect would make it one throughout — small, contained, NOT done.
-- **⛔ STILL OPEN, and it is a TREASURY item, not code: the revenue vault is 1-of-1.**
-  `wallets.json:41` says it itself — *"ACCEPTABLE FOR THE 1-SKR CANARY, NOT FOR PUBLIC SALES — raise
-  to 2-of-3 first"*. Vault otherwise sound (off-curve Squads PDA
-  `9wbHbKuirtKai5e3ajvdpzdRYVpuxpAH4DUnERkVtBzj`, SKR ATA present, official mint, **decimals 6 read
-  from chain**). One key controls all revenue with no co-signer. Raising it changes no address and no
-  code. **Owner's to rule; it stands between "tested" and "public sales".**
+- **⭐ CLOSED 2026-08-24 — the revenue vault is 2-of-3.** 2-of-3, timeLock 0, RE-VERIFIED ON CHAIN 2026-08-24 (`node tools/treasury-verify.mjs 9wbHbKuirtKai5e3ajvdpzdRYVpuxpAH4DUnERkVtBzj --multisig BcHLoNCsnGD6oegywkP19PALKMQYoFeQWTvmPLmp22no` -> "multisig is 2-of-3, timeLock 0 - production-shaped"). Vault sound throughout
+  (off-curve Squads PDA `9wbHbKuirtKai5e3ajvdpzdRYVpuxpAH4DUnERkVtBzj`, SKR ATA present, official
+  mint, **decimals 6 read from chain**), linkage proven from multisig. **No multisig blocker remains
+  between "tested" and "public sales".**
+  ⚠ **This bullet said 1-of-1 until 2026-08-24 and was STALE** — the owner had already raised it. It
+  was restated in **eight** files, so it read as corroborated fact and nobody re-derived it. **Read the
+  threshold with `tools/treasury-verify.mjs --multisig`, never from this line** (without `--multisig`
+  the tool proves the vault but reads NO threshold at all).
 - **Gates, off fresh logs:** `COMPILE_GATE_OK` (0 `error CS`) · **`REGRESSION_OK 270/270 suites`** ·
   backend **37/37**. The 08-21 two-red asset gap (245/247) is CLOSED. `FeatureFlags.Siege` is ON and
   proven (WO-1139, 08-22).

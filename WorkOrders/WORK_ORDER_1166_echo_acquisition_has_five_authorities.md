@@ -130,6 +130,43 @@ power."*
 The covenant's beauty half is currently unsellable, so the wardrobe is not a new monetization
 surface — it is the missing *destination* for one that already exists.
 
+### ⭐ D IS STAGED, AND STAGE 1 IS HONESTLY THIN (owner, 2026-08-24)
+
+**Owner, verbatim:** *"creating the skins is simple, adds no value other than a portrait card"* ·
+*"So far only a player card, but it's there for an idea"* · *"Eventually an area players can go
+interact with their echos"* · *"Enter echo hollow — separate scene with rooms for echos with 3d
+bodies nothing but cosmetic"* · *"That's future plans but I know that is important to some people"*.
+
+⚠ **The owner is right that Stage 1 barely pays, and the reason is VISIBILITY, not effort.** An
+Echo has almost no on-screen life: `EchoWorldPresence` gives it a body for the **escort beat only**,
+and that body is **GONE the moment the beat completes** (arrival and vanish fire at the same
+lead-clear point — `EchoWorldPresenceRegression`, WO-1108 Lane B). Outside that one walk, an Echo is
+a **row in a menu**. So a skin today changes a portrait on a card the player sees while assigning
+harvest — real, but small. **Do not price Stage 1 like a hero skin, and do not build a store around
+it.**
+
+| Stage | What it is | Value |
+|---|---|---|
+| **1 — the card** (today) | Portrait swap on the roster card | Thin. Ships as *an idea made visible*, not as a revenue line. |
+| **2 — ENTER ECHO HOLLOW** (future) | A **separate scene**: rooms, one per Echo, **3D bodies, purely cosmetic** | ⭐ This is where the skin becomes a thing you can look at — and where the SKU earns its price. |
+
+**Stage 2 is what makes the building.** The door stops being a second route to a menu and becomes a
+place you go: your six souls, housed, visible, dressed. That is a flavour-and-place argument that
+actually holds — and the owner names the audience precisely: *"important to some people."* It is not
+a mass-market driver and should not be justified as one.
+
+⛔ **THE ONE ARCHITECTURAL LANDMINE, flagged now so Stage 2 does not trip it.** CLAUDE.md §7:
+**`EchoWorldPresence` is the Echo's ONE appearance owner** — one owner, one lifecycle, no second
+spawner, and `PetDeployer.DespawnEcho` is the first despawn path in the game. A new scene that
+instantiates its own Echo bodies is **exactly the second spawner that rule forbids**, and it would
+be a natural, innocent way to build it. Stage 2 routes its bodies through the existing appearance
+owner, or it extends that owner — it never grows a parallel one. Pin it with the existing
+`EchoWorldPresenceRegression` before the scene exists, not after.
+
+⚠ Stage 2 is **future plans, deliberately unscheduled.** Recording it here so Stage 1 is built as
+its first step rather than as a dead end — the portrait must come from the same cosmetic entry that
+a room body will later read.
+
 ### ⛔ REJECTED IN THE SAME BREATH: selling an AFFINITY CHANGE
 
 The owner also asked whether an Echo cosmetic could **change its affinity to a desired one**.
