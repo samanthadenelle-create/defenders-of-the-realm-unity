@@ -1,6 +1,10 @@
 # WORK ORDER 1168 — THE TOWN ROSTER, RULED: twelve non-defensive buildings, and what each one is for
 
-**Status:** PARTIALLY LANDED 2026-08-24 — steps 1, 2 and 5 done; ⛔ **step 4 OVERTURNED the same day** (see §0); steps 3 and 6 still open.
+**Status:** CLOSED 2026-08-24 — owner: "solved and implemented yesterday". The ROSTER RULING is settled and the parts that were this ticket's own work shipped: step 1 (iron unlock + rename, `96b43f89c`), step 2 (roles, `a9134a567`), step 5 (palette groups, WO-1167).
+
+⛔ **§4 was OVERTURNED the same day** (`936da0c3b`) and must not be implemented as written: the Cathedral costs **240 crystals**, so making it the crystal producer required crystals to build the thing that makes crystals. The faucet was opened via `mine_crystal` instead; the Cathedral keeps spells and magic research.
+
+⚠ **Two items are NOT done and live elsewhere — closing this ticket must not lose them:** step 3 (the **Smithy merge** — fold `armorer`/`jeweler` into `forge`, retire from the palette, tab the UI; ⛔ ids are frozen save keys, and `vendors.json` holds four vendors of which three would merge) and step 6 (the **food→stone renames**, tracked as **WO-1163** and **PROD-016**, whose surface list is the reason it is not a quick change).
 
 ## 0. ⛔ CORRECTION — §4 (Cathedral as crystal producer) IS CIRCULAR AND WAS REVERSED
 

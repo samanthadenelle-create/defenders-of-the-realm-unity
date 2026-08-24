@@ -44,3 +44,41 @@ This ticket first said zero rows meant **writes are failing**. That was inferenc
 - [ ] Columns match `api/schema.sql`
 - [ ] A real in-game bug report produces a row, verified in ops
 - [ ] Covered by `tools/schema-parity.mjs`
+
+## ⛔ 2026-08-24 - DO NOT CLOSE YET, AND THE REASON IS THE MOST IMPORTANT PART OF THIS TICKET
+
+Owner: *"think we just fixed this."* The fix is **written, not run** - and this ticket has been
+"just fixed" once before.
+
+⭐ **`api/schema.sql` line 615 already carries a reconcile for this exact failure**, dated
+**2026-08-02**:
+
+```
+-- DRIFT RECONCILE (2026-08-02) - THE REASON bug_reports HAS 0 ROWS.
+--     NeonDbError: column "player_id" of relation "bug_reports" does not exist
+ALTER TABLE bug_reports ADD COLUMN IF NOT EXISTS report_id BIGINT GENERATED ALWAYS AS IDENTITY;
+```
+
+⚠ **Those ALTERs were never executed against Neon.** Proof: on 2026-08-24 the read view still
+returned `500 NeonDbError: column "report_id" does not exist`. If the block had run, that column
+would exist. So the repair was authored into the schema file, committed, and **never reached the
+database** - and nothing noticed for **22 days**, because every gate we run validates the ARTIFACT
+and none of them looks at the database the artifact talks to.
+
+That is the whole case for **WO-1173 / `SCHEMA_PARITY_OK`**, which is currently built and
+**not wired into any ship chain** - i.e. itself a "complete but uncalled" mechanism, in a repo
+where that is the recurring failure. A gate nobody calls would have caught this one on 08-02.
+
+### What actually has to be true before this closes
+
+1. `tmp/neon-repair-pass5b-bugreports.sql` is RUN (STEP 0 must return **0** first).
+2. ⚠ **A real submission is proven to land.** The SQL file says it in its own STEP 3: *"a schema
+   match is NOT evidence a write succeeds."* `/api/bug-report` currently shows **ZERO requests**, so
+   the very first thing to confirm is that the in-game form reaches the server at all - a perfect
+   table with no caller is still zero rows.
+3. The endpoint code side (five-shape INSERT cascade + swallowed catches) is verified against the
+   rebuilt shape - in flight, WO-1169 troubleshoot pillar.
+4. `schema-parity` reports `SCHEMA_PARITY_OK` for `bug_reports` - the check that would have made the
+   08-02 miss impossible.
+
+⛔ Closing on the strength of the file being correct is exactly what happened on 2026-08-02.

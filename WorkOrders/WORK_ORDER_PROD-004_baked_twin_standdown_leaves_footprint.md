@@ -1,6 +1,11 @@
 # PROD-004 — Standing down a baked twin hides the building and leaves its footprint
 
-**Status:** IN PROGRESS — **the §3 branch is SETTLED** (see §3b: it is a NAVMESH CARVE, not a decal
+**Status:** DONE 2026-08-24 - owner-closed, felt-verified on device ("Resolved (Painfully)").
+All three causes are landed: cause 1 (`NavMeshBakeFinal`, `15944d9f4`), cause 2 (twin active at bake),
+and the §3b branch - the residual footprint was a **NAVMESH CARVE**, not a decal and not terrain paint,
+which is why every decal/terrain theory before it missed. ⭐ Keep that: the same symptom (an invisible
+obstruction where a building used to be) will be diagnosed as art again by the next seat unless the
+carve is named. No owner ruling outstanding.
 and not terrain paint; owner confirmed *"there is some invisible footprint there"*). No owner ruling
 is outstanding on this ticket.
 - **Cause 1 (bake ran before the rotation) — LANDED + GATED.** `NavMeshBakeFinal` (commit `15944d9f4`):
