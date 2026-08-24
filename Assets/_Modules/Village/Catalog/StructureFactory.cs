@@ -656,6 +656,23 @@ namespace DeNelle.Village
             // cannot do it - GenericContainer is the model for lumberyard AND foundry AND silo.
             o.TraceId = entry != null ? entry.id : null;
 
+            // WO-1157 (§12, owner F8 2026-08-24 "the ballista builds on its side"): the DECISION is
+            // logged here, at the one place it is made, rather than being reconstructed downstream
+            // from the Xform lines. The three orientation channels (manual euler / preserve / the
+            // identity reset) are mutually exclusive and only ONE of them runs for a given row —
+            // so the row must SAY which, or every future orientation triage starts by re-deriving
+            // it from the catalog by hand. That re-derivation is what produced two wrong theories
+            // on this same defect. PERMANENT instrumentation; flag it off, never strip it.
+            string channel = o.LocalRotation.HasValue ? "MANUAL EULER (opts.LocalRotation, pre-fit)"
+                           : o.PreservePrefabRotation ? "PRESERVE PREFAB ROTATION (repo opt-in row)"
+                           : "IDENTITY RESET (DEF-232 default)";
+            FlowTrace.Step("Structure",
+                $"OptsFor('{o.TraceId ?? "<null>"}'): rotation channel = {channel}; " +
+                $"catalogEuler={(entry?.orientation != null ? entry.orientation.Euler.ToString() : "<none>")} " +
+                $"manual={(entry?.orientation != null && entry.orientation.manual)} " +
+                $"preserve={o.PreservePrefabRotation} applyManualEuler={applyManualEuler} " +
+                $"fitHeight={o.FitHeight:0.###} maxFootprint={o.MaxFootprint:0.###}.");
+
             return o;
         }
 

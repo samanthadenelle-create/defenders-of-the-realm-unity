@@ -228,11 +228,26 @@ namespace DeNelle.Village
             string who = string.IsNullOrEmpty(opts.TraceId)
                 ? $"'{prefab.name}'"
                 : $"'{prefab.name}' (entry='{opts.TraceId}')";
+            // WO-1157 (owner F8 2026-08-24, "the ballista builds on its side"): the line now also
+            // carries the MEASURED WORLD BOUNDS and the upright aspect at that stage. euler alone
+            // cannot answer "is it standing" — a euler of (0,0,0) is upright for one model and flat
+            // for the next, which is exactly how two orientation theories were argued from the same
+            // trace and both were wrong. size + aspect are the numbers that decide it, so they are
+            // printed beside the pose at EVERY mutation stage rather than derived afterwards.
+            // aspect = height / max(width, depth): >1 tall-and-narrow, <1 flat-and-wide.
             void TraceXform(string stage)
             {
                 var t = go.transform;
+                string measured = "bounds=<none>";
+                if (TryBounds(go, out Bounds tb))
+                {
+                    float widest = Mathf.Max(tb.size.x, tb.size.z);
+                    float aspect = widest > 0.0001f ? tb.size.y / widest : 0f;
+                    measured = $"bounds size=({tb.size.x:0.###}w x {tb.size.y:0.###}h x {tb.size.z:0.###}d) " +
+                               $"aspect={aspect:0.###} minY={tb.min.y:0.###}";
+                }
                 FlowTrace.Step("Xform", $"{who} after {stage}: " +
-                    $"euler={t.localEulerAngles} pos={t.localPosition} scale={t.localScale}");
+                    $"euler={t.localEulerAngles} pos={t.localPosition} scale={t.localScale} {measured}");
             }
             TraceXform("instantiate (prefab-native pose)");
 
@@ -401,10 +416,35 @@ namespace DeNelle.Village
         /// equals <paramref name="target"/> — robust to arbitrary import scale.</summary>
         private static void Fit(GameObject go, float target, bool largest)
         {
-            if (!TryBounds(go, out Bounds b)) return;
+            if (!TryBounds(go, out Bounds b))
+            {
+                // W (WO-1157): a silent return here left the model at its authored scale with
+                // nothing saying the fit never ran. Never silent.
+                FlowTrace.Warn("VisualFactory",
+                    $"Fit('{go?.name}'): NO measurable renderer bounds — NOT fitted, scale left at " +
+                    $"{(go != null ? go.transform.localScale.ToString("F3") : "<null>")}.");
+                return;
+            }
             float measure = largest ? Mathf.Max(b.size.x, Mathf.Max(b.size.y, b.size.z)) : b.size.y;
-            if (measure < 0.0001f) return;
-            go.transform.localScale *= target / measure;
+            if (measure < 0.0001f)
+            {
+                FlowTrace.Warn("VisualFactory",
+                    $"Fit('{go?.name}'): measured axis is degenerate ({measure:0.#####} m) — NOT fitted.");
+                return;
+            }
+
+            // WO-1157 (§12): the fit is where a mis-ORIENTED model becomes a mis-SCALED one as well,
+            // because fit-to-height divides by whatever axis happens to be vertical AT THIS MOMENT.
+            // Printing the measured axis, the whole bounds and the resulting factor makes that
+            // coupling readable in one line: a lying-down model shows a small `measure` and a wildly
+            // large factor, which is the signature the archer-tower thread had to re-derive by hand.
+            float k = target / measure;
+            FlowTrace.Step("VisualFactory",
+                $"Fit('{go.name}'): mode={(largest ? "largest" : "height")} measured={measure:0.###}m " +
+                $"of bounds ({b.size.x:0.###} x {b.size.y:0.###} x {b.size.z:0.###}) " +
+                $"target={target:0.###}m -> scale x{k:0.####} (from {go.transform.localScale.x:0.####}).");
+
+            go.transform.localScale *= k;
         }
 
         // ── Seat verification (§12: the next float NAMES ITSELF) ─────────────
