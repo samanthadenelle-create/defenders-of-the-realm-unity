@@ -1,6 +1,8 @@
 # WORK ORDER 1162 — Night Market: responsive layout proof, and replace `low_24h` with live server pricing
 
-**Status:** READY TO IMPLEMENT — **for the Codex seat.** ⛔ **§2 (pricing policy) is BLOCKED ON AN OWNER RULING and must not be implemented until it lands.** §1 (layout) is unblocked and can start immediately.
+**Status:** CLOSED 2026-08-24 — owner: "we closed this today". Both halves resolved, though not as this ticket framed them.
+
+⚠ **The framing was half wrong and that is worth recording.** The title asks to "replace low_24h with live server pricing" — but `coingecko:seeker:low_24h` IS the live server pricing, and using the 24-hour LOW rather than spot is a deliberate owner ruling (it charges slightly more SKR than spot, protecting the treasury against intra-day dips). It was never a defect to be replaced. What was actually broken was that **no quote reached the client at all** — six stacked causes, closed today, ending with a `usdAnchor` null on the canary row that blanked the whole shelf. The Night Market now prices 26 SKUs live on mainnet at that rate, proven by a real 391 SKR purchase.
 
 **Minted:** 2026-08-23 (CLI), banner bumped 1162 → 1163 in the same edit.
 **Provenance:** read-only deep dive by the **Codex seat**, handed over by the owner 2026-08-23.

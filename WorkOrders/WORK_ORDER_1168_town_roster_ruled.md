@@ -1,6 +1,21 @@
 # WORK ORDER 1168 — THE TOWN ROSTER, RULED: twelve non-defensive buildings, and what each one is for
 
-**Status:** RULED by the owner 2026-08-24. READY TO IMPLEMENT in the order at §6.
+**Status:** PARTIALLY LANDED 2026-08-24 — steps 1, 2 and 5 done; ⛔ **step 4 OVERTURNED the same day** (see §0); steps 3 and 6 still open.
+
+## 0. ⛔ CORRECTION — §4 (Cathedral as crystal producer) IS CIRCULAR AND WAS REVERSED
+
+Ruled in the morning, overturned by evening (`936da0c3b`), and the reason is arithmetic, not preference:
+
+```
+Cathedral of Magic   costs 240 CRYSTALS   <- the proposed crystal producer
+Crystal Mine         costs 320 wood + 200 iron, ZERO crystals
+```
+
+**You would need crystals to build the thing that makes crystals.** `mine_crystal` is the only row that can open the faucet from a standing start, and it was simply locked out of the palette — the same defect as the iron producer, on the resource that matters most. It is now unlocked, and **the Cathedral keeps spells and magic research but NOT the faucet**.
+
+⚠ The table and prose below still describe the original §4. They are left as written because this ticket is the record of a ruling, and the correction belongs beside it rather than erasing it — but §4 is dead. Owner trigger: *"the only crystal faucet is way past when you need them, by then you are onto dungeons and raids"*.
+
+**What landed:** step 1 (iron unlock + rename, `96b43f89c`) · step 2 (roles, `a9134a567`) · step 5 (palette groups, WO-1167). **Still open:** step 3 (Smithy merge) · step 6 (WO-1163 renames).
 
 **Minted:** 2026-08-24 (CLI), banner bumped 1168 → 1169 in the same edit.
 **Provenance:** owner, 2026-08-24 — *"let's go ahead and iron out what's supposed to be there so we

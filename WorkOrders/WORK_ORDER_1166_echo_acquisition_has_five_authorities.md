@@ -1,6 +1,12 @@
 # WORK ORDER 1166 — Echo acquisition has FIVE competing accounts, and Echo Hollow's job depends on which you believe
 
-**Status:** READY FOR OWNER RULING. No code change until §5 is answered — the question is *which model is real*, and every implementation follows from that.
+**Status:** RESOLVED 2026-08-24 (owner). The five competing accounts collapse to ONE: **account #4 is what shipped** — the first Echo is granted with the guide (`TutorialFlow.cs:1610`, `StarterPetSpecies = "ice-wolf"` = Aldwin), the rest arrive at thresholds. The other four are stale comments, not designs.
+
+⛔ **The four files asserting the FALSE exclusivity remain the lesson:** `GameStateService.cs:1005`, `PetSelectController.cs:645` and `:661`, `PetDeployer.cs:140` all state the pet is acquired "ONLY"/"SOLELY" from the Echo Hollow shop, and all four also name a **Yarn** node — and Yarn was fully removed (WO-557). ⚠ **Four independent restatements made a false claim look corroborated**, which is exactly why nobody re-derived it. That is the same one-fact-written-many-times failure as the stale WO-number block, the retired asmdef table, and the 1-of-1 treasury in nine files.
+
+**Echo Hollow keeps its job (Option D, staged):** home + wardrobe. ⚠ Stage 1 is honestly thin and the owner said so — an Echo is barely on screen (`EchoWorldPresence` gives it a body for the escort beat ONLY), so a skin is a portrait swap. Stage 2 — *"Enter echo hollow, separate scene, rooms for echos with 3d bodies, nothing but cosmetic"* — is where it earns the building, and is deliberately unscheduled.
+
+⛔ **Selling an affinity change stays REJECTED** on its own arithmetic: `preferredLaneMatchBonus` 0.03 against `baseContributionPerEcho` 0.02, beside a 0.20 six-set and 0.25 tri-synergy — a rounding error that would delete the assignment decision. Pure appearance yes; anything that moves a number no.
 
 **Minted:** 2026-08-24 (CLI), banner bumped 1166 → 1167 in the same edit.
 **Provenance:** the owner asked a simple question — *"what does echo hollow provide? A second entrance to manage echo screen?"* — and the honest answer turned out to be **"it depends which of five models you believe."**

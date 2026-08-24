@@ -429,7 +429,28 @@
 > never as BUILD STATUS** -- "under construction"/"coming soon"/"dev"/"WIP" are BANNED player-facing
 > strings and get a REGRESSION ORACLE, not a comment, because that is the rule most likely to rot.
 > Status READY TO IMPLEMENT, 3 open rulings. No code yet.)*
-> ## âš  RECONCILED 2026-08-17 (UI seat): UI seat next free = **1063**.
+> ## âš  RECONCILED 2026-08-24 (UI seat): UI seat next free = **1075**.
+> *(UI seat minted **WO-1069 through WO-1074** and bumped the header 1069 -> 1075 in this SAME
+> edit. **1074** = the KINGDOM COSMETIC IDENTITY PROGRAM (second owner-adopted external review,
+> same day): Kingdom Collections + Heart-of-Elarion Aspects (LAYERED over progression tier, never
+> replacing it) + componentized Heraldry; accent/collection/prestige price tiers; the "buy the
+> canvas, play it spectacular" achievement mechanic; the three dead clone bundles reborn as themed
+> Accent Packs. Program authority; child tickets mint as prerequisites land.)*
+> *(Earlier in the same edit: minted **WO-1069 through WO-1073** and bumped the header 1069 -> 1074
+> edit — the five follow-ups from the WO-1165 external monetization review the owner ADOPTED
+> 2026-08-24 ("permanence + prestige + convenience, not bigger sacks of wood"; reds: no bigger
+> raw-resource packs, no random loot/power packs). **1069** = the shortfall resolver never serves a
+> dominated offer (reconciled with WO-1176 §5c — still NO upsell at the shortfall moment).
+> **1070** = Founder's Vow 2.0: permanence + prestige, goods are not the headline. **1071** =
+> Storehouse Deeds I→III, the permanent storage SKU ladder. **1072** = ONE crystal valuation across
+> every SKU, then promote the crystal row. **1073** = the cumulative Patronage ladder — visible
+> status, zero combat stats, zero tempo. Specs only; CLI implements, gates and commits.
+> ⚠ ALSO FIXED HERE: the superseded header below read "next free = 1063" while its own body said
+> "minted 1063 through 1068, bumped 1063 -> 1069" — the header went stale in that very edit, and
+> board_build.py has printed the stale 1063 since. Files 1063-1068 all exist on disk, so the true
+> next free was 1069.)*
+>
+> ### superseded (its header was stale at 1063; its body was right): RECONCILED 2026-08-17 (UI seat): UI seat next free = **1069**.
 > *(UI seat minted **WO-1063 through WO-1068** and bumped 1063 -> 1069 in this SAME edit. Gear program:
 > 1063 program authority; 1064 measured daily-Gold pricing; 1065 affinity runtime; 1066 weapon effects,
 > Elarion naming and semantic VFX verbs; 1067 visual certification; 1068 store comparison/hot swap.

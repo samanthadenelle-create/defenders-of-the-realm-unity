@@ -1,6 +1,8 @@
 # WORK ORDER 1165 — The pack lineup: a covenant collision, two unbuyable SKUs, and an inverted top rung
 
-**Status:** READY — §1 needs an OWNER RULING before WO-1163 lands. The rest is implementable.
+**Status:** DIRECTION ADOPTED 2026-08-24 — §1 is RULED (see §1), §2 is LANDED IN-TREE (ledger
+anchors in `USD_ANCHORS`, mirror test 25/25), and the owner adopted the external review's program
+(§12 below). Remaining work is dispatched: WO-1069–1074 (UI-seat block) + WO-1174/1175/1176.
 
 **Minted:** 2026-08-23 (CLI), banner bumped 1165 → 1166 in the same edit.
 **Source:** monetization SME review requested by the owner. **CLI-verified at source** before filing — verdicts marked CONFIRMED are re-read by the CLI, not taken on the reviewer's word.
@@ -180,7 +182,54 @@ surfaced) · **say "24h low" in the UI**, converting a hidden markup into a stat
 in SKR + signature + rate + timestamp · surface the 5-minute quote lock, which is consumer-favourable
 and currently invisible.
 
-## 11. Order of work
+## 12. ⭐ ADOPTED 2026-08-24 — the external review, and where each piece went
+
+**Provenance:** the owner pasted the external advisor's reply to this WO (two messages, 2026-08-24)
+and directed the UI seat to fold it in. Adopted direction, verbatim thesis: *"don't make your whale
+tier 'more stuff.' Make it 'more ownership of the world.'"* — **permanence + prestige + convenience,
+not bigger sacks of wood.**
+
+### The locked verdict table
+
+| # | Item | Verdict | Where it lives now |
+|---|---|---|---|
+| 1 | Activate both Monthly Ledgers | 🟢 done | **LANDED** — `USD_ANCHORS` rows + mirror-law test green |
+| 2 | Founder's Vow 2.0 as the whale SKU | 🟢 | **WO-1070** (merged with WO-1176 §4 companion + WO-1074 Founder's Citadel) |
+| 3 | Permanent storage expansion | 🟢 | **WO-1071** Storehouse Deeds I→III |
+| 4 | Crystals: fix valuation, then promote | 🟢 | **WO-1072** (the §5 3.46× hole) |
+| 5 | Lifetime Patron/Founder status | 🟢 | **WO-1073** cumulative Patronage ladder |
+| 6 | Bigger raw-resource packs | 🔴 **wrong direction — standing NO** | recorded here; §3 is why |
+| 7 | Random loot / power packs | 🔴 **avoid — standing NO** | recorded here; covenant |
+| — | Shortfall: never a dominated offer | 🟢 | **WO-1069** (reconciled with WO-1176 §5c no-upsell) |
+| — | Kingdom cosmetic identity program | 🟢 (second paste) | **WO-1074** — Collections + Heart Aspects + Heraldry |
+
+### The two rules made sacred
+
+1. **Whales can buy faster progression and dramatically more prestige. They cannot buy a better
+   army.** The §1 gold ruling already draws this line (gold = tempo; training time, battle stats,
+   skill = the real constraints) and the ad-skip caps remain its load-bearing infrastructure.
+2. **The whale tier must contain what cheaper SKUs cannot recreate by repetition** — the §4
+   inversion is fixed by changing WHAT is sold, never by inflating goods.
+
+### The four-lane store architecture (target shape)
+
+⚡ **Immediate** (Hearth Spark, emergency resources, crystals) · 📜 **Recurring** (Wayfarer $4.99,
+Keeper $9.99 ledgers) · 🏰 **Permanent** (Storehouse Deeds, builder unlocks, WO-1074 cosmetics) ·
+👑 **Patronage** (Founder's Vow, prestige collections, the WO-1073 milestone track). The fourth lane
+is where the whales live.
+
+### Refinements applied while folding in (where the advisor met existing rulings)
+
+- Shortfall fix composes with WO-1176 §5c: strongest offer **at or below** the smallest-sufficient
+  price — still no upsell at the shortfall moment (WO-1069 §3).
+- "+1 workforce/builder slot" in the Vow collides with the WO-911 Q6 Echo-gate — surfaced as an
+  owner ruling in WO-1070 §4, not silently adopted.
+- Patronage cosmetics: not tradable initially, wallet-verifiable later (adopted as written).
+- "Tree of Life" → **Heart of Elarion** everywhere (canon §7).
+- The early-access "$5 max pack" memory is SUPERSEDED by this lineup (the $49.99 rung and $99+
+  prestige bundles are the adopted direction).
+
+## 11. Order of work *(2026-08-23 original, kept for history — §12 above is the live dispatch; items below marked done/routed there)*
 
 1. **Rule §1** — the coins/covenant collision. Blocks WO-1163.
 2. Add the two Monthly Ledger SKUs to `USD_ANCHORS` (§2) — smallest change, largest revenue.

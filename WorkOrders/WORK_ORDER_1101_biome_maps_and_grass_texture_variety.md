@@ -1,9 +1,9 @@
 # WORK ORDER 1101 — Environment variety: grass/ground texture variety -> per-area biome maps
 
-**Status:** DONE — owner-confirmed 2026-08-21.
+**Status:** CLOSED 2026-08-24 — implemented and verified in the tree (BiomeRoads / ArenaBiomeDressing / BiomeRoadsRegression). Body corrected: it had claimed no implementation existed.
 
 > Approval recorded verbatim: *"also I approved 1101"* (owner, 2026-08-17). The spec is ratified as
-> written; it no longer awaits review. No implementation exists yet — this is a fresh READY, not a
+> written; it no longer awaits review. ⛔ **THAT SENTENCE IS RETIRED (corrected 2026-08-24).** It read "No implementation exists yet" long after the work shipped — `Assets/_Modules/Core/World/BiomeRoads.cs`, `ArenaBiomeDressing.cs` and `BiomeRoadsRegression.cs` are all in the tree. ⚠ It shipped via a DIFFERENT design than the plan below, which is why the plan still reads as unbuilt: nobody went back to retire the framing once the approach changed. Read the code, not this section. The original line said: this was a fresh READY, not a
 > stale one.
 **Minted:** 2026-08-16 (orchestrator; the CLI_LANES_WO_NUMBERS.md banner was bumped by the
 orchestrator in the same mint — this file did not touch the banner)
