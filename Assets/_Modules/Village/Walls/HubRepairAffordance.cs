@@ -60,6 +60,8 @@ namespace DeNelle.Village
         // Below Build HUD (906) / selection (910) chrome; above the world.
         private const int SortingOrder = 905;
         private const float RefreshInterval = 0.75f;
+        /// <summary>Rate gate on the refused-tap Warn (see OnClick) - the tally is never lost.</summary>
+        private const float RefusedWarnInterval = 2f;
 
         private WallRepairController _repair;
         private GameObject _canvas;
@@ -67,6 +69,13 @@ namespace DeNelle.Village
         private Image _buttonImg;
         private TextMeshProUGUI _label;
         private float _timer;
+
+        // Dead-tap tally + its rate gate (OnClick's unaffordable branch).
+        private int _refusedTaps;
+        private float _nextRefusedWarnAt;
+
+        // Last label string already reported as clipping (see WarnIfClipped) - de-dupes the poll.
+        private string _lastClipReported;
 
         // Last-announced state so FlowTrace logs transitions, not every poll.
         private enum Vis { Uninit, HiddenInBattle, HiddenNothingDamaged, AvailableAffordable, AvailableShort }
@@ -282,7 +291,12 @@ namespace DeNelle.Village
             SetVisible(true);
             if (affordable)
             {
-                _label.text = "REPAIR ALL  (tap)\n" + WallRepairController.DescribeMaterials(cost);
+                // Copy lives in WallRepairStrings (LOCALIZE). The old "  (tap)" suffix is
+                // GONE - a button already reads as tappable, and those glyphs were part of
+                // what pushed this line into the kit's ellipsis on the owner's Seeker.
+                _label.text = WallRepairStrings.HubRepairAllLabel + "\n" +
+                              WallRepairController.DescribeMaterials(cost);
+                WarnIfClipped("affordable");
                 _label.color = ElarionUi.Parchment;
                 if (_buttonImg != null) _buttonImg.color = ElarionUi.ConfirmFace;
                 Announce(Vis.AvailableAffordable, cost, shortfall, true);
@@ -290,8 +304,13 @@ namespace DeNelle.Village
             else
             {
                 // Meaning never by colour alone (kit rule): the shortfall is in TEXT.
-                _label.text = "NEED MORE TO REPAIR\n" +
-                              WallRepairController.DescribeMaterials(shortfall) + " short - go farm";
+                // Copy lives in WallRepairStrings (LOCALIZE) and is deliberately SHORT: the
+                // owner's Seeker rendered this as "NEED MORE TO REP... / 115 iron short - go
+                // fa...". Shorter copy beats a wider container - the rect is unchanged.
+                _label.text = WallRepairStrings.HubNeedMoreLabel + "\n" +
+                              string.Format(WallRepairStrings.HubShortfallFormat,
+                                            WallRepairController.DescribeMaterials(shortfall));
+                WarnIfClipped("short");
                 _label.color = ElarionUi.Parchment;
                 if (_buttonImg != null) _buttonImg.color = ElarionUi.DangerFace;
                 Announce(Vis.AvailableShort, cost, shortfall, false);
@@ -348,9 +367,22 @@ namespace DeNelle.Village
             {
                 // Owner ruling: do NOT spend when they cannot afford. Show the shortfall.
                 CoreCost shortfall = Shortfall(cost);
-                FlowTrace.Step("Repair",
-                    $"hub repair REFUSED (cannot afford): cost {WallRepairController.DescribeMaterials(cost)}, " +
-                    $"short {WallRepairController.DescribeMaterials(shortfall)}, wallet={WalletLine()} - farm then return");
+                // WARN, not Step: a refusal is an anomaly the PLAYER FELT - a tap that did
+                // nothing. And the REPEAT is the signal (it means they found no exit), so the
+                // dead taps are COUNTED rather than dropped.
+                //
+                // NOTE ON FlowTrace.Throttle: it logs via Sink.Info and silently DISCARDS the
+                // suppressed calls, so it cannot carry Warn severity and cannot count. The rate
+                // gate is therefore local, and the tally rides in the message instead.
+                _refusedTaps++;
+                if (Time.unscaledTime >= _nextRefusedWarnAt)
+                {
+                    _nextRefusedWarnAt = Time.unscaledTime + RefusedWarnInterval;
+                    FlowTrace.Warn("Repair",
+                        $"hub repair REFUSED (cannot afford) - dead tap #{_refusedTaps} this session: " +
+                        $"cost {WallRepairController.DescribeMaterials(cost)}, " +
+                        $"short {WallRepairController.DescribeMaterials(shortfall)}, wallet={WalletLine()} - farm then return");
+                }
                 Refresh();   // re-render the shortfall
                 return;
             }
@@ -427,10 +459,59 @@ namespace DeNelle.Village
                 _label = _button.GetComponentInChildren<TextMeshProUGUI>();
                 if (_label != null)
                 {
-                    _label.enableAutoSizing = false;
-                    _label.fontSize = 26f;
+                    // THE CLIP BUG (owner Seeker capture). ElarionUiKit.Button runs
+                    // FitSingleLine on every label, arming NoWrap + Ellipsis. The old code
+                    // here then opted OUT with enableAutoSizing=false / fontSize=26 without
+                    // clearing either mode - so single-line ellipsis stayed armed over a
+                    // deliberately TWO-LINE string and each line clipped independently, 26px
+                    // sat BELOW the kit's own mobile floor (FontFloor=30), and disabling
+                    // autosizing also disarmed the kit's post-layout UiKitTextFitGuard (it
+                    // only manipulates fontSizeMin/Max). FitBlock is the kit's multi-line
+                    // answer: Normal wrap + Truncate + bounded autosize, guard RE-ARMED.
+                    ElarionUiKit.FitBlock(_label, ElarionUiKit.FontFloor);
+                    var lrt = _label.rectTransform;
+                    FlowTrace.Step("Repair",
+                        $"hub repair label fitted: rect {lrt.rect.width:F0}x{lrt.rect.height:F0} " +
+                        $"anchors {lrt.anchorMin}-{lrt.anchorMax} wrap={_label.textWrappingMode} " +
+                        $"overflow={_label.overflowMode} autoSize={_label.enableAutoSizing} " +
+                        $"size=[{_label.fontSizeMin:F0}..{_label.fontSizeMax:F0}]");
                 }
             }
+        }
+
+        /// <summary>
+        /// CLIP DETECTOR. The owner's phone reported clipped repair copy and nothing in the log
+        /// could prove it - TMP drops the glyphs silently. This Warns whenever the label actually
+        /// renders fewer characters than it was given, so the next clip report is one grep instead
+        /// of an argument over a screenshot.
+        ///
+        /// <para>textInfo is only populated after a layout pass, so ForceMeshUpdate() runs first -
+        /// the same precedent the kit's own UiKitTextFitGuard uses before reading characterCount
+        /// (ElarionUiKitObsidian.cs, the guard's post-layout check).</para>
+        ///
+        /// <para>Deliberately a Warn, not a Fail: characterCount is TMP's PARSED count, so a
+        /// newline in the two-line string can read as one character short on its own. It points at
+        /// the label; it does not convict it.</para>
+        /// </summary>
+        private void WarnIfClipped(string which)
+        {
+            if (!FlowTrace.Enabled || _label == null) return;
+            _label.ForceMeshUpdate();
+            var info = _label.textInfo;
+            if (info == null) return;
+            string raw = _label.text ?? string.Empty;
+            if (info.characterCount >= raw.Length) return;
+            // Refresh() polls every 0.75s, so report each DISTINCT clipped string once rather
+            // than flooding the capture with the same line.
+            if (raw == _lastClipReported) return;
+            _lastClipReported = raw;
+            var lrt = _label.rectTransform;
+            string flat = raw.Replace("\n", " / ");
+            FlowTrace.Warn("Repair",
+                $"hub repair label CLIPPING ({which}): rendered {info.characterCount} of {raw.Length} chars - " +
+                $"text='{flat}' rect {lrt.rect.width:F0}x{lrt.rect.height:F0} " +
+                $"wrap={_label.textWrappingMode} overflow={_label.overflowMode} " +
+                $"fontSize={_label.fontSize:F0} size=[{_label.fontSizeMin:F0}..{_label.fontSizeMax:F0}]");
         }
 
         private void SetVisible(bool visible)

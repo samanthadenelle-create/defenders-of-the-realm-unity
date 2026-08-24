@@ -71,5 +71,21 @@ namespace DeNelle.Village
         public const string IntactMessage = "That structure is undamaged.";
         // LOCALIZE: village.repair.hint
         public const string SelectHint = "Tap a damaged wall, gate or building to repair it.";
+
+        // -- Hub "Repair All" affordance copy (HubRepairAffordance) -----------
+        // NARROW-WIDTH RULE: this label lives in a ~0.19-screen-wide button on a
+        // phone, and the kit ellipsizes rather than growing the container. Copy is
+        // therefore written to fit the NARROWEST supported width - shorter beats
+        // instructive. Plain hyphens only (tofu rule).
+        // LOCALIZE: village.repair.hub.repairAll
+        // No "(tap)" suffix - a button already reads as tappable.
+        public const string HubRepairAllLabel = "REPAIR ALL";
+        // LOCALIZE: village.repair.hub.needMore
+        // Shortened from "NEED MORE TO REPAIR" (19 glyphs -> 9): the long form
+        // clipped to "NEED MORE TO REP..." on the owner's Seeker.
+        public const string HubNeedMoreLabel = "NEED MORE";
+        // LOCALIZE: village.repair.hub.shortfallFormat  ({0} = the composed materials list)
+        // Dropped " - go farm": a refused player needs the AMOUNT, not the errand.
+        public const string HubShortfallFormat = "{0} short";
     }
 }

@@ -137,7 +137,7 @@
 > fine as history. A copied number is the bug **even when it was right the day it was written** -
 > that is exactly how the retired 860-899 UI block kept re-seeding collisions from CLAUDE.md sec.2.
 
-> ## ⚠ RECONCILED 2026-08-24 (CLI): main line next free = **1178**.
+> ## ⚠ RECONCILED 2026-08-24 (CLI): main line next free = **1179**.
 > *(CLI seat minted **WO-1176** and bumped 1176 -> 1177 in this SAME edit. **1176** = THE SHELF
 > REDESIGN - one-time starter + choose-your-resource packs + server-side purchase limits.
 > Finding: founderOnly is DECORATION, nothing limits any purchase.)*
