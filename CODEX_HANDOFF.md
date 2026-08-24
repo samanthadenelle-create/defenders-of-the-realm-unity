@@ -1,3 +1,53 @@
+# THE OPERATING LOOP (owner, 2026-08-24) - read this first
+
+```
+  LEAD  ---- selects a batch, writes it HERE ---->  OWNER tells Codex it is here
+    ^                                                        |
+    |                                              Codex works in its OWN worktree
+    |                                                        |
+    |                                              OWNER tells lead it is resolved
+    |                                                        v
+    +--- next batch <--- SELECTOR agent      LEAD verifies -> gates -> commits
+                              ^                              |
+                              |                              v
+                              +----------------  BOARD agent reflects status
+```
+
+**Roles, and the reason each exists:**
+
+| Who | Does | ⛔ Never |
+|---|---|---|
+| **Lead (this seat)** | Selects, specs, **verifies at source**, gates, commits by explicit path | Never trusts a handback's summary over the tree |
+| **Owner** | Routes batches to Codex, says when they are resolved, **felt-verifies and closes** | - |
+| **Codex** | Implements in its own worktree; **refuses wrong specs at intake** | Gate, commit, push, close, or invent policy |
+| **BOARD agent** | Reflects `**Status:**` lines as work lands | ⛔ Never marks DONE - only the PO closes |
+| **SELECTOR agent** | Picks the next batch that can safely go out | ⛔ Never assumes disjointness - **proves it** |
+
+## The two standing agents, precisely
+
+### BOARD agent - reflects, never closes
+`BOARD.html` is **generated** (`python tools/board_build.py`) and therefore **cannot drift**. What
+drifts is the `**Status:**` line inside each work order. That is the only thing this agent edits, plus
+a dated one-line note. ⛔ **Shipped code is `FIXED <date> (<sha>) - awaiting owner felt-verify`, never
+DONE** - §13 reserves closing for the PO. A wrong DONE is worse than a stale line: it makes a live
+ticket invisible.
+
+### SELECTOR agent - proves disjointness
+Its whole value is the check nobody makes by eye. ⭐ **Today that check caught WO-1173 and WO-1177
+both editing `api/schema.sql`** - handed out together they would have had two seats in one file, with
+the parity gate written against a schema moving underneath it.
+
+A ticket is only handable when **all five** hold:
+1. **Spec-complete** - a spec Codex must guess at returns as work the lead re-derives.
+2. **File-disjoint** from every in-flight batch AND from whatever the lead is editing - proven by
+   listing the files, not assumed from the silo name.
+3. **No open owner ruling.** If a ruling is owed, it is a question, not a ticket.
+4. ⚠ **Not already shipped.** Several tickets' own Status lines admit they do not know. **WO-822
+   nearly went out today saying exactly that.** When in doubt it goes to the RCA lane, not the dev lane.
+5. **Not scene/bake work** and not gate-dependent.
+
+---
+
 # Codex handoff - the standing rules, and what is ready right now
 
 **Owner ruling 2026-08-24:** *"think of Codex as your dev team"* / *"and you are lead."*
@@ -29,7 +79,37 @@ Codex implements. The CLI lead specs, verifies, gates and commits. This file is 
 - **File-disjoint** from every other in-flight ticket, and from whatever the lead is editing.
 - **No open owner ruling.** If the ticket says a ruling is owed, it is not ready - it is a question.
 
-## BATCH 1 - handed out 2026-08-24
+### ⭐ WHY THE CADENCE PRODUCES QUALITY, NOT JUST SPEED (owner, 2026-08-24)
+
+> *"By doing this in a cadence, we can keep things moving fast with high quality because two
+> different AI units are verifying the solution."*
+
+That is the load-bearing idea, and **2026-08-24 proved it runs in BOTH directions** - which is the
+only thing that makes it verification rather than ceremony:
+
+- **Codex -> lead.** It refused batch 1 at intake and was right twice. **WO-1069** asked the resolver
+  to serve `hearth-spark`; that pack is not an impulse SKU and the guard that rejects it enforces a
+  **binding WO-947 ruling** - the ticket asked for a violation. **WO-1178** proposed a pre-run version
+  check; a raw launch rewrites the file *afterwards*, so the check passes and the damage still lands.
+  Both were **my** specs.
+- **Lead -> agents.** A `FlowTrace.Throttle` instruction I gave would have demoted a Warn to Info and
+  discarded the repeat that was the entire signal. An agent caught it. Separately, a `MaterialsZero`
+  premise I wrote named the wrong regression suite - the file had **zero** relevant cases.
+
+⛔ **THE CONDITION, and it is fragile:** the two units must be **genuinely free to disagree**. Codex
+must be able to refuse a spec, and the lead must **verify at source instead of trusting the
+handback's summary**. The moment either defers to the other, the double-check silently becomes a
+single point of failure that *looks* like two - which is worse than one honest check, because
+everyone stops looking.
+
+⚠ Which is why the handback's **"what I could not find, and where the spec did not match the code"**
+section is mandatory, and why every claim in this repo is judged by **marker on a fresh log, never an
+exit code**. Three runners on 2026-08-24 reported a verdict unrelated to reality inside ten minutes -
+two exited **0 having done nothing**, one said **`NO LOG`** while the gate had **passed**.
+
+---
+
+# BATCH 1 - handed out 2026-08-24
 
 | WO | What | Silo | Notes |
 |---|---|---|---|
