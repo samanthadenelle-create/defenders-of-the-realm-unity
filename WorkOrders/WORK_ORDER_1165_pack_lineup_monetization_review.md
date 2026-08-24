@@ -1,6 +1,6 @@
 # WORK ORDER 1165 — The pack lineup: a covenant collision, two unbuyable SKUs, and an inverted top rung
 
-**Status:** DIRECTION ADOPTED 2026-08-24 — §1 is RULED (see §1), §2 is LANDED IN-TREE (ledger
+**Status:** CLOSED — DIRECTION ADOPTED 2026-08-24 — §1 is RULED (see §1), §2 is LANDED IN-TREE (ledger
 anchors in `USD_ANCHORS`, mirror test 25/25), and the owner adopted the external review's program
 (§12 below). Remaining work is dispatched: WO-1069–1074 (UI-seat block) + WO-1174/1175/1176.
 

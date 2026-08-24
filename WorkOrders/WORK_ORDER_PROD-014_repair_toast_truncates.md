@@ -1,6 +1,6 @@
 # PROD-014 — The "NEED MORE TO REPAIR" toast truncates on both lines
 
-**Status:** READY. **Silo:** HUD.
+**Status:** READY — PARTIAL. The **label-clipping half is FIXED 2026-08-24** (`130ec84ab`: `HubRepairAffordance` now calls `FitBlock` at the legibility floor, copy moved to `WallRepairStrings.cs`, plus a new ellipsis detector) and awaits owner felt-verify. **STILL OPEN:** the acknowledge control, the crystals-repair option and the smallest-sufficient pack offer (the discount half is split out to WO-1177). **Silo:** HUD.
 **Reported:** owner felt-test, Seeker, 2026-08-24.
 
 ## Symptom

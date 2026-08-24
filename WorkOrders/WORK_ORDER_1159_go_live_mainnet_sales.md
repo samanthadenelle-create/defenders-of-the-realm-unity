@@ -1,6 +1,6 @@
 # WORK ORDER 1159 — GO LIVE: real mainnet pack sales, on the full authored ladder
 
-**Status:** FIXED 2026-08-23 — gated green (`COMPILE_GATE_OK`, `REGRESSION_OK 270/270 suites`, backend `node --test` 37/37), the new pin PROVEN red-then-green. ⚠ AWAITING OWNER FELT-TEST ON DEVICE, and ONE TREASURY ITEM IS OPEN (§5). Not closed by the CLI — the PO closes.
+**Status:** FIXED 2026-08-23 — gated green (`COMPILE_GATE_OK`, `REGRESSION_OK 270/270 suites`, backend `node --test` 37/37), the new pin PROVEN red-then-green. ⚠ AWAITING OWNER FELT-TEST ON DEVICE. Not closed by the CLI — the PO closes. ⭐ **The §5 treasury red is RESOLVED 2026-08-24** (`3d17fc9e2`): the threshold was re-read from chain as **2-of-3** and the nine stale 1-of-1 copies in the repo were corrected — §5's body carries the proof. *(This line said "ONE TREASURY ITEM IS OPEN" until the 2026-08-24 board reconcile.)* The ship-chain `TREASURY_VERIFY_OK` call added in `45bd2df8e` is a **PROPOSAL awaiting an owner call**, deliberately not wired.
 
 **Owner ruling (explicit, 2026-08-23):** *"we test everything and make live"*, *"by owner explicitly"*.
 Scope ruled by the owner in the same exchange: **the full authored ladder, $1.99–$49.99.**
