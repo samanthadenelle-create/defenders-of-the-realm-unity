@@ -117,10 +117,29 @@ decoration with extra steps.**
 > The ruling moves troop training to **straight gold**. So stone would inherit ~122k of one-time
 > costs and **NO repeatable drain at all**, i.e. it starts life in the exact state food died in.
 >
-> **OPEN, AND IT DECIDES WHETHER STONE HAS VALUE: what is stone's REPEATABLE sink?**
-> Candidates to put to the owner, not to pick: walls/defence rebuild after a siege · a
-> per-raid muster or re-arm cost · structure repair priced in stone · consumables crafted from it.
-> Anything that a player spends AGAIN. Without one, this ticket renames the problem.
+> **⭐ ANSWERED BY THE OWNER, 2026-08-23 — and the answer is the ladder itself.**
+> Verbatim: *"so losing a lvl 3 tower hurts on wood stone and iron"* · *"as well as gold"*.
+>
+> **THE REPEATABLE SINK IS LOSS, AND THE LADDER IS WHAT GIVES IT TEETH.** Because cost is keyed to
+> TIER, a level-3 structure has cumulatively consumed **wood+gold (L1) + stone+gold (L2) +
+> iron+gold (L3)**. Destroying it therefore costs **all three resources plus gold** to climb back —
+> one loss drains every currency at once.
+>
+> That is precisely what food never had. It is **repeatable** (sieges recur), it **scales with
+> investment** (the more you have built, the more a raid costs you), and it **cannot be outrun by a
+> faucet**, because the drain grows with the same progression that grows the income. Compare the
+> food failure directly: a fixed 122k budget against a compounding faucet had one outcome; a drain
+> proportional to what you own does not.
+>
+> ⚠ **It also gives WO-753 teeth for the first time.** *"Destroyed items never rebuild - build fresh
+> at full cost"* was a rule with nothing behind it while food was abundant. Under the ladder it is a
+> real consequence.
+>
+> ⚠ **And it keeps the 150-gold producer restore coherent, because that exception is NARROW:**
+> tier-one PRODUCERS get the gold-only escape so the economy can never deadlock (§1); towers, walls
+> and everything else pay the full ladder. The carve-out protects against SOFT-LOCK, never against
+> LOSS. ⛔ Do not widen it to structures generally — that would delete the sink this section just
+> established.
 
 **⛔ AND FOOD IS MONETIZED — three food-only SKUs are on sale**
 (`packs.json:686/713/741` — 1,000 / 3,500 / 8,000 food at $1.99 / $2.99 / $4.99), and
