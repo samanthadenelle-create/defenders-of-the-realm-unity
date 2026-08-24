@@ -102,9 +102,21 @@ to lose."** Time-boxed protection for a player who is travelling - not a permane
 Design consequences that follow from the use case, not from monetization:
 
 - **Fixed duration, stated up front.** The player buys a KNOWN window, not a subscription to safety.
-- ⛔ **NON-STACKING.** If shields stack, the product silently becomes permanent immunity - which is
-  the thing this ruling exists to prevent - and offline attacks stop existing for anyone who pays.
-  ⚠ Buying a second while one is live must **refuse or queue**, never extend without bound.
+- ⭐ **CHEAP FIRST, PAINFUL AFTER** (owner, 2026-08-24: *"either that or make the cost cheap then as
+  added painful"*). **This supersedes the hard non-stacking rule I first proposed**, and it is better:
+  a hard refusal punishes the legitimate case - someone genuinely away two weeks hits a wall - while
+  an escalating price lets them cover it and makes permanent immunity progressively unaffordable.
+  The traveller pays little; the player buying immunity pays steeply more each time. **It self-limits
+  without ever telling a paying player "no."**
+- ⛔ **AND IT STILL NEEDS A HARD CEILING - a price curve alone only PRICES permanent immunity, it does
+  not prevent it.** A whale buys through any curve, and then offline attacks stop existing for them,
+  which is the thing this ruling protects. So: an absolute cap on **total protected time in a rolling
+  window**, above which **no price buys more.** ⚠ The cap NUMBER is balance, not architecture - it
+  belongs with the crystal-faucet measurement (ruling 5), not authored blind.
+- ⛔ **THE CURVE IS NOT A CONVERSION KNOB.** This ruling already fences theft rates against being
+  tuned to move shield sales. An escalating price is **the second knob on the same product**, and it
+  is exactly where that pressure will reappear - as *"soften the curve, conversion is soft."* ⚠ Same
+  answer, same reason: the proposal is the tell. Fenced now, while it costs nothing to say.
 - ⛔ **The shield DROPS when the player returns and acts.** It protects the absence, not the player.
   A shield still up while its owner is online and raiding is a different product, and a worse one.
 - **It protects the in-progress accumulation** - the thing they were close to saving - which means
