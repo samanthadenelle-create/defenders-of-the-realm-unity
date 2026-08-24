@@ -55,7 +55,22 @@
 //   GET /api/admin/stats?view=retention[&days=N]
 //   GET /api/admin/stats?view=funnel[&days=N]
 //   GET /api/admin/stats?view=economy[&days=N]
+//   GET /api/admin/stats?view=purchases[&days=N]
 //   GET /api/admin/stats?view=players[&limit=N][&player=<id>|&ref=<12hex>]
+//
+// ── ⛔ TWO PURCHASE VIEWS, AND THEY ARE NOT INTERCHANGEABLE ──────────────────
+//   ?view=economy   — CLIENT-REPORTED INTENT. Aggregates the purchase_completed
+//                     event the game emits. It is a real funnel (bundle_viewed →
+//                     purchase_completed) and it carries NO money.
+//   ?view=purchases — SERVER TRUTH. Aggregates purchase_entitlements (a row
+//                     exists only after the backend verified the finalized chain
+//                     transaction itself) and purchase_quotes. This is where
+//                     revenue comes from.
+//   ⛔ NEVER merge the two into one figure. WO-1158 fixed exactly this direction
+//   of trust inside the rail — the server issues the price because the client's
+//   number is not authoritative — and a blended dashboard number would undo that
+//   by hiding the disagreement. The disagreement IS the alert; ?view=purchases
+//   surfaces it as `disagreement`.
 //
 // EVENT NAMES: only names the client actually emits are queried here (verified
 // against Assets/ by grep, 2026-08-17):
@@ -501,7 +516,15 @@ module.exports = async (req, res) => {
         }
 
         // ============================================================= economy
-        // WHAT SELLS, AND WHAT THE PROMO/REFERRAL RAILS ACTUALLY DID.
+        // ⚠ CLIENT-REPORTED INTENT — NOT SETTLEMENT, NOT REVENUE.
+        // WHAT THE GAME SAID SOLD, AND WHAT THE PROMO/REFERRAL RAILS ACTUALLY DID.
+        //
+        // Everything under `purchases` / `bundle_views` / `conversion` here comes
+        // from analytics_events, i.e. from the CLIENT's own word. That makes this
+        // a genuine intent funnel (opened the pack card → said it completed) and
+        // makes it useless as a money record. For what actually settled on chain,
+        // read ?view=purchases — which is a SEPARATE view on purpose: see the
+        // "TWO PURCHASE VIEWS" note in the file header. Do not blend the two.
         //
         // ⚠ purchase_completed carries NO price field. PackStore.cs:582 emits
         // { packId, packName, currency, txSig } only — the `price` in
@@ -612,15 +635,345 @@ module.exports = async (req, res) => {
 
             return res.status(200).json(Object.assign(meta, {
                 low_n_threshold: LOW_N_THRESHOLD,
-                revenue_note: 'purchase_completed carries no amount (PackStore emits packId/packName/'
-                    + 'currency/txSig only), so these are COUNTS, not revenue. A null price_sample '
-                    + 'means the client never sent one.',
+                // Kept as `purchases` because site/admin.html reads that key; the
+                // LABEL is what changes, and it changes to the truth.
+                source: 'analytics_events — CLIENT-REPORTED INTENT, not settlement.',
+                client_reported: true,
+                see_also: '?view=purchases — server-verified settlement and revenue from '
+                    + 'purchase_entitlements. The two are never blended; where they disagree, that '
+                    + 'disagreement is itself the signal.',
+                revenue_note: 'CLIENT-REPORTED, NOT REVENUE. purchase_completed carries no amount '
+                    + '(PackStore emits packId/packName/currency/txSig only), so these are COUNTS of '
+                    + 'what the client said it did. A null price_sample means the client never sent '
+                    + 'one — never that the sale was free. Real revenue lives in ?view=purchases.',
                 purchases: purchases,
                 bundle_views: views,
                 conversion: conversion,
                 promo_codes: promos,
                 referrals: referrals[0] || null,
                 client_events: clientSide,
+            }));
+        }
+
+        // =========================================================== purchases
+        // SERVER TRUTH. Sourced from purchase_entitlements + purchase_quotes —
+        // the rows api/purchases/{quote,verify,fulfill} write — and NEVER from
+        // analytics_events.
+        //
+        // ⛔ WHY THIS IS A SECOND VIEW RATHER THAN A FIX TO ?view=economy:
+        // the two answer different questions and MUST NOT be blended.
+        //   ?view=economy    — what the CLIENT said happened (purchase_completed).
+        //   ?view=purchases  — what the SERVER independently verified on chain.
+        // A single merged figure would average away the disagreement, and the
+        // DISAGREEMENT IS THE ALERT: a client purchase_completed whose txSig has
+        // no entitlement row means a grant may have gone out with no settlement
+        // recorded behind it. It is surfaced below, never reconciled — because
+        // reconciling is a WRITE and no write lives in this file.
+        //
+        // ── REVENUE ─────────────────────────────────────────────────────────
+        // usd_anchor is the AUTHORED LADDER PRICE (2.99, 4.99 …) persisted onto
+        // the row at verify time, so it is a stable historical figure and not a
+        // re-derivation against today's market. It is the only honest revenue
+        // number the database holds; analytics cannot produce one at all.
+        // ⚠ It is NULL on the two CANARY skus (schema.sql — pinned protocol
+        // constants with no rate behind them), so every total ships next to
+        // `rows_without_usd_anchor`: a non-zero count means the total UNDERSTATES
+        // the row count, NOT that those sales were free.
+        // ⚠ observed_lamports is a BASE-UNIT integer whose decimals live on the
+        // QUOTE (6 on mainnet SKR, 9 on devnet), not on the entitlement. It is
+        // therefore reported raw, per-currency, and never summed into a
+        // human-readable token amount here.
+        //
+        // ── THE QUOTE FUNNEL is the health signal ───────────────────────────
+        // A quote is issued when a player opens the wallet prompt and consumed
+        // when their payment verifies; TTL is 5 minutes. A fall in
+        // consumed/issued means people are TRYING TO BUY AND FAILING, which no
+        // other metric on this dashboard can see.
+        //
+        // Wallets are masked exactly as everywhere else. tx_signature is NOT
+        // masked: it is already a public chain record, and it is the precise
+        // string the operator needs to answer "did that actually land".
+        //
+        // Each table is probed INDEPENDENTLY. Schema drift is real here (three
+        // of these tables were invisible to the admin surface until 2026-08-24,
+        // and a stale CHECK constraint silently failed a settled mainnet sale),
+        // so a missing or altered table degrades to an entry in `errors` rather
+        // than 500-ing the whole view.
+        if (view === 'purchases') {
+            const errors = [];
+            const probe = async (label, run) => {
+                try {
+                    return await run();
+                } catch (err) {
+                    console.error('[admin/stats] purchases probe failed:', label, err);
+                    errors.push({ probe: label, error: String((err && err.message) || err) });
+                    return null;
+                }
+            };
+
+            // ---- settled totals (purchase_entitlements) ---------------------
+            const totals = await probe('entitlements_totals', () => sql`
+                SELECT COUNT(*)::bigint                                   AS settled_all_time,
+                       COUNT(DISTINCT wallet)::bigint                     AS buyers_all_time,
+                       COALESCE(SUM(usd_anchor), 0)::float8               AS usd_all_time,
+                       COUNT(*) FILTER (WHERE usd_anchor IS NULL)::bigint AS rows_without_usd_anchor,
+                       COUNT(*) FILTER (WHERE created_at > NOW() - (${days} * INTERVAL '1 day'))::bigint AS settled_window,
+                       COUNT(DISTINCT wallet) FILTER (WHERE created_at > NOW() - (${days} * INTERVAL '1 day'))::bigint AS buyers_window,
+                       COALESCE(SUM(usd_anchor) FILTER (WHERE created_at > NOW() - (${days} * INTERVAL '1 day')), 0)::float8 AS usd_window,
+                       MIN(created_at) AS first_settled_at,
+                       MAX(created_at) AS last_settled_at
+                FROM purchase_entitlements
+                LIMIT 1`);
+
+            // ---- counts by settlement status --------------------------------
+            // verified      = chain-confirmed, grant not yet handed over
+            // fulfilled     = grant delivered
+            // manual_review = verified but something did not match (e.g. the
+            //                 payment landed outside the quote window) — the
+            //                 money moved and a human has to look.
+            const byStatus = await probe('entitlements_by_status', () => sql`
+                SELECT status,
+                       COUNT(*)::bigint                     AS rows,
+                       COUNT(DISTINCT wallet)::bigint       AS wallets,
+                       COALESCE(SUM(usd_anchor), 0)::float8 AS usd_anchor_total,
+                       MAX(created_at)                      AS latest
+                FROM purchase_entitlements
+                GROUP BY 1
+                ORDER BY 2 DESC
+                LIMIT 10`);
+
+            // ---- per-SKU breakdown ------------------------------------------
+            const bySku = await probe('entitlements_by_sku', () => sql`
+                SELECT sku,
+                       currency,
+                       network,
+                       COUNT(*)::bigint                                        AS settled,
+                       COUNT(DISTINCT wallet)::bigint                          AS buyers,
+                       COUNT(*) FILTER (WHERE status = 'fulfilled')::bigint     AS fulfilled,
+                       COUNT(*) FILTER (WHERE status = 'verified')::bigint      AS awaiting_fulfilment,
+                       COUNT(*) FILTER (WHERE status = 'manual_review')::bigint AS manual_review,
+                       COALESCE(SUM(usd_anchor), 0)::float8                     AS usd_anchor_total,
+                       COUNT(*) FILTER (WHERE usd_anchor IS NULL)::bigint       AS rows_without_usd_anchor,
+                       COALESCE(SUM(observed_lamports), 0)::float8              AS base_units_observed,
+                       MIN(created_at)                                          AS first_settled_at,
+                       MAX(created_at)                                          AS last_settled_at
+                FROM purchase_entitlements
+                GROUP BY 1, 2, 3
+                ORDER BY 4 DESC
+                LIMIT 100`);
+
+            // ---- revenue per day, over the window ---------------------------
+            const perDay = await probe('entitlements_per_day', () => sql`
+                SELECT date_trunc('day', created_at)::date::text AS day,
+                       COUNT(*)::bigint                          AS settled,
+                       COUNT(DISTINCT wallet)::bigint            AS buyers,
+                       COALESCE(SUM(usd_anchor), 0)::float8      AS usd_anchor_total
+                FROM purchase_entitlements
+                WHERE created_at > NOW() - (${days} * INTERVAL '1 day')
+                GROUP BY 1
+                ORDER BY 1 DESC
+                LIMIT 181`);
+
+            // ---- the rows that need a human ---------------------------------
+            // Anything not yet 'fulfilled': the chain confirmed the money and the
+            // grant is not recorded as delivered. This is the "verify they
+            // received it" list.
+            const unfulfilled = await probe('entitlements_unfulfilled', () => sql`
+                SELECT entitlement_id, tx_signature, wallet, sku, currency, network,
+                       status, usd_anchor, quote_ref, chain_slot,
+                       verified_at, fulfilled_at, created_at
+                FROM purchase_entitlements
+                WHERE status <> 'fulfilled'
+                ORDER BY created_at DESC
+                LIMIT 100`);
+
+            // ---- most recent settlements ------------------------------------
+            const recent = await probe('entitlements_recent', () => sql`
+                SELECT entitlement_id, tx_signature, wallet, sku, currency, network,
+                       status, expected_lamports, observed_lamports, chain_slot,
+                       usd_anchor, usd_rate, rate_source, quote_ref,
+                       verified_at, fulfilled_at, created_at
+                FROM purchase_entitlements
+                ORDER BY created_at DESC
+                LIMIT 50`);
+
+            // ---- ⭐ the quote → settle funnel (purchase_quotes) --------------
+            const funnel = await probe('quotes_funnel', () => sql`
+                SELECT COUNT(*)::bigint                                                            AS issued,
+                       COUNT(*) FILTER (WHERE consumed_at IS NOT NULL)::bigint                     AS consumed,
+                       COUNT(*) FILTER (WHERE consumed_at IS NULL AND expires_at <= NOW())::bigint AS expired_unconsumed,
+                       COUNT(*) FILTER (WHERE consumed_at IS NULL AND expires_at >  NOW())::bigint AS live,
+                       COUNT(DISTINCT wallet)::bigint                                              AS wallets_quoted,
+                       COUNT(DISTINCT wallet) FILTER (WHERE consumed_at IS NOT NULL)::bigint        AS wallets_that_paid,
+                       MAX(issued_at)                                                              AS last_issued_at,
+                       MAX(consumed_at)                                                            AS last_consumed_at
+                FROM purchase_quotes
+                WHERE issued_at > NOW() - (${days} * INTERVAL '1 day')
+                LIMIT 1`);
+
+            const funnelBySku = await probe('quotes_funnel_by_sku', () => sql`
+                SELECT sku,
+                       network,
+                       COUNT(*)::bigint                                                            AS issued,
+                       COUNT(*) FILTER (WHERE consumed_at IS NOT NULL)::bigint                     AS consumed,
+                       COUNT(*) FILTER (WHERE consumed_at IS NULL AND expires_at <= NOW())::bigint AS expired_unconsumed,
+                       COUNT(*) FILTER (WHERE consumed_at IS NULL AND expires_at >  NOW())::bigint AS live,
+                       MAX(issued_at)                                                              AS last_issued_at
+                FROM purchase_quotes
+                WHERE issued_at > NOW() - (${days} * INTERVAL '1 day')
+                GROUP BY 1, 2
+                ORDER BY 3 DESC
+                LIMIT 100`);
+
+            const funnelPerDay = await probe('quotes_funnel_per_day', () => sql`
+                SELECT date_trunc('day', issued_at)::date::text                                    AS day,
+                       COUNT(*)::bigint                                                            AS issued,
+                       COUNT(*) FILTER (WHERE consumed_at IS NOT NULL)::bigint                     AS consumed,
+                       COUNT(*) FILTER (WHERE consumed_at IS NULL AND expires_at <= NOW())::bigint AS expired_unconsumed
+                FROM purchase_quotes
+                WHERE issued_at > NOW() - (${days} * INTERVAL '1 day')
+                GROUP BY 1
+                ORDER BY 1 DESC
+                LIMIT 181`);
+
+            // ---- ⛔ client-vs-server disagreement ----------------------------
+            // Reported as COUNTS ON BOTH SIDES plus the orphan list. Never as one
+            // blended number.
+            const clientSide = await probe('client_reported_counts', () => sql`
+                SELECT COUNT(*)::bigint                                                            AS completed_events,
+                       COUNT(DISTINCT properties->>'txSig')::bigint                                AS distinct_tx_signatures,
+                       COUNT(DISTINCT player_id) FILTER (WHERE player_id <> ${ANON_ID})::bigint     AS players,
+                       MAX(received_at)                                                            AS latest
+                FROM analytics_events
+                WHERE event_name = 'purchase_completed'
+                  AND received_at > NOW() - (${days} * INTERVAL '1 day')
+                LIMIT 1`);
+
+            // THE ALERT: the client announced a completed purchase and the server
+            // holds NO verified entitlement for that signature.
+            const clientOrphans = await probe('client_events_without_entitlement', () => sql`
+                SELECT e.properties->>'txSig'  AS tx_signature,
+                       e.properties->>'packId' AS pack_id,
+                       e.player_id             AS player_id,
+                       COUNT(*)::bigint        AS events,
+                       MAX(e.received_at)      AS latest
+                FROM analytics_events e
+                WHERE e.event_name = 'purchase_completed'
+                  AND e.received_at > NOW() - (${days} * INTERVAL '1 day')
+                  AND NOT EXISTS (
+                      SELECT 1 FROM purchase_entitlements p
+                      WHERE p.tx_signature = e.properties->>'txSig')
+                GROUP BY 1, 2, 3
+                ORDER BY 5 DESC
+                LIMIT 100`);
+
+            // The mirror case. Far less alarming — the client can simply have
+            // failed to report, or the sale came in through /purchases/reconcile
+            // — but a large number here means the analytics funnel UNDERSTATES
+            // sales, which is worth knowing before anyone reads ?view=economy as
+            // if it were revenue.
+            const serverOrphans = await probe('entitlements_without_client_event', () => sql`
+                SELECT COUNT(*)::bigint AS settled_without_client_event
+                FROM purchase_entitlements p
+                WHERE p.created_at > NOW() - (${days} * INTERVAL '1 day')
+                  AND NOT EXISTS (
+                      SELECT 1 FROM analytics_events e
+                      WHERE e.event_name = 'purchase_completed'
+                        AND e.properties->>'txSig' = p.tx_signature)
+                LIMIT 1`);
+
+            const t = (totals && totals[0]) || {};
+            const f = (funnel && funnel[0]) || {};
+            const c = (clientSide && clientSide[0]) || {};
+
+            const issued = Number(f.issued || 0);
+            const consumed = Number(f.consumed || 0);
+
+            // Rows carry a real wallet address; mask it the way every other view
+            // here does. tx_signature stays whole on purpose (see header).
+            const maskRow = (r) => {
+                const out = Object.assign({}, r);
+                delete out.wallet;
+                out.wallet_masked = maskId(r.wallet);
+                return out;
+            };
+
+            return res.status(200).json(Object.assign(meta, {
+                source: 'purchase_entitlements + purchase_quotes — SERVER-VERIFIED settlement, not '
+                    + 'client-reported. ?view=economy reports the client side; the two are '
+                    + 'deliberately never blended.',
+                low_n_threshold: LOW_N_THRESHOLD,
+                revenue_note: 'Revenue is SUM(usd_anchor) — the authored ladder price persisted onto '
+                    + 'the row at verify time. usd_anchor is NULL on the CANARY skus (pinned protocol '
+                    + 'constants with no rate behind them), so rows_without_usd_anchor > 0 means the '
+                    + 'total understates the row count, NOT that those sales were free. '
+                    + 'base_units_observed is a raw integer whose decimals live on the quote (6 mainnet, '
+                    + '9 devnet) and is deliberately not converted to a token amount here.',
+                settled: {
+                    all_time: Number(t.settled_all_time || 0),
+                    all_time_buyers: Number(t.buyers_all_time || 0),
+                    all_time_usd_anchor: Number(t.usd_all_time || 0),
+                    window: Number(t.settled_window || 0),
+                    window_buyers: Number(t.buyers_window || 0),
+                    window_usd_anchor: Number(t.usd_window || 0),
+                    rows_without_usd_anchor: Number(t.rows_without_usd_anchor || 0),
+                    first_settled_at: t.first_settled_at || null,
+                    last_settled_at: t.last_settled_at || null,
+                },
+                by_status: byStatus || [],
+                by_sku: bySku || [],
+                per_day: perDay || [],
+                quote_funnel: {
+                    definition: 'A quote is issued when the wallet prompt opens and consumed when the '
+                        + 'payment verifies (5-minute TTL). consumed/issued falling is players TRYING '
+                        + 'TO BUY AND FAILING — the earliest warning this rail has.',
+                    issued: issued,
+                    consumed: consumed,
+                    expired_unconsumed: Number(f.expired_unconsumed || 0),
+                    live: Number(f.live || 0),
+                    wallets_quoted: Number(f.wallets_quoted || 0),
+                    wallets_that_paid: Number(f.wallets_that_paid || 0),
+                    consumed_pct: pct(consumed, issued),
+                    low_n: issued < LOW_N_THRESHOLD,
+                    last_issued_at: f.last_issued_at || null,
+                    last_consumed_at: f.last_consumed_at || null,
+                    by_sku: (funnelBySku || []).map(r => Object.assign({}, r, {
+                        consumed_pct: pct(r.consumed, r.issued),
+                        low_n: Number(r.issued || 0) < LOW_N_THRESHOLD,
+                    })),
+                    per_day: (funnelPerDay || []).map(r => Object.assign({}, r, {
+                        consumed_pct: pct(r.consumed, r.issued),
+                        low_n: Number(r.issued || 0) < LOW_N_THRESHOLD,
+                    })),
+                },
+                needs_attention: {
+                    note: 'status <> fulfilled: the chain confirmed the money and the grant is not '
+                        + 'recorded as delivered. Re-granting is a WRITE and does not live on this '
+                        + 'endpoint — this view only tells you which rows to act on.',
+                    rows: (unfulfilled || []).map(maskRow),
+                },
+                recent_settlements: (recent || []).map(maskRow),
+                disagreement: {
+                    note: 'Client-reported vs server-settled, side by side and NEVER merged. A client '
+                        + 'purchase_completed with no entitlement row for its txSig means a grant may '
+                        + 'have been handed out with no verified settlement behind it. Surfaced, not '
+                        + 'reconciled — reconciling is a write.',
+                    client_completed_events: Number(c.completed_events || 0),
+                    client_distinct_tx_signatures: Number(c.distinct_tx_signatures || 0),
+                    client_players: Number(c.players || 0),
+                    client_latest: c.latest || null,
+                    server_settled_window: Number(t.settled_window || 0),
+                    client_events_without_entitlement: (clientOrphans || []).map(r => ({
+                        tx_signature: r.tx_signature,
+                        pack_id: r.pack_id,
+                        player_masked: maskId(r.player_id),
+                        events: Number(r.events || 0),
+                        latest: r.latest,
+                    })),
+                    settled_without_client_event: Number(
+                        ((serverOrphans && serverOrphans[0]) || {}).settled_without_client_event || 0),
+                },
+                errors: errors,
             }));
         }
 
@@ -742,7 +1095,7 @@ module.exports = async (req, res) => {
         }
 
         return res.status(400).json({
-            error: 'Unknown view. Use: overview | retention | funnel | economy | players',
+            error: 'Unknown view. Use: overview | retention | funnel | economy | purchases | players',
         });
     } catch (err) {
         console.error('[admin/stats] error:', err);

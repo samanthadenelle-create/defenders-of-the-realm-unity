@@ -129,7 +129,12 @@
 > fine as history. A copied number is the bug **even when it was right the day it was written** -
 > that is exactly how the retired 860-899 UI block kept re-seeding collisions from CLAUDE.md sec.2.
 
-> ## ⚠ RECONCILED 2026-08-24 (CLI): main line next free = **1176**.
+> ## ⚠ RECONCILED 2026-08-24 (CLI): main line next free = **1177**.
+> *(CLI seat minted **WO-1176** and bumped 1176 -> 1177 in this SAME edit. **1176** = THE SHELF
+> REDESIGN - one-time starter + choose-your-resource packs + server-side purchase limits.
+> Finding: founderOnly is DECORATION, nothing limits any purchase.)*
+>
+> ### superseded: RECONCILED 2026-08-24 (CLI): main line next free = **1176**.
 > *(CLI seat minted **WO-1174** and **WO-1175** and bumped 1174 -> 1176 in this SAME edit.
 > **1174** = DUAL-CURRENCY USDC + SKR, player-side swap, no Jupiter dependency.
 > **1175** = THE SKR PATH IS THE REWARDED PATH - Discord title + wallet-bound monthly code,
