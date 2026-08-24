@@ -269,6 +269,63 @@ efficiency with a top-tier AUTO-HARVEST capstone"*.
    1000) and its grandfathering law (*"an existing save over the cap is NEVER drained"*) must both
    survive the move.
 
+## 4d. ⭐ THE PERK MAP — producers grant COMBAT research on their tier ladders (ruled 2026-08-23)
+
+**Owner:** *"The lumber mill can strengthen arrows. Iron can strengthen armor and defenses and stone
+can be used for increasing things like damage."* · *"the producers have those upgrades at the tiers.
+Warcraft style."*
+
+### ⛔ WHY THIS IS THE FIX, not a flourish — the producers were a CLOSED CIRCLE
+
+Read the ladders as they stand in `building-tiers.json`:
+
+| Ladder | Grants today |
+|---|---|
+| `lumbermill` | wood production +10 → +40% |
+| `farm` | food production +10 → +45% |
+| `forge` (Weaponsmith) | **resource efficiency** +10 → +22% ⚠ |
+| `armorer` | troop health, troop damage, structure HP ✅ |
+
+**Every producer perk makes MORE OF THE THING IT ALREADY MAKES.** Wood buys more wood. Food bought
+more food. Nothing a producer granted ever mattered outside its own loop — which is the same defect
+as food's 122k of prices: activity without consequence. **That is why the producers felt valueless,
+and no amount of re-pricing fixes a closed circle.**
+
+Note also `forge` grants **resource efficiency** — a weaponsmith improving resource yield. Scrambled
+the same way the display names were, and fixed by the same ruling.
+
+### The ruled map
+
+| Producer | Resource | Grants (army-wide research) |
+|---|---|---|
+| **Lumber Mill** | wood | **arrows / ranged strength** |
+| **Iron Mine** | iron | **armor + defenses** (troop health + structure HP) |
+| **Quarry** | stone | **damage** |
+
+⭐ **The `armorer` ladder ALREADY has the iron shape** — troop health, troop damage, structure HP
+across T1-T4. Do not author it fresh; **move the existing curve** to the Iron Mine. The numbers are
+tuned; the building they hang on is what was wrong.
+
+**Shape per WC3 canon** (memory `building-upgrades-warcraft3-style`, owner 2026-07-16): mid tiers
+QUANTITATIVE (more / faster / cheaper), top tier a QUALITATIVE capstone that changes how the
+building plays. The existing named capstones are good and should survive: `Eternal Grove`
+(lumbermill), `Battle Forged` (armorer), `Forgefire` (forge), `Winds of Plenty` (farm → re-theme for
+the Quarry).
+
+### ⛔ THE BOUNDARY THAT KEEPS THIS FROM COLLIDING WITH THE BENCHES
+
+| | Scope | System |
+|---|---|---|
+| **Producer perk** | ARMY-WIDE, permanent research — "all arrows +10%" | `building-tiers.json` ladder |
+| **Bench upgrade** (Forge / Armorer) | PER-ITEM — levels *your* sword | `GearProgression.Improve` (WO-808) |
+
+Different nouns, different sinks, no overlap. It also frees the Weaponsmith from granting resource
+efficiency and returns it to what its name says.
+
+⭐ **AND IT COMPLETES THE VALUE ARGUMENT.** Each resource now buys a DIFFERENT kind of power, so
+gathering wood and gathering stone are different strategic choices rather than two flavours of one
+number — and the upgrades CONSUME the resource, giving stone the repeatable sink §3b said it needed.
+
 ## 5. Naming, per the role table (WO-1161)
 
 | Role (identity) | Display | id |
