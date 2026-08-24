@@ -152,6 +152,22 @@ Design consequences that follow from the use case, not from monetization:
   what it must actually stop is the **bounded resource theft**, not the gate damage. Gate damage is
   repairable by design; the stolen stockpile is the loss that stings.
 
+### ⛔ NOTIFICATION COPY MUST MATCH THE BANKED-PRESSURE MODEL — it is not a style question
+
+Away time **banks pressure**; it does not resolve combat. ⭐ **So while the player is away, NOTHING IS ATTACKING THEM.** A push notification saying *"Your town is under attack!"* is therefore **factually false**, and false urgency is the one thing this ruling cannot survive.
+
+| ⛔ Never send | ✅ Honest, and better |
+|---|---|
+| "Your town is UNDER ATTACK" | "A siege is massing — it will be waiting when you return" |
+| "You are LOSING resources" | "Pressure is building at the gates" |
+| "Act now or lose your town" | "Your lookouts report movement" |
+
+⚠ **AND THE HARD FENCE: a notification may NEVER be paired with a shield offer.** A push that manufactures alarm and then sells the cure is precisely the sell-the-cure-for-a-disease-we-added pattern this ruling exists to prevent — the same trade as tuning theft rates to move shields, arriving through a different door. ⛔ **If that pairing is ever proposed, the proposal is the tell.**
+
+⭐ The honest version is also the better retention play: *"something is waiting for you"* is an invitation. *"You are being robbed right now"* is a punishment for having a life — and the player who opens the app to find nothing was actually lost learns that the notification lies. After that, none of them work.
+
+⚠ **Scope note for the alert lane:** it may **observe** `SiegeScheduler`'s cadence and pending count. ⛔ It must never **spawn, partition, tune or resolve** — `WaveManager` is the single spawn authority, and `SiegeSpawnAuthorityRegression` fails the gate if a spawn call appears in `SiegeSession`.
+
 ---
 
 ## Where these came from
