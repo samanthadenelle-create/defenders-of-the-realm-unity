@@ -28,14 +28,46 @@
 footmen, and `BattleMonthlyRegression`'s firewall is violated by data it currently passes.** Nobody
 noticed because coins are inert today — the economy ruling is what creates the breach.
 
-**This is not a store defect. It is a consequence of tonight's ruling, and it needs an owner
-decision, not a fix:**
-- (a) strip coins from every paid grant, or
-- (b) keep coins out of the purchase path — gold becomes earned-only, or
-- (c) re-rule the covenant so gold is fair game.
+### ⭐ RULED 2026-08-24 — option (c), on a principled distinction: GOLD BUYS TEMPO, NOT POWER
 
-⚠ **Do not let (c) happen by default because nobody checked.** That is the specific failure this
-ticket exists to prevent.
+**Owner, verbatim:** *"The video just allows queuing troops for a raid, not a tactical edge since
+gold is easy and enemies give generously"* · *"Still time constraint to train, battle stats and
+skill to win"*.
+
+**The covenant line is redrawn, not abandoned.** "Never combat power" means never buying *capability*
+— stats, gear tiers, damage. Buying **gold** buys the ability to QUEUE sooner, and the binding
+constraints on actually winning are untouched: **training time, battle stats, and player skill.**
+Gold is also abundantly earnable from kills, so a purchase compresses a schedule rather than opening
+a door that was closed.
+
+### ⚠ THE ONE DEPENDENCY THIS RULING RESTS ON — verified, and it is narrower than it looks
+
+The ruling's premise is *"still time constraint to train"*. That premise is **partially exposed**:
+`CanWatchAdToSkip(ChannelId channel, …)` is **WO-911 ad-skip on ANY channel** — Builder, Train AND
+Research — so a rewarded ad *does* skip training time.
+
+**It survives on the CAPS, so the caps are now load-bearing covenant infrastructure:**
+
+| Bound | Value |
+|---|---|
+| `place.build.skip` dailyCap | **3 / day** |
+| Skip per watch | 600s |
+| **Max training time skippable per day** | **30 minutes** |
+| Cooldown | 480s · `hardDailyCap` 7 across all placements |
+| Scope | **RUNNING JOBS ONLY** — accelerates a job already training, cannot conjure one |
+
+`ad-placements.json` already reasoned its way here: *"the retention-first 2026-08-21 pass cut build
+skips from 10 to 3 per four-hour window so ads help a session **without becoming the progression
+loop**."*
+
+⛔ **SO: 30 minutes/day is TEMPO. The training constraint is dented, not deleted, and the ruling
+holds.** But it holds *because of a number*. **Raising `dailyCap` on `place.build.skip` weakens this
+covenant ruling in direct proportion** — that is not a balance knob any more, it is the thing the
+"never combat power" claim now rests on. Anyone changing it is re-opening an owner ruling.
+
+⚠ **Ads are the SECOND door into this, not the first.** `reward.daily.chest` grants **+500 coins**
+and `reward.coins.small` **+250** — so ads pay gold directly, as well as purchases. Both paths are
+covered by the ruling above; both are bounded by the same caps.
 
 ## 2. ⭐ HIGHEST-VALUE, LOWEST-EFFORT: two authored SKUs are unbuyable
 

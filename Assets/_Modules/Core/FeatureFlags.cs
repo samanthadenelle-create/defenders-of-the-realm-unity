@@ -746,7 +746,34 @@ namespace DeNelle.Core
         // PlayerPrefs value written by an earlier production-gated APK on the same test device.
         public static bool RewardedAdSkip => true;
 #else
-        public static bool RewardedAdSkip => Get("rewardedadskip", defaultOn: false);
+        /// ⭐ FLIPPED ON 2026-08-24 (owner: <i>"Flip it on"</i>), the morning the ironSource Ads
+        /// account was APPROVED — which was the last missing piece and the only one that was never
+        /// in this repo's hands.
+        ///
+        /// <para>BOTH HARD PREREQUISITES ABOVE ARE SATISFIED, verified at source before the flip:
+        /// <list type="number">
+        /// <item>A REAL SDK — <c>com.unity.services.levelplay@9.5.1</c> in manifest + lock, the
+        /// adapter compiling in its own <c>LEVELPLAY_PRESENT</c>-constrained assembly, app key
+        /// configured, three placements mapped to real unit ids, and rewards granted ONLY from the
+        /// earned callback.</item>
+        /// <item>WO-912 SERVER-ANCHORED AD WINDOW — the window stamp is
+        /// <c>TimeSource.NowUnixMs()</c>, not <c>DateTime.UtcNow</c>, so rolling the device clock
+        /// forward can no longer mint a fresh allowance. ⚠ A stale "KNOWN LIMIT — the window start
+        /// is a DEVICE clock" comment still sits above that code in BuildTimerService; the fix
+        /// landed and the warning was left behind. Do not act on it.</item>
+        /// </list></para>
+        ///
+        /// <para>⛔ WHY THE PREREQUISITES MATTERED, restated so nobody relaxes them later: granting
+        /// on "we showed it" is FRAUD against the network, and a device-clock window is FABRICATED
+        /// IMPRESSIONS against a live ad account — which is what networks ban accounts for. The
+        /// account that was just approved is the thing those two guards protect.</para>
+        ///
+        /// <para>⚠ OPEN, AND IT NOW HAS TWO DOORS: ads pay out in GOLD, gold IS
+        /// <c>Resources.Coins</c>, and WO-1163 makes troop training pure gold — against a covenant
+        /// that says "never combat power". WO-1165 §1 already raises this for PURCHASES; ads are the
+        /// second path into the same collision. Harmless today because coins are inert; it becomes
+        /// real the moment WO-1163 lands. Owner ruling owed there, not here.</para>
+        public static bool RewardedAdSkip => Get("rewardedadskip", defaultOn: true);
 #endif
 
         /// <summary>WO-911 (owner 2026-08-06) — gates the MAP TAB inside the Bag/Inventory panel.

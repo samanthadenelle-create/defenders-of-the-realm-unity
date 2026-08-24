@@ -164,8 +164,14 @@ namespace DeNelle.Editor.Regression
                     "purchase flag is ON while the wallet default network is not Mainnet - a public " +
                     "Buy button in front of FREE test tokens (grants real packs for worthless SKR)",
                     failures);
-                Require(featureFlags, "RewardedAdSkip => Get(\"rewardedadskip\", defaultOn: false)",
-                    "public rewarded-ad flag no longer defaults OFF", failures);
+                // RE-POINTED 2026-08-24 (owner "Flip it on"), not softened. The ironSource account
+                // was approved that morning — the last of the two prerequisites this pin guarded,
+                // and the only one that was never in this repo's hands. The other (WO-912's
+                // server-anchored ad window) had already landed. The pin still asserts a specific
+                // declared state, so a silent revert or a reshaped declaration turns this red.
+                Require(featureFlags, "RewardedAdSkip => Get(\"rewardedadskip\", defaultOn: true)",
+                    "rewarded-ad flag is not in its ruled ACTIVE state (defaultOn: true, 2026-08-24)",
+                    failures);
             }
             catch (Exception ex)
             {
@@ -173,7 +179,11 @@ namespace DeNelle.Editor.Regression
             }
 
             reason = failures.Count == 0
-                ? "ads have one async placement-gated reward path + main-thread ILRD telemetry; purchases use targeted MWA, finalized server verification, a pinned canary contract, and exactly-once fulfilment; the rewarded-ad flag remains OFF and the purchase flag is in its ruled GO-LIVE state (defaultOn true, matched to DefaultNetwork = Mainnet)"
+                // ⚠ THIS STRING IS AN ASSERTION TOO. It claimed "the rewarded-ad flag remains OFF"
+                // for a few minutes after the 2026-08-24 flip — a GREEN gate stating something
+                // false, which is the WO-1138 defect class arriving through the reason line rather
+                // than through a case. Second time in two days; check it whenever a pin moves.
+                ? "ads are LIVE (rewardedadskip defaultOn true, ruled 2026-08-24) on one async placement-gated reward path with earned-callback-only grants, a server-anchored WO-912 window and main-thread ILRD telemetry; purchases use targeted MWA, finalized server verification, a pinned canary contract, and exactly-once fulfilment, with the purchase flag in its ruled GO-LIVE state (defaultOn true, matched to DefaultNetwork = Mainnet)"
                 : string.Join(" | ", failures);
             return failures.Count == 0;
         }

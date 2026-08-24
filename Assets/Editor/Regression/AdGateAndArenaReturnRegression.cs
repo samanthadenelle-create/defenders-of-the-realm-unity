@@ -86,16 +86,36 @@ namespace DeNelle.Editor
                 return;
             }
 
-            // Default OFF. Reading the property honours any PlayerPrefs override, so assert on the
-            // DECLARED default in source rather than the live value (a dev machine may have it on).
+            // ── RE-POINTED 2026-08-24 (owner "Flip it on"), NOT softened ────────────────────
+            // This asserted defaultOn:false and named TWO conditions for lifting it. BOTH are now
+            // met and were verified at source before the flip:
+            //   1. A REAL SDK — com.unity.services.levelplay@9.5.1 in manifest + packages-lock,
+            //      the adapter compiling behind its LEVELPLAY_PRESENT assembly constraint, app key
+            //      configured, three placements mapped to real unit ids. The ironSource account
+            //      itself was APPROVED 2026-08-24, which was the last piece and the only one that
+            //      was never in this repo's hands.
+            //   2. WO-912 — the window stamp is TimeSource.NowUnixMs(), NOT DateTime.UtcNow, so a
+            //      clock roll can no longer mint an allowance. (A stale "KNOWN LIMIT ... DEVICE
+            //      clock" comment still sits above that code in BuildTimerService; the fix landed
+            //      and the warning was left behind. It is wrong, not prophetic.)
+            //
+            // ⛔ THE GUARD IS KEPT AND INVERTED, not deleted. The reason this pin existed —
+            // fabricated impressions get an ad ACCOUNT BANNED — did not go away when the account
+            // was approved; it got MORE expensive, because now there is a live account to lose.
+            // So this still fails loudly if the declaration is reshaped so the pin stops reading
+            // it, and the earned-callback-only + no-stub-grant assertions below are untouched.
             var src = ReadRepoFile("Assets/_Modules/Core/FeatureFlags.cs");
-            if (src != null && !src.Contains("Get(\"rewardedadskip\", defaultOn: false)"))
-                failures.Add("FeatureFlags.RewardedAdSkip no longer declares defaultOn: false — " +
-                             "the ad path must stay OFF until a real SDK lands AND WO-912 server-side " +
-                             "window validation ships (the window is stamped from the DEVICE clock, so " +
-                             "a clock roll mints a fresh allowance = fabricated impressions = account ban).");
+            if (src != null && !src.Contains("Get(\"rewardedadskip\", defaultOn: true)"))
+                failures.Add("FeatureFlags.RewardedAdSkip is not in its ruled ACTIVE state " +
+                             "(defaultOn: true, owner 2026-08-24). Either it was reverted, or the " +
+                             "declaration was reshaped so this pin no longer reads it. If the revert " +
+                             "was DELIBERATE (pulling ads), say so here and in the flag's own block in " +
+                             "the SAME edit. ⛔ And if ads are being re-enabled after a revert, re-verify " +
+                             "BOTH prerequisites first: a real SDK with earned-callback-only grants, and " +
+                             "a SERVER-ANCHORED ad window — a device-clock window is fabricated " +
+                             "impressions against a LIVE ad account, which is what networks ban for.");
             else
-                log.AppendLine("[ad-gate] RewardedAdSkip present, declares defaultOn: false");
+                log.AppendLine("[ad-gate] RewardedAdSkip present, declares defaultOn: true (ruled ACTIVE 2026-08-24)");
 
             // The stub must not be able to grant. A void ShowAdInternal is the OLD shape whose whole
             // body was onReward?.Invoke().
