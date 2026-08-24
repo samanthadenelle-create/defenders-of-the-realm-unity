@@ -129,7 +129,15 @@
 > fine as history. A copied number is the bug **even when it was right the day it was written** -
 > that is exactly how the retired 860-899 UI block kept re-seeding collisions from CLAUDE.md sec.2.
 
-> ## ⚠ RECONCILED 2026-08-23 (CLI): main line next free = **1163**.
+> ## ⚠ RECONCILED 2026-08-23 (CLI): main line next free = **1164**.
+> *(CLI seat minted **WO-1163** and bumped 1163 -> 1164 in this SAME edit. **1163** = the resource
+> ladder redesign, owner-ruled 2026-08-23: FOOD becomes STONE (a RENAME of the same save slot, not
+> a purge - 208 canonical refs + the persisted WO-911 paid basket ride along), building tiers cost
+> L1 wood+gold / L2 stone+gold / L3 iron+gold, troop training goes straight gold, and node /
+> storage / stores are separated. Kills the closed loop where every tier-one producer was priced
+> in the resource it produces.)*
+>
+> ### superseded: RECONCILED 2026-08-23 (CLI): main line next free = **1163**.
 > *(CLI seat minted **WO-1162** and bumped 1162 -> 1163 in this SAME edit. **1162** = the Codex
 > handoff: Night Market responsive layout proof + REPLACE the `low_24h` pricing policy with a
 > short-lived current/executable server quote. CLI-VERIFIED at source before handoff - the
