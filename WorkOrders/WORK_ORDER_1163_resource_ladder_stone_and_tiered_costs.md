@@ -362,7 +362,17 @@ number — and the upgrades CONSUME the resource, giving stone the repeatable si
 
 1. **The Farm and the Silo become what?** `collector_farm` currently displays "Farm" and `silo` displays "Silo" — both are food-flavoured. Stone needs a quarry/mason vocabulary. **Owner names them.**
 2. **Do existing food balances convert 1:1 to stone?** A rename says yes automatically. Confirm that is intended — a player holding 1,800 food wakes up holding 1,800 stone.
-3. **Barracks levels currently cost food** (0 / 80 / 290 / 860). Under "troop training straight gold", do those become gold, or does the barracks *building* keep tier costs while *training* goes gold? They are different sinks.
+3. ⭐ **ANSWERED 2026-08-23** — owner: *"troops go to pure gold sink"* · *"in the barracks"*.
+   **TRAINING = PURE GOLD, at the Barracks.** All nine troop rows drop their food cost
+   (`troops.json`: footman/archer 50 → echo-legionnaire 400) and price in gold alone; the derived
+   `BarracksProgression.TroopUpgradeCost` curve (`def.CostFood × targetLevel`) follows.
+   ⚠ **The BARRACKS BUILDING is a separate sink and follows the TIER LADDER** (L1 wood+gold /
+   L2 stone+gold / L3 iron+gold), not the training rule. Its current food levels
+   (0 / 80 / 290 / 860 / 2040 / 4480) reprice by depth like every other building.
+   ⭐ **This makes gold the army currency end to end** — and it is the right shape, because troop
+   loss is the most repeatable spend in the game (every raid re-musters), and gold is the one
+   resource that is UNCAPPED and always earnable from kills. An army you cannot rebuild is a
+   soft-lock; an army priced in the uncapped currency never is.
 4. **Does anything still need a food-shaped resource?** The WO-1163 sink audit is running; fold its arithmetic in before deleting the concept.
 
 ## 7. Sequencing — do not reorder

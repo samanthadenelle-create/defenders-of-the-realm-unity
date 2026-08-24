@@ -47,6 +47,68 @@ revenue with no co-signer.** Blocks no code and no build; raising it changes no 
 
 ---
 
+---
+
+## ▶ EVENING UPDATE (2026-08-23, ~21:00) — the economy gets designed, and go-live turns out to be half-shipped
+
+**Gate: `COMPILE_GATE_OK` + `DataRegression` 271/271, ZERO RED** (`Builds/night-reg.log`). First
+fully green suite of the day — the owner authored the Crafting Station portrait, which was the last
+one standing.
+
+### ⛔ WO-1159's GO-LIVE WAS HALF DONE, AND I REPORTED IT AS DONE
+
+The CLIENT went live this afternoon (`RealmStorePurchase` ON, the unconditional mainnet payment
+refusal replaced). But `api/_lib/purchase-catalog.js` `walletAllowed()` still answered **canary-only
+on mainnet** — one SKU, one wallet, behind `MAINNET_CANARY_ENABLED`. So the client asked for prices,
+the server refused every real SKU, and every store card read **"Price unavailable"**. Two halves of
+one ruling disagreeing, with the server winning silently.
+
+⚠ **The owner found it, not the CLI.** I had pointed at the wallet connect — true, but not the
+blocker. She said it was network-gated and she was right.
+
+**Widened (owner ruling, `c9366123d`):** the OWNER WALLET may buy any sold SKU on mainnet; everyone
+else still needs `MAINNET_SALES_ENABLED=true`, an env switch defaulting CLOSED. The canary keeps its
+own stricter gate. **⛔ NOT YET DEPLOYED — needs `vercel --prod`.** Until then the store still shows
+no prices.
+
+⛔ **THE GAP THIS EXPOSES:** `MonetizationActivationRegression` pins the flag and the network, but
+**nothing pins the client and server agreeing about what is sellable.** That is why a half-shipped
+go-live read as green. Worth a ticket.
+
+### The economy is now designed — two full specs, nothing implemented
+
+- **WO-1163** — food RETIRES, stone takes its save slot (208 canonical refs + the v37 paid basket
+  ride along; three food-only IAP SKUs make it a revenue-correctness requirement, not a convenience).
+  Tiers cost **L1 wood+gold / L2 stone+gold / L3 iron+gold**, troop training straight gold.
+  **Quarry · Stone Yard · Iron Mine.** Containers RETIRE as buildings — capacity becomes a producer
+  upgrade and the WO-707 pallets are the visible store. Producer tiers grant **+production
+  (baseline) + an unlocked ability (the value)**: Lumber Mill → arrows, Quarry → damage+range,
+  Iron Mine → defense+strength.
+- **WO-1164** — ONE tabbed Store; trade buildings keep their upgrade benches and lose their shelves.
+  Walk-up AND HUD, **one destination two doorways**.
+
+⛔ **BOTH ARE SPEC ONLY.** They touch a save field on a build that now takes real money. Land 1163
+before 1164 so a felt-test can attribute what changed.
+
+### Also landed
+
+- **`FoundingDefaultTown` flipped OFF.** ⚠ The 2026-08-20 ruling in that flag's own comment ALREADY
+  said to flag it off and the default was left ON — the owner had to rule it twice.
+- **`armorer` UNLOCKED** in the Town palette (it was the ruled opener for iron and unplaceable), and
+  the hand-mirrored `BuildCategoryRegistry` C# fallback corrected so a JSON parse failure cannot
+  silently re-lock iron.
+- **`forge` displays "Weaponsmith"**, `armorer` displays "Armorer" (catalog v29).
+- `Workshop.fbx` copied into tracked `Assets/StructureContent` (KayKit source is gitignored — the
+  magenta-ground failure shape).
+
+### ⭐ THE PATTERN OF THE WHOLE DAY, worth carrying forward
+
+Almost nothing was MISSING. It was **decided and never written to disk**: WO-707's rename (swept
+closed by a range pass), the role enum (ruled twice), the WC3 tech tree (backend built, locked
+behind an un-raisable tier), the pallets (ruled in July), `FoundingDefaultTown` (ruled, not
+flipped), and go-live's server half. **A ruling recorded but not applied is indistinguishable from
+no ruling** — and it is why the same confusion kept resurfacing wearing a different face.
+
 ## STATE
 
 - **Branch:** `wip/village2-and-f8-tickets`, NOT pushed. Count with `git rev-list --count origin/<branch>..HEAD`.
