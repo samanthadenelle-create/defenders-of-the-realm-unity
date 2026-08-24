@@ -129,7 +129,12 @@
 > fine as history. A copied number is the bug **even when it was right the day it was written** -
 > that is exactly how the retired 860-899 UI block kept re-seeding collisions from CLAUDE.md sec.2.
 
-> ## ⚠ RECONCILED 2026-08-24 (CLI): main line next free = **1173**.
+> ## ⚠ RECONCILED 2026-08-24 (CLI): main line next free = **1174**.
+> *(CLI seat minted **WO-1173** and bumped 1173 -> 1174 in this SAME edit. **1173** = SCHEMA
+> PARITY GATE - the deployed DB drifted behind api/schema.sql FOUR times in one day and the
+> fourth took real money. Needs a gate beside R2_PARITY_OK.)*
+>
+> ### superseded: RECONCILED 2026-08-24 (CLI): main line next free = **1173**.
 > *(CLI seat minted **WO-1172** and bumped 1172 -> 1173 in this SAME edit. **1172** = BUILD
 > PALETTE GROUPING - external mockup brief, self-contained: real geometry + the 12-building
 > roster + constraints, so an outside AI can draft the layout.)*
