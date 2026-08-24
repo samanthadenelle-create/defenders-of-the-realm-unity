@@ -1,6 +1,14 @@
 # Lanes â€” Work-Order Numbers Only (for CLI)  Â·  reconciled 2026-06-12 (nightly refill)
 
-> ## PROD SERIES (post-launch): next free = **PROD-013**.
+> ## PROD SERIES (post-launch): next free = **PROD-018**.
+> *(CLI seat minted **PROD-013 through PROD-017** and bumped 013 -> 018 in this SAME edit.
+> Owner felt-test on the Seeker, 2026-08-24: 013 = the repair marker (oversized/opaque, label
+> pushed off-screen) · 014 = the NEED MORE TO REPAIR toast truncates · 015 = Arcane Spire costs
+> 500 crystals with NO crystal faucet in town · 016 = food is still an Echo job and a world node
+> (pre food->stone) · 017 = bug_reports table is at an OLD SCHEMA, so in-game bug reports
+> cannot be written at all.)*
+>
+> ### superseded: PROD SERIES next free = **PROD-013**.
 > *(Docs seat minted **PROD-012** and bumped 012 -> 013 in this SAME edit. **PROD-012** = IS INTERNET
 > REQUIRED on first run — an OWNER DECISION, not a defect, deliberately left BLOCKED with no answer
 > proposed. The CDN migration DELETED `Assets/Resources/Structures` and `Assets/Resources/Enemies`
