@@ -73,6 +73,62 @@ paid basket, and re-checking every purchasable pack — for a change the player 
 
 ⚠ The aliasing machinery already exists — `TownBankCapacity.WordOf` maps `"grain"` → Food today, so a word→enum alias is an established pattern, not a new one.
 
+## 3b. THE SINK AUDIT — why food died, in numbers
+
+> Owner, 2026-08-23: *"food never had real value now it finally dies and something with value comes"*.
+
+⛔ **The audit CORRECTS an earlier partial answer given to the owner in conversation** (that "only two
+structures cost food"). That was materially incomplete — it missed the largest sink in the game.
+
+**Food's real sinks were enormous:**
+
+| Sink | Food | Live? |
+|---|---|---|
+| `building-tiers.json` — all six ladders | **113,360** | LIVE (`FeatureFlags.BuildingUpgradePanel` defaultOn true) |
+| `barracks.json` levels 2-6 | 7,750 | LIVE |
+| Lumbermill level ladder (per instance) | 834 | LIVE |
+| `collector_lumbermill` placement | 80 | LIVE |
+| **one-time total** | **~122,000** | |
+
+Plus **every troop** (footman 50 → echo-legionnaire 400), re-spent on every raid loss, and food is
+lootable in sieges (`StakeRules.cs:83-88`, 50% of *uncollected pending*, never bank theft).
+
+**⭐ AND YET IT WAS WORTHLESS — because the faucet outran all of it.** A single L5 farm produces
+5,220 food/hr; the Echo multiplier is **linear** in roster size and the tier perk adds ×1.45:
+
+| configuration | clears the ENTIRE 122k one-time budget in |
+|---|---|
+| L5 farm, 1 Echo | 23.4 hours |
+| L5 farm, 6 Echoes | **3.9 hours** |
+| L5 farm, 6 Echoes, ×1.45 perk | **2.7 hours** |
+
+And everything above the bank cap is **DISCARDED** (`EconomyService.cs:463-466` — *"Overflow is
+LOST"*). So food had prices but never scarcity. **A resource with costs and no constraint is
+decoration with extra steps.**
+
+> ## ⛔ THE LESSON STONE MUST NOT REPEAT
+> Food did not fail for lack of sinks — it had 122,000 of them. It failed because **the sinks were
+> ONE-TIME and the income was UNBOUNDED and COMPOUNDING.** Fixed budget vs a faucet that scales
+> linearly with Echo count and multiplicatively with perks has exactly one outcome, and no amount of
+> re-pricing the ladder changes it — doubling every cost buys about three more hours.
+>
+> **⚠ AND THE RULED LADDER MAKES THIS WORSE, NOT BETTER.** Troop training was food's *only*
+> repeatable sink — the one thing re-spent on every raid loss, the only drain that scaled with play.
+> The ruling moves troop training to **straight gold**. So stone would inherit ~122k of one-time
+> costs and **NO repeatable drain at all**, i.e. it starts life in the exact state food died in.
+>
+> **OPEN, AND IT DECIDES WHETHER STONE HAS VALUE: what is stone's REPEATABLE sink?**
+> Candidates to put to the owner, not to pick: walls/defence rebuild after a siege · a
+> per-raid muster or re-arm cost · structure repair priced in stone · consumables crafted from it.
+> Anything that a player spends AGAIN. Without one, this ticket renames the problem.
+
+**⛔ AND FOOD IS MONETIZED — three food-only SKUs are on sale**
+(`packs.json:686/713/741` — 1,000 / 3,500 / 8,000 food at $1.99 / $2.99 / $4.99), and
+`ShortfallPackOffer.cs:107,233` routes a food shortfall straight to a purchase. Those SKUs MUST
+map to stone. A pack that advertises a resource the game no longer has is selling something it
+cannot deliver — the `[purchased-grant-never-clamped]` law, and now a revenue-correctness
+requirement rather than a convenience.
+
 ## 4. Node / storage / stores — mostly already built
 
 The owner's three-way separation is the shape the code already has; the work is making the NAMES match:
