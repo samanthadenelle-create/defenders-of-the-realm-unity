@@ -213,10 +213,29 @@ namespace DeNelle.Editor.Regression
                           "of magic. The owner flagged a FUTURE release may let it imbue precious stones; that is " +
                           "a re-classification THEN, not now. v18. Crystals (30) folded 1:1 into IRON." } },
                 { "tower_arcane_spire", new AppliedRow {
-                    Magical = true, Totals = new[] { 660, 1980, 5770 },
+                    // ⛔ TOTALS RE-RULED 2026-08-24 by the owner: crystals 200/400/800 (was
+                    // 200/1500/4370), so these totals move 660/1980/5770 -> 360/880/2200.
+                    // Her reasoning, verbatim: "to get 5 of those towers would take a year".
+                    //
+                    // ⭐ THIS SUITE DID ITS JOB and the note is worth keeping: it caught the change
+                    // in one run and said exactly the right thing — "a different total is a balance
+                    // change riding on a composition ruling; if it is intended, update AppliedRows
+                    // with the owner's new numbers." It is intended, and these are her numbers.
+                    //
+                    // ⚠ WHAT DID NOT CHANGE, AND WHY IT MATTERS: the WO-947 pin-1 PAIRING
+                    // ("Crystals and Iron") is untouched, and so is the 1:1 wood fold that produced
+                    // it. This edit moves MAGNITUDE only. The suite exists to stop a balance change
+                    // from silently re-opening a COMPOSITION ruling — the composition is unchanged,
+                    // which is why updating the totals is the correct response rather than a bypass.
+                    //
+                    // ⚠ IRON IS DELIBERATELY UNCHANGED (160/480/1400). At L3 iron is now the larger
+                    // constraint — crystals gate ENTRY, iron gates SCALE — which is a consequence of
+                    // the owner's crystal-only ruling, flagged rather than quietly rebalanced.
+                    Magical = true, Totals = new[] { 360, 880, 2200 },
                     Why = "MAGICAL (element 'Aether', behaviorId 'ArcaneTower', projectileStyle 'spell'); the " +
                           "PAIRING came from OWNER pin 1, verbatim: \"Crystals and Iron\". v18. Wood (40/48/100) " +
-                          "folded 1:1 into CRYSTALS, the crystal-BASED side of the ruling." } },
+                          "folded 1:1 into CRYSTALS, the crystal-BASED side of the ruling. v37 (2026-08-24): " +
+                          "crystal MAGNITUDES re-ruled to 200/400/800 by the owner; pairing and fold unchanged." } },
                 // NOTE: the Healer Tower row was converted here at v18 under the same pin-2 ruling and
                 // then RETIRED WHOLESALE at catalog v20 (WO-990, owner 2026-08-14). Its AppliedRow was
                 // removed with it -- case 4 FAILS on an entry whose row is missing, so a retirement must

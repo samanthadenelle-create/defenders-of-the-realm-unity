@@ -276,9 +276,17 @@ namespace DeNelle.Village
                     LockedIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
                     {
                         "jeweler",
-                        "mine_crystal",
                         "mill",
                         "lumbermill",
+                        // ⭐ "mine_crystal" REMOVED 2026-08-24 (owner ruling, PROD-015). It is the
+                        // EARLY CRYSTAL FAUCET and was locked out of the palette, so crystals had no
+                        // town source at all - they arrived only from raids and one-time drops, which
+                        // the owner felt directly: "the only crystal faucet is way past when you need
+                        // them, by then you are onto dungeons and raids".
+                        // ⚠ AND IT IS THE RIGHT FAUCET BECAUSE OF ITS COST: wood 320 + iron 200 +
+                        // ZERO CRYSTALS. WO-1168 section 4 had made the Cathedral of Magic the crystal
+                        // producer, which is CIRCULAR - the Cathedral costs 240 CRYSTALS, so you would
+                        // need crystals to build the thing that makes them.
                         // ⭐ "armorer" REMOVED 2026-08-23 (owner ruling): it is the opener for IRON
                         // and was locked out of the palette, so the Echo picker told the owner
                         // "Iron - NEEDS: Armorer" about a building no player could place. Unlocked
@@ -313,15 +321,34 @@ namespace DeNelle.Village
                     Label = "Build Defenses",
                     LockedIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
                     {
+                        // ⭐ RESTORED 2026-08-24. Briefly removed while the owner judged
+                        // the Arcane Spire cost; she then ruled the gate itself CORRECT
+                        // ("its not late game i love where it is"). WO-964 requires this
+                        // row HIDDEN until the Castle Defense Plans are earned - it is
+                        // pinned by the [castle-plans] regression, which caught the
+                        // removal within one suite run.
+                        "tower_arcane_spire",
                         "tower_siege_tower", "tower_catapult", "gate_stone",
                     },
                     // WO-1013: the Arcane Spire is VISIBLE from minute one but locked in
                     // words until the Castle Defense Plans are recovered (wave-2 drop).
                     // Mirrors build-categories.json 'visibleLockedIds'; keep the two in sync.
-                    VisibleLockedReasons = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
-                    {
-                        { "tower_arcane_spire", "Recover the plans" },
-                    },
+                    // ⛔ EMPTIED 2026-08-24 to MATCH THE DATA, which is the authority. The JSON
+                    // ships `visibleLockedIds: {}` and the owner has ruled the Spire plainly
+                    // available ("no it shouldnt be a late game" / "early to get hard to level").
+                    //
+                    // ⚠ THE TWO MIRRORS HAD DISAGREED, and that is the finding worth keeping: this
+                    // fallback said VISIBLE-BUT-LOCKED ("Recover the plans") while the JSON had the
+                    // same id in `lockedIds`, i.e. HIDDEN ENTIRELY. Data wins when it parses, so
+                    // WO-1013's design - visible from minute one, unlocked by the wave-2 Castle
+                    // Defense Plans drop - NEVER RAN, even though CastleDefensePlansService, the
+                    // walk-over pickup and the VM support were all fully built. A feature can be
+                    // complete in code and switched off by one line of data.
+                    //
+                    // ⚠ IF THE PLANS GATE IS EVER WANTED BACK it must be authored in
+                    // build-categories.json `visibleLockedIds` - NOT restored here. A reason living
+                    // only in this fallback is invisible to the running game (WO-1170).
+                    VisibleLockedReasons = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase),
                 },
                 [BuildType.Walls] = new BuildCategory
                 {

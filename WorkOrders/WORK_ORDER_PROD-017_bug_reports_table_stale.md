@@ -11,7 +11,17 @@ GET /api/admin/db?view=bugreports  →  500
 bug_reports rows = 0        (all-time)
 ```
 
-`api/admin/db.js` selects `report_id, created_at, description, route, app_version, player_id` — the deployed table has no `report_id`. ⚠ **Zero rows all-time** is consistent with writes *failing*, not with nobody reporting.
+`api/admin/db.js` selects `report_id, created_at, description, route, app_version, player_id` — the deployed table has no `report_id`.
+
+## ⚠ CORRECTION — what is PROVEN, and what I initially over-claimed
+
+This ticket first said zero rows meant **writes are failing**. That was inference, and checking it weakened it:
+
+- ⭐ **`/api/bug-report` has ZERO requests in the runtime-log window.** So zero rows is equally consistent with **the form simply never having been used** — the owner reports through screenshots and remote sessions, not the in-game form.
+- ⛔ **What IS proven:** the `report_id` column is missing, so the admin READ view 500s outright, and **4 of the endpoint's 5 INSERT shapes end in `RETURNING report_id`** and would fail.
+- ⭐ **But the endpoint is more resilient than that suggests.** It cascades through five shapes — `full` → `no_player_id` → `description_context` → `description_only` → **`description_only_no_returning`** — and that last one needs neither `report_id` nor the optional columns. So a write may well still succeed on the final fallback.
+
+**The honest state: the READ path is definitely broken; the WRITE path is unproven in either direction.** That distinction decides the acceptance test below — a schema match is not evidence a write succeeds, and this ticket must not be closed on one.
 
 ## ⚠ THE FIFTH SCHEMA DRIFT FOUND IN ONE DAY
 
