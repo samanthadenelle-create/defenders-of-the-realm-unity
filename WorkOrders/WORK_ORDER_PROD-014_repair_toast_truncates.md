@@ -143,3 +143,89 @@ Implement as asked. Three implementation constraints that are correctness, not o
 
 ### RULING 3 (WO-1169 §5 Q2): **F8 captures stay on this machine for now** - revisit once
 `bug_reports` has accepted a single real row. Nothing is lost meanwhile; captures still land locally.
+
+## ⭐ DIAGNOSIS 2026-08-24 - the cause is proven from source, and it is self-inflicted
+
+**⚠ It is not a toast.** It is a **persistent mid-left button** -
+`Assets/_Modules/Village/Walls/HubRepairAffordance.cs:293-294` composes both lines. The HUD repair
+prompt (`HudKitController.ShowRepairPrompt`) is a *different* surface and it **does** have
+Repair + Cancel. That is why the owner had no buttons: she was looking at the other one.
+
+### The truncation - three facts compose
+
+1. `ElarionUiKit.Button` runs **`FitSingleLine`** on every label
+   (`ElarionUiKitObsidian.cs:2924-2942`): `NoWrap` + `TextOverflowModes.Ellipsis` + autosizing
+   `[30..50]`.
+2. ⛔ **`HubRepairAffordance.cs:430-431` then opts OUT** - `enableAutoSizing = false;
+   fontSize = 26f;` - **without clearing `NoWrap` or `Ellipsis`.** Those stay armed. *(Verified at
+   source.)*
+3. Line 293 writes a **two-line string with an embedded `
+`** into that label.
+
+So each `
+`-separated line ellipsizes independently - exactly the two-line clip photographed.
+⚠ Turning autosizing off **also disarms `UiKitTextFitGuard`**, which only manipulates
+`fontSizeMin`/`fontSizeMax` and is inert when autosizing is off. **And 26px is below the kit's own
+mobile legibility floor (`FontFloor = 30`)** - the label is clipped *and* sub-legible.
+
+⚠ Confirmed: **zero `repair` keys in `canon-strings.json`** (both copies). The family's home is
+`WallRepairStrings.cs`; neither truncating string is in it.
+
+### ⛔ The dead end - confirmed, and PROD-013 DOES return by another route
+
+**There is no dismissal control at all.** `BuildCanvas` (`:389-437`) creates one Button and one
+label, nothing else. A shortfall does not hide the affordance. Tapping the button on the unaffordable
+branch is a **dead tap** - `OnClick` traces, calls `Refresh()`, returns to the identical state.
+
+And the marker stays lit. `WallRepairController.HandleTap:398` is a bare **`if (HasSelection)
+return;`** - a world tap while a structure is selected is discarded **before any raycast**, by design
+(the prompt is deliberately modal). `ClearSelection` is reachable **only** via `CancelRepair()`,
+fired only by the HUD prompt's Cancel. **So tapping empty ground clears nothing**, and the player is
+left with the violet marker still reading "Repair?" - PROD-013's exact symptom through a different
+door.
+
+### The fix, in order
+
+1. ⭐ **Delete `HubRepairAffordance.cs:430-431`** and call `ElarionUiKit.FitBlock(_label, minSize:
+   FontFloor)` - `FitBlock` sets `Normal` wrap + `Truncate`, the correct policy for a deliberately
+   two-line label, and **re-arms the fit guard**.
+2. Move all four strings into `WallRepairStrings.cs` as `// LOCALIZE:` consts, shortened to fit the
+   narrowest width rather than growing the box: `"NEED MORE"` (19 glyphs -> 9), `"{0} short"`
+   (drop `" - go farm"` - the farm instruction is not what a refused player needs; the actions are).
+3. A refusal card with an **`ElarionUiKit.ObsidianCloseButton`** (⛔ never an X glyph) whose handler
+   calls the **existing** `WallRepairController.CancelRepair()` - which already clears the selection,
+   hides the marker, and rescans. **No new deselect path.**
+4. ⚠ **`HandleTap:398` is its own line item, not part of this.** Making a world tap clear an open
+   selection changes a deliberately-modal interaction documented at `:391-397`. Ship the explicit
+   Close first.
+
+### Crystals (Ruling 1) - one choke point, already
+
+**`WallRepairController.CostForFraction:590`** is the single line that says no
+(`crystals = 0, // owner 2026-07-11`). ⛔ **Do not touch it** - the base price stays in-kind. Add
+`CrystalPriceFor(shortfall)` beside it, with the conversion rate **authored in data**
+(`structures-catalog.json`, beside `repair_default`), **never a C# literal**, and priced **above**
+the natural exchange so a player holding iron still spends iron. Then one
+`TryRepairAllWithCrystals()` that spends held wood/iron **plus** the crystal top-up in a **single**
+`EconomyService.TrySpend` - one atomic debit, no second repair system. The spend rail already carries
+crystals (`EconomyService.cs:298/:315`).
+⚠ `MaterialsZero` (`:698`) **ignores the crystals slot entirely**, so a crystals-only cost reads as
+"free" today - fix that in the same pass or the carve-out ships with a hole.
+
+### Pack offer
+
+`ShortfallPackOffer` already picks correctly: first rung whose `ImpulseAmount >= missing`, and its
+own comment names any further comparison "literally the upsell WO-1037 §1 forbids". For **115 iron**
+it returns **`impulse-iron-small` (400 iron @ $1.99)**. ⛔ Call
+**`PackStore.FocusShortfall(label, missing)`** - do not call the resolver directly and render your
+own buy button; the resolver deliberately cannot grant or charge.
+⚠ **Sequence behind WO-1069:** `hearth-spark` grants **800 iron at the same $1.99** - twice the rung
+this would offer, plus four other lines. Wiring the refusal to a dominated pack at the point of
+maximum motivation is the worst possible place for it.
+
+### The 20% - SPLIT OUT to WO-1177
+
+Confirmed: **exactly one price authority** (`api/_lib/purchase-catalog.js` `USD_ANCHORS` +
+`buildQuoteBody`; the client is arithmetic-free by construction) and **zero existing discount concept
+anywhere under `api/`** - `grep -rni discount api/` returns **0**. It is greenfield server work and
+the largest item here, so it ships separately rather than holding up the reported defect.
