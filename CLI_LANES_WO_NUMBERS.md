@@ -129,7 +129,15 @@
 > fine as history. A copied number is the bug **even when it was right the day it was written** -
 > that is exactly how the retired 860-899 UI block kept re-seeding collisions from CLAUDE.md sec.2.
 
-> ## ⚠ RECONCILED 2026-08-23 (CLI): main line next free = **1166**.
+> ## ⚠ RECONCILED 2026-08-24 (CLI): main line next free = **1167**.
+> *(CLI seat minted **WO-1166** and bumped 1166 -> 1167 in this SAME edit. **1166** = Echo
+> acquisition has FIVE competing accounts and no single authority - a "ONLY from the Echo
+> Hollow shop" ruling, PetAcquisitionService three paths (Tame/Hatch/Rescue), WO-587
+> threshold slot unlocks, the owner CURRENT design (first granted as the guide, rest at
+> thresholds), and a live Echo Warden dialogue granting three SPECIES against a roster of six
+> NAMED souls. Echo Hollow own justification depends on which you believe.)*
+>
+> ### superseded: RECONCILED 2026-08-23 (CLI): main line next free = **1166**.
 > *(CLI seat minted **WO-1165** and bumped 1165 -> 1166 in this SAME edit. **1165** = the
 > monetization SME pass on the packs. Headline: WO-1163 makes troops PURE GOLD, gold IS
 > Resources.Coins, and every paid pack grants coins - so the economy ruling turns every SKU
