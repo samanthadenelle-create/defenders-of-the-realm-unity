@@ -120,3 +120,68 @@ cites shield conversion as a reason to raise theft is refused by this ruling on 
 - [ ] A captured run proves **no** crystal, cosmetic, premium-item, building-deletion or troop-wipe
       loss is reachable by any offline-attack outcome
 - [ ] Gate repair is completable with wood/stone/iron + time, with no premium requirement
+
+---
+
+## ⛔ 2026-08-24 SEAM MAP - THE THEFT LINE IS ALREADY BUILT, AND A NEW ONE WOULD FAIL THE BUILD
+
+The ruling recorded here says the attacker *"possibly steals a small bounded amount of stored basic
+resources."* ⚠ **Read literally as a BANK take, that is a re-litigation of an owner ruling dated
+2026-08-22 - and it is guarded three ways:**
+
+1. **The deletion is documented at source.** `Village/Waves/DefenseReportBuilder.cs:370-379`:
+   *"⛔⛔ NOTHING IN THIS FILE MAY EVER DEBIT THE WALLET FOR A SIEGE."* An earlier pass shipped
+   **a flat 15%-of-banked take through `EconomyService.TrySpend`** and it was **DELETED**, because
+   `ResourceCollector.OnSiegeDestroyed` had **already** removed the resources - so a wallet debit
+   charges the player **twice for one siege**. ⭐ *"That is not a balance question, it is a
+   double-charge."*
+2. **A regression FAILS THE BUILD if it returns.** `Editor/Regression/SiegeLossStakesRegression.cs:268-278`
+   hard-rules on `StakeRules.Build` / `TakeFrom` / `ProtectedFloor` / `StealFraction` /
+   `ProtectedFloorFraction` - ⭐ **including the CONSTANTS**, explicitly so *"there must be no
+   bank-take constant for a future edit to hang arithmetic off."*
+3. `SiegeScheduler.cs:311-312` asserts no second silent theft path.
+
+### ⭐ AND THE RULING IS ALREADY SATISFIED - by the mechanism the 08-22 ruling KEPT
+
+`ResourceCollector.OnSiegeDestroyed` (`Village/Buildings/Progression/ResourceCollector.cs:515`) takes
+**`RaidLootFraction 0.5`** - half of a broken collector's **uncollected pending** - and it mutates
+`_pending`, ⛔ **never the wallet** (WO-664).
+
+That **IS** "a small bounded amount of stored basic resources": bounded (half of pending), basic
+(wood/iron/food), and a real stake the player feels. **The two rulings agree; only the word "stored"
+was ambiguous between *banked* and *uncollected*.**
+
+⛔ **THEREFORE: this ticket proposes NO new theft path.** The stake already exists. Raid consequence
+work routes to the collector path and touches `StakeRules` not at all.
+
+## ⚠ The crystals question - resolved by the lead, not owner-owed
+
+The seam map flagged that PROD-014's same-day amendment makes **crystals a universal REPAIR
+currency**, while this ticket's ⛔ NEVER list bans **crystal LOSS**. ⭐ **These do not conflict:
+spending crystals to repair is a CHOICE the player makes; losing crystals to a raid is something DONE
+TO THEM.** The NEVER list governs **involuntary** loss. A player may elect to pay crystals to mend a
+gate; a raid may never take crystals from them.
+
+⚠ Note for whoever prices repair: **every authored repair row is wood+iron** - `gate_stone`
+240w/200i, `wall_stone` 120w/240i, `repair_default` 120w/60i, code fallback 30w/15i. **No food on any
+repairable row**, which independently confirms the wood/iron reading.
+
+## ⚠ Two more seam facts a spec must not get wrong
+
+- ⛔ **There is NO "this took damage" notification.** `WallRepairController` has no `NotifyDamaged`,
+  no event - damage is discovered by a **rescan timer** (`:173`, `:226-229` -> `Rescan()` `:269`).
+  A siege consequence **cannot call in**; it waits for the poll, or the spec adds the push seam.
+  ⚠ And several call sites **self-install a controller at runtime** (`HubRepairAffordance.cs:239`,
+  `WaveFeedbackDirector.cs:436`) - do not assume one scene-authored instance.
+- ⭐ **An offline-aware repair path already exists**: `EchoRepairService.ApplyOfflineWindow(OfflineClaimWindow)`
+  (`Village/Harvest/EchoRepairService.cs:192`), driving the **non-UI** verbs
+  `TryPeekWorstDamaged` (`:872`) / `TryRepairWorst` (`:900`). **Offline resolution has a precedent -
+  do not invent a second one.**
+
+## ⛔ The shield is PROHIBITED from being pre-built
+
+`WORK_ORDER_1026_IMPLEMENTATION_PLAN.md:527`, verbatim: *"What must NOT be pre-built while the ruling
+is open: any shield/immunity timer, any revenge target..."* ⚠ And two identifiers are **NOT** shields
+- do not cite them as one: `HeroAbilities._damageShieldUntil` (`:1506`) is a seconds-long in-combat
+damage-reduction buff, and `TownSuspension._graceUntil` (`:114`) is a non-persisted `Time.time`
+session grace.
