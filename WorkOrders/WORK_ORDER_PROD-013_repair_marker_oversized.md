@@ -25,3 +25,22 @@ Bounds now count only renderers that are **enabled** and are not `ParticleSystem
 
 - [ ] Owner felt-verify: marker fits the structure, grass visible through it, label on screen
 - [x] `COMPILE_GATE_OK` · `REGRESSION_OK 273/273`
+
+## Note of record - 2026-08-24, `55bb991a4` (the dead "Repair?" prompt)
+
+Recorded here because this is the closest governing ticket for the repair marker/prompt surface, and
+because a shipped fix with **no ticket of record anywhere** is how a fix becomes invisible.
+
+`55bb991a4` - *""Repair?" was a dead prompt for a live feature - a reflection seam had drifted
+silently"* - touched `HudKitController.cs`, `VillageHudController.cs`, `RepairHighlight.cs`,
+`RepairTarget.cs`, and added `Editor/Regression/RepairHudContractRegression.cs` pinning the 5-member
+contract.
+
+⛔ **It is NOT attributed to WO-1024, and the distinction is the point.** WO-1024 repaired
+**installation / lifecycle timing**; `55bb991a4` repaired a later **reflection-contract drift between
+`WallRepairHudBridge` and the HUD methods**. Same surface, **distinct failure mechanism**. WO-1024
+closed 100 minutes after this landed, which makes the coincidence tempting and the attribution
+wrong - and a guessed attribution is worse than none, because it retires a mechanism nobody actually
+fixed.
+
+⚠ This is a **note of record, not a reopening.** PROD-013's own status is unchanged.
