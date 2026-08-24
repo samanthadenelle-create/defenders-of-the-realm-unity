@@ -307,6 +307,30 @@ namespace DeNelle.Wallet
                                              $"(cloud-attested={attested}).");
                 }
 
+                // ⛔ THE HANDSHAKE BELONGS ON *THIS* PATH, NOT ONLY ON ConnectAsync (fixed
+                // 2026-08-24, second pass). The first pass put the session warm-up in ConnectAsync -
+                // the SKR corner-button route - and the owner reported she still never authenticated.
+                // The device trace said why:
+                //     [Flow:Wallet] auto-resume SUCCEEDED - connected at boot with no player action.
+                // Auto-resume (TryAutoResumeAsync) does NOT go through ConnectAsync; it comes through
+                // HERE. So a returning player - the common case, and the case the owner is in - got a
+                // silent reconnect and no handshake at all, exactly as before the fix.
+                //
+                // ⚠ THIS IS THE SHARED PATH: auto-resume AND the login surface both land here, so
+                // warming up here covers every route a connect can arrive by. WarmUpSessionAsync is
+                // idempotent (it no-ops when a usable session is already held), so the copy in
+                // ConnectAsync is harmless rather than a second owner.
+                try
+                {
+                    await BackendRequestSigner.WarmUpSessionAsync(account.Address);
+                }
+                catch (Exception warmEx)
+                {
+                    FlowTrace.Warn("Wallet",
+                        $"session warm-up threw on the login path ({warmEx.GetType().Name}) - harmless; " +
+                        "the first authed call mints on demand. " + warmEx.Message);
+                }
+
                 return new AuthOutcome { Success = true, UserId = account.Address, Email = string.Empty, Error = string.Empty };
             }
             catch (Exception e)

@@ -55,6 +55,7 @@ using UnityEngine.UI;
 using DeNelle.Core.State;
 using DeNelle.Core.UI;
 using DeNelle.Core.Diagnostics;
+using DeNelle.Core.Platform;      // CurrencySkinResolver.WalletConnectionChanged - the connect seam
 using DeNelle.Core.Promo;
 using DeNelle.Core.Web3;
 
@@ -313,6 +314,11 @@ namespace DeNelle.Wallet
             // kept is a stale measurement.
             //
             // An explicitly injected service still wins; this only fills a null.
+            // Subscribe FIRST, so a connect that lands during this open is not missed between the
+            // check below and the handler being attached.
+            CurrencySkinResolver.WalletConnectionChanged -= OnWalletConnectionChanged; // idempotent
+            CurrencySkinResolver.WalletConnectionChanged += OnWalletConnectionChanged;
+
             if (_wallet == null && WalletSkinBootstrap.ConnectedWallet != null)
             {
                 _wallet = WalletSkinBootstrap.ConnectedWallet;
@@ -337,10 +343,76 @@ namespace DeNelle.Wallet
 
         private void OnDisable()
         {
+            CurrencySkinResolver.WalletConnectionChanged -= OnWalletConnectionChanged;
             if (_redeem != null) _redeem.Close();
             if (_modal != null && _modal.canvas != null)
                 _modal.canvas.SetActive(false);
             if (_panelHandle != null) PanelManager.NotifyClosed(_panelHandle);
+        }
+
+        /// <summary>
+        /// The wallet finished connecting while this store was already alive — adopt it and ask the
+        /// server for prices, because opening the store is NOT the only moment a wallet can arrive.
+        /// </summary>
+        /// <remarks>
+        /// ⛔ THE DEFECT THIS CLOSES, read straight off the owner's device (2026-08-24):
+        /// <code>
+        ///   11:33:48  [Flow:Store]  quote list skipped: no signing wallet
+        ///   11:34:19  [Flow:Wallet] &lt;- Connect (provider=Solana Wallet, Mainnet) (2799.8ms)
+        ///   11:34:19  [Flow:Wallet] auto-resume SUCCEEDED — connected at boot with no player action.
+        /// </code>
+        /// <para>
+        /// THE STORE OPENED 31 SECONDS BEFORE THE WALLET FINISHED CONNECTING, and nothing told it.
+        /// The connect takes ~2.8s of association plus whatever the player spends in the wallet app,
+        /// so "check on open" loses this race whenever the player reaches the store first — and on
+        /// auto-resume, which fires at boot, they usually do.
+        /// </para>
+        /// <para>
+        /// ⚠ AN OPEN-TIME CHECK ALONE CANNOT FIX THIS. The store host is spawned once and kept
+        /// (hidden) for the session, so a player who opens the store, watches it say "Price
+        /// unavailable", connects, and comes back is served by OnEnable — but a player already
+        /// LOOKING at the store when the connect lands would sit on stale copy forever. Event plus
+        /// open-time check is what covers both, the same both-halves reasoning CurrencySkinResolver
+        /// itself documents for its connect seam ("a view built AFTER the connect never sees the
+        /// event, so it must be able to read the state at build time").
+        /// </para>
+        /// </remarks>
+        private void OnWalletConnectionChanged(bool connected, string shortAddress)
+        {
+            using var _ = FlowTrace.Enter("Store", $"wallet connection changed -> connected={connected}");
+
+            if (!connected)
+            {
+                FlowTrace.Step("Store", "wallet disconnected — dropping the store's reference so no " +
+                                        "stale price or address survives it.");
+                _wallet = null;
+                if (isActiveAndEnabled) Render();
+                return;
+            }
+
+            var live = WalletSkinBootstrap.ConnectedWallet;
+            if (live == null)
+            {
+                // NEVER SILENT (§12): "connected" was published but the owning bootstrap holds no
+                // instance. That is a contradiction worth a line, not a shrug.
+                FlowTrace.Warn("Store", "wallet reported CONNECTED but WalletSkinBootstrap holds no " +
+                                        "service — cannot adopt; the shelf stays priceless.");
+                return;
+            }
+
+            _wallet = live;
+            FlowTrace.Step("Store", $"adopted the newly-connected wallet {shortAddress} — requesting " +
+                                    "server prices now (this is the race the open-time check loses).");
+            if (isActiveAndEnabled)
+            {
+                Render();
+                RefreshWalletMirror().Forget();
+                RefreshQuotedPrices().Forget();
+            }
+            else
+            {
+                FlowTrace.Step("Store", "store is hidden — reference adopted; prices refresh on next open.");
+            }
         }
 
         private void OnDestroy()
