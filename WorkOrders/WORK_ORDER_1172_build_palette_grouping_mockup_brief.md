@@ -1,6 +1,7 @@
 # WORK ORDER 1172 — Build palette grouping: SELF-CONTAINED MOCKUP BRIEF
 
-**Status:** DONE 2026-08-24 (CLI) — mockups delivered; owner layout pick + felt-verify closes it.
+**Status:** DONE 2026-08-24 (CLI) — mockups delivered; **owner RULED: OPTION B (filter chips)**,
+implemented same day (see WO-1167 RESULT); owner felt-verify closes it.
 Three layout options (A inline dividers / B filter chips / C stacked rows), each with a working
 greyscale check, empty/single states and a growth note, published as an artifact page:
 https://claude.ai/code/artifact/76be2507-6d7c-4bf3-9b1e-bd5ca171654a

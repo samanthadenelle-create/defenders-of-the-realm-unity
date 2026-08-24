@@ -1,9 +1,17 @@
 # WORK ORDER 1167 — RESULT
 
 **Status:** IMPLEMENTED 2026-08-24 (CLI). Headless-verified; owner felt-verify + close owed (§13).
-**Layout note:** rendered as WO-1172 **Option A** (inline vertical group dividers). The owner has the
-three-option mockup page (WO-1172, artifact link in that WO) — headers are render-only, so a
-different pick later is a View change; none of this data moves.
+**Layout note:** OWNER PICKED WO-1172 **OPTION B** (2026-08-24) — segmented filter chips. The
+first-shipped Option A divider render was swapped the same day, View-only, proving the seam: no
+data or VM change. Current render: a 112px CHIP BAND (chips are CONTROLS, so the MinTouchPx floor
+binds) replaces the 44px crystals line inside the unchanged 303px dock (tray 259 → 191 — raising
+the dock instead would overflow the right-edge column's 42.4px spare on the Seeker); crystals
+read-out folds into the band's right end. Chips = "All" + one per non-empty section + Other when
+occupied, all captioned label + live count; **All is the default, always** (nothing hides behind a
+tap by default; verb change resets to All); active chip = gilt underline (position/shape tell).
+First chip capture caught every chip overprinted at one spot — AddImage's stretched anchors fight
+the HorizontalLayoutGroup; rebuilt on the card recipe (point anchors + explicit width), re-captured
+clean.
 
 ---
 
@@ -65,7 +73,10 @@ The rename ruling remains WO-1161/1163's.
 | Fallback codegen | `Builds/wo1167-fallback-gen2.log` | `CATALOG_FALLBACK_GEN_OK` (version=33) |
 | Compile | `Builds/wo1167-gate.log` | `COMPILE_GATE_OK` |
 | Data regression | `Builds/wo1167-regression2.log` | `REGRESSION_OK 272/272 suites` (incl. `[palette-groups]`) |
-| UI capture | `Builds/wo1167-uicap.log` | `UI_CAPTURE_OK 89` — `Builds/ui-capture/BuildPaletteDock_open_2670x1200.png` OPENED AND READ: PRODUCERS divider → Lumber Mill/Farm/Iron Mine, STORAGE divider → Lumberyard/Foundry…, gold-ruled headers, cards + costs intact, tray opaque, quick-tabs standing |
+| UI capture (A) | `Builds/wo1167-uicap.log` | `UI_CAPTURE_OK 89` — divider render verified in the 2670×1200 PNG (historical; superseded by B) |
+| Compile (B) | `Builds/wo1172b-gate2.log` | `COMPILE_GATE_OK` |
+| Data regression (B) | `Builds/wo1172b-regression2.log` | `REGRESSION_OK 272/272 suites` |
+| UI capture (B) | `Builds/wo1172b-uicap2.log` | `UI_CAPTURE_OK 89` — `BuildPaletteDock_open_2670x1200.png` OPENED AND READ: All (13) active + underlined, Producers (3) / Storage (3) / Trade (4) / Civic (3), counts sum to the card total, crystals right, cards + costs intact, quick-tabs standing |
 
 First regression run (`wo1167-regression.log`) went red on the oracle's own over-broad lint —
 `"jeweler"`/`"armorer"` in the registry fallback are catalog **ids**, not a role list — fixed by

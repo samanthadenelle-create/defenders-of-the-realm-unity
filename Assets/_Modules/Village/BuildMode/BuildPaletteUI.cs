@@ -92,6 +92,10 @@ namespace DeNelle.Village
         public void Configure(BuildType type)
         {
             _activeType = type;
+            // WO-1172 Option B: a verb change resets the group filter to All — the default
+            // must always be the state that hides nothing (and a Town filter label means
+            // nothing to another verb's sections anyway).
+            _activeFilterLabel = null;
             EnsureVm();
             _vm.Configure(type);
             UpdateTabHighlight();   // WO-673 — move the gold underline to the active category tab
@@ -117,7 +121,17 @@ namespace DeNelle.Village
         // into the HUD intent bar (BuildHudController.SetPlacingLabel) — no summary panel here.
         private GameObject _topBarGo;         // the dock header band (hidden while collapsed)
         private GameObject _trayGo;           // the scroll well (hidden while collapsed)
-        private GameObject _crystalsRowGo;    // the slim crystals line above the tray (hidden while collapsed)
+        private GameObject _crystalsRowGo;    // WO-1172 Option B: now the CHIP BAND (group filter
+                                              // chips + the crystals read-out) above the tray
+                                              // (hidden while collapsed; name kept for the
+                                              // Collapse()/Expand() seam)
+        // WO-1172 Option B (owner pick 2026-08-24): the grouped palette filters by SEGMENTED
+        // CHIPS instead of inline dividers. _chipHost is the chip row's layout parent (rebuilt
+        // every Render — sections are data and can change); _activeFilterLabel is the selected
+        // section's label, null = "All" (the DEFAULT, always — constraint: nothing hides behind
+        // a tap by default; Configure resets it).
+        private Transform _chipHost;
+        private string _activeFilterLabel;
         // WO-1010 D21 (owner ruling late 2026-08-09, WO §7): the category tabs LEFT the bottom
         // panel — the right-edge quick-tab stack is now the PERMANENT category selector, visible
         // in BOTH the PICK phase and the collapsed/placing state. In PICK a tap re-points the
@@ -139,9 +153,17 @@ namespace DeNelle.Village
         // PROMOTED from locals inside EnsureBuilt (COLUMN-FIT 2026-08-16): the quick-tab band math has to
         // seat clear of the dock, and it must read the dock's REAL height rather than a
         // number re-typed in a comment. Tray 259 + crystals line 44 = 303.
-        private const float TrayHeightPx   = 259f;
-        private const float CrystalsBandPx = 44f;
-        private const float DockHeightPx   = TrayHeightPx + CrystalsBandPx;   // 303
+        // WO-1172 Option B (owner pick 2026-08-24): the 44px crystals line grew into a 112px
+        // CHIP BAND (group filter chips ARE controls, so they take the MinTouchPx floor —
+        // unlike Option A's header plates, which were reads). The growth comes OUT of the tray
+        // (259 -> 191) so DockHeightPx stays 303: DockTopPx feeds the whole right-edge column
+        // fit (quick-tab stack 410..778, Done 787..899, 923 required vs 965.4 available on the
+        // Seeker — only 42.4px spare), so raising the dock would overflow Done off the canvas.
+        // Cards at the 191px tray stand ~143px tall — above the touch floor, no card redesign.
+        // The crystals read-out folds into the chip band's right end (text, not a control).
+        private const float TrayHeightPx   = 191f;
+        private const float ChipBandPx     = ElarionUiKit.MinTouchPx;         // 112
+        private const float DockHeightPx   = TrayHeightPx + ChipBandPx;       // 303 — unchanged
 
         // ── WO-1010 D21 / COLUMN-FIT 2026-08-16: the quick-tab stack's FIXED-PIXEL band math ─────
         // ⚠ THE OLD NOTE HERE REASONED AGAINST AN ASSUMED 1080-TALL CANVAS. IT IS NOT.
@@ -196,11 +218,12 @@ namespace DeNelle.Village
         /// <summary>Fixed pixel width of one card (never a fraction of the band — UI_PLAYBOOK §3).
         /// Named because the D13 band-coverage trace has to reason about it.</summary>
         private const float CardWidthPx = 260f;
-        /// <summary>WO-1167 — fixed pixel width of one section-header divider in the grouped
-        /// strip. Narrow on purpose: it is a READ, not a touch target (non-interactive, so the
-        /// MinTouchPx floor does not apply), and 4 headers x 96px is the whole width the
-        /// grouping costs the scroll. Fixed pixels per the fixed-pixel-band rule.</summary>
-        private const float SectionHeaderWidthPx = 96f;
+        /// <summary>WO-1172 Option B — width bounds for one filter chip. Width scales with the
+        /// DATA label (group labels are authored, variable length) between these clamps; height
+        /// is the band's 112px (MinTouchPx — chips are CONTROLS, unlike Option A's header
+        /// plates, so the touch floor binds).</summary>
+        private const float ChipMinWidthPx = 160f;
+        private const float ChipMaxWidthPx = 340f;
 
         // WO-673 category switcher (always on — WO-682), RE-HOMED by WO-1010 D21: the
         // owner-ruled three build categories — Town / Defense / Castle Structures (the
@@ -305,7 +328,7 @@ namespace DeNelle.Village
             // fixed pixels, centred, resting on the D19 resource frame. No dead band.
             // (TrayHeightPx / CrystalsBandPx / DockHeightPx are class consts now — COLUMN-FIT 2026-08-16,
             // so the quick-tab band math can seat off the dock's real height.)
-            const float trayTop = TrayHeightPx / DockHeightPx;             // ~0.855 of 303px
+            const float trayTop = TrayHeightPx / DockHeightPx;             // ~0.630 of 303px (WO-1172 B)
             const float headerBottom = 1.0f;
 
             // Grok slice 4 (landscape density): the shop is now a LARGE landscape
@@ -371,16 +394,36 @@ namespace DeNelle.Village
 
             // WO-1010 D21: the bottom CategoryTabs band + BuildTabRow are GONE — the
             // category selector is the right-edge quick-tab stack (built below, canvas
-            // level, so it survives Collapse). What remains here is the ONE slim crystals
-            // line the ruling keeps in the bottom panel, centred so the slimmed dock reads
-            // as card row + readout and nothing else.
-            var crystalsRow = ElarionUiKit.AddImage(dock.transform, "CrystalsRow",
+            // level, so it survives Collapse).
+            // WO-1172 Option B (owner pick 2026-08-24): the slim crystals line grew into the
+            // CHIP BAND — the group-filter chips (All / <authored group labels> / Other, all
+            // DATA except the fixed "All") on the left, the crystals read-out folded into the
+            // right end. Chips are rebuilt per Render (RebuildChips) because the sections are
+            // data-driven and change with the verb; only the band chrome is built here.
+            var chipRow = ElarionUiKit.AddImage(dock.transform, "ChipRow",
                 new Vector2(0f, trayTop), new Vector2(1f, headerBottom),
                 ElarionUiKit.ObsidianFill, rounded: false);
-            _crystalsRowGo = crystalsRow;
-            _balanceLabel = MakeText(crystalsRow.transform, "Crystals: 0", 16, ElarionUi.Gilt,
-                FontStyles.Bold, TextAlignmentOptions.Center,
-                new Vector2(0.30f, 0.05f), new Vector2(0.70f, 0.95f));
+            _crystalsRowGo = chipRow;
+
+            var chipHostGo = new GameObject("Chips", typeof(RectTransform), typeof(HorizontalLayoutGroup));
+            chipHostGo.transform.SetParent(chipRow.transform, false);
+            var chipRt = chipHostGo.GetComponent<RectTransform>();
+            chipRt.anchorMin = new Vector2(0f, 0f);
+            chipRt.anchorMax = new Vector2(0.80f, 1f);
+            chipRt.offsetMin = Vector2.zero; chipRt.offsetMax = Vector2.zero;
+            var chipLayout = chipHostGo.GetComponent<HorizontalLayoutGroup>();
+            chipLayout.spacing = 12f;
+            chipLayout.padding = new RectOffset(16, 8, 8, 8);
+            chipLayout.childAlignment = TextAnchor.MiddleLeft;
+            chipLayout.childControlWidth = false;     // chips keep their own width
+            chipLayout.childControlHeight = true;     // chips fill the 112px band (touch floor)
+            chipLayout.childForceExpandWidth = false;
+            chipLayout.childForceExpandHeight = true;
+            _chipHost = chipHostGo.transform;
+
+            _balanceLabel = MakeText(chipRow.transform, "Crystals: 0", 16, ElarionUi.Gilt,
+                FontStyles.Bold, TextAlignmentOptions.Right,
+                new Vector2(0.80f, 0.05f), new Vector2(0.985f, 0.95f));
 
             // Bottom: horizontal-scrolling slot-plate card tray in a recessed dark well
             // (content-width now, so it reads as a dock — not a screen-wide wall).
@@ -653,6 +696,7 @@ namespace DeNelle.Village
                         // switch on the next re-render.
                         _vm.Configure(type);
                         _activeType = type;
+                        _activeFilterLabel = null;   // WO-1172 B: verb change -> chips back to All
                         UpdateTabHighlight();
                         OnRestoreRequested?.Invoke();
                     }
@@ -782,47 +826,49 @@ namespace DeNelle.Village
             // catalog-count trace is emitted by the VM on (re)build.
             var cards = _vm.Cards;
 
-            // WO-1167 — GROUPED RENDER. When the active verb authors paletteGroups the VM
-            // projects Sections (authored order + trailing Other); the View inserts a narrow
-            // vertical header divider before each section's card run. The section split is
-            // the VM's; this block only draws headers — same cards, same order, same
-            // BuildCard path, so arming/locking/affordability are untouched. Sections empty =
-            // ungrouped verb = the flat strip below, exactly as before (Defense / Walls).
-            // Colourblind-safe by construction: the group identity is TEXT on a plate at a
-            // POSITION in the run — colour never carries it (owner is red/green colourblind).
-            //
+            // WO-1167 grouping, rendered as WO-1172 OPTION B (owner pick 2026-08-24): the VM
+            // projects Sections (authored order + trailing Other) and the View surfaces them
+            // as SEGMENTED FILTER CHIPS in the band above the tray — All / <label> / Other.
+            // "All" is the DEFAULT, always (nothing hides behind a tap by default), and the
+            // strip renders either every card (All) or exactly one section's cards, in their
+            // existing WO-963 order — same objects, same BuildCard path, so arming/locking/
+            // affordability are untouched. Sections empty = ungrouped verb = no chips, the
+            // flat strip exactly as before (Defense / Walls / legacy verbs).
+            // Colourblind-safe: the active chip carries a gilt UNDERLINE (position/shape, the
+            // quick-tab grammar) and every chip carries its label + live count in words.
+            var sections = _vm.Sections;
+            Guard.Try("BuildPalette", "rebuild filter chips", () => RebuildChips(sections));
+            IReadOnlyList<StructureCardVM> toRender = cards;
+            if (sections != null && sections.Count > 0 && !string.IsNullOrEmpty(_activeFilterLabel))
+            {
+                PaletteSectionVM active = null;
+                for (int i = 0; i < sections.Count; i++)
+                    if (sections[i] != null && string.Equals(sections[i].Label, _activeFilterLabel,
+                            StringComparison.OrdinalIgnoreCase)) { active = sections[i]; break; }
+                if (active != null)
+                {
+                    toRender = active.Cards;
+                }
+                else
+                {
+                    // The filtered group vanished under us (data changed / verb re-pointed with
+                    // a same-named stale label). Falling back to All is the only state that can
+                    // never hide a building — and it is said out loud, never silent.
+                    FlowTrace.Warn("BuildPalette",
+                        $"active chip filter '{_activeFilterLabel}' matches no section -- resetting to All");
+                    _activeFilterLabel = null;
+                }
+            }
+
             // §12: guard EACH card build so one bad entry (missing field / kit quirk) is
             // logged + skipped instead of blanking the whole palette — the WebGL "shows
             // nothing, no error" silent-failure class becomes a logged line.
-            var sections = _vm.Sections;
-            int headersBuilt = 0;
-            (int built, int failed) built;
-            if (sections != null && sections.Count > 0)
-            {
-                int b = 0, f = 0;
-                foreach (var section in sections)
-                {
-                    if (section == null || section.Cards == null || section.Cards.Count == 0) continue;
-                    Guard.Try("BuildPalette", "build section header '" + section.Label + "'", () =>
-                    {
-                        BuildSectionHeader(section.Label);
-                        headersBuilt++;
-                    });
-                    var r = Guard.TryEach("BuildPalette", "build card", section.Cards,
-                        c => BuildCard(c));
-                    b += r.built; f += r.failed;
-                }
-                built = (b, f);
-                FlowTrace.Step("BuildPalette",
-                    $"rows-added: built={built.built} failed={built.failed} headers={headersBuilt} " +
-                    $"sections={sections.Count} (WO-1167 grouped strip)");
-            }
-            else
-            {
-                built = Guard.TryEach("BuildPalette", "build card", cards,
-                    c => BuildCard(c));
-                FlowTrace.Step("BuildPalette", $"rows-added: built={built.built} failed={built.failed}");
-            }
+            var built = Guard.TryEach("BuildPalette", "build card", toRender,
+                c => BuildCard(c));
+            FlowTrace.Step("BuildPalette",
+                $"rows-added: built={built.built} failed={built.failed} " +
+                $"filter={(_activeFilterLabel ?? "All")} sections={(sections != null ? sections.Count : 0)} " +
+                "(WO-1172 Option B chips)");
 
             // WO-1010 D13 — BAND COVERAGE. The defect was tab-specific (Defenses, not Town) and
             // nothing in the card code is tab-specific, so the variable is how much of the tray
@@ -833,18 +879,16 @@ namespace DeNelle.Village
             // from "the shop is drawn right and there is simply not much in this category".
             var trayRt2 = _trayGo != null ? _trayGo.transform as RectTransform : null;
             float trayW = trayRt2 != null ? trayRt2.rect.width : 0f;
-            // WO-1167: section headers are layout participants too — count them, or the
-            // coverage number under-reads the grouped strip and the D13 read goes wrong.
-            int elements = built.built + headersBuilt;
-            float contentW = built.built * CardWidthPx + headersBuilt * SectionHeaderWidthPx
-                + Mathf.Max(0, elements - 1) * 10f + 24f;
+            // (WO-1172 Option B: the strip is cards-only again — the Option A header plates
+            // left the tray, so the coverage arithmetic is back to the plain card run.)
+            float contentW = built.built * CardWidthPx + Mathf.Max(0, built.built - 1) * 10f + 24f;
             FlowTrace.Step("BuildPalette",
                 $"band-coverage: cards={built.built} contentPx={contentW:F0} trayPx={trayW:F0} " +
                 $"cover={(trayW > 0f ? contentW / trayW : 0f):F2} (tray fill is OPAQUE -- D13)");
 
             if (built.built == 0)
             {
-                var none = MakeText(_stripContent, cards.Count == 0
+                var none = MakeText(_stripContent, toRender.Count == 0
                         ? "No buildables registered."
                         : "Buildables failed to load.",
                     14, ElarionUi.Parchment, FontStyles.Italic, TextAlignmentOptions.Left,
@@ -856,52 +900,115 @@ namespace DeNelle.Village
         }
 
         /// <summary>
-        /// WO-1167 — one section-header divider in the grouped strip: a narrow full-height
-        /// obsidian plate carrying the group's label in gilt, with a gold left rule so the
-        /// section boundary reads as SHAPE + POSITION even before the word does. The label is
-        /// DATA (build-categories 'paletteGroups' label — variable length, so it autosizes
-        /// down rather than truncating; the quick-tab caption lesson). Non-interactive: it is
-        /// a read, never a control, so it raycasts nothing and needs no touch floor. Works in
-        /// greyscale by construction — text + rule + position carry the meaning, colour only
-        /// reinforces (owner is red/green colourblind).
+        /// WO-1172 Option B — rebuild the filter chip row from the VM's sections. Chips are
+        /// DATA: "All" (the one fixed UI word) + one chip per NON-EMPTY section, in section
+        /// order, each captioned "&lt;label&gt; (&lt;count&gt;)". An empty section grows no chip
+        /// (a chip that filters to nothing is a dead end — the mockup brief's own rule), and a
+        /// verb with no sections grows no chips at all (the band keeps only the crystals
+        /// read-out — the flat-strip verbs). Rebuilt every Render because the sections are
+        /// data and change with the verb/wallet. Colourblind-safe: the ACTIVE chip carries the
+        /// gilt underline (position/shape, the quick-tab grammar) + bold gilt text; counts and
+        /// labels are words, never colour.
         /// </summary>
-        private void BuildSectionHeader(string label)
+        private void RebuildChips(IReadOnlyList<PaletteSectionVM> sections)
         {
-            var headerGo = new GameObject("SectionHeader_" + (string.IsNullOrEmpty(label) ? "unnamed" : label),
-                typeof(RectTransform), typeof(Image), typeof(LayoutElement));
-            headerGo.transform.SetParent(_stripContent, false);
-            var rt = headerGo.GetComponent<RectTransform>();
-            rt.sizeDelta = new Vector2(SectionHeaderWidthPx, 0f);
-            headerGo.GetComponent<LayoutElement>().preferredWidth = SectionHeaderWidthPx;
-            var img = headerGo.GetComponent<Image>();
-            img.color = ElarionUiKit.ObsidianFill;
-            img.raycastTarget = false;
+            if (_chipHost == null) return;
+            for (int i = _chipHost.childCount - 1; i >= 0; i--)
+                Destroy(_chipHost.GetChild(i).gameObject);
 
-            // Gold LEFT rule — the section boundary as a shape, mirroring the kit's band rules.
-            var rule = new GameObject("GoldRule", typeof(RectTransform), typeof(Image));
-            rule.transform.SetParent(headerGo.transform, false);
-            var rrt = (RectTransform)rule.transform;
-            rrt.anchorMin = new Vector2(0f, 0.06f);
-            rrt.anchorMax = new Vector2(0f, 0.94f);
-            rrt.pivot = new Vector2(0f, 0.5f);
-            rrt.sizeDelta = new Vector2(3f, 0f);
-            rrt.anchoredPosition = Vector2.zero;
-            var ruleImg = rule.GetComponent<Image>();
-            ruleImg.color = ElarionUi.Gilt;
-            ruleImg.raycastTarget = false;
+            bool grouped = sections != null && sections.Count > 0;
+            if (!grouped)
+            {
+                if (!string.IsNullOrEmpty(_activeFilterLabel))
+                {
+                    FlowTrace.Step("BuildPalette",
+                        "chips: verb has no sections -- clearing stale filter '" + _activeFilterLabel + "'");
+                    _activeFilterLabel = null;
+                }
+                return;
+            }
 
-            var text = MakeText(headerGo.transform, string.IsNullOrEmpty(label) ? "" : label.ToUpperInvariant(),
-                16, ElarionUi.Gilt, FontStyles.Bold, TextAlignmentOptions.Center,
-                new Vector2(0.10f, 0.06f), new Vector2(0.96f, 0.94f));
-            // Authored labels vary in length — shrink to fit the narrow plate, never ellipsize
-            // (a shrunk word is readable; "PRODUC..." is not). Wrapping stays on so a two-word
-            // label stacks instead of vanishing.
-            text.enableAutoSizing = true;
-            text.fontSizeMin = 10f;
-            text.fontSizeMax = 18f;
-
+            int total = _vm != null && _vm.Cards != null ? _vm.Cards.Count : 0;
+            BuildChip("All", total, isActive: string.IsNullOrEmpty(_activeFilterLabel), filterLabel: null);
+            for (int i = 0; i < sections.Count; i++)
+            {
+                var s = sections[i];
+                if (s == null || s.Cards == null || s.Cards.Count == 0) continue;
+                BuildChip(s.Label, s.Cards.Count,
+                    isActive: string.Equals(s.Label, _activeFilterLabel, StringComparison.OrdinalIgnoreCase),
+                    filterLabel: s.Label);
+            }
             FlowTrace.Step("BuildPalette",
-                $"section-header built label='{label}' width={SectionHeaderWidthPx}px (WO-1167 grouped strip)");
+                $"chips rebuilt: sections={sections.Count} active={(_activeFilterLabel ?? "All")} " +
+                "(WO-1172 Option B; All is the default -- nothing hidden behind a tap by default)");
+        }
+
+        /// <summary>One filter chip. <paramref name="filterLabel"/> null = the All chip.</summary>
+        private void BuildChip(string caption, int count, bool isActive, string filterLabel)
+        {
+            string words = (string.IsNullOrEmpty(caption) ? "?" : caption) + " (" + count + ")";
+            // Built like a card, NOT via AddImage: AddImage stretches the child's anchors
+            // across the parent, and a stretched-anchor child under a HorizontalLayoutGroup
+            // ignores the layout's slotting — the first capture showed every chip overprinted
+            // at one spot. Default point anchors + an explicit width are what the layout
+            // needs (the exact recipe the card path uses).
+            var chipGo = new GameObject("Chip_" + (filterLabel ?? "All"),
+                typeof(RectTransform), typeof(Image), typeof(Button), typeof(LayoutElement));
+            chipGo.transform.SetParent(_chipHost, false);
+            // Width follows the DATA label between the clamps; the label autosizes down inside
+            // it, so a long authored word shrinks rather than truncating (quick-tab lesson).
+            float w = Mathf.Clamp(90f + words.Length * 13f, ChipMinWidthPx, ChipMaxWidthPx);
+            var chipRt2 = chipGo.GetComponent<RectTransform>();
+            chipRt2.sizeDelta = new Vector2(w, 0f);
+            chipGo.GetComponent<LayoutElement>().preferredWidth = w;
+
+            var img = chipGo.GetComponent<Image>();
+            var plate = RpgUiCatalog.Get(RpgUiCatalog.RoleSlot, RpgUiCatalog.SlotAction);
+            if (plate != null)
+            {
+                img.sprite = plate;
+                img.type = Image.Type.Sliced;
+                img.fillCenter = true;
+                img.color = Color.white;
+            }
+            else
+            {
+                img.color = ElarionUiKit.ObsidianFill;
+            }
+            img.raycastTarget = true;
+            var btn = chipGo.GetComponent<Button>();
+            btn.targetGraphic = img;
+            string captured = filterLabel;
+            btn.onClick.AddListener(() =>
+            {
+                FlowTrace.Step("BuildPalette",
+                    "chip tapped filter=" + (captured ?? "All") + " (was " + (_activeFilterLabel ?? "All") + ")");
+                _activeFilterLabel = captured;
+                Render();
+            });
+
+            var label = MakeText(chipGo.transform, words, 17,
+                isActive ? ElarionUi.Gilt : ElarionUi.Parchment, FontStyles.Bold,
+                TextAlignmentOptions.Center, new Vector2(0.06f, 0.08f), new Vector2(0.94f, 0.92f));
+            label.textWrappingMode = TextWrappingModes.NoWrap;
+            label.enableAutoSizing = true;
+            label.fontSizeMin = 12f;
+            label.fontSizeMax = 19f;
+
+            // Active tell — the gilt underline, same grammar as the quick tabs. Position +
+            // shape carry the state; the gilt text is the redundant second cue, never the only one.
+            var underline = new GameObject("ActiveUnderline", typeof(RectTransform), typeof(Image));
+            underline.transform.SetParent(chipGo.transform, false);
+            var urt = (RectTransform)underline.transform;
+            urt.anchorMin = new Vector2(0.10f, 0f);
+            urt.anchorMax = new Vector2(0.90f, 0f);
+            urt.pivot = new Vector2(0.5f, 0f);
+            urt.sizeDelta = new Vector2(0f, 4f);
+            urt.anchoredPosition = new Vector2(0f, 6f);
+            var uimg = underline.GetComponent<Image>();
+            uimg.color = ElarionUi.Gilt;
+            uimg.raycastTarget = false;
+            underline.SetActive(isActive);
         }
 
         private void BuildCard(StructureCardVM card)
