@@ -170,5 +170,37 @@ different classes instead of blending. It is a **view over existing tables** - n
 F8 captures stay local. Revisit **after `bug_reports` has accepted one real row** - the
 player-submitted channel has never worked, and adding a second richer stream before the first one
 functions would be building on an unproven base. The captures are not lost meanwhile.
-⚠ The other ruling this pillar surfaced - whether to store the raw wallet on a bug report so it can
-be correlated with purchases - is **still open** and is a privacy call.
+### ⭐ OWNER RULING 2026-08-24 - **the wallet GOES ON the report.** IMPLEMENTED.
+
+`bug_reports` gains a `wallet TEXT` column, so *"this reporter also has an unfulfilled purchase"*
+becomes answerable for the first time.
+
+⛔ **ONE INVARIANT: the column holds a SERVER-VERIFIED wallet or NOTHING.** `api/bug-report.js`
+resolves it by calling `verifySession()` on the `x-session` bearer - the same rail
+`b43fbce69` put under the grant-bearing endpoints. **A client-asserted wallet is never written
+there.** A column that sometimes holds a proof and sometimes a claim cannot be joined against
+`purchase_entitlements` safely: you would never know which rows are evidence, and an ops view saying
+"this player also has an unfulfilled purchase" would be repeating whatever the client typed.
+
+⚠ **An unverified report is still STORED, `wallet` NULL - deliberately.** The player whose auth is
+broken is precisely the player most likely to file a bug. Gating the sink on the signed rail would
+silently drop the highest-value reports we have, which is the opposite of why the endpoint exists.
+A failed session **downgrades identity; it never refuses the report.** The admin view renders those
+as **"unverified"** rather than blank, because a burst of them means auth is broken - itself the
+triage signal that would otherwise go unreported.
+
+⭐ **Folded into the PENDING rebuild, not added as a second migration.** The table was already being
+rebuilt (PROD-017) and that file has **not been run yet**, so the column costs nothing there - whereas
+a follow-up `ALTER` would be a second file for a human to remember, and *the entire reason PROD-017
+exists is that the 2026-08-02 reconcile was authored, committed and never run.* Adding a second
+forgettable file would be repeating the exact failure this ticket documents.
+
+⭐ **The five-shape INSERT cascade now has a real job for the first time.** A deploy can reach
+production before a human runs the SQL, so a new `no_wallet` shape degrades ONE step (keeping the
+hash) instead of falling to `no_player_id` and losing that too. The wallet folds into
+`context.verifiedWallet`, and `api/admin/db.js` reads
+`COALESCE(wallet, context->>'verifiedWallet')` - so reports filed during the migration gap are still
+correlatable rather than silently reading as unverified.
+
+**Still to build:** the actual joined triage view (report -> that wallet's purchases / auth rejects).
+The column makes it *possible*; nothing consumes it yet.

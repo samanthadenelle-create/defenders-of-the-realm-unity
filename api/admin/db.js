@@ -366,12 +366,22 @@ module.exports = async (req, res) => {
         // incremental cursor (rows STRICTLY newer, ascending); without it => latest
         // rows descending (baseline read). screenshotB64 is returned as a presence
         // flag only - the blob can be ~420K chars and never belongs in a poll.
+        // ⭐ `wallet` is read as COALESCE(column, context->>'verifiedWallet') because
+        // api/bug-report.js's `no_wallet` fallback shape folds the verified wallet
+        // into context when the column does not exist yet. This repo has no
+        // migration runner -- a deploy reaches production before a human runs the
+        // SQL file -- so for that window the reports are real and the wallet is
+        // real, it simply lives one level down. Without the COALESCE those rows
+        // would read as unverified and the correlation this column exists for would
+        // silently miss exactly the reports filed during a migration gap.
+        // ⚠ Both sources are SERVER-VERIFIED. Neither ever holds a client claim.
         if (view === 'bugreports') {
             const limit = clampLimit(q.limit, 20, 100);
             const afterId = parseInt(q.after_id, 10);
             const rows = (Number.isFinite(afterId) && afterId > 0)
                 ? await sql`
                     SELECT report_id, created_at, description, route, app_version, player_id,
+                           COALESCE(wallet, context->>'verifiedWallet') AS wallet,
                            context->>'platform'  AS platform,
                            context->>'sessionId' AS session_id,
                            context->'traceTail'  AS trace_tail,
@@ -382,6 +392,7 @@ module.exports = async (req, res) => {
                     LIMIT ${limit}`
                 : await sql`
                     SELECT report_id, created_at, description, route, app_version, player_id,
+                           COALESCE(wallet, context->>'verifiedWallet') AS wallet,
                            context->>'platform'  AS platform,
                            context->>'sessionId' AS session_id,
                            context->'traceTail'  AS trace_tail,

@@ -34,6 +34,7 @@
 // =============================================================================
 
 const { neon } = require('@neondatabase/serverless');
+const { verifySession } = require('./_lib/wallet-auth');
 
 const MAX_NOTE       = 4000;
 const MAX_TAIL_LINES = 120;
@@ -133,10 +134,44 @@ module.exports = async (req, res) => {
             return res.status(500).json({ error: 'Internal server error' });
         }
         const sql = neon(process.env.DATABASE_URL);
-        const stored = await insertReport(sql, { note, sceneName, version, piUidHash, context });
+
+        // ── The wallet on the report (owner ruling 2026-08-24) ──────────────────
+        // ⛔ THE ONE INVARIANT: `wallet` HOLDS A SERVER-VERIFIED WALLET OR NOTHING.
+        // Never a client-asserted one. A column that sometimes holds a proof and
+        // sometimes a claim cannot be joined against purchase_entitlements or
+        // auth_sessions safely -- you would never know which rows are evidence, and
+        // an ops view that says "this player also has an unfulfilled purchase" would
+        // be repeating whatever the client typed. Unverified claims stay in `context`
+        // where their status is obvious.
+        //
+        // ⚠ AND AN UNVERIFIED REPORT IS STILL ACCEPTED, DELIBERATELY. The player
+        // whose auth is broken is precisely the player most likely to file a bug --
+        // gating the sink on the signed rail would silently drop the highest-value
+        // reports we have, which is the opposite of why this endpoint exists. So a
+        // failed session downgrades identity; it never refuses the report.
+        let wallet = null;
+        const sessionToken = (req.headers && req.headers['x-session']) || null;
+        if (sessionToken) {
+            try {
+                const v = await verifySession(sql, sessionToken, null);
+                if (v && v.ok) {
+                    wallet = v.wallet;
+                } else {
+                    console.error('[bug-report] step=verify_session rejected code=' +
+                                  ((v && v.code) || 'unknown') +
+                                  ' -- report accepted WITHOUT a verified wallet');
+                }
+            } catch (e) {
+                console.error('[bug-report] step=verify_session threw (non-fatal, report still stored):',
+                              (e && e.message) || e);
+            }
+        }
+
+        const stored = await insertReport(sql, { note, sceneName, version, piUidHash, wallet, context });
         try {
             console.log(`[bug_report] STORED report_id=${stored.reportId} via=${stored.shape} ` +
-                        `identity=${piUidHash ? String(piUidHash).slice(0, 16) : 'none'}`);
+                        `identity=${piUidHash ? String(piUidHash).slice(0, 16) : 'none'} ` +
+                        `wallet=${wallet ? wallet.slice(0, 8) + '..' : 'unverified'}`);
         } catch (e) {
             console.error('[bug-report] step=echo_stored_log failed (non-fatal):', (e && e.message) || e);
         }
@@ -203,8 +238,26 @@ async function insertReport(sql, r) {
         {
             shape: 'full',
             run: () => sql`
+                INSERT INTO bug_reports (description, route, app_version, player_id, wallet, context)
+                VALUES (${r.note}, ${r.sceneName}, ${r.version}, ${r.piUidHash}, ${r.wallet || null},
+                        ${ctxFull}::jsonb)
+                RETURNING report_id`,
+        },
+        // 1b. No `wallet` column yet -- the ONE drift this cascade was actually
+        //     built for, and the first time it has ever had a real job. The column
+        //     is added by the same rebuild that fixes the table (WO-1169 / PROD-017),
+        //     and a deploy can reach production before a human runs that file,
+        //     because this repo has no migration runner. Degrade ONE step rather
+        //     than falling to no_player_id and losing the hash too.
+        //     ⚠ The wallet folds into `context` marked as what it is: unqueryable
+        //     until the column exists, but not lost.
+        {
+            shape: 'no_wallet',
+            run: () => sql`
                 INSERT INTO bug_reports (description, route, app_version, player_id, context)
-                VALUES (${r.note}, ${r.sceneName}, ${r.version}, ${r.piUidHash}, ${ctxFull}::jsonb)
+                VALUES (${r.note}, ${r.sceneName}, ${r.version}, ${r.piUidHash},
+                        ${JSON.stringify(Object.assign({}, r.context,
+                            r.wallet ? { verifiedWallet: r.wallet } : {}))}::jsonb)
                 RETURNING report_id`,
         },
         // 2. No player_id column — fold the identity into context so it is not lost.
@@ -213,7 +266,8 @@ async function insertReport(sql, r) {
             run: () => sql`
                 INSERT INTO bug_reports (description, route, app_version, context)
                 VALUES (${r.note}, ${r.sceneName}, ${r.version},
-                        ${JSON.stringify(Object.assign({}, r.context, { playerId: r.piUidHash }))}::jsonb)
+                        ${JSON.stringify(Object.assign({}, r.context, { playerId: r.piUidHash },
+                            r.wallet ? { verifiedWallet: r.wallet } : {}))}::jsonb)
                 RETURNING report_id`,
         },
         // 3. Only description + context survive — fold route/version/identity in.
@@ -224,6 +278,7 @@ async function insertReport(sql, r) {
                 VALUES (${r.note},
                         ${JSON.stringify(Object.assign({}, r.context, {
                             playerId: r.piUidHash, route: r.sceneName, appVersion: r.version,
+                            verifiedWallet: r.wallet || undefined,
                         }))}::jsonb)
                 RETURNING report_id`,
         },
@@ -235,6 +290,7 @@ async function insertReport(sql, r) {
                 INSERT INTO bug_reports (description)
                 VALUES (${r.note + '\n\n[context] ' + JSON.stringify(Object.assign({}, r.context, {
                     playerId: r.piUidHash, route: r.sceneName, appVersion: r.version,
+                    verifiedWallet: r.wallet || undefined,
                 }))})
                 RETURNING report_id`,
         },
@@ -248,6 +304,7 @@ async function insertReport(sql, r) {
                 INSERT INTO bug_reports (description)
                 VALUES (${r.note + '\n\n[context] ' + JSON.stringify(Object.assign({}, r.context, {
                     playerId: r.piUidHash, route: r.sceneName, appVersion: r.version,
+                    verifiedWallet: r.wallet || undefined,
                 }))})`,
         },
     ];

@@ -607,10 +607,28 @@ CREATE TABLE IF NOT EXISTS bug_reports (
     description  TEXT        NOT NULL,               -- "description" (<= 4000 chars)
     route        TEXT,                               -- context.route (active scene name)
     app_version  TEXT,                               -- context.appVersion (Application.version)
-    player_id    TEXT,                               -- NULL — HelpMenu does not send one (yet)
+    player_id    TEXT,                               -- client-side SALTED HASH of the Pi uid
+    wallet       TEXT,                               -- ⭐ SERVER-VERIFIED wallet, or NULL. Never a claim.
     context      JSONB       NOT NULL DEFAULT '{}',  -- full "context" object, future-proofed
     created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+-- ⭐ `wallet` (owner ruling 2026-08-24). player_id is a SALTED HASH while every
+-- money and auth table keys on the RAW wallet, so a bug report could not be
+-- correlated with that player's purchases or auth rejects at all -- "this reporter
+-- also has an unfulfilled purchase" was simply not answerable. This column makes it
+-- answerable.
+--
+-- ⛔ IT HOLDS A SERVER-VERIFIED WALLET OR NOTHING. api/bug-report.js resolves it by
+-- calling verifySession() on the `x-session` bearer; a client-asserted wallet is
+-- NEVER written here (it goes to context.verifiedWallet's absence, i.e. nowhere).
+-- A column that sometimes holds a proof and sometimes a claim cannot be joined
+-- safely -- you would never know which rows are evidence.
+--
+-- ⚠ AND AN UNVERIFIED REPORT IS STILL STORED, wallet NULL. The player whose auth is
+-- broken is exactly the player most likely to file a bug; gating the sink on the
+-- signed rail would drop the highest-value reports we have.
+CREATE INDEX IF NOT EXISTS idx_bug_reports_wallet ON bug_reports (wallet) WHERE wallet IS NOT NULL;
 
 -- DRIFT RECONCILE (2026-08-02) — THE REASON bug_reports HAS 0 ROWS.
 -- Captured from production, request 02:25:43 UTC 2026-08-03:
@@ -646,6 +664,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS uq_bug_reports_report_id ON bug_reports (repor
 ALTER TABLE bug_reports ADD COLUMN IF NOT EXISTS route       TEXT;
 ALTER TABLE bug_reports ADD COLUMN IF NOT EXISTS app_version TEXT;
 ALTER TABLE bug_reports ADD COLUMN IF NOT EXISTS player_id   TEXT;
+ALTER TABLE bug_reports ADD COLUMN IF NOT EXISTS wallet      TEXT;   -- 2026-08-24, see above
 ALTER TABLE bug_reports ADD COLUMN IF NOT EXISTS context     JSONB       NOT NULL DEFAULT '{}';
 ALTER TABLE bug_reports ADD COLUMN IF NOT EXISTS created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW();
 

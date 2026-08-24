@@ -719,7 +719,7 @@ function renderPlayers(d){
 // The ONLY view on this page sourced from /api/admin/db instead of
 // /api/admin/stats — there is no aggregate behind a bug report, the rows ARE
 // the artifact. Response shape: { view:'bugreports', rows:[ report_id,
-// created_at, description, route, app_version, player_id, platform, session_id,
+// created_at, description, route, app_version, player_id, wallet, platform, session_id,
 // trace_tail, has_screenshot ] } (api/admin/db.js, view=bugreports).
 //
 // ⚠ EMPTY IS NOT THE SAME AS HEALTHY. bug_reports held ZERO rows all-time
@@ -745,6 +745,17 @@ function renderBugReports(d){
       { label:'When',    get:function(r){ return when(r.created_at); } },
       { label:'Route',   get:function(r){ return r.route ? '<code>' + esc(r.route) + '</code>' : '<span class="none">unknown</span>'; } },
       { label:'Version', get:function(r){ return r.app_version ? esc(r.app_version) : '<span class="none">unknown</span>'; } },
+      // Wallet: SERVER-VERIFIED or absent. Rendered as "unverified" rather than
+      // blank, because a blank cell reads as missing data while the truth is a
+      // statement: this report arrived without a valid session. That is itself a
+      // triage signal - a burst of unverified reports means auth is broken, which
+      // is exactly the failure that would otherwise go unreported.
+      { label:'Wallet',  get:function(r){
+          return r.wallet
+            ? '<code title="' + esc(r.wallet) + '">' + esc(String(r.wallet).slice(0,4)) + '…'
+              + esc(String(r.wallet).slice(-4)) + '</code>'
+            : '<span class="none">unverified</span>';
+        } },
       { label:'Report',  get:function(r){
           var t = String(r.description == null ? '' : r.description);
           var shown = t.length > 600 ? t.slice(0, 600) + '…' : t;

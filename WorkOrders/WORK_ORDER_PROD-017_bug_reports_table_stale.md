@@ -82,3 +82,7 @@ where that is the recurring failure. A gate nobody calls would have caught this 
    08-02 miss impossible.
 
 ⛔ Closing on the strength of the file being correct is exactly what happened on 2026-08-02.
+
+⚠ **The rebuild SQL now ALSO adds the `wallet` column** (owner ruling 2026-08-24, WO-1169). It was
+folded into this pending file on purpose rather than shipped as a follow-up `ALTER` - a second
+migration file is exactly the thing that went unrun for 22 days here.
