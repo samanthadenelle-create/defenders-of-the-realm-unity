@@ -1367,9 +1367,15 @@ namespace DeNelle.Village
     // deltas (damageMult/damageAdd, rangeAdd, fireRateMult). It owns NO per-tier
     // if/else — Tower.CurrentDamage/CurrentRange and TowerCombat read a single row
     // for the tower's EffectiveTier and apply it. Loaded once via the SAME WebGL-safe
-    // CanonicalJson loader the rest of the catalogs use; ships a built-in fallback
-    // table so a missing/broken JSON never leaves towers un-upgraded (no silent
-    // failure, §12). Replaces the old "upgrade = visual swap only / TODO no-op".
+    // CanonicalJson loader the rest of the catalogs use. Replaces the old
+    // "upgrade = visual swap only / TODO no-op".
+    //
+    // ⛔ NO BALANCE NUMBER IS WRITTEN IN THIS FILE (WO-1170, owner 2026-08-24). The
+    // load-failure fallback is the GENERATED TowerPerkFallbackData — tower-perks.json
+    // embedded byte-for-byte — parsed through the same ParseRows the file path uses.
+    // If a tier's numbers look wrong, edit tower-perks.json (both canonical copies) and
+    // re-run DeNelle.Editor.TowerPerkFallbackGenerator.Generate. Never re-introduce a
+    // hand-written table here: "identical to the shipped JSON" is a hope, not a mechanism.
     // =========================================================================
     public static class TowerPerkTable
     {
@@ -1397,16 +1403,44 @@ namespace DeNelle.Village
         // tier (1-based) -> Row. Index 0 unused; built lazily, rebuildable via Reload().
         private static Row[] _rows;
 
-        /// <summary>The hard-coded fallback table — identical to the shipped JSON — so a
-        /// missing/corrupt tower-perks.json can never silently make upgrades a no-op again.</summary>
-        private static Row[] BuiltInFallback() => new[]
+        // ---------------------------------------------------------------------
+        //  WO-1170 site #1 (owner ruling 2026-08-24: "We need to not have anything
+        //  pulled other than from json").
+        //
+        //  WHAT USED TO BE HERE: a hand-written four-row Row[] whose own doc comment
+        //  called it "identical to the shipped JSON". That sentence was an ASSERTION
+        //  WITH NOTHING ENFORCING IT — and it was asserting COMBAT BALANCE. The
+        //  moment anyone tuned tower-perks.json, the two disagreed, and because this
+        //  is the load-FAILURE path, a parse failure would then silently revert every
+        //  tower in the game to last month's numbers, during the incident that caused
+        //  the parse failure, when nobody can tell which is which.
+        //
+        //  (Its own history is the argument: that comment was written to fix upgrades
+        //  SILENTLY DOING NOTHING. The cure for one silent failure was a quieter one.)
+        //
+        //  WHAT IS HERE NOW: TowerPerkFallbackData.Json — tower-perks.json embedded
+        //  byte-for-byte by DeNelle.Editor.TowerPerkFallbackGenerator — parsed through
+        //  ParseRows, the SAME method the file path uses. There are no numbers in this
+        //  file to drift. Freshness (the one thing codegen can still get wrong) is
+        //  gated by TowerPerkRegression's [tower-fallback-parity] block.
+        // ---------------------------------------------------------------------
+
+        /// <summary>Parses a tower-perks payload into the tier-indexed row array (index 0 unused).
+        /// Returns null if the payload is empty/unparsable/row-less. THE one parse path — the file
+        /// and the generated fallback both come through here, so they cannot diverge.</summary>
+        private static Row[] ParseRows(string json)
         {
-            null,
-            new Row { Tier = 1, Name = "Built",      DamageMult = 1.08f, DamageAdd = 0f,  RangeAdd = 0f, FireRateMult = 1.00f, SignatureAbility = "" },
-            new Row { Tier = 2, Name = "Reinforced", DamageMult = 1.25f, DamageAdd = 3f,  RangeAdd = 2f, FireRateMult = 0.55f, SignatureAbility = "" },
-            new Row { Tier = 3, Name = "Masterwork", DamageMult = 1.45f, DamageAdd = 6f,  RangeAdd = 4f, FireRateMult = 0.40f, SignatureAbility = "overcharge" },
-            new Row { Tier = 4, Name = "Empowered",  DamageMult = 1.70f, DamageAdd = 10f, RangeAdd = 6f, FireRateMult = 0.30f, SignatureAbility = "overcharge" },
-        };
+            if (string.IsNullOrWhiteSpace(json)) return null;
+            var file = Newtonsoft.Json.JsonConvert.DeserializeObject<File>(json);
+            if (file == null || file.Tiers == null || file.Tiers.Count == 0) return null;
+
+            int maxTier = 1;
+            foreach (var r in file.Tiers) if (r != null && r.Tier > maxTier) maxTier = r.Tier;
+            var arr = new Row[maxTier + 1];
+            foreach (var r in file.Tiers)
+                if (r != null && r.Tier >= 1 && r.Tier < arr.Length) arr[r.Tier] = r;
+            return arr;
+        }
 
         /// <summary>Force a fresh read of tower-perks.json (used by the editor regression + on first use).</summary>
         public static void Reload()
@@ -1414,26 +1448,37 @@ namespace DeNelle.Village
             Row[] built = null;
             Guard.Try("TowerPerkTable", "load tower-perks.json", () =>
             {
-                string json = DeNelle.Core.CanonicalJson.Read(RelativePath);
-                if (string.IsNullOrWhiteSpace(json)) return;
-                var file = Newtonsoft.Json.JsonConvert.DeserializeObject<File>(json);
-                if (file == null || file.Tiers == null || file.Tiers.Count == 0) return;
-
-                int maxTier = 1;
-                foreach (var r in file.Tiers) if (r != null && r.Tier > maxTier) maxTier = r.Tier;
-                var arr = new Row[maxTier + 1];
-                foreach (var r in file.Tiers)
-                    if (r != null && r.Tier >= 1 && r.Tier < arr.Length) arr[r.Tier] = r;
-                built = arr;
+                built = ParseRows(DeNelle.Core.CanonicalJson.Read(RelativePath));
             });
 
             if (built == null)
             {
                 FlowTrace.Warn("TowerPerkTable",
-                    $"tower-perks.json missing/empty/unparsable at '{RelativePath}' — using the built-in fallback table (upgrades still grant stats).");
-                built = BuiltInFallback();
+                    $"tower-perks.json missing/empty/unparsable at '{RelativePath}' — falling back to the GENERATED " +
+                    $"embedded copy ({TowerPerkFallbackData.SourcePath}, {TowerPerkFallbackData.SourceTierCount} tiers, " +
+                    $"v{TowerPerkFallbackData.SourceVersion}, sha256={TowerPerkFallbackData.SourceSha256}). Upgrades still " +
+                    "grant their designed stats, and those stats ARE the shipped ones — this is the file, embedded.");
+
+                Guard.Try("TowerPerkTable", "parse generated tower-perk fallback", () =>
+                {
+                    built = ParseRows(TowerPerkFallbackData.Json);
+                });
+
+                if (built == null)
+                {
+                    // Both the file AND the embedded copy failed. Nothing is left to be quiet about:
+                    // say so loudly rather than invent numbers (CLAUDE.md §12 — no silent failures).
+                    FlowTrace.Fail("TowerPerkTable",
+                        "BOTH tower-perk sources failed: the file at '" + RelativePath + "' AND the generated " +
+                        "embedded copy. Tower upgrades will grant NOTHING this session. Regenerate with: " +
+                        TowerPerkFallbackData.RegenerateCommand);
+                }
             }
-            _rows = built;
+
+            // A null here would make Rows() re-run this whole load on EVERY Get() — a log storm on
+            // top of a content outage. Park a single empty array instead: Get() answers with its
+            // neutral identity row, and the Fail line above is said once.
+            _rows = built ?? new Row[1];
         }
 
         private static Row[] Rows()

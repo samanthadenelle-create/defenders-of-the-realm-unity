@@ -46,6 +46,21 @@ namespace DeNelle.Editor
         }
 
         /// <summary>
+        /// Batchmode entry point for THIS suite alone (WO-1170) — so the [tower-fallback-parity]
+        /// freshness gate can be exercised, and seen to FAIL on drift, without running the whole
+        /// DataRegression fleet. Judge it by the marker on a fresh log, never the exit code
+        /// (CLAUDE.md §8): Run() emits TOWER_PERKS_OK or TOWER_PERKS_FAIL.
+        ///   powershell -NoProfile -File .\run-unity-method.ps1 `
+        ///       -Method DeNelle.Editor.TowerPerkRegression.RunHeadless `
+        ///       -LogName tower-perks.log -ExpectMarker TOWER_PERKS_OK
+        /// </summary>
+        public static void RunHeadless()
+        {
+            string reason;
+            Run(out reason);
+        }
+
+        /// <summary>
         /// Runs the tower-perk regression. Returns true on pass; on failure returns false and
         /// sets <paramref name="reason"/> to a single aggregated failure line for the suite.
         /// </summary>
@@ -117,6 +132,9 @@ namespace DeNelle.Editor
             log.AppendLine($"  apply math: dmg base={dBase:0.0} -> L1={d1:0.0} -> L2={d2:0.0} -> L3={d3:0.0}");
             log.AppendLine($"  apply math: range {r1:0.0}/{r2:0.0}/{r3:0.0} | cooldown {c1:0.00}/{c2:0.00}/{c3:0.00}");
 
+            // (c) THE GENERATED FALLBACK IS FRESH — WO-1170 site #1.
+            CheckFallbackParity(failures, log);
+
             if (failures.Count == 0)
             {
                 reason = null;
@@ -127,6 +145,181 @@ namespace DeNelle.Editor
             reason = "tower-perks: " + string.Join("; ", failures);
             Debug.LogError(log.ToString() + "TOWER_PERKS_FAIL: " + reason);
             return false;
+        }
+
+        // =====================================================================
+        //  [tower-fallback-parity] — WO-1170 site #1 (owner ruling 2026-08-24).
+        // ---------------------------------------------------------------------
+        //  TowerPerkTable's load-FAILURE path used to be a hand-written four-row
+        //  table whose comment claimed it was "identical to the shipped JSON".
+        //  Nothing enforced that, and it was asserting COMBAT BALANCE: the first
+        //  tune of tower-perks.json made the two disagree, and a parse failure
+        //  would then silently revert every tower in the game to old numbers.
+        //
+        //  The fallback is now GENERATED (DeNelle.Editor.TowerPerkFallbackGenerator)
+        //  — the file embedded byte-for-byte and parsed through TowerPerkTable's own
+        //  ParseRows. Field-level parity is true BY CONSTRUCTION; there are no
+        //  numbers left to compare. SO THIS GATE PROVES THE ONE THING CODEGEN CAN
+        //  STILL GET WRONG: FRESHNESS.
+        //    A. the two canonical copies (Resources + StreamingAssets) are byte-identical;
+        //    B. TowerPerkFallbackData.SourceSha256 equals the SHA-256 of the file on
+        //       disk — i.e. the generated file is NOT STALE;
+        //    C. the embedded string still hashes to that same SHA — i.e. nobody
+        //       hand-edited the generated file (its banner says not to);
+        //    D. the declared tier count / schema version match the file; and
+        //    E. the embedded copy actually PARSES, through the real interpreter's own
+        //       ParseRows, to the same tiers — a fallback that compiles but parses to
+        //       nothing is precisely the "upgrades do nothing" defect WO-432 closed.
+        //
+        //  Every failure names the regeneration command verbatim. A gate whose remedy
+        //  the reader has to go look up is a gate people route around.
+        // =====================================================================
+
+        /// <summary>Repo-relative canonical copy the generator reads (CanonicalJson resolves it first).</summary>
+        private const string CanonicalResourcesCopy =
+            "Assets/Resources/Data/Canonical/tower-perks.json";
+
+        /// <summary>Repo-relative authoring copy. Must stay BYTE-IDENTICAL to the Resources copy.</summary>
+        private const string CanonicalStreamingCopy =
+            "Assets/StreamingAssets/Data/Canonical/tower-perks.json";
+
+        private static void CheckFallbackParity(List<string> failures, StringBuilder log)
+        {
+            string regen = TowerPerkFallbackData.RegenerateCommand;
+            int failuresOnEntry = failures.Count;
+            string repoRoot = System.IO.Path.GetDirectoryName(Application.dataPath);
+
+            string resAbs    = System.IO.Path.Combine(repoRoot, CanonicalResourcesCopy.Replace('/', System.IO.Path.DirectorySeparatorChar));
+            string streamAbs = System.IO.Path.Combine(repoRoot, CanonicalStreamingCopy.Replace('/', System.IO.Path.DirectorySeparatorChar));
+
+            if (!System.IO.File.Exists(resAbs))
+            {
+                failures.Add($"[tower-fallback-parity] {CanonicalResourcesCopy} is MISSING — the freshness of the " +
+                             "generated perk fallback cannot be proven, and the runtime read path has nothing to read");
+                return;
+            }
+            if (!System.IO.File.Exists(streamAbs))
+            {
+                failures.Add($"[tower-fallback-parity] {CanonicalStreamingCopy} is MISSING — the dual-copy invariant " +
+                             "is broken; both canonical copies must exist and be byte-identical");
+                return;
+            }
+
+            byte[] resBytes    = System.IO.File.ReadAllBytes(resAbs);
+            byte[] streamBytes = System.IO.File.ReadAllBytes(streamAbs);
+            string resSha      = Sha256Hex(resBytes);
+            string streamSha   = Sha256Hex(streamBytes);
+
+            // A. dual-copy.
+            if (resSha != streamSha)
+            {
+                failures.Add($"[tower-fallback-parity] the two canonical tower-perks copies are NOT byte-identical: " +
+                             $"{CanonicalResourcesCopy} sha256={resSha} ({resBytes.Length} bytes) vs " +
+                             $"{CanonicalStreamingCopy} sha256={streamSha} ({streamBytes.Length} bytes). " +
+                             "Reconcile them, then regenerate the fallback: " + regen);
+            }
+
+            // B. STALENESS — the one thing codegen can still get wrong.
+            if (TowerPerkFallbackData.SourceSha256 != resSha)
+            {
+                failures.Add($"[tower-fallback-parity] THE GENERATED TOWER-PERK FALLBACK IS STALE. " +
+                             $"TowerPerkFallbackData.g.cs was generated from a perk table with " +
+                             $"sha256={TowerPerkFallbackData.SourceSha256} ({TowerPerkFallbackData.SourceByteLength} bytes), " +
+                             $"but {CanonicalResourcesCopy} now hashes to {resSha} ({resBytes.Length} bytes). " +
+                             "Until it is regenerated, a runtime failure to READ the perk table would fight the whole " +
+                             "game on OLD COMBAT BALANCE — old damage, old range, old fire rate — with nothing on " +
+                             "screen saying so. FIX: run " + regen);
+            }
+
+            // C. the generated file was hand-edited (its banner says DO NOT EDIT).
+            string embedded = TowerPerkFallbackData.Json;
+            byte[] embeddedBytes = new System.Text.UTF8Encoding(false).GetBytes(embedded);
+            string embeddedSha = Sha256Hex(embeddedBytes);
+            if (embeddedSha != TowerPerkFallbackData.SourceSha256)
+            {
+                failures.Add($"[tower-fallback-parity] TowerPerkFallbackData.Json does not hash to its own declared " +
+                             $"SourceSha256 (embedded={embeddedSha} {embeddedBytes.Length} bytes vs declared=" +
+                             $"{TowerPerkFallbackData.SourceSha256} {TowerPerkFallbackData.SourceByteLength} bytes) — " +
+                             "the GENERATED file has been hand-edited, which is exactly what its DO-NOT-EDIT banner " +
+                             "forbids. Edit " + CanonicalResourcesCopy + " instead, then run " + regen);
+            }
+
+            // D. declared shape.
+            PerkFile onDisk = null;
+            try { onDisk = JsonConvert.DeserializeObject<PerkFile>(new System.Text.UTF8Encoding(false).GetString(resBytes)); }
+            catch (System.Exception ex)
+            {
+                failures.Add($"[tower-fallback-parity] {CanonicalResourcesCopy} did not parse: {ex.Message}");
+            }
+            int diskTiers = onDisk?.Tiers?.Count ?? 0;
+            if (onDisk != null && TowerPerkFallbackData.SourceTierCount != diskTiers)
+            {
+                failures.Add($"[tower-fallback-parity] TowerPerkFallbackData declares {TowerPerkFallbackData.SourceTierCount} " +
+                             $"tier row(s) but the perk table on disk parses to {diskTiers} — the generated fallback " +
+                             "does not describe the current table. FIX: run " + regen);
+            }
+            if (onDisk != null && TowerPerkFallbackData.SourceVersion != onDisk.Version)
+            {
+                failures.Add($"[tower-fallback-parity] TowerPerkFallbackData declares schema v{TowerPerkFallbackData.SourceVersion} " +
+                             $"but the perk table on disk is v{onDisk.Version}. FIX: run " + regen);
+            }
+
+            // E. it actually WORKS — the embedded copy driven through the REAL interpreter's own
+            //    parse method, not a mirror of it. A fallback that compiles but parses to nothing
+            //    is the silent "upgrades do nothing" defect this whole path exists to prevent.
+            var parse = typeof(TowerPerkTable).GetMethod(
+                "ParseRows",
+                System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
+            if (parse == null)
+            {
+                failures.Add("[tower-fallback-parity] TowerPerkTable.ParseRows is not reflectable (renamed/removed) — " +
+                             "the JSON-failure path is UNPROVEN; re-point this gate at whatever replaced it");
+                return;
+            }
+
+            object parsed;
+            try { parsed = parse.Invoke(null, new object[] { embedded }); }
+            catch (System.Reflection.TargetInvocationException tie)
+            {
+                var inner = tie.InnerException ?? tie;
+                failures.Add($"[tower-fallback-parity] parsing the embedded perk table threw: " +
+                             $"{inner.GetType().Name}: {inner.Message}");
+                return;
+            }
+
+            var rows = parsed as System.Array;
+            if (rows == null || rows.Length <= 1)
+            {
+                failures.Add("[tower-fallback-parity] the embedded perk table parsed to ZERO tier rows — on the " +
+                             "load-failure path every tower upgrade would grant NOTHING. FIX: run " + regen);
+                return;
+            }
+
+            int liveTiers = 0;
+            for (int t = 1; t < rows.Length; t++) if (rows.GetValue(t) != null) liveTiers++;
+            if (onDisk != null && liveTiers != diskTiers)
+            {
+                failures.Add($"[tower-fallback-parity] the embedded perk table yields {liveTiers} tier row(s) but the " +
+                             $"file on disk yields {diskTiers} — the fallback is not the file. FIX: run " + regen);
+            }
+
+            if (failures.Count == failuresOnEntry)
+            {
+                log.AppendLine($"  [tower-fallback-parity] generated fallback is FRESH: {liveTiers} tier(s), " +
+                               $"v{TowerPerkFallbackData.SourceVersion}, sha256={resSha} " +
+                               $"({resBytes.Length} bytes), both canonical copies byte-identical");
+            }
+        }
+
+        private static string Sha256Hex(byte[] bytes)
+        {
+            using (var sha = System.Security.Cryptography.SHA256.Create())
+            {
+                var hash = sha.ComputeHash(bytes);
+                var sb = new StringBuilder(hash.Length * 2);
+                foreach (var b in hash) sb.Append(b.ToString("x2"));
+                return sb.ToString();
+            }
         }
     }
 }
