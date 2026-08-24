@@ -119,10 +119,21 @@ Design consequences that follow from the use case, not from monetization:
   1's progression gate, where the purchase would skip content the player is meant to earn. A shield
   skips a threat they are meant to *endure*, and enduring it is optional by design.
 
-  ⚠ **THE ONE EXCEPTION, and check it before shipping any ranked feature: if raid losses EVER feed a
-  leaderboard or ranked standing, the shield becomes COMPETITIVE and the ceiling argument returns
-  immediately.** WO-1073 already contemplates leaderboard card chrome. **Losses must not count toward
-  rank while shields are purchasable without limit** - pick one.
+- ⭐ **A SHIELD REMOVES YOU FROM THE LEADERBOARD** (owner, 2026-08-24). This is the answer to the
+  competitive exception I raised, and it is better than the cap it replaces: **immunity OR standing,
+  never both.** Nothing is capped, nothing is policed - **the player chooses, and the choice enforces
+  itself.** A whale may buy any shield they like; what they cannot buy is a ranked position while
+  protected from the risk everyone else is ranked under.
+
+  ⚠ **RE-ENTRY MUST BE SYMMETRIC OR IT IS GAMEABLE.** If eligibility returns the instant the shield
+  drops, the exploit is to shield the risky stretches and rank when safe - the same competitive
+  advantage, taken in slices. **RECOMMENDED: eligibility returns once the shield has been DOWN at
+  least as long as it was UP.** Proportionate, self-scaling with the escalating price (a long shield
+  buys a long way back), simpler than seasons, and it does not punish one genuine holiday.
+
+  ⛔ **This must be stated in the shield's own purchase copy, before the buy.** A player who discovers
+  after paying that they left the leaderboard has been surprised by a term, and that is a refund
+  request and a review, not a design detail.
 
   ⚠ The remaining risk is **retention, not fairness**: a player can buy their way out of the loop that
   keeps them playing, and then churn. That is worth **watching in the data**, not designing around -
