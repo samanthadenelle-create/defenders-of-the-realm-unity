@@ -42,7 +42,49 @@ until the pot exists — at which point every prior decision is already shipped 
 ⛔ **Do not build this on an engineering opinion, mine included.** It needs a real review. Everything
 below assumes that review comes back workable.
 
-## ⭐ The structural decision: rank on what money CANNOT buy
+## ⭐⭐ 2026-08-24 - THE OWNER'S ACTUAL DESIGN, and it is better than what I assumed
+
+Owner, in three parts:
+> *"once we have the arena actually up and working where people can engage with each other and we
+> have enough of a player base, it then could be considered as they can enter the arena."*
+> *"all of that is based on the premise that they're not using the castle. It'll all have to be their
+> own hand designs that they've built and paid for."*
+> *"at that point, now we're talking about fully authored bases formed by the very people that are
+> fighting to be the best."*
+
+⭐ **This is a DESIGN COMPETITION, not a wealth ladder** - and it dissolves most of my objection. The
+arena base is **authored by the competitor**, separate from the persistent castle, and the thing being
+judged is **the base they built**. The base *is* the play.
+
+⚠ **Three preconditions the owner set, in order** - none skippable:
+1. The **arena actually works** and players engage each other.
+2. There is **enough of a player base** for a ladder to mean anything.
+3. **Only then** is paid entry *considered*.
+
+⛔ **The persistent castle is explicitly NOT the arena base.** That is the single most important
+sentence in this ticket, because it is what keeps the store out of the ladder.
+
+### ⛔ AND HERE IS THE ONE DISTINCTION THAT DECIDES EVERYTHING - it hides inside "built and paid for"
+
+**Base DESIGN is skill. Base CONTENTS are spend.**
+
+- ⭐ **Fixed, EQUAL palette** - every entrant gets the same pieces and only the *arrangement* differs.
+  Money buys **nothing**. The pot rewards pure design skill, `FOUNDATIONAL_RULINGS.md` §1 survives
+  untouched, and the competition is defensible to a player, a reviewer, or a regulator.
+- ⚠ **Drawn from the player's FUNDED progression** - better towers because they bought further up the
+  tree. ⛔ Then the pot is **a return on spend laundered through a layout screen**, and it is the
+  thing §1 exists to prevent, wearing a design-competition costume.
+
+**RECOMMEND the equal palette.** It is also the better *game*: Clash's war-base metagame is
+interesting precisely because the constraint is shared, and a layout beats a bigger wallet.
+
+⚠ **"Paid for" needs one word of clarification from the owner** - paid in *in-game resources* (fine
+if the palette is equal) or in *real money* (⛔ then the palette is not equal and the pot rewards
+spend).
+
+## The earlier framing (superseded in part by the above)
+
+### The structural decision: rank on what money CANNOT buy
 
 If the season ranks the town the player **funded**, the pot is a **rebate on spending** and the
 best-funded player wins by construction — which is both the legal worst case (it looks like a return
