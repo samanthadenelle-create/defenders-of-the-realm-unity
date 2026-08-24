@@ -26,6 +26,16 @@
 ## The two standing agents, precisely
 
 ### BOARD agent - reflects, never closes
+
+⛔ **BRIEF IT ON THE WHOLE BUCKET, NOT A DATE SLICE. This is a lesson paid for on 2026-08-24.**
+The agent was told to reconcile *today's work against today's commits*. It did that faithfully and
+found six drifts. Codex then reviewed **every Fixed row regardless of age** and found **seven more** -
+WO-1157 and WO-1060 had been green and wrong since **08-23**, outside the window the brief gave.
+⭐ **The sweep was not wrong, it was scoped too narrowly, and the scope was the lead's.** A
+date-scoped sweep silently certifies everything outside the date. Standing instruction: **sweep the
+whole Fixed bucket every time**, and read each row against its own body, not against the commit log.
+
+
 `BOARD.html` is **generated** (`python tools/board_build.py`) and therefore **cannot drift**. What
 drifts is the `**Status:**` line inside each work order. That is the only thing this agent edits, plus
 a dated one-line note. ⛔ **Shipped code is `FIXED <date> (<sha>) - awaiting owner felt-verify`, never
