@@ -148,6 +148,31 @@ map to stone. A pack that advertises a resource the game no longer has is sellin
 cannot deliver — the `[purchased-grant-never-clamped]` law, and now a revenue-correctness
 requirement rather than a convenience.
 
+## 3c. THE STONE NODE — art ruled 2026-08-23
+
+**Owner ruling:** reuse **`Assets/Resources/Harvest/crystals.fbx`** as the stone node body —
+*"looks like stone and if says stone noone will care."* She has seen the model; the CLI has not.
+
+**Wiring:** node art resolves through `HarvestSite.ResourceModelPath` (`HarvestSite.cs:356-363`),
+which maps `MineResource.X` → `"Harvest/<x>"`. Point `Stone` at `"Harvest/crystals"`.
+⚠ An unmapped resource falls through to a **primitive fallback** in `BuildVisual`, so the rename
+can land BEFORE any art decision without breaking a scene — nodes render a placeholder shape.
+
+⚠ **CONSEQUENCE TO BE AWARE OF, not a blocker: the CRYSTAL node uses this same FBX.** So both nodes
+wear one body, separated only by tint (`crystal 0.35,0.72,0.95` vs a grey stone,
+`HarvestSite.GetResourceColor`). Two considerations the owner should hold, having ruled:
+- **Colour is the only separator, and this owner is red/green colourblind** — the project's standing
+  rule is that meaning never rides on hue alone (WO-1132 ruled the opposite direction for chest
+  drops: they read by SILHOUETTE, deliberately).
+- **The risk points at CRYSTALS, not stone.** If the model reads as rock, then stone looks correct
+  and the *premium* currency is the one that stops looking precious.
+- Precedent for the class: `mine_crystal` and `healing_caravan` **already share `Structures/Well`** —
+  flagged in the 2026-08-23 audit as "a crystal mine and a healing fountain wear one body".
+
+**Recorded as a deliberate choice, so it is revisitable rather than invisible.** If stone earns its
+own body later, it is a one-line repoint plus an FBX drop into `Assets/Resources/Harvest/` — that
+folder is git-TRACKED (unlike `Resources/Structures`), so it ships everywhere with no zip transfer.
+
 ## 4. Node / storage / stores — mostly already built
 
 The owner's three-way separation is the shape the code already has; the work is making the NAMES match:
@@ -161,6 +186,35 @@ Town Bank (wallet)   ◀──banks────────────┘      
 ```
 
 Verified: `ResourceCollector.cs:3` — *"Accrues into Pending; Collect() banks to wallet; siege raids steal uncollected."* Containers carry `storageResource` + `storageCapacity` and **no** `collectorBuildingId`, so they produce nothing. **Do not let a container harvest** — two buildings claiming production is the phantom-resource hunt this separation exists to prevent.
+
+## 4b. ⭐ THE VOCABULARY — RULED 2026-08-23. This closes §6.1.
+
+| Resource | Producer | producer id | Storage | storage id |
+|---|---|---|---|---|
+| Wood | **Lumber Mill** | `collector_lumbermill` | **Lumberyard** | `lumberyard` |
+| Stone | **Quarry** *(was Farm)* | `collector_farm` | **Stone Yard** *(was Silo)* | `silo` |
+| Iron | **Iron Mine** | `collector_forge` | **Foundry** | `foundry` |
+
+⛔ **THIS SUPERSEDES THE EARLIER "IRON IS THE ARMORER" RULING (same day), AND IT IS AN IMPROVEMENT
+— read why, because the reason is structural.** Iron now has a DEDICATED producer (`collector_forge`
+as the Iron Mine) and the Armorer returns to being purely the armour vendor. That is exactly the
+identity-vs-capability split that broke the role table earlier: the Armorer was made to be BOTH the
+armour vendor and the iron producer, a row claims exactly ONE role, and two oracles correctly
+rejected it (see WO-1161). Under this vocabulary **no building wears two hats** and the whole
+problem dissolves rather than being worked around.
+
+**It also retires the last name collision.** `collector_forge` currently displays **"Forge"** — the
+only "Forge" left once `forge` became "Weaponsmith". As **Iron Mine** it stops competing with
+anything.
+
+### ⚠ TWO THINGS THIS BREAKS IF THEY ARE NOT DONE IN THE SAME CHANGE
+
+1. **`collector_forge` IS PALETTE-LOCKED** (`build-categories.json` Town `lockedIds`). As the Iron
+   Mine it MUST be unlocked, exactly as `armorer` was earlier today. Otherwise iron has a producer
+   no player can place — **the precise dead-end that started this whole thread.**
+2. **`collector_forge.repo.satisfiedByStructureIds = ["armorer"]` IS NOW WRONG.** It was authored
+   under the superseded ruling. Iron's gate must point at the Iron Mine itself, or the NEEDS cue
+   names the wrong building again — the original defect, restored by our own fix.
 
 ## 5. Naming, per the role table (WO-1161)
 
