@@ -61,3 +61,27 @@ perfectly legal thing to do.
 - [ ] Starting Unity with a mismatched `ProjectVersion.txt` fails with a named error, not a rebuild
 - [ ] A run that produces no `COMPILE_GATE_OK` on a fresh log reports failure from the runner
 - [ ] Both proven by deliberately inducing each case - **watch each fail before trusting it**
+
+## ⭐ LEAD RULING 2026-08-24 - Codex found the flaw in my own proposed fix. It is right.
+
+**The objection:** a raw `Unity.exe` (4.7) launch begins while `ProjectVersion.txt` still correctly
+says 4.8, and rewrites it **afterwards**. So a pre-run check **passes**, and the damage happens after
+it. My proposed fix #1 does not close the hole it was written to close.
+
+⛔ **And the hole cannot be closed.** Nothing in this repo can prevent an arbitrary external process
+from launching an editor. A wrapper guards only what passes through the wrapper - the same truth
+CLAUDE.md §16 states about raw `adb install`.
+
+⭐ **So stop trying to PREVENT it and make it LOUD instead.** Revised scope:
+
+1. **A hook refuses a `ProjectVersion.txt` DOWNGRADE.** The file is two lines; comparing versions is
+   trivial and needs no network. An unpreventable event becomes an announced one.
+2. ⭐ **The runner asserts the MARKER instead of returning a bare exit code** - and this is the item
+   that would actually have saved today. Three runners returned a verdict unrelated to reality inside
+   ten minutes: two exited **0 having done nothing**, one reported **`NO LOG`** while the gate had
+   **passed**. ⚠ This half is worth more than the editor pin that prompted the ticket.
+3. **Pre-run check stays** - demoted to what it honestly is: it catches the *already-downgraded*
+   state before paying for a full Bee rebuild. It does not catch the downgrade happening.
+
+⚠ **Acceptance amended:** the ticket previously required proving the raw-invocation hole closed.
+It cannot be. It now requires proving the downgrade is **detected and announced**.

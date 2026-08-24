@@ -63,3 +63,29 @@ extend and no second implementation to reconcile.
       amount, so a discounted quote cannot be settled at the undiscounted price or vice versa
 - [ ] `SCHEMA_PARITY_OK` covers the two new columns
 - [ ] One wallet prompt, end to end
+
+## LEAD RULINGS 2026-08-24 - answering the Codex intake blockers
+
+**Blocker 1: "no server-verifiable fact proves a repair shortfall occurred."** Codex is right that
+none exists. ⭐ **Resolution: stop trying to prove it - it does not need proving.**
+The discount does not have to be *earned* by a verified shortfall; it has to be **un-farmable**, and
+the rate limit alone delivers that. A player who forges `reason:"repair_shortfall"` obtains exactly
+what a player who genuinely hit one obtains: **one discount per window, no more.** So the forgery
+buys nothing and the unprovable fact stops mattering.
+⛔ `reason` therefore stays what the spec already called it - **a logged hint, never an
+authorization.** Do NOT build a shortfall-attestation rail; it would be real complexity guarding a
+door that the rate limit already locks.
+
+**Blocker 2: "the window duration is not stated."** Correct - my omission, not an ambiguity. It is
+monetization policy and therefore an **owner ruling** (below). ⛔ Do not invent a constant.
+
+**Blocker 3: WO-1173 sequencing.** Confirmed and already recorded - both edit `api/schema.sql`.
+
+### ⭐ OWNER RULING 2026-08-24: **the discount window is SEVEN DAYS.** One per player per 7 days.
+
+Rare enough that **the discount never becomes the real price**, frequent enough to read as a break
+rather than a one-off. A player hitting shortfalls daily still sees it weekly.
+
+⛔ **Recorded and enforced SERVER-SIDE.** The client never decides eligibility, and a forged
+`reason` buys nothing - it yields exactly what a genuine shortfall yields: one discount per window.
+That is precisely why no shortfall-attestation rail is needed.

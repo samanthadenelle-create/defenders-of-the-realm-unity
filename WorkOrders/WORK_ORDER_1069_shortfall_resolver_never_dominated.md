@@ -67,3 +67,57 @@ monetization and less likely to make players feel fleeced."*
 - [ ] With a (mocked) consumed one-time Hearth Spark entitlement, the resolver falls to the next
       best non-dominated candidate — never a dead offer
 - [ ] Oracle registered in `DataRegression.RunAll`; `REGRESSION_OK` fresh
+
+## ⛔ LEAD RULING 2026-08-24 - THIS TICKET POINTED AT THE WRONG LAYER. Codex was right.
+
+The Codex intake pass refused to implement this and was **correct to refuse**. Verified at source:
+
+1. `hearth-spark` is **not an impulse pack at all** - `impulse=None`, no `impulseResource`, no
+   `impulseSize`. `FindValid` never even considers it.
+2. ⛔ Even if it did, **`IsSingleKeyResourceOnly` would reject it**, and not incidentally: that guard
+   enforces **WO-947 §12c guardrail 1**, whose own error text says a multi-resource impulse bundle
+   *"re-mixes the cost baskets through the back door and is FORBIDDEN."*
+
+⭐ **So "serve `hearth-spark` at the shortfall" asks the resolver to break a binding ruling. The
+resolver is right. The ticket was wrong.**
+
+### The defect is real, and it is in the DATA
+
+| SKU | price | grant |
+|---|---|---|
+| `impulse-iron-small` | **$1.99** | 400 iron |
+| `hearth-spark` | **$1.99** | **800 iron** + 1500 wood + 500 food + 150 crystals + 100 coins |
+
+Twice the iron **plus four other resources, at the identical price.** A player who buys the targeted
+offer gets objectively less for the same money. That is a genuine value trap and WO-1165 §6 was right
+to call it the hardest finding to defend publicly.
+
+⚠ **But the fix is pricing, not resolver logic.** Changing the resolver would breach guardrail 1 to
+paper over a pricing mistake - and would leave the trap intact everywhere else the two SKUs meet.
+
+### Restated scope
+
+- ⛔ **`ShortfallPackOffer` is NOT to be modified.** Its guardrails are correct.
+- ⭐ Add a **regression** asserting **no impulse rung is strictly dominated by any other purchasable
+  pack at the same USD anchor** - so this cannot silently return the next time a bundle is authored.
+  That test is the durable fix; the price change is the one-time correction.
+- The price/grant correction itself is an **owner ruling** (below) - real-money ladder policy.
+
+⚠ **`hearth-spark` is `DEVNET_CANARY_SKU`** (`api/_lib/purchase-catalog.js:29`) - the pinned canary
+the quote path is tested against. Any price change to it touches the test path; check that first.
+
+### ⭐ OWNER RULING 2026-08-24: **`hearth-spark` moves to $4.99.**
+
+It grants five resources including 800 iron; a **targeted single-resource top-up must not cost the
+same as a full starter bundle**. `impulse-iron-small` stays at $1.99/400 iron, and the domination
+disappears because the two SKUs stop sharing a price point.
+
+⛔ **`ShortfallPackOffer` is still NOT modified.** The resolver was always right.
+
+⚠ **`hearth-spark` is `DEVNET_CANARY_SKU`** (`api/_lib/purchase-catalog.js:29`) - the pinned SKU the
+quote path is tested against. **Re-check the quote/verify test path with the new anchor before
+shipping**, or the canary starts asserting a price that no longer exists.
+
+**Change `USD_ANCHORS['hearth-spark']` 1.99 -> 4.99 in `api/_lib/purchase-catalog.js`, and mirror it
+wherever the client shelf reads a price** - then the new regression (no impulse rung strictly
+dominated at its own USD anchor) proves it and keeps proving it.
