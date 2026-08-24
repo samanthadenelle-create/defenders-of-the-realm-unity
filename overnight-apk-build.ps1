@@ -32,8 +32,25 @@
 # passthrough exists so an owner-test APK can be produced WITHOUT leaving the sanctioned
 # chain: the alternative was a raw run-unity-method call, which skips the s16 R2
 # push+verify that this script carries. Never add a second build path instead.
+#
+# -Tester : adds the TESTER_BUILD scripting define (owner ruling 2026-08-24). This is the APK
+#   that goes to FIREBASE APP DISTRIBUTION, and it turns on owner-facing tooling that must
+#   NEVER reach the Solana dApp Store - today that is the one-tap FLAG capture chip.
+#   Until 2026-08-24 both destinations produced the SAME artifact (BuildOptions.None release,
+#   so Debug.isDebugBuild is false on the tester build too), which is why on-device tooling
+#   kept vanishing on the very device it was built for.
+#   THE SWITCH IS OPT-IN ON PURPOSE: its ABSENCE is store-safe. A store APK cannot ship dev
+#   tooling by someone FORGETTING a flag, only by someone explicitly ADDING one. Do not make
+#   this the default, and do not invert the sense.
 # =============================================================================
-param([string]$Defines = '')
+param([string]$Defines = '', [switch]$Tester)
+if ($Tester) {
+    if ([string]::IsNullOrWhiteSpace($Defines)) { $Defines = 'TESTER_BUILD' }
+    else { $Defines = "$Defines;TESTER_BUILD" }
+    Write-Host "[apk] TESTER build - defines: $Defines"
+} else {
+    Write-Host "[apk] STORE-shaped build (no TESTER_BUILD define) - defines: '$Defines'"
+}
 Set-Location $PSScriptRoot
 $status = 'Builds\overnight-apk-status.txt'
 New-Item -ItemType Directory -Force -Path 'Builds' | Out-Null

@@ -54,6 +54,8 @@ namespace DeNelle.Wallet
 
             CurrencySkinResolver.WalletConnectRequested -= OnConnectRequested; // idempotent
             CurrencySkinResolver.WalletConnectRequested += OnConnectRequested;
+            CurrencySkinResolver.WalletDisconnectRequested -= OnDisconnectRequested; // idempotent
+            CurrencySkinResolver.WalletDisconnectRequested += OnDisconnectRequested;
             FlowTrace.Step("Skin", "SKR skin active — wallet-connect handler installed (WalletSkinBootstrap).");
         }
 
@@ -128,6 +130,38 @@ namespace DeNelle.Wallet
         }
 
         private static void OnConnectRequested() => ConnectAsync().Forget();
+
+        /// <summary>
+        /// The RESET the owner ruled on 2026-08-17 ("there is a menu option to reset"), finally wired.
+        /// Clears the sealed MWA session via WalletService.Disconnect, so the NEXT cold start does not
+        /// auto-resume and the player is asked to Connect again - the documented other direction of
+        /// TryAutoResumeAsync's gate.
+        /// </summary>
+        private static void OnDisconnectRequested() => DisconnectAsync().Forget();
+
+        private static async UniTaskVoid DisconnectAsync()
+        {
+            // ⚠ Disconnecting MID-CONNECT would race the association and could clear a session that
+            // is about to be written. Refuse and say so rather than half-doing it.
+            if (_connecting)
+            {
+                FlowTrace.Warn("Wallet", "Disconnect requested while a connect is in progress - ignored.");
+                return;
+            }
+            if (_wallet == null)
+            {
+                // Not an error: nothing is connected, and the caller's intent (end up disconnected)
+                // is already satisfied. Say it plainly instead of failing.
+                FlowTrace.Step("Wallet", "Disconnect requested with no WalletService instance - already disconnected.");
+                CurrencySkinResolver.PublishWalletDisconnected();
+                return;
+            }
+
+            FlowTrace.Step("Wallet", "Disconnect requested - clearing the sealed MWA session (no auto-resume next boot).");
+            await _wallet.Disconnect();
+            // WalletService.Disconnect already publishes the disconnected state in its finally block;
+            // it is NOT repeated here. PublishWalletDisconnected is idempotent, but one owner per fact.
+        }
 
         private static async UniTaskVoid ConnectAsync()
         {

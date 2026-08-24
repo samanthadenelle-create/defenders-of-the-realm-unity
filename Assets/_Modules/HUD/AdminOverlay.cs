@@ -16,6 +16,7 @@ using System.Reflection;
 using DeNelle.Core.Catalog;
 using DeNelle.Core.UI;
 using DeNelle.Core.Diagnostics;
+using DeNelle.Core.Platform;      // CurrencySkinResolver - the Core seam to the Wallet assembly (HUD may not reference DeNelle.Wallet)
 using UnityEngine;
 using UnityEngine.UIElements;
 using PanelMgr = DeNelle.Core.UI.PanelManager;
@@ -46,6 +47,13 @@ namespace DeNelle.HUD
 
         // Lock-On A/B toggle button (WO-512) — label reflects ff.lockon state, retargeted on tap.
         private Button _lockOnButton;
+
+        // FLAG-chip toggle (WO-1170) — label reflects ff.flagbutton state.
+        private Button _flagButtonToggle;
+
+        // Wallet reset (WO-1171) — two-tap confirm, like the full-reset button below.
+        private Button _walletResetButton;
+        private float _walletResetArmedUntil;
         private Button _fullResetButton;
         private float _fullResetArmedUntil;   // two-tap confirm window (owner 2026-07-08 full reset)
 
@@ -288,6 +296,29 @@ namespace DeNelle.HUD
             // PlayerPrefs live each call (no cache), so the write below takes effect next frame.
             _lockOnButton = Button(LockOnLabel(), OnToggleLockOn);
             scroll.Add(_lockOnButton);
+            // ⭐ FLAG chip toggle (WO-1170, owner 2026-08-24). THE ONLY WAY TO REACH ff.flagbutton
+            // FROM A PHONE. The chip defaults OFF everywhere (store-hardening ruling 2026-08-07) and
+            // the tester APK is a RELEASE build, so Debug.isDebugBuild is false there too — which
+            // left the owner on a touch device with NO capture trigger at all: no F8 key, the 5-tap
+            // corner gesture retired, and the dev panel's "Feature flags" group holding ZERO rows
+            // since ff.strategicplacement was removed. The flag existed and was unreachable.
+            //
+            // ⛔ WHY A ONE-TAP CHIP AND NOT A MENU ITEM — the owner's own diagnosis, and it is
+            // right: any capture you reach by NAVIGATING photographs the navigation. Settings ->
+            // Report a bug closes the menu first, but you still had to open Settings over the very
+            // screen you were trying to photograph. The chip captures at the instant of the tap,
+            // with nothing opened, which is the whole reason it exists.
+            _flagButtonToggle = Button(FlagButtonLabel(), OnToggleFlagButton);
+            scroll.Add(_flagButtonToggle);
+            // ⭐ WALLET RESET (WO-1171, owner ruling 2026-08-17 finally wired 2026-08-24).
+            // "yes it should auto connect, there is a menu option to reset" - the auto-connect half
+            // shipped in August and THIS half never did. WalletService.Disconnect() was fully
+            // implemented and called by nothing.
+            // ⚠ Routed through the Core seam (CurrencySkinResolver.RequestWalletDisconnect) because
+            // DeNelle.HUD may NOT reference DeNelle.Wallet - the same reason the connect button uses
+            // RequestWalletConnect. Do not "simplify" this into a direct call.
+            _walletResetButton = Button(WalletResetLabel(), OnWalletReset);
+            scroll.Add(_walletResetButton);
             // F8-11 (owner 2026-07-07): "Reset Yarn" row REMOVED — Yarn was dropped (WO-455/557);
             // OnReplayTutorial stays in the file per the owner-trim convention above.
             // Owner 2026-07-08: "full reset option that clears all persistent data and resources
@@ -651,6 +682,58 @@ namespace DeNelle.HUD
             if (_lockOnButton != null) _lockOnButton.text = LockOnLabel();
             FlowTrace.Step("UI", "DevPanel (AdminOverlay) ff.lockon = " + (on ? "ON" : "OFF"));
             SetStatus("Lock-On " + (on ? "ON" : "OFF") + " (live next frame) - re-engage or move to feel the camera change.");
+        }
+
+        // ── FLAG chip toggle (WO-1170) ───────────────────────────────────────
+        // Same live-read contract as the Lock-On pair above: FeatureFlags.Get reads PlayerPrefs on
+        // every call, and FlagCaptureButton.ShouldShow re-checks it, so the chip appears/disappears
+        // without a rebuild or restart. PlayerPrefs persist across launches, so this is set ONCE per
+        // device and the capture trigger is there from then on.
+        private static string FlagButtonLabel()
+        {
+            return "FLAG chip: " + (DeNelle.Core.FeatureFlags.FlagButton ? "ON" : "OFF");
+        }
+
+        private void OnToggleFlagButton()
+        {
+            bool on = !DeNelle.Core.FeatureFlags.FlagButton;   // resolved value, then invert
+            PlayerPrefs.SetInt("ff.flagbutton", on ? 1 : 0);
+            PlayerPrefs.Save();
+            if (_flagButtonToggle != null) _flagButtonToggle.text = FlagButtonLabel();
+            FlowTrace.Step("UI", "DevPanel (AdminOverlay) ff.flagbutton = " + (on ? "ON" : "OFF"));
+            SetStatus(on
+                ? "FLAG chip ON - a one-tap capture chip now sits on the left edge. Tap it the moment "
+                + "something looks wrong: it shoots the CURRENT frame, so nothing has to be opened first."
+                : "FLAG chip OFF - no on-screen capture trigger on this device.");
+        }
+
+        // ── Wallet reset (WO-1171) ───────────────────────────────────────────
+        // TWO-TAP CONFIRM, deliberately: disconnecting drops the sealed MWA session, so the next
+        // cold start stops auto-resuming and the player must re-authorize in the wallet app. That is
+        // recoverable but not free, and it is the kind of thing a mis-tap should not do.
+        private static string WalletResetLabel()
+        {
+            return CurrencySkinResolver.IsWalletConnected
+                ? "Disconnect Wallet (" + CurrencySkinResolver.ConnectedWalletShortAddress + ")"
+                : "Disconnect Wallet (none connected)";
+        }
+
+        private void OnWalletReset()
+        {
+            if (Time.unscaledTime > _walletResetArmedUntil)
+            {
+                _walletResetArmedUntil = Time.unscaledTime + 4f;
+                if (_walletResetButton != null) _walletResetButton.text = "Tap again to DISCONNECT";
+                SetStatus("Disconnecting clears the saved wallet session - the next launch will ask you to " +
+                          "Connect again instead of reconnecting silently. Tap again within 4s to confirm.");
+                return;
+            }
+
+            _walletResetArmedUntil = 0f;
+            CurrencySkinResolver.RequestWalletDisconnect();
+            if (_walletResetButton != null) _walletResetButton.text = WalletResetLabel();
+            FlowTrace.Step("UI", "DevPanel (AdminOverlay) wallet disconnect requested.");
+            SetStatus("Wallet disconnected. Reconnect from the title screen's Connect Wallet button.");
         }
 
         // ── Queue time-skip (owner 2026-08-04) ───────────────────────────────

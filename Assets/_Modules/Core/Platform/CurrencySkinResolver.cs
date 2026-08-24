@@ -101,6 +101,43 @@ namespace DeNelle.Core.Platform
             catch (Exception e) { FlowTrace.Fail("Skin", $"WalletConnectRequested handler threw: {e.Message}"); }
         }
 
+        /// <summary>
+        /// Raised when a view asks to DISCONNECT / reset the wallet. Symmetric with
+        /// <see cref="WalletConnectRequested"/>: the Wallet assembly subscribes and does the work,
+        /// because Core can never reference DeNelle.Wallet.
+        /// <para>
+        /// ⛔ WHY THIS EXISTS (2026-08-24). The owner ruled on 2026-08-17 — quoted verbatim in
+        /// WalletSkinBootstrap — <i>"yes it should auto connect, there is a menu option to reset"</i>.
+        /// The AUTO-CONNECT half shipped. The RESET half never did: WalletService.Disconnect() is
+        /// fully implemented (provider disconnect, signer unregister, MwaSessionStore.Clear, and it
+        /// even publishes the disconnected state so labels fall back) and was called by NOTHING.
+        /// A whole working mechanism with no way in.
+        /// </para>
+        /// <para>
+        /// ⚠ It is not only a test convenience: with auto-resume ON, a player who connects the wrong
+        /// wallet is reconnected to it silently on every cold start, forever, with no way out short
+        /// of reinstalling the app. Reset is what makes auto-connect safe to have.
+        /// </para>
+        /// </summary>
+        public static event Action WalletDisconnectRequested;
+
+        /// <summary>Fired by a "Disconnect / Reset wallet" control. Routes to the Wallet assembly.</summary>
+        public static void RequestWalletDisconnect()
+        {
+            var handler = WalletDisconnectRequested;
+            if (handler == null)
+            {
+                // ⚠ NEVER SILENT (§12). A dead reset button that merely does nothing is how the
+                // player concludes the wallet cannot be changed at all.
+                FlowTrace.Warn("Skin",
+                    "Disconnect Wallet pressed but no handler is subscribed (WalletDisconnectRequested) - " +
+                    "the Wallet assembly did not install one (SKR skin inactive?). Nothing was disconnected.");
+                return;
+            }
+            try { handler.Invoke(); }
+            catch (Exception e) { FlowTrace.Fail("Skin", $"WalletDisconnectRequested handler threw: {e.Message}"); }
+        }
+
         // =====================================================================
         //  Connected-wallet state — the RETURN LEG of the connect seam (2026-08-05)
         // =====================================================================

@@ -356,7 +356,18 @@ namespace DeNelle.Core
         // OWNER RULING 2026-08-07: default OFF everywhere. The F8 KEY still captures - only the
         // on-screen chip is hidden. Opt in with ff.flagbutton=1 (needed on a touch device with
         // no keyboard). Was defaultOn: IsDevBuild.
-        public static bool FlagButton => Get("flagbutton", defaultOn: false);
+        // ⭐ OWNER RULING 2026-08-24 - default ON for TESTER builds, still OFF for the store.
+        // The 2026-08-07 "default OFF everywhere" ruling is NOT reversed; it is made reachable. That
+        // ruling protected two things - no dev chip in a store APK, and no chip in device SCREENSHOTS -
+        // and both survive: the store build has no TESTER_BUILD define, and the AdminOverlay toggle
+        // (Settings -> DevTools -> "FLAG chip") turns it off for clean captures.
+        //
+        // ⛔ WHAT THE OLD DEFAULT ACTUALLY COST, found 2026-08-24: on a touch device the owner had NO
+        // capture trigger at all. No F8 key; the 5-tap corner gesture retired; the F10 menu retired;
+        // the dev panel's "Feature flags" group holding ZERO rows since ff.strategicplacement was
+        // removed; and Android PlayerPrefs needing root to set by hand. The flag was the documented
+        // opt-in for "a touch device with no keyboard" and it was unreachable FROM a touch device.
+        public static bool FlagButton => Get("flagbutton", defaultOn: IsDevBuild || IsTesterBuild);
 
         /// <summary>HUB AMBIENT DEPTH (owner 2026-06-23, overnight first-pass) -- when ON (default), the
         /// <see cref="DeNelle.Village.HubAmbientVfxInjector"/> attaches tasteful looping ambient VFX to the
@@ -1223,6 +1234,30 @@ namespace DeNelle.Core
         /// STRIPS OFF (defaults to hidden) in a public/store APK. The PlayerPrefs "ff.&lt;name&gt;"
         /// override still wins, so a developer can flip the tool back on on any build.</summary>
         private static bool IsDevBuild => Application.isEditor || Debug.isDebugBuild;
+
+        /// <summary>
+        /// TRUE only in a build compiled with the <c>TESTER_BUILD</c> scripting define — the APK that
+        /// goes to Firebase App Distribution, never the one that goes to the Solana dApp Store.
+        /// <para>
+        /// ⛔ WHY THIS EXISTS (owner ruling 2026-08-24: <i>"if it's a dev build then we can just leave
+        /// the flag on because it's only going to the tester. It's not going to the Solana store"</i>).
+        /// Until today THE TWO WERE THE SAME ARTIFACT. <c>AndroidBuild.BuildSeekerApk</c> produces a
+        /// <c>BuildOptions.None</c> RELEASE apk for both destinations, so <see cref="Debug.isDebugBuild"/>
+        /// is FALSE on the tester build too — which is exactly why owner-facing tooling kept
+        /// disappearing on the very device it was built for. There was no way for code to tell the two
+        /// apart, so every tool had to choose between shipping publicly or being unreachable.
+        /// </para>
+        /// <para>
+        /// ⭐ THE DEFAULT DIRECTION IS DELIBERATE AND MUST NOT BE INVERTED: the define is OPT-IN, so its
+        /// ABSENCE means store-safe. A store build cannot ship dev tooling by forgetting a flag — only
+        /// by explicitly adding one. Fail-safe, not fail-open.
+        /// </para>
+        /// </summary>
+#if TESTER_BUILD
+        private static bool IsTesterBuild => true;
+#else
+        private static bool IsTesterBuild => false;
+#endif
 
         /// <summary>
         /// TRUE on the editor and on a DESKTOP standalone player; FALSE on Android/iOS.
