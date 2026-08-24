@@ -216,6 +216,59 @@ anything.
    under the superseded ruling. Iron's gate must point at the Iron Mine itself, or the NEEDS cue
    names the wrong building again — the original defect, restored by our own fix.
 
+## 4c. ⭐ CONTAINERS RETIRE AS BUILDINGS — capacity becomes a PRODUCER UPGRADE (ruled 2026-08-23)
+
+**Owner:** *"we never ever placed a silo. We only had the farm. Then outside of the farm, we had the
+storage for it."* → and on the consequence: *"i love it!"*
+
+**PROVEN, not remembered.** Her live device ledger tonight:
+`everBuiltStructureIds = [workshop, collector_lumbermill, collector_farm, pet-house, forge,
+arcane-tower, market, jeweler, apothecary, jewelers-bench, barracks, tower_ground_archer,
+tower_arcane_spire]` — **no silo, no lumberyard, no foundry.** The container family has never been
+placed, by her or by anyone, and `storage-caps.json` grants the base cap unconditionally
+(*"the non-building BASE STORE every save holds before any storage container exists"*), so nothing
+ever required one.
+
+### The ruled shape
+
+| Was | Becomes |
+|---|---|
+| Lumberyard / Stone Yard / Foundry as **separate buildings** | **RETIRED from the palette.** Capacity is a PRODUCER UPGRADE. |
+| Bank capacity from a placed container | `building.upgrade` on the Quarry / Lumber Mill / Iron Mine |
+| Stock as an invisible wallet number | **PALLET STACKS beside the producer** — the visible store |
+
+⭐ **THIS IS NOT A NEW IDEA — IT IS THE ORIGINAL RULING, RESTORED.** WO-707 already ruled the pallets
+in her own words: *"I loved the idea of visually seeing your store"* — each storing building shows
+its stock IN THE WORLD as pallet stacks beside it, growing and shrinking with the amount, with
+**quantity reading by stack SIZE, never colour** (colourblind-safe by construction). The separate
+container family was added afterwards and never landed.
+
+It is also **exactly the WC3 tech-tree shape she ruled on 2026-07-16** (memory
+`building-upgrades-warcraft3-style`): the economy building owns its own research, mid perks
+quantitative, top-tier a qualitative capstone — with her own worked example being *"Lumber Mill =
+efficiency with a top-tier AUTO-HARVEST capstone"*.
+
+### What this buys
+
+- **The FBX list collapses to TWO** — Quarry and Iron Mine (§4d). No container bodies needed.
+- **Three fewer buildings to name, place, art and keep from colliding.** Today Lumberyard, Foundry
+  and Silo are *visually identical* (all `Structures/GenericContainer`) — you cannot tell your stone
+  store from your iron store by looking. That problem deletes itself.
+- **The raid stake becomes visible.** A raider burning the Lumber Mill takes the pile you can SEE
+  beside it, rather than an abstract wallet number.
+
+### ⚠ Carry-overs, so nothing is lost in the retirement
+
+1. **The capacity ladder survives, it just moves.** `levelCapacityMultipliers [1,2,4,8,16,32]` and
+   WO-1108b's six-level climb (1k/2k/4k/8k/16k/32k) become the PRODUCER's capacity upgrade. Fold the
+   definition, do NOT re-derive the numbers.
+2. **⛔ DO NOT DELETE THE CATALOG ROWS.** `lumberyard` / `foundry` / `silo` ids are frozen save keys;
+   retire them from the PALETTE (the WO-707 pattern) so any save that ever recorded one still
+   replays. Nobody has placed one, but that is not a licence to remove a key.
+3. **`TownBankCapacity` reads container capacity today.** Its never-zero floor (`AbsoluteMinBaseCap`
+   1000) and its grandfathering law (*"an existing save over the cap is NEVER drained"*) must both
+   survive the move.
+
 ## 5. Naming, per the role table (WO-1161)
 
 | Role (identity) | Display | id |
