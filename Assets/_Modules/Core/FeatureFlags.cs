@@ -709,13 +709,33 @@ namespace DeNelle.Core
         public static bool RealmStorePurchase => Get("realmstorepurchase", defaultOn: true);
 #endif
 
-        /// <summary>RELEASE BLOCKER GATE (2026-08-07) — gates the WHOLE rewarded-ad timer-skip path:
-        /// the "Ad" CTA on every queue row (ManageScreenPanel + ObsidianQueueHud) and
-        /// <c>BuildTimerService.CanWatchAdToSkip</c> / <c>WatchAdToSkip</c>. DEFAULT OFF, and it must
-        /// STAY OFF until BOTH prerequisites below are met.
+        /// <summary>⭐ LIVE since 2026-08-24 — gates the WHOLE rewarded-ad timer-skip path: the "Ad"
+        /// CTA on every queue row (ManageScreenPanel + ObsidianQueueHud) and
+        /// <c>BuildTimerService.CanWatchAdToSkip</c> / <c>WatchAdToSkip</c>. <b>DEFAULT ON</b>
+        /// (owner: "Flip it on", the morning the ironSource Ads account was approved).
         ///
-        /// WHY: there is NO ad SDK in this project. No AdMob / Unity Ads / ironSource / AppLovin package
-        /// in Packages/manifest.json, no ad unit id, no mediation.
+        /// <para>⚠ THIS SUMMARY USED TO SAY THE OPPOSITE, AND THAT IS WHY IT IS REWRITTEN HERE RATHER
+        /// THAN CORRECTED FURTHER DOWN. It read "RELEASE BLOCKER GATE … DEFAULT OFF, and it must STAY
+        /// OFF" and "there is NO ad SDK in this project". The flip note was added below the
+        /// <c>#if MONETIZATION_LOCAL_TEST</c>, so the FIRST thing a reader (or an IDE tooltip) saw was
+        /// still the release-blocker text — a categorical "no SDK, keep it off" sitting on top of a
+        /// shipped, ruled ON flag. A correction the reader reaches second is not a correction.</para>
+        ///
+        /// <para>BOTH ORIGINAL PREREQUISITES ARE MET, verified at source before the flip:
+        /// <b>(1) a real SDK</b> — <c>com.unity.services.levelplay@9.5.1</c> in manifest + lock, the
+        /// adapter compiling in its own LEVELPLAY_PRESENT-constrained assembly, app key configured,
+        /// three placements mapped to real unit ids, rewards granted ONLY from the earned callback.
+        /// <b>(2) WO-912 server-anchored window</b> — the stamp is <c>TimeSource.NowUnixMs()</c>, not
+        /// <c>DateTime.UtcNow</c>. ⚠ A stale "KNOWN LIMIT … DEVICE clock" comment still sits above
+        /// that code in BuildTimerService; the fix shipped and the warning was left. Do not act on it.</para>
+        ///
+        /// <para>⛔ THE ORIGINAL REASONING STILL GOVERNS ANY FUTURE CHANGE, so it is kept below rather
+        /// than deleted: granting on "we showed it" is fraud against the network, and a device-clock
+        /// window is FABRICATED IMPRESSIONS against a live ad account — which is what networks ban
+        /// for. There is now a live approved account to lose, so those guards matter MORE than when
+        /// they were written, not less.</para>
+        ///
+        /// HISTORICAL — the 2026-08-07 blocker text, true when written, false since 2026-08-24:
         /// <see cref="DeNelle.Village.RewardedAdManager"/>.ShowAdInternal is a stub and
         /// <c>IsAdReady</c> is a plain 480s stopwatch, NOT a fill check. Shipping the CTA would hand out
         /// unlimited free timer skips with no ad shown and no revenue earned. WO-911 widened the CTA from

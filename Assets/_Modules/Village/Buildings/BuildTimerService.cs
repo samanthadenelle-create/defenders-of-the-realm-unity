@@ -1499,12 +1499,21 @@ namespace DeNelle.Village
         //  "o" format), AdSkipsUsedToday the count within it. The names are now misleading
         //  and worth renaming on the next schema touch.
         //
-        //  KNOWN LIMIT - the window start is a DEVICE clock (UtcNow). Moving the device
-        //  clock forward past the window grants a fresh allowance. That is not just free
-        //  skips: once a real ad SDK is behind this it is FABRICATED IMPRESSIONS against
-        //  the ad account, which is what networks ban for. A trustworthy version needs the
-        //  window stamped/validated server-side where the save already round-trips. Tracked
-        //  in WO-912; deliberately not solved here because no ad SDK is wired yet.
+        //  ⭐ RESOLVED - the "KNOWN LIMIT" that stood here is FIXED and the warning was stale.
+        //  It read: "the window start is a DEVICE clock (UtcNow) ... deliberately not solved
+        //  here because no ad SDK is wired yet." Both halves are now false. WO-912 §7.1 landed:
+        //  RecordAdSkipUsed stamps TimeSource.NowUnixMs() (server-anchored when a handshake has
+        //  happened this process), NOT DateTime.UtcNow - there is no DateTime.UtcNow left in this
+        //  file - and the ad SDK IS wired (LevelPlay 9.5.1, account approved 2026-08-24, flag ON).
+        //
+        //  ⛔ THE REASON THE WARNING EXISTED STILL GOVERNS, which is why it is rewritten rather
+        //  than deleted: a device-clock window lets a player roll the phone forward and mint a
+        //  fresh allowance, and once a real SDK is behind it that is FABRICATED IMPRESSIONS
+        //  against a live ad account - what networks ban for. There is now a live approved
+        //  account to lose. Never re-stamp this window from a device clock.
+        //
+        //  (Deleted 2026-08-24. It had already been called out as stale in FeatureFlags.cs's
+        //  RewardedAdSkip block, and left standing anyway - a warning the repo knew was wrong.)
 
         private bool UnderDailyAdCap()
         {

@@ -19,6 +19,49 @@
 
 **Five models of one mechanic, layered as the design moved, none retired.**
 
+## 1b. ⭐ LARGELY RESOLVED 2026-08-24 — the OWNER'S MODEL IS THE ONE THAT SHIPPED
+
+A stale-comment sweep settled most of this. **Account #4 — the owner's current design — is what the
+code actually does**, and the comments describing the others are simply false.
+
+**PROVING LINE:** `Assets/_Modules/Village/Tutorial/V2/TutorialFlow.cs:1610`
+```csharp
+acquiredNew = petSvc.Acquire(StarterPetSpecies, PetAcquisitionSource.Starter);   // grant.starterPet
+```
+with `StarterPetSpecies = "ice-wolf"` (`:1498`) — and ice-wolf is **Aldwin, the Ice Echo**, matching
+the owner's own device readout *"Echo 1 of 1 — Aldwin, the Ice Echo"*. **The first Echo is granted
+with the guide, exactly as ruled.**
+
+### So the accounts collapse:
+
+| # | Verdict |
+|---|---|
+| **#4 owner's model** — granted as guide, rest at thresholds | ✅ **TRUE — implemented** |
+| **#1** "ONLY from the shop, **never pre-granted**" | ❌ **FALSE, and it is asserted in FOUR files** |
+| **#5** Echo Warden shop nodes | ⚠️ **live but now a SECOND path**, not the only one |
+| **#2** Tame / Hatch / Rescue | ⚠️ the grant primitive is real; the three named paths need confirming |
+| **#3** threshold slot unlocks | ✅ compatible — slots and ownership are different axes |
+
+⛔ **THE FOUR FILES ASSERTING THE FALSE EXCLUSIVITY** — this is why it read as settled fact:
+`Core/State/GameStateService.cs:1005` · `Onboarding/PetSelectController.cs:645` and `:661`
+(*"acquired **SOLELY** from the Echo Hollow pet-shop"*) · `Pets/PetDeployer.cs:140`.
+
+⚠ **Four independent restatements make a false claim look corroborated.** Nobody re-derives a fact
+that four files agree on — which is exactly how this survived. All four also name a **Yarn** node,
+and Yarn is FULLY REMOVED (WO-557); the verb survived into `DialogueCommandSink.cs:310` →
+`Acquire(species, PetAcquisitionSource.Gift)`.
+
+### What is still genuinely open
+
+1. **Are the Echo Warden's three grant nodes still wanted?** They are a live second acquisition path
+   handing out species (`ice-wolf` / `flame-pup` / `aether-sprite`) that the threshold model does not
+   need. Keep, or retire?
+2. **§5 below still stands: what is Echo Hollow FOR?** With acquisition proven to come from the
+   guide-grant and thresholds, the Hollow's mechanical justification is gone regardless of how (1)
+   is answered.
+3. Correct the four false comments in whichever direction (1) settles — **do not "fix" them by
+   asserting the shop is the only path**, which is the falsehood being retired.
+
 ## 2. Two extra wrinkles inside account #5
 
 ⚠ **The comment says "Yarn node" and YARN IS FULLY REMOVED** (WO-557). The *verb* survived the
