@@ -112,6 +112,47 @@ you to place should have a reason that survives the next question about it.
 | **A — the home** | Keep it: the roaming area is real, it puts life in the town, and the manage door is a legitimate second doorway to one destination. Flavour justification, honestly labelled. |
 | **B — the threshold surface** | It becomes where you SEE what unlocks next and CLAIM an Echo when a threshold trips. Gives it a mechanical verb again without reviving the shop. |
 | **C — retire it** | If Echoes arrive by grant and threshold, a building with no verb is a tile occupying a palette slot. ⚠ Its id is a frozen save key — retire from the PALETTE, never delete the row. |
+| **⭐ D — THE WARDROBE** (owner, 2026-08-24) | Where the six souls LIVE and where you RE-SKIN them. Mechanical enough to justify a building, zero covenant risk, and it unblocks the store's "beauty" half. **Recommended.** |
+
+### ⭐ OPTION D — the Echo wardrobe (added 2026-08-24)
+
+**Owner:** *"Benefit of adding could be skins (cosmetic)… they purchase echo cosmetic"*.
+
+Echo Hollow becomes **the home and the wardrobe**: the roaming area where the Echoes live, and the
+surface where you change how they look. It keeps the baked twin
+(`EchoHollow_Pets_RoamingArea`), keeps the manage door as a legitimate second doorway, and adds a
+verb that is **explicitly sanctioned by the covenant** — *"convenience and BEAUTY, never combat
+power."*
+
+⭐ **It also unblocks the largest dark revenue in the store.** The 2026-08-24 monetization pass found
+**9 of 13 non-incidental SKUs are hidden for exactly ONE reason: cosmetics do not render**
+(`hero-wardrobe-pack`, `realm-defender-bundle`, the three seasonal bundles, `echo-patron-pack`…).
+The covenant's beauty half is currently unsellable, so the wardrobe is not a new monetization
+surface — it is the missing *destination* for one that already exists.
+
+### ⛔ REJECTED IN THE SAME BREATH: selling an AFFINITY CHANGE
+
+The owner also asked whether an Echo cosmetic could **change its affinity to a desired one**.
+**No — and the arithmetic is the argument.** From `echoes-balance.json`:
+
+| Knob | Value |
+|---|---|
+| `baseContributionPerEcho` | **0.02** |
+| `preferredLaneMatchBonus` | **0.03** ← the whole value of "matched" |
+| `sixSetBonusGlobalHarvest` | **0.20** |
+| `hiddenTriSynergyBonus` | **0.25** |
+
+1. **It sells almost nothing.** A matched affinity is +3 points on a 2-point base, sitting beside a
+   **20%** six-set bonus and a **25%** tri-synergy. It is a rounding error in our own balance file.
+2. ⛔ **It DELETES A DECISION, which is the real cost.** WO-830 canon: *"the player PICKS each Echo's
+   harvest resource — matching that Echo's affinity pays an ADDITIVE MATCH BONUS. Never gate an Echo
+   to one resource."* The interesting choice is WHICH Echo tends WHAT, with six unique affinities
+   pulling against what you actually need. Sell your way to always-matched and every Echo becomes
+   interchangeable — the player has paid to remove the puzzle.
+3. It is also the wrong side of the covenant: not combat power, but **buying an advantage**, and
+   WO-1165 §1 already records gold-adjacent purchases as the live covenant risk.
+
+**Pure appearance skins: yes. Anything that moves a number: no.** That line is the whole ruling.
 
 **Then, whichever wins:**
 1. Retire the three accounts that lose. Delete the "ONLY from the Echo Hollow pet-shop" sentence or
