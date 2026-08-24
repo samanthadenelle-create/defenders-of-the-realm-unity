@@ -1,6 +1,7 @@
 # WO-1179 - Roaming troops that attack the town, escalating in size and smarts
 
-**Status:** BLOCKED - two owner questions. The implementation spec is written and every seam is verified at source (see the SPEC section); the design rulings are settled. ⛔ **Q1: does "offline towns can be attacked" mean the SHIPPED banked-pressure model, or a real absentia resolver (WO-430-F, explicitly unbuilt AND explicitly forbidden until stakes are ruled)? Q2: four spawn SIDES, or four damageable GATES?** ⚠ Those two answers change this ticket by an ORDER OF MAGNITUDE - it is not handable until they land.
+**Status:** READY TO IMPLEMENT - both owner questions RULED 2026-08-24 and the implementation spec is written with every seam verified at source. Bounded to: **one encounter, one global concurrency cap, escalating side count 1 -> 2 -> 4, away time BANKS PRESSURE rather than simulating an unseen loss.** ⛔ Six binding constraints in the ruling section - read them before touching the spawner.
+>  PRIOR: **Status:** BLOCKED - two owner questions. The implementation spec is written and every seam is verified at source (see the SPEC section); the design rulings are settled. ⛔ **Q1: does "offline towns can be attacked" mean the SHIPPED banked-pressure model, or a real absentia resolver (WO-430-F, explicitly unbuilt AND explicitly forbidden until stakes are ruled)? Q2: four spawn SIDES, or four damageable GATES?** ⚠ Those two answers change this ticket by an ORDER OF MAGNITUDE - it is not handable until they land.
 >  PRIOR: **Status:** READY - all three open design questions RULED by the owner 2026-08-24 (existing wave system; offline towns CAN be attacked; losses are REPAIRABLE and bounded). ⛔ Build WO-513 first so pack behaviour is inherited, per this ticket's own note.
 **Silo:** Combat/AI. **Origin:** owner, 2026-08-24, verbatim:
 > *"I still want to add roaming troops that attack the town, incrementally getting harder, smarter
@@ -264,3 +265,70 @@ Before any behaviour change, one headless hub load must answer what static readi
 - `[Flow:Enemy] SmartSpawner wave N: … gate='spawn-castle-<dir>-<i>'` — which gate actually served.
 - `[Flow:Wave] wave N: concurrency cap … HOLDING M` — ⭐ **is there budget to divide at all?** If the cap already binds on a late wave, two gates means **half a wave each**, not two waves.
 - Instrument the two edges in `ApplyForceFieldState` **separately**, and read one capture before hanging anything on `ForceFieldCollapsed`.
+
+---
+
+# ⭐ OWNER RULINGS 2026-08-24 — WO-1179 IS NOW BOUNDED AND HANDABLE
+
+Owner's own summary, and it is the spec's north star:
+> **"One encounter, one global cap, escalating side count 1 → 2 → 4, with away time banking pressure
+> rather than simulating an unseen loss."**
+
+## Q1 — RULED: **banked pressure, NOT absentia resolution**
+
+Away time **schedules and escalates the fight the player returns to**. ⛔ **Nothing is stolen and
+nothing is resolved while they are absent.** A true offline combat resolver belongs behind **WO-430-F**
+and requires its own stakes ruling.
+
+⭐ **This means the shipped `SiegeScheduler` model IS the answer** — no new offline machinery at all.
+It is already an `IOfflineClaimConsumer` with a 24 h cap and `_maxPendingSieges = 1`.
+
+### ⚠ ACCEPTANCE LINE REWRITTEN (the old one could not be satisfied)
+
+- ⛔ **WAS:** *"An offline attack can damage a gate and steal a bounded amount of basic resources only."*
+- ⭐ **NOW:** *"Away time BANKS PRESSURE, producing a harder homecoming — a larger and/or
+  multi-sided assault that happens LIVE, with the player watching. Nothing is taken while away."*
+
+## Q2 — RULED: **four spawn SIDES now, not four damageable gates**
+
+Use the existing **`WaveSpawnPoint.GateIndex`** data as **side lanes**, ⛔ **without requiring live
+`Gate` objects.** Player-built gates may affect the battle naturally — but the feature **must not
+require four authored hub gates** and **must not enter the serialization-bottleneck lane** (§9).
+
+## ⛔ CONFIRMED CONSTRAINTS — all six binding
+
+1. ⛔ **NEVER use the nonexistent `SpawnPoint` tag.** It is undeclared and reading it **throws**.
+   Resolve by the **`WaveSpawnPoint` component**.
+2. ⭐ **DO NOT call `SpawnWave` multiple times. Partition ONE wave's composition across the active
+   sides under ONE shared concurrency budget.**
+   ⭐ *This is cleaner than the spec's own §1 and supersedes it.* It removes the doubled-field hazard
+   by construction rather than by careful arithmetic — **and it dissolves §1.3 entirely**: with a
+   single `SpawnWave` call, `DrainSmartReinforcements` re-derives the same side set, so reinforcements
+   returning to their own sides is **correct behaviour**, not a bug to engineer around.
+3. ⛔ **Do NOT use `Gate.ForceFieldCollapsed` as the breach signal** — it also fires when the hero
+   enters a proximity opener, i.e. every time the player walks out of town.
+4. ⛔ **Do NOT depend on WO-1026's ring detector** — behind a flag that has been **OFF since WO-579**;
+   it would record nothing, forever, silently.
+5. **The false §7 canon statement is replaced**; this ticket stays grounded in the **20
+   `WaveSpawnPoint` markers** and their **populated `GateIndex`** values.
+6. ⛔ **No new theft path** — the bank-take is deleted and regression-guarded; the sanctioned stake is
+   `ResourceCollector.OnSiegeDestroyed` (`_pending` only, never the wallet).
+
+## Lead decision — the one design choice the rulings leave open
+
+**How to partition the composition across sides.** Not an owner call; a defensible default:
+
+- ⭐ **Partition BY ROLE so each side is a COHERENT THREAT** — never "all ranged on one side, all
+  melee on the other", which makes one side trivial and the other unfair. Each active side receives a
+  proportional slice of every role present.
+- **Determinism via the existing `seedSalt`** on `WaveCompositionBuilder.Build` — one salt per
+  `GateIndex`. ⛔ No new randomness source; the builder is pure and must stay so.
+- ⚠ **Remainders go to the FIRST active side** by ordinal, so a 3-enemy split across 2 sides is
+  stable run to run rather than drifting with float rounding.
+
+## ⚠ Still instrument first (§12)
+
+The §6 capture list stands, and **one line in it now gates the whole feature**:
+`[Flow:Wave] wave N: concurrency cap … HOLDING M`. ⭐ **If the cap already binds on a late wave, two
+sides means HALF A WAVE EACH, not two waves** — the escalation would read as *weaker*, not harder.
+**Read that capture before tuning anything.**

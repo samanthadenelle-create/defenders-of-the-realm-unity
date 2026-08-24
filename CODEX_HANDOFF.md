@@ -162,7 +162,32 @@ swaps one lie for another.
 ⛔ **WO-917: PHASE B ONLY** - Phase A is an owner art pick. ⚠ `ElarionUiKit.cs` is shared with WO-1182
 in batch 3: **917 confines edits to the action-slot builder; 1182 adds no new kit primitives.**
 
-## ⚠ NOT in batch 4: WO-1179, and the gap is MINE
+## ⭐ WO-1179 IS NOW IN BATCH 4 - ruled and specced 2026-08-24
+
+| WO | What | Silo | Files |
+|---|---|---|---|
+| **WO-1179** | Roaming troops: escalating **side count 1 -> 2 -> 4**, away time **banks pressure** | Combat/AI | `Village/Waves/SmartEnemySpawner.cs`, `WaveManager.cs`, `WaveCompositionBuilder.cs` |
+
+**Bounded by the owner to: one encounter, one global cap, sides 1 -> 2 -> 4, away time banks pressure
+rather than simulating an unseen loss.**
+
+⛔ **SIX BINDING CONSTRAINTS - in the ticket's ruling section. Read them before touching the spawner.**
+The two that will otherwise cost a day:
+- ⭐ **ONE `SpawnWave` CALL.** Partition one wave's composition across active sides under **one shared
+  concurrency budget**. ⚠ Calling it per-side hands **each** call the full budget and doubles the
+  field, defeating a cap that exists because of a **phone frame-rate cliff**.
+- ⛔ **`Gate.ForceFieldCollapsed` is NOT the breach signal** - it also fires whenever the hero walks
+  out of town. And ⛔ **do not touch WO-1026's ring detector**: behind a flag OFF since WO-579, it
+  records **nothing, forever, silently**.
+
+⚠ **`SmartEnemySpawner.cs` and `WaveManager.cs` are disjoint from every other in-flight ticket** -
+but WO-513 (batch 2) is the other Combat/AI lane. It owns `Village/Arena/BattleArena.cs`. **No overlap;
+keep it that way.**
+
+⚠ **Instrument BEFORE tuning:** `[Flow:Wave] wave N: concurrency cap ... HOLDING M`. ⭐ **If the cap
+already binds, two sides means HALF A WAVE EACH** - the escalation would read as weaker, not harder.
+
+## ⚠ (Historical) NOT in batch 4: WO-1179, and the gap was MINE
 
 Roaming troops is **ruled and still not handable** - 122 lines naming exactly **one** concrete file.
 I wrote it as a design spec, not an implementation one, so it fails test 1. **The lead owes it a spec
