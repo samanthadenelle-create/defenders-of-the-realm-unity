@@ -129,7 +129,12 @@
 > fine as history. A copied number is the bug **even when it was right the day it was written** -
 > that is exactly how the retired 860-899 UI block kept re-seeding collisions from CLAUDE.md sec.2.
 
-> ## ⚠ RECONCILED 2026-08-24 (CLI): main line next free = **1167**.
+> ## ⚠ RECONCILED 2026-08-24 (CLI): main line next free = **1168**.
+> *(CLI seat minted **WO-1167** and bumped 1167 -> 1168 in this SAME edit. **1167** = the build
+> palette groups itself by ROLE - one flat 16-tile Town list becomes authored buckets, driven by
+> the WO-1161 role vocabulary so a new building needs data, not code.)*
+>
+> ### superseded: RECONCILED 2026-08-24 (CLI): main line next free = **1167**.
 > *(CLI seat minted **WO-1166** and bumped 1166 -> 1167 in this SAME edit. **1166** = Echo
 > acquisition has FIVE competing accounts and no single authority - a "ONLY from the Echo
 > Hollow shop" ruling, PetAcquisitionService three paths (Tame/Hatch/Rescue), WO-587
