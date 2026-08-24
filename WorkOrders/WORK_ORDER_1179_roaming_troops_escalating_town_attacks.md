@@ -1,6 +1,7 @@
 # WO-1179 - Roaming troops that attack the town, escalating in size and smarts
 
-**Status:** READY - all three open design questions RULED by the owner 2026-08-24 (existing wave system; offline towns CAN be attacked; losses are REPAIRABLE and bounded). ⛔ Build WO-513 first so pack behaviour is inherited, per this ticket's own note.
+**Status:** BLOCKED - two owner questions. The implementation spec is written and every seam is verified at source (see the SPEC section); the design rulings are settled. ⛔ **Q1: does "offline towns can be attacked" mean the SHIPPED banked-pressure model, or a real absentia resolver (WO-430-F, explicitly unbuilt AND explicitly forbidden until stakes are ruled)? Q2: four spawn SIDES, or four damageable GATES?** ⚠ Those two answers change this ticket by an ORDER OF MAGNITUDE - it is not handable until they land.
+>  PRIOR: **Status:** READY - all three open design questions RULED by the owner 2026-08-24 (existing wave system; offline towns CAN be attacked; losses are REPAIRABLE and bounded). ⛔ Build WO-513 first so pack behaviour is inherited, per this ticket's own note.
 **Silo:** Combat/AI. **Origin:** owner, 2026-08-24, verbatim:
 > *"I still want to add roaming troops that attack the town, incrementally getting harder, smarter
 > attacks one gate, maybe two gates same time, all 4 eventually"*
@@ -30,8 +31,10 @@ Tune that transition, not the roster sizes.
 
 ## Seams that already exist - reuse, do not greenfield
 
-- `SpawnPoint` tags are already placed **12m outside each gate** (CLAUDE.md §7) - the four attack
-  origins exist.
+- ⛔ **CORRECTION 2026-08-24: the `SpawnPoint` TAG DOES NOT EXIST** and reading it THROWS. I wrote
+  that line here citing CLAUDE.md §7, which was itself wrong (now fixed). The real seam is the
+  **`WaveSpawnPoint` COMPONENT**, and there are **20 markers, not 4** (5 per side x 4 sides), each
+  carrying a populated **`GateIndex`** - so the data for per-gate targeting is already there.
 - `WaveManager` already **generates rosters** (`waves.json` `_smartComposition:1`; the authored
   `enemies[]` batches are INERT and a re-add now FAILS a regression). ⛔ **Do not author batches** -
   extend the generator.
@@ -185,3 +188,79 @@ is open: any shield/immunity timer, any revenge target..."* ⚠ And two identifi
 - do not cite them as one: `HeroAbilities._damageShieldUntil` (`:1506`) is a seconds-long in-combat
 damage-reduction buff, and `TownSuspension._graceUntil` (`:114`) is a non-persisted `Time.time`
 session grace.
+
+---
+
+# ⭐ IMPLEMENTATION SPEC (lead pass, 2026-08-24) — every seam verified at source
+
+⛔ **Two owner questions below (§0) change the size of this ticket by an ORDER OF MAGNITUDE. It is not handable until they are answered.** Everything else is settled.
+
+## 0. ⛔ THE TWO QUESTIONS
+
+### Q1. "Offline towns can be attacked" — banked PRESSURE, or a real ABSENTIA RESOLVER?
+
+⭐ **The shipped design already does something, and it may already be what you meant.** `SiegeScheduler.cs:20-31` states the design call verbatim: *"ApplyOfflineWindow does **NOT** resolve battles. It converts the away window into siege **PRESSURE**, and the siege then happens **LIVE, at the gate, with the player watching**."* Its reasoning: resolving in absentia under the interim would write a report whose rows and losses are both empty — *"a record that says nothing happened, which is worse than no record."*
+
+- **(a) Banked pressure = ALREADY BUILT.** Away time produces **the attack you come home to**. Nothing is taken while you are gone. `SiegeScheduler` is already an `IOfflineClaimConsumer` with a **24 h cap** and `_maxPendingSieges = 1` (*"coming home to a queue of five assaults is a punishment for playing"*).
+- **(b) True absentia resolution = WO-430-F, explicitly UNBUILT and explicitly FORBIDDEN.** `DefenseReport.cs:89-92`: *"Nothing produces this yet, and **nothing should until the stakes are ruled**."*
+
+⚠ **This ticket's own acceptance line — *"an offline attack can damage a gate and steal a bounded amount of basic resources"* — CANNOT be satisfied by (a)**, because under banked pressure nothing is taken while away.
+
+⭐ **RECOMMEND (a):** it is shipped, honest, needs no combat sim, and keeps `WaveManager` the single spawn authority. The acceptance line should then be rewritten to *"away time produces a harder homecoming."*
+
+### Q2. Four spawn SIDES, or four damageable GATES?
+
+⛔ **The live hub contains NO `Gate` objects.** `CastleHubBuilder` builds four cardinal **openings** — nav strips and masonry — and **never** calls `AddComponent<Gate>()` (verified: the only production site is `StructureFactory.cs:1133`, driven by the **player-buildable** `gate_stone` row). `CastleDefensePlansService.cs:270` says it plainly: *"The merged hub has no Gate objects."*
+
+- **Sides** work today, at zero structural cost.
+- **Damageable gates at four cardinal points is a HUB-LAYOUT change** — ⚠ and `CastleHubBuilder` / `VillageSceneBuilder` is the **serialization bottleneck lane** (§9): one agent at a time, and it is not this ticket's lane.
+
+⭐ **RECOMMEND: sides now, gates later.** "Losing a gate" already has an object to happen to **if the player built one** — which is the more interesting version anyway: defences you chose to build are defences you care about losing.
+
+## 1. ⭐ The escalation IS the work. There is no tuning value for two gates.
+
+`SmartEnemySpawner.SpawnWave` (`:79`) hard-collapses to ONE gate: `WaveSpawnPoint gate = PickGate(spawnPoints, waveId);` (`:102`), where **`PickGate` is `private static`** (`:346`) and returns a **single** marker — `slot = (waveId-1) % gateCount`, rotating N→E→S→W across waves. Everything downstream (origin, heading, lateral fan-out, the completion log) derives from that one marker.
+
+**Four things a multi-gate split must resolve:**
+
+1. **Lift gate selection to the caller.** `PickGate` must stop being private-and-single: either `SpawnWave` takes a gate (or gate-set), or selection moves up. Today the caller cannot influence the gate except through `waveId`.
+2. ⛔ **SPLIT the concurrency budget — do NOT duplicate it.** The cap is `_maxSimultaneousEnemies` via `SmartSpawnBudget()` (`WaveManager.cs:2003`) → `BudgetFor(cap, liveCount)` (`:311`). ⚠ **Calling `SpawnWave` twice hands EACH call the full budget and doubles the field**, silently defeating the WO-1113 cap whose entire purpose was **a phone frame-rate cliff**.
+3. **Reinforcements must remember THEIR gate.** `DrainSmartReinforcements` re-calls `SpawnWave` with the **same `waveId`** (`:2119`), so `PickGate` returns the **same gate**. Under a split, each held remainder needs its own gate or reinforcements trickle back to one side. ⭐ There are exactly **two** `SpawnWave` call sites: `WaveManager.cs:1966` and `:2119`.
+4. **Partition the composition.** `EnemyWaveComposition.Entries` is a flat list; splitting it is arithmetic, but **WHICH roles go to which gate is a design decision this ticket does not make** — and it is the decision that makes two gates *interesting* rather than just *twice as many*.
+
+## 2. Roster — recompute, do not add an accessor
+
+⭐ `WaveCompositionBuilder.Build(waveId, waveHasAuthoredHeavy, catalog, seedSalt)` (`WaveCompositionBuilder.cs:169`) is **`public static` and PURE**, deterministically seeded (`:179`). There is **no public accessor** for the composed roster and **none should be added** — a recomputation is byte-identical to what spawned. ⭐ **`seedSalt` already exists and is the natural per-gate discriminator.** `TryDescribeUpcomingWave` (`WaveManager.cs:3343`) hands out exactly the three arguments `Build` needs.
+
+⛔ `waves.json` `enemies[]` batches are **INERT** — confirmed, and `WaveDataTest.cs:59/:83` **FAILS** on a re-add. ⚠ Three legacy spawn paths still exist behind the smart one (`SpawnComposedFamilyGroups` `:1580`, the flat `SpawnBatch` loop `:1583-1590`, the `WaveEnemyGroup` asset spawner `:1595-1620`) — **do not re-awaken one by accident.**
+
+## 3. The breach hook already exists, and it is a trap as written
+
+⭐ **`Gate.ForceFieldCollapsed` (`Gate.cs:109`) has ZERO subscribers repo-wide** — verified. A live, unused hook.
+
+⛔ **But it is NOT a clean breach signal.** `ApplyForceFieldState` computes `bool up = !_isOpenForHero && IsForceFieldUp` (`:400`), so it **also fires whenever the hero enters a `GateProximityOpener` radius**. ⚠ **A consequence hooked naively fires every time the player walks out of town.** Key on the **HP-fraction edge**, never the combined edge.
+
+⭐ **The right hook for a consequence is `SiegeSession.RecordBreach(Enemy by)`** (`SiegeSession.cs:266`) — `public` precisely so a producer can report a breach without the ring observer, and its own doc names the intended caller: *"or **a real gate-destroyed event**"*.
+
+⛔ **Do NOT hook `WaveManager`'s ring detector**, which WO-1026's plan points at: it sits behind `FeatureFlags.WaveBreachToAtb`, **OFF by default since WO-579** (`WaveManager.cs:2590`). Hooking it records **nothing, forever, silently**. The in-code comment says so, and adds *"(Do not 'simplify' this back.)"*
+
+## 4. Offline — be the FIFTH consumer, never a new clock
+
+`OfflineClaimCoordinator.Claim(reason)` (`:192`) computes **ONE** delta and fans the **identical** `OfflineClaimWindow` to every `IOfflineClaimConsumer`, each `Guard.Try`-wrapped. Four are registered: `OfflineHarvestService` (10 h), `EchoService`, `EchoRepairService` (4 h), and **`SiegeScheduler` (24 h)**.
+
+⭐ **A raid consequence is a fifth consumer, not a new clock.** ⛔ The coordinator applies **no cap for anyone** — each consumer caps its own window.
+
+**Server authority is split, deliberately:** the client clock prefers `ServerClock` (monotonic, so a wall-clock edit cannot move it), and the real authority is the **save-side refusal** `reconcileAccrual` (`api/game/save.js:515`), which clamps a claimed window to server-elapsed time plus grace.
+
+## 5. ⛔ No new theft path, and no damage notification
+
+Both recorded above: the bank-take is **deleted and regression-guarded**, the sanctioned stake is `ResourceCollector.OnSiegeDestroyed` (`RaidLootFraction 0.5`, `_pending` only, **never** the wallet); and there is **no "this took damage" event** — damage is found by a **rescan timer**, and several call sites **self-install a controller at runtime**.
+
+## 6. Instrument first (§12)
+
+Before any behaviour change, one headless hub load must answer what static reading cannot:
+
+- `[CastleSpawnPointInjector] placed N wave spawn points` — ⚠ **are the 20 markers actually present?** The injector **self-suppresses if any `WaveSpawnPoint` already exists.**
+- `[Flow:Enemy] SmartSpawner wave N: … gate='spawn-castle-<dir>-<i>'` — which gate actually served.
+- `[Flow:Wave] wave N: concurrency cap … HOLDING M` — ⭐ **is there budget to divide at all?** If the cap already binds on a late wave, two gates means **half a wave each**, not two waves.
+- Instrument the two edges in `ApplyForceFieldState` **separately**, and read one capture before hanging anything on `ForceFieldCollapsed`.

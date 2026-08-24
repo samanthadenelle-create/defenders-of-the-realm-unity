@@ -212,7 +212,21 @@ hardcoded repo root (§0). **Do not restore a hand-maintained dependency table h
 - No Keep building — removed (DESIGN-DECISIONS.md #3)
 - Hero tag: **`Player`** (one tag per GameObject — locomotion, camera, HUD, triggers all `FindWithTag("Player")`; set in `HeroControlEnsurer.Ensure`, WO-450)
 - Enemy AI finds the hero by **component** (`FindFirstObjectByType<HeroLocomotion>()`), NOT a `HeroTarget` tag — that tag was never declared; a GameObject has only one tag
-- Enemy spawn tags: `SpawnPoint` — placed 12m outside each gate
+- ⛔ **ENEMY SPAWNS RESOLVE BY COMPONENT, NEVER BY TAG. The `SpawnPoint` TAG DOES NOT EXIST**
+  (verified 2026-08-24: `ProjectSettings/TagManager.asset` declares exactly **four** tags — `Tower`,
+  `Building`, `HeartTarget`, `Player`). ⚠ `FindGameObjectsWithTag("SpawnPoint")` **THROWS on an
+  undeclared tag**, and this line previously asserted the tag existed — which is how WO-1038 shipped:
+  `CastleDefensePlansService` read that tag, **every scan died there, and the drop never spawned**
+  (owner F8 seq 2434-2442; RCA recorded in-code at `CastleDefensePlansService.cs:266-274`).
+  The two places that still WRITE the tag wrap it in `try/catch` for exactly this reason
+  (`Editor/CastleHubBuilder.cs:2912`, `Editor/Village2Playable.cs:711`).
+  **The real seam:** `WaveSpawnPoint` (`Village/Waves/WaveSpawnPoint.cs:29`), found by
+  `FindObjectsByType<WaveSpawnPoint>()` (`WaveManager.cs:1209`) — there is **no registry**. Each marker
+  carries `SpawnId`, **`GateIndex` (0 N / 1 E / 2 S / 3 W)**, `Direction`, `GatePosition`,
+  `HeadingToGate`. `CastleSpawnPointInjector` injects **20** at runtime (5 per side x 4 sides), and
+  **skips entirely if any `WaveSpawnPoint` already exists**. ⚠ `FindObjectsByType` is UNORDERED — use
+  `WaveSpawnResolver` for deterministic ordering (it exists because a boss entered from a random side
+  every session).
 - **Home hub scene = `Main_Castle_Overworld`** (MergedWorld ON, one navmesh). ⚠ `MainCastle_Hall.unity`
   still exists on disk as a LEGACY file — it is NOT the hub; that ambiguity keeps re-seeding stale docs.
   `Village.unity` + `OuterWorld.unity` are DELETED from the tree.
@@ -573,7 +587,8 @@ invariant is *the proof must postdate the bytes it claims to prove* — no netwo
 docs-only push passes untouched, because `ServerData/` did not change and the existing proof
 still postdates it. **There is deliberately NO override flag:** every one of the three
 incidents above was a human expected to remember a second command, so a flag would restore
-the exact hole. To clear a real block, run the one sanctioned path — `tools2-ship.ps1`.
+the exact hole. To clear a real block, run the one sanctioned path — `tools
+2-ship.ps1`.
 
 **Why this is written this hard — it has now happened THREE TIMES:**
 - **2026-08-18** — an APK sat ready to install whose enemy bundle had never been uploaded. Caught **by
