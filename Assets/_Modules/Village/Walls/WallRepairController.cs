@@ -693,8 +693,29 @@ namespace DeNelle.Village
             return new CoreCost { wood = 30, iron = 15 };
         }
 
-        /// <summary>True when the wood/iron/food slots are all zero (a free repair).</summary>
-        public static bool MaterialsZero(CoreCost c) => c.wood == 0 && c.food == 0 && c.iron == 0;
+        /// <summary>
+        /// True when EVERY wallet slot is zero — a genuinely free repair.
+        ///
+        /// ⛔ CRYSTALS ARE COUNTED, and that is the whole point of this method. It is not a
+        /// display predicate: <see cref="SpendMaterials"/> and <see cref="CanAffordMaterials"/>
+        /// both EARLY-RETURN TRUE on it, and two Repair-All sweeps skip the spend entirely when
+        /// it holds. While it ignored the crystals slot, a crystals-only cost read as "free" and
+        /// would have been GRANTED WITHOUT SPENDING ANYTHING — affordable regardless of wallet,
+        /// charged nothing, repaired anyway.
+        ///
+        /// That was harmless only for as long as crystals could never appear on a repair. The
+        /// owner ruled on 2026-08-24 that crystals ARE a universal repair currency (WO-947
+        /// amendment, PROD-014), so the day that ruling lands in pricing, this predicate becomes
+        /// a free-repair exploit. Fixed in the SAME pass, deliberately, rather than left as a
+        /// landmine for the pricing change to step on.
+        ///
+        /// ⚠ The spend rail itself was always ready: BuildModeController.ToEconomy maps all
+        /// four slots (<c>new ResourceCost(wood, food, iron, crystals)</c>) and
+        /// EconomyService.CanAfford/TrySpend take crystals. ONLY this zero-check and
+        /// DescribeMaterials were blind to them.
+        /// </summary>
+        public static bool MaterialsZero(CoreCost c)
+            => c.wood == 0 && c.food == 0 && c.iron == 0 && c.crystals == 0;
 
         /// <summary>
         /// Player-facing materials list, e.g. "12 wood, 4 iron" (skips zero slots;
@@ -709,6 +730,11 @@ namespace DeNelle.Village
             if (c.wood > 0) parts.Add(DeNelle.Core.UI.ElarionUi.CompactNumber(c.wood) + " wood");
             if (c.iron > 0) parts.Add(DeNelle.Core.UI.ElarionUi.CompactNumber(c.iron) + " iron");
             if (c.food > 0) parts.Add(DeNelle.Core.UI.ElarionUi.CompactNumber(c.food) + " food");
+            // ⚠ Crystals MUST be listed for the same reason MaterialsZero must count them:
+            // without this line a crystals-only cost renders as "nothing" in the player's own
+            // prompt WHILE BEING CHARGED. A price the UI calls nothing is worse than a wrong
+            // price — the player cannot even dispute it. (PROD-014, owner ruling 2026-08-24.)
+            if (c.crystals > 0) parts.Add(DeNelle.Core.UI.ElarionUi.CompactNumber(c.crystals) + " crystals");
             return parts.Count > 0 ? string.Join(", ", parts) : "nothing";
         }
 
@@ -721,7 +747,9 @@ namespace DeNelle.Village
         {
             public string Name;
             public float DamageFraction;
-            public CoreCost Cost;     // in-kind materials (owner 2026-07-11); crystals slot always 0
+            public CoreCost Cost;     // in-kind materials. ⚠ The "crystals slot always 0" note here was
+                                      // retired 2026-08-24: the owner ruled crystals ARE a universal repair
+                                      // currency (WO-947 amendment, PROD-014). MaterialsZero now counts them.
             public Action Fix;        // the structure's full-restore path (REP-1: RepairFull, not a magnitude)
             public Func<float> FractionNow; // live re-read of the damage fraction (post-fix proof line)
         }
