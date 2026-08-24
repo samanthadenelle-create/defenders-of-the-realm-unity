@@ -139,17 +139,47 @@ into the tickets.** It can proceed:
 
 ---
 
-# BATCH 3 - board tooling (pure `tools/`, zero Unity contention)
+# BATCH 3
 
-| WO | What | Why now |
-|---|---|---|
-| **WO-1180** | The board parser accepts a malformed `**Status:**` and hides the rows its fallback rescues | ⭐ The valuable half is **counting and listing fallback-bucketed rows** - WO-932 was one edit from vanishing because it lived there |
-| **WO-1181** | A status can lead with `FIXED` and say "not done" four words later - **seven rows were green today while admitting they were unfinished** | ⛔ The lint must distinguish **work remaining** from **verification remaining**, or it flags the entire healthy Fixed bucket and gets switched off in a day |
+| WO | What | Silo | Files |
+|---|---|---|---|
+| **WO-1180** | Board parser accepts a malformed `**Status: ...**` and silently rescues rows via substring fallback | Tooling (Python) | `tools/board_build.py` |
+| **WO-1181** | Lint rejecting a `FIXED/DONE/CLOSED` status whose own text asserts work remaining - **7 rows today** | Tooling (Python) | `tools/board_build.py` |
+| **WO-876** | Troop combat VFX: melee on-hit impact, take-hit, death burst, a real Archer projectile instead of instant damage | Combat/AI VFX | `Assets/_Modules/Village/Troops/TroopController.cs` |
+| **WO-1005 tail** | The **last UXML player-facing surface** - rebuild the dungeon crafting modal as code-built Obsidian-kit uGUI | Dungeons/UI | `Dungeons/UI/CraftingPanelController.cs`; retire `CraftingPanel.uxml/.uss` |
 
-⭐ **Both are `tools/board_build.py` only** - no Unity, no gate, no lock, and they can run alongside
-everything else. Both carry **induce-the-failure-and-watch-it-fire** acceptance.
+⛔ **WO-1180 + WO-1181 are ONE lane, ONE seat, sequential, 1180 first.** They read as independent
+tickets and **rewrite the same file**; 1181's spec explicitly builds on 1180's fallback path.
 
-⚠ **They touch the SAME FILE**, so they are ONE lane, not two - same seat, sequential, 1180 first.
+⚠ **WO-876's cited line numbers are STALE** - the file is 799 lines and was restructured by WO-935's
+`CombatCast`. Tell Codex the citations are historical and to **report the mismatch** rather than
+hunt for them. Every hook it reuses does exist verbatim (`VfxPool.SpawnHitImpact`,
+`VFXManager.Play(Impact_*)`, `ProjectileVFXCatalog.SpawnFlying`), so it is a **mapping job with no
+creative VFX pick** - which matters, because VFX key selection is the owner's.
+
+⚠ **WO-1005's remaining slice is one sentence, not a spec section.** Add before handing out: the
+pattern is commit `7c103775a` (the lantern-oil rebuild - self-builds its own Canvas at runtime and
+tolerates the legacy `UIDocument` seat), and the constraint is **keep the `DungeonCraftVM` MVVM seam;
+the View reads no game state**. Without that it fails test 1. ⛔ **No scene or prefab work.**
+
+## ⛔ COLLISION FOUND INSIDE BATCH 1 - already handed out
+
+**WO-1069 and WO-1177 both edit `api/_lib/purchase-catalog.js`**, and both disturb
+`test/purchases.quote.test.js`. 1069 changes `USD_ANCHORS['hearth-spark']` (`:84`) 1.99 -> 4.99;
+1177 rewrites the `USD_ANCHORS` block (`:83-114`) and adds the eligibility check at `:414`.
+
+⭐ **Safe IF and ONLY IF one seat takes both, sequentially.** Split across two seats, the second
+merges onto a moved anchor table and a moved test. ⚠ I handed these out together without catching
+it - **confirm the seat before the handbacks land.**
+
+## Other collisions worth knowing
+
+- **WO-827 is in batch 2 (implementation) AND the RCA lane** (*"is realm travel wired, or is the shell
+  still a stub?"*). Read-only, so no file conflict - but ⚠ **a lane may be building what the RCA lane
+  is about to declare already shipped.** Run the RCA first.
+- **Latent:** WO-914 edits `hud-areas.json`; WO-1171 §4 must give connect/disconnect a home on a HUD
+  surface. If §4's answer is a new widget row, that is the same file. ⚠ **§4 is also the thinnest
+  spec in batch 2** - it names no screen, only *"a real settings screen"*.
 
 ---
 
