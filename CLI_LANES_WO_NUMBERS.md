@@ -129,7 +129,12 @@
 > fine as history. A copied number is the bug **even when it was right the day it was written** -
 > that is exactly how the retired 860-899 UI block kept re-seeding collisions from CLAUDE.md sec.2.
 
-> ## ⚠ RECONCILED 2026-08-24 (CLI): main line next free = **1170**.
+> ## ⚠ RECONCILED 2026-08-24 (CLI): main line next free = **1171**.
+> *(CLI seat minted **WO-1170** and bumped 1170 -> 1171 in this SAME edit. **1170** = JSON IS THE
+> ONLY SOURCE - retire every hand-mirrored C# fallback table; codegen or delete, never hand-keep.
+> Owner ruling: "we need to not have anything pulled other than from json".)*
+>
+> ### superseded: RECONCILED 2026-08-24 (CLI): main line next free = **1170**.
 > *(CLI seat minted **WO-1169** and bumped 1169 -> 1170 in this SAME edit. **1169** = THE COMMAND
 > CENTER - transaction log / troubleshoot / tickets / promos. Finding: the MONEY tables
 > purchase_quotes + purchase_entitlements are invisible to BOTH admin surfaces.)*
