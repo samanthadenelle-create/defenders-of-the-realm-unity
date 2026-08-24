@@ -120,6 +120,27 @@ This blocks no code and no build. Raising the threshold changes **no address and
 Surfaced to the owner 2026-08-23; it is hers to rule, and it is the one thing standing between
 "tested on device" and "public sales".
 
+
+### ⭐ PROPOSED, NOT DONE — make the ship chain COMPUTE the threshold (owner call)
+
+The 2026-08-24 sweep found the threshold cached in **nine** files while the chain said something
+else for a day. The nine are corrected, but correcting copies does not stop the next copy. **The
+structural fix is the §16 lesson applied here: call the one file, do not restate it.**
+
+`tools/r2-ship.ps1` already proves this shape works for bundles. The equivalent would be a
+`treasury-verify.mjs <vault> --multisig <ms>` call in the ship chain, marker-judged on
+`TREASURY_VERIFY_OK`, so a build that reaches a device has *computed* the threshold rather than
+trusted a sentence.
+
+⚠ **THE TRADEOFF IS REAL AND IT IS THE OWNER'S CALL:** this puts a **mainnet RPC round-trip on the
+ship path**. Public RPC is rate-limited and occasionally down, so a green build could be blocked by
+someone else's outage. Options: (a) block, like R2 parity; (b) `-WarnOnly`, like the sideload path;
+(c) leave it manual and re-run the verifier at each go-live decision. **Not wired either way** —
+adding a network dependency to the ship chain is not a change to make unilaterally.
+
+⛔ Whatever is chosen: **always pass `--multisig`.** Without it the tool returns
+`TREASURY_VERIFY_OK` having read no threshold at all — a green that proves the vault, not its safety.
+
 ## 6. What still needs the owner's hands (felt-test)
 
 1. **The quote matches** — the SKR figure on the pack card must be the SKR figure the wallet
