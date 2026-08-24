@@ -66,7 +66,24 @@ test('mainnet canary contract is exact, owner-only, and fail-closed', () => {
         process.env.SOLANA_MAINNET_PURCHASE_RECIPIENT_ATA = recipientAta;
         assert.equal(walletAllowed('mainnet-beta', MAINNET_CANARY_SKU, MAINNET_CANARY_OWNER), true);
         assert.equal(walletAllowed('mainnet-beta', MAINNET_CANARY_SKU, wallet), false);
-        assert.equal(walletAllowed('mainnet-beta', 'hearth-spark', MAINNET_CANARY_OWNER), false);
+        // RE-POINTED 2026-08-23 (WO-1159 phase 2), not softened. This line used to assert
+        // that the OWNER could not buy a real SKU on mainnet — i.e. that mainnet was
+        // canary-only. The owner widened that deliberately: her wallet may buy any sold
+        // SKU on mainnet, because the published store build is still on the old Devnet
+        // client and every payout resolves to her own treasury.
+        assert.equal(walletAllowed('mainnet-beta', 'hearth-spark', MAINNET_CANARY_OWNER), true);
+        // ⛔ AND THE GUARD THAT MATTERS IS KEPT AND MADE EXPLICIT: a real SKU on mainnet
+        // is still REFUSED for anyone who is not the owner until MAINNET_SALES_ENABLED is
+        // switched on. Absent env == closed. If this ever goes green with the env unset,
+        // public mainnet sales have been opened by accident.
+        delete process.env.MAINNET_SALES_ENABLED;
+        assert.equal(walletAllowed('mainnet-beta', 'hearth-spark', wallet), false);
+        process.env.MAINNET_SALES_ENABLED = 'true';
+        assert.equal(walletAllowed('mainnet-beta', 'hearth-spark', wallet), true);
+        delete process.env.MAINNET_SALES_ENABLED;
+        // The canary's own gate is UNCHANGED by the sales switch — it is a proof-of-rail,
+        // not a sale, and widening sales must never widen it.
+        assert.equal(walletAllowed('mainnet-beta', MAINNET_CANARY_SKU, wallet), false);
         assert.deepEqual(purchaseContract('mainnet-beta', MAINNET_CANARY_SKU), {
             network: 'mainnet-beta', sku: MAINNET_CANARY_SKU, currency: 'SKR',
             amountBaseUnits: 1_000_000, decimals: 6, mint: MAINNET_SKR_MINT,
