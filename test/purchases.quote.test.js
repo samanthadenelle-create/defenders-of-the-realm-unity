@@ -78,15 +78,67 @@ async function readChain(result, contract) {
 // ─────────────────────────────────────────────────────────────────────────────
 //  The USD ladder is the ONE authored number, and it must mirror the client
 // ─────────────────────────────────────────────────────────────────────────────
-test('server USD anchors mirror the canonical client packs.json exactly', () => {
-    const streamPath = path.join(__dirname, '..', 'Assets', 'StreamingAssets', 'Data', 'Canonical', 'packs.json');
-    const packs = JSON.parse(fs.readFileSync(streamPath, 'utf8')).packs;
-    const clientSkus = packs.map(p => p.sku).sort();
+// ⛔ THE MIRROR HAS TWO CLIENT SOURCE FILES, NOT ONE — WO-1165 §2, 2026-08-24.
+// This case read packs.json alone, and its deepEqual made that omission ACTIVELY
+// HOSTILE: the two Monthly Ledger cards were authored in battle_monthly.json with
+// real `pricing.usd` and 30 days of grants each, and any attempt to give them a
+// server anchor would have FAILED this test for being "extra". So the one check
+// that exists to catch a missing price was the thing keeping two SKUs unbuyable.
+// Every canonical file that authors a sellable `pricing.usd` belongs below.
+const CANONICAL_SKU_SOURCES = [
+    { file: 'packs.json', list: doc => doc.packs },
+    { file: 'battle_monthly.json', list: doc => doc.monthlyCards },
+];
+
+function canonicalDir(root) {
+    return path.join(__dirname, '..', 'Assets', root, 'Data', 'Canonical');
+}
+
+/** Every sellable client SKU, as {sku, usd, file}, read off the canonical mirror. */
+function canonicalSellableSkus() {
+    const rows = [];
+    for (const source of CANONICAL_SKU_SOURCES) {
+        // The twins must be byte-identical before either is trusted as canon.
+        const streamText = fs.readFileSync(path.join(canonicalDir('StreamingAssets'), source.file), 'utf8');
+        const resourceText = fs.readFileSync(path.join(canonicalDir('Resources'), source.file), 'utf8');
+        assert.equal(resourceText, streamText, `${source.file}: canonical mirrors differ`);
+        const list = source.list(JSON.parse(streamText));
+        assert.ok(Array.isArray(list) && list.length, `${source.file}: no sellable rows found`);
+        for (const row of list)
+            rows.push({ sku: row.sku, usd: row.pricing && row.pricing.usd, file: source.file });
+    }
+    return rows;
+}
+
+test('server USD anchors mirror EVERY canonical client price file exactly', () => {
+    const rows = canonicalSellableSkus();
+    const clientSkus = rows.map(r => r.sku).sort();
     const serverSkus = Object.keys(catalog.USD_ANCHORS).sort();
-    assert.deepEqual(serverSkus, clientSkus, 'the server ladder and packs.json list different SKUs');
-    for (const pack of packs)
-        assert.equal(catalog.USD_ANCHORS[pack.sku], pack.pricing.usd,
-            `${pack.sku}: server USD anchor differs from the client's`);
+    assert.deepEqual(serverSkus, clientSkus,
+        'the server ladder and the canonical client files list different SKUs');
+    for (const row of rows) {
+        assert.equal(typeof row.usd, 'number', `${row.sku} (${row.file}) has no canonical USD price`);
+        assert.equal(catalog.USD_ANCHORS[row.sku], row.usd,
+            `${row.sku} (${row.file}): server USD anchor differs from the client's`);
+    }
+});
+
+// A named case for the two SKUs the mirror was blind to, so a future edit that
+// drops them fails on a line that says WHY, not just "different SKUs".
+test('the Monthly Ledger cards are quotable — 60 authored reward days need a price', () => {
+    const cards = JSON.parse(fs.readFileSync(
+        path.join(canonicalDir('StreamingAssets'), 'battle_monthly.json'), 'utf8')).monthlyCards;
+    assert.deepEqual(cards.map(c => c.sku), ['monthly-wayfarer', 'monthly-keeper']);
+    for (const card of cards) {
+        assert.equal(catalog.usdAnchor(card.sku), card.pricing.usd,
+            `${card.sku}: no server anchor means usdAnchor() -> null -> no quote -> unbuyable`);
+        assert.ok(catalog.quotableSkus('devnet').includes(card.sku), `${card.sku} is not quotable on devnet`);
+        assert.ok(catalog.quotableSkus('mainnet-beta').includes(card.sku), `${card.sku} is not quotable on mainnet`);
+        assert.equal(catalog.isPinnedSku('devnet', card.sku), false, `${card.sku} must not be a pinned canary`);
+        assert.equal(catalog.isPinnedSku('mainnet-beta', card.sku), false, `${card.sku} must not be a pinned canary`);
+        assert.equal(card.durationDays, 30, `${card.sku}: the 30-claim pool is the cap-safe drip (WO-1165 §3)`);
+        assert.equal(card.dailyTable.length, 30, `${card.sku}: authored day count drifted from the pool size`);
+    }
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
