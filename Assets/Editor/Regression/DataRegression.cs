@@ -444,6 +444,12 @@ namespace DeNelle.Editor
             if (!OverworldCombatGateRegression.Run(out var owCombatReason)) failures.Add(owCombatReason); else log.AppendLine("[overworld-combat-gate] " + owCombatReason);
             // --- destroyed-structure owner ruling (repair no-op + exclusion predicates; play-mode remove is note-only) ---
             if (!DestroyedStructureRegression.Run(out var destroyedStructReason)) failures.Add(destroyedStructReason); else log.AppendLine("[destroyed-structure] " + destroyedStructReason);
+            // --- Village->HUD REPAIR REFLECTION CONTRACT (2026-08-24): the bridge binds
+            //     ShowRepairPrompt/HideRepairPrompt/ShowRepairFeedback + the two command events
+            //     by NAME across the asmdef gap, so nothing compiles the seam. It drifted, the
+            //     prompt became a silent no-op, and a selected structure said "Repair?" with no
+            //     way to confirm. This is the only automated detector that seam has. ---
+            if (!RepairHudContractRegression.Run(out var repairHudReason)) failures.Add(repairHudReason); else log.AppendLine("[repair-hud-contract] " + repairHudReason);
             if (!OrcRigBindingAudit.Run(out var orcBindingReason)) failures.Add(orcBindingReason); else log.AppendLine("[orc-binding] " + orcBindingReason);
             if (!HeroLocomotionClipRegression.Run(out var heroLocoClipReason)) failures.Add(heroLocoClipReason); else log.AppendLine("[hero-loco-clips] " + heroLocoClipReason);
             // --- UI-Obsidian conformance (style-everything-obsidian LAW): flags NEW hand-rolled uGUI vs baseline debt ---

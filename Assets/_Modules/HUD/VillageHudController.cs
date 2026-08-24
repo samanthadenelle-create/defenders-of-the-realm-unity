@@ -143,8 +143,39 @@ namespace DeNelle.HUD
             if (_kit != null) _kit.ShowRepairToast(wallLabel, damagePercent);
         }
 
-        /// <summary>Repair prompt dismiss — the toast self-expires; nothing to hide.</summary>
-        public void HideRepairPrompt() { }
+        /// <summary>
+        /// Repair prompt — THE SIGNATURE <see cref="DeNelle.Village.WallRepairHudBridge"/>
+        /// ACTUALLY LOOKS UP: <c>ShowRepairPrompt(string,int,bool)</c>.
+        ///
+        /// <para>⛔ DO NOT "TIDY" THIS AWAY as a duplicate of the (string,float) overload above.
+        /// The bridge resolves it with <c>GetMethod(name, ..., new[]{string,int,bool}, null)</c> —
+        /// an EXACT-types lookup across the Village/HUD asmdef gap. Only the (string,float) form
+        /// existed, so the lookup returned null and the prompt was a silent no-op: the owner's
+        /// 2026-08-24 felt-test saw the world marker read "Repair?" with no way to act on it.
+        /// Proof line, device log 2026-08-20-equip.log:4580831 — "[WallRepairHudBridge] One or
+        /// more HUD repair-prompt methods were not found on 'DeNelle.HUD.VillageHudController'".
+        /// Pinned by RepairHudContractRegression; change either side and that suite fails.</para>
+        ///
+        /// <para><paramref name="crystalCost"/> is LEGACY and always 0 (crystals are no longer
+        /// spent on repair, owner 2026-07-11) — the real cost travels inside
+        /// <paramref name="subtitle"/>, which the HUD shows verbatim.</para>
+        /// </summary>
+        public void ShowRepairPrompt(string subtitle, int crystalCost, bool affordable)
+        {
+            if (_kit != null) _kit.ShowRepairPrompt(subtitle, affordable);
+        }
+
+        /// <summary>Repair result / refusal message (bridge contract: ShowRepairFeedback(string,bool)).</summary>
+        public void ShowRepairFeedback(string message, bool isError)
+        {
+            if (_kit != null) _kit.ShowRepairFeedback(message, isError);
+        }
+
+        /// <summary>Repair prompt dismiss — the prompt is persistent, so this really does close it.</summary>
+        public void HideRepairPrompt()
+        {
+            if (_kit != null) _kit.HideRepairPrompt();
+        }
 
         /// <summary>Wave-clear banner push — shared toast (kills the old :2670 no-op).</summary>
         public void ShowWaveClearBanner(int waveNumber, int enemiesDefeated, string flavourLine)

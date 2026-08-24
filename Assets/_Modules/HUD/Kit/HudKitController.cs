@@ -275,6 +275,106 @@ namespace DeNelle.HUD.Kit
                 });
         }
 
+        // =====================================================================
+        //  REPAIR PROMPT — the ACTIONABLE surface (WallRepairHudBridge contract)
+        // ---------------------------------------------------------------------
+        //  WO/F8 2026-08-24 ("Purple shader says repair but no option to repair").
+        //  The owner selected a damaged structure, the world marker turned violet
+        //  and its label read "Repair?" (RepairHighlight.ApplyColor), and NOTHING
+        //  actionable appeared. Root cause, from the DEVICE log (not inference —
+        //  Logs/device/2026-08-20-equip.log:4580831, repeated on every Bind()):
+        //
+        //    W/Unity: [WallRepairHudBridge] One or more HUD repair-prompt methods
+        //             were not found on 'DeNelle.HUD.VillageHudController'.
+        //
+        //  WallRepairHudBridge.ResolveHudHandles looks the HUD up BY REFLECTION
+        //  (the Village asmdef may not reference DeNelle.HUD) for exactly:
+        //      ShowRepairPrompt(string,int,bool) / HideRepairPrompt() /
+        //      ShowRepairFeedback(string,bool)
+        //  The HUD only ever had ShowRepairPrompt(string,FLOAT) and NO
+        //  ShowRepairFeedback at all, so GetMethod returned null for two of the
+        //  three, OnPromptShown's `_hudShowPrompt?.Invoke(...)` was a silent NO-OP,
+        //  and the selection could never be confirmed. A reflection seam with no
+        //  compile-time check and no test drifted, and the ONLY detector left was
+        //  the owner's eyes — pinned now by RepairHudContractRegression.
+        //
+        //  This is a PROMPT, not a toast: it does NOT self-expire. A prompt that
+        //  timed out would leave the marker selected with nothing to press again,
+        //  which is the reported symptom returning on a delay. It closes only on
+        //  Repair, on Cancel, or on HideRepairPrompt (PromptHidden).
+        // =====================================================================
+
+        private GameObject _repairPromptCard;
+
+        /// <summary>
+        /// Shows the repair prompt for the currently-selected structure.
+        /// <paramref name="subtitle"/> is the fully-composed line the controller
+        /// hands over verbatim (e.g. "Repair the North Gate? Cost: 12 wood, 4 iron")
+        /// — the materials cost travels IN the text, so the HUD never prices anything.
+        /// When <paramref name="affordable"/> is false the Repair button is present but
+        /// NOT interactable, so the player can read the price they cannot yet meet
+        /// instead of the prompt silently vanishing.
+        /// </summary>
+        public void ShowRepairPrompt(string subtitle, bool affordable)
+        {
+            HideRepairPrompt();
+
+            var mount = _host != null ? _host.Mount(HudArea.Feedback) : null;
+            if (mount == null)
+            {
+                FlowTrace.Fail("HudKit",
+                    "repair prompt NOT shown: HudArea.Feedback mount is null — the selected " +
+                    "structure has no way to be confirmed. subtitle='" + (subtitle ?? "") + "'");
+                return;
+            }
+
+            var parts = ElarionUiKit.ToastCard(mount,
+                affordable ? ElarionUiKit.ToastTone.Gold : ElarionUiKit.ToastTone.Danger,
+                accentLeft: true, align: TextAnchor.MiddleLeft);
+            var rt = (RectTransform)parts.card.transform;
+            rt.anchorMin = new Vector2(0.22f, 0.80f);
+            rt.anchorMax = new Vector2(0.78f, 0.92f);
+            rt.offsetMin = Vector2.zero; rt.offsetMax = Vector2.zero;
+            parts.label.text = subtitle ?? "";
+
+            var repairBtn = ElarionUiKit.BuildObsidianButton(parts.card.transform, "Repair",
+                ElarionUiKit.ObsidianButtonStyle.Style2, ElarionUiKit.ObsidianButtonColor.Green,
+                new Vector2(0.58f, 0.12f), new Vector2(0.77f, 0.88f), () =>
+                {
+                    if (_owner != null) _owner.RepairConfirmRequested?.Invoke();
+                    HideRepairPrompt();
+                });
+            if (repairBtn != null) repairBtn.interactable = affordable;
+
+            ElarionUiKit.BuildObsidianButton(parts.card.transform, "Cancel",
+                ElarionUiKit.ObsidianButtonStyle.Style2, ElarionUiKit.ObsidianButtonColor.Gray,
+                new Vector2(0.79f, 0.12f), new Vector2(0.97f, 0.88f), () =>
+                {
+                    if (_owner != null) _owner.RepairCancelRequested?.Invoke();
+                    HideRepairPrompt();
+                });
+
+            _repairPromptCard = parts.card;
+            FlowTrace.Step("HudKit",
+                "repair prompt SHOWN (affordable=" + affordable + "): " + (subtitle ?? ""));
+        }
+
+        /// <summary>Dismisses the repair prompt (PromptHidden / confirm / cancel).</summary>
+        public void HideRepairPrompt()
+        {
+            if (_repairPromptCard == null) return;
+            Destroy(_repairPromptCard);
+            _repairPromptCard = null;
+            FlowTrace.Step("HudKit", "repair prompt hidden");
+        }
+
+        /// <summary>Repair result / refusal message (WallRepairController.FeedbackShown).</summary>
+        public void ShowRepairFeedback(string message, bool isError)
+        {
+            ShowToast(isError ? ElarionUiKit.ToastTone.Danger : ElarionUiKit.ToastTone.Confirm,
+                      message ?? "");
+        }
+
         /// <summary>Wave-clear push adapter — routes the old no-op banner through the shared toast.</summary>
         public void ShowWaveClearToast(int waveNumber, int enemiesDefeated, string flavourLine)
         {

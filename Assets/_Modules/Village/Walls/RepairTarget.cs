@@ -270,14 +270,58 @@ namespace DeNelle.Village
             bounds = new Bounds();
             if (GameObject == null) return false;
 
+            // ⛔ INCLUDE ONLY WHAT THE PLAYER CAN SEE (fixed 2026-08-24, owner felt-test: the repair
+            // marker rendered as a ~20 m slab over a ~3 m hut). This used to encapsulate EVERY
+            // renderer in the hierarchy, which pulled in two things that are not the building:
+            //
+            //   1. VFX CHILDREN. Measured on device: an aura child reports boundsSize 12.5 m
+            //      ([Hovl_Cathedral_Aura], Logs/device/enemy-color.log). Extents 6.25 -> the
+            //      caller's 6.25*1.35+0.6 = 9.04 pins its 9 m clamp, so the marker stops being
+            //      fitted to anything and is simply always maximum size.
+            //   2. THE HIDDEN BAKED MESH. HubStructureVisualInjector.SkinStorefront hides the baked
+            //      model with `r.enabled = false`, NOT SetActive(false) — so the renderer is still
+            //      RETURNED by GetComponentsInChildren and its bounds still inflate the box, even
+            //      though nothing is drawn.
+            //
+            // ⚠ `enabled` is the exact property that distinguishes them, which is why filtering on
+            // it is the fix rather than a name/tag heuristic: a disabled renderer draws nothing, so
+            // it cannot be part of what the player sees us circling.
+            //
+            // ParticleSystemRenderer is excluded by TYPE: a particle system's bounds describe where
+            // its particles may TRAVEL, not where the structure IS, so it is never a size input.
             var renderers = GameObject.GetComponentsInChildren<Renderer>();
             bool any = false;
+            int skippedDisabled = 0, skippedParticles = 0;
             foreach (var r in renderers)
             {
                 if (r == null) continue;
+                if (!r.enabled) { skippedDisabled++; continue; }
+                if (r is ParticleSystemRenderer) { skippedParticles++; continue; }
                 if (!any) { bounds = r.bounds; any = true; }
                 else bounds.Encapsulate(r.bounds);
             }
+
+            // ⚠ FALL BACK RATHER THAN RETURN NOTHING. If every renderer was filtered out, the old
+            // all-inclusive box is still a better answer than "no bounds" (which drops the caller to
+            // a blind radius of 2). Say so — a silent widening is how this became invisible.
+            if (!any && renderers.Length > 0)
+            {
+                foreach (var r in renderers)
+                {
+                    if (r == null) continue;
+                    if (!any) { bounds = r.bounds; any = true; }
+                    else bounds.Encapsulate(r.bounds);
+                }
+                if (any)
+                    FlowTrace.Warn("Repair", $"TryGetWorldBounds('{DisplayName}'): every renderer was disabled or " +
+                                             "a particle system - falling back to the UNFILTERED bounds, so " +
+                                             "the marker may read oversized.");
+            }
+
+            if (any && (skippedDisabled > 0 || skippedParticles > 0))
+                FlowTrace.Step("Repair", $"TryGetWorldBounds('{DisplayName}'): size={bounds.size.x:0.0}x{bounds.size.z:0.0}m " +
+                                         $"from {renderers.Length - skippedDisabled - skippedParticles} visible renderer(s) " +
+                                         $"(skipped {skippedDisabled} disabled, {skippedParticles} particle).");
             return any;
         }
 

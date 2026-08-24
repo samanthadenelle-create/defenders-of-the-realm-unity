@@ -196,9 +196,32 @@ namespace DeNelle.Village
             _hudConfirmEvent = ReadUnityEvent(t, "RepairConfirmRequested");
             _hudCancelEvent = ReadUnityEvent(t, "RepairCancelRequested");
 
+            // §12 INSTRUMENTATION. The old line said only "one or more methods were not found",
+            // which is why this shipped broken for so long: it never said WHICH, so nobody could
+            // tell a stale HUD module from a drifted SIGNATURE. Two of the three had drifted —
+            // ShowRepairPrompt existed as (string,float), and ShowRepairFeedback did not exist at
+            // all — and the resulting `_hudShowPrompt?.Invoke(...)` no-op made the repair prompt
+            // unreachable while the world marker still said "Repair?" (owner felt-test 2026-08-24).
+            // Name each miss explicitly, and FAIL (not Warn): an unreachable repair loop is a hard
+            // break in the flow, not an anomaly to note.
             if (_hudShowPrompt == null || _hudHidePrompt == null || _hudShowFeedback == null)
-                Debug.LogWarning("[WallRepairHudBridge] One or more HUD repair-prompt methods were " +
-                                 $"not found on '{t.FullName}'. Is the HUD module up to date?");
+            {
+                string missing =
+                    (_hudShowPrompt == null ? "ShowRepairPrompt(string,int,bool) " : "") +
+                    (_hudHidePrompt == null ? "HideRepairPrompt() " : "") +
+                    (_hudShowFeedback == null ? "ShowRepairFeedback(string,bool) " : "");
+                DeNelle.Core.Diagnostics.FlowTrace.Fail("Repair",
+                    $"HUD repair contract BROKEN on '{t.FullName}' - MISSING: {missing.TrimEnd()}. " +
+                    "The repair prompt cannot reach the HUD, so a selected structure shows the " +
+                    "'Repair?' marker with NO way to confirm. Fix the HUD signature (see " +
+                    "RepairHudContractRegression), never the symptom.");
+            }
+            else
+            {
+                DeNelle.Core.Diagnostics.FlowTrace.Step("Repair",
+                    $"HUD repair contract resolved on '{t.FullName}' (prompt/hide/feedback + " +
+                    $"confirm={( _hudConfirmEvent != null)} cancel={(_hudCancelEvent != null)}).");
+            }
         }
 
         /// <summary>

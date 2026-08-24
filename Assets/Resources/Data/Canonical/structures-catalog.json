@@ -1175,6 +1175,8 @@
    "kind": "Cell",
    "visualPrefabPath": "Structures/IronMine",
    "repo": {
+   "_singletonNote": "⛔ ADDED 2026-08-24. Every OTHER producer is a singleton - collector_lumbermill and collector_farm both carry singleton:true - and this row did not, so the palette offered a SECOND Iron Mine (at full cost) with one already standing. Found by the owner in play, minutes after the unlock. ⚠ THE MISS IS INSTRUCTIVE: this row was unlocked and renamed the same day (Forge -> Iron Mine, WO-1168 step 1) and its role, its art, its portrait and its lock state were all checked - but not whether it MATCHED ITS SIBLINGS. A row being edited is exactly when it should be compared against the rows it is supposed to behave like.",
+   "singleton": true,
     "behaviorId": "ResourceCollector",
     "collectorBuildingId": "forge",
     "satisfiedByStructureIds": [

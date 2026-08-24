@@ -14,6 +14,7 @@
 // Module isolation: DeNelle.Village only; no other-module / HUD coupling.
 // =============================================================================
 
+using DeNelle.Core.Diagnostics;   // FlowTrace - names which shader fallback resolved
 using UnityEngine;
 
 namespace DeNelle.Village
@@ -170,10 +171,40 @@ namespace DeNelle.Village
                 return null;
             }
             var mat = new Material(shader) { name = "RepairHighlightMat" };
-            // Best-effort transparency setup — harmless if a property is absent.
-            if (mat.HasProperty("_Surface")) mat.SetFloat("_Surface", 1f); // transparent
-            if (mat.HasProperty("_Blend")) mat.SetFloat("_Blend", 0f);
+
+            // ⛔ THE ALPHA WAS NEVER ACTUALLY APPLIED (fixed 2026-08-24). This used to set only
+            // `_Surface` and `_Blend` and then bump renderQueue. Setting `_Surface` AT RUNTIME does
+            // not re-run URP's ShaderGUI, so NO BLEND STATE IS EVER WRITTEN — and `renderQueue`
+            // alone changes sort order, not blending. The marker therefore drew fully OPAQUE
+            // despite its 0.85 alpha, which is why the owner's screenshot shows a solid slab with
+            // no grass texture visible through it (measured interior R-stddev 20.9 vs 51.2 on the
+            // surrounding grass).
+            //
+            // ⚠ EVERY OTHER TRANSPARENCY SITE IN THIS REPO ALREADY WRITES THE FULL SET —
+            // ExteriorTerrainBuilder, LanaUrpMaterialFix, MagentaMaterialFixer, VfxProofCapture and
+            // VillageSceneBuilder.Fortify all set _SrcBlend/_DstBlend/_ZWrite plus the keyword. This
+            // one site was the outlier, which is the tell: a lone "best-effort" variant of something
+            // five other files do completely is usually incomplete, not deliberately minimal.
+            //
+            // ⚠ AND IT MATTERS MORE THAN IT LOOKS: two of the three shader fallbacks above
+            // (Unlit/Color, and the URP/Lit scene-borrow) are OPAQUE BY CONSTRUCTION, so without an
+            // explicit blend state the marker can never be see-through no matter what alpha the
+            // caller sets.
+            mat.SetFloat("_Surface", 1f);                       // 1 = Transparent
+            mat.SetFloat("_Blend", 0f);                         // 0 = Alpha
+            mat.SetInt("_SrcBlend", (int)UnityEngine.Rendering.BlendMode.SrcAlpha);
+            mat.SetInt("_DstBlend", (int)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
+            mat.SetInt("_ZWrite", 0);
+            mat.EnableKeyword("_SURFACE_TYPE_TRANSPARENT");
+            mat.DisableKeyword("_ALPHATEST_ON");
+            mat.DisableKeyword("_ALPHAPREMULTIPLY_ON");
             mat.renderQueue = (int)UnityEngine.Rendering.RenderQueue.Transparent;
+
+            // §12: name the shader that actually resolved. Three fallbacks can land here and they
+            // behave DIFFERENTLY under transparency, so "which one" is the first question any future
+            // look-wrong report needs answered — and it was previously unrecorded.
+            FlowTrace.Step("Repair", $"marker material built on shader '{shader.name}' " +
+                                     "(transparent: SrcAlpha/OneMinusSrcAlpha, ZWrite off).");
             return mat;
         }
 

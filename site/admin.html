@@ -143,7 +143,8 @@ var VIEWS = [
   ['overview',  'Overview'],
   ['retention', 'Retention'],
   ['funnel',    'Tutorial funnel'],
-  ['economy',   'Economy'],
+  ['purchases', 'Money (settled)'],
+  ['economy',   'Economy (client)'],
   ['players',   'Players']
 ];
 
@@ -209,8 +210,12 @@ function card(title, body, note){
 
 // ── fetch ──────────────────────────────────────────────────────────────────
 // The key travels in the X-Admin-Key HEADER, never the URL.
-function api(params){
-  var url = apiBase.replace(/\/+$/,'') + '/api/admin/stats?' + params;
+function api(params){ return apiGet('/api/admin/stats', params); }
+// Same key, same header, either admin endpoint. The Money view needs BOTH
+// (/api/admin/stats for the aggregates, /api/admin/db for the server-computed
+// unfulfilled_minutes) — see renderPurchases.
+function apiGet(path, params){
+  var url = apiBase.replace(/\/+$/,'') + path + '?' + params;
   return fetch(url, { method:'GET', headers:{ 'X-Admin-Key': adminKey } })
     .then(function(r){ return r.json().then(function(j){ return { ok:r.ok, body:j }; }); })
     .then(function(res){
@@ -404,6 +409,251 @@ function renderEconomy(d){
   return h;
 }
 
+// ── Money (SERVER TRUTH) ───────────────────────────────────────────────────
+// TWO endpoints back this single screen, deliberately:
+//   /api/admin/stats?view=purchases  — settled totals, per-SKU, the quote→settle
+//     funnel, and the client-vs-server disagreement probes. Wallets MASKED.
+//   /api/admin/db?view=purchases&state=unfulfilled — the same outstanding rows,
+//     but carrying `unfulfilled_minutes`, which the SERVER computes. That column
+//     is the whole point: "verified 3 minutes ago" is a purchase in flight,
+//     "verified 3 DAYS ago" is a player owed goods. Same status, opposite urgency.
+// ⚠ Only the MINUTES are lifted from db.js, keyed by entitlement_id. Its rows
+//   carry a RAW wallet; the row that actually gets rendered is the masked one
+//   from stats.js, so nothing on this page un-masks an address. tx_signature is
+//   shown whole because it already is a public chain record and it is the exact
+//   string needed to check settlement — it is NOT linked anywhere.
+// ⛔ NO WRITE PATH LIVES HERE. No re-grant button, no refund button. Minting an
+//   entitlement needs its own auth and its own audit row; a button on a
+//   read-only viewer is exactly how that gets skipped.
+function usd(v){
+  if (v == null) return '<span class="none">none</span>';
+  var x = Number(v);
+  return Number.isFinite(x) ? '$' + x.toFixed(2) : esc(v);
+}
+// Age in words. Magnitude is the WORD, never a colour (see the header note).
+function age(mins){
+  var m = Number(mins);
+  if (!Number.isFinite(m)) return '<span class="none">unknown</span>';
+  m = Math.max(0, Math.round(m));
+  if (m < 60) return m + ' min';
+  if (m < 1440) return Math.floor(m / 60) + ' h ' + (m % 60) + ' min';
+  var dd = Math.floor(m / 1440);
+  return dd + (dd === 1 ? ' day ' : ' days ') + Math.floor((m % 1440) / 60) + ' h';
+}
+function renderPurchases(d, side){
+  side = side || {};
+  var sideErr = side.__error || null;
+  var probeErrs = d.errors || [];
+  var unfulfilledProbeFailed = probeErrs.some(function(e){ return e.probe === 'entitlements_unfulfilled'; });
+
+  // server-computed minutes, keyed by entitlement_id
+  var minutesById = {};
+  (side.rows || []).forEach(function(r){
+    if (r && r.entitlement_id != null) minutesById[String(r.entitlement_id)] = r.unfulfilled_minutes;
+  });
+
+  var na = d.needs_attention || {};
+  var rows = (na.rows || []).map(function(r){
+    var m = minutesById[String(r.entitlement_id)];
+    if (m != null && Number.isFinite(Number(m))) { r.__mins = Number(m); r.__minsFromServer = true; }
+    else {
+      // Fallback ONLY if db.js did not answer. Labelled as an estimate rather
+      // than passed off as the server's own number.
+      var t = r.verified_at ? Date.parse(r.verified_at) : NaN;
+      r.__mins = isNaN(t) ? null : Math.round((Date.now() - t) / 60000);
+      r.__minsFromServer = false;
+    }
+    return r;
+  });
+  rows.sort(function(a, b){ return (b.__mins == null ? -1 : b.__mins) - (a.__mins == null ? -1 : a.__mins); });
+
+  var legend = side.legend || {};
+  var legendHtml = '';
+  Object.keys(legend).forEach(function(k){
+    legendHtml += '<div class="s" style="margin-top:4px"><code>' + esc(k) + '</code> &mdash; ' + esc(legend[k]) + '</div>';
+  });
+
+  // ---- ⭐ the list that can cost a real player real money -------------------
+  var body;
+  if (unfulfilledProbeFailed) {
+    body = '<p class="err"><strong>Could not read the outstanding list.</strong> '
+         + 'This is NOT the same as "nothing outstanding" &mdash; the query failed. See Probe errors below.</p>';
+  } else if (!rows.length) {
+    body = '<p><strong>Nothing outstanding.</strong> Every settled purchase on record is marked '
+         + '<code>fulfilled</code> &mdash; no player is waiting on goods they paid for. '
+         + '<span class="chip">list read OK ' + when(d.generated_at) + '</span></p>';
+  } else {
+    body = '<p><strong>' + rows.length + ' settled purchase' + (rows.length === 1 ? '' : 's')
+         + ' with NO confirmed grant.</strong> The money moved; the goods are not recorded as delivered. '
+         + 'Oldest first &mdash; the top row is the most likely to be a player actually owed something.</p>'
+         + table([
+             { label:'Waiting', num:true, get:function(r){
+                 if (r.__mins == null) return '<span class="none">no verified_at</span>';
+                 return '<strong>' + age(r.__mins) + '</strong>'
+                      + (r.__minsFromServer ? '' : ' <span class="chip">browser estimate</span>');
+               } },
+             { label:'Status', get:function(r){ return '<code>' + esc(r.status) + '</code>'
+                 + (r.status === 'verified' ? ' <span class="chip warn">paid, grant unconfirmed</span>' : '')
+                 + (r.status === 'manual_review' ? ' <span class="chip warn">needs a human</span>' : ''); } },
+             { label:'SKU',     get:function(r){ return '<code>' + esc(r.sku) + '</code>'; } },
+             { label:'Value',   num:true, get:function(r){ return usd(r.usd_anchor); } },
+             { label:'Wallet',  get:function(r){ return '<code>' + esc(r.wallet_masked) + '</code>'; } },
+             { label:'Network', get:function(r){ return esc(r.network || '—') + ' <span class="chip">' + esc(r.currency || '—') + '</span>'; } },
+             { label:'Verified', get:function(r){ return when(r.verified_at); } },
+             { label:'Chain transaction', get:function(r){ return '<code>' + esc(r.tx_signature) + '</code>'; } }
+           ], rows)
+         + (legendHtml ? '<div style="margin-top:10px">' + legendHtml + '</div>' : '');
+  }
+  if (sideErr) {
+    body += '<p class="note">The <code>unfulfilled_minutes</code> column comes from '
+          + '<code>/api/admin/db?view=purchases</code>, which did not answer (' + esc(sideErr)
+          + '). Ages shown above are computed in the browser from <code>verified_at</code>.</p>';
+  }
+  var h = card('Paid, grant not confirmed', body,
+      (na.note || '') + ' This screen is READ-ONLY: re-granting is a write and does not live on an '
+      + 'admin viewer. The chain transaction is shown in full because it is already a public record '
+      + 'and it is the exact string needed to confirm settlement.');
+
+  // ---- the two probes that should always read 0 ---------------------------
+  var dis = d.disagreement || {};
+  var orphans = dis.client_events_without_entitlement || [];
+  var mism = side.amount_mismatches;
+  h += card('Should be zero',
+    '<div class="tiles">'
+    + tile('Amount mismatches',
+        mism == null ? '<span class="none">unavailable</span>' : fmt(mism),
+        mism == null
+          ? 'the db endpoint did not answer'
+          : (n(mism) ? '<span class="chip warn">investigate</span> expected &ne; observed on a settled row'
+                     : 'expected = observed on every row, as it must be'))
+    + tile('Client said paid, server has no row', fmt(orphans.length),
+        orphans.length ? '<span class="chip warn">investigate</span> a grant may have gone out with no settlement behind it'
+                       : 'every client purchase has a verified entitlement')
+    + tile('Settled with no client event', fmt(dis.settled_without_client_event),
+        'far less alarming — the client may simply not have reported, or it came in via reconcile')
+    + '</div>'
+    + (orphans.length ? table([
+        { label:'Chain transaction', get:function(r){ return r.tx_signature ? '<code>' + esc(r.tx_signature) + '</code>' : '<span class="none">no txSig sent</span>'; } },
+        { label:'Pack',    get:function(r){ return '<code>' + esc(r.pack_id) + '</code>'; } },
+        { label:'Player',  get:function(r){ return '<code>' + esc(r.player_masked) + '</code>'; } },
+        { label:'Events',  num:true, get:function(r){ return fmt(r.events); } },
+        { label:'Last',    get:function(r){ return when(r.latest); } }
+      ], orphans) : ''),
+    (dis.note || '') + ' A non-zero figure in either of the first two tiles is an alert, not a statistic.');
+
+  // ---- ⭐ quote → settle funnel -------------------------------------------
+  var qf = d.quote_funnel || {};
+  h += card('Quote → settle',
+    '<div class="tiles">'
+    + tile('Quotes issued', fmt(qf.issued), fmt(qf.wallets_quoted) + ' wallets opened the wallet prompt')
+    + tile('Payments verified', fmt(qf.consumed), fmt(qf.wallets_that_paid) + ' wallets paid')
+    + tile('Completed', qf.consumed_pct != null ? qf.consumed_pct + '%' : '<span class="none">no data yet</span>',
+        'of quotes issued' + (qf.low_n ? ' &middot; <span class="chip warn">low n</span>' : ''))
+    + tile('Expired unused', fmt(qf.expired_unconsumed), 'quote issued, payment never verified — 5 minute TTL')
+    + tile('Live right now', fmt(qf.live), 'in flight; last issued ' + when(qf.last_issued_at))
+    + '</div>'
+    + card('By SKU',
+      table([
+        { label:'SKU',      get:function(r){ return '<code>' + esc(r.sku) + '</code>'
+            + (r.low_n ? ' <span class="chip warn">low n</span>' : ''); } },
+        { label:'Network',  get:function(r){ return esc(r.network || '—'); } },
+        { label:'Issued',   num:true, get:function(r){ return fmt(r.issued); } },
+        { label:'Verified', num:true, get:function(r){ return fmt(r.consumed); } },
+        { label:'Completed', get:function(r){ return pctCell(r.consumed_pct, r.issued, r.low_n, true); } },
+        { label:'Expired',  num:true, get:function(r){ return fmt(r.expired_unconsumed); } },
+        { label:'Live',     num:true, get:function(r){ return fmt(r.live); } }
+      ], qf.by_sku))
+    + card('By day',
+      table([
+        { label:'Day',      get:function(r){ return esc(r.day); } },
+        { label:'Issued',   num:true, get:function(r){ return fmt(r.issued); } },
+        { label:'Verified', num:true, get:function(r){ return fmt(r.consumed); } },
+        { label:'Completed', get:function(r){ return pctCell(r.consumed_pct, r.issued, r.low_n, true); } },
+        { label:'Expired',  num:true, get:function(r){ return fmt(r.expired_unconsumed); } }
+      ], qf.per_day)),
+    qf.definition || '');
+
+  // ---- settled money ------------------------------------------------------
+  var s = d.settled || {};
+  h += card('Settled on chain',
+    '<div class="tiles">'
+    + tile('Revenue, all time', usd(s.all_time_usd_anchor), fmt(s.all_time) + ' purchases &middot; ' + fmt(s.all_time_buyers) + ' buyers')
+    + tile('Revenue, window',   usd(s.window_usd_anchor),   fmt(s.window) + ' purchases &middot; ' + fmt(s.window_buyers) + ' buyers')
+    + tile('First settlement',  when(s.first_settled_at), 'latest ' + when(s.last_settled_at))
+    + tile('Rows with no price', fmt(s.rows_without_usd_anchor),
+        n(s.rows_without_usd_anchor) ? '<span class="chip warn">total understates the row count</span>' : 'every settled row carries a price')
+    + '</div>',
+    d.revenue_note || '');
+
+  h += card('By settlement status',
+    table([
+      { label:'Status',  get:function(r){ return '<code>' + esc(r.status) + '</code>'
+          + (r.status === 'verified' ? ' <span class="chip warn">paid, grant unconfirmed</span>' : '')
+          + (r.status === 'manual_review' ? ' <span class="chip warn">needs a human</span>' : ''); } },
+      { label:'Rows',    num:true, get:function(r){ return fmt(r.rows); } },
+      { label:'Wallets', num:true, get:function(r){ return fmt(r.wallets); } },
+      { label:'Value',   num:true, get:function(r){ return usd(r.usd_anchor_total); } },
+      { label:'Latest',  get:function(r){ return when(r.latest); } }
+    ], d.by_status),
+    'The same counts the summary tiles come from, split by the state machine the rail actually writes.');
+
+  h += card('By SKU',
+    table([
+      { label:'SKU',       get:function(r){ return '<code>' + esc(r.sku) + '</code>'; } },
+      { label:'Currency',  get:function(r){ return esc(r.currency || '—') + ' <span class="chip">' + esc(r.network || '—') + '</span>'; } },
+      { label:'Settled',   num:true, get:function(r){ return fmt(r.settled); } },
+      { label:'Buyers',    num:true, get:function(r){ return fmt(r.buyers); } },
+      { label:'Fulfilled', num:true, get:function(r){ return fmt(r.fulfilled); } },
+      { label:'Awaiting grant', num:true, get:function(r){
+          if (!n(r.awaiting_fulfilment)) return '<span class="muted">0</span>';
+          return '<strong>' + fmt(r.awaiting_fulfilment) + '</strong> <span class="chip warn">unconfirmed</span>'; } },
+      { label:'Manual review', num:true, get:function(r){
+          if (!n(r.manual_review)) return '<span class="muted">0</span>';
+          return '<strong>' + fmt(r.manual_review) + '</strong>'; } },
+      { label:'Value',     num:true, get:function(r){ return usd(r.usd_anchor_total)
+          + (n(r.rows_without_usd_anchor) ? ' <span class="chip warn">' + fmt(r.rows_without_usd_anchor) + ' unpriced</span>' : ''); } },
+      { label:'Base units observed', num:true, get:function(r){ return fmt(r.base_units_observed); } },
+      { label:'Latest',    get:function(r){ return when(r.last_settled_at); } }
+    ], d.by_sku),
+    'Base units are raw integers — their decimals live on the quote (6 on mainnet, 9 on devnet), so they are deliberately not converted to a token amount.');
+
+  var maxUsd = 0; (d.per_day || []).forEach(function(r){ maxUsd = Math.max(maxUsd, n(r.usd_anchor_total)); });
+  h += card('Settlements per day',
+    table([
+      { label:'Day',      get:function(r){ return esc(r.day); } },
+      { label:'Settled',  num:true, get:function(r){ return fmt(r.settled); } },
+      { label:'Buyers',   num:true, get:function(r){ return fmt(r.buyers); } },
+      { label:'Value',    num:true, get:function(r){ return usd(r.usd_anchor_total); } },
+      { label:'',         get:function(r){ return bar(r.usd_anchor_total, maxUsd); } }
+    ], d.per_day));
+
+  h += card('Recent settlements',
+    table([
+      { label:'When',   get:function(r){ return when(r.created_at); } },
+      { label:'Status', get:function(r){ return '<code>' + esc(r.status) + '</code>'
+          + (r.fulfilled_at ? '' : ' <span class="chip warn">no grant recorded</span>'); } },
+      { label:'SKU',    get:function(r){ return '<code>' + esc(r.sku) + '</code>'; } },
+      { label:'Value',  num:true, get:function(r){ return usd(r.usd_anchor); } },
+      { label:'Wallet', get:function(r){ return '<code>' + esc(r.wallet_masked) + '</code>'; } },
+      { label:'Expected', num:true, get:function(r){ return fmt(r.expected_lamports); } },
+      { label:'Observed', num:true, get:function(r){ return fmt(r.observed_lamports)
+          + (String(r.expected_lamports) !== String(r.observed_lamports) ? ' <span class="chip warn">mismatch</span>' : ''); } },
+      { label:'Grant confirmed', get:function(r){ return r.fulfilled_at ? when(r.fulfilled_at) : '<span class="none">not yet</span>'; } },
+      { label:'Chain transaction', get:function(r){ return '<code>' + esc(r.tx_signature) + '</code>'; } }
+    ], d.recent_settlements),
+    'Wallets masked to first four and last four characters, as everywhere else. The transaction signature is a public chain record and is shown whole.');
+
+  if (probeErrs.length || sideErr) {
+    h += card('Probe errors',
+      table([
+        { label:'Probe', get:function(r){ return '<code>' + esc(r.probe) + '</code>'; } },
+        { label:'Error', get:function(r){ return esc(r.error); } }
+      ], probeErrs.concat(sideErr ? [{ probe:'api/admin/db?view=purchases', error:sideErr }] : [])),
+      'Each money table is queried independently, so schema drift degrades one section instead of blanking the page. A probe listed here means the section above it is INCOMPLETE, not empty.');
+  }
+  return h;
+}
+
 function renderPlayers(d){
   if (d.found === false) return card('Player', '<p class="none">No match among the 500 most recently active players.</p>');
   if (d.player) {
@@ -465,13 +715,26 @@ function load(extra){
   var out = el('out');
   out.innerHTML = '<section class="card"><p class="muted">Loading ' + esc(view) + '…</p></section>';
   var params = 'view=' + encodeURIComponent(view) + '&days=' + encodeURIComponent(days) + (extra || '');
-  api(params).then(function(d){
+  var main = api(params);
+  var pending = main;
+
+  if (view === 'purchases') {
+    // The Money view also reads api/admin/db, which is where the SERVER-computed
+    // unfulfilled_minutes lives. A failure there must degrade one column and one
+    // tile — never blank the page — so its rejection is folded into a value.
+    var side = apiGet('/api/admin/db', 'view=purchases&state=unfulfilled&limit=100')
+      .catch(function(e){ return { __error: String((e && e.message) || e) }; });
+    pending = Promise.all([main, side]).then(function(r){ r[0].__side = r[1]; return r[0]; });
+  }
+
+  pending.then(function(d){
     var html;
-    if (view === 'overview')       html = renderOverview(d);
-    else if (view === 'retention') html = renderRetention(d);
-    else if (view === 'funnel')    html = renderFunnel(d);
-    else if (view === 'economy')   html = renderEconomy(d);
-    else                           html = renderPlayers(d);
+    if (view === 'overview')        html = renderOverview(d);
+    else if (view === 'retention')  html = renderRetention(d);
+    else if (view === 'funnel')     html = renderFunnel(d);
+    else if (view === 'purchases')  html = renderPurchases(d, d.__side);
+    else if (view === 'economy')    html = renderEconomy(d);
+    else                            html = renderPlayers(d);
     out.innerHTML = html
       + '<p class="muted" style="font-size:12px;padding:0 2px 24px">Generated ' + when(d.generated_at)
       + ' &middot; window ' + esc(d.window_days) + ' days &middot; read-only.</p>';
