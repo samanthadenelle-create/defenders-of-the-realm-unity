@@ -22,6 +22,7 @@ using Cysharp.Threading.Tasks;
 using UnityEngine;
 using DeNelle.Core.Auth;
 using DeNelle.Core.Diagnostics;
+using DeNelle.Core.Web3;          // BackendRequestSigner.WarmUpSessionAsync - handshake at connect
 using DeNelle.Core.Platform;
 using DeNelle.Core.State;
 
@@ -32,6 +33,28 @@ namespace DeNelle.Wallet
     public static class WalletSkinBootstrap
     {
         private static WalletService _wallet;
+
+        /// <summary>
+        /// The ONE live <see cref="WalletService"/> for the session, or null when nothing has
+        /// connected yet. Read-only on purpose: this class owns the instance's lifecycle (create on
+        /// connect, clear on disconnect) and every other surface BORROWS it.
+        /// <para>
+        /// ⛔ WHY THIS EXISTS (2026-08-24, the go-live P0). PackStore held its own
+        /// `private WalletService _wallet` and the only way to fill it was
+        /// `PackStore.SetWalletService(...)` — a public injector with **ZERO call sites in the whole
+        /// project**. So the store's wallet reference was ALWAYS null. That is not a cosmetic gap:
+        /// `PurchaseQuoteService.RefreshPricesAsync(null)` fails closed with "no signing wallet", so
+        /// the store NEVER requested a quote, and every pack read "Price unavailable" no matter how
+        /// connected the player's wallet was. Confirmed against production: zero
+        /// /api/purchases/quote requests ever reached the server while the owner's wallet showed
+        /// connected on screen.
+        /// </para>
+        /// <para>
+        /// ⚠ The store's OWN copy stays authoritative once set (an explicitly injected service wins),
+        /// so this is a FALLBACK adoption, not a second owner.
+        /// </para>
+        /// </summary>
+        public static WalletService ConnectedWallet => _wallet;
         private static bool _connecting;
 
         /// <summary>Installs the wallet-connect handlers at boot. The LOGIN-surface
@@ -178,6 +201,29 @@ namespace DeNelle.Wallet
                 {
                     FlowTrace.Warn("Wallet", "SKR wallet connect cancelled/failed — no identity bound.");
                     return;
+                }
+
+                // ⭐ HANDSHAKE AT CONNECT, NOT AT PURCHASE (owner, 2026-08-24). The backend session
+                // used to be minted lazily on the first authed call, so the prompts landed
+                // 1-at-connect then TWO-at-first-purchase (session mint + payment). The player knows
+                // the other shape: connect, then the auth handshake, and later ONE prompt to pay.
+                // Same three signatures; this one does not interrupt the purchase.
+                //
+                // ⚠ BEST-EFFORT AND DELIBERATELY NOT AWAITED FOR CORRECTNESS: TryAttachSession still
+                // mints on demand, so a declined or failed warm-up costs one later prompt and never a
+                // broken purchase. Awaited here only so the two wallet dialogs are ORDERED - firing
+                // them concurrently would stack two prompts on the player at once.
+                try
+                {
+                    await BackendRequestSigner.WarmUpSessionAsync(account.Address);
+                }
+                catch (Exception warmEx)
+                {
+                    // Caught AND LOGGED, never swallowed (§12). Correctness is unaffected - the
+                    // lazy mint still runs on the first authed call.
+                    FlowTrace.Warn("Wallet",
+                        $"session warm-up threw ({warmEx.GetType().Name}) - harmless; the first authed " +
+                        "call will mint on demand. " + warmEx.Message);
                 }
 
                 var skin = CurrencySkinResolver.Active;

@@ -129,7 +129,12 @@
 > fine as history. A copied number is the bug **even when it was right the day it was written** -
 > that is exactly how the retired 860-899 UI block kept re-seeding collisions from CLAUDE.md sec.2.
 
-> ## ⚠ RECONCILED 2026-08-24 (CLI): main line next free = **1172**.
+> ## ⚠ RECONCILED 2026-08-24 (CLI): main line next free = **1173**.
+> *(CLI seat minted **WO-1172** and bumped 1172 -> 1173 in this SAME edit. **1172** = BUILD
+> PALETTE GROUPING - external mockup brief, self-contained: real geometry + the 12-building
+> roster + constraints, so an outside AI can draft the layout.)*
+>
+> ### superseded: RECONCILED 2026-08-24 (CLI): main line next free = **1172**.
 > *(CLI seat minted **WO-1171** and bumped 1171 -> 1172 in this SAME edit. **1171** = WALLET
 > DISCONNECT/RESET - the owner's 2026-08-17 "menu option to reset" ruling, finally wired.
 > WalletService.Disconnect() was fully implemented and called by NOTHING.)*

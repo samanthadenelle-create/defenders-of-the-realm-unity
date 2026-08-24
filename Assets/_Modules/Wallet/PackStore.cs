@@ -299,8 +299,37 @@ namespace DeNelle.Wallet
             EnsureBuilt();
             if (_modal != null && _modal.canvas != null)
                 _modal.canvas.SetActive(true);
+
+            // ⛔ ADOPT THE LIVE WALLET (2026-08-24, the go-live P0). SetWalletService below is a
+            // public injector that NOTHING in the project ever called, so `_wallet` was permanently
+            // null and RefreshQuotedPrices asked PurchaseQuoteService for prices with a null wallet
+            // - which fails closed ("no signing wallet") and never issues the request. The player saw
+            // "Price unavailable" on every pack while their wallet read as connected two inches away
+            // on the same screen, and the server log showed ZERO /api/purchases/quote requests.
+            //
+            // ⚠ ADOPTED ON OPEN, NOT ONCE AT BUILD: the store is built lazily and kept for the
+            // session, so a connect that happens AFTER the first open must still be picked up. This
+            // is the same reasoning as DiscardBuildIfSurfaceChanged above - a value resolved once and
+            // kept is a stale measurement.
+            //
+            // An explicitly injected service still wins; this only fills a null.
+            if (_wallet == null && WalletSkinBootstrap.ConnectedWallet != null)
+            {
+                _wallet = WalletSkinBootstrap.ConnectedWallet;
+                FlowTrace.Step("Store", "adopted the live WalletService on open (none was injected) - " +
+                                        "quoted prices can now be requested.");
+            }
+            else if (_wallet == null)
+            {
+                // NEVER SILENT (§12): this is the exact state that renders "Price unavailable", so it
+                // must say so rather than leaving the screen to imply a server problem.
+                FlowTrace.Warn("Store", "opened with NO wallet service and none connected - the shelf " +
+                                        "will show 'Price unavailable' because no quote can be requested.");
+            }
+
             Render();
             RefreshWalletMirror().Forget();
+            RefreshQuotedPrices().Forget();
             RestorePendingPresentation();
 
             if (_panelHandle != null) PanelManager.NotifyOpened(_panelHandle);

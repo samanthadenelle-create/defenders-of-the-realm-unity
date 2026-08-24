@@ -646,3 +646,5 @@ Assets/Resources/PerformanceTestRunSettings.json.meta
 tools/__pycache__/
 __pycache__/
 *.pyc
+
+.env*

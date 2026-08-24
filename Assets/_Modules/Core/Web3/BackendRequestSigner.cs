@@ -33,6 +33,7 @@ using System;
 using System.Security.Cryptography;
 using System.Text;
 using Cysharp.Threading.Tasks;
+using DeNelle.Core.Diagnostics;   // FlowTrace - the connect-time session warm-up traces its outcome
 using DeNelle.Core.State;
 using Newtonsoft.Json;
 using UnityEngine;
@@ -216,6 +217,44 @@ namespace DeNelle.Core.Web3
             req.SetRequestHeader("X-Nonce", nonce);
             req.SetRequestHeader("X-Signature", signature);
             return true;
+        }
+
+        /// <summary>
+        /// Mint the backend session NOW, at connect time, instead of on the first authed call.
+        /// Returns true when a usable session is held afterwards.
+        /// <para>
+        /// ⛔ WHY (owner, 2026-08-24): <i>"normally on a new game ... I see a Wallet connect, which
+        /// gives it the account, but another one which is the handshake for the authentication. Then
+        /// when you go to the store you already have two, so then you get the third one as the actual
+        /// payment."</i> That is the pattern players know. Ours minted the session LAZILY, so the
+        /// prompts landed 1-at-connect then TWO-at-first-purchase (session + payment) - the same
+        /// three signatures, but the handshake interrupts the PURCHASE instead of the setup, which is
+        /// precisely where a player is least willing to be surprised by an extra prompt.
+        /// </para>
+        /// <para>
+        /// KEY_FACTS.md had already recorded the remedy and left it undone: <i>"Minting at connect
+        /// would make it one throughout - small, contained, NOT done."</i> This is that.
+        /// </para>
+        /// <para>
+        /// ⚠ BEST-EFFORT BY DESIGN. A failure here changes NOTHING about correctness - the lazy path
+        /// in <see cref="TryAttachSession"/> is untouched and still mints on demand. So a declined or
+        /// failed warm-up costs the player one later prompt, never a broken purchase. It is logged,
+        /// never thrown, and never blocks the connect.
+        /// </para>
+        /// </summary>
+        public static async UniTask<bool> WarmUpSessionAsync(string wallet)
+        {
+            if (string.IsNullOrEmpty(wallet)) return false;
+            if (SessionUsable(wallet))
+            {
+                FlowTrace.Step("Wallet", "session warm-up skipped - a usable session is already held.");
+                return true;
+            }
+            bool ok = await MintSessionAsync(wallet);
+            FlowTrace.Step("Wallet", ok
+                ? "session minted AT CONNECT - the next purchase needs one prompt (payment), not two."
+                : "session warm-up did not complete - harmless, the first authed call will mint on demand.");
+            return ok;
         }
 
         /// <summary>
