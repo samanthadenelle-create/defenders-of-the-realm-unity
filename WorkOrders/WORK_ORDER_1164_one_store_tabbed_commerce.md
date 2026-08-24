@@ -86,11 +86,22 @@ None of this is hard; all of it is *referenced*, which is what bites:
 
 ## 5. ⛔ ANSWER BEFORE IMPLEMENTING
 
-1. **Is the Store WALKED TO or a HUD BUTTON?** The owner's "for mobile, simplify" implies a HUD
-   entry reachable anywhere (the CoC shape). ⚠ But this decides whether the town is *a place you
-   traverse* or *a menu you manage* — a bigger call than the plumbing, and it interacts with the
-   bottom action bar, which is at SIX visible faces with `MaxVisibleFaces` already reduced from 7.
-   **If it needs a bar face, that is a seventh, and the bar's face budget is a ruled constraint.**
+1. ⭐ **RULED 2026-08-23 — BOTH.** Owner: *"having the ability to walk up to a store has value, but
+   I also agree... it's on HUD. For mobile."*
+   **The Store building STAYS in the town** (walk up and interact — the town remains a place, not a
+   menu) **AND a HUD entry opens the same panel** (the mobile affordance).
+   ⛔ **ONE DESTINATION, TWO DOORWAYS — never two implementations.** The precedent is already in
+   this codebase and it was won the hard way: `PlacedStructureUpgradeService` is the SINGLE start
+   path for upgrades with several doorways into it, after a second resolution site told a player a
+   level-1 tower was "fully enhanced — tier 0 of 0". **Do not build a second store panel for the
+   HUD.** Both routes open the one `PackStore` surface.
+   ⚠ **SUB-QUESTION STILL OPEN — where the HUD entry lives.** The calm(town) action bar is at SIX
+   visible faces and `MaxVisibleFaces` was deliberately cut 7 → 6; `ButtonCount` stays 7 for
+   enum/array identity. A Store face re-opens that ruled budget. Precedent for the alternative:
+   **Map left the bar and became a tab inside Bag** (flag-gated), with `ActionBarButtonId.Map` left
+   dormant at ordinal 4 — the face arrays are indexed by ordinal, so **nothing may be renumbered.**
+   Options: a 7th bar face (re-opens the budget) · a tab inside an existing face · a persistent
+   corner chip outside the bar. **Owner's call.**
 2. **Do the vendor NPCs stay at their buildings?** They can remain as flavour/talk without a shelf,
    move to the Store, or retire. This is a felt/creative call.
 3. **What happens to the four quest stages that send the player to a vendor?**
