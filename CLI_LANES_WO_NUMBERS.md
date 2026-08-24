@@ -129,7 +129,16 @@
 > fine as history. A copied number is the bug **even when it was right the day it was written** -
 > that is exactly how the retired 860-899 UI block kept re-seeding collisions from CLAUDE.md sec.2.
 
-> ## ⚠ RECONCILED 2026-08-23 (CLI): main line next free = **1165**.
+> ## ⚠ RECONCILED 2026-08-23 (CLI): main line next free = **1166**.
+> *(CLI seat minted **WO-1165** and bumped 1165 -> 1166 in this SAME edit. **1165** = the
+> monetization SME pass on the packs. Headline: WO-1163 makes troops PURE GOLD, gold IS
+> Resources.Coins, and every paid pack grants coins - so the economy ruling turns every SKU
+> into a combat-power sale against a covenant that says "never combat power". Plus: two
+> authored Monthly Ledger SKUs are UNBUYABLE (absent from USD_ANCHORS), the $49.99 rung
+> loses on goods-per-dollar to the $19.99, and a $49.99 card promises "Founders are named
+> on the Heart" with no implementation anywhere.)*
+>
+> ### superseded: RECONCILED 2026-08-23 (CLI): main line next free = **1165**.
 > *(CLI seat minted **WO-1164** and bumped 1164 -> 1165 in this SAME edit. **1164** = ONE STORE.
 > Owner ruling 2026-08-23, mobile-first: all in-game selling consolidates into a single tabbed
 > Store; the trade buildings STOP being vendors and keep only their upgrade benches. Two stores
