@@ -214,7 +214,14 @@ namespace DeNelle.Village
                         "mine_crystal",
                         "mill",
                         "lumbermill",
-                        "armorer",
+                        // ⭐ "armorer" REMOVED 2026-08-23 (owner ruling): it is the opener for IRON
+                        // and was locked out of the palette, so the Echo picker told the owner
+                        // "Iron - NEEDS: Armorer" about a building no player could place. Unlocked
+                        // in build-categories.json the same day; removed HERE because this set is
+                        // a hand-mirrored copy of that file ("keep the two in sync" above) and a
+                        // stale fallback would silently re-lock iron the moment the JSON failed to
+                        // parse. Same one-fact-written-twice shape WO-1137 codegen'd away for the
+                        // catalog fallback.
                         "collector_forge",
                     },
                 },

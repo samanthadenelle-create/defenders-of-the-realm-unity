@@ -856,7 +856,25 @@ namespace DeNelle.Core
         /// <para>The suppression is FlowTrace'd at the decision site, so a capture shows WHY the
         /// screen is missing rather than reading as a vanished screen.</para>
         /// </summary>
-        public static bool FoundingDefaultTown => Get("defaulttown", defaultOn: true);
+        /// ⭐ FLIPPED OFF 2026-08-23 (owner: <i>"im thinking we want to remove the default option and
+        /// just have them place all buildings till we get this all ironed out"</i>).
+        ///
+        /// <para>⚠ NOTE FOR THE RECORD, because it is the second time: the 2026-08-20 ruling
+        /// quoted above ALREADY said to flag this off — and the default was left ON. The flag was
+        /// added and never flipped, so the option kept shipping and the owner had to rule the same
+        /// thing twice. A ruling recorded but not applied is indistinguishable from no ruling.</para>
+        ///
+        /// <para>⛔ AND THE 2026-08-23 REASON IS SHARPER THAN THE 08-20 ONE. WO-1163 is re-authoring
+        /// the economy underneath this: the Farm becomes a QUARRY, the Silo RETIRES entirely, the
+        /// Forge is now the Weaponsmith and iron moves to a dedicated Iron Mine. A prebuilt ring
+        /// hands every new player a town made of buildings that are being renamed, repriced and
+        /// removed — it would bake the stale world in at founding, on the one screen a new player
+        /// cannot avoid.</para>
+        ///
+        /// <para>Nothing is deleted and the path stays intact (see above). PlayerPrefs
+        /// "ff.defaulttown" = 1 restores the choice with no rebuild, which is what its own re-test
+        /// needs once WO-1163 lands and the ring can be re-authored against the new vocabulary.</para>
+        public static bool FoundingDefaultTown => Get("defaulttown", defaultOn: false);
 
         /// <summary>
         /// WO-1042 (owner ruling 2026-08-16) — gates the STAKING bonus hook on the Jeweler's polish
