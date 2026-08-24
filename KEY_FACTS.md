@@ -96,6 +96,28 @@
   was restated in **eight** files, so it read as corroborated fact and nobody re-derived it. **Read the
   threshold with `tools/treasury-verify.mjs --multisig`, never from this line** (without `--multisig`
   the tool proves the vault but reads NO threshold at all).
+- **⛔ 2026-08-24 — FOUR FINISHED-BUT-UNWIRED MECHANISMS FOUND IN ONE DAY, all on the money path.**
+  `WalletService.Disconnect` · `CurrencySkinResolver.PublishWalletDisconnected` ·
+  `WalletConnectDialog.SetWalletService` · `PackStore.SetWalletService`. Every one complete,
+  correct and **called by nothing**. ⚠ The shared failure mode is that NOTHING FAILS LOUDLY: a null
+  that merely renders a fallback string ("Price unavailable", "Wallet identity bound") looks exactly
+  like a feature working in a degraded state. **When a feature looks half-dead, grep for callers of
+  its entry point before reading its logic.**
+- **⛔ NO WALLET SAVE HAD EVER BEEN WRITTEN** (fixed 2026-08-24). `player_data` held 21 rows, ALL
+  `guest-local-*`. The raw-body guard predated WO-1157's session rail and rejected before
+  `authenticate()` ran, so session-authed saves were refused for bytes they never needed. Invisible
+  in game because the guest id is device-derived — the town persisted under the wrong key while the
+  identity purchases bind to had nothing behind it. Pinned by `test/auth.rawbody.session.test.js`.
+- **⚠ THE STORE LOSES A RACE TO THE WALLET, and "check on open" cannot fix it alone.** Device trace:
+  the shelf drew at 11:33:48, the connect completed at 11:34:19 — **31 seconds later**. Association
+  alone is ~2.8s and AUTO-RESUME fires at boot, so the player reaches the store first. PackStore now
+  subscribes to `CurrencySkinResolver.WalletConnectionChanged` **and** checks at open; both halves
+  are required (a view built after the connect never sees the event; one built before it needs the
+  event).
+- **⚠ AUTO-RESUME DOES NOT GO THROUGH `ConnectAsync`.** `TryAutoResumeAsync` → `ConnectForLoginAsync`
+  is the SHARED path (auto-resume + login surface). Anything that must happen on every connect —
+  the session handshake, for one — belongs THERE, not on the corner-button route. Getting this wrong
+  means returning players silently skip it, which is the majority case.
 - **Gates, off fresh logs:** `COMPILE_GATE_OK` (0 `error CS`) · **`REGRESSION_OK 270/270 suites`** ·
   backend **37/37**. The 08-21 two-red asset gap (245/247) is CLOSED. `FeatureFlags.Siege` is ON and
   proven (WO-1139, 08-22).
