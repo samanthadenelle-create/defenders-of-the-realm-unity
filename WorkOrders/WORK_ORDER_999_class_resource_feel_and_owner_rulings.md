@@ -9,7 +9,8 @@ the locked-Q identity test) and is consumed in the strike's ARRIVAL closure when
 (`_pendingTimingBonus` pattern; cleared after `ResolveEffect` so no stale arm survives). The melee
 path keeps its own `anyHit` gate — different input, same per-hit rule, no shared-input double.
 
-**Status:** DONE (implementation) — owner felt-close still open  
+**Status:** FIXED - awaiting owner felt-close. ⚠ **Not a contradiction** - an owner close outstanding is VERIFICATION remaining, which §13 makes the normal state for every correctly-handled row. The defect was the bucket: DONE is reserved for closed. *(Corrected 2026-08-24.)*
+>  PRIOR: **Status:** DONE (implementation) — owner felt-close still open  
 **RESULT:** `WorkOrders/WORK_ORDER_999_class_resource_feel_and_owner_rulings.RESULT.md`  
 **Design:** `docs/design/MOBILE_CLASS_RESOURCE_ECONOMY.md`  
 **Silo:** Hero combat + HUD presentation · **For:** CLAUDE CLI · **Date:** 2026-08-15  

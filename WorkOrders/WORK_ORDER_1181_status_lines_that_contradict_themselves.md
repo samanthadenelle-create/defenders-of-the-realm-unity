@@ -64,3 +64,49 @@ the commentary. Today's seven were written that way.
       lint is unusable on day one
 - [ ] Prove it by **inducing** a contradiction and watching it fire before trusting it
 - [ ] Wire into `board_build.py --check` alongside the Unlabeled check
+
+## ⭐ LEAD FEEDBACK 2026-08-24 - two refinements the HEAD run surfaced, both real
+
+Codex implemented this and **correctly refused to call it ready**, because its own acceptance demands
+a zero-finding run against HEAD and five statuses fired. ⭐ **That was the right call** - a lint that
+cries wolf on day one gets switched off in a week. Four of the five were genuine and are now
+reconciled (WO-1100, WO-1152, WO-970, WO-978). ⚠ **One of them was mine**: I left WO-1152 `FIXED` by
+hand this morning with "R2 push owed" in the same line. Pushing is **work remaining**, not
+verification. The lint was right and I was wrong.
+
+The other two findings change the lint itself:
+
+### 1. ⛔ EXEMPT `*.RESULT.md` FILES - the acceptance is UNSATISFIABLE without this
+
+Two of the five flagged rows were **`.RESULT.md` files** (WO-1100, WO-999). ⛔ **CLAUDE.md §15 freezes
+those: "dated point-in-time ledgers ... RESULT files ... never rewrite."**
+
+So the lint currently demands an edit that canon forbids, and **no amount of reconciliation can ever
+make the HEAD run clean.** Exempt them. If a RESULT file reads as current, §15's remedy is a
+`⚠ SUPERSEDED <date>` banner, never a status rewrite.
+
+### 2. ⚠ `"still open"` IS TOO BLUNT - the same mistake `READY` would have been
+
+**WO-999 was a FALSE POSITIVE.** Its line read *"owner felt-close still open"* - and an owner close
+outstanding is **verification remaining**, which §13 makes the **normal state of every correctly
+handled row**. Flagging it would flag the healthy bucket, which is exactly the failure this ticket's
+own spec warns about.
+
+⭐ **The rule is: ban the PHRASE, not the WORD.** This ticket already says `READY` alone is too blunt
+because *"FIXED, ready for felt-test"* is legitimate. **`still open` has the identical problem.**
+
+| ⛔ Fire on | ✅ Never fire on |
+|---|---|
+| `§N ... still open` / `§N is open` | `owner felt-close still open` |
+| `ruling still open` / `question still open` | `owner close still open` |
+| `NOT added`, `NOT built`, `push owed` | `awaiting owner felt-verify` / `felt-test` |
+
+⚠ **WO-999 still needed a fix - just not the one the lint named.** It led with `DONE` while awaiting a
+close, and §13 reserves DONE for closed. Corrected to `FIXED`.
+
+### The debt the run surfaced - that is WO-1180's worklist, and it is the point
+
+**31 malformed status markers** and **43 rows depending on the substring fallback.** ⭐ Both numbers
+are exactly what WO-1180 was written to make visible: an invisible class became a countable one.
+⛔ **Do not bulk-rewrite them** - drain by hand, in batches, checking bucket counts before and after
+so no row silently changes meaning.

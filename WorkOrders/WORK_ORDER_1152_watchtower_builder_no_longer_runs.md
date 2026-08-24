@@ -1,4 +1,5 @@
-**Status:** FIXED 2026-08-23 (f295971b6) — builder runs on all three levels, idempotency proven by re-run, taper-asserted. ⚠ R2 push owed: the L1 prefab was re-baked. AWAITING OWNER CLOSE.
+**Status:** READY - the code is FIXED (`f295971b6`, all three levels, idempotency proven) but ⛔ **the re-baked L1 prefab has NOT been pushed to R2**, so the fix is on no device. ⚠ Pushing is WORK REMAINING, not verification - which is why this is not Fixed. *(Bucket corrected 2026-08-24; I left this Fixed by hand this morning and the lint was right to reject it.)*
+>  PRIOR: **Status:** FIXED 2026-08-23 (f295971b6) — builder runs on all three levels, idempotency proven by re-run, taper-asserted. ⚠ R2 push owed: the L1 prefab was re-baked. AWAITING OWNER CLOSE.
 
 # WORK ORDER 1152 — WoodenWatchtowerBuilder no longer runs, and it fails on a level that looks fine
 
@@ -75,7 +76,8 @@ prefab has NOT been pushed to R2, so the fix is not on any device and cannot be 
 ⛔ **And a missing push fails SILENTLY** (§16): the build installs, launches and plays, showing
 placeholder art with **no error on screen**. ⭐ **Bundle names are content-hashed, so this re-bake
 needs ITS OWN push** - a previous push cannot cover it, and the bucket looking full proves nothing.
-Run `tools2-ship.ps1` and judge by `R2_PUSH_OK` / `R2_PARITY_OK` on a **fresh** log, never the exit
+Run `tools
+2-ship.ps1` and judge by `R2_PUSH_OK` / `R2_PARITY_OK` on a **fresh** log, never the exit
 code.
 
 ⚠ **Do not close this on the repo state.** The repo is right; the device is not.

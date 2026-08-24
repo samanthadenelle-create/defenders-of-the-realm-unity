@@ -1,6 +1,7 @@
 # WORK ORDER 970 — The bounds align can only YAW, so a weapon whose mesh is not authored Y-long never stands up
 
-**Status:** DONE — shipped `af5e2e7d` ("fix(gear): WO-970"). Still open: the owner's re-dial of the two authored nudges, plus owner felt-verify. RESULT file still owed (not fabricated). *(Status corrected 2026-08-14: the line still said "awaiting batch-gate + commit", and was written `**Status: …**` rather than the canonical `**Status:** …` the sibling files use.)*
+**Status:** BLOCKED - owner action owed. Shipped `af5e2e7d`, but the **owner's re-dial of the two authored nudges** is still outstanding, and the RESULT file is owed (deliberately not fabricated). *(Bucket corrected 2026-08-24: led with DONE while naming open owner work.)*
+>  PRIOR: **Status:** DONE — shipped `af5e2e7d` ("fix(gear): WO-970"). Still open: the owner's re-dial of the two authored nudges, plus owner felt-verify. RESULT file still owed (not fabricated). *(Status corrected 2026-08-14: the line still said "awaiting batch-gate + commit", and was written `**Status: …**` rather than the canonical `**Status:** …` the sibling files use.)*
 **Silo:** Hero / Equipment / Geometry — `WeaponBoundsOrient.cs` (orchestrator holds `EquipmentController.cs`)
 **Owner report (2026-08-10, felt-test, playing the Mage):** the Emberglass Staff (`tripo_staff_a`)
 **"is not being held correctly."**
