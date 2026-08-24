@@ -76,6 +76,10 @@
   .chip.warn::before{content:"! ";font-weight:700}
   .bar{position:relative;background:var(--bar);height:8px;border-radius:4px;min-width:60px}
   .bar > i{position:absolute;left:0;top:0;bottom:0;background:var(--accent);border-radius:4px;display:block}
+  td.wrapcell,th.wrapcell{white-space:normal;max-width:560px;min-width:240px}
+  pre.tail{white-space:pre-wrap;word-break:break-word;margin:6px 0 0;padding:8px;
+    background:var(--panel2);border:1px solid var(--line);border-radius:8px;
+    font-size:12px;line-height:1.45;max-height:220px;overflow:auto}
   .none{color:var(--dim);font-style:italic}
   .err{border-color:var(--accent);color:var(--accent)}
   .gate{max-width:460px;margin:8vh auto;padding:0 14px}
@@ -145,7 +149,8 @@ var VIEWS = [
   ['funnel',    'Tutorial funnel'],
   ['purchases', 'Money (settled)'],
   ['economy',   'Economy (client)'],
-  ['players',   'Players']
+  ['players',   'Players'],
+  ['bugreports','Player reports']
 ];
 
 // ── helpers ────────────────────────────────────────────────────────────────
@@ -194,11 +199,17 @@ function trend(curr, prev){
 function table(cols, rows){
   if (!rows || !rows.length) return '<p class="none">No rows in this window.</p>';
   var h = '<div class="scroll"><table><thead><tr>';
-  cols.forEach(function(c){ h += '<th' + (c.num ? ' class="num"' : '') + '>' + esc(c.label) + '</th>'; });
+  cols.forEach(function(c){
+    var cls = (c.num ? 'num' : '') + (c.cell ? (c.num ? ' ' : '') + c.cell : '');
+    h += '<th' + (cls ? ' class="' + cls + '"' : '') + '>' + esc(c.label) + '</th>';
+  });
   h += '</tr></thead><tbody>';
   rows.forEach(function(r){
     h += '<tr' + (r.__ref ? ' class="click" data-ref="' + esc(r.__ref) + '"' : '') + '>';
-    cols.forEach(function(c){ h += '<td' + (c.num ? ' class="num"' : '') + '>' + c.get(r) + '</td>'; });
+    cols.forEach(function(c){
+      var cls = (c.num ? 'num' : '') + (c.cell ? (c.num ? ' ' : '') + c.cell : '');
+      h += '<td' + (cls ? ' class="' + cls + '"' : '') + '>' + c.get(r) + '</td>';
+    });
     h += '</tr>';
   });
   return h + '</tbody></table></div>';
@@ -704,6 +715,57 @@ function renderPlayers(d){
     'Ids are masked to first four and last four characters. Tap a row to open that player.');
 }
 
+// ── Player reports (TROUBLESHOOT) ────────────────────────────
+// The ONLY view on this page sourced from /api/admin/db instead of
+// /api/admin/stats — there is no aggregate behind a bug report, the rows ARE
+// the artifact. Response shape: { view:'bugreports', rows:[ report_id,
+// created_at, description, route, app_version, player_id, platform, session_id,
+// trace_tail, has_screenshot ] } (api/admin/db.js, view=bugreports).
+//
+// ⚠ EMPTY IS NOT THE SAME AS HEALTHY. bug_reports held ZERO rows all-time
+// because every INSERT was failing (WO-1169 §4) — so "no rows" gets a sentence
+// that says the write path is the first thing to check, not a blank table that
+// reads as "no one has reported anything".
+//
+// ⛔ DISPLAY ONLY. No delete, no resolve, no reply. api/admin/db.js is
+// read-only BY CONSTRUCTION and a button here would be the reason that stops
+// being true. The screenshot and the full trace tail are deliberately NOT
+// fetched: they need ?view=bugreport&id=<n>[&shot=1], one report at a time.
+function renderBugReports(d){
+  var rows = d.rows || [];
+  var body;
+  if (!rows.length) {
+    body = '<p><strong>No player reports stored.</strong> '
+         + 'Read this as a claim about the TABLE, not about the players: this table held zero rows '
+         + 'all-time while every insert was failing. If testers have submitted reports, check the '
+         + 'write path (<code>api/bug-report.js</code>) and the runtime log before concluding the '
+         + 'queue is clear.</p>';
+  } else {
+    body = table([
+      { label:'When',    get:function(r){ return when(r.created_at); } },
+      { label:'Route',   get:function(r){ return r.route ? '<code>' + esc(r.route) + '</code>' : '<span class="none">unknown</span>'; } },
+      { label:'Version', get:function(r){ return r.app_version ? esc(r.app_version) : '<span class="none">unknown</span>'; } },
+      { label:'Report',  get:function(r){
+          var t = String(r.description == null ? '' : r.description);
+          var shown = t.length > 600 ? t.slice(0, 600) + '…' : t;
+          var h = shown.trim()
+                ? esc(shown).split(String.fromCharCode(10)).join('<br>')
+                : '<span class="none">no note — the capture is the report</span>';
+          if (r.platform)       h += ' <span class="chip">' + esc(r.platform) + '</span>';
+          if (r.has_screenshot) h += ' <span class="chip">screenshot</span>';
+          var tail = Array.isArray(r.trace_tail) ? r.trace_tail.length : 0;
+          if (tail)             h += ' <span class="chip">' + tail + ' trace lines</span>';
+          return h;
+        }, cell:'wrapcell' },
+      { label:'Id', num:true, get:function(r){ return '<code>' + esc(r.report_id == null ? '—' : r.report_id) + '</code>'; } }
+    ], rows);
+  }
+  return card('Player bug reports', body,
+    'Newest first, from the in-game report form. Read-only — there is no resolve, delete or reply '
+    + 'here on purpose. The screenshot and the full trace tail are not loaded in this list; fetch one '
+    + 'report with /api/admin/db?view=bugreport&id=<report_id>&shot=1.');
+}
+
 // ── shell ──────────────────────────────────────────────────────────────────
 function paintTabs(){
   el('tabs').innerHTML = VIEWS.map(function(v){
@@ -715,6 +777,26 @@ function load(extra){
   var out = el('out');
   out.innerHTML = '<section class="card"><p class="muted">Loading ' + esc(view) + '…</p></section>';
   var params = 'view=' + encodeURIComponent(view) + '&days=' + encodeURIComponent(days) + (extra || '');
+
+  // Player reports come from api/admin/db (the rows ARE the artifact; there is
+  // no aggregate behind them), so this view does NOT call api/admin/stats at
+  // all. `days` is not a parameter there — the list is newest-first and bounded
+  // by limit, and pretending the window filtered it would be a lie on screen.
+  if (view === 'bugreports') {
+    var reports = apiGet('/api/admin/db', 'view=bugreports&limit=50');
+    reports.then(function(d){
+      out.innerHTML = renderBugReports(d)
+        + '<p class="muted" style="font-size:12px;padding:0 2px 24px">Newest 50 &middot; '
+        + 'not filtered by the time window &middot; read-only.</p>';
+    }).catch(function(e){
+      out.innerHTML = '<section class="card err"><h2>Could not load player reports</h2>'
+        + '<p>' + esc(e.message || e) + '</p>'
+        + '<p class="note">This is NOT the same as "no reports". A wrong key and an unknown view both '
+        + 'answer 400 here; a 500 means the read query itself failed against the table.</p></section>';
+    });
+    return;
+  }
+
   var main = api(params);
   var pending = main;
 

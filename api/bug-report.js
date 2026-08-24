@@ -117,21 +117,60 @@ module.exports = async (req, res) => {
                         `pi=${piUidHash ? 'hash' : 'no'}`);
             if (note.trim()) console.log('  [note] ' + note.slice(0, 300).replace(/\n/g, ' | '));
             for (const l of traceTail.slice(-15)) console.log('  [tail] ' + l);
-        } catch (e) { /* logging must never break the sink */ }
+        } catch (e) {
+            // Logging must never break the sink — but a SILENT swallow here is the
+            // exact pattern that cost a whole diagnosis on api/auth/session.js
+            // (CLAUDE.md §12: "a catch that swallows without logging is forbidden").
+            // Name the step; a bare console.error cannot itself be the thing that throws.
+            console.error('[bug-report] step=echo_request_log failed (non-fatal):',
+                          (e && e.message) || e);
+        }
 
+        if (!process.env.DATABASE_URL) {
+            // A missing env var and a broken table both used to arrive as an
+            // indistinguishable 500. Say which, in the LOG only.
+            console.error('[bug-report] step=connect FAILED: DATABASE_URL is not set on this deployment');
+            return res.status(500).json({ error: 'Internal server error' });
+        }
         const sql = neon(process.env.DATABASE_URL);
         const stored = await insertReport(sql, { note, sceneName, version, piUidHash, context });
         try {
             console.log(`[bug_report] STORED report_id=${stored.reportId} via=${stored.shape} ` +
                         `identity=${piUidHash ? String(piUidHash).slice(0, 16) : 'none'}`);
-        } catch (e) { /* logging must never break the sink */ }
+        } catch (e) {
+            console.error('[bug-report] step=echo_stored_log failed (non-fatal):', (e && e.message) || e);
+        }
 
         return res.status(200).json({ success: true, reportId: stored.reportId, shape: stored.shape });
     } catch (err) {
-        console.error('[bug-report] DB error:', err);
+        // ⛔ THE RESPONSE STAYS OPAQUE — a 500 must never describe internals to a
+        // caller. The REASON belongs here, and it must be complete enough to RCA
+        // from the runtime log alone: step, Postgres SQLSTATE, constraint/column,
+        // message, stack. On 2026-08-24 this endpoint 500-ed with an empty log
+        // entry elsewhere in api/ and it cost a whole diagnosis.
+        console.error('[bug-report] step=insert FAILED — ' + describeDbError(err));
+        console.error('[bug-report] raw error:', err);
         return res.status(500).json({ error: 'Internal server error' });
     }
 };
+
+// One-line, greppable rendering of a Postgres/Neon error. Everything a triage
+// read needs without opening the object: SQLSTATE is the primary key of a DB
+// failure (42703 = missing column, 23502 = a NOT NULL column we did not write,
+// 42P01 = missing table, 23505 = unique violation).
+function describeDbError(err) {
+    if (!err) return 'code=none message=<no error object>';
+    const parts = [
+        'code=' + (err.code || 'none'),
+        'message=' + String(err.message || err),
+    ];
+    if (err.constraint) parts.push('constraint=' + err.constraint);
+    if (err.column)     parts.push('column=' + err.column);
+    if (err.table)      parts.push('table=' + err.table);
+    if (err.detail)     parts.push('detail=' + String(err.detail).slice(0, 300));
+    if (err.hint)       parts.push('hint=' + String(err.hint).slice(0, 200));
+    return parts.join(' ');
+}
 
 // =============================================================================
 //  DRIFT-TOLERANT INSERT (2026-08-02 — this endpoint was 500-ing on EVERY report)
@@ -219,18 +258,42 @@ async function insertReport(sql, r) {
             const rows = await attempt.run();
             const reportId = rows && rows[0] ? Number(rows[0].report_id) : null;
             if (attempt.shape !== 'full') {
-                console.warn(`[bug-report] SCHEMA DRIFT: fell back to shape "${attempt.shape}" — ` +
-                             `run api/schema.sql against Neon to restore the full column set. ` +
-                             `Last error: ${lastErr ? lastErr.message : 'n/a'}`);
+                // ⚠ NOT a warning any more. A fallback shape stores a report the
+                // triage view cannot fully read: shapes 3-5 fold route/app_version
+                // into the description TEXT, and shape 5 loses report_id entirely,
+                // so /api/admin/db?view=bugreports renders NULL columns while the
+                // endpoint still answered 200. Silent partial loss is worse than a
+                // loud failure — this line is the only place it is visible.
+                console.error(`[bug-report] SCHEMA DRIFT: fell back to shape "${attempt.shape}" — ` +
+                              `run api/schema.sql against Neon to restore the full column set. ` +
+                              `Columns folded into text/context are NOT queryable by the admin view. ` +
+                              `Last error: ${describeDbError(lastErr)}`);
             }
             return { reportId: reportId, shape: attempt.shape };
         } catch (err) {
             lastErr = err;
+            // Every attempt's failure is named. Previously an intermediate failure
+            // was recorded ONLY in `lastErr` and surfaced only if a LATER shape
+            // succeeded — so a cascade that burned all five shapes reported one
+            // error and hid the other four, which is a swallow by another name.
+            console.error(`[bug-report] step=insert shape="${attempt.shape}" FAILED — ` +
+                          describeDbError(err));
             // Only a missing-column / undefined-table error is worth retrying with a
             // narrower shape. Anything else (connection, permission) will fail the
             // same way every time — rethrow immediately rather than hammering.
+            //
+            // ⚠ 23502 (not_null_violation) is DELIBERATELY NOT retryable, and that is
+            // the deployed 2026-08-24 defect: the live table carried `id TEXT NOT NULL`
+            // with NO DEFAULT, which NO shape below writes. Narrowing the column list
+            // cannot satisfy a column we never name, so retrying would burn five
+            // round-trips to reach the same failure. The fix is the migration, and the
+            // log line above is what makes 23502 legible instead of a bare 500.
             const code = err && err.code;
-            if (code !== '42703' && code !== '42P01' && code !== '42804') throw err;
+            if (code !== '42703' && code !== '42P01' && code !== '42804') {
+                console.error(`[bug-report] step=insert code=${code || 'none'} is NOT retryable — ` +
+                              `abandoning the cascade after shape "${attempt.shape}"`);
+                throw err;
+            }
         }
     }
     throw lastErr || new Error('bug_reports insert failed with every shape');
