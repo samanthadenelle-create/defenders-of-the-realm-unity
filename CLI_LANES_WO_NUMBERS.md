@@ -129,7 +129,14 @@
 > fine as history. A copied number is the bug **even when it was right the day it was written** -
 > that is exactly how the retired 860-899 UI block kept re-seeding collisions from CLAUDE.md sec.2.
 
-> ## ⚠ RECONCILED 2026-08-23 (CLI): main line next free = **1164**.
+> ## ⚠ RECONCILED 2026-08-23 (CLI): main line next free = **1165**.
+> *(CLI seat minted **WO-1164** and bumped 1164 -> 1165 in this SAME edit. **1164** = ONE STORE.
+> Owner ruling 2026-08-23, mobile-first: all in-game selling consolidates into a single tabbed
+> Store; the trade buildings STOP being vendors and keep only their upgrade benches. Two stores
+> total - the Store (game currency) and the Realm Store (packs). Kills the vendor-identity class
+> of bug that consumed 2026-08-23 at the root.)*
+>
+> ### superseded: RECONCILED 2026-08-23 (CLI): main line next free = **1164**.
 > *(CLI seat minted **WO-1163** and bumped 1163 -> 1164 in this SAME edit. **1163** = the resource
 > ladder redesign, owner-ruled 2026-08-23: FOOD becomes STONE (a RENAME of the same save slot, not
 > a purge - 208 canonical refs + the persisted WO-911 paid basket ride along), building tiers cost
