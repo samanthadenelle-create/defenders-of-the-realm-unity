@@ -127,7 +127,14 @@ async function handler(req, res) {
     // A signature can only be verified against the ORIGINAL bytes. If the runtime
     // parsed the body out from under us, say so precisely instead of emitting a
     // lying AUTH_BAD_SIGNATURE (see _lib/http.readBodyExact).
-    if (!exactBytes && !isGuestId(playerId)) {
+    // ⛔ SCOPED TO THE SIGNATURE PATH (2026-08-24). A session bearer does NOT sign the body:
+    // wallet-auth.js verifyWallet() accepts `x-session` and returns via:'session' without ever
+    // reading `payload`. This guard predates WO-1157's session rail and rejected BEFORE
+    // authenticate() ran, so a session-authed call was refused for lacking bytes it never needed.
+    // Same defect fixed in api/game/save.js, where it had silently 500ed EVERY wallet save in
+    // production — all 21 rows in player_data were guest rows.
+    const hasSessionHeader = !!(req.headers && req.headers['x-session']);
+    if (!exactBytes && !isGuestId(playerId) && !hasSessionHeader) {
         await logAuthReject(sql, req, {
             code: AuthCode.SERVER_ERROR, ref, identity: playerId, mode: 'wallet',
             detail: { reason: 'raw_body_unavailable_bodyparser_active' },

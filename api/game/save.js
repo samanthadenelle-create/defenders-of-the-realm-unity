@@ -138,7 +138,24 @@ async function handler(req, res) {
     // A wallet signature is over the EXACT raw bytes. If the runtime already
     // parsed and we had to re-serialise, verification is IMPOSSIBLE — say that
     // precisely instead of emitting a lying AUTH_BAD_SIGNATURE.
-    if (!exactBytes && !isGuestId(String(playerId))) {
+    //
+    // ⛔ BUT A SESSION DOES NOT SIGN THE BODY, AND THIS GUARD DID NOT KNOW THAT (fixed
+    // 2026-08-24). WO-1157 added the session rail: wallet-auth.js verifyWallet() accepts an
+    // `x-session` bearer and returns `via:'session'` WITHOUT EVER TOUCHING `payload` — its own
+    // comment says "A valid session is proof of the same fact the signature proves". This guard
+    // predates that rail and rejected BEFORE authenticate() ever ran, so a session-authed save was
+    // refused for lacking raw bytes it never needed.
+    //
+    // ⚠ THE COST WAS TOTAL AND SILENT: every wallet-authed save 500ed in production. Checked
+    // 2026-08-24 — `player_data` held 21 rows and EVERY ONE was `guest-local-*`. Not one save has
+    // ever been written under a wallet identity. It looked survivable only because the guest id is
+    // derived from the device, so the player's town quietly persisted under the wrong key while the
+    // identity their PURCHASES bind to had nothing behind it.
+    //
+    // The guard still stands for the signature path, which genuinely cannot verify without exact
+    // bytes. It is now scoped to requests that will actually use that path.
+    const hasSessionHeader = !!(req.headers && req.headers['x-session']);
+    if (!exactBytes && !isGuestId(String(playerId)) && !hasSessionHeader) {
         await logAuthReject(sql, req, {
             code: AuthCode.SERVER_ERROR, ref, identity: playerId, mode: 'wallet',
             detail: { reason: 'raw_body_unavailable_bodyparser_active' },
