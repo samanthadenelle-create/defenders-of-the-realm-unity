@@ -26,7 +26,8 @@
 
 # WORK ORDER 501 - Store/Shop View Redesign (hero-filtered, slim list + 3D preview)
 
-**Status:** PROPOSAL / READY TO IMPLEMENT (DESIGN pass - read-only survey done)
+**Status:** FIXED - awaiting owner felt-verify. ⛔ **Do NOT hand this to a dev lane.** Its own 2026-08-22 banner records all four owner points shipped in `PartyShopPanelMvvm.cs` with the flag `defaultOn: true`. ⚠ **Every `file:line` in its §1 is invalidated**: that survey was written against a **583-line** file and the file is now **1727 lines** (verified 2026-08-24). A seat working from those citations would be reading a different program.
+>  PRIOR: **Status:** PROPOSAL / READY TO IMPLEMENT (DESIGN pass - read-only survey done)
 **Silo:** Monetization/UI (Store) - PartyShop MVVM. File-disjoint from combat/scene lanes.
 **Feature flag:** ships behind the existing FeatureFlags.PartyShop (OFF). No new flag.
 **Supersedes/extends:** WO-486 (store preview pane + per-item sprites). WO-486 right-side preview + narrowed grid is the FOUNDATION; this WO upgrades the preview from a 2D sprite to a 3D render and adds the hero-type filter + the toggling Purchase/Sell + Equip buttons.
