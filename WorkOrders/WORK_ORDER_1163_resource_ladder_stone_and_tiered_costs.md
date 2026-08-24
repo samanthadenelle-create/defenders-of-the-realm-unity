@@ -294,13 +294,32 @@ and no amount of re-pricing fixes a closed circle.**
 Note also `forge` grants **resource efficiency** — a weaponsmith improving resource yield. Scrambled
 the same way the display names were, and fixed by the same ruling.
 
-### The ruled map
+### The ruled map (REFINED 2026-08-23, owner)
 
-| Producer | Resource | Grants (army-wide research) |
+**Every producer tier does TWO things — this is the WC3 two-tab panel, exactly as ruled 2026-07-16:**
+
+> *"upgrading type by default increases production of each type"* · *"on each level unlocks better
+> abilities"*
+
+| Tab | Every producer, every tier |
+|---|---|
+| **Upgrade** | **+production of its own resource** — the baseline, automatic, every level |
+| **Skills** | **an unlocked ability**, escalating per level — the reason to choose this ladder |
+
+| Producer | Resource | Skills line |
 |---|---|---|
-| **Lumber Mill** | wood | **arrows / ranged strength** |
-| **Iron Mine** | iron | **armor + defenses** (troop health + structure HP) |
-| **Quarry** | stone | **damage** |
+| **Lumber Mill** | wood | **arrows + wood-related** |
+| **Quarry** | stone | **damage + range** |
+| **Iron Mine** | iron | **defense + strength** |
+
+⚠ **Note what the "+production" baseline does NOT do on its own:** it is the closed circle §4d
+describes — wood buying more wood. It is fine as a *baseline* precisely because the SKILLS half is
+what carries the outward value. Ship the production bonus without the skills and this reverts to the
+state food died in.
+
+⭐ **The `armorer` ladder ALREADY has the iron shape** — troop health, troop damage, structure HP
+across T1-T4 — which maps cleanly onto **defense + strength**. Do not author it fresh; **move the
+tuned curve** onto the Iron Mine.
 
 ⭐ **The `armorer` ladder ALREADY has the iron shape** — troop health, troop damage, structure HP
 across T1-T4. Do not author it fresh; **move the existing curve** to the Iron Mine. The numbers are
