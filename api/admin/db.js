@@ -110,6 +110,15 @@ module.exports = async (req, res) => {
                 // WO-1114: the dungeon door states. Without this probe the table is
                 // invisible in the viewer, and an operator cannot see what they flipped.
                 ['dungeon_status',     'updated_at',  () => sql`SELECT COUNT(*)::bigint AS rows, MAX(updated_at)  AS latest FROM dungeon_status`],
+                // ⛔ THE MONEY TABLES (WO-1169, added 2026-08-24). These were absent from this list
+                // entirely, so the SERVER'S OWN RECORD OF WHAT WAS PAID was unreadable by any
+                // console — while api/admin/stats.js reported "purchases" from analytics_events, a
+                // CLIENT-emitted event that carries no price at all. The only purchase view we had
+                // counted what the client CLAIMED, not what settled. That is the wrong direction of
+                // trust, and it is the same direction WO-1158 already corrected inside the rail.
+                ['purchase_quotes',       'issued_at',   () => sql`SELECT COUNT(*)::bigint AS rows, MAX(issued_at)   AS latest FROM purchase_quotes`],
+                ['purchase_entitlements', 'created_at',  () => sql`SELECT COUNT(*)::bigint AS rows, MAX(created_at)  AS latest FROM purchase_entitlements`],
+                ['auth_sessions',         'created_at',  () => sql`SELECT COUNT(*)::bigint AS rows, MAX(created_at)  AS latest FROM auth_sessions`],
             ];
             const rows = [];
             for (const [table, tsCol, run] of probes) {
@@ -267,6 +276,89 @@ module.exports = async (req, res) => {
                 ORDER BY 5 DESC
                 LIMIT ${limit}`;
             return res.status(200).json({ view: 'traces', sessions: rows, limit: limit });
+        }
+
+        // -------------------------------------------------------------- purchases
+        // ⭐ THE OPS VIEW FOR REAL MONEY (WO-1169, owner ask 2026-08-24): "i want to make sure on
+        // the other side, in ops, i can see transaction data and understand if the transaction and
+        // the grant happen. if grant fails i need ability to repush, or verify they received".
+        //
+        // ⛔ THE ONE COLUMN THAT ANSWERS IT IS `status`, and the state machine already existed:
+        //     verified      -> the chain transaction is PROVEN and the money is ours...
+        //                      ...but the client never confirmed it persisted the grant.
+        //                      ⚠ THIS IS THE PAID-BUT-NOT-GRANTED ROW. It is the only row shape
+        //                      that can cost a real player real money for nothing, and until now
+        //                      NOTHING IN THE PROJECT COULD SEE IT.
+        //     fulfilled     -> the client acknowledged the grant landed. Money and goods agree.
+        //     manual_review -> verification found something it would not decide alone.
+        //
+        // `unfulfilled_minutes` is computed here rather than left to the reader: "verified 3
+        // minutes ago" is a purchase in flight, "verified 3 DAYS ago" is a player owed goods. Same
+        // status, opposite urgency, and a human scanning timestamps will miss it.
+        //
+        // READ-ONLY, like every other view here. Re-granting is a WRITE and deliberately does NOT
+        // live in this file (see the note at the top): a surface that can mint entitlements needs
+        // its own auth, its own audit row and its own review. Reconcile (api/purchases/reconcile.js)
+        // is the player-initiated restore and can never CREATE an entitlement, which is correct.
+        if (view === 'purchases') {
+            const limit = clampLimit(q.limit, 25, 100);
+            const offset = clampOffset(q.offset);
+
+            // Only the unfulfilled, when asked — the working queue rather than the ledger.
+            const rows = String(q.state || '').toLowerCase() === 'unfulfilled'
+                ? await sql`
+                    SELECT entitlement_id, tx_signature, wallet, sku, network, currency,
+                           status, verified_at, fulfilled_at, quote_ref,
+                           usd_anchor, usd_rate, rate_source,
+                           expected_lamports::text  AS expected_base_units,
+                           observed_lamports::text  AS observed_base_units,
+                           ROUND(EXTRACT(EPOCH FROM (NOW() - verified_at)) / 60)::bigint
+                               AS unfulfilled_minutes
+                    FROM purchase_entitlements
+                    WHERE status <> 'fulfilled'
+                    ORDER BY verified_at DESC
+                    LIMIT ${limit} OFFSET ${offset}`
+                : await sql`
+                    SELECT entitlement_id, tx_signature, wallet, sku, network, currency,
+                           status, verified_at, fulfilled_at, quote_ref,
+                           usd_anchor, usd_rate, rate_source,
+                           expected_lamports::text  AS expected_base_units,
+                           observed_lamports::text  AS observed_base_units,
+                           CASE WHEN status = 'fulfilled' THEN NULL
+                                ELSE ROUND(EXTRACT(EPOCH FROM (NOW() - verified_at)) / 60)::bigint
+                           END AS unfulfilled_minutes
+                    FROM purchase_entitlements
+                    ORDER BY verified_at DESC
+                    LIMIT ${limit} OFFSET ${offset}`;
+
+            // The one-line health read, so an operator does not have to tally rows by eye.
+            const summary = await sql`
+                SELECT status, COUNT(*)::bigint AS rows,
+                       MIN(verified_at) AS oldest, MAX(verified_at) AS newest
+                FROM purchase_entitlements
+                GROUP BY status
+                ORDER BY status`;
+
+            // ⚠ EXPECTED vs OBSERVED IS THE INTEGRITY CHECK, not decoration. /verify refuses a
+            // mismatch, so a row where these differ should be impossible — surface the count so
+            // "impossible" is something we can SEE rather than something we assume.
+            const mismatched = await sql`
+                SELECT COUNT(*)::bigint AS rows
+                FROM purchase_entitlements
+                WHERE expected_lamports <> observed_lamports`;
+
+            return res.status(200).json({
+                view: 'purchases',
+                summary,
+                amount_mismatches: Number(mismatched[0] && mismatched[0].rows) || 0,
+                rows,
+                limit, offset,
+                legend: {
+                    verified: 'PAID, grant NOT confirmed - the player may be owed goods',
+                    fulfilled: 'paid and the client confirmed the grant landed',
+                    manual_review: 'verification declined to decide - needs a human',
+                },
+            });
         }
 
         // ------------------------------------------------------------- bugreports
