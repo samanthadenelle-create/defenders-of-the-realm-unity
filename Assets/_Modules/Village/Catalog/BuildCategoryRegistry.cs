@@ -38,11 +38,33 @@ namespace DeNelle.Village
     /// The resolved palette recipe for one <see cref="BuildType"/>: which catalog
     /// types feed the palette, the verb's label, and the unlock-gated ids to filter.
     /// </summary>
+    /// <summary>
+    /// WO-1167 — one authored display group of the build palette: a header label plus the
+    /// catalog ROLE strings (structures-catalog 'role', the WO-1161 open vocabulary) whose
+    /// cards render under it. DISPLAY ONLY — grouping never re-maps, re-sorts or re-gates a
+    /// row. Authored in build-categories.json 'paletteGroups'; the roles named here are DATA,
+    /// never a C# list (a role list in code is one fact written twice — WO-1161).
+    /// </summary>
+    public sealed class PaletteGroup
+    {
+        public string Label = "";
+        /// <summary>Role strings, compared ordinal-ignore-case against CatalogEntry.role.</summary>
+        public string[] Roles = Array.Empty<string>();
+    }
+
     public sealed class BuildCategory
     {
         public CatalogType[] Types = Array.Empty<CatalogType>();
         public string Label = "Build";
         public HashSet<string> LockedIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        /// <summary>
+        /// WO-1167 — the verb's ordered display groups, or empty = ungrouped (the palette
+        /// renders its flat strip exactly as before). A card whose role names no group falls
+        /// into a trailing "Other" bucket at projection time — never dropped — so a brand-new
+        /// building with a brand-new role appears with zero code change (owner standing rule).
+        /// </summary>
+        public PaletteGroup[] PaletteGroups = Array.Empty<PaletteGroup>();
 
         /// <summary>
         /// WO-1013 -- catalog ids rendered VISIBLE-BUT-LOCKED in this verb's palette
@@ -88,6 +110,15 @@ namespace DeNelle.Village
             [JsonProperty("lockedIds")]    public List<string> LockedIds = new List<string>();
             /// <summary>WO-1013: id -> lock-reason words, rendered as a visible-locked card.</summary>
             [JsonProperty("visibleLockedIds")] public Dictionary<string, string> VisibleLockedIds;
+            /// <summary>WO-1167: ordered display groups (label + role strings). Optional.</summary>
+            [JsonProperty("paletteGroups")] public List<PaletteGroupRow> PaletteGroups;
+        }
+
+        [Serializable]
+        private sealed class PaletteGroupRow
+        {
+            [JsonProperty("label")] public string Label;
+            [JsonProperty("roles")] public List<string> Roles = new List<string>();
         }
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
@@ -180,10 +211,38 @@ namespace DeNelle.Village
                     VisibleLockedReasons = row.VisibleLockedIds != null
                         ? new Dictionary<string, string>(row.VisibleLockedIds, StringComparer.OrdinalIgnoreCase)
                         : new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase),
+                    PaletteGroups = ParsePaletteGroups(row.PaletteGroups),
                 };
                 map[row.BuildType] = cat;
             }
             return map.Count > 0 ? map : null;
+        }
+
+        /// <summary>
+        /// WO-1167 — parse the authored group rows, dropping only rows that could never
+        /// render (no label AND no roles). A labelled row with roles nobody authors yet is
+        /// KEPT: it simply matches nothing and renders nothing, which is the correct way for
+        /// a group authored ahead of its buildings to behave.
+        /// </summary>
+        private static PaletteGroup[] ParsePaletteGroups(List<PaletteGroupRow> rows)
+        {
+            if (rows == null || rows.Count == 0) return Array.Empty<PaletteGroup>();
+            var groups = new List<PaletteGroup>(rows.Count);
+            foreach (var r in rows)
+            {
+                if (r == null) continue;
+                var roles = new List<string>(r.Roles != null ? r.Roles.Count : 0);
+                if (r.Roles != null)
+                    foreach (var role in r.Roles)
+                        if (!string.IsNullOrEmpty(role)) roles.Add(role);
+                if (string.IsNullOrEmpty(r.Label) && roles.Count == 0) continue;
+                groups.Add(new PaletteGroup
+                {
+                    Label = r.Label ?? "",
+                    Roles = roles.ToArray(),
+                });
+            }
+            return groups.ToArray();
         }
 
         // ── Hardcoded fallback — used ONLY when the JSON cannot be loaded ──────────
@@ -199,6 +258,12 @@ namespace DeNelle.Village
                 {
                     Types = new[] { CatalogType.Resource, CatalogType.Collector },
                     Label = "Build Town",
+                    // WO-1167: the fallback DELIBERATELY carries NO paletteGroups. The group
+                    // role lists are DATA and may exist only in build-categories.json — a
+                    // hand-mirrored role list here would be one fact written twice (the exact
+                    // drift shape WO-1161/§2/§5/§16 keep re-teaching), and the oracle asserts
+                    // no role list exists in C#. On a JSON parse failure the palette degrades
+                    // to its flat, ungrouped strip — the pre-WO-1167 behaviour, fully playable.
                     // Jeweler stays unlock-gated (moved here from Defense — it is a
                     // Resource row and belongs to the Town verb).
                     // WO-707 (owner taxonomy 2026-07-13, one building per trade): the palette

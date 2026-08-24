@@ -1,6 +1,8 @@
 # WORK ORDER 1167 — The build palette groups itself by ROLE, so a new building needs data and not code
 
-**Status:** READY TO IMPLEMENT.
+**Status:** DONE 2026-08-24 (CLI) — see `WORK_ORDER_1167_build_palette_groups_by_role.RESULT.md`.
+Headless-verified (`COMPILE_GATE_OK` + `REGRESSION_OK 272/272` incl. the new `[palette-groups]`
+oracle); rendered as WO-1172 Option A (inline dividers); owner felt-verify closes it.
 
 **Minted:** 2026-08-24 (CLI), banner bumped 1167 → 1168 in the same edit.
 **Provenance:** owner, 2026-08-24 — *"What about the buildings, is that done grouping by collector

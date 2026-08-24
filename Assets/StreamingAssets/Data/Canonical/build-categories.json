@@ -1,5 +1,6 @@
 {
- "version": 2,
+ "version": 3,
+ "_paletteGroupsNote": "WO-1167 (owner ask 2026-08-24: 'is that done grouping by collector producer storage defense? For build menu and UI'). 'paletteGroups' is an OPTIONAL, ORDERED, DISPLAY-ONLY block on a verb row: each group names a label + the catalog ROLE strings (structures-catalog 'role', the WO-1161 open vocabulary) whose cards render under that header, in authored group order. RULES, enforced by BuildPaletteGroupsRegression: (1) a card whose role names NO group falls into a trailing 'Other' bucket - NEVER dropped, so a brand-new building with a brand-new role appears with ZERO code change (the owner's standing rule); (2) a group with no renderable members renders NOTHING - no empty header; (3) order WITHIN a group is the existing WO-963 displayOrder sort - grouping adds headers, it does not re-sort; (4) buildType/catalogTypes/lockedIds are untouched - nothing re-maps, no id changes (ids are frozen save keys). The grouping axis is ROLE, deliberately NOT 'type': Farm and Lumber Mill are Collector while Silo/Lumberyard/Foundry are Resource, so 'type' splits producers from their stores down the middle - exactly the wrong picture. ⛔ NO ROLE LIST MAY EXIST IN C# - the groups live HERE and only here (WO-1161: a role list in code is one fact written twice).",
  "notes": "Build-verb -> catalog-type mapping (owner 2026-07-10 generic build-mode; WO-673 taxonomy 2026-07-11). ONE generic entry BuildModeController.EnterBuildMode(BuildType) is parameterised by 'buildType'; each row maps it to the CatalogType(s) that feed its palette + the unlock-gated ids to filter. Loaded at startup by BuildCategoryRegistry (Village) via CanonicalJson (Resources-first, WebGL-safe). Keep the Resources + StreamingAssets copies byte-equal. 'buildType' / 'catalogTypes' are enum NAMES (StringEnumConverter). 'lockedIds' are catalog ids kept in the catalog but filtered out of THIS verb's palette until their unlock ships. WO-673 (owner ruling 2026-07-11, displays Town / Defenses / Walls): Town = the player-placed functional buildings (Resource + Collector, always on -- WO-682 removed ff.strategicplacement 2026-07-13; supersedes the 2026-06-27 'Defensive only' palette ruling); Defense keeps towers/gates; Walls split out (claimed-outpost wall canon). The jeweler unlock-gate moved from Defense to Town (it is a Resource row). Collector/Support remain as standalone legacy verbs. WO-1010 D21 (owner D8 resolution 2026-08-09): the Walls row's 'label' is the DISPLAY string for the build screen's right-edge quick-tab -- renamed 'Castle Structures' (walls + gates-to-come, verticality later). DISPLAY ONLY: buildType keys + catalogTypes unchanged, nothing re-maps. WO-948 (owner ruling 2026-08-10): walls BUILD at level 1 ONLY (CoC model) -- 'wall_stone' is locked out of the Walls palette here; the catalog ROW survives so existing saves replay/sell placed stone walls (BaseLayoutLoader resolves via CatalogRegistry and never consults these lockedIds). Stone is reached by UPGRADING a placed wood wall (wall_wood maxLevel 2); steel/spiked stay WO-904's behind raid-steal. WO-1013 (2026-08-10): 'visibleLockedIds' is a DIFFERENT axis from 'lockedIds' -- id -> lock-reason WORDS, rendered as a visible card (normal cost shown) that cannot be armed until the id's persisted unlock flag flips (ProgressionUnlocks / SeenTutorials 'unlock.<id>'). The Arcane Spire card is visible-locked 'Recover the plans' from minute one; the wave-2 Castle Defense Plans drop lifts it.",
  "categories": [
   {
@@ -14,6 +15,42 @@
     "mine_crystal",
     "mill",
     "lumbermill"
+   ],
+   "paletteGroups": [
+    {
+     "label": "Producers",
+     "roles": [
+      "wood_producer",
+      "food_producer",
+      "iron_producer"
+     ]
+    },
+    {
+     "label": "Storage",
+     "roles": [
+      "wood_store",
+      "food_store",
+      "iron_store"
+     ]
+    },
+    {
+     "label": "Trade",
+     "roles": [
+      "marketplace",
+      "weaponsmith",
+      "armorer",
+      "jeweler",
+      "crafting_station"
+     ]
+    },
+    {
+     "label": "Civic",
+     "roles": [
+      "barracks",
+      "echo_home",
+      "arcane"
+     ]
+    }
    ]
   },
   {

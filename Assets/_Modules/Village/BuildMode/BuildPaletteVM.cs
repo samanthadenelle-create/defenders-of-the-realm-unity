@@ -52,6 +52,31 @@ namespace DeNelle.Village
     }
 
     /// <summary>
+    /// WO-1167 — one rendered SECTION of the grouped palette: a header label plus the cards
+    /// that fall under it, in their existing WO-963 display order. Projection only: sections
+    /// are computed from the authored <see cref="PaletteGroup"/> rows + each card's catalog
+    /// role; nothing is re-sorted, re-gated or dropped. A card whose role names no authored
+    /// group lands in the trailing "Other" section — never dropped, so a brand-new building
+    /// with a brand-new role appears with zero code change (owner standing rule, WO-1161).
+    /// </summary>
+    public sealed class PaletteSectionVM
+    {
+        /// <summary>Header words (authored group label, or "Other" for the trailing bucket).</summary>
+        public readonly string Label;
+        /// <summary>The section's cards, in the flat strip's existing order. Never null/empty.</summary>
+        public readonly IReadOnlyList<StructureCardVM> Cards;
+        /// <summary>True for the trailing catch-all bucket (unlisted / unroled cards).</summary>
+        public readonly bool IsOther;
+
+        public PaletteSectionVM(string label, IReadOnlyList<StructureCardVM> cards, bool isOther)
+        {
+            Label = label ?? "";
+            Cards = cards;
+            IsOther = isOther;
+        }
+    }
+
+    /// <summary>
     /// ViewModel for the Build Mode structure palette. Projects the configured build verb's
     /// catalog entries into <see cref="StructureCardVM"/> cards (cost/affordability/targeting)
     /// and raises <see cref="Changed"/> on any wallet or verb change.
@@ -81,6 +106,11 @@ namespace DeNelle.Village
             new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         private readonly Func<string, bool> _unlockedProvider;
         private readonly List<StructureCardVM> _cards = new List<StructureCardVM>();
+        // WO-1167 — the active verb's authored display groups (build-categories 'paletteGroups')
+        // and the sections projected from them. Empty groups = ungrouped verb = empty sections,
+        // and the View renders its flat strip exactly as before.
+        private PaletteGroup[] _paletteGroups = Array.Empty<PaletteGroup>();
+        private readonly List<PaletteSectionVM> _sections = new List<PaletteSectionVM>();
 
         /// <summary>Resolves the live catalog/economy/state handles itself — the ONLY resolution
         /// site (audit §3.1). The View never names these services.</summary>
@@ -152,6 +182,15 @@ namespace DeNelle.Village
         /// <summary>The projected cards for the active build verb. Never null.</summary>
         public IReadOnlyList<StructureCardVM> Cards => _cards;
 
+        /// <summary>
+        /// WO-1167 — the grouped projection of <see cref="Cards"/>: authored sections in
+        /// authored order, then the trailing "Other" bucket. EMPTY when the active verb
+        /// authors no 'paletteGroups' (the View renders the flat strip). The union of every
+        /// section's cards is exactly <see cref="Cards"/> — same objects, same order,
+        /// nothing dropped, nothing re-sorted.
+        /// </summary>
+        public IReadOnlyList<PaletteSectionVM> Sections => _sections;
+
         /// <summary>Live crystal balance (drives the header "Crystals: N" read-out).</summary>
         public int Crystals => _economy?.Crystals ?? 0;
 
@@ -183,6 +222,13 @@ namespace DeNelle.Village
                 _lockedIds = cat.LockedIds ?? new HashSet<string>(StringComparer.OrdinalIgnoreCase);
                 _visibleLockedReasons = cat.VisibleLockedReasons
                     ?? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+                // WO-1167: the verb's authored display groups ride the same recipe. Absent =
+                // empty = the flat strip (Defense / Walls / the legacy verbs are unchanged).
+                _paletteGroups = cat.PaletteGroups ?? Array.Empty<PaletteGroup>();
+            }
+            else
+            {
+                _paletteGroups = Array.Empty<PaletteGroup>();
             }
             // WO-1010 D21 (owner D8 resolution 2026-08-09): the Walls verb surfaces as the
             // "Castle Structures" DISPLAY category on the right-edge quick-tab stack. Named
@@ -262,6 +308,9 @@ namespace DeNelle.Village
 
             _lockedIds = locked;
             _visibleLockedReasons = visibleLocked;
+            // WO-1167: the D15 merged view is COMPOSED across verbs, so no single verb's
+            // authored paletteGroups applies — it renders flat (and nothing ships this path).
+            _paletteGroups = Array.Empty<PaletteGroup>();
             FlowTrace.Step("BuildPalette",
                 $"group-configure: group={group} types={string.Join(",", types)} lockedIds={locked.Count} " +
                 $"visibleLocked={visibleLocked.Count}");
@@ -335,6 +384,24 @@ namespace DeNelle.Village
                     "(build-categories lockedIds; catalog rows survive for save replay/sell)");
             FlowTrace.Step("BuildPalette",
                 $"catalog-count: registry={RegistryCount} cards={_cards.Count} (types={_types.Length})");
+            // WO-1167 — project the grouped sections off the SAME card list (headers only;
+            // no re-sort, no re-gate, nothing dropped). Ungrouped verbs project nothing and
+            // the View renders the flat strip exactly as before.
+            _sections.Clear();
+            if (_paletteGroups.Length > 0)
+            {
+                _sections.AddRange(GroupCards(_cards, _paletteGroups));
+                var sb = new System.Text.StringBuilder();
+                foreach (var s in _sections)
+                {
+                    if (sb.Length > 0) sb.Append(" | ");
+                    sb.Append(s.Label).Append('=').Append(s.Cards.Count);
+                    if (s.IsOther) sb.Append("(Other)");
+                }
+                FlowTrace.Step("BuildPalette",
+                    $"palette-sections: groups={_paletteGroups.Length} sections={_sections.Count} [{sb}] " +
+                    "(WO-1167 role grouping; empty groups render nothing, unlisted roles land in Other)");
+            }
             // WO-963 §12 — name the ORDER that shipped, so a "the carousel is in the wrong order"
             // report is one read: card-order tells authored-first from catalog-order at a glance.
             FlowTrace.Step("BuildPalette",
@@ -400,6 +467,85 @@ namespace DeNelle.Village
         {
             if (e == null) return int.MaxValue;
             return e.displayOrder > 0 ? e.displayOrder : int.MaxValue;
+        }
+
+        // ── WO-1167: the ONE grouping projection ──────────────────────────────
+
+        /// <summary>
+        /// WO-1167 — split an ordered card list into display sections by each card's catalog
+        /// ROLE against the authored <paramref name="groups"/>.
+        ///
+        /// THE RULES, in ruling order:
+        ///  1. A card whose role names NO group — including a card with no role at all — falls
+        ///     into a trailing "Other" section. NEVER dropped: a building that vanishes from
+        ///     the palette because someone forgot to author a group is worse than an ugly
+        ///     header, and "a brand-new role appears with zero code change" is the owner's
+        ///     standing rule this projection exists to keep.
+        ///  2. A group none of whose roles matched a card is OMITTED — no empty header.
+        ///  3. Order within a section is the incoming card order (the WO-963 sort) — grouping
+        ///     adds headers, it does not re-sort. Sections come out in authored group order.
+        ///  4. A role claimed by TWO groups resolves to the FIRST (authored order) and the
+        ///     collision is reported via FlowTrace.Warn — never a silent coin flip.
+        ///
+        /// PURE + static so the regression drives the real shipped projection: the union of
+        /// the returned sections' cards is exactly the input list (same objects, same order).
+        /// ⛔ NO ROLE STRING IS NAMED IN THIS METHOD OR ANYWHERE IN THIS FILE — the role
+        /// vocabulary lives in the data (WO-1161); this code only compares strings it is handed.
+        /// </summary>
+        public static List<PaletteSectionVM> GroupCards(
+            IReadOnlyList<StructureCardVM> cards, IReadOnlyList<PaletteGroup> groups)
+        {
+            var sections = new List<PaletteSectionVM>();
+            if (cards == null) return sections;
+            int groupCount = groups != null ? groups.Count : 0;
+            if (groupCount == 0)
+            {
+                // No authored groups — the caller should be rendering flat; if it asks anyway,
+                // everything is "Other" so nothing can be dropped.
+                if (cards.Count > 0)
+                    sections.Add(new PaletteSectionVM("Other", new List<StructureCardVM>(cards), true));
+                return sections;
+            }
+
+            // role -> first group claiming it (authored order wins; duplicates reported).
+            var roleToGroup = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+            for (int g = 0; g < groupCount; g++)
+            {
+                var roles = groups[g] != null ? groups[g].Roles : null;
+                if (roles == null) continue;
+                foreach (var role in roles)
+                {
+                    if (string.IsNullOrEmpty(role)) continue;
+                    if (roleToGroup.TryGetValue(role, out int first))
+                    {
+                        FlowTrace.Warn("BuildPalette",
+                            $"paletteGroups role '{role}' is claimed by BOTH group '{groups[first]?.Label}' " +
+                            $"and group '{groups[g]?.Label}' — keeping the first (authored order). " +
+                            "A role must name exactly one group; fix build-categories.json.");
+                        continue;
+                    }
+                    roleToGroup[role] = g;
+                }
+            }
+
+            var buckets = new List<StructureCardVM>[groupCount];
+            List<StructureCardVM> other = null;
+            foreach (var card in cards)
+            {
+                if (card == null) continue;
+                string role = card.Entry != null ? card.Entry.role : null;
+                if (!string.IsNullOrEmpty(role) && roleToGroup.TryGetValue(role, out int g))
+                    (buckets[g] ??= new List<StructureCardVM>()).Add(card);
+                else
+                    (other ??= new List<StructureCardVM>()).Add(card);   // rule 1 — never dropped
+            }
+
+            for (int g = 0; g < groupCount; g++)
+                if (buckets[g] != null && buckets[g].Count > 0)          // rule 2 — no empty header
+                    sections.Add(new PaletteSectionVM(groups[g]?.Label, buckets[g], false));
+            if (other != null && other.Count > 0)
+                sections.Add(new PaletteSectionVM("Other", other, true));
+            return sections;
         }
 
         private void Raise() { if (!_disposed) Changed?.Invoke(); }

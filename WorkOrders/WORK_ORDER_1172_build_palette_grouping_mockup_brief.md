@@ -1,7 +1,11 @@
 # WORK ORDER 1172 — Build palette grouping: SELF-CONTAINED MOCKUP BRIEF
 
-**Status:** READY FOR EXTERNAL MOCKUP. Hand this whole file to a design AI — it needs no repo access.
-Implementation follows WO-1167 once a layout is chosen.
+**Status:** DONE 2026-08-24 (CLI) — mockups delivered; owner layout pick + felt-verify closes it.
+Three layout options (A inline dividers / B filter chips / C stacked rows), each with a working
+greyscale check, empty/single states and a growth note, published as an artifact page:
+https://claude.ai/code/artifact/76be2507-6d7c-4bf3-9b1e-bd5ca171654a
+**Option A is implemented behind WO-1167** (headers are render-only, so switching to B/C later is a
+View change — the data does not move). *(Original brief below, unchanged.)*
 
 **Minted:** 2026-08-24 (CLI), banner bumped 1172 → 1173 in the same edit.
 **Provenance:** owner — *"What about the buildings, is that done grouping by collector producer

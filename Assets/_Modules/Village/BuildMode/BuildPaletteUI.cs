@@ -196,6 +196,11 @@ namespace DeNelle.Village
         /// <summary>Fixed pixel width of one card (never a fraction of the band — UI_PLAYBOOK §3).
         /// Named because the D13 band-coverage trace has to reason about it.</summary>
         private const float CardWidthPx = 260f;
+        /// <summary>WO-1167 — fixed pixel width of one section-header divider in the grouped
+        /// strip. Narrow on purpose: it is a READ, not a touch target (non-interactive, so the
+        /// MinTouchPx floor does not apply), and 4 headers x 96px is the whole width the
+        /// grouping costs the scroll. Fixed pixels per the fixed-pixel-band rule.</summary>
+        private const float SectionHeaderWidthPx = 96f;
 
         // WO-673 category switcher (always on — WO-682), RE-HOMED by WO-1010 D21: the
         // owner-ruled three build categories — Town / Defense / Castle Structures (the
@@ -777,12 +782,47 @@ namespace DeNelle.Village
             // catalog-count trace is emitted by the VM on (re)build.
             var cards = _vm.Cards;
 
+            // WO-1167 — GROUPED RENDER. When the active verb authors paletteGroups the VM
+            // projects Sections (authored order + trailing Other); the View inserts a narrow
+            // vertical header divider before each section's card run. The section split is
+            // the VM's; this block only draws headers — same cards, same order, same
+            // BuildCard path, so arming/locking/affordability are untouched. Sections empty =
+            // ungrouped verb = the flat strip below, exactly as before (Defense / Walls).
+            // Colourblind-safe by construction: the group identity is TEXT on a plate at a
+            // POSITION in the run — colour never carries it (owner is red/green colourblind).
+            //
             // §12: guard EACH card build so one bad entry (missing field / kit quirk) is
             // logged + skipped instead of blanking the whole palette — the WebGL "shows
             // nothing, no error" silent-failure class becomes a logged line.
-            var built = Guard.TryEach("BuildPalette", "build card", cards,
-                c => BuildCard(c));
-            FlowTrace.Step("BuildPalette", $"rows-added: built={built.built} failed={built.failed}");
+            var sections = _vm.Sections;
+            int headersBuilt = 0;
+            (int built, int failed) built;
+            if (sections != null && sections.Count > 0)
+            {
+                int b = 0, f = 0;
+                foreach (var section in sections)
+                {
+                    if (section == null || section.Cards == null || section.Cards.Count == 0) continue;
+                    Guard.Try("BuildPalette", "build section header '" + section.Label + "'", () =>
+                    {
+                        BuildSectionHeader(section.Label);
+                        headersBuilt++;
+                    });
+                    var r = Guard.TryEach("BuildPalette", "build card", section.Cards,
+                        c => BuildCard(c));
+                    b += r.built; f += r.failed;
+                }
+                built = (b, f);
+                FlowTrace.Step("BuildPalette",
+                    $"rows-added: built={built.built} failed={built.failed} headers={headersBuilt} " +
+                    $"sections={sections.Count} (WO-1167 grouped strip)");
+            }
+            else
+            {
+                built = Guard.TryEach("BuildPalette", "build card", cards,
+                    c => BuildCard(c));
+                FlowTrace.Step("BuildPalette", $"rows-added: built={built.built} failed={built.failed}");
+            }
 
             // WO-1010 D13 — BAND COVERAGE. The defect was tab-specific (Defenses, not Town) and
             // nothing in the card code is tab-specific, so the variable is how much of the tray
@@ -793,7 +833,11 @@ namespace DeNelle.Village
             // from "the shop is drawn right and there is simply not much in this category".
             var trayRt2 = _trayGo != null ? _trayGo.transform as RectTransform : null;
             float trayW = trayRt2 != null ? trayRt2.rect.width : 0f;
-            float contentW = built.built * CardWidthPx + Mathf.Max(0, built.built - 1) * 10f + 24f;
+            // WO-1167: section headers are layout participants too — count them, or the
+            // coverage number under-reads the grouped strip and the D13 read goes wrong.
+            int elements = built.built + headersBuilt;
+            float contentW = built.built * CardWidthPx + headersBuilt * SectionHeaderWidthPx
+                + Mathf.Max(0, elements - 1) * 10f + 24f;
             FlowTrace.Step("BuildPalette",
                 $"band-coverage: cards={built.built} contentPx={contentW:F0} trayPx={trayW:F0} " +
                 $"cover={(trayW > 0f ? contentW / trayW : 0f):F2} (tray fill is OPAQUE -- D13)");
@@ -809,6 +853,55 @@ namespace DeNelle.Village
                 lrt.sizeDelta = new Vector2(360f, 0f);
                 none.gameObject.AddComponent<LayoutElement>().preferredWidth = 360f;
             }
+        }
+
+        /// <summary>
+        /// WO-1167 — one section-header divider in the grouped strip: a narrow full-height
+        /// obsidian plate carrying the group's label in gilt, with a gold left rule so the
+        /// section boundary reads as SHAPE + POSITION even before the word does. The label is
+        /// DATA (build-categories 'paletteGroups' label — variable length, so it autosizes
+        /// down rather than truncating; the quick-tab caption lesson). Non-interactive: it is
+        /// a read, never a control, so it raycasts nothing and needs no touch floor. Works in
+        /// greyscale by construction — text + rule + position carry the meaning, colour only
+        /// reinforces (owner is red/green colourblind).
+        /// </summary>
+        private void BuildSectionHeader(string label)
+        {
+            var headerGo = new GameObject("SectionHeader_" + (string.IsNullOrEmpty(label) ? "unnamed" : label),
+                typeof(RectTransform), typeof(Image), typeof(LayoutElement));
+            headerGo.transform.SetParent(_stripContent, false);
+            var rt = headerGo.GetComponent<RectTransform>();
+            rt.sizeDelta = new Vector2(SectionHeaderWidthPx, 0f);
+            headerGo.GetComponent<LayoutElement>().preferredWidth = SectionHeaderWidthPx;
+            var img = headerGo.GetComponent<Image>();
+            img.color = ElarionUiKit.ObsidianFill;
+            img.raycastTarget = false;
+
+            // Gold LEFT rule — the section boundary as a shape, mirroring the kit's band rules.
+            var rule = new GameObject("GoldRule", typeof(RectTransform), typeof(Image));
+            rule.transform.SetParent(headerGo.transform, false);
+            var rrt = (RectTransform)rule.transform;
+            rrt.anchorMin = new Vector2(0f, 0.06f);
+            rrt.anchorMax = new Vector2(0f, 0.94f);
+            rrt.pivot = new Vector2(0f, 0.5f);
+            rrt.sizeDelta = new Vector2(3f, 0f);
+            rrt.anchoredPosition = Vector2.zero;
+            var ruleImg = rule.GetComponent<Image>();
+            ruleImg.color = ElarionUi.Gilt;
+            ruleImg.raycastTarget = false;
+
+            var text = MakeText(headerGo.transform, string.IsNullOrEmpty(label) ? "" : label.ToUpperInvariant(),
+                16, ElarionUi.Gilt, FontStyles.Bold, TextAlignmentOptions.Center,
+                new Vector2(0.10f, 0.06f), new Vector2(0.96f, 0.94f));
+            // Authored labels vary in length — shrink to fit the narrow plate, never ellipsize
+            // (a shrunk word is readable; "PRODUC..." is not). Wrapping stays on so a two-word
+            // label stacks instead of vanishing.
+            text.enableAutoSizing = true;
+            text.fontSizeMin = 10f;
+            text.fontSizeMax = 18f;
+
+            FlowTrace.Step("BuildPalette",
+                $"section-header built label='{label}' width={SectionHeaderWidthPx}px (WO-1167 grouped strip)");
         }
 
         private void BuildCard(StructureCardVM card)

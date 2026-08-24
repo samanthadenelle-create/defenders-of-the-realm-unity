@@ -850,6 +850,14 @@ namespace DeNelle.Editor
             // silently draws a DIFFERENT ladder, with no log line and no symptom. ---
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "collector-ladder suite", () => { if (!DeNelle.Editor.Regression.CollectorLadderRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[collector-ladder] " + r); });
 
+            // --- WO-1167 (2026-08-24): the build palette groups itself by catalog ROLE
+            // (build-categories 'paletteGroups' — Producers/Storage/Trade/Civic + a trailing
+            // Other bucket). Pins the owner's standing rule at both ends: a brand-new role
+            // lands in Other with ZERO code change (driven through the real shipped
+            // projection, BuildPaletteVM.GroupCards), and NO role literal may exist in the
+            // palette C# — the membership lives in the data and only there (WO-1161). ---
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "palette-groups suite", () => { if (!DeNelle.Editor.Regression.BuildPaletteGroupsRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[palette-groups] " + r); });
+
             // --- 2026-08-10 wave-3 lanes. Each lane authored its oracle but left the
             // registration to the committer on purpose (this file is lane-fenced, so
             // nine agents editing it in parallel would collide). Registered here in the
