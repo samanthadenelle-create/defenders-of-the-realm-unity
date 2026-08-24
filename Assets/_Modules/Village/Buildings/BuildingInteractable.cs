@@ -716,8 +716,8 @@ namespace DeNelle.Village
         {
             // ── Roles the catalog authors: the word comes from the row, never from here ──
             BuildingType.Workshop    => RoleWord(StructureRole.CraftingStation), // id "workshop"   -> "Crafting Station"
-            BuildingType.Farm        => RoleWord(StructureRole.FoodFaucet),      // id "collector_farm"
-            BuildingType.Lumbermill  => RoleWord(StructureRole.WoodFaucet),      // id "collector_lumbermill" -> "Lumber Mill"
+            BuildingType.Farm        => RoleWord(StructureRole.FoodProducer),      // id "collector_farm"
+            BuildingType.Lumbermill  => RoleWord(StructureRole.WoodProducer),      // id "collector_lumbermill" -> "Lumber Mill"
             BuildingType.Forge       => RoleWord(StructureRole.Weaponsmith),     // id "forge" (SELLS WEAPONS)
             BuildingType.Armorer     => RoleWord(StructureRole.Armorer),         // id "armorer" (SELLS ARMOUR)
             BuildingType.JewelersBench => RoleWord(StructureRole.Jeweler),       // id "jeweler"

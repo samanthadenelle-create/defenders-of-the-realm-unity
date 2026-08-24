@@ -78,11 +78,11 @@ namespace DeNelle.Core.Catalog
 
         // ── The resource faucets. Code branches on these (the Echo harvest gate) ──
         /// <summary>The FOOD faucet.</summary>
-        public const string FoodFaucet = "food_faucet";
+        public const string FoodProducer = "food_producer";
         /// <summary>The WOOD faucet.</summary>
-        public const string WoodFaucet = "wood_faucet";
+        public const string WoodProducer = "wood_producer";
         /// <summary>The IRON faucet.</summary>
-        public const string IronFaucet = "iron_faucet";
+        public const string IronProducer = "iron_producer";
 
         // ── The storage containers (WO-707: stock lives apart from the shop) ──
         /// <summary>Stores wood.</summary>

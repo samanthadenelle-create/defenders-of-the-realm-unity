@@ -165,6 +165,33 @@ namespace DeNelle.Core.Catalog
         public string[] satisfiedByStructureIds = null;
 
         /// <summary>
+        /// Flat GOLD cost to restore this structure after it has been DESTROYED, dependent
+        /// on nothing else. 0/absent = no gold restore path (the WO-753 default applies).
+        ///
+        /// <para>⛔ A NAMED EXCEPTION TO WO-753, NOT A CONTRADICTION OF IT. WO-753 ruled that
+        /// destroyed items never "rebuild" — you build fresh at full cost. That stands for
+        /// everything except a TIER-ONE PRODUCER, by owner ruling 2026-08-23. Recorded here so
+        /// the next seat reads it as a deliberate carve-out instead of "fixing" it back.</para>
+        ///
+        /// <para>⛔ WHY THE CARVE-OUT EXISTS, in the numbers that forced it: every tier-one
+        /// producer is priced in the resource it PRODUCES. The armorer costs 280 IRON and is the
+        /// iron producer; the lumber mill costs 160 WOOD and is the wood producer; the farm costs
+        /// 240 wood. So losing the building loses the resource, and the resource is what buys the
+        /// building back — the economy closes on itself with no way out. That is not a balance
+        /// question, it is a soft-lock.</para>
+        ///
+        /// <para>Gold is the escape because it is UNCAPPED by design
+        /// (<c>TownBankCapacity.UncappableResources</c>) and drops from kills, so it is always
+        /// reachable WITHOUT owning another building. 150 sizes to roughly one wave of clearing
+        /// at the live curve (kill rewards 3-120, median 18).</para>
+        ///
+        /// <para>⚠ FIRST placement is a different path and is already FREE — <c>freeBuildsUsed</c>
+        /// (save v32) grants one free placement per catalog id, burns on commit, and never
+        /// refunds. This field covers RESTORE only.</para>
+        /// </summary>
+        public int restoreGoldCost = 0;
+
+        /// <summary>
         /// Phase 2 (owner): true = at most ONE of these may exist in the village (pet-house,
         /// forge, mill, arcane-tower, Heart). Pure-data flag only for now — the enforce /
         /// auto-find-existing wiring is a follow-up; this just carries the intent so build /
