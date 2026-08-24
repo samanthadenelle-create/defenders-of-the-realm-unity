@@ -1,4 +1,5 @@
-**Status:** FIXED 2026-08-23 (57b2c4595) — rules moved out of the assembly cycle that made them unrunnable; registered as [ui-touch-oracle], 269->270 suites. ⚠ RED ON 43 REAL PANELS — that is the oracle working, and TWO OWNER CALLS are open (see the RESULT): baseline the 4 newly-red panels, and rule on the ~21 full-panel tap-catcher overlaps. AWAITING OWNER RULING.
+**Status:** BLOCKED - two owner rulings open. The oracle landed (`57b2c4595`) and works, but its OWN acceptance is unmet: the required four-entry baseline has **two** entries and **43 panels are still red**.  *(Bucket corrected 2026-08-24: the line led with FIXED while its own text said work remained. Prior line preserved below.)*
+>  PRIOR: **Status:** FIXED 2026-08-23 (57b2c4595) — rules moved out of the assembly cycle that made them unrunnable; registered as [ui-touch-oracle], 269->270 suites. ⚠ RED ON 43 REAL PANELS — that is the oracle working, and TWO OWNER CALLS are open (see the RESULT): baseline the 4 newly-red panels, and rule on the ~21 full-panel tap-catcher overlaps. AWAITING OWNER RULING.
 ⚠ Read the 2026-08-23 section: `UI_TOUCH_FAIL` is RED TODAY on 43 real findings across four panels
 that were NOT on anyone's list. Those are new tickets, not a reason to grow the allow-list.
 *(was: READY TO IMPLEMENT — owner-requested 2026-08-22, "yes do the clamp oracle")*

@@ -1,4 +1,5 @@
-**Status:** FIXED 2026-08-23 (1c023535c) — crystals pay once per UTC day; day-key promoted to DeNelle.Core.UtcDay. ⚠ Extreme crystal income halves 242 -> 121/day; the clear-count ladder is NOT built (owner numbers open). AWAITING OWNER FELT-TEST.
+**Status:** BLOCKED - owner numbers open. The daily crystal reward landed (`1c023535c`), but the **clear-count ladder - the repeatable-endgame core of this ticket - is NOT BUILT**, and its numbers are the owner's.  *(Bucket corrected 2026-08-24: the line led with FIXED while its own text said work remained. Prior line preserved below.)*
+>  PRIOR: **Status:** FIXED 2026-08-23 (1c023535c) — crystals pay once per UTC day; day-key promoted to DeNelle.Core.UtcDay. ⚠ Extreme crystal income halves 242 -> 121/day; the clear-count ladder is NOT built (owner numbers open). AWAITING OWNER FELT-TEST.
 
 ---
 

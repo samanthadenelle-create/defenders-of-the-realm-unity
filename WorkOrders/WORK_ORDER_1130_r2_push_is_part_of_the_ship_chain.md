@@ -124,3 +124,19 @@ if the bucket is ever emptied or the CDN is unreachable. That half is PROD-010 /
 `tools/r2_sync.py` itself (PROD-011 owns it — including the docstring at `:21` that still teaches
 the wrong `--push ServerData/Android` form) · the Addressables group assets · any `Assets/` code ·
 the `m_Timeout: 0` decision (PROD-011 §3 ruled it finished, not missing).
+
+## ⭐ §5 RESOLVED 2026-08-24 - the raw `adb install` bypass CANNOT be closed, and that is the answer
+
+§5 sat open because the ticket wanted the bypass *prevented*. **It cannot be.** Nothing in this repo
+can stop an arbitrary external process from invoking `adb` or `Unity.exe` - a wrapper guards only what
+passes through the wrapper. That was ruled on **WO-1178**, which hit the identical shape from the
+other end: a raw `Unity.exe` launch bypassed all six pinned scripts and silently downgraded
+`ProjectVersion.txt`.
+
+⭐ **So the resolution is to stop trying to prevent it and make it LOUD.** The `pre-push` hook
+(§16) already does this for R2: it refuses a push whenever `ServerData/` is newer than the parity
+proof, and it needs no network to do it - *the proof must postdate the bytes it claims to prove*.
+That is detection, not prevention, and it is the correct shape.
+
+⚠ §5 is therefore **answered, not outstanding**. Leaving it written as "OPEN" implied a fix was
+owed that no one could ever deliver.

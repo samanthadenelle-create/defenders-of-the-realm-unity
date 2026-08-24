@@ -1,6 +1,7 @@
 # WORK ORDER 1129 — The art tree reconciliation: one derived path, no typed literals, and a coverage oracle
 
-**Status:** FIXED — AWAITING OWNER FELT-TEST TO CLOSE. Prior status: IMPLEMENTED 2026-08-21 - convex Finish-Now curve (anchored at the 24h clamp, floor 3->10) + rescale parity restored across CatalogBootstrap, the cost-basket baseline and the jeweler sim. Gate-green.
+**Status:** READY - PARTIAL. §3.2 physical consolidation, literal triage, widening, render proof and gates all remain - the ticket's own words: **"STILL OPEN - and it is the bulk of the ticket."** Needs Unity batchmode (`AssetDatabase.MoveAsset`, to preserve GUIDs).  *(Bucket corrected 2026-08-24: the line led with FIXED while its own text said work remained. Prior line preserved below.)*
+>  PRIOR: **Status:** FIXED — AWAITING OWNER FELT-TEST TO CLOSE. Prior status: IMPLEMENTED 2026-08-21 - convex Finish-Now curve (anchored at the 24h clamp, floor 3->10) + rescale parity restored across CatalogBootstrap, the cost-basket baseline and the jeweler sim. Gate-green.
 **Minted:** 2026-08-20 (CLI seat) — banner bumped 1129 → 1130 in the SAME edit
 **Lane:** Asset organisation + the path-resolution seam + a new coverage gate. Touches
 `Assets/EnemyContent/**`, `Assets/Art/Incoming_Tripo/**`, the resolvers, and ~111 call sites.

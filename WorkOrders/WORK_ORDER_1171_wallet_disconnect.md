@@ -1,6 +1,7 @@
 # WORK ORDER 1171 — Wallet disconnect: a finished mechanism with no way in
 
-**Status:** FIXED 2026-08-24 (`d1b6239ca`) — the dev-panel disconnect surface shipped; **awaiting owner felt-verify** (§13: the PO closes, not the CLI). §4 player-facing placement is READY, not yet done. *(Read `DONE (dev-panel surface)` until the 2026-08-24 board reconcile — code landing is not a close.)*
+**Status:** READY - PARTIAL. The dev-panel disconnect surface is FIXED 2026-08-24 (`d1b6239ca`); the **§4 player-facing placement is NOT DONE**.  *(Bucket corrected 2026-08-24: the line led with FIXED while its own text said work remained. Prior line preserved below.)*
+>  PRIOR: **Status:** FIXED 2026-08-24 (`d1b6239ca`) — the dev-panel disconnect surface shipped; **awaiting owner felt-verify** (§13: the PO closes, not the CLI). §4 player-facing placement is READY, not yet done. *(Read `DONE (dev-panel surface)` until the 2026-08-24 board reconcile — code landing is not a close.)*
 
 **Minted:** 2026-08-24 (CLI), banner bumped 1171 → 1172 in the same edit.
 **Provenance:** owner, 2026-08-24 — *"Offer a disconnect (better), Then reconnect"* — raised while

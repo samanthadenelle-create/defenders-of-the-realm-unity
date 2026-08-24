@@ -66,3 +66,16 @@ this family has no pipeline.
 - [ ] The builder runs to `WOODEN_WATCHTOWER_BUILD_OK` on all three levels
 - [ ] Each level renders UPRIGHT in a capture, and the prefab and model layers AGREE
 - [ ] `[structure-orientation]` is green for the watchtower family
+
+## ⚠ 2026-08-24 - FIXED is defensible, but this is NOT deployed
+
+Code and content landed and were measured, so `FIXED` is the honest bucket. ⛔ **But the re-baked L1
+prefab has NOT been pushed to R2, so the fix is not on any device and cannot be felt-verified.**
+
+⛔ **And a missing push fails SILENTLY** (§16): the build installs, launches and plays, showing
+placeholder art with **no error on screen**. ⭐ **Bundle names are content-hashed, so this re-bake
+needs ITS OWN push** - a previous push cannot cover it, and the bucket looking full proves nothing.
+Run `tools2-ship.ps1` and judge by `R2_PUSH_OK` / `R2_PARITY_OK` on a **fresh** log, never the exit
+code.
+
+⚠ **Do not close this on the repo state.** The repo is right; the device is not.

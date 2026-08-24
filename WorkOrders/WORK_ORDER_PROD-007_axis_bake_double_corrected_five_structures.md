@@ -1,6 +1,7 @@
 # PROD-007 — The axis-conversion pass corrected the WRONG FILE; five structures were double-corrected and lie down
 
-**Status:** FIXED — AWAITING OWNER FELT-TEST TO CLOSE. Prior status: DONE (catalog rows applied in the working tree) — AWAITING OWNER FELT-VERIFY after re-bake; the missing ORACLE is filed separately as **PROD-008**, and one tower remains OPEN (see §6).
+**Status:** READY - PARTIAL. §§1-5 are fixed and measured; ⚠ **§6 is still OPEN** - `Tower_Wooden_Watchtower_L3` is double-corrected via a prefab override plus `preservePrefabRotation` on `tower_ground_archer`. ⛔ **NOT resolved by WO-1152** (`f295971b6`): that fixed the builder not RUNNING; this is a ROTATION defect on the same prefab family. Its own body says §6 was "deliberately NOT fixed" and "needs its own change, with its own measurement."  *(Bucket corrected 2026-08-24: the line led with FIXED while its own text said work remained. Prior line preserved below.)*
+>  PRIOR: **Status:** FIXED — AWAITING OWNER FELT-TEST TO CLOSE. Prior status: DONE (catalog rows applied in the working tree) — AWAITING OWNER FELT-VERIFY after re-bake; the missing ORACLE is filed separately as **PROD-008**, and one tower remains OPEN (see §6).
 **Minted:** 2026-08-18 (docs seat) — PROD series, post-launch defect.
 **Priority:** HIGH — buildings lying on their sides in the LIVE build.
 **Silo:** Structure art / orientation. **Lane:** `structures-catalog.json` (dual copies). No scenes, no `.cs`.

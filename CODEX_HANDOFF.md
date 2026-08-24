@@ -109,6 +109,40 @@ two exited **0 having done nothing**, one said **`NO LOG`** while the gate had *
 
 ---
 
+# ⭐ BATCH 1 IS NOW UNBLOCKED - all four intake blockers are answered (2026-08-24)
+
+Codex refused batch 1 at intake, correctly, on four points. **All four are now settled and written
+into the tickets.** It can proceed:
+
+- **WO-1069** - ⛔ **do NOT modify `ShortfallPackOffer`.** The resolver was right; the ticket pointed
+  at the wrong layer. `hearth-spark` is not an impulse SKU and the guard rejecting it enforces a
+  binding WO-947 ruling. **Owner ruling: `hearth-spark` moves $1.99 -> $4.99** in
+  `api/_lib/purchase-catalog.js`. ⚠ It is `DEVNET_CANARY_SKU` - re-check the quote/verify test path
+  with the new anchor. Add the regression: **no impulse rung strictly dominated at its own USD anchor.**
+- **WO-1177** - ⭐ **stop trying to prove the shortfall; it does not need proving.** A forged `reason`
+  yields exactly what a genuine one yields: **one discount per window.** So build **no**
+  attestation rail. **Owner ruling: the window is SEVEN DAYS**, server-recorded.
+- **WO-1178** - the raw-invocation hole **cannot be closed** and the ticket no longer asks for it.
+  ⭐ Its most valuable half has nothing to do with editors: **the runner must assert the MARKER
+  instead of returning a bare exit code.**
+- **WO-1173** - still sequenced behind WO-1177 (shared `api/schema.sql`).
+
+---
+
+# BATCH 3 - board tooling (pure `tools/`, zero Unity contention)
+
+| WO | What | Why now |
+|---|---|---|
+| **WO-1180** | The board parser accepts a malformed `**Status:**` and hides the rows its fallback rescues | ⭐ The valuable half is **counting and listing fallback-bucketed rows** - WO-932 was one edit from vanishing because it lived there |
+| **WO-1181** | A status can lead with `FIXED` and say "not done" four words later - **seven rows were green today while admitting they were unfinished** | ⛔ The lint must distinguish **work remaining** from **verification remaining**, or it flags the entire healthy Fixed bucket and gets switched off in a day |
+
+⭐ **Both are `tools/board_build.py` only** - no Unity, no gate, no lock, and they can run alongside
+everything else. Both carry **induce-the-failure-and-watch-it-fire** acceptance.
+
+⚠ **They touch the SAME FILE**, so they are ONE lane, not two - same seat, sequential, 1180 first.
+
+---
+
 # BATCH 1 - handed out 2026-08-24
 
 | WO | What | Silo | Notes |
