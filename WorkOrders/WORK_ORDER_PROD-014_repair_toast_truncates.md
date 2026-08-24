@@ -104,3 +104,42 @@ the thing we just finished making singular.
 - [ ] First-purchase discount is one-time-ever, server-recorded (client-side would be trivially
       replayed), and identical wherever the pack appears
 - [ ] The buy path is the SAME quote + confirm path as the shelf — no second implementation
+
+## ⭐ OWNER RULINGS 2026-08-24 - BOTH SETTLED, both overriding my recommendation
+
+I argued the other way on both. She ruled. These are now canon for this ticket and the concerns are
+CLOSED, not open - do not re-litigate them in a later session.
+
+### RULING 1: **crystals ARE a universal repair currency.**
+
+⛔ **This AMENDS WO-947, it does not bypass it.** The basket separation now reads: *regular
+structures are BUILT and UPGRADED with wood + iron; magical structures with crystals; **REPAIR may be
+paid in crystals for anything**.* `Assets/Editor/Regression/CostBasketSeparationRegression.cs` must
+be **amended to encode the repair exception explicitly** - a deliberate, named carve-out. ⚠ If the
+suite is instead loosened or the case deleted, the separation stops being enforced at all and the
+next accidental crystal cost lands silently. The exception is the point; the enforcement stays.
+
+⭐ **Crystals gain a real sink.** WO-1165 §3 found crystals are the only currency that holds value -
+uncapped, gating rare+ gear. A repair sink is the first thing that consumes them at the pace they
+accumulate.
+
+⚠ **Set the crystal price so it is a convenience, not a discount.** If crystals-per-iron is cheap,
+crystals become the default repair currency and iron's sink disappears - which would undo the reason
+iron was unlocked this morning. Price it above the natural exchange so the player who HAS iron uses
+iron.
+
+### RULING 2: **the 20% fires at the shortfall.**
+
+Implement as asked. Three implementation constraints that are correctness, not objection:
+
+1. ⛔ **The discount is SERVER-ISSUED, inside the quote.** A client-computed 20% is trivially
+   spoofed into 100%, and this is real money on a live storefront. It rides the WO-1157 quote path -
+   `PurchaseQuoteService` - like every other price. There is no second price authority.
+2. ⚠ **Rate-limit it server-side.** A discount the player can summon by re-triggering a refusal is
+   a permanent 20% off with extra taps. One per player per window, recorded server-side; the client
+   never decides eligibility.
+3. **Log every issuance** to `purchase_quotes` with the reason, so the discount rate is a number we
+   can read later rather than a thing we assume.
+
+### RULING 3 (WO-1169 §5 Q2): **F8 captures stay on this machine for now** - revisit once
+`bug_reports` has accepted a single real row. Nothing is lost meanwhile; captures still land locally.

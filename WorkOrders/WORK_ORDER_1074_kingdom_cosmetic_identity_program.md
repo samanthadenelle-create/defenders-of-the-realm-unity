@@ -112,12 +112,43 @@ Defense Report, Heart tier) — unlock triggers read them, never add loops.
    narrows a wall reopens the pathable-gap save-break.
 5. Purchase limits (WO-1176 §3) precede any one-time collection; entitlements wallet-keyed.
 
-## 6. Child tickets (mint when their prerequisites land)
+## 6. 📋 EXTERNAL AUTHORING BRIEF — hand this section to the design AI, no repo access needed
+
+*(The advisor offered to author the first 8–10 Kingdom Collections. This section is the
+self-contained brief for that deliverable, the WO-1172 pattern. Owner pastes it out; the returned
+catalog is refined here before anything reaches data.)*
+
+**Deliver: 8–10 Kingdom Collections.** For each:
+1. **Name + one-line fantasy** (the faction identity in a sentence).
+2. **All five surfaces** (§2a template): Heart of Elarion Aspect · castle architecture · heraldry
+   (crest + banner components: shape/fabric/emblem/trim/animation) · army identity · profile frame
+   + **title**. Every line must restate the theme — no filler items.
+3. **The Accent Pack subset** ($4.99–$9.99): banner + frame + shield emblem + one Heart particle.
+4. **The prestige extension** ($49.99+, same family): 4–6 exclusive pieces obeying the
+   prestige-extension rule (§2a) — spectacle-scale items (moats, monuments, sky treatments,
+   arrival animations), never more copies of lower-tier items.
+5. **Rarity + suggested price tier** mapped to the §3 architecture.
+6. **2–3 achievement-unlocked pieces** for the §4 canvas mechanic, each tied to an existing stat
+   (raid wins, Heart restoration stage, defenses held) — cosmetic only.
+
+**Hard constraints on the returned catalog:**
+- ⛔ The tree is the **HEART OF ELARION** — the words "Tree of Life" may not appear.
+- ⛔ Zero stats, zero speed, zero resources — visual and titular only, down to the copy ("+" and
+  "%" should not appear anywhere in a cosmetic description).
+- ⛔ Every theme must be identifiable in GREYSCALE — silhouette, material and motif carry the
+  identity (ravens, rivets, runes, ice limbs); palette reinforces, never carries.
+- Titles are player-facing copy in the game's register (see the five authored: *Lord of the
+  Hollow*, *Ember Sovereign*, *High Arcanist*, *Lord of Ironhold*, *Frostwarden*).
+- Names/labels are variable-length data — no layout assumptions.
+- Include the five §2a collections (extend them to full spec rather than replacing them) plus
+  Golden Age; invent the remainder.
+
+## 7. Child tickets (mint when their prerequisites land)
 
 Companion rail (WO-1176 §4) → first Accent Pack (rebirth one clone SKU) → Heraldry v1 (castle
 banner only) → first Kingdom Collection → Heart Aspects → canvas achievements.
 
-## 7. Acceptance (program-level)
+## 8. Acceptance (program-level)
 
 - [ ] Every cosmetic row resolves through the one ownership/application rail; no second skinner
 - [ ] Aspect × tier layering proven: upgrading the Heart while an Aspect is active re-renders as

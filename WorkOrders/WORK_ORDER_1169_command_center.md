@@ -165,3 +165,10 @@ different classes instead of blending. It is a **view over existing tables** - n
    be joined without storing the wallet on the report or building a mapping table. So *"this player
    also has an unfulfilled purchase"* is **not possible today**, and making it possible is a
    **privacy call, not an engineering one**. ⭐ **Owner's to rule.**
+
+### ⭐ OWNER RULING 2026-08-24 - §5 Q2 (F8 egress): **NOT YET.**
+F8 captures stay local. Revisit **after `bug_reports` has accepted one real row** - the
+player-submitted channel has never worked, and adding a second richer stream before the first one
+functions would be building on an unproven base. The captures are not lost meanwhile.
+⚠ The other ruling this pillar surfaced - whether to store the raw wallet on a bug report so it can
+be correlated with purchases - is **still open** and is a privacy call.
