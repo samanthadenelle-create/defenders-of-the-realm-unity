@@ -1,6 +1,6 @@
 # WO-1179 - Roaming troops that attack the town, escalating in size and smarts
 
-**Status:** SPEC - needs one design pass with the owner before it is handed to a dev lane.
+**Status:** READY - all three open design questions RULED by the owner 2026-08-24 (existing wave system; offline towns CAN be attacked; losses are REPAIRABLE and bounded). ⛔ Build WO-513 first so pack behaviour is inherited, per this ticket's own note.
 **Silo:** Combat/AI. **Origin:** owner, 2026-08-24, verbatim:
 > *"I still want to add roaming troops that attack the town, incrementally getting harder, smarter
 > attacks one gate, maybe two gates same time, all 4 eventually"*

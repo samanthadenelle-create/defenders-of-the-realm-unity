@@ -125,11 +125,15 @@ Design consequences that follow from the use case, not from monetization:
   itself.** A whale may buy any shield they like; what they cannot buy is a ranked position while
   protected from the risk everyone else is ranked under.
 
-  ⚠ **RE-ENTRY MUST BE SYMMETRIC OR IT IS GAMEABLE.** If eligibility returns the instant the shield
-  drops, the exploit is to shield the risky stretches and rank when safe - the same competitive
-  advantage, taken in slices. **RECOMMENDED: eligibility returns once the shield has been DOWN at
-  least as long as it was UP.** Proportionate, self-scaling with the escalating price (a long shield
-  buys a long way back), simpler than seasons, and it does not punish one genuine holiday.
+  ⭐ **RULED: the exclusion is FOR THAT SEASON, and A SEASON IS 30 DAYS** (owner, 2026-08-24). This
+  supersedes the symmetric down-time rule I proposed, and it is simpler in the way that matters: it is
+  **explainable in one sentence at the point of sale** - *"using a shield ends your leaderboard run
+  for this season."* My version required a player to reason about elapsed uptime to know where they
+  stood, and a rule you cannot state on the button is a rule players discover by being burned.
+
+  ⚠ It is also **unexploitable by construction**: there is no window to shield through, because any
+  shield at all costs the whole season. ⛔ **Any shield, any duration, forfeits the full 30 days** -
+  a one-hour shield and a 30-day shield cost the same standing, which is what removes the arithmetic.
 
   ⛔ **This must be stated in the shield's own purchase copy, before the buy.** A player who discovers
   after paying that they left the leaderboard has been surprised by a term, and that is a refund

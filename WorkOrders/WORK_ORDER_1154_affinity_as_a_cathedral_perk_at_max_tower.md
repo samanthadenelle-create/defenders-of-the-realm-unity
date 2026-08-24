@@ -1,4 +1,4 @@
-**Status:** SPEC — needs the owner's numbers before it can be built (see §6). Design is settled; balance is not.
+**Status:** BLOCKED — owner ruled 2026-08-24 that NO numbers may be set until the **crystal faucet rate** is measured (crystals/day for an engaged player). Design is settled; balance stays unauthored. That measurement is the unblock — see the ruling section at the bottom.
 
 # WORK ORDER 1154 — Elemental affinity as a Cathedral perk, earned at max tower level
 

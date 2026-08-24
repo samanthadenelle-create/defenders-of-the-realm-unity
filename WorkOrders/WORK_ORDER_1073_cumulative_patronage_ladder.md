@@ -1,6 +1,6 @@
 # WORK ORDER 1073 — The Patronage ladder: cumulative lifetime support, visible status, zero combat stats
 
-**Status:** SPEC — thresholds and unlock list need owner sign-off; architecture is implementable.
+**Status:** READY — architecture approved by the owner 2026-08-24; thresholds **TENTATIVE** at $50 / $150 / $500. ⛔ No tier above $500 may be designed until real $500 patrons exist.
 **Minted:** 2026-08-24 (UI seat), banner header bumped with the 1069–1074 block.
 **Provenance:** the external review the owner ADOPTED 2026-08-24 (*"Create a Patronage system based
 on cumulative support, with zero combat stats … Whales generally don't need 900,000 stone. They want

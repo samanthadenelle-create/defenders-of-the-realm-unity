@@ -1,6 +1,6 @@
 # WORK ORDER 1161 — The structure ROLE table: name a building by what it IS, settled by data
 
-**Status:** IMPLEMENTED 2026-08-23 — `COMPILE_GATE_OK` (0 `error CS`), `DataRegression` **269/270**. ⛔ **ONE RED IS DELIBERATE AND NEEDS AN OWNER RULING** — `[tutorial-agree]`, see §5. Not closed by the CLI.
+**Status:** READY — the §5 red is RULED by the owner 2026-08-24: fix the TWO WRONG IDS in `tutorial-steps.json` and nothing else. Prior implementation stands (`COMPILE_GATE_OK`, `DataRegression` 269/270); the one red closes with that two-id edit. ⚠ The §6 `EchoCardVM.FaucetBuildingIdFor` repoint is a SEPARATE change needing a captured run.
 
 **Minted:** 2026-08-23 (CLI), banner bumped 1161 → 1162 in the same edit.
 **Provenance:** owner felt-test — *"Iron - NEEDS: Forge"* on the Echo harvest picker while `forge` sat in her own ever-built ledger, i.e. **an instruction that could not be satisfied by obeying it.**

@@ -1,6 +1,6 @@
 # WORK ORDER 1163 — The resource ladder: Food becomes Stone, and tiers cost by depth
 
-**Status:** SPEC — READY TO IMPLEMENT once §6 is answered. ⛔ **Save-schema-adjacent change on a LIVE build with an ACTIVATED pay path** (WO-1159). Not a lane to rush.
+**Status:** READY — §6 fully answered (§6.1 + §6.2 ruled by the owner 2026-08-24; §6.3 ruled 08-23). ⛔ Still a save-schema-adjacent change on a LIVE build with an ACTIVATED pay path (WO-1159) — follow §7's sequencing exactly; not a lane to rush.
 
 **Minted:** 2026-08-23 (CLI), banner bumped 1163 → 1164 in the same edit.
 **Ruled by:** the owner, 2026-08-23, in conversation. Verbatim below.

@@ -1,6 +1,6 @@
 # WORK ORDER 1071 — Storehouse Deeds I→III: the permanent storage SKU ladder
 
-**Status:** SPEC — needs one owner ruling (§4), then READY.
+**Status:** READY — §4 RULED by the owner 2026-08-24 (percentage multiplier + cosmetic evolution). Implementation still sequences behind WO-1176 §3 purchase limits. ⚠ The cosmetic half is NEW work in its own ticket (the lead is minting it) — do not absorb it here.
 **Minted:** 2026-08-24 (UI seat), banner header bumped with the 1069–1074 block.
 **Provenance:** WO-1165 §3 (*"a permanent storage upgrade is the single best missing SKU"*) + the
 external review the owner ADOPTED 2026-08-24 (*"Storehouse Deed I → II → III … value that never

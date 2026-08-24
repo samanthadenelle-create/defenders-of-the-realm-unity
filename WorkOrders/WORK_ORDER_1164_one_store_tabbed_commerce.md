@@ -1,6 +1,6 @@
 # WORK ORDER 1164 — One Store: all selling moves to one tabbed shop, buildings keep their benches
 
-**Status:** SPEC — READY TO IMPLEMENT once §5 is answered. ⛔ Keep this SEPARATE from WO-1163: one ticket changes what RESOURCES are, this one changes where COMMERCE lives. Tangling them makes both impossible to felt-test.
+**Status:** READY — §5.1 and its sub-question RULED by the owner 2026-08-24: the HUD entry is a **TAB IN BAG**, the town Store building stays, both doorways open the one `PackStore`. ⛔ Land WO-1163 first (§6) — one ticket changes what RESOURCES are, this one changes where COMMERCE lives.
 
 **Minted:** 2026-08-23 (CLI), banner bumped 1164 → 1165 in the same edit.
 **Ruled by:** the owner, 2026-08-23.

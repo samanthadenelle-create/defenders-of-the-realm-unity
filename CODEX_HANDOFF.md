@@ -139,7 +139,62 @@ into the tickets.** It can proceed:
 
 ---
 
-# BATCH 4 - thin on purpose
+# BATCH 4 - REBUILT after the owner's ten rulings (2026-08-24)
+
+⚠ **The one-ticket batch 4 below the fold was composed BEFORE the rulings landed and is superseded.**
+Eight tickets moved SPEC -> READY in one sitting; the board went **Ready 25 -> 33**. That is the
+bottleneck clearing exactly as predicted.
+
+| WO | What | Silo | Files |
+|---|---|---|---|
+| **WO-1161** | Tutorial names the wrong buildings - fix **TWO IDS ONLY**: trigger `workshop`->`forge`, nudge `forge`->`armorer` | Onboarding/data | `tutorial-steps.json` (both copies) |
+| **WO-1163** | Stone replaces food: `collector_farm`->**Quarry**, `silo`->**Stoneyard**, balances convert **1:1** | Economy/catalog | 431-line spec, 15 files named |
+| **WO-917 §2 Phase B** | Unequipped ability slots render a **blank plate** - add the `+` affordance | HUD/UI | `HudModelProducers.cs`, `HudKitController.cs`, the action-slot builder |
+
+⛔ **WO-1161: the TWO IDS AND NOTHING ELSE.** That file carries the owner's creative pin on the rest
+of the sequence. ⚠ And `EchoCardVM.FaucetBuildingIdFor` still routing iron to `collector_forge` is a
+**separate change needing a captured run** - repointing the cue without moving the faucet binding
+swaps one lie for another.
+
+⛔ **WO-1163: IDS STAY FROZEN.** `collector_farm` and `silo` are **live save keys**; only
+`displayName` changes. ⚠ Spelling is **"Stoneyard"** (the 08-24 ruling supersedes §4b's "Stone Yard").
+
+⛔ **WO-917: PHASE B ONLY** - Phase A is an owner art pick. ⚠ `ElarionUiKit.cs` is shared with WO-1182
+in batch 3: **917 confines edits to the action-slot builder; 1182 adds no new kit primitives.**
+
+## ⚠ NOT in batch 4: WO-1179, and the gap is MINE
+
+Roaming troops is **ruled and still not handable** - 122 lines naming exactly **one** concrete file.
+I wrote it as a design spec, not an implementation one, so it fails test 1. **The lead owes it a spec
+pass** naming the `WaveManager` seam, the `SpawnPoint` resolution, and where the two-gate escalation
+step lives. ⛔ Handing it out as-is returns work I would have to re-derive.
+
+---
+
+# BATCH 5 - the monetization cluster. ONE LANE, ONE SEAT, SEQUENTIAL.
+
+All four are **READY** on the owner's rulings. ⛔ **They are NOT four parallel tickets.**
+
+| Order | WO | Ruling that unblocked it |
+|---|---|---|
+| 1 | **WO-1164** | Store HUD entry = a **tab in Bag**; town building stays. ⛔ Two doors, **ONE** `PackStore` - never forked |
+| 2 | **WO-1071** | Storehouse Deeds = **percentage multiplier** (+25% / +25-50% / more), plus cosmetic evolution of buildings already placed, ⛔ **no new container object** |
+| 3 | **WO-1070** | Founder's Vow grants **crystals TOWARD** the gated slot, never the slot; "Named on the Heart" **removed** |
+| 4 | **WO-1073** | Patronage **architecture** now, thresholds **tentative** at $50/$150/$500; ⛔ nothing above $500 until real $500 patrons exist |
+
+⛔ **WHY ONE SEAT: they share `packs.json`, `api/_lib/purchase-catalog.js` and the `PackStore`
+surface** - and **batch 1 (WO-1069 + WO-1177) is IN `purchase-catalog.js` right now.**
+⚠ **Batch 5 must not start until batch 1 returns.** Two seats in the anchor table, one of them
+repricing `hearth-spark`, is the collision that was already caught once today.
+
+⭐ **All four cite `FOUNDATIONAL_RULINGS.md`** - §1 progression gates cannot be purchased, §2 paid
+permanence should be visible, and the Heart is not a sponsor surface. ⛔ **Do not restate those rules
+in code comments or ticket edits; cite the file.** A fact written twice is this repo's dominant
+failure mode, and one fresh instance was created today by the very process built to prevent it.
+
+---
+
+# BATCH 4 (SUPERSEDED - composed before the rulings) - thin on purpose
 
 ⚠ **One clean ticket. It was not padded, and that is the finding.** The selector swept every
 `WorkOrders/*.md` by status line: everything else fails a handability test.

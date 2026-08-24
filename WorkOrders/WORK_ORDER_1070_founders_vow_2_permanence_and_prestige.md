@@ -1,6 +1,6 @@
 # WORK ORDER 1070 — Founder's Vow 2.0: the whale SKU sells permanence + prestige, and goods stop being the headline
 
-**Status:** SPEC — contents need ONE owner sign-off pass (§4 open items), then READY.
+**Status:** READY — both §4 open items RULED by the owner 2026-08-24 (see the ruling section at the bottom). Implementation still sequences behind WO-1176 §3 purchase limits and the cosmetic rail.
 **Minted:** 2026-08-24 (UI seat), banner header bumped 1069 → 1074 in the same edit (with 1069, 1071–1073).
 **Provenance:** WO-1165 §4/§9.1 + the external review the owner ADOPTED 2026-08-24 (*"I would not try
 to fix the $49.99 Founder's Vow by stuffing another 30,000 wood into it. That's putting a bigger
@@ -124,3 +124,19 @@ density/scale stays bounded no matter how many patrons exist.
 - The proposed builder-slot perk → the Vow's **crystal grant** is the vehicle; no slot is granted.
 - §6's last acceptance box ("Owner sign-off recorded on §4's two rulings") → **satisfied by this
   section.**
+
+---
+
+## ⚠ 2026-08-24 - the general rule in this ticket is a COPY. Cite the source instead.
+
+The accelerate-never-bypass rule was written into this ticket inline (the recording pass ran before
+`FOUNDATIONAL_RULINGS.md` existed). ⛔ **That file now holds it, and it says explicitly: do NOT restate
+these rulings inside tickets - cite the file.**
+
+**Source of truth: `FOUNDATIONAL_RULINGS.md` §1.** If this ticket's wording and that file ever
+disagree, **the file wins and this ticket is wrong.**
+
+⚠ Kept here only because deleting a paraphrase mid-flight is how a seat loses the ruling entirely.
+The next edit to this ticket should cut the inline copy down to the citation - a fact written twice is
+this repo's dominant failure mode, and this is a fresh instance of it, created today, by the process
+built to prevent it.
