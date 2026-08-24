@@ -108,3 +108,60 @@ that grants value — it does not belong in the read-only viewer, and it needs i
 - [ ] Client-reported vs server-settled shown SEPARATELY, with disagreements surfaced
 - [ ] Every added statement is a SELECT with a hard LIMIT — the read-only contract holds
 - [ ] No secrets, wallet addresses or tx signatures logged beyond what the tables already store
+
+## 2026-08-24 - TROUBLESHOOT pillar (§4): code side landed, consolidation ASSESSED not built
+
+Landed in `05f14790b`: `api/bug-report.js` instrumented (six swallowed failures named, response
+contract unchanged), `site/admin.html` gains a **read-only** `Player reports` tab over the existing
+`db.js view=bugreports`. No write path, no new SQL. See PROD-017 for why the table itself is still
+not proven.
+
+### ⛔ Why the five-shape INSERT cascade is KEPT rather than deleted
+
+It **has never once done its job.** The deployed `id TEXT NOT NULL` raises **`23502`**, which is not
+in the retry list - so the cascade rethrew on attempt 1 and never fired. And retrying could not have
+helped: **no shape writes `id`**, so narrowing the column list cannot satisfy a column we never name.
+It guards *"columns were removed"*; the real failure was *"a required column exists that we do not
+write."*
+
+Kept anyway because there is **no migration runner in this repo** - a migration is a human running a
+file - and `schema-shape.js` records **five** file-vs-database drifts on 2026-08-24 alone.
+⭐ **Deletion trigger, written down so it is not a judgement call later:** when `SCHEMA_PARITY_OK`
+**blocks a deploy**, delete shapes 2-5 and keep shape 1 plus the instrumentation.
+
+⚠ Its degradation was **silent and lossy**: shapes 3-5 fold `route`/`app_version`/`playerId` into the
+`description` TEXT and shape 5 drops `RETURNING`, **and the endpoint still answers 200**. Those rows
+render in the new view with empty Route/Version and no id. Now a `console.error`.
+
+### §4 consolidation - what a single triage view needs, and what is genuinely out of reach
+
+Four streams, **no shared join key and no common time base**:
+
+| stream | key | identity | clock |
+|---|---|---|---|
+| `bug_reports` | `report_id` | `player_id` = **salted hash** | `created_at` TIMESTAMPTZ (was epoch ms) |
+| `analytics_events` | - | `player_id` = **raw wallet** + `session_id` | TIMESTAMPTZ |
+| authrejects | correlation `ref` | (analytics rows: `api_auth_reject`) | TIMESTAMPTZ |
+| F8 `QUEUE.jsonl` | monotonic `seq` | **none** | its own |
+
+Minimum work: one correlation key (⚠ `sessionId` is the only candidate, and the bug-report one is a
+client-local `"br-..."` id with **no evidence** it matches analytics'), one time axis, and a
+kind/severity discriminator so player-submitted, auto-captured and auth-refusal rows stay visibly
+different classes instead of blending. It is a **view over existing tables** - no new storage.
+
+**Unreachable today:**
+
+1. ⛔ **The F8 stream, which is the highest-signal one.** `logs/f8-inbox/QUEUE.jsonl` and
+   `break-log.jsonl` are files on **one machine**. Confirmed: **no ingest endpoint exists anywhere in
+   `api/`**. Making it reachable is a new write endpoint plus a shipper - and captures carry full
+   trace tails and screenshots, so it is a **data-egress decision, not plumbing**. ⭐ **Owner's to
+   rule (§5 Q2). Untouched.**
+2. **Every pre-migration report.** Zero rows; the client's local fallback sits on each tester's
+   device. Gone, not merely unqueried.
+3. **Any future cascade-shape-3-to-5 rows** - `route`/`app_version` inside a TEXT blob are greppable
+   but not filterable, so a consolidated view would silently under-report them.
+4. ⚠ **Correlating a bug report with that player's purchases or auth rejects.**
+   `bug_reports.player_id` is a **salted hash**; money and auth key on the **raw wallet**. They cannot
+   be joined without storing the wallet on the report or building a mapping table. So *"this player
+   also has an unfulfilled purchase"* is **not possible today**, and making it possible is a
+   **privacy call, not an engineering one**. ⭐ **Owner's to rule.**
