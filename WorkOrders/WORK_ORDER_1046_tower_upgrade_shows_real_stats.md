@@ -1,6 +1,6 @@
 # WORK ORDER 1046 — "Stronger Archer Tower at Level 3" may be an UNBACKED claim, not just vague copy
 
-**Status:** FIXED — AWAITING OWNER FELT-TEST TO CLOSE. Prior status: IMPLEMENTED 2026-08-17 (`19f35ad80`), gate-green + runtime-proven L1->L2 — AWAITING OWNER FELT-VERIFY of the L2->L3 card. See the RESULT file.
+**Status:** CLOSED 2026-08-24 — owner felt-tested and closed.
 **Minted:** 2026-08-17 (UI seat) — provenance stack bumped 1046 → 1047 in the same edit
 **Lane:** Tower progression data + upgrade panel copy. ⚠ May be a **balance** defect, not a UI one.
 **Provenance:** owner 2026-08-17: *"all it says is stronger tower, can we check what changes, attack

@@ -4,7 +4,7 @@
 
 # WORK ORDER 896 — Skill tree: simplify to a connected progression line (kill the dense grid)
 
-**Status:** FIXED — AWAITING OWNER FELT-TEST TO CLOSE. Prior status: IMPLEMENTED — awaiting owner felt-close (2026-08-15 sparse Obsidian graph)
+**Status:** CLOSED 2026-08-24 — owner felt-tested and closed ("all completed and close").
 
 > ## OWNER CONFIRMATION 2026-08-15 (BINDING visual north star)
 > Owner, on the **Obsidian kit demo Talent Tree** (screenshot

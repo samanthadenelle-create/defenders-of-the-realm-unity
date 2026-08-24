@@ -1,6 +1,6 @@
 # WORK ORDER 1043 — PENDING BAKE: the dungeon exit trim is committed but not yet on screen
 
-**Status:** FIXED — AWAITING OWNER FELT-TEST TO CLOSE. Prior status: DONE — audit-verified as shipped (2026-08-21 backlog audit).
+**Status:** CLOSED 2026-08-24 — STALE, the bake ran. This ticket existed only because the egress trim (`dd17a793`, 2026-08-16) was committed but not yet baked into the scenes. `0b8685ab7` (2026-08-22) re-baked all ten DungeonCompose scenes, so the premise "committed but not yet on screen" no longer holds. ⚠ Verified by scene mtime, not by the audit line above: the 2026-08-21 audit called it shipped a day BEFORE the bake commit, which would have been wrong at the time.
 **Minted:** 2026-08-16 (CLI seat, Sunday sweep) — banner bumped in the same edit
 **Lane:** Dungeon scenes. ⚠ Bake-only; the code and data work is DONE and committed (`dd17a793`).
 

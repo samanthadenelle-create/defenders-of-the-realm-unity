@@ -1,6 +1,6 @@
 # WORK ORDER 719 — Dedicated Build HUD (Clash-of-Clans-simple chrome)
 
-**Status:** FIXED — AWAITING OWNER FELT-TEST TO CLOSE. Prior status: DONE (code) - AWAITING PO FELT-VERIFY
+**Status:** CLOSED 2026-08-24 — owner felt-tested and closed ("all completed and close").
 
 > **CODE DONE - verified in HEAD 2026-08-14 (phantom sweep).** The work is present at
 > BuildHudController.cs:64,71 + BuildModeController.cs:3847. NOT closed: this WO's own RESULT

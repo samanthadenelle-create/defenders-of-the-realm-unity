@@ -1,6 +1,6 @@
 # WORK ORDER 1170 — JSON is the only source: retire every hand-mirrored C# fallback table
 
-**Status:** READY — owner ruling, 2026-08-24. §4 is the ranked work list.
+**Status:** READY — owner ruling, 2026-08-24. §4 is the ranked work list. ⭐ **SITE 1 IS DONE** (f6e306847): `Tower.cs` `BuiltInFallback()` is retired in favour of `Assets/Editor/TowerPerkFallbackGenerator.cs` → `Village/Buildings/Generated/TowerPerkFallbackData.g.cs` + a hash gate. **SITES 2–6 ARE OPEN** — `BuildCategoryRegistry.BuildFallback()` still carries hand-mirrored `lockedIds` / `visibleLockedIds` tables with "keep the two in sync" comments, which §5 explicitly refuses to sanction.
 
 **Minted:** 2026-08-24 (CLI), banner bumped 1170 → 1171 in the same edit.
 **Provenance:** owner, 2026-08-24, verbatim — *"We need to not have anything pulled other than from

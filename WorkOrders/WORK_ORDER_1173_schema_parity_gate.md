@@ -1,6 +1,6 @@
 # WORK ORDER 1173 — SCHEMA_PARITY_OK: the deployed database drifted four times in one day, and the fourth took real money
 
-**Status:** READY. ⛔ **BLOCKS `MAINNET_SALES_ENABLED=true`.** The rail is proven; this is what makes it safe for someone other than the owner.
+**Status:** READY. ⛔ **BLOCKS `MAINNET_SALES_ENABLED=true`.** The rail is proven; this is what makes it safe for someone other than the owner. ⭐ **THE TOOL LANDED 2026-08-24** (6caea4767 + d829340f6): `tools/schema-parity.mjs` exists and self-tests. **TWO §6 BOXES ARE STILL OPEN and they are the ones that make it a gate:** it is referenced by NO ship-chain script (`grep schema-parity tools/ .githooks/` returns only the tool itself), and there is **no migration file** — `api/` has `schema.sql` and no `migrations/`. A gate nothing calls is not a gate.
 
 **Minted:** 2026-08-24 (CLI), banner bumped 1173 → 1174 in the same edit.
 **Provenance:** four production failures on 2026-08-24, all the same shape, found one at a time by

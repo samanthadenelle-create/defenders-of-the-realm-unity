@@ -1,6 +1,6 @@
 # WORK ORDER 993 — Echoes are a FAUCET: retire the physical pet stack
 
-**Status:** FIXED — AWAITING OWNER FELT-TEST TO CLOSE. Prior status: DONE 2026-08-16 (`b63bc7190`) — RESULT filed; pending PO felt-verify
+**Status:** CLOSED 2026-08-24 — owner confirmed Done.
 **Minted:** 2026-08-14 (CLI)
 **Silo:** Echoes / harvest / pets
 **Source:** OWNER RULINGS, 2026-08-14

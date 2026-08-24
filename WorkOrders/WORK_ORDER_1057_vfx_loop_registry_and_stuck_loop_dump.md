@@ -1,4 +1,4 @@
-**Status:** FIXED 2026-08-23 (57b2c4595) — registry already shipped in 590464bd2; the BUG REPORT FORM seam was missing its snapshot and now carries the loop table. FELT-TEST: submit a bug report, confirm the trace contains [Flow:Vfx] LOOPS. AWAITING OWNER CLOSE.
+**Status:** CLOSED 2026-08-24 — owner felt-tested and closed ("closed tested").
 
 # WORK ORDER 1057 — "Random VFX stuck around" is currently UNANSWERABLE — give the loop pool names
 

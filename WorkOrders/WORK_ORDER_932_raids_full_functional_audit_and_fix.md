@@ -1,6 +1,6 @@
 # WORK ORDER 932 — Raids: full functional audit + step-by-step to “working end-to-end”
 
-**Status: READY TO IMPLEMENT** (phased; each phase shippable)  
+**Status: PARTIAL — PHASES 1–4 CODE LANDED 2026-08-08** (see `WORK_ORDER_932_raids_full_functional_audit_and_fix.RESULT.md`); Phase 0 felt matrix + Phase 5/6 gates remain. Verified in the tree 2026-08-24: `RaidCapabilityHudBridge`, `RaidDeployScreen` "BEGIN ASSAULT", `RaidScoring` "RAID CLOCK armed". *(This line read "READY TO IMPLEMENT" until 2026-08-24 — the board therefore showed shipped work as not-started.)*  
 **Minted:** 2026-08-08 (CLI / Grok — owner: detailed raids audit + guidance to fully functional)  
 **Silo:** Raids / Troops / Scenes (Combat + UI; no VillageSceneBuilder)  
 **Roles:** CLI implements phases in order; PO felt-closes each phase  
