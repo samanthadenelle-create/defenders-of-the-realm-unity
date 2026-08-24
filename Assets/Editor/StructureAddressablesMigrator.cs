@@ -487,6 +487,87 @@ namespace DeNelle.Editor
             return null;
         }
 
+        // =====================================================================
+        //  MarkCatalogArt — IDEMPOTENT re-mark. Run it after ADDING structure art.
+        // =====================================================================
+        /// <summary>
+        /// Marks every catalog-referenced asset under <see cref="ArtRoot"/> addressable in
+        /// <c>Structure_Art</c>, with the address set to the catalog's own key verbatim.
+        /// Safe to run any number of times; adds what is missing and leaves the rest alone.
+        /// <para>
+        /// ⛔ WHY THIS EXISTS (2026-08-24). <see cref="MoveFolder"/> already contained this exact
+        /// marking loop, but it is a ONE-SHOT MIGRATION: its first statement aborts unless the old
+        /// <c>Resources</c> root still exists, and that folder was consumed by the original run. So
+        /// from the day the migration succeeded there was NO WAY TO MARK A NEWLY-ADDED STRUCTURE
+        /// ASSET — the tool that knew how had permanently locked itself out. Adding one building's
+        /// art meant hand-editing AddressableAssetSettings, which is precisely the manual step the
+        /// migrator was written to abolish.
+        /// </para>
+        /// <para>
+        /// ⚠ AND THE FAILURE IS SILENT IN THE WORST WAY: unmarked art is simply absent from the
+        /// bundle. The build succeeds, the R2 push succeeds, every marker goes green, and the
+        /// building renders as a placeholder on the device — the §16 capsule-enemy shape exactly.
+        /// </para>
+        /// <para>
+        /// MoveFolder now CALLS this rather than repeating it, so the marking rule has one owner.
+        /// </para>
+        /// </summary>
+        [MenuItem("Defenders/Art/Structures -> Addressables (RE-MARK, idempotent)")]
+        public static void MarkCatalogArtMenu() => MarkCatalogArt();
+
+        public static void MarkCatalogArt()
+        {
+            var settings = UnityEditor.AddressableAssets.AddressableAssetSettingsDefaultObject.Settings;
+            if (settings == null)
+            {
+                Debug.LogError("[Migrate] Addressables settings missing - cannot mark. " +
+                               "STRUCTURE_MARK_FAIL");
+                return;
+            }
+
+            int marked = MarkInto(settings);
+            settings.SetDirty(UnityEditor.AddressableAssets.Settings.AddressableAssetSettings
+                                  .ModificationEvent.BatchModification, null, true, true);
+            AssetDatabase.SaveAssets();
+            AssetDatabase.Refresh();
+            Debug.Log($"STRUCTURE_MARK_OK {marked} catalog asset(s) addressable in '{GroupName}'");
+        }
+
+        /// <summary>The shared marking loop. Returns how many entries resolved.</summary>
+        private static int MarkInto(UnityEditor.AddressableAssets.Settings.AddressableAssetSettings settings)
+        {
+            var group = settings.FindGroup(GroupName) ?? settings.CreateGroup(
+                GroupName, setAsDefaultGroup: false, readOnly: false, postEvent: false,
+                schemasToCopy: null,
+                types: new[] { typeof(UnityEditor.AddressableAssets.Settings.GroupSchemas.BundledAssetGroupSchema),
+                               typeof(UnityEditor.AddressableAssets.Settings.GroupSchemas.ContentUpdateGroupSchema) });
+
+            int marked = 0;
+            var missing = new List<string>();
+            foreach (var key in ReadCatalogArtKeys())
+            {
+                string rel = key.Substring("Structures/".Length);
+                string path = null;
+                foreach (var ext in new[] { ".prefab", ".fbx", ".png", ".jpg", ".jpeg", ".asset", ".mat", ".JPEG" })
+                    if (System.IO.File.Exists($"{ArtRoot}/{rel}{ext}")) { path = $"{ArtRoot}/{rel}{ext}"; break; }
+                if (path == null) { missing.Add(key); continue; }
+
+                string guid = AssetDatabase.AssetPathToGUID(path);
+                if (string.IsNullOrEmpty(guid)) { missing.Add(key); continue; }
+                var entry = settings.CreateOrMoveEntry(guid, group, readOnly: false, postEvent: false);
+                if (entry == null) { missing.Add(key); continue; }
+                entry.SetAddress(key, postEvent: false);   // address == the catalog's own key, verbatim
+                marked++;
+            }
+
+            // ⚠ NEVER SILENT (CLAUDE.md §12). A catalog key with no file on disk is a building that
+            // will render as a placeholder, and it must SAY SO rather than be quietly skipped.
+            if (missing.Count > 0)
+                Debug.LogWarning($"[Migrate] {missing.Count} catalog art key(s) have NO file under " +
+                                 $"'{ArtRoot}' and were NOT marked: {string.Join(", ", missing)}");
+            return marked;
+        }
+
         private static List<string> ReadCatalogArtKeys()
         {
             var keys = new SortedSet<string>(System.StringComparer.OrdinalIgnoreCase);

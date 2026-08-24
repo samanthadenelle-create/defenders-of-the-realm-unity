@@ -222,7 +222,21 @@ namespace DeNelle.Village
                         // stale fallback would silently re-lock iron the moment the JSON failed to
                         // parse. Same one-fact-written-twice shape WO-1137 codegen'd away for the
                         // catalog fallback.
-                        "collector_forge",
+                        //
+                        // ⭐ "collector_forge" REMOVED 2026-08-24 (WO-1168, owner ruling) for the SAME
+                        // reason one line up, and it is the row that actually carried the defect: it is
+                        // the IRON NODE, the only town producer of iron, and it was locked out of the
+                        // palette while the Echo picker still told the owner "Iron - NEEDS: Forge".
+                        // The game named a building the palette refused to offer. Unlocked in
+                        // build-categories.json in the same edit; renamed "Forge" -> "Iron Mine" in
+                        // structures-catalog.json v31 so it no longer collides with the Weaponsmith,
+                        // which is also called Forge.
+                        //
+                        // ⚠ THIS SET IS A HAND-MIRRORED COPY of build-categories.json and the two
+                        // MUST be edited together. It was written as a parse-failure fallback and the
+                        // failure mode is silent: unlock the JSON alone and iron works until the day
+                        // the JSON does not parse, at which point the economy quietly closes again
+                        // with nothing on screen saying so.
                     },
                 },
                 [BuildType.Defense] = new BuildCategory

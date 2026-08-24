@@ -75,6 +75,11 @@ MonoBehaviour:
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 585f03e5d6ce6cd428531f7ee9b3f225
+    m_Address: Structures/IronMine
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 5a258590045b55041aa22a4362144c9d
     m_Address: Structures/barracks
     m_ReadOnly: 0
