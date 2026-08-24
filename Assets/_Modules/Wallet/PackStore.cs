@@ -319,19 +319,7 @@ namespace DeNelle.Wallet
             CurrencySkinResolver.WalletConnectionChanged -= OnWalletConnectionChanged; // idempotent
             CurrencySkinResolver.WalletConnectionChanged += OnWalletConnectionChanged;
 
-            if (_wallet == null && WalletSkinBootstrap.ConnectedWallet != null)
-            {
-                _wallet = WalletSkinBootstrap.ConnectedWallet;
-                FlowTrace.Step("Store", "adopted the live WalletService on open (none was injected) - " +
-                                        "quoted prices can now be requested.");
-            }
-            else if (_wallet == null)
-            {
-                // NEVER SILENT (§12): this is the exact state that renders "Price unavailable", so it
-                // must say so rather than leaving the screen to imply a server problem.
-                FlowTrace.Warn("Store", "opened with NO wallet service and none connected - the shelf " +
-                                        "will show 'Price unavailable' because no quote can be requested.");
-            }
+            AdoptLiveWalletIfBetter("open");
 
             Render();
             RefreshWalletMirror().Forget();
@@ -390,19 +378,8 @@ namespace DeNelle.Wallet
                 return;
             }
 
-            var live = WalletSkinBootstrap.ConnectedWallet;
-            if (live == null)
-            {
-                // NEVER SILENT (§12): "connected" was published but the owning bootstrap holds no
-                // instance. That is a contradiction worth a line, not a shrug.
-                FlowTrace.Warn("Store", "wallet reported CONNECTED but WalletSkinBootstrap holds no " +
-                                        "service — cannot adopt; the shelf stays priceless.");
-                return;
-            }
+            if (!AdoptLiveWalletIfBetter($"connect event ({shortAddress})")) return;
 
-            _wallet = live;
-            FlowTrace.Step("Store", $"adopted the newly-connected wallet {shortAddress} — requesting " +
-                                    "server prices now (this is the race the open-time check loses).");
             if (isActiveAndEnabled)
             {
                 Render();
@@ -413,6 +390,68 @@ namespace DeNelle.Wallet
             {
                 FlowTrace.Step("Store", "store is hidden — reference adopted; prices refresh on next open.");
             }
+        }
+
+        /// <summary>
+        /// Point <see cref="_wallet"/> at the session's LIVE wallet whenever that one can actually
+        /// sign and the one we hold cannot. Returns true if the reference changed.
+        /// </summary>
+        /// <remarks>
+        /// ⛔ THE BUG THIS EXISTS TO KILL, and it is why two earlier fixes did nothing (2026-08-24).
+        /// <c>PackStore.Awake()</c> does <c>_wallet = new WalletService()</c> — the store mints its
+        /// OWN instance, which is never connected to anything. So:
+        /// <list type="bullet">
+        /// <item><description><c>_wallet</c> is NEVER null, so an "adopt when null" check can never
+        /// fire — both of my earlier guards were unreachable, which the device trace proved by their
+        /// total absence from the log.</description></item>
+        /// <item><description>That instance's <c>IsRealSigningWallet</c> is false FOREVER, so
+        /// <c>RefreshPricesAsync</c> fails closed on every open, at every moment, regardless of what
+        /// the player's real wallet is doing two inches away on the same screen.</description></item>
+        /// </list>
+        /// <c>SetWalletService</c> existed to REPLACE that placeholder and had zero callers project-wide,
+        /// so the placeholder was the only wallet the store ever had.
+        /// <para>
+        /// ⚠ THE TEST IS CAPABILITY, NOT NULLNESS. "Do I have a wallet object?" was always yes and was
+        /// always the wrong question. "Can the wallet I hold actually sign?" is the one that matters,
+        /// and it is the same predicate <c>PurchaseQuoteService</c> gates on — so the store and the
+        /// quote service can no longer disagree about whether a wallet is usable.
+        /// </para>
+        /// </remarks>
+        private bool AdoptLiveWalletIfBetter(string reason)
+        {
+            var live = WalletSkinBootstrap.ConnectedWallet;
+
+            if (_wallet != null && _wallet.IsRealSigningWallet)
+                return false;   // already holding a signing wallet - nothing to do, stay quiet.
+
+            if (live == null)
+            {
+                FlowTrace.Warn("Store", $"[{reason}] the wallet we hold cannot sign and NO live wallet " +
+                                        "is connected - the shelf will show 'Price unavailable' because " +
+                                        "no quote can be requested. This is not a server fault.");
+                return false;
+            }
+
+            if (ReferenceEquals(live, _wallet))
+            {
+                FlowTrace.Warn("Store", $"[{reason}] already holding the live wallet, but it reports " +
+                                        "IsRealSigningWallet=false (connected=" + live.IsConnected + ") - " +
+                                        "the connect has not completed or the provider cannot sign.");
+                return false;
+            }
+
+            if (!live.IsRealSigningWallet)
+            {
+                FlowTrace.Warn("Store", $"[{reason}] a live wallet exists but it cannot sign yet " +
+                                        "(connected=" + live.IsConnected + ") - not adopting a second " +
+                                        "wallet that is equally unusable.");
+                return false;
+            }
+
+            _wallet = live;
+            FlowTrace.Step("Store", $"[{reason}] ADOPTED the live signing wallet, replacing the placeholder " +
+                                    "PackStore.Awake created - server prices can now be requested.");
+            return true;
         }
 
         private void OnDestroy()
