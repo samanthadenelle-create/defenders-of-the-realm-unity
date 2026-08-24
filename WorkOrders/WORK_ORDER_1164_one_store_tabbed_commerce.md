@@ -117,3 +117,41 @@ Running both at once means a felt-test cannot attribute what broke.
 4. Decide NPC disposition (§5.2).
 5. Gate + captured run proving each tab stocks what its old storefront did.
 6. **Owner felt-test** — on the phone, which is the only place the mobile argument can be judged.
+
+---
+
+## ⭐ OWNER RULING 2026-08-24
+
+### §5.1 sub-question — the HUD entry is **A TAB IN BAG.**
+
+Not a 7th action-bar face, not a corner chip. This is the precedent the ticket itself named: **Map
+left the bar and became a tab inside Bag**, with `ActionBarButtonId.Map` left dormant at ordinal 4.
+Store follows that road.
+
+Consequences, and they are why this option was chosen:
+
+- The calm(town) bar stays at **SIX visible faces**; `MaxVisibleFaces` stays **6** and `ButtonCount`
+  stays **7** for enum/array identity. The ruled face budget is **not re-opened**.
+- ⛔ **NOTHING IS RENUMBERED.** The face arrays are indexed by ordinal; no existing
+  `ActionBarButtonId` value moves, and no new one is minted for Store.
+
+### The town **Store building STAYS**
+
+Unchanged from the 08-23 ruling: walk up and interact — the town remains a place, not a menu.
+
+### ⛔ TWO ENTRANCES, **ONE** STORE IMPLEMENTATION
+
+The Bag tab and the town building **open the same `PackStore` surface**. ⛔ **Never fork them.**
+
+This is not a style preference; the codebase already paid for the lesson.
+`PlacedStructureUpgradeService` is the SINGLE start path for upgrades with several doorways into it,
+and it became that only after a second resolution site told a player a level-1 tower was *"fully
+enhanced — tier 0 of 0"*. A second store panel would re-buy that exact defect in the one place where
+the wrong answer costs real money. **Do not build a second store panel for the HUD tab.**
+
+### Still open (unchanged by this ruling)
+
+- §5.2 — vendor NPC disposition (stay as flavour / move to the Store / retire). Felt/creative call.
+- §5.3 — the four quest stages that send the player to a vendor.
+
+Neither blocks starting: §6's sequencing already puts tabs + shelf removal ahead of them.

@@ -104,3 +104,43 @@ This ticket is deliberately SPEC, not READY. Five numbers are hers:
 - [ ] Attunement survives save / load / relaunch, with no schema bump unless the owner rules one
 - [ ] Greyscale screenshot: every element is still tellable apart
 - [ ] `[Flow:*]` lines cover eligibility, purchase, attune and re-attune
+
+---
+
+## ⭐ OWNER RULING 2026-08-24
+
+### ⛔ DO NOT RULE THE NUMBERS YET. This ticket is **BLOCKED**, deliberately.
+
+The owner declined to answer §6's five numbers, and named the prerequisite that must land first:
+
+> **How many crystals an engaged player earns per day.**
+
+Verbatim:
+
+> *"Without knowing the faucet rate, any crystal number is dartboard economics."*
+
+### The unblock condition — exactly one thing
+
+**A measured crystal-faucet rate: crystals per day for an engaged player**, sourced from captured
+runtime data — not an estimate off the catalog, not arithmetic on authored yields (CLAUDE.md §12
+applies to economy numbers too). When that measurement exists, §6 is answerable and this ticket
+returns BLOCKED → READY in one pass.
+
+### The target SHAPE, ruled now (so the numbers have a target to hit)
+
+Once the faucet rate is known, price the affinity ladder so that:
+
+1. **The first affinity is attainable naturally** — a player who never pays reaches it by playing.
+2. **The second is a meaningful investment** — felt, saved for, chosen over something else.
+3. **The third is a long-term sink** — the late-game crystal destination §4 says the economy needs.
+4. **Premium crystals ACCELERATE but never TRIVIALISE.** Paying moves you along the ladder faster; it
+   does not collapse it. ⭐ Same shape as the WO-1070 §4.1 foundational rule — *accelerate toward a
+   gated permanent upgrade, never bypass its progression requirement.*
+
+### What this does NOT change
+
+- §5's constraints all stand unmodified — the WO-947 magical basket (crystals + iron, **never wood**;
+  `[cost-basket]` is a build gate), no schema bump without an owner decision, the greyscale test,
+  permanent `FlowTrace`, code-built uGUI at `MinTouchPx = 112`.
+- §6 items 1–5 stay **open**. Nothing here answers them; this states what must be true before they
+  *can* be answered, and the shape the answers must take.

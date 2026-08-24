@@ -384,3 +384,48 @@ number — and the upgrades CONSUME the resource, giving stone the repeatable si
 5. Regenerate the codegen'd fallback (WO-1137 hash gate will demand it).
 6. Full gate + a captured run proving a tier-1 build, a tier-2 upgrade and a troop train all charge the ruled basket.
 7. **Owner felt-test.** No headless run can judge whether the ladder feels right.
+
+---
+
+## ⭐ OWNER RULING 2026-08-24
+
+§6 is now **fully answered**. With §6.3 already ruled 2026-08-23, this ticket moves **SPEC → READY**.
+
+### §6.1 — Farm / Silo rename: **`collector_farm` → "Quarry"** · **`silo` → "Stoneyard"**
+
+⛔ **IDS STAY FROZEN. Only `displayName` changes.** `collector_farm` and `silo` remain the literal ids
+on disk — they are **live save keys** joined on by `everBuiltStructureIds`, `BaseLayout`, baked scenes,
+`vendors.json` and `dialogues.json`, on a **live store listing**. Renaming an id orphans every existing
+player's building. Same discipline WO-1161 §3 held, for the same reason.
+
+⚠ **Reconcile with §4b:** that table (ruled 08-23) wrote the storage display as **"Stone Yard"** (two
+words). The owner's 08-24 wording is **"Stoneyard"** (one word) and, being later, it is the
+authoritative string. Author **`"Stoneyard"`**; treat §4b's "Stone Yard" as superseded spelling, not as
+a second name. The producer name **"Quarry"** is unchanged between the two rulings.
+
+### §6.2 — Food → Stone converts **1:1**
+
+A player holding 1,800 food wakes holding **1,800 stone**. That is intended.
+
+Owner, verbatim:
+
+> *"Don't use migration itself as a balance lever."*
+
+⛔ So the conversion carries **no haircut, no multiplier, no rounding rule, no cap-clamp beyond the
+existing stone ceiling**. If the resulting stone economy is wrong, it is **rebalanced afterwards
+through faucets and sinks** — levers that are visible, tunable and reversible. Burying a balance change
+inside a one-way migration hides it from every future reader and cannot be undone.
+
+⭐ Worth carrying forward as a general rule: **a migration's only job is to preserve value. Balance
+happens in data the player can see move.**
+
+### §6.4 — folded in, not re-opened
+
+§6.4 (*"does anything still need a food-shaped resource?"*) is answered by §3b's sink audit, whose
+arithmetic §7 step 1 already requires be read before the concept is deleted. Nothing new is owed here.
+
+### Sequencing is unchanged
+
+§7 stands **exactly as written** — audit → rename as data+alias → re-price tiers → troop training to
+gold → regenerate the WO-1137 codegen'd fallback → full gate + captured run → **owner felt-test**.
+READY means the questions are answered, not that the sequencing may be shortened.

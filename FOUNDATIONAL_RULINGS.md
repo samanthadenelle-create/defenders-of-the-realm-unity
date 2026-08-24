@@ -108,11 +108,25 @@ Design consequences that follow from the use case, not from monetization:
   an escalating price lets them cover it and makes permanent immunity progressively unaffordable.
   The traveller pays little; the player buying immunity pays steeply more each time. **It self-limits
   without ever telling a paying player "no."**
-- ⛔ **AND IT STILL NEEDS A HARD CEILING - a price curve alone only PRICES permanent immunity, it does
-  not prevent it.** A whale buys through any curve, and then offline attacks stop existing for them,
-  which is the thing this ruling protects. So: an absolute cap on **total protected time in a rolling
-  window**, above which **no price buys more.** ⚠ The cap NUMBER is balance, not architecture - it
-  belongs with the crystal-faucet measurement (ruling 5), not authored blind.
+- ⭐ **NO HARD CEILING. The owner overruled me and was right** (2026-08-24: *"if they really want a
+  super long shield lol"* · *"if someone wants to drop real money it can fund months of development
+  or maybe a UI staff"*).
+
+  I argued for an absolute cap on protected time. ⛔ **The argument was wrong, and the reason it was
+  wrong is worth keeping: THE ATTACKERS ARE NPCs, NOT OTHER PLAYERS.** A player who buys permanent
+  immunity takes **nothing from anyone else** - no ranking, no resource, no queue position. That is a
+  **difficulty setting they paid for**, not pay-to-win, and it is categorically different from ruling
+  1's progression gate, where the purchase would skip content the player is meant to earn. A shield
+  skips a threat they are meant to *endure*, and enduring it is optional by design.
+
+  ⚠ **THE ONE EXCEPTION, and check it before shipping any ranked feature: if raid losses EVER feed a
+  leaderboard or ranked standing, the shield becomes COMPETITIVE and the ceiling argument returns
+  immediately.** WO-1073 already contemplates leaderboard card chrome. **Losses must not count toward
+  rank while shields are purchasable without limit** - pick one.
+
+  ⚠ The remaining risk is **retention, not fairness**: a player can buy their way out of the loop that
+  keeps them playing, and then churn. That is worth **watching in the data**, not designing around -
+  and it is the player's call to make.
 - ⛔ **THE CURVE IS NOT A CONVERSION KNOB.** This ruling already fences theft rates against being
   tuned to move shield sales. An escalating price is **the second knob on the same product**, and it
   is exactly where that pressure will reappear - as *"soften the curve, conversion is soft."* ⚠ Same

@@ -139,6 +139,61 @@ into the tickets.** It can proceed:
 
 ---
 
+# BATCH 4 - thin on purpose
+
+⚠ **One clean ticket. It was not padded, and that is the finding.** The selector swept every
+`WorkOrders/*.md` by status line: everything else fails a handability test.
+
+| WO | What | Silo | Files |
+|---|---|---|---|
+| **WO-917 §2 Phase B ONLY** | An unequipped ability slot renders a **blank plate** - add a "+ / add skill" affordance | HUD/UI | `Village/HUD/HudModelProducers.cs`, `HUD/Kit/HudKitController.cs`, the action-slot builder in `Core/UI/ElarionUiKit*.cs` |
+
+Verified live at source: `HudModelProducers.cs:595` gives an unequipped slot a **null** icon, and no
+`+` affordance exists anywhere in the kit.
+
+⛔ **PHASE B ONLY. Phase A (the dodge glyph) is an OWNER ART PICK** and is not ruled. ⭐ Phase B needs
+no colour decision at all - the spec already names "faint gold `+` on a dimmed frame" plus a tap hint,
+which matters because **the owner is red/green colourblind and visual picks are always delegated.**
+
+⚠ **`ElarionUiKit.cs` is a SHARED kit and WO-1182 (batch 3) also uses it.** Tell both seats: **917
+confines edits to the action-slot builder; 1182 adds NO new kit primitives** (its own spec already
+says it uses the same kit as every other surface).
+
+## ⏸ Held - WO-1026 (PvE siege + Defense Report), and it is the best-specced ticket in the repo
+
+618 lines: every file named with its assembly, three regression oracles, headlessly-checkable
+acceptance, and an honest list of what it could not verify. ⭐ Its unruled stakes are **designed
+around** - §8 pins the loss consequence to one six-line method returning an all-zero `StakesLedger`,
+so it ships without a ruling.
+
+⛔ **But it collides with WO-827, already out in batch 2.** Both write `Core/State/GameState.cs`,
+`GameStateService.cs`, `SaveSchema.cs` (1026 bumps `CurrentVersion` 38 -> 39) and `SaveMigrator.cs`.
+⚠ **Two seats in the save seam with one of them bumping the schema version** is the WO-1177/WO-1173
+shape again. **It goes out the moment 827 returns.**
+
+## ⛔ Do NOT hand these out - their status is WRONG, they are not work
+
+- **WO-1157** - its remaining slice is **already in the tree and committed**. Corrected to FIXED.
+- **WO-911-B** - its banner says *"there is no `TryAdSkip` in `BuildTimerService`"*. At HEAD there is a
+  channel-aware pair (`BuildTimerService.cs:880`, `ObsidianQueueHud.cs:299/:408`,
+  `ManageScreenVM.cs:452/:1118`) plus `AdGateService` and a covenant regression over it. **16 days
+  stale.**
+- **WO-501** - all four owner points shipped per its own banner; every `file:line` in its §1 is
+  invalidated (a 583-line survey against a 1727-line file).
+
+⚠ These go to the **lead/RCA lane**, never a dev lane - a seat handed one would rebuild working code.
+
+## ⭐ THE REAL CONSTRAINT, stated plainly
+
+**It is not tickets. It is owner answers and lead-run captures.**
+**Eighteen** tickets are one owner sitting from ready. **Four more** are one lead measurement from
+ready (WO-914 Phase A, WO-925, WO-926, WO-917 Phase A).
+
+That is roughly **five batches of dev work** sitting behind about **two hours of the owner's time and
+three headless runs.**
+
+---
+
 # BATCH 3
 
 | WO | What | Silo | Files |
@@ -146,7 +201,7 @@ into the tickets.** It can proceed:
 | **WO-1180** | Board parser accepts a malformed `**Status: ...**` and silently rescues rows via substring fallback | Tooling (Python) | `tools/board_build.py` |
 | **WO-1181** | Lint rejecting a `FIXED/DONE/CLOSED` status whose own text asserts work remaining - **7 rows today** | Tooling (Python) | `tools/board_build.py` |
 | **WO-876** | Troop combat VFX: melee on-hit impact, take-hit, death burst, a real Archer projectile instead of instant damage | Combat/AI VFX | `Assets/_Modules/Village/Troops/TroopController.cs` |
-| **WO-1005 tail** | The **last UXML player-facing surface** - rebuild the dungeon crafting modal as code-built Obsidian-kit uGUI | Dungeons/UI | `Dungeons/UI/CraftingPanelController.cs`; retire `CraftingPanel.uxml/.uss` |
+| **WO-1182** | The **last UXML player-facing surface** - rebuild the dungeon crafting modal as code-built Obsidian-kit uGUI | Dungeons/UI | `Dungeons/UI/CraftingPanelController.cs`; retire `CraftingPanel.uxml/.uss` |
 
 ⛔ **WO-1180 + WO-1181 are ONE lane, ONE seat, sequential, 1180 first.** They read as independent
 tickets and **rewrite the same file**; 1181's spec explicitly builds on 1180's fallback path.
@@ -157,7 +212,12 @@ hunt for them. Every hook it reuses does exist verbatim (`VfxPool.SpawnHitImpact
 `VFXManager.Play(Impact_*)`, `ProjectileVFXCatalog.SpawnFlying`), so it is a **mapping job with no
 creative VFX pick** - which matters, because VFX key selection is the owner's.
 
-⚠ **WO-1005's remaining slice is one sentence, not a spec section.** Add before handing out: the
+⛔ **HAND OUT `WO-1182`, NOT "WO-1005 tail" - they are THE SAME FILE and two rows would race it.**
+WO-1182 was split out of WO-1005 on 2026-08-24 and **already carries** the two things this section told
+the lead to add by hand. WO-1005's own status now records the split. *(Caught by the batch-4 selector;
+I created the duplicate by minting 1182 without updating this table.)*
+
+⚠ **(Historical - already satisfied by WO-1182.)** WO-1005's remaining slice was one sentence, not a spec section. The
 pattern is commit `7c103775a` (the lantern-oil rebuild - self-builds its own Canvas at runtime and
 tolerates the legacy `UIDocument` seat), and the constraint is **keep the `DungeonCraftVM` MVVM seam;
 the View reads no game state**. Without that it fails test 1. ⛔ **No scene or prefab work.**

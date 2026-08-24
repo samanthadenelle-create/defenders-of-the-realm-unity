@@ -56,3 +56,55 @@ estate" instinct) but touches placement/BaseLayout and the container singleton r
 - [ ] One-time per wallet, server-refused on repeat, survives reinstall
 - [ ] Overflow-discard behaviour unchanged for non-buyers (no silent economy change)
 - [ ] Ladder pricing respects the WO-1072 valuation discipline (no dominated rung)
+
+---
+
+## ⭐ OWNER RULING 2026-08-24
+
+§4 is answered, and the owner **added scope**. This ticket moves **SPEC → READY**.
+
+### §4 — **PERCENTAGE MULTIPLIER.** Not a fourth container slot.
+
+Authored ladder (data, tunable at implementation):
+
+| SKU | Effect on total cap (base + containers) |
+|---|---|
+| **Storehouse Deed I** | **+25%** |
+| **Storehouse Deed II** | a further **+25–50%** |
+| **Storehouse Deed III** | a further increase above II |
+
+- ⛔ **No fourth container object.** Placement, `BaseLayout`, and the container-singleton rules are
+  **untouched** — that is the whole reason the multiplier wins.
+- The multiplier applies **on top of** live container levels, so upgrading a container after buying a
+  Deed still raises the cap (§5 acceptance box 1 unchanged).
+- The **[sink-cap] oracle keeps asserting against the NO-Deed ceiling** (§3.1 stands, unmodified).
+
+### ⭐ ADDED SCOPE — **cosmetic evolution of the EXISTING storage buildings**
+
+The owner paired the multiplier with visible change, because *"permanent purchases should feel
+permanent."* An invisible cap number does not read as permanence; the building does.
+
+Each Deed visibly upgrades the storage buildings the player already owns:
+
+- upgraded props on and around the building
+- extra crates / carts / stone piles
+- reinforced doors
+- banners and signage
+- a larger surrounding yard
+
+⛔ **WITH NO EXTRA CONTAINER OBJECT.** The evolution is **dressing on the existing structure's
+visual** — never a new placeable, never a second building, never an added `BaseLayout` footprint.
+That constraint is what keeps the added scope free of the placement/singleton risk the rejected
+"fourth container" option carried. If an implementation finds itself adding an object the layout
+owns, it has left the ruling.
+
+⚠ **THE COSMETIC HALF IS NEW WORK AND IS TRACKED SEPARATELY.** The lead is minting its own ticket for
+it. Do **not** implement it inside this WO, and do not let this WO's acceptance depend on it — the
+multiplier ships on its own timeline (behind WO-1176 §3), the visual evolution on the cosmetic rail's.
+Cross-reference, do not merge.
+
+### Additional acceptance (from this ruling)
+
+- [ ] Deed effect is a **percentage of the computed total cap**, authored in data, never a flat add
+- [ ] No new placeable, no `BaseLayout` change, no container-singleton change — asserted
+- [ ] Cosmetic evolution is scoped to the companion ticket and referenced, not duplicated here

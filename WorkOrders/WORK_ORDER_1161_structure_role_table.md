@@ -83,3 +83,44 @@ The truthful chain is: weapons roof = `forge` (role `weaponsmith`) → then sugg
 - **The harvest gate mapping itself.** The owner ruled iron = **Armorer**, food = Farm, wood = Lumbermill, crystals = none (level-6 Echo). `EchoCardVM.FaucetBuildingIdFor` still routes iron to `ForgeId` → `collector_forge`. Repointing it needs care: `MayHarvest` resolves through `collectorBuildingId`, so pointing the cue at `armorer` without moving the faucet binding would swap one lie for another — the cue would name a building that, once built, still would not open the gate. **Do that as its own change, with a captured run proving the gate flips.**
 - `collector_forge` still displays "Forge", now duplicating the corrected `forge`. It is no longer player-facing once the cue resolves by role, but the duplicate should go when the faucet binding moves.
 - `collector_lumbermill` and `lumbermill` **both** display "Lumber Mill" — the same latent trap, dormant only because the owner happened to build the right one.
+
+---
+
+## ⭐ OWNER RULING 2026-08-24
+
+### §5 — **FIX THE TWO WRONG IDS IMMEDIATELY. NOTHING ELSE.**
+
+The `[tutorial-agree]` red is a genuine find, and the fix is the smallest possible one. The truthful
+chain, exactly as §5 already derived it:
+
+> **weapons roof = `forge` (role `weaponsmith`)  →  armour nudge = `armorer` (role `armorer`)**
+
+Two id corrections in `tutorial-steps.json` (**both canonical copies, byte-identical**):
+
+1. The order-1060 beat's trigger `build.structure_placed:`**`workshop`** → **`forge`** — the "weapons
+   roof" beat must trigger on the weapons building, not the Crafting Station.
+2. The armour nudge's target **`forge`** → **`armorer`**, and its stale authoring note (*"catalog id
+   'forge', display 'Armorer'"*) corrected with it.
+
+⛔ **DO NOT TOUCH THE REST OF THE SEQUENCE.** The file's explicit owner creative pin still stands:
+
+> *"THE CHAIN'S ORDER PAST THESE TWO BEATS IS AN OWNER CREATIVE PIN — propose the full sequence to the
+> owner before authoring more."*
+
+Correcting two wrong ids is a **truth fix**, not a creative rewrite — that is why it is permitted and
+why nothing adjacent is. No re-ordering, no added beats, no re-worded copy beyond the two ids and the
+note that describes them.
+
+**Expected result:** `[tutorial-agree]` goes green and `DataRegression` reads **270/270**.
+
+### ⚠ KEEP THIS SEPARATE — §6's faucet repoint is NOT part of this
+
+`EchoCardVM.FaucetBuildingIdFor` routing iron to `collector_forge` is a **SEPARATE change** and still
+needs **a captured run proving the gate flips**. §6 already spells out why a half-move is worse than
+no move: `MayHarvest` resolves through `collectorBuildingId`, so repointing the *cue* without moving
+the *faucet binding* swaps one lie for another — the cue would name a building that, once built, still
+would not open the gate.
+
+⚠ Note also that WO-1163 §4b **superseded** the "iron is the Armorer" ruling: `collector_forge` becomes
+the **Iron Mine** and the Armorer returns to being purely the armour vendor. Whoever picks up the §6
+repoint reads that section first — the destination has moved since §6 was written.

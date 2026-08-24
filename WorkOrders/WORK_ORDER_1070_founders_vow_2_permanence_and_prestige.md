@@ -72,3 +72,55 @@ SKU must contain things **no repetition of cheaper SKUs can recreate**. Don't se
 - [ ] Goods/$ is no longer the card's implicit pitch: goods ≤ the $19.99 rung's, by design, stated
       in the authoring note so a future "fix the value" pass doesn't re-invert it
 - [ ] Owner sign-off recorded on §4's two rulings before implementation starts
+
+---
+
+## ⭐ OWNER RULING 2026-08-24
+
+Both §4 open items are answered. This ticket moves **SPEC → READY**.
+
+### §4.1 — +1 workforce/builder slot: **(b) CRYSTALS TOWARD THE SLOT, never the slot itself.**
+
+Owner, verbatim:
+
+> *"Founder's Vow may accelerate the player toward gated permanent upgrades, but may not bypass
+> their progression requirements."*
+
+- The Vow grants **crystals**, which the player then spends through the existing
+  `BuildTimerService.TryBuySlot` path.
+- The **WO-911 Q6 Echo gate is untouched**: each Echo above 2 unlocks the *right* to buy; crystals
+  complete it. A Founder with 2 Echoes gets a faster wallet, not an extra lane.
+- ⛔ Do **not** add a Founder branch, flag, or bypass inside `TryBuySlot`. There is exactly one
+  slot-purchase path and the Vow does not fork it.
+
+⭐ **THIS IS NOW A GENERAL MONETIZATION RULE, NOT A ONE-OFF — a FOUNDATIONAL RULING.** It governs
+every future SKU, not just this one: **paid products may ACCELERATE a player toward a gated
+permanent upgrade; they may never BYPASS that upgrade's progression requirement.** Any SKU that
+proposes to hand over a gated unlock outright is refused by this rule without needing a fresh owner
+pass. Carry it forward into WO-1071, WO-1072, WO-1073 and every store ticket after them.
+
+### §4.2 — "Named on the Heart": **REMOVE THE COPY NOW.**
+
+- Strike the `packs.json:188` sentence in the next data pass. It is an undeliverable forever-promise
+  on a **live** store listing — the highest-risk copy in the catalog.
+- The promise is **not lost — it MOVES.** It becomes the **$500 Patron Monument** in WO-1073's
+  Patronage ladder. One surface, one implementation, two tickets consume it — exactly what WO-1073
+  §3.3 predicted.
+
+⭐ **OWNER'S REFINEMENT — capture it, it is the load-bearing half:** the monument appears **NEAR the
+Heart, and NEVER alters the Heart itself.** Verbatim reasoning:
+
+> *"that protects your most important world object from becoming a NASCAR hood covered in sponsor
+> names."*
+
+⛔ So: no inscription surface **on** the Heart mesh, no per-patron decal on it, no name list rendered
+on the world tree. The monument is a **separate placed object adjacent to** the Heart, and its
+density/scale stays bounded no matter how many patrons exist.
+
+### What this changes in this ticket
+
+- §2's table row "Named on the Heart" → **remove the sentence now**; the capability re-appears as the
+  WO-1073 $500 monument, sited near the Heart.
+- The proposed builder-slot perk → the Vow's **crystal grant** is the vehicle; no slot is granted.
+- §6's last acceptance box ("Owner sign-off recorded on §4's two rulings") → **satisfied by this
+  section.**

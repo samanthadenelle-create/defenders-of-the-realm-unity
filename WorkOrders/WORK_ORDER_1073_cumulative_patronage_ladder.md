@@ -63,3 +63,49 @@ live alongside the milestone track's progress display.
 - [ ] Tier entitlements survive reinstall (wallet-keyed) and are never client-grantable
 - [ ] Public surfaces show tier, never dollars
 - [ ] Owner sign-off recorded on thresholds + unlock list before implementation
+
+---
+
+## ⭐ OWNER RULING 2026-08-24
+
+**Build the ARCHITECTURE now.** The server-side lifetime-USD aggregate, the data-driven threshold
+table, the granted-not-purchased entitlement flip, and the cosmetic-only oracle are all approved and
+implementable today. This ticket moves **SPEC → READY (architecture)**.
+
+### Thresholds — ⚠ **TENTATIVE**, three tiers only
+
+| Tier | Threshold (tentative) | Unlocks |
+|---|---|---|
+| **Patron** | **$50** | permanent Patron crest · profile border · banner component |
+| **High Patron** | **$150** | exclusive kingdom decoration · animated heraldry · premium Heart aura |
+| **Founder / Benefactor** | **$500** | permanent monument · player/house inscription · unique animated kingdom marker |
+
+These **supersede** §2's illustrative six-rung list ($25/$50/$100/$250/$500/$1,000) as the shape to
+build against. They are authored as **DATA** (§2 already requires it), so re-tuning a threshold is a
+data edit, not a rebuild — which is precisely why "tentative" is safe to ship the architecture on.
+
+### ⛔ NO WHALE LADDER ABOVE $500 — owner, verbatim:
+
+> *"Do not design a $2,500 whale ladder before you know whether you have $500 whales."*
+
+Higher tiers are authored **only after real $500 patrons exist** in `purchase_entitlements`. This is
+an evidence gate, not a preference. ⚠ Do not pre-author placeholder rows above $500 — an unrendered
+threshold is the dead unlock §3.2 forbids.
+
+### The $500 monument — this is where "Named on the Heart" LANDS
+
+§3.3 predicted that WO-1070 §4.2 and this tier are the same surface, and the owner ruled it that way:
+the `packs.json` "Founders are named on the Heart" copy is **removed now** from the Vow, and the
+capability re-appears here as the **$500 Patron Monument** with player/house inscription.
+
+⭐ **OWNER'S SITING CONSTRAINT, BINDING ON THIS TIER:** the monument stands **NEAR the Heart and never
+alters the Heart itself.** Verbatim: *"that protects your most important world object from becoming a
+NASCAR hood covered in sponsor names."* No inscription on the Heart mesh, no per-patron decal, no name
+list on the world tree; a **separate adjacent object**, bounded in scale and density however many
+patrons accumulate.
+
+### Still owed before implementation completes
+
+- The unlock list above is the owner's sign-off for **v1**; §5's last acceptance box is satisfied for
+  these three tiers and these three tiers only.
+- §3.2 still governs: a tier whose cosmetic cannot render yet is **not authored yet**.
