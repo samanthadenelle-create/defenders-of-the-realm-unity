@@ -66,7 +66,19 @@ Codex's structural findings, accepted as the starting map (re-verify each at sou
 
 ⚠ **The owner is red/green colourblind.** No fix may encode meaning in hue; value/shape contrast only, and the greyscale check is the gate.
 
-## §2 — Pricing policy (⛔ BLOCKED ON OWNER RULING)
+## §2 — Pricing policy — ⭐ RULED 2026-08-23: **KEEP `low_24h`. §2 IS CLOSED, DECLINED.**
+
+> **Owner, verbatim: *"i think low over 24 is ok"*.**
+
+**BOTH halves stand** — the 24h-low rate source AND `ceil()` to a whole SKR. They were presented together, on one ruling, and the answer affirms the existing policy. What was "carried forward, not endorsed" is now **authored policy**, recorded at `api/_lib/purchase-catalog.js`.
+
+Decided against measured numbers, not in the abstract. Live at ruling time: `low_24h` **$0.00755954** vs `current_price` **$0.00803436** — a $2.99 pack costs **396 SKR** under this policy against **373 SKR** at spot, roughly **6% more**, before `ceil()` adds its share.
+
+⛔ **Codex's recommendation to replace this with a short-lived current/executable quote is DECLINED.** Nothing about it was wrong on the merits — but it was a proposal about pricing *policy*, and policy is the owner's. Re-opening needs a **new owner ruling, not a refactor**. Do not "improve" this into spot pricing.
+
+⚠ **The pricing regressions are still owed** (freshness, expiry, rounding, source identity, fail-closed) — a ruled policy that can silently drift is not actually ruled. Those pin the RULED behaviour; they are not a re-litigation of it.
+
+### (superseded) The original §2 as written before the ruling
 
 **Do not implement until the owner rules.** The decision she owes, both halves together:
 
