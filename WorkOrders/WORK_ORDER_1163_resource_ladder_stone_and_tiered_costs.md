@@ -1,6 +1,6 @@
 # WORK ORDER 1163 — The resource ladder: Food becomes Stone, and tiers cost by depth
 
-**Status:** READY - PARTIAL. The five-surface paid-pack food-to-stone correction LANDED 2026-08-25 in `5625f9af8` and is compile-gated; the prior off-tree money bug is closed. The whole ticket is NOT done: the wider player-facing food-to-stone conversion, ruled tier-cost ladder, troop-training gold conversion, generated fallback, captured tier-1/tier-2/training charge proof, and owner felt-test in section 7 remain open. See `WORK_ORDER_1163_resource_ladder_stone_and_tiered_costs.RESULT.md` for the exact landed slice and evidence.
+**Status:** FIXED 2026-08-25 - AWAITING OWNER SEEKER FELT-TEST TO CLOSE. The full Food-to-Stone player conversion, ruled tier-cost ladder, Gold-only troop training, legacy compatibility, refundable queued-Gold persistence (save schema v39), generated fallbacks, and Quarry presentation are integrated through `45907e7e`. Integrated evidence is `COMPILE_GATE_OK`, `REGRESSION_OK 279/279`, and Node `57/57`. Implementation is no longer outstanding; only the owner-held headed/device acceptance in section 7 remains pending. See the matching RESULT.
 
 **Minted:** 2026-08-23 (CLI), banner bumped 1163 → 1164 in the same edit.
 **Ruled by:** the owner, 2026-08-23, in conversation. Verbatim below.

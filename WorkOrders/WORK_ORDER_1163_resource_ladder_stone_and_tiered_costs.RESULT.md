@@ -1,6 +1,35 @@
-# WORK ORDER 1163 - RESULT: paid-pack food-to-stone correction
+# WORK ORDER 1163 - RESULT: resource ladder and Food-to-Stone conversion
 
-**Status:** PARTIAL - money-path slice landed; WO-1163 remains open and assignable.
+**Status:** IMPLEMENTED AND INTEGRATED - awaiting owner Seeker felt-test to close.
+
+## Final integrated result (2026-08-25)
+
+The broad implementation landed as `a11899d58`, the coordinated save-schema/version update as
+`dbedc701`, and the Quarry portrait resolution as `45907e7e`. Together with the earlier paid-pack
+slice `5625f9af8`, current main now ships one Stone identity over the frozen internal Food save slot,
+the L1 Wood+Gold / L2 Stone+Gold / L3 Iron+Gold building ladder, and Gold-only troop training.
+
+Queued Gold is recorded in the v39 paid basket and cancellation refunds the complete material+Gold
+basket before one authoritative save and resource notification. Legacy troop costs preserve the old
+Wood+Iron+Food total as Gold; legacy pack `food` keys remain accepted as the internal Stone slot.
+Canonical mirrors and generated catalog/build-category fallbacks move together. Quests retain their
+wire fields while live presentation says Stone.
+
+## Integrated evidence
+
+- `COMPILE_GATE_OK` with zero C# errors.
+- `REGRESSION_OK 279/279` on integrated main.
+- Backend Node fleet `57/57` green.
+- Paid-pack, battle-monthly, impulse-pack, town-bank, core-save v39, Obsidian queue/refund,
+  training-door, and upgrade-authority suites green.
+- Quarry portrait follow-up integrated at `45907e7e`.
+
+## Acceptance still owner-held
+
+The implementation/code/data scope is complete. Final closure still requires the section 7 headed
+Seeker felt-test: confirm Stone/Quarry vocabulary and icons in play and observe representative L1,
+L2, and troop-training charges. Do not describe missing owner/device evidence as missing conversion
+implementation.
 
 ## Landed
 
@@ -22,8 +51,9 @@ The three renamed `impulse-stone-*` rows retain their retired `impulse-food-*` i
 - Canonical pack mirrors: byte-identical, MD5 `A711238D20A51A29E294236AB25B3D3D`.
 - Source safety: `git diff --check` clean; `SaveSchema.CurrentVersion` remains `38`; no quest path changed.
 
-## Still open - do not close WO-1163
+## Superseded partial-state note
 
-This result covers only the bounced money-path correction. Section 7 still requires the broader food-to-stone game conversion, L1 wood+gold / L2 stone+gold / L3 iron+gold repricing, troop training to straight gold, regenerated WO-1137 fallback, and captured proof that the three representative actions charge those baskets.
+The paragraph below described the first paid-pack-only landing. Those implementation items are now
+integrated as recorded above; it is retained only as history.
 
 The final felt-test is owner-held. Any live/device capture and final integrated Unity regression required by the remaining implementation are lead/ops-held. Player-facing names and feel remain owner authority. `blue_mine` art remains explicitly outside WO-1163.

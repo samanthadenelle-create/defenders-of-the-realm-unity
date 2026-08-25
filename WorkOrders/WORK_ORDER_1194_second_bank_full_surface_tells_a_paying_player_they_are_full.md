@@ -1,6 +1,6 @@
 # WORK ORDER 1194 - a second "Bank full" surface still scolds a player who just paid
 
-**Status:** READY TO IMPLEMENT
+**Status:** FIXED 2026-08-25 - AWAITING HEADED/DEVICE FELT-TEST TO CLOSE. Implemented in `8c03413ab` after WO-1163: the ambient surface now uses three always-visible Wood/Iron/Stone `current of capacity` lines, `Harvest` replaces the vague collector count, and exact-cap versus purchased-over-cap copy remains mechanically distinct. Integrated main is `COMPILE_GATE_OK`, `REGRESSION_OK 279/279`, Node `57/57`. Only headed placement/readability and owner device feel remain open; implementation is not outstanding.
 **Minted:** 2026-08-25 (CLI lead, main line; banner bumped 1194 -> 1195 in the same edit)
 **Silo:** Village / UI
 **Ruling:** `FOUNDATIONAL_RULINGS.md` section 7 - CITE it, never restate it.
