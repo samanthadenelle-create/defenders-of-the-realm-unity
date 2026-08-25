@@ -137,8 +137,23 @@
 > fine as history. A copied number is the bug **even when it was right the day it was written** -
 > that is exactly how the retired 860-899 UI block kept re-seeding collisions from CLAUDE.md sec.2.
 
-> ## ⚠ RECONCILED 2026-08-25 (CLI): main line next free = **1202**.
-> *(CLI seat minted **WO-1201** and bumped 1201 -> 1202 in this SAME edit. **1201** = QUESTS PAY
+> ## ⚠ RECONCILED 2026-08-25 (CLI): main line next free = **1204**.
+> *(CLI seat minted **WO-1203** and bumped 1203 -> 1204 in this SAME edit. **1203** = the BOARD
+> CANNOT SAY "IT EXISTS, BUT NOT HERE" - direct successor to WO-1197, two related defects in the
+> sub-badge that shipped this morning (`5f3985928`). (1) The `--check` contradiction detector cannot
+> tell a status line that NAMES the badge from one that CLAIMS a landing, so WO-1197's own row was
+> the first its own detector falsely accused; the badge renderer is worse, having no quoted-span
+> exemption at all. (2) THE REAL ONE: WO-1163 and WO-1199 were built in unmerged Codex lanes,
+> reviewed and RETURNED, with nothing on disk here - so the landed-slice badge asserts a landing
+> that never happened and bare READY understates a near-complete revision. Spec is a SECOND
+> sub-badge meaning "built in a dev lane, not in this tree", carrying WHERE, plus the lint fix, in
+> one commit. ⛔ No new bucket. This is the Batch 8 mechanism one layer out: the work is not in the
+> tree, so grepping HEAD cannot reveal it.)*
+> *(Earlier: CLI seat minted **WO-1202** and bumped 1202 -> 1203 in this SAME edit. **1202** = QUEST REWARDS
+> SCALED BY PLACEMENT + DIFFICULTY — typed reward list (folds WO-1201 Phase A), lore-aligned
+> wood/iron/food/magic/XP authoring for all 24 quests / 63 stages, rare gear from a closed id table,
+> parity + unknown-kind Fail + grant smoke. Owner: rewards that scale with placement and difficulty.)*
+> *(Earlier: CLI seat minted **WO-1201** and bumped 1201 -> 1202 in this SAME edit. **1201** = QUESTS PAY
 > EXPERIENCE - owner ruled "add xp to quest rewards", then "half the games I have played, that is
 > the main reward", then named troops as the next reward kind. So the ticket is a REWARD-SCHEMA
 > MIGRATION (fixed struct -> typed kind/amount LIST across all 63 stages, both canonical copies)
