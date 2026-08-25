@@ -26,12 +26,49 @@
 // singletons - it is decidable from text, which is why it can be trusted to run
 // in the same batch it is guarding):
 //
-//   RULE 1  [marker-uniqueness]  No two distinct ORACLE files emit the same
-//           `*_OK` marker literal in live code. Scoped to oracle files
+//   RULE 1  [marker-uniqueness]  No two distinct ORACLE files EMIT the same
+//           marker literal in live code. Scoped to oracle files
 //           (*Regression.cs / *Oracle.cs / *Audit.cs + RegressionSuite.cs) so
 //           scene builders that happen to share a NAV_OK token are not dragged in.
 //           KnownDuplicateMarkers is a NAMED, SHRINKING allowlist for pre-existing
 //           debt - never a place to park a new collision.
+//
+//           ⚠ REWRITTEN 2026-08-25 (WO-1193). THE RULE USED TO COUNT A MENTION AS AN
+//           EMISSION. It decided ownership by scanning source text for the literal, so
+//           a suite that NAMES another suite's marker - in prose failure text, in a
+//           source-lint, or as a NEGATIVE PARSER FIXTURE - registered as a second
+//           emitter. On 2026-08-25 CaptureProvenanceRegression's deliberately-foreign
+//           "UI_CAPTURE_OK 51" fixture (a line its parser must REFUSE - a good test)
+//           turned DataRegression red, and the workaround was to break the token in
+//           half in the source. That was the SECOND instance of this exact class: the
+//           RULE 2 scan already carried a named exclusion for HollowPassFixtures.cs,
+//           whose own comment predicted the recurrence and deferred the general fix.
+//
+//           ⛔ THE OBVIOUS FIX IS MEASURABLY WRONG AND WAS MEASURED, NOT ASSUMED.
+//           "Require a logging sink on the SAME LINE" was tested over every oracle
+//           file: 249 marker sites have one and 36 do NOT - and the dominant shape
+//           among those 36 is the CORRECT one, `private const string MarkerOk =
+//           "X_OK";`. It would have stripped uniqueness protection from 13+ genuine
+//           emitters: a loud false positive traded for a quiet false negative, which
+//           for a ratchet is strictly the worse direction. A noisy gate gets fixed; a
+//           silent one gets trusted.
+//
+//           A literal is now an EMISSION only if it REACHES A SINK (EmittedMarkers):
+//             (a) a sink inside the same STATEMENT - joined to the `;`, not to the end
+//                 of the line, so a wrapped Debug.Log still counts; or
+//             (b) the literal is the value of a string DECLARATION/assignment and that
+//                 IDENTIFIER reaches a sink somewhere in the same file - which is what
+//                 keeps `const string MarkerOk = "X_OK";` a genuine emitter.
+//           Anything else is a MENTION and owns nothing. Measured over this tree the
+//           change moves oracle ownership 257 -> 253 pairs, and every one of the four
+//           it drops is a verified mention whose real emitter still owns the marker.
+//
+//           The sink list (MarkerSink) knows this repo's own wrappers - Debug.Log*,
+//           Console.Write*, StringBuilder Append*, FlowTrace.*, the local Log() helper,
+//           DungeonKitRegression's Require(), RegressionSuite's Pass(), and assignment
+//           to the `reason` / `detail` return channel. Add a new wrapper HERE when one
+//           appears; a wrapper the list does not know reads as a mention and QUIETLY
+//           drops a tooth, so this list is load-bearing.
 //
 //   RULE 2  [registration]  Every file under Assets/Editor/Regression that
 //           exposes `public static bool Run(out string <name>)` is referenced in
@@ -272,9 +309,57 @@ namespace DeNelle.Editor.Regression
         // ---------------------------------------------------------------------
         //  Regexes
         // ---------------------------------------------------------------------
-        // An _OK marker literal appearing inside a string literal in live code.
+        // A marker literal appearing inside a string literal in live code.
+        //
+        // WIDENED 2026-08-25 (WO-1193). It used to key ONLY on `*_OK`, so a whole family of
+        // markers this repo actually relies on had its uniqueness guaranteed by a manual table
+        // in a work order rather than by a gate: `*_FAIL`, and the WO-1080 shapes
+        // UI_CAPTURE_HEAD / UI_CAPTURE_STAMP, which carry no suffix at all.
+        //
+        // ⛔ THE REGEX LEARNS THE MARKERS; THE MARKERS DO NOT DEFORM TO FIT THE REGEX. Renaming
+        // UI_CAPTURE_HEAD to end in _OK is never the move - its shape is specified by WO-1080
+        // and PARSED by tools/board_build.py. Names with no common suffix are listed by name.
+        //
+        // ⚠ NOT COVERED, AND THE OMISSION IS MEASURED, NOT AN OVERSIGHT: a reason of the shape
+        // `CAPTURE_PROVENANCE OK` (a SPACE, not an underscore). The obvious pattern for it,
+        // `"([A-Z_]+)\s+(OK|FAIL)"`, was run over this tree and produced 24 collisions that are
+        // all ordinary English prose ending in the word OK - "CATALOG OK", "GATE OK", "LAYOUT
+        // OK" across six unrelated suites. A rule that fires 24 times on prose is not a ratchet,
+        // so the spaced family stays unprotected and NAMED here rather than silently absorbed.
         private static readonly Regex MarkerInLiteral = new Regex(
-            "\"[^\"\\n]*?\\b([A-Z][A-Z0-9]*(?:_[A-Z0-9]+)*_OK)\\b", RegexOptions.Compiled);
+            "\"[^\"\\n]*?\\b([A-Z][A-Z0-9]*(?:_[A-Z0-9]+)*_(?:OK|FAIL)" +
+            "|UI_CAPTURE_HEAD|UI_CAPTURE_STAMP)\\b", RegexOptions.Compiled);
+
+        // ---------------------------------------------------------------------
+        //  WO-1193  --  MENTION vs EMISSION
+        // ---------------------------------------------------------------------
+        // A SINK is anything that carries the string OUT of the file: a log call, a log
+        // accumulator, or the Run(out string reason) return channel. This list is the rule's
+        // load-bearing part - see the RULE 1 note in the header before editing it.
+        private static readonly Regex MarkerSink = new Regex(
+            "Debug\\.Log" +                       // Debug.Log / LogError / LogWarning / LogFormat
+            "|Console\\.Write" +
+            "|\\.Append(?:Line|Format)?\\s*\\(" + // StringBuilder log accumulation
+            "|new\\s+StringBuilder\\s*\\(" +
+            "|FlowTrace\\." +
+            "|\\bLog\\s*\\(" +                    // the CastleHubBuilder-style local Log() wrapper
+            "|\\bRequire\\s*\\(" +                // DungeonKitRegression's marker helper
+            "|\\bPass\\s*\\(" +                   // RegressionSuite's CaseResult helper
+            "|\\breason\\s*\\+?=[^=]" +           // the Run(out string reason) return channel
+            "|\\bdetail\\s*\\+?=[^=]",
+            RegexOptions.Compiled);
+
+        // `[modifiers] string|var|StringBuilder <ident> = <literal>` - the shape whose identifier
+        // must be chased to a sink. Matched against the MASKED statement so quoted text cannot
+        // fake a declaration.
+        private static readonly Regex MarkerDecl = new Regex(
+            "(?:^|[;{}])\\s*(?:(?:public|private|internal|protected|static|readonly|const|new)\\s+)*" +
+            "(?:string|var|StringBuilder)\\s+(\\w+)\\s*=[^=]",
+            RegexOptions.Compiled | RegexOptions.Multiline);
+
+        // A plain re-assignment `<ident> = <literal>` (no declarator).
+        private static readonly Regex MarkerAssign = new Regex(
+            "(?:^|[;{}])\\s*(\\w+)\\s*=[^=]", RegexOptions.Compiled | RegexOptions.Multiline);
 
         // A marker token anywhere in a PowerShell grep line.
         private static readonly Regex MarkerToken = new Regex(
@@ -350,11 +435,17 @@ namespace DeNelle.Editor.Regression
             var allEditorFiles = Directory.GetFiles(editorDir, "*.cs", SearchOption.AllDirectories);
             var codeByPath = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
             var rawByPath = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            var maskedByPath = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            var literalStartsByPath = new Dictionary<string, HashSet<int>>(StringComparer.OrdinalIgnoreCase);
             foreach (var p in allEditorFiles)
             {
                 string raw = ReadOrEmpty(p);
                 rawByPath[p] = raw;
-                codeByPath[p] = StripLineComments(raw);
+                string code = StripLineComments(raw);
+                codeByPath[p] = code;
+                HashSet<int> starts;
+                maskedByPath[p] = MaskStringLiterals(code, out starts);
+                literalStartsByPath[p] = starts;
             }
 
             // -----------------------------------------------------------------
@@ -370,9 +461,18 @@ namespace DeNelle.Editor.Regression
                 bool isOracle = IsOracleFile(name);
                 if (isOracle) oracleFileCount++;
 
-                foreach (Match m in MarkerInLiteral.Matches(kv.Value))
+                // EMITS, not MENTIONS (WO-1193). See EmittedMarkers + the RULE 1 header note.
+                HashSet<int> litStarts;
+                string maskedCode;
+                if (maskedByPath.ContainsKey(kv.Key) && literalStartsByPath.ContainsKey(kv.Key))
                 {
-                    string marker = m.Groups[1].Value;
+                    maskedCode = maskedByPath[kv.Key];
+                    litStarts = literalStartsByPath[kv.Key];
+                }
+                else maskedCode = MaskStringLiterals(kv.Value, out litStarts);
+
+                foreach (string marker in EmittedMarkers(kv.Value, maskedCode, litStarts))
+                {
                     if (!isSelf) Add(allMarkerOwners, marker, name);
                     if (isOracle) Add(markerOwners, marker, name);
                 }
@@ -409,7 +509,7 @@ namespace DeNelle.Editor.Regression
             foreach (var kv in markerOwners)
             {
                 if (kv.Value.Count < 2) continue;
-                if (KnownDuplicateMarkers.Contains(kv.Key)) continue;
+                if (IsKnownDuplicate(kv.Key)) continue;
                 failures.Add("marker '" + kv.Key + "' is emitted by " + kv.Value.Count +
                              " distinct oracle files (" + string.Join(", ", kv.Value.ToArray()) +
                              ") - a log carrying it cannot say WHICH suite passed. Give each a distinct marker.");
@@ -435,22 +535,30 @@ namespace DeNelle.Editor.Regression
                 string name = Path.GetFileName(p);
                 string code = codeByPath.ContainsKey(p) ? codeByPath[p] : StripLineComments(ReadOrEmpty(p));
                 string raw = rawByPath.ContainsKey(p) ? rawByPath[p] : ReadOrEmpty(p);
-                // ⛔ FIXTURE FILES HOLD FAKE ORACLE SOURCE AS TEST DATA (added 2026-08-22).
-                // HollowPassFixtures.cs stores sample suites - including a deliberately CLEAN one -
-                // as verbatim string constants, so this text scan reads "public static class
-                // CleanSuite { ... Run(out string ...) }" and demands it be registered. It is not an
-                // oracle; it is the control the hollow-pass detector is measured against.
+
+                // *** THE NAMED HollowPassFixtures.cs EXCLUSION THAT USED TO SIT HERE IS DELETED
+                // (WO-1193, 2026-08-25). It was added 2026-08-22 because that file stores sample
+                // oracle source as verbatim string constants, so a raw text scan read "public
+                // static class CleanSuite { ... Run(out string ...) }" and demanded a FIXTURE be
+                // registered as a suite. Its own comment named the general fix - strip string
+                // literals before the scan - and deferred it as "a wider change to a load-bearing
+                // gate". RULE 1 then hit the identical defect three days later.
                 //
-                // A DECLARATION INSIDE A STRING LITERAL IS NOT A DECLARATION - the same class as
-                // counting braces that live inside quoted source. The general fix is to strip
-                // verbatim string literals before this scan; that is a wider change to a
-                // load-bearing gate, so this is a NARROW, NAMED exclusion of one file and the
-                // general case is left flagged rather than silently absorbed.
-                if (name.Equals("HollowPassFixtures.cs", StringComparison.OrdinalIgnoreCase)) continue;
-                if (!RunSignature.IsMatch(code)) continue;
+                // ⛔ IT IS NOT KEPT AS A SAFETY NET BESIDE THE FIX, ON PURPOSE. A per-file
+                // exclusion standing next to a general mechanism is how you stop finding out
+                // whether the mechanism works: the file it excuses is the one file that would
+                // have proven it. The scan below now runs on MASKED source, so a declaration
+                // inside quoted text is not a declaration for EVERY file, and HollowPassFixtures
+                // passes on the general rule with nothing naming it.
+                //
+                // Masked for the DECLARATION scans only. The hollow-pass scanner below is still
+                // handed RAW source - it does its own masking and needs the comments intact to
+                // honour the per-site opt-out.
+                string codeMasked = maskedByPath.ContainsKey(p) ? maskedByPath[p] : MaskStringLiterals(code);
+                if (!RunSignature.IsMatch(codeMasked)) continue;
 
                 // Which class in this file owns the Run(out string) entry point?
-                foreach (string cls in ClassesWithRunEntryPoint(code))
+                foreach (string cls in ClassesWithRunEntryPoint(codeMasked))
                 {
                     bool inRegistry = Regex.IsMatch(registryBody, "\\b" + Regex.Escape(cls) + "\\.Run\\s*\\(\\s*out\\b");
                     if (inRegistry) { registered++; continue; }
@@ -462,9 +570,11 @@ namespace DeNelle.Editor.Regression
                 }
 
                 // RULE 4a - can it go red at all?
-                bool canFail = code.Contains("return false")
-                            || Regex.IsMatch(code, "return\\s+\\w+\\.Count\\s*==\\s*0")
-                            || Regex.IsMatch(code, "return\\s+\\w+\\s*\\.\\s*Count\\s*==\\s*0");
+                // Masked (WO-1193): a `return false` that lives inside a quoted FIXTURE is not a
+                // failing path any more than a quoted class declaration is a class.
+                bool canFail = codeMasked.Contains("return false")
+                            || Regex.IsMatch(codeMasked, "return\\s+\\w+\\.Count\\s*==\\s*0")
+                            || Regex.IsMatch(codeMasked, "return\\s+\\w+\\s*\\.\\s*Count\\s*==\\s*0");
                 bool optedOutHollow = raw.IndexOf(HollowPassOptOut, StringComparison.OrdinalIgnoreCase) >= 0;
                 if (!canFail && !optedOutHollow && !KnownHollowPassFiles.Contains(name))
                     newHollow.Add(name + " has no failing path at all (no 'return false', no 'return <list>.Count == 0') - it can only ever report OK");
@@ -530,7 +640,7 @@ namespace DeNelle.Editor.Regression
                                 continue;
                             }
                             var owners = allMarkerOwners[token];
-                            if (owners.Count > 1 && !KnownDuplicateMarkers.Contains(token))
+                            if (owners.Count > 1 && !IsKnownDuplicate(token))
                                 failures.Add(scriptName + " greps for marker '" + token + "' which " + owners.Count +
                                              " different files emit (" + string.Join(", ", owners.ToArray()) +
                                              ") - the gate cannot tell which suite it just judged.");
@@ -551,7 +661,8 @@ namespace DeNelle.Editor.Regression
                   "FOUND (fixed, or the guard was edited) - delete those rows: " + DescribeSites(ledger);
 
             reason = "REGRESSION MARKER OK -- " + oracleFileCount + " oracle files, " + markerOwners.Count +
-                     " distinct _OK markers (0 undeclared collisions), " + registered +
+                     " distinct markers EMITTED (_OK/_FAIL/UI_CAPTURE_HEAD/UI_CAPTURE_STAMP; " +
+                     "mentions excluded -- WO-1193) with 0 undeclared collisions, " + registered +
                      " Run(out) oracles registered in DataRegression.RunAll (" + optedOut +
                      " declared standalone), " + gateGreps +
                      " gate-script marker grep(s) all resolve to exactly one emitter; hollow-pass ratchet " +
@@ -609,6 +720,236 @@ namespace DeNelle.Editor.Regression
                 sb.Append(c);
             }
             return sb.ToString();
+        }
+
+        // =====================================================================
+        //  WO-1193 (2026-08-25)  --  MENTION vs EMISSION, and literal masking
+        // =====================================================================
+
+        /// <summary>
+        /// Blanks the CONTENTS of every string / char literal (regular, verbatim @"", and
+        /// interpolated $"") while preserving length, so an index into the returned text is an
+        /// index into the original. Interpolation HOLES are masked AS CODE, recursively - they are
+        /// code, and an identifier used only inside $"{MarkerOk} ..." must still be findable, as
+        /// must a literal printed from inside one (RegressionSuite prints CRITICAL_GATES_OK that
+        /// way). The hole's own braces are blanked so they are not read as statement boundaries.
+        ///
+        /// THIS IS THE GENERAL FIX the 2026-08-22 HollowPassFixtures.cs exclusion deferred. That
+        /// file stores sample oracle SOURCE as verbatim string constants, so a raw text scan read
+        /// "public static class CleanSuite { ... Run(out string ...) }" and demanded it be
+        /// registered. A DECLARATION INSIDE A STRING LITERAL IS NOT A DECLARATION - the same
+        /// class as counting braces that live inside quoted source. Masking makes that true for
+        /// EVERY file instead of excusing one by name.
+        ///
+        /// The two-argument overload also records where each REAL literal BEGINS, which is what
+        /// lets RULE 1 refuse a marker that is only nested inside ANOTHER literal - the
+        /// `@"LogError\s*\(\s*""UI_GEOMETRY_FAIL"` source-lint pattern in
+        /// UiCaptureFidelityRegression is a regex, not an emission, and its inner quotes must not
+        /// read as one.
+        /// </summary>
+        private static string MaskStringLiterals(string code)
+        {
+            HashSet<int> ignored;
+            return MaskStringLiterals(code, out ignored);
+        }
+
+        private static string MaskStringLiterals(string code, out HashSet<int> literalStarts)
+        {
+            literalStarts = new HashSet<int>();
+            if (string.IsNullOrEmpty(code)) return string.Empty;
+            var buf = code.ToCharArray();
+            MaskRange(code, buf, 0, code.Length, literalStarts);
+            return new string(buf);
+        }
+
+        /// <summary>Masks [from, to) in place. Recurses into $"" interpolation holes, which are code.</summary>
+        private static void MaskRange(string code, char[] buf, int from, int to, HashSet<int> literalStarts)
+        {
+            int i = from;
+            while (i < to)
+            {
+                char c = code[i];
+                char nx = i + 1 < to ? code[i + 1] : '\0';
+
+                // @"..." and $@"..." - verbatim, where "" is an escaped quote.
+                bool verbatim = (c == '@' && nx == '"')
+                             || (c == '$' && nx == '@' && i + 2 < to && code[i + 2] == '"');
+                if (verbatim)
+                {
+                    while (i < to && code[i] != '"') { buf[i] = ' '; i++; }
+                    if (i < to) { literalStarts.Add(i); buf[i] = ' '; i++; }
+                    while (i < to)
+                    {
+                        if (code[i] == '"')
+                        {
+                            if (i + 1 < to && code[i + 1] == '"') { buf[i] = ' '; buf[i + 1] = ' '; i += 2; continue; }
+                            buf[i] = ' '; i++; break;
+                        }
+                        buf[i] = ' '; i++;
+                    }
+                    continue;
+                }
+
+                if (c == '"' || (c == '$' && nx == '"'))
+                {
+                    if (c == '$') { buf[i] = ' '; i++; }
+                    literalStarts.Add(i);
+                    buf[i] = ' '; i++;
+                    bool esc = false;
+                    while (i < to)
+                    {
+                        char ch = code[i];
+                        if (ch == OpenBrace && i + 1 < to && code[i + 1] == OpenBrace)
+                        { buf[i] = ' '; buf[i + 1] = ' '; i += 2; continue; }
+                        if (ch == OpenBrace)
+                        {
+                            // An interpolation HOLE is code: mask it as code, and credit any
+                            // literal inside it. RegressionSuite.cs prints CRITICAL_GATES_OK from
+                            // inside one, so skipping holes would drop a genuine emitter.
+                            int hole = i + 1, depth = 0, k = i;
+                            while (k < to)
+                            {
+                                if (code[k] == OpenBrace) depth++;
+                                else if (code[k] == CloseBrace)
+                                {
+                                    depth--;
+                                    if (depth == 0) break;
+                                }
+                                k++;
+                            }
+                            if (k > hole) MaskRange(code, buf, hole, k, literalStarts);
+                            buf[i] = ' ';
+                            if (k < to) buf[k] = ' ';
+                            i = k + 1;
+                            continue;
+                        }
+                        buf[i] = ' '; i++;
+                        if (esc) esc = false;
+                        else if (ch == '\\') esc = true;
+                        else if (ch == '"') break;
+                        else if (ch == '\n') break;
+                    }
+                    continue;
+                }
+
+                if (c == '\'')
+                {
+                    buf[i] = ' '; i++;
+                    bool esc2 = false;
+                    while (i < to)
+                    {
+                        char ch = code[i];
+                        buf[i] = ' '; i++;
+                        if (esc2) esc2 = false;
+                        else if (ch == '\\') esc2 = true;
+                        else if (ch == '\'') break;
+                        else if (ch == '\n') break;
+                    }
+                    continue;
+                }
+
+                i++;
+            }
+        }
+
+        /// <summary>
+        /// The STATEMENT containing <paramref name="pos"/>: back to the previous statement
+        /// boundary, forward to the `;` that ends it (at paren depth 0, so a wrapped call still
+        /// reads as one statement). Joining to the `;` and NOT to the end of the line is the
+        /// point: a Debug.Log split across five source lines is one emission.
+        /// </summary>
+        private static void StatementBounds(string masked, int pos, out int start, out int end)
+        {
+            int i = pos;
+            while (i > 0)
+            {
+                char c = masked[i - 1];
+                if (c == ';' || c == OpenBrace || c == CloseBrace) break;
+                i--;
+            }
+            start = i;
+
+            int j = pos, depth = 0, n = masked.Length;
+            while (j < n)
+            {
+                char c = masked[j];
+                if (c == '(' || c == '[') depth++;
+                else if (c == ')' || c == ']') depth--;
+                else if (depth <= 0 && (c == ';' || c == OpenBrace || c == CloseBrace)) { j++; break; }
+                j++;
+            }
+            end = j;
+        }
+
+        /// <summary>Does <paramref name="ident"/> reach a sink anywhere else in this file?</summary>
+        private static bool IdentifierReachesSink(string code, string masked, string ident, int declStart, int declEnd)
+        {
+            var uses = new Regex("\\b" + Regex.Escape(ident) + "\\b");
+            foreach (Match u in uses.Matches(masked))
+            {
+                if (u.Index >= declStart && u.Index < declEnd) continue;   // the declaration itself
+                int s, e;
+                StatementBounds(masked, u.Index, out s, out e);
+                string stmt = code.Substring(s, e - s);
+                if (MarkerSink.IsMatch(stmt)) return true;
+                // `return ident;` out of a string-returning helper: the value escapes the method,
+                // which is the same thing a sink does one frame later.
+                if (Regex.IsMatch(stmt, "\\breturn\\s+" + Regex.Escape(ident) + "\\b")) return true;
+            }
+            return false;
+        }
+
+        /// <summary>
+        /// The markers this file EMITS (as opposed to merely mentions). See the RULE 1 note in
+        /// the header for why text-presence was not good enough and why "a sink on the same line"
+        /// was measured and rejected.
+        /// </summary>
+        private static HashSet<string> EmittedMarkers(string code, string masked, HashSet<int> literalStarts)
+        {
+            var emitted = new HashSet<string>(StringComparer.Ordinal);
+            foreach (Match lit in MarkerInLiteral.Matches(code))
+            {
+                string marker = lit.Groups[1].Value;
+                if (emitted.Contains(marker)) continue;
+
+                // The match must begin at a REAL literal, not at a quote nested inside another
+                // literal (a `""TOKEN""` inside a verbatim regex or a fixture holding fake source).
+                if (!literalStarts.Contains(lit.Index)) continue;
+
+                int s, e;
+                StatementBounds(masked, lit.Index, out s, out e);
+                string stmt = code.Substring(s, e - s);
+
+                // (a) a sink inside the same statement.
+                if (MarkerSink.IsMatch(stmt)) { emitted.Add(marker); continue; }
+
+                // (b) a string declaration/assignment whose identifier reaches a sink.
+                string maskedStmt = masked.Substring(s, e - s);
+                Match d = MarkerDecl.Match(maskedStmt);
+                if (!d.Success) d = MarkerAssign.Match(maskedStmt);
+                if (d.Success && IdentifierReachesSink(code, masked, d.Groups[1].Value, s, e))
+                    emitted.Add(marker);
+
+                // Anything else is a MENTION and owns nothing.
+            }
+            return emitted;
+        }
+
+        /// <summary>
+        /// KnownDuplicateMarkers, plus the `_FAIL` twin of any allowlisted `_OK`.
+        ///
+        /// DERIVED, NOT A SECOND ROW (WO-1193). Once RULE 1 learned `*_FAIL` markers, the two
+        /// files that both print DUNGEON_EXIT_OK necessarily both print DUNGEON_EXIT_FAIL - the
+        /// SAME documented debt, seen from its other side. Writing a second table row would have
+        /// grown the allowlist to record no new fact, and the two halves could then be retired
+        /// out of step. Fixing the OK collision retires both.
+        /// </summary>
+        private static bool IsKnownDuplicate(string marker)
+        {
+            if (KnownDuplicateMarkers.Contains(marker)) return true;
+            if (marker.EndsWith("_FAIL", StringComparison.Ordinal))
+                return KnownDuplicateMarkers.Contains(marker.Substring(0, marker.Length - 5) + "_OK");
+            return false;
         }
 
         /// <summary>The brace-matched body of DataRegression.RunAll (the suite registry).</summary>

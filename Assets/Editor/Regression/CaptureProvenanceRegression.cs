@@ -494,22 +494,24 @@ namespace DeNelle.Editor.Regression
                 failures.Add(Tag + " FAIL dirty=false did not survive the round trip: '" + cleanLine + "'");
         }
 
-        // *** DO NOT "TIDY" THE COMPOSED STRING BELOW BACK INTO A LITERAL. READ THIS FIRST. ***
+        // THE FOREIGN-MARKER FIXTURE BELOW IS A BARE LITERAL AGAIN, AND THAT IS THE POINT.
         //
-        // RegressionMarkerRegression RULE 1 scans the SOURCE TEXT of every oracle file for an
-        // ALL-CAPS *_OK token inside a double-quoted literal and counts one OWNER per file. It
-        // reads text, so it cannot tell a MENTION from an EMISSION. This suite MENTIONS another
-        // suite's marker on purpose -- as a NEGATIVE fixture, proving the parser refuses a line
-        // that is not ours -- and a bare literal here therefore registered this file as a second
-        // emitter of UI_CAPTURE_OK and turned the whole registry RED (2026-08-25).
+        // History, because it is the acceptance test for WO-1193. RegressionMarkerRegression
+        // RULE 1 used to scan the SOURCE TEXT of every oracle file for an ALL-CAPS *_OK token
+        // inside a double-quoted literal and count one OWNER per file. It read text, so it could
+        // not tell a MENTION from an EMISSION. This suite MENTIONS another suite's marker on
+        // purpose -- a NEGATIVE fixture, proving the parser refuses a line that is not ours --
+        // and the bare literal therefore registered this file as a second emitter of
+        // UI_CAPTURE_OK and turned the whole registry RED (2026-08-25). The stopgap was to break
+        // the token in half in the source (`"UI_CAPTURE" + "_OK"`), which kept the runtime string
+        // byte-identical but left the ratchet unable to do its job.
         //
-        // The fix keeps the RUNTIME STRING BYTE-IDENTICAL and only breaks up the source token, so
-        // the test loses nothing: the parser is still handed the exact foreign marker line and
-        // must still refuse it. Re-joining the halves would restore the false ownership and
-        // re-red the gate. Widening RegressionMarkerRegression instead is the one move that is
-        // never available (owner ruling 2026-08-24: no waivers -- do not take the batteries out
-        // of a smoke alarm because it is beeping).
-        private const string ForeignOkMarker = "UI_CAPTURE" + "_OK";
+        // *** THE RATCHET WAS FIXED INSTEAD OF WAIVED (WO-1193): a literal now counts as an
+        // EMISSION only if it reaches a logging sink. This one flows into the `bad[]` array that
+        // TryParseHeadLine must REFUSE and never into a log, so it is correctly a mention. Re-
+        // joining it is what proves the mechanism works, so it stays joined. If this line ever
+        // has to be broken up again, the ratchet has regressed -- fix the ratchet, do not take
+        // the batteries out of the smoke alarm (owner ruling 2026-08-24: no waivers).
 
         // 3. A lax parser is worse than none: it would ACCEPT a hand-typed short sha and then
         //    compare it against nothing. Each of these must be refused.
@@ -521,7 +523,7 @@ namespace DeNelle.Editor.Regression
                 "UI_CAPTURE_HEAD a2162f17d0000000000000000000000000000001 master", // no dirty token
                 "UI_CAPTURE_HEAD a2162f17d0000000000000000000000000000001 master dirty=maybe",
                 "UI_CAPTURE_HEADROOM a2162f17d0000000000000000000000000000001 master dirty=false",
-                ForeignOkMarker + " 51",   // a DIFFERENT marker entirely -- see the note above
+                "UI_CAPTURE_OK 51",        // a DIFFERENT marker entirely -- see the note above
                 ""
             };
 
