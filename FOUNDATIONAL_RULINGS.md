@@ -542,6 +542,31 @@ note. Under a REWARD slab it is **an empty hero element on the screen where the 
 — ⭐ *"Unlocks Act 2"* is a legitimate reward and arguably a better one than 90 food. Any quest whose
 payoff is progression must SAY so.
 
+⛔ **AND XP BELONGS IN THAT SLOT — EXCEPT QUESTS DO NOT GRANT ANY.**
+
+> **Owner, 2026-08-25:** *"don't forget EXP amounts can drive those too."*
+
+She is right that XP drives quest choice, and verifying it at source exposed a gap larger than the
+panel:
+
+- **XP is a REAL system.** `Assets/_Modules/Core/Progression/IXpEarner.cs:35` declares `AddXp`, heroes
+  level, and the dev tools grant it (`DevPanelController.cs:1155`).
+- ⛔ **Quests award NONE.** Across all **63 stages** of `quests.json` the `reward` object carries
+  exactly `crystals`, `food`, `magic`, `grantItemId`, `grantsKeystone`. There is **no `xp` field**, and
+  the only callers of `AddXp` in the tree are DevTools and `AdminOverlay`. ⛔ **No quest path touches
+  hero XP at all.**
+
+⭐ **So the reward that most drives quest selection in an RPG is the one reward quests do not give.**
+That is a game-design gap, not a UI gap — the reward slab merely makes it visible. ⚠ It is also
+strictly larger than the Quest 3 case above: that is one quest with nothing to show; this is EVERY
+quest missing the line the player most wants to see.
+
+⛔ **This is the owner's call and is NOT ruled here.** Two directions: add `xp` to the quest reward
+schema and author values (a data + service change — ⚠ check whether hero XP is save-persisted before
+treating it as cosmetic), or accept that quests pay in resources and progression only, and design the
+slab around what actually exists. ⛔ Do NOT design a slab with an XP line that renders zero for every
+quest — that is worse than omitting it.
+
 ⭐ Consequence worth noting: the nine quests with no authored GIVER stop mattering under this design.
 The giver was only ever needed to caption a picture.
 
