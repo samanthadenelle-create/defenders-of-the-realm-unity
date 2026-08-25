@@ -111,6 +111,7 @@ namespace DeNelle.Editor.Regression
                 Case(failures, "detail", () => Case2_DetailStackFitsThePane(failures, notes));
                 Case(failures, "no-overlap", () => Case3_SourceLaws(failures, notes));
                 Case(failures, "close-band", () => Case4_PortraitCloseBand(failures, notes));
+                Case(failures, "portrait-map", () => Case5_PortraitMap(failures, notes));
             }
             catch (Exception ex)
             {
@@ -462,6 +463,41 @@ namespace DeNelle.Editor.Regression
                     failures.Add("[close-band] the portrait detail pane is back on the literal 0.05 floor - " +
                                  "that literal IS the WO-941 defect");
             }
+        }
+
+        // =====================================================================
+        //  CASE 5 - WO-1192: portrait is a narrow list rail plus authored detail
+        // =====================================================================
+        private static void Case5_PortraitMap(List<string> failures, List<string> notes)
+        {
+            Type view = FindType(ViewType);
+            if (view == null) { failures.Add("[portrait-map] view type not found"); return; }
+
+            float listMin = ConstFloat(view, "PortraitListMinX", failures, "[portrait-map]");
+            float listMax = ConstFloat(view, "PortraitListMaxX", failures, "[portrait-map]");
+            float gap = ConstFloat(view, "PortraitContentGapX", failures, "[portrait-map]");
+            float contentMax = ConstFloat(view, "PortraitContentMaxX", failures, "[portrait-map]");
+            if (listMin < 0f || listMax <= listMin || gap <= 0f || contentMax <= listMax + gap)
+                failures.Add("[portrait-map] portrait columns are invalid - list must be a narrow left rail " +
+                             "with a positive gap and non-empty detail region");
+            if (listMax - listMin >= contentMax - (listMax + gap))
+                failures.Add("[portrait-map] the portrait quest rail is not narrower than the detail region");
+
+            string raw = ReadSource(ViewSrc, failures);
+            if (raw == null) return;
+            string src = StripComments(raw);
+            if (src.IndexOf("typeof(ScrollRect)", StringComparison.Ordinal) < 0 ||
+                src.IndexOf("tabScroll.horizontal = portrait", StringComparison.Ordinal) < 0)
+                failures.Add("[portrait-map] portrait tabs are not explicitly horizontally scrollable");
+            if (src.IndexOf("detailMin = new Vector2(PortraitListMaxX + PortraitContentGapX, 0f)",
+                    StringComparison.Ordinal) < 0 ||
+                src.IndexOf("detailMax = new Vector2(PortraitContentMaxX, PortraitContentTopY)",
+                    StringComparison.Ordinal) < 0)
+                failures.Add("[portrait-map] absent art no longer collapses into the selected-detail region");
+
+            notes.Add("portrait map: list " + listMin.ToString("F2") + ".." + listMax.ToString("F2") +
+                      ", detail " + (listMax + gap).ToString("F2") + ".." + contentMax.ToString("F2") +
+                      ", tabs scroll");
         }
 
         // =====================================================================

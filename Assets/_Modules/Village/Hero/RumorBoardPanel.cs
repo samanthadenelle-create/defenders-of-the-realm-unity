@@ -182,6 +182,14 @@ namespace DeNelle.Village.Hero
         /// touch the list well above it.</summary>
         public const float PortraitDetailTopMaxY = 0.47f;
 
+        // WO-1192 portrait map. With no authored quest art, detail consumes the former art
+        // region instead of preserving an empty parchment promise.
+        public const float PortraitListMinX = 0.03f;
+        public const float PortraitListMaxX = 0.38f;
+        public const float PortraitContentGapX = 0.02f;
+        public const float PortraitContentMaxX = 0.97f;
+        public const float PortraitContentTopY = 0.855f;
+
         private GameObject _ui;
         private Transform _panelRoot;
         private Transform _chromeContent;
@@ -317,8 +325,13 @@ namespace DeNelle.Village.Hero
                 //  re-sorted, and a transparent raycaster could not have been fixed by sorting.
                 // =============================================================
                 detailBottomOffsetPx = detailFloorY * panelHPx;
-                listMin = new Vector2(0.03f, 0.48f); listMax = new Vector2(0.97f, 0.855f);
-                detailMin = new Vector2(0.05f, 0f); detailMax = new Vector2(0.95f, detailTopY);
+                // Portrait is its own map: a narrow quest rail at left, with the selected
+                // detail taking all remaining authored space. Optional quest art can later
+                // divide the detail region; its absence never leaves an empty plate.
+                listMin = new Vector2(PortraitListMinX, detailFloorY);
+                listMax = new Vector2(PortraitListMaxX, PortraitContentTopY);
+                detailMin = new Vector2(PortraitListMaxX + PortraitContentGapX, 0f);
+                detailMax = new Vector2(PortraitContentMaxX, PortraitContentTopY);
                 DeNelle.Core.Diagnostics.FlowTrace.Step("UI", string.Format(
                     "RumorBoard portrait detail floor: frac={0:F3} -> {1:F1} px above the pane's " +
                     "bottom anchor (panelH {2:F0} px, top {3:F3}). CTA band bottom = that + {4:F0} px.",
@@ -768,6 +781,7 @@ namespace DeNelle.Village.Hero
         {
             if (_tabStrip != null) { SafeDestroy(_tabStrip); _tabStrip = null; }
 
+            bool portrait = ElarionUiKit.SurfaceHeight > ElarionUiKit.SurfaceWidth;
             Transform host;
             float xMin, xMax, topY;
             if (_chromeContent != null && _zoneLeft != null
@@ -781,11 +795,13 @@ namespace DeNelle.Village.Hero
             else
             {
                 host = _panelRoot != null ? _panelRoot : (_ui != null ? _ui.transform : null);
-                xMin = 0.02f; xMax = 0.98f; topY = 1f;
+                xMin = portrait ? PortraitListMinX : 0.02f;
+                xMax = portrait ? PortraitListMaxX : 0.98f;
+                topY = portrait ? PortraitContentTopY : 1f;
             }
             if (host == null) return;
 
-            _tabStrip = new GameObject("TabBand", typeof(Image), typeof(RectMask2D));
+            _tabStrip = new GameObject("TabBand", typeof(Image), typeof(RectMask2D), typeof(ScrollRect));
             _tabStrip.transform.SetParent(host, false);
             var sr = _tabStrip.GetComponent<RectTransform>();
             sr.anchorMin = new Vector2(xMin, topY);
@@ -818,15 +834,27 @@ namespace DeNelle.Village.Hero
             content.transform.SetParent(_tabStrip.transform, false);
             var ccr = content.GetComponent<RectTransform>();
             ccr.anchorMin = Vector2.zero;
-            ccr.anchorMax = Vector2.one;
+            ccr.anchorMax = portrait ? new Vector2(0f, 1f) : Vector2.one;
+            ccr.pivot = portrait ? new Vector2(0f, 0.5f) : new Vector2(0.5f, 0.5f);
             ccr.offsetMin = Vector2.zero;
             ccr.offsetMax = Vector2.zero;
+            if (portrait) ccr.sizeDelta = new Vector2(TabRowMinWidthPx, 0f);
             var hlg = content.GetComponent<HorizontalLayoutGroup>();
             hlg.childControlWidth = true; hlg.childForceExpandWidth = true;
             hlg.childControlHeight = true; hlg.childForceExpandHeight = true;
             hlg.childAlignment = TextAnchor.MiddleCenter;
             hlg.spacing = TabChipSpacingPx;
             hlg.padding = new RectOffset(6, 6, 4, 6);
+
+            // The five touch-floor tabs deliberately exceed the portrait rail. Scrolling is
+            // explicit in portrait; landscape retains one fully visible fixed row.
+            var tabScroll = _tabStrip.GetComponent<ScrollRect>();
+            tabScroll.viewport = sr;
+            tabScroll.content = ccr;
+            tabScroll.horizontal = portrait;
+            tabScroll.vertical = false;
+            tabScroll.movementType = ScrollRect.MovementType.Clamped;
+            tabScroll.scrollSensitivity = 32f;
 
             // The band's width budget (TabRowMinWidthPx) is declared for TabCount tabs. If the
             // VM grows a sixth, the budget -- and the regression that proves it fits the well --
@@ -1116,11 +1144,15 @@ namespace DeNelle.Village.Hero
             // Line 1: title (bold parchment) + the state as a CHIP -- the same widget the
             // detail pane uses, so the list and the detail speak ONE language (WO-866).
             bool hasPip = !string.IsNullOrEmpty(pip);
+            bool portrait = ElarionUiKit.SurfaceHeight > ElarionUiKit.SurfaceWidth;
             var titleGo = new GameObject("Title", typeof(TMPro.TextMeshProUGUI));
             titleGo.transform.SetParent(row.transform, false);
             var trt = titleGo.GetComponent<RectTransform>();
             trt.anchorMin = new Vector2(0.04f, 1f);
-            trt.anchorMax = new Vector2(hasPip ? 0.70f : 0.96f, 1f);
+            // In the narrow portrait rail the state moves to line two, giving the title the
+            // whole first line. This is what keeps distinct quest names from becoming the
+            // repeated "Standing Wa..." failure in the source capture.
+            trt.anchorMax = new Vector2(hasPip && !portrait ? 0.70f : 0.96f, 1f);
             // 66px band: one FontBody(50) line box is 62.5 -- anything shorter culls the line.
             trt.offsetMin = new Vector2(0f, -70f);
             trt.offsetMax = new Vector2(0f, -4f);
@@ -1138,14 +1170,14 @@ namespace DeNelle.Village.Hero
             {
                 // A right-aligned one-chip row: fixed 48px band, so it can never be culled.
                 var pipRow = MakeChipRow(row.transform, "PipRow",
-                    topPx: 8f, heightPx: ChipHeightPx, fromBottomPx: -1f,
+                    topPx: 8f, heightPx: ChipHeightPx, fromBottomPx: portrait ? 6f : -1f,
                     sideFrac: 0f, spacingPx: ChipSpacingPx, align: TextAnchor.MiddleRight);
                 var prt = pipRow;
-                prt.anchorMin = new Vector2(0.70f, 1f);
-                prt.anchorMax = new Vector2(0.96f, 1f);
-                prt.pivot = new Vector2(0.5f, 1f);
+                prt.anchorMin = portrait ? new Vector2(0.54f, 0f) : new Vector2(0.70f, 1f);
+                prt.anchorMax = portrait ? new Vector2(0.96f, 0f) : new Vector2(0.96f, 1f);
+                prt.pivot = new Vector2(0.5f, portrait ? 0f : 1f);
                 prt.sizeDelta = new Vector2(0f, ChipHeightPx);
-                prt.anchoredPosition = new Vector2(0f, -8f);
+                prt.anchoredPosition = new Vector2(0f, portrait ? 6f : -8f);
                 MakeChip(pipRow, pip);
             }
 
@@ -1154,7 +1186,7 @@ namespace DeNelle.Village.Hero
             hookGo.transform.SetParent(row.transform, false);
             var hrt = hookGo.GetComponent<RectTransform>();
             hrt.anchorMin = new Vector2(0.04f, 0f);
-            hrt.anchorMax = new Vector2(0.96f, 0f);
+            hrt.anchorMax = new Vector2(hasPip && portrait ? 0.52f : 0.96f, 0f);
             // 44px band under the 66px title inside a 124px card: 4px of clearance between
             // them, and one whole FontMicro(32) line box (40) so the hook is never culled.
             hrt.offsetMin = new Vector2(0f, 6f);

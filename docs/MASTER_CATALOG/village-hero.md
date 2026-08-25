@@ -609,6 +609,11 @@ registered with PanelManager (modal arbiter) and/or PanelRouter.
   alone; ASCII only — the font tofus non-Latin glyphs), left ~42% two-line quest CARDS (whole
   card selects, NO row buttons), right ~58% detail with the primary CTA pinned bottom
   (Accept/Track/Pinned — the "ACC…" truncation fix), portrait stacks panes.
+  **WO-1192 delta (2026-08-25):** landscape keeps list-left/detail-right. Portrait now uses a
+  narrow list rail at left and gives the remaining region to selected detail; its tabs scroll
+  horizontally at the touch floor. Missing quest art creates no placeholder slab. Reward chips
+  continue to consume `RumorBoardVM.RewardPartsFor`, the typed WO-1201/1202 authority, never a
+  fixed chip schema.
 - **RumorBoardVM** (328): pure VM over `IRumorBoardBackend` (live = QuestService + QuestCatalog +
   DailyQuestService; tests fake it). Tabs All/Story/Daily/Gear/Endgame; tracked-quest flag;
   StartQuest/SetTracked writes.
