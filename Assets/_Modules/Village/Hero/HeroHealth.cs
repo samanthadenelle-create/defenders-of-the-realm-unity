@@ -149,7 +149,7 @@ namespace DeNelle.Village
         // equipping a +HP ring grows the bar and tops the hero up by the delta (and unequipping
         // shrinks it + clamps). 0 when no GearLoadout / no HP gear, so existing combat is unchanged.
         private int GearHpBonus => _gear != null ? _gear.GearHpBonus : 0;
-        private int _appliedGearHpBonus;
+        private int _appliedEffectiveHpBonus;
 
         // v2 talents (WO talent-tree): Vitality / Elarion's Blessing fold a fractional max-HP
         // bonus into the effective max, the SAME way gear HP does (so the bar grows + the hero
@@ -170,7 +170,11 @@ namespace DeNelle.Village
                 return Mathf.RoundToInt(_maxHp * Mathf.Max(0f, m - 1f));
             }
         }
-        private int EffectiveBonus => GearHpBonus + TalentHpBonus;
+        // Cathedral mage HP is an additive fraction of BASE max HP. Keep it separate
+        // from the talent multiplier and flat gear so it can never compound either.
+        private int CathedralMageHpBonus => Mathf.RoundToInt(_maxHp *
+            DeNelle.Village.Talents.HeroTalentModifiers.MageMaxHpBonusPct(HeroClassOrDefault));
+        private int EffectiveBonus => GearHpBonus + TalentHpBonus + CathedralMageHpBonus;
 
         public float MaxHp    => _maxHp + EffectiveBonus;
         public float Hp       => _hp;
@@ -262,12 +266,12 @@ namespace DeNelle.Village
             // Resolve gear up-front so the starting bar reflects any persisted HP gear, then
             // top the hero to the effective full so a +HP loadout doesn't read as "missing HP".
             if (_gear == null) _gear = GetComponent<GearLoadout>();
-            _appliedGearHpBonus = EffectiveBonus;
+            _appliedEffectiveHpBonus = EffectiveBonus;
             _hp = MaxHp;
             // HP-desync ticket 2026-07-02: prove the resolved max + its composition at spawn so the
-            // next capture shows exactly which instance owns which pool (base + gear + talent = N).
+            // next capture names the one pool (base + gear + talent + Cathedral = N).
             DeNelle.Core.Diagnostics.FlowTrace.Step("HeroHealth",
-                $"max resolved: base {_maxHp:F0} + gear {GearHpBonus} + talent {TalentHpBonus} = {MaxHp:F0} " +
+                $"max resolved: base {_maxHp:F0} + gear {GearHpBonus} + talent {TalentHpBonus} + cathedral {CathedralMageHpBonus} = {MaxHp:F0} " +
                 $"(id={GetInstanceID()} scene='{UnityEngine.SceneManagement.SceneManager.GetActiveScene().name}')");
             OnHealthChanged?.Invoke(_hp, MaxHp);
         }
@@ -278,16 +282,16 @@ namespace DeNelle.Village
         private void SyncGearHp()
         {
             if (_gear == null) _gear = GetComponent<GearLoadout>();
-            int now = EffectiveBonus;   // gear HP + talent HP folded together
-            if (now == _appliedGearHpBonus) return;
-            int delta = now - _appliedGearHpBonus;
-            _appliedGearHpBonus = now;
+            int now = EffectiveBonus;   // gear + talent + Cathedral HP folded together
+            if (now == _appliedEffectiveHpBonus) return;
+            int delta = now - _appliedEffectiveHpBonus;
+            _appliedEffectiveHpBonus = now;
             if (delta > 0) _hp += delta;           // grow with the new max
             _hp = Mathf.Min(_hp, MaxHp);           // clamp to the (possibly smaller) max
             // HP-desync ticket 2026-07-02: the effective max just CHANGED (gear equip/unequip or a
             // talent learn/respec) — re-log the composition so every capture can name the live pool.
             DeNelle.Core.Diagnostics.FlowTrace.Step("HeroHealth",
-                $"max resolved: base {_maxHp:F0} + gear {GearHpBonus} + talent {TalentHpBonus} = {MaxHp:F0} " +
+                $"max resolved: base {_maxHp:F0} + gear {GearHpBonus} + talent {TalentHpBonus} + cathedral {CathedralMageHpBonus} = {MaxHp:F0} " +
                 $"(id={GetInstanceID()} changed by {delta:+#;-#;0})");
             OnHealthChanged?.Invoke(_hp, MaxHp);
         }
@@ -1265,7 +1269,7 @@ namespace DeNelle.Village
         public void RestoreToFull()
         {
             bool wasDown = _isDead || _hp <= 0f;
-            _appliedGearHpBonus = EffectiveBonus;   // re-sync so SyncGearHp doesn't double-apply after a full restore
+            _appliedEffectiveHpBonus = EffectiveBonus;   // re-sync so SyncGearHp doesn't double-apply after a full restore
             _hp = MaxHp;
             ResetTalentRunState();   // WO-566: town return = a fresh run — re-arm revive / clear Last Stand
             // If the hero had gone down, clear the death state so it isn't stuck "dead" on the
