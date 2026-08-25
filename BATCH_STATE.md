@@ -27,7 +27,7 @@
 >
 > ## ⭐ ONE FILE PER DIRECTION — there is no shared write at all
 > **`BATCH_STATE.md` is OUTBOUND ONLY: lead → dev lane.** ⛔ **The dev lane never writes to this file.**
-> Its results go into a **separate result file the owner creates**, which is INBOUND: dev lane → lead.
+> Its results go into **`batch_results_state.md`**, which is INBOUND: dev lane → lead.
 >
 > ⭐ **That removes the clobber hazard by construction rather than by discipline** — a rule nobody has to
 > remember cannot be forgotten. The earlier two-zone version of this section is superseded; it depended
@@ -114,10 +114,18 @@ annotation, not a repair.
 
 ---
 
-## 📥 RESULTS COME BACK IN A SEPARATE FILE — ⛔ do not write them here
+## 📥 RESULTS GO IN `batch_results_state.md` — ⛔ do not write them here
 
-The owner creates and carries a **separate result file** for the dev lane's handbacks. ⛔ **Nothing is
-appended to `BATCH_STATE.md` by the dev lane.**
+⭐ **The inbound file is `batch_results_state.md`.** The dev lane writes its handbacks there; the owner
+carries it back to the lead. ⛔ **Nothing is written into `BATCH_STATE.md` by the dev lane.**
+
+**One file per direction, so there is no shared write at all:**
+- `BATCH_STATE.md` — **OUTBOUND**, lead → dev lane. The lead owns it.
+- `batch_results_state.md` — **INBOUND**, dev lane → lead. The dev lane owns it.
+
+⚠ **The owner carries both by hand, so neither side may assume delivery.** A handback written into
+`batch_results_state.md` has not reached the lead until she brings it; a pin added here has not reached
+the dev lane until she relays it.
 
 **Each handback should say these five things — the third and fourth earn their place:**
 1. **WO + what landed** — one line.
