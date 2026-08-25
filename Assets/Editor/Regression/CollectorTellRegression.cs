@@ -100,7 +100,9 @@ namespace DeNelle.Editor.Regression
             if (src == null) { failures.Add("[ambient-chip] missing source " + ViewSrc); return; }
 
             foreach (var token in new[] { "BuildCollectorsChip", "FormatCollectorChip",
-                                          "collectorsChip", "CollectorStatusGate.Status" })
+                                          "collectorsChip", "CollectorStatusGate.Status",
+                                          "SetCappedResourceValue", "TownBankCapacity.IsCapped",
+                                          "TownBankCapacity.MaxOf", "\"Wood\", \"Iron\", \"Stone\"" })
                 if (src.IndexOf(token, StringComparison.Ordinal) < 0)
                     failures.Add("[ambient-chip] HudKitController no longer references '" + token +
                                  "' - the ambient tell is gone and the only remaining signal that a " +
@@ -213,9 +215,11 @@ namespace DeNelle.Editor.Regression
                                  "of 'full' on one screen is the exact confusion the copy law exists to " +
                                  "prevent");
 
-            if (title == null || title.IndexOf("Collectors", StringComparison.Ordinal) < 0)
-                failures.Add("[copy-law] the chip no longer says 'Collectors' (canon '" +
+            if (!string.Equals(title, "Harvest", StringComparison.Ordinal))
+                failures.Add("[copy-law] the chip no longer says the owner-ruled verb 'Harvest' (canon '" +
                              HudStrings.KeyCollectorsTitle + "' is '" + title + "')");
+            if (region.IndexOf("return HudStrings.Get(HudStrings.KeyCollectorsTitle);", StringComparison.Ordinal) < 0)
+                failures.Add("[copy-law] published collector state can overwrite the Harvest verb");
             if (count == null || count.IndexOf("full", StringComparison.Ordinal) < 0)
                 failures.Add("[copy-law] the chip no longer states FULLNESS in words (canon '" +
                              HudStrings.KeyCollectorsCount + "' is '" + count + "') - the owner is " +

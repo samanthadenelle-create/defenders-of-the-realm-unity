@@ -281,7 +281,7 @@
   "monthlyLedgerMilestone": "MILESTONE BONUS",
   "spirePlansBeaconNudge": "See that light? Looks like something dropped. Let us take a closer look.",
   "_hudChipCopyNote": "WO-1144 HUD chip/face copy, shortened AT SOURCE after the 2026-08-22 headed-fleet capture (break_24_error.png) showed 'Tap to collec' cut mid-word on the Collectors chip and 'Manag...' ellipsised on the Manage bar face. NEITHER was a font bug: the Collectors chip is 220 ref px wide (== EchoUnlockFeedback.EchoChipWidthPx, a fixed rail width three chips share) so its label rect is ~202 ref px, and the action line 'Tap to collect' measures ~214 ref px at the 30 px FontFloor - it could not fit at ANY legible size. The Manage bar face is one sixth of a 46%-wide ActionBar zone, ~144 ref px of label rect, so the WO-1027 session-shape sentence 'Manage - 2 of 3 idle' was about 4x too long for the box it renders in. The fix is SHORTER WORDS HERE, never a smaller font (FontFloor/MinTouchPx are floors, not budget) and never a wider chip (the three rail chips share one right edge). ASCII only - TMP renders non-ASCII as tofu. Pinned by HudLabelFitRegression, which MEASURES each of these strings against its real box using the real font's glyph advances, at both landscape capture aspects.",
-  "hudCollectorsTitle": "Collectors",
+  "hudCollectorsTitle": "Harvest",
   "hudCollectorsCount": "Collectors {0}/{1} full",
   "hudCollectorsFullLine": "Collect",
   "hudCollectorsNearlyLine": "{0}% - tap",

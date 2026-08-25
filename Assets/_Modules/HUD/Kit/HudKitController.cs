@@ -41,6 +41,7 @@ using UnityEngine.UI;
 using TMPro;
 using DeNelle.Core;
 using DeNelle.Core.Diagnostics;
+using DeNelle.Core.Economy;
 using DeNelle.Core.HUD;
 using DeNelle.Core.HudModel;
 using DeNelle.Core.UI;
@@ -122,6 +123,7 @@ namespace DeNelle.HUD.Kit
         internal const float Pill611X0 = 0.30f, Pill611Y0 = 0.02f;
         internal const float Pill611X1 = 0.99f, Pill611Y1 = 0.30f;
         private ElarionUiKit.CurrencyChipHandle[] _resChips;      // expanded row
+        private TMP_Text[] _cappedResourceValues;                 // Wood / Iron / Stone current of capacity
         private ElarionUiKit.CurrencyChipHandle _resGoldOnly;     // collapsed variant
         private GameObject _resExpandedRow;
         private GameObject _resDock;        // WO-440: right-edge tab + collapsible chips container
@@ -1184,22 +1186,15 @@ namespace DeNelle.HUD.Kit
         /// </summary>
         private static string FormatCollectorChip(CollectorStatusGate.CollectorStatus s)
         {
-            if (!s.Available || s.TotalCount <= 0) return HudStrings.Get(HudStrings.KeyCollectorsTitle);
-
-            string line = HudStrings.Format(HudStrings.KeyCollectorsCount, s.FullCount, s.TotalCount);
-            if (s.FullCount > 0)
+            // WO-1194: the three resource lines own the storage state. This button owns
+            // only the existing collect-all action, so it remains the verb "Harvest".
+            return HudStrings.Get(HudStrings.KeyCollectorsTitle);
                 // The load-bearing tell: a full collector has STOPPED EARNING, and the fix is one
                 // tap. Line 1 has already said "N/M full", so the bare imperative is the whole of
                 // what is left to say — which is fortunate, because it is also all that fits.
                 // (Cross-WO: once the bank gets a headroom check, WO-857 replaces this line with
                 // a "bank full" variant when the collect cannot bank — flagged in both WOs so
                 // neither surface ships a lie. Keep that variant SHORT too.)
-                line += "\n" + HudStrings.Get(HudStrings.KeyCollectorsFullLine);
-            else if (s.MaxFillPct >= 85)
-                line += "\n" + HudStrings.Format(HudStrings.KeyCollectorsNearlyLine, s.MaxFillPct);
-            else if (s.TotalPending > 0)
-                line += "\n" + HudStrings.Format(HudStrings.KeyCollectorsWaitingLine, s.TotalPending);
-            return line;
         }
 
         /// <summary>THE one collapsed rail chip. Echoes, Builders and Resources are the same
@@ -1256,10 +1251,8 @@ namespace DeNelle.HUD.Kit
         private void SetRailSection(RailSection section)
         {
             bool builders = section == RailSection.Builders;
-            bool resources = section == RailSection.Resources;
             if (_railOpen == section &&
-                (_queueRailMount == null || _queueRailMount.gameObject.activeSelf == builders) &&
-                (_resExpandedRow == null || _resExpandedRow.activeSelf == resources)) return;
+                (_queueRailMount == null || _queueRailMount.gameObject.activeSelf == builders)) return;
 
             _railOpen = section;
             if (_queueRailMount != null && _queueRailMount.gameObject.activeSelf != builders)
@@ -1273,9 +1266,10 @@ namespace DeNelle.HUD.Kit
             if (builders && _queueRail != null) { _queueRail.Sync(); _queueRailSyncFrames = 2; }
             else _queueRailSyncFrames = 0;
 
-            _resPanelOpen = resources;
-            if (_resExpandedRow != null && _resExpandedRow.activeSelf != resources)
-                _resExpandedRow.SetActive(resources);
+            // WO-1194: capped-resource lines are ambient information, not an expanded rail.
+            _resPanelOpen = true;
+            if (_resExpandedRow != null && !_resExpandedRow.activeSelf)
+                _resExpandedRow.SetActive(true);
 
             FlowTrace.Step("HudKit", "right rail: expanded section = " + section +
                            " (one open at a time; the other two stay collapsed)");
@@ -1596,21 +1590,18 @@ namespace DeNelle.HUD.Kit
 
             var kinds = new[]
             {
-                ElarionUiKit.CurrencyKind.Gold, ElarionUiKit.CurrencyKind.Wood,
-                ElarionUiKit.CurrencyKind.Iron, ElarionUiKit.CurrencyKind.Food,
-                ElarionUiKit.CurrencyKind.Crystal,
+                ElarionUiKit.CurrencyKind.Wood, ElarionUiKit.CurrencyKind.Iron,
+                ElarionUiKit.CurrencyKind.Food,
             };
-            var names = new[] { "Gold", "Wood", "Iron", "Food", "Crystal" };
+            var names = new[] { "Wood", "Iron", "Stone" };
 
             // The collapsed chip — THE shared rail chip, identical to Builders and Echoes.
-            BuildRailChip(drt, "ResourcesChip", "Resources", 0f,
-                          () => ToggleRailSection(RailSection.Resources));
 
             // The expanded section: a fixed-pixel panel on the shared gutter, hanging under
             // the chip. Fixed rows, never a fraction of the band (WO-841).
             float panelH = ResPanelPadPx * 2f + kinds.Length * ResRowHeightPx +
                            (kinds.Length - 1) * ResRowGapPx;
-            var rrt = RailBand(drt, "ResourceChips", RailChipHeightPx + RailGapPx,
+            var rrt = RailBand(drt, "ResourceChips", 0f,
                                panelH, RailPanelWidthPx);
             _resExpandedRow = rrt.gameObject;
 
@@ -1623,6 +1614,7 @@ namespace DeNelle.HUD.Kit
             if (frameImg != null) frameImg.raycastTarget = false;
 
             _resChips = new ElarionUiKit.CurrencyChipHandle[kinds.Length];
+            _cappedResourceValues = new TMP_Text[3];
             for (int i = 0; i < kinds.Length; i++)
             {
                 // One row = a fixed-pixel band inside a fixed-pixel panel. Display only (no
@@ -1654,10 +1646,11 @@ namespace DeNelle.HUD.Kit
                 _resChips[i] = ElarionUiKit.CurrencyChip(row.transform, kinds[i],
                     new Vector2(0.46f, 0f), new Vector2(1f, 1f), primary: false,
                     tag: names[i]);
+                _cappedResourceValues[i] = _resChips[i].amount;
             }
 
-            _resPanelOpen = false;
-            _resExpandedRow.SetActive(false);   // collapsed by default
+            _resPanelOpen = true;
+            _resExpandedRow.SetActive(true);
             Register("resourceChips", WrapAsWidget("resourceChips", _resDock));
 
             // Collapsed variant (calm(explore)): gold chip only; TAP expands the row for 6s.
@@ -1922,12 +1915,21 @@ namespace DeNelle.HUD.Kit
             var e = _models != null ? _models.Economy : null;
             if (e == null || _resChips == null) return;
             // Count-tween only — the no-flash law lives in CurrencyChip.SetAmount.
-            _resChips[0].SetAmount(e.Gold);
-            _resChips[1].SetAmount(e.Wood);
-            _resChips[2].SetAmount(e.Iron);
-            _resChips[3].SetAmount(e.Food);
-            _resChips[4].SetAmount(e.Crystals);
+            SetCappedResourceValue(0, BankResource.Wood, e.Wood);
+            SetCappedResourceValue(1, BankResource.Iron, e.Iron);
+            SetCappedResourceValue(2, BankResource.Food, e.Food);
             _resGoldOnly.SetAmount(e.Gold);
+        }
+
+        private void SetCappedResourceValue(int index, BankResource resource, int current)
+        {
+            if (_cappedResourceValues == null || index < 0 || index >= _cappedResourceValues.Length)
+                return;
+            var label = _cappedResourceValues[index];
+            if (label == null || !TownBankCapacity.IsCapped(resource)) return;
+            int capacity = TownBankCapacity.MaxOf(resource);
+            label.text = ElarionUi.CompactNumber(Mathf.Max(0, current)) + " of " +
+                         ElarionUi.CompactNumber(Mathf.Max(0, capacity));
         }
 
         private void OnWave()
@@ -2221,12 +2223,11 @@ namespace DeNelle.HUD.Kit
         // 2026-08-05: both entry points now route through the ONE rail arbiter, so opening
         // Resources collapses Builders and vice versa — the right column can never stack two
         // expanded panels (the state that produced the overlapping chip + panel in the review).
-        private void ToggleResourcePanel() => ToggleRailSection(RailSection.Resources);
+        private void ToggleResourcePanel() { }
 
         private void SetResourcePanelOpen(bool open)
         {
-            if (open) { SetRailSection(RailSection.Resources); return; }
-            if (_railOpen == RailSection.Resources) SetRailSection(RailSection.None);
+            // WO-1194: this legacy posture seam cannot collapse the ambient capacity rows.
         }
 
         // WO-835 §3c: the old OpenQuestOrUpgrade context relabel is SPLIT into two
