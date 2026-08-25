@@ -475,7 +475,7 @@ chrome is gated by `FeatureFlags.BlinkChrome`.
 | `CombatTextLayer` | `UI/CombatTextLayer.cs` (222L) | Pooled, capped, non-stacking combat stamps (single writer). |
 | `HudCommands` (static) | `HUD/HudCommands.cs` (124L) | Core command sink HUD-kit → Village handlers (HUD_OBSIDIAN A4). |
 | `HudBuildingFocus` (static) | `UI/HudBuildingFocus.cs` | Cross-assembly "hero near upgradable building" proximity signal. |
-| `HarvestPanelGate` / `ObsidianQueueGate` / `PauseGate` / `RaidEntryGate` (statics) | `UI/*Gate.cs` | Core open/close seams: Echo harvest panel · work-queue panel (WO-773) · back/pause · **RaidEntryGate** (F8 2026-07-30: HudKit "Raids" button → Village raid selection). |
+| `HarvestPanelGate` / `ObsidianQueueGate` / `PauseGate` / `RaidEntryGate` (statics) | `UI/*Gate.cs` | Core open/close seams: Echo harvest panel · work-queue panel (WO-773) · back/pause · **RaidEntryGate** (F8 2026-07-30: HudKit "Raids" button → Village raid selection). `PauseGate` also owns the scoped native-full-screen suppression bit: rewarded ads keep the invoking `PanelManager` caller registered, so Android's ad-driven application-pause callback cannot replace it with Pause. The scope owns no navigation and reopens nothing. |
 | `LoadingOverlay` | `UI/LoadingOverlay.cs` (211L) | Reusable code-built loading screen (Load Default / Design My Own delay). |
 | `VillageLoadOverlay` | `UI/VillageLoadOverlay.cs` (265L) | Village-specific loader (spinner/progress/lore) driven by SceneRouter. |
 | `ObjectiveBannerUi` | `UI/ObjectiveBannerUi.cs` (283L) | WO-T2 one-line objective strip (kit language). |

@@ -161,7 +161,8 @@ retired 2026-07-03; still true).
 ### PauseController.cs — pause overlay + timeScale freeze. LIVE via PauseHudBootstrap.
 - Kit modal `FrameOptions`, sortingOrder 31500 (`PauseController.cs:155-158`); Resume/Settings/Quit column
   (`:170-177`). Pause captures + zeroes `Time.timeScale`, Resume restores the CAPTURED scale (`:62`, `:200-221`).
-  `OnApplicationPause(true)` auto-pauses only (`:126-130`). Toggle rides Core `PauseGate.PauseToggleRequested`
+  `OnApplicationPause(true)` auto-pauses only when `PauseGate.ExternalPresentationActive` is false;
+  native rewarded-ad presentation preserves its existing caller instead of opening Pause over it. Toggle rides Core `PauseGate.PauseToggleRequested`
   (`:76-77`); PanelManager battle-allowed "Pause" (`:181-182`). `AttachSettings()` runtime wiring (`:102-112`);
   Settings opens over pause (pause yields its arbiter slot first, `:239-248`). Quit restores timeScale then
   `SceneRouter.GoTitle()` (`:259-271`).

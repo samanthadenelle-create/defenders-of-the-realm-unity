@@ -85,6 +85,7 @@ namespace DeNelle.Village.Monetization
         private bool _presentationSettled;
         private bool _loadingRewarded;
         private bool _showingRewarded;
+        private IDisposable _presentationScope;
         private float _retrySeconds = RetryFloorSeconds;
         private AdUnavailableReason _unavailableReason = AdUnavailableReason.NotInitialised;
 
@@ -330,7 +331,21 @@ namespace DeNelle.Village.Monetization
             _presentationSettled = false;
             _showingRewarded = true;
             _unavailableReason = AdUnavailableReason.None;
-            _rewardedByPlacement[placementId].ShowAd();
+            // LevelPlay's native full-screen activity triggers OnApplicationPause(true) on
+            // Android. Keep the invoking PanelManager caller alive beneath it; this scope owns no
+            // navigation and is released on both close and display failure.
+            _presentationScope = PauseGate.BeginExternalPresentation("rewarded ad " + placementId);
+            try
+            {
+                _rewardedByPlacement[placementId].ShowAd();
+            }
+            catch (Exception ex)
+            {
+                SettleRewarded(AdShowResult.Unavailable(AdUnavailableReason.LoadFailed));
+                EndRewardedPresentation();
+                FlowTrace.Fail(Sys, "rewarded ShowAd threw placement=" + placementId + ": " + ex.Message);
+                PreloadRewarded(placementId);
+            }
         }
 
         private void OnRewardedLoaded(LevelPlayAdInfo info)
@@ -440,6 +455,7 @@ namespace DeNelle.Village.Monetization
 
         private void EndRewardedPresentation()
         {
+            if (_presentationScope != null) { _presentationScope.Dispose(); _presentationScope = null; }
             _pendingCompletion = null;
             _showingRewarded = false;
             _presentationSettled = false;
@@ -448,6 +464,7 @@ namespace DeNelle.Village.Monetization
 
         private void OnDestroy()
         {
+            if (_presentationScope != null) { _presentationScope.Dispose(); _presentationScope = null; }
             AdServices.Unregister(this);
             CancelInvoke();
             foreach (LevelPlayRewardedAd ad in _rewardedByPlacement.Values)

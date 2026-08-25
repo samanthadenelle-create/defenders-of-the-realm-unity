@@ -145,7 +145,10 @@ namespace DeNelle.Settings
         /// behaviour (audit §2.3). Only ever pauses; never auto-resumes.</summary>
         private void OnApplicationPause(bool isBackgrounded)
         {
-            if (_pauseOnApplicationPause && isBackgrounded && !_paused)
+            // A native rewarded ad backgrounds Unity on Android. The ad caller's registered
+            // panel must remain the owner underneath it; opening Pause here would swap-close that
+            // caller and manufacture a return to Pause/Settings when the ad closes.
+            if (_pauseOnApplicationPause && PauseGate.ShouldAutoPause(isBackgrounded, _paused))
                 Pause();
         }
 

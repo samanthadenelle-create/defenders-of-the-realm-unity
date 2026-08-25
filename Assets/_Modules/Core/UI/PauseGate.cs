@@ -31,6 +31,7 @@
 // =============================================================================
 
 using System;
+using DeNelle.Core.Diagnostics;
 
 namespace DeNelle.Core.UI
 {
@@ -42,6 +43,12 @@ namespace DeNelle.Core.UI
     /// </summary>
     public static class PauseGate
     {
+        private static int s_externalPresentationDepth;
+
+        /// <summary>True while native full-screen UI (for example a rewarded ad) owns the
+        /// foreground. The caller's registered panel remains the navigation authority beneath it.</summary>
+        public static bool ExternalPresentationActive => s_externalPresentationDepth > 0;
+
         /// <summary>
         /// Raised when a back/pause request arrives and NO modal is open — i.e. the
         /// request should toggle the pause overlay. PauseController subscribes to this
@@ -49,6 +56,25 @@ namespace DeNelle.Core.UI
         /// never references DeNelle.Settings.
         /// </summary>
         public static event Action PauseToggleRequested;
+
+        /// <summary>
+        /// Prevent OS background callbacks caused by native full-screen presentation from opening
+        /// Pause over (and therefore closing) the panel that invoked it. This scope owns no route
+        /// and reopens nothing: the existing <see cref="PanelManager"/> caller remains untouched.
+        /// </summary>
+        public static IDisposable BeginExternalPresentation(string presentation)
+        {
+            s_externalPresentationDepth++;
+            string caller = PanelManager.OpenPanelName ?? "<gameplay>";
+            FlowTrace.Step("UI", "external presentation BEGIN kind=" +
+                (string.IsNullOrEmpty(presentation) ? "<unknown>" : presentation) +
+                " caller=" + caller + " depth=" + s_externalPresentationDepth);
+            return new ExternalPresentationLease(presentation, caller);
+        }
+
+        /// <summary>Pure decision used by PauseController and the return-path regression.</summary>
+        public static bool ShouldAutoPause(bool isBackgrounded, bool alreadyPaused) =>
+            isBackgrounded && !alreadyPaused && !ExternalPresentationActive;
 
         /// <summary>
         /// The single on-screen "back / pause" action (the HUD PAUSE/BACK button).
@@ -65,6 +91,31 @@ namespace DeNelle.Core.UI
                 return;
             }
             PauseToggleRequested?.Invoke();
+        }
+
+        private sealed class ExternalPresentationLease : IDisposable
+        {
+            private readonly string _presentation;
+            private readonly string _caller;
+            private bool _disposed;
+
+            public ExternalPresentationLease(string presentation, string caller)
+            {
+                _presentation = presentation;
+                _caller = caller;
+            }
+
+            public void Dispose()
+            {
+                if (_disposed) return;
+                _disposed = true;
+                if (s_externalPresentationDepth > 0) s_externalPresentationDepth--;
+                string current = PanelManager.OpenPanelName ?? "<gameplay>";
+                FlowTrace.Step("UI", "external presentation END kind=" +
+                    (string.IsNullOrEmpty(_presentation) ? "<unknown>" : _presentation) +
+                    " caller=" + _caller + " current=" + current +
+                    " depth=" + s_externalPresentationDepth);
+            }
         }
     }
 }

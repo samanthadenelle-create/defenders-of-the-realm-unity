@@ -46,6 +46,14 @@ namespace DeNelle.Editor
 {
     public static class AdGateAndArenaReturnRegression
     {
+        public static void RunAll()
+        {
+            if (Run(out string reason))
+                UnityEngine.Debug.Log(reason);
+            else
+                UnityEngine.Debug.LogError(reason);
+        }
+
         public static bool Run(out string reason)
         {
             var failures = new List<string>();
@@ -55,6 +63,7 @@ namespace DeNelle.Editor
             try
             {
                 CheckAdGate(failures, log);
+                CheckAdCallerReturn(failures, log);
                 CheckArenaReturn(failures, log);
                 CheckAsciiOnly(failures, log);
             }
@@ -70,6 +79,47 @@ namespace DeNelle.Editor
             }
             reason = "AD_GATE_ARENA_OK — " + log.ToString().Replace(Environment.NewLine, " ");
             return true;
+        }
+
+        // 1b. Native ad presentation preserves whichever panel invoked it. Two distinct callers
+        // exercise the same Core scope; there is no Settings-specific return route to drift.
+        private static void CheckAdCallerReturn(List<string> failures, StringBuilder log)
+        {
+            string provider = ReadRepoFile(
+                "Assets/_Modules/Village/Monetization/Providers/LevelPlayInitializer.cs");
+            string pause = ReadRepoFile("Assets/_Modules/Settings/PauseController.cs");
+            if (provider == null || pause == null)
+            {
+                failures.Add("ad caller-return sources are not readable");
+                return;
+            }
+            if (!provider.Contains("PauseGate.BeginExternalPresentation") ||
+                !provider.Contains("_presentationScope.Dispose()"))
+                failures.Add("LevelPlay rewarded presentation does not hold and release the Core external-presentation scope");
+            if (!pause.Contains("PauseGate.ShouldAutoPause(isBackgrounded, _paused)"))
+                failures.Add("PauseController no longer suppresses OS auto-pause during native external presentation");
+
+            foreach (string caller in new[] { "Daily Chest", "Manage" })
+            {
+                bool open = true;
+                var handle = DeNelle.Core.UI.PanelManager.Register(caller, () => open = false, () => open);
+                if (!DeNelle.Core.UI.PanelManager.NotifyOpened(handle))
+                {
+                    failures.Add("caller-return fixture could not open " + caller);
+                    continue;
+                }
+                using (DeNelle.Core.UI.PauseGate.BeginExternalPresentation("rewarded regression"))
+                {
+                    if (DeNelle.Core.UI.PauseGate.ShouldAutoPause(true, false))
+                        failures.Add("native ad background would auto-open Pause over " + caller);
+                    if (DeNelle.Core.UI.PanelManager.OpenPanelName != caller)
+                        failures.Add("external presentation replaced caller " + caller);
+                }
+                if (DeNelle.Core.UI.PanelManager.OpenPanelName != caller || !open)
+                    failures.Add("closing external presentation did not return to " + caller);
+                DeNelle.Core.UI.PanelManager.NotifyClosed(handle);
+            }
+            log.AppendLine("[ad-return] Daily Chest and Manage remain their own callers across native presentation");
         }
 
         // ── 1. the rewarded-ad gate ──────────────────────────────────────────
