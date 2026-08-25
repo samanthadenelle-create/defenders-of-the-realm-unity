@@ -936,6 +936,11 @@ namespace DeNelle.Editor
             //     ability through the real ResolveKey(id, effect) -> Resolve -> DefaultSprite chain and
             //     compares the resulting Sprite REFERENCE to attack_sword / icon_shield / icon_combat. ---
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "mage-ability-icons suite", () => { if (!DeNelle.Editor.Regression.MageAbilityIconRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[mage-ability-icons] " + r); });
+            // --- WO-1166: the hero-select cards are a HAND-MIRROR of abilities.json (Onboarding cannot
+            //     reference AbilityCatalog), and had drifted: the mage advertised Frost Nova / Arcane Bolt /
+            //     Healing Beacon on a slot letter "F" that does not exist. This pins every advertised name +
+            //     slot against AbilityCatalog.GetLoadout at test time, both directions. ---
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "hero-kit-mirror suite", () => { if (!DeNelle.Editor.Regression.HeroKitMirrorRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[hero-kit-mirror] " + r); });
             // --- WO-1104: the spire-plans moment subscribes to the PlansCollected seam, plays ONCE
             //     ever, registers with the arbiter, never touches roster/unlock state, and reads its
             //     speaker from EchoRosterCatalog rather than a name literal. ---

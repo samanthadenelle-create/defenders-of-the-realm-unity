@@ -56,7 +56,7 @@ namespace DeNelle.Onboarding
         public readonly int Attack;
         /// <summary>Speed rating, 1-5 pips (mobility / cast-rate archetype).</summary>
         public readonly int Speed;
-        /// <summary>Signature ability display name (e.g. "Frost Nova").</summary>
+        /// <summary>Signature ability display name (the W-slot ability, e.g. "Arcane Shell").</summary>
         public readonly string AbilityName;
         /// <summary>One-line signature ability effect blurb.</summary>
         public readonly string AbilityDesc;
@@ -96,14 +96,17 @@ namespace DeNelle.Onboarding
 
     /// <summary>
     /// One primary-skill entry for the hero-select detail panel — the slot key
-    /// (Q / F / E / R) plus the ability's display name. Mirrored verbatim from
+    /// (Q / W / E / R) plus the ability's display name. Mirrored verbatim from
     /// Resources/Data/Canonical/abilities.json (no narrative authored here).
+    /// ⛔ The ONLY legal slot keys are Q, W, E, R. "F" is NOT a slot — it appeared
+    /// here for the mage and the ranger until WO-1166; F is the LEARNABLE-POOL key
+    /// abilities.json uses inside classes.*-skills, not a bar slot the player has.
     /// </summary>
     public sealed class HeroSkillInfo
     {
-        /// <summary>The slot key as shown on the ability bar (Q / F / E / R).</summary>
+        /// <summary>The slot key as shown on the ability bar (Q / W / E / R only).</summary>
         public readonly string Slot;
-        /// <summary>The ability's display name (e.g. "Frost Nova").</summary>
+        /// <summary>The ability's display name (e.g. "Arcane Shell").</summary>
         public readonly string Name;
 
         public HeroSkillInfo(string slot, string name)
@@ -125,32 +128,46 @@ namespace DeNelle.Onboarding
                 HeroClass.Mage, "hero.mage.name", "hero.mage.role", "hero.mage.blurb",
                 "T", new Color(0.45f, 0.75f, 1.0f),       // Thrain — icy blue
                 hp: 2, attack: 5, speed: 3,
-                abilityName: "Frost Nova",
-                abilityDesc: "Freezing burst — 26 dmg + freeze in a ring.",
+                // WO-1166 (owner ruling 2026-08-25, "update truth to match source"):
+                // the advertised mage kit was Q Arcane Bolt / F Frost Nova / E Healing
+                // Beacon / R Meteor Strike - three wrong names AND a slot letter ("F")
+                // that is not a real slot. abilities.json classes.mage is the source and
+                // ships Q Fireball / W Arcane Shell / E Drain / R Poison Cloud (WO-861 A1
+                // owner-approved 2026-08-02, retuned by WO-1019 Part B: Mend -> Drain and
+                // Meteor Strike -> Poison Cloud; the displaced spells moved into
+                // classes.mage-skills, which is where "Frost Nova"/"Arcane Bolt" actually
+                // live - LEARNABLE POOL entries, never this hero's default bar).
+                // Signature = the W-slot ability, matching the knight/ranger convention.
+                // Pinned by HeroKitMirrorRegression [hero-kit-mirror].
+                abilityName: "Arcane Shell",
+                abilityDesc: "Ward yourself - take 40% less damage for 4s.",
                 primarySkills: new[]
                 {
-                    new HeroSkillInfo("Q", "Arcane Bolt"),
-                    new HeroSkillInfo("F", "Frost Nova"),
-                    new HeroSkillInfo("E", "Healing Beacon"),
-                    new HeroSkillInfo("R", "Meteor Strike"),
+                    new HeroSkillInfo("Q", "Fireball"),
+                    new HeroSkillInfo("W", "Arcane Shell"),
+                    new HeroSkillInfo("E", "Drain"),
+                    new HeroSkillInfo("R", "Poison Cloud"),
                 }),
             new HeroCardInfo(
                 HeroClass.Knight, "hero.knight.name", "hero.knight.role", "hero.knight.blurb",
                 "G", new Color(0.98f, 0.84f, 0.40f),      // Grom — holy gold
                 hp: 5, attack: 3, speed: 2,
                 // WO-750 (owner 2026-07-19): mirror the LIVE knight kit names from
-                // abilities.json (Sword Heroic / Shield Charge / Warden's Grace / Radiant Strike)
-                // + the combat Q/W/E/R slot letters. This is the hand-mirror kept in sync
-                // (Onboarding references DeNelle.Core only, so it can't read AbilityCatalog in
-                // DeNelle.Village — a true single source needs an asmdef ref or a Core-side
+                // abilities.json + the combat Q/W/E/R slot letters. This is the hand-mirror kept
+                // in sync (Onboarding references DeNelle.Core only, so it can't read AbilityCatalog
+                // in DeNelle.Village — a true single source needs an asmdef ref or a Core-side
                 // abilities reader; see the WO-750 report). Signature = the W-slot ability
-                // (matches the mage/ranger convention: Frost Nova / Snare Trap).
-                abilityName: "Shield Charge",
-                abilityDesc: "Charge behind your shield — knocks back, slows, breaks guard.",
+                // (matches the mage/ranger convention: Arcane Shell / Snare Trap).
+                // WO-1166: the W-slot name in abilities.json is "Shield Bash", not the
+                // "Shield Charge" this card advertised (the def's own description still
+                // opens "Charge behind your shield", which is how the wrong display name
+                // survived). Name mirrored verbatim; the blurb keeps the def's wording.
+                abilityName: "Shield Bash",
+                abilityDesc: "Charge behind your shield - knocks back, slows, breaks guard.",
                 primarySkills: new[]
                 {
                     new HeroSkillInfo("Q", "Sword Heroic"),
-                    new HeroSkillInfo("W", "Shield Charge"),
+                    new HeroSkillInfo("W", "Shield Bash"),
                     new HeroSkillInfo("E", "Warden's Grace"),
                     new HeroSkillInfo("R", "Radiant Strike"),
                 }),
@@ -158,13 +175,16 @@ namespace DeNelle.Onboarding
                 HeroClass.Ranger, "hero.ranger.name", "hero.ranger.role", "hero.ranger.blurb",
                 "S", new Color(0.41f, 0.74f, 0.48f),      // Sylas — wood-green
                 hp: 3, attack: 4, speed: 5,
+                // WO-1166: Snare Trap is the W slot, not "F" (there is no F slot - the bar
+                // is Q/W/E/R, Q locked, W/E/R loadout-swappable). E ships as "Healing Shot";
+                // "Mending Salve" is a KNIGHT-SKILLS pool entry and was never on this bar.
                 abilityName: "Snare Trap",
-                abilityDesc: "Snares foes at range and deals damage.",
+                abilityDesc: "Roots and slows a foe - 18 dmg at 12m.",
                 primarySkills: new[]
                 {
                     new HeroSkillInfo("Q", "Quick Shot"),
-                    new HeroSkillInfo("F", "Snare Trap"),
-                    new HeroSkillInfo("E", "Mending Salve"),
+                    new HeroSkillInfo("W", "Snare Trap"),
+                    new HeroSkillInfo("E", "Healing Shot"),
                     new HeroSkillInfo("R", "Storm of Arrows"),
                 }),
             new HeroCardInfo(

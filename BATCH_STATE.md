@@ -154,6 +154,16 @@ product is **MWA on Android**, app-to-app, to an INSTALLED Android wallet app.
   it under Android only) - it falls to `StubWalletProvider`, a devnet mock that cannot sign.
 - ⛔ WebGL: same stub; the SDK has no WebGL support.
 
+⭐ **THE OWNER'S REASONING, recorded so nobody re-litigates it as a nice-to-have:**
+
+> *"Just like me - who says that just because they have the Solana wallet, that's the one they want to
+> use? Maybe they want to use a more robust Android wallet that's gonna be better."*
+
+⛔ **The current behaviour encodes a WRONG INFERENCE: owning a Seeker does not mean wanting to transact
+from its Seed Vault.** A player may well prefer a fuller-featured Android wallet - better UX, portfolio
+view, swaps, multi-chain - and today the app silently decides for them and seals that decision. This is
+not a preference feature; it is a defaulting bug with a preference-shaped fix.
+
 ⭐ **So "multiconnect" is achievable ONLY as: let MWA present its own chooser when more than one MWA
 wallet app is installed, plus a player-facing way to switch.** That is real and worth building. A UI
 that offers wallets we cannot reach would be a promise the transport cannot keep.
