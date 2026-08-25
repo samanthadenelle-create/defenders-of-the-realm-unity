@@ -8,7 +8,17 @@
 > 3. ⛔ **Anything in `CODEX_HANDOFF.md` that contradicts this file is HISTORY.** That document is layered and much of it is stale by design — it is the reasoning archive, not the state.
 > 4. The lead updates this file **as batches move**. If it looks stale against what you see in the tree, ⚠ **say so rather than guessing** — a wrong state file is worse than none.
 >
-> ## ⛔⛔ TWO WRITERS, TWO ZONES — the rule that stops us clobbering each other
+> ## ⭐ THE OWNER IS THE COURIER (2026-08-24) — neither seat reads the other directly
+> **She carries this file between the CLI lead and the dev lane by hand.** ⚠ **So nothing written here
+> reaches the other seat until she relays it.** A handback typed into this file is **not** delivered; a
+> pin added above is **not** received. ⛔ **Never assume the other side has seen it.**
+> - ⭐ **Write for a human to paste.** Keep the ACTIVE block short, concrete, and self-contained — it is
+>   the part that actually travels.
+> - ⚠ **Say what changed since you last saw it**, so she does not have to diff it in her head.
+> - ⭐ Manual couriering also **serialises the two writers**, which makes the clobber risk below mostly
+>   theoretical — the zones stay documented anyway, because the moment either side automates, it returns.
+>
+> ## ⛔ TWO WRITERS, TWO ZONES — the rule that stops us clobbering each other
 > **The dev lane writes ONLY inside `## 📥 HANDBACKS`, at the bottom. The lead writes ONLY above it.**
 >
 > ⚠ **Why:** if both seats rewrite the whole file, whoever saves second wins and the other's update
