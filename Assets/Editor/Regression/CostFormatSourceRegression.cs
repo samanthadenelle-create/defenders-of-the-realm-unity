@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using System.IO;
 using System.Text.RegularExpressions;
 using DeNelle.Core.UI;
+using Newtonsoft.Json.Linq;
+using UnityEditor;
 using UnityEngine;
 
 namespace DeNelle.Editor.Regression
@@ -50,12 +52,13 @@ namespace DeNelle.Editor.Regression
             ScanSources(assets, failures);
             CheckPins(assets, failures);
             CheckBehavior(assets, failures);
+            CheckStoneIcon(assets, failures);
             if (failures.Count != 0)
             {
                 reason = "cost-format-source: " + string.Join(" | ", failures);
                 return false;
             }
-            reason = "COST_FORMAT_SOURCE_OK - zero suffix emitters; 13 adapters pinned; compact/zero/full-word behavior pinned; no reverse parse/direct registry";
+            reason = "COST_FORMAT_SOURCE_OK - zero suffix emitters; 13 adapters pinned; compact/zero/full-word behavior pinned; Stone sprite resolves through canonical map; no reverse parse/direct registry";
             return true;
         }
 
@@ -116,6 +119,58 @@ namespace DeNelle.Editor.Regression
             if (!formatter.Contains("UiStyle.Icon(part.ConceptId)") ||
                 !formatter.Contains("part.Word + \" \" + part.AmountText"))
                 failures.Add("renderers lost UiStyle lookup or full-word fallback");
+        }
+
+        private static void CheckStoneIcon(string assets, List<string> failures)
+        {
+            const string spritePath = "Assets/Resources/RpgUi/currency/currency_stone.png";
+            var importer = AssetImporter.GetAtPath(spritePath) as TextureImporter;
+            if (importer == null)
+                failures.Add("Stone currency art has no TextureImporter");
+            else
+            {
+                if (importer.textureType != TextureImporterType.Sprite || importer.spriteImportMode != SpriteImportMode.Single)
+                    failures.Add("Stone currency art is not imported as one Sprite");
+                if (!importer.alphaIsTransparency || importer.mipmapEnabled)
+                    failures.Add("Stone currency Sprite lost transparent-alpha or no-mipmap UI import settings");
+                if (importer.wrapMode != TextureWrapMode.Clamp || importer.npotScale != TextureImporterNPOTScale.None)
+                    failures.Add("Stone currency Sprite lost clamp or no-NPOT-scaling UI import settings");
+                if (importer.maxTextureSize > 512)
+                    failures.Add("Stone currency Sprite exceeds the 512px shipped UI texture ceiling");
+                foreach (string platform in new[] { "DefaultTexturePlatform", "Standalone", "Android", "WebGL" })
+                {
+                    TextureImporterPlatformSettings settings = importer.GetPlatformTextureSettings(platform);
+                    if (settings.maxTextureSize > 512)
+                        failures.Add("Stone currency Sprite exceeds 512px on " + platform);
+                }
+            }
+
+            string resourcesMap = Path.Combine(assets, "Resources/Data/Canonical/concept-icons.json");
+            string streamingMap = Path.Combine(assets, "StreamingAssets/Data/Canonical/concept-icons.json");
+            string resourcesJson = File.ReadAllText(resourcesMap);
+            string streamingJson = File.ReadAllText(streamingMap);
+            if (!string.Equals(resourcesJson, streamingJson, StringComparison.Ordinal))
+                failures.Add("concept-icons canonical mirrors differ");
+            else
+            {
+                var map = JObject.Parse(resourcesJson)["map"];
+                foreach (string concept in new[] { "stone", "stones" })
+                {
+                    if ((string)map?[concept]?["role"] != "currency" ||
+                        (string)map?[concept]?["name"] != "currency_stone")
+                        failures.Add(concept + " does not map to currency/currency_stone");
+                }
+            }
+
+            RpgUiCatalog.ClearCache();
+            ConceptIconResolver.ClearCache();
+            Sprite singular = ConceptIconResolver.Resolve("stone");
+            Sprite plural = ConceptIconResolver.Resolve("stones");
+            Sprite styled = UiStyle.Icon("stone");
+            if (singular == null || plural == null || styled == null)
+                failures.Add("Stone currency Sprite does not resolve through ConceptIconResolver and UiStyle");
+            else if (singular.name != "currency_stone" || plural != singular || styled != singular)
+                failures.Add("Stone aliases do not resolve the one currency_stone Sprite authority");
         }
 
         private static string MethodBody(string source, string marker)

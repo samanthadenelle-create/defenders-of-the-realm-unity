@@ -218,6 +218,10 @@
    "role": "currency",
    "name": "currency_iron"
   },
+  "stone": {
+   "role": "currency",
+   "name": "currency_stone"
+  },
   "food": {
    "role": "currency",
    "name": "currency_food"
@@ -237,6 +241,10 @@
   "irons": {
    "role": "currency",
    "name": "currency_iron"
+  },
+  "stones": {
+   "role": "currency",
+   "name": "currency_stone"
   },
   "foods": {
    "role": "currency",
