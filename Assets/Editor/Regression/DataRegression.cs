@@ -387,6 +387,7 @@ namespace DeNelle.Editor
             if (!UiSurfaceProbeRegression.Run(out var uiSurfaceReason)) failures.Add(uiSurfaceReason); else log.AppendLine("[ui-surface-probe] " + uiSurfaceReason);
             // --- WO-935/991/910/994: CombatCast + caravan mobility + Hunter mark + shield port ---
             if (!CombatCastCaravanMarkRegression.Run(out var castCaravanReason)) failures.Add(castCaravanReason); else log.AppendLine("[combat-cast-caravan-mark] " + castCaravanReason);
+            if (!HeroElementCastVfxRegression.Run(out var heroElementCastReason)) failures.Add(heroElementCastReason); else log.AppendLine("[hero-element-cast] " + heroElementCastReason);
             if (!TownsfolkDialogueRegression.Run(out var townsfolkReason)) failures.Add(townsfolkReason); else log.AppendLine("[townsfolk] " + townsfolkReason);
             if (!AtbEngineRegression.Run(out var atbReason)) failures.Add(atbReason); else log.AppendLine("[atb-engine] " + atbReason);
             if (!EconomyMetaCatalogRegression.Run(out var econMetaReason)) failures.Add(econMetaReason); else log.AppendLine("[econ-meta] " + econMetaReason);

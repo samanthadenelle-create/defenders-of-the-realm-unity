@@ -188,8 +188,10 @@ namespace DeNelle.Village
             // Heuristic hue split — matches abilities.json palette:
             //   #b388ff arcane-violet, #7dd3fc/#9ae6b4 frost-cyan, #ff7043 fire-orange.
             if (c.r > 0.65f && c.g < 0.6f && c.b < 0.5f) return SpellElement.Fire;   // orange/red dominant
-            if (c.b > 0.7f && c.r < 0.75f && c.b >= c.r) return SpellElement.Frost;  // cyan/blue dominant
+            // Test violet before the broader blue bucket: authored Arcane #b388ff has
+            // b >= r and used to be swallowed by the Frost condition below.
             if (c.r > 0.55f && c.b > 0.75f)              return SpellElement.Arcane; // violet (r+b high)
+            if (c.b > 0.7f && c.r < 0.75f && c.b >= c.r) return SpellElement.Frost;  // cyan/blue dominant
             return SpellElement.Arcane;
         }
 

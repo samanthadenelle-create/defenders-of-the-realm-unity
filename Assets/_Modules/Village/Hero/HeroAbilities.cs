@@ -1011,6 +1011,13 @@ namespace DeNelle.Village
             // (phase bundle: vfxKey=start, vfxProjectile=travel, vfxImpact=end).
             _currentCastKeyword = castVariant >= 0 && castVariant < CastVariantKeyword.Length
                 ? CastVariantKeyword[castVariant] : null;
+
+            // WO-875: every committed hero ability also gets the existing, semantically named
+            // element flash (Fire/Frost/Arcane/Holy/Physical). RegistryOnlyMotionVfx governs the
+            // owner's authored motion-bundle keys; it must not mask this element router. Keep the
+            // two beats additive: a manual motion-castings pick remains canon and still fires below,
+            // while an empty row can no longer make the cast itself visually silent.
+            SpellVfxFactory.PlayCast(def.EffectEnum, _heroClass, def.UnityColor, origin);
             PlayCastVfxKey(def, origin, castVariant);
 
             // WO-999 gate findings (review of 3b7a5d77, 2026-08-15): the resource restore
@@ -2798,14 +2805,6 @@ namespace DeNelle.Village
                     $"SpawnVfx skipped procedural — '{def.Id}' uses authored Hovl keys.");
                 return;
             }
-
-            // WO-195: add a distinct element-coded CAST flash so each spell reads
-            // as its own element (fire / frost / arcane / holy) at the cast beat.
-            // SpellVfxFactory resolves (effect, class, accent) -> a Cast_* VFXType
-            // and plays it through the canonical VFXManager (pooled prefab when
-            // wired, procedural fallback otherwise). Additive — the main per-class
-            // effect below is unchanged.
-            SpellVfxFactory.PlayCast(def.EffectEnum, _heroClass, def.UnityColor, at);
 
             // DEF-VFX-01: route through VFXManager so prefab-based art swaps require
             // no code changes. Falls back to procedural if no prefab is wired.
