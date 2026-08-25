@@ -1,6 +1,16 @@
-# MON002 — Mainnet SKR canary: 1 SKR for exactly 1 wood
+# WO-1079 (MON) — Mainnet SKR canary: 1 SKR for exactly 1 wood
 
-**Status:** BLOCKED ON CONFIG — code done 2026-08-22, FAIL-CLOSED, NO TRANSACTION AUTHORIZED. Mainnet contract, official mint, owner allowlist, isolated canary SKU, exact 1 SKR -> 1 wood, network-bound recovery and independent regressions all present ([mainnet-canary] green). It REFUSES BEFORE WALLET APPROVAL because no mainnet recipient/ATA/RPC is configured and there is no fallback. Blocked on: the Squads treasury owner pubkey (the address supplied so far is a plain on-curve wallet, fine for a 1 SKR canary, never as the production treasury).
+> **Renumbered 2026-08-24 (lead ruling).** This ticket was filed as **`MON002`**, which violates the
+> encoded ruling that **MON is a LANE TAG, not a number series** (owner 2026-08-22): it rides on an
+> ORDINARY banner-minted WO number so there stays exactly ONE numbering authority and the duplicate
+> guard keeps working. With no banner number it rendered as the unassignable `WO-?` on the board.
+> Minted **WO-1079** from the UI-seat block of `CLI_LANES_WO_NUMBERS.md` (banner bumped 1079 -> 1080
+> in the same edit) and renamed via `git mv` so history follows. **Historical alias: `MON002`** —
+> the identifier appears in `docs/MONETIZATION_STATE_2026-08-23.md`, the MON activation handoff,
+> WO-1157 and the `[MON002]` commit trailer; those are prose/commit references, deliberately left
+> as written. Status below is UNCHANGED — this was a rename, not a re-adjudication.
+
+**Status:** FIXED 2026-08-24 — AWAITING OWNER FELT-TEST TO CLOSE (the PO closes, §13). ⭐ **THE §0 OUTCOME — "prove the production-shaped Mainnet rail" — IS PROVEN, BY STRONGER EVIDENCE THAN THIS TICKET ASKED FOR.** Two REAL `mainnet-beta` SKR purchases have settled and been granted through the same catalog, quote, verifier, entitlement and treasury path this canary was written to rehearse: `impulse-wood-medium` (settled 2026-08-25, tx `38yKkV7opP9RkL1n1uoquhZV2m59MJULbsBnBPa6fnwbb9Nk2hCA1FRY7CqhAvLUmphxJrq4CV7bYPVje6MvHyce`) and `impulse-iron-medium` (settled 2026-08-24, tx `257H7nNYmz4qg3wkM8buRz2tpLo4XfdzyyS4wK24QjzmKzE4Y4RbqL5L3AdNiLLtcdoueTZRbocaFz2VV8HNtxdS`), each 391000000 base units at decimals 6 against a $2.99 USD anchor, owner felt-tested with the contents delivered. Full evidence + per-criterion verdict in §15. ⚠ **READ THIS PART LITERALLY: THE 1-SKR `mainnet-wood-canary` TRANSACTION WAS NEVER EXECUTED, AND IS NOW MOOT.** Nobody may later read this line as "the canary ran". The canary was a PRE-GO-LIVE rehearsal; go-live already happened (WO-1159) and real money settled, so a 1-SKR run would now prove a strict SUBSET — and per WO-1158 it would prove LESS, because a pinned SKU answers `pinned:true` with NO quote row and so exercises none of the server-quote path the ladder SKUs above did exercise. The canary SKU, its stricter owner + `MAINNET_CANARY_ENABLED` gate and its exact-`1_000_000` pin all REMAIN IN THE TREE (`api/_lib/purchase-catalog.js:30,47,186-188`) and are not to be deleted. ⚠ Not evidenced and deliberately not claimed: the §8 packaged-build oracles for `MAINNET_CANARY_TEST` presence/absence, which were never run because no canary artifact was ever built. *(Prior status:)* BLOCKED ON CONFIG — code done 2026-08-22, FAIL-CLOSED, NO TRANSACTION AUTHORIZED. Mainnet contract, official mint, owner allowlist, isolated canary SKU, exact 1 SKR -> 1 wood, network-bound recovery and independent regressions all present ([mainnet-canary] green). It REFUSES BEFORE WALLET APPROVAL because no mainnet recipient/ATA/RPC is configured and there is no fallback. Blocked on: the Squads treasury owner pubkey. ⭐ **THAT BLOCKER IS RESOLVED — §15.1, and the proof is on-chain rather than asserted.**
 
 ---
 
@@ -506,3 +516,71 @@ wood. Prove exact client/server parity and cancellation before the sole authoriz
 an ambiguous submission as recoverable and never charge again. Capture the full wallet → chain →
 backend → entitlement → inventory → receipt join. Then disable the canary and prove the ordinary build
 cannot expose it.
+
+---
+
+## 15. ⭐ EVIDENCE OF RESOLUTION — recorded 2026-08-24 (lead verification pass)
+
+### 15.1 The stated blocker — the Squads treasury owner pubkey — IS RESOLVED
+
+§4 required "a verified Mainnet treasury owner and derived SKR associated token account". Both now
+exist, and neither is asserted from a document:
+
+- **The vault is a real Squads multisig, re-read FROM CHAIN 2026-08-24** —
+  `node tools/treasury-verify.mjs 9wbHbKuirtKai5e3ajvdpzdRYVpuxpAH4DUnERkVtBzj --multisig BcHLoNCsnGD6oegywkP19PALKMQYoFeQWTvmPLmp22no`
+  reports **2-of-3, timeLock 0, "production-shaped"**. Recorded at `api/_lib/purchase-catalog.js:171`,
+  shipped in `3d17fc9e2`.
+  ⚠ That same comment asserted a **1-of-1** threshold until 2026-08-24 and was **STALE in nine places** —
+  which is precisely why the verifier reads the threshold off the chain and nothing re-caches it here.
+- **The §47 placeholder recipient did NOT become the production treasury**, which was this ticket's own
+  stated fear ("that is exactly how a temporary value becomes permanent"). The plain, on-curve wallet
+  `2VePane…euCg` is superseded by the vault above.
+- **The recipient is environment-authored and FAIL-CLOSED**, not hardcoded: `purchaseRail()`
+  (`api/_lib/purchase-catalog.js:216-228`) reads `SOLANA_MAINNET_PURCHASE_RECIPIENT` and
+  `SOLANA_MAINNET_PURCHASE_RECIPIENT_ATA` and returns `null` — refusing before any wallet prompt —
+  whenever either is absent.
+
+### 15.2 The funds provably REACHED the configured treasury
+
+This is not inferred from the mere existence of a signature. `verifyTransfer`
+(`api/purchases/verify.js:78-95`) accepts a transaction only when **exactly one** instruction is an
+`spl-token` `transferChecked` whose `destination === contract.recipientAta`, `mint === contract.mint`,
+`tokenAmount.decimals === contract.decimals` and `tokenAmount.amount === String(contract.amountBaseUnits)`.
+Only after that does `verify.js:279-281` stamp `consumed_at` / `consumed_tx` onto the quote row.
+
+**So a `purchase_quotes` row carrying a `consumed_tx` is itself the proof** that the configured mainnet
+recipient ATA exists, is non-placeholder, holds the official SKR mint
+`SKRbvo6Gf7GondiT3BbTfuRDPqLWei4j2Qy2NPGZhW3`, and received exactly the quoted amount. Two such rows exist:
+
+| SKU | network | base units | decimals | USD anchor | settled (`consumed_at`) | `consumed_tx` |
+|---|---|---|---|---|---|---|
+| `impulse-wood-medium` | `mainnet-beta` | 391000000 | 6 | 2.99 | 2026-08-25 02:45:29Z | `38yKkV7opP9RkL1n1uoquhZV2m59MJULbsBnBPa6fnwbb9Nk2hCA1FRY7CqhAvLUmphxJrq4CV7bYPVje6MvHyce` |
+| `impulse-iron-medium` | `mainnet-beta` | 391000000 | 6 | 2.99 | 2026-08-24 17:41:48Z | `257H7nNYmz4qg3wkM8buRz2tpLo4XfdzyyS4wK24QjzmKzE4Y4RbqL5L3AdNiLLtcdoueTZRbocaFz2VV8HNtxdS` |
+
+Both signatures are independently checkable on any mainnet explorer, which is the whole reason they are
+recorded here: nobody ever has to re-litigate whether the mainnet rail worked. The owner completed a full
+felt-test of the shipped build and the purchased contents were granted, closing the
+chain → backend → entitlement → inventory → receipt join that §9 F2 asked for.
+
+⚠ **Deliberately absent from this file: the paying wallet address.** `purchase_quotes.wallet` is
+server-verified and is personal data; the signature is the durable public proof and is sufficient.
+
+### 15.3 Per-criterion verdict against §0
+
+| §0 ruled field | Demanded | Actual evidence | Verdict |
+|---|---|---|---|
+| SKU | `mainnet-wood-canary` | `impulse-wood-medium` / `impulse-iron-medium` | **NOT met literally** — superseded |
+| Network | `mainnet-beta` | `mainnet-beta` | **MET** |
+| Rail / currency | SPL transfer, SKR | SPL `transferChecked`, official SKR mint | **MET** |
+| Decimals | `6` | `6`, enforced by exact equality at `verify.js:87` | **MET** |
+| Price in base units | exactly `1_000_000` | `391000000`, server-quoted | **NOT met literally** — a real sale, not the rehearsal |
+| Reward | exactly `1 wood` | full pack contents, owner felt-verified | **NOT met literally** — superseded |
+| Verified treasury owner + derived ATA | required | Squads vault 2-of-3 on chain; ATA proven by settlement | **MET** (§15.1–15.2) |
+| Server-owned contract; client never prices | required | quote path; `verify.js` reads no amount from the body | **MET** |
+| Signature is the idempotency key | required | `verify.js:129` + the single-use quote row at `279-281` | **MET** |
+| Grant only after durable verification | required | entitlement inserted before fulfilment | **MET** |
+| §8 packaged-build canary-isolation oracles | required | **never run** — no canary artifact was built | **NOT met** |
+
+**Ruling:** the three literal misses are misses *because the canary was overtaken by the real thing*, not
+because anything failed. The one genuine gap — the §8 build-symbol oracles — guards a canary artifact that
+will now never ship. This ticket closes as **superseded and proven**, never as **executed**.

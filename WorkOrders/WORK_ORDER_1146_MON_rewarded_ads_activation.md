@@ -1,4 +1,4 @@
-**Status:** BLOCKED on public activation (dashboard/device evidence per placement + owner sign-off). CODE DONE 2026-08-22 - ACTIVATION HELD. Three placement-specific LevelPlay rewarded units, consent-before-init, main-thread ILRD forwarding, server-anchored placement accounting, earned-callback-only grants, duplicate/cross-unit callback refusal, and permanent refusal of the synchronous bypass are all present and gated ([monetization-activation] green). NOT DONE: public activation, which needs dashboard/device evidence per placement plus owner sign-off. RewardedAdSkip stays defaultOn:false until then.
+**Status:** FIXED 2026-08-24 — AWAITING OWNER FELT-TEST TO CLOSE (the PO closes, §13 of CLAUDE.md). ⭐ **THE ADS ACTIVATION GATE IS SIGNED AND ADS ARE LIVE.** The ironSource/LevelPlay account was **APPROVED on 2026-08-24** — the last of the two prerequisites and the only one that was never in this repo’s hands — the owner ruled *"Flip it on"*, and `RewardedAdSkip` now reads `Get("rewardedadskip", defaultOn: true)` (`Assets/_Modules/Core/FeatureFlags.cs:808`), shipped in `f62bfa28d` with `COMPILE_GATE_OK` and `DataRegression 271/271, zero red`. Both hard prerequisites were verified at source before the flip: a REAL SDK (`com.unity.services.levelplay@9.5.1` in manifest and lock, the adapter compiling behind its `LEVELPLAY_PRESENT` assembly constraint, app key configured, three placements mapped to real unit ids, grants earned-callback-only) and the WO-912 **server-anchored** ad window (`TimeSource.NowUnixMs()`, not `DateTime.UtcNow`, so a rolled device clock can no longer mint a fresh allowance — the guard against fabricated impressions, which is what gets an ad account banned). Both covenant pins were RE-POINTED, neither deleted. See §11. ⚠ **NOT closed on the mainnet purchase evidence.** The 2026-08-24/25 settled `purchase_quotes` rows that closed WO-1079 have **no bearing on this ticket** — that is a chain/backend rail; this is an ad network. Sharing the MON lane is not shared evidence. ⚠ **One acceptance gap, recorded rather than laundered:** §4 A4’s per-placement physical-device LevelPlay **Test Suite matrix** and the joined **dashboard impression / ILRD** record were never captured. The owner activated on ACCOUNT APPROVAL plus source verification of the two hard prerequisites, which is her call to make (§4 A5 final item) — but it is not the A4 evidence packet, and this line does not pretend it is. *(Prior status:)* BLOCKED on public activation (dashboard/device evidence per placement + owner sign-off). CODE DONE 2026-08-22 - ACTIVATION HELD. Three placement-specific LevelPlay rewarded units, consent-before-init, main-thread ILRD forwarding, server-anchored placement accounting, earned-callback-only grants, duplicate/cross-unit callback refusal, and permanent refusal of the synchronous bypass are all present and gated ([monetization-activation] green). NOT DONE: public activation, which needs dashboard/device evidence per placement plus owner sign-off. RewardedAdSkip stays defaultOn:false until then.
 
 # WO-1146 - MON - Rewarded ads: activation behind earned-reward proof
 
@@ -282,3 +282,46 @@ MON001 is complete only when:
 - commits contain only attributable MON001 changes and are pushed by the CLI seat.
 
 It is valid for MON001 to finish with **ads public ON, purchasing devnet tester ON, purchasing mainnet HOLD, and SKR HOLD**. That is staged activation, not partial truth.
+
+---
+
+## 11. ⭐ EVIDENCE OF ACTIVATION — recorded 2026-08-24 (lead verification pass)
+
+### 11.1 What actually lifted the blocker
+
+The blocker in the prior status line was *"dashboard/device evidence per placement plus owner sign-off"*,
+with `RewardedAdSkip` held at `defaultOn:false`. What landed:
+
+| Item | Evidence | Verdict |
+|---|---|---|
+| ironSource/LevelPlay account approved (§4 A0) | Approved 2026-08-24; commit `f62bfa28d` records it as *"the last of the two prerequisites … the only one that was never in this repo’s hands"* | **MET** |
+| Real SDK, not a stub (§4 A0/A1) | `com.unity.services.levelplay@9.5.1` in manifest + lock; adapter compiles behind the `LEVELPLAY_PRESENT` assembly constraint; app key configured; three placements mapped to real unit ids | **MET**, verified at source before the flip |
+| Reward only from the earned callback (§1.2) | Grants are earned-callback-only; the synchronous bypass is permanently refused | **MET** |
+| Server-anchored ad window (WO-912) | Window stamp is `TimeSource.NowUnixMs()`, not `DateTime.UtcNow` — a rolled device clock cannot mint a fresh allowance | **MET** ⚠ a stale *"KNOWN LIMIT — the window start is a DEVICE clock"* comment still sits above that code in `BuildTimerService`; **the fix landed and the warning was left behind. Do not act on it.** |
+| Owner approves `RewardedAdSkip` ON (§4 A5, final item) | Owner ruling 2026-08-24: *"Flip it on"* | **MET** |
+| The flag is actually ON | `Assets/_Modules/Core/FeatureFlags.cs:808` — `Get("rewardedadskip", defaultOn: true)` | **MET** |
+| Gates (§5) | `f62bfa28d`: `COMPILE_GATE_OK` (0 error CS), `DataRegression 271/271`, zero red | **MET** |
+| §4 A4 — per-placement device Test Suite matrix + joined dashboard impression / ILRD record | **never captured** | **NOT met** — see 11.2 |
+
+### 11.2 The one gap, stated plainly
+
+§4 A4 asked for a physical-device LevelPlay Test Suite pass and a dashboard/ILRD join **per placement**
+(`place.build.skip`, `place.harvest.doubler`, `place.daily.chest`). That packet was not produced. Activation
+happened on account approval plus source verification of the two hard prerequisites, under an explicit owner
+ruling — which §4 A5 makes her call. This section exists so that decision stays visible instead of being
+absorbed into a green status line. If real-fill or ILRD behaviour disappoints on device, that is a **new
+ticket with its own evidence**, not a re-opening of this one.
+
+⚠ Also still open and inherited, not caused here: ads pay out in GOLD, gold is `Resources.Coins`, and
+WO-1163 makes troop training pure gold — against a covenant that says *never combat power*. Harmless while
+coins are inert; it becomes real the moment WO-1163 lands. **The owner ruling is owed in WO-1163, not here**
+(WO-1165 §1 raises the same collision for purchases).
+
+### 11.3 What did NOT close this ticket
+
+⚠ The two settled mainnet `purchase_quotes` rows of 2026-08-24/25 — `impulse-wood-medium` and
+`impulse-iron-medium`, tx `38yKkV7opP9RkL1n1uoquhZV2m59MJULbsBnBPa6fnwbb9Nk2hCA1FRY7CqhAvLUmphxJrq4CV7bYPVje6MvHyce`
+and `257H7nNYmz4qg3wkM8buRz2tpLo4XfdzyyS4wK24QjzmKzE4Y4RbqL5L3AdNiLLtcdoueTZRbocaFz2VV8HNtxdS` — close
+**WO-1079**, the chain/backend purchasing rail. They prove nothing whatsoever about a rewarded ad. The two
+tickets were split apart on 2026-08-22 precisely because *"their EVIDENCE is completely different"*
+(see the split banner above); judging them on one packet would re-make the exact mistake the split fixed.
