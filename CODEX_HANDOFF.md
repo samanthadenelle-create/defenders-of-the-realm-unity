@@ -17,8 +17,11 @@ from the ticket**, and a seat obeying it either breaks the mirror test or edits 
 
 ## THE PIN — three lines
 
-1. ⛔ **Do NOT rename any SKU id.** SKU ids are **live purchase keys** — the same reason WO-1163
-   already freezes `collector_farm` and `silo`. Rename the **display**, never the id.
+1. ⛔ **Do NOT rename any SKU id** — but ⚠ **for the correct reason.** I first wrote "live purchase
+   keys"; that was wrong. **Nothing is money-facing** — `MAINNET_SALES_ENABLED` gates every wallet but
+   the owner's, and no player has ever purchased. The real reasons stand on their own: SKU ids are
+   **entitlement/save keys**, they are **mirrored across three files under a test that proves equality**,
+   and **batch 1 owns that table this minute.** Rename the **display**, never the id.
 2. ⛔ **Do NOT touch `api/_lib/purchase-catalog.js` or `test/purchases.quote.test.js`** in WO-1163.
 3. ⭐ **The food→stone SKU remap is a FOLLOW-UP, sequenced after batch 1 returns.** WO-1163 ships the
    catalog/display half now; the monetized-SKU half waits for the anchor table to stop moving.

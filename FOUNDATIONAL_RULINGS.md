@@ -31,8 +31,23 @@ playing?*
 ⚠ **The tell is the copy.** If the marketing sentence is *"skip"*, *"unlock instantly"*, or *"no need
 to"*, the rule is being broken. If it is *"sooner"*, *"faster"*, or *"toward"*, it is being kept.
 
-⭐ We are **LIVE on the Solana dApp Store**. This is not a philosophical position — it is the thing a
-player points at in a review.
+⚠ **CORRECTED 2026-08-24 — I over-stated the exposure and it changed how I framed several
+decisions.** Owner, verbatim: *"NOTHING IS LIVE, NOTHING IS AT SOLANA DAPP MONEY FACING"* ·
+*"ONLY TEST TO ME."*
+
+The app is **published/listed**, but **no player-facing money path is active**:
+`MAINNET_SALES_ENABLED` is an env switch (`api/_lib/purchase-catalog.js:178`) and until it is true
+**only the owner's own wallet can transact.** The 391 SKR settlement was **her own test purchase**.
+⛔ **No player has ever spent money in this game.**
+
+⭐ **What that changes: URGENCY, not the ruling.** SKU renames, price moves and schema changes carry
+**no player-facing risk right now**, which makes this a cheap window to get them right rather than a
+minefield. I had been arguing several decisions as if a live player base were exposed to them.
+
+⭐ **What it does NOT change: the ruling itself.** These are design-integrity rules, and the reason to
+hold them is that they are **far cheaper to keep than to retrofit.** Every one of them gets harder the
+day sales switch on, and that day is the wrong time to discover the store and the progression system
+share an economy.
 
 ---
 
