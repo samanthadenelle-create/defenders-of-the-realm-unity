@@ -130,7 +130,9 @@ test('no impulse rung is strictly dominated by another purchasable pack at the s
     const purchasable = packs.filter(pack => pack && pack.storeVisible !== false &&
         pack.pricing && typeof pack.pricing.usd === 'number');
     const grant = pack => pack.contents && pack.contents.economy || {};
-    const keys = ['wood', 'iron', 'food', 'crystals', 'coins'];
+    // Derive the resource-key surface from canonical grants. A hand-maintained
+    // list failed open during food -> stone by simply checking one fewer key.
+    const keys = [...new Set(packs.flatMap(pack => Object.keys(grant(pack))))].sort();
     const dominates = (candidate, impulse) => {
         const a = grant(candidate), b = grant(impulse);
         return keys.every(key => Number(a[key] || 0) >= Number(b[key] || 0)) &&
@@ -143,6 +145,29 @@ test('no impulse rung is strictly dominated by another purchasable pack at the s
         assert.equal(dominator, undefined,
             `${impulse.sku} is strictly dominated by ${dominator && dominator.sku} at $${impulse.pricing.usd}`);
     }
+});
+
+test('the renamed stone impulse family is mirrored and grants stone only', () => {
+    const packs = JSON.parse(fs.readFileSync(
+        path.join(canonicalDir('StreamingAssets'), 'packs.json'), 'utf8')).packs;
+    const expected = [
+        ['impulse-stone-small', 'impulse-food-small', 1.99, 1000],
+        ['impulse-stone-medium', 'impulse-food-medium', 2.99, 3500],
+        ['impulse-stone-large', 'impulse-food-large', 4.99, 8000],
+    ];
+    for (const [sku, legacySku, usd, amount] of expected) {
+        const pack = packs.find(row => row.sku === sku);
+        assert.ok(pack, `${sku}: renamed client SKU missing`);
+        assert.deepEqual(pack.legacySkus, [legacySku], `${sku}: retired paid key must resolve forever`);
+        assert.equal(catalog.USD_ANCHORS[sku], usd, `${sku}: server anchor missing`);
+        assert.equal(pack.impulseResource, 'stone', `${sku}: shortfall route still names food`);
+        assert.deepEqual(pack.contents.economy, { stone: amount },
+            `${sku}: paid grant must deliver exactly the advertised stone`);
+    }
+    assert.equal(packs.some(row => /^impulse-food-/.test(row.sku)), false,
+        'retired food SKU survived in the client catalog');
+    assert.equal(Object.keys(catalog.USD_ANCHORS).some(sku => /^impulse-food-/.test(sku)), false,
+        'retired food SKU survived in the server price authority');
 });
 
 // A named case for the two SKUs the mirror was blind to, so a future edit that

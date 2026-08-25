@@ -50,6 +50,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Text;
+using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using UnityEngine;
 using DeNelle.Wallet;
@@ -64,7 +65,7 @@ namespace DeNelle.Editor.Regression
         private const double PriceCeilingUsd = 5.0d;
 
         /// <summary>The four harvestable resource KEYS money may buy (WO-1037 section 3 / WO-947 12b).</summary>
-        private static readonly string[] ResourceKeys = { "wood", "iron", "food", "crystals" };
+        private static readonly string[] ResourceKeys = { "wood", "iron", "stone", "crystals" };
 
         /// <summary>The size ladder, smallest first. Every resource must author all three.</summary>
         private static readonly string[] Sizes = { "small", "medium", "large" };
@@ -80,7 +81,7 @@ namespace DeNelle.Editor.Regression
             {
                 "sku", "tier", "name", "tagline", "theme", "founderOnly",
                 "impulse", "impulseResource", "impulseSize",
-                "pricing", "contents",
+                "pricing", "contents", "legacySkus",
 
                 // ── REVIEWED 2026-08-21, owner shelf ruling ──────────────────────────
                 // Added in the same change that put them in the data, which is what this
@@ -158,6 +159,7 @@ namespace DeNelle.Editor.Regression
             try
             {
                 CaseDualCopy(failures, log);
+                CaseClientBindsEveryEconomyKey(failures, log);
 
                 var impulse = ParseImpulsePacks(failures, log);
                 if (impulse != null)
@@ -202,6 +204,37 @@ namespace DeNelle.Editor.Regression
             Debug.LogError("IMPULSE_PACK_FAIL: " + failures.Count + " failure(s)\n" + log +
                            "\n - " + string.Join("\n - ", failures));
             return false;
+        }
+
+        // Newtonsoft ignores unknown JSON members by default. Compare the raw
+        // authored economy-key union with PackEconomy's JsonProperty bindings so
+        // a rename cannot silently deserialize paid value to zero.
+        private static void CaseClientBindsEveryEconomyKey(List<string> failures, StringBuilder log)
+        {
+            string json = DeNelle.Core.CanonicalJson.Read(PacksRelPath);
+            if (string.IsNullOrEmpty(json)) return;
+            var root = JObject.Parse(json);
+            var authored = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var row in (JArray)root["packs"])
+            {
+                var economy = row["contents"] != null ? row["contents"]["economy"] as JObject : null;
+                if (economy == null) continue;
+                foreach (var property in economy.Properties()) authored.Add(property.Name);
+            }
+
+            var bound = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var field in typeof(PackEconomy).GetFields())
+            {
+                var attrs = field.GetCustomAttributes(typeof(JsonPropertyAttribute), false);
+                if (attrs.Length == 1) bound.Add(((JsonPropertyAttribute)attrs[0]).PropertyName);
+            }
+            foreach (string key in authored)
+                if (!bound.Contains(key))
+                    failures.Add("[client-bindings] packs.json authors economy key '" + key +
+                                 "' but PackEconomy has no JsonProperty binding; Newtonsoft would silently " +
+                                 "drop paid value and grant zero");
+            log.AppendLine("  [client-bindings] " + authored.Count +
+                           " authored economy key(s) all bind in PackEconomy");
         }
 
         // =====================================================================

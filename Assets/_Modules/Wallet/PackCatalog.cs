@@ -60,8 +60,9 @@ namespace DeNelle.Wallet
     {
         /// <summary>Crystals — the primary build currency.</summary>
         [JsonProperty("crystals")] public int Crystals;
-        /// <summary>Food.</summary>
-        [JsonProperty("food")] public int Food;
+        /// <summary>Stone. The C# field retains its historic name because this is the reused
+        /// economy/save slot; the authored and player-facing JSON key is stone.</summary>
+        [JsonProperty("stone")] public int Food;
         /// <summary>Coins (Gold).</summary>
         [JsonProperty("coins")] public int Coins;
         /// <summary>Wood - build resource (additive; absent in older packs.json rows = 0, no migration break). Granted via EconomyService.GrantSpendable (ECON-01).</summary>
@@ -238,7 +239,7 @@ namespace DeNelle.Wallet
                 case "wood":     return e.Wood;
                 case "iron":     return e.Iron;
                 case "crystals": return e.Crystals;
-                case "food":     return e.Food;
+                case "stone":    return e.Food;
                 case "coins":    return e.Coins;
                 default:         return 0;
             }
@@ -261,7 +262,7 @@ namespace DeNelle.Wallet
 
         /// <summary>True for a WO-1037 single-resource impulse SKU (exactly ONE economy key).</summary>
         [JsonProperty("impulse")] public bool Impulse;
-        /// <summary>The ONE economy key this impulse pack grants: "wood" / "iron" / "food" / "crystals".</summary>
+        /// <summary>The ONE economy key this impulse pack grants: "wood" / "iron" / "stone" / "crystals".</summary>
         [JsonProperty("impulseResource")] public string ImpulseResource;
         /// <summary>"small" / "medium" / "large" — the size rung inside its resource family.</summary>
         [JsonProperty("impulseSize")] public string ImpulseSize;
@@ -282,7 +283,7 @@ namespace DeNelle.Wallet
                 {
                     case "wood":     return e.Wood;
                     case "iron":     return e.Iron;
-                    case "food":     return e.Food;
+                    case "stone":    return e.Food;
                     case "crystals": return e.Crystals;
                     default:         return 0;
                 }

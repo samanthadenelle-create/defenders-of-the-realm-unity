@@ -50,7 +50,7 @@ namespace DeNelle.Wallet
     {
         /// <summary>The pack to name, or null when there is nothing honest to offer.</summary>
         public readonly PackDef Pack;
-        /// <summary>Normalised economy key the player is short of ("wood"/"iron"/"food"/"crystals").</summary>
+        /// <summary>Normalised economy key the player is short of ("wood"/"iron"/"stone"/"crystals").</summary>
         public readonly string ResourceKey;
         /// <summary>Player-facing resource word as the panel already spells it ("Wood").</summary>
         public readonly string ResourceLabel;
@@ -104,7 +104,7 @@ namespace DeNelle.Wallet
             {
                 { "wood",     "wood"     },
                 { "iron",     "iron"     },
-                { "food",     "food"     },
+                { "stone",    "stone"    },
                 { "crystals", "crystals" },
                 { "crystal",  "crystals" },   // singular spelling seen in some cost labels
             };
@@ -114,7 +114,7 @@ namespace DeNelle.Wallet
         /// <paramref name="resourceLabel"/>. Returns an empty offer when the ask is not a genuine
         /// shortfall, the resource has no pack family, or no valid pack exists.
         /// </summary>
-        /// <param name="resourceLabel">The panel's own resource word ("Wood", "Iron", "Food", "Crystals").</param>
+        /// <param name="resourceLabel">The panel's own resource word ("Wood", "Iron", "Stone", "Crystals").</param>
         /// <param name="missing">Units still needed. &lt;= 0 means "affordable" and resolves nothing.</param>
         public static ShortfallOffer Resolve(string resourceLabel, int missing)
         {
@@ -131,7 +131,7 @@ namespace DeNelle.Wallet
                 // Not a failure — "Magic" and any future non-harvestable cost land here by design.
                 FlowTrace.Once("Store", "shortfall-no-family:" + resourceLabel,
                     "ShortfallPackOffer: resource '" + resourceLabel +
-                    "' has no impulse-pack family (only wood/iron/food/crystals are purchasable, " +
+                    "' has no impulse-pack family (only wood/iron/stone/crystals are purchasable, " +
                     "WO-947 §12b) - no offer surfaced. This is expected, not a defect.");
                 return empty;
             }
@@ -230,7 +230,7 @@ namespace DeNelle.Wallet
             var nonZero = new List<string>();
             if (e.Wood     > 0) nonZero.Add("wood");
             if (e.Iron     > 0) nonZero.Add("iron");
-            if (e.Food     > 0) nonZero.Add("food");
+            if (e.Food     > 0) nonZero.Add("stone");
             if (e.Crystals > 0) nonZero.Add("crystals");
             if (e.Coins    > 0) nonZero.Add("coins");
 
