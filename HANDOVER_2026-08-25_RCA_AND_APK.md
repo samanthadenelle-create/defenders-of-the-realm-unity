@@ -1,7 +1,9 @@
 # Handover — Ready-board RCA and APK checkpoint
 
-**Date:** 2026-08-25  
-**Branch:** `wip/village2-and-f8-tickets`  
+**Date:** 2026-08-25
+
+**Branch:** `wip/village2-and-f8-tickets`
+
 **Handover HEAD:** `1bf657684` (`chore(board): regenerate ready work-order view`)
 
 ## 1. Current release posture
