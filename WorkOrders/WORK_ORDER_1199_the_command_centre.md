@@ -114,9 +114,24 @@ must therefore be expressed as a **discount applied to an authored price**, neve
 ⛔ Editing anchors to run a sale breaks the mirror test and needs a client ship - which defeats the
 entire purpose.
 
-### STOP THE STORE MIRROR - a screen showing what a player sees RIGHT NOW
+### STOP THE STORE MIRROR - TERMINAL OUTPUT, NOT A UI
 
 Owner, 2026-08-25: *"I should have a screen that reflects store at that moment in real time."*
+Then, immediately: **"I don't need the UI."**
+
+⭐ **So this is `command-centre -Store` printing to the console. No web page, no in-game screen, no
+design pass, no UI seat, no capture to open.** That is a large scope reduction and it is deliberate -
+the value is in the ANSWER being one command away, not in how it is drawn.
+
+Print a plain ASCII table. Something like:
+
+    STORE AS OF 2026-08-25 14:52 UTC  |  production  |  viewing as: <no wallet>
+    SKU                 PRICE      WAS      SAVE   SELLABLE  REASON
+    hearth-spark        $4.99        -         -   yes       -
+    impulse-wood-med    $2.39    $2.99     $0.60   yes       20% shortfall discount
+    founders-vow       $49.99        -         -   NO        sales are not open on this network
+    PROMOTION: none active
+
 
 **This is the SEE verb made concrete, and its absence is what cost the most time today.** Neither the
 owner nor the lead could answer "what does the store show right now." It was inferred from source,
@@ -148,7 +163,7 @@ what a player sees. The mirror must preview as:
 ⭐ **That single control answers the question this project could not answer all of 2026-08-25**: is
 the store priced for anyone other than her.
 
-#### What it shows
+#### What it prints
 
 - every SKU on the shelf, in shelf order, with the **effective** price and the saving (WO-1198),
 - **sellable / not sellable, with the server's worded reason** - not a colour, not a tick,
@@ -165,10 +180,10 @@ mistake, and this screen would make the same error about money.
 
 #### Acceptance
 
-1. At `startsAt - 1 minute` it shows full price; at `startsAt + 1 minute`, without a reload, it shows
-   the sale. ⭐ Prove the schedule with the clock, not with a config read.
+1. At `startsAt - 1 minute` it prints full price; run again at `startsAt + 1 minute` and it prints the
+   sale. ⭐ Prove the schedule with the clock, not with a config read.
 2. Previewing as a non-owner wallet reflects `MAINNET_SALES_ENABLED` truthfully.
-3. Killing the endpoint produces a visible failure, never a stale shelf.
+3. Killing the endpoint produces a visible failure and a non-zero exit, never a stale shelf.
 4. ⛔ Grep proves the mirror reads NO local price source.
 
 ### What SEE needs
