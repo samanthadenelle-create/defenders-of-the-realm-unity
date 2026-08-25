@@ -137,7 +137,17 @@
 > fine as history. A copied number is the bug **even when it was right the day it was written** -
 > that is exactly how the retired 860-899 UI block kept re-seeding collisions from CLAUDE.md sec.2.
 
-> ## ⚠ RECONCILED 2026-08-25 (CLI): main line next free = **1201**.
+> ## ⚠ RECONCILED 2026-08-25 (CLI): main line next free = **1202**.
+> *(CLI seat minted **WO-1201** and bumped 1201 -> 1202 in this SAME edit. **1201** = QUESTS PAY
+> EXPERIENCE - owner ruled "add xp to quest rewards", then "half the games I have played, that is
+> the main reward", then named troops as the next reward kind. So the ticket is a REWARD-SCHEMA
+> MIGRATION (fixed struct -> typed kind/amount LIST across all 63 stages, both canonical copies)
+> with xp as its first new kind. The deciding argument is WO-1163 the same day: packs.json
+> authored "stone", PackCatalog bound only the fields it knew, Newtonsoft DROPPED it silently and
+> three live SKUs would have granted nothing. A typed list lets an unknown kind FAIL LOUD. Hero XP
+> IS save-persisted since v29, so no schema bump.)*
+>
+> ### superseded: RECONCILED 2026-08-25 (CLI): main line next free = **1201**.
 > *(CLI seat minted **WO-1200** and bumped 1200 -> 1201 in this SAME edit. **1200** = the UI
 > seat CAN BE SPOKEN TO AND CANNOT ANSWER. SendMessage reaches a cloud session; the tool contract
 > says that session "cannot message any session back yet", so a blocked UI seat can only go idle
