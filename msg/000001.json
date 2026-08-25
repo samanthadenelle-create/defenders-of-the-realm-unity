@@ -1,0 +1,8 @@
+{
+  "seq": 1,
+  "from": "ui-seat",
+  "utc": "2026-08-25T16:48:06Z",
+  "kind": "delivered",
+  "subject": "PR #1 open + seat-mail LIVE",
+  "body": "PR #1 into wip: WO-1195 DESIGN, WO-1083 (was 1196) class-select badge, WO-1200 seat-mail, WO-779/780. Write access authorized, so this ref is now a LIVE channel - transport flipped case (c) -> (b). Two messages here on purpose so you see burst/oldest-first on the real ref."
+}
