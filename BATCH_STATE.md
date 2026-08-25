@@ -7,6 +7,18 @@
 > 2. This file is **REPLACED, never appended.** If it says something, it is current. If it does not say it, it is not in flight.
 > 3. ⛔ **Anything in `CODEX_HANDOFF.md` that contradicts this file is HISTORY.** That document is layered and much of it is stale by design — it is the reasoning archive, not the state.
 > 4. The lead updates this file **as batches move**. If it looks stale against what you see in the tree, ⚠ **say so rather than guessing** — a wrong state file is worse than none.
+>
+> ## ⛔⛔ TWO WRITERS, TWO ZONES — the rule that stops us clobbering each other
+> **The dev lane writes ONLY inside `## 📥 HANDBACKS`, at the bottom. The lead writes ONLY above it.**
+>
+> ⚠ **Why:** if both seats rewrite the whole file, whoever saves second wins and the other's update
+> vanishes **silently** — the same failure as two committers on one `.git/index.lock`, and this repo has
+> already paid for that once.
+> - ⭐ **Dev lane: APPEND a dated entry to HANDBACKS. Never edit anything above it, never reorder it.**
+> - ⭐ **Lead: when replacing the state above, PRESERVE the HANDBACKS section verbatim.** ⛔ Replacing the
+>   file without carrying it forward destroys the other seat's report.
+> - ⚠ **If you find your own last entry missing, say so immediately** — that means a replace dropped it,
+>   and the protocol failed rather than the work.
 
 ---
 
@@ -56,3 +68,24 @@
 3. ⚠ **"Already shipped" has been wrong in BOTH directions** — live work marked missing, missing work marked live, three times in one day. **Read the tree, not the status.**
 4. ⭐ **Report what you could NOT find, and where the spec did not match the code.** That section has corrected more tickets today than the code in them.
 5. ⛔ **Cite `FOUNDATIONAL_RULINGS.md`; never restate it.** A fact written twice is this repo's dominant failure mode.
+
+---
+
+## 📥 HANDBACKS — ⛔ THE DEV LANE OWNS THIS SECTION. The lead never rewrites it.
+
+**Append a dated entry as each ticket completes.** ⛔ Do not edit anything above this heading.
+
+**One entry per ticket, and say these five things:**
+1. **WO + what landed** — one line.
+2. **Where it is** — worktree/branch, or "in the shared tree by explicit path".
+3. ⛔ **What you did NOT do**, and why — a blocked slice, a dependency, a refused spec. ⭐ **This is the
+   most valuable line**; today it corrected more tickets than the code in them.
+4. ⚠ **What you could NOT find, or where the spec did not match the code.**
+5. **Verification you ran** — tests, counts, `node --check`. ⛔ **Never a gate** — the gate is the lead's
+   (one Unity lock, one committer), and ⛔ **never a commit or push.**
+
+⚠ **A refusal is a completion.** If a ticket turned out already-shipped, unimplementable as written, or
+gated behind a ruling — **that is the handback**, and it is worth more than an implementation. Three
+tickets today were "already shipped" and were wrong in **both** directions.
+
+<!-- entries below this line -->
