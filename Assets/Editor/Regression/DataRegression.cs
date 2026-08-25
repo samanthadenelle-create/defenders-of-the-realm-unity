@@ -1190,6 +1190,7 @@ namespace DeNelle.Editor
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "night-market-runtime-layout suite", () => { if (!DeNelle.Editor.Regression.NightMarketRuntimeLayoutRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[night-market-runtime-layout] " + r); });
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "cost-format-source suite", () => { if (!DeNelle.Editor.Regression.CostFormatSourceRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[cost-format-source] " + r); });
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "cathedral-mage-hp suite", () => { if (!DeNelle.Editor.Regression.CathedralMageHpRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[cathedral-mage-hp] " + r); });
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "echo-harvest-assignment suite", () => { if (!DeNelle.Editor.Regression.EchoHarvestAssignmentRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[echo-harvest-assignment] " + r); });
             // --- WO-1149 (owner, on device 2026-08-22: "we need to stop game during transactions got
             //     killed while making purchase test"): a transaction freezes the world through the
             //     single WorldHold owner, and EVERY exit unfreezes it. The suite measures the clock
