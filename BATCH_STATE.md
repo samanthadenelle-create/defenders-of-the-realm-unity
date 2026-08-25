@@ -180,6 +180,69 @@ that offers wallets we cannot reach would be a promise the transport cannot keep
 the lane reaches this row, build the DISCONNECT/switch mechanism and its placement, and leave the
 chooser presentation to the spec.
 
+### ⭐⭐ WO-1171 §4 — RULED 2026-08-25: MAKE THE WALLET PREFERENCE CHAIN PLAYER-SELECTABLE
+
+Owner ruling, verbatim: **"make the wallet preference chain player-selectable."**
+
+⭐ **This is SMALLER than it sounds, because the chain was already built as data.**
+`Assets/_Modules/Wallet/TargetedLocalAssociationScenario.cs:123` holds
+`public static readonly string[] PreferredWalletPackages`, and its own header calls the chain
+*"data, not logic."* Today it is fixed:
+
+    1 com.solanamobile.wallet        Seeker / Seed Vault   <- RANK 1 (owner ruling 2026-08-05)
+    2 app.phantom                    Phantom
+    3 com.solflare.mobile            Solflare
+    4 app.backpack.mobile.standalone Backpack
+    5 ag.jup.jupiter.android         Jupiter               <- LAST
+
+⚠ **Read that file's header before touching it.** It exists because the SDK's generic
+`LocalAssociationScenario` fires an IMPLICIT intent and Android picked the winner - on the owner's
+Seeker that winner was **Jupiter, and the Seeker wallet was never offered**. This clone forces the
+ranking. ⛔ Do not "simplify" it back to the SDK scenario; that reintroduces the bug it was written to
+fix. `setPackage()` narrows DELIVERY ONLY - action, category, data URI and the websocket association
+stay byte-identical, and the MWA identity check depends on that. Keep it that way.
+
+**What to build:**
+1. **A persisted player choice consulted BEFORE the chain.** Chosen package wins; the existing chain
+   remains the fallback order. ⛔ **Store it in PlayerPrefs, NOT the save schema** - it is a
+   device/wallet-app choice, not player progress, and it must not force a schema bump.
+2. **Default stays SEEKER.** The 2026-08-05 ruling is not repealed - it is now a default rather than
+   the only outcome. A player who never opens the picker sees exactly today's behaviour.
+3. **Offer only wallets ACTUALLY INSTALLED.** The scenario already enumerates installed MWA handlers
+   via `queryIntentActivities()` - reuse that. ⛔ Never list a wallet the player cannot pick; an option
+   that fails on tap is worse than no option.
+4. ⛔ **CHANGING THE WALLET MUST CLEAR THE SEALED SESSION** (`MwaSessionStore`). Otherwise
+   `TryAutoResumeAsync` silently reconnects the OLD wallet at next boot and the choice appears to do
+   nothing. **This is the single most likely way to ship this feature broken.**
+5. **Uninstalled-later must fall back, never hard-fail.** The file already states a missing preferred
+   wallet is never a hard failure - preserve that for the player's stored choice too.
+
+### ⛔⛔ THE HAZARD NOBODY HAS NAMED, AND IT MUST BE ANSWERED BEFORE THIS SHIPS
+
+**`GameState.BoundWallet` IS THE SAVE KEY.** Verified at source:
+`SolanaWalletProvider.cs:437` - *"GameState.BoundWallet is the save key"*;
+`GameStateService.cs:1809` warns about a **"wrong-key write"** when BoundWallet is not what you think.
+
+⛔ **So switching wallets switches the player's SAVE IDENTITY.** A player who taps a different wallet
+to "see their options" can land in what looks like a **brand-new empty town**, with their real town
+intact but keyed to the wallet they just left. That is a support catastrophe wearing a settings toggle.
+
+⚠ **This is not hypothetical.** `MwaSessionStore.cs:7` records the owner hitting the neighbouring case
+already - *"Her save DID come back (GameState.BoundWallet is persisted...)"* - i.e. identity/save
+coupling has already surprised someone once.
+
+**Required before the switch is reachable by a player - name which you chose:**
+- (a) the picker states plainly, before switching, that a different wallet means a different saved
+  kingdom, and requires a deliberate confirm; **or**
+- (b) switching is offered ONLY at a point where no local progress can be stranded; **or**
+- (c) the save is re-keyed to follow the player - ⛔ which is a DATA MIGRATION on a live build and is
+  the OWNER's call, not the lane's.
+
+⭐ **Recommended: (a).** It is honest, it is one screen, and it needs no migration. ⛔ Do NOT pick (c)
+unilaterally.
+
+⚠ Copy for that confirm is the OWNER's - propose, do not settle it.
+
 ### 4. Site 3, PROD-014(b), WO-1171 §4 — UNCHANGED and unblocked.
 
 No question was raised on these three and no return has arrived. Their pins in the Batch 9 table stand:
