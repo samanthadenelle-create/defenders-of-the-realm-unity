@@ -314,6 +314,64 @@ capacity and earning nothing into that resource - a silent faucet that stopped i
 
 ---
 
+## 8. PRODUCTION PROMOTION IS A MANUAL OWNER ACT. There is no deploy script, and that is the design.
+
+> **Owner explicit, 2026-08-25.**
+
+**The case:** WO-1173 wires a schema-parity gate to run *"after every production API deploy."* Codex
+found, and the lead confirmed, that **no tracked script in this repo invokes `vercel --prod`.** The
+WebGL script performs a PREVIEW and says *"never --prod"* in its own text. Production has only ever
+been promoted **by hand** - repeatedly, on 2026-08-03, 08-04, 08-05 and again for the money-path
+endpoints.
+
+⭐ **RULED: that is deliberate and stays.** Promoting to production is an OWNER act, not an automated
+one. The absence of a deploy script is **not a gap to be closed** by writing one.
+
+**What follows from it:**
+- ⛔ **Do NOT wire a production-deploy gate to the preview script.** That would label the wrong event
+  as covered - a gate asserting something it never checks, which is strictly worse than no gate.
+  Codex declined to do this and was right.
+- WO-1173's device/store trigger surfaces (the morning chain, the detached APK build, Firebase
+  distribution, and the `api/schema.sql` pre-push check) are the gate's real doors and are wired.
+- The "after every production API deploy" trigger is satisfied by the **owner running parity by hand
+  as part of promoting**, because the promotion is itself by hand. ⚠ That makes it a DISCIPLINE, not
+  a gate, and this file is where that is written down so nobody later mistakes the absence of a script
+  for an oversight.
+- ⚠ **The corollary that bites:** `.vercelignore` re-includes `/api`, so **every `--prod` from the
+  repo root re-ships the serverless backend alongside the static payload.** There is no
+  WebGL-only promotion. Any plan of the form "ship the game build but hold `api/` back" is
+  unimplementable as the tree stands.
+
+---
+
+## 9. THE SCHEMA-PARITY REPAIR MIGRATION IS AUTHORIZED against production.
+
+> **Owner explicit, 2026-08-25.**
+
+`api/migrations/20260824_0001_repair_schema_parity.sql` may be applied to the live Neon database.
+
+    psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f api/migrations/20260824_0001_repair_schema_parity.sql
+    node tools/schema-parity.mjs
+
+**Audited before authorization** - zero `DROP`, `DELETE` or `TRUNCATE`; wrapped in `BEGIN`/`COMMIT`;
+every statement additive (`CREATE TABLE IF NOT EXISTS`, `ADD COLUMN IF NOT EXISTS`). It repairs
+`dungeon_status`, `auth_sessions`, `purchase_quotes`, the entitlement audit columns and the widened
+network CHECK.
+
+⛔ **THE EXIT CODE IS NOT THE PROOF, AND THIS DATABASE HAS ALREADY TAUGHT US WHY.** `CREATE TABLE IF
+NOT EXISTS` on a table that exists with the WRONG SHAPE reports success and changes nothing - the
+`bug_reports` repair reported success three times while doing nothing. **The proof is
+`SCHEMA_PARITY_OK` from `node tools/schema-parity.mjs` AFTER the run**, which is a shape query.
+Same rule as every other gate here: judge by the marker, never the exit code.
+
+⛔ **The five `tmp/neon-repair-*.sql` files are NOT authoritative** and must not be run. They are
+untracked operational scratch from an earlier incident. The tracked migration above is the one.
+
+⚠ **Applying it is the OWNER's action.** `DATABASE_URL` is redacted for every agent seat including the
+lead, so no seat here can run it, verify it, or confirm it landed.
+
+---
+
 ## Where these came from
 
 Ten rulings on 2026-08-24 (`OWNER_RULINGS_OWED.md`). Seven answered a ticket. **Three answered a
