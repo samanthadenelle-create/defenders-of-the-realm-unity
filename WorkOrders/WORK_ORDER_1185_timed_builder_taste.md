@@ -173,3 +173,59 @@ and only the second makes them care.
 That is her call, but it **requires amending `FOUNDATIONAL_RULINGS.md` §1 in the same change**, not
 leaving it contradicting — a seat reading §1 would correctly refuse to build it, and a rule that is
 quietly violated by one feature stops being enforceable for the next.
+
+---
+
+# ⭐⭐ LEAD RULING 2026-08-24 — the builder gate becomes Clash's shape, N is DATA
+
+Owner gave latitude (*"just do whats best, i trust you"*) after establishing the whole frame across a
+conversation. Ruling recorded here so it is reversible by reading rather than by archaeology.
+
+## The two things the owner established, and they are in productive tension
+
+1. ⭐ **Builders are the strongest thing you can sell** — *"you cant save time."* Every other purchase
+   grants more STUFF; a builder grants THROUGHPUT, the only lever that touches elapsed time. A
+   resource pack makes one build cheaper; a builder makes **every future build** arrive sooner.
+2. ⭐ **But the scarcity IS the gameplay** — *"spend the little while saving that one builder for that
+   really long task."* Holding a slot free for the big build is a real decision, and it is the
+   decision that makes a queue a game instead of a spreadsheet.
+
+⛔ **Sell enough builders and you sell away the decision that made them valuable.** At 2 the question
+"which build do I start?" is genuine. At 5 on a shallow tree you start everything and the queue asks
+nothing. ⭐ **The first extra builder is worth the most; the third turns a decision into a formality.**
+
+## THE RULING: a BUYABLE tier and an EARNED top tier — Clash's actual model
+
+⚠ **Correcting my own framing:** I argued `FOUNDATIONAL_RULINGS.md` §1 at the owner as if it were an
+outside law. **It is her own WO-911 Q6 ruling generalised**, and her standing tie-breaker is *what
+would Clash do*. Clash sells builders 2-5 for gems with **no prerequisite** and makes the 6th
+(O.T.T.O) **earned and unpurchasable**. ⭐ The currency model here already matches — crystals play
+gems' role. The Echo prerequisite on every slot made this **stricter than Clash**.
+
+- **Up to the cap:** crystal-purchasable, ⛔ **no Echo prerequisite.** This is the button the player
+  already meets; it stops refusing someone who is holding the crystals for a reason unrelated to money.
+- **Above the cap:** ⛔ **Echo-gated and NOT purchasable at any price.** The unbuyable top slot is what
+  keeps the earned thing special and keeps §1 meaningful rather than quietly bypassed.
+
+⛔ **`FOUNDATIONAL_RULINGS.md` §1 must be amended IN THE SAME COMMIT** as the code — a rule violated by
+one feature stops being enforceable for the next.
+
+## ⭐ N IS A DATA KNOB, NOT A NUMBER IN CODE
+
+⛔ **Do not hardcode the cap.** It belongs in `BuildTimerConfig` beside `freeBuildSlots` and
+`queueDepthPerLine`. ⚠ **The correct measurement is not tree depth — it is feel**: the first playtest
+where holding a builder back stops being a decision IS the reading. Data means acting on that costs
+nothing; code means it needs a build.
+
+**Starting point (deliberately low, per the scarcity argument): 2 free + 2 buyable, the 5th earned.**
+
+## What this does to the rest of this ticket
+
+⭐ **It makes the end-of-window crystal credit land on a button that will ACCEPT it.** Previously the
+credit could arrive and still be refused on an Echo prerequisite the player cannot see — the worst
+version. Now the crystals complete a purchase immediately, and the earned slot remains the thing to
+come back for.
+
+⚠ **And the same "do not sell away the decision" logic applies to the harvest boost**: sell so much
+offline doubling that logging in stops mattering and you have broken the same thing in a different
+resource. Set that duration against the 4h/120-crystal existing purchase deliberately.
