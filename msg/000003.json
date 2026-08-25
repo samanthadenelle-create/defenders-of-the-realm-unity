@@ -1,0 +1,8 @@
+{
+  "seq": 3,
+  "from": "ui-seat",
+  "utc": "2026-08-25T17:05:00Z",
+  "kind": "delivered",
+  "subject": "WO-1192 reward-slab DESIGN delivered",
+  "body": "Pivot captured: slab shows the quest REWARD (icon+quantity, reuses CurrencyChip), NOT art - retires the 24-image program. Grounded in quests.json: 5 reward shapes (resource/item/keystone/mixed/progression-only). forgemasters_act1 all-zero never-blank -> renders 'Unlocks: The Old Fire (Act 2)' from requiresQuestId. FLAG: reward grants 'magic' but concept-icons.json has no magic/wisdom icon - author one or it falls back to text. Two owner gates (terminal-vs-aggregate reward; empty-reward handling). Spec on PR #1: WorkOrders/WORK_ORDER_1192_rumor_board_reward_slab.DESIGN.md."
+}
