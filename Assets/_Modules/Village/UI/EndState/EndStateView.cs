@@ -719,12 +719,14 @@ namespace DeNelle.Village.UI
                 // becomes the manual dismiss (compact panels have no scrim/backdrop, so the
                 // world stays interactive around the banner). AutoDismissAfter (below)
                 // remains the softlock guard; both funnel FirePrimary, which latches on
-                // _fired so the route still fires exactly once. WO-672: when the banner
-                // carries a Repair-All CTA the overlay slots BEHIND the panel content
-                // (first sibling) so the CTA button stays on top and gets the click —
-                // dismiss is then the CTA / auto-dismiss / a tap the chrome lets through.
+                // _fired so the route still fires exactly once. When a Repair-All CTA is
+                // present, the dismiss surface is scoped to the report well and cannot
+                // geometrically cover the separately owned CTA band.
                 var tap = new GameObject("TapDismiss", typeof(Image), typeof(Button));
-                tap.transform.SetParent(chrome.root.transform, false);
+                // WO-1077: a Repair-All banner keeps tap-to-dismiss over its report well,
+                // but the catcher's geometry stops before the separately owned CTA band.
+                // With no banner CTA the original whole-panel dismiss surface remains.
+                tap.transform.SetParent(hasBannerCta ? rewardWell : chrome.root.transform, false);
                 var tapRt = (RectTransform)tap.transform;
                 tapRt.anchorMin = Vector2.zero; tapRt.anchorMax = Vector2.one;
                 tapRt.offsetMin = Vector2.zero; tapRt.offsetMax = Vector2.zero;
@@ -733,9 +735,8 @@ namespace DeNelle.Village.UI
                 tapImg.raycastTarget = true;
                 tap.GetComponent<Button>().transition = Selectable.Transition.None;
                 tap.GetComponent<Button>().onClick.AddListener(FirePrimary);
-                if (hasBannerCta) tap.transform.SetAsFirstSibling();
                 FlowTrace.Step("EndState", hasBannerCta
-                    ? "compact banner: tap-dismiss behind panel (Repair-All CTA on top)"
+                    ? "compact banner: tap-dismiss scoped to report well (Repair-All CTA excluded)"
                     : "compact banner: primary CTA suppressed (auto-dismiss/tap)");
             }
 

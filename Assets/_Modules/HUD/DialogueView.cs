@@ -274,21 +274,11 @@ namespace DeNelle.HUD
             var emblem = portraitHost.Find("MedallionEmblem");
             if (emblem != null) emblem.gameObject.SetActive(false);
 
-            // Tap-to-advance: a transparent button filling the BODY ZONE ONLY (advances lines,
-            // not choices). Deliberately contained to the panel — never a full-screen catcher.
-            var tapGo = new GameObject("TapAdvance", typeof(Image), typeof(Button));
-            tapGo.transform.SetParent(bodyZone, false);
-            var trt = tapGo.GetComponent<RectTransform>();
-            trt.anchorMin = Vector2.zero; trt.anchorMax = Vector2.one;
-            trt.offsetMin = Vector2.zero; trt.offsetMax = Vector2.zero;
-            tapGo.GetComponent<Image>().color = new Color(0f, 0f, 0f, 0f);
-            var tapBtn = tapGo.GetComponent<Button>();
-            tapBtn.transition = Selectable.Transition.None;
-            tapBtn.onClick.AddListener(OnBoxTapped);
+            // WO-1078: the prose viewport below already owns OnBoxTapped and its geometry
+            // ends above the options band. A second body-sized catcher is redundant and
+            // covers every choice row, so keep one hit surface: the prose viewport.
 
-            // F8 fleet capture ("CLICK-BLOCKED: 'CloseButton' covered by 'TapAdvance'" x7):
-            // the kit builds the shared CloseButton BEFORE this catcher — raise the Close to
-            // the top of the panel subtree so it stays clickable above the catcher.
+            // Keep the established Close ordering from the earlier TapAdvance repair.
             // OPTION A (F8-1/F8-5): the per-view anchor override is REMOVED — the factory's
             // SeatSharedCloseInside owns the seat (canonical 360x120, bottom-centre band), and
             // the factory's close-band reservation already ends layout.body/footer above it.
@@ -352,7 +342,7 @@ namespace DeNelle.HUD
 
             // OWNER 2026-07-08 ("instead of continue button, maybe tap to continue?"): the
             // advance affordance is a passive HINT, not a button — the whole panel already
-            // advances (viewport Button above + the TapAdvance modal catcher), so a chip was
+            // advances (the viewport Button above), so a chip was
             // a duplicate control. The no-dead-interaction law (2026-07-06 sweep) demands a
             // VISIBLE affordance: this label renders in the kit FOOTER zone (the factory's
             // close-band reservation keeps it clear of the shared Close), gold + italic so
@@ -360,7 +350,7 @@ namespace DeNelle.HUD
             // Repaint keeps driving its visibility through _tapHint (hidden while options show).
             // OWNER F8 2026-07-10 ("remove the continue and press any key"): the visible
             // "Tap to continue ▸" chip is removed. Advance is now ANY key (Update, keyboard-only)
-            // OR a tap on the panel (the existing TapAdvance/viewport Buttons). _tapHint stays null;
+            // OR a tap on the prose viewport. _tapHint stays null;
             // its later uses are null-guarded (contRt at ~368, SetActive at ~430) so no dead control.
             _tapHint = null;
 
@@ -448,7 +438,7 @@ namespace DeNelle.HUD
         }
 
         // OWNER F8 2026-07-10: any KEY advances the dialogue (the "press any key" ask). Mouse/touch
-        // already advance via the panel's TapAdvance/viewport Buttons, so this is keyboard-only —
+        // already advance via the prose viewport Button, so this is keyboard-only —
         // a click firing BOTH the Button and this would skip two lines. Min-hold guards the opening
         // input; keyboard-only via legacy Input (DeNelle.HUD does not reference the Input System).
         private float _openedAt;

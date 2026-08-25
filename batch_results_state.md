@@ -149,3 +149,63 @@
 3. **Not done:** no production economy behavior, player-facing presentation, crystal cap, or `DataRegression.cs` edit. The ticket's behavior/doc reconciliation remains blocked; only the explicitly unaffected regression slice was implemented. No gate, commit, or push was run.
 4. **Mismatch / could not find:** the ticket says assert literal `requested`, but the existing Population reporter says `request`. The oracle pins the stable `request` stem rather than forcing cosmetic production-copy churn. Reporting helpers receive measured deltas from their callers, so before/after is asserted across the caller file, not incorrectly required inside each helper body.
 5. **Verification:** `git diff --check` clean; all four anchors found and all six structural predicates true; regression source braces **12/12**, NUL count **0**. Lead registration owed in fenced `DataRegression.cs`: invoke `EconomyCreditReportingRegression.Run(out reason)` using the existing suite-registration pattern.
+
+## HANDOFF 2026-08-24 21:07 - WO-1177 complete
+
+### WO-1177 - server-issued seven-day shortfall discount
+
+1. **What landed:** the quote endpoint accepts an untrusted `repair_shortfall` hint; the server checks prior discounted issuance, applies **2000 bps** before `quoteAmount`, persists nullable `discount_bps` plus the server-authored `discount_reason`, and returns nullable `discountBps` plus server-authored display copy. Discount issuance uses a `Serializable` conditional-insert transaction so simultaneous empty-window reads cannot both commit. A losing or in-window request receives no second discount. `/verify` reads the persisted discount audit fields while continuing to compare the finalized chain transfer against the persisted discounted base-unit amount. The client sends only context and displays server copy; it performs no price/percentage arithmetic and still reaches exactly one wallet prompt.
+2. **Where:** `D:\eoa-codex-batch1-clean`, branch `codex/batch1-clean`; six-file explicit-path diff: `api/_lib/purchase-catalog.js`, `api/purchases/quote.js`, `api/purchases/verify.js`, `test/purchases.quote.test.js`, `Assets/_Modules/Wallet/PurchaseQuoteService.cs`, and `Assets/_Modules/Wallet/PackStore.cs`.
+3. **Not done:** no migration, deployment, gate, commit, or push. The lead must hold this unmerged/undeployed until the owner runs `tmp/neon-migration-wo1177-discount.sql` and confirms the declared nullable columns/index. No WorkOrder status was flipped because Batch 6 is the sole current owner of `WorkOrders/*.md`.
+4. **Mismatch / could not find:** `PackStore.FocusShortfall` is generic across repair/build/upgrade resource gaps; there is no repair-specific purchase caller or durable shortfall-origin enum. The lane therefore sends the ruled `repair_shortfall` hint only when buying the impulse pack matching the live focused shortfall. This is safe because the hint is never authorization, but the audit label is broader than its name. No approved database executor is available in this lane, as previously reported.
+5. **Verification:** `node --check` clean for all three changed JS runtime files; `node --test test/purchases.quote.test.js test/purchases.verify.test.js` with shared `NODE_PATH` **43/43 passing**; `git diff --check` clean; C# braces `PurchaseQuoteService.cs` **83/83**, `PackStore.cs` **286/286**; both NUL **0**; client discount-arithmetic scan found no discount multiplier/percentage computation.
+
+**Sequencing release:** WO-1177 is handed back. Per the owner ruling, WO-1163 may begin only after the lead accepts this handback; its SKU rename must move `USD_ANCHORS`, both canonical `packs.json` copies, and the quote-test resource-key list together.
+
+## HANDOFF 2026-08-24 21:20 - WO-1178 complete
+
+### WO-1178 - editor downgrade detection and marker-proof gate runners
+
+1. **What landed:** one reusable pre-launch assertion now refuses a mismatched `ProjectVersion.txt` or a silently selected fallback editor before Unity starts; all seven general Unity launch paths call it. The pre-push hook refuses any project editor version other than the 6000.4.8f1 branch pin and names the rebuild/marker risk. The check-in gate now passes explicit `COMPILE_GATE_OK`, `REGRESSION_OK`, and `CHECKIN_SUITE_OK` expectations into the existing fresh-log evidence gate. `install-apk-to-seeker.ps1` now uses the pinned editor/SDK and routes its build through `run-unity-method.ps1` with the `[AndroidBuild] SUCCEEDED` marker.
+2. **Where:** `D:\eoa-codex-batch1-clean`, branch `codex/batch1-clean`; WO-1178 explicit paths are `.githooks/pre-push`, new `tools/assert-unity-editor-pin.ps1`, `run-unity-method.ps1`, `run-tests.ps1`, `build-windows.ps1`, `build-webgl.ps1`, `build-webgl-isolated.ps1`, `install-apk-to-seeker.ps1`, `tools/run-unity-playmode.ps1`, and `tools/regression/checkin_gate.ps1`.
+3. **Not done:** no Unity process, gate, build, push, commit, or WorkOrder status edit was performed. The repo cannot prevent an arbitrary external raw editor launch; it now detects the resulting metadata mismatch before sanctioned launches and at push, matching the revised ruling.
+4. **Mismatch / could not find:** the ticket says all six repo scripts pin 6000.4.8f1. That was false: a seventh direct launcher, `install-apk-to-seeker.ps1`, hard-coded both Unity and Android SDK to **6000.4.7f1** and invoked Unity directly. It exactly matches the unexplained 4.8 -> 4.7 rewrite and is the strongest source-level cause found. Also, the nominally pinned general launchers silently fell back to another installed editor when 4.8 was absent; the assertion makes that fallback fail closed.
+5. **Verification:** PowerShell parser clean for all nine changed/new `.ps1` files; hook shell syntax clean after stripping the repository's CRLF for Bash parsing; `git diff --check` clean. Deliberate no-Unity proof: pin mismatch printed `UNITY_EDITOR_PIN_MISMATCH` and exited **9**; judge-only marker test printed `VERDICT=FAIL reason=LOG_MISSING` for missing `COMPILE_GATE_OK` and exited **8**. Script scan found no remaining `6000.4.7f1` pin in any `.ps1`. Unity/runtime gate remains the lead's.
+
+**Deployment evidence received while this ticket was in progress:** the WO-1177 migration is now verified live with all four columns present and the existing 391-SKR quote intact, so its schema-first deployment hold is cleared. Production still has only one historical quote row; the next real quote is the first repetition of that rail and should be treated as evidence, not assumed from deployment success.
+
+## HANDOFF 2026-08-24 21:34 - UI panels WO-1075 through WO-1078
+
+### WO-1075 - Raid deploy actions keep canonical touch height
+
+1. **What landed:** `Army Ready?` and `BEGIN ASSAULT` are vertically centred at the fixed `CanonCtaHeight` instead of taking 90% of an aspect-dependent footer. Both therefore author at 132 ref px, above the 112 px floor.
+2. **Where:** `D:\eoa-codex-ui-panels`, branch `codex/ui-panels-1075-1078`; one-file diff `Assets/_Modules/Village/Hero/RaidDeployScreen.cs`.
+3. **Not done:** readiness/deployability logic, glow geometry, the allow-list, oracle, gate, capture, commit and push were untouched.
+4. **Mismatch / could not find:** none in the current seam; the two fractional button bands were still present exactly as ticketed.
+5. **Verification:** `git diff --check` clean; fixed-height structural check true; braces **41/41**, NUL **0**. Fresh resolved capture numbers remain for the lead's Unity gate.
+
+### WO-1076 - Rumor Board Close reserve
+
+1. **What landed:** **REFUSAL / ALREADY SHIPPED.** No new diff. Current source already computes the detail pane floor from the shared Close's measured anchor plus canonical pixel height, then grows upward rather than back into that reserved band.
+2. **Where:** shared source commit `a2162f17d` (`fix(ui): RumorBoard + RealmMap stop overlapping the Close...`); inspected in `D:\eoa-codex-ui-panels` at `Assets/_Modules/Village/Hero/RumorBoardPanel.cs`.
+3. **Not done:** no duplicate geometry change, allow-list, oracle, gate, capture, commit or push.
+4. **Mismatch / could not find:** the ticket's proposed fix already exists as `CloseReserveTopFraction`; the ticket was minted from the older `Builds/wo1060-capture.log`, not the current source state.
+5. **Verification:** source reserve call and implementation found; braces **78/78**, NUL **0**. The lead should rerun the capture to reconcile the stale 18 findings before changing this file again.
+
+### WO-1077 - EndState Repair-All excluded from dismiss catcher
+
+1. **What landed:** banners with a Repair-All CTA now parent `TapDismiss` to the report well instead of the full chrome root. Tap-dismiss remains over the report, while the separately owned CTA band is outside its geometry; banners without a CTA retain the original whole-panel catcher.
+2. **Where:** `D:\eoa-codex-ui-panels`, branch `codex/ui-panels-1075-1078`; one-file diff `Assets/_Modules/Village/UI/EndState/EndStateView.cs`.
+3. **Not done:** no `LayoutOracle` exclusion, allow-list change, CTA action/price logic, gate, capture, commit or push. This takes ticket path (a), as explicitly ruled.
+4. **Mismatch / could not find:** source proved the prior safety claim was z-order only (`SetAsFirstSibling`), which cannot satisfy the geometric oracle. The catcher is now separated geometrically instead.
+5. **Verification:** `git diff --check` clean; Repair-All parent structural check true; braces **173/173**, NUL **0**. Raycast winner and resolved rectangles remain for the lead's capture.
+
+### WO-1078 - dialogue choices no longer covered by TapAdvance
+
+1. **What landed:** the redundant body-sized `TapAdvance` overlay is removed. Tap-to-advance remains on the prose scroll viewport through its existing `vpBtn.onClick -> OnBoxTapped`; `ResizeToContent` already ends that viewport above the separately owned options band.
+2. **Where:** `D:\eoa-codex-ui-panels`, branch `codex/ui-panels-1075-1078`; one-file diff `Assets/_Modules/HUD/DialogueView.cs`.
+3. **Not done:** no `LayoutOracle` exclusion, allow-list change, option-row geometry, Close ordering, gate, capture, commit or push. This takes ticket path (a), as explicitly ruled.
+4. **Mismatch / could not find:** the ticket described shrinking `TapAdvance`, but current source already had a second, correctly scoped prose-viewport button invoking the same handler. Keeping both created two controls for one action; removing the redundant overlay preserves behavior with the smaller blast radius.
+5. **Verification:** `git diff --check` clean; no `new GameObject("TapAdvance"` remains; viewport handler check true; braces **109/109**, NUL **0**. Option raycast winner and resolved rectangles remain for the lead's capture.
+
+**Batch note:** WO-1163 remains isolated in `D:\eoa-codex-1163`; none of its files were touched. The four UI tickets do not modify `LayoutOracle.cs`, `UICaptureLaunch.cs`, `ElarionUiKit.cs`, or any WorkOrder status line.

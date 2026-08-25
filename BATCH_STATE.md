@@ -1,6 +1,6 @@
 # BATCH_STATE — the live handoff. Read this FIRST, every time.
 
-**Last written:** 2026-08-24 (later) by the CLI lead. ⭐ **NEW since you last saw it: WO-1177 is COMMITTED (`2c3ed6c24`) AND DEPLOYED, the migration RAN — so WO-1163 IS UNBLOCKED and has been waiting all night.** Batch 1 is fully closed; there are now **SEVEN file-disjoint seats free**. All of it is in the block directly under the ACTIVE table — it supersedes the older WO-1177 correction beneath it.
+**Last written:** 2026-08-24 (later) by the CLI lead. ⭐ **NEW since you last saw it: WO-1177 is COMMITTED (`2c3ed6c24`) AND DEPLOYED, the migration RAN — so WO-1163 IS UNBLOCKED and has been waiting all night.** Batch 1 is fully closed; there are now **SEVEN file-disjoint seats free**. ⭐ **ALSO NEW: BATCH 7 — four panel tickets (WO-1075/1076/1077/1078) minted after the last state file went out; the lane has never seen them, and all four run IN PARALLEL.** All of it is in the blocks directly under the ACTIVE table — it supersedes the older WO-1177 correction beneath it.
 
 > ## ⛔ THE PROTOCOL
 > 1. **Read this file at the START of every batch, and again before starting any NEW ticket inside one.**
@@ -46,6 +46,81 @@
 |---|---|---|---|
 | **Batch 1** (Codex) | **WO-1177** → **WO-1178** | `api/_lib/purchase-catalog.js`, `api/purchases/quote.js`, `test/purchases.quote.test.js` · then `tools/` | ⛔ **ONE SEAT, SEQUENTIAL.** WO-1069 is **DONE** — landed `6bb61a810`. |
 | **Batch 4** (Codex) | **WO-1163** · **WO-917 Phase B** · **WO-1179 core** | catalog/data · `HudModelProducers.cs` + action-slot builder · `SmartEnemySpawner.cs`/`WaveManager.cs` | ⛔ **WO-1161 needs NO edit** — already fixed 08-23, both copies byte-identical. |
+| **Batch 7 — PANELS** (new) | **WO-1075** · **WO-1076** · **WO-1077** · **WO-1078** | `Village/Hero/RaidDeployScreen.cs` · `Village/Hero/RumorBoardPanel.cs` · `Village/UI/EndState/EndStateView.cs` · `HUD/DialogueView.cs` | ⭐ **FOUR PARALLEL SEATS — one file each.** Minted AFTER the last state file went out; the lane has never seen them. Full detail in the Batch 7 section directly below. |
+
+### 🆕 BATCH 7 — FOUR PANEL TICKETS THE DEV LANE HAS NEVER SEEN (minted 2026-08-24, UI seat)
+
+⭐ **These four were minted AFTER the last state file travelled, so nothing about them has reached the
+lane.** All four are **READY TO IMPLEMENT** (markers verified canonical at source, 2026-08-24), all four
+are children of **WO-1060**, and all four target a **different file**.
+
+⭐ **ALL FOUR CAN RUN IN PARALLEL — one file each, no shared surface.**
+
+| WO | Panel | File it owns | Findings |
+|---|---|---|---|
+| **WO-1075** | `RaidDeployScreen` — deploy footer falls under the touch floor | `Assets/_Modules/Village/Hero/RaidDeployScreen.cs` | **4** SUB-TOUCH-FLOOR |
+| **WO-1076** | `RumorBoardPanel` — the shared Close buries **Accept AND Track** | `Assets/_Modules/Village/Hero/RumorBoardPanel.cs` | **18** (4 overlap + 14 button-over-text) |
+| **WO-1077** | `EndStateView` — full-panel tap-dismiss covers the **Repair All** CTA | `Assets/_Modules/Village/UI/EndState/EndStateView.cs` | **3** BUTTONS OVERLAP |
+| **WO-1078** | `DialogueView` — `TapAdvance` covers **every option row** | `Assets/_Modules/HUD/DialogueView.cs` | **18** BUTTONS OVERLAP |
+
+⭐ **Every measurement in these four came from `Builds/wo1060-capture.log`.** They are **captured data,
+not inferred** — each ticket cites its own line range in that log (1075 → `:17596-17632`,
+1076 → `:17128-17332`, 1077 → `:17344-17368`, 1078 → `:17380-17584`). ⛔ **Do not re-derive a number by
+reading the source; read it off the log, and prove the fix from a FRESH capture.**
+
+### ⛔ The pins on Batch 7
+
+- ⚠ **WO-1076 — the Rumor Board region is `193.6 x 112`, NOT the rounded `194` that appears in WO-1060's
+  prose.** The oracle emits **193.6**; the round-up is WO-1060's own ruling text and it is wrong.
+  ⛔ **And there are TWO buried buttons, not one — `ObsBtn_Accept` AND `ObsBtn_Track`** (Track shares
+  **139.2 x 112**). A fix that clears only Accept leaves the panel red.
+- ⛔ **THE `LayoutOracle` ALLOW-LIST STAYS AT TWO IN ALL FOUR.** `TouchBaseline`
+  (`Assets/Editor/UICaptureLaunch.cs:3771`) keeps exactly its two entries — **`ArmyMuster`** and
+  **`EquipDrawer`**. ⛔ **Nobody extends it.** Owner ruling 2026-08-24 (batch 2, ruling 9):
+  *"Do not celebrate creating a smoke alarm by taking the batteries out when it starts beeping."*
+  Adding a panel to it **fails the ticket**.
+- ⛔ **WO-1075 shares its file with WO-823 Phase E** (`RaidDeployScreen.cs:477` / `:526`, the duplicate
+  `_vm.DeployableCount` checks). **WO-1075 owns `BuildDeployBar` geometry ONLY** — different silo, same
+  file. ⚠ If WO-823 Phase E is live, coordinate before touching anything outside `BuildDeployBar`.
+- ⚠ **WO-1077 is DISPUTED at source.** `EndStateView.cs:720` documents the layering as deliberate
+  (WO-672) and `:726` sends the catcher behind the CTA, so the raycast may already resolve correctly.
+  **The oracle is geometric and cannot see sibling order.** ⛔ §12 applies: **prove from a capture which
+  control receives the tap at the CTA centre** before deleting dismiss-anywhere behaviour.
+- ⚠ **WO-1078's failure class has already shipped once** — `DialogueView.cs:289` records an F8 finding of
+  exactly this shape, fixed with `SetAsLastSibling` on the **Close only**; the option rows were never
+  addressed. ⛔ A z-order-only fix leaves all 18 findings red — **geometry must change.** ⛔ Leave the
+  `:289` `SetAsLastSibling` alone; it fixed a real finding.
+
+### ⛔⛔ WO-1077 AND WO-1078 BOTH OFFER A TOOL FIX. **IT IS A LEAD CALL. THE DEV LANE FIXES THE PANEL.**
+
+Both tickets observe — correctly — that `LayoutOracle.cs:141` already excludes graphic-less buttons from
+the **BUTTON OVER TEXT** assert (`if (!HasVisibleGraphic(b)) continue;`) but **not** from **BUTTONS
+OVERLAP**, and that extending that one exclusion would close **all 3** of WO-1077's findings and **all
+18** of WO-1078's — **21 of the 43 reds in a single edit.**
+
+> ⛔ **That is a LEAD call about the TOOL, not a call about the game. The dev lane fixes THE PANEL, not
+> the oracle.** Take **path (a)** — the geometry fix — on **both** tickets. It is the option that cannot
+> weaken the gate.
+
+⚠ **The argument against the tool fix is real, not procedural:** a fully transparent `Image` keeps
+`raycastTarget` on, so a clear-image catcher **genuinely does steal taps**. Path (b) would make the
+oracle blind to a defect that ships. ⛔ **And a tool-rule change is NOT an allow-list entry** — different
+decision, different owner; it must not be smuggled in as one. If the lead ever does rule path (b), it is
+**ONE edit coordinated across both tickets** — never two seats in `LayoutOracle.cs` at once.
+
+### ⚠ NO ACCEPTANCE CRITERION MAY DEPEND ON HUE
+
+**The owner is red/green colourblind.** ⛔ Never write, and never verify against, a check that turns on a
+colour. Every criterion in these four is already a **pixel measurement, a finding count, or a raycast
+identity** — keep it that way. ⭐ Judge by **position, size, geometry, or the greyscale check.**
+
+### ⚠ ONE CONTRADICTION ACROSS THE FOUR, and it is arithmetic
+
+Each ticket computes its own marker drop **from the same baseline of `UI_TOUCH_FAIL x43`** — 1075 says
+43 → 39, 1076 says 43 → 25, 1078 says 43 → 25. ⛔ **Those cannot all hold at once if the tickets land
+together.** ⭐ **Treat the per-panel finding count as the binding number** (4 / 18 / 3 / 18), and read the
+repo-wide total off a **fresh** capture at the time your ticket lands, not off the number written in the
+spec. ⚠ Say in the handback which baseline you actually measured against.
 
 ### ⭐⭐ 2026-08-24 (later) — **WO-1163 IS UNBLOCKED. IT HAS BEEN WAITING ALL NIGHT. START IT NOW.**
 

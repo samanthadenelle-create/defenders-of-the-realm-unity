@@ -452,8 +452,9 @@ namespace DeNelle.Village.Hero
             // Honesty pass 2026-08-09: removed the "Auto Recommend" stub (toast-only, no
             // loadout AI). Full-width BEGIN ASSAULT — the army is always the full deployable
             // roster on the battleground tray. Quiet "Army ready" peek stays as optional info.
-            ElarionUiKit.Button(footer, "Army Ready?", ElarionUiKit.ButtonKind.Quiet,
-                new Vector2(0.00f, 0.05f), new Vector2(0.28f, 0.95f), OnAutoRecommend);
+            var readyBtn = ElarionUiKit.Button(footer, "Army Ready?", ElarionUiKit.ButtonKind.Quiet,
+                new Vector2(0.00f, 0.50f), new Vector2(0.28f, 0.50f), OnAutoRecommend);
+            SeatFooterCtaAtCanonicalHeight(readyBtn);
 
             // DEPLOY — the big glowing primary CTA. WO-839 #5: the old DeployGlow was a
             // flat gilt RECT deliberately larger than the button on every side
@@ -469,13 +470,26 @@ namespace DeNelle.Village.Hero
 
             // WO-932: "BEGIN ASSAULT" — distinct from in-raid ground DROP of troops.
             var deployBtn = ElarionUiKit.Button(footer, "BEGIN ASSAULT", ElarionUiKit.ButtonKind.Confirm,
-                new Vector2(0.32f, 0.05f), new Vector2(0.985f, 0.95f), OnDeploy);
+                new Vector2(0.32f, 0.50f), new Vector2(0.985f, 0.50f), OnDeploy);
+            SeatFooterCtaAtCanonicalHeight(deployBtn);
             // WO-839 #6: scouting stays the default (GateDeployAtZeroTroops=false). Either
             // way the WO-820 readiness gate upstream (RaidEntryGate / ArmyReadiness.Compute
             // at the HUD button + selection grid) stays the ONE authority — this screen
             // never re-derives or bypasses readiness.
             bool troopsOk = !GateDeployAtZeroTroops || (_vm != null && _vm.DeployableCount > 0);
             if (deployBtn != null) deployBtn.interactable = _vm != null && _vm.CanDeploy && troopsOk;
+        }
+
+        // WO-1075: footer height changes with aspect, so a vertical fraction can fall below
+        // the mobile touch floor. Pin both actions to the canonical pixel height instead.
+        private static void SeatFooterCtaAtCanonicalHeight(Button button)
+        {
+            if (button == null) return;
+            var rt = button.transform as RectTransform;
+            if (rt == null) return;
+            float half = ElarionUiKit.CanonCtaHeight * 0.5f;
+            rt.offsetMin = new Vector2(rt.offsetMin.x, -half);
+            rt.offsetMax = new Vector2(rt.offsetMax.x, half);
         }
 
         private void OnAutoRecommend()
