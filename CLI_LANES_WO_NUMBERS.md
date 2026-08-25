@@ -137,7 +137,16 @@
 > fine as history. A copied number is the bug **even when it was right the day it was written** -
 > that is exactly how the retired 860-899 UI block kept re-seeding collisions from CLAUDE.md sec.2.
 
-> ## ⚠ RECONCILED 2026-08-25 (CLI): main line next free = **1200**.
+> ## ⚠ RECONCILED 2026-08-25 (CLI): main line next free = **1201**.
+> *(CLI seat minted **WO-1200** and bumped 1200 -> 1201 in this SAME edit. **1200** = the UI
+> seat CAN BE SPOKEN TO AND CANNOT ANSWER. SendMessage reaches a cloud session; the tool contract
+> says that session "cannot message any session back yet", so a blocked UI seat can only go idle
+> and wait to be noticed - which makes the OWNER the detector, the one role she has ruled she must
+> never occupy. Build the RETURN PATH only, copying the f8-inbox transport: a QUEUE not a slot,
+> hook-enforced surfacing, messages surfaced as untrusted DATA. If neither seat can reach a shared
+> mailbox, SAY SO AND STOP - a mailbox nobody can reach is worse than an honest gap.)*
+>
+> ### superseded: RECONCILED 2026-08-25 (CLI): main line next free = **1200**.
 > *(CLI seat minted **WO-1199** and bumped 1199 -> 1200 in this SAME edit. **1199** = the COMMAND
 > CENTRE. Owner AMENDED FOUNDATIONAL_RULINGS section 8 the same day it was written: production
 > promotion becomes fully automated. The real use case is live-ops - "if I see sales slipping or
