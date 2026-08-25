@@ -114,77 +114,56 @@ must therefore be expressed as a **discount applied to an authored price**, neve
 ⛔ Editing anchors to run a sale breaks the mirror test and needs a client ship - which defeats the
 entire purpose.
 
-### STOP THE STORE MIRROR - TERMINAL OUTPUT, NOT A UI
+### STOP THE STORE MIRROR - `command-centre -Store`, four columns
 
-Owner, 2026-08-25: *"I should have a screen that reflects store at that moment in real time."*
-Then, immediately: **"I don't need the UI."**
+Owner, 2026-08-25: *"I should have a screen that reflects store at that moment in real time"* ->
+*"I don't need the UI"* -> **"just the packs, MSRP and sale price and percentage."**
 
-⭐ **So this is `command-centre -Store` printing to the console. No web page, no in-game screen, no
-design pass, no UI seat, no capture to open.** That is a large scope reduction and it is deliberate -
-the value is in the ANSWER being one command away, not in how it is drawn.
+⭐ **That is the whole output. Do not add columns.**
 
-Print a plain ASCII table. Something like:
+    STORE  2026-08-25 14:52 UTC  production
+    PACK                      MSRP     SALE     OFF
+    hearth-spark             $4.99        -       -
+    impulse-wood-medium      $2.99    $2.39     20%
+    founders-vow            $49.99        -       -
 
-    STORE AS OF 2026-08-25 14:52 UTC  |  production  |  viewing as: <no wallet>
-    SKU                 PRICE      WAS      SAVE   SELLABLE  REASON
-    hearth-spark        $4.99        -         -   yes       -
-    impulse-wood-med    $2.39    $2.99     $0.60   yes       20% shortfall discount
-    founders-vow       $49.99        -         -   NO        sales are not open on this network
-    PROMOTION: none active
+⚠ **A pack with no SALE simply has no sale.** If a pack is not sellable to the viewer it comes back
+with no price at all - that absence is visible in the table and needs no extra column to explain it.
 
+#### The one rule that decides whether this helps or lies
 
-**This is the SEE verb made concrete, and its absence is what cost the most time today.** Neither the
-owner nor the lead could answer "what does the store show right now." It was inferred from source,
-from HTTP probes, and finally from a screenshot of an env-var screen. That question should be one
-screen away.
+**It renders from the LIVE quote endpoint - the same call the game makes.**
 
-#### STOP THE ONE REQUIREMENT THAT DECIDES WHETHER THIS IS USEFUL OR HARMFUL
+⛔ It must NOT read `packs.json`, `USD_ANCHORS`, or any local config. The moment it does, it becomes
+another copy of a fact that already lives in three places, it drifts, and it confidently prints a
+store that does not exist - this repo's dominant failure aimed at the surface the owner would trust
+most.
 
-**The mirror MUST render from the LIVE quote endpoint - the same call the game makes.**
+⭐ **If the table and the game disagree, the table is WRONG BY CONSTRUCTION**, because both answers
+came from the server. That property is the entire value.
 
-⛔ It must NOT read `packs.json`, `USD_ANCHORS`, or any local config to build its view. The moment it
-does, it becomes **another copy of a fact that already exists in three places**, it will drift, and it
-will confidently show the owner a store that does not exist. That is this repo's dominant failure mode
-pointed directly at the surface she would trust most.
+#### Whose eyes it looks through
 
-⭐ **If the mirror and the game disagree, the mirror is WRONG BY CONSTRUCTION** - because the game's
-answer came from the server and the mirror's did too. That property is the entire value.
-
-#### It must be able to look through someone else's eyes
-
-⚠ Sellability is **per-wallet**: `walletAllowed` passes the owner unconditionally BEFORE
-`MAINNET_SALES_ENABLED` is consulted. So the owner's own view is the ONE view that cannot tell her
-what a player sees. The mirror must preview as:
-
-- **no wallet** - a browsing guest,
-- **an arbitrary wallet address** - a normal player,
-- **the owner's wallet** - what she sees today.
-
-⭐ **That single control answers the question this project could not answer all of 2026-08-25**: is
-the store priced for anyone other than her.
-
-#### What it prints
-
-- every SKU on the shelf, in shelf order, with the **effective** price and the saving (WO-1198),
-- **sellable / not sellable, with the server's worded reason** - not a colour, not a tick,
-- whether a promotion is **active right now**, and its start and end in the owner's local time,
-- the banner text exactly as a player would see it,
-- and, plainly, **whether this reflects production or a preview deployment.**
+Prices are **per-wallet**: `walletAllowed` passes the owner unconditionally BEFORE
+`MAINNET_SALES_ENABLED` is consulted, so her own view is the ONE view that cannot show her what a
+player sees. Default to **no wallet**; accept an optional address to view as someone specific. The
+header line says which.
 
 #### It fails LOUD, never stale
 
-⛔ If the mirror cannot reach the server, it says so and renders NOTHING. It must never fall back to a
-cached or locally-computed view. A store mirror showing a state that is not real is worse than no
-mirror - the harness that "re-authored the panel it photographed" cost a morning today by exactly this
-mistake, and this screen would make the same error about money.
+⛔ Cannot reach the server -> print the failure, exit non-zero, print NO table. Never a cached or
+locally-computed shelf. A harness that re-authored the panel it photographed cost a morning today by
+exactly this mistake, and this would make the same error about money.
 
 #### Acceptance
 
-1. At `startsAt - 1 minute` it prints full price; run again at `startsAt + 1 minute` and it prints the
-   sale. ⭐ Prove the schedule with the clock, not with a config read.
-2. Previewing as a non-owner wallet reflects `MAINNET_SALES_ENABLED` truthfully.
-3. Killing the endpoint produces a visible failure and a non-zero exit, never a stale shelf.
-4. ⛔ Grep proves the mirror reads NO local price source.
+1. At `startsAt - 1 minute` it prints no SALE; run again at `startsAt + 1 minute` and the SALE and OFF
+   columns are populated. ⭐ Prove the schedule with the clock, not by reading the config that set it.
+2. Run with no wallet and with a non-owner address - the output reflects `MAINNET_SALES_ENABLED`
+   truthfully rather than the owner's privileged view.
+3. Killing the endpoint yields a visible failure and a non-zero exit, never a stale table.
+4. ⛔ Grep proves it reads no local price source.
+5. ASCII-only, and the OFF column is a NUMBER - never a colour, never a bar.
 
 ### What SEE needs
 
