@@ -86,6 +86,7 @@ namespace DeNelle.Editor.Regression
                 Case(failures, "tripwire-wiring", () => Case2_TripwireWiringLint(failures));
                 Case(failures, "seat-precedence", () => Case3_SeatPrecedence(failures));
                 Case(failures, "starter-shield-key", () => starterSummary = Case4_StarterShieldKey(failures));
+                Case(failures, "staff-neutral-default", () => Case5_StaffNeutralDefault(failures));
             }
             catch (Exception ex)
             {
@@ -208,6 +209,32 @@ namespace DeNelle.Editor.Regression
                 "the scene-load registry probe is gone - candidate A can no longer be discriminated");
             Require(failures, src, "Quaternion.Euler(fo.eulerRot)",
                 "the fullOverride seat no longer applies the authored Offset Forge rotation");
+        }
+
+        // WO-970 residual: once WeaponBoundsOrient learned to put a Z-long staff on +Y,
+        // the old +90Y staff default became a stranded compensation. Keep the staff
+        // neutral without erasing the independently authored wand calibration.
+        private static void Case5_StaffNeutralDefault(List<string> failures)
+        {
+            if (!File.Exists(EquipSrc))
+            {
+                failures.Add("[staff-neutral-default] source not found: " + EquipSrc);
+                return;
+            }
+
+            string src = Regex.Replace(File.ReadAllText(EquipSrc), @"//[^\r\n]*", "");
+            MatchCollection staffDefaults = Regex.Matches(src,
+                @"_staffGripEuler\s*=\s*new\s+Vector3\s*\(\s*0f\s*,\s*0f\s*,\s*0f\s*\)");
+            if (staffDefaults.Count != 1)
+                failures.Add("[staff-neutral-default] expected exactly one neutral _staffGripEuler default; found " +
+                             staffDefaults.Count + ". The retired +90Y compensation must not return.");
+
+            Require(failures, src, "_wandGripEuler  = new Vector3(0f, 90f, 0f)",
+                "the independent wand +90Y calibration changed with the staff repair");
+            Require(failures, src, "case WeaponClass.Staff:  return _staffGripEuler;",
+                "staff no longer consumes its explicit neutral calibration");
+            Require(failures, src, "return Staff(\"staff_A\");",
+                "the shipped staff_A fallback no longer routes through the Staff weapon definition");
         }
 
         // =====================================================================

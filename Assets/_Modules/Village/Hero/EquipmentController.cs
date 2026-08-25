@@ -617,7 +617,9 @@ namespace DeNelle.Village
         // NEEDS-CAPTURE: staff/wand/mace exact forward-lean (0 vs -25) confirmed by the build capture;
         // 0 tilt is the safe neutral for a symmetric shaft. These remain Inspector-tunable + CANON
         // (never auto-overwritten). Any per-mesh delta still layers on top via offsets.json.
-        [SerializeField] private Vector3 _staffGripEuler = new Vector3(0f, 90f, 0f);
+        // WO-970 residual: the former +90Y compensated for the old yaw-only bounds solve.
+        // The geometry authority now seats the staff long axis on +Y, so the safe default is neutral.
+        [SerializeField] private Vector3 _staffGripEuler = new Vector3(0f, 0f, 0f);
         [SerializeField] private Vector3 _wandGripEuler  = new Vector3(0f, 90f, 0f);
         [SerializeField] private Vector3 _axeGripEuler   = new Vector3(-25f, 90f, 0f);
         [SerializeField] private Vector3 _maceGripEuler  = new Vector3(0f, 90f, 0f);
