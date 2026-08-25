@@ -139,6 +139,61 @@ into the tickets.** It can proceed:
 
 ---
 
+---
+
+# ⭐ THE CADENCE — when the two standing agents run (owner directive, 2026-08-24)
+
+> *"i told you two agents one clearing one feeding"* · *"not you, you are CLI — you delegate and own
+> the gate"* · *"agents do the work"* · *"you verify and orchestrate"*
+
+⛔ **THE LEAD DOES NOT DO THIS WORK BY HAND.** On 2026-08-24 the lead wrote both roles into this
+document and then ran neither, doing status lines and batch composition manually instead. ⚠ **The
+cost was measurable: `BOARD.html` was STALE at HEAD** despite being regenerated inside **34 commits**
+that day. Doing it by hand meant doing it inconsistently — which is the whole reason the roles exist.
+
+⭐ **This is the same failure the repo keeps producing in other forms: a mechanism built and never
+called.** Seven were found in one day (`WalletService.Disconnect`, `SetWalletService` ×2, `founderOnly`,
+the repair HUD seam, `MonthlyCardService.ActivateCard`, the schema-parity gate). These two agents were
+number eight, and the lead built them.
+
+## The lead's lane — all four, nothing else
+
+**VERIFY** at source · **GATE** (marker on a fresh log, never an exit code) · **COMMIT** by explicit
+path (sole committer) · **HOLD THE THROUGH-LINE** with the owner.
+
+⛔ Not: writing tickets, editing status lines, composing batches, or doing the deep read. **Those are
+agent work.** If the lead is typing a ticket body, an agent should be.
+
+## When each agent fires
+
+| Agent | Fires |
+|---|---|
+| **CLEARING** (status reflection) | ⭐ **After every gate-green commit wave** — the moment work lands is the moment its Status line is wrong. Also at session start, and before any board read the owner will act on. |
+| **FEEDING** (batch selection) | ⭐ **The moment a batch is handed out** — not when it returns. The next batch must be ready *before* the lane goes idle, and the disjointness check must run **BEFORE** a batch ships, never after. ⚠ On 2026-08-24 it ran after, and found a collision **inside a batch already handed to Codex**. |
+
+⚠ **Neither is one-shot.** Agents do not persist, so "standing" means **the lead re-spawns them at
+each cadence point.** A cadence that depends on the lead remembering is a cadence that lapses —
+which is exactly what happened. **If in doubt, re-spawn: a redundant sweep is cheap, a stale board is
+not.**
+
+## The two briefs that must not be softened
+
+- ⛔ **CLEARING sweeps the WHOLE BUCKET, never a date slice.** A date-scoped sweep found 6 drifts; a
+  whole-bucket review found **7 more**, two wrong since the previous day. ⚠ **A date-scoped sweep does
+  not merely miss old rows — it implicitly CERTIFIES them.**
+- ⛔ **FEEDING proves disjointness by listing FILE PATHS.** Never infer it from a silo name. That check
+  caught WO-1173/WO-1177 sharing `api/schema.sql`, and WO-1069/WO-1177 sharing
+  `api/_lib/purchase-catalog.js` **inside a live batch**.
+
+## The one thing the lead must never delegate
+
+⛔ **The gate.** One Unity lock, one committer. ⚠ And judge by **MARKER on a FRESH log** — on
+2026-08-24 three runners returned a verdict unrelated to reality inside ten minutes: two exited **0
+having done nothing**, one reported **`NO LOG`** while the gate had **passed**. Trusting the third
+would have discarded correct work.
+
+---
+
 # BATCH 4 - REBUILT after the owner's ten rulings (2026-08-24)
 
 ⚠ **The one-ticket batch 4 below the fold was composed BEFORE the rulings landed and is superseded.**
