@@ -492,6 +492,29 @@ nothing.
 
 ---
 
+### ⭐ AMENDED 2026-08-25 — the image is GENERIC ACTION CONTEXT, and that settles the count
+
+> **Owner, 2026-08-25, on the 24 per-quest briefs:** *"that's good since it's generic — just context
+> of the action the quest grants."*
+
+⭐ **This dissolves the apparent conflict between this section and `docs/QUEST_IMAGE_BRIEFS.md`.**
+That document briefs an image for EVERY quest; this section rules ONE ILLUSTRATION PER QUESTLINE.
+Both are right, because the brief describes **what kind of action the quest is about** — a smith at
+an anvil, a shepherd on a hillside — not a specific dramatised moment.
+
+Consequences, and they are the useful part:
+
+- ⛔ **A duplicate brief is NOT a defect.** Six near-duplicate clusters exist in that document (the
+  largest being wolf-bonding, flame-pup and aether-sprite, because eight authored bond quests fold
+  onto the three companion species that ship). ⛔ Do NOT "fix" them by inventing distinctions the
+  quests do not have.
+- ⭐ **The art bill is bounded by DISTINCT ACTION TYPES, not by quest count.** That is why the count
+  never runs away, and it is the real reason this section holds.
+- ⛔ **Do not brief an image by naming a specific character** unless the quest genuinely centres on
+  them. Types — an old smith, a soldier on a wall — travel across a questline; a named face does not.
+- ⚠ A quest whose action is genuinely unlike anything else earns its own image. The rule is one per
+  questline as the DEFAULT, not a cap.
+
 ## 12. A SHELF SHOWS PRICES; ELIGIBILITY IS CHECKED AT THE TILL.
 
 > **Owner, 2026-08-25:** the store's display-price path serves everyone — **no wallet, no session.**
