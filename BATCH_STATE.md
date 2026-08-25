@@ -126,6 +126,50 @@ parity surface. ⭐ **That judgement is correct and is now the instruction:** la
 not touch `DataRegression.cs`; site 6 is withdrawn entirely, so the contention is reduced to sites 2
 and 3, and **site 2 owns the registration.**
 
+### ⭐ OWNER RULING 2026-08-25 — WO-1171 §4 GROWS. Read before building it.
+
+> *"It doesn't ask me for any wallet. It doesn't give me any options. It defaults to Seeker, and I
+> wanted to default to Seeker, but it'd also be nice to have options. So maybe giving them an option
+> of which they want to connect - some kind of a multiconnect, whatever - or do they want to use the
+> Solana. I think having that option is smart."*
+
+⛔ **This CHANGES the lane. Do not build the narrow version.** WO-1171 §4 was scoped as "put the
+existing connect/disconnect somewhere the player can reach it." The owner is asking for **a wallet
+CHOICE**, with Seeker as the DEFAULT rather than the only outcome.
+
+**Why the player never sees a choice today - two causes, both verified at source:**
+1. `WalletSkinBootstrap.TryAutoResumeAsync` does a **SILENT reconnect at boot** whenever
+   `MwaSessionStore.HasStoredSession`. The chooser is never reached because the decision was already
+   made and sealed.
+2. There is **no player-facing disconnect**. `WalletConnectDialog` is **UXML**, which does not render
+   in player builds (that file's own comment concedes the real one "is code-built later"), and the
+   only working disconnect sits in `AdminOverlay` behind `IsAuthorised()`, which matches the OWNER
+   wallet - so it unlocks only for the wallet you would be trying to leave.
+
+**⛔ THE TECHNICAL ENVELOPE - do not promise outside it.** The ONLY real wallet transport in this
+product is **MWA on Android**, app-to-app, to an INSTALLED Android wallet app.
+- ⛔ Browser extensions (Phantom extension, Jupiter, Soul Flare) are **unreachable on every platform**
+  - MWA cannot see them and no web adapter exists.
+- ⛔ Desktop EXE: `SOLANA_SDK` is **not defined for the platform** (`ProjectSettings.asset:767` lists
+  it under Android only) - it falls to `StubWalletProvider`, a devnet mock that cannot sign.
+- ⛔ WebGL: same stub; the SDK has no WebGL support.
+
+⭐ **So "multiconnect" is achievable ONLY as: let MWA present its own chooser when more than one MWA
+wallet app is installed, plus a player-facing way to switch.** That is real and worth building. A UI
+that offers wallets we cannot reach would be a promise the transport cannot keep.
+
+**What the lane should deliver (design spec is being written by the UI seat in parallel):**
+- Seeker remains the DEFAULT - the owner was explicit.
+- A player-facing **switch / disconnect** so the sealed session can be released without clearing app
+  data. ⛔ Route via `CurrencySkinResolver`, never `WalletService` (asmdef).
+- Auto-resume must not silently foreclose the choice for a player who wants to change.
+  ⚠ It must still auto-resume by default - a returning player should NOT be re-prompted every launch;
+  that is the behaviour canon already calls correct.
+
+⚠ **Coordinate:** the UI seat has been sent the design brief for this. If the spec has not arrived when
+the lane reaches this row, build the DISCONNECT/switch mechanism and its placement, and leave the
+chooser presentation to the spec.
+
 ### 4. Site 3, PROD-014(b), WO-1171 §4 — UNCHANGED and unblocked.
 
 No question was raised on these three and no return has arrived. Their pins in the Batch 9 table stand:
