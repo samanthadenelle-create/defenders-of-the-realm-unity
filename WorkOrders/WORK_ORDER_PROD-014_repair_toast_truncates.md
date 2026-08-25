@@ -1,6 +1,6 @@
 # PROD-014 — The "NEED MORE TO REPAIR" toast truncates on both lines
 
-**Status:** READY — **but exactly ONE slice is takeable; the others are fixed, blocked, or elsewhere.** Per-slice state (2026-08-24):
+**Status:** READY - PARTIAL (board reconcile 2026-08-25). **Slice (b) CODE HAS LANDED (`10912de95`) but its acceptance capture is still OWED, and slices (c) + (d) remain blocked** - so the ticket stays in Ready. Per-slice state:
 - **(a) Label clipping — FIXED 2026-08-24** (`130ec84ab`: `HubRepairAffordance` now calls `FitBlock` at the legibility floor, copy moved to `WallRepairStrings.cs`, plus a new ellipsis detector). Awaiting **owner felt-verify only** — no code work here.
 - **(b) Acknowledge / close control — READY. THIS is the slice to take.** Component, UI primitive, handler and the selection-clearing path (`WallRepairController.CancelRepair`) are all specified in the body below.
 - **(c) Smallest-sufficient pack offer — ⛔ BLOCKED** until WO-1069 is integrated; it must reuse `PackStore.FocusShortfall`, never a second offer path.

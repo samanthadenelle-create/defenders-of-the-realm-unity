@@ -137,7 +137,14 @@
 > fine as history. A copied number is the bug **even when it was right the day it was written** -
 > that is exactly how the retired 860-899 UI block kept re-seeding collisions from CLAUDE.md sec.2.
 
-> ## ⚠ RECONCILED 2026-08-25 (CLI): main line next free = **1197**.
+> ## ⚠ RECONCILED 2026-08-25 (CLI): main line next free = **1198**.
+> *(CLI seat minted **WO-1197** and bumped 1197 -> 1198 in this SAME edit. **1197** = the board has
+> no bucket meaning "partially landed". THREE tickets in one reconcile pass now sit in Ready with
+> their best slices already built (1170 sites 1-3, PROD-014(b), 1073 architecture). A puller who
+> trusts the bucket and not the sentence re-does landed work - the same mechanism that got Batch 8
+> refused. Found by the board keeper, which reported it rather than picking a least-bad keyword.)*
+>
+> ### superseded: RECONCILED 2026-08-25 (CLI): main line next free = **1197**.
 > *(CLI seat reconciled TWO numbers in this SAME edit. **1195** was MINTED TO DISK EARLIER TODAY
 > (`WORK_ORDER_1195_a_resource_is_named_by_its_icon_never_a_letter.md`) and the banner was NOT
 > bumped with it - that is the exact rule the banner exists to enforce, broken by the lead. It is
