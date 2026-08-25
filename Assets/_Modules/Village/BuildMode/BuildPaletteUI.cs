@@ -1549,6 +1549,9 @@ namespace DeNelle.Village
                 // The collector variant IS the Lumber Mill — reuse its existing portrait rather
                 // than commissioning a second image of the same building.
                 { "collector_lumbermill", "lumbermill" },
+                // WO-1163 renamed the Food producer to Quarry, but its shipped visual remains
+                // Structures/farm. Keep the portrait tied to the real model across label changes.
+                { "collector_farm", "farm" },
             };
 
         private static Sprite ResolveEntryArt(CatalogEntry e)
