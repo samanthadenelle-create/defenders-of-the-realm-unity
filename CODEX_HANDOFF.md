@@ -1,3 +1,60 @@
+# ⭐⭐ NEXT UP — read this before starting anything (owner directive, 2026-08-24)
+
+> *"hold six, put codex on batch 1"*
+
+## ⛔ HOLD BATCH 6. Do not work `D:\eoa-codex-six`.
+
+**Batch 6 has not been selected.** The feeding agent is still running its disjointness pass, and
+⚠ **a worktree opened for an unselected batch is exactly the gap that agent exists to close** — it is
+how WO-1069 and WO-1177 ended up shipped together in one batch, colliding on one file. Park it.
+
+## ⭐ BATCH 1 IS THE CRITICAL PATH — and it is entirely unimplemented
+
+Verified at HEAD on 2026-08-24: `USD_ANCHORS['hearth-spark']` is **still `1.99`**
+(`api/_lib/purchase-catalog.js:84`), and `grep -ci discount` returns **0** across
+`purchase-catalog.js` and `api/purchases/quote.js`. Only the intake pass ever ran.
+
+⭐ **Four batch-5 tickets are queued behind these three.** Finishing batch 1 unblocks the longest
+queue on the board; adding a fifth parallel lane unblocks nothing.
+
+### The order, and it is not negotiable
+
+| # | WO | Why this position |
+|---|---|---|
+| 1 | **WO-1069** | ⛔ **ONE SEAT with WO-1177, SEQUENTIALLY.** Both edit `api/_lib/purchase-catalog.js` and both disturb `test/purchases.quote.test.js`. ⚠ Split across two seats, the second merges onto a moved anchor table and a moved test. |
+| 2 | **WO-1177** | Same seat, after 1069. Its `buildQuoteBody` change sits in the block 1069 reprices. |
+| 3 | **WO-1178** | Disjoint (`tools/`) — may run in parallel with the above, or after. |
+
+### All four intake blockers are ANSWERED — the tickets carry the rulings
+
+- **WO-1069** — ⛔ **do NOT modify `ShortfallPackOffer`.** Codex was right to refuse: the resolver
+  enforces WO-947 guardrail 1 and the ticket had asked for a violation. **The fix is DATA:
+  `hearth-spark` 1.99 → 4.99.** ⚠ It is `DEVNET_CANARY_SKU` (`:29`) — **re-check the quote/verify
+  test path against the new anchor**, or the canary asserts a price that no longer exists. Then add
+  the regression: **no impulse rung strictly dominated at its own USD anchor.**
+- **WO-1177** — ⭐ **stop trying to prove the shortfall.** A forged `reason` yields exactly what a
+  genuine one yields: **one discount per window.** ⛔ Build **no** attestation rail. **Window = 7
+  days**, server-recorded. The discount applies to `usd` **inside `buildQuoteBody`, before
+  `quoteAmount`** — the client never sees a pre-discount number.
+- **WO-1178** — the raw-invocation hole **cannot be closed**; the ticket no longer asks for it.
+  ⭐ Its most valuable half has nothing to do with editors: **the runner must assert the MARKER
+  instead of returning a bare exit code.**
+- **WO-1173 / WO-1072** stay sequenced behind WO-1177 — both touch the same file.
+
+⛔ **Cite `FOUNDATIONAL_RULINGS.md`; do not restate it** in code comments or ticket edits. A fact
+written twice is this repo's dominant failure mode, and one fresh instance was created today by the
+very process built to prevent it.
+
+## ⚠ Batch 4 continues in parallel — it is file-disjoint from batch 1
+
+`D:\eoa-codex-batch4` holds **WO-1163**, **WO-917 Phase B**, and **WO-1179's core**.
+⭐ **WO-1161 needs no edit** — verified byte-identical in both canonical copies, corrected 2026-08-23
+by `4f6dfc251`. Its banner was stale; the clearing agent is fixing it. ⚠ Its **§6 remains open**
+(`EchoCardVM.FaucetBuildingIdFor` still routes iron to `collector_forge`) and is a **separate change
+needing a captured run**.
+
+---
+
 # THE OPERATING LOOP (owner, 2026-08-24) - read this first
 
 ```
