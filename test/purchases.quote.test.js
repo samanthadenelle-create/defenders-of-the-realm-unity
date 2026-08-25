@@ -123,6 +123,27 @@ test('server USD anchors mirror EVERY canonical client price file exactly', () =
     }
 });
 
+test('no impulse rung is strictly dominated by another purchasable pack at the same USD anchor', () => {
+    const packs = JSON.parse(fs.readFileSync(
+        path.join(canonicalDir('StreamingAssets'), 'packs.json'), 'utf8')).packs;
+    const purchasable = packs.filter(pack => pack && pack.storeVisible !== false &&
+        pack.pricing && typeof pack.pricing.usd === 'number');
+    const grant = pack => pack.contents && pack.contents.economy || {};
+    const keys = ['wood', 'iron', 'food', 'crystals', 'coins'];
+    const dominates = (candidate, impulse) => {
+        const a = grant(candidate), b = grant(impulse);
+        return keys.every(key => Number(a[key] || 0) >= Number(b[key] || 0)) &&
+            keys.some(key => Number(a[key] || 0) > Number(b[key] || 0));
+    };
+
+    for (const impulse of packs.filter(pack => pack && pack.impulse === true)) {
+        const dominator = purchasable.find(candidate => candidate.sku !== impulse.sku &&
+            candidate.pricing.usd === impulse.pricing.usd && dominates(candidate, impulse));
+        assert.equal(dominator, undefined,
+            `${impulse.sku} is strictly dominated by ${dominator && dominator.sku} at $${impulse.pricing.usd}`);
+    }
+});
+
 // A named case for the two SKUs the mirror was blind to, so a future edit that
 // drops them fails on a line that says WHY, not just "different SKUs".
 test('the Monthly Ledger cards are quotable — 60 authored reward days need a price', () => {
