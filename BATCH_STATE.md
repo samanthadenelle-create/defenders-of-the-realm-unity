@@ -1424,3 +1424,225 @@ fetch's exit code.**
 ⛔ The success path remains ENTIRELY UNEXECUTED - ⭐ and FIX 1 is precisely the argument for why
 acceptance items 1/2/3/6 still require the live ops run: a defect that only appears at runtime, on a step
 that costs 25 minutes to reach, is exactly what a static audit cannot promise to catch twice.
+
+---
+
+## 📤 BATCH 12 - assignment set (2026-08-25, CLI lead)
+
+⚠ **Precedence note:** dated 2026-08-25 and appended at the END because this file is append-only by
+section. It supersedes nothing above it except where it names a lane explicitly.
+
+### The standing split - stated once, binding on every lane below
+
+⭐ **Codex writes the code in its own isolated worktree. The CLI lead verifies, gates, commits and
+pushes.** ⛔ Codex does not gate. ⛔ Codex does not commit. ⛔ Codex does not flip a ticket status.
+One Unity lock, one committer, both the lead's.
+
+### ⭐ THE ACCEPTANCE RULE - the one WO-1199 earned
+
+⛔ **A REFUSAL TEST IS NOT ACCEPTANCE.** Every lane below must prove the **SUCCESS path** - the thing
+working, not merely the guard declining. WO-1199 revision 2 is the proof of why: its static half is
+near-passing and its success path remains **ENTIRELY UNEXECUTED**, which is exactly how FIX 1 (a
+`vercel curl` refusal on every run) survived a full audit.
+
+⛔ Where a lane **genuinely cannot** prove the success path from the dev seat - it needs the Unity
+gate, a live deploy, a real DB, a headed capture, or an owner felt-verify - **name those items as
+OPS-OWNED, in writing, as a slice with the executor split.** ⛔ Do not leave them implied, do not
+leave them silently open, and do not claim them.
+
+---
+
+## STILL OPEN FROM BATCH 11 - ⛔ finish these before starting new lanes
+
+⛔ **Not restated here. Read the sections that already exist in THIS file.**
+
+- **WO-1199 revision 2** - see `## 2026-08-25 - WO-1199 REVISION 2 verdict: NEAR PASS, two one-line
+  fixes` above. Two one-line fixes: `--no-color` forwarded to the real curl binary, and the stale-index
+  false pass. Nothing else in that section is re-opened.
+- **WO-1163 R2** - see `## ⛔ WO-1163 R2 - BOUNCE BACK` above. The money bug (`packs.json` authors
+  `stone`, the Unity client binds only `food`, three live SKUs would grant nothing) plus the mirror law
+  amended to **FIVE** surfaces. Its six-item "WHAT THE LANE MUST DO" list stands as written.
+
+---
+
+## NEW LANES - priority order
+
+### LANE 1 - WO-1195: the build-screen cost strings
+
+⭐ **Now ROUTABLE.** The implementation spec is written, and its **section 4 delegates the one design
+decision to the implementer** verbatim (*"State the trade-off and the choice in your report"*).
+**No owner ruling is outstanding.** This closes the LANE 5 hold recorded in BATCH 11.
+
+⛔ **THIRTEEN copies of the cost formatter** - seven letter-form (`A1`-`A7`) plus six word-form
+(`B1`-`B6`) - **plus a fourteenth site that re-parses one of them**
+(`BuildingUpgradePanelMvvm.cs:1798-1820` splits B2's finished string and keyword-sniffs the tokens
+through a SECOND icon registry). They have already drifted **four** ways: compact vs raw numbers,
+crystals as `C` vs `*N`, zero as empty vs `"Free"`, and three different separators.
+
+⚠ **Addendum from the pipeline pass:** the drift is worse than a first read of the table suggests -
+`Assets/_Modules/Village/BuildMode/BuildStructureInfoPanel.cs:347` renders crystals as
+`"*" + c.crystals`, an **asterisk**, a **FOURTH** form of the same cost. The same cost renders three
+different ways across three files today.
+
+⛔ **Route them ALL through ONE formatter or the fix re-creates the bug.** `CostFormat` returns
+STRUCTURED PARTS, never a display string - a formatter that returns a string is precisely how site C
+ended up parsing one back. Icons resolve through the existing `concept-icons.json` resolver; ⛔ no
+second icon registry.
+
+---
+
+### LANE 2 - WO-1203: the board's dev-lane badge (and the badge-renderer blind spot)
+
+Small tooling lane. Read `WorkOrders/WORK_ORDER_1203_the_board_cannot_say_it_lives_in_a_dev_lane.md`
+(`**Status:** READY`), and read WO-1197 first - this is its direct successor.
+
+Two related defects in one change: the `--check` contradiction detector cannot tell a status line that
+NAMES the new sub-badge from one that CLAIMS a partially-landed slice, and there is no label meaning
+"built in a dev lane, not in this tree" - so WO-1163 and WO-1199 can only be labelled with something
+that lies. ⛔ No new bucket; a SECOND sub-badge in the existing mechanism.
+
+⚠ **Sequence it AFTER any other board work** - it edits the generator that every other board row flows
+through. ⛔ `tools/board_build.py` and `docs/BOARD.md` section 3b **must move in the SAME commit**, or
+the generator and its documented contract disagree the moment either lands alone.
+
+---
+
+### LANE 3 - the class findings
+
+⭐ Full per-row evidence: **`tmp/pipeline_candidates_b12.md`**. Take the rows from there; every claim
+in it was opened at source and is quoted at `file:line`.
+
+**C5 - eight in-code claims PROVEN FALSE, two of them DELETION HAZARDS. ⚠ Lead with these two.**
+A false comment that invites a deletion is worse than no comment at all.
+
+- `Assets/_Modules/Audio/AudioBootstrap.cs:163-167` (repeated `:234-238`) calls four battle-music
+  tracks *"four unreferenced tracks ... left unwired"* and wraps it in a ⛔ DO-NOT-FIX directive.
+  **All four are wired and live:** `Assets/_Modules/Village/Audio/BattleMusicManager.cs:107-126` names
+  every one (`CombatClipPaths`, `IntenseClipPaths`, `VictoryClipPaths`, `BossClipPaths`), `:132` is a
+  `[RuntimeInitializeOnLoadMethod]` DDOL singleton, `:532` loads them, and two are asserted by
+  `RegressionSuite.cs:134-135`. ⛔ **A seat trimming WebGL size deletes four live mp3s and silently
+  kills all battle/boss/victory music.** Its twin at `BattleMusicManager.cs:553-573` claims the files
+  are outside a `Resources/` folder; the migration already happened - `Assets/Audio/Music/Battle/` is
+  **empty** and the four normalized mp3s are in `Assets/Audio/Resources/Music/Battle/`. Two comments in
+  one subsystem give opposite, both-false accounts of the same four files.
+- `Assets/_Modules/Core/Diagnostics/DevClock.cs:28-34` warns that a time skip moves
+  **"EIGHT live consumers"** and numbers them 1..8.
+  `grep -rln "TimeSource\.NowUnixMs" --include=*.cs Assets/_Modules/` returns **20 files**. The missing
+  ones include `Village/Monetization/HarvestBoostService.cs` - a **purchased** harvest boost - plus
+  `Village/World/Camps/RaidCooldownService.cs`, `Village/Monetization/AdGateService.cs` and
+  `Village/Siege/SiegeClock.cs`. ⛔ The block exists precisely to enumerate what a dev skip perturbs,
+  and it under-reports a paid entitlement.
+
+The remaining six rows (`StructureAddressablesMigrator.cs:10-11`, `BuildPaletteUI.cs:501-505`,
+`RegressionSuite.cs:534-536`, `EnemyTypeVfxLibrary.cs:13-14`, `DungeonStatusService.cs:61-63`) are in
+the C5 table with their counter-evidence. All eight are **comment-only** corrections, zero behaviour
+change. ⚠ **Codex must RE-COUNT each one at HEAD rather than pasting the lead's numbers** - a pasted
+count is the exact failure being fixed. Best run LAST so it corrects a settled tree.
+
+**C1 - 172 silent catch blocks in runtime module code**, forbidden by CLAUDE.md section 12 (*"a catch
+that swallows without logging is forbidden"*). Brace-matched sweep of `Assets/_Modules/**/*.cs`:
+**709 catch blocks, 176 flagged, 4 cleared on read, 172 real**; **24** are risky (parse / catalog load /
+economy / network / UI construction), the other 148 are benign and ⛔ should be left alone. The 24
+cluster: **7 in ONE file on the money path** (`Assets/_Modules/Wallet/PurchaseEntitlementVerifier.cs` -
+smallest blast radius, highest value), **4** in `Core/Addressables/` (four loaders sharing one
+copy-pasted `found = false;` catch), **4** in `Village/Audio/`, 3 in `Village/Hero/`, 2 in `Pets/`.
+
+⚠ **Bonus shape:** `private static GameObject SafeFindWithTag(string tag)` is defined **16 separate
+times** (all 16 sites listed in `tmp/pipeline_candidates_b12.md`), plus inline variants. It is correct
+in every copy today - a consolidation candidate, not a bug, and it belongs behind the lanes above.
+
+**C2 - ⭐ a `CanonicalKeyCoverage` oracle is the real prize.**
+`Assets/Editor/Regression/ModifierKeyCoverageRegression.cs:6-19` already documents this exact defect
+(*"Newtonsoft SILENTLY DROPPED every one of them ... The Cathedral cost 5,500 wood and granted the mage
+NOTHING"*) and at `:20-21` calls itself *"deliberately GENERIC, not a list of the seven keys."*
+⛔ **It covers exactly ONE file - `building-tiers.json`. There are 66 canonical JSON files and no
+equivalent for the other 65.** ⛔ **This is the class that produced the `stone` money bug in WO-1163 R2.
+Generalising that one oracle closes it repo-wide.** ⚠ The oracle must bind by **reflection over the DTO
+type**, not by regex over source - a source regex false-positives on spaced generics
+(`public Dictionary<string, TypeOverrideDef> perType;`, `StructureDamageVisuals.cs:139`).
+
+**C3 - canonical data with NO reader, whose MIRROR is pinned by a gate.**
+`Assets/Editor/Regression/DataWebRegression.cs:151-160` declares `KnownSixMustStayMirrored`. Two of the
+six are orphans verified this session: `heart.json` - repo-wide grep in `.cs` returns exactly **one**
+hit, that regression line; no loader; its `"maxHp": 160` contradicts
+`Village/Heart/HeartController.cs:97` (`Range(0f, 100f)`, `_hp = 100f`). And `enemy-roles.json` - two
+hits, that regression line plus a *comment* at `Core/Enemies/EnemyTaxonomy.cs:79`; no loader, while the
+file authors player-facing `label` + `description` per role that never renders. ⚠ So a gate is spent
+asserting that files nothing reads stay byte-mirrored. Decide per file (wire / delete / `STALE:`
+banner); the mirror pin follows the decision. ⛔ The `heart.json` model conflict is an **owner** call -
+see BLOCKED in the candidates file.
+
+**C4 - `docs/reference/DEAD_CODE_REGISTRY.md` is a 708-line pre-triaged backlog nobody converted to
+tickets.** ~29 numbered rows, created 2026-08-16, last touched `f88a3e0f4` on 2026-08-17 - **9 days
+stale**, and itself an unasserted hand-maintained ledger. Four rows were verified still-true at source
+this session (they became R3, R4, R6 and R5). ⭐ **Name it now as batch 13's cheapest candidate source**
+- ⛔ but every row must be re-verified at source before minting; it predates nine days of commits.
+
+---
+
+### LANE 4 - the eight READY lanes (R1-R8)
+
+⭐ **Per-lane WRITE grants, READ-ONLY grants, `file:line` evidence, closability and shared-surface notes
+are all in `tmp/pipeline_candidates_b12.md`.** Take them from there, not from this summary.
+
+- **R1** - a failed real purchase logs NOTHING: 7 bare catches on the money path in
+  `Wallet/PurchaseEntitlementVerifier.cs`. Additive `FlowTrace` only. Collision-checked clean.
+- **R2 + R2b** - four Addressables loaders plus Village audio swallow catalog failures identically;
+  and every hero asset load pays TWO blocking `WaitForCompletion` catalog lookups. ⛔ Same files, so
+  per CLAUDE.md section 9 they are **ONE lane, ONE agent**.
+- **R3** - the structure-toughness clamp is written twice and the regression pins the copy nobody
+  calls. ⛔ Keep `WallSegment`'s `Faction` check (WO-853 section 9).
+- **R4** - ⭐ **call this one out by name: it is a real player-facing bug, not a hygiene lane.**
+  `HarvestSite._assignedWorkers` is never pruned and yield reads its raw `Count`, so a recalled or
+  destroyed Echo pays `YieldPerAssignedPet` **forever**. `UnassignPet` exists with **zero callers
+  outside its own file**, and the despawn path that now exists (`PetDeployer.DespawnEcho`,
+  `Assets/_Modules/Pets/PetDeployer.cs:442`) does not call it. Both fixes wanted: prune null entries,
+  and wire the recall. ⛔ Call into the WO-1108 one-owner lifecycle seam; never add a second recall path.
+- **R5** - daily-quest anti-drought weighting is authored and inert (three keys bound to nothing).
+  **Part A only.** ⛔ Part B (the recency term) is BLOCKED on a save-schema decision the lead owes.
+- **R6** - `MageMaxHpBonusPct` appears exactly once in the tree, its own declaration, while its comment
+  claims `HeroHealth` consumes it. One additive term plus the comment fix.
+- **R7** - WO-1195 routability, already promoted to LANE 1 above.
+- **R8** - the eight C5 comment corrections, already described under LANE 3.
+
+⚠ The **only** shared surface across the oracle-bearing rows is the `DataRegression.RunAll`
+registration line, which is ⛔ **COMMITTER-FENCED and OWED BY THE LEAD**
+(`ModifierKeyCoverageRegression.cs:45-46`). ⚠ **Two seats may now want a line in that file** - the Grok
+quest lane below is the other. ⛔ **Neither adds it.** The lead holds it.
+
+---
+
+## CLOSE
+
+### ⭐ Honestly rejected, so nobody re-hunts it
+
+⛔ **The canonical dual-copy seam is ALREADY asserted. Do not re-open it.**
+`Assets/Editor/Regression/DataWebRegression.cs:130-176` runs the byte-identity check with documented,
+reasoned exemptions. A `cmp` sweep across **all 66 canonical files** this session found drift in
+**exactly the exempted set and nothing else** - `armor.json` / `weapons.json` (exempted at `:162-175`,
+the Resources copy is deliberately a superset) plus `skr_*` / `battle_*` / `*.sample.json` (exempted at
+`:130-136`). The three Resources-only files are Resources-authored, not drift. And `packs.json` is now
+**fully bound** (`impulseSize`, `impulseResource`, `storeSection`, `orbTint` all resolve on
+`PackCatalog.cs`). **Nothing to do here.**
+
+### ⛔ Not in this batch - do not pick these up
+
+- ⛔⛔ **WO-1201 AND WO-1202 - BOTH ASSIGNED TO THE GROK SEAT.** WO-1202 (which Grok authored)
+  **folds WO-1201 in as its Phase A** and says so in its own text: *"implement 1201's migration as
+  Phase A of this ticket. Do not leave 1201 as a second competing pickup."*
+  ⛔ **If Codex also picks up 1201, two seats build the same typed-reward-list migration over the same
+  63 stages in the same two canonical `quests.json` copies** - the exact duplicate-work failure that
+  got Batch 8 refused. ⛔ **While that lane is live, Codex does not touch** `quests.json` (either copy),
+  the `QuestReward` type, `QuestService`, `QuestRewardBridge`, or `QuestCompletabilityRegression`.
+  ⭐ Worth naming as a good precedent while it runs: WO-1202 specs XP as **DERIVED** - type tier x
+  stage weight x chain depth - rather than 63 hand-authored values. That is the same anti-drift
+  discipline this batch's class findings are about; ⛔ a hand-maintained table with nothing asserting
+  it is this repo's dominant failure.
+- **WO-1200** - BLOCKED: no machine transport exists in either direction; the owner remains the courier.
+- **WO-1170 site 4 and site 5** - both **WITHDRAWN 2026-08-25**, as recorded in BATCH 11.
+
+### Return protocol - unchanged
+
+- ⭐ Results go in **`batch_results_state.md`**. ⛔ **Never in this file.**
+- **One isolated worktree per lane.**
+- ⛔ **Nothing committed. Nothing promoted. No ticket status flipped.**
