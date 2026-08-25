@@ -35,7 +35,7 @@
             "economy": {
               "wood": 128,
               "iron": 64,
-              "food": 53,
+              "stone": 53,
               "coins": 22
             }
           },
@@ -44,7 +44,7 @@
             "economy": {
               "wood": 320,
               "iron": 160,
-              "food": 128,
+              "stone": 128,
               "coins": 55
             }
           },
@@ -58,7 +58,7 @@
             "economy": {
               "wood": 136,
               "iron": 68,
-              "food": 56,
+              "stone": 56,
               "coins": 24
             }
           },
@@ -67,7 +67,7 @@
             "economy": {
               "wood": 340,
               "iron": 170,
-              "food": 136,
+              "stone": 136,
               "coins": 60
             }
           },
@@ -81,7 +81,7 @@
             "economy": {
               "wood": 144,
               "iron": 72,
-              "food": 59,
+              "stone": 59,
               "coins": 26
             }
           },
@@ -90,7 +90,7 @@
             "economy": {
               "wood": 360,
               "iron": 180,
-              "food": 144,
+              "stone": 144,
               "coins": 65
             }
           },
@@ -104,7 +104,7 @@
             "economy": {
               "wood": 152,
               "iron": 76,
-              "food": 62,
+              "stone": 62,
               "coins": 28
             }
           },
@@ -113,7 +113,7 @@
             "economy": {
               "wood": 380,
               "iron": 190,
-              "food": 152,
+              "stone": 152,
               "coins": 70
             }
           },
@@ -130,7 +130,7 @@
                 "economy": {
                   "wood": 160,
                   "iron": 80,
-                  "food": 65,
+                  "stone": 65,
                   "coins": 30
                 }
               },
@@ -150,7 +150,7 @@
                 "economy": {
                   "wood": 400,
                   "iron": 200,
-                  "food": 160,
+                  "stone": 160,
                   "coins": 75
                 }
               },
@@ -172,7 +172,7 @@
             "economy": {
               "wood": 168,
               "iron": 84,
-              "food": 68,
+              "stone": 68,
               "coins": 32
             }
           },
@@ -181,7 +181,7 @@
             "economy": {
               "wood": 420,
               "iron": 210,
-              "food": 168,
+              "stone": 168,
               "coins": 80
             }
           },
@@ -195,7 +195,7 @@
             "economy": {
               "wood": 176,
               "iron": 88,
-              "food": 71,
+              "stone": 71,
               "coins": 34
             }
           },
@@ -204,7 +204,7 @@
             "economy": {
               "wood": 440,
               "iron": 220,
-              "food": 176,
+              "stone": 176,
               "coins": 85
             }
           },
@@ -218,7 +218,7 @@
             "economy": {
               "wood": 184,
               "iron": 92,
-              "food": 74,
+              "stone": 74,
               "coins": 36
             }
           },
@@ -227,7 +227,7 @@
             "economy": {
               "wood": 460,
               "iron": 230,
-              "food": 184,
+              "stone": 184,
               "coins": 90
             }
           },
@@ -241,7 +241,7 @@
             "economy": {
               "wood": 192,
               "iron": 96,
-              "food": 77,
+              "stone": 77,
               "coins": 38
             }
           },
@@ -250,7 +250,7 @@
             "economy": {
               "wood": 480,
               "iron": 240,
-              "food": 192,
+              "stone": 192,
               "coins": 95
             }
           },
@@ -267,7 +267,7 @@
                 "economy": {
                   "wood": 200,
                   "iron": 100,
-                  "food": 80,
+                  "stone": 80,
                   "coins": 40
                 }
               },
@@ -287,7 +287,7 @@
                 "economy": {
                   "wood": 500,
                   "iron": 250,
-                  "food": 200,
+                  "stone": 200,
                   "coins": 100
                 }
               },
@@ -316,7 +316,7 @@
             "economy": {
               "wood": 208,
               "iron": 104,
-              "food": 83,
+              "stone": 83,
               "coins": 42
             }
           },
@@ -325,7 +325,7 @@
             "economy": {
               "wood": 520,
               "iron": 260,
-              "food": 208,
+              "stone": 208,
               "coins": 105
             }
           },
@@ -339,7 +339,7 @@
             "economy": {
               "wood": 216,
               "iron": 108,
-              "food": 86,
+              "stone": 86,
               "coins": 44
             }
           },
@@ -348,7 +348,7 @@
             "economy": {
               "wood": 540,
               "iron": 270,
-              "food": 216,
+              "stone": 216,
               "coins": 110
             }
           },
@@ -362,7 +362,7 @@
             "economy": {
               "wood": 224,
               "iron": 112,
-              "food": 89,
+              "stone": 89,
               "coins": 46
             }
           },
@@ -371,7 +371,7 @@
             "economy": {
               "wood": 560,
               "iron": 280,
-              "food": 224,
+              "stone": 224,
               "coins": 115
             }
           },
@@ -385,7 +385,7 @@
             "economy": {
               "wood": 232,
               "iron": 116,
-              "food": 92,
+              "stone": 92,
               "coins": 48
             }
           },
@@ -394,7 +394,7 @@
             "economy": {
               "wood": 580,
               "iron": 290,
-              "food": 232,
+              "stone": 232,
               "coins": 120
             }
           },
@@ -411,7 +411,7 @@
                 "economy": {
                   "wood": 240,
                   "iron": 120,
-                  "food": 95,
+                  "stone": 95,
                   "coins": 50
                 }
               },
@@ -431,7 +431,7 @@
                 "economy": {
                   "wood": 600,
                   "iron": 300,
-                  "food": 240,
+                  "stone": 240,
                   "coins": 125
                 }
               },
@@ -453,7 +453,7 @@
             "economy": {
               "wood": 248,
               "iron": 124,
-              "food": 98,
+              "stone": 98,
               "coins": 52
             }
           },
@@ -462,7 +462,7 @@
             "economy": {
               "wood": 620,
               "iron": 310,
-              "food": 248,
+              "stone": 248,
               "coins": 130
             }
           },
@@ -476,7 +476,7 @@
             "economy": {
               "wood": 256,
               "iron": 128,
-              "food": 101,
+              "stone": 101,
               "coins": 54
             }
           },
@@ -485,7 +485,7 @@
             "economy": {
               "wood": 640,
               "iron": 320,
-              "food": 256,
+              "stone": 256,
               "coins": 135
             }
           },
@@ -499,7 +499,7 @@
             "economy": {
               "wood": 264,
               "iron": 132,
-              "food": 104,
+              "stone": 104,
               "coins": 56
             }
           },
@@ -508,7 +508,7 @@
             "economy": {
               "wood": 660,
               "iron": 330,
-              "food": 264,
+              "stone": 264,
               "coins": 140
             }
           },
@@ -522,7 +522,7 @@
             "economy": {
               "wood": 272,
               "iron": 136,
-              "food": 107,
+              "stone": 107,
               "coins": 58
             }
           },
@@ -531,7 +531,7 @@
             "economy": {
               "wood": 680,
               "iron": 340,
-              "food": 272,
+              "stone": 272,
               "coins": 145
             }
           },
@@ -548,7 +548,7 @@
                 "economy": {
                   "wood": 280,
                   "iron": 140,
-                  "food": 110,
+                  "stone": 110,
                   "coins": 60
                 }
               },
@@ -568,7 +568,7 @@
                 "economy": {
                   "wood": 700,
                   "iron": 350,
-                  "food": 280,
+                  "stone": 280,
                   "coins": 150
                 }
               },
@@ -597,7 +597,7 @@
             "economy": {
               "wood": 288,
               "iron": 144,
-              "food": 113,
+              "stone": 113,
               "coins": 62
             }
           },
@@ -606,7 +606,7 @@
             "economy": {
               "wood": 720,
               "iron": 360,
-              "food": 288,
+              "stone": 288,
               "coins": 155
             }
           },
@@ -620,7 +620,7 @@
             "economy": {
               "wood": 296,
               "iron": 148,
-              "food": 116,
+              "stone": 116,
               "coins": 64
             }
           },
@@ -629,7 +629,7 @@
             "economy": {
               "wood": 740,
               "iron": 370,
-              "food": 296,
+              "stone": 296,
               "coins": 160
             }
           },
@@ -643,7 +643,7 @@
             "economy": {
               "wood": 304,
               "iron": 152,
-              "food": 119,
+              "stone": 119,
               "coins": 66
             }
           },
@@ -652,7 +652,7 @@
             "economy": {
               "wood": 760,
               "iron": 380,
-              "food": 304,
+              "stone": 304,
               "coins": 165
             }
           },
@@ -666,7 +666,7 @@
             "economy": {
               "wood": 312,
               "iron": 156,
-              "food": 122,
+              "stone": 122,
               "coins": 68
             }
           },
@@ -675,7 +675,7 @@
             "economy": {
               "wood": 780,
               "iron": 390,
-              "food": 312,
+              "stone": 312,
               "coins": 170
             }
           },
@@ -692,7 +692,7 @@
                 "economy": {
                   "wood": 320,
                   "iron": 160,
-                  "food": 125,
+                  "stone": 125,
                   "coins": 70
                 }
               },
@@ -712,7 +712,7 @@
                 "economy": {
                   "wood": 800,
                   "iron": 400,
-                  "food": 320,
+                  "stone": 320,
                   "coins": 175
                 }
               },
@@ -734,7 +734,7 @@
             "economy": {
               "wood": 328,
               "iron": 164,
-              "food": 128,
+              "stone": 128,
               "coins": 72
             }
           },
@@ -743,7 +743,7 @@
             "economy": {
               "wood": 820,
               "iron": 410,
-              "food": 328,
+              "stone": 328,
               "coins": 180
             }
           },
@@ -757,7 +757,7 @@
             "economy": {
               "wood": 336,
               "iron": 168,
-              "food": 131,
+              "stone": 131,
               "coins": 74
             }
           },
@@ -766,7 +766,7 @@
             "economy": {
               "wood": 840,
               "iron": 420,
-              "food": 336,
+              "stone": 336,
               "coins": 185
             }
           },
@@ -780,7 +780,7 @@
             "economy": {
               "wood": 344,
               "iron": 172,
-              "food": 134,
+              "stone": 134,
               "coins": 76
             }
           },
@@ -789,7 +789,7 @@
             "economy": {
               "wood": 860,
               "iron": 430,
-              "food": 344,
+              "stone": 344,
               "coins": 190
             }
           },
@@ -803,7 +803,7 @@
             "economy": {
               "wood": 352,
               "iron": 176,
-              "food": 137,
+              "stone": 137,
               "coins": 78
             }
           },
@@ -812,7 +812,7 @@
             "economy": {
               "wood": 880,
               "iron": 440,
-              "food": 352,
+              "stone": 352,
               "coins": 195
             }
           },
@@ -829,7 +829,7 @@
                 "economy": {
                   "wood": 360,
                   "iron": 180,
-                  "food": 140,
+                  "stone": 140,
                   "coins": 80
                 }
               },
@@ -849,7 +849,7 @@
                 "economy": {
                   "wood": 900,
                   "iron": 450,
-                  "food": 360,
+                  "stone": 360,
                   "coins": 200
                 }
               },
@@ -899,7 +899,7 @@
             "economy": {
               "wood": 250,
               "iron": 120,
-              "food": 90,
+              "stone": 90,
               "coins": 30
             }
           },
@@ -912,7 +912,7 @@
             "economy": {
               "wood": 250,
               "iron": 120,
-              "food": 90,
+              "stone": 90,
               "coins": 30
             }
           },
@@ -925,7 +925,7 @@
             "economy": {
               "wood": 250,
               "iron": 120,
-              "food": 90,
+              "stone": 90,
               "coins": 30
             }
           },
@@ -938,7 +938,7 @@
             "economy": {
               "wood": 250,
               "iron": 120,
-              "food": 90,
+              "stone": 90,
               "coins": 30
             }
           },
@@ -951,7 +951,7 @@
             "economy": {
               "wood": 250,
               "iron": 120,
-              "food": 90,
+              "stone": 90,
               "coins": 30
             }
           },
@@ -964,7 +964,7 @@
             "economy": {
               "wood": 250,
               "iron": 120,
-              "food": 90,
+              "stone": 90,
               "coins": 30
             }
           },
@@ -980,7 +980,7 @@
                 "economy": {
                   "wood": 250,
                   "iron": 120,
-                  "food": 90,
+                  "stone": 90,
                   "coins": 30
                 }
               },
@@ -1001,7 +1001,7 @@
             "economy": {
               "wood": 250,
               "iron": 120,
-              "food": 90,
+              "stone": 90,
               "coins": 30
             }
           },
@@ -1014,7 +1014,7 @@
             "economy": {
               "wood": 250,
               "iron": 120,
-              "food": 90,
+              "stone": 90,
               "coins": 30
             }
           },
@@ -1027,7 +1027,7 @@
             "economy": {
               "wood": 250,
               "iron": 120,
-              "food": 90,
+              "stone": 90,
               "coins": 30
             }
           },
@@ -1040,7 +1040,7 @@
             "economy": {
               "wood": 250,
               "iron": 120,
-              "food": 90,
+              "stone": 90,
               "coins": 30
             }
           },
@@ -1053,7 +1053,7 @@
             "economy": {
               "wood": 250,
               "iron": 120,
-              "food": 90,
+              "stone": 90,
               "coins": 30
             }
           },
@@ -1066,7 +1066,7 @@
             "economy": {
               "wood": 250,
               "iron": 120,
-              "food": 90,
+              "stone": 90,
               "coins": 30
             }
           },
@@ -1082,7 +1082,7 @@
                 "economy": {
                   "wood": 250,
                   "iron": 120,
-                  "food": 90,
+                  "stone": 90,
                   "coins": 30
                 }
               },
@@ -1103,7 +1103,7 @@
             "economy": {
               "wood": 250,
               "iron": 120,
-              "food": 90,
+              "stone": 90,
               "coins": 30
             }
           },
@@ -1116,7 +1116,7 @@
             "economy": {
               "wood": 250,
               "iron": 120,
-              "food": 90,
+              "stone": 90,
               "coins": 30
             }
           },
@@ -1129,7 +1129,7 @@
             "economy": {
               "wood": 250,
               "iron": 120,
-              "food": 90,
+              "stone": 90,
               "coins": 30
             }
           },
@@ -1142,7 +1142,7 @@
             "economy": {
               "wood": 250,
               "iron": 120,
-              "food": 90,
+              "stone": 90,
               "coins": 30
             }
           },
@@ -1155,7 +1155,7 @@
             "economy": {
               "wood": 250,
               "iron": 120,
-              "food": 90,
+              "stone": 90,
               "coins": 30
             }
           },
@@ -1168,7 +1168,7 @@
             "economy": {
               "wood": 250,
               "iron": 120,
-              "food": 90,
+              "stone": 90,
               "coins": 30
             }
           },
@@ -1184,7 +1184,7 @@
                 "economy": {
                   "wood": 250,
                   "iron": 120,
-                  "food": 90,
+                  "stone": 90,
                   "coins": 30
                 }
               },
@@ -1205,7 +1205,7 @@
             "economy": {
               "wood": 250,
               "iron": 120,
-              "food": 90,
+              "stone": 90,
               "coins": 30
             }
           },
@@ -1218,7 +1218,7 @@
             "economy": {
               "wood": 250,
               "iron": 120,
-              "food": 90,
+              "stone": 90,
               "coins": 30
             }
           },
@@ -1231,7 +1231,7 @@
             "economy": {
               "wood": 250,
               "iron": 120,
-              "food": 90,
+              "stone": 90,
               "coins": 30
             }
           },
@@ -1244,7 +1244,7 @@
             "economy": {
               "wood": 250,
               "iron": 120,
-              "food": 90,
+              "stone": 90,
               "coins": 30
             }
           },
@@ -1257,7 +1257,7 @@
             "economy": {
               "wood": 250,
               "iron": 120,
-              "food": 90,
+              "stone": 90,
               "coins": 30
             }
           },
@@ -1270,7 +1270,7 @@
             "economy": {
               "wood": 250,
               "iron": 120,
-              "food": 90,
+              "stone": 90,
               "coins": 30
             }
           },
@@ -1283,7 +1283,7 @@
             "economy": {
               "wood": 250,
               "iron": 120,
-              "food": 90,
+              "stone": 90,
               "coins": 30
             }
           },
@@ -1296,7 +1296,7 @@
             "economy": {
               "wood": 250,
               "iron": 120,
-              "food": 90,
+              "stone": 90,
               "coins": 30
             }
           },
@@ -1312,7 +1312,7 @@
                 "economy": {
                   "wood": 250,
                   "iron": 120,
-                  "food": 90,
+                  "stone": 90,
                   "coins": 30
                 }
               },
@@ -1353,7 +1353,7 @@
             "economy": {
               "wood": 550,
               "iron": 260,
-              "food": 200,
+              "stone": 200,
               "coins": 70
             }
           },
@@ -1366,7 +1366,7 @@
             "economy": {
               "wood": 550,
               "iron": 260,
-              "food": 200,
+              "stone": 200,
               "coins": 70
             }
           },
@@ -1379,7 +1379,7 @@
             "economy": {
               "wood": 550,
               "iron": 260,
-              "food": 200,
+              "stone": 200,
               "coins": 70
             }
           },
@@ -1392,7 +1392,7 @@
             "economy": {
               "wood": 550,
               "iron": 260,
-              "food": 200,
+              "stone": 200,
               "coins": 70
             }
           },
@@ -1405,7 +1405,7 @@
             "economy": {
               "wood": 550,
               "iron": 260,
-              "food": 200,
+              "stone": 200,
               "coins": 70
             }
           },
@@ -1418,7 +1418,7 @@
             "economy": {
               "wood": 550,
               "iron": 260,
-              "food": 200,
+              "stone": 200,
               "coins": 70
             }
           },
@@ -1434,7 +1434,7 @@
                 "economy": {
                   "wood": 550,
                   "iron": 260,
-                  "food": 200,
+                  "stone": 200,
                   "coins": 70
                 }
               },
@@ -1455,7 +1455,7 @@
             "economy": {
               "wood": 550,
               "iron": 260,
-              "food": 200,
+              "stone": 200,
               "coins": 70
             }
           },
@@ -1468,7 +1468,7 @@
             "economy": {
               "wood": 550,
               "iron": 260,
-              "food": 200,
+              "stone": 200,
               "coins": 70
             }
           },
@@ -1481,7 +1481,7 @@
             "economy": {
               "wood": 550,
               "iron": 260,
-              "food": 200,
+              "stone": 200,
               "coins": 70
             }
           },
@@ -1494,7 +1494,7 @@
             "economy": {
               "wood": 550,
               "iron": 260,
-              "food": 200,
+              "stone": 200,
               "coins": 70
             }
           },
@@ -1507,7 +1507,7 @@
             "economy": {
               "wood": 550,
               "iron": 260,
-              "food": 200,
+              "stone": 200,
               "coins": 70
             }
           },
@@ -1520,7 +1520,7 @@
             "economy": {
               "wood": 550,
               "iron": 260,
-              "food": 200,
+              "stone": 200,
               "coins": 70
             }
           },
@@ -1536,7 +1536,7 @@
                 "economy": {
                   "wood": 550,
                   "iron": 260,
-                  "food": 200,
+                  "stone": 200,
                   "coins": 70
                 }
               },
@@ -1557,7 +1557,7 @@
             "economy": {
               "wood": 550,
               "iron": 260,
-              "food": 200,
+              "stone": 200,
               "coins": 70
             }
           },
@@ -1570,7 +1570,7 @@
             "economy": {
               "wood": 550,
               "iron": 260,
-              "food": 200,
+              "stone": 200,
               "coins": 70
             }
           },
@@ -1583,7 +1583,7 @@
             "economy": {
               "wood": 550,
               "iron": 260,
-              "food": 200,
+              "stone": 200,
               "coins": 70
             }
           },
@@ -1596,7 +1596,7 @@
             "economy": {
               "wood": 550,
               "iron": 260,
-              "food": 200,
+              "stone": 200,
               "coins": 70
             }
           },
@@ -1609,7 +1609,7 @@
             "economy": {
               "wood": 550,
               "iron": 260,
-              "food": 200,
+              "stone": 200,
               "coins": 70
             }
           },
@@ -1622,7 +1622,7 @@
             "economy": {
               "wood": 550,
               "iron": 260,
-              "food": 200,
+              "stone": 200,
               "coins": 70
             }
           },
@@ -1638,7 +1638,7 @@
                 "economy": {
                   "wood": 550,
                   "iron": 260,
-                  "food": 200,
+                  "stone": 200,
                   "coins": 70
                 }
               },
@@ -1659,7 +1659,7 @@
             "economy": {
               "wood": 550,
               "iron": 260,
-              "food": 200,
+              "stone": 200,
               "coins": 70
             }
           },
@@ -1672,7 +1672,7 @@
             "economy": {
               "wood": 550,
               "iron": 260,
-              "food": 200,
+              "stone": 200,
               "coins": 70
             }
           },
@@ -1685,7 +1685,7 @@
             "economy": {
               "wood": 550,
               "iron": 260,
-              "food": 200,
+              "stone": 200,
               "coins": 70
             }
           },
@@ -1698,7 +1698,7 @@
             "economy": {
               "wood": 550,
               "iron": 260,
-              "food": 200,
+              "stone": 200,
               "coins": 70
             }
           },
@@ -1711,7 +1711,7 @@
             "economy": {
               "wood": 550,
               "iron": 260,
-              "food": 200,
+              "stone": 200,
               "coins": 70
             }
           },
@@ -1724,7 +1724,7 @@
             "economy": {
               "wood": 550,
               "iron": 260,
-              "food": 200,
+              "stone": 200,
               "coins": 70
             }
           },
@@ -1737,7 +1737,7 @@
             "economy": {
               "wood": 550,
               "iron": 260,
-              "food": 200,
+              "stone": 200,
               "coins": 70
             }
           },
@@ -1750,7 +1750,7 @@
             "economy": {
               "wood": 550,
               "iron": 260,
-              "food": 200,
+              "stone": 200,
               "coins": 70
             }
           },
@@ -1766,7 +1766,7 @@
                 "economy": {
                   "wood": 550,
                   "iron": 260,
-                  "food": 200,
+                  "stone": 200,
                   "coins": 70
                 }
               },

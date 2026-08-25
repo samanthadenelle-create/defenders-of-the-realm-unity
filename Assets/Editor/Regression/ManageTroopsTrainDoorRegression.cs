@@ -117,6 +117,7 @@ namespace DeNelle.Editor
                 var bal = throwaway.Resources;
                 bal.Food = 100000;
                 bal.Crystals = 100000;
+                bal.Coins = 100000;
                 throwaway.Resources = bal;
                 throwaway.ObsidianQueue = ObsidianQueueState.Empty();
 

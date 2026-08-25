@@ -77,6 +77,7 @@ namespace DeNelle.Core.State
                 { 36, MigrateToV36 },
                 { 37, MigrateToV37 },
                 { 38, MigrateToV38 },
+                { 39, MigrateToV39 },
             };
 
         /// <summary>
@@ -681,6 +682,9 @@ namespace DeNelle.Core.State
             s.Army.EnsureLoadouts();
             return s;
         }
+
+        /// <summary>v38 to v39: paidCoins is additive and defaults to zero on legacy jobs.</summary>
+        private static PersistedState MigrateToV39(PersistedState s) => s;
 
         private static PersistedState MigrateToV37(PersistedState s)
         {

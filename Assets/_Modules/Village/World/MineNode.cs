@@ -40,7 +40,7 @@ namespace DeNelle.Village
             switch (r)
             {
                 case MineResource.Wood:          return "Chop Wood";
-                case MineResource.Food:          return "Harvest Food";
+                case MineResource.Food:          return "Mine Stone";
                 case MineResource.Iron:          return "Mine Iron";
                 case MineResource.AetherCrystal: return "Mine Crystals";
                 default:                         return "Harvest";
@@ -657,7 +657,7 @@ namespace DeNelle.Village
             {
                 MineResource.Wood          => "Wood",
                 MineResource.Iron          => "Iron",
-                MineResource.Food          => "Food",
+                MineResource.Food          => "Stone",
                 MineResource.AetherCrystal => "Crystals",
                 _                          => res.ToString()
             };

@@ -92,6 +92,24 @@ namespace DeNelle.Village
             return list;
         }
 
+        private static bool CanAfford(ResourceCost cost) => State != null &&
+            State.Resources.Coins >= cost.Coins && Ledger.ResourceLedger.CanAfford(LedgerCost(cost));
+
+        private static bool TrySpend(ResourceCost cost)
+        {
+            if (!CanAfford(cost)) return false;
+            State.Resources.Coins -= cost.Coins;
+            if (Ledger.ResourceLedger.TrySpend(LedgerCost(cost))) return true;
+            State.Resources.Coins += cost.Coins;
+            return false;
+        }
+
+        private static void Refund(ResourceCost cost)
+        {
+            RefundLedgerCost(LedgerCost(cost));
+            if (State != null) State.Resources.Coins += Mathf.Max(0, cost.Coins);
+        }
+
         /// <summary>
         /// WO-911 — hand a charged basket straight back when the ENQUEUE that followed it is
         /// refused (the depth cap of ruling Q4 can refuse AFTER the spend has landed). Credits the
@@ -107,11 +125,11 @@ namespace DeNelle.Village
 
         /// <summary>Ledger affordability of the next barracks level — the panel's cost-row tint (same wallet the spend charges).</summary>
         public static bool CanAffordBarracksUpgrade(int currentLevel) =>
-            Ledger.ResourceLedger.CanAfford(LedgerCost(BarracksProgression.BarracksUpgradeCost(currentLevel)));
+            CanAfford(BarracksProgression.BarracksUpgradeCost(currentLevel));
 
         /// <summary>Ledger affordability of a troop's next level — the panel's cost-row tint (same wallet the spend charges).</summary>
         public static bool CanAffordTroopUpgrade(string troopId, int nextLevel) =>
-            Ledger.ResourceLedger.CanAfford(LedgerCost(BarracksProgression.TroopUpgradeCost(troopId, nextLevel)));
+            CanAfford(BarracksProgression.TroopUpgradeCost(troopId, nextLevel));
 
         /// <summary>Names the short resources so the block reason tells the player WHAT is missing.</summary>
         private static string MissingOf(System.Collections.Generic.List<Ledger.ResourceCost> lines)
@@ -289,7 +307,8 @@ namespace DeNelle.Village
 
             // ResourceCost ctor order: (wood, food, iron, crystals, coins). Charged via the
             // GameState ledger (see the wallet comment above), never the in-session pool.
-            var cost = LedgerCost(new ResourceCost(def.CostWood, def.CostFood, def.CostIron));
+            var rawCost = new ResourceCost(coins: def.CostGold);
+            var cost = LedgerCost(rawCost);
 
             // OVER-QUEUE FIX (full-army gate lane): the old per-unit army.CanTrain check read
             // the LIVE roster only — in-flight Train jobs were invisible to it, so 20+ units
@@ -334,9 +353,10 @@ namespace DeNelle.Village
                     stopReason = "Army is full.";                       // cap full (incl. in-flight jobs)
                     break;
                 }
-                if (!Ledger.ResourceLedger.TrySpend(cost))
+                if (!TrySpend(rawCost))
                 {
-                    stopReason = MissingOf(cost);                       // unaffordable - names the SHORT resource
+                    stopReason = rawCost.Coins > (State?.Resources.Coins ?? 0)
+                        ? "Need more gold." : MissingOf(cost);          // unaffordable - names the SHORT resource
                     break;
                 }
                 string jobId = TrainPrefix + troopId + ":" + Guid.NewGuid().ToString("N").Substring(0, 8);
@@ -345,9 +365,9 @@ namespace DeNelle.Village
                 // the whole stack. (M1): the Train line refuses at its depth cap; this unit is
                 // refunded and the muster stops with a readable reason rather than truncating silently.
                 if (queue.Enqueue(JobKind.TrainTroop, jobId, def.BuildSeconds, 0,
-                                  BuildTimerService.ToJobCost(cost)) == null)
+                                  BuildTimerService.ToJobCost(rawCost)) == null)
                 {
-                    RefundLedgerCost(cost);
+                    Refund(rawCost);
                     stopReason = queue.LastEnqueueFailure ?? "Training queue is full.";
                     FlowTrace.Warn("Barracks",
                         $"train enqueue refused at {enqueued}/{qty} '{troopId}' ({stopReason}) — this unit's charge refunded.");

@@ -232,35 +232,22 @@ namespace DeNelle.Editor.Regression
         private static void CheckCancelNoticeNeverLiesAboutCurrency(List<string> failures, ref int checks)
         {
             checks++;
-            // Behavioural, not source: the policy helper must actually classify research as
-            // gold-priced, and an ordinary build as not.
-            if (!JobCurrency.SpendsUnrefundableCoins(JobKind.BuildingResearch))
-                failures.Add("[econ-sweep/3] JobCurrency.SpendsUnrefundableCoins(BuildingResearch) is FALSE - research is "
-                           + "the one gold-priced job kind and JobCost still has no coins lane, so the cancel notice "
-                           + "would go back to claiming nothing was taken.");
-            if (JobCurrency.SpendsUnrefundableCoins(JobKind.Build))
-                failures.Add("[econ-sweep/3] JobCurrency.SpendsUnrefundableCoins(Build) is TRUE - an ordinary build is paid "
-                           + "from the refundable basket and must not be described as losing a currency.");
-            if (string.IsNullOrEmpty(JobCurrency.UnrefundableCurrencyLabel(JobKind.BuildingResearch)))
-                failures.Add("[econ-sweep/3] JobCurrency.UnrefundableCurrencyLabel(BuildingResearch) is empty - the notice "
-                           + "has no name to give the money it is telling the player about.");
+            var gold = new DeNelle.Core.State.JobCost(0, 0, 0, 0, coins: 75);
+            if (gold.IsZero || gold.Coins != 75 || gold.Describe().IndexOf("gold", StringComparison.OrdinalIgnoreCase) < 0)
+                failures.Add("[econ-sweep/3] JobCost does not carry/display the refundable Gold lane.");
 
             checks++;
             if (TryReadCode(JobKindPath, failures, out string kindCode, out _))
             {
-                if (kindCode.IndexOf("class JobCurrency", StringComparison.Ordinal) < 0)
-                    failures.Add("[econ-sweep/3] JobCurrency is gone from Core/Jobs/JobKind.cs.");
+                if (JobCurrency.SpendsUnrefundableCoins(JobKind.BuildingResearch))
+                    failures.Add("[econ-sweep/3] research is still classified as unrefundable after paidCoins v39.");
             }
 
             checks++;
             if (TryReadCode(TimerPath, failures, out string timer, out _))
             {
-                if (timer.IndexOf("out string unrefundedCurrency", StringComparison.Ordinal) < 0)
-                    failures.Add("[econ-sweep/3] BuildTimerService.CancelChannelJobWithRefund no longer reports an "
-                               + "unrefunded currency - the UI is blind to a charge it cannot see in the basket.");
-                if (timer.IndexOf("JobCurrency.SpendsUnrefundableCoins", StringComparison.Ordinal) < 0)
-                    failures.Add("[econ-sweep/3] BuildTimerService.CancelChannelJobWithRefund does not consult "
-                               + "JobCurrency.SpendsUnrefundableCoins - it cannot flag a gold-priced cancel.");
+                if (timer.IndexOf("paid.Coins", StringComparison.Ordinal) < 0)
+                    failures.Add("[econ-sweep/3] cancellation does not credit JobCost.Coins.");
             }
 
             checks++;

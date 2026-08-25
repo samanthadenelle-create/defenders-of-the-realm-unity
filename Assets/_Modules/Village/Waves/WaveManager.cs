@@ -3043,7 +3043,7 @@ namespace DeNelle.Village
             var parts = new System.Collections.Generic.List<string>(3);
             if (wood > 0) parts.Add($"{wood} Wood");
             if (iron > 0) parts.Add($"{iron} Iron");
-            if (food > 0) parts.Add($"{food} Food");
+            if (food > 0) parts.Add($"{food} Stone");
             if (parts.Count == 0) parts.Add("nothing");
             return parts;
         }

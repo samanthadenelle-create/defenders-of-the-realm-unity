@@ -748,7 +748,7 @@ namespace DeNelle.Village
         public static JobCost ToJobCost(DeNelle.Core.Catalog.ResourceCost c)
             => new JobCost(c.wood, c.food, c.iron, c.crystals);
 
-        /// <summary>WO-911 — the EconomyService cost shape as a paid basket. Coins are NOT refundable here.</summary>
+        /// <summary>WO-911/v39 — the EconomyService cost shape as a fully refundable paid basket.</summary>
         /// <remarks>
         /// Fully qualified on purpose: this file carries <c>using DeNelle.Core.Catalog;</c>, so a bare
         /// <c>ResourceCost</c> here would silently mean the ENCLOSING namespace's type and read as the
@@ -756,11 +756,7 @@ namespace DeNelle.Village
         /// </remarks>
         public static JobCost ToJobCost(DeNelle.Village.ResourceCost c)
         {
-            if (c.Coins > 0)
-                DeNelle.Core.Diagnostics.FlowTrace.Warn("Obsidian",
-                    $"job cost carries {c.Coins} coins — coins are not part of the refundable basket " +
-                    "(no ledger lane); a cancel will not return them.");
-            return new JobCost(c.Wood, c.Food, c.Iron, c.Crystals);
+            return new JobCost(c.Wood, c.Food, c.Iron, c.Crystals, coins: c.Coins);
         }
 
         /// <summary>WO-911 — a ledger cost-line list (+ optional magic) as a paid basket.</summary>
@@ -1400,18 +1396,7 @@ namespace DeNelle.Village
             }
             var paid = found.Value.Paid;
             // ECON-SWEEP 2026-08-16 (defect 3): read the kind BEFORE the cancel destroys the record.
-            var cancelledKind = found.Value.JobKind;
-
             if (!CancelChannelJob(channel, structureId)) return false;
-
-            if (JobCurrency.SpendsUnrefundableCoins(cancelledKind))
-            {
-                unrefundedCurrency = JobCurrency.UnrefundableCurrencyLabel(cancelledKind);
-                DeNelle.Core.Diagnostics.FlowTrace.Warn("Obsidian",
-                    $"cancelled '{structureId}' ({cancelledKind}) on {channel} — it was paid for in " +
-                    $"{unrefundedCurrency}, which JobCost has no lane for, so that charge is NOT returned. " +
-                    "The cancel notice names it rather than claiming nothing was taken.");
-            }
 
             if (paid.IsZero)
             {
@@ -1425,11 +1410,22 @@ namespace DeNelle.Village
 
             DeNelle.Core.Diagnostics.Guard.Try("Obsidian", "refund cancelled job", () =>
             {
-                Ledger.ResourceLedger.Credit(Ledger.HarvestResource.Wood, paid.Wood);
-                Ledger.ResourceLedger.Credit(Ledger.HarvestResource.Food, paid.Food);
-                Ledger.ResourceLedger.Credit(Ledger.HarvestResource.Iron, paid.Iron);
-                Ledger.ResourceLedger.Credit(Ledger.HarvestResource.Crystals, paid.Crystals);
-                if (paid.Magic > 0) Ledger.ResourceLedger.CreditMagic(paid.Magic);
+                // One atomic wallet mutation followed by ONE authoritative save. CancelChannelJob
+                // persisted the queue removal already; this later save must contain the complete
+                // material + Gold refund or a reload can resurrect the pre-refund wallet.
+                var service = GameStateService.Instance;
+                var state = service?.State;
+                if (state == null) return;
+                state.Wood += paid.Wood;
+                state.Iron += paid.Iron;
+                state.Magic += paid.Magic;
+                var wallet = state.Resources;
+                wallet.Food += paid.Food;
+                wallet.Crystals += paid.Crystals;
+                wallet.Coins += paid.Coins;
+                state.Resources = wallet;
+                service.Save();
+                service.ResourcesChanged?.Invoke();
             });
 
             refunded = paid;

@@ -394,7 +394,7 @@ namespace DeNelle.HUD
                 rewards.Add(new ElarionUiKit.DetailCardRow("+", "Crystals",
                     "+" + r.Crystals, ElarionUiKit.DetailRowTone.Good));
             if (r.Food > 0)
-                rewards.Add(new ElarionUiKit.DetailCardRow("+", "Food",
+                rewards.Add(new ElarionUiKit.DetailCardRow("+", "Stone",
                     "+" + r.Food, ElarionUiKit.DetailRowTone.Good));
             if (r.Wisdom > 0)
                 rewards.Add(new ElarionUiKit.DetailCardRow("+", "Wisdom",

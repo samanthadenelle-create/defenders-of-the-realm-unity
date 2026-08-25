@@ -140,7 +140,7 @@ namespace DeNelle.Tests.EditMode
                 {
                     var def = TroopCatalog.Find(id);
                     if (def == null) break;
-                    if (!eco.TrySpend(new ResourceCost(def.CostWood, def.CostFood, def.CostIron))) break;
+                    if (!eco.TrySpend(new ResourceCost(coins: def.CostGold))) break;
                     n++;
                 }
                 return n;

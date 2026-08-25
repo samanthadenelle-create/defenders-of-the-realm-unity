@@ -20,6 +20,7 @@
 //     HUD toggle caller (OpenWorkQueue + HudKit source), layout.body list host.
 // =============================================================================
 
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Reflection;
@@ -33,6 +34,12 @@ namespace DeNelle.Editor
 {
     public static class ObsidianQueueRegression
     {
+        public static void RunAll()
+        {
+            if (Run(out string reason)) Debug.Log("OBSIDIAN_QUEUE_OK - " + reason);
+            else Debug.LogError("OBSIDIAN_QUEUE_FAIL: " + reason);
+        }
+
         public static bool Run(out string reason)
         {
             var failures = new List<string>();
@@ -438,7 +445,7 @@ namespace DeNelle.Editor
                 failures.Add($"SaveSchema.CurrentVersion is {SaveSchema.CurrentVersion} — WO-911's paid basket requires >= 37");
 
             var t = typeof(BuildJobData);
-            foreach (var f in new[] { "PaidWood", "PaidFood", "PaidIron", "PaidCrystals", "PaidMagic" })
+            foreach (var f in new[] { "PaidWood", "PaidFood", "PaidIron", "PaidCrystals", "PaidMagic", "PaidCoins" })
                 if (t.GetField(f) == null)
                     failures.Add($"BuildJobData.{f} missing — a cancel cannot refund what the job does not remember (WO-911 M2)");
 
@@ -447,9 +454,26 @@ namespace DeNelle.Editor
             if (!legacy.Paid.IsZero)
                 failures.Add("a job with no recorded cost does not report a zero basket — a legacy cancel would mint resources");
 
-            var round = new BuildJobData { StructureId = "x", Paid = new JobCost(400, 200, 0, 0) };
-            if (round.PaidWood != 400 || round.PaidFood != 200)
+            var round = new BuildJobData { StructureId = "x", Paid = new JobCost(400, 200, 0, 0, coins: 75) };
+            if (round.PaidWood != 400 || round.PaidFood != 200 || round.PaidCoins != 75)
                 failures.Add("BuildJobData.Paid does not round-trip through the persisted fields");
+
+            // v39 refund baskets: pure-Gold training and mixed material+Gold upgrades must both
+            // survive the persisted job record without losing either lane.
+            var pureGold = new BuildJobData { Paid = new JobCost(0, 0, 0, 0, coins: 550) };
+            var mixed = new BuildJobData { Paid = new JobCost(500, 0, 0, 0, coins: 300) };
+            if (pureGold.Paid.Coins != 550 || pureGold.Paid.IsZero)
+                failures.Add("pure-Gold training basket is not refundable after persistence");
+            if (mixed.Paid.Wood != 500 || mixed.Paid.Coins != 300)
+                failures.Add("mixed material+Gold upgrade basket loses a refund lane");
+
+            string timerSource = File.ReadAllText("Assets/_Modules/Village/Buildings/BuildTimerService.cs");
+            int cancel = timerSource.IndexOf("CancelChannelJobWithRefund(ChannelId channel, string structureId, out JobCost refunded,", StringComparison.Ordinal);
+            int coinCredit = timerSource.IndexOf("wallet.Coins += paid.Coins", cancel, StringComparison.Ordinal);
+            int finalSave = timerSource.IndexOf("service.Save()", coinCredit, StringComparison.Ordinal);
+            int notify = timerSource.IndexOf("service.ResourcesChanged?.Invoke()", finalSave, StringComparison.Ordinal);
+            if (cancel < 0 || coinCredit < 0 || finalSave < coinCredit || notify < finalSave)
+                failures.Add("cancel refund must mutate Gold, then persist the full basket, then notify resources");
 
             // THE curve — priced from REMAINING TIME with a MINIMUM. No second curve may exist.
             var cfg = DeNelle.Core.Catalog.BuildTimerConfig.CreateDefault();

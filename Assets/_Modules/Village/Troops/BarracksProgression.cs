@@ -156,7 +156,7 @@ namespace DeNelle.Village
             var def = TroopCatalog.Find(troopId);
             if (def == null) return new ResourceCost();
             int m = targetLevel < 2 ? 1 : targetLevel;
-            return new ResourceCost(def.CostWood * m, def.CostFood * m, def.CostIron * m);
+            return new ResourceCost(coins: def.CostGold * m);
         }
 
         /// <summary>

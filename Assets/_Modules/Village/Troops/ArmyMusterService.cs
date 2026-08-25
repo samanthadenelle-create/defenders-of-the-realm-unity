@@ -160,11 +160,10 @@ namespace DeNelle.Village
         /// path - the same one Preview() already uses for affordability - so the footer can never
         /// disagree with the CTA about whether you can pay.
         /// </summary>
-        public static (int Wood, int Iron, int Food) WalletBalances()
+        public static int GoldBalance()
         {
-            return (Ledger.ResourceLedger.Balance(Ledger.HarvestResource.Wood),
-                    Ledger.ResourceLedger.Balance(Ledger.HarvestResource.Iron),
-                    Ledger.ResourceLedger.Balance(Ledger.HarvestResource.Food));
+            var state = DeNelle.Core.State.GameStateService.Instance?.State;
+            return state?.Resources.Coins ?? 0;
         }
 
         public static MusterPreview Preview(ArmyComposition comp)
@@ -185,9 +184,7 @@ namespace DeNelle.Village
                     if (def == null) continue;
 
                     p.TotalUnits += row.Count;
-                    p.Cost.Wood += def.CostWood * row.Count;
-                    p.Cost.Iron += def.CostIron * row.Count;
-                    p.Cost.Food += def.CostFood * row.Count;
+                    p.Cost.Gold += def.CostGold * row.Count;
                     for (int i = 0; i < row.Count; i++) durations.Add(def.BuildSeconds);
                 }
             }
@@ -197,9 +194,9 @@ namespace DeNelle.Village
 
             // Affordability against the SAME wallet the spend charges (the GameState ledger),
             // never EconomyService's divergent in-session pool - see BarracksService's wallet note.
-            var lines = LedgerLines(p.Cost);
-            p.Affordable = Ledger.ResourceLedger.CanAfford(lines);
-            p.ShortOf = p.Affordable ? "" : ShortOf(lines);
+            var state = DeNelle.Core.State.GameStateService.Instance?.State;
+            p.Affordable = state != null && state.Resources.Coins >= p.Cost.Gold;
+            p.ShortOf = p.Affordable ? "" : "Gold";
             return p;
         }
 
@@ -383,9 +380,6 @@ namespace DeNelle.Village
         private static List<Ledger.ResourceCost> LedgerLines(ArmyCost cost)
         {
             var list = new List<Ledger.ResourceCost>(3);
-            if (cost.Wood > 0) list.Add(new Ledger.ResourceCost(Ledger.HarvestResource.Wood, cost.Wood));
-            if (cost.Iron > 0) list.Add(new Ledger.ResourceCost(Ledger.HarvestResource.Iron, cost.Iron));
-            if (cost.Food > 0) list.Add(new Ledger.ResourceCost(Ledger.HarvestResource.Food, cost.Food));
             return list;
         }
 

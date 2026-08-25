@@ -726,8 +726,8 @@ namespace DeNelle.Editor
             // v37 REVIEWED 2026-08-07 (WO-911): paid basket on BuildJobData — additive only.
             // v38 REVIEWED 2026-08-09 (WO-934): army loadouts nested under Army — no echoLanes change.
             // Update this pin in the SAME breath as any future reviewed bump (CLAUDE.md §15).
-            if (SaveSchema.CurrentVersion != 38)
-                Fail($"SaveSchema.CurrentVersion={SaveSchema.CurrentVersion} (expected 38; echoLanes token must survive the current schema)");
+            if (SaveSchema.CurrentVersion != 39)
+                Fail($"SaveSchema.CurrentVersion={SaveSchema.CurrentVersion} (expected 39; echoLanes token must survive the current schema)");
 
             // A rich WO-830 resource token survives the REAL serialize → deserialize → validate path.
             const string richToken = "crystals:3,idle,wood:1,gold:2";

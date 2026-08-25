@@ -306,7 +306,7 @@ namespace DeNelle.Village.Hero
         {
             var d = TroopCatalog.Find(id);
             if (d == null || _economy == null) return false;
-            return _economy.TrySpend(new ResourceCost(d.CostWood, d.CostFood, d.CostIron));
+            return _economy.TrySpend(new ResourceCost(coins: d.CostGold));
         }
 
         // Mirror the panel's town-HUD push (owner: "sync on subtract"). Null-safe pure data call
@@ -457,16 +457,14 @@ namespace DeNelle.Village.Hero
         private static ResourceCost CostOf(TroopDef def)
         {
             // ResourceCost ctor order is (wood, food, iron, crystals, coins).
-            return def == null ? new ResourceCost() : new ResourceCost(def.CostWood, def.CostFood, def.CostIron);
+            return def == null ? new ResourceCost() : new ResourceCost(coins: def.CostGold);
         }
 
         private static string CostString(TroopDef def)
         {
             if (def == null) return "Free";
             var parts = new List<string>();
-            if (def.CostWood > 0) parts.Add(def.CostWood + "W");
-            if (def.CostIron > 0) parts.Add(def.CostIron + "I");
-            if (def.CostFood > 0) parts.Add(def.CostFood + "F");
+            if (def.CostGold > 0) parts.Add(def.CostGold + " Gold");
             return parts.Count == 0 ? "Free" : string.Join(" ", parts);
         }
 

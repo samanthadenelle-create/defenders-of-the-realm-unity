@@ -6,7 +6,7 @@
   "baseCap": {
     "wood": 2000,
     "iron": 2000,
-    "food": 2000
+    "stone": 2000
   },
   "levelCapacityMultipliers": [1.0, 2.0, 4.0, 8.0, 16.0, 32.0],
   "overflowWarnCooldownSeconds": 8.0

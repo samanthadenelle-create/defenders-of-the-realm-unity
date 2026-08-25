@@ -105,11 +105,13 @@ namespace DeNelle.Village
 
         // ── Build economy (authored now, inert in Step 1; consumed by Step 2+) ──
         /// <summary>Wood cost to build this troop.</summary>
-        [JsonProperty("costWood")] public int CostWood;
+        [JsonProperty("costWood")] private int LegacyCostWood { set { CostGold += Math.Max(0, value); } }
         /// <summary>Iron cost to build this troop.</summary>
-        [JsonProperty("costIron")] public int CostIron;
-        /// <summary>Food cost to build this troop.</summary>
-        [JsonProperty("costFood")] public int CostFood;
+        [JsonProperty("costIron")] private int LegacyCostIron { set { CostGold += Math.Max(0, value); } }
+        /// <summary>Gold cost to train this troop. WO-1163 retires material-priced training.</summary>
+        [JsonProperty("costGold")] public int CostGold;
+        /// <summary>Legacy authored food cost; accepted on old catalogs but never player-facing.</summary>
+        [JsonProperty("costFood")] private int LegacyCostFood { set { CostGold += Math.Max(0, value); } }
         /// <summary>Seconds to build this troop in the (later) training queue.</summary>
         [JsonProperty("buildSeconds")] public float BuildSeconds;
 

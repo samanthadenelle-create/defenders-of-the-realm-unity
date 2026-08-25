@@ -77,7 +77,7 @@ namespace DeNelle.Editor.Regression
         /// <summary>The only economy keys a grant may carry. `glimmer` is ABSENT on purpose.</summary>
         private static readonly HashSet<string> AllowedEconomyKeys = new HashSet<string>(StringComparer.Ordinal)
         {
-            "wood", "iron", "food", "crystals", "coins",
+            "wood", "iron", "stone", "crystals", "coins",
         };
 
         /// <summary>
@@ -579,7 +579,7 @@ namespace DeNelle.Editor.Regression
                     {
                         if (!AllowedEconomyKeys.Contains(prop.Name))
                             failures.Add("[grants] " + where + ": economy key '" + prop.Name + "' is not one of " +
-                                         "{wood, iron, food, crystals, coins}. A new currency in a reward table " +
+                                         "{wood, iron, stone, crystals, coins}. A new currency in a reward table " +
                                          "is a product decision, not a data edit.");
                         if (prop.Value.Type == JTokenType.Integer && prop.Value.Value<int>() <= 0)
                             failures.Add("[grants] " + where + ": economy key '" + prop.Name + "' is " +

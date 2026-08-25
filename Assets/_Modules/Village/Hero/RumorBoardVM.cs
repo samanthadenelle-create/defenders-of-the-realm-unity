@@ -169,7 +169,7 @@ namespace DeNelle.Village.Hero
             if (crystals > 0) parts.Add("Crystals " + crystals);
             if (wood > 0) parts.Add("Wood " + wood);
             if (iron > 0) parts.Add("Iron " + iron);
-            if (food > 0) parts.Add("Food " + food);
+            if (food > 0) parts.Add("Stone " + food);
             if (magic > 0) parts.Add("Magic " + magic);
             // NAME the item, never key it. The "Item: " prefix is deliberately gone: it cost
             // six glyphs of a row that already cannot seat four chips at FontMicro, and the

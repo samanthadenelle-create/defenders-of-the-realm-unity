@@ -174,7 +174,7 @@ namespace DeNelle.Editor
                 {
                     glimmer = econ["glimmer"]?.Value<int>() ?? 0;
                     crystals = econ["crystals"]?.Value<int>() ?? 0;
-                    food = econ["food"]?.Value<int>() ?? 0;
+                    food = econ["stone"]?.Value<int>() ?? 0;
                     coins = econ["coins"]?.Value<int>() ?? 0;
                 }
                 var cos = o["contents"]?["cosmetics"] as JArray;

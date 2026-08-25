@@ -3192,7 +3192,7 @@ namespace DeNelle.Village
             {
                 if (cost.wood     > 0 && !econ.CanAfford(new ResourceCost(cost.wood, 0, 0, 0)))     return $"Not enough Wood ({cost.wood})";
                 if (cost.iron     > 0 && !econ.CanAfford(new ResourceCost(0, 0, cost.iron, 0)))     return $"Not enough Iron ({cost.iron})";
-                if (cost.food     > 0 && !econ.CanAfford(new ResourceCost(0, cost.food, 0, 0)))     return $"Not enough Food ({cost.food})";
+                if (cost.food     > 0 && !econ.CanAfford(new ResourceCost(0, cost.food, 0, 0)))     return $"Not enough Stone ({cost.food})";
                 if (cost.crystals > 0 && !econ.CanAfford(new ResourceCost(0, 0, 0, cost.crystals))) return $"Not enough Crystals ({cost.crystals})";
             }
             else if (cost.crystals > 0 && CrystalBalance < cost.crystals)
@@ -3259,7 +3259,7 @@ namespace DeNelle.Village
             if (c.IsZero) return "nothing";
             var parts = new List<string>(4);
             if (c.wood     > 0) parts.Add($"{c.wood} wood");
-            if (c.food     > 0) parts.Add($"{c.food} food");
+            if (c.food     > 0) parts.Add($"{c.food} stone");
             if (c.iron     > 0) parts.Add($"{c.iron} iron");
             if (c.crystals > 0) parts.Add($"{c.crystals} crystals");
             return string.Join(", ", parts);

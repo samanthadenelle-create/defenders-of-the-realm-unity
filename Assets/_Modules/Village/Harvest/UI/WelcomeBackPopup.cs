@@ -128,7 +128,7 @@ namespace DeNelle.Village.UI
             card.Add(awayLine);
 
             AddRowIf(card, _result.AetherCrystals, "Aether Crystals", new Color(0.55f, 0.8f, 1f));
-            AddRowIf(card, _result.Food, "Food", new Color(0.85f, 0.78f, 0.5f));
+            AddRowIf(card, _result.Food, "Stone", new Color(0.58f, 0.62f, 0.68f));
             AddRowIf(card, _result.Iron, "Iron", new Color(0.85f, 0.7f, 0.6f));
             AddRowIf(card, _result.Wood, "Wood", new Color(0.7f, 0.85f, 0.55f));
 

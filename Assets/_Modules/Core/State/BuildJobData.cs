@@ -60,19 +60,22 @@ namespace DeNelle.Core.State
         public int Crystals;
         /// <summary>Magic/tech points charged (the TrySpendWithMagic sites).</summary>
         public int Magic;
+        /// <summary>Coins/Gold charged.</summary>
+        public int Coins;
 
         /// <summary>Build a paid basket.</summary>
-        public JobCost(int wood, int food, int iron, int crystals, int magic = 0)
+        public JobCost(int wood, int food, int iron, int crystals, int magic = 0, int coins = 0)
         {
             Wood = wood;
             Food = food;
             Iron = iron;
             Crystals = crystals;
             Magic = magic;
+            Coins = coins;
         }
 
         /// <summary>True when nothing was charged (free build, or a pre-v37 job).</summary>
-        public bool IsZero => Wood == 0 && Food == 0 && Iron == 0 && Crystals == 0 && Magic == 0;
+        public bool IsZero => Wood == 0 && Food == 0 && Iron == 0 && Crystals == 0 && Magic == 0 && Coins == 0;
 
         /// <summary>ASCII, player-readable summary ("400 wood, 200 food"); "nothing" when zero.</summary>
         public string Describe()
@@ -80,10 +83,11 @@ namespace DeNelle.Core.State
             if (IsZero) return "nothing";
             var sb = new System.Text.StringBuilder();
             if (Wood > 0) sb.Append(Wood).Append(" wood");
-            if (Food > 0) { if (sb.Length > 0) sb.Append(", "); sb.Append(Food).Append(" food"); }
+            if (Food > 0) { if (sb.Length > 0) sb.Append(", "); sb.Append(Food).Append(" stone"); }
             if (Iron > 0) { if (sb.Length > 0) sb.Append(", "); sb.Append(Iron).Append(" iron"); }
             if (Crystals > 0) { if (sb.Length > 0) sb.Append(", "); sb.Append(Crystals).Append(" crystals"); }
             if (Magic > 0) { if (sb.Length > 0) sb.Append(", "); sb.Append(Magic).Append(" magic"); }
+            if (Coins > 0) { if (sb.Length > 0) sb.Append(", "); sb.Append(Coins).Append(" gold"); }
             return sb.ToString();
         }
     }
@@ -171,11 +175,14 @@ namespace DeNelle.Core.State
         /// <summary>WO-911 v37 — magic/tech points charged (ResourceLedger.TrySpendWithMagic sites).</summary>
         [JsonProperty("paidMagic")] public int PaidMagic;
 
+        /// <summary>v39 — Coins/Gold actually charged for this job.</summary>
+        [JsonProperty("paidCoins")] public int PaidCoins;
+
         /// <summary>The paid basket as one value (WO-911 M2). Never null; all-zero when nothing was charged.</summary>
         [JsonIgnore]
         public JobCost Paid
         {
-            get => new JobCost(PaidWood, PaidFood, PaidIron, PaidCrystals, PaidMagic);
+            get => new JobCost(PaidWood, PaidFood, PaidIron, PaidCrystals, PaidMagic, PaidCoins);
             set
             {
                 PaidWood = value.Wood;
@@ -183,6 +190,7 @@ namespace DeNelle.Core.State
                 PaidIron = value.Iron;
                 PaidCrystals = value.Crystals;
                 PaidMagic = value.Magic;
+                PaidCoins = value.Coins;
             }
         }
 

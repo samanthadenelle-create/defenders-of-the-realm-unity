@@ -505,7 +505,7 @@ namespace DeNelle.Village
             AppendAxis(sb, "Crystals", cost.crystals, MaterialCount("crystals"));
             AppendAxis(sb, "Wood",     cost.wood,     MaterialCount("wood"));
             AppendAxis(sb, "Iron",     cost.iron,     MaterialCount("iron"));
-            AppendAxis(sb, "Food",     cost.food,     MaterialCount("food"));
+            AppendAxis(sb, "Stone",    cost.food,     MaterialCount("food"));
             return sb.Length > 0 ? sb.ToString() : "Costs nothing.";
         }
 

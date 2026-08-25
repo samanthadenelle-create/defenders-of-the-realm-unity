@@ -329,7 +329,7 @@ namespace DeNelle.Core.Economy
             {
                 case BankResource.Wood:     return "wood";
                 case BankResource.Iron:     return "iron";
-                case BankResource.Food:     return "food";
+                case BankResource.Food:     return "stone";
                 case BankResource.Crystals: return "crystals";
                 case BankResource.Coins:    return "coins";
             }
@@ -348,6 +348,7 @@ namespace DeNelle.Core.Economy
                 case "iron":          r = BankResource.Iron;     return true;
                 case "food":          r = BankResource.Food;     return true;
                 case "grain":         r = BankResource.Food;     return true;
+                case "stone":         r = BankResource.Food;     return true;
                 case "crystal":
                 case "crystals":
                 case "aethercrystal": r = BankResource.Crystals; return true;
@@ -365,7 +366,7 @@ namespace DeNelle.Core.Economy
             {
                 case BankResource.Wood:     return "Wood";
                 case BankResource.Iron:     return "Iron";
-                case BankResource.Food:     return "Food";
+                case BankResource.Food:     return "Stone";
                 case BankResource.Crystals: return "Crystals";
                 case BankResource.Coins:    return "Gold";
             }

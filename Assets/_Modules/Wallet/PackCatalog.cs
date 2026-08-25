@@ -63,6 +63,7 @@ namespace DeNelle.Wallet
         /// <summary>Stone. The C# field retains its historic name because this is the reused
         /// economy/save slot; the authored and player-facing JSON key is stone.</summary>
         [JsonProperty("stone")] public int Food;
+        [JsonProperty("food")] private int LegacyFood { set { if (Food == 0) Food = value; } }
         /// <summary>Coins (Gold).</summary>
         [JsonProperty("coins")] public int Coins;
         /// <summary>Wood - build resource (additive; absent in older packs.json rows = 0, no migration break). Granted via EconomyService.GrantSpendable (ECON-01).</summary>
@@ -240,6 +241,7 @@ namespace DeNelle.Wallet
                 case "iron":     return e.Iron;
                 case "crystals": return e.Crystals;
                 case "stone":    return e.Food;
+                case "food":     return e.Food;
                 case "coins":    return e.Coins;
                 default:         return 0;
             }
@@ -284,6 +286,7 @@ namespace DeNelle.Wallet
                     case "wood":     return e.Wood;
                     case "iron":     return e.Iron;
                     case "stone":    return e.Food;
+                    case "food":     return e.Food;
                     case "crystals": return e.Crystals;
                     default:         return 0;
                 }
@@ -480,7 +483,7 @@ namespace DeNelle.Wallet
         /// <c>RedeemableConvenienceKinds</c> above.</para>
         /// </summary>
         public static readonly string[] LedgerEconomyKeys =
-            { "wood", "iron", "crystals", "food", "coins" };
+            { "wood", "iron", "crystals", "stone", "coins" };
 
         /// <summary>
         /// The band a pack renders in. Reads the authored <c>band</c> first and falls back to the

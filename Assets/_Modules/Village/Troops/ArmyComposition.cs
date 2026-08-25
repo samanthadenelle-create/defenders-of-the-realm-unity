@@ -164,21 +164,17 @@ namespace DeNelle.Village
     /// <summary>Summed resource cost of a composition — the four resources troops.json prices in.</summary>
     public struct ArmyCost
     {
-        public int Wood;
-        public int Iron;
-        public int Food;
+        public int Gold;
 
         /// <summary>True when nothing is priced (an empty composition).</summary>
-        public bool IsZero => Wood == 0 && Iron == 0 && Food == 0;
+        public bool IsZero => Gold == 0;
 
         /// <summary>ASCII, never colour-coded: "120 Wood, 40 Iron, 60 Food" / "Free".</summary>
         public override string ToString()
         {
             if (IsZero) return "Free";
             var sb = new System.Text.StringBuilder();
-            if (Wood > 0) sb.Append(Wood).Append(" Wood");
-            if (Iron > 0) { if (sb.Length > 0) sb.Append(", "); sb.Append(Iron).Append(" Iron"); }
-            if (Food > 0) { if (sb.Length > 0) sb.Append(", "); sb.Append(Food).Append(" Food"); }
+            if (Gold > 0) sb.Append(Gold).Append(" Gold");
             return sb.ToString();
         }
     }

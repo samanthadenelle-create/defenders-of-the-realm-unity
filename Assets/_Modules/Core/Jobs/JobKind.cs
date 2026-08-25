@@ -123,11 +123,11 @@ namespace DeNelle.Core.Jobs
         /// True when a job of <paramref name="kind"/> was charged in COINS (gold), which the paid
         /// basket cannot record and a cancel therefore cannot return.
         /// </summary>
-        public static bool SpendsUnrefundableCoins(JobKind kind) => kind == JobKind.BuildingResearch;
+        public static bool SpendsUnrefundableCoins(JobKind kind) => false;
 
         /// <summary>ASCII, player-readable name of that currency, for the cancel notice.</summary>
         public static string UnrefundableCurrencyLabel(JobKind kind)
-            => SpendsUnrefundableCoins(kind) ? "gold" : "";
+            => "";
     }
 
     /// <summary>Static helpers mapping a <see cref="JobKind"/> to its default <see cref="ChannelId"/>.</summary>

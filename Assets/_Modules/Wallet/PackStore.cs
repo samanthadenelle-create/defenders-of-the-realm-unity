@@ -2083,7 +2083,7 @@ namespace DeNelle.Wallet
                     AppendAmount(sb, econ.Wood, "wood");
                     AppendAmount(sb, econ.Iron, "iron");
                     AppendAmount(sb, econ.Crystals, "crystals");
-                    AppendAmount(sb, econ.Food, "food");
+                    AppendAmount(sb, econ.Food, "stone");
                     AppendAmount(sb, econ.Coins, "coins");
                 }
 
@@ -2122,7 +2122,7 @@ namespace DeNelle.Wallet
                 AppendAmount(sb, econ.Wood, "wood");
                 AppendAmount(sb, econ.Iron, "iron");
                 AppendAmount(sb, econ.Crystals, "crystals");
-                AppendAmount(sb, econ.Food, "food");
+                AppendAmount(sb, econ.Food, "stone");
                 AppendAmount(sb, econ.Coins, "coins");
             }
             if (c.Cosmetics != null)

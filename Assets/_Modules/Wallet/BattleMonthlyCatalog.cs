@@ -96,7 +96,8 @@ namespace DeNelle.Wallet
     {
         [JsonProperty("wood")]     public int Wood;
         [JsonProperty("iron")]     public int Iron;
-        [JsonProperty("food")]     public int Food;
+        [JsonProperty("stone")]    public int Food;
+        [JsonProperty("food")] private int LegacyFood { set { if (Food == 0) Food = value; } }
         [JsonProperty("crystals")] public int Crystals;
         [JsonProperty("coins")]    public int Coins;
 
@@ -181,7 +182,7 @@ namespace DeNelle.Wallet
             var parts = new List<string>();
             if (e.Wood > 0)     parts.Add(e.Wood + " Wood");
             if (e.Iron > 0)     parts.Add(e.Iron + " Iron");
-            if (e.Food > 0)     parts.Add(e.Food + " Food");
+            if (e.Food > 0)     parts.Add(e.Food + " Stone");
             if (e.Crystals > 0) parts.Add(e.Crystals + " Crystals");
             if (e.Coins > 0)    parts.Add(e.Coins + " Coins");
             return string.Join("  ", parts.ToArray());

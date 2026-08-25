@@ -103,9 +103,7 @@ namespace DeNelle.Editor
                     failures.Add($"'{e.Id}' UnlockBarracksTier == {def.UnlockBarracksTier}, expected {e.Tier} (unlock ladder drift).");
 
                 // --- 4) cost / slot sanity ---------------------------------------
-                if (def.CostWood < 0) failures.Add($"'{e.Id}' costWood {def.CostWood} < 0.");
-                if (def.CostIron < 0) failures.Add($"'{e.Id}' costIron {def.CostIron} < 0.");
-                if (def.CostFood < 0) failures.Add($"'{e.Id}' costFood {def.CostFood} < 0.");
+                if (def.CostGold < 0) failures.Add($"'{e.Id}' costGold {def.CostGold} < 0.");
                 if (def.Slots < 1)    failures.Add($"'{e.Id}' slots {def.Slots} < 1 (a troop must occupy at least one army slot).");
 
                 // --- 5) WO-735 visuals: non-empty model + iconId -----------------

@@ -112,8 +112,15 @@ namespace DeNelle.Village.Buildings.Progression
                 // charge Gold, so ResourceLedger (Wood/Food/Iron/Crystals) covers the whole cost.
                 var state = GameStateService.Instance != null ? GameStateService.Instance.State : null;
                 var cost = TierCost(def);
-                if (state != null && ResourceLedger.TrySpend(cost))
+                int gold = Mathf.Max(0, def.CostGold);
+                if (state != null && state.Resources.Coins >= gold && ResourceLedger.CanAfford(cost))
                 {
+                    state.Resources.Coins -= gold;
+                    if (!ResourceLedger.TrySpend(cost))
+                    {
+                        state.Resources.Coins += gold;
+                        return false;
+                    }
                     // F8-51 — cost charged above; the TIER applies at timer COMPLETION
                     // (BuildTimerService.CompleteJob -> CompletedUpgradeApplier -> ApplyTier,
                     // offline-fair). A null job (raced) degrades to the instant apply so a
@@ -121,7 +128,12 @@ namespace DeNelle.Village.Buildings.Progression
                     // WO-911 (M2): `cost` is exactly what ResourceLedger.TrySpend just debited, so
                     // it rides the job and a cancel refunds 100% of it (ruling Q1).
                     if (timerSvc != null &&
-                        timerSvc.StartUpgrade(id, targetTier, BuildTimerService.ToJobCost(cost)) != null)
+                        timerSvc.StartUpgrade(id, targetTier,
+                            BuildTimerService.ToJobCost(new DeNelle.Village.ResourceCost(
+                                wood: def.Tier == 1 ? def.PrimaryMaterialCost : 0,
+                                food: def.Tier == 2 ? def.PrimaryMaterialCost : 0,
+                                iron: def.Tier >= 3 ? def.PrimaryMaterialCost : 0,
+                                coins: gold))) != null)
                     {
                         // F8 (owner 2026-07-17 "an upgrade timer that doesn't tell"): show the
                         // CoC-style on-building countdown so the player SEES the upgrade working —
@@ -146,10 +158,10 @@ namespace DeNelle.Village.Buildings.Progression
                 // (PlacedStructureUpgradeService, ResourceBuildingState, WallRepairController,
                 // ShopVM). The state dump is UNCHANGED; only the severity is honest now.
                 FlowTrace.Capture("Upgrade", id + " tier-" + targetTier + " spend REJECTED - need W"
-                    + def.CostWood + "/F" + def.CostFood + "/C" + def.CostCrystal + ", wallet W"
-                    + ResourceLedger.Balance(HarvestResource.Wood) + "/F"
-                    + ResourceLedger.Balance(HarvestResource.Food) + "/C"
-                    + ResourceLedger.Balance(HarvestResource.Crystals)
+                    + def.PrimaryMaterialCost + " primary/G" + def.CostGold + ", wallet W"
+                    + ResourceLedger.Balance(HarvestResource.Wood) + "/S"
+                    + ResourceLedger.Balance(HarvestResource.Food) + "/I"
+                    + ResourceLedger.Balance(HarvestResource.Iron) + "/G" + (state != null ? state.Resources.Coins : 0)
                     + (state == null ? " (no GameState)" : ""));
                 return false;
             }
@@ -179,9 +191,10 @@ namespace DeNelle.Village.Buildings.Progression
         {
             var list = new System.Collections.Generic.List<ResourceCost>(3);
             if (def == null) return list;
-            if (def.CostWood > 0)    list.Add(new ResourceCost(HarvestResource.Wood, def.CostWood));
-            if (def.CostFood > 0)    list.Add(new ResourceCost(HarvestResource.Food, def.CostFood));
-            if (def.CostCrystal > 0) list.Add(new ResourceCost(HarvestResource.Crystals, def.CostCrystal));
+            int primary = def.PrimaryMaterialCost;
+            if (def.Tier == 1 && primary > 0) list.Add(new ResourceCost(HarvestResource.Wood, primary));
+            else if (def.Tier == 2 && primary > 0) list.Add(new ResourceCost(HarvestResource.Food, primary));
+            else if (def.Tier >= 3 && primary > 0) list.Add(new ResourceCost(HarvestResource.Iron, primary));
             return list;
         }
 
@@ -193,7 +206,9 @@ namespace DeNelle.Village.Buildings.Progression
         /// </summary>
         public static bool CanAffordTier(BuildingTierDef def)
         {
-            return def != null && ResourceLedger.CanAfford(TierCost(def));
+            var state = GameStateService.Instance != null ? GameStateService.Instance.State : null;
+            return def != null && state != null && state.Resources.Coins >= def.CostGold
+                && ResourceLedger.CanAfford(TierCost(def));
         }
 
         /// <summary>

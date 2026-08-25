@@ -20,7 +20,7 @@
      "label": "Producers",
      "roles": [
       "wood_producer",
-      "food_producer",
+      "stone_producer",
       "iron_producer",
       "crystal_producer"
      ]
@@ -29,7 +29,7 @@
      "label": "Storage",
      "roles": [
       "wood_store",
-      "food_store",
+      "stone_store",
       "iron_store"
      ]
     },

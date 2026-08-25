@@ -810,7 +810,7 @@ namespace DeNelle.Village.Buildings.Progression
                     if (nextDef != null)
                         FlowTrace.Capture("Upgrade", _buildingId + " tier-" + next
                             + " UpgradeNext -> TryUpgrade FALSE (needed W" + nextDef.CostWood
-                            + "/F" + nextDef.CostFood + "/C" + nextDef.CostCrystal
+                            + "/G" + nextDef.CostGold
                             + ", have W" + ResourceLedger.Balance(HarvestResource.Wood)
                             + "/F" + ResourceLedger.Balance(HarvestResource.Food)
                             + "/C" + ResourceLedger.Balance(HarvestResource.Crystals) + ")");
@@ -1058,7 +1058,12 @@ namespace DeNelle.Village.Buildings.Progression
                     bool gated = isNext && t.RequiresVillageTier > villageTier;
                     bool locked = tier > CurrentTier + 1 || gated;
 
-                    var cost = new EcoCost { Wood = t.CostWood, Food = t.CostFood, Crystals = t.CostCrystal };
+                    var cost = new EcoCost {
+                        Wood = t.Tier == 1 ? t.PrimaryMaterialCost : 0,
+                        Food = t.Tier == 2 ? t.PrimaryMaterialCost : 0,
+                        Iron = t.Tier >= 3 ? t.PrimaryMaterialCost : 0,
+                        Coins = t.CostGold
+                    };
                     // Affordability reads the GameState-backed wallet the tap actually charges
                     // (building-upgrade blocker fix) -- NOT EconomyService's divergent in-session
                     // Wood/Iron pool. Mirrors BuildResource's ResourceLedger check below so the
@@ -1337,9 +1342,9 @@ namespace DeNelle.Village.Buildings.Progression
                     if (!string.IsNullOrEmpty(pn)) _nextBonuses.Add("Opens research: " + Ascii(pn));
                 }
 
-            AddCostLine(HarvestResource.Wood, nextDef.CostWood);
-            AddCostLine(HarvestResource.Food, nextDef.CostFood);
-            AddCostLine(HarvestResource.Crystals, nextDef.CostCrystal);
+            if (nextDef.Tier == 1) AddCostLine(HarvestResource.Wood, nextDef.PrimaryMaterialCost);
+            else if (nextDef.Tier == 2) AddCostLine(HarvestResource.Food, nextDef.PrimaryMaterialCost);
+            else AddCostLine(HarvestResource.Iron, nextDef.PrimaryMaterialCost);
             _nextAffordable = BuildingUpgradeService.CanAffordTier(nextDef);
         }
 
@@ -1419,7 +1424,7 @@ namespace DeNelle.Village.Buildings.Progression
 
             var cost = PlacedStructureUpgradeService.CostForNext(entry, CurrentTier);
             AddWalletCostLine("Wood", cost.wood, _economy?.Wood ?? 0);
-            AddWalletCostLine("Food", cost.food, _economy?.Food ?? 0);
+            AddWalletCostLine("Stone", cost.food, _economy?.Food ?? 0);
             AddWalletCostLine("Iron", cost.iron, _economy?.Iron ?? 0);
             AddWalletCostLine("Crystals", cost.crystals, _economy?.Crystals ?? 0);
             _nextAffordable = BuildModeController.CanAfford(cost);
@@ -1570,7 +1575,7 @@ namespace DeNelle.Village.Buildings.Progression
         {
             var parts = new List<string>();
             if (c.Wood > 0) parts.Add(DeNelle.Core.UI.ElarionUi.CompactNumber(c.Wood) + " Wood");
-            if (c.Food > 0) parts.Add(DeNelle.Core.UI.ElarionUi.CompactNumber(c.Food) + " Food");
+            if (c.Food > 0) parts.Add(DeNelle.Core.UI.ElarionUi.CompactNumber(c.Food) + " Stone");
             if (c.Iron > 0) parts.Add(DeNelle.Core.UI.ElarionUi.CompactNumber(c.Iron) + " Iron");
             if (c.Crystals > 0) parts.Add(DeNelle.Core.UI.ElarionUi.CompactNumber(c.Crystals) + " Crystals");
             if (c.Coins > 0) parts.Add(DeNelle.Core.UI.ElarionUi.CompactNumber(c.Coins) + " Gold");

@@ -246,7 +246,7 @@ namespace DeNelle.Village.Buildings.Progression
             // HarvestIntervalByLevel note: the faucet, not the sinks, was the runaway.
             // Per-hour at x1 echo / no perks: L1 936, L3 2,160, L5 5,220 food.
             dict[FarmId] = MakeBuilding(
-                FarmId, "Farm", HarvestResource.Food,
+                FarmId, "Quarry", HarvestResource.Food,
                 baseYield: 13, yieldStep: 4,
                 costResources: new[] { HarvestResource.Wood, HarvestResource.Crystals },
                 baseCost: 130, costStep: 1.9f);
@@ -438,7 +438,8 @@ namespace DeNelle.Village.Buildings.Progression
         public static string LabelFor(HarvestResource r) => r switch
         {
             HarvestResource.Crystals => "Crystals",
-            HarvestResource.Food => "Food",
+            // The persisted Food enum/value is the frozen Stone wallet slot.
+            HarvestResource.Food => "Stone",
             HarvestResource.Wood => "Wood",
             HarvestResource.Iron => "Iron",
             _ => r.ToString(),

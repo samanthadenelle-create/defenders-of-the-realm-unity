@@ -108,9 +108,7 @@ namespace DeNelle.Village
 
             _wallet = ElarionUiKit.BuildWalletRow(_footerHost, new[]
             {
-                ElarionUiKit.CurrencyKind.Wood,
-                ElarionUiKit.CurrencyKind.Iron,
-                ElarionUiKit.CurrencyKind.Food,
+                ElarionUiKit.CurrencyKind.Gold,
             });
 
             ElarionUiKit.AttachPanelOpenFx(_ui,
@@ -244,11 +242,8 @@ namespace DeNelle.Village
 
         private void UpdateWallet()
         {
-            if (_wallet == null || _wallet.Length < 3) return;
-            var bal = ArmyMusterService.WalletBalances();
-            _wallet[0]?.SetAmount(bal.Wood);
-            _wallet[1]?.SetAmount(bal.Iron);
-            _wallet[2]?.SetAmount(bal.Food);
+            if (_wallet == null || _wallet.Length < 1) return;
+            _wallet[0]?.SetAmount(ArmyMusterService.GoldBalance());
         }
 
         private void BuildTroopLadder()
@@ -340,7 +335,7 @@ namespace DeNelle.Village
 
         private static string PerUnitLine(TroopDef def)
         {
-            var cost = new ArmyCost { Wood = def.CostWood, Iron = def.CostIron, Food = def.CostFood };
+            var cost = new ArmyCost { Gold = def.CostGold };
             return cost.ToString() + " - " + ArmyMusterPlanner.FormatDuration(def.BuildSeconds) + " each";
         }
 

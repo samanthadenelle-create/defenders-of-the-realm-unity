@@ -729,7 +729,7 @@ namespace DeNelle.Village
             var parts = new List<string>(3);
             if (c.wood > 0) parts.Add(DeNelle.Core.UI.ElarionUi.CompactNumber(c.wood) + " wood");
             if (c.iron > 0) parts.Add(DeNelle.Core.UI.ElarionUi.CompactNumber(c.iron) + " iron");
-            if (c.food > 0) parts.Add(DeNelle.Core.UI.ElarionUi.CompactNumber(c.food) + " food");
+            if (c.food > 0) parts.Add(DeNelle.Core.UI.ElarionUi.CompactNumber(c.food) + " stone");
             // ⚠ Crystals MUST be listed for the same reason MaterialsZero must count them:
             // without this line a crystals-only cost renders as "nothing" in the player's own
             // prompt WHILE BEING CHARGED. A price the UI calls nothing is worse than a wrong
@@ -942,7 +942,7 @@ namespace DeNelle.Village
         {
             var econ = EconomyService.Instance;
             if (econ == null) return "<no EconomyService>";
-            return $"W{econ.Wood} I{econ.Iron} F{econ.Food}";
+            return $"W{econ.Wood} I{econ.Iron} S{econ.Food}";
         }
 
         /// <summary>

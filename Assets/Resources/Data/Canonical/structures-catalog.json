@@ -1078,9 +1078,9 @@
   },
   {
    "id": "collector_farm",
-   "displayName": "Farm",
-   "description": "Harvests Food for your town over time.",
-   "role": "food_producer",
+   "displayName": "Quarry",
+   "description": "Extracts Stone for your town over time.",
+   "role": "stone_producer",
    "_heightNote": "1.4 IS NOT A CADENCE OUTLIER - DO NOT NORMALIZE IT TO 1.0. That half of the original note was right and it STANDS. What it MISSED is the other axis, and that is what the owner finally felt on 2026-08-20 ('farm seems to be much larger than anything else'): heightMul is a UNIFORM scale, so it moves the FOOTPRINT by the same factor it moves the height, and this model's fitted pose is FLAT. MEASURED on device, not theorised (logs/device/2026-08-20-portal.log, [Flow:Xform] + [Flow:VisualFactory] 'skinned'): Structures/farm is natively 0.977 x 1.000 x 0.391 m, and this row's orientation euler (-90,0,0) stands the 0.391 axis UP, so Fit divided the 5.6 m target (4 m base x 1.4) by 0.391 and produced scale=(14.34) and a fitted footprint of 14.00 x 14.34 m - against a family that measures 2.8-5.8 m across. That is 3.5x, and NO value of heightMul fixes it: lowering it re-ships the shrunk farm (commit 31b41d19), raising it makes the footprint worse. THE CORRECTION IS repo.maxFootprint 5.6 (added 2026-08-20) - a footprint CEILING that scales the fitted model DOWN uniformly until its widest horizontal extent is 5.6 m, the same number as this row's placement.footprint, so the visual and the collision claim finally agree. Final rendered size 5.47 x 2.19 x 5.60 m; the grid claim shrinks 5x5 cells -> 2x2, which is overlap-safe for saved towns. WHY THE OLD MECHANISM READ WRONG, kept so nobody re-derives it: 'the windmill blades inflate this model's Y bounds' is not what the geometry says - the art is a flat square plot, not a spindly silhouette - but the old note's CONCLUSION was correct for the pipeline it was written against. Until the GROK_BRIEF change of 2026-08-19 the euler was applied AFTER the fit, so Fit measured the UNROTATED 1.000 axis, 1.4 yielded scale 5.60, and the farm rendered at exactly 5.47 x 2.19 x 5.60 - the size the owner accepted. Moving the euler PRE-fit flipped which axis Fit divides by, and only this row's art is flat enough for that to matter. The cap value is chosen to reproduce that owner-accepted size in BOTH regimes: under the old order the widest extent is 5.60 and the cap is exactly non-binding, under the current order it binds and lands on the same numbers - so this row can no longer be resized by a change to rotation ORDER. heightMul 1.4 is deliberately KEPT and is INERT while the cap binds (any heightMul above ~0.55 lands on the same capped size); it remains the documented fallback if the cap is ever disarmed. If it ever needs retuning, retune the CAP against the rendered body standing next to a forge, never against the number.",
    "type": "Collector",
    "kind": "Cell",
@@ -1391,9 +1391,9 @@
   },
   {
    "id": "silo",
-   "displayName": "Silo",
-   "description": "Raises how much Food your town can hold.",
-   "role": "food_store",
+   "displayName": "Stoneyard",
+   "description": "Raises how much Stone your town can hold.",
+   "role": "stone_store",
    "type": "Resource",
    "kind": "Cell",
    "_note": "WO-707 storage container: stores Grain/food. | WO-966 (owner ruling 2026-08-15): SIX levels -- 1000/2000/4000/8000/16000/32000 food held; upgradeCost below is wood+iron only (WO-947); duration derived from (targetLevel - 2), never authored. Placeholder art: Windmill_Medieval reads agrarian (the mill tile that used it retires from the palette). | WO-707: shared GenericContainer holder body (owner 2026-07-13, Tripo import); resource identity = tile word + fill stacks (pass 2)",
@@ -1401,7 +1401,7 @@
    "repo": {
     "behaviorId": "GameplayBuilding",
     "storageCapacity": 1000,
-    "storageResource": "food",
+    "storageResource": "stone",
     "buildCost": 1280,
     "cost": {
      "wood": 960,

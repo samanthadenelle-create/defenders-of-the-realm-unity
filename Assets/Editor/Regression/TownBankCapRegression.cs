@@ -135,7 +135,7 @@ namespace DeNelle.Editor.Regression
             if (baseCap["coins"] != null)
                 failures.Add("[caps-data] storage-caps.json authors a 'coins' baseCap -- coins/gold are UNCAPPED. Remove the key.");
 
-            foreach (var word in new[] { "wood", "iron", "food" })
+            foreach (var word in new[] { "wood", "iron", "stone" })
             {
                 if (baseCap[word] == null) { failures.Add($"[caps-data] storage-caps.json has no baseCap for '{word}'"); continue; }
                 int v = baseCap[word].Value<int>();
@@ -851,7 +851,7 @@ namespace DeNelle.Editor.Regression
 
             var expectedResource = new Dictionary<string, string>
             {
-                { "lumberyard", "wood" }, { "foundry", "iron" }, { "silo", "food" },
+                { "lumberyard", "wood" }, { "foundry", "iron" }, { "silo", "stone" },
             };
 
             foreach (var kv in expectedResource)

@@ -212,7 +212,12 @@ namespace DeNelle.Editor.Regression
         private static void CaseClientBindsEveryEconomyKey(List<string> failures, StringBuilder log)
         {
             string json = DeNelle.Core.CanonicalJson.Read(PacksRelPath);
-            if (string.IsNullOrEmpty(json)) return;
+            if (string.IsNullOrEmpty(json))
+            {
+                failures.Add("[client-bindings] " + PacksRelPath +
+                    " unreadable; client binding coverage cannot be proven");
+                return;
+            }
             var root = JObject.Parse(json);
             var authored = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             foreach (var row in (JArray)root["packs"])

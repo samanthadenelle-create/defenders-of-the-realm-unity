@@ -747,12 +747,12 @@ namespace DeNelle.Village.UI
 
                 var def = BuildingTierCatalog.Find(ladderId);
                 string name = (def != null && !string.IsNullOrEmpty(def.DisplayName)) ? def.DisplayName : ladderId;
-                var cost = new CoreCost { wood = next.CostWood, food = next.CostFood, crystals = next.CostCrystal };
+                var cost = BuildingTierBasket(next);
                 // Upgrade against the ladder id so the inline row uses the same authoritative
                 // progression identity as the detailed building-management view.
                 string rowId = ladderId;                                 // captured by the CTA closure
                 int targetTier = next.Tier;
-                AddBrowseRow(Ascii(name) + " -> T" + targetTier, cost, "Upgrade",
+                AddGoldBrowseRow(Ascii(name) + " -> T" + targetTier, cost, next.CostGold, "Upgrade",
                     () => UpgradeBuilding(rowId, targetTier));
                 rows++;
             }
@@ -875,14 +875,7 @@ namespace DeNelle.Village.UI
                     // Cost is the authored per-unit build cost (TroopDef.costWood/Food/Iron) —
                     // the SAME numbers BarracksService.EnqueueTraining charges. No balance is
                     // decided here; this only displays and routes.
-                    var trainCost = new CoreCost
-                    {
-                        wood = def.CostWood,
-                        food = def.CostFood,
-                        iron = def.CostIron,
-                        crystals = 0,
-                    };
-                    AddBrowseRow("Train " + name, trainCost, "Train", () => TrainTroop(id));
+                    AddGoldBrowseRow("Train " + name, default, def.CostGold, "Train", () => TrainTroop(id));
                     trainRows++;
 
                     // ── UPGRADE (unchanged path) ───────────────────────────────
@@ -1146,19 +1139,10 @@ namespace DeNelle.Village.UI
             var svc = BuildTimerService.Instance;
             if (svc == null) return;
 
-            // ECON-SWEEP 2026-08-16 (defect 3) — NEVER claim "Nothing to refund." when a currency
-            // WAS taken. Research is priced in GOLD and JobCost has no coins lane, so its basket is
-            // all-zero and the old message reported a free cancel for a real charge. The refund
-            // POLICY is unchanged (an owner/schema call, see BuildingPerkService's header note);
-            // what changes is that the notice NAMES the money and says it is not coming back.
             if (svc.CancelChannelJobWithRefund(channel, jobId, out JobCost refunded, out string unrefunded))
             {
-                bool tookUnrefundable = !string.IsNullOrEmpty(unrefunded);
                 if (!refunded.IsZero)
-                    Notice = "Cancelled. Refunded " + refunded.Describe() + "."
-                           + (tookUnrefundable ? " The " + unrefunded + " spent on it is not returned." : "");
-                else if (tookUnrefundable)
-                    Notice = "Cancelled. The " + unrefunded + " spent on it is not returned.";
+                    Notice = "Cancelled. Refunded " + refunded.Describe() + ".";
                 else
                     Notice = "Cancelled. Nothing to refund.";
             }
@@ -1317,7 +1301,7 @@ namespace DeNelle.Village.UI
                 // this line names the SCREEN the request came from so the two can be paired in a capture.
                 var def = TroopCatalog.Find(troopId);
                 string costText = def != null
-                    ? DescribeCost(new CoreCost { wood = def.CostWood, food = def.CostFood, iron = def.CostIron })
+                    ? def.CostGold + " gold"
                     : "unknown cost";
                 FlowTrace.Step("Manage",
                     $"train enqueued from Manage: id={troopId} qty={enqueued} cost=[{costText}] " +
@@ -1416,10 +1400,34 @@ namespace DeNelle.Village.UI
         {
             var sb = new System.Text.StringBuilder();
             if (c.wood > 0) sb.Append(c.wood).Append(" wood");
-            if (c.food > 0) { if (sb.Length > 0) sb.Append(", "); sb.Append(c.food).Append(" food"); }
+            if (c.food > 0) { if (sb.Length > 0) sb.Append(", "); sb.Append(c.food).Append(" stone"); }
             if (c.iron > 0) { if (sb.Length > 0) sb.Append(", "); sb.Append(c.iron).Append(" iron"); }
             if (c.crystals > 0) { if (sb.Length > 0) sb.Append(", "); sb.Append(c.crystals).Append(" crystals"); }
             return sb.Length > 0 ? sb.ToString() : "free";
+        }
+
+        private void AddGoldBrowseRow(string label, CoreCost materials, int gold, string actionText, Action activate)
+        {
+            bool affordable = CanAfford(materials) && GoldBalance() >= gold;
+            string materialText = DescribeCost(materials);
+            string costText = materialText == "free" ? gold + " gold" : materialText + ", " + gold + " gold";
+            BrowseRows.Add(new BrowseRowVM {
+                Label = label, CostText = costText, Affordable = affordable,
+                StateText = affordable ? "Ready" : "Short on resources",
+                CostWeight = materials.wood + materials.food + materials.iron + materials.crystals + gold,
+                ActionText = actionText, Activate = activate
+            });
+        }
+
+        private static CoreCost BuildingTierBasket(BuildingTierDef tier)
+        {
+            if (tier == null) return default;
+            int primary = tier.PrimaryMaterialCost;
+            return new CoreCost {
+                wood = tier.Tier == 1 ? primary : 0,
+                food = tier.Tier == 2 ? primary : 0,
+                iron = tier.Tier >= 3 ? primary : 0,
+            };
         }
 
         private static string NameOf(CatalogEntry entry, string fallbackId)

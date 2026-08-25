@@ -53,8 +53,13 @@ namespace DeNelle.Core.State
         [JsonProperty("tier")] public int Tier;
         [JsonProperty("name")] public string Name;
         [JsonProperty("costWood")] public int CostWood;
-        [JsonProperty("costFood")] public int CostFood;
+        [JsonProperty("costGold")] public int CostGold;
+        // Legacy catalogs deserialize their retired costFood lane as Gold. New authoring uses costGold.
+        [JsonProperty("costFood")] private int LegacyCostFood { set { if (CostGold == 0) CostGold = value; } }
         [JsonProperty("costCrystal")] public int CostCrystal;
+
+        /// <summary>The authored primary material, selected by ruled depth: T1 Wood, T2 Stone, T3+ Iron.</summary>
+        public int PrimaryMaterialCost => System.Math.Max(CostWood, CostCrystal);
         /// <summary>WO-432 tech-gate — this tier (and its research) is locked until the global Village/
         /// Stronghold Tier (Heart of Elarion) reaches this value. 0 = no gate (always available).</summary>
         [JsonProperty("requiresVillageTier")] public int RequiresVillageTier;
