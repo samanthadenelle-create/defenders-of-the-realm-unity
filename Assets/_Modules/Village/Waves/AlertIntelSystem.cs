@@ -88,7 +88,8 @@ namespace DeNelle.Village
         // ── Runtime ───────────────────────────────────────────────────────────
 
         private WaveManager _wave;
-        private Label _banner;
+        private VisualElement _banner;
+        private Label _report;
         private bool _showing;
         // The wave id the current banner is warning about — so a banner shown for
         // wave N isn't reused/duplicated if the loop loops back through Countdown.
@@ -146,7 +147,11 @@ namespace DeNelle.Village
 
             int secs = Mathf.Clamp(Mathf.CeilToInt(remaining), 1, 999);
             string where = DescribeApproach();
-            _banner.text = $"ALERT: Raid incoming — {where} in {secs}...";
+            int nextWave = Mathf.Max(1, waveId + 1);
+            string size = RoamingHordeNotifications.BestLookoutLevel() >= 3
+                ? RoamingHordeNotifications.DescribeForceSize(nextWave) + " "
+                : string.Empty;
+            _report.text = $"LOOKOUT REPORT\n{size} Raid incoming — {where} in {secs}...";
         }
 
         private void Clear()
@@ -193,7 +198,9 @@ namespace DeNelle.Village
             UIDocument doc = FindAnyObjectByType<UIDocument>();
             if (doc == null || doc.rootVisualElement == null) return;
 
-            _banner = new Label { pickingMode = PickingMode.Ignore };
+            _banner = new VisualElement { pickingMode = PickingMode.Ignore };
+            var icon = new Label("!") { pickingMode = PickingMode.Ignore };
+            _report = new Label { pickingMode = PickingMode.Ignore };
 
             // Themed plum/gold to match the village HUD (cf. WaveCountdownUI).
             _banner.style.position = Position.Absolute;
@@ -205,6 +212,8 @@ namespace DeNelle.Village
             _banner.style.unityFontStyleAndWeight = FontStyle.Bold;
             _banner.style.unityTextAlign = TextAnchor.MiddleCenter;
             _banner.style.backgroundColor = new Color(0.18f, 0.06f, 0.20f, 0.86f); // plum
+            _banner.style.flexDirection = FlexDirection.Row;
+            _banner.style.alignItems = Align.Center;
             _banner.style.paddingLeft = 16;
             _banner.style.paddingRight = 16;
             _banner.style.paddingTop = 6;
@@ -226,6 +235,24 @@ namespace DeNelle.Village
             _banner.style.borderBottomWidth = 1.5f;
 
             _banner.style.display = DisplayStyle.None;
+            icon.style.width = 34;
+            icon.style.height = 34;
+            icon.style.marginRight = 10;
+            icon.style.backgroundColor = new Color(0.72f, 0.10f, 0.12f, 1f);
+            icon.style.color = Color.white;
+            icon.style.fontSize = 26;
+            icon.style.unityFontStyleAndWeight = FontStyle.Bold;
+            icon.style.unityTextAlign = TextAnchor.MiddleCenter;
+            icon.style.borderTopLeftRadius = 17;
+            icon.style.borderTopRightRadius = 17;
+            icon.style.borderBottomLeftRadius = 17;
+            icon.style.borderBottomRightRadius = 17;
+            _report.style.color = new Color(0.97f, 0.86f, 0.45f);
+            _report.style.fontSize = 18;
+            _report.style.unityFontStyleAndWeight = FontStyle.Bold;
+            _report.style.unityTextAlign = TextAnchor.MiddleLeft;
+            _banner.Add(icon);
+            _banner.Add(_report);
             doc.rootVisualElement.Add(_banner);
         }
     }

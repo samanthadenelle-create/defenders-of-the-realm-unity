@@ -78,6 +78,9 @@ namespace DeNelle.Village
         /// from the persisted clock, so a long raid session still comes home to a siege.</summary>
         public int PendingSieges { get; private set; }
 
+        /// <summary>Read-only cadence for the lookout presentation layer.</summary>
+        public double SiegeIntervalMs => IntervalMs;
+
         /// <summary>The session currently being recorded, or null.</summary>
         private SiegeSession _session;
         private WaveManager _boundManager;
@@ -98,6 +101,7 @@ namespace DeNelle.Village
 
         private void OnEnable()
         {
+            RoamingHordeNotifications.Attach(this);
             OfflineClaimCoordinator.Register(this);
             InvokeRepeating(nameof(Evaluate), 2f, Mathf.Max(1f, _evaluateEverySeconds));
             FlowTrace.Step("Siege",

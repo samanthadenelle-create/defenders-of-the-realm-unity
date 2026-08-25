@@ -57,6 +57,20 @@ namespace DeNelle.Village
         /// </summary>
         public static double NowUnixMs() => TimeSource.NowUnixMs();
 
+        /// <summary>Remaining cadence time for presentation/scheduling. Returns false until
+        /// a real cadence anchor exists; callers must never turn a fresh save into an alert.</summary>
+        public static bool TryGetDueIn(GameState state, double intervalMs, out TimeSpan dueIn)
+        {
+            dueIn = default;
+            if (state == null || state.LastSiegeUnixMs <= 0 || intervalMs <= 0) return false;
+
+            double now = NowUnixMs();
+            if (state.LastSiegeUnixMs > now) return false;
+
+            dueIn = TimeSpan.FromMilliseconds(Math.Max(0, intervalMs - (now - state.LastSiegeUnixMs)));
+            return true;
+        }
+
         /// <summary>
         /// Stamps the cadence clock as "a siege just fired now". Called once, from
         /// <c>SiegeScheduler.Arm</c>.
