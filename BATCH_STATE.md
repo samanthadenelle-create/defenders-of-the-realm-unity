@@ -4,9 +4,16 @@
 
 > ## ⛔ THE PROTOCOL
 > 1. **Read this file at the START of every batch, and again before starting any NEW ticket inside one.**
-> 2. This file is **REPLACED, never appended.** If it says something, it is current. If it does not say it, it is not in flight.
-> 3. ⛔ **Anything in `CODEX_HANDOFF.md` that contradicts this file is HISTORY.** That document is layered and much of it is stale by design — it is the reasoning archive, not the state.
-> 4. The lead updates this file **as batches move**. If it looks stale against what you see in the tree, ⚠ **say so rather than guessing** — a wrong state file is worse than none.
+> 2. ⭐ **THE TWO SEATS DO DIFFERENT OPERATIONS — that is the safety, not just different regions.**
+>    - **Dev lane: APPENDS to existing sections.** ⛔ Never creates one, never replaces one.
+>    - **Lead: ADDS NEW SECTIONS, and replaces only sections it wrote.** ⛔ **NEVER replaces the file.**
+>    ⚠ **This corrects an earlier version of this rule** that said *"replaced, never appended"* — taken
+>    literally, a lead replacing the file would have **silently destroyed every dev-lane entry.** The
+>    state above is refreshed **section by section**, never wholesale.
+> 3. **If a section says something, it is current.** ⛔ **If it is not in ACTIVE, it is not in flight** —
+>    a ticket's absence here is as load-bearing as its presence.
+> 4. ⛔ **Anything in `CODEX_HANDOFF.md` that contradicts this file is HISTORY.** That document is layered and much of it is stale by design — it is the reasoning archive, not the state.
+> 5. The lead updates this file **as batches move**. If it looks stale against what you see in the tree, ⚠ **say so rather than guessing** — a wrong state file is worse than none.
 >
 > ## ⭐ THE OWNER IS THE COURIER (2026-08-24) — neither seat reads the other directly
 > **She carries this file between the CLI lead and the dev lane by hand.** ⚠ **So nothing written here
