@@ -429,7 +429,26 @@
 > never as BUILD STATUS** -- "under construction"/"coming soon"/"dev"/"WIP" are BANNED player-facing
 > strings and get a REGRESSION ORACLE, not a comment, because that is the rule most likely to rot.
 > Status READY TO IMPLEMENT, 3 open rulings. No code yet.)*
-> ## âš  RECONCILED 2026-08-24 (UI seat): UI seat next free = **1075**.
+> ## ⚠ RECONCILED 2026-08-24 (UI seat): UI seat next free = **1079**.
+> *(UI seat minted **WO-1075 through WO-1078** and bumped 1075 -> 1079 in this SAME edit. The four
+> newly-red panels from the WO-1060 touch/overlap oracle, **one ticket per file so four seats can run
+> in parallel** - all four files are mutually disjoint. **1075** = `RaidDeployScreen` - `Army Ready?`
+> and `BEGIN ASSAULT` resolve 103 / 101.7 px tall at 2340x1080 and 2670x1200, UNDER
+> `ElarionUiKit.MinTouchPx` (112), and CLEAR the floor at 1920x1080 - the aspect most likely to be
+> checked. **1076** = `RumorBoardPanel`, the worst at 18 findings - the shared Close (360x132) sits on
+> `ObsBtn_Accept` (**193.6x112** shared) AND `ObsBtn_Track` (139.2x112); accept-vs-dismiss resolves by
+> raycast luck. **1077** = `EndStateView` - the invisible full-panel `TapDismiss` covers 100% of the
+> "Repair All" CTA (314x115.1 at all three aspects). **1078** = `DialogueView` - `TapAdvance` covers
+> every option row at its full 112 px height; `DialogueView.cs:289` proves this exact class already
+> shipped once and was fixed for the Close button ONLY.
+> ⚠ **1077 + 1078 share ONE LEAD DECISION about the TOOL, not the panels:** `LayoutOracle.cs:141`
+> already excludes graphic-less buttons from BUTTON OVER TEXT but not from BUTTONS OVERLAP; extending
+> it would drop 21 of the 43 in one edit. WO-1060 declined on principle; the owner ruled it a lead
+> call. Both tickets surface it, neither makes it, and both say it is ONE coordinated edit if taken.
+> ⛔ The allow-list stays at TWO entries (`ArmyMuster`, `EquipDrawer`) in all four - owner ruling
+> 2026-08-24 batch 2 ruling 9. Specs only; CLI implements, gates and commits.)*
+>
+> ### superseded: RECONCILED 2026-08-24 (UI seat): UI seat next free = **1075**.
 > *(UI seat minted **WO-1069 through WO-1074** and bumped the header 1069 -> 1075 in this SAME
 > edit. **1074** = the KINGDOM COSMETIC IDENTITY PROGRAM (second owner-adopted external review,
 > same day): Kingdom Collections + Heart-of-Elarion Aspects (LAYERED over progression tier, never

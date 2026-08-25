@@ -1,6 +1,6 @@
 # WORK ORDER 823 — Post-review hardening pack (army readiness + founding card + oracles + RESULT hygiene)
 
-**Status:** READY - ⭐ **Phase E's owner ruling LANDED 2026-08-24 (batch 2, ruling 8): the threshold is 3 OF 10**, first-ever raid only, and it MUST go through `ArmyReadiness`. Phases A-D shipped 2026-08-01 (`8560fced`). *(Prior line:)* BLOCKED - on an owner ruling (reconciled 2026-08-09 - Phases A through D SHIPPED in `8560fced`; the single outstanding item, Phase E (optional PO-tunable first-raid softness, P3), is explicitly awaiting the owner's ruling and cannot move without it)
+**Status:** READY - ⭐ **Phase E is now BUILDABLE (2026-08-24, UI seat): see "Phase E — THE IMPLEMENTABLE SPEC" at the end of this file.** The ruling alone was not enough — no "has ever completed a raid" signal existed anywhere; E1-E7 spec the field, the v38→v39 bump (FOUNDATIONAL_RULINGS.md §5, no owner ruling needed), the `ReconcileRaidEnd` seam, the derive-don't-default read-migration, and the `ArmyReadiness` routing. *(Prior line:)* ⭐ **Phase E's owner ruling LANDED 2026-08-24 (batch 2, ruling 8): the threshold is 3 OF 10**, first-ever raid only, and it MUST go through `ArmyReadiness`. Phases A-D shipped 2026-08-01 (`8560fced`). *(Prior line:)* BLOCKED - on an owner ruling (reconciled 2026-08-09 - Phases A through D SHIPPED in `8560fced`; the single outstanding item, Phase E (optional PO-tunable first-raid softness, P3), is explicitly awaiting the owner's ruling and cannot move without it)
 
 **Status: READY — Phases A-D SHIPPED 2026-08-01 (8560fced); Phase E is now RULED (owner 2026-08-24: **3 of 10**, first raid only, via `ArmyReadiness`) and buildable.**  
 **Minted:** 2026-08-01 (CLI / Grok — from PM code review of Claude Fable check-ins)  
@@ -217,3 +217,286 @@ without her.**
   inside the raid screen**, or the grey-button-versus-open-gate bug comes straight back.
 
 **Status → READY.** Phase E is the last outstanding phase; Phases A–D shipped 2026-08-01 (`8560fced`).
+
+---
+
+# ⭐ Phase E — THE IMPLEMENTABLE SPEC (added 2026-08-24, UI seat)
+
+**Why this section exists:** the ruling above is complete and the number is settled, but Phase E was
+still **NOT BUILDABLE**. It says *"used only when the save has never completed a raid"* — and
+**no such signal exists anywhere in the game.** Verified at source this session, not inferred:
+
+| Searched | Result |
+|---|---|
+| `raidsCompleted` / `everCompletedRaid` / `firstRaid*` across every `.cs` under `Assets/` | **ZERO hits** |
+| The full `[JsonProperty]` list in `Assets/_Modules/Core/State/SaveSchema.cs` | no raid-completion field of any kind |
+| `Assets/_Modules/Core/State/GameState.cs:568` | only `RaidCooldowns` — **per-camp and expiring**, wrong shape |
+
+So Phase E needs five pieces built before the 3-of-10 rule has anything to ask.
+
+---
+
+## E1 — The field
+
+**`Assets/_Modules/Core/State/GameState.cs`** — append at the END of the class, beside `RaidCooldowns`
+(`:568`). Model it on `StrategicPlacementMigrated` (`GameState.cs:435`):
+
+```csharp
+/// <summary>
+/// WO-823 Phase E — has this save EVER completed a raid (victory, loss, retreat, timeout
+/// or hero death)? Monotonic: once true it never returns to false. The ONLY input to the
+/// first-raid soft gate (3 of 10). Distinct from RaidCooldowns, which is per-camp and EXPIRES.
+/// </summary>
+public bool EverCompletedRaid = false;
+```
+
+**Plain `bool` on GameState, nullable only on the wire** — the `StrategicPlacementMigrated`
+precedent. **Monotonic, like `everBuiltStructureIds`** (`SaveSchema.cs:645`): nothing ever clears it.
+⛔ Do not add a debug/reset path; `ResetToNewGame` is the only writer of `false`.
+
+**The exact three-place pattern, verified at source on the `strategicPlacementMigrated` model:**
+
+| Place | Model line | What to add |
+|---|---|---|
+| Wire field | `SaveSchema.cs:504` | `[JsonProperty("everCompletedRaid")] public bool? EverCompletedRaid;` — **append-only at the END** of `PersistedState`, after `raidCooldowns` (`:696`) |
+| CAPTURE / save | `GameStateService.cs:543` | `EverCompletedRaid = s.EverCompletedRaid,` in the same object initializer |
+| RESTORE / load | `GameStateService.cs:638` | `if (p.EverCompletedRaid.HasValue) s.EverCompletedRaid = p.EverCompletedRaid.Value;` |
+| New game | `GameStateService.cs:1104` (the `s.RaidCooldowns = new List<...>();` line; bool precedent at `:1098`) | `s.EverCompletedRaid = false;` on an adjacent line |
+
+---
+
+## E2 — The schema bump: **v38 → v39**
+
+⭐ **This bump does NOT need an owner ruling.** `FOUNDATIONAL_RULINGS.md` **§5** grants the lead
+authority to bump the save schema when all four of its stated conditions hold together. They do:
+
+| §5 condition | How E2 satisfies it |
+|---|---|
+| 1 | Nullable on the wire, append-only at the end of `PersistedState`; a v38 save deserializes unchanged. |
+| 2 | Absent ⇒ the read-migration in **E4** supplies the value. |
+| 3 | E6 adds the coverage. |
+| 4 | Nothing existing is renamed, removed, reinterpreted or converted. `RaidCooldowns` keeps its exact current meaning. |
+
+⛔ Do not restate §5's four conditions in a code comment — cite the section.
+
+**The version number:** current is **`SaveSchema.CurrentVersion = 38`**
+(`Assets/_Modules/Core/State/SaveSchema.cs:41`, read at source this session — ⛔ never take it from a
+doc; that same file's own header comment sat two versions stale and says so at `:11-12`). So Phase E
+ships **v39**.
+
+**Where the step goes, verified:**
+- Bump `SaveSchema.cs:41` and prepend the v39 note to that same comment — **that comment IS the changelog.**
+- Register in the `Steps` dictionary, `SaveMigrator.cs:36-80`. Today's top entry is `SaveMigrator.cs:79`
+  — `{ 38, MigrateToV38 },`. Add `{ 39, MigrateToV39 },` immediately after it.
+- Method body precedent: `SaveMigrator.cs:678` (`MigrateToV38`). File ordering is not enforced.
+
+⚠ **An additive default-on-read bool would not normally need a migrator step at all** (see the
+precedents at `SaveMigrator.cs:49-61`, and v32/v33 which have none) — **but bumping `CurrentVersion`
+does.** `Assets/Editor/Regression/CoreSaveContractRegression.cs:57-69` reflects the private `Steps`
+table and **FAILS** unless the top step `==` `CurrentVersion`. Here the step is doing real work anyway
+(E4), so this is not a formality.
+
+---
+
+## E3 — The seam that SETS it
+
+**`Assets/_Modules/Village/Troops/RaidDeployController.cs:702` — `ReconcileRaidEnd(int starsEarned)`.**
+
+There is **no single "raid ended" method**; the raid end is split across exits that converge here.
+Verified call sites — **four, in three files**:
+
+| Exit | Call site |
+|---|---|
+| Retreat / clock expiry | `RaidDeployController.cs:529` (`DoRetreat`, fed by `OnRaidTimeExpired` `:220`) |
+| Hero death | `Assets/_Modules/Village/Hero/HeroHealth.cs:875` |
+| Victory (camp raids) | `Assets/_Modules/Village/World/Camps/RaidVictoryController.cs:493`, via `ReconcileArmy` `:277` |
+
+It is the right seam for three reasons:
+
+1. **It is the only method reached by victory AND defeat AND retreat AND timeout AND hero-death.**
+   The two obvious alternatives are **not**: `SettlePartialLoot` (`:556`) is non-victory only, and
+   `RaidCooldownService.BeginAfterClear` is **victory only** (`RaidVictoryController.cs:249`,
+   `Village2RaidController.cs:232` — the only two non-test call sites repo-wide).
+2. **It is already latch-idempotent** — `_reconciled` (`:613`, checked `:704-710`), so the stamp fires
+   exactly once per raid.
+3. **It already has GameState in hand** (`Army()` `:712`) and every caller `Save()`s right after
+   (`RaidDeployController.cs:532`, `HeroHealth.cs:879`; victory persists via `ClaimBase` /
+   `RaidCooldownService.Persist`).
+
+**Stamp it immediately after the `army == null` early-out (`:713-718`), BEFORE the reconcile work** —
+so a raid ending in a reconcile anomaly still records that it happened. One assignment plus a
+`FlowTrace.Step` **on the false→true transition only** (⛔ never per-raid; §12 says instrument, not flood).
+
+⛔ **Do NOT stamp in `RaidVictoryController`** — victory-only, so a player whose first raid is a
+retreat would never leave the soft gate.
+
+### ⚠ KNOWN GAP — Village2 stronghold raids do not reach this seam
+
+`Assets/_Modules/Village/World/Camps/Village2RaidController.cs:205` (`HandleCleared`) stamps its own
+cooldown at `:232` but **never calls `ReconcileRaidEnd`** — Village2 has no `RaidScoring` and no
+deploy-ledger settle. Compounding it, `RaidDeployController` self-installs **only in `RaidBase*`
+scenes** (`:120-133`, noted again at `HeroHealth.cs:854-855`).
+
+**Consequence to state plainly:** a player whose first-ever raid is a **Village2 stronghold** clears it
+and the flag stays `false`, so the soft gate persists into their next raid. ⛔ **Do not "fix" this by
+adding a second stamp in `Village2RaidController`** — that forks the one-owner seam and is the same
+class of mistake as a second readiness check. Either Village2 is routed through `ReconcileRaidEnd` as
+its own change, or this is accepted and documented. **Surface it; do not silently paper over it.**
+
+---
+
+## E4 — ⚠ The legacy-save default is a BEHAVIOUR CHOICE, and the obvious answer is WRONG
+
+**The owner has completed several raids.** So `absent → false` — the naive migration — would
+**re-gate her own save**, and every other veteran save, telling a player with a dozen raids behind
+them that they may bring 3 of 10 troops "for their first raid." That is visibly wrong to precisely
+the people most likely to notice. ⛔ Do not ship `absent → false`.
+
+### The rule: `absent → DERIVE from named evidence; if no evidence exists → false`
+
+**The evidence hunt, at source. There is exactly one durable signal, and it is imperfect:**
+
+| Candidate | Verdict |
+|---|---|
+| ⭐ **`army.owned[].veterancyRank > 0`** | **USE THIS — primary clause.** Durable, never expires, never pruned. `PlayerTroop.cs:60-61` documents the rank as granted per survived raid; its **only** grant path repo-wide is `RaidDeployController.GrantVeterancy` (`:782`) — the raid seam itself — and `:755` records that before that call site `AddVeterancy` had **zero** callers. `PlayerTroop.cs:34` records troops are *"never deleted on a loss."* A non-zero rank is proof a raid completed. |
+| `GameState.RaidCooldowns` non-empty | **Sufficient but NOT necessary — second clause, never alone.** `RaidCooldownService` **actively prunes** expired and inert records (`:212`, `:241`, `:354`), so an idle veteran save legitimately holds none. |
+| Quest / objective completion | **NOT USABLE.** `QuestProgress` (`NestedTypes.cs:251-255`) has a `completed` dictionary, but no raid-completion quest id keyed to a camp raid was found in `Assets/Resources/Data/Canonical/quests.json`. ⛔ Do not invent one. |
+| `defenseReports` (`SaveSchema.cs:664`) / `lastSiegeUnixMs` (`:678`) | **NOT USABLE — wrong direction.** Those record **incoming** sieges on the player's town, not outbound raids. |
+| `settlements` / `tribes.clearCount` (`WorldContent.cs:93-113`, `:160`) | **NOT USABLE — would FALSE-POSITIVE.** Node claims and roaming-tribe wipes are different mechanics; clearing a tribe is not raiding a camp. |
+| A lifetime raid counter | **DOES NOT EXIST.** No `Lifetime*` / `totalRaids` field on `ArmyStorage` or anywhere in `PersistedState`. |
+
+**So `MigrateToV39` reads:** *absent ⇒ **true** if any owned troop has `veterancyRank > 0` **OR**
+`raidCooldowns` is non-empty; otherwise **false**.* (Model the seed on `SaveMigrator.cs:456`, the
+`MigrateToV30` line for `StrategicPlacementMigrated`.)
+
+### ⚠ The gap this leaves — put it in the migrator comment, do not hide it
+
+A veteran save is **still wrongly re-gated** when **all** of these hold at once: every raid was below
+3 stars or lost, so veterancy was never granted (`GrantVeterancy` returns early under 3 stars,
+`:760-765`), **and** every camp cooldown has since expired and been pruned. That player gets **one**
+extra soft-gated raid, after which E3 stamps the flag and the gate is gone permanently.
+
+⭐ **Two honest options for the residual gap. Both are the owner's call — this ticket does not pick:**
+
+- **(a)** Accept it. One extra soft-gated raid for a narrow slice of veteran saves, self-healing after
+  a single raid. **Say so in the ticket and in the migrator comment** — a derivation that quietly
+  misses cases is worse than a documented one.
+- **(b)** The owner rules a one-time manual set for her own save (and any save she names).
+
+⛔ Do not implement either until she rules. **(a)** is the no-code default if she does not.
+
+---
+
+## E5 — The gate: through `ArmyReadiness`, and nowhere else
+
+⛔ **The threshold is read INSIDE `ArmyReadiness.Compute`. There is no second check anywhere.**
+
+### The real API (verified — it differs from Phase A's sketch above)
+
+`Assets/_Modules/Village/Troops/ArmyReadiness.cs`, `public static class`, namespace `DeNelle.Village`:
+
+- `:36` `public struct Snapshot` — fields `DeployableSlots` (`:39`), `QueuedSlots` (`:41`),
+  `CapSlots` (`:43`), `RosterSlots` (`:45`), `Ready` (`:47`). **There is no `Ready`-only sketch struct;
+  use these names.**
+- `:55` `public static Snapshot Compute(GameState st)` — null `st`/`st.Army` ⇒
+  `new Snapshot { Ready = true }` (`:58`), the deliberate headless never-false-block.
+- `:73` `public static Snapshot Compute(ArmyStorage army, int deployableSlots, int queuedSlots)` —
+  the EditMode test seam; `Ready = deployableSlots + queuedSlots >= cap` (`:82`).
+
+### The change
+
+Add two fields to `Snapshot` and route both overloads through one comparison:
+
+```csharp
+public int RequiredSlots;      // NEW: CapSlots normally; FirstRaidMinDeployableSlots when never raided
+public bool FirstRaidSoftGate; // NEW: presentation-only — lets the screen say WHY, never re-decide
+```
+
+- `RequiredSlots` = `st.EverCompletedRaid ? CapSlots : FirstRaidMinDeployableSlots`.
+- `Ready` becomes `DeployableSlots + QueuedSlots >= RequiredSlots` — **one comparison, one place.**
+- `FirstRaidMinDeployableSlots = 3` — a **named constant** sited beside the helper. The owner's number.
+  ⛔ Never re-tune without her; her reasoning (one = scripted tutorial, five = waiting again) is
+  recorded above and is the retune argument.
+- ⚠ **The test-seam overload (`:73`) takes no `GameState`, so it cannot see the flag.** Give it an
+  explicit `bool everCompletedRaid` parameter (defaulted `true` = today's behaviour) rather than
+  duplicating the comparison. ⛔ Two copies of the comparison is the bug this phase exists to avoid.
+- **The null contract is unchanged:** `st == null` ⇒ `Ready = true`, `FirstRaidSoftGate = false` —
+  headless / AutoPilot must never meet the soft gate.
+- ⭐ **`FirstRaidSoftGate` is presentation-only.** The raid screen may use it to word the copy; it may
+  **not** branch the decision on it.
+
+### ⚠ THE UNIT TRAP — "3 of 10" is 3 **SLOTS**, not 3 troops
+
+`ArmyReadiness` is **slot-weighted**: it sums `TroopDialogueCommands.SlotOf` (`:62-63`) against
+`army.MaxArmySize`. `FirstRaidMinDeployableSlots` therefore lives in the **same unit as `CapSlots`**,
+which is what makes "3 of 10" read correctly. ⛔ Do not compare it against a headcount.
+
+### ⚠ AND THERE IS ALREADY A SECOND CHECK IN THE RAID SCREEN — this is the bug, live
+
+`Assets/_Modules/Village/Hero/RaidDeployScreen.cs` bypasses `ArmyReadiness` in two places:
+
+- `:477` — `bool troopsOk = !GateDeployAtZeroTroops || (_vm != null && _vm.DeployableCount > 0);`
+  → drives `deployBtn.interactable` at `:478`
+- `:526` — a **second copy** in the DEPLOY handler: `if (GateDeployAtZeroTroops && _vm.DeployableCount <= 0)`
+  → toast + block (`:528-529`)
+
+`_vm.DeployableCount` comes from `RaidDeployVM.cs:337` and is a **raw headcount** over
+`_army.GetDeployable()` (`:309-322`) — **not slot-weighted**. `RaidDeployScreen.cs:474` even comments
+that the upstream gate exists, and then does not consult it. `GateDeployAtZeroTroops` is currently
+flagged OFF by default (`:438`, `:525`), which is the only reason this has not already produced the
+grey-button-versus-open-gate divergence again.
+
+⭐ **Phase E must route these two through the snapshot** rather than adding a third opinion. That is
+the ruling's *"never a second check inside the raid screen"* applied to what is actually in the file
+today. There is a **third** count path at `RaidDeployVM.cs:342-359` (`ComputeArmyCapText`, its own
+`slotOf` lambda over `_army.SlotsUsed`) — copy text only; leave it, but ⛔ do not let the gate read it.
+
+---
+
+## E6 — Acceptance
+
+- [ ] `grep -rn "EverCompletedRaid" Assets/` shows the field, the wire property, both
+      `GameStateService` directions, the `ResetToNewGame` line, `MigrateToV39`, `ReconcileRaidEnd`
+      and `ArmyReadiness` — **and nothing inside any raid screen, panel or VM.**
+- [ ] `grep -rn "FirstRaidMinDeployableSlots" Assets/` returns **exactly one** definition and
+      **exactly one** read, both inside `ArmyReadiness.cs`.
+- [ ] `RaidDeployScreen.cs:477` and `:526` read the `ArmyReadiness` snapshot; `_vm.DeployableCount`
+      no longer gates either one.
+- [ ] `SaveSchema.CurrentVersion == 39` and the `SaveMigrator` `Steps` top entry is `MigrateToV39`
+      (pinned by `CoreSaveContractRegression.cs:57-69`).
+- [ ] A v38 fixture with **no** `everCompletedRaid` key deserializes cleanly.
+- [ ] A v38 fixture carrying a troop at `veterancyRank >= 1` migrates to **true** (E4 primary clause,
+      proved not assumed).
+- [ ] A v38 fixture with a **non-empty** `raidCooldowns` migrates to **true** (E4 second clause).
+- [ ] A genuinely fresh v38 fixture (no veterancy, no cooldowns) migrates to **false**, and the
+      migrator's own comment names the E4 gap **and** the E3 Village2 gap.
+- [ ] New game ⇒ `false` ⇒ first raid deploys at **3 slots**; after `ReconcileRaidEnd` runs once the
+      flag is `true` and the requirement is the full cap **permanently**. **Cover all three exits** —
+      retreat (`starsEarned 0`), hero death, and victory.
+- [ ] Headless / no `GameState` ⇒ `Ready = true`, `FirstRaidSoftGate = false` (Phase A contract intact).
+- [ ] COMPILE_GATE_OK + the regression marker.
+
+### Suites this will trip — check them before claiming green
+
+| Suite | Why it fires |
+|---|---|
+| `Assets/Editor/Regression/CoreSaveContractRegression.cs:57-69` | version-triple: top step must `==` `CurrentVersion` |
+| `Assets/Editor/Regression/CoreSaveRegression.cs:230-244`, `:247` | migrates every start version `0..CurrentVersion-1` |
+| `Assets/Editor/Regression/RaidCooldownRegression.cs:322-326` | **source-lints the `ReconcileRaidEnd(int starsEarned)` signature** — do not change it |
+| `Assets/Editor/Regression/RaidExitParityRegression.cs:132-143` | source-lints the exit routing; a stamp inserted into `ReconcileRaidEnd` is checked here |
+| `Assets/Editor/Regression/RaidsDiscoverabilityRegression.cs:233-234`, `:205-206` | pins that `RaidSelectionScreen.Open` calls `ArmyReadiness.Compute` and `RaidCapabilityHudBridge` does **not** |
+
+**New coverage joins** `Assets/Editor/Regression/StrategicPlacementRegression.cs` as its model (the
+closest precedent for an additive bool: migrator-seeds-the-right-default `:209-212`, round-trip
+`:362-378`, absent-on-old-save `:393`), registered in `DataRegression.cs` the same way. EditMode:
+`Assets/Tests/EditMode/ArmyReadinessTests.cs` and `Assets/_Modules/Core/Tests/SaveLoadRoundTripTest.cs`.
+
+## E7 — What NOT to touch
+
+- ⛔ `RaidCooldowns` semantics, its record shape, or its pruning. Untouched — that is §5 condition 4.
+- ⛔ The `ReconcileRaidEnd(int starsEarned)` **signature** — source-linted (see table above).
+- ⛔ `RaidVictoryController` / `Village2RaidController` — the stamp does not go in either (E3).
+- ⛔ The 3-star rule inside `GrantVeterancy`. E4 **reads** veterancy; changing when it is granted
+      would invalidate its own evidence.
+- ⛔ `RaidCapabilityHudBridge` — it must keep NOT referencing `ArmyReadiness`.
+- ⛔ Any third readiness opinion. Phase E **removes** one; it must not add one.

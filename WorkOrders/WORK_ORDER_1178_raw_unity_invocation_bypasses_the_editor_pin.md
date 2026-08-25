@@ -1,6 +1,6 @@
 # WO-1178 - A raw `Unity.exe` invocation bypasses the editor pin and silently costs a full rebuild
 
-**Status:** READY. **Silo:** Tooling/gates.
+**Status:** READY — ⚠ **code HANDED BACK 2026-08-24 and AT LEAD REVIEW; NOT committed, NOT landed.** **Silo:** Tooling/gates. ⛔ Its diff touches `tools/run-unity-method.ps1` and an APK chain that calls it is executing, so the merge is fenced on that chain finishing. *(Status audit 2026-08-24: no commit exists for this ticket — verified against `git log`; body unchanged.)*
 **Found:** 2026-08-24, while gating PROD-014. Cost: one wasted gate run plus a forced full recompile.
 
 ## What happened

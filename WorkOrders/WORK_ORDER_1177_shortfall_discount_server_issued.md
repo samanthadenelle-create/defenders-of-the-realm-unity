@@ -1,6 +1,6 @@
 # WO-1177 - The shortfall discount, issued by the server or not at all
 
-**Status:** READY TO IMPLEMENT. **Silo:** Backend/monetization.
+**Status:** FIXED 2026-08-24 (`2c3ed6c24`) — awaiting owner felt-verify. **Silo:** Backend/monetization. *(Status audit 2026-08-24: verified at source — `api/purchases/quote.js`, `api/_lib/purchase-catalog.js`, `api/purchases/verify.js`, `test/purchases.quote.test.js`, `PackStore.cs`, `PurchaseQuoteService.cs` all in `2c3ed6c24`; 43/43 quote+verify tests. **DEPLOYED to production** and the discount migration RAN and VERIFIED — all four columns present, `quotes_still_present 1 / settled_quotes 1`, so the 391 SKR settlement survived the ALTER. Body unchanged.)*
 **Origin:** owner, 2026-08-24 - *"offer a 20% discount? buy it now?"*. Split out of **PROD-014**,
 where it was the largest item and would otherwise have held up the reported defect.
 **Ruling:** the owner ruled the discount **fires at the shortfall**. I argued for a one-time

@@ -61,13 +61,102 @@ paid basket, and re-checking every purchasable pack — for a change the player 
 
 ⛔ **This is the single most important implementation decision in the ticket.** Food and Stone are mechanically identical — a bulk resource with a cap, a producer and a container — so this is one word, not one economy.
 
-**Blast radius, counted:** **208** `"food"` references in canonical data — `battle_monthly.json` **120** · `quests.json` **63** · `packs.json` **18** · `barracks.json` **6** · `storage-caps.json` **1** — plus the persisted save fields `BuildJobData.Food` and `PaidFood` (the WO-911 paid basket, schema **v37**).
+### ⚠ BLAST RADIUS — CORRECTED 2026-08-24 (UI seat). The previous table was materially WRONG.
+
+⛔ **The old table keyed on the string `"food"` and therefore missed the actual cost field, which is
+`costFood`.** The two key sets are almost perfectly **disjoint** — 13 of the 14 C# files carrying
+`costFood` contain zero `"food"`, and 26 of the 27 JSON files carrying `"food"` contain zero
+`costFood`. So a `"food"`-keyed plan captured 692 mostly-irrelevant occurrences and **missed the only
+two files that actually carry tiered costs.** Recounted at source with `rg --count-matches`
+(occurrences, not lines — several C# lines carry two tokens).
+
+⛔ **The old table also listed `building-tiers.json` at ZERO refs.** It holds **26** `costFood` — and
+§3b already names it the **largest sink in the game** at 113,360 food. The two halves of this ticket
+disagreed with each other.
+
+⛔ **And the path was wrong: `Assets/Data/building-tiers.json` DOES NOT EXIST.** There is no
+`Assets/Data/` directory at all. The canonical file is
+**`Assets/Resources/Data/Canonical/building-tiers.json`**, with a **required mirror** at
+**`Assets/StreamingAssets/Data/Canonical/building-tiers.json`**. ⭐ **Every canonical data file in
+this repo is mirrored across those two trees. Both copies move together or they diverge silently.**
+
+#### The `costFood` footprint — this is what the rename actually touches
+
+| File | `costFood` |
+|---|---|
+| `Assets/Resources/Data/Canonical/building-tiers.json` | **26** |
+| `Assets/StreamingAssets/Data/Canonical/building-tiers.json` | **26** (mirror) |
+| `Assets/Resources/Data/Canonical/troops.json` | 9 |
+| `Assets/StreamingAssets/Data/Canonical/troops.json` | 9 (mirror) |
+| `Assets/Resources/Data/Canonical/packs.json` | 1 |
+| `Assets/StreamingAssets/Data/Canonical/packs.json` | 1 (mirror) |
+| **JSON subtotal** | **72 across 6 files** |
+
+**C# — 32 occurrences across 14 files** (9 lowercase `costFood` = JSON-binding attributes and
+regression assertions; 23 PascalCase `CostFood` = the properties):
+`Assets/_Modules/Village/Hero/TroopTrainingVM.cs` (4) ·
+`Assets/_Modules/Village/Buildings/Progression/BuildingUpgradeService.cs` (3) ·
+`.../BuildingUpgradeVM.cs` (3) · `Assets/_Modules/Village/UI/Manage/ManageScreenVM.cs` (3) ·
+`Assets/_Modules/Village/Troops/TroopDef.cs` (3) ·
+`Assets/_Modules/Core/State/BuildingTierCatalog.cs` (2) ·
+`Assets/_Modules/Village/Troops/{ArmyMusterPanel,ArmyMusterService,BarracksProgression,BarracksService}.cs` (1 each) ·
+`Assets/Editor/Regression/EconomySinkCapRegression.cs` (5) ·
+`.../TroopRosterRegression.cs` (3) · `.../CostBasketSeparationRegression.cs` (1) ·
+`Assets/Tests/EditMode/TroopTrainingVMTests.cs` (1).
+
+**`costFood` code + data total: 104 occurrences across 20 files.**
+
+#### The `"food"` footprint — separate axis, still real, still must be done
+
+The 208 figure was also low. Recounted: **597** `"food"` in JSON across 27 files (`battle_monthly.json`
+120 ×2 trees, `quests.json` 63 ×2, **`structures-catalog.json` 57 ×2 — never previously listed**,
+`packs.json` 18 ×2, `gear-recipes.json` 8 ×2, `barracks.json` 6 ×2, `jeweler-recipes.json` 6 ×2,
+`battle_monthly_packs.sample.json` 24, plus singles) and **71** in C# across 35 files.
+
+⚠ **Note `building-tiers.json` and `troops.json` have `costFood` and ZERO `"food"`** — the exact
+inverse of the old table's assumption. **The rename plan needs BOTH keys or it is incomplete.**
 
 | | RENAME (food slot → stone) | DELETE + ADD |
 |---|---|---|
 | Save field | keeps its slot, reads as Stone | new field + purge + migration |
-| Packs / battle pass / quests | all 208 refs ride along | all 208 re-authored by hand |
+| `costFood` (104 occ / 20 files) | rides along as one field rename | 104 hand edits, incl. the 113,360-food ladder |
+| `"food"` (668 occ / 62 files) | rides along via the alias | all re-authored by hand |
 | Risk | low | high — **touches paid content** |
+
+---
+
+### ⭐ THE SKU IDS DO RENAME — owner ruling, and it pulls in two more files
+
+⛔ **This ticket now touches the backend and its test.** Verified at source:
+
+- **`api/_lib/purchase-catalog.js:103-105`** carries a three-rung food SKU ladder in the price map:
+  `'impulse-food-small'` → 1.99 · `'impulse-food-medium'` → 2.99 · `'impulse-food-large'` → 4.99.
+  Sibling ladders (`impulse-wood-*` `:97-99`, `impulse-iron-*` `:100-102`, `impulse-crystals-*`
+  `:106-108`) confirm the naming is per-resource. **There is NO `impulse-stone-*` family** — that is a
+  real gap the rename must close.
+- **`test/purchases.quote.test.js:132`** — `const keys = ['wood', 'iron', 'food', 'crystals', 'coins'];`
+  ⚠ **This file contains ZERO food SKU id strings** (every SKU literal in it is
+  `'impulse-wood-medium'`, 13 occurrences). **So the existing quote tests would NOT catch a food SKU
+  removal.** The test must gain stone SKU coverage, not merely have `'food'` swapped at `:132`.
+
+⛔ **THREE FILES MOVE TOGETHER UNDER THE MIRROR LAW, OR IT IS A RED BUILD:** the client catalog
+(`packs.json`, both trees), `api/_lib/purchase-catalog.js`, and `test/purchases.quote.test.js`. A SKU
+id that exists on one side and not the other is a purchase that quotes and never delivers — which is
+the exact failure `[purchased-grant-never-clamped]` exists to make loud.
+
+⭐ **SEQUENCING: this ticket runs AFTER `WO-1177` returns** (`WORK_ORDER_1177_shortfall_discount_server_issued.md`).
+1177 moves quoting server-side; renaming the SKUs underneath an in-flight quote path would land the
+rename twice and reconcile neither.
+
+⚠ **One thing the recount makes EASIER, not harder:** the JS layer has **zero** `costFood` — cost
+fields are Unity-side only, so no server change is needed for the *cost-field* half. And
+`api/game/save.js:62` (`GUARDED_BALANCES`) and `:492` (`TIME_DERIVED_BALANCES = ['iron','wood','food','stone']`)
+**already list `stone` alongside `food`**, as does `api/game/load.js:32`. The server balance
+whitelist is ready.
+
+⚠ **Untracked build copies exist and will regenerate** (`Builds/`, `Library/Bee/Android/...`) — do not
+hand-edit them. Noted only because `Builds/WebGL/.../troops.json` currently reads **8** `costFood`
+against the source's **9**, i.e. the deployed WebGL data is already stale.
 
 ⛔ **PACKS THAT ADVERTISE FOOD ARE PURCHASABLE CONTENT.** `TownBankCapacity` states the law: *"a pack that advertises 5,000 food and delivers 1,920 is not balance, it is selling something and not delivering it"*, and `[purchased-grant-never-clamped]` **fails the build** if a paid grant is ever clamped. Whatever a card promises, it must still deliver after the rename.
 

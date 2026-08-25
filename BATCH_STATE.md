@@ -1,6 +1,6 @@
 # BATCH_STATE — the live handoff. Read this FIRST, every time.
 
-**Last written:** 2026-08-24 by the CLI lead. ⭐ **NEW since you last saw it:** the WO-1177 unblock correction, three accepted handbacks, and five freed batch-5 seats — all in the block directly under the ACTIVE table.
+**Last written:** 2026-08-24 (later) by the CLI lead. ⭐ **NEW since you last saw it: WO-1177 is COMMITTED (`2c3ed6c24`) AND DEPLOYED, the migration RAN — so WO-1163 IS UNBLOCKED and has been waiting all night.** Batch 1 is fully closed; there are now **SEVEN file-disjoint seats free**. All of it is in the block directly under the ACTIVE table — it supersedes the older WO-1177 correction beneath it.
 
 > ## ⛔ THE PROTOCOL
 > 1. **Read this file at the START of every batch, and again before starting any NEW ticket inside one.**
@@ -46,6 +46,68 @@
 |---|---|---|---|
 | **Batch 1** (Codex) | **WO-1177** → **WO-1178** | `api/_lib/purchase-catalog.js`, `api/purchases/quote.js`, `test/purchases.quote.test.js` · then `tools/` | ⛔ **ONE SEAT, SEQUENTIAL.** WO-1069 is **DONE** — landed `6bb61a810`. |
 | **Batch 4** (Codex) | **WO-1163** · **WO-917 Phase B** · **WO-1179 core** | catalog/data · `HudModelProducers.cs` + action-slot builder · `SmartEnemySpawner.cs`/`WaveManager.cs` | ⛔ **WO-1161 needs NO edit** — already fixed 08-23, both copies byte-identical. |
+
+### ⭐⭐ 2026-08-24 (later) — **WO-1163 IS UNBLOCKED. IT HAS BEEN WAITING ALL NIGHT. START IT NOW.**
+
+⛔ **This block supersedes the WO-1177 correction below it and the WO-1163 pin in "Pins that are
+binding on active work."** Read this one first; the older text is kept only as reasoning.
+
+**WO-1177 is ACCEPTED, COMMITTED (`2c3ed6c24`) and DEPLOYED TO PRODUCTION.** The migration **ran and
+verified.** ⭐ **So the file lock that held WO-1163 is RELEASED.**
+
+#### ⭐ WO-1163 — the food→stone ladder. The biggest seat, and newly free.
+
+- ⭐ **WO-1163 now OWNS `api/_lib/purchase-catalog.js` and `test/purchases.quote.test.js`.** WO-1177 is
+  **done with them.** The owner ruled the **food SKU ids DO rename** — the remap is **in scope**.
+- ⚠ **THREE FILES MOVE TOGETHER OR IT IS A RED BUILD:** the server `USD_ANCHORS` table, **both**
+  canonical `packs.json` copies, and the quote test's hardcoded resource-key list
+  (`test/purchases.quote.test.js:132` holds `['wood','iron','food','crystals','coins']`).
+  ⭐ **The mirror law proves them equal on every run** — ⛔ **a partial rename is not a staging step.**
+- ⛔ **Frozen ids stay frozen:** `collector_farm` and `silo` are **live save keys**. Rename the
+  **display**, never the id. ⭐ Display spelling is **Stoneyard**, **one word.**
+- ⭐ **Its blast-radius table is being CORRECTED** by a parallel lead pass — it keyed on the wrong field
+  and listed `building-tiers.json` at **zero refs when it holds 27**, the **largest sink in the game.**
+  ⚠ **Do not plan against the old table.**
+- ⚠ `blue_mine` (KayKit) is **recorded follow-up art**, ⛔ **not WO-1163 scope.** Do **not** solve the
+  visual by editing the farm prefab — the real mine node is already provisioned.
+
+#### ✅ BATCH 1 IS FULLY CLOSED
+
+- **WO-1069** ✓ committed. **WO-1177** ✓ committed **and deployed**. **WO-1178** handed back, **at lead
+  review**.
+- ⭐ **Credit WO-1178's finding — it is the best of the night:** `install-apk-to-seeker.ps1:25`
+  hardcoded **`6000.4.7f1`** — the exact downgrade that rewrote `ProjectVersion.txt` and cost a full
+  Bee rebuild **plus two gate runs.** The lead's own spec had checked **six *build* scripts** (all
+  correctly pinned) and **never thought to look in an *install* script.**
+  ⚠ **Its verification is the right shape too:** it **INDUCED** failures with named exits — **9** for
+  pin mismatch, **8** for missing marker — not a clean run.
+- ⚠ **WO-1178 is NOT yet committed:** `run-unity-method.ps1` is in its diff and an **APK chain is
+  currently executing** and calls it. ⛔ Replacing a script mid-run is how an inexplicable failure
+  happens. **It commits the moment the build finishes.**
+
+### ⭐ WORK AVAILABLE NOW — **SEVEN SEATS, all file-disjoint.** Start any of them immediately.
+
+⛔ **Full detail for 5A–5E is already in the BATCH 5 section below — do NOT duplicate it, read it
+there.** This is the release note plus the one pin that matters on each.
+
+| # | WO | Now free | The pin you must not miss |
+|---|---|---|---|
+| **1** | **WO-1163** | The food→stone ladder | ⭐ **The biggest, and newly free.** See the pins directly above. |
+| **2** | **5A WO-875** | Un-gate hero cast VFX already in the library | ⛔ **No new VFX authored.** WO-874's **three boss keys stay the OWNER's.** |
+| **3** | **5B PROD-012 r2** | First-run **no-connection** screen + **Retry** | ⛔ **MUST NOT edit `Core/UI/ElarionUiKit.cs`** — WO-917 owns it **and is committed.** Reuse only. |
+| **4** | **5C WO-1171 §4** | Player-facing wallet **connect/disconnect** | ⛔ Route via **`CurrencySkinResolver`**, **never `WalletService`** (asmdef). |
+| **5** | **5D WO-1129 §3.3** | Repoint **six editor tools** at the derived art path | Six `Assets/Editor/*.cs`; no runtime files. |
+| **6** | **5E WO-814** | Per-rarity **gear ability** machinery | ⚠ **The ticket names `GearStatResolver`; NO SUCH FILE EXISTS — it is `GearProgression.cs`.** Ships with **empty ability rows**; identities are the **owner's**. |
+| **7** | **WO-1179 core** | Side partitioning | ⭐ **WO-513 is a COMPOSER, NOT a prerequisite** (ruled). ⛔ **ONE `SpawnWave` call**, one **shared** concurrency budget, **1→2→4** side partition. ⛔ `Gate.ForceFieldCollapsed` is **not** the breach signal; do **not** touch WO-1026's flag-disabled ring detector. |
+
+⚠ **PLUS Batch 6 (WO-1180 remainder) — ⛔ SOLE OCCUPANT of `WorkOrders/*.md`.** It cannot run alongside
+anything that flips a Status line. **Assign it alone, or not at all right now.**
+
+### ⚠ ONE STANDING ENVIRONMENT NOTE FOR THE LANE
+
+The lead's **Unity gating is degraded** — a **commit-charge leak**, and **three regression aborts**.
+⛔ **That blocks GATING, not IMPLEMENTATION.** ⭐ **Nothing in the seven above needs Unity to be
+written**, and **handbacks queue normally.**
 
 ### ⭐⭐ READ THIS FIRST — 2026-08-24 lead correction. **WO-1177's CODE IS UNBLOCKED. START IT NOW.**
 
@@ -129,7 +191,13 @@ tickets want a registration line there and it is **committer-fenced.** Hand the 
 
 ### ⛔ Pins that are binding on active work
 
-- **WO-1163** — ⛔ do **NOT** rename any SKU id, and do **NOT** touch `api/_lib/purchase-catalog.js` or `test/purchases.quote.test.js`. The three food SKUs live in the `USD_ANCHORS` block **batch 1 owns**, and that file carries a **MIRROR LAW** proven by the quote test. The food→stone SKU remap is a **follow-up after batch 1 returns.**
+- **WO-1163** — ⛔ **THIS PIN IS SUPERSEDED — see the 2026-08-24 (later) block under the ACTIVE table.**
+  WO-1177 is committed + deployed, so **WO-1163 now OWNS `api/_lib/purchase-catalog.js` and
+  `test/purchases.quote.test.js`** and the **SKU ids DO rename**. ⚠ The **MIRROR LAW still binds**:
+  `USD_ANCHORS` + **both** `packs.json` copies + the quote test's resource-key list move **together**.
+  ⛔ Frozen ids (`collector_farm`, `silo`) stay frozen — rename the **display** only. *(Kept for
+  reasoning: it previously read "do NOT touch `purchase-catalog.js`; the food→stone SKU remap is a
+  follow-up after batch 1 returns." Batch 1 has returned.)*
 - **WO-1179** — ⛔ **ONE `SpawnWave` call.** Partition one wave's composition across active sides under **one shared concurrency budget**. Calling it per-side hands each call the full budget and doubles the field, defeating a cap that exists because of a phone frame-rate cliff. ⛔ `Gate.ForceFieldCollapsed` is **NOT** the breach signal (it also fires when the hero walks out of town), and ⛔ do not touch WO-1026's ring detector (behind a flag OFF since WO-579 — it records nothing, silently).
 - **WO-1177** — ⚠ its migration is **written and unrun**: `tmp/neon-migration-wo1177-discount.sql`. ⛔ **It must run BEFORE the code deploys** — `/verify` runs after the transfer settles, so a schema fault there is found with the money already gone. ⭐ **DEPLOY ordering only — the CODE IS WRITTEN NOW.** See the correction block directly under the ACTIVE table; the migration is the **OWNER's** action and no lane can run it.
 
