@@ -137,7 +137,17 @@
 > fine as history. A copied number is the bug **even when it was right the day it was written** -
 > that is exactly how the retired 860-899 UI block kept re-seeding collisions from CLAUDE.md sec.2.
 
-> ## ⚠ RECONCILED 2026-08-25 (CLI): main line next free = **1204**.
+> ## ⚠ RECONCILED 2026-08-25 (CLI): main line next free = **1205**.
+> *(CLI seat minted **WO-1204** and bumped 1204 -> 1205 in this SAME edit. **1204** = REWARDED
+> ADS RETURN TO THEIR CALLER, not Pause/Settings. Owner report: after an ad played, the game
+> returned to Pause/Settings instead of the screen/context that invoked it. Commit `76ba97a9d`
+> scopes native rewarded-ad presentation through `PauseGate`, preventing Android's
+> `OnApplicationPause(true)` from opening Pause and swap-closing the caller. The scope owns no
+> navigation: the caller's existing `PanelManager` handle remains authoritative. Fresh
+> `COMPILE_GATE_OK` + `AD_GATE_ARENA_OK`; Daily Chest and Manage are the two pinned callers.
+> IMPLEMENTED, awaiting owner Seeker felt-test.)*
+>
+> ### superseded: RECONCILED 2026-08-25 (CLI): main line next free = **1204**.
 > *(CLI seat minted **WO-1203** and bumped 1203 -> 1204 in this SAME edit. **1203** = the BOARD
 > CANNOT SAY "IT EXISTS, BUT NOT HERE" - direct successor to WO-1197, two related defects in the
 > sub-badge that shipped this morning (`5f3985928`). (1) The `--check` contradiction detector cannot
