@@ -1,6 +1,6 @@
 # WORK ORDER 1173 — SCHEMA_PARITY_OK: the deployed database drifted four times in one day, and the fourth took real money
 
-**Status:** READY. ⛔ **BLOCKS `MAINNET_SALES_ENABLED=true`.** The rail is proven; this is what makes it safe for someone other than the owner. ⭐ **THE TOOL LANDED 2026-08-24** (6caea4767 + d829340f6): `tools/schema-parity.mjs` exists and self-tests. **TWO §6 BOXES ARE STILL OPEN and they are the ones that make it a gate:** it is referenced by NO ship-chain script (`grep schema-parity tools/ .githooks/` returns only the tool itself), and there is **no migration file** — `api/` has `schema.sql` and no `migrations/`. A gate nothing calls is not a gate.
+**Status:** FIXED - wiring landed 2026-08-25 (`957ca2e9f`), and PRODUCTION PARITY IS PROVEN: `SCHEMA_PARITY_OK 17 table(s) verified against api/schema.sql`, run by the owner against the live Neon database. Owner felt-close owed.
 
 **Minted:** 2026-08-24 (CLI), banner bumped 1173 → 1174 in the same edit.
 **Provenance:** four production failures on 2026-08-24, all the same shape, found one at a time by
@@ -94,3 +94,61 @@ refusals).
 - [ ] Wired into the pre-ship chain as BLOCKING
 - [ ] Migration file covering today's four repairs, so a fresh environment reaches the same state
       without anyone pasting SQL
+
+---
+
+## CLOSED 2026-08-25 - and the production half is PROVEN, not deferred
+
+**`SCHEMA_PARITY_OK 17 table(s) verified against api/schema.sql`** - run by the owner against the live
+database. This is the FIRST TIME production schema parity has ever been proven on this project.
+
+### What it took, and none of it was the wiring
+
+The gate wiring landed easily. Getting to a true green took three rounds, and each round found a
+different class of defect:
+
+**Round 1 - four drifts.** `promo_codes.reward_pack_sku` and `tower_swaps.verification` missing,
+`purchase_entitlements.rail` and `purchase_quotes.currency` CHECKs missing.
+
+**Round 2 - the `IF NOT EXISTS` trap, exactly as predicted.** Migration `0001` reported SUCCESS and
+fixed two of four. `purchase_quotes` and `purchase_entitlements` ALREADY EXISTED, so
+`CREATE TABLE IF NOT EXISTS` skipped those statements whole - and skipped the CHECK constraints
+written INSIDE them. The tables looked right; their constraints were never born. Re-running `0001`
+could never fix it: it is a no-op against an existing table, forever. Hence migration `0002`, which
+adds them by `ALTER`, guarded on `pg_constraint`.
+
+**Round 3 - THE GATE ITSELF WAS BLIND, and this is the finding worth keeping.** After `0002` the two
+CHECKs were present and parity still reported them missing. Postgres renders
+`CHECK (col IN ('a','b'))` as `col = ANY (ARRAY[...])` but **SIMPLIFIES a one-element `IN` to plain
+equality**: `col = 'a'::text`. `tools/schema-parity.mjs` matched only the ARRAY form, so **every
+single-value CHECK read as missing no matter how correctly it was defined.**
+
+STOP **The two it hid were `rail IN ('solana')` and `currency IN ('SKR')` - single-valued by nature,
+both on the MONEY PATH, both reported as drift while the database was correct.**
+
+!! That is worse than a missed bug. A gate that cannot see a correct constraint does not merely fail
+to catch a defect - it **sends someone to repair a thing that is not broken**, which is what it did
+for two full rounds. Same family as the hollow pass: an assertion whose output does not depend on the
+truth it claims to test. Fixed by trying the ARRAY form then the equality form, proven against five
+renderings, with the non-enum checks (`amount_base_units > 0`, `decimals >= 0`) still correctly
+ignored so the gate did not get looser in exchange for getting sighted.
+
+### The lesson this ticket paid for
+
+**The exit code of a migration is not evidence. The shape query is.** `0001` exited clean twice while
+leaving the money path unconstrained. The two-step runner - apply, then prove - is the only reason
+this was caught rather than shipped.
+
+### What remains
+
+- The deliberately-narrowed-CHECK RED proof in a scratch DB is still owed (section 6 of this ticket).
+  !! Lower value now: the gate has been seen RED against production **three times** and green once,
+  which is stronger evidence than a synthetic red.
+- Per `FOUNDATIONAL_RULINGS.md` section 8, the "after every production API deploy" trigger is an
+  OWNER DISCIPLINE, not a script - there is no `vercel --prod` in the tree by design.
+
+### It unblocks
+
+STOP This ticket was the stated blocker on `MAINNET_SALES_ENABLED=true`. **That blocker is now clear.**
+Turning sales on remains the owner's decision, and the switch is still UNTESTED from a non-owner
+wallet - a separate question this ticket never covered.
