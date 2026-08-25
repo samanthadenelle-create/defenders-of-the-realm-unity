@@ -63,7 +63,7 @@ try {
     "APK_THREW $($_.Exception.Message)" | Out-File -Encoding ascii -Append $status
 }
 
-# ⛔ FRESHNESS, NOT EXISTENCE (2026-08-19). This used to take the newest *.apk on disk and
+# STOP FRESHNESS, NOT EXISTENCE (2026-08-19). This used to take the newest *.apk on disk and
 # call it success. On 2026-08-19 18:48 the build FAILED (gradle could not configure the
 # AdsIdentity.androidlib module), no APK was written, this glob found the 16:22 artifact,
 # and the script printed APK_OK with its size - so a STALE build was installed to the

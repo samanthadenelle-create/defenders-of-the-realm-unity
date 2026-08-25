@@ -8,7 +8,7 @@
 #
 # Exit codes: 0 = R2_PARITY_OK (or -WarnOnly with a failure). 16 = parity failed.
 #
-# ⛔ WHY THIS FILE EXISTS - the failure it is built to make impossible.
+# STOP WHY THIS FILE EXISTS - the failure it is built to make impossible.
 #
 # Enemy and structure ART is served REMOTELY from R2. It is NOT in the APK. There is
 # no local fallback: Assets/Resources/Enemies and Assets/Resources/Structures no
@@ -17,7 +17,7 @@
 # placeholders where the buildings should be - WITH NO ERROR ON SCREEN. The player
 # just sees a broken world.
 #
-# ⚠ BUNDLE NAMES ARE CONTENT-HASHED. Every content build produces new filenames, so
+# !! BUNDLE NAMES ARE CONTENT-HASHED. Every content build produces new filenames, so
 # EVERY build needs ITS OWN push. A push from a previous build can never cover this
 # one. That single sentence is the whole trap: the bucket looks full, the previous
 # build works, and the new one is broken.
@@ -38,7 +38,7 @@
 #                 UnityWebRequest result : ProtocolError : HTTP/1.1 404 Not Found
 #               Owner ruling that day: "wire the r2 push into the ship chain."
 #
-# ⛔ AND THE REASON IT IS ONE FILE. Before this, the push+verify pair was COPY-PASTED
+# STOP AND THE REASON IT IS ONE FILE. Before this, the push+verify pair was COPY-PASTED
 # into overnight-apk-build.ps1 and morning-ship-chain.ps1, and they had ALREADY
 # drifted apart: overnight pushed then verified; morning ONLY VERIFIED and then told
 # a human to go push by hand. A gate whose remedy is "a human remembers to run a
@@ -46,7 +46,7 @@
 # 08-20. Same fact in three files is how this repo lost a WO number block and a
 # dependency table; here it would keep costing whole play sessions.
 #
-# ⛔ PUSH THE PARENT, ALWAYS. '--push ServerData/Android' FLATTENS the keys to the
+# STOP PUSH THE PARENT, ALWAYS. '--push ServerData/Android' FLATTENS the keys to the
 # bucket root, where the game never looks. It reports R2_PUSH_OK while uploading 103
 # objects nobody can read - observed on 2026-08-20. The correct form is
 # '--push ServerData'. Verify, however, needs the EXPLICIT target
@@ -54,7 +54,7 @@
 # StandaloneWindows64 and the tool refuses to guess. The two commands genuinely take
 # different arguments; that asymmetry is why they are hard-coded here exactly once.
 #
-# ⛔ JUDGE BY THE MARKER, NEVER THE EXIT CODE. The runners in this repo exit 0 on
+# STOP JUDGE BY THE MARKER, NEVER THE EXIT CODE. The runners in this repo exit 0 on
 # refusals and FAILs (memory: gates-report-success-without-proving-it). Marker
 # absence on a fresh log is a FAILURE, not an unknown.
 # =============================================================================

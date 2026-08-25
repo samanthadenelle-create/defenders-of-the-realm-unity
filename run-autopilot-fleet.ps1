@@ -132,7 +132,7 @@ for ($i = 0; $i -lt $Count; $i++) {
     # each instance's full log NEXT TO its break-log, using the SAME <i> namespacing the
     # BreakCaptureHarness uses for --run=<i> (persistentDataPath\autopilot-runs\<i>). The
     # harness creates that folder at startup, but -logFile is consumed by the player BEFORE
-    # the harness runs — so create the folder here first or Unity may drop the redirect.
+    # the harness runs - so create the folder here first or Unity may drop the redirect.
     $runDir = Join-Path $runsDir "$i"
     New-Item -ItemType Directory -Force -Path $runDir | Out-Null
     # Explicit quotes: PS 5.1 Start-Process joins -ArgumentList with spaces WITHOUT quoting,
@@ -166,7 +166,7 @@ while ($true) {
 
 # --- assert per-instance player.log landed (WO-1102) ---------------------------
 # A missing/empty player.log means that instance's Step-level FlowTrace evidence is
-# GONE — the exact silent loss this WO fixed. Warn LOUDLY by name; never silent.
+# GONE - the exact silent loss this WO fixed. Warn LOUDLY by name; never silent.
 $plMissing = 0
 for ($i = 0; $i -lt $Count; $i++) {
     $pl = Join-Path (Join-Path $runsDir "$i") 'player.log'

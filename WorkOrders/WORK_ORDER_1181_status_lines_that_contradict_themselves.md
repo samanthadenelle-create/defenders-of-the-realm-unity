@@ -1,6 +1,6 @@
 # WO-1181 - A status can lead with FIXED and say "not done" four words later
 
-**Status:** READY. **Silo:** Tooling/board.
+**Status:** FIXED - landed f467b7e1c; the contradiction lint reports 0 on every run. Owner felt-close owed.
 **Origin:** review of the Fixed bucket, 2026-08-24. **SEVEN rows** were green while their own status
 text admitted the work was unfinished.
 
@@ -155,3 +155,15 @@ reasonable in isolation, and the aggregate is a detector that agrees with itself
 ⚠ **The first time this lint fires on a genuinely wrong status, SAY SO — loudly, in this file.** That
 event is the evidence it is doing real work. Until it happens, the clean HEAD run is a *consistency*
 result, not a *correctness* one.
+
+---
+
+## Status corrected 2026-08-25 (CLI lead)
+
+Landed in `f467b7e1c`. Proven by running the tool this morning: `python tools/board_build.py` emits **`BOARD_CHECK_OK 0 unlabeled, 0 status contradictions, mint numbers readable`** on a PLAIN run - no `--check` flag needed - plus a `DUPLICATE_WO_NUMBERS` report. A marker you only get with a remembered flag is not a gate, which was this ticket's own argument.
+
+The status line was never flipped, so the board listed its own finished work as available.
+
+Previous status line, kept for the record:
+
+> **Status:** READY. **Silo:** Tooling/board.

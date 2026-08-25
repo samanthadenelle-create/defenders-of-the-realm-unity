@@ -1,6 +1,6 @@
-# distribute-android.ps1 — push (optionally build first) the Android APK to Firebase App Distribution testers.
+# distribute-android.ps1 - push (optionally build first) the Android APK to Firebase App Distribution testers.
 #
-# One-time setup (interactive, do these once — see docs/TESTER_APK_DISTRIBUTION.md):
+# One-time setup (interactive, do these once - see docs/TESTER_APK_DISTRIBUTION.md):
 #   1) firebase login
 #   2) Create a Firebase project + register an Android app with package
 #      com.denellestudios.echoesofelarion  ->  copy its App ID (1:...:android:...)

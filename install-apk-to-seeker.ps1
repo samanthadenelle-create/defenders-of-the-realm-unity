@@ -1,6 +1,6 @@
 #requires -Version 5.1
 # =============================================================================
-# install-apk-to-seeker.ps1 — one-command build + sideload to the Solana Seeker
+# install-apk-to-seeker.ps1 - one-command build + sideload to the Solana Seeker
 # -----------------------------------------------------------------------------
 # Usage:
 #   .\install-apk-to-seeker.ps1                 # build + install
@@ -11,7 +11,7 @@
 #   1. Unity Hub -> 6000.4.8f1 -> Add Modules -> Android Build Support (with
 #      OpenJDK + SDK + NDK). The script aborts if AndroidPlayer is missing.
 #   2. Seeker connected via USB with Developer Options + USB Debugging on.
-#      First connect prompts "Allow USB debugging?" on the phone — accept.
+#      First connect prompts "Allow USB debugging?" on the phone - accept.
 # =============================================================================
 
 [CmdletBinding()]

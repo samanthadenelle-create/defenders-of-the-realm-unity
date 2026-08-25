@@ -31,7 +31,7 @@ if (Test-Path 'Builds\WebGL\index.html') {
         $out = & vercel deploy --yes --token $t --scope 'team_2PrmHqE5mM52aIrzPJNHmyEt' 2>&1
         ($out | ForEach-Object { $_.ToString() }) | Out-File -Encoding ascii 'Builds\vercel-deploy.txt'
         # Take the LAST bare deployment URL. Filter out api.vercel.com/... (the CLI prints
-        # inspector/API links too — matching those yields a URL that is not the deployment).
+        # inspector/API links too - matching those yields a URL that is not the deployment).
         $url = ($out | Select-String -Pattern 'https://[a-z0-9-]+\.vercel\.app' -AllMatches |
                 ForEach-Object { $_.Matches } | ForEach-Object { $_.Value } |
                 Where-Object { $_ -notmatch 'api\.vercel\.com' } | Select-Object -Last 1)
@@ -39,7 +39,7 @@ if (Test-Path 'Builds\WebGL\index.html') {
             "DEPLOY_URL $url" | Out-File -Encoding ascii -Append $status
             # The WEB F8 watcher (websig-watch-daemon.ps1) re-reads this EVERY poll to find the
             # admin endpoint, because preview URLs rotate on each deploy. Without this write the
-            # watcher keeps polling a dead preview and silently stops covering the live build —
+            # watcher keeps polling a dead preview and silently stops covering the live build -
             # exactly the "looks like coverage, fires never" failure this whole lane exists to kill.
             $url | Out-File -Encoding ascii 'Builds\admin-preview-url.txt'
             "ADMIN_URL_WRITTEN Builds\admin-preview-url.txt" | Out-File -Encoding ascii -Append $status

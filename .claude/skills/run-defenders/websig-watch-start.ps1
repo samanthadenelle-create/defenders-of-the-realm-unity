@@ -1,4 +1,4 @@
-# Starts the persistent WEB trace watcher (the web half of §14) in a hidden background
+# Starts the persistent WEB trace watcher (the web half of section 14) in a hidden background
 # PowerShell. Idempotent - one per machine. Pairs with f8-watch-start.ps1 (local logs);
 # BOTH feed the SAME logs/f8-inbox, so f8-check-inbox.ps1 covers desktop AND web.
 #

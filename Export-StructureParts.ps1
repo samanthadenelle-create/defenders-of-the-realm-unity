@@ -23,7 +23,7 @@ Get-ChildItem -Recurse -Filter "*.cs" | ForEach-Object {
     foreach ($m in $matches) {
         $id = $m.Groups[1].Value.Trim()
         if ($id.Length -gt 2) {
-            $results += "• $id"
+            $results += "* $id"
             $count++
         }
     }
@@ -38,7 +38,7 @@ Get-ChildItem -Recurse -Include "*.cs","*.json","*.asset" | ForEach-Object {
     $matches = [regex]::Matches($content, $pattern, [System.Text.RegularExpressions.RegexOptions]::IgnoreCase)
     foreach ($m in $matches) {
         $id = $m.Groups[1].Value
-        $results += "• $id  (detected pattern)"
+        $results += "* $id  (detected pattern)"
         $count++
     }
 }
@@ -48,7 +48,7 @@ $unique = $results | Select-Object -Unique | Sort-Object
 
 $unique | Out-File -FilePath $outputFile -Encoding utf8
 
-Write-Host "✅ Export complete! Found approximately $count potential structure IDs." -ForegroundColor Green
+Write-Host "OK Export complete! Found approximately $count potential structure IDs." -ForegroundColor Green
 Write-Host "File saved to: $outputFile" -ForegroundColor Green
 
 # Try to open the file

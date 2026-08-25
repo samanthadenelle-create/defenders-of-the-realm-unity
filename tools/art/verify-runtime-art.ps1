@@ -4,7 +4,7 @@
     and warn about any gitignored source pack that has not been copied in.
 
 .DESCRIPTION
-    Authority: docs/PAIN_POINTS_2026-07-26.md  §1.2 (RULING "Tracked runtime + zip travel").
+    Authority: docs/PAIN_POINTS_2026-07-26.md  section 1.2 (RULING "Tracked runtime + zip travel").
     Manifest : tools/art/REQUIRED_PACKS.md
 
     The big character/environment packs are gitignored and travel by zip, not by `git pull`.
@@ -68,12 +68,12 @@ $checks = @(
     @{ Tier='CRITICAL';  Kind='File'; Path='Assets/Resources/NPCs/NPC_Peasant_Mevina.prefab';Note='Peasant NPC (Mevina)' }
     @{ Tier='CRITICAL';  Kind='File'; Path='Assets/Resources/Heroes/KnightV3.fbx';           Note='hero body (CC/AccuRig)' }
 
-    # ---- COMMITTED: the tracked People pack (LFS) — Bryn-class NPC bodies + their textures ----
+    # ---- COMMITTED: the tracked People pack (LFS) - Bryn-class NPC bodies + their textures ----
     @{ Tier='COMMITTED'; Kind='File';   Path='Assets/Models/People/0_FighterClass_High_High_1024_LOD0.Fbx'; Note='FighterClass body (People pack)' }
     @{ Tier='COMMITTED'; Kind='AnyPng'; Path='Assets/Models/People/Blacksmith/Textures';     Note='Blacksmith textures' }
     @{ Tier='COMMITTED'; Kind='AnyPng'; Path='Assets/Models/People/Peasant/Textures';        Note='Peasant textures' }
 
-    # ---- PACK: gitignored source packs (travel by zip) — WARN only, fallback covers ----
+    # ---- PACK: gitignored source packs (travel by zip) - WARN only, fallback covers ----
     @{ Tier='PACK'; Kind='AnyFbx'; Path='Assets/Models/KayKit/KayKit Skeletons 1.1/characters'; Note='KayKit Skeletons source bodies' }
     @{ Tier='PACK'; Kind='AnyFbx'; Path='Assets/Models/KayKit Adventurers 2.0/Characters';      Note='KayKit Adventurers troop/hero bodies' }
     @{ Tier='PACK'; Kind='AnyFbx'; Path='Assets/Models/KayKit/dungeon';                         Note='KayKit Dungeon Remastered geometry' }

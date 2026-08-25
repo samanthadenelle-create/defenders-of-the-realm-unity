@@ -1,16 +1,16 @@
 # =============================================================================
-# generate-sfx.ps1 — generate combat SFX via the ElevenLabs Sound Effects API.
+# generate-sfx.ps1 - generate combat SFX via the ElevenLabs Sound Effects API.
 # -----------------------------------------------------------------------------
 # Reads the API key from .secrets/elevenlabs.key (gitignored) and a prompt set
 # from a CSV (id,duration,text) or the inline default set below. Writes one
 # .mp3 per row into Assets/Audio/SFX/Combat/.
 #
-# Usage (from repo root, editor CLOSED not required — pure HTTP):
+# Usage (from repo root, editor CLOSED not required - pure HTTP):
 #   powershell -ExecutionPolicy Bypass -File Tools/AudioGen/generate-sfx.ps1
 #   powershell -ExecutionPolicy Bypass -File Tools/AudioGen/generate-sfx.ps1 -PromptCsv Tools/AudioGen/prompts.csv
 #
 # API notes: duration_seconds must be 0.5..30. prompt_influence 0..1 (0.5 = balanced).
-# License: free-tier output needs ElevenLabs attribution for commercial use — see
+# License: free-tier output needs ElevenLabs attribution for commercial use - see
 # Assets/Audio/SFX/Combat/SOURCE_LICENSE.md. Regenerate on a paid tier before ship.
 # =============================================================================
 param(

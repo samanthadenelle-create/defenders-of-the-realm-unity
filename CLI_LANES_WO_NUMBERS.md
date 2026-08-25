@@ -137,7 +137,25 @@
 > fine as history. A copied number is the bug **even when it was right the day it was written** -
 > that is exactly how the retired 860-899 UI block kept re-seeding collisions from CLAUDE.md sec.2.
 
-> ## ⚠ RECONCILED 2026-08-25 (CLI): main line next free = **1187**.
+> ## ⚠ RECONCILED 2026-08-25 (CLI): main line next free = **1190**.
+> *(CLI seat minted **WO-1189** and bumped 1189 -> 1190 in this SAME edit. **1189** = ObsBtn_Accept
+> overlaps the Rumor Board status line by 7.4px. These two findings were HIDDEN by the capture
+> harness override deleted in WO-1076 - the same two lines manufactured 18 phantoms and concealed
+> these 2. A lying instrument conceals as well as invents.)*
+>
+> ### superseded: RECONCILED 2026-08-25 (CLI): main line next free = **1189**.
+> *(CLI seat minted **WO-1188** and bumped 1188 -> 1189 in this SAME edit. **1188** = the post-
+> purchase screen must POLL the durable authority until the grant is confirmed, then report the
+> MEASURED credited amounts. Owner-stated 2026-08-25. The polling primitive `ReconcileAsync`
+> already exists and is called only BEFORE a purchase, never after.)*
+>
+> ### superseded: RECONCILED 2026-08-25 (CLI): main line next free = **1188**.
+> *(CLI seat minted **WO-1187** and bumped 1187 -> 1188 in this SAME edit. **1187** = 15 .ps1 files
+> contain non-ASCII and ZERO carry a BOM, so PS 5.1 reads them as ANSI; one already did not parse
+> and had never run. FIVE of the latent 14 are the section 16 ship chain. Needs an oracle - a
+> script that does not parse never runs, and never-ran is indistinguishable from passed.)*
+>
+> ### superseded: RECONCILED 2026-08-25 (CLI): main line next free = **1187**.
 > *(CLI seat minted **WO-1186** and bumped 1186 -> 1187 in this SAME edit. **1186** = the build
 > palette's `Chip_Other` covers the "Crystals: 0" readout by 135x96 ref px at ALL THREE captured
 > resolutions, including the Seeker's 2670x1200. Found by the 2026-08-25 capture pass; no ticket

@@ -1,11 +1,11 @@
 # =============================================================================
-# rip-clips.ps1 — slice ONE audio file into many named clips.
+# rip-clips.ps1 - slice ONE audio file into many named clips.
 # -----------------------------------------------------------------------------
 # Two modes:
-#   1) SILENCE  — auto-detect gaps (>= -MinSilence sec under -NoiseDb) and export
+#   1) SILENCE  - auto-detect gaps (>= -MinSilence sec under -NoiseDb) and export
 #                 each non-silent segment as its own clip. Name them in order via
 #                 -Names (comma list) or they fall back to clip_01, clip_02, ...
-#   2) TIMESTAMP — pass -Cuts "id=start-end,id2=start-end" (seconds) to cut exactly.
+#   2) TIMESTAMP - pass -Cuts "id=start-end,id2=start-end" (seconds) to cut exactly.
 #
 # Outputs 44.1kHz mono WAV (Unity-friendly) into -OutDir. Trims leading/trailing
 # silence per clip and normalizes loudness lightly.

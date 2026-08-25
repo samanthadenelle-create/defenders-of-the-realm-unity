@@ -1,10 +1,10 @@
 # =============================================================================
-# DEPRECATED — use .claude/skills/run-defenders/f8-watch-start.ps1 (persistent daemon + inbox).
-# f8-watcher-auto-alert.ps1 — Auto-alert on F8 break-log captures
+# DEPRECATED - use .claude/skills/run-defenders/f8-watch-start.ps1 (persistent daemon + inbox).
+# f8-watcher-auto-alert.ps1 - Auto-alert on F8 break-log captures
 #
 # Monitors the Editor.log / Player.log for F8 flags, errors, exceptions.
 # When a capture fires, automatically extracts context and alerts Claude.
-# No manual pinging needed — the CLI gets notified instantly.
+# No manual pinging needed - the CLI gets notified instantly.
 # =============================================================================
 
 param(
@@ -18,7 +18,7 @@ $ErrorActionPreference = 'Stop'
 # Baseline: capture the current log end so we only watch for NEW entries
 $logExists = Test-Path $LogPath
 if (-not $logExists) {
-    Write-Host "[F8-Watcher] Log not found at $LogPath — waiting for first session..."
+    Write-Host "[F8-Watcher] Log not found at $LogPath - waiting for first session..."
     Start-Sleep -Seconds 5
 }
 
@@ -43,7 +43,7 @@ while ($true) {
 
     $currentSize = (Get-Item $LogPath).Length
 
-    # Log rotated or truncated — reset position
+    # Log rotated or truncated - reset position
     if ($currentSize -lt $lastPos) {
         Write-Host "[F8-Watcher] Log rotated/truncated (was $lastPos, now $currentSize); resetting."
         $lastPos = 0
@@ -84,13 +84,13 @@ while ($true) {
             $capturesSeen += $captureKey
 
             Write-Host ""
-            Write-Host "╔════════════════════════════════════════════════════════════╗"
-            Write-Host "║ ⚠️  F8 CAPTURE DETECTED — AUTO-ALERT                      ║"
-            Write-Host "╚════════════════════════════════════════════════════════════╝"
+            Write-Host "+============================================================+"
+            Write-Host "| !!  F8 CAPTURE DETECTED - AUTO-ALERT                      |"
+            Write-Host "+============================================================+"
             Write-Host "[F8-Watcher] Capture type:"
-            if ($isFlagged) { Write-Host "  • F8 flagged (manual break)" }
-            if ($isError) { Write-Host "  • Compiler error or runtime exception" }
-            if ($isSoftlock) { Write-Host "  • Potential softlock/hang" }
+            if ($isFlagged) { Write-Host "  * F8 flagged (manual break)" }
+            if ($isError) { Write-Host "  * Compiler error or runtime exception" }
+            if ($isSoftlock) { Write-Host "  * Potential softlock/hang" }
             Write-Host ""
             Write-Host "[F8-Watcher] Trigger line:"
             Write-Host "  $line"
@@ -109,7 +109,7 @@ while ($true) {
                 }
             }
             Write-Host ""
-            Write-Host "[F8-Watcher] 📌 Alert sent at $(Get-Date -Format 'HH:mm:ss')"
+            Write-Host "[F8-Watcher] * Alert sent at $(Get-Date -Format 'HH:mm:ss')"
             Write-Host "[F8-Watcher] Claude will triage this instantly. Waiting for next capture..."
             Write-Host ""
         }

@@ -364,6 +364,9 @@ namespace DeNelle.Editor
             // --- WO-912 sec.10.5: the ad provider stays BEHIND IAdService (registered BEFORE any SDK) ---
             if (!AdServiceSeamRegression.Run(out var adSeamReason)) failures.Add(adSeamReason); else log.AppendLine("[ad-seam] " + adSeamReason);
             if (!AndroidContentTargetRegression.Run(out var androidTargetReason)) failures.Add(androidTargetReason); else log.AppendLine("[android-content-target] " + androidTargetReason);
+            // --- WO-1187: every repo .ps1 is ASCII-or-BOM and parses non-vacuously (a BOM-less
+            //     non-ASCII script is read as ANSI by PS 5.1 and can silently never run) ---
+            if (!PowerShellEncodingRegression.Run(out var ps1EncodingReason)) failures.Add(ps1EncodingReason); else log.AppendLine("[ps1-encoding] " + ps1EncodingReason);
             if (!BattleQuiescenceRegression.Run(out var quiescenceReason)) failures.Add(quiescenceReason); else log.AppendLine("[battle-quiescence] " + quiescenceReason);
             if (!StructureSeatRegression.Run(out var seatReason)) failures.Add(seatReason); else log.AppendLine("[structure-seat] " + seatReason);
             if (!StructureCadenceRegression.Run(out var cadenceReason)) failures.Add(cadenceReason); else log.AppendLine("[structure-cadence] " + cadenceReason);

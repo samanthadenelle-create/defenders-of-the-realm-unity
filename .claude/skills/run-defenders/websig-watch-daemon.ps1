@@ -1,5 +1,5 @@
 # =============================================================================
-# websig-watch-daemon.ps1 - the WEB half of the F8 live-triage watcher (CLAUDE.md §14).
+# websig-watch-daemon.ps1 - the WEB half of the F8 live-triage watcher (CLAUDE.md section 14).
 # -----------------------------------------------------------------------------
 # WHY THIS EXISTS (2026-07-15, the magenta-ground post-mortem):
 # The deployed WebGL build streams FlowTrace to Neon (WebTrace: FeatureFlags.cs:117
@@ -7,18 +7,18 @@
 # session recorded, at error level:
 #     TERRAINDIAG 'ExteriorTerrain' material='NULL' shader='NULL'
 #     [Flow:MagentaGuard] recovered MAGENTA renderer ...   (x8)
-# and it sat unread for a DAY until the owner spotted the magenta ground WITH HER EYES —
-# a direct violation of §14 ("the owner is NEVER the bug detector"). f8-watch-daemon.ps1
+# and it sat unread for a DAY until the owner spotted the magenta ground WITH HER EYES -
+# a direct violation of section 14 ("the owner is NEVER the bug detector"). f8-watch-daemon.ps1
 # tails the LOCAL Editor/Player logs and structurally cannot see this: a web player's logs
 # are not on this machine. This daemon closes that hole.
 #
-# ── WHY THE DB AND NOT `vercel logs` (PROVEN 2026-07-15, do NOT "simplify" this back) ──
+# -- WHY THE DB AND NOT `vercel logs` (PROVEN 2026-07-15, do NOT "simplify" this back) --
 # api/trace.js:66-67 logs a summary line AND then one `  [sig] <line>` per signal line.
-# The summary IS retrievable; the [sig] lines ARE NOT — `vercel logs`, even with --json,
+# The summary IS retrievable; the [sig] lines ARE NOT - `vercel logs`, even with --json,
 # returns exactly ONE message per request (the summary). Verified: 100 json rows, 0 matching
 # [sig]. So the canon read-path "the [sig] echo in Vercel runtime logs" yields `signal=18`
 # but never the 18 lines. A daemon grepping `vercel logs` for [sig] matches NOTHING and fires
-# NEVER — which is worse than no watcher, because it looks like coverage.
+# NEVER - which is worse than no watcher, because it looks like coverage.
 # THEREFORE: the summary is only a cheap TRIGGER (it carries signal=N); the actual lines are
 # fetched from Neon through the key-gated admin endpoint (api/admin/db.js).
 #
@@ -108,7 +108,7 @@ function Emit-WebCapture([string]$kind, [string]$session, [string]$build, [strin
         (($context | Select-Object -First 40) -join $nl)
         '```'
         ''
-        '## Triage (CLAUDE.md §12 / §14)'
+        '## Triage (CLAUDE.md section 12 / section 14)'
         '- READ THESE LINES FIRST - before any code-read or theory. This IS the captured data.'
         '- Scene-load evidence (TERRAINDIAG / MagentaGuard / FloorDiag / catalog + Resources'
         '  resolution) is in the FIRST batches. The tail is gameplay spam - page to the HEAD:'

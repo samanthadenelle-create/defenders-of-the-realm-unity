@@ -129,7 +129,7 @@ if (-not $SkipApk) {
 # happens inside BuildSeekerApk) and BEFORE distribution.
 if (-not $SkipApk) {
     Say "2b/4 R2 content ship (push + parity) ..."
-    # ⛔ THIS STEP NOW PUSHES, IT DOES NOT ONLY CHECK (owner ruling 2026-08-20:
+    # STOP THIS STEP NOW PUSHES, IT DOES NOT ONLY CHECK (owner ruling 2026-08-20:
     # "wire the r2 push into the ship chain"). It used to verify and then print
     # "FIX: python tools\r2_sync.py --push ServerData" for a human to run - and on
     # 2026-08-20 that second command was the one that got skipped, so the owner

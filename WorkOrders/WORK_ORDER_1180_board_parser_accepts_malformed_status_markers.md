@@ -1,6 +1,6 @@
 # WO-1180 - The board parser accepts a malformed `**Status:**` and hides the rows it rescues
 
-**Status:** READY. **Silo:** Tooling/board.
+**Status:** FIXED - landed f467b7e1c; BOARD_CHECK_OK now prints on every run. Owner felt-close owed.
 **Origin:** review of the 2026-08-24 board reflection - *"WO-932 exposed a parser-level weakness, not
 merely a one-file typo."* Correct, and the fix needs to be narrower than it first looks.
 
@@ -163,3 +163,15 @@ class inflates the number and erodes trust in the rest of it.
 **17 PROD rows, 0 duplicate ids.** ⭐ Worth recording explicitly: it means the **PROD series' minting
 discipline works and the WO series' does not.** The fix for the WO series is therefore procedural,
 not merely a de-duplication pass — whatever PROD does at mint time is the thing to copy.
+
+---
+
+## Status corrected 2026-08-25 (CLI lead)
+
+Landed in `f467b7e1c`. Proven by running the tool this morning: `python tools/board_build.py` emits **`BOARD_CHECK_OK 0 unlabeled, 0 status contradictions, mint numbers readable`** on a PLAIN run - no `--check` flag needed - plus a `DUPLICATE_WO_NUMBERS` report. A marker you only get with a remembered flag is not a gate, which was this ticket's own argument.
+
+The status line was never flipped, so the board listed its own finished work as available.
+
+Previous status line, kept for the record:
+
+> **Status:** READY. **Silo:** Tooling/board.
