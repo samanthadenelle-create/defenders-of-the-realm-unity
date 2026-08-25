@@ -148,8 +148,22 @@ def bucket_of(status_text, has_result, is_wo=True):
 def has_landed_partial(status_text):
     """True when a status says that a slice landed while the ticket remains open."""
     status = status_text or ""
-    return (re.search(r"\bPARTIAL\b", status, re.IGNORECASE) is not None
+    # A badge name followed by its type is documentation, not a claim.  WO-1197's
+    # finished handback is the live regression: "the PARTIAL sub-badge" must not
+    # make the row partial or contradict its finished verdict.
+    return (re.search(r"\bPARTIAL\b(?!\s+(?:SUB-?BADGE|BADGE|KEYWORD|LABEL|WORD)\b)",
+                      status, re.IGNORECASE) is not None
             or re.search(r"\bSLICE\b.{0,40}\bLANDED\b", status, re.IGNORECASE) is not None)
+
+_OFFTREE = re.compile(
+    r"\bOFFTREE\s+(RETURNED|AWAITING-REVIEW)\s+lane=([^\s,;]+)", re.IGNORECASE)
+
+def parse_offtree(status_text):
+    """Return (workflow state, lane) for an explicit off-tree claim, else None."""
+    match = _OFFTREE.search(status_text or "")
+    if not match:
+        return None
+    return match.group(1).upper(), match.group(2).rstrip(". )]}")
 
 # Exact markdown is part of the board contract. A near miss remains visible, but is
 # named as a defect instead of being silently accepted (WO-1180).
@@ -195,7 +209,8 @@ def parse_status(text):
 # family: "4 still open" is work remaining, but "owner felt-close still open" is the NORMAL
 # state of a healthy row - that false positive is what WO-999 cost on the first HEAD run.
 _STATUS_CONTRADICTIONS = (
-    (re.compile(r"\bPARTIAL\b", re.IGNORECASE), False),
+    (re.compile(r"\bPARTIAL\b(?!\s+(?:SUB-?BADGE|BADGE|KEYWORD|LABEL|WORD)\b)",
+                re.IGNORECASE), False),
     (re.compile(r"\bNOT(?:\s+YET)?\s+(?:DONE|BUILT|ADDED)\b", re.IGNORECASE), False),
     (re.compile(r"\bSTILL\s+OPEN\b", re.IGNORECASE), True),
     (re.compile(r"\b(?:IS|REMAINS)\s+OPEN\b", re.IGNORECASE), True),
@@ -550,6 +565,7 @@ def parse_wos():
             "bucket": bucket, "result": has_result, "malformed_status": malformed_status,
             "near_miss_status": near_miss_status,
             "landed_partial": has_landed_partial(status),
+            "offtree": parse_offtree(status),
             "fallback_bucketed": fallback_bucketed,
             "is_wo": is_wo, "mtime": mtime,
             "created": created, "created_est": created_est, "age_days": max(0, age_days),
@@ -589,6 +605,10 @@ def build_html(rows):
         color = BUCKET_COLOR[r["bucket"]]
         partial = (' <span class="partial">PARTIAL</span>'
                    if r.get("landed_partial") and r["bucket"] == "Ready" else "")
+        offtree_data = r.get("offtree")
+        offtree = (f' <span class="offtree">OFF-TREE · {html.escape(offtree_data[0])}'
+                   f' · {html.escape(offtree_data[1])}</span>'
+                   if offtree_data and r["bucket"] == "Ready" else "")
         res = ' <span class="res">RESULT</span>' if r["result"] else ""
         # WO-1080. Rendered ONLY on a row that cites a capture, so every other row's HTML is
         # byte-identical to before. Reuses the existing word-plus-colour badge class: the
@@ -606,7 +626,7 @@ def build_html(rows):
                 f'<td class="num"><a href="WorkOrders/{html.escape(r["file"])}">{num}</a></td>'
                 f'<td class="title">{html.escape(r["title"][:110])}{res}</td>'
                 f'<td><span class="badge" style="border-color:{color};color:{color}">'
-                f'{r["bucket"]}</span>{partial}</td>'
+                f'{r["bucket"]}</span>{partial}{offtree}</td>'
                 f'<td class="status">{html.escape(r["status"][:80])}</td>'
                 f'<td class="age">{est}{r["created"]} &middot; {days}d{old}</td></tr>')
 
@@ -681,6 +701,8 @@ def build_html(rows):
  .badge{{border:1px solid;border-radius:10px;padding:1px 9px;font-size:12px;white-space:nowrap}}
  .partial{{border:1px solid #d0a050;color:#e8c07a;border-radius:10px;padding:1px 7px;
            margin-left:5px;font-size:10px;font-weight:700;white-space:nowrap}}
+ .offtree{{border:1px solid #62b7c8;color:#9ee7f2;background:#163039;border-radius:4px;
+           padding:1px 7px;margin-left:5px;font-size:10px;font-weight:700;white-space:nowrap}}
  .status{{color:#999;font-size:12px}} .age{{color:#666;font-size:12px;white-space:nowrap}}
  .res{{background:#2c4a2c;color:#9c9;font-size:10px;padding:1px 6px;border-radius:8px;margin-left:6px}}
  .oldm{{border:1px solid #b08030;color:#d0a050;font-size:10px;padding:0 5px;border-radius:8px;margin-left:5px}}

@@ -1,6 +1,8 @@
 # WORK ORDER 1203 - the board cannot say "it exists, but not here"
 
-**Status:** READY - two related defects in the badge mechanism that shipped this morning. (1) The
+**Status:** FIXED 2026-08-25 - added the OFFTREE sub-badge with required lane and RETURNED / AWAITING-REVIEW state, while preserving Ready assignability; fixed discussion of the PARTIAL sub-badge so naming either badge is not a claim. Chose one badge with an embedded workflow state, so requirement 3 loses no distinction and does not add a third badge. Verified against WO-1163, WO-1199, WO-1197, and this row; awaiting owner felt-verify.
+
+Two related defects in the badge mechanism that shipped this morning. (1) The
 `--check` contradiction detector cannot tell a status line that NAMES the new sub-badge from one that
 CLAIMS a partially-landed slice, so the very ticket that shipped the detector was the first row its
 own detector falsely accused. (2) THE REAL ONE: there is no label meaning "built in a dev lane, not in

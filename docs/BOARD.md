@@ -79,6 +79,13 @@ not a fourth bucket: it warns that work already landed while preserving the open
 assignable. Keep the landed and residual scope explicit in the status line; the badge does not infer
 either scope from source files.
 
+An assignable Ready row whose implementation exists only in another development lane uses
+`OFFTREE RETURNED lane=<branch>` or `OFFTREE AWAITING-REVIEW lane=<branch>` in its status line. It
+stays in **Ready** and renders a visually distinct **OFF-TREE · state · branch** sub-badge. `RETURNED`
+means the lane owns requested revisions; `AWAITING-REVIEW` means the lead owes review. The required
+lane value makes the work findable, and the explicit grammar prevents prose that merely names the
+PARTIAL or OFFTREE sub-badge from asserting either state. This is presentation, not a new bucket.
+
 **`Unlabeled` is a DEFECT in the WO file, not a category.** It means the status line carries no
 canonical keyword, so the row cannot be bucketed and silently drops out of every real query.
 Since the §3a scope fix it is a *pure* defect count — a companion doc can never land there.
