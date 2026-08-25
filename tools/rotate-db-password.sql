@@ -1,0 +1,49 @@
+-- =============================================================================
+-- rotate-db-password.sql - rotate the neondb_owner password after it was exposed.
+-- -----------------------------------------------------------------------------
+-- The connection string was pasted into a chat transcript on 2026-08-25. It is an
+-- OWNER-level credential on production: it can read every player_data row, every
+-- purchase quote, and every wallet binding. Rotate it.
+--
+-- HOW TO RUN: Neon console -> SQL Editor -> paste -> Run.
+--   (psql is not installed on this machine; the console needs no tooling.)
+--
+-- STOP REPLACE THE PLACEHOLDER BELOW WITH A REAL PASSWORD BEFORE RUNNING.
+--   Do NOT paste this file as-is. The literal below is not a password.
+--   Generate one that is long and random - a password manager, or in PowerShell:
+--
+--     -join ((48..57)+(65..90)+(97..122) | Get-Random -Count 32 | % {[char]$_})
+--
+--   Keep it OUT of any chat window, including this one.
+-- =============================================================================
+
+ALTER ROLE neondb_owner WITH PASSWORD 'REPLACE_ME_WITH_A_REAL_PASSWORD';
+
+-- =============================================================================
+-- AFTER RUNNING, IN THIS ORDER - the middle step is the one people forget
+-- =============================================================================
+--
+-- 1. UPDATE VERCEL. Project -> Settings -> Environment Variables -> DATABASE_URL.
+--    ⛔ The app reads the connection string from there, NOT from this repo. Until
+--    this is updated the API is holding a password that no longer works, and every
+--    authed endpoint - save, load, quote, verify, bug-report - starts failing.
+--
+-- 2. REDEPLOY so the new value is picked up. An env var change alone does not
+--    reach a running deployment.
+--    !! Per FOUNDATIONAL_RULINGS section 8 that promotion is a MANUAL OWNER ACT,
+--    and .vercelignore re-includes /api, so it re-ships the backend. Expected here.
+--
+-- 3. RE-CHECK the schema, because a rotation is a good moment to prove the
+--    connection still works end to end:
+--       $env:DATABASE_URL = '<the NEW string, in SINGLE quotes>'
+--       node tools/schema-parity.mjs        -> want SCHEMA_PARITY_OK
+--
+-- !! SINGLE QUOTES MATTER. The connection string contains '&' before
+--    channel_binding, and PowerShell treats a bare '&' as a command separator.
+--    Without quotes it splits the string and fails in a way that looks like a
+--    credential problem but is not.
+--
+-- !! IF ANYTHING ELSE HOLDS THIS CREDENTIAL - a local .env, a CI secret, another
+--    machine - it breaks at step 1. Nothing in this repo stores it (DATABASE_URL
+--    is deliberately absent from the tree), but a laptop or a shell history might.
+-- =============================================================================
