@@ -32,8 +32,12 @@ if (-not $candidates) { Write-Error "No Unity editor under '$hubEditors'."; exit
 $chosen = $candidates | Where-Object { $_.Name -eq $pinned } | Select-Object -First 1
 if (-not $chosen) { $chosen = $candidates | Where-Object { $_.Name -like '6000.*' } | Sort-Object Name -Descending | Select-Object -First 1 }
 if (-not $chosen) { $chosen = $candidates | Sort-Object Name -Descending | Select-Object -First 1 }
+# WO-1178: an UNSET $LASTEXITCODE is $null, and $null -ne 0 is TRUE - so the guard
+# below used to fire on SUCCESS (and 'exit $null' exits 0). Seed it, and test for
+# null explicitly, so a future edit to the assert script cannot reopen that hole.
+$LASTEXITCODE = 0
 & (Join-Path $proj 'tools\assert-unity-editor-pin.ps1') -ProjectRoot $proj -ExpectedVersion $pinned -SelectedVersion $chosen.Name
-if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+if ($null -eq $LASTEXITCODE) { exit 9 } elseif ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 $unity = Join-Path $chosen.FullName 'Editor\Unity.exe'
 
 # --- refuse if an editor is already open (project lock) -----------------------

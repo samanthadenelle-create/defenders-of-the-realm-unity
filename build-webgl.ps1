@@ -55,8 +55,12 @@ if (-not $chosen) {
         Write-Warning "No Unity 6 (6000.*) editor found; falling back to $($chosen.Name)."
     }
 }
+# WO-1178: an UNSET $LASTEXITCODE is $null, and $null -ne 0 is TRUE - so the guard
+# below used to fire on SUCCESS (and 'exit $null' exits 0). Seed it, and test for
+# null explicitly, so a future edit to the assert script cannot reopen that hole.
+$LASTEXITCODE = 0
 & (Join-Path $proj 'tools\assert-unity-editor-pin.ps1') -ProjectRoot $proj -ExpectedVersion $pinned -SelectedVersion $chosen.Name
-if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+if ($null -eq $LASTEXITCODE) { exit 9 } elseif ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 $unity = Join-Path $chosen.FullName 'Editor\Unity.exe'
 Write-Host "[webgl] Editor: $($chosen.Name)  ->  $unity"
 
