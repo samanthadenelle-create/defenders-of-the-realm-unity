@@ -30,6 +30,11 @@ namespace DeNelle.Core.Catalog
     {
         public string      id;
         public string      displayName;
+        /// <summary>
+        /// WO-1081 - the one player-facing sentence saying what this building does.
+        /// Authored data; absent/blank falls back to the per-type sentence.
+        /// </summary>
+        public string      description;
         public CatalogType type;
         public EntryKind   kind = EntryKind.Cell;
 

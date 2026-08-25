@@ -21,7 +21,8 @@
      "roles": [
       "wood_producer",
       "food_producer",
-      "iron_producer"
+      "iron_producer",
+      "crystal_producer"
      ]
     },
     {

@@ -78,6 +78,7 @@ namespace DeNelle.Editor
                 // ── 2. DUAL-COPY BYTE-EQUAL (the catalog's own stated rule) ─────────────
                 CheckDualCopy(CatalogRelPath, failures, log);
                 CheckDualCopy(DamageRelPath, failures, log);
+                CheckStructureDescriptions(entries, failures, log);
 
                 // Hydrate the registry so the REAL cost/refund/factory paths resolve ids
                 // exactly as the game does (CatalogRegistry.Get). Mirrors CatalogBootstrap's
@@ -225,6 +226,53 @@ namespace DeNelle.Editor
                              $"({a.Length} vs {b.Length} bytes) — editor and WebGL would load different data");
             else
                 log.AppendLine($"  dual-copy '{relPath}' byte-identical ({a.Length} bytes) OK");
+        }
+
+        // WO-1081: descriptions are authored catalog data, bounded to the one-line tile.
+        private static void CheckStructureDescriptions(List<CatalogEntry> entries,
+            List<string> failures, StringBuilder log)
+        {
+            int authored = 0;
+            CatalogEntry crystalMine = null;
+            foreach (var e in entries)
+            {
+                if (e == null) continue;
+                bool requiresDescription = e.type == CatalogType.Resource || e.type == CatalogType.Collector;
+                if (!requiresDescription) continue;
+                if (string.IsNullOrWhiteSpace(e.description))
+                {
+                    failures.Add($"[structure-descriptions] '{e.id}' type={e.type} has no authored description");
+                    continue;
+                }
+                authored++;
+                if (e.description.Length > 48)
+                    failures.Add($"[structure-descriptions] '{e.id}' description is {e.description.Length} characters; max is 48");
+                string projected = StructureCardVM.DescriptionFor(e);
+                if (!string.Equals(projected, e.description, System.StringComparison.Ordinal))
+                    failures.Add($"[structure-descriptions] '{e.id}' projection changed authored copy");
+                if (projected.IndexOf("gathers materials over time", System.StringComparison.OrdinalIgnoreCase) >= 0)
+                    failures.Add($"[structure-descriptions] '{e.id}' rendered the obsolete generic resource sentence");
+                if (e.id == "mine_crystal") crystalMine = e;
+            }
+
+            const string mineCopy = "Yields Crystals each time a wave is cleared.";
+            if (crystalMine == null || StructureCardVM.DescriptionFor(crystalMine) != mineCopy)
+                failures.Add("[structure-descriptions] mine_crystal does not project the required copy verbatim");
+
+            string repoRoot = System.IO.Path.GetDirectoryName(Application.dataPath);
+            string vmPath = System.IO.Path.Combine(repoRoot,
+                "Assets/_Modules/Village/BuildMode/StructureCardVM.cs".Replace('/', System.IO.Path.DirectorySeparatorChar));
+            string source = System.IO.File.ReadAllText(vmPath);
+            int start = source.IndexOf("DescriptionFor(CatalogEntry e)", System.StringComparison.Ordinal);
+            int end = start < 0 ? -1 : source.IndexOf("private static string FootprintFor", start, System.StringComparison.Ordinal);
+            string method = start >= 0 && end > start ? source.Substring(start, end - start) : string.Empty;
+            if (method.Length == 0)
+                failures.Add("[structure-descriptions] DescriptionFor source seam not found");
+            else if (method.Contains("e.role") || method.Contains("e.id ==") || method.Contains("e.id !="))
+                failures.Add("[structure-descriptions] DescriptionFor branches on role/id; fallback must stay type-only");
+
+            log.AppendLine($"  [structure-descriptions] authored={authored} resource/collector rows; " +
+                           "48-char cap, mine copy, authored projection, type-only fallback OK");
         }
 
         // =====================================================================

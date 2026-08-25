@@ -235,9 +235,12 @@ namespace DeNelle.Village
             return "Targets: Land only";
         }
 
-        private static string DescriptionFor(CatalogEntry e)
+        public static string DescriptionFor(CatalogEntry e)
         {
             if (e == null) return string.Empty;
+            if (!string.IsNullOrWhiteSpace(e.description)) return e.description;
+            FlowTrace.Once("Build", "desc-unauthored-" + e.id,
+                $"description fallback id={e.id} type={e.type} -- author CatalogEntry.description");
             switch (e.type)
             {
                 case CatalogType.Tower:    return "A defensive tower — auto-fires on enemies in range.";

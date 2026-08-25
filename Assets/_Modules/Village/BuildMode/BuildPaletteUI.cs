@@ -1283,6 +1283,17 @@ namespace DeNelle.Village
                 TextAlignmentOptions.Center, new Vector2(0.06f, 0.70f), new Vector2(0.94f, 0.96f));
             nameLabel.raycastTarget = false;
 
+            // WO-1081: the tile itself must say what the building does; the detail panel is
+            // not on the live gesture path. One bounded line cannot displace the cost band.
+            string effectText = card.Description ?? string.Empty;
+            if (effectText.Length > 48) effectText = effectText.Substring(0, 45) + "...";
+            var effectLabel = MakeText(cardGo.transform, effectText, 11,
+                ElarionUi.Parchment, FontStyles.Normal, TextAlignmentOptions.Center,
+                new Vector2(0.06f, 0.57f), new Vector2(0.94f, 0.70f));
+            effectLabel.raycastTarget = false;
+            effectLabel.textWrappingMode = TextWrappingModes.NoWrap;
+            effectLabel.overflowMode = TextOverflowModes.Ellipsis;
+
             // ── Art band UNDER the name (owner 2026-07-06) ────────────────────
             // Priority: (a) Resources/Portraits/<key> building portraits (catalog id,
             // then displayName slug — the key comes from the entry's own data, no
@@ -1330,7 +1341,7 @@ namespace DeNelle.Village
             bandGo.transform.SetParent(cardGo.transform, false);
             var brt = (RectTransform)bandGo.transform;
             brt.anchorMin = new Vector2(0.10f, 0.26f);
-            brt.anchorMax = new Vector2(0.90f, 0.68f);
+            brt.anchorMax = new Vector2(0.90f, 0.56f);
             brt.offsetMin = Vector2.zero; brt.offsetMax = Vector2.zero;
             var bandImg = bandGo.GetComponent<Image>();
             bandImg.raycastTarget = false;

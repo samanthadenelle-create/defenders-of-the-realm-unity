@@ -1,6 +1,6 @@
 {
  "version": 37,
- "_rolePassNote2026_08_24": "WO-1167 (owner ask: group the build palette by producer/storage/trade/civic): the six Town rows that had NO role are filled so none lands in the palette's trailing 'Other' bucket by accident. barracks='barracks', pet-house='echo_home', arcane-tower='arcane' (the WO-1167 sec.3 Civic group names these three exactly). The three LOCKED legacy rows get honest UNIQUE roles - mill='gristmill', lumbermill='sawmill', mine_crystal='crystal_producer' - unique because StructureRoles refuses role collisions loudly (FlowTrace.Fail), so they must NOT reuse food_producer/wood_producer, which collector_farm/collector_lumbermill already claim. They are deliberately in NO paletteGroups group: they are lockedIds-filtered and never render, and per WO-1168 they retire from the palette (mine_crystal's verb is absorbed by the Cathedral). When the Cathedral absorbs crystal production, MOVE 'crystal_producer' onto arcane-tower by editing this file - never by a code map (WO-1161).",
+ "_rolePassNote2026_08_24": "WO-1167 grouped the Town palette by authored roles. mine_crystal is unlocked and its crystal_producer role belongs in the Producers group (WO-1081); mill and lumbermill remain locked legacy rows with unique roles. Role grouping remains data-authored, never a code map (WO-1161).",
  "_sinkPassNote": "v24 = ECONOMY SINK PASS 2026-08-21 (OWNER RULING): a committed daily player should need 8-12 WEEKS to exhaust current content, a casual ~6 months; it was ONE EVENING. THE LEVER IS THE SINKS, NOT THE FAUCET -- harvest stays exactly 5 per 5 seconds (EchoBonusCalculator CommonResourcePerHour 3600) because \" 5 wood every 5 seconds\" is legible and a player can feel it; nudging it to 3.7/tick buys nothing and costs comprehension. Scaling factors: build x4, upgrade->L2 x10, upgrade->L3 x14. The THREE STORAGE ROWS (lumberyard/foundry/silo) use their own DECREASING ladder (x16/x16/x10/x8/x6.5/x6) because a uniform multiplier on a ladder that already doubles per step walks the cost off the end of the cap ladder it is gated behind -- foundry and silo wood steps were then lowered again by hand to 2000/2700/4000/6800/12000 because they are paid in WOOD, capped by the LUMBERYARD, and must fit the MATCHED container level. HARD CONSTRAINT, pinned by DeNelle.Editor.Regression.EconomySinkCapRegression [sink-cap]: NO COST MAY EXCEED THE MAX BANKABLE AMOUNT OF THAT RESOURCE (base 2000 + one container at level 1..6 = 3k/4k/6k/10k/18k/34k). A 3000-wood cost under a 2000 cap is UNCOMPLETABLE and nothing in the game explains why. CRYSTALS AND COINS ARE UNCAPPED BY DESIGN (TownBankCapacity.UncappableResources) -- that is why the crystal-priced magical ladders run to five figures. Cost baskets are UNCHANGED in shape: scaling never moves a resource across the WO-947 regular/magical line. NOTE the knock-on: BuildTimerConfig.TierForCost derives build TIME from the authored basket, so this pass also lifts the time ladder -- which is the intended coupling (see that file: \"the whole ladder re-tunes itself for free when the JSON cost pass lands\").",
  "_costBasketRule": "WO-947 — OWNER ECONOMY RULING 2026-08-10, BINDING, and the four classification pins ANSWERED by the owner 2026-08-14: cost baskets separate by the structure's NATURE. REGULAR structures cost wood + iron (± food where already used) and NEVER crystals. MAGICAL / ETHEREAL structures are CRYSTALS + IRON (owner 2026-08-14 pin 1 verbatim: \"Crystals and Iron\") — never wood. INVARIANT: no row's build cost or upgrade step ever contains wood AND iron AND crystals together. Enforced headlessly by DeNelle.Editor.Regression.CostBasketSeparationRegression [cost-basket] — any NEW row that violates the invariant FAILS the gate. FULLY APPLIED as of v18: v17 converted 'tower_siege_tower'; v18 converts the five rows that were waiting on the pins — MAGICAL (crystals + iron, wood folded 1:1 into CRYSTALS so basket totals are unchanged): 'tower_arcane_spire', 'healing_caravan' (pin 2 verbatim: \"yes AoE healing\" — healing IS magical); REGULAR (crystals folded 1:1 into IRON, totals unchanged): 'jeweler' (pin 3 verbatim: \"Crafting (can enbue preciouus sstones future release)\" — crafting, therefore regular today; a FUTURE release may let it imbue precious stones, which would be a RE-classification then, not now) and 'tower_wall_wizard' (pin 4 verbatim: \"thats a baliista mechanical\" — the DATA reading wins over the id; displayName 'Ballista', element None, projectileStyle 'bolt' per the owner rename ruling 2026-07-08). The regression's pending-pin exemption list is now EMPTY. (v18 populated MagicalIds; v19 added 'arcane-tower'; v20 removed the retired Healer Tower row -- see the retirement note at the end.) THE LAST PIN IS SPENT (OWNER 2026-08-14, verbatim: \"cathedral of magic is where all magic upgrades anre and can unlock new teirs of spells\"): 'arcane-tower' ('Cathedral of Magic') is MAGICAL. v19 converts it — wood:60 folded 1:1 into CRYSTALS, so the basket is crystals:60 + iron:60 and the total (120) is unchanged, the same discipline used for the three v18 magical rows. This OVERRIDES the earlier agent reading that called it REGULAR by the jeweler analogy (\"a shop that DEALS IN magic is still a shop\"), which cited behaviorId 'GameplayBuilding' and the row's _heightNote (\"despite the id this is not a tower — it is the town's one civic landmark\"). THE OWNER'S DISTINCTION, recorded so nobody re-litigates it: the jeweler SELLS things that happen to be precious; the Cathedral is WHERE MAGIC UPGRADES LIVE AND WHERE NEW SPELL TIERS UNLOCK — it is the ENGINE of magical progression, not a vendor that deals in it. 'behaviorId: GameplayBuilding' describes its BEHAVIOUR (it is not a firing tower), NOT its cost class. The surface evidence genuinely points both ways, so the ruling is the tiebreak — do not re-classify it off the id, the behaviorId or the _heightNote. WO-947 IS NOW FULLY APPLIED: every classification question is closed, the regression's pending-pin exemption list is EMPTY and stays empty. v20 RETIRES the never-buildable Healer Tower row entirely (WO-990, OWNER RULING 2026-08-14, verbatim: \"i do not know what the town healer is\" -> \"retire\"). She did not recognise it because it appeared in NO build category in build-categories.json, so no player could ever build it and it had no early-economy consequence; the WO-947 pin-2 conversion had been applied to a dead row. Its BEHAVIOUR is deliberately KEPT (StructureFactory case \"HealerTower\") as the WO-891 support-FIELD pattern reference; 'healing_caravan' is the row's design successor and inherits the concept. Do not resurrect the row. MagicalIds therefore holds THREE ids at v20: 'tower_arcane_spire', 'healing_caravan', 'arcane-tower'.",
  "_displayOrder": "WO-963 (owner ask 2026-08-10, F8 seq 2302, verbatim: 'Can we order the carousel in order of how the tutorial presents them?'). 'displayOrder' is an OPTIONAL per-entry integer that sorts the build palette carousel. LOWER FIRST; ABSENT / 0 = UNAUTHORED and sorts AFTER every authored row, keeping its current relative position (the sort is STABLE on the catalog's row order, so an unauthored row never jumps). The palette is the only consumer (BuildPaletteVM.SortForDisplay); it changes NO gating, no group split and no cost. SEEDED TO THE TEACHING ORDER: 10 collector_lumbermill (tutorial step order 20, 'Place your Lumbermill'), 20 workshop (contextual nudge 1050, the weapons roof), 30 forge/'Armorer' (contextual nudge 1060). Gaps of 10 are deliberate so the owner can slot a row between two without renumbering. NO TOWER ROW IS AUTHORED ON PURPOSE: the tutorial's defense beat (step order 30) names a TAB ('build.tab_defenses'), not a tower id, and tower_ground_archer is already the first Tower row in this file, so the Defense group teaches the archer tower first with no key. It also keeps the three CatalogBootstrap.RegisterFallback tower rows field-equal to their catalog rows (BuildEconomyRegression gate 12 [fallback-parity] deep-compares EVERY public CatalogEntry/RepoProps field, so authoring a tower here would demand a mirrored edit there). The tutorial is NEVER read at runtime by the palette - the catalog carries the order and BuildCarouselTutorialOrderRegression is what keeps the two agreeing.",
@@ -426,6 +426,7 @@
   {
    "id": "mine_crystal",
    "displayName": "Crystal Mine",
+   "description": "Yields Crystals each time a wave is cleared.",
    "role": "crystal_producer",
    "type": "Resource",
    "kind": "Cell",
@@ -573,6 +574,7 @@
   {
    "id": "pet-house",
    "displayName": "Echo Hollow",
+   "description": "Home and wardrobe for your Echoes.",
    "role": "echo_home",
    "type": "Resource",
    "kind": "Cell",
@@ -619,6 +621,7 @@
   {
    "id": "workshop",
    "displayName": "Crafting Station",
+   "description": "Craft gear and potions here.",
    "_artNote2026_08_17": "THE CRAFTING STATION, and the home of the owner's LAST purchased model. Two things converged here. (1) COLLISION: this row and 'forge' both pointed at Structures/Forge the moment forge was repointed to the WeaponSmith model, so two different buildings would have worn one body. (2) IDENTITY: this row is displayed 'Weaponsmith' but it is NOT a vendor - vendors.json holds exactly four (market, forge=weapon, armorer=armor, jeweler) and this is not one of them. It is a type=Resource crafting building wearing a shop's name, which is why the whole forge/armorer/workshop cluster reads as interchangeable. Repointed to Structures/ShopAndCrafting per the owner's brief for that model - 'the crafting and store misc' + 'Can we have the crafting station also sell the potions so we dont need a store that only sells potions?' - which retires the potions-only storefront by merging it here. ⛔ 'market' was deliberately NOT given this model: market IS a vendor (consumable+material) and is Coppin's marketplace, the one that carried the hidden third Realm Store option. THE displayName IS STILL 'Weaponsmith' AND IS STILL WRONG - it needs an owner ruling, not a silent rename, exactly like forge='Armorer' and armorer='Blacksmith'. Three crossed display names in one cluster is a data defect with one cause, and it should be fixed in one ruling rather than three guesses.",
    "role": "crafting_station",
    "type": "Resource",
@@ -667,6 +670,7 @@
   {
    "id": "market",
    "displayName": "Store",
+   "description": "Sells consumables and materials.",
    "role": "marketplace",
    "type": "Resource",
    "kind": "Cell",
@@ -713,6 +717,7 @@
   {
    "id": "mill",
    "displayName": "Mill",
+   "description": "Grinds grain into Food.",
    "role": "gristmill",
    "type": "Resource",
    "kind": "Cell",
@@ -756,6 +761,7 @@
   {
    "id": "lumbermill",
    "displayName": "Lumber Mill",
+   "description": "Processes timber into Wood.",
    "role": "sawmill",
    "type": "Resource",
    "kind": "Cell",
@@ -797,6 +803,7 @@
   {
    "id": "forge",
    "displayName": "Weaponsmith",
+   "description": "Sells weapons.",
    "role": "weaponsmith",
    "type": "Resource",
    "kind": "Cell",
@@ -845,6 +852,7 @@
   {
    "id": "armorer",
    "displayName": "Armorer",
+   "description": "Sells armour, and opens the Iron harvest.",
    "role": "armorer",
    "type": "Resource",
    "kind": "Cell",
@@ -891,6 +899,7 @@
   {
    "id": "jeweler",
    "displayName": "Jeweler",
+   "description": "Crafts jewelry.",
    "role": "jeweler",
    "type": "Resource",
    "kind": "Cell",
@@ -938,6 +947,7 @@
   {
    "id": "arcane-tower",
    "displayName": "Cathedral of Magic",
+   "description": "Spells and magic research.",
    "_nameConfusionNote": "⚠ THIS ID IS NOT A TOWER. id 'arcane-tower' displays 'Cathedral of Magic' and is THRAIN'S LEVELING BUILDING (behaviorId GameplayBuilding, singleton, spells + magic research). The DEFENSIVE wizard tower is a different row: 'tower_arcane_spire', displayed 'Arcane Spire', behaviorId ArcaneTower. So the id that says tower is not one, and the one that BEHAVES as ArcaneTower is named Spire - which is why the owner asked about 'arcane tower' costs on 2026-08-24 and meant the Spire. ⛔ IDS ARE FROZEN SAVE KEYS and cannot be renamed; only the words can move. building-tiers.json carries the same warning - it is repeated HERE because this is the file people read first.",
    "role": "arcane",
    "_costNote": "MAGICAL by OWNER RULING 2026-08-14, verbatim: \"cathedral of magic is where all magic upgrades anre and can unlock new teirs of spells\". WO-947 v19 folds the former wood:60 1:1 into CRYSTALS, so the basket is crystals:60 + iron:60 and the total (120) is UNCHANGED. This OVERRULES the prior reading that put this row on the REGULAR side by the jeweler analogy (\"a shop that DEALS IN magic is still a shop\"), citing repo.behaviorId 'GameplayBuilding' and the _heightNote below (\"despite the id this is not a tower - it is the town's one civic landmark\"). THE DISTINCTION: the jeweler SELLS things that happen to be precious; the Cathedral is WHERE MAGIC UPGRADES LIVE AND WHERE NEW SPELL TIERS UNLOCK - the ENGINE of magical progression, not a vendor that deals in it. 'behaviorId: GameplayBuilding' describes its BEHAVIOUR (it is not a firing tower), NOT its cost class, and the id/_heightNote say nothing about what it is MADE of. The surface evidence points both ways on purpose; the owner's ruling is the tiebreak. Do not re-litigate, and do not restore wood here - CostBasketSeparationRegression [applied] now pins this row MAGICAL with total 120.",
@@ -1069,6 +1079,7 @@
   {
    "id": "collector_farm",
    "displayName": "Farm",
+   "description": "Harvests Food for your town over time.",
    "role": "food_producer",
    "_heightNote": "1.4 IS NOT A CADENCE OUTLIER - DO NOT NORMALIZE IT TO 1.0. That half of the original note was right and it STANDS. What it MISSED is the other axis, and that is what the owner finally felt on 2026-08-20 ('farm seems to be much larger than anything else'): heightMul is a UNIFORM scale, so it moves the FOOTPRINT by the same factor it moves the height, and this model's fitted pose is FLAT. MEASURED on device, not theorised (logs/device/2026-08-20-portal.log, [Flow:Xform] + [Flow:VisualFactory] 'skinned'): Structures/farm is natively 0.977 x 1.000 x 0.391 m, and this row's orientation euler (-90,0,0) stands the 0.391 axis UP, so Fit divided the 5.6 m target (4 m base x 1.4) by 0.391 and produced scale=(14.34) and a fitted footprint of 14.00 x 14.34 m - against a family that measures 2.8-5.8 m across. That is 3.5x, and NO value of heightMul fixes it: lowering it re-ships the shrunk farm (commit 31b41d19), raising it makes the footprint worse. THE CORRECTION IS repo.maxFootprint 5.6 (added 2026-08-20) - a footprint CEILING that scales the fitted model DOWN uniformly until its widest horizontal extent is 5.6 m, the same number as this row's placement.footprint, so the visual and the collision claim finally agree. Final rendered size 5.47 x 2.19 x 5.60 m; the grid claim shrinks 5x5 cells -> 2x2, which is overlap-safe for saved towns. WHY THE OLD MECHANISM READ WRONG, kept so nobody re-derives it: 'the windmill blades inflate this model's Y bounds' is not what the geometry says - the art is a flat square plot, not a spindly silhouette - but the old note's CONCLUSION was correct for the pipeline it was written against. Until the GROK_BRIEF change of 2026-08-19 the euler was applied AFTER the fit, so Fit measured the UNROTATED 1.000 axis, 1.4 yielded scale 5.60, and the farm rendered at exactly 5.47 x 2.19 x 5.60 - the size the owner accepted. Moving the euler PRE-fit flipped which axis Fit divides by, and only this row's art is flat enough for that to matter. The cap value is chosen to reproduce that owner-accepted size in BOTH regimes: under the old order the widest extent is 5.60 and the cap is exactly non-binding, under the current order it binds and lands on the same numbers - so this row can no longer be resized by a change to rotation ORDER. heightMul 1.4 is deliberately KEPT and is INERT while the cap binds (any heightMul above ~0.55 lands on the same capped size); it remains the documented fallback if the cap is ever disarmed. If it ever needs retuning, retune the CAP against the rendered body standing next to a forge, never against the number.",
    "type": "Collector",
@@ -1121,6 +1132,7 @@
   {
    "id": "collector_lumbermill",
    "displayName": "Lumber Mill",
+   "description": "Harvests Wood for your town over time.",
    "role": "wood_producer",
    "_pairingNote": "WO-1161 follow-up (2026-08-23). OWNER RULING, verbatim: \"It should be the armorer, the food is the farm, and the wood is the lumbermill, and there is none for crystals, since that is only available at lvl 6 echo\". repo.satisfiedByStructureIds is the DATA seam that pairs a faucet with the trade building that also opens its harvest gate - ResourceBuildingHarvester.CatalogIdsForBuilding reads it, and NOTHING branches on an id in code. Iron was paired first (collector_forge -> armorer); wood is paired here (collector_lumbermill -> lumbermill) so a town holding the Lumber Mill trade row - including a WO-748 id-drift save whose BaseLayout recorded the bare 'lumbermill' - earns wood instead of sitting behind a gate it has already satisfied. FOOD IS DELIBERATELY UNPAIRED: the owner's farm IS this file's 'collector_farm' (displayName 'Farm'); there is no second farm row to pair it with, so authoring one would invent a building. CRYSTALS ARE DELIBERATELY UNPAIRED per the same ruling (level-6 Echo only). STOP: THIS SEAM DOES NOT REACH QUESTS. QuestCompletion.ToSignalId composes 'build.structure_placed:<targetId>' and StoryQuestSignalBridge.Dispatch matches it by EXACT STRING - it never calls CatalogIdsForBuilding and never reads this field. Pairing a faucet here does NOT make a quest's build stage completable; see the vendor.lumbermill/plant-sapling finding.",
    "type": "Collector",
@@ -1175,6 +1187,7 @@
   {
    "id": "collector_forge",
    "displayName": "Iron Mine",
+   "description": "Harvests Iron for your town over time.",
    "role": "iron_producer",
    "type": "Collector",
    "kind": "Cell",
@@ -1223,6 +1236,7 @@
   {
    "id": "lumberyard",
    "displayName": "Lumberyard",
+   "description": "Raises how much Wood your town can hold.",
    "role": "wood_store",
    "type": "Resource",
    "kind": "Cell",
@@ -1300,6 +1314,7 @@
   {
    "id": "foundry",
    "displayName": "Foundry",
+   "description": "Raises how much Iron your town can hold.",
    "role": "iron_store",
    "type": "Resource",
    "kind": "Cell",
@@ -1377,6 +1392,7 @@
   {
    "id": "silo",
    "displayName": "Silo",
+   "description": "Raises how much Food your town can hold.",
    "role": "food_store",
    "type": "Resource",
    "kind": "Cell",
@@ -1454,6 +1470,7 @@
   {
    "id": "barracks",
    "displayName": "Barracks",
+   "description": "Trains and houses your troops.",
    "role": "barracks",
    "type": "Resource",
    "kind": "Cell",

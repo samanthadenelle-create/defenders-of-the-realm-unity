@@ -400,13 +400,25 @@ namespace DeNelle.Village
                 }
                 FlowTrace.Step("BuildPalette",
                     $"palette-sections: groups={_paletteGroups.Length} sections={_sections.Count} [{sb}] " +
+                    $"desc-authored={CountAuthoredDescriptions(_cards)}/{_cards.Count} " +
                     "(WO-1167 role grouping; empty groups render nothing, unlisted roles land in Other)");
             }
             // WO-963 §12 — name the ORDER that shipped, so a "the carousel is in the wrong order"
             // report is one read: card-order tells authored-first from catalog-order at a glance.
             FlowTrace.Step("BuildPalette",
-                "card-order: " + DescribeOrder(_cards) + " (WO-963 displayOrder asc, 0/absent last, " +
+                "card-order: " + DescribeOrder(_cards) + $" desc-authored={CountAuthoredDescriptions(_cards)}/{_cards.Count} " +
+                "(WO-963 displayOrder asc, 0/absent last, " +
                 "stable on catalog row order)");
+        }
+
+        private static int CountAuthoredDescriptions(List<StructureCardVM> cards)
+        {
+            int count = 0;
+            if (cards == null) return count;
+            foreach (var card in cards)
+                if (card != null && card.Entry != null &&
+                    !string.IsNullOrWhiteSpace(card.Entry.description)) count++;
+            return count;
         }
 
         private static string DescribeOrder(List<StructureCardVM> cards)
