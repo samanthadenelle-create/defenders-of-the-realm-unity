@@ -1547,6 +1547,24 @@ namespace DeNelle.Village.Hero
                     list.Add(new PartyShopSpec("Improve", "Lv " + lvl + " -> " + (lvl + 1),
                         FmtDelta(nextDmg - dmg, "% output"), 1));
                 }
+
+                // WO-814 (owner ruling 2026-08-24, batch 2 ruling 11 §3): the max-level ability is
+                // shown from Level 1 - "Lv 5: <ability>" - so the goal is visible the whole way up
+                // rather than a surprise at the end. Deliberately OUTSIDE the ownership gate above:
+                // the promise is a property of the RARITY, so it reads the same on a shop row as on
+                // an owned one. Sign 0 (no colour-carried meaning). Once the piece is at max the
+                // earned ability replaces the locked line. Both are silent while the band's
+                // weaponAbilities are unauthored - see GearStatResolver.LockedAbilityLine.
+                var earned = GearStatResolver.AbilityFor(w, lvl);
+                if (earned != null && !string.IsNullOrEmpty(earned.DisplayName))
+                {
+                    list.Add(new PartyShopSpec("Ability", earned.DisplayName, "", 0));
+                    if (!string.IsNullOrEmpty(earned.Description))
+                        list.Add(new PartyShopSpec("", earned.Description, "", 0));
+                }
+                string locked = GearStatResolver.LockedAbilityLine(w.rarity, lvl);
+                if (!string.IsNullOrEmpty(locked))
+                    list.Add(new PartyShopSpec("Ability", locked, "", 0));
                 return list;
             }
 

@@ -8,6 +8,9 @@
 //   3. Cost curves: index 0 free, strictly increasing after (monotonic economy).
 //   4. Coverage: every rarity used by weapons.json/armor.json has a band, so no
 //      shipped item is silently ladder-less.
+//   5. WO-814: every band carries a weaponAbilities slot (may be EMPTY - the shipped
+//      state, identities are owner-authored later); any authored row has a reachable,
+//      unique levelThreshold >= 2, an abilityId + name, and no damage-multiplier field.
 // Runs inside DataRegression.RunAll as [gear-levels].
 // =============================================================================
 
@@ -72,6 +75,49 @@ namespace DeNelle.Editor
                                 if ((int)costs[i] <= (int)costs[i - 1])
                                     failures.Add(rarity + ": " + key + " must climb strictly at index " + i);
                         }
+
+                        // 5. WO-814 max-level weapon abilities (per-RARITY, weapons only).
+                        //    The array must EXIST on every band - that is the slot the owner
+                        //    authors into. Shipping it EMPTY is legal and is the current state;
+                        //    an absent array is not, because a band with no slot silently opts
+                        //    out of the feature forever.
+                        var abilities = b["weaponAbilities"] as JArray;
+                        if (abilities == null)
+                        {
+                            failures.Add(rarity + ": weaponAbilities array missing (WO-814 slot)");
+                        }
+                        else
+                        {
+                            var seenThresholds = new HashSet<int>();
+                            for (int i = 0; i < abilities.Count; i++)
+                            {
+                                var a = abilities[i];
+                                string where = rarity + ".weaponAbilities[" + i + "]";
+
+                                int threshold = (int?)a["levelThreshold"] ?? 0;
+                                if (threshold < 2)
+                                    failures.Add(where + ": levelThreshold must be >= 2 (level 1 is the free baseline)");
+                                if (threshold > mults.Count)
+                                    failures.Add(where + ": levelThreshold " + threshold + " exceeds the band max "
+                                                 + mults.Count + " (ability would be unreachable)");
+                                if (!seenThresholds.Add(threshold))
+                                    failures.Add(where + ": duplicate levelThreshold " + threshold);
+
+                                if (string.IsNullOrEmpty((string)a["abilityId"]))
+                                    failures.Add(where + ": abilityId missing (must resolve in abilities.json)");
+                                if (string.IsNullOrEmpty((string)a["name"]))
+                                    failures.Add(where + ": name missing (it is the '<ability>' in the "
+                                                 + "'Lv N: <ability>' preview line)");
+
+                                // The owner's design law: a max-level ability CHANGES PLAYSTYLE, it is
+                                // not '+35% more damage'. The row shape has no damage-multiplier field;
+                                // this pins that an authored row cannot smuggle one back in.
+                                foreach (var banned in new[] { "damageMult", "statMult", "damageMultiplier" })
+                                    if (a[banned] != null)
+                                        failures.Add(where + ": '" + banned + "' is not part of the ability row - "
+                                                     + "max-level abilities change behaviour, not raw damage");
+                            }
+                        }
                     }
                 }
 
@@ -100,7 +146,8 @@ namespace DeNelle.Editor
                 return false;
             }
             reason = "GEAR LEVELS OK - dual-copy identical, all bands baseline-1.0 + strictly-climbing mults, " +
-                     "free-at-L1 + monotonic costs, full rarity coverage vs weapons/armor catalogs";
+                     "free-at-L1 + monotonic costs, full rarity coverage vs weapons/armor catalogs, " +
+                     "WO-814 weaponAbilities slot present on every band with reachable thresholds";
             return true;
         }
     }

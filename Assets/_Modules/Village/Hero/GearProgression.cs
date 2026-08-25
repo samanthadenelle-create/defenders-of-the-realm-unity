@@ -28,10 +28,60 @@ using Newtonsoft.Json;
 using UnityEngine;
 using DeNelle.Core.State;
 using DeNelle.Core.Diagnostics;
+using DeNelle.BattleATB.Engine; // StatusKind - the one canonical status vocabulary
 using Ledger = DeNelle.Village.Buildings.Progression;
 
 namespace DeNelle.Village
 {
+    /// <summary>
+    /// WO-814 (owner ruling 2026-08-24, batch 2 ruling 11): a special ability a WEAPON earns
+    /// once its instance level reaches <see cref="LevelThreshold"/> (the band max in practice).
+    ///
+    /// PER-RARITY GENERIC, never per-item — the ruling, and the reason this row hangs off
+    /// <see cref="GearLevelBand"/> rather than off a WeaponDef: per-item authoring scales with
+    /// the catalog forever, per-rarity gives every max-level weapon a beat for a fraction of the
+    /// writing. The shape mirrors the shipped troop pattern piece for piece
+    /// (<see cref="AbilityUnlock"/> in BarracksData.cs / troop-upgrades.json specialAbilities) —
+    /// no new machinery, deliberately.
+    ///
+    /// ⭐ THERE IS NO DAMAGE-MULTIPLIER FIELD, AND THAT IS THE DESIGN. The owner's caution is that
+    /// a max-level ability should CHANGE PLAYSTYLE (frost slows, fire burns, arcane chains, holy
+    /// wards) instead of reading "+35% MORE DAMAGE" — so the model makes a behaviour expressible
+    /// (a <see cref="StatusKind"/> with a chance / duration / magnitude) and a flat damage scalar
+    /// inexpressible. The stat ladder already owns raw numbers; this row owns behaviour.
+    ///
+    /// ⛔ The ability IDENTITIES are the owner's creative canon and are NOT authored here. Every
+    /// band ships with an EMPTY weaponAbilities array; the CLI never picks a name, effect or number.
+    /// </summary>
+    [Serializable]
+    public sealed class GearWeaponAbility
+    {
+        /// <summary>Instance level at which the ability becomes active (>= 2, &lt;= band max).</summary>
+        [JsonProperty("levelThreshold")]   public int LevelThreshold;
+        /// <summary>Canonical ability id (abilities.json) — resolve via AbilityCatalog.FindById.</summary>
+        [JsonProperty("abilityId")]        public string AbilityId;
+        /// <summary>Short display name — the "&lt;ability&gt;" in the "Lv 5: &lt;ability&gt;" preview line.</summary>
+        [JsonProperty("name")]             public string Name;
+        /// <summary>The behaviour this ability applies (canonical StatusKind vocabulary).</summary>
+        [JsonProperty("statusKind")]       public StatusKind StatusKind;
+        /// <summary>Proc chance 0..1 (0 = always, i.e. not a chance proc).</summary>
+        [JsonProperty("chance")]           public float Chance;
+        /// <summary>How long the applied behaviour lasts, seconds (0 = instant / not timed).</summary>
+        [JsonProperty("durationSeconds")]  public float DurationSeconds;
+        /// <summary>Strength of the applied behaviour in that status's own units
+        /// (slow fraction, burn tick, chain count) — NOT a damage multiplier.</summary>
+        [JsonProperty("magnitude")]        public float Magnitude;
+        /// <summary>One-line player-facing description for the detail pane.</summary>
+        [JsonProperty("description")]      public string Description;
+
+        /// <summary>The label the UI shows. Falls back to the ability id so a half-authored row
+        /// still renders something truthful rather than a blank.</summary>
+        public string DisplayName =>
+            !string.IsNullOrEmpty(Name) ? Name
+            : !string.IsNullOrEmpty(AbilityId) ? AbilityId
+            : null;
+    }
+
     /// <summary>One rarity band's level ladder: stat multiplier + cost curves.
     /// Index 0 == level 1 (always the authored baseline / free).</summary>
     [Serializable]
@@ -41,6 +91,10 @@ namespace DeNelle.Village
         [JsonProperty("statMult")] public float[] StatMult;
         [JsonProperty("costWood")] public int[] CostWood;
         [JsonProperty("costIron")] public int[] CostIron;
+
+        /// <summary>WO-814: the max-level weapon abilities this rarity grants. EMPTY on ship —
+        /// the identities are owner-authored later. Weapons only; armour is a later pass.</summary>
+        [JsonProperty("weaponAbilities")] public GearWeaponAbility[] WeaponAbilities = Array.Empty<GearWeaponAbility>();
 
         /// <summary>Max reachable level for this band (curve length; 1 when unauthored).</summary>
         public int MaxLevel => StatMult != null && StatMult.Length > 0 ? StatMult.Length : 1;
@@ -166,6 +220,78 @@ namespace DeNelle.Village
             return Mathf.Clamp(def.defense * (band != null ? band.MultAt(level) : 1f),
                                0f, GearLoadout.MaxArmorDefense);
         }
+
+        // ── WO-814: max-level weapon abilities (per-RARITY, weapons only) ────────
+        //
+        // The combat seam these are destined for is the existing on-hit path in
+        // PlayerAttackController (Assets/_Modules/Village/Enemies/PlayerAttackController.cs) —
+        // the same proc seam the talent system uses. NOTHING is wired to it yet, deliberately:
+        // with every band's weaponAbilities EMPTY there is no identity to fire, and inventing one
+        // would be authoring the owner's creative canon. The resolvers below are the whole
+        // machinery; the firing site is one call to AbilityFor once a row exists.
+        //
+        // ARMOUR IS OUT OF SCOPE by the same ruling (weapons first — armour rides the mitigation
+        // path and is separate engineering). There is intentionally no ArmorDef overload here.
+
+        /// <summary>Every ability a weapon of this rarity has UNLOCKED at <paramref name="level"/>
+        /// (threshold &lt;= level), in authored order. Empty when unauthored — never null.</summary>
+        public static IReadOnlyList<GearWeaponAbility> AbilitiesFor(string rarity, int level)
+        {
+            var band = GearLevelCatalog.BandFor(rarity);
+            if (band?.WeaponAbilities == null || band.WeaponAbilities.Length == 0)
+                return Array.Empty<GearWeaponAbility>();
+            var list = new List<GearWeaponAbility>(band.WeaponAbilities.Length);
+            foreach (var a in band.WeaponAbilities)
+                if (a != null && a.LevelThreshold <= level) list.Add(a);
+            return list;
+        }
+
+        /// <summary>The ability this weapon has unlocked at <paramref name="level"/> — the
+        /// HIGHEST-threshold unlocked row, i.e. the one a max-level piece shows off. Null below
+        /// every threshold, for a null def, or while the band is unauthored (the shipped state).
+        /// This is the ticket's <c>AbilityFor(def, level)</c>.</summary>
+        public static GearWeaponAbility AbilityFor(WeaponDef def, int level)
+        {
+            if (def == null) return null;
+            GearWeaponAbility best = null;
+            foreach (var a in AbilitiesFor(def.rarity, level))
+                if (best == null || a.LevelThreshold >= best.LevelThreshold) best = a;
+            return best;
+        }
+
+        /// <summary>The next ability this rarity has still to EARN above
+        /// <paramref name="level"/> (lowest threshold above it). Null when nothing is left or
+        /// the band is unauthored. This is what makes the goal visible from Level 1.</summary>
+        public static GearWeaponAbility NextLockedAbility(string rarity, int level)
+        {
+            var band = GearLevelCatalog.BandFor(rarity);
+            if (band?.WeaponAbilities == null) return null;
+            GearWeaponAbility next = null;
+            foreach (var a in band.WeaponAbilities)
+            {
+                if (a == null || a.LevelThreshold <= level) continue;
+                if (next == null || a.LevelThreshold < next.LevelThreshold) next = a;
+            }
+            return next;
+        }
+
+        /// <summary>
+        /// The owner-specced preview line — <c>"Lv 5: &lt;ability&gt;"</c> — shown on the Improve
+        /// surfaces from Level 1 so the goal is visible the whole way up instead of being a
+        /// surprise at the end (ruling 2026-08-24, batch 2 ruling 11 §3).
+        ///
+        /// Returns null when there is nothing truthful to say: no band, no authored ability, or
+        /// every ability already earned (a max-level piece shows the unlocked ability itself, not
+        /// a locked line). ⛔ It NEVER fabricates placeholder copy for an unauthored row — a made-up
+        /// teaser would be the owner's creative canon written by the CLI, so the line simply does
+        /// not render until she authors one, and appears the moment she does.
+        /// </summary>
+        public static string LockedAbilityLine(string rarity, int level)
+        {
+            var next = NextLockedAbility(rarity, level);
+            string label = next?.DisplayName;
+            return string.IsNullOrEmpty(label) ? null : "Lv " + next.LevelThreshold + ": " + label;
+        }
     }
 
     /// <summary>
@@ -276,6 +402,14 @@ namespace DeNelle.Village
             });
 
             FlowTrace.Step("Gear", $"'{gearId}' improved L{cur}->L{next} ({rarity} band; instant, ledger-charged).");
+
+            // WO-814: name the moment an ability threshold is crossed, so the unlock is visible in
+            // the trace the day the owner authors a row (and a missing unlock is provable, not
+            // guessed - CLAUDE.md §12). No player-facing toast copy is written here: the wording
+            // would be her creative canon, and the ability list is not authored yet.
+            var unlocked = GearStatResolver.NextLockedAbility(rarity, cur);
+            if (unlocked != null && unlocked.LevelThreshold <= next)
+                FlowTrace.Step("Gear", $"'{gearId}' UNLOCKED max-level ability '{unlocked.AbilityId}' at L{next}.");
             Changed?.Invoke();
             return next;
         }

@@ -1,36 +1,42 @@
 {
-  "version": 1,
+  "version": 2,
   "_comment": "WO-808 Option A (owner-locked 2026-07-30): per-instance gear power levels. Same owned weapon/armor levels up in place; rarity stays identity, level is the power ladder. statMult index 0 = level 1 (always 1.0 = authored baseline). costWood/costIron index N = the cost to REACH level N+1 (index 0 = level 1 = free/owned). WO-855 Phase 6 (2026-08-03) retune: improve costs lifted against the post-faucet-cut economy - rarity ordering preserved, per-level step shape normalized to 1 : 2.5 : 6 : 14, iron = wood/2 throughout. Common stays approachable (first step 90W/45I ~ one early tower); legendary is a genuine chase. NOTE: improve is INSTANT (GearProgression.Improve - no job, no queue channel), so gear costs resources ONLY and never wall-clock; a timed reforge is engine work, not a data tune. Curves are soft placeholders - owner retunes numbers, structure stays. Max level per band = statMult length. DUAL-COPY RULE: Assets/Resources/Data/Canonical is the runtime authority; Assets/StreamingAssets/Data/Canonical must stay byte-identical.",
+  "_comment_wo814": "WO-814 (owner ruling 2026-08-24, batch 2 ruling 11): reaching a band's MAX level unlocks a special ABILITY on that weapon. PER-RARITY GENERIC, never per-item - per-item authoring scales with the catalog forever. WEAPONS ONLY in this pass; armour rides the mitigation path and is separate engineering, so there is deliberately NO armour ability field here. Row shape mirrors troop-upgrades.json specialAbilities: levelThreshold + abilityId + statusKind + description, plus a display name and the proc knobs (chance / durationSeconds / magnitude). THERE IS DELIBERATELY NO DAMAGE-MULTIPLIER FIELD: the owner's design caution is that a max-level ability must CHANGE PLAYSTYLE (frost slows, fire burns, arcane chains, holy wards) rather than read '+35% more damage', so the data model makes a behaviour expressible and a flat multiplier inexpressible. levelThreshold must be >= 2 and <= the band's statMult length ([gear-levels] oracle pins it). SHIPPED EMPTY ON PURPOSE: the ability IDENTITIES are the owner's creative canon and are authored later by her - the CLI never picks one. Until a row exists the machinery is inert and the Improve preview simply omits the locked line. abilityId resolves against abilities.json via AbilityCatalog.FindById; statusKind is the DeNelle.BattleATB.Engine.StatusKind vocabulary (Burn/Poison/Bleed/Slow/Freeze/Stun/Regen/Haste/Shield/Mark).",
   "bands": [
     {
       "rarity": "common",
       "statMult": [1.00, 1.12, 1.22, 1.30, 1.36],
       "costWood": [0, 180, 450, 1080, 2520],
-      "costIron": [0, 90, 230, 540, 1260]
+      "costIron": [0, 90, 230, 540, 1260],
+      "weaponAbilities": []
     },
     {
       "rarity": "uncommon",
       "statMult": [1.00, 1.10, 1.19, 1.26, 1.32],
       "costWood": [0, 300, 750, 1800, 4200],
-      "costIron": [0, 150, 380, 900, 2100]
+      "costIron": [0, 150, 380, 900, 2100],
+      "weaponAbilities": []
     },
     {
       "rarity": "rare",
       "statMult": [1.00, 1.09, 1.17, 1.23, 1.28],
       "costWood": [0, 520, 1300, 3120, 7200],
-      "costIron": [0, 260, 650, 1560, 3600]
+      "costIron": [0, 260, 650, 1560, 3600],
+      "weaponAbilities": []
     },
     {
       "rarity": "epic",
       "statMult": [1.00, 1.08, 1.15, 1.21, 1.25],
       "costWood": [0, 900, 2200, 5400, 12600],
-      "costIron": [0, 450, 1100, 2700, 6300]
+      "costIron": [0, 450, 1100, 2700, 6300],
+      "weaponAbilities": []
     },
     {
       "rarity": "legendary",
       "statMult": [1.00, 1.07, 1.13, 1.18, 1.22],
       "costWood": [0, 1600, 4000, 9600, 22400],
-      "costIron": [0, 800, 2000, 4800, 11200]
+      "costIron": [0, 800, 2000, 4800, 11200],
+      "weaponAbilities": []
     }
   ]
 }
