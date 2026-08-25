@@ -1,6 +1,6 @@
 # PROD-012 — Is an internet connection REQUIRED on first run? An OWNER DECISION, not a defect
 
-**Status:** BLOCKED — SPEC only, awaiting owner rulings. No answer is proposed here and none may be built until she rules.
+**Status:** READY — ⭐ **owner ruled 2026-08-24 (batch 2, ruling 1): internet IS required**, all three sub-questions answered (declare on the listing · honest setup screen with Retry · ⛔ no offline asset floor). The ruling section at the bottom carries her exact copy string. *(This line said "BLOCKED — SPEC only, awaiting owner rulings" until the ruling landed.)*
 **Minted:** 2026-08-18 (docs seat) — PROD series.
 **Priority:** MEDIUM — but it gates a **store-listing** claim on a LIVE published app, so it cannot sit indefinitely.
 **Silo:** Product / content delivery policy. **Lane:** decision first; implementation scope depends entirely on the ruling.
@@ -73,3 +73,23 @@ one owner word.
 - Do not add a placeholder/synth building fallback — the loader's header rules that out deliberately
   for structures, and quietly showing a wrong model is worse than showing none.
 - Do not answer §4 on the owner's behalf in a RESULT file.
+
+---
+
+## ⭐ OWNER RULING 2026-08-24 — batch 2, ruling 1: **YES, internet IS required.** All three answered.
+
+**Recorded by the UI seat from `OWNER_RULINGS_OWED_2.md` §1. Do not re-decide.**
+
+1. ✅ **Declare it on the dApp Store listing.** We currently make the opposite claim by omission.
+2. ✅ **An honest setup screen with a RETRY, never a broken town.**
+   ⭐ **Her exact wording — ship this string, do not paraphrase it:**
+   > **"An internet connection is required to finish setting up Elarion."**
+   Her reason: *"better than scary error-code soup."*
+3. ⛔ **NO duplicated offline asset floor.** Ruled out — it means duplicating content, and duplication
+   carries the PROD-010 hazard (already-installed APKs adopt the new remote catalog, so a local path
+   absent from shipped builds gives *existing* players invisible buildings).
+
+⚠ Scope reminder from the ticket body, unchanged by this ruling: bundles cache, so this is a
+**first-run-per-build** requirement, not a per-launch one.
+
+**Status → READY.** Nothing further is owed by the owner on this ticket.

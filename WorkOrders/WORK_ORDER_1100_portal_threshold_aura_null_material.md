@@ -1,6 +1,6 @@
 # WORK ORDER 1100 — Dungeon-portal threshold aura renders with a NULL material (MagentaProbe M2)
 
-**Status:** BLOCKED - owner ruling open. The normalizer + `[vfx-null-slot]` suite landed (`bb9844a97`) and the original theory was DISPROVED, but a ruling is outstanding. *(Bucket corrected 2026-08-24: led with IMPLEMENTED while saying OWNER RULING OPEN - the WO-1181 class.)*
+**Status:** READY - ⭐ **the owner ruling LANDED 2026-08-24** (`FOUNDATIONAL_RULINGS.md` §4): restoring a prefab's own missing material is a REPAIR and is the lead's call. *(Prior line said:)* BLOCKED - owner ruling open. The normalizer + `[vfx-null-slot]` suite landed (`bb9844a97`) and the original theory was DISPROVED, but a ruling is outstanding. *(Bucket corrected 2026-08-24: led with IMPLEMENTED while saying OWNER RULING OPEN - the WO-1181 class.)*
 >  PRIOR: **Status:** IMPLEMENTED 2026-08-16 - theory DISPROVED (MagentaGuard false-positives on authored-disabled renderers); normalizer + [vfx-null-slot] suite landed (commit `bb9844a97`); OWNER RULING OPEN on 5 genuine null-slot ParticlePack prefabs - see RESULT
 **Minted:** 2026-08-16 (CLI seat) — banner bumped 1100 -> 1101 in the same edit; ⚠ this is the FIRST
 mint of the new CLI block (the main line jumped 1000→1100 over the UI seat's 1000–1099 — C-1 went
@@ -46,3 +46,15 @@ broken-shader repaint. 12 captures = one defect probed once per portal.
 
 - `MagentaGuard` itself — it is the net that caught this (§12: never strip).
 - `VfxManualPicks` / owner VFX tags — no creative substitutions.
+
+---
+
+## ⭐ OWNER RULING 2026-08-24 — batch 2, ruling 3: **UNBLOCKED. Restoring a prefab's own missing material is a REPAIR.**
+
+The VFX authority split is now **canon in `FOUNDATIONAL_RULINGS.md` §4** — read it there; ⛔ not
+restated here, per that file's no-paraphrase rule.
+
+Five ParticlePack prefabs have a **null material slot**. Putting back what the prefab already had is a
+repair, which sits in the **lead's** column — proceed, and send her a capture.
+
+**Status → READY.**

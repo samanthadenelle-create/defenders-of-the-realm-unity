@@ -8,7 +8,7 @@
 
 > *(superseded status, kept for the record: BLOCKED - NEEDS OWNER RULING, reconciled 2026-08-09.)*
 
-**Status:** NEEDS-OWNER-RULING (reconciled 2026-08-08) — child of WO-872. **Lane:** Combat/AI VFX. **WO#:** UI-seat block; **874**.
+**Status:** BLOCKED - the three boss VFX keys are OWNER-OWED art tags, confirmed 2026-08-24 (`FOUNDATIONAL_RULINGS.md` §4 - no prefab names itself the answer, so it is a substitution and hers). Everything else implemented 2026-08-22. *(Prior line:)* NEEDS-OWNER-RULING (reconciled 2026-08-08) — child of WO-872. **Lane:** Combat/AI VFX. **WO#:** UI-seat block; **874**.
 **Origin:** owner 2026-08-04 VFX pass. Audit-backed (WO-872 §2, E6/E8/E9). **Layer:** B/D.
 **OWNER RULING 2026-08-04: WIRE it** (not kill) — do §2's "Wire it" path: attach `EliteVFXController`, map the
 `Boss_*`/`Elite_*` rows to real Mirza Beig prefabs, add the DragonBoss spawn entrance.
@@ -116,3 +116,15 @@ the Village source (the exact grep the 2026-08-08 audit ran when it caught the s
 ## Not done here
 - No gate, no build, no commit (edit-only lane).
 - Acceptance still needs `CompileGate` green + the PO's on-device felt-verify.
+
+---
+
+## ⭐ OWNER RULING 2026-08-24 — batch 2, ruling 3: **the three boss keys stay HERS.**
+
+The VFX authority split is now **canon in `FOUNDATIONAL_RULINGS.md` §4** — read it there; ⛔ not
+restated here, per that file's no-paraphrase rule.
+
+⛔ **`Boss_AttackImpact` / `Boss_PhaseTransition` / `Boss_Telegraph` are the worked example of the
+OWNER column, not an exception to it.** No existing prefab names itself the answer, so choosing one is
+a substitution — a creative pick — and it comes to her. The rest of the ticket is implemented; this
+residue is owner-owed art tagging, nothing more.

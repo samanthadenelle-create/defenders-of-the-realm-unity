@@ -1,3 +1,19 @@
+# ⛔⛔ THIS FILE IS THE ARCHIVE. THE LIVE STATE IS `BATCH_STATE.md`.
+
+> **Read `BATCH_STATE.md` FIRST, at the start of every batch and before starting any new ticket inside one.**
+> ⛔ **Anything below that contradicts it is HISTORY.**
+
+⚠ **Why this split exists (2026-08-24):** this document was **appended to** all day — batches 1 through 6,
+pins, rulings, corrections, retractions — so the newest instruction and a superseded one sit in the same
+file looking equally current. A seat reading it top-to-bottom acted on a stale pin more than once.
+
+⭐ **`BATCH_STATE.md` is REPLACED, never appended.** If it says something, it is current; if it does not
+say it, it is not in flight. **This file keeps the REASONING** — why a pin exists, what a collision cost,
+which premises turned out false — because that is worth keeping and is exactly what a live state file
+must not carry.
+
+---
+
 # ⭐⭐ SEAT HANDOFF — 2026-08-24 evening. Read this first.
 
 The owner is handing the seat to Codex. **This is the true state, counted rather than asserted.**

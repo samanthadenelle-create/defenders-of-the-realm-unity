@@ -1,6 +1,6 @@
 # WORK ORDER 1160 — `api/` is committed but NOT deployed, and it has now DIVERGED from a shipped APK
 
-**Status:** BLOCKED ON OWNER — the fix is a **production deploy of `api/`**, and web promotion is explicitly the owner's call (START_HERE §4: *"Web deploys stay preview-only … NEVER `--prod` — promotion is the owner's"*). No code change is required. ⚠ The Vercel CLI is **not installed on this machine** (`npm i -g vercel`).
+**Status:** BLOCKED — ⭐ **owner APPROVED the promotion 2026-08-24 (batch 2, ruling 2), ONE deployment only** (⛔ *"This does not create standing production-deploy authority"*). Still BLOCKED because the four post-deploy requirements she set are unmet: `/api/purchases/quote` health check · `/api/auth/session` health check · one purchase-quote smoke test · **capture the deployed commit hash**. A deploy of HEAD is running; the unblock is that evidence posted here. *(Prior line preserved:)* BLOCKED ON OWNER — the fix is a **production deploy of `api/`**, and web promotion is explicitly the owner's call (START_HERE §4: *"Web deploys stay preview-only … NEVER `--prod` — promotion is the owner's"*). No code change is required. ⚠ The Vercel CLI is **not installed on this machine** (`npm i -g vercel`).
 
 **⚠ UPDATED 2026-08-24 — the ticket's scope GREW; it is no longer only "two routes are missing."** Eleven paths under `api/` + `site/` changed today and are undeployed, and one of them **repriced a live SKU**, so production is now in open disagreement with an APK that is on a device. **§7–§13 are tonight's material; §1–§6 are the original 08-23 finding and stand unchanged.**
 
@@ -211,3 +211,26 @@ This surface is already owned by WO-1160 (*"`api/` has never been promoted to pr
 is the same root with a larger blast radius, so it lands **here**. A second ticket on one surface is the
 duplicate-of-record problem PROD-016 already demonstrates. **No number was minted and the
 `CLI_LANES_WO_NUMBERS.md` banner was not bumped.**
+
+---
+
+## ⭐ OWNER RULING 2026-08-24 — batch 2, ruling 2: **promotion APPROVED — ONE deployment only.**
+
+**Recorded by the UI seat from `OWNER_RULINGS_OWED_2.md` §2. Do not re-decide.**
+
+⛔ **Owner, verbatim:** *"This does not create standing production-deploy authority."* `START_HERE` §4
+stands intact — web deploys remain preview-only, and the next `--prod` needs its own word from her.
+This is a **per-deploy** approval for this one promotion of `api/`, nothing wider.
+
+### ⛔ The FOUR post-deploy requirements she set — all four are owed as evidence
+
+1. **`/api/purchases/quote` health check** — must no longer 404 in production.
+2. **`/api/auth/session` health check** — must no longer 404 in production (this is the one whose
+   absence made the WO-1157 one-prompt fix silently inert).
+3. **One purchase-quote smoke test** — an actual quote round-trip, not just a 200.
+4. ⭐ **Capture the DEPLOYED COMMIT HASH.** Her reasoning, worth keeping:
+   > *"large reduction in future 'which build is actually live?' archaeology"*
+
+⚠ **STATUS STAYS `BLOCKED` UNTIL THE LEAD POSTS THAT EVIDENCE.** A deploy of HEAD is running at the
+time of writing; approval is not completion. The unblock is the four checks above, posted in this
+ticket with the commit hash.

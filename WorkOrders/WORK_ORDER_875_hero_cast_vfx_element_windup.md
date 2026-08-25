@@ -4,7 +4,7 @@
 
 # WORK ORDER 875 — Hero cast VFX: element-coded flash + windup telegraph (cast-on-magic)
 
-**Status:** NOT STARTED (reconciled 2026-08-08) — child of WO-872. **Lane:** Combat/Hero VFX. **WO#:** UI-seat block; **875**.
+**Status:** READY — ⭐ **unblocked 2026-08-24 by the owner's VFX-authority ruling (`FOUNDATIONAL_RULINGS.md` §4)**: this is a MAP by existing semantic name, which is the lead's call. Proceed and send her a capture. *(Prior line preserved:)* NOT STARTED (reconciled 2026-08-08) — child of WO-872. **Lane:** Combat/Hero VFX. **WO#:** UI-seat block; **875**.
 **Origin:** owner 2026-08-04 — *"cast on magic."* Audit-backed (WO-872 §2, H1/H3/H7). **Layer:** B/D.
 **Ties:** feeds WO-861 (Thrain/Sylas kits) — their cast VFX ride this.
 
@@ -35,3 +35,22 @@ Hero spell casts are **largely SILENT**:
 ## 4. Do NOT
 - Do NOT author new VFX (`SpellVfxFactory`/element library exist). Do NOT leave `RegistryOnlyMotionVfx` masking the
   element engine. WO-872 §4 rules.
+
+---
+
+## ⭐ OWNER RULING 2026-08-24 — batch 2, ruling 3: **UNBLOCKED. This is a MAP, not a creative pick.**
+
+The VFX authority split is now **canon in `FOUNDATIONAL_RULINGS.md` §4** — read it there; ⛔ it is
+deliberately **not restated here**, per that file's own no-paraphrase rule.
+
+What it means for this ticket: `SpellVfxFactory` already contains a full fire / frost / arcane / holy
+cast library and `RegistryOnlyMotionVfx = true` suppresses it, so most hero casts are silent. Mapping
+*fire ability → the prefab named fire* falls in the **lead's** column. Owner, verbatim:
+
+> *"If a prefab literally says Fire Cast, mapping a fire ability to it isn't creative direction.
+> It's plugging the toaster into the toaster outlet."*
+
+⚠ The standing rule (*owner tags the key, CLI maps verbatim, CLI never picks*) is **scoped, not
+retired** — where an existing label answers the question, the lead proceeds and **sends her a capture**.
+
+**Status → READY.**
