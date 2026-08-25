@@ -500,3 +500,25 @@ closest precedent for an additive bool: migrator-seeds-the-right-default `:209-2
       would invalidate its own evidence.
 - ⛔ `RaidCapabilityHudBridge` — it must keep NOT referencing `ArmyReadiness`.
 - ⛔ Any third readiness opinion. Phase E **removes** one; it must not add one.
+
+---
+
+## ⭐ OWNER RULING 2026-08-24 - "3 of 10" MEANS **SLOTS**, not a troop headcount
+
+⭐ **`ArmyReadiness`'s slot-weighted model is CORRECT and is the single source.** The threshold is
+**3 deployable SLOTS of 10**, so a first raid may be three cheap units or fewer expensive ones - the
+cost of what the player brings is part of the decision, which is the point.
+
+⛔ **THIS MAKES THE TWO BYPASSES DEFECTS, not an alternative reading.** `RaidDeployScreen.cs:477` and
+`:526` gate on a **raw headcount** (`_vm.DeployableCount`) while `ArmyReadiness` is slot-weighted, so
+those two sites and the readiness service **disagree about what "enough army" means** - today, before
+Phase E adds anything.
+
+⚠ **That disagreement is the grey-button-versus-open-gate bug in its original form**: one surface says
+you may raid, another says you may not, and neither is lying. ⭐ **Phase E REMOVES the two bypasses;
+it does not add a third check.** ⛔ No new readiness predicate anywhere - route through `ArmyReadiness`
+or do not gate.
+
+⚠ Also still open and NOT fixed by this ruling: **`Village2RaidController` never calls
+`ReconcileRaidEnd`**, so a first-ever Village2 stronghold raid would not clear
+`EverCompletedRaid` and that player gets the soft gate a second time. Its own change, its own capture.
