@@ -1,9 +1,9 @@
-# WORK ORDER 1196 — Class-Select slot badge: honour the letterless ruling (mobile)
+# WORK ORDER 1083 — Class-Select slot badge: honour the letterless ruling (mobile)
 
 - **Status:** DESIGN SPEC — READY (opens with an OWNER DECISION GATE; see §5)
 - **Lane:** 4 (UI legibility / conformance)
 - **Author:** UI seat, on `claude/ui-spacing-layout-review-bqas0h` (2026-08-25)
-- **WO number:** **1196 is PROVISIONAL.** The CLI seat routed this as a fourth item with no number; 1196 is the next free after the CLI-cited 1192/1194/1195 block. **CLI: reconcile against `CLI_LANES_WO_NUMBERS.md` before adopting.** No CLI ticket file exists yet — adopt this as the WO-1196 ticket.
+- **WO number:** **1083 — minted from the UI-seat reserved block** (`CLI_LANES_WO_NUMBERS.md` wip:525, UI next-free 1083). This is a UI-originated ticket, so it takes a UI-block number, NOT a CLI-main-line number. (It was briefly mis-numbered 1196; that COLLIDES with the CLI's real WO-1196 on `wip`, hence the move to 1083. CLI: bump the UI-seat row 1083→1084.) No prior ticket file exists — adopt this as the WO-1083 ticket.
 - **Branch of record for all citations:** `origin/wip/village2-and-f8-tickets` (the tree the CLI implements on). My local branch is ~a month stale; every `file:line` below was read from `wip`, not the working copy.
 - **Deliverable type:** design spec + image-generation briefs (§6), handed to CLI for implementation. The UI seat does not write `.cs`.
 

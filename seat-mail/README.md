@@ -16,24 +16,31 @@ The outbound half (CLI -> UI) already works and is untouched.
 - **UI seat SENDS** (enqueue). It is the writer.
 - **CLI seat SURFACES + ACKS** (reads oldest-un-acked, acts, acks exactly one).
 
-## Transport - case (b), resolved BY EVIDENCE (WO-1200 sec.3)
+## Transport - case (c), resolved BY EVIDENCE (WO-1200 sec.3)
 
-The UI seat cannot share the CLI's tree but can write the repo, so messages ride a
-dedicated git ref `seat-mail/ui-to-cli` that the CLI fetches. Evidence, quoted at source:
+The UI seat can READ the repo but cannot WRITE it by any channel, and cannot share the
+CLI's tree. So the return path is BUILT but cannot go live from the cloud seat yet;
+the owner remains the courier until the Claude GitHub App is granted WRITE for the org.
+Evidence, quoted at source:
 
 - UI seat is a cloud **Linux** session (`cwd /home/user/defenders-unity`); the CLI
-  seat is on **Windows `D:\EoA`** -> the working tree is **not shared**. (case (a) ruled out)
+  seat is on **Windows `D:\EoA`** -> the working tree is **not shared**. (case (a) out)
 - UI seat **cannot call the CLI**: `SendMessage` returned verbatim - *"this cloud
   session cannot message other sessions yet - its credential is accepted for its own
-  work but not for delivering to another session."* (the outbound gap this fixes)
-- UI seat **can write the repo, but NOT via `git push`**: plain `git push` returns
-  `403 - Claude doesn't have GitHub access ... for your organization`. The **GitHub
-  MCP API works** (`list_branches` succeeds; `push_files` writes the ref). So in the
-  cloud env the UI seat sends via the **GitHub MCP API**, not the git CLI.
-- The CLI seat has real git access on Windows and fetches the ref normally.
+  work but not for delivering to another session."*
+- UI seat **cannot write the repo**: `git push` -> `403 Claude doesn't have GitHub
+  access ... for your organization`; GitHub MCP write (`create_branch`) -> `403
+  Resource not accessible by integration`. Reads work (`git fetch`, MCP `list_branches`).
 
-=> case **(b)**: cannot share, can push (via MCP). This is NOT case (c) - the channel
-is reachable from both seats, just by different mechanisms on each side.
+=> case **(c)**: neither share nor push. Per the ticket this is a legitimate outcome -
+SAY SO AND STOP, do NOT manufacture a transport ("a mailbox neither seat can read is
+worse than an honest gap"). The queue LOGIC below is transport-agnostic and kept
+regardless, so when a write channel arrives ONLY the delivery step changes.
+
+**Unblock:** install/reconnect the Claude GitHub App with WRITE for the
+`samanthadenelle-create` org (`github.com/apps/claude/installations/select_target`, or
+reconnect from claude.ai settings). Then push the ref `seat-mail/ui-to-cli` and the CLI
+fetches it - case (c) becomes (b) with no code change.
 
 ## Queue semantics - a MAILBOX IS A QUEUE, NOT A SLOT (WO-1200 sec.1)
 
@@ -77,10 +84,10 @@ whole job.
 
 ## Usage
 
-UI seat send (git-push env): `seat-mail/seat-send.sh <kind> "<subject>" "<body>"`
-UI seat send (cloud env, git push 403): build the queue content with
-`seatmail.py enqueue` into a temp, then push `QUEUE.jsonl` + `msg/NNNNNN.json` to
-`seat-mail/ui-to-cli` via GitHub MCP `push_files`.
+UI seat send (any env where the seat can write the repo): `seat-mail/seat-send.sh
+<kind> "<subject>" "<body>"`.
+In THIS cloud env the seat cannot write the repo (case (c) above), so send is not
+possible until the GitHub App gets WRITE; the owner couriers messages meanwhile.
 
 CLI seat: hooks surface automatically. Manual peek: `powershell -File
 .claude/hooks/seat-mail-check.ps1`. After acting: `powershell -File
@@ -94,9 +101,11 @@ Prove the queue logic anywhere: `python3 seat-mail/seatmail.py selftest`.
   2 (ack one -> `pending=1`, not zero), burst (2 acks -> 2), 4 (instruction-shaped body
   surfaced as inert quoted data), 6 (no board/status write) - `seatmail.py selftest` +
   a live `QUEUE.jsonl` burst demo.
-- **VERIFIED transport reachability (acceptance 5):** git-push 403 and MCP `list_branches`
-  success both captured; the ref is pushed via MCP.
-- **NEEDS CLI-SIDE VERIFICATION (Windows, live Claude Code):** acceptance 3 (an idle CLI
+- **TRANSPORT UNREACHABLE, case (c) (acceptance 5):** git-push 403, MCP write 403,
+  SendMessage 403 all captured. The channel cannot go live from the cloud seat until the
+  GitHub App gets WRITE for the org. Not faked (WO: "do not manufacture a transport").
+- **NEEDS CLI-SIDE VERIFICATION (Windows, live Claude Code) once a write channel exists:**
+  acceptance 3 (an idle CLI
   seat is rewoken with no owner input) - the Stop asyncRewake wiring runs only in the
   CLI's live harness. Run `seat-mail/test_seatmail.ps1` (parity) and confirm the rewake
   fires on the next pushed message.

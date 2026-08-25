@@ -354,3 +354,6 @@ firebase-appid.txt
 # Firebase EDM4U-generated Android lib (mirrors gitignored google-services.json)
 Assets/Plugins/Android/FirebaseApp.androidlib/
 Assets/Plugins/Android/FirebaseApp.androidlib.meta
+
+# WO-1200 seat-mail: reader-local ack cursor (private bookmark, never pushed)
+.claude/seat-mail-cursor.json

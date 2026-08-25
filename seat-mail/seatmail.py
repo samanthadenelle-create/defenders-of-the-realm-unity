@@ -10,16 +10,19 @@
 #
 # DIRECTION: enqueue = UI seat (writes). surface/ack = CLI seat (reads/acks).
 #
-# TRANSPORT (WO-1200 sec.3, case (b) resolved BY EVIDENCE, quoted at source):
+# TRANSPORT (WO-1200 sec.3, resolved BY EVIDENCE, quoted at source): CASE (c).
 #   - UI seat is a cloud Linux session (cwd /home/user/defenders-unity, uname Linux);
-#     the CLI seat is on Windows D:\EoA -> the tree is NOT shared.
-#   - UI seat CAN push (origin is https github; it commits + pushes its branch).
-#   - UI seat CANNOT call the CLI: SendMessage returned verbatim
-#       "this cloud session cannot message other sessions yet - its credential is
-#        accepted for its own work but not for delivering to another session".
-#   => (b): cannot share, but can push. Messages ride a dedicated `seat-mail/ui-to-cli`
-#      git ref the CLI fetches. This file is the queue LOGIC; the ref sync (fetch/push)
-#      is the wrapper's job (seat-send.sh on Linux, seat-mail-*.ps1 on Windows).
+#     the CLI seat is on Windows D:\EoA -> the tree is NOT shared. (case (a) out)
+#   - UI seat CANNOT write the repo by ANY channel:
+#       git push          -> 403 "Claude doesn't have GitHub access ... for your org"
+#       GitHub MCP write  -> 403 "Resource not accessible by integration"
+#       SendMessage UI->CLI-> 403 "cannot message other sessions yet"
+#     (reads work: git fetch, MCP list_branches.)
+#   => CASE (c): neither share nor push. Per the ticket: SAY SO, do not manufacture a
+#      transport; owner remains the courier until the Claude GitHub App gets WRITE for
+#      the org. This queue LOGIC is transport-agnostic and kept regardless (WO directive)
+#      so ONLY the delivery changes when a write channel arrives; the wrapper does the
+#      ref sync (seat-send.sh / seat-mail-*.ps1) once writes are permitted.
 #
 # THE F8 LESSON, CARRIED FORWARD (WO-1200 sec.1): the F8 inbox was a single SLOT
 # (PING.json) acked to "the latest" (f8-ack.ps1: lastAckSeq = ping.seq). A burst
