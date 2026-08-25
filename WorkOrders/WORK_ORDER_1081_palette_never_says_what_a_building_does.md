@@ -1,6 +1,6 @@
 # WORK ORDER 1081 — A building can be placed in three taps and read in none: the palette never says what anything DOES
 
-**Status:** READY TO IMPLEMENT
+**Status:** READY - PARTIAL: CODE/DATA/ORACLE LANDED; HEADED TWO-LANDSCAPE CAPTURE PROOF OWED
 **Minted:** 2026-08-24 (UI seat), banner bumped 1081 → 1083 in the same edit (with WO-1082).
 **Silo:** Build palette / catalog schema (`Village/BuildMode` + `Core/Catalog` + canonical JSON). No scene work, no economy work.
 **Provenance:** owner felt-test on the shipped Seeker APK, 2026-08-24 — *"not a single issue other than
