@@ -518,3 +518,57 @@ arithmetic §7 step 1 already requires be read before the concept is deleted. No
 §7 stands **exactly as written** — audit → rename as data+alias → re-price tiers → troop training to
 gold → regenerate the WO-1137 codegen'd fallback → full gate + captured run → **owner felt-test**.
 READY means the questions are answered, not that the sequencing may be shortened.
+
+---
+
+## ⭐ AMENDMENT 2026-08-25 (CLI lead) - THE MIRROR LAW NAMES **FIVE** SURFACES, NOT FOUR
+
+Recorded after verifying the `codex/wo1163-r2` partial at source (HEAD `a988358de`; evidence
+`tmp/wo1163_verify.md`). ⛔ **This amends binding law in this ticket. Read it before touching the
+economy key again.**
+
+### What the Status line above says today
+
+> *"Three files move together under the MIRROR LAW (server `USD_ANCHORS`, both canonical `packs.json`
+> copies, the quote test's hardcoded resource-key list) or it is a red build."*
+
+**That list is INCOMPLETE.** It is now **FIVE surfaces:**
+
+| # | Surface | Where |
+|---|---|---|
+| 1 | server `USD_ANCHORS` | `api/_lib/purchase-catalog.js:103-105` |
+| 2 | canonical packs (StreamingAssets) | `Assets/StreamingAssets/Data/Canonical/packs.json` |
+| 3 | canonical packs (Resources) | `Assets/Resources/Data/Canonical/packs.json` - byte-identical to #2 |
+| 4 | quote test resource-key list | `test/purchases.quote.test.js:133` |
+| **5** | ⭐ **THE UNITY CLIENT** | `PackCatalog.PackEconomy` JSON bindings (`Assets/_Modules/Wallet/PackCatalog.cs:64`), `PackCatalog.ImpulseAmount` (`:281-289`), `ShortfallPackOffer` key map (`Assets/_Modules/Wallet/ShortfallPackOffer.cs:107`), and `ImpulsePackRegression.ResourceKeys` (`Assets/Editor/Regression/ImpulsePackRegression.cs:67`) |
+
+### ⭐ WHY IT WAS MISSED - the part worth remembering
+
+**The four surfaces the law named are all reachable from the node suite.** So the law was
+**implicitly scoped to what the backend tests could see**, and the fifth surface - the one where the
+player's money actually turns into resources - was never written down.
+
+The lane that ran this ticket moved **every surface the law listed**, produced a **31/31** quote suite
+and a **57/57** backend suite, and was **correct on its own terms**. And the shipped result would have
+granted **zero** on three live impulse SKUs, because `PackEconomy` has no `stone` key and Newtonsoft
+drops the unbound key **silently** (`MissingMemberHandling.Ignore`, `PackCatalog.cs:654`).
+
+> ## ⛔ A LAW THAT ONLY LISTS WHAT YOUR TESTS CAN REACH IS NOT A LAW.
+
+### What this means for the remaining work in this ticket
+
+- ⛔ **Any future edit to a resource key in `packs.json` moves all FIVE surfaces in ONE commit.**
+- ⛔ **A green node suite is NOT evidence that surface 5 moved.** The node suite cannot reach Unity by
+  construction. Only a Unity run can - `ImpulsePackRegression` is the Unity half of the mirror law,
+  and it goes **RED** on the r2 tree exactly as it should have.
+- ⭐ **This ticket now also owes an ORACLE for surface 5** - something that fails when `packs.json`
+  authors a resource key the Unity client cannot bind. ⚠ It may have to be a Unity-side test; if so
+  it is **ops-owned** and must be named as such, not left implied.
+- ⚠ `packs.json` `_schemaNotes.economy` was edited in the r2 slice to claim
+  *"PackStoreVM routes wood/iron/stone/crystals through EconomyService.GrantSpendablePurchased"* -
+  **a documentation line that is false about code that was not changed.** Fix it with the code, not
+  before it.
+
+⛔ Unchanged by this amendment: **no save-schema bump** (`SaveSchema.cs:41` stays `CurrentVersion = 38`
+per §3's slot-reuse ruling), and **no amount / rate / rounding / settlement change**. §7's sequencing
+stands exactly as written.

@@ -387,3 +387,88 @@ Required, in writing, with the handback:
 
 ⚠ Steps 1-3 of the chain (the gate half) are sound and are not in scope for this revision. Everything
 that is wrong lives in the deploy half, steps 4-8.
+
+---
+
+## 2026-08-25 - WO-1199 REVISION 2 verdict: NEAR PASS, two one-line fixes
+
+Source: completed verification, `tmp/wo1199_verify2.md` (read-only both trees, no `vercel` command run,
+script never executed; Vercel behaviour read from the installed bundle v56.4.0).
+
+### ⭐ What the lane got RIGHT - said first, and without hedging
+
+- **B1 FIXED, and load-bearing.** `Invoke-Captured` sets `$ErrorActionPreference = 'Continue'`
+  function-locally (`command-centre.ps1:59-60`), shadowing the script-scope `'Stop'` at `:21`.
+  ⭐ REPRODUCED under a `'Stop'` harness: all 5 stderr lines plus the trailing stdout JSON survived
+  (`LINECOUNT=6`), native exit code propagated (`RC2=7`), outer preference intact
+  (`OUTER_PREF_AFTER=Stop`). ⭐ And a NEGATIVE CONTROL - the same body WITHOUT that one line captured
+  exactly 1 line. Credit the method explicitly: a negative control is what turns "it passed" into
+  "the fix is why it passed."
+- **B3 FIXED STRUCTURALLY**, which is what the acceptance demanded. `--skip-domain` is rejected unless
+  the target is production (`dist/commands/deploy/index.js:1345-1348`) and sets
+  `autoAssignCustomDomains = false` (`:1566`); `promoteByCreation` is gated on
+  `deployment.target !== "production"` (`dist/commands-bulk.js:53430-53442`), so ⛔ the rebuild branch is
+  UNREACHABLE for this artifact - not detected, unreachable. Control falls through to
+  `POST /v10/projects/<id>/promote/<deploymentId>` (`:53467`), a re-alias not a build. The prose
+  success regex is gone; success is an alias-ID poll (`Wait-ProductionDeployment`, `:80-99`, call at
+  `:278`). The identifier was traced build -> proof -> promote (`:228-231` -> `:236-238` -> `:251` ->
+  `:276` -> `:278`): the proven artifact and the promoted artifact are the same deployment.
+- **B2 NEUTRALISED, not eliminated** - state the distinction honestly. The CLI still writes every human
+  line to stderr (`dist/chunks/chunk-OX7KI3LF.js:4674`); the capture boundary stops it being fatal.
+  One prose parse survives: the candidate URL regex (`:227-231`).
+- **Polling FIXED.** Bounded at a 180s deadline (`-AliasTimeoutSec 180`, `:17`); timeout is a named
+  refusal in step 6 (`ALIAS_POLL_TIMEOUT`, `:278-280`) and step 8 (`ROLLBACK_ALIAS_POLL_TIMEOUT`,
+  exit 28, `:313`); and a successful rollback still exits non-zero
+  (`POST_DEPLOY_DB_PROOF_FAILED_ROLLED_BACK`, 27, `:310-311`).
+- **Ops handback CORRECT.** Items 1, 2, 3, 6 named and matching the WO acceptance list
+  (`WORK_ORDER_1199_the_command_centre.md:249-259`); 4 and 5 correctly NOT claimed as ops.
+- **Regressions all hold.** No OK token on a failure path into a judged log (`Write-Run` `:31-35` writes
+  only to the never-judged `Builds/command-centre.log`); the `-Utf16` R2 decode preserved (`:179` ->
+  `:118`); marker-not-exit-code preserved; ASCII 0, NUL 0, braces 55/55, parens 83/83, parse clean.
+  ⭐ The verifier also probed the NEW UTF-16 exposure - `Tee-Object` writes the schema log and it is read
+  WITHOUT `-Utf16` (`:186`) - and found `Tee-Object` emits a BOM (`FIRSTBYTES=FF FE 53 00 ...`) which
+  .NET detects, so `PLAIN_MATCH=True`. ⛔ Recorded so nobody later "fixes" it into a bug.
+
+### THE TWO FIXES REQUIRED - both one-liners
+
+**FIX 1 - ⛔ BLOCKER. `vercel curl` will refuse on EVERY run.** The subcommand is real and genuinely
+carries deployment-protection bypass (`curlCommand`, `dist/chunks/chunk-2KNVJ7ET.js:2589-2650`;
+`getOrCreateDeploymentProtectionToken`, `dist/commands-bulk.js:15341-15360`, which even auto-creates the
+secret). But it uses a bespoke arg parser - `parseCurlLikeArgs`, `dist/commands-bulk.js:15419-15476`,
+whitelists `VC_STRING_FLAGS = {--deployment, --protection-bypass}` and
+`VC_BOOLEAN_FLAGS = {--yes, --help, --trace, --json}` (`:15403-15404`) - which does NOT contain
+`--no-color`, so that flag is forwarded to the real `curl` binary, which dies with
+`curl: option --no-color: is unknown`, `EXIT=2`, no output file. ⭐ Proven by replaying the CLI's own
+parser in node (`toolFlags = ["--no-color","--silent","--show-error","--output","<path>"]`) and then
+probing the real curl binary. ⚠ Step 5 (`command-centre.ps1:251`) would refuse on every run, AFTER the
+compile gate, the regression, R2 parity, schema parity and the ~25-minute WebGL build.
+**Fix: drop `--no-color` from the `vercel curl` invocation** (it is valid on `deploy`/`inspect`/`promote`,
+which go through `parseArguments`; `curl` is the one command that bypasses that merge).
+
+**FIX 2 - ⚠ HIGH, a FALSE PASS.** `$remoteIndex` (`:243`) is never deleted before the fetch, and the
+fetch's exit code is `| Out-Null`'d (`:250-253`); `:254` reads the file unconditionally. So a FAILED
+fetch plus a stale byte-identical file from an earlier run **hashes itself** and prints
+`STEP_5_OK marker=CANDIDATE_CONTENT_MATCH` for a deployment that was never contacted. ⛔ That is the
+exact class this whole ticket exists to prevent - a green marker for something that did not happen.
+**Fix: `Remove-Item $remoteIndex -Force -ErrorAction SilentlyContinue` before the fetch AND judge the
+fetch's exit code.**
+
+### ALSO NOTED - lane's judgement, not blocking
+
+- MEDIUM: the candidate URL is still recovered from prose (`:227-231`,
+  `'https://[a-z0-9-]+\.vercel\.app'` + `Select-Object -Last 1`), and that pattern can match the
+  production alias. Safe today; harden by taking the URL from stdout only.
+- MEDIUM: the step-6 poll timeout refuses WITHOUT rolling back, while a queued promotion may still land
+  (the `202` path, `dist/commands-bulk.js:53473-53477`).
+- LOW: `WEBGL_BUILD_OK` is declared (`:208`) but never checked (`:210-216` judge artefact + log
+  freshness only); `vercel curl` silently creates a project-level bypass secret
+  (`dist/commands-bulk.js:15355-15359`) - ⚠ worth the owner knowing; the new capture test is wired to no
+  gate and its `-LibraryOnly` dot-source runs `:22-29` before the `:131` early return, truncating
+  `Builds\command-centre.log`.
+
+### Close
+
+⛔ Still NOT harvestable, but the objection is now NARROW. Two fixes close the static half.
+⛔ The success path remains ENTIRELY UNEXECUTED - ⭐ and FIX 1 is precisely the argument for why
+acceptance items 1/2/3/6 still require the live ops run: a defect that only appears at runtime, on a step
+that costs 25 minutes to reach, is exactly what a static audit cannot promise to catch twice.

@@ -1058,3 +1058,369 @@ never went live:**
 ⛔ **Do not harvest or commit the current `codex/wo1199` script.** The full note also lives at the end
 of `WorkOrders/WORK_ORDER_1199_the_command_centre.md`; the file:line evidence is in
 `tmp/wo1199_verify.md`.
+
+---
+
+## 📤 BATCH 11 - assignment set (2026-08-25, CLI lead)
+
+⚠ **Precedence note:** this section is dated 2026-08-25 and is appended at the END because the file is
+append-only by section. It supersedes nothing above it except where it names a lane explicitly.
+
+### The standing split - stated once, binding on every lane below
+
+⭐ **Codex writes the code in its own isolated worktree. The CLI lead verifies, gates, commits and
+pushes.** ⛔ Codex does not gate. ⛔ Codex does not commit. ⛔ Codex does not flip a ticket status.
+One Unity lock, one committer, both the lead's.
+
+### ⭐ THE ACCEPTANCE RULE - carried forward from what WO-1199 just proved
+
+⛔ **A REFUSAL TEST IS NOT ACCEPTANCE.** Every lane in this batch must prove the **SUCCESS path** -
+the thing working, not merely the guard declining. Failure-only acceptance certifies the one branch
+that was tested and silently certifies nothing else; that is
+`prove-the-success-path-not-just-the-refusal`, and WO-1199 is the second time this repo has shipped it.
+
+⛔ Where a lane **genuinely cannot** prove the success path from the dev seat - it needs the Unity
+gate, a live deploy, a real DB, a headed capture, or an owner felt-verify - **name those items as
+OPS-OWNED, in writing, as a slice with the executor split.** ⛔ Do not leave them implied, do not
+leave them silently open, and do not claim them.
+
+---
+
+## THE FIVE LANES - in this priority order
+
+### LANE 1 - WO-1199 revision
+
+⛔ **Not restated here.** Read `## ⛔ WO-1199 - REVISION REQUIRED` earlier in **this same file**, and
+the file:line evidence in `tmp/wo1199_verify.md`.
+
+Two additions only:
+
+- ⛔ **Do NOT harvest, build on, or extend the current `codex/wo1199` script.** Start from the
+  revision note, not from that branch.
+- ⭐ **Close B1 first.** `Invoke-Captured` losing everything after the first stderr line is provable
+  **locally, with a synthetic multi-stderr-line process, no Vercel, no credentials.** It is the
+  cheapest proof in the batch and B2 is fatal on top of it, so it is the wrong one to leave for last.
+
+---
+
+### LANE 2 - WO-1163, stone replaces food
+
+⭐ **OWNER RULED 2026-08-25: RUN IT NOW.** This **overrides the lead's standing recommendation to
+hold.** The lane is open.
+
+Read `WorkOrders/WORK_ORDER_1163_resource_ladder_stone_and_tiered_costs.md`. It is `**Status:** READY`
+and **fully ruled** - section 6 is answered (6.1 + 6.2 by the owner 2026-08-24, 6.3 on 08-23).
+⛔ **Do not re-open its design.** Do not re-litigate the ladder, the vocabulary, the container
+retirement or the perk map. They are decided.
+
+**Binding constraints, all three non-negotiable:**
+
+1. ⛔ **It is save-schema-adjacent on a LIVE build with an ACTIVATED pay path (WO-1159).** Follow the
+   ticket's own **section 7 sequencing EXACTLY**, in order. ⛔ Do not reorder it, do not collapse
+   steps, do not do the "obvious" parts first. This is not a lane to rush.
+2. ⛔⛔ **THE MIRROR LAW BINDS.** The server `USD_ANCHORS`, **BOTH** canonical `packs.json` copies, and
+   the quote test's hardcoded resource-key list move together as **ONE ATOMIC CHANGE** - or the build
+   is red. Not three commits, not a follow-up, not "the test after".
+3. ⭐ **The food SKU ids DO rename, and that remap is IN SCOPE here** - owner ruling 2026-08-24,
+   already recorded in this file. It is not a follow-up ticket.
+
+⚠ **This is the largest lane in the batch by a wide margin.** It may warrant its own worktree and its
+own return, decoupled from the other four.
+
+---
+
+### LANE 3 - the `UtcDay` oracle
+
+⭐ **This is not a coverage chore. Frame it correctly or the lane will under-build it.**
+
+`Assets/_Modules/Core/UtcDay.cs` declares its own format a **SAVE CONTRACT** in-code (*"THE FORMAT IS
+A SAVE CONTRACT ... Do not 'improve' it"*) and carries a **hand-maintained migration ledger** at lines
+25-31 naming *"three remaining copies"*.
+
+**At HEAD that ledger is wrong twice:**
+
+- **The count is FIVE, not three.** `Wallet/BattlePassService.cs:525` **and `:533`;**
+  `Wallet/MonthlyCardService.cs:92` **and `:239`;** `Village/Monetization/AdGateService.cs:131`.
+  The ledger names one site per file; two of the three files have two.
+- **The paths mislead.** BattlePassService and MonthlyCardService are both under
+  **`Assets/_Modules/Wallet/`**, not the `Village/Monetization/` neighbourhood the ledger reads as.
+  A seat following it looks in the wrong directory.
+
+`grep -rl "UtcDay" Assets/Editor/Regression/` returns **0**.
+
+⛔ **A ledger written INSIDE the very file that exists to END duplicated state has itself drifted -
+because nothing asserts it.** Same failure class as CLAUDE.md section 2's stale WO number block and
+section 5's retired dependency table.
+
+**The lane:** an oracle that **pins the real call-site set** so the ledger cannot drift again.
+
+⚠ **Verify all five sites at source before writing.** The lead is relaying a finding, not a source
+read of her own. Full evidence and the scope fences are in `tmp/pipeline_candidates_b11.md`.
+
+⛔ **Out of scope, per UtcDay's own header:** migrating any of the five call sites (*"live monetization
+paths ... a drive-by edit to any of them is a structural refactor smuggled into player-facing work"*),
+and the LOCAL-day variants in `Core/Quests/DailyQuests.cs` / `Village/Quests/DailyQuestGateBridge.cs`,
+which are a different axis on purpose. Those go in the lint's allow-list, named.
+
+⭐ **Correct the ledger comment (count + paths) in the same edit** - the suite is what makes it true
+from then on.
+
+---
+
+### LANE 4 - the remaining missing-oracle lanes
+
+⭐ **Full list with per-row evidence: `tmp/pipeline_candidates_b11.md`.** Take the rows from there;
+they are screened at source, not inferred.
+
+**What they have in common:** greenfield. ⛔ **No Unity run. No database. No endpoint. No owner ruling
+needed to write them.** The **ONLY** shared surface across the whole set is the `DataRegression.cs`
+registration line, which is ⛔ **COMMITTER-FENCED and OWED BY THE LEAD** - it is an open **lead** task,
+not the lane's, and its absence is **not** a defect in the handback.
+
+⭐ **Three of these rows are unchecked acceptance boxes on tickets ALREADY marked DONE or FIXED.**
+
+⭐ **The sharpest is WO-774.** Its acceptance
+(`WORK_ORDER_774_raid_loadout_deployring_naming.md:90`) describes **`RaidCopyRegression` in the present
+indicative** - as an assertion that already exists and already runs. **No file of that name has ever
+been in the tree.** Ticket status: `DONE - audit-verified as shipped`.
+
+⚠ **Instruct Codex explicitly: "the ticket says it exists" is a CLAIM TO VERIFY, never evidence.**
+Every one of these rows was found by disbelieving exactly that sentence.
+
+---
+
+### LANE 5 - WO-1195 build-screen cost strings
+
+## ⛔ NOT YET ROUTABLE - THE LEAD OWES THE SPEC. ⛔ DO NOT START IT.
+
+Recorded here so it is **visible and not forgotten**, not so it is picked up.
+
+**Owner ruling 2026-08-25 (decided):** build costs render as the resource **CHIP / ICON followed by
+the quantity**, replacing the letter-suffix form (`130I`, `400W`, `10C`).
+
+⛔ **It cannot be handed out yet:** the lead must first name **which files carry those cost strings.**
+A lane that goes hunting for them will find some and miss others, and a half-converted cost display is
+worse than the letter suffixes.
+
+⚠ **ALSO RECORDED AS UNRULED, pending a fresh capture:** whether the build palette card **keeps its
+building image at all.** The owner floated removing it in favour of text-plus-costs; the lead's
+counter is a **thumbnail-plus-text** card, on the grounds that the image is what makes a card
+recognisable without reading it. ⛔ **Neither position is decided.** ⛔ Do not implement either.
+
+---
+
+## ⛔ NOT IN THIS BATCH - do not pick these up
+
+- **WO-1197** - already returned in `codex/wo1197`. ⛔ The **lead** harvests it. Do not re-run it, do
+  not extend it, do not rebase it.
+- **WO-1170 site 4 AND site 5** - **both WITHDRAWN 2026-08-25.**
+  - **Site 4:** `HeroCatalog` is **not a fallback**, so a generated file there would be a **THIRD
+    copy** - the opposite of what WO-1170 exists to do.
+  - **Site 5:** the cited line guards a deliberately **TUNABLE float**. Pinning it would freeze a knob
+    that is meant to move.
+
+---
+
+## The standing return protocol - unchanged
+
+- ⭐ Results go in **`batch_results_state.md`**. ⛔ **Never in this file.**
+- **One isolated worktree per lane.**
+- ⛔ **Nothing committed. Nothing promoted. No ticket status flipped.**
+
+---
+
+## ⛔ WO-1163 R2 - BOUNCE BACK. The lane's scope statement is ACCURATE; the TICKET'S LAW WAS WRONG. (2026-08-25, CLI lead)
+
+Verified at source in `D:\eoa-codex-1163-r2`, branch `codex/wo1163-r2`, HEAD `a988358de`.
+Full evidence: `tmp/wo1163_verify.md`. Nothing below is taken from the handback text.
+
+### ⭐ THE FRAME - read this before the findings
+
+**This is not a lane failure.** The handback is an HONEST PARTIAL and its statement of scope is
+ACCURATE. All four surfaces the ticket NAMED do move atomically, the quote suite really is **31/31**,
+and the lane explicitly did NOT claim the broader economy conversion. Credit that.
+
+⭐ **The ticket's own MIRROR LAW was INCOMPLETE. It names FOUR surfaces; there are FIVE.**
+The fifth is the **Unity client**, and the node suite ⛔ **cannot reach it by construction** - it reads
+JSON and JS only. So a fully green backend suite proves **nothing** about it. The lane moved every
+surface it was told about. **The instruction was wrong.** That correction is the point of this bounce.
+
+---
+
+### ⛔⛔ BLOCKER 1 - THE MONEY BUG. Lead with it.
+
+`Assets/_Modules/Wallet/PackCatalog.cs:64` binds `[JsonProperty("food")]` only; `PackEconomy` has
+**no `stone` key**. `packs.json` now authors `"stone"`, so Newtonsoft **silently drops it** (default
+`MissingMemberHandling.Ignore`, at the `JsonConvert.DeserializeObject<PackCatalogData>` call,
+`PackCatalog.cs:654`) and `PackStoreVM.cs:109` (`gFood = Mathf.Max(0, econ.Food)`) /
+`PackStoreVM.cs:116` (`if (gWood > 0 || gIron > 0 || gFood > 0 || gCrystals > 0)`) grant **zero**.
+
+⛔ **Consequence: all three renamed impulse SKUs - `impulse-stone-small` ($1.99),
+`impulse-stone-medium` ($2.99), `impulse-stone-large` ($4.99) - would grant LITERALLY NOTHING.**
+`impulse-stone-small` has nothing else in its basket, so `TryGrantResources` is not even called.
+`impulse-stone-medium` is `shelfCurated:true` + `storeVisible:true` - a **live browsable shelf row**,
+not shortfall-only. **Twelve further baskets** (`hearth-spark` 500, `starters-hand` 1,500,
+`folks-hearth` 3,400, `patron-of-elarion` 7,000, `founders-vow` 17,500, `frostfall-bundle` 400, plus
+three seasonal/echo rows) silently lose their stone line while still delivering wood/iron/crystals.
+
+⚠ **This is a LIVE dApp Store listing with an ACTIVATED pay path (WO-1159).**
+
+Same gap, same root cause, two more places:
+- `PackCatalog.ImpulseAmount` (`PackCatalog.cs:281-289`, block `:275-290`) switches on
+  `wood|iron|food|crystals` and returns **0** in `default:` for `"stone"` - so
+  `ShortfallPackOffer.Amount` (`ShortfallPackOffer.cs:72`) and the offer copy at `:151` / `:165`
+  advertise 0.
+- `ShortfallPackOffer.cs:107` still maps `"food" -> "food"`; no impulse family answers a food-shaped
+  shortfall, so the route dead-ends at the `:134` "no impulse-pack family" failure.
+
+⭐ **Note the SHAPE for the lane:** the failure is **SILENT**. No exception, no log, no red test. A
+dropped JSON key looks exactly like a correct parse. That is why it needs a **structural fix plus an
+oracle**, not just a patch.
+
+### ⛔ BLOCKER 2 - the tree goes RED
+
+`Assets/Editor/Regression/ImpulsePackRegression.cs:67` still reads
+`{ "wood", "iron", "food", "crystals" }`, and it loads the REAL canonical files off disk
+(`:61` `PacksRelPath`, `:214-215`), so it sees the renamed data. This tree fails
+`[single-key]` (`:329-333`) x3 - *"'impulse-stone-small' grants 'stone', which is not one of the four
+harvestable resources money may buy"* - and `[family]` (`:481-500`) x3 - *"no 'small'/'medium'/'large'
+pack for 'food'"*.
+
+⛔ **The lane could not have seen this without a Unity run, which it correctly did not do.**
+`ResourceKeys` is a sixth copy of the resource list and belongs in the same edit.
+
+### ⚠ HIGH - no `legacySkus` aliases
+
+The three SKUs were renamed with **no alias**, against `packs.json`'s OWN stated law at `:21`
+(*"`sku` is a LIVE SAVE KEY ... renaming one without an alias silently orphans a paid entitlement and
+re-offers the pack for sale"*) and against its own `lanternlight -> keepers-satchel` precedent in the
+same file at `:79-80`. The three stone rows (`:669`, `:693`, `:724`) carry no `legacySkus` array at
+all. ⛔ **A player mid-flow, or any stored reference to an old id, resolves to nothing.** Adding the
+alias is one array per row and does not break the new test, whose negative assertions read `row.sku`.
+
+---
+
+### WHAT IS CONFIRMED GOOD - stated so it is not re-churned
+
+- **All four named surfaces agree.** `USD_ANCHORS` (`api/_lib/purchase-catalog.js:103-105`); both
+  `packs.json` copies **byte-identical at md5 `5e027102dda784d72032d26fb4fd6fde`** with **zero `food`
+  tokens remaining (was 18)**; the test key list (`test/purchases.quote.test.js:133` -
+  `['wood','iron','stone','crystals','coins']`).
+- ⭐ **Surfaces 1/2/3 have a REAL pre-existing oracle from WO-1177.**
+  `test/purchases.quote.test.js:105` asserts the two canonical copies are byte-identical
+  (`assert.equal(resourceText, streamText, ...)`), and `:113-125` asserts `USD_ANCHORS` deep-equals
+  the client catalog. Change one, it goes red. **That is a mechanism, not discipline** -
+  ⛔ **do not weaken it.**
+- ⚠ **But surface 4 (`keys` at `:133`) is a hardcoded list bound to nothing and FAILS OPEN** - a
+  future rename that misses it leaves the test passing while it silently checks one fewer resource.
+  Ask the lane to bind it.
+- **Measured, not claimed:** quote suite **31/31**; full backend **57/57** in the worktree vs a
+  **56/56** baseline in `D:\eoa` - the delta is **exactly the one new test**. ⚠ The worktree has
+  **no `node_modules`**, so the suite needs `NODE_PATH` to run there at all (bare, it dies at
+  `MODULE_NOT_FOUND: @neondatabase/serverless` before a single case executes).
+- **Safety clean:** diff is **exactly 4 files**; `SaveSchema.cs:41` still `CurrentVersion = 38`;
+  `api/purchases/verify.js` and `api/purchases/quote.js` untouched; no amount / rate / rounding
+  change. **Hygiene clean** - no strays, `git diff --check` clean, no non-ASCII on any added line.
+
+---
+
+### WHAT THE LANE MUST DO - same commit
+
+1. Add `stone` to `PackEconomy` + the JSON binding; fix `ImpulseAmount` and the shortfall key map.
+2. Update `ImpulsePackRegression.ResourceKeys` to the new key set.
+3. Add `legacySkus` aliases for all three renamed SKUs.
+4. Bind the test's resource-key list so **surface 4 fails CLOSED**.
+5. ⭐ **Add an oracle that reaches the FIFTH surface** - something that fails when `packs.json`
+   authors a resource key the Unity client cannot bind. ⛔ **Without it, the next resource rename
+   repeats this exactly.** ⚠ This one may need a Unity-side test; **if so, say so and hand that item
+   back as ops-owned** rather than leaving it implied.
+6. ⛔ **Still forbidden:** any save-schema change, any amount / rate / rounding / settlement change.
+
+⚠ Also flagged, **owner's call, not the lane's**: the three renamed rows still wear food copy -
+`packs.json:671-672` "Basket of Grain", `:698` "Grain Cart", `:726-727` "Harvest Wagon" - selling
+stone under grain names, one of them on the browsable shelf. Naming player-facing copy is hers.
+
+---
+
+## 2026-08-25 - WO-1199 REVISION 2 verdict: NEAR PASS, two one-line fixes
+
+Source: completed verification, `tmp/wo1199_verify2.md` (read-only both trees, no `vercel` command run,
+script never executed; Vercel behaviour read from the installed bundle v56.4.0).
+
+### ⭐ What the lane got RIGHT - said first, and without hedging
+
+- **B1 FIXED, and load-bearing.** `Invoke-Captured` sets `$ErrorActionPreference = 'Continue'`
+  function-locally (`command-centre.ps1:59-60`), shadowing the script-scope `'Stop'` at `:21`.
+  ⭐ REPRODUCED under a `'Stop'` harness: all 5 stderr lines plus the trailing stdout JSON survived
+  (`LINECOUNT=6`), native exit code propagated (`RC2=7`), outer preference intact
+  (`OUTER_PREF_AFTER=Stop`). ⭐ And a NEGATIVE CONTROL - the same body WITHOUT that one line captured
+  exactly 1 line. Credit the method explicitly: a negative control is what turns "it passed" into
+  "the fix is why it passed."
+- **B3 FIXED STRUCTURALLY**, which is what the acceptance demanded. `--skip-domain` is rejected unless
+  the target is production (`dist/commands/deploy/index.js:1345-1348`) and sets
+  `autoAssignCustomDomains = false` (`:1566`); `promoteByCreation` is gated on
+  `deployment.target !== "production"` (`dist/commands-bulk.js:53430-53442`), so ⛔ the rebuild branch is
+  UNREACHABLE for this artifact - not detected, unreachable. Control falls through to
+  `POST /v10/projects/<id>/promote/<deploymentId>` (`:53467`), a re-alias not a build. The prose
+  success regex is gone; success is an alias-ID poll (`Wait-ProductionDeployment`, `:80-99`, call at
+  `:278`). The identifier was traced build -> proof -> promote (`:228-231` -> `:236-238` -> `:251` ->
+  `:276` -> `:278`): the proven artifact and the promoted artifact are the same deployment.
+- **B2 NEUTRALISED, not eliminated** - state the distinction honestly. The CLI still writes every human
+  line to stderr (`dist/chunks/chunk-OX7KI3LF.js:4674`); the capture boundary stops it being fatal.
+  One prose parse survives: the candidate URL regex (`:227-231`).
+- **Polling FIXED.** Bounded at a 180s deadline (`-AliasTimeoutSec 180`, `:17`); timeout is a named
+  refusal in step 6 (`ALIAS_POLL_TIMEOUT`, `:278-280`) and step 8 (`ROLLBACK_ALIAS_POLL_TIMEOUT`,
+  exit 28, `:313`); and a successful rollback still exits non-zero
+  (`POST_DEPLOY_DB_PROOF_FAILED_ROLLED_BACK`, 27, `:310-311`).
+- **Ops handback CORRECT.** Items 1, 2, 3, 6 named and matching the WO acceptance list
+  (`WORK_ORDER_1199_the_command_centre.md:249-259`); 4 and 5 correctly NOT claimed as ops.
+- **Regressions all hold.** No OK token on a failure path into a judged log (`Write-Run` `:31-35` writes
+  only to the never-judged `Builds/command-centre.log`); the `-Utf16` R2 decode preserved (`:179` ->
+  `:118`); marker-not-exit-code preserved; ASCII 0, NUL 0, braces 55/55, parens 83/83, parse clean.
+  ⭐ The verifier also probed the NEW UTF-16 exposure - `Tee-Object` writes the schema log and it is read
+  WITHOUT `-Utf16` (`:186`) - and found `Tee-Object` emits a BOM (`FIRSTBYTES=FF FE 53 00 ...`) which
+  .NET detects, so `PLAIN_MATCH=True`. ⛔ Recorded so nobody later "fixes" it into a bug.
+
+### THE TWO FIXES REQUIRED - both one-liners
+
+**FIX 1 - ⛔ BLOCKER. `vercel curl` will refuse on EVERY run.** The subcommand is real and genuinely
+carries deployment-protection bypass (`curlCommand`, `dist/chunks/chunk-2KNVJ7ET.js:2589-2650`;
+`getOrCreateDeploymentProtectionToken`, `dist/commands-bulk.js:15341-15360`, which even auto-creates the
+secret). But it uses a bespoke arg parser - `parseCurlLikeArgs`, `dist/commands-bulk.js:15419-15476`,
+whitelists `VC_STRING_FLAGS = {--deployment, --protection-bypass}` and
+`VC_BOOLEAN_FLAGS = {--yes, --help, --trace, --json}` (`:15403-15404`) - which does NOT contain
+`--no-color`, so that flag is forwarded to the real `curl` binary, which dies with
+`curl: option --no-color: is unknown`, `EXIT=2`, no output file. ⭐ Proven by replaying the CLI's own
+parser in node (`toolFlags = ["--no-color","--silent","--show-error","--output","<path>"]`) and then
+probing the real curl binary. ⚠ Step 5 (`command-centre.ps1:251`) would refuse on every run, AFTER the
+compile gate, the regression, R2 parity, schema parity and the ~25-minute WebGL build.
+**Fix: drop `--no-color` from the `vercel curl` invocation** (it is valid on `deploy`/`inspect`/`promote`,
+which go through `parseArguments`; `curl` is the one command that bypasses that merge).
+
+**FIX 2 - ⚠ HIGH, a FALSE PASS.** `$remoteIndex` (`:243`) is never deleted before the fetch, and the
+fetch's exit code is `| Out-Null`'d (`:250-253`); `:254` reads the file unconditionally. So a FAILED
+fetch plus a stale byte-identical file from an earlier run **hashes itself** and prints
+`STEP_5_OK marker=CANDIDATE_CONTENT_MATCH` for a deployment that was never contacted. ⛔ That is the
+exact class this whole ticket exists to prevent - a green marker for something that did not happen.
+**Fix: `Remove-Item $remoteIndex -Force -ErrorAction SilentlyContinue` before the fetch AND judge the
+fetch's exit code.**
+
+### ALSO NOTED - lane's judgement, not blocking
+
+- MEDIUM: the candidate URL is still recovered from prose (`:227-231`,
+  `'https://[a-z0-9-]+\.vercel\.app'` + `Select-Object -Last 1`), and that pattern can match the
+  production alias. Safe today; harden by taking the URL from stdout only.
+- MEDIUM: the step-6 poll timeout refuses WITHOUT rolling back, while a queued promotion may still land
+  (the `202` path, `dist/commands-bulk.js:53473-53477`).
+- LOW: `WEBGL_BUILD_OK` is declared (`:208`) but never checked (`:210-216` judge artefact + log
+  freshness only); `vercel curl` silently creates a project-level bypass secret
+  (`dist/commands-bulk.js:15355-15359`) - ⚠ worth the owner knowing; the new capture test is wired to no
+  gate and its `-LibraryOnly` dot-source runs `:22-29` before the `:131` early return, truncating
+  `Builds\command-centre.log`.
+
+### Close
+
+⛔ Still NOT harvestable, but the objection is now NARROW. Two fixes close the static half.
+⛔ The success path remains ENTIRELY UNEXECUTED - ⭐ and FIX 1 is precisely the argument for why
+acceptance items 1/2/3/6 still require the live ops run: a defect that only appears at runtime, on a step
+that costs 25 minutes to reach, is exactly what a static audit cannot promise to catch twice.
