@@ -1,0 +1,64 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "powershell -NoProfile -ExecutionPolicy Bypass -File .claude/skills/run-defenders/f8-watch-start.ps1",
+            "async": true,
+            "timeout": 120,
+            "statusMessage": "Starting F8 watch daemon (idempotent)"
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "powershell -NoProfile -ExecutionPolicy Bypass -File .claude/hooks/f8-prompt-check.ps1",
+            "timeout": 30
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "powershell -NoProfile -ExecutionPolicy Bypass -File .claude/hooks/seat-mail-prompt-check.ps1",
+            "timeout": 30,
+            "statusMessage": "Checking seat-mail (UI->CLI return path, WO-1200)"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "powershell -NoProfile -ExecutionPolicy Bypass -File .claude/hooks/f8-poll-rewake.ps1",
+            "asyncRewake": true,
+            "timeout": 3600,
+            "rewakeSummary": "New F8 capture in inbox",
+            "statusMessage": "F8 passive listener armed"
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "powershell -NoProfile -ExecutionPolicy Bypass -File .claude/hooks/seat-mail-poll-rewake.ps1",
+            "asyncRewake": true,
+            "timeout": 3600,
+            "rewakeSummary": "UI seat pushed a seat-mail message (WO-1200)",
+            "statusMessage": "Seat-mail return-path listener armed"
+          }
+        ]
+      }
+    ]
+  }
+}
