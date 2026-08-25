@@ -225,6 +225,49 @@ namespace DeNelle.Village
         private const float ChipMinWidthPx = 160f;
         private const float ChipMaxWidthPx = 340f;
 
+        // ── WO-1186: THE CHIP BAND AND THE CRYSTAL READ-OUT ARE TWO DISJOINT BANDS ──────────
+        // Proving log: Builds/uicap-0825am.log (UI_CAPTURE_OK 89), three findings, one per
+        // captured resolution (1920x1080 / 2340x1080 / 2670x1200 -- the Seeker's real surface):
+        //   'PaletteDock/ChipRow/Chips/Chip_Other' (x 396..603) covers
+        //   'PaletteDock/ChipRow/Text' ("Crystals: 0") (x 468..756.6) by 135x96 ref px.
+        // The chip host was anchored 0..0.80 of a 1560px dock (x -780..468) and the read-out
+        // 0.80..0.985 (x 468..756.6) -- authored disjoint, and NOT disjoint on screen, because
+        // the HorizontalLayoutGroup does not shrink its children: six chips at their natural
+        // widths ran 1391px inside a 1248px host and simply OVERFLOWED into the read-out. A
+        // chip is a Button and the count is not, so the chip won every tap over the number the
+        // player uses to judge whether she can afford the placement.
+        //
+        // ⛔ THE FIX IS GEOMETRIC, NOT Z-ORDER (WO-1186 AC3): a transparent-but-raycasting
+        // control still steals the tap, so re-stacking would have hidden the defect, not fixed
+        // it. Three parts, all geometry:
+        //   1. the bands are named consts with a REAL GUTTER between them (below);
+        //   2. the chip run is FIT to its band -- widths scale down toward the touch floor so
+        //      the natural run never exceeds the host (RebuildChips);
+        //   3. the host CLIPS (RectMask2D), so even an unfittable run is contained. A masked
+        //      region does not raycast either, so the clip removes the tap-theft as well as the
+        //      overprint -- containment, not concealment.
+        /// <summary>The dock's own fixed reference width. Named because the chip-fit math has to
+        /// resolve the band widths BEFORE the layout runs, and a re-typed 1560 is how that goes
+        /// stale (the fixed-pixel-band rule, UI_PLAYBOOK §3).</summary>
+        private const float DockWidthPx = 1560f;
+        /// <summary>Right edge of the CHIP band as a fraction of the dock (x -780..553.8).</summary>
+        private const float ChipBandRightFrac = 0.855f;
+        /// <summary>Left edge of the READ-OUT band (x 569.4) -- 15.6px clear of the chip band, so
+        /// the two never share a pixel even at the sub-pixel rounding the oracle measures at.</summary>
+        private const float ReadoutBandLeftFrac = 0.865f;
+        /// <summary>Right edge of the READ-OUT band (x 756.6) -- unchanged from before WO-1186,
+        /// so the number sits exactly where the owner has been reading it.</summary>
+        private const float ReadoutBandRightFrac = 0.985f;
+        /// <summary>Gap between two chips. Shared by the layout group AND the fit math -- one
+        /// source, because two copies of a spacing is how the run mis-measures its own width.</summary>
+        private const float ChipGapPx = 12f;
+        /// <summary>Chip run inset from the left edge of its host.</summary>
+        private const float ChipPadLeftPx = 16f;
+        /// <summary>Chip run inset from the right edge of its host.</summary>
+        private const float ChipPadRightPx = 8f;
+        /// <summary>Vertical inset of a chip inside the 112px band.</summary>
+        private const float ChipPadVertPx = 8f;
+
         // WO-673 category switcher (always on — WO-682), RE-HOMED by WO-1010 D21: the
         // owner-ruled three build categories — Town / Defense / Castle Structures (the
         // renamed Walls) — now live in the right-edge quick-tab stack, NOT a bottom tab
@@ -359,7 +402,7 @@ namespace DeNelle.Village
             // band-tightening) -> 303 (2026-08-09 D21: the tab band dissolved to the
             // right-edge stack, so the dock is exactly the ~259px card tray + a 44px
             // crystals line — the mockup's slim bottom panel).
-            drt.sizeDelta = new Vector2(1560f, DockHeightPx);
+            drt.sizeDelta = new Vector2(DockWidthPx, DockHeightPx);
 
             // Slim header row: obsidian fill + gold under-rule (the kit panel language).
             // Held as _topBarGo so Collapse() can hide the whole header band (it was the
@@ -405,25 +448,42 @@ namespace DeNelle.Village
                 ElarionUiKit.ObsidianFill, rounded: false);
             _crystalsRowGo = chipRow;
 
-            var chipHostGo = new GameObject("Chips", typeof(RectTransform), typeof(HorizontalLayoutGroup));
+            // WO-1186: the chip host CLIPS. RectMask2D is the hard containment backstop under
+            // the fit math in RebuildChips -- and it is a raycast filter as well as a visual
+            // one, so a chip that runs past the band edge is neither drawn nor tappable there.
+            // That is what makes this a geometric containment and not a z-order dodge.
+            var chipHostGo = new GameObject("Chips",
+                typeof(RectTransform), typeof(RectMask2D), typeof(HorizontalLayoutGroup));
             chipHostGo.transform.SetParent(chipRow.transform, false);
             var chipRt = chipHostGo.GetComponent<RectTransform>();
             chipRt.anchorMin = new Vector2(0f, 0f);
-            chipRt.anchorMax = new Vector2(0.80f, 1f);
+            chipRt.anchorMax = new Vector2(ChipBandRightFrac, 1f);
             chipRt.offsetMin = Vector2.zero; chipRt.offsetMax = Vector2.zero;
             var chipLayout = chipHostGo.GetComponent<HorizontalLayoutGroup>();
-            chipLayout.spacing = 12f;
-            chipLayout.padding = new RectOffset(16, 8, 8, 8);
+            chipLayout.spacing = ChipGapPx;
+            chipLayout.padding = new RectOffset(
+                (int)ChipPadLeftPx, (int)ChipPadRightPx, (int)ChipPadVertPx, (int)ChipPadVertPx);
             chipLayout.childAlignment = TextAnchor.MiddleLeft;
-            chipLayout.childControlWidth = false;     // chips keep their own width
+            chipLayout.childControlWidth = false;     // chips keep their own (fitted) width
             chipLayout.childControlHeight = true;     // chips fill the 112px band (touch floor)
             chipLayout.childForceExpandWidth = false;
             chipLayout.childForceExpandHeight = true;
             _chipHost = chipHostGo.transform;
+            FlowTrace.Step("BuildPalette",
+                "WO-1186 bands: chips 0.." + ChipBandRightFrac.ToString("0.###") +
+                " (" + (DockWidthPx * ChipBandRightFrac).ToString("F0") + "px, clipped), readout " +
+                ReadoutBandLeftFrac.ToString("0.###") + ".." + ReadoutBandRightFrac.ToString("0.###") +
+                " (" + (DockWidthPx * (ReadoutBandRightFrac - ReadoutBandLeftFrac)).ToString("F0") +
+                "px) -- disjoint, gutter " +
+                (DockWidthPx * (ReadoutBandLeftFrac - ChipBandRightFrac)).ToString("F1") + "px");
 
             _balanceLabel = MakeText(chipRow.transform, "Crystals: 0", 16, ElarionUi.Gilt,
                 FontStyles.Bold, TextAlignmentOptions.Right,
-                new Vector2(0.80f, 0.05f), new Vector2(0.985f, 0.95f));
+                new Vector2(ReadoutBandLeftFrac, 0.05f), new Vector2(ReadoutBandRightFrac, 0.95f));
+            // NoWrap: the read-out band is 187px and the string is short (CompactNumber), but a
+            // wrapped count would grow the text rect downward into the chips' vertical band --
+            // the same defect on the other axis.
+            _balanceLabel.textWrappingMode = TextWrappingModes.NoWrap;
 
             // Bottom: horizontal-scrolling slot-plate card tray in a recessed dark well
             // (content-width now, so it reads as a dock — not a screen-wide wall).
@@ -928,25 +988,92 @@ namespace DeNelle.Village
                 return;
             }
 
+            // ── WO-1186: MEASURE THE WHOLE RUN BEFORE BUILDING ANY OF IT ───────────────
+            // The chip count is DATA (one per authored group, plus All), so the run's natural
+            // width is not knowable at authoring time -- which is precisely how it overflowed
+            // its band and landed on the crystal count. Pass 1 collects the captions and their
+            // natural widths; pass 2 fits that run to the band; only then does pass 3 build.
             int total = _vm != null && _vm.Cards != null ? _vm.Cards.Count : 0;
-            BuildChip("All", total, isActive: string.IsNullOrEmpty(_activeFilterLabel), filterLabel: null);
+            var words   = new List<string>();
+            var labels  = new List<string>();
+            var actives = new List<bool>();
+            var widths  = new List<float>();
+
+            words.Add(ChipWords("All", total)); labels.Add(null);
+            actives.Add(string.IsNullOrEmpty(_activeFilterLabel));
+            widths.Add(NaturalChipWidth(words[0]));
             for (int i = 0; i < sections.Count; i++)
             {
                 var s = sections[i];
                 if (s == null || s.Cards == null || s.Cards.Count == 0) continue;
-                BuildChip(s.Label, s.Cards.Count,
-                    isActive: string.Equals(s.Label, _activeFilterLabel, StringComparison.OrdinalIgnoreCase),
-                    filterLabel: s.Label);
+                string w = ChipWords(s.Label, s.Cards.Count);
+                words.Add(w); labels.Add(s.Label);
+                actives.Add(string.Equals(s.Label, _activeFilterLabel, StringComparison.OrdinalIgnoreCase));
+                widths.Add(NaturalChipWidth(w));
             }
+
+            int n = widths.Count;
+            float bandPx    = DockWidthPx * ChipBandRightFrac;
+            float usablePx  = bandPx - ChipPadLeftPx - ChipPadRightPx - ChipGapPx * Mathf.Max(0, n - 1);
+            float naturalPx = 0f;
+            for (int i = 0; i < n; i++) naturalPx += widths[i];
+
+            float fittedPx = naturalPx;
+            if (naturalPx > usablePx && naturalPx > 0.01f)
+            {
+                // Scale the run down toward the touch floor. MinTouchPx is the hard floor: a
+                // filter chip is a CONTROL, so it may never be authored below it (the same rule
+                // that sized the band at 112px in the first place).
+                float scale = usablePx / naturalPx;
+                fittedPx = 0f;
+                for (int i = 0; i < n; i++)
+                {
+                    widths[i] = Mathf.Max(ElarionUiKit.MinTouchPx, widths[i] * scale);
+                    fittedPx += widths[i];
+                }
+            }
+
+            float runPx = ChipPadLeftPx + ChipPadRightPx + ChipGapPx * Mathf.Max(0, n - 1) + fittedPx;
+            if (runPx > bandPx + 0.5f)
+            {
+                // Cannot fit even at the floor -- the clip is holding it, which means the tail
+                // chips are unreachable. Said OUT LOUD (§12: no silent failure); the fix is a
+                // scrolling chip rail, which is WO-1167's behaviour scope, not this ticket's.
+                FlowTrace.Warn("BuildPalette",
+                    $"WO-1186 chip run does NOT fit: chips={n} runPx={runPx:F0} bandPx={bandPx:F0} " +
+                    "-- clipped at the band edge (contained, but the tail chips are unreachable)");
+            }
+
+            for (int i = 0; i < n; i++)
+                BuildChip(words[i], actives[i], labels[i], widths[i]);
+
             FlowTrace.Step("BuildPalette",
-                $"chips rebuilt: sections={sections.Count} active={(_activeFilterLabel ?? "All")} " +
-                "(WO-1172 Option B; All is the default -- nothing hidden behind a tap by default)");
+                $"chips rebuilt: sections={sections.Count} chips={n} active={(_activeFilterLabel ?? "All")} " +
+                $"naturalPx={naturalPx:F0} fittedPx={fittedPx:F0} runPx={runPx:F0} bandPx={bandPx:F0} " +
+                "(WO-1172 Option B; WO-1186 fit-to-band -- All is the default, nothing hidden behind a tap)");
         }
 
-        /// <summary>One filter chip. <paramref name="filterLabel"/> null = the All chip.</summary>
-        private void BuildChip(string caption, int count, bool isActive, string filterLabel)
+        /// <summary>The width one chip WANTS, before the WO-1186 fit pass. Width follows the DATA
+        /// label between the clamps; the label autosizes down inside it, so a long authored word
+        /// shrinks rather than truncating (the quick-tab lesson).</summary>
+        private static float NaturalChipWidth(string words)
         {
-            string words = (string.IsNullOrEmpty(caption) ? "?" : caption) + " (" + count + ")";
+            int len = words != null ? words.Length : 1;
+            return Mathf.Clamp(90f + len * 13f, ChipMinWidthPx, ChipMaxWidthPx);
+        }
+
+        /// <summary>The chip's caption string. ONE source, so the width math and the label can
+        /// never measure different text.</summary>
+        private static string ChipWords(string caption, int count)
+        {
+            return (string.IsNullOrEmpty(caption) ? "?" : caption) + " (" + count + ")";
+        }
+
+        /// <summary>One filter chip. <paramref name="filterLabel"/> null = the All chip.
+        /// <paramref name="widthPx"/> is the WO-1186 FITTED width -- the caller measures the whole
+        /// run against the band first, because one chip cannot know whether the run overflows.</summary>
+        private void BuildChip(string words, bool isActive, string filterLabel, float widthPx)
+        {
             // Built like a card, NOT via AddImage: AddImage stretches the child's anchors
             // across the parent, and a stretched-anchor child under a HorizontalLayoutGroup
             // ignores the layout's slotting — the first capture showed every chip overprinted
@@ -955,9 +1082,12 @@ namespace DeNelle.Village
             var chipGo = new GameObject("Chip_" + (filterLabel ?? "All"),
                 typeof(RectTransform), typeof(Image), typeof(Button), typeof(LayoutElement));
             chipGo.transform.SetParent(_chipHost, false);
-            // Width follows the DATA label between the clamps; the label autosizes down inside
-            // it, so a long authored word shrinks rather than truncating (quick-tab lesson).
-            float w = Mathf.Clamp(90f + words.Length * 13f, ChipMinWidthPx, ChipMaxWidthPx);
+            // WO-1186: the width arrives FITTED. It used to be computed here from the label
+            // alone, with no knowledge of the band -- which is why six chips ran 143px past
+            // their host and onto the crystal read-out. The label still autosizes down inside
+            // whatever width it is given, so a shrunken chip shrinks its word rather than
+            // truncating it (the quick-tab lesson).
+            float w = Mathf.Max(ElarionUiKit.MinTouchPx, widthPx);
             var chipRt2 = chipGo.GetComponent<RectTransform>();
             chipRt2.sizeDelta = new Vector2(w, 0f);
             chipGo.GetComponent<LayoutElement>().preferredWidth = w;

@@ -64,3 +64,57 @@ very row this ticket measures.**
 
 `Assets/_Modules/Village/BuildMode/BuildPaletteUI.cs` (the dock and its chip row are built here;
 confirm at source before editing - the catalog says comments lie).
+
+---
+
+## RCA CORRECTION 2026-08-25 - this ticket's stated cause was WRONG
+
+**Verified at source by the implementing seat, confirmed by the lead.**
+
+Acceptance criterion 3 said *"author the chip row and the readout into non-overlapping bands."*
+**They were ALREADY authored non-overlapping** - chip host `0..0.80` of the 1560px dock (x -780..468),
+readout `0.80..0.985` (x 468..756.6). A seat reading AC3 literally would have checked the anchors,
+found nothing wrong, and shipped nothing.
+
+**The real cause:** `HorizontalLayoutGroup` with `childControlWidth = false` **does not shrink its
+children**. Six chips at natural width ran **1391px inside a 1248px host** - a 143px overflow that put
+`Chip_Other`'s right edge at x 603, exactly **135px** past the readout's left edge. That 135 is the
+overlap figure in all three captured findings, which is what confirms the mechanism.
+
+⭐ **The transferable lesson:** the finding named a SYMPTOM (two rectangles overlap) and the ticket
+turned that into an assumed CAUSE (the rectangles are authored wrong). They are not the same claim.
+A geometric oracle reports where things ENDED UP; it cannot report WHY. This is CLAUDE.md section 12
+at the layout layer - the capture LOCATED it, only reading the layout code CONCLUDED it.
+
+**Fix as landed:** bands re-cut with a real 15.6px gutter (readout right edge unchanged at 756.6, so
+the number stays where the owner reads it), a fit-to-band pass that scales the run with a hard
+`ElarionUiKit.MinTouchPx` floor, and `RectMask2D` on the host as containment. ⭐ The mask was chosen
+because it is a RAYCAST filter as well as a visual clip - a masked region does not steal the tap,
+which is the objection AC3 raises against a z-order fix. Nothing was reordered or made transparent.
+
+## LEAD CALL OWED - an adjacent defect the oracle did not flag
+
+Chips resolve **96px tall** inside the 112px band (`ChipPadVertPx` 8 top and bottom). Chips are
+CONTROLS, so 96 is **below `MinTouchPx` (112)**.
+
+⛔ `LayoutOracle`'s Assert A did NOT flag this in `Builds/uicap-0825am.log`, and no ticket covers it.
+So there are two open questions and they are different:
+1. Should the chips be 112 tall (removing the vertical padding puts them flush to the band edge)?
+2. **Why did the touch-floor assert not fire on a 96px control?** That is a possible gap in the
+   oracle itself, and a gap in a gate is worth more than the defect that revealed it
+   (`docs/INSTRUMENTATION_STANDARD.md` section 1.4b - an assertion that cannot fail on the broken
+   state is decoration).
+
+⚠ Question 2 must NOT be closed by adding this panel to `TouchBaseline`. The allow-list stays at two
+entries; owner ruling 2026-08-24, no waivers.
+
+## Coordination, reported not resolved
+
+- **WO-1081 shares this file.** Its line citations (`:1014-1353`, `:820-950`, `:866-867`,
+  `:1101-1138`, `:1129-1134`) are now **STALE** - this change adds +149 lines above and inside
+  `RebuildChips`. No semantic conflict (`BuildCard`, `OnCardTapped`, `CardTapGuard` untouched), but a
+  seat working from line numbers rather than symbol names will land in the wrong place.
+  ⛔ Work WO-1081 by SYMBOL, not by line.
+- **WO-1082 is JSON-only and does not conflict** - but it reorders the catalog, which changes group
+  card counts, which changes chip caption lengths, which feeds the new width math. The fit pass
+  handles any count, so this is a dependency, not a collision.
