@@ -314,7 +314,57 @@ capacity and earning nothing into that resource - a silent faucet that stopped i
 
 ---
 
-## 8. PRODUCTION PROMOTION IS A MANUAL OWNER ACT. There is no deploy script, and that is the design.
+## 8. PRODUCTION PROMOTION IS AUTOMATED END TO END. (AMENDED 2026-08-25 - see the note.)
+
+> ## STOP AMENDED THE SAME DAY IT WAS WRITTEN. Owner, 2026-08-25:
+> *"That should all be handled programmatically from command center or via code."*
+>
+> **The original ruling below is SUPERSEDED, not deleted.** It said promotion was a manual owner act
+> and the absence of a deploy script was the design. The owner has reversed it: the chain runs
+> programmatically, promote included, with no human in the loop.
+>
+> ⭐ **WHAT REVERSED IT is worth recording.** The original held for one afternoon and the afternoon
+> disproved it. In a single session the owner personally: pasted a migration file by hand, ran a
+> parity check by hand, hunted an env var through a dashboard, read a deployment list to find a
+> rollback id, and copied a URL between two commands. Every one of those is assembly, and every one
+> is a place a step gets skipped. **A ruling that a human must do the deciding got implemented as a
+> human doing the typing, and those are not the same thing.**
+>
+> ⚠ **What the amendment BUYS, beyond speed:** WO-1173's requirement (d) - run schema parity "after
+> every production API deploy" - was declared unsatisfiable because no deploy script existed to hook.
+> Codex was right at the time. **Automating the deploy makes that trigger REAL**, turning a discipline
+> back into a gate.
+>
+> **Implementation: WO-1199.** Until it lands, promotion is still done by hand and the steps below
+> still describe reality.
+
+### The parts of the original that are FACTS, not policy - these survive the amendment
+
+- ⛔ **`.vercelignore` re-includes `/api`**, so **every** promotion from the repo root re-ships the
+  serverless backend alongside the static payload. **There is no WebGL-only promotion.** Any plan of
+  the form "ship the game build but hold `api/` back" is unimplementable as the tree stands, whether a
+  human or a script does it.
+- The rollback target must be captured **BEFORE** promoting. Recorded afterwards it names the thing
+  being escaped.
+- Judge every step by its **MARKER on a fresh log**, never an exit code. This repo's runners exit 0 on
+  refusals and FAILs.
+
+### What automation does NOT license
+
+⛔ **Automating the act does not automate the JUDGEMENT.** The chain may promote without asking, but
+it may not promote without PROVING - gates green, parity green, rollback captured, post-deploy checks
+passed. An automated deploy that skips a gate is strictly worse than the manual process it replaced,
+because nobody was watching.
+
+⚠ And the reason the original rule existed has not evaporated: this is a **live store listing on a
+money path**. The safety has to move from "a human is in the loop" to "the chain refuses" - it cannot
+simply be dropped.
+
+---
+
+## 8-ORIGINAL (SUPERSEDED 2026-08-25, kept for its reasoning)
+
+### PRODUCTION PROMOTION IS A MANUAL OWNER ACT. There is no deploy script, and that is the design.
 
 > **Owner explicit, 2026-08-25.**
 

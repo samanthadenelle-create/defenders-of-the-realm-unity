@@ -137,7 +137,14 @@
 > fine as history. A copied number is the bug **even when it was right the day it was written** -
 > that is exactly how the retired 860-899 UI block kept re-seeding collisions from CLAUDE.md sec.2.
 
-> ## ⚠ RECONCILED 2026-08-25 (CLI): main line next free = **1199**.
+> ## ⚠ RECONCILED 2026-08-25 (CLI): main line next free = **1200**.
+> *(CLI seat minted **WO-1199** and bumped 1199 -> 1200 in this SAME edit. **1199** = the COMMAND
+> CENTRE. Owner AMENDED FOUNDATIONAL_RULINGS section 8 the same day it was written: production
+> promotion becomes fully automated. The real use case is live-ops - "if I see sales slipping or
+> am having an event" - which forces the requirement that A SALE MUST BE SERVER-SIDE ONLY, no
+> client rebuild. WO-1198 is its prerequisite.)*
+>
+> ### superseded: RECONCILED 2026-08-25 (CLI): main line next free = **1199**.
 > *(CLI seat minted **WO-1198** and bumped 1198 -> 1199 in this SAME edit. **1198** = the owner
 > ruled the usdEffective question: ship the discounted USD AND announce the saving. "If it is a
 > sale, that is the exact reason to offer more value." The server already computes quotedUsd,
