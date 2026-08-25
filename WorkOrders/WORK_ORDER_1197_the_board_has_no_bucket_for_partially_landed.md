@@ -1,6 +1,6 @@
 # WORK ORDER 1197 - the board has no bucket that means "partially landed"
 
-**Status:** READY TO IMPLEMENT
+**Status:** FIXED 2026-08-25 - shape **(a)**, the PARTIAL sub-badge, chosen by the dev lane over (b) the required `RESIDUAL:` field; **awaiting owner felt-verify**. `tools/board_build.py` renders a `PARTIAL` badge on any row whose status line declares a partial landing, and `docs/BOARD.md` section 3b moved in the SAME change as the parser, per that doc's section 4. Verified against the three REAL rows rather than a synthetic fixture: WO-1170, PROD-014 and WO-1073 all render the badge and all three stay in the **Ready** bucket, so the open halves remain takeable - the constraint the ticket cared about most. `BOARD_CHECK_OK 0 unlabeled, 0 status contradictions`. **RESIDUAL:** (b) was the more durable answer and was not built - a partial claim still cannot be CHECKED, only permitted, so a row may assert partial completion without naming what is left.
 **Minted:** 2026-08-25 (CLI lead, main line; banner bumped 1197 -> 1198 in the same edit)
 **Silo:** Tooling / board
 **Origin:** found by the board keeper during the 2026-08-25 reconcile, reported rather than

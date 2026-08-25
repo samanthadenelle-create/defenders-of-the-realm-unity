@@ -73,6 +73,12 @@ hole. Filter them out with the `Doc` chip when you want a pure work view.
 | `DRAFT` / `SPEC` / `NOT STARTED` / `PROPOSAL` | **Spec** |
 | anything else | **Unlabeled** |
 
+An assignable Ready row whose status says `PARTIAL`, or says that a named `SLICE ... LANDED`,
+stays in **Ready** and also renders a visible **PARTIAL** sub-badge. The sub-badge is presentation,
+not a fourth bucket: it warns that work already landed while preserving the open residual as
+assignable. Keep the landed and residual scope explicit in the status line; the badge does not infer
+either scope from source files.
+
 **`Unlabeled` is a DEFECT in the WO file, not a category.** It means the status line carries no
 canonical keyword, so the row cannot be bucketed and silently drops out of every real query.
 Since the §3a scope fix it is a *pure* defect count — a companion doc can never land there.
