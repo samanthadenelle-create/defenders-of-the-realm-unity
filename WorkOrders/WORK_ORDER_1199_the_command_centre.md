@@ -114,6 +114,63 @@ must therefore be expressed as a **discount applied to an authored price**, neve
 ⛔ Editing anchors to run a sale breaks the mirror test and needs a client ship - which defeats the
 entire purpose.
 
+### STOP THE STORE MIRROR - a screen showing what a player sees RIGHT NOW
+
+Owner, 2026-08-25: *"I should have a screen that reflects store at that moment in real time."*
+
+**This is the SEE verb made concrete, and its absence is what cost the most time today.** Neither the
+owner nor the lead could answer "what does the store show right now." It was inferred from source,
+from HTTP probes, and finally from a screenshot of an env-var screen. That question should be one
+screen away.
+
+#### STOP THE ONE REQUIREMENT THAT DECIDES WHETHER THIS IS USEFUL OR HARMFUL
+
+**The mirror MUST render from the LIVE quote endpoint - the same call the game makes.**
+
+⛔ It must NOT read `packs.json`, `USD_ANCHORS`, or any local config to build its view. The moment it
+does, it becomes **another copy of a fact that already exists in three places**, it will drift, and it
+will confidently show the owner a store that does not exist. That is this repo's dominant failure mode
+pointed directly at the surface she would trust most.
+
+⭐ **If the mirror and the game disagree, the mirror is WRONG BY CONSTRUCTION** - because the game's
+answer came from the server and the mirror's did too. That property is the entire value.
+
+#### It must be able to look through someone else's eyes
+
+⚠ Sellability is **per-wallet**: `walletAllowed` passes the owner unconditionally BEFORE
+`MAINNET_SALES_ENABLED` is consulted. So the owner's own view is the ONE view that cannot tell her
+what a player sees. The mirror must preview as:
+
+- **no wallet** - a browsing guest,
+- **an arbitrary wallet address** - a normal player,
+- **the owner's wallet** - what she sees today.
+
+⭐ **That single control answers the question this project could not answer all of 2026-08-25**: is
+the store priced for anyone other than her.
+
+#### What it shows
+
+- every SKU on the shelf, in shelf order, with the **effective** price and the saving (WO-1198),
+- **sellable / not sellable, with the server's worded reason** - not a colour, not a tick,
+- whether a promotion is **active right now**, and its start and end in the owner's local time,
+- the banner text exactly as a player would see it,
+- and, plainly, **whether this reflects production or a preview deployment.**
+
+#### It fails LOUD, never stale
+
+⛔ If the mirror cannot reach the server, it says so and renders NOTHING. It must never fall back to a
+cached or locally-computed view. A store mirror showing a state that is not real is worse than no
+mirror - the harness that "re-authored the panel it photographed" cost a morning today by exactly this
+mistake, and this screen would make the same error about money.
+
+#### Acceptance
+
+1. At `startsAt - 1 minute` it shows full price; at `startsAt + 1 minute`, without a reload, it shows
+   the sale. ⭐ Prove the schedule with the clock, not with a config read.
+2. Previewing as a non-owner wallet reflects `MAINNET_SALES_ENABLED` truthfully.
+3. Killing the endpoint produces a visible failure, never a stale shelf.
+4. ⛔ Grep proves the mirror reads NO local price source.
+
 ### What SEE needs
 
 Read-only, from data that already exists: `purchase_quotes` (issued, consumed, `discount_bps`,
