@@ -16,6 +16,7 @@ const path = require('node:path');
 
 const catalog = require('../api/_lib/purchase-catalog');
 const { _test: verifyTest } = require('../api/purchases/verify');
+const { _test: quoteTest } = require('../api/purchases/quote');
 
 const wallet = 'Wallet111111111111111111111111111111111111';
 const other = 'Attacker1111111111111111111111111111111111';
@@ -233,9 +234,64 @@ test('a quote is issued with the exact amount, the rate and the rate source', ()
             sku: 'impulse-wood-medium', network: 'devnet', currency: 'SKR',
             amountBaseUnits: '396000000000', skrAmount: 396, decimals: 9,
             mint: devnetMint, recipient, recipientAta,
-            usdAnchor: 2.99, rate: 0.00755954, rateSource: catalog.RATE_SOURCE,
+            usdAnchor: 2.99, discountBps: null, discountLabel: null,
+            rate: 0.00755954, rateSource: catalog.RATE_SOURCE,
         });
     });
+});
+
+test('the server applies a 20% discount before quoteAmount and exposes only its basis points', () => {
+    withEnv(DEVNET_ENV, () => {
+        const regular = catalog.buildQuoteBody('devnet', 'impulse-wood-medium',
+            { usdPerSkr: 0.01, source: 'test' });
+        const discounted = catalog.buildQuoteBody('devnet', 'impulse-wood-medium',
+            { usdPerSkr: 0.01, source: 'test' }, 2000);
+        assert.equal(regular.amountBaseUnits, '299000000000');
+        assert.equal(discounted.amountBaseUnits, '240000000000');
+        assert.equal(discounted.usdAnchor, 2.99, 'the authored anchor remains auditable');
+        assert.equal(discounted.discountBps, 2000);
+        assert.equal(discounted.discountLabel, '20% shortfall discount');
+        assert.equal('discountedUsd' in discounted, false,
+            'do not create a second client-visible price authority');
+    });
+});
+
+test('invalid discount basis points never create a free or negative quote', () => {
+    withEnv(DEVNET_ENV, () => {
+        for (const bad of [0, -1, 10_000, 20_000, NaN, null, '2000']) {
+            const built = catalog.buildQuoteBody('devnet', 'impulse-wood-medium',
+                { usdPerSkr: 0.01, source: 'test' }, bad);
+            assert.equal(built.amountBaseUnits, '299000000000', `bad bps ${bad}`);
+            assert.equal(built.discountBps, null, `bad bps ${bad}`);
+        }
+    });
+});
+
+test('shortfall discount issuance is server-owned and rate-limited to seven days', () => {
+    const source = fs.readFileSync(path.join(__dirname, '..', 'api', 'purchases', 'quote.js'), 'utf8');
+    assert.match(source, /SHORTFALL_DISCOUNT_BPS\s*=\s*2000/);
+    assert.match(source, /DISCOUNT_WINDOW_DAYS\s*=\s*7/);
+    assert.match(source, /discount_bps IS NOT NULL/);
+    assert.match(source, /WHERE NOT EXISTS/,
+        'the INSERT must re-check eligibility rather than trusting only a pre-read');
+    assert.match(source, /isolationLevel:\s*'Serializable'/,
+        'simultaneous empty-window reads must not both commit discounted rows');
+    assert.match(source, /discount_reason/);
+    assert.match(source, /reasonHint:\s*reasonHint/,
+        'the client hint is logged for audit');
+    assert.match(source, /SHORTFALL_REASON_SERVER/,
+        'the persisted reason must be the server label, not the client string');
+});
+
+test('a forged or replayed reason cannot obtain a second discount inside the window', () => {
+    assert.equal(quoteTest.discountBpsForReason('repair_shortfall', false), 2000,
+        'the first eligible shortfall hint receives the ruled discount');
+    assert.equal(quoteTest.discountBpsForReason('repair_shortfall', true), null,
+        'the same freely forged hint receives no second discount inside seven days');
+    assert.equal(quoteTest.discountBpsForReason('anything_else', false), null,
+        'an unrelated client string never selects discount policy');
+    assert.equal(quoteTest.discountBpsForReason('repair_shortfall', undefined), null,
+        'unknown eligibility fails closed');
 });
 
 test('an unsold SKU is not quotable at any rate', () => {

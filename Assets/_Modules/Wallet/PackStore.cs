@@ -2226,7 +2226,13 @@ namespace DeNelle.Wallet
                 // protocol constant (a proof-of-rail, not a sale), so nothing here reprices them.
                 SetCommerceState(CommerceState.Verifying,
                     $"Asking for today's price for {pack.Name}. Nothing has been charged yet.");
-                var quoted = await PurchaseQuoteService.RequestQuoteAsync(pack, _wallet);
+                // Context only: the server treats this as a logged hint and owns both eligibility
+                // and amount. No percentage or price arithmetic exists in the client.
+                string quoteReason = _pendingShortfallMissing > 0 && pack.Impulse &&
+                    string.Equals(pack.ImpulseResource, _pendingShortfallLabel,
+                        StringComparison.OrdinalIgnoreCase)
+                    ? "repair_shortfall" : null;
+                var quoted = await PurchaseQuoteService.RequestQuoteAsync(pack, _wallet, quoteReason);
                 if (!quoted.Ok)
                 {
                     // ⛔ FAIL CLOSED. No quote means no sale - never a stale price, never the
@@ -2250,9 +2256,11 @@ namespace DeNelle.Wallet
                 string rateLine = quote.Pinned
                     ? "Fixed test amount - no market rate is used."
                     : $"at ${(quote.Rate ?? 0d):0.########} per SKR ({quote.RateSource}).";
+                string discountLine = string.IsNullOrEmpty(quote.DiscountLabel)
+                    ? string.Empty : $" {quote.DiscountLabel} applied.";
                 SetCommerceState(CommerceState.AwaitingApproval,
                     $"{pack.Name}: you will send exactly {quote.ExactSkrLabel} " +
-                    $"({quote.UsdApproxLabel}) on {_wallet.NetworkLabel}. {rateLine} " +
+                    $"({quote.UsdApproxLabel}) on {_wallet.NetworkLabel}.{discountLine} {rateLine} " +
                     "Human approval has no countdown.");
 
                 var result = await _wallet.Pay(pack, currency);
