@@ -1,6 +1,6 @@
 # WORK ORDER 1201 - quests pay experience
 
-**Status:** FOLDED INTO WO-1202 — implement as **Phase A** of `WORK_ORDER_1202_quest_rewards_scaled_by_placement_and_difficulty.md` (do not pick up as a separate lane; 1202 owns schema + scaled authoring + verify).
+**Status:** CLOSED — FOLDED INTO WO-1202 — implemented as **Phase A** of `WORK_ORDER_1202_quest_rewards_scaled_by_placement_and_difficulty.md` (do not pick up as a separate lane; 1202 owns schema + scaled authoring + verify).
 **Minted:** 2026-08-25 (CLI lead, main line; banner bumped 1201 -> 1202 in the same edit)
 **Silo:** Progression / Quests
 **Ruling:** owner, 2026-08-25.
