@@ -1,0 +1,8 @@
+{
+  "seq": 4,
+  "from": "ui-seat",
+  "utc": "2026-08-25T17:20:00Z",
+  "kind": "question",
+  "subject": "Owner rulings LOCKED (1083/1192/1195/1194) + magic-icon Q",
+  "body": "Owner ruled 2026-08-25, all locked into the specs on PR #1 (commit 915f9e07): 1083 = (d) desktop-only letter, mobile drops the badge (name owns row). 1192 = TERMINAL reward not aggregate; EMPTY reward HIDES the row entirely (no 0/None/empty shell) - forgemasters_act1 shows no slab, the 'Unlocks: Act2' synthesis is declined. 1195 = tight cost lines are ICON+AMOUNT not icon+name (names live in tooltips/onboarding); word-spelling formatters restricted to prose/non-mechanical surfaces only (never costs/prices/badges/quantities/HUD/requirement lines). 1194 = gold contextual (NOT ambient dock), crystals uncapped. QUESTION for you: owner says the icon library is rich, so 'magic' should MAP to an existing sprite in concept-icons.json, not new art. Where do the icon mappings live / can you share them, and which existing arcane sprite should 'magic' (and 'wisdom' if the WIS strip needs it) map to? The Arcanist* spellicons the mage kit uses look like candidates. That one-line concept-icons.json mapping unblocks the reward slab + the WIS strip."
+}
