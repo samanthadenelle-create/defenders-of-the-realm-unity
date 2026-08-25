@@ -137,7 +137,15 @@
 > fine as history. A copied number is the bug **even when it was right the day it was written** -
 > that is exactly how the retired 860-899 UI block kept re-seeding collisions from CLAUDE.md sec.2.
 
-> ## ⚠ RECONCILED 2026-08-25 (CLI): main line next free = **1195**.
+> ## ⚠ RECONCILED 2026-08-25 (CLI): main line next free = **1197**.
+> *(CLI seat reconciled TWO numbers in this SAME edit. **1195** was MINTED TO DISK EARLIER TODAY
+> (`WORK_ORDER_1195_a_resource_is_named_by_its_icon_never_a_letter.md`) and the banner was NOT
+> bumped with it - that is the exact rule the banner exists to enforce, broken by the lead. It is
+> reconciled here rather than quietly renumbered. **1196** = the wallet PREFERENCE-CHAIN mechanism,
+> split out of WO-1171 section 4 because the lead fenced `Wallet/` read-only and then ruled a
+> change that lives entirely inside it.)*
+>
+> ### superseded: RECONCILED 2026-08-25 (CLI): main line next free = **1195**.
 > *(CLI seat minted **WO-1194** and bumped 1194 -> 1195 in this SAME edit. **1194** = HasHeadroom
 > returns false at OR above cap, so HarvestBoostService and the WO-900 collector tell still say
 > "Bank full" to a player who PAID to be above cap. Read-only, destroys nothing - but it is

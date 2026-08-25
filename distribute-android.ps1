@@ -22,6 +22,18 @@ param(
 )
 $ErrorActionPreference = "Stop"
 
+# WO-1173: this script can distribute an existing APK, so it needs its own gate
+# even when -Build is absent. A green build from yesterday cannot prove today's DB.
+$schemaLog = Join-Path $PSScriptRoot 'Builds\schema-parity.log'
+New-Item -ItemType Directory -Force -Path (Split-Path $schemaLog) | Out-Null
+& node (Join-Path $PSScriptRoot 'tools\schema-parity.mjs') 2>&1 | Tee-Object -FilePath $schemaLog
+if ($LASTEXITCODE -ne 0 -or
+    -not (Select-String -Path $schemaLog -Pattern '^SCHEMA_PARITY_OK ' -Quiet)) {
+  Write-Error "SCHEMA_PARITY_OK absent. Refusing Firebase distribution; see $schemaLog"
+  exit 4
+}
+Write-Host "[distribute] SCHEMA_PARITY_OK - production dependency matches api/schema.sql"
+
 # Resolve the App ID (param > env > gitignored file).
 if (-not $AppId -and (Test-Path "firebase-appid.txt")) { $AppId = (Get-Content firebase-appid.txt -Raw).Trim() }
 if (-not $AppId) {

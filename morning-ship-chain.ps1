@@ -35,6 +35,17 @@ Set-Location $proj
 function Say([string]$m) { Write-Host "[chain] $m" }
 function Die([string]$m, [int]$code) { Write-Host ""; Write-Host "[chain] *** STOPPED: $m ***"; exit $code }
 
+# WO-1173: a player artifact must not reach a device/store while the production
+# database is narrower than api/schema.sql. Judge the fresh marker, not exit code.
+$schemaLog = Join-Path $proj 'Builds\schema-parity.log'
+New-Item -ItemType Directory -Force -Path (Split-Path $schemaLog) | Out-Null
+& node (Join-Path $proj 'tools\schema-parity.mjs') 2>&1 | Tee-Object -FilePath $schemaLog
+if ($LASTEXITCODE -ne 0 -or
+    -not (Select-String -Path $schemaLog -Pattern '^SCHEMA_PARITY_OK ' -Quiet)) {
+    Die "SCHEMA_PARITY_OK absent - refusing every player build/distribution path. See $schemaLog" 91
+}
+Say "schema parity OK - production dependency matches api/schema.sql"
+
 # --- 0) MEMORY GATE ----------------------------------------------------------
 # Fail in two seconds instead of forty minutes. A player build that starts on a
 # machine still carrying the leak does not fail fast - Unity grinds through

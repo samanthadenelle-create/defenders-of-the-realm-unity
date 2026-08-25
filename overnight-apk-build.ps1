@@ -57,6 +57,17 @@ New-Item -ItemType Directory -Force -Path 'Builds' | Out-Null
 $startedAt = Get-Date
 "APK_START $(Get-Date -Format o)" | Out-File -Encoding ascii $status
 
+# WO-1173: block before creating an APK that can reach a device or store.
+$schemaLog = 'Builds\schema-parity.log'
+& node (Join-Path $PSScriptRoot 'tools\schema-parity.mjs') 2>&1 | Tee-Object -FilePath $schemaLog
+if ($LASTEXITCODE -ne 0 -or
+    -not (Select-String -Path $schemaLog -Pattern '^SCHEMA_PARITY_OK ' -Quiet)) {
+    "SCHEMA_PARITY_FAILED $(Get-Date -Format o) - refusing APK build; see $schemaLog" | Out-File -Encoding ascii -Append $status
+    Write-Host "[apk] SCHEMA_PARITY_OK absent - refusing to build. See $schemaLog"
+    exit 4
+}
+"SCHEMA_PARITY_OK $(Get-Date -Format o)" | Out-File -Encoding ascii -Append $status
+
 try {
     & '.\run-unity-method.ps1' -Method DeNelle.Editor.AndroidBuild.BuildSeekerApk -LogName apk-build.log -TimeoutMin 120 -BuildTarget Android -ExtraScriptingDefines $Defines
 } catch {

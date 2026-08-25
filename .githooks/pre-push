@@ -30,6 +30,25 @@ server="$root/ServerData"
 proof="$root/Builds/r2-parity.log"
 project_version_file="$root/ProjectSettings/ProjectVersion.txt"
 expected_unity="6000.4.8f1"
+zero=0000000000000000000000000000000000000000
+schema_changed=0
+
+# WO-1173: api/schema.sql changing is the exact moment production can become
+# stale. Inspect every commit in every outgoing ref, including a new branch.
+while read local_ref local_sha remote_ref remote_sha; do
+    [ "$local_sha" = "$zero" ] && continue
+    if [ "$remote_sha" = "$zero" ]; then
+        commits=$(git rev-list "$local_sha" --not --remotes 2>/dev/null)
+    else
+        commits=$(git rev-list "$remote_sha..$local_sha" 2>/dev/null)
+    fi
+    for commit in $commits; do
+        if git diff-tree --no-commit-id --name-only -r "$commit" | grep -qx 'api/schema.sql'; then
+            schema_changed=1
+            break 2
+        fi
+    done
+done
 
 # WO-1178: a raw editor launch can rewrite this file after every wrapper's
 # pre-run check. The repo cannot prevent that external process, but it can make
@@ -49,6 +68,22 @@ if [ "$actual_unity" != "$expected_unity" ]; then
     exit 1
 fi
 echo "[pre-push] Unity editor pin is $expected_unity. OK."
+
+if [ "$schema_changed" -eq 1 ]; then
+    schema_log="$root/Builds/schema-parity.log"
+    mkdir -p "$root/Builds"
+    node "$root/tools/schema-parity.mjs" >"$schema_log" 2>&1
+    schema_exit=$?
+    cat "$schema_log"
+    if [ "$schema_exit" -ne 0 ] || ! grep -q '^SCHEMA_PARITY_OK ' "$schema_log"; then
+        echo ""
+        echo "  PUSH BLOCKED - api/schema.sql changed but SCHEMA_PARITY_OK was not proven."
+        echo "  See Builds/schema-parity.log. Apply the tracked migration, then rerun."
+        echo ""
+        exit 1
+    fi
+    echo "[pre-push] SCHEMA_PARITY_OK after api/schema.sql change."
+fi
 
 # Nothing to serve -> nothing to keep in sync.
 [ -d "$server" ] || exit 0

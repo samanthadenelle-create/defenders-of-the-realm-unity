@@ -22,6 +22,7 @@
 
 using DeNelle.Core.Diagnostics;
 using System;
+using DeNelle.Core.Platform;
 using DeNelle.Core.State;
 using DeNelle.Core.UI;
 using TMPro;
@@ -56,6 +57,7 @@ namespace DeNelle.Settings
         private Toggle _muteToggle, _shakeToggle, _musicToggle;
         private Transform _qualityRow, _difficultyRow;
         private TextMeshProUGUI _difficultyBlurb, _audioSeam;
+        private Button _walletConnectButton, _walletDisconnectButton;
 
         private static readonly QualityTier[] Tiers =
         {
@@ -72,9 +74,9 @@ namespace DeNelle.Settings
         // AUDIT FIX (2026-07-30): px layout ladder. Sum of every rung + gap below:
         //   top pad 14 + 5 captions x 54 + 3 slider rows x 68 + 3 toggle rows x 76
         //   + seam 60 + difficulty row 132 + blurb 54 + quality row 132
-        //   + help/reset row 120 + bottom pad 24 = 1238.
+        //   + wallet caption/row 174 + help/reset row 120 + bottom pad 24 = 1370.
         // Keep this constant in sync with the EnsureBuilt ladder if rungs change.
-        private const float RequiredLadderPx = 1238f;
+        private const float RequiredLadderPx = 1370f;
 
         /// <summary>Resolved height (canvas-local px) of the scroll content every band is a
         /// fraction of: max(body px, <see cref="RequiredLadderPx"/>). Set in EnsureBuilt.</summary>
@@ -99,10 +101,12 @@ namespace DeNelle.Settings
             // Resources lookup. Null is fine: the bridge resolves lazily.
             if (_audioMixer != null)
                 AudioMixerBridge.SetMixer(_audioMixer);
+            CurrencySkinResolver.WalletConnectionChanged += OnWalletConnectionChanged;
         }
 
         private void OnDestroy()
         {
+            CurrencySkinResolver.WalletConnectionChanged -= OnWalletConnectionChanged;
             // Don't leak the arbiter slot if destroyed while open (scene unload).
             if (_panelHandle != null) PanelManager.NotifyClosed(_panelHandle);
             if (_modal != null && _modal.canvas != null) Destroy(_modal.canvas);
@@ -240,6 +244,21 @@ namespace DeNelle.Settings
             // ── Comfort ──────────────────────────────────────────────────────
             y = Caption(body, "Comfort", y);
             _shakeToggle = ToggleRow(body, "Screen shake", ref y, OnShakeChanged);
+
+            // WO-1171 section 4: the real player-facing home for BOTH halves of wallet
+            // ownership. The Wallet assembly stays behind CurrencySkinResolver's Core seam.
+            // Two explicit controls make the available action legible without relying on colour;
+            // the inapplicable one remains visible but disabled so players can discover both.
+            y = Caption(body, "Wallet", y);
+            _walletConnectButton = ElarionUiKit.BuildObsidianButton(body, "Connect Wallet",
+                ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Yellow,
+                new Vector2(0.06f, y - Frac(120f)), new Vector2(0.48f, y),
+                CurrencySkinResolver.RequestWalletConnect);
+            _walletDisconnectButton = ElarionUiKit.BuildObsidianButton(body, "Disconnect Wallet",
+                ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Red,
+                new Vector2(0.52f, y - Frac(120f)), new Vector2(0.94f, y),
+                CurrencySkinResolver.RequestWalletDisconnect);
+            y -= Frac(132f);
 
             // ── Help + Reset (WO-588) ────────────────────────────────────────
             y = Caption(body, "Help", y);
@@ -439,10 +458,34 @@ namespace DeNelle.Settings
                     _difficultyBlurb.text = DifficultyTuning.Blurb(SettingsModel.Difficulty);
                 if (_audioSeam != null)
                     _audioSeam.gameObject.SetActive(!AudioMixerBridge.HasMixer);
+                RefreshWalletControls();
             }
             finally
             {
                 _suppressCallbacks = false;
+            }
+        }
+
+        private void OnWalletConnectionChanged(bool connected, string shortAddress)
+        {
+            RefreshWalletControls();
+        }
+
+        private void RefreshWalletControls()
+        {
+            bool connected = CurrencySkinResolver.IsWalletConnected;
+            if (_walletConnectButton != null) _walletConnectButton.interactable = !connected;
+            if (_walletDisconnectButton != null)
+            {
+                _walletDisconnectButton.interactable = connected;
+                var label = _walletDisconnectButton.GetComponentInChildren<TextMeshProUGUI>(true);
+                if (label != null)
+                {
+                    string address = CurrencySkinResolver.ConnectedWalletShortAddress;
+                    label.text = connected && !string.IsNullOrEmpty(address)
+                        ? "Disconnect " + address
+                        : "Disconnect Wallet";
+                }
             }
         }
 
