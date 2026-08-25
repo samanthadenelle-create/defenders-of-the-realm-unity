@@ -4,7 +4,7 @@
 
 # WORK ORDER 858 — Collector collect icons + high-value invasion targets
 
-**Status: SUPERSEDED**  
+**Status:** SUPERSEDED  
 **Minted:** 2026-08-04 (CLI / Grok — owner: visual icon for what to collect; extra collectors are high-value invasion targets)  
 **Silo:** Village collectors / presentation / siege targeting  
 **Roles:** CLI implement; Claude may author icon placement mock only  

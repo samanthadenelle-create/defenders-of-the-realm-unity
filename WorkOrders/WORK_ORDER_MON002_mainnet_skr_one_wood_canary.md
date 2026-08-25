@@ -1,6 +1,6 @@
 # MON002 — Mainnet SKR canary: 1 SKR for exactly 1 wood
 
-**Status:** CODE DONE 2026-08-22 - BLOCKED ON CONFIG, FAIL-CLOSED, NO TRANSACTION AUTHORIZED. Mainnet contract, official mint, owner allowlist, isolated canary SKU, exact 1 SKR -> 1 wood, network-bound recovery and independent regressions all present ([mainnet-canary] green). It REFUSES BEFORE WALLET APPROVAL because no mainnet recipient/ATA/RPC is configured and there is no fallback. Blocked on: the Squads treasury owner pubkey (the address supplied so far is a plain on-curve wallet, fine for a 1 SKR canary, never as the production treasury).
+**Status:** BLOCKED ON CONFIG — code done 2026-08-22, FAIL-CLOSED, NO TRANSACTION AUTHORIZED. Mainnet contract, official mint, owner allowlist, isolated canary SKU, exact 1 SKR -> 1 wood, network-bound recovery and independent regressions all present ([mainnet-canary] green). It REFUSES BEFORE WALLET APPROVAL because no mainnet recipient/ATA/RPC is configured and there is no fallback. Blocked on: the Squads treasury owner pubkey (the address supplied so far is a plain on-curve wallet, fine for a 1 SKR canary, never as the production treasury).
 
 ---
 

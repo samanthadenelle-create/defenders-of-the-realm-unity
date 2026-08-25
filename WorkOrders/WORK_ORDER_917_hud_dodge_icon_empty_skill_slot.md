@@ -11,7 +11,7 @@
 > actively miscommunicates. Raises this from residual-polish to a readability defect. The blocking
 > owner art pick (dodge glyph) still stands — surface icon-key candidates to her rather than waiting.
 
-**Status: NOT STARTED** (reconciled 2026-08-08, see banner) — blocked only on owner art pick for dodge glyph if no existing icon key fits  
+**Status:** READY — Phase B is in flight (BATCH_STATE.md ACTIVE, Batch 4, 2026-08-24); the dodge-glyph art pick is surfaced to the owner rather than held on (reconciled 2026-08-08, see banner)  
 **Minted:** 2026-08-07 (CLI / Grok — residual of WO-899; explicitly **not** done in `a35163e1`)  
 **Silo:** HUD / UI  
 **Roles:** CLI implement; owner creative pick if no in-catalog dodge/roll icon  

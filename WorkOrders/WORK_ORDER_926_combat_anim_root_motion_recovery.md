@@ -4,7 +4,7 @@
 
 # WORK ORDER 926 — Combat animation: legs/hips, foot slide, recovery, shield clip
 
-**Status: NOT STARTED** (reconciled 2026-08-08, see banner)  
+**Status:** SPEC — NOT STARTED (reconciled 2026-08-08, see banner)  
 **Minted:** 2026-08-07 (Grok Imagine visual review — Development Build)  
 **Silo:** Animation / Hero combat  
 **Roles:** CLI implement after owner picks priority vs dungeon WOs; may need anim clip retarget  

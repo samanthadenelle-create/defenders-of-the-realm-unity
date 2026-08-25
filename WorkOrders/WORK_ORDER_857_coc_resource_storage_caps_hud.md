@@ -4,7 +4,7 @@
 
 # WORK ORDER 857 — CoC-style resource storage caps + HUD “have / max”
 
-**Status: DONE**  
+**Status:** DONE  
 **Minted:** 2026-08-04 · **Owner-locked model:** 2026-08-04 (owner confirmed “yes” on three-full split)  
 **Silo:** Economy / HUD / Catalog data  
 **Roles:** CLI implement; Claude may do chip layout wireframe only (no `.cs` if house rule)  

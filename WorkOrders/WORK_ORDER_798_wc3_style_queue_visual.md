@@ -1,6 +1,6 @@
 # WO-798 — WC3-style work queue VISUAL (build on the live chip + 5-deep rows)
 
-**Status:** DESIGN INPUT — **superseded for implementation by WO-817** (full CoC+WC3 queue visual system)  
+**Status:** SUPERSEDED for implementation — DESIGN INPUT retained — **superseded for implementation by WO-817** (full CoC+WC3 queue visual system)  
 **Minted:** 2026-07-30 · **Rewritten:** 2026-07-30 · **Programmed under 817:** 2026-08-01  
 **Master implement WO:** `WorkOrders/WORK_ORDER_817_coc_wc3_queue_visual_system.md`  
 **Lane:** UI presentation only (HudKit queue chip + optional modal restyle).  

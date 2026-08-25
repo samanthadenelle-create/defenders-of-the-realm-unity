@@ -1,6 +1,6 @@
 # WORK ORDER — Village2 → Enemy Stronghold (repurpose, recipe-driven)
 
-**Status: SPEC — awaiting owner confirm before the Village2 regen + Village.unity removal.**
+**Status:** SPEC — awaiting owner confirm before the Village2 regen + Village.unity removal.
 **Source:** owner-authored design (`Create Enemy Camp.txt`, the `EnemyStrongholdGenerator_NavReady` concept) +
 the KayKit `assets_list.txt`. **Reconciled** onto our existing systems (NOT the standalone generator).
 

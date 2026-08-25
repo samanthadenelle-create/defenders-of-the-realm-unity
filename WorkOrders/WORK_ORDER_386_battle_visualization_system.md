@@ -1,6 +1,6 @@
 # WORK_ORDER_386 — Battle Visualization System
 
-**Status:** UNDERSTAND PHASE COMPLETE (documented below) — design/build pending the TARGET decision (§0). Architecture recommended.
+**Status:** BLOCKED on the §0 TARGET decision — UNDERSTAND PHASE COMPLETE (documented below) — design/build pending the TARGET decision (§0). Architecture recommended.
 **Lane:** 2 Combat/AI + 4 UI/HUD (visualization layer over the ATB engine). Code-only.
 **Source:** This session (2026-06-09). Owner-authored WO + verified investigation.
 

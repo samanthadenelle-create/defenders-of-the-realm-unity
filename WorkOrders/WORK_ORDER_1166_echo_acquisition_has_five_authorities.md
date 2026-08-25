@@ -1,6 +1,6 @@
 # WORK ORDER 1166 — Echo acquisition has FIVE competing accounts, and Echo Hollow's job depends on which you believe
 
-**Status:** RESOLVED 2026-08-24 (owner). The five competing accounts collapse to ONE: **account #4 is what shipped** — the first Echo is granted with the guide (`TutorialFlow.cs:1610`, `StarterPetSpecies = "ice-wolf"` = Aldwin), the rest arrive at thresholds. The other four are stale comments, not designs.
+**Status:** CLOSED — RESOLVED 2026-08-24 (owner). The five competing accounts collapse to ONE: **account #4 is what shipped** — the first Echo is granted with the guide (`TutorialFlow.cs:1610`, `StarterPetSpecies = "ice-wolf"` = Aldwin), the rest arrive at thresholds. The other four are stale comments, not designs.
 
 ⛔ **The four files asserting the FALSE exclusivity remain the lesson:** `GameStateService.cs:1005`, `PetSelectController.cs:645` and `:661`, `PetDeployer.cs:140` all state the pet is acquired "ONLY"/"SOLELY" from the Echo Hollow shop, and all four also name a **Yarn** node — and Yarn was fully removed (WO-557). ⚠ **Four independent restatements made a false claim look corroborated**, which is exactly why nobody re-derived it. That is the same one-fact-written-many-times failure as the stale WO-number block, the retired asmdef table, and the 1-of-1 treasury in nine files.
 

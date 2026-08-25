@@ -1,6 +1,6 @@
 ﻿# WO-1114 â€” Dungeon Status: a remotely-flippable, in-world door state
 
-**Status:** BLOCKED ON DEPLOY — BUILT, NOT DEPLOYED (reconciled 2026-08-22). R1-R6 landed and the oracle is
+**Status:** BLOCKED ON DEPLOY — BUILT, NOT DEPLOYED (reconciled 2026-08-22; ⚠ re-checked 2026-08-24 — the `api/` production promotion (`e2e07f1c0`) does NOT clear this: items 1 and 3 below (schema.sql never run against Neon; the two real-dungeon seed rows still absent) are unaffected by it). R1-R6 landed and the oracle is
 registered; nothing further is owed in the Unity tree. *(Was: READY - PARTIAL - 2026-08-21 CLI, gate-green
 (COMPILE_GATE_OK + REGRESSION_OK 234/234).)*
 

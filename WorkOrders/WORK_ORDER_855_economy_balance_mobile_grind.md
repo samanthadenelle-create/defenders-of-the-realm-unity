@@ -4,7 +4,7 @@
 
 # WORK ORDER 855 — Economy balance pass: costs, times, gather, spam softcap, difficulty (data-first)
 
-**Status: DONE**  
+**Status:** DONE  
 **Minted:** 2026-08-03 (CLI / Grok — owner: mobile-game grind + challenge; **tweak not rewrite**)  
 **Silo:** Economy / Data / light BuildMode cost hook  
 **Roles:** CLI (or Claude CLI) implements **numbers + thin cost multiplier only**; no system rewrites  

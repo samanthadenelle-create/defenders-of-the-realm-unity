@@ -4,7 +4,7 @@
 
 # WORK ORDER 876 — Troop combat VFX: on-hit impact, death, + ranged archer projectile
 
-**Status:** NOT STARTED (reconciled 2026-08-08) — child of WO-872. **Lane:** Combat/AI VFX. **WO#:** UI-seat block; **876**.
+**Status:** SPEC — NOT STARTED (reconciled 2026-08-08) — child of WO-872. **Lane:** Combat/AI VFX. **WO#:** UI-seat block; **876**.
 **Origin:** owner 2026-08-04 — *"on hit with troops."* Audit-backed (WO-872 §2, Tr1–Tr4). **Layer:** B/C.
 
 ## 1. Gaps (audit, `TroopController.cs`)

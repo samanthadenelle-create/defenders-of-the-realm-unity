@@ -1,6 +1,6 @@
 # WORK ORDER — Offline Storage / Offline-Accrual Logic (DESIGN)
 
-**Status:** DESIGN COMPLETE — ideas + data schema only. **NO `.cs` written.**
+**Status:** SPEC — DESIGN COMPLETE — ideas + data schema only. **NO `.cs` written.**
 **Type:** Foundation design (the offline-storage-UPGRADE store packs sell against this).
 **Author:** design pass, 2026-06-28
 **Owner ask (verbatim framing):** *"how much can they hold and stuff like that"* — the offline

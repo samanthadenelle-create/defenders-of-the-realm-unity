@@ -4,7 +4,7 @@
 
 # WORK ORDER 854 — Quest Completability Program
 
-**Status: DONE**
+**Status:** DONE
 **Minted:** 2026-08-03 · **Type:** Program, 7 phases, file-disjoint silos
 **Roles:** Architect specs (this doc) · CLI implements + batch-gates + sole-commits · Owner rules §6 · PO felt-closes
 **Owner directive, verbatim:** *"Have an architect and team resolve quests and create all the missing

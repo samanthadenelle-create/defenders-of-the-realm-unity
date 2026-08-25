@@ -1,6 +1,6 @@
 # WORK ORDER 832 — Building Enhancement panel: ONE unambiguous Upgrade button
 
-**Status:** IMPLEMENTED (pending gates — CompileGate + RunCaptureHeadless not yet run; edit-only agent 2026-08-02)
+**Status:** FIXED — implemented by an edit-only agent 2026-08-02; gates (CompileGate + RunCaptureHeadless) and owner felt-verify still owed
 **Author:** UI/QA triage (read-only RCA, §13) — Claude UI
 **Lane:** HUD/UI — single file (`BuildingUpgradePanelMvvm.cs`), View-only. No VM/logic/scene change.
 **Origin:** owner felt-test 2026-08-02, "Lumber Mill Enhancements" screen — *"it's really impossible to know which

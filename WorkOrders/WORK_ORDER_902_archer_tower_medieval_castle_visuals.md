@@ -32,7 +32,7 @@
 >
 > Fixing those belongs to the wooden ladder, **not** to this WO. Do not reopen this one to do it.
 
-**Status: SUPERSEDED — do not implement (was: READY TO IMPLEMENT)**  
+**Status:** SUPERSEDED — do not implement (was: READY TO IMPLEMENT)  
 **Minted:** 2026-08-04 (CLI / Grok — owner: hates Tribal archer look; ruled **Option A** castle ladder)  
 **Silo:** Structures / catalog art (data + Resources mirror only)  
 **Roles:** CLI or Claude-with-code seat — **no combat logic rewrite**  

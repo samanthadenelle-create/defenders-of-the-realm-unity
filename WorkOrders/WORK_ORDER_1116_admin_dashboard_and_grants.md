@@ -1,6 +1,6 @@
 # WORK ORDER 1116 — Operator dashboard: phase 1 SHIPPED (read-only), phase 2 SPEC (issuing codes)
 
-**Status:** PHASE 1 IMPLEMENTED (awaiting gate + owner felt-verify) · PHASE 2 SPEC — NOT IMPLEMENTED, 4 open rulings
+**Status:** BLOCKED — PHASE 2 has 4 open owner rulings. PHASE 1 IMPLEMENTED (awaiting gate + owner felt-verify) · PHASE 2 SPEC — NOT IMPLEMENTED, 4 open rulings
 **Minted:** 2026-08-17 (main line — banner bumped 1116 → 1117 in this same edit)
 **Lane:** Monetization / live-ops · backend + public-site static page. **No Unity, no `Assets/**`.**
 **Provenance:** owner, 2026-08-17, verbatim: *"we need to be able to do this from a dev panel for users

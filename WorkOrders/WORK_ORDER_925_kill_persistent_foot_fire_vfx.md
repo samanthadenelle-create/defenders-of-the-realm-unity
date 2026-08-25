@@ -4,7 +4,7 @@
 
 # WORK ORDER 925 — Kill or condition permanent foot fire / spark VFX under the hero
 
-**Status: NOT STARTED** (reconciled 2026-08-08, see banner)  
+**Status:** SPEC — NOT STARTED (reconciled 2026-08-08, see banner)  
 **Minted:** 2026-08-07 (Grok Imagine visual review — Development Build 52s recording)  
 **Silo:** VFX / Hero  
 **Roles:** CLI implement; instrument first if multiple candidates  

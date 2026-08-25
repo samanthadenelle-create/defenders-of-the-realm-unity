@@ -41,7 +41,7 @@
 
 # WORK ORDER 905 — "Manage": one screen for every upgrade, sorted by what you can afford
 
-**Status:** ⚠ SUPERSEDED by WO-911 (2026-08-06) — see the banner above. *(Was: SPEC — READY for design review.)*
+**Status:** SUPERSEDED by WO-911 (2026-08-06) — see the banner above. *(Was: SPEC — READY for design review.)*
 **Minted:** 2026-08-04 (CLI), owner directive
 **Lane:** HUD/UI. Presentation + a read-only affordability model. **No economy or timer logic changes.**
 **Depends on:** WO-864 (the queue card rail — must expose a REUSABLE component)

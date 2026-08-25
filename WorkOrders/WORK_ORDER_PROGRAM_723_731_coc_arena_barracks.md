@@ -1,6 +1,6 @@
 # PROGRAM — WO-723 → WO-731 · CoC Arena + Barracks → AI Camps → Async PvP
 
-**Status:** MINTED 2026-07-16 · **WO-723 DONE** (start implement at **724**)  
+**Status:** SPEC — program umbrella, MINTED 2026-07-16; implementation is tracked by WO-724…WO-731, each with its own status · **WO-723 DONE** (start implement at **724**)  
 **Numbering:** next free after roster/layout = **738** (`CLI_LANES_WO_NUMBERS.md`)  
 **Canon:** `docs/ARENA_SOLUTION.md` · `docs/COMBAT_PIVOT_NORTHSTAR.md` · `docs/NORTH_STAR.md`  
 **Claude packet:** `WorkOrders/CLAUDE_HANDOFF_2026-07-16_barracks_coc_roster.md`  

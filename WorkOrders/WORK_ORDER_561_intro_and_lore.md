@@ -1,6 +1,6 @@
 # WORK ORDER 561 — 30s Skippable Intro + Lore/Storyline Polish
 
-**Status:** ✅ DONE (intro implemented + skippable; lore bible written; image-prompt sidecar authored)
+**Status:** DONE (intro implemented + skippable; lore bible written; image-prompt sidecar authored)
 **Date:** 2026-06-28
 **Branch:** wip/village2-and-f8-tickets (agent worktree)
 **Related:** WO-557 (full Yarn removal — the intro rewrite is part of that rip).

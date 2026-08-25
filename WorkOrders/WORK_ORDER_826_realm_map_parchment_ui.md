@@ -1,6 +1,6 @@
 # WORK ORDER 826 — Realm Map parchment UI (immersive overworld screen)
 
-**Status: SHIPPED 2026-08-01 (eb5d0710) — REALM_MAP oracle green, capture verified. RESULT: WORK_ORDER_826_realm_map_parchment_ui.RESULT.md**  
+**Status:** DONE — SHIPPED 2026-08-01 (eb5d0710); REALM_MAP oracle green, capture verified. RESULT: WORK_ORDER_826_realm_map_parchment_ui.RESULT.md  
 **Minted:** 2026-08-01  
 **Program:** WO-825  
 **Silo:** HUD / UI (code-built uGUI; dual-copy data already exists)  

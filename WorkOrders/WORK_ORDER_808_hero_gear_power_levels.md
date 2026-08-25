@@ -1,6 +1,6 @@
 # WO-808 — Hero weapon / armor power levels (Forge & Armorer ladder)
 
-**Status:** SHIPPED 2026-07-30 (7d14a17a / 0c083336 / 3b66efb3 / 55643448) — see WORK_ORDER_808_hero_gear_power_levels.RESULT.md; [gear-levels] oracle green.  
+**Status:** DONE — SHIPPED 2026-07-30 (7d14a17a / 0c083336 / 3b66efb3 / 55643448) — see WORK_ORDER_808_hero_gear_power_levels.RESULT.md; [gear-levels] oracle green.  
 **Minted:** 2026-07-30  
 **Program:** `docs/WC3_COC_EXPERIENCE_ANALYSIS.md` §2A  
 **Lane:** Gear / hero progression (Forge + Armorer + Inventory)  

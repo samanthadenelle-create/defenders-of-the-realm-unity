@@ -77,7 +77,7 @@ several mirrored `EXIT` labels stack through the floors in one frame. Visual hal
 
 ---
 
-**Status: SUPERSEDED BY §0 — root cause found (stair YAW), and the FIX HAS SHIPPED.** The replacement is
+**Status:** SUPERSEDED BY §0 — root cause found (stair YAW), and the FIX HAS SHIPPED. The replacement is
 WO-930, delivered 2026-08-08 in `3ab1bfb6` → `cb092b7f` (all 4 content dungeons `PathComplete`,
 12 descents, 0 mate failures). **Do not re-run §5 M1-M7.** ⚠ No `.RESULT.md` exists for this WO —
 recorded as debt in `CANON_GROUND_TRUTH_2026-08-09.md` §7.

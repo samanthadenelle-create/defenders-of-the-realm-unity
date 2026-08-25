@@ -10,7 +10,7 @@
 
 # WORK ORDER 838 — Bug-report email-on-submit + admin bug-report view (server-side, -v2)
 
-**Status:** ⚠ SUPERSEDED 2026-08-02 by **WO-846** — do NOT implement this. WO-846 already delivers the house-pattern
+**Status:** SUPERSEDED 2026-08-02 by **WO-846** — do NOT implement this. WO-846 already delivers the house-pattern
 notification: a **bug-report watcher that pings the F8 inbox** (`logs/f8-inbox/`, the same surface CLI live-triages,
 §14) — better than email (the report reaches the person who RCAs it, evidence attached, automatically). WO-846's
 agent is also handling the `view=bugreports` gap in `api/admin/db.js` this WO predicted. Kept for the record only.

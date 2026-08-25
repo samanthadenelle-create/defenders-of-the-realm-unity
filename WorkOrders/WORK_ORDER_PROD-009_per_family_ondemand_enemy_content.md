@@ -1,6 +1,6 @@
 # PROD-009 — Enemy/structure content is ALL-OR-NOTHING and loads on the MAIN THREAD: per-family on-demand + async loader + roster lookahead
 
-**Status:** ❌ **CLOSED — SUPERSEDED by PROD-010** (owner ruling 2026-08-19: *"PROD 10 kills 10 and 09"*).
+**Status:** CLOSED — ** — SUPERSEDED by PROD-010** (owner ruling 2026-08-19: *"PROD 10 kills 10 and 09"*).
 This ticket shrank the first-run download by splitting enemy content per family and fetching on demand.
 PROD-010 answers the same player problem a different way — the player opts in and pulls the WHOLE set once,
 then runs local — so the per-family split buys nothing and would add a second content-partitioning scheme to

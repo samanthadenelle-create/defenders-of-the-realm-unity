@@ -1,6 +1,6 @@
 # WORK ORDER 815 — Echo harvest resource CHOICE + per-Echo resource AFFINITY
 
-**Status: SUPERSEDED by WO-830** (echo harvest affinity + synergy, owner-approved 2026-08-01). Retained as origin ruling only.
+**Status:** SUPERSEDED by WO-830 (echo harvest affinity + synergy, owner-approved 2026-08-01). Retained as origin ruling only.
 **Origin (owner, verbatim):** "there should be options for which resource the echos harvest
 and each can have an affinty with a certain type to promote using them for that +5% food maybe"
 **Lane:** Echoes / Harvest (builds on WO-784 echo-lane consumers + WO-811 gather-or-repair)

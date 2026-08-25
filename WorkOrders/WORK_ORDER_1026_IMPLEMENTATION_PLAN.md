@@ -3,7 +3,7 @@
 **Parent WO:** `WorkOrders/WORK_ORDER_1026_raid_defense_consequence_loop.md`
 **Ruling being implemented:** owner 2026-08-17 — **model (a) PvE siege**, built so **(c) ghost-PvP is a source swap**.
 **Plan authored:** 2026-08-17 (research seat, read-only — no code touched; an APK build was in flight).
-**Status of this document:** READY TO IMPLEMENT. Everything below is verified at source this session with
+**Status:** READY TO IMPLEMENT (status of this document). Everything below is verified at source this session with
 file:line citations. Nothing here is inferred from comments alone.
 
 > ⛔ **THE STAKES ARE STILL UNRULED.** This plan ships attacks that **resolve and REPORT but take nothing**.

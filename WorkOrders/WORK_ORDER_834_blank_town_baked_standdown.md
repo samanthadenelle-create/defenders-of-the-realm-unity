@@ -1,6 +1,6 @@
 # WORK ORDER 834 — Blank-founding towns: baked default-town structures STAND DOWN until first player build
 
-**Status: IMPLEMENTED (pending gates)** — edit-only agent 2026-08-02; orchestrator owns CompileGate +
+**Status:** FIXED — implemented, awaiting gate confirmation — edit-only agent 2026-08-02; orchestrator owns CompileGate +
 DataRegression + EditMode run + commit.
 **Silo:** BuildMode/Save-Schema
 **Owner signal:** live F8, capture seq 592 ("Build Your Own" town loads full of baked buildings).

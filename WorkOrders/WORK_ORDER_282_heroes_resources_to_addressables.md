@@ -6,7 +6,7 @@
 
 # WORK ORDER 282 — Hero models: Resources/Heroes → Addressables `Heroes` group
 
-**Status:** ⛔ **CLOSED — SUPERSEDED BY WO-545.** Do not implement this as written.
+**Status:** CLOSED — ** — SUPERSEDED BY WO-545.** Do not implement this as written.
 
 WO-545 shipped the hero-asset seam with a **different and contradictory** contract:
 `HeroAssetLoader.cs` + `HeroAddressablesGrouper.cs` use **Addressables-first with a Resources fallback

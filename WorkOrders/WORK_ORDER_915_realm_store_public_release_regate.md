@@ -4,7 +4,7 @@
 
 # WORK ORDER 915 — Realm Store: public-release re-gate + complete the payment path
 
-**Status: NEEDS-OWNER-RULING** on §2 — nothing implemented (reconciled 2026-08-08, see banner)  
+**Status:** BLOCKED — needs an owner ruling on §2; nothing implemented (reconciled 2026-08-08, see banner)  
 **Minted:** 2026-08-07 (CLI / Grok — residual of audit finding #1 / WO-911 Q9)  
 **Silo:** Monetization / Wallet / FeatureFlags (isolated lane)  
 **Roles:** Owner rules open questions; CLI implements after rulings  

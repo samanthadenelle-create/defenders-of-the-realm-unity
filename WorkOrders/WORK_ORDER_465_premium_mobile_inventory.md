@@ -1,6 +1,6 @@
 # WO-465 — Implement Premium Mobile-First Inventory UI (Horizontal + Portrait) – Match Mockup Exactly
 
-**Status:** 🟢 done (gate validated + committed locally)
+**Status:** DONE (gate validated + committed locally)
 
 **Lane:** 4 — UI/HUD (parallel)
 

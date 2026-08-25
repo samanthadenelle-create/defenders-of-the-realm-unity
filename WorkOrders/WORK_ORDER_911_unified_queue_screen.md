@@ -11,7 +11,7 @@
 
 # WORK ORDER 911 - Unified Manage/Queues Screen (bar face re-pointed, tabbed channels, Finish Now, cancel/refund, 5-per-line cap)
 
-**Status: DONE** (`21d166c9`; reconciled 2026-08-08, see banner; not felt-verified)
+**Status:** FIXED — shipped (`21d166c9`; reconciled 2026-08-08, see banner; not felt-verified)
 
 > ## Q12 - RULED (owner, 2026-08-06). THE LAST ONE; NOTHING IS OPEN.
 >

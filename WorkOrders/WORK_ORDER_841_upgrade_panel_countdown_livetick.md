@@ -1,6 +1,6 @@
 # WORK ORDER 841 — Upgrade panel "Under construction" countdown ticks live
 
-**Status:** IMPLEMENTED (pending gates — CompileGate + EditMode + RunCaptureHeadless not yet run; edit-only agent 2026-08-02)
+**Status:** FIXED — implemented by an edit-only agent 2026-08-02; gates (CompileGate + EditMode + RunCaptureHeadless) and owner felt-verify still owed
 
 > **Implementation note (2026-08-02, edit-only agent):** done per §2 with one MVVM refinement —
 > the countdown feed lives on the VM (`BuildingUpgradeVM.UnderConstruction` /

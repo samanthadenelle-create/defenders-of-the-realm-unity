@@ -4,7 +4,7 @@
 
 # WORK ORDER 914 — Status mount: compass strip vs waveBlock layout (no collision)
 
-**Status: NOT STARTED** (reconciled 2026-08-08, see banner)  
+**Status:** SPEC — NOT STARTED (reconciled 2026-08-08, see banner)  
 **Minted:** 2026-08-07 (CLI / Grok — residual after WO-899 heading strip)  
 **Silo:** HUD / UI  
 **Roles:** CLI implement + headless UI capture; PO felt-closes appearance  
