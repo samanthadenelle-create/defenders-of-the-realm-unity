@@ -137,7 +137,14 @@
 > fine as history. A copied number is the bug **even when it was right the day it was written** -
 > that is exactly how the retired 860-899 UI block kept re-seeding collisions from CLAUDE.md sec.2.
 
-> ## ⚠ RECONCILED 2026-08-25 (CLI): main line next free = **1198**.
+> ## ⚠ RECONCILED 2026-08-25 (CLI): main line next free = **1199**.
+> *(CLI seat minted **WO-1198** and bumped 1198 -> 1199 in this SAME edit. **1198** = the owner
+> ruled the usdEffective question: ship the discounted USD AND announce the saving. "If it is a
+> sale, that is the exact reason to offer more value." The server already computes quotedUsd,
+> prices the SKR off it, then ships only the undiscounted anchor. The refusing test is RE-POINTED,
+> never deleted - its fear was about AUTHORITY, and a display figure creates none.)*
+>
+> ### superseded: RECONCILED 2026-08-25 (CLI): main line next free = **1198**.
 > *(CLI seat minted **WO-1197** and bumped 1197 -> 1198 in this SAME edit. **1197** = the board has
 > no bucket meaning "partially landed". THREE tickets in one reconcile pass now sit in Ready with
 > their best slices already built (1170 sites 1-3, PROD-014(b), 1073 architecture). A puller who
