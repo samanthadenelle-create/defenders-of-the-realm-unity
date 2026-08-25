@@ -319,6 +319,11 @@ namespace DeNelle.Wallet
             // is the same reasoning as DiscardBuildIfSurfaceChanged above - a value resolved once and
             // kept is a stale measurement.
             //
+            // ⚠ AND THE PRICES NO LONGER DEPEND ON IT (WO-1190, 2026-08-25): the list request is
+            // public and goes out with or without a wallet, so the paragraph above is the HISTORY of
+            // a fixed defect, not a description of today. Adoption now buys the binding quote a
+            // signer and the server a viewer to word `sellableReason` for — nothing on the shelf.
+            //
             // An explicitly injected service still wins; this only fills a null.
             // Subscribe FIRST, so a connect that lands during this open is not missed between the
             // check below and the handler being attached.
@@ -410,10 +415,28 @@ namespace DeNelle.Wallet
         /// <item><description><c>_wallet</c> is NEVER null, so an "adopt when null" check can never
         /// fire — both of my earlier guards were unreachable, which the device trace proved by their
         /// total absence from the log.</description></item>
-        /// <item><description>That instance's <c>IsRealSigningWallet</c> is false FOREVER, so
-        /// <c>RefreshPricesAsync</c> fails closed on every open, at every moment, regardless of what
-        /// the player's real wallet is doing two inches away on the same screen.</description></item>
+        /// <item><description>That instance's <c>IsRealSigningWallet</c> is false FOREVER, so every
+        /// path that demanded a signing wallet saw one that could never sign, regardless of what the
+        /// player's real wallet was doing two inches away on the same screen.</description></item>
         /// </list>
+        /// <para>
+        /// ⚠ WHAT THIS NO LONGER DOES — CORRECTED 2026-08-25 (WO-1190). This comment used to say
+        /// that without a signing wallet "<c>RefreshPricesAsync</c> fails closed on every open" and
+        /// the shelf therefore reads "Price unavailable". THAT IS RETIRED AND IT IS NOW FALSE.
+        /// <c>PurchaseQuoteService.RefreshPricesAsync</c> is PUBLIC: it takes a null or unconnected
+        /// wallet, sends no signature, requests no backend session (<c>requireAuth:false</c>) and
+        /// returns the full sold ladder on <c>WalletService.DefaultNetwork</c>. Browsing prices no
+        /// longer authenticates — the owner's question was "why do I need to authorize if I'm just
+        /// looking", and the answer is that she does not. Each row instead carries an advisory
+        /// <c>sellable</c> / <c>sellableReason</c>, and the shelf renders a PRICE with a worded state
+        /// line where it used to render nothing at all.
+        /// </para>
+        /// <para>
+        /// So adopting the live wallet is no longer what makes the shelf show prices. It still
+        /// matters for two things and only two: the BINDING quote (<c>RequestQuoteAsync</c>) still
+        /// demands a real signing wallet, and a known address lets the server word each row's
+        /// <c>sellableReason</c> for this specific viewer instead of for the public.
+        /// </para>
         /// <c>SetWalletService</c> existed to REPLACE that placeholder and had zero callers project-wide,
         /// so the placeholder was the only wallet the store ever had.
         /// <para>
@@ -432,9 +455,14 @@ namespace DeNelle.Wallet
 
             if (live == null)
             {
-                FlowTrace.Warn("Store", $"[{reason}] the wallet we hold cannot sign and NO live wallet " +
-                                        "is connected - the shelf will show 'Price unavailable' because " +
-                                        "no quote can be requested. This is not a server fault.");
+                // ⚠ NOT A WARN ANY MORE, AND THE OLD SENTENCE WAS THE STALE BEHAVIOUR ITSELF: it
+                // said the shelf "will show 'Price unavailable' because no quote can be requested".
+                // Browsing is public now (see the remarks above) — the list request goes out with no
+                // wallet and prices arrive. Nothing is wrong here; it is the ordinary state of a
+                // player who has not connected yet, so it is a Step, not a warning.
+                FlowTrace.Step("Store", $"[{reason}] no signing wallet held or connected - browsing " +
+                                        "continues on the PUBLIC price list; only the binding quote " +
+                                        "and viewer-specific sellable wording need a wallet.");
                 return false;
             }
 
@@ -907,10 +935,19 @@ namespace DeNelle.Wallet
                 // ⛔ THE ROW IS AUTHORED AT THE CARD'S OWN HEIGHT. Two places holding one
                 // measurement is how a 100-unit row came to carry a 168-unit card.
                 var variant = VariantFor(band);
-                float rowHeight = StorePackCard.CardHeight(variant);
 
                 for (int i = 0; i < rows.Count; i += CardsPerRow)
                 {
+                    // ⛔ THE ROW IS SIZED FOR THE TALLEST CARD IT WILL HOLD. A card that carries the
+                    // not-sellable state line is ReasonExtraPx taller than a buyable one, and the
+                    // strip force-expands its children to the row's own height — so a row measured
+                    // before the cards are resolved would squeeze that block back out again, which
+                    // is the two-places-hold-one-measurement defect BuildCardRow's header records.
+                    bool rowHasReason = false;
+                    for (int c = 0; c < CardsPerRow && i + c < rows.Count; c++)
+                        if (!string.IsNullOrEmpty(CardNotSellableReason(rows[i + c]))) rowHasReason = true;
+
+                    float rowHeight = StorePackCard.CardHeight(variant, rowHasReason);
                     var strip = BuildCardRow(rowHeight);
                     for (int c = 0; c < CardsPerRow; c++)
                     {
@@ -1214,6 +1251,10 @@ namespace DeNelle.Wallet
                 PriceMinor   = pack.UsdApprox,
                 Badge        = pack.StoreBadge,
                 StateWord    = CardStateWord(pack),
+                // ⛔ RESOLVED HERE, RENDERED THERE. The card is handed a finished string; it never
+                // asks a commerce question of its own (UI-002). Empty on every buyable pack, so a
+                // healthy shelf is byte-for-byte the card it was before this line existed.
+                NotSellableReason = CardNotSellableReason(pack),
                 Band         = band,
                 OrbTint      = pack.OrbTint,
                 GlyphConcepts = GlyphConceptsFor(pack),
@@ -1243,10 +1284,71 @@ namespace DeNelle.Wallet
         {
             if (_vm != null && _vm.IsOwned(pack.Sku)) return StoreStrings.Get(StoreStrings.KeyCardOwned);
             if (pack.AnchorOnly) return StoreStrings.Get(StoreStrings.KeyCardAnchor);
+            // ⛔ SALES-NOT-OPEN IS A STATE, NOT A FAULT, so it takes the state pill exactly like
+            // "Owned" and "Your gap" do. It ranks BELOW Owned (a pack you already have is not a pack
+            // you were denied) and below AnchorOnly (which already draws no buy control), and ABOVE
+            // the shortfall hint, because "you cannot buy this yet" outranks "this would close your
+            // gap". The pill is a short WORD; the sentence goes on the line above the price.
+            if (!string.IsNullOrEmpty(CardNotSellableReason(pack))) return CardNotSellableStateWord;
             if (!string.IsNullOrEmpty(_pendingShortfallLabel) && pack.Impulse &&
                 string.Equals(pack.ImpulseResource, _pendingShortfallLabel, StringComparison.OrdinalIgnoreCase))
                 return StoreStrings.Get(StoreStrings.KeyCardGap);
             return string.Empty;
+        }
+
+        // =====================================================================
+        //  ⭐ PRICED, BUT NOT PURCHASABLE — THE STATE THE SHELF COULD NOT SAY.
+        // ---------------------------------------------------------------------
+        //  WO-1190 made the price LIST public: browsing no longer asks the player
+        //  to authorize anything, and the server returns the FULL sold ladder with
+        //  an advisory `sellable` / `sellableReason` on each row. That closed the
+        //  "Price unavailable on every pack" defect and opened a NEW one, which is
+        //  what these two strings close: a row the server marks NOT sellable was
+        //  drawing its real price beside a LIVE buy control. It was fail-closed —
+        //  the binding quote refuses and nothing is charged — but the player was
+        //  still invited to tap a button that could not work, and the only place
+        //  the refusal appeared was after they had committed to buying.
+        //
+        //  ⚠ THESE TWO STRINGS ARE A PROPOSAL, NOT A RULING. The player-facing
+        //  wording is the OWNER'S call. The server's current sentence
+        //  ("Purchases are not open on this network yet. You can browse; buying
+        //  unlocks when sales go live.") is another seat's placeholder, and it is
+        //  ~95 characters — four wrapped lines in a shelf card's text lane, which
+        //  is a card half again as tall or a clipped string, and neither is
+        //  shippable. So the CARD carries the short state and the COMMERCE COLUMN
+        //  — which has a whole host to spend — prints the server's own sentence
+        //  verbatim, where the buy button would have been.
+        //
+        //  ⛔ AND IT READS AS A STATE, NOT AN ERROR. Sales not being open yet is a
+        //  normal condition of a store that has not switched on, not a fault the
+        //  player hit: no "cannot", no "failed", no "unavailable" (that word is
+        //  spoken for — it means we have NO price, and this card has one).
+        // =====================================================================
+
+        /// <summary>The state pill's WORD for a priced-but-not-purchasable pack. PROPOSAL.</summary>
+        private const string CardNotSellableStateWord = "Not yet";
+
+        /// <summary>The card's one-line state sentence for the same. PROPOSAL.</summary>
+        private const string CardNotSellableLine = "Not for sale yet - browsing only.";
+
+        /// <summary>
+        /// The card's not-sellable state line, or EMPTY when the pack is purchasable as far as the
+        /// server has said.
+        /// <para>⛔ DISPLAY GATING ONLY. <see cref="PurchaseGate"/> and the binding quote remain the
+        /// only authorities that can stop a charge; this decides whether the shelf INVITES the tap.
+        /// A SKU with no display price at all reads sellable here on purpose — that card already
+        /// says "Price unavailable" in the price row, and stacking a second state sentence on top of
+        /// it would say the same nothing twice.</para>
+        /// </summary>
+        private string CardNotSellableReason(PackDef pack)
+        {
+            if (pack == null || string.IsNullOrEmpty(pack.Sku)) return string.Empty;
+            // Owned and anchor-only cards already carry their own state word and already build no
+            // buy control — a second state line there would be noise, not information.
+            if (_vm != null && _vm.IsOwned(pack.Sku)) return string.Empty;
+            if (pack.AnchorOnly) return string.Empty;
+            if (PurchaseQuoteService.IsSellable(pack.Sku)) return string.Empty;
+            return CardNotSellableLine;
         }
 
         /// <summary>
@@ -1716,6 +1818,35 @@ namespace DeNelle.Wallet
 
                 FlowTrace.Step("Store", $"BuildSpotlightCta '{pack.Sku}': Buy REFUSED by PurchaseGate — \"{gateReason}\" " +
                                         $"(face='{blockedLabel}', actionable={walletIsTheBlocker}).");
+                return;
+            }
+
+            // ⛔ THE SERVER SAYS THIS ROW IS NOT SELLABLE TO THIS VIEWER -> NO BUY CONTROL (WO-1190).
+            // The price still stands above (the shelf card and the spotlight ledger both print it);
+            // what is withheld is the INVITATION. Before this, a not-sellable SKU showed its real
+            // price beside a live Buy button and the refusal only arrived after the player committed
+            // — fail-closed, but a shelf that lies about what it will sell you.
+            //
+            // A refusal is a PLATE, never a button (UI-002, the same rule the two branches above
+            // follow): there is nothing the player can do here, so nothing here may look tappable.
+            // That also settles the touch floor — a plate is not a control, so there is no control
+            // to shrink under MinTouchPx; the only interactive rect in this host is the one we did
+            // not build.
+            //
+            // ⛔ AND THE SERVER'S OWN SENTENCE IS PRINTED VERBATIM. It is worded for this viewer and
+            // this network; paraphrasing it here would put a second opinion on the screen, and
+            // SellableReasonFor already substitutes a worded fallback when the row carried none —
+            // so this is never blank and never a bare code.
+            if (!PurchaseQuoteService.IsSellable(pack.Sku))
+            {
+                string notSellable = PurchaseQuoteService.SellableReasonFor(pack.Sku);
+                if (string.IsNullOrEmpty(notSellable))
+                    notSellable = PurchaseQuoteService.NotSellableFallbackMessage;
+                FitInto(MakeText(host, notSellable, 30, ElarionUi.ParchmentDim, FontStyles.Italic,
+                    TextAlignmentOptions.Center, ctaMin, ctaMax), 30);
+                FlowTrace.Step("Store", $"BuildSpotlightCta '{pack.Sku}': server marked this row NOT " +
+                                        $"sellable - \"{notSellable}\". Price is still shown; the Buy " +
+                                        "control is not built (nothing charged, nothing to tap).");
                 return;
             }
 

@@ -93,6 +93,21 @@ namespace DeNelle.Wallet
         public string Badge;
         /// <summary>State WORD ("Owned" / "Locked" / "Your gap"). Outranks the badge when present.</summary>
         public string StateWord;
+        /// <summary>
+        /// A SHORT worded reason this pack cannot be bought right now, or EMPTY when it can.
+        /// <para>⛔ THIS IS NOT "Price unavailable" AND IT NEVER REPLACES IT. That sentence means we
+        /// have no price at all and it is still printed in the price row where the digits would go.
+        /// This is the OTHER state, and it is the new one: the pack IS priced, the digits ARE drawn,
+        /// and buying is simply not open yet. A card that showed the price with a live buy control
+        /// invited a tap that the till would refuse -- fail-closed, but still a lie on the shelf.</para>
+        /// <para>⛔ THE CARD DECIDES NOTHING. Like every other string here the caller resolves it
+        /// (from PurchaseQuoteService.SellableReasonFor), because a card that could compute
+        /// sellability would be a second commerce authority (UI-002).</para>
+        /// <para>⚠ KEEP IT SHORT -- it is budgeted at <see cref="ReasonBlockLines"/> lines at
+        /// <c>FontCaption</c>. The server's FULL sentence belongs on the commerce column's refusal
+        /// plate, which has a whole host to spend; the card carries the state, not the essay.</para>
+        /// </summary>
+        public string NotSellableReason;
         /// <summary>The band this card lives in — supplies the accent light.</summary>
         public StoreBand Band;
         /// <summary>Authored per-pack tint (packs.json <c>orbTint</c>). Empty falls back to the band light.</summary>
@@ -112,6 +127,8 @@ namespace DeNelle.Wallet
         public Image Ring;
         public TextMeshProUGUI StateLabel;
         public TextMeshProUGUI PriceLabel;
+        /// <summary>The not-sellable state line, or null when the pack is buyable.</summary>
+        public TextMeshProUGUI ReasonLabel;
     }
 
     /// <summary>The single Night Market card template. Static builders; holds no state.</summary>
@@ -189,6 +206,34 @@ namespace DeNelle.Wallet
 
         /// <summary>The price row. REQUIRED, bottom-pinned, never traded away.</summary>
         public static float PriceBlockPx => BlockPx(FontPrice, 1);
+
+        // =====================================================================
+        //  ⭐ THE NOT-SELLABLE LINE GETS ITS OWN BLOCK — IT DOES NOT BORROW ONE.
+        // ---------------------------------------------------------------------
+        //  The price row's x bands (0.06..0.94 with no fiat minor, 0.06..0.62
+        //  with one) are MEASURED numbers with a defect behind each of them, and
+        //  the budget above is spent to the pixel. So a new required sentence
+        //  cannot be squeezed into either: it gets a block of its own, the card's
+        //  DERIVED height grows by exactly that block plus its gap, and the shelf
+        //  -- which scrolls -- absorbs the taller row. That is the same ruling
+        //  FIX 2 settled: author the number, let the column scroll; never shrink
+        //  the type and never clip the string.
+        //
+        //  It is RESERVED BEFORE the optional blocks, like the price lane, because
+        //  it is REQUIRED whenever it is present: a card may drop its value caption
+        //  to make room for the reason, but it may never drop the reason. A player
+        //  looking at a real price with no buy control must be told why in WORDS --
+        //  the owner is red/green colourblind, so a dimmed control explains nothing.
+        // =====================================================================
+
+        /// <summary>Lines budgeted for the not-sellable state line. Two at <c>FontCaption</c>.</summary>
+        public const int ReasonBlockLines = 2;
+
+        /// <summary>The not-sellable state block. Present only on a card that carries a reason.</summary>
+        public static float ReasonBlockPx => BlockPx(FontCaption, ReasonBlockLines);
+
+        /// <summary>What a reason costs a card in total: its block plus the gap above it.</summary>
+        public static float ReasonExtraPx => ReasonBlockPx + BlockGapPx;
 
         /// <summary>Card heights per variant, reference px — DERIVED from the blocks above.</summary>
         public static float FeaturedHeightPx =>
@@ -326,10 +371,21 @@ namespace DeNelle.Wallet
             v == StorePackCardVariant.Featured ? FeaturedArtPx :
             v == StorePackCardVariant.Compact  ? CompactArtPx  : StandardArtPx;
 
-        /// <summary>Card height for a variant, reference px.</summary>
+        /// <summary>Card height for a variant, reference px. Buyable card — no reason line.</summary>
         public static float CardHeight(StorePackCardVariant v) =>
             v == StorePackCardVariant.Featured ? FeaturedHeightPx :
             v == StorePackCardVariant.Compact  ? CompactHeightPx  : StandardHeightPx;
+
+        /// <summary>
+        /// Card height for a variant that may carry the not-sellable state line.
+        /// <para>⛔ THE ROW MUST ASK THIS, NOT <see cref="CardHeight(StorePackCardVariant)"/>. The
+        /// shelf strip authors ONE height for the whole row and force-expands its children to it, so
+        /// a row sized for buyable cards that then holds a card with a reason block would compress
+        /// the taller card -- the same two-places-hold-one-measurement defect that put a 168-unit
+        /// card in a 100-unit row (see PackStore.BuildCardRow).</para>
+        /// </summary>
+        public static float CardHeight(StorePackCardVariant v, bool hasNotSellableReason) =>
+            CardHeight(v) + (hasNotSellableReason ? ReasonExtraPx : 0f);
 
         /// <summary>
         /// Build one card under <paramref name="parent"/>.
@@ -348,7 +404,9 @@ namespace DeNelle.Wallet
 
             Color light  = NightMarketPalette.For(model.Band);
             Color accent = NightMarketPalette.ParseTint(model.OrbTint, light);
-            float cardH  = CardHeight(variant);
+            string reason = Ascii(model.NotSellableReason);
+            bool hasReason = !string.IsNullOrEmpty(reason);
+            float cardH  = CardHeight(variant, hasReason);
             float artH   = ArtWellHeight(variant);
 
             // ── ROOT ─────────────────────────────────────────────────────────
@@ -407,7 +465,11 @@ namespace DeNelle.Wallet
             // criterion, not a preference.
             float y = artH + TextGapPx;
             float priceLaneTop = cardH - (BottomPadPx + PriceBlockPx);
-            float budget = priceLaneTop - PriceGapPx - y;
+            // ⛔ THE REASON LINE IS RESERVED WITH THE PRICE LANE, NOT SPENT WITH THE OPTIONALS. It
+            // is REQUIRED whenever it exists: the caller only sets it on a card whose buy control is
+            // dead, and a dead control with no words is exactly the state the owner cannot read.
+            float reasonTop = priceLaneTop - PriceGapPx - ReasonBlockPx;
+            float budget = (hasReason ? reasonTop - BlockGapPx : priceLaneTop - PriceGapPx) - y;
 
             // ── NAME — REQUIRED ──────────────────────────────────────────────
             // It takes its full block, or every remaining pixel if the budget is somehow tighter
@@ -472,6 +534,25 @@ namespace DeNelle.Wallet
                             budget.ToString("0") + "px left, block needs " + CaptionBlockPx.ToString("0") +
                             "px. Required price and state are unaffected.");
                 }
+            }
+
+            // ── NOT-SELLABLE STATE LINE — REQUIRED WHEN PRESENT ──────────────
+            // Its own block, directly above the price gap, in the text lane (0.06..0.94) and NEVER
+            // in the price row's measured x bands. The price still prints beneath it in full: the
+            // whole point of the public price list is that the shelf now HAS digits where it used to
+            // read "Price unavailable", so hiding them here would undo the change that paid for it.
+            if (hasReason)
+            {
+                handle.ReasonLabel = TopAnchoredText(card, reason, FontCaption, ElarionUi.Parchment,
+                    FontStyles.Normal, TextAlignmentOptions.TopLeft, reasonTop, ReasonBlockPx);
+                if (handle.ReasonLabel != null)
+                {
+                    handle.ReasonLabel.textWrappingMode = TextWrappingModes.Normal;
+                    ElarionUiKit.FitBlock(handle.ReasonLabel, ElarionUi.FontFloorMobile, FontCaption);
+                }
+                DeNelle.Core.Diagnostics.FlowTrace.Step("Store",
+                    "StorePackCard '" + (model.Sku ?? "?") + "': NOT sellable - price is still drawn, " +
+                    "the state line reads \"" + reason + "\", and the card carries no buy control.");
             }
 
             // ── PRICE ROW, pinned to the BOTTOM ──────────────────────────────
