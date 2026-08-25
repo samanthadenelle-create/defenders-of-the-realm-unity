@@ -268,6 +268,52 @@ verified. **Change one, revisit the other in the same change.**
 
 ---
 
+## 7. PAID VALUE OVERFLOWS THE CAP. EARNED VALUE DOES NOT.
+
+> *"I think if they're doing a purchase, we should not penalize them and we should allow that
+> overflow with the caveat that none of their harvesters or rewards are gonna add to it until they've
+> brought that under the threshold... if they're purchasing it, I don't want to hold onto the extra
+> value and have to do more work. Let us do an override and allow it to overflow."*
+> - owner, 2026-08-25
+
+**The case:** a player buys a pack while a resource is at capacity. Under the earlier ruling the bank
+paid what fit and discarded the rest, which is right for loot and wrong for something bought.
+
+### The rule, split by SOURCE of the credit
+
+| Source | Behaviour at cap |
+|---|---|
+| **PAID** - a purchase | **OVERFLOWS.** Credit the full purchased amount, above the cap. |
+| **EARNED** - harvesters, rewards, raid loot, quest payouts | Adds **NOTHING** while that resource sits above its cap. Resumes when the player spends back under. |
+
+**No overflow wallet, no escrow, no held value anywhere.** The owner's stated reason is that she does
+not want value parked somewhere that then needs more machinery to manage. The overflow lives in the
+ordinary balance, simply above the cap. An overflow store would be a second wallet with its own caps,
+its own UI and its own bugs, bought to avoid a sentence.
+
+### What this SUPERSEDES, and what it does not
+
+It **narrows** `OWNER_RULINGS_OWED_2.md` ruling 5 (2026-08-24), which is a dated ledger and is NOT
+rewritten - read it there, then read this. That ruling said a capped resource "pays what fits,
+discards the overflow, and discloses exactly what was collected." **That still governs EARNED income
+in full.** It no longer governs a PURCHASE.
+
+**Crystals are unaffected either way** - they are UNCAPPED and always pay in full
+(`TownBankCapacity.cs:238-242`, `:478-482`; pinned by `[no-crystal-cap]`). Do not implement a
+crystal cap by implication.
+
+**Never hardcode a resource-name list.** The capped test is `TownBankCapacity.IsCapped()`. A "stone"
+written into a rule goes stale the day WO-1163 lands - that is why ruling 5 was recorded structurally.
+
+### How to apply
+
+Ask: *did the player PAY for this credit?* If yes, it lands in full. If no, it lands only up to the
+cap, and above the cap it lands not at all. The player must be TOLD, in words, when they are above
+capacity and earning nothing into that resource - a silent faucet that stopped is the
+"I did the raid and got nothing" complaint wearing a new face. Never signal it by colour alone.
+
+---
+
 ## Where these came from
 
 Ten rulings on 2026-08-24 (`OWNER_RULINGS_OWED.md`). Seven answered a ticket. **Three answered a

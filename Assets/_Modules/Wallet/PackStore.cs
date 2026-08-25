@@ -58,6 +58,12 @@ using DeNelle.Core.Diagnostics;
 using DeNelle.Core.Platform;      // CurrencySkinResolver.WalletConnectionChanged - the connect seam
 using DeNelle.Core.Promo;
 using DeNelle.Core.Web3;
+// WO-1188 - the confirmation screen reports what ARRIVED, so it reads the ONE authoritative
+// wallet total (TownBankCapacity.CurrentOf) before and after the grant and prints the DELTA.
+// Aliased rather than a bare `using DeNelle.Core.Economy;` so this file cannot pick up a second
+// meaning for any of its existing type names.
+using Bank = DeNelle.Core.Economy.TownBankCapacity;
+using BankRes = DeNelle.Core.Economy.BankResource;
 
 namespace DeNelle.Wallet
 {
@@ -2201,6 +2207,20 @@ namespace DeNelle.Wallet
                             "Payment verified, but delivery is pending. Reopen the store to retry.");
                     }
 
+                    // WO-1188 - REOPENING THE STORE ACTUALLY RESUMES. The give-up copy promises that
+                    // reopening "picks it up from here", so this path owes the same polling loop the
+                    // post-payment path runs, not one ask and another "come back later".
+                    // ⛔ Still no wallet call and no transfer: the loop only re-reads the SAME stored
+                    // signature this probe just returned.
+                    if (recovered.State == EntitlementVerificationState.Pending &&
+                        !string.IsNullOrEmpty(recovered.TransactionSignature))
+                    {
+                        var resumed = PaymentResult.Success(pack.Sku, currency,
+                            pack.AmountFor(currency), recovered.TransactionSignature);
+                        if (await AwaitGrantConfirmationAsync(pack, currency, resumed)) return resumed;
+                        return Indeterminate(resumed, _commerceDetail);
+                    }
+
                     string recoveryMessage = recovered.State == EntitlementVerificationState.Pending
                         ? "Payment found; waiting for final verification. No second charge was made."
                         : "The pending payment needs support review. No second charge was made.";
@@ -2295,31 +2315,12 @@ namespace DeNelle.Wallet
                     // Chain confirmation alone is not entitlement authority. Persist first so a
                     // crash cannot strand the charge, then require independent backend proof.
                     SetCommerceState(CommerceState.Submitted, $"Transaction {Shorten(result.TxSignature)}.");
-                    SetCommerceState(CommerceState.Verifying,
-                        $"Transaction {Shorten(result.TxSignature)}. Do not pay again.");
-                    var verified = await PurchaseEntitlementVerifier.VerifyPendingAsync(pack, currency, _wallet);
-                    if (verified.State == EntitlementVerificationState.Fulfilled)
-                    {
-                        if (!await RestoreFulfilledOwnershipAsync(pack, result))
-                            return Indeterminate(result,
-                                "Fulfilled payment found, but ownership restore is pending.");
-                    }
-                    else if (verified.State == EntitlementVerificationState.Verified)
-                    {
-                        if (!await CompleteVerifiedPurchaseAsync(pack, result))
-                            return Indeterminate(result,
-                                "Payment verified, but delivery is pending. Reopen the store to retry.");
-                    }
-                    else
-                    {
-                        string pending = verified.State == EntitlementVerificationState.Pending
-                            ? "Payment submitted; verification is pending. Reopen the store to resume - do not pay again."
-                            : "Payment recorded but could not be verified. Contact support with the transaction receipt.";
-                        FlowTrace.Warn("Store", $"Purchase '{pack.Sku}' tx {Shorten(result.TxSignature)}: {pending}");
-                        SetCommerceState(CommerceState.Delayed,
-                            $"Transaction {Shorten(result.TxSignature)}. {pending}");
-                        return Indeterminate(result, pending);
-                    }
+                    // ⛔ WO-1188 - THE MONEY HAS MOVED, SO THE SCREEN STAYS. Everything below used to
+                    // be ONE /verify call: if the first answer was not final the player was handed
+                    // "reopen the store to resume" - a chore - at the exact moment they had just
+                    // spent real money. The polling primitive existed and nothing polled with it.
+                    if (!await AwaitGrantConfirmationAsync(pack, currency, result))
+                        return Indeterminate(result, _commerceDetail);
                 }
                 else
                 {
@@ -2359,6 +2360,330 @@ namespace DeNelle.Wallet
             return paid;
         }
 
+        // =====================================================================
+        //  WO-1188 - THE PROCESSING SCREEN THAT STAYS UNTIL THE GRANT IS CONFIRMED
+        // ---------------------------------------------------------------------
+        //  Owner, 2026-08-25: "after the purchase is complete ... leave it on a processing screen
+        //  until we keep calling back calling back calling back and it confirms that the redemption
+        //  happened and then ... tell them X was received, and deposited, and close out gracefully."
+        //
+        //  ⛔ THE ASK IS RE-ASKED, THE PLAYER IS NEVER RE-CHARGED. This loop calls exactly one
+        //  method - VerifyPendingAsync - which reads the ALREADY-PERSISTED signature + quote id
+        //  written by Remember() before the loop started. There is no wallet call, no transfer, and
+        //  no quote refresh anywhere below. One payment, one transfer.
+        // =====================================================================
+
+        /// <summary>
+        /// Waits between polls. Fast early (a healthy /verify resolves on the first or second ask),
+        /// slowing out so a server that is genuinely still writing is not hammered.
+        /// <para>Seven attempts spaced 2/4/8/15/30/30 = <b>89 seconds</b> of foreground waiting, and
+        /// that ceiling is not a taste call: the whole purchase runs inside
+        /// <see cref="DeNelle.Core.UI.WorldHold"/> (WO-1149), whose stuck-hold watchdog force-releases
+        /// the freeze at <c>StuckHoldSeconds = 180</c>. A loop allowed to run longer than that would
+        /// unfreeze the world underneath its own modal. 89s leaves headroom for the quote + the
+        /// human wallet approval that already happened before the first poll.</para>
+        /// </summary>
+        private static readonly float[] GrantPollBackoffSeconds = { 2f, 4f, 8f, 15f, 30f, 30f };
+
+        /// <summary>Total asks, including the immediate one. = backoff steps + 1.</summary>
+        private const int GrantPollAttempts = 7;
+
+        /// <summary>
+        /// Polls the durable authority until the entitlement is granted locally, the server rejects,
+        /// or the ceiling is reached. Returns true only when the player's account actually holds the
+        /// pack; every false path has already painted an honest, non-failure screen.
+        ///
+        /// <para>BACKGROUNDED / LOST FOCUS: <c>runInBackground</c> is 0 in ProjectSettings, so Unity
+        /// stops the player loop when the app leaves the foreground. This loop is a PlayerLoop
+        /// await, so it SUSPENDS there - no timer ticks, no request fires, and no attempt is spent.
+        /// On return to the foreground it resumes on the same attempt index. If the OS kills the app
+        /// outright, the pending marker written by <see cref="PurchaseEntitlementVerifier.Remember"/>
+        /// survives, so the next store open reopens onto the SAME signature and resumes verification
+        /// instead of inviting a second charge. In neither case is anything re-submitted.</para>
+        /// </summary>
+        private async UniTask<bool> AwaitGrantConfirmationAsync(
+            PackDef pack, CurrencyKind currency, PaymentResult payment)
+        {
+            using var _ = FlowTrace.Enter("Store", $"AwaitGrantConfirmation '{pack?.Sku ?? "<null>"}'");
+            string shortSig = Shorten(payment.TxSignature);
+            string reference = string.Empty;
+            string stage = string.Empty;
+            bool settledButUnrecorded = false;
+
+            for (int attempt = 1; ; attempt++)
+            {
+                // Repainting Verifying on EVERY attempt also resets _commerceStateSince, which is
+                // what keeps Update()'s 60s "confirmation delayed" nudge from firing over the top of
+                // a loop that is still actively asking. The nudge is for a stalled flow, not this one.
+                SetCommerceState(CommerceState.Verifying,
+                    BuildProcessingDetail(shortSig, attempt, settledButUnrecorded, reference));
+
+                var verified = await PurchaseEntitlementVerifier.VerifyPendingAsync(pack, currency, _wallet);
+
+                if (verified.State == EntitlementVerificationState.Fulfilled)
+                {
+                    if (await RestoreFulfilledOwnershipAsync(pack, payment)) return true;
+                }
+                else if (verified.State == EntitlementVerificationState.Verified)
+                {
+                    if (await CompleteVerifiedPurchaseAsync(pack, payment)) return true;
+                }
+                else if (verified.State == EntitlementVerificationState.Rejected)
+                {
+                    // A 4xx from /verify is the server saying this signature is not a payment for
+                    // this SKU/wallet/network. That is the ONE outcome the loop cannot resolve, so
+                    // it stops asking. Still never the word "failed" - money may have moved.
+                    const string rejected =
+                        "Payment recorded but could not be verified. Contact support with the transaction receipt.";
+                    FlowTrace.Warn("Store", $"Purchase '{pack.Sku}' tx {payment.TxSignature}: {rejected}");
+                    SetCommerceState(CommerceState.Delayed, $"Transaction {shortSig}. {rejected}");
+                    return false;
+                }
+
+                // Pending, Unavailable, or a local delivery step that has not taken yet - all
+                // retryable. record_failed (503) lands here as Pending and is EXACTLY the case this
+                // loop was built for: the transfer settled, the server's own write did not, and a
+                // later ask resolves it with no player action at all.
+                if (!string.IsNullOrEmpty(verified.Reference))
+                {
+                    reference = verified.Reference;
+                    stage = verified.Stage ?? string.Empty;
+                    settledButUnrecorded = true;
+                }
+
+                if (attempt >= GrantPollAttempts)
+                {
+                    string giveUp = BuildUnfinishedDetail(shortSig, reference);
+                    FlowTrace.Warn("Store",
+                        $"Purchase '{pack.Sku}' tx {payment.TxSignature}: grant NOT confirmed after " +
+                        $"{GrantPollAttempts} polls (settledButUnrecorded={settledButUnrecorded} " +
+                        $"stage={(string.IsNullOrEmpty(stage) ? "-" : stage)} " +
+                        $"ref={(string.IsNullOrEmpty(reference) ? "-" : reference)}). " +
+                        "Payment stands recorded; the pending marker is deliberately NOT cleared.");
+                    SetCommerceState(CommerceState.Delayed, giveUp);
+                    return false;
+                }
+
+                float wait = GrantPollBackoffSeconds[
+                    Mathf.Min(attempt - 1, GrantPollBackoffSeconds.Length - 1)];
+                // ignoreTimeScale: the WorldHold freeze has Time.timeScale at 0 for the whole
+                // purchase, so a scaled delay here would never elapse and the loop would hang.
+                await UniTask.Delay(TimeSpan.FromSeconds(wait), ignoreTimeScale: true);
+            }
+        }
+
+        /// <summary>The words on the processing screen while the loop is still asking. ⛔ It never
+        /// tells the player to reopen the store - that instruction is what this ticket removed.</summary>
+        private static string BuildProcessingDetail(string shortSig, int attempt,
+                                                    bool settledButUnrecorded, string reference)
+        {
+            var sb = new StringBuilder();
+            sb.Append("Transaction ").Append(shortSig).Append(". Payment sent - confirming your delivery (check ")
+              .Append(attempt).Append(" of ").Append(GrantPollAttempts).Append("). ");
+            if (settledButUnrecorded)
+            {
+                sb.Append("Your payment has settled and the server is still recording it; ")
+                  .Append("this retries on its own");
+                if (!string.IsNullOrEmpty(reference)) sb.Append(" (reference ").Append(reference).Append(')');
+                sb.Append(". ");
+            }
+            sb.Append("Stay here - nothing further will be charged.");
+            return sb.ToString();
+        }
+
+        /// <summary>The bounded, honest give-up. ⛔ The money moved, so this is NOT a failure screen:
+        /// no "failed", no bare spinner, and the support reference is surfaced when one exists.</summary>
+        private static string BuildUnfinishedDetail(string shortSig, string reference)
+        {
+            var sb = new StringBuilder();
+            sb.Append("Transaction ").Append(shortSig)
+              .Append(". Your payment is recorded and nothing further will be charged. ")
+              .Append("Delivery has not finished yet - it completes on its own, and reopening the store ")
+              .Append("picks it up from here.");
+            if (!string.IsNullOrEmpty(reference))
+                sb.Append(" Support reference: ").Append(reference).Append('.');
+            return sb.ToString();
+        }
+
+        // =====================================================================
+        //  WO-1188 - MEASURED DELIVERY: report what ARRIVED, never what was asked for
+        // ---------------------------------------------------------------------
+        //  ⛔ THE CONFIRMATION READS THE WALLET, NOT THE PACK DEFINITION. WO-978 is the ticket where
+        //  four economy callers logged the amount REQUESTED as though it were the amount CREDITED;
+        //  the one screen where the player is checking whether they got what they paid for is the
+        //  worst possible place to repeat that. Balances are snapshotted immediately BEFORE
+        //  ApplyPackContents and read again after, and the DELTA is what gets printed. The pack's
+        //  authored numbers are used for one purpose only: deciding whether the delta looks short.
+        //
+        //  ⭐ OWNER RULING 2026-08-25: a PURCHASED grant OVERFLOWS the storage cap - the player paid
+        //  for it, they get all of it, and it lives in the ordinary balance above the cap (no escrow,
+        //  no held value). TownBankCapacity.IsClampable already exempts PurchasedOrPromised, so this
+        //  screen has NO "storage full, you only got some" copy: a purchase that under-delivers is an
+        //  ANOMALY to be reported and traced, not a storage disclosure. What the screen DOES say, in
+        //  words, is when a resource has landed ABOVE its cap - because earned income stops adding to
+        //  that resource until the player spends back under, and they are owed that plainly.
+        // =====================================================================
+
+        private readonly struct EconomySnapshot
+        {
+            public readonly bool Valid;
+            private readonly int _wood, _iron, _food, _crystals, _coins;
+
+            private EconomySnapshot(int wood, int iron, int food, int crystals, int coins)
+            {
+                _wood = wood; _iron = iron; _food = food; _crystals = crystals; _coins = coins;
+                Valid = true;
+            }
+
+            /// <summary>Reads the ONE authoritative wallet total per resource (TownBankCapacity.CurrentOf
+            /// -> GameState, WO-842). Nothing here derives or predicts a balance.</summary>
+            public static EconomySnapshot Capture() => new EconomySnapshot(
+                Bank.CurrentOf(BankRes.Wood), Bank.CurrentOf(BankRes.Iron), Bank.CurrentOf(BankRes.Food),
+                Bank.CurrentOf(BankRes.Crystals), Bank.CurrentOf(BankRes.Coins));
+
+            public int Of(BankRes r)
+            {
+                switch (r)
+                {
+                    case BankRes.Wood: return _wood;
+                    case BankRes.Iron: return _iron;
+                    case BankRes.Food: return _food;
+                    case BankRes.Crystals: return _crystals;
+                    case BankRes.Coins: return _coins;
+                }
+                return 0;
+            }
+        }
+
+        private static readonly BankRes[] ReceiptResources =
+        {
+            BankRes.Wood, BankRes.Iron, BankRes.Food, BankRes.Crystals, BankRes.Coins,
+        };
+
+        private static int AdvertisedAmount(PackDef pack, BankRes r)
+        {
+            var econ = pack != null && pack.Contents != null ? pack.Contents.Economy : null;
+            if (econ == null) return 0;
+            switch (r)
+            {
+                case BankRes.Wood: return Mathf.Max(0, econ.Wood);
+                case BankRes.Iron: return Mathf.Max(0, econ.Iron);
+                case BankRes.Food: return Mathf.Max(0, econ.Food);
+                case BankRes.Crystals: return Mathf.Max(0, econ.Crystals);
+                case BankRes.Coins: return Mathf.Max(0, econ.Coins);
+            }
+            return 0;
+        }
+
+        /// <summary>
+        /// Builds the receipt body from MEASURED balance deltas plus MEASURED ownership.
+        /// <para>Every number printed here was read out of the wallet after the grant. The only thing
+        /// taken from the pack definition is the comparison figure used to notice an under-delivery,
+        /// and the names of items this screen explicitly says it did NOT count.</para>
+        /// </summary>
+        private string DescribeMeasuredDelivery(PackDef pack, EconomySnapshot before, string txSignature)
+        {
+            var lines = new List<string>();
+            if (!before.Valid)
+            {
+                // The replay path: the grant landed in an earlier run, so there is no delta to read
+                // and the screen must not invent one from the pack card.
+                lines.Add("This purchase was already delivered to your account.");
+            }
+            else
+            {
+                var after = EconomySnapshot.Capture();
+                var deposited = new StringBuilder();
+                var notes = new List<string>();
+
+                foreach (var r in ReceiptResources)
+                {
+                    int advertised = AdvertisedAmount(pack, r);
+                    int credited = Mathf.Max(0, after.Of(r) - before.Of(r));
+                    if (advertised <= 0 && credited <= 0) continue;
+
+                    if (credited > 0)
+                    {
+                        if (deposited.Length > 0) deposited.Append(", ");
+                        deposited.Append(credited.ToString("N0")).Append(' ')
+                                 .Append(Bank.DisplayName(r).ToLowerInvariant());
+                    }
+
+                    if (credited < advertised)
+                    {
+                        // ⛔ NOT a storage message. A purchased grant is never clamped, so a short
+                        // delta means the grant seam itself under-delivered - loud, and said plainly.
+                        FlowTrace.Fail("Store",
+                            $"MEASURED SHORTFALL on paid pack '{pack?.Sku}': {Bank.WordOf(r)} credited " +
+                            $"{credited} of {advertised} (before={before.Of(r)} after={after.Of(r)}). " +
+                            "A purchased grant is exempt from the cap, so this is a grant-path defect, " +
+                            "not storage. tx " + txSignature);
+                        notes.Add($"{Bank.DisplayName(r)}: {credited:N0} of {advertised:N0} arrived so far. " +
+                                  "The rest stays recorded against this payment - contact support with the " +
+                                  "transaction id below if it does not appear.");
+                    }
+                    else if (Bank.IsCapped(r))
+                    {
+                        // Owner ruling 2026-08-25: a purchase may legitimately push a resource ABOVE
+                        // its cap. Say so in WORDS - the consequence (earned income stops adding)
+                        // belongs to the player, not to a colour or an icon.
+                        int max = Bank.MaxOf(r);
+                        if (after.Of(r) > max)
+                            notes.Add($"{Bank.DisplayName(r)} is above storage ({after.Of(r):N0} of " +
+                                      $"{max:N0}). All of it is yours to spend; harvesting and rewards " +
+                                      $"will not add more {Bank.DisplayName(r).ToLowerInvariant()} until " +
+                                      "you are back under.");
+                    }
+                }
+
+                if (deposited.Length > 0) lines.Add("Deposited: " + deposited + ".");
+                lines.AddRange(notes);
+            }
+
+            // Cosmetics are MEASURED too - the wardrobe is asked whether it owns the sku, and one
+            // that did not land is traced and simply not claimed.
+            if (pack != null && pack.Contents != null && pack.Contents.Cosmetics != null)
+            {
+                var unlocked = new StringBuilder();
+                foreach (string sku in pack.Contents.Cosmetics)
+                {
+                    if (string.IsNullOrWhiteSpace(sku)) continue;
+                    if (_vm != null && _vm.IsOwned(sku))
+                    {
+                        if (unlocked.Length > 0) unlocked.Append(", ");
+                        unlocked.Append(sku);
+                    }
+                    else
+                    {
+                        FlowTrace.Warn("Store",
+                            $"receipt for '{pack.Sku}': cosmetic '{sku}' is NOT owned after the grant - " +
+                            "not claimed on the confirmation. tx " + txSignature);
+                    }
+                }
+                if (unlocked.Length > 0) lines.Add("Unlocked: " + unlocked + ".");
+            }
+
+            // Convenience tokens have no read seam this View may use, so the screen states exactly
+            // that rather than asserting a delivery it did not measure.
+            if (pack != null && pack.Contents != null && pack.Contents.Convenience != null)
+            {
+                var items = new StringBuilder();
+                foreach (var item in pack.Contents.Convenience)
+                {
+                    if (item == null || item.Count <= 0 || string.IsNullOrWhiteSpace(item.Kind)) continue;
+                    if (items.Length > 0) items.Append(", ");
+                    items.Append(item.Count).Append("x ")
+                         .Append(item.Kind.Replace('-', ' ').Replace('_', ' '));
+                }
+                if (items.Length > 0)
+                    lines.Add("Items recorded with this entitlement (not counted on this screen): "
+                              + items + ".");
+            }
+
+            if (lines.Count == 0) lines.Add("Ownership recorded on your account.");
+            return string.Join("\n", lines);
+        }
+
         private async UniTask<bool> RestoreFulfilledOwnershipAsync(PackDef pack, PaymentResult payment)
         {
             if (pack == null || string.IsNullOrEmpty(payment.TxSignature)) return false;
@@ -2386,7 +2711,9 @@ namespace DeNelle.Wallet
                     bool durablyFulfilled = await PurchaseEntitlementVerifier.MarkFulfilledAsync(
                         pack.Sku, payment.TxSignature, _wallet);
                     if (!durablyFulfilled) return false;
-                    ShowFulfillmentReceipt(pack, payment);
+                    // Already granted in an earlier pass: there is no before/after to measure, and
+                    // an unmeasured receipt says so rather than reprinting the pack card.
+                    ShowFulfillmentReceipt(pack, payment, default(EconomySnapshot));
                     return true;
                 }
                 PurchaseGate.ReportGrantFailed(payment.TxSignature,
@@ -2396,6 +2723,10 @@ namespace DeNelle.Wallet
 
             SetCommerceState(CommerceState.Delivering,
                 $"Transaction {Shorten(payment.TxSignature)}.");
+            // ⛔ WO-1188 - THE BASELINE IS TAKEN ON THE LINE BEFORE THE GRANT, ON PURPOSE. It is the
+            // only moment at which "what this purchase credited" is measurable at all; read it any
+            // later and the confirmation is back to quoting the pack card.
+            var beforeGrant = EconomySnapshot.Capture();
             _vm.ApplyPackContents(pack);
             if (!_vm.IsOwned(pack.Sku))
             {
@@ -2413,7 +2744,7 @@ namespace DeNelle.Wallet
                     $"pack '{pack.Sku}' was locally owned but durable fulfillment did not acknowledge");
                 return false;
             }
-            ShowFulfillmentReceipt(pack, payment);
+            ShowFulfillmentReceipt(pack, payment, beforeGrant);
             PackPurchased?.Invoke(pack, payment);
             DeNelle.Core.Analytics.EventTracker.Track("purchase_completed", new
             {
@@ -2426,15 +2757,32 @@ namespace DeNelle.Wallet
             return true;
         }
 
-        private void ShowFulfillmentReceipt(PackDef pack, PaymentResult payment)
+        /// <summary>
+        /// The close-out. ⛔ <paramref name="before"/> is the wallet snapshot taken immediately
+        /// before the grant; the body is built from the MEASURED delta against it, never from
+        /// <c>DescribeGrantedContents(pack)</c> - which is the pack's advertised inventory and is now
+        /// used only by diagnostics. An invalid snapshot means "no delta exists to measure", and the
+        /// copy says that instead of guessing.
+        /// </summary>
+        private void ShowFulfillmentReceipt(PackDef pack, PaymentResult payment, EconomySnapshot before)
         {
-            string receipt = $"{pack.Name} received\n{DescribeGrantedContents(pack)}";
+            string receipt = $"{pack.Name} received\n" +
+                             DescribeMeasuredDelivery(pack, before, payment.TxSignature);
+            FlowTrace.Step("Store",
+                $"receipt for '{pack.Sku}' (MEASURED, not advertised): {receipt.Replace('\n', ' ')} " +
+                $"| pack card would have said: {DescribeGrantedContents(pack)}");
             SetCommerceState(CommerceState.Fulfilled,
                 $"{receipt}\nTransaction {Shorten(payment.TxSignature)}.");
             // Shared HUD feedback. Wallet cannot reference Village's world-space resource popup;
             // ApplyPackContents already raises the established resource change notifications.
+            // The measured receipt can run to several lines (a deposit line, an over-storage note,
+            // an items line), where the advertised one-liner never did. The card grows with the
+            // content instead of clipping the sentence that explains the money.
+            int lineCount = 1;
+            for (int i = 0; i < receipt.Length; i++) if (receipt[i] == '\n') lineCount++;
+            float cardHeight = Mathf.Clamp(72f + lineCount * 30f, 132f, 300f);
             ElarionUiKit.ShowToast(receipt, ElarionUiKit.ToastTone.Confirm,
-                lifeSeconds: 5f, cardWidth: 760f, cardHeight: 132f);
+                lifeSeconds: lineCount > 2 ? 8f : 5f, cardWidth: 760f, cardHeight: cardHeight);
         }
 
         /// <summary>
