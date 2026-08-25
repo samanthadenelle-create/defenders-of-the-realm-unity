@@ -229,3 +229,20 @@ with its reason updated. **Whichever is chosen, it is an owner ruling and must b
 ⚠ **This half is a DESIGN task before it is an implementation task**, and the owner has said the shape
 is open. It wants a spec + mockup (UI seat) covering the states above, then implementation. It should
 NOT be handed to an implementation seat as-is.
+
+---
+
+## OWNER RULING 2026-08-25 - ambient resource treatment
+
+Owner approved the CLI recommendation:
+
+1. Render three always-visible capped-resource lines for **Wood, Iron, and Stone**, using the ruled
+   icon plus `current of capacity` shape.
+2. Keep **Gold** and uncapped **Crystals** in the existing currency dock. Do not invent a capacity
+   for Crystals.
+3. Replace the vague `Collectors` control with the verb **`Harvest`**.
+4. Sequence the Stone-facing implementation behind WO-1163 so there is one resource identity and
+   one icon/data path, never a temporary second Stone concept.
+
+This resolves the open Gold/Crystals treatment and the resource-line set. Headed placement and
+greyscale verification remain implementation acceptance, not a new owner-design question.

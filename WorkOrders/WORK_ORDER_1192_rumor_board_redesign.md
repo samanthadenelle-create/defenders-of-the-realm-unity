@@ -132,3 +132,21 @@ redesign changes the list well, that question dissolves and no answer is needed.
 
 A design spec plus a mockup covering both orientations, with the constraints above satisfied, handed
 to the CLI seat for implementation. ⛔ No `.cs` edits from the UI seat.
+
+---
+
+## OWNER RULING 2026-08-25 - illustrations may land later
+
+Ship the orientation-specific redesign without blocking on quest illustrations. The UI map is:
+
+- portrait: narrow quest-list rail at left, optional illustration plate at upper right, and the
+  selected quest detail card across the lower region;
+- landscape: quest list at left, with selected quest detail and optional illustration sharing the
+  right region; do not preserve the current empty lower field.
+
+When illustration data or art is absent, the art region **collapses and the remaining authored
+content takes its space**. It must never render an empty parchment promise. Optional per-type or
+per-quest illustrations can be added later through quest data without another layout rewrite.
+
+WO-1201/1202's landed `QuestRewardLine` / `QuestRewardMath` structure is the reward-row authority.
+WO-1192 must reuse it and must not author a fixed reward-chip count or a second reward schema.
