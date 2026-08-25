@@ -209,3 +209,36 @@
 5. **Verification:** `git diff --check` clean; no `new GameObject("TapAdvance"` remains; viewport handler check true; braces **109/109**, NUL **0**. Option raycast winner and resolved rectangles remain for the lead's capture.
 
 **Batch note:** WO-1163 remains isolated in `D:\eoa-codex-1163`; none of its files were touched. The four UI tickets do not modify `LayoutOracle.cs`, `UICaptureLaunch.cs`, `ElarionUiKit.cs`, or any WorkOrder status line.
+
+## HANDOFF 2026-08-24 21:43 - WO-1163 implementation blocker found at source
+
+### WO-1163 - ruled ladder cannot be represented by the live tier contract
+
+1. **What landed:** **REFUSAL / NO CODE OR DATA EDIT YET.** The persistence-safe approach is confirmed: the player-facing Stone economy must continue using the existing `Resources.Food` wire slot because `GameState.Stone` already exists as a separate persisted legacy balance. Renaming or merging those fields would corrupt value rather than preserve it 1:1.
+2. **Where:** investigation in clean isolated lane `D:\eoa-codex-1163`, branch `codex/wo1163`, based on shared commit `54a8b5a4f`.
+3. **Not done:** no SKU rename, canonical mirror rewrite, generated fallback, tier repricing, troop repricing, schema bump, gate, commit or push. A partial catalog rename would make the mirror/pay path inconsistent and is therefore not a safe staging step.
+4. **Mismatch / could not find:** the ruled tier basket is **L1 wood + gold / L2 stone + gold / L3 iron + gold**, but `BuildingTierDef` (`Assets/_Modules/Core/State/BuildingTierCatalog.cs`) exposes only `CostWood`, `CostFood`, and `CostCrystal`. `BuildingUpgradeService`, `BuildingUpgradeVM`, and `ManageScreenVM` likewise build upgrade costs from only those three fields. There is no `costIron`, `costGold`/`costCoins`, or conversion table in the ticket. The current 26 tier rows contain Wood/Food/Crystal values, so adding Iron/Gold also requires a data-contract and consumer expansion plus exact ruled amounts. Deriving Gold by summing or splitting old materials would invent an exchange rate and materially rebalance the live economy. The ticket's statement that §6 is fully answered therefore does not make §2 representable.
+5. **Verification:** clean lane status confirmed; source searches found zero tier `costIron`, `costGold`, or `costCoins` fields/usages; live DTO and all three cost consumers inspected. No Unity gate was run.
+
+**Required send-back ruling/spec pass:** provide either (a) exact Wood/Stone/Iron/Gold amounts for every reachable tier, together with authorization to add `costIron` + `costCoins` to the tier DTO/three consumers, or (b) a deterministic conversion rule from each existing row's Wood/Food/Crystal numbers into the new depth-resource + Gold basket. The Food-wire-slot alias, frozen building ids, `Stoneyard` spelling, and stone SKU-id rename are already clear and need no further ruling.
+
+## HANDOFF 2026-08-25 - Batch 8 intake findings returned to CLI lead
+
+### Fresh-addition triage - do not reassign until reconciled
+
+1. **WO-1138 mismatch:** `BATCH_STATE.md` offers WO-1138 as new implementation work, but `WorkOrders/WORK_ORDER_1138_hollow_pass_ratchet.md` is already `FIXED — AWAITING OWNER FELT-TEST TO CLOSE` and says the control-flow walk, known-site control, 27-site triage, and green gate already landed. **CLI action:** reconcile the batch row against the canonical ticket and current source; return only a specifically named residual if one exists.
+2. **WO-1137 mismatch:** `BATCH_STATE.md` offers WO-1137 as new implementation work, but `WorkOrders/WORK_ORDER_1137_fallback_catalog.md` is already `FIXED 2026-08-23 (84b9b987b) — AWAITING OWNER CLOSE` and says the generated 28-row fallback plus freshness gate landed. **CLI action:** remove/reconcile the stale assignment unless a current-tree regression is cited.
+3. **`usdEffective` ownership collision:** the new row owns `api/purchases/quote.js`, which is already modified in the shared worktree; `PurchaseQuoteService.cs` and `PackStore.cs` are also dirty on the same price-display path. Starting from this seat would risk mixing an unattributed active diff into the new server-field change. **CLI action:** identify the current owner and either finish/return that work or provide a clean, explicit-path handoff.
+4. **Spaced `X OK` ownership collision:** the new row owns `Assets/Editor/Regression/RegressionMarkerRegression.cs`, already modified in the shared worktree. **CLI action:** attribute and settle that diff before reassignment; include the exact intended spaced-marker grammar so the previously measured 24 prose collisions are not rediscovered by trial and error.
+5. **Dungeon fleet proof blocked by stale player:** `tools/verify-dungeons.ps1` now parses and discovers eight player dungeons, but the only Windows player is `Builds/Windows/DefendersOfTheRealm.exe`, timestamped **2026-08-23 14:50**, predating the 2026-08-25 changes. The script's own contract says a stale player cannot prove today's composer output. The shared tree also contains active uncommitted WO-1191/purchase/regression work, so building it now would snapshot incomplete cross-seat changes. **CLI action:** settle the active dirty work, produce a fresh gated Windows build, then reassign the real eight-dungeon fleet run.
+
+**Dev-lane disposition:** no Batch 8 implementation was started and no outbound `BATCH_STATE.md` text was changed. These findings are returned here so the CLI lead can correct ownership/state and resolve prerequisites before asking this seat again.
+
+## FOLLOW-UP 2026-08-25 - 07:41 correction reviewed
+
+The new ownership-attribution section resolves findings 3 and 4 procedurally: the dirty purchase and regression files now have named lead-side owners, and the collision rule correctly holds those lanes until commit. Two assignment defects remain unresolved:
+
+1. **WO-1137 and WO-1138 are still listed under `AVAILABLE NOW`.** The correction explains file ownership but does not reconcile either row with its canonical ticket's existing `FIXED` status and landed implementation evidence. Calling WO-1137 “safe to assign immediately” does not answer the earlier stale-assignment finding. **CLI action still required:** remove both rows, or name a concrete residual absent from the current tree.
+2. **The dungeon lane is file-disjoint but not evidence-ready.** Calling it safe to assign does not cure the stale-player condition: the only Windows executable remains dated 2026-08-23, while the script explicitly rejects stale builds as proof of current composer output. **CLI action still required:** after the active dirty changes are committed/gated, provide a fresh Windows build (or authorize that build from a clean settled tree), then assign the eight-dungeon run.
+
+**Disposition remains refusal on these residuals.** No implementation or stale-build fleet run was started.

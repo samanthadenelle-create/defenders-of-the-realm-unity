@@ -137,7 +137,13 @@
 > fine as history. A copied number is the bug **even when it was right the day it was written** -
 > that is exactly how the retired 860-899 UI block kept re-seeding collisions from CLAUDE.md sec.2.
 
-> ## ⚠ RECONCILED 2026-08-25 (CLI): main line next free = **1194**.
+> ## ⚠ RECONCILED 2026-08-25 (CLI): main line next free = **1195**.
+> *(CLI seat minted **WO-1194** and bumped 1194 -> 1195 in this SAME edit. **1194** = HasHeadroom
+> returns false at OR above cap, so HarvestBoostService and the WO-900 collector tell still say
+> "Bank full" to a player who PAID to be above cap. Read-only, destroys nothing - but it is
+> WO-1191's defect arriving through a door the clamp does not reach.)*
+>
+> ### superseded: RECONCILED 2026-08-25 (CLI): main line next free = **1194**.
 > *(CLI seat minted **WO-1193** and bumped 1193 -> 1194 in this SAME edit. **1193** = the marker
 > uniqueness ratchet decides ownership by scanning source text, so it counts a MENTION as an
 > EMISSION. SECOND instance - HollowPassFixtures.cs already carries a named exclusion whose own

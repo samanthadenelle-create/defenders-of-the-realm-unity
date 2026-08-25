@@ -40,6 +40,162 @@
 
 ---
 
+## 🆕 BATCH 8 — READY TO HAND TO CODEX (written 2026-08-25 by the CLI lead)
+
+> ⚠ **LEAD ADMISSION, so the lane knows why this file went quiet:** the lead ran today's work through
+> in-process subagents and **did not update this file at all**. The batch board below was stale from
+> yesterday's Batch 1/4/7 until now. That was a process failure on the lead's side, not the lane's.
+> Everything in "ALREADY LANDED" was implemented and gated without passing through here.
+
+### ✅ ALREADY LANDED 2026-08-25 — do NOT re-implement any of these
+
+Gated `COMPILE_GATE_OK` + `REGRESSION_OK 276/276` + `UI_CAPTURE_OK 89` and committed in 9 commits.
+⛔ **If a ticket below appears in your queue, it is done. Read the tree, not an older list.**
+
+| WO | What landed |
+|---|---|
+| **1075 / 1077 / 1078** | FIXED and proven - zero touch findings on all three panels |
+| **1076** | Root cause was the CAPTURE HARNESS re-authoring the panel, not the panel. Harness override deleted |
+| **1186** | Palette chip row no longer covers the crystal readout |
+| **1187** | All 14 non-ASCII `.ps1` converted + a registered encoding oracle |
+| **814** | Gear max-level ability slots (empty rows, per-rarity, oracle bans a damage-multiplier field) |
+| **1179** | Wave side-partitioning, ONE shared concurrency budget |
+| **1188** | Post-purchase polling loop + measured receipt |
+| **1080** | Capture provenance stamp - captures now record the commit they measured |
+| **1189** | RumorBoard status band re-parented |
+| **1190** | Store browsing no longer authenticates |
+| **1193** | Marker ratchet rebuilt: emission vs mention, `HollowPassFixtures` exclusion DELETED |
+| **1191** | Over-cap framing (⚠ 2 reds outstanding, see HELD) |
+
+⭐ **Capture markers are now `UI_TOUCH_OK 89/89` and `UI_GEOMETRY_OK 89`.** ⛔ The `UI_TOUCH_FAIL x43`
+baseline quoted in WO-1060/1075/1076/1077/1078 is **DEAD**. Do not compute a drop against it.
+
+### ⛔ NOT FOR CODEX — routed to the UI seat as DESIGN work
+
+**WO-1192** (Rumor Board redesign) · **WO-1194** (bank-full second surface + the collector readout
+redesign) · **WO-1195** (a resource is named by its ICON, never a letter).
+All three are owner-ruled design + mockup first. ⛔ Do not implement from the ticket text; the spec is
+being written by the UI seat and the implementation lands after it.
+
+### ⛔⛔ READ BEFORE ASSIGNING ANYTHING — THE TREE IS DIRTY AND HERE IS WHOSE IT IS
+
+⭐ **Codex was right to refuse the table below until this existed.** The lead published an
+"available" list while the main worktree carried unattributed edits. Every uncommitted file is
+attributed here. HEAD is `acff13c5b`, **44 commits ahead of origin, nothing pushed.**
+
+⚠ **`batch_results_state.md` correctly ends with yesterday's WO-1163 blocker. There is no Batch 8
+return because Batch 8 never went out** — today's work ran through in-process subagents on the lead's
+side and bypassed this loop entirely. That is the lead's process failure, stated so the lane is not
+hunting for a handback that does not exist.
+
+**UNCOMMITTED, gated `COMPILE_GATE_OK` but the regression is RED on WO-1191 (see HELD):**
+
+| File | Lane | Status |
+|---|---|---|
+| `Assets/_Modules/Wallet/StorePackCard.cs` | WO-1190 card wiring | green, awaiting commit |
+| `Assets/_Modules/Wallet/PackStore.cs` | WO-1190 card wiring + stale-comment fix | green, awaiting commit |
+| `Assets/_Modules/Wallet/PurchaseQuoteService.cs` | WO-1190 browse-without-auth | green, awaiting commit |
+| `api/purchases/quote.js` | WO-1190 public LIST mode | green, backend tests 30/30 |
+| `Assets/Editor/Regression/RegressionMarkerRegression.cs` | WO-1193 ratchet rebuild | green, awaiting commit |
+| `Assets/Editor/Regression/CaptureProvenanceRegression.cs` | WO-1193 (bare literal restored as the acceptance test) | green |
+| `Assets/_Modules/Core/Economy/TownBankCapacity.cs` | WO-1191 over-cap framing | ⛔ lane is RED |
+| `Assets/_Modules/Core/UI/BankOverflowToastPresenter.cs` | WO-1191 over-cap framing | ⛔ lane is RED |
+| `Assets/Editor/Regression/WO1191OverCapIncomeRegression.cs` (+`.meta`, NEW) | WO-1191 oracle | ⛔ **owns the 2 reds** |
+| `Assets/Editor/Regression/DataRegression.cs` | registrations for WO-1191 + WO-1193 | shared, lead-owned |
+| `BATCH_STATE.md`, `BOARD.html`, `CLI_LANES_WO_NUMBERS.md`, `WorkOrders/1194`, `1195`, `QUEST_ILLUSTRATION_BRIEF.md` | lead bookkeeping | not code |
+
+**NOT the lead's, and deliberately untouched all day** — pre-existing dirt from another seat, still
+uncommitted: `ProjectSettings/ProjectSettings.asset`, `WorkOrders/WORK_ORDER_1081_*.md` (+78 lines),
+`batch_results_state.md`, `READY_FOR_REVIEW.md`, `Assets/_Modules/Village/Buildings/Generated.meta`.
+⛔ The lead will not commit these under its own message; whoever owns them should say so.
+
+### ⛔ THE COLLISION RULE FOR BATCH 8
+
+**Do not start lane 1 (`usdEffective`) or lane 2/5 (regression files) until the lead commits the
+above.** Specifically:
+
+- `api/purchases/quote.js` is **dirty right now** (WO-1190). Lane 1 edits the same file.
+- `RegressionMarkerRegression.cs` and `DataRegression.cs` are **dirty right now** (WO-1193). Lanes 2
+  and 5 edit that neighbourhood.
+- ⛔ `WO1191OverCapIncomeRegression.cs` is being repaired by the seat that wrote it. **Do not touch.**
+
+⭐ **Lanes 3 and 4 (WO-1137 fallback catalog, the first real `verify-dungeons.ps1` run) touch NONE of
+the dirty files and are safe to assign immediately.**
+
+The lead will re-post this section once the commit lands and the tree is clean.
+
+### ⛔⛔ BATCH 8 IS WITHDRAWN — CODEX REFUSED ALL FIVE ROWS AND WAS RIGHT ON EVERY ONE
+
+**Returned 2026-08-25 in `batch_results_state.md`. Nothing was started, nothing outbound was edited.**
+⭐ **That refusal is the second time in two days the dev lane has caught the lead handing out work that
+was already done.** Recorded here rather than quietly deleted, because the failure is the lesson.
+
+| Row | What Codex found | Verified by the lead |
+|---|---|---|
+| **WO-1138** | already `FIXED — AWAITING OWNER FELT-TEST TO CLOSE` | ✅ confirmed at source. ⭐ **And it is the ratchet that went RED on WO-1191's new oracle in this morning's own gate run** - it has been working all along, which is itself the proof it landed |
+| **WO-1137** | already `FIXED 2026-08-23 (84b9b987b)` | ✅ confirmed at source |
+| **`usdEffective`** | owns `api/purchases/quote.js`, dirty in the shared worktree | ✅ correct - the lead named the collision and then listed the row anyway |
+| **spaced `X OK`** | owns `RegressionMarkerRegression.cs`, dirty in the shared worktree | ✅ correct, same contradiction |
+| **`verify-dungeons.ps1` fleet run** | the only Windows player is `Builds/Windows/DefendersOfTheRealm.exe` stamped **2026-08-23 14:50**, predating today's changes; the script's own contract says a stale player cannot prove today's composer output. Building now would snapshot incomplete cross-seat work | ✅ correct, and the sharpest of the five |
+
+⛔ **ROOT CAUSE, stated so it is not repeated:** the lead carried WO-1137 and WO-1138 from the 08-21
+anchor's OWED list and **never opened either ticket this session**. That is `RULES.md` rule 11 -
+*never assert a fact you have not opened at source this session* - broken by the seat that quotes it.
+A number carried in the head is the same defect as a number copied into a doc.
+
+### ⛔ THERE IS NOTHING ASSIGNABLE RIGHT NOW, AND SAYING SO IS THE HONEST ANSWER
+
+With the two stale rows removed and three blocked on the dirty tree, **Batch 8 is empty.** ⛔ The lead
+will NOT pad it back out. The unblock is a sequence the lead owns, in this order:
+
+1. **WO-1191's two oracle reds are fixed** (in flight with the seat that wrote it) - it discards a
+   `TrySpend` bool, and two `!IsCapped` stand-downs land GREEN instead of emitting a Skip token.
+2. **The lead commits the attributed tree** by explicit path, on a green `REGRESSION_OK`.
+3. **A fresh gated Windows build** replaces the 08-23 exe.
+4. **THEN** the dungeon fleet run, `usdEffective`, and the spaced-marker grammar are reassignable -
+   the first two as a clean explicit-path handoff, the third with the intended grammar stated up front
+   so the previously measured **24 prose collisions** are not rediscovered by trial and error.
+
+⚠ **The spaced-marker grammar is owed by the LEAD, not discovered by the lane.** WO-1193's in-code
+note records that the naive pattern collides with ordinary prose ("CATALOG OK", "GATE OK",
+"LAYOUT OK") across six unrelated suites. Handing that out without a grammar would be asking the lane
+to re-derive a measurement that already exists.
+
+### ~~AVAILABLE NOW~~ — WITHDRAWN, see above
+
+| # | WO | Files | The pin you must not miss |
+|---|---|---|---|
+| 1 | **`usdEffective` server field** (no ticket yet - lead owes one) | `api/_lib/purchase-catalog.js`, `api/purchases/quote.js` | The server ALREADY computes `quotedUsd` (`purchase-catalog.js:~338-359`), prices the SKR off it, then ships only the undiscounted `usd`. Add `usdEffective`, nullable like `usdAnchor` so the pinned canary stays null. ⛔ MIRROR LAW: `USD_ANCHORS` + both `packs.json` copies + the quote test's key list move together or the build is red. ⚠ Contends with WO-1163 - one seat. |
+| 2 | **WO-1138** hollow-pass ratchet | `Assets/Editor/Regression/` | ⭐ THE LEVERAGED ONE. Its detection window is ~4 lines, so its coverage depends on code FORMATTING. Widen to a control-flow relationship, then re-run across every registered suite and triage what it surfaces. ⚠ WO-1193 just rebuilt the neighbouring marker ratchet - read it first, do not duplicate its literal-masking. |
+| 3 | **WO-1137** fallback catalog | catalog fallback rows | 3 of 28 rows covered, drifted four times. Would hand the player a silent 3-row different game. |
+| 4 | **`tools/verify-dungeons.ps1` has still never RUN** | `tools/` | It now PARSES (fixed 2026-08-25) - parsing is not running. Its first real execution is owed, and it needs a real fleet run, not a source read. |
+| 5 | **The spaced `X OK` marker family** (no ticket yet - lead owes one) | `Assets/Editor/Regression/RegressionMarkerRegression.cs` | ⛔ Read WO-1193's in-code note FIRST: the obvious pattern produced **24 collisions on this tree, every one ordinary prose** ("CATALOG OK", "GATE OK", "LAYOUT OK"). A naive regex here is worse than nothing. |
+
+### ⏸ HELD
+
+- **WO-1191** - 2 reds outstanding in its own new oracle (`[tryspend-honoured]` discards a `TrySpend`
+  bool; two `!IsCapped` stand-downs land GREEN instead of emitting a Skip token). Being fixed by the
+  seat that wrote it. ⛔ Do not touch `WO1191OverCapIncomeRegression.cs`.
+- **WO-1163** - still BLOCKED on the owner's tier-basket ruling (needs exact Wood/Stone/Iron/Gold
+  amounts, or a deterministic conversion rule). Unchanged since 2026-08-24.
+- **WO-1173** - blocks `MAINNET_SALES_ENABLED=true`. Still wants a spec pass before assignment.
+
+### ⚠ Owner rulings owed - these are the pipeline's binding constraint, not capacity
+
+1. **Quest illustration art** - 24 quests, and there is NO art field on a quest at all. Per-quest or
+   per-`type`? And what the plate shows when absent? (`QUEST_ILLUSTRATION_BRIEF.md`, repo root.)
+2. **`MAINNET_SALES_ENABLED` is UNTESTED** - `walletAllowed` passes the owner's wallet BEFORE the
+   switch is consulted, so her own purchases can never exercise it. Needs a LIST-mode quote from a
+   non-owner wallet.
+3. **The auth handshake** - fold into connect (recommended) vs leave as a second prompt.
+4. **Guests still cannot buy** - browsing is now free but the binding quote still demands a proven
+   wallet, contradicting `PurchaseGate.WalletRequiredAboveUsd = 4.99`. Closing it puts a guest
+   identity on the money path. ⛔ Not a lead call.
+5. **Gold and crystals in the new resource readout** - crystals are UNCAPPED so "current of capacity"
+   is meaningless for them; gold's placement is unstated.
+
+---
+
 ## ✅ ACTIVE — work on these now
 
 | Lane | Tickets | Files | Notes |
