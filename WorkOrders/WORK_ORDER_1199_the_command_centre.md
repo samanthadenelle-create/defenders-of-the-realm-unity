@@ -8,6 +8,8 @@ via code."* This AMENDS `FOUNDATIONAL_RULINGS.md` section 8; read that amendment
 
 ---
 
+⚠ **NAME COLLISION - this is NOT WO-1169.** `WO-1169 "The Command Center"` is a separate, live ticket (SPEC, Backend / money observability): the transaction log, the joined troubleshoot view, the admin stats/DB probes and promo-code authoring. **This ticket (1199) is Tooling / ops** - the programmatic ship-and-live-ops chain. Same name, one letter apart, different scopes; ⛔ check which one you pulled before starting.
+
 ## Why
 
 In one session the owner personally pasted a migration, ran a parity check, hunted an env var through
@@ -260,3 +262,128 @@ process it replaces, because nobody is watching.
 - ⛔ `tools/schema-parity.mjs` and `tools\\r2-ship.ps1` are READ-ONLY here - call them, do not edit
   them.
 - ⛔ Do not weaken any existing gate to make the chain pass.
+
+---
+
+## ⛔ REVISION REQUIRED - 2026-08-25 (CLI lead, after a full static audit of the returned script)
+
+**Returned artifact:** `tools/command-centre.ps1` (branch `codex/wo1199`, 255 lines), covering steps
+1-8. ⛔ **Not safe to harvest and commit as it stands.** Full source evidence: `tmp/wo1199_verify.md`.
+
+### The frame - and it is the point of this note
+
+The lane proved **only the refusal path**: a deliberate missing-credential run refused with a named
+step, a marker, a log, a reason and exit 20. That refusal fires in the first few statements
+(`command-centre.ps1:98-105`), so **no step ever executed and no run log was ever written.**
+
+⭐ **This is the repo's `prove-the-success-path-not-just-the-refusal` lesson, exactly.** A prior guard
+shipped that refused correctly, aborted every good run, and exited 0 the whole time.
+⛔ **Failure-only acceptance is not acceptance** - a refusal test exercises none of the machinery.
+
+⚠ No blame in this: the refusal work is correct as far as it goes, and the refusal messages are good
+ones. The gap is that they prove the first three statements of a 255-line chain.
+
+A static audit now finds the success path **cannot succeed as written**, and worse, that it **can
+print `COMMAND_CENTRE_OK` for a release that never went live.**
+
+### The four blockers - all must be fixed
+
+**B1 - `Invoke-Captured` discards everything after the first stderr line.**
+`$ErrorActionPreference = 'Stop'` (`command-centre.ps1:19`) is in scope inside the function, so in
+`& $Command *>&1 | ForEach-Object { $_.ToString() } | Tee-Object` (`:53`) the FIRST stderr record from
+a native command becomes a **terminating** error; the `catch` (`:55-58`) keeps only that one line and
+every later line, stdout included, is lost. **Probed, not theorised:** five stderr lines in, one line
+out; the identical body with `'Continue'` captured all nine. ⛔ Affects every call site that shells a
+binary - `:143` node, `:151` vercel inspect, `:185` vercel deploy, `:218` vercel promote, `:249`
+vercel promote (rollback).
+
+**B2 - the Vercel CLI writes ALL human output to stderr.** Confirmed at source in the installed
+v56.4.0 bundle: `var output = new Output(process.stderr, ...)`
+(`dist/chunks/chunk-OX7KI3LF.js:4674`), and on a non-TTY the spinner degrades to a plain stderr line
+(`:4560-4566`). Only machine payloads reach stdout. `vercel inspect` fires
+`spinner('Fetching deployment "..."')` BEFORE the JSON (`dist/commands-bulk.js:40584`).
+⭐ **This is what makes B1 fatal rather than cosmetic: a fully credentialed, entirely correct run dies
+at step 4 with `INVALID_INSPECT_JSON`.**
+
+**B3 - ⛔⛔ THE DANGEROUS ONE. `vercel promote <preview> --yes` REBUILDS; it does not ship the artifact
+that was inspected and byte-proven.** A preview has `target !== 'production'`, so `--yes` sets
+`promoteByCreation = true` (`dist/commands-bulk.js:53433-53442`), auto-confirming the prompt that says
+*"A new deployment will be built using your production environment"*. That path POSTs a **new**
+deployment, prints `Successfully created new deployment of <project> at <url>`, and `return 0`
+**without waiting** (`:53444-53463`). `Successfully` matches the step-6 regex (`:220`), so `STEP_6_OK`
+prints; step 7 then probes the **OLD** production, gets its 200, and the chain prints
+`COMMAND_CENTRE_OK`. ⭐ **A broken build passes the entire chain, and nothing rolls back** - the chain
+has already exited 0. Corroborated independently by this repo's own captured record:
+`OVERNIGHT_REPORT_2026-08-10.md:263`. The script's own comment at `:212-213` asserts the property the
+CLI does not provide.
+
+**B4 - step 5's byte-proof would fetch a Vercel LOGIN PAGE.** `:196-209` fetches
+`"$previewUrl/index.html"` with no auth header and no bypass token; previews on this project sit
+behind deployment protection (`OVERNIGHT_REPORT_2026-08-10.md:258-261` - an anonymous fetch returned
+the login HTML and correctly reported MATCH=NO). Even with B1 and B2 fixed, a correct run refuses at
+`INDEX_HASH_MISMATCH` - ⚠ and it does so **after a ~25-minute WebGL build**, so the feedback loop is
+brutal.
+
+### Also fix, in the same pass
+
+- **The step-6/8 promotion regex is too weak.** `(?i)(promoted|promotion.*completed|success)` (`:220`,
+  `:251`) is satisfied by `"Promotion has been queued and will begin when the active rolling release
+  completes successfully."` (`dist/commands-bulk.js:53474-53476`, then `return 0`). The genuine
+  completion string is `Success! <project> was promoted to <url> (<id>)` (`:53412`), emitted only after
+  `promoteStatus` polls to `jobStatus === 'succeeded'`. ⛔ **Judge promotion by the OUTCOME, never by
+  output prose.**
+- **Step 8 proves the command ran, not that the rollback took effect.** `$productionHost` is never
+  re-resolved after the rollback promote (`:249-255`). Close it by **POLLING**
+  `vercel inspect $productionHost --format=json` until `.id -eq $rollbackId`, refusing on timeout.
+  ⭐ **Polling, not a single check** - the alias does not flip synchronously. The same closure is owed
+  to step 6: production content is never verified post-promote at all.
+  ⚠ Related consequence of B1: a rollback that SUCCEEDED currently reports
+  `COMMAND_CENTRE_REFUSED step=8 reason=ROLLBACK_PROMOTION_FAILED`, exit 28 - at 3am, mid bad release,
+  telling the operator production is still broken when it has in fact been restored.
+- **Step labels are reused three ways** - `step=5` for the `VERCEL_TOKEN` check (`:98-105`), the WebGL
+  build (`:170`) and the preview deploy (`:183`); `step=3` twice (`:98-105`, `:141`). The marker text
+  carries the real meaning, so a refusal line survives an incident - but the number misleads while
+  someone is reading fast. **Note only; one comment line fixes it.**
+
+### ⭐ CONFIRMED FINE - do not re-churn these
+
+- ⭐ **No failure path writes an OK token into the log it is judged on.** All four markers clear:
+  `COMPILE_GATE_OK` (`Assets/Editor/CompileGate.cs:57,60-65,131-137`), `SCHEMA_PARITY_OK`
+  (`tools/schema-parity.mjs:185,199,204`), `R2_PARITY_OK` (`tools/r2_sync.py:401`,
+  `tools/r2-ship.ps1:111`). The only residual is `tools/r2_sync.py:426`, which holds the literal OK
+  token inside an argparse `help=` string - never written to a judged log with the arguments as they
+  stand, recorded only because it is one flag-rename away.
+- `.id` from `vercel inspect` IS the correct value to feed `vercel promote` (it takes
+  `url|deploymentId`, `dist/commands-bulk.js:8343-8360`), so the **rollback target is right** - it is
+  the verification that is missing, not the id. `--format=json`, `--no-color` and `--yes` are all
+  valid flags here; no unknown-flag refusal.
+- `auth_nonces` self-prunes that wallet's rows before insert (`api/_lib/wallet-auth.js:186-203`), so
+  step 7 causes **no unbounded growth**; and the proof wallet is the Solana system program, whose
+  private key does not exist, so the nonce it writes is unusable.
+- **Judging by marker rather than exit code is CORRECT** per CLAUDE.md section 8. Keep it.
+- ⛔ **The explicit UTF-16 decode of the R2 parity log is CORRECT** (`:137`, `-Utf16`) and was
+  independently re-confirmed today: `Builds/r2-parity.log` really is UTF-16 and a plain grep returns
+  zero hits on it. ⛔ **Do not "simplify" it.** ⚠ Related note, not a defect: there is no
+  `#requires -Version` / edition guard, and under PowerShell 7 `Tee-Object` writes UTF-8 - so a green
+  R2 parity would read `MARKER_ABSENT` under `pwsh`. One `#requires` line closes it.
+
+### ⛔ ACCEPTANCE FOR THE REVISION - a refusal test is no longer sufficient evidence
+
+Required, in writing, with the handback:
+
+1. **A test proving `Invoke-Captured` returns ALL output** from a process that writes multiple stderr
+   lines and then stdout. ⭐ **This is provable locally with a synthetic process - no Vercel, no
+   credentials** - so there is no excuse for leaving it unproven.
+2. **Evidence that the promoted artifact is the SAME one that was byte-proven**, or an explicit design
+   change to a flow where that is structurally guaranteed. ⚠ **Propose the mechanism** rather than
+   waiting for one to be dictated - but B3 must end up **structurally impossible, not merely
+   detected.**
+3. **Rollback verified by polling the alias to the expected id**, with the poll bounded and its
+   timeout a **REFUSAL**.
+4. ⛔ **State plainly which acceptance items remain OPS-OWNED and cannot be closed by the dev lane.**
+   Acceptance items 1, 2, 3 and 6 above need the Unity gate, a real deploy + promote, and two induced
+   live failures. Hand those back as a **named slice with the executor split written down** - do not
+   silently leave them open and do not claim them.
+
+⚠ Steps 1-3 of the chain (the gate half) are sound and are not in scope for this revision. Everything
+that is wrong lives in the deploy half, steps 4-8.

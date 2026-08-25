@@ -92,3 +92,39 @@ number block, the retired asmdef table, the 1-of-1 treasury in nine files, and t
       deliberately editing the JSON and watching it go red — a gate nobody has seen fail is not a gate)
 - [ ] Every deleted fallback fails loudly with a worded reason, never silently
 - [ ] `REGRESSION_OK` green; `CATALOG_FALLBACK_GEN_OK` still emitted
+
+---
+
+## SITES 4 AND 5 ARE WITHDRAWN - CLI lead, 2026-08-25 (spec-backed, verified at source)
+
+⚠ **This note does not touch the status line above** - the board keeper owns status, and the
+partial-landed wording there is deliberate. This records WHY the residual shrank.
+
+**Site 4 (`Assets/_Modules/Onboarding/HeroCatalog.cs`) is WITHDRAWN, like site 6 - mis-specified,
+not skipped.**
+- ⛔ **`HeroCatalog` is NOT a fallback. It is ALWAYS in force.** Section 2's harm - *"the fallback
+  only runs when the JSON is missing/corrupt, i.e. during an incident"* - **cannot occur here**,
+  because there is no incident-only path to substitute anything during. The whole argument this
+  ticket rests on does not reach this file.
+- ⛔ **So the codegen+hash pattern does not transfer.** A generated file would be a **THIRD copy** of
+  the data, not a replacement for a second one - the opposite of section 1's rule.
+- ⭐ **And the drift is already pinned by a mechanism, not a comment.**
+  `HeroKitMirrorRegression` - registered at `Assets/Editor/Regression/DataRegression.cs:944` - pins
+  slot + name + signature against `abilities.json` **read at test time**. That is exactly what
+  section 5's acceptance asks a hash gate to buy, obtained a different way.
+
+**Site 5 (`Assets/_Modules/Village/Enemies/OverworldEncounterSpawner.cs`) is WITHDRAWN too.**
+- ⛔ **The cited line guards a single float whose own comment declares it deliberately TUNABLE**
+  (`PackBountyRewardVariance`, *"TUNABLE opening balance, never a lock"*). Hash-gating it would
+  **forbid the very divergence the comment reserves** - a gate that fires on intended behaviour.
+- ⚠ **The survey table also mis-names the mirror.** This file's real hand-maintained fallback mirrors
+  **`spawn-areas.json`, not `enemies.json`** - and ⭐ **`SpawnAreaEnemyIdRegression`
+  (`DataRegression.cs:1159`) already covers the dangerous half** of it.
+
+⚠ **Stale path corrected:** the section-4 table row 5 says `Village/World/OverworldEncounterSpawner.cs`.
+The file lives at **`Assets/_Modules/Village/Enemies/OverworldEncounterSpawner.cs`** (verified at
+HEAD; `Village/World/` has no such file). Row 6 already cites the `Enemies/` folder correctly, so the
+two rows disagreed with each other.
+
+⭐ **What remains open is therefore section 6 alone:** the standing oracle that flags a NEW C#
+collection literal duplicating a canonical JSON file.

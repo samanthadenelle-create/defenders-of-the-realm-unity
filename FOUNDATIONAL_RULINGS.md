@@ -1,8 +1,12 @@
 # Foundational rulings — the law that outlives the ticket that produced it
 
-**Owner, 2026-08-24.** Three rulings elevated deliberately above the tickets they came from, because
-each one answers a *class* of future question. When a work order and this file disagree, **this file
-wins** and the work order is wrong.
+**Owner's rulings, 2026-08-24 onward.** Elevated deliberately above the tickets they came from,
+because each one answers a *class* of future question. When a work order and this file disagree,
+**this file wins** and the work order is wrong.
+
+⚠ **Do not restate a count here.** This line used to say *"Three rulings"* and the file now carries
+fourteen — the same one-fact-written-twice drift that produced the stale WO-number block and the
+retired dependency table in `CLAUDE.md`. The sections below are the count.
 
 ⚠ **Why this file exists at all:** this repo's dominant failure mode is a fact recorded in a second
 place going stale — a retired dependency table, a hardcoded repo root, a stale WO-number block, eight
@@ -461,6 +465,139 @@ it - there is nobody to hurt.
 
 * **The inverse is equally binding.** The day the listing IS updated, this section stops applying and
 nobody will announce that. Re-ask; never cache the answer.
+
+---
+
+## 11. ONE QUEST ILLUSTRATION PER QUESTLINE. Not per quest, and not one generic slab.
+
+> **Owner, 2026-08-25**, answering a direct question from the CLI lead: a shared illustration per
+> chapter / questline, **reused across every quest inside it.**
+
+The two options she was NOT choosing are both worth naming, because both are the obvious default a
+seat would reach for:
+- ⛔ **one image per quest** — the art bill then scales with quest count, and quest count is the
+  thing this project adds most cheaply. A content axis that is free in JSON must not be expensive in
+  art.
+- ⛔ **one generic slab for all quests** — cheap, and it makes every questline read as the same
+  errand.
+
+⭐ **The consequence to design against:** the parchment slab's art slot is keyed to the
+**QUESTLINE**, not to the quest. So the UI seat designs **one reusable slot** — a single image
+region that a questline supplies and every quest inside it inherits — rather than a unique-image
+pipeline with a per-quest asset key.
+
+**How to apply.** When a quest surface needs art, ask what OWNS the image. The answer is the
+questline. A quest that wants its own picture is asking for a new questline, or it is asking for
+nothing.
+
+---
+
+## 12. A SHELF SHOWS PRICES; ELIGIBILITY IS CHECKED AT THE TILL.
+
+> **Owner, 2026-08-25:** the store's display-price path serves everyone — **no wallet, no session.**
+> The wallet is requested **only when the player commits to buy.**
+
+**Both halves are the ruling, and the second half is the one that gets dropped.**
+
+### Half one — browsing is public
+The display-price path is a public price list. Opening the store must not mint a backend session,
+must not ask for a signature, and must not require a connected wallet. An unauthenticated list
+returns the **PUBLIC LADDER** — what anyone could buy — not a per-wallet filtered set.
+
+### Half two — ⛔ LOOSENING THE LIST MUST NOT LOOSEN WHAT CAN BE SOLD
+Per-wallet eligibility — `walletAllowed`, `MAINNET_SALES_ENABLED`, the canary's stricter gate —
+**stays exactly where it is**, and is enforced at the **BINDING quote** and at **`/verify`**. The
+list is a display concern. The sale is an authorization concern. They were coupled, and the ruling
+decouples them **in one direction only**.
+
+⚠ **This ruling does NOT authorise guest purchases.** `PurchaseGate.WalletRequiredAboveUsd = 4.99`
+is **not** being implemented as a guest checkout — the owner chose **browse-only**. A guest who taps
+buy is **asked to connect**. A seat that reads half one and infers "so guests can buy the cheap
+packs" has invented a second ruling the owner did not make.
+
+**How to apply.** Before adding an auth requirement to any store path, ask: *does this path bind or
+charge anything?*
+- **No** → it is shelf display. It serves everyone.
+- **Yes** → it is the till. It authenticates, and it authenticates **as late as possible**.
+
+---
+
+## 13. A COST IS WRITTEN AS AN ICON AND A QUANTITY, NEVER A LETTER.
+
+> **Owner, 2026-08-25:** *"Ok currently in the build scren it shows things like 130I 400W 10C I want
+> the chip then the quantity in place of where it exists in build screen. that was the ask here."*
+
+**The ruling.** Wherever a build cost is displayed, it renders as the resource **CHIP/ICON followed
+by the quantity**, in the place the existing cost string already occupies. The letter-suffix form -
+`130I`, `400W`, `10C` - is **RETIRED**. This is not a relayout: the cost string keeps its position,
+its slot and its neighbours; only its composition changes.
+
+### Why the letter form is worse than it looks
+
+The build screen's cost line is the player's **first read of affordability** - can I afford this,
+right now, before I tap. A single letter is a poor carrier for that read: `I` for iron and `C` for
+crystal are language-bound (they are English initials and nothing else), and they are easy to confuse
+with each other and with the digits beside them at a glance, at the smallest text size in the game.
+This is the same failure **WO-1195** already names - a resource is named by its ICON, never by a
+letter - appearing on the one screen where the player actually commits resources. The icon carries the
+identity; the number carries the amount; neither has to be read as language.
+
+### Scope - ⚠ read this before touching any HUD code
+
+⚠ **This ruling is about the BUILD-SCREEN COST STRINGS.** That is the surface the owner named and the
+surface it binds.
+
+⛔ **The ambient, posture-driven HUD resource dock is OUT OF SCOPE and UNCHANGED.** Verified at source
+(`Assets/_Modules/HUD/Kit/HudKitController.cs`, `BuildResourceChips`; landed 2026-07-03 in
+`925464df7`, no feature flag), the shipped behaviour is posture-dependent and stays exactly as it is:
+- `calm(town)` - widget `resourceChips`, ships **COLLAPSED**; the rail chip reads "Resources".
+- `calm(explore)` - widget `resourceChipsCollapsed`, **GOLD only**; a tap gives a **6-second timed
+  reveal**, not persisted.
+- `build` and all three `hostile` postures - **no resource readout at all**.
+- The right-rail arbiter permits at most **ONE** expanded section.
+
+⛔ **An earlier draft of this section said "ALL FIVE RESOURCES ARE PERMANENTLY ON SCREEN" and forbade
+collapsing or context-gating any resource anywhere. THAT DRAFT WAS WRONG AND IS RETIRED.** It came
+from a mis-framed question - the lead offered the owner "all five always visible" vs "core three plus
+tap" for the ambient dock, she picked "all five", and the answer was written up as a HUD layout
+mandate. She was never talking about the dock. As written, that draft forbade shipped behaviour the
+owner never asked to change, and any seat obeying it would have torn out the posture logic to satisfy
+a ruling that does not exist.
+
+⭐ **Recording the correction matters more than the correction.** The failure was not a typo in a
+ruling; it was **asking the owner to choose a layout without first reading what shipped.** A choice
+offered between two options that do not describe the live build cannot produce a usable answer, and
+the answer it does produce will be recorded as law. Read the surface, then ask.
+
+### ⛔ STILL UNRULED - the build palette card's image
+
+Open and **NOT decided**. The owner floated: *"what if we remove the image and put just test and the
+costs? easier less work"*. The lead's counter is that the image is what makes a card recognisable
+without reading, and proposed a thumbnail-plus-text card instead. ⛔ **Neither position is recorded
+here as decided.** This is pending a capture of the actual card, and a seat that implements either
+one is inventing a ruling.
+
+---
+
+## 14. WO-1163 (stone replaces food) RUNS NOW. The lead's concern becomes the SEQUENCING DISCIPLINE.
+
+> **Owner, 2026-08-25**, overruling the lead. The lead recommended **holding** WO-1163 until the
+> store work settled; the owner chose **now**. The decision stands.
+
+⛔ **The concern is preserved here rather than erased, because it is accurate and it still governs
+HOW the work is done.** The lead's objection was:
+- the change is **save-schema-adjacent**, on a **live build with an activated pay path**; and
+- it moves **three mirrored files that go red together**.
+
+**The ruling converts that objection from a reason to WAIT into a reason to be PRECISE:**
+
+1. Follow **the ticket's own section 7 sequencing exactly.** It is not advisory ordering.
+2. Treat the mirror law as a **SINGLE ATOMIC CHANGE** — the server's `USD_ANCHORS`, **both**
+   canonical `packs.json` copies, and the quote test's hardcoded resource-key list move together, in
+   one change, or the build is red. ⚠ Landing any subset is the failure mode the concern was about.
+
+⛔ **WO-1163 itself is not edited by this ruling.** It is already READY and correctly specced; this
+section is about **timing only**. Do not re-spec it, and do not add a hold banner to it.
 
 ---
 

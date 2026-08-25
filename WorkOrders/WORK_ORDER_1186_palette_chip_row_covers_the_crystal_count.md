@@ -118,3 +118,24 @@ entries; owner ruling 2026-08-24, no waivers.
 - **WO-1082 is JSON-only and does not conflict** - but it reorders the catalog, which changes group
   card counts, which changes chip caption lengths, which feeds the new width math. The fit pass
   handles any count, so this is a dependency, not a collision.
+
+---
+
+## OWNER RULING 2026-08-25 - a control may never sit on top of a resource count
+
+**Owner, 2026-08-25.** Binding text lives in `FOUNDATIONAL_RULINGS.md` **section 13** - ⛔ cite it, do
+not paraphrase it here.
+
+⭐ **What survives for THIS ticket, and it is the whole of this ticket's defect:** a control may never
+sit on top of a resource count on the surface where the player judges affordability. An occluded
+number is not a smaller number, it is an unreadable one, and the player commits resources from that
+read. The fix **reclaims space or re-flows** - which is what the landed fix did (bands re-cut with a
+real gutter plus a fit-to-band pass), so ⭐ **the landed fix remains correct**, and any FOLLOW-UP on
+this dock - the open lead call on the 96px chip height, the WO-1167 re-grouping - may not buy space
+back by putting a control over a count again.
+
+⚠ **An earlier version of this note claimed the ruling meant "never a reason to drop, collapse or
+tap-gate a resource". That claim is REMOVED and was wrong.** The shipped ambient dock does exactly
+that by posture - town collapsed, explore gold-only with a 6-second tap reveal, build and combat with
+no readout at all - and it is not in breach of anything. Section 13 is about build-screen cost
+strings, not about the dock's posture behaviour.

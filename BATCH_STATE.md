@@ -970,3 +970,91 @@ the dev lane until she relays it.
 ⚠ **A REFUSAL IS A COMPLETION.** A ticket that turns out already-shipped, unimplementable as written, or
 gated behind a ruling — **that is the handback**, and it is worth more than an implementation. Three
 tickets today were called "already shipped" and were wrong in **both** directions.
+---
+
+## ⛔ WO-1199 - REVISION REQUIRED. The refusal path was proved; the success path cannot succeed. (2026-08-25, later - CLI lead)
+
+⚠ **Precedence note:** this section is dated 2026-08-25 and is the newest in the file. Per the
+precedence rule at the top, **the newest dated section wins** - it is appended at the END rather than
+the top only because this file is append-only by section.
+
+⛔ **This section is scoped to WO-1199 alone.** It changes nothing about Batch 9 or any other lane.
+
+### What came back, and what it proved
+
+`tools/command-centre.ps1` (branch `codex/wo1199`, 255 lines), covering WO-1199 steps 1-8, with a
+handback proving a **deliberate missing-credential run**: it refused with a named step, a marker, a
+log, a reason, and exit 20.
+
+⭐ **That refusal work is correct as far as it goes, and the refusal messages are good ones.** No
+blame in this section. But the refusal fires in the first few statements (`command-centre.ps1:98-105`),
+which means **no step ever executed and no run log was ever written.** The proof covers lines 98-105
+of a 255-line chain and nothing downstream.
+
+### ⭐ This is `prove-the-success-path-not-just-the-refusal`, exactly
+
+A prior guard in this repo shipped that **refused correctly, aborted every good run, and exited 0 the
+whole time.** The failure mode is identical: failure-only acceptance certifies the one branch that was
+tested and silently certifies nothing else.
+
+⛔ **A refusal test is no longer sufficient evidence for this ticket.**
+
+### What the audit found - full evidence in `tmp/wo1199_verify.md`
+
+Read from the **installed Vercel CLI bundle on disk** (v56.4.0) and from **probed PowerShell
+behaviour**, not from memory or docs. ⛔ No `vercel` command was executed and the script was never run.
+
+**FOUR BLOCKERS - the script cannot succeed as written, and can report success for a release that
+never went live:**
+
+| # | Defect | Where |
+|---|---|---|
+| **B1** | `Invoke-Captured` discards everything after the first stderr line - `$ErrorActionPreference='Stop'` is in scope, so the first stderr record TERMINATES and the catch keeps one line | `command-centre.ps1:19,53,55-58`; call sites `:143 :151 :185 :218 :249` |
+| **B2** | The Vercel CLI writes **all** human output to stderr, and `inspect` prints `Fetching deployment "..."` BEFORE the JSON - so B1 is **fatal, not cosmetic**: a fully credentialed correct run dies at step 4 with `INVALID_INSPECT_JSON` | `dist/chunks/chunk-OX7KI3LF.js:4674,4560-4566`; `dist/commands-bulk.js:40584` |
+| **B3** | ⛔⛔ `vercel promote <preview> --yes` **REBUILDS**; it does not ship the inspected, byte-proven artifact. It POSTs a NEW deployment, prints `Successfully created new deployment...`, returns 0 **without waiting**. `Successfully` matches the step-6 regex, `STEP_6_OK` prints, step 7 probes the **OLD** production, gets its 200, chain prints `COMMAND_CENTRE_OK`. **A broken build passes the whole chain and nothing rolls back.** | `dist/commands-bulk.js:53433-53463`; corroborated by `OVERNIGHT_REPORT_2026-08-10.md:263` |
+| **B4** | Step 5's byte-proof would fetch a Vercel **login page** - previews sit behind deployment protection and no bypass token is sent. A correct run refuses at `INDEX_HASH_MISMATCH` ⚠ **after a ~25-minute WebGL build** | `command-centre.ps1:196-209`; `OVERNIGHT_REPORT_2026-08-10.md:258-261` |
+
+**ALSO FIX in the same pass (not blockers):**
+- The step-6/8 promotion regex `(?i)(promoted|promotion.*completed|success)` matches
+  `"Promotion has been queued ... completes successfully."`, which returns 0.
+  ⛔ **Judge promotion by the OUTCOME, never by output prose.**
+- Step 8 proves the command ran, not that the rollback took effect. Close it by **POLLING**
+  `vercel inspect $productionHost` until `.id -eq $rollbackId`. ⭐ **Polling, not a single check** -
+  the alias does not flip synchronously.
+- Step labels are reused three ways (`step=5` for the token check, the WebGL build and the preview
+  deploy; `step=3` twice). Marker text carries the meaning, so **note only** - but the number misleads
+  during an incident.
+
+### ⭐ CONFIRMED FINE - ⛔ do not re-churn, do not "improve"
+
+- ⭐ **No failure path writes an OK token into the log it is judged on** - all four markers clear. Only
+  residual: `tools/r2_sync.py:426` holds the OK token inside an argparse `help=` string, never written
+  to a judged log.
+- `.id` from `vercel inspect` IS the right value for `vercel promote` (it takes `url|deploymentId`) -
+  **the rollback target is right; the verification is what is missing.**
+- `auth_nonces` self-prunes per wallet before insert, so step 7 causes no unbounded growth; the proof
+  wallet is the Solana system program, whose private key does not exist, so the nonce is unusable.
+- **Judging by marker rather than exit code is CORRECT** (CLAUDE.md section 8). Keep it.
+- ⛔ **The explicit UTF-16 decode of the R2 parity log is CORRECT** and was independently re-confirmed
+  today - `Builds/r2-parity.log` really is UTF-16 and a plain grep returns zero hits.
+  ⛔ **Do not "simplify" it.**
+- ⚠ Steps 1-3 (the gate half) are **sound** and are out of scope for this revision. Everything wrong
+  lives in the deploy half, steps 4-8.
+
+### ⛔ ACCEPTANCE FOR THE REVISION - required in writing with the handback
+
+1. **A test proving `Invoke-Captured` returns ALL output** from a process that writes multiple stderr
+   lines then stdout. ⭐ **Provable locally with a synthetic process - no Vercel, no credentials** - so
+   there is no excuse for leaving it unproven.
+2. **Evidence that the promoted artifact is the SAME one that was byte-proven**, or an explicit design
+   change to a flow where that is structurally guaranteed. ⚠ **Propose the mechanism** rather than
+   waiting for it to be dictated - but B3 must become **structurally impossible, not merely detected.**
+3. **Rollback verified by polling the alias to the expected id**, poll bounded, timeout a **REFUSAL**.
+4. ⛔ **Name which acceptance items remain OPS-OWNED and cannot be closed by the dev lane.** WO-1199
+   acceptance items **1, 2, 3 and 6** need the Unity gate, a real deploy + promote, and two induced
+   live failures. ⭐ **Hand those back as a named slice with the executor split written down** - do not
+   silently leave them open, and do not claim them.
+
+⛔ **Do not harvest or commit the current `codex/wo1199` script.** The full note also lives at the end
+of `WorkOrders/WORK_ORDER_1199_the_command_centre.md`; the file:line evidence is in
+`tmp/wo1199_verify.md`.

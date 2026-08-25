@@ -95,3 +95,23 @@ button). This ticket is the *naming convention everywhere else* - costs, prices,
 training. They share the icon resolver and should agree, but they are different surfaces.
 ⚠ **WO-1163 retires food for stone.** Do not hardcode a four-resource list in the new formatter -
 enumerate, so the set can change without touching every call site again.
+
+---
+
+## OWNER RULING 2026-08-25 - the ruling CONFIRMS this ticket's rule, and LOCATES it
+
+**Owner, 2026-08-25.** Binding text lives in `FOUNDATIONAL_RULINGS.md` **section 13** (a cost is
+written as an icon and a quantity, never a letter) - ⛔ cite it, do not paraphrase it here.
+
+⭐ **What it does for this ticket:** it does not raise the bar, it **confirms the rule and names the
+first place it must land.** The build screen's cost strings - currently rendered `130I` / `400W` /
+`10C` - are the surface the owner called out by name, and they are exactly the letter-suffix form this
+ticket exists to retire. Replace the letter with the resource chip/icon, in the place the cost string
+already occupies.
+
+⚠ This does not change any acceptance criterion above. It tells the seat where to start: criterion 1's
+repo-wide search should find the build-screen cost path first, and criterion 2's single formatter is
+what that path must route through.
+
+⚠ **Scope note, so nobody over-reads it:** section 13 is about cost strings. The ambient posture-driven
+HUD resource dock is out of scope and unchanged - see that section.

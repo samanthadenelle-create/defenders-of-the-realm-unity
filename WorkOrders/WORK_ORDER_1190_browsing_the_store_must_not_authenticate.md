@@ -79,3 +79,22 @@ norm (Sign In With Solana) makes connect and authenticate ONE action. Folding th
 own ticket and its own owner decision. Note also that the session is deliberately IN MEMORY ONLY
 (`BackendRequestSigner.cs:61`) and lives 15 minutes, so it cannot survive an app restart by design -
 no caching strategy removes that handshake, only combining it with connect does.
+
+---
+
+## OWNER RULING 2026-08-25 - the open question in section 2 is SETTLED
+
+**Owner, 2026-08-25**, answering a direct question from the CLI lead. Elevated to
+`FOUNDATIONAL_RULINGS.md` **section 12** ("a shelf shows prices; eligibility is checked at the
+till"), which is the binding text - ⛔ cite that section, do not paraphrase it here.
+
+- **Section 2's "decide and state what an unauthenticated list returns" is answered: the PUBLIC
+  LADDER.** The body already proposed exactly that; the ruling confirms it, so the item is no longer
+  a decision this ticket carries.
+- ⚠ **This ticket does NOT get to loosen sellability.** `walletAllowed`, `MAINNET_SALES_ENABLED` and
+  the canary's stricter gate stay exactly where they are, enforced at the BINDING quote and at
+  `/verify`. Loosening the LIST must not loosen what can be SOLD.
+- ⛔ **Guest checkout is NOT authorised.** The owner chose **browse-only**:
+  `PurchaseGate.WalletRequiredAboveUsd = 4.99` is **not** to be implemented as a guest purchase path
+  by this ticket. **A guest who taps buy is asked to connect.** Section 2's finding 1 stands as a
+  recorded contradiction, not as a licence to resolve it in the guest's favour here.
