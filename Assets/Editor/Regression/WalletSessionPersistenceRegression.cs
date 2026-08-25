@@ -30,11 +30,14 @@
 //   7. StubWalletProvider does not touch the store: a persisted session can never
 //      make a stub address look like a connected, real signing wallet
 //      (WalletIdentityRegression's invariant, protected from this direction too).
+//   8. Wallet preference resolution defaults to Seeker, an installed stored choice
+//      wins, and changing that choice clears both halves of the sealed session.
 // Wire into DataRegression.RunAll as [wallet-session].
 // =============================================================================
 
 using System.Collections.Generic;
 using System.IO;
+using System.Reflection;
 using System.Text.RegularExpressions;
 using UnityEngine;
 using DeNelle.Wallet;
@@ -153,7 +156,71 @@ namespace DeNelle.Editor.Regression
                 PlayerPrefs.Save();
             }
 
-            // -- 5. THE GRANT IS NEVER LOGGED ---------------------------------
+            // -- 5. WALLET PREFERENCE RESOLUTION + SEAL CLEAR ---------------
+            // Snapshot every key this probe touches. It deliberately exercises
+            // real PlayerPrefs because that is the production persistence seam.
+            bool hadPreference = PlayerPrefs.HasKey(WalletPreferenceStore.PackagePrefsKey);
+            string savedPreference = PlayerPrefs.GetString(
+                WalletPreferenceStore.PackagePrefsKey, string.Empty);
+            savedToken = PlayerPrefs.GetString(MwaSessionStore.TokenPrefsKey, string.Empty);
+            savedAddr = PlayerPrefs.GetString(MwaSessionStore.AddressPrefsKey, string.Empty);
+            const string Jupiter = "com.jup.ag";
+            try
+            {
+                // No explicit choice: the unchanged rank-1 Seeker package wins,
+                // even when another capable wallet appears first in the list.
+                PlayerPrefs.DeleteKey(WalletPreferenceStore.PackagePrefsKey);
+                string resolution;
+                string package = TargetedLocalAssociationScenario.ResolveWalletPackage(
+                    new[] { Jupiter, WalletPreferenceStore.DefaultPackage }, out resolution);
+                if (package != WalletPreferenceStore.DefaultPackage || resolution != "chain rank 1")
+                    failures.Add("WALLET PREFERENCE DEFAULT FAIL: no choice did not resolve Seeker at chain rank 1");
+
+                // An explicit installed choice outranks the default chain.
+                PlayerPrefs.SetString(WalletPreferenceStore.PackagePrefsKey, Jupiter);
+                package = TargetedLocalAssociationScenario.ResolveWalletPackage(
+                    new[] { WalletPreferenceStore.DefaultPackage, Jupiter }, out resolution);
+                if (package != Jupiter || resolution != "stored choice")
+                    failures.Add("WALLET PREFERENCE STORED FAIL: installed stored choice did not win");
+
+                // Start from implicit Seeker with a sealed-session canary. The
+                // internal store seam is what the public picker entry point calls
+                // after enumerating installed handlers on Android.
+                PlayerPrefs.DeleteKey(WalletPreferenceStore.PackagePrefsKey);
+                PlayerPrefs.SetString(MwaSessionStore.AddressPrefsKey, WalletA);
+                PlayerPrefs.SetString(MwaSessionStore.TokenPrefsKey, "v1:SEALED:CANARY");
+                MethodInfo setter = typeof(WalletPreferenceStore).GetMethod(
+                    "TrySetPreferredPackage", BindingFlags.Static | BindingFlags.NonPublic);
+                if (setter == null)
+                {
+                    failures.Add("WALLET PREFERENCE SWITCH FAIL: TrySetPreferredPackage seam missing");
+                }
+                else
+                {
+                    object[] args = { Jupiter, new[] { Jupiter }, true, null };
+                    bool changed = (bool)setter.Invoke(null, args);
+                    if (!changed || PlayerPrefs.GetString(
+                            WalletPreferenceStore.PackagePrefsKey, string.Empty) != Jupiter)
+                        failures.Add("WALLET PREFERENCE SWITCH FAIL: confirmed installed choice was not persisted");
+                    if (MwaSessionStore.HasStoredSession ||
+                        !string.IsNullOrEmpty(MwaSessionStore.StoredAddress))
+                        failures.Add("WALLET PREFERENCE SEAL FAIL: changing wallet left the old sealed session resumable");
+                }
+            }
+            finally
+            {
+                if (hadPreference)
+                    PlayerPrefs.SetString(WalletPreferenceStore.PackagePrefsKey, savedPreference);
+                else
+                    PlayerPrefs.DeleteKey(WalletPreferenceStore.PackagePrefsKey);
+                if (string.IsNullOrEmpty(savedToken)) PlayerPrefs.DeleteKey(MwaSessionStore.TokenPrefsKey);
+                else PlayerPrefs.SetString(MwaSessionStore.TokenPrefsKey, savedToken);
+                if (string.IsNullOrEmpty(savedAddr)) PlayerPrefs.DeleteKey(MwaSessionStore.AddressPrefsKey);
+                else PlayerPrefs.SetString(MwaSessionStore.AddressPrefsKey, savedAddr);
+                PlayerPrefs.Save();
+            }
+
+            // -- 6. THE GRANT IS NEVER LOGGED ---------------------------------
             // Two independent lints, because a leak can arrive either way: a token
             // identifier on a log line, or a token identifier inside a string
             // interpolation hole (which some other line may then log).
@@ -186,7 +253,7 @@ namespace DeNelle.Editor.Regression
                 }
             }
 
-            // -- 6. Silent resume wired + full authorize fallback intact -------
+            // -- 7. Silent resume wired + full authorize fallback intact -------
             if (!File.Exists(providerPath))
             {
                 failures.Add("SolanaWalletProvider.cs missing");
@@ -215,7 +282,7 @@ namespace DeNelle.Editor.Regression
                 failures.Add("TargetedLocalAssociationScenario lost the reauthorize call - there is no silent " +
                              "resume without it");
 
-            // -- 7. The stub can never look connected from a stored session ----
+            // -- 8. The stub can never look connected from a stored session ----
             if (File.Exists(stubPath) && File.ReadAllText(stubPath).Contains("MwaSessionStore"))
                 failures.Add("StubWalletProvider touches MwaSessionStore - a persisted grant must never make a " +
                              "stub address look like a real signing wallet (see WalletIdentityRegression)");
@@ -227,7 +294,8 @@ namespace DeNelle.Editor.Regression
             }
             reason = "WALLET SESSION OK - MWA grant sealed with an AndroidKeyStore AES-GCM key (fails closed " +
                      "off-device, never plaintext), bound to its wallet (a mismatch discards it), cleared on " +
-                     "disconnect, never logged or interpolated, silent reauthorize wired with the full-authorize " +
+                     "disconnect and wallet preference changes, Seeker default and stored-choice precedence pinned, " +
+                     "never logged or interpolated, silent reauthorize wired with the full-authorize " +
                      "fallback intact, and the stub kept out of the store";
             return true;
         }

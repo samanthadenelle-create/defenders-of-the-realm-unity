@@ -221,6 +221,11 @@ test('the two canary SKUs keep their fixed amounts and are never quoted', () => 
     assert.ok(!catalog.quotableSkus('devnet').includes('hearth-spark'),
         'the devnet canary must never be repriced from a market rate');
     assert.ok(catalog.quotableSkus('devnet').includes('impulse-wood-medium'));
+    withEnv(DEVNET_ENV, () => {
+        const pinned = quoteTest.wirePinned(catalog.purchaseContract('devnet', 'hearth-spark'));
+        assert.equal(pinned.usdEffective, null, 'a pinned proof-of-rail has no effective USD price');
+        assert.equal(pinned.usdSaving, null, 'a pinned proof-of-rail is not a sale');
+    });
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -234,13 +239,14 @@ test('a quote is issued with the exact amount, the rate and the rate source', ()
             sku: 'impulse-wood-medium', network: 'devnet', currency: 'SKR',
             amountBaseUnits: '396000000000', skrAmount: 396, decimals: 9,
             mint: devnetMint, recipient, recipientAta,
-            usdAnchor: 2.99, discountBps: null, discountLabel: null,
+            usdAnchor: 2.99, usdEffective: 2.99, usdSaving: null,
+            discountBps: null, discountLabel: null,
             rate: 0.00755954, rateSource: catalog.RATE_SOURCE,
         });
     });
 });
 
-test('the server applies a 20% discount before quoteAmount and exposes only its basis points', () => {
+test('the server applies a 20% discount and ships the same effective USD that priced SKR', () => {
     withEnv(DEVNET_ENV, () => {
         const regular = catalog.buildQuoteBody('devnet', 'impulse-wood-medium',
             { usdPerSkr: 0.01, source: 'test' });
@@ -249,10 +255,36 @@ test('the server applies a 20% discount before quoteAmount and exposes only its 
         assert.equal(regular.amountBaseUnits, '299000000000');
         assert.equal(discounted.amountBaseUnits, '240000000000');
         assert.equal(discounted.usdAnchor, 2.99, 'the authored anchor remains auditable');
+        assert.equal(regular.usdEffective, regular.usdAnchor,
+            'an undiscounted quote keeps the plain server price');
+        assert.equal(regular.usdSaving, null, 'an undiscounted quote announces no sale');
+        assert.equal(discounted.usdEffective, 2.392,
+            'the effective display price is the exact server input to quoteAmount');
+        assert.ok(Math.abs(discounted.usdSaving - 0.598) < 1e-12,
+            'the server, not the client, computes the dollar saving');
         assert.equal(discounted.discountBps, 2000);
         assert.equal(discounted.discountLabel, '20% shortfall discount');
-        assert.equal('discountedUsd' in discounted, false,
-            'do not create a second client-visible price authority');
+        const wired = quoteTest.wireQuote(discounted, { quoteId: 'q1' });
+        assert.equal(wired.usdEffective, discounted.usdEffective,
+            'the endpoint must not discard the server-effective display price');
+        assert.equal(wired.usdSaving, discounted.usdSaving,
+            'the endpoint must not discard the server-computed saving');
+
+        // RE-POINTED, NEVER DELETED (WO-1198). The old assertion banned a second
+        // display figure. The stricter replacement requires the server figure and
+        // fails if client code ever derives price or binds payment to USD/rate.
+        const quoteClient = fs.readFileSync(path.join(__dirname, '..', 'Assets', '_Modules',
+            'Wallet', 'PurchaseQuoteService.cs'), 'utf8');
+        const storeClient = fs.readFileSync(path.join(__dirname, '..', 'Assets', '_Modules',
+            'Wallet', 'PackStore.cs'), 'utf8');
+        assert.match(quoteClient, /JsonProperty\("usdEffective"\)/);
+        assert.match(quoteClient, /JsonProperty\("usdSaving"\)/);
+        assert.match(quoteClient, /long\.TryParse\(AmountBaseUnits/,
+            'the binding client amount must still originate in amountBaseUnits');
+        assert.doesNotMatch(quoteClient, /UsdAnchor(?:\.Value)?\s*\*|UiAmount\s*\*\s*Rate|Rate(?:\.Value)?\s*\*\s*UiAmount/,
+            'the client must never derive an effective USD price');
+        assert.match(storeClient, /quote\.ExactSkrLabel/,
+            'purchase confirmation must state the base-unit-derived token amount');
     });
 });
 

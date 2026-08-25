@@ -2409,9 +2409,11 @@ namespace DeNelle.Wallet
                     : $"at ${(quote.Rate ?? 0d):0.########} per SKR ({quote.RateSource}).";
                 string discountLine = string.IsNullOrEmpty(quote.DiscountLabel)
                     ? string.Empty : $" {quote.DiscountLabel} applied.";
+                string savingLine = string.IsNullOrEmpty(quote.UsdSavingLabel)
+                    ? string.Empty : $"; {quote.UsdSavingLabel}";
                 SetCommerceState(CommerceState.AwaitingApproval,
                     $"{pack.Name}: you will send exactly {quote.ExactSkrLabel} " +
-                    $"({quote.UsdApproxLabel}) on {_wallet.NetworkLabel}.{discountLine} {rateLine} " +
+                    $"({quote.UsdApproxLabel}{savingLine}) on {_wallet.NetworkLabel}.{discountLine} {rateLine} " +
                     "Human approval has no countdown.");
 
                 var result = await _wallet.Pay(pack, currency);
