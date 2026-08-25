@@ -1,6 +1,6 @@
 # WO-1179 - Roaming troops that attack the town, escalating in size and smarts
 
-**Status:** READY TO IMPLEMENT - both owner questions RULED 2026-08-24 and the implementation spec is written with every seam verified at source. Bounded to: **one encounter, one global concurrency cap, escalating side count 1 -> 2 -> 4, away time BANKS PRESSURE rather than simulating an unseen loss.** ⛔ Six binding constraints in the ruling section - read them before touching the spawner.
+**Status:** FIXED - landed 2026-08-25 at `4f4055043`, gated `COMPILE_GATE_OK` + `REGRESSION_OK 277/277`. Owner felt-close owed.
 >  PRIOR: **Status:** BLOCKED - two owner questions. The implementation spec is written and every seam is verified at source (see the SPEC section); the design rulings are settled. ⛔ **Q1: does "offline towns can be attacked" mean the SHIPPED banked-pressure model, or a real absentia resolver (WO-430-F, explicitly unbuilt AND explicitly forbidden until stakes are ruled)? Q2: four spawn SIDES, or four damageable GATES?** ⚠ Those two answers change this ticket by an ORDER OF MAGNITUDE - it is not handable until they land.
 >  PRIOR: **Status:** READY - all three open design questions RULED by the owner 2026-08-24 (existing wave system; offline towns CAN be attacked; losses are REPAIRABLE and bounded). ⛔ Build WO-513 first so pack behaviour is inherited, per this ticket's own note.
 
@@ -334,3 +334,11 @@ The §6 capture list stands, and **one line in it now gates the whole feature**:
 `[Flow:Wave] wave N: concurrency cap … HOLDING M`. ⭐ **If the cap already binds on a late wave, two
 sides means HALF A WAVE EACH, not two waves** — the escalation would read as *weaker*, not harder.
 **Read that capture before tuning anything.**
+
+---
+
+## LANDED 2026-08-25 - `4f4055043`
+
+Side partitioning inside `SpawnWave`. ONE `int budget` local per invocation (`SmartEnemySpawner.cs:123`) decremented inside the side loop (`:253`), and exactly two call sites, both in `WaveManager` - verified at source, since a per-side call would hand each side the full cap. `WaveManager` remains the single spawn authority; WO-1026's ring detector untouched.
+
+⚠ The status line was not flipped in the same commit as the work (CLAUDE.md section 2 / docs/BOARD.md section 2). Corrected here after the pipeline filler caught it - the board advertised finished work as available for several hours, which is the exact failure that got Batch 8 refused.

@@ -1,6 +1,6 @@
 # WORK ORDER 814 — Gear ability unlock at max level (Lv 5)
 
-**Status:** READY — ⭐ owner APPROVED the shape 2026-08-24 (batch 2, ruling 11): per-rarity generic · weapons first · locked ability line visible from Level 1. ⛔ The ability identities stay hers, authored later; the slots may be built now. *(Prior line: SPEC DRAFT — owner floated 2026-07-30 "add ability at lvl 5?", read as needing her creative pick of abilities before READY.)*
+**Status:** FIXED - landed 2026-08-25 at `3362daf6e`, gated `COMPILE_GATE_OK` + `REGRESSION_OK 277/277`. Owner felt-close owed.
 **Lane:** Gear / hero progression (rides WO-808 Option A, shipped 2026-07-30)
 
 ## The idea
@@ -53,3 +53,11 @@ mirrors the shipped troop pattern exactly (troop-upgrades.json `specialAbilities
 threshold) — no new machinery.
 
 **Status → READY.**
+
+---
+
+## LANDED 2026-08-25 - `3362daf6e`
+
+Per-rarity gear ability machinery. Ships with every `weaponAbilities` array EMPTY - the ability identities are the owner's and none was invented. The oracle FAILS if a damage-multiplier field is ever added, so the owner's "change playstyle, not +35% damage" caution is enforced rather than advised. Dual copies verified byte-identical by md5.
+
+⚠ The status line was not flipped in the same commit as the work (CLAUDE.md section 2 / docs/BOARD.md section 2). Corrected here after the pipeline filler caught it - the board advertised finished work as available for several hours, which is the exact failure that got Batch 8 refused.

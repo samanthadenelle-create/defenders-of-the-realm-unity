@@ -1,6 +1,6 @@
 # WORK ORDER 1191 - earned income adds nothing while a resource is over cap
 
-**Status:** READY TO IMPLEMENT
+**Status:** FIXED - landed 2026-08-25 at `bfcb1adaf`. The two oracle reds it shipped with are resolved and the suite is green: `REGRESSION_OK 277/277` on `Builds/reg-wave6.log`. Owner felt-close owed.
 **Minted:** 2026-08-25 (CLI lead, main line; banner bumped 1190 -> 1192 with WO-1190 in the same edit)
 **Silo:** Economy
 **Ruling:** `FOUNDATIONAL_RULINGS.md` section 7 - CITE it, never restate it.
@@ -62,3 +62,25 @@ every log agreed the player had been paid while the bank took nothing.
 implementing - WO-978 found four callers that all reported wrongly, which is evidence these paths are
 numerous and were not centralised. If they are not centralised, say so and propose the seam rather
 than patching four places.
+
+---
+
+## LANDED 2026-08-25 - `bfcb1adaf`
+
+**The mechanics were already correct** and were verified at source rather than taken on report:
+`IsClampable` gates on `EarnedIncome` only, purchases grant through `GrantInternal(PurchasedOrPromised)`
+and never reach `ClampGrant`, and `ClampGrant`'s `room = max(0, max - current)` already returned zero
+above the cap. **The clamp audit found NOTHING anywhere that clamps a balance down to the cap** - so no
+purchased value was ever at risk.
+
+What landed is the framing: `OverCap` + `Current` on the status, the warn branched so `BANK FULL ...
+LOST n` never appears above the cap, and the toast reading as a state rather than a danger.
+
+⭐ **The suite shipped the exact hollow-pass class it exists to catch, and two existing ratchets caught
+it** - a discarded `TrySpend` bool, and two guarded stand-downs landing GREEN. Both fixed with neither
+ratchet touched, widened or exempted. The fix went past the instruction: the guards were a SYMPTOM of a
+hardcoded `Wood` test vehicle - itself the resource-name list this ticket's own rule 1 forbids - so the
+vehicle is discovered at runtime and one guard dissolved rather than being tokenised.
+
+⚠ Follow-up already ticketed as **WO-1194 Part 1**: `HasHeadroom` returns false at OR above cap, so two
+other surfaces still say "Bank full" to a player who paid to be there.

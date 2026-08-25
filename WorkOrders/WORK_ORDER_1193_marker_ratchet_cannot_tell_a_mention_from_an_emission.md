@@ -1,6 +1,6 @@
 # WORK ORDER 1193 - the marker ratchet cannot tell a MENTION from an EMISSION
 
-**Status:** READY TO IMPLEMENT
+**Status:** FIXED - landed 2026-08-25 at `9ad4ddcfd` (`Assets/Editor/Regression/RegressionMarkerRegression.cs`). Verified at source this session: string literals are length-preserved-masked and ownership counts only where a marker reaches a `MarkerSink` (line 339). Measured 253 owner pairs vs 257 under the old text scan, zero orphaned markers. Owner felt-close owed.
 **Minted:** 2026-08-25 (CLI lead, main line; banner bumped 1193 -> 1194 in the same edit)
 **Silo:** Tooling / gates
 **Origin:** surfaced by WO-1080's implementation, 2026-08-25, when it tripped the ratchet with a

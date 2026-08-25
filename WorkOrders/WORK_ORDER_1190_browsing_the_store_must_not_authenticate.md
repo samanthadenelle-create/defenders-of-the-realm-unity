@@ -1,6 +1,6 @@
 # WORK ORDER 1190 - browsing the store must not ask for an authorization
 
-**Status:** READY TO IMPLEMENT
+**Status:** FIXED - landed 2026-08-25 at `aefd62837` (`PackStore.cs`, `PurchaseQuoteService.cs`, `StorePackCard.cs`, `api/purchases/quote.js`). Verified at source this session: `RefreshPricesAsync` is public and takes a null/unconnected wallet, and a priced-but-not-sellable SKU renders a worded plate instead of a Buy control. Sellability gating unmoved. Owner felt-close owed.
 **Minted:** 2026-08-25 (CLI lead, main line; banner bumped 1190 -> 1192 with WO-1191 in the same edit)
 **Silo:** Monetization / wallet
 **Origin:** owner, 2026-08-25: *"I don't think that as soon as you click the store button that it

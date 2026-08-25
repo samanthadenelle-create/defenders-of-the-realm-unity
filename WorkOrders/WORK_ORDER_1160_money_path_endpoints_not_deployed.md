@@ -234,3 +234,30 @@ This is a **per-deploy** approval for this one promotion of `api/`, nothing wide
 ⚠ **STATUS STAYS `BLOCKED` UNTIL THE LEAD POSTS THAT EVIDENCE.** A deploy of HEAD is running at the
 time of writing; approval is not completion. The unblock is the four checks above, posted in this
 ticket with the commit hash.
+
+---
+
+## EVIDENCE CORRECTION 2026-08-25 - the primary sha proves nothing
+
+This ticket's status cites **`e2e07f1c0`** as evidence that `api/` reached production.
+**Verified at source: that commit contains ZERO files under `api/`.** It is
+*"Fourteen status corrections, and a false parser defect I nearly had written into a ticket"* -
+15 `WorkOrders/*.md` files and `BOARD.html`. It cannot evidence a backend deploy.
+
+⛔ **This is a false provenance record on the MONEY PATH.** The question it exists to answer is
+"when did `/api/purchases/quote` go live, and from what code" - and the primary citation points at a
+commit with no backend in it.
+
+**What IS real evidence, in order of strength:**
+1. The **deployment id `dpl_Gvyu7vQxZwMyM73bp7WjXC7xgnQd`** - the only artifact that records a deploy.
+2. **`2c3ed6c24`** (the ticket's secondary citation) - a genuine backend commit.
+3. `BATCH_STATE.md`'s independent assertion that `/api/purchases/quote`, `/api/auth/session`,
+   `/api/bug-report` and `/api/admin/schema-shape` all respond where they previously 404'd.
+
+⚠ **NOT corrected in the status line, because it cannot be settled from this lane.** Confirming which
+commit that deployment actually built requires Vercel access, which this seat does not have. ⭐ Whoever
+has it should resolve the deployment id to its commit and replace the sha. ⛔ Until then, do not cite
+`e2e07f1c0` for anything about `api/`.
+
+*(Found by the board keeper's reverse sweep - checking tickets that claim DONE for work that is
+actually absent. Every other cited sha in the WO-1160+ band resolved correctly.)*

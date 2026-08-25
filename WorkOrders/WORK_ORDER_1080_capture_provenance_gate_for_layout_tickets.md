@@ -1,6 +1,6 @@
 # WORK ORDER 1080 — A layout ticket must cite the capture it came from, and the capture must cite the tree it measured
 
-**Status:** READY TO IMPLEMENT
+**Status:** FIXED - landed 2026-08-25 at `cf7cd1343`. Verified at source this session: `UICaptureLaunch.cs` emits `UI_CAPTURE_HEAD` (line 612) and `UI_CAPTURE_STAMP`, `Assets/Editor/Regression/CaptureProvenanceRegression.cs` exists, and `tools/board_build.py` judges Capture: staleness by `git merge-base --is-ancestor`. Owner felt-close owed.
 
 **Minted:** 2026-08-24, UI seat, from the `CLI_LANES_WO_NUMBERS.md` UI-seat block (1080; banner bumped 1080 → 1081 in the same edit).
 ⚠ **First drafted as WO-1079 and renumbered before it left this seat.** A concurrent UI-seat edit took 1079 for the MON mainnet-SKR canary rename while this file was being written, and that file was first-on-disk-and-referenced (CLAUDE.md §2). The banner was re-read and the mint moved to 1080 — which is itself an instance of the class this ticket is about: state read once, acted on later.

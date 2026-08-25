@@ -1,6 +1,6 @@
 # WORK ORDER 1188 - the purchase screen must stay until the grant is CONFIRMED, then say what arrived
 
-**Status:** READY TO IMPLEMENT
+**Status:** FIXED - landed 2026-08-25 at `e7d3bcf6e`. Verified at source this session: `PackStore.AwaitGrantConfirmationAsync` (line 2535) polls `GrantPollAttempts = 7` at 2/4/8/15/30/30s under the 180s WorldHold ceiling, and the receipt reports MEASURED credited amounts. Owner felt-close owed.
 **Minted:** 2026-08-25 (CLI lead, main line; banner bumped 1188 -> 1189 in the same edit)
 **Silo:** Monetization / store UX
 **Origin:** owner, 2026-08-25, verbatim: *"after the purchase is complete I think that we need to
