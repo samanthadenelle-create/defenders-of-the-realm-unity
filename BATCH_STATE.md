@@ -55,6 +55,38 @@
 
 ---
 
+## ⛔⛔ RULED 2026-08-24 - THE FOOD SKU IDS **DO** RENAME. WO-1177 + WO-1163 ARE **ONE SEQUENTIAL SEAT**.
+
+Owner: **yes**, the food SKU ids rename.
+
+⛔ **THIS UN-PARALLELISES TWO LANES THAT ARE BOTH BEING WORKED RIGHT NOW.** WO-1163 must now touch
+`api/_lib/purchase-catalog.js` (the `USD_ANCHORS` block holds the literals
+`impulse-food-small|medium|large` under the **mirror law**) and `test/purchases.quote.test.js`
+(`:132` hardcodes `['wood','iron','food','crystals','coins']`). **Those are WO-1177's files.**
+
+⭐ **THE ORDER: WO-1177 first, complete and handed back. THEN WO-1163's SKU remap.**
+⚠ The **earlier pin on WO-1163 is now SUPERSEDED** — it said *"do not touch `purchase-catalog.js`; the
+food→stone SKU remap is a follow-up after batch 1 returns."* That is still the sequencing, but the
+remap is now **in scope for WO-1163**, not a separate follow-up. ⛔ It just may not start until 1177 is
+back.
+
+⚠ **Three files move together or the mirror test fails:** the server `USD_ANCHORS` table, both
+canonical `packs.json` copies, and the quote test's hardcoded resource-key list. ⭐ **The mirror law
+proves them equal on every run** — a partial rename is a red build, not a staging step.
+
+### ⭐ Owner has already recorded the art: `blue_mine` (KayKit)
+
+The stone/mine node **has its asset already** — the owner recorded `blue_mine` from the KayKit pack.
+⚠ **Later the collector becomes a proper MINE NODE**, not a re-skinned farm. ⛔ That is a **follow-up,
+not WO-1163's scope** — 1163 renames display strings and remaps SKUs on frozen ids; swapping the world
+node to a mine is its own change with its own capture.
+
+⭐ Worth knowing now because it settles a question the ticket never asked: **the rename is not
+permanently cosmetic.** Quarry/Stoneyard get real geometry eventually, so ⛔ **do not "solve" the
+food→stone visual by editing the farm prefab** — that work is already provisioned.
+
+---
+
 ## 🆕 BATCH 5 - SIX PARALLEL SEATS (composed 2026-08-24 from the corrected board)
 
 ⭐ **There IS more handable work now** - six seats, proven file-disjoint by listing paths. Not padding:
