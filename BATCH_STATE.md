@@ -72,6 +72,75 @@
 
 ---
 
+## ⭐⭐ BATCH 9 REVISION 2 — DECISIONS, NOT QUESTIONS. CODEX IS UNBLOCKED. (2026-08-25 08:35)
+
+**The lane is paused waiting on the lead. Every open question it raised is answered below.** Two rows
+change, four are confirmed as-is. ⛔ Nothing here asks the lane for another intake review - proceed.
+
+### 1. WO-1170 site 6 — ⛔ WITHDRAWN FROM BATCH 9. The lane was right and the ticket is wrong.
+
+Codex asked: name the canonical source and choose CODEGEN, or authorize DELETE and define which flow
+must refuse visibly. **Neither is available, and the lead verified why rather than picking one:**
+
+- ⛔ **CODEGEN has no input.** `Assets/Resources/Data/Canonical/` contains `enemies.json` and
+  `enemy-roles.json` and **NO per-enemy VFX catalog**. `EnemyTypeVfxLibrary` resolves
+  family Resources asset -> default Resources asset -> synthesized instance. There is no JSON to
+  generate a `.g.cs` FROM. Generating one would only RENAME a hand-authored fallback, which the lane
+  already said and was right about.
+- ⛔ **DELETE is unsafe as specified.** The synthesized rung supplies a non-null `EnemyTypeVfxSet` and
+  **preserves telegraph timing**. Removing it turns a visible combat warning into a missing cue. That
+  is a gameplay-safety change wearing a refactor's clothes, and it is not the lead's to authorize.
+
+⭐ **So site 6 is MIS-SPECIFIED, not merely under-specified.** It is withdrawn and sent back for a spec
+pass. It needs either an authored canonical VFX catalog (new content - the owner's), or a ruled
+refusal boundary naming which enemy-spawn/combat flow must fail LOUDLY when the asset is absent.
+⛔ **Do not attempt it. Do not return a partial.**
+
+### 2. WO-1173 — RE-SCOPED. My "ONE ship-chain script" pin WAS the defect.
+
+Codex found the trigger surfaces are SPLIT - device/store in the Android chain, production API/WebGL in
+the deploy chain - so one script cannot demonstrate the ticket's requirement (d). **That is correct and
+the pin was mine.**
+
+**The grant is WIDENED** to every required trigger surface: `morning-ship-chain.ps1`,
+`overnight-apk-build.ps1`, `distribute-android.ps1`, `overnight-webgl-deploy.ps1`, `.githooks/pre-push`
+- take only the ones the ticket's trigger list actually requires and say which you took.
+
+**And the lane is SPLIT, because two of its four acceptance items are not lane-completable:**
+- ⭐ **IN SCOPE (do this):** wire `tools/schema-parity.mjs` into the trigger surfaces so it BLOCKS
+  anything reaching a device or store, and create `api/migrations/` with the tracked migration.
+- ⛔ **OUT OF SCOPE, owner/ops (do NOT attempt, do NOT block on):** `SCHEMA_PARITY_OK` against
+  PRODUCTION, and the deliberately-narrowed-CHECK **RED** proof in a scratch DB. `DATABASE_URL` is
+  redacted for every seat here including the lead. Those two are being tracked separately and the lane
+  is NOT expected to close them.
+
+⚠ **Which repair SQL is authoritative:** ⛔ NONE of the `tmp/neon-repair-*.sql` files. They are
+untracked operational material from a one-off incident. **Author the tracked migration fresh in
+`api/migrations/`; do not promote a `tmp/` file.**
+
+### 3. WO-1170 site 2 — CONFIRMED, proceed and return it WHOLE.
+
+The lane reserved `D:\eoa-codex-b9-1170s2` and declined to offer a partial because it owns the shared
+parity surface. ⭐ **That judgement is correct and is now the instruction:** land it whole - generator,
+`.g.cs`, all three hand mirrors removed, and the shared parity/oracle registration. ⛔ Sites 3 and 6 do
+not touch `DataRegression.cs`; site 6 is withdrawn entirely, so the contention is reduced to sites 2
+and 3, and **site 2 owns the registration.**
+
+### 4. Site 3, PROD-014(b), WO-1171 §4 — UNCHANGED and unblocked.
+
+No question was raised on these three and no return has arrived. Their pins in the Batch 9 table stand:
+site 3 is small and mechanical; **PROD-014 is slice (b) ONLY** and its acceptance needs a headed
+capture the LEAD will run (do not block on it - hand back the source work and say the capture is
+owed); **WO-1171 writes `Settings/` only, `Wallet/` is READ-ONLY.**
+
+### ⭐ Net: Batch 9 is FIVE lanes, not six. Four are executable now, one is re-scoped and executable.
+
+⛔ **There is no Batch 10 to wait for.** It was drafted and is one row; it has not been couriered and is
+not blocking anything. Finish what is executable in Batch 9 and hand back per lane - **partial returns
+are welcome on every lane except site 2**, which owns a shared surface and must land whole.
+
+---
+
 ## 🆕 BATCH 9 — SIX VERIFIED LANES FOR CODEX (2026-08-25, rescoped after the Batch 9 intake review)
 
 > ⭐ **Every row below was verified AT SOURCE by a dedicated pipeline seat before it was written here** -
