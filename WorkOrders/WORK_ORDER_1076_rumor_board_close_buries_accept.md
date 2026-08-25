@@ -1,6 +1,6 @@
 # WORK ORDER 1076 — RumorBoardPanel: the Close button is stacked on Accept and Track; only one can win the tap
 
-**Status:** READY TO IMPLEMENT - REOPENED 2026-08-25. The "already shipped in `a2162f17d`" flip is REFUTED by a fresh capture (`Builds/uicap-0825am.log`, 06:00): all 18 findings are still live.
+**Status:** FIXED - the PANEL was already correct (a2162f17d); the CAPTURE HARNESS was re-breaking it for the camera. Harness fix + a fail-safe floor landed 2026-08-25. Owner felt-close owed.
 
 **Minted:** 2026-08-24, UI seat, from the `CLI_LANES_WO_NUMBERS.md` UI-seat block (1076; banner bumped 1075 → 1079 in the same edit).
 **Parent:** WO-1060 (`WORK_ORDER_1060_touch_clamp_and_overlap_oracle.md`) — the touch/overlap oracle that found this.
@@ -205,3 +205,73 @@ return **zero** touch findings on the fresh capture, so their fixes are proven, 
 
 **Remaining after this ticket lands: 3**, all on `BuildPaletteDock` - a panel no ticket covered until
 today. See the newly minted work order for it.
+
+---
+
+## CORRECTION 2026-08-25 (CLI lead) - I REOPENED THIS TICKET ON A FALSE READING
+
+⛔ **The "REOPENED 2026-08-25" section above is WRONG in its conclusion and is superseded by this
+block.** It is kept, not deleted, because the mistake is the useful part.
+
+### What I asserted this morning, and why it was wrong
+
+I read 18 findings on a fresh capture, saw `RumorBoardLayoutRegression` green in the same run, and
+concluded the panel was broken and the regression was a hollow gate asserting authored intent instead
+of resolved geometry. **The panel was fine. The harness was re-authoring it before photographing it.**
+
+`Assets/Editor/UICaptureLaunch.cs:1832-1833` held a PRIVATE COPY of the retired `0.05` portrait floor
+and wrote it onto `_detailPane` **after `Open()` returned and before `RenderCanvasToPng` ->
+`AuditGeometry` ran**. So the oracle measured the harness's number, not the panel's.
+`grep -rn "detailPane\.anchor"` finds exactly one external writer, and that was it.
+
+`a2162f17d` had ALREADY replaced that literal with `CloseReserveTopFraction`, which reads the Close's
+own seated anchor - its own comment says *"instead of hoping a hardcoded 0.05 clears it."* The
+regression was green **because the panel is correct**, not because the check is hollow.
+
+⭐ **On a real device the portrait Rumor Board has been correct since 2026-08-21**, with roughly 60 ref
+px between the CTA row and the Close. No player ever saw this defect. The 18 findings were phantoms
+produced by the measuring instrument.
+
+### The arithmetic that proves it, entirely from `Builds/uicap-0825am.log`
+
+Flow line at `:3872` for 1080x2340: `canvasH=2120 panelAnchors=(0.08,0.10)-(0.92,0.90)
+closeBandTop=0.128`. The panel computes its floor as `Clamp(0.128 + 0.02, 0.16, 0.45)` = **0.16**.
+The captured pane bottom resolves to exactly **0.050**. Both cannot be true: something wrote 0.05
+after the panel computed 0.16. Same at 1200x2670.
+
+### It IS still this repo's dominant failure - just not the one I named
+
+**One fact written in two places, and the copies drifted.** The portrait floor lived in the panel AND
+in the harness; the panel was corrected and the harness's copy was not. Identical in shape to the
+stale WO-number block, the retired dependency table, the hardcoded repo root and the 3-of-28 fallback
+catalog.
+
+⭐ **And the new rule it earns: a harness must PHOTOGRAPH the panel, never RE-AUTHOR it.** Any
+re-assert of production layout inside the capture path is a second source of truth for that layout,
+and it will drift. When it does, it manufactures findings that look exactly like real defects - this
+one reopened a finished ticket and cost a morning.
+
+### What landed
+
+1. **`UICaptureLaunch.cs:1832-1833` DELETED** (lead, not updated to a new number - updating it would
+   have preserved the duplicate). A comment in its place explains why nothing may be re-added there.
+2. **`RumorBoardPanel.cs`** - the portrait floor moved out of the ANCHOR and into a **pixel offset**
+   (`offsetMin`), so it now fails safe: an anchor overwrite can only push the pane further from the
+   Close, never back into it. Purely geometric; nothing re-sorted, no `SetAsLastSibling`, `DetailCtaPx`
+   still 112 so no SUB-TOUCH-FLOOR band can appear. `TouchBaseline` untouched.
+3. A `FlowTrace` line now publishes the resolved floor in both fraction and px, so the next capture
+   NAMES the number instead of requiring this reconstruction. That is the falsifiable-assertion rule
+   (`docs/INSTRUMENTATION_STANDARD.md` section 1.4b) applied to the thing that fooled me.
+
+### Ticket errors found on the way, recorded so nobody re-inherits them
+
+- The ticket's "Root cause - visible in the source" section blames `FooterBandPx = 200f` as "the band
+  that seats the shared Close". `BuildFooterBand` returns early on portrait and does not seat the
+  Close on any path. The Close is seated by `ElarionUiKit.SeatSharedCloseInside`.
+- The findings are emitted as `[RumorBoard_1080x2340 @1080x2340]`, not the `[RumorBoard]` this ticket
+  quotes. A matcher keyed on the short form matches nothing.
+- `193.6` confirmed at 1080x2340 and `193.4` at 1200x2670. The rounded "194" in WO-1060's prose is
+  wrong, as the pin said.
+
+⚠ **ACCEPTANCE IS A FRESH CAPTURE SHOWING RumorBoard AT ZERO FINDINGS** - not this reasoning. The
+numbers in the implementing seat's report are arithmetic reproduced from the log, not from a new run.

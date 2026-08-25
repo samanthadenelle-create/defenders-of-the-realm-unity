@@ -1829,8 +1829,17 @@ namespace DeNelle.Editor
                     {
                         listViewport.anchorMin = new Vector2(0.03f, 0.48f);
                         listViewport.anchorMax = new Vector2(0.97f, 0.855f);
-                        detailPane.anchorMin = new Vector2(0.05f, 0.05f);
-                        detailPane.anchorMax = new Vector2(0.95f, 0.46f);
+                        // WO-1076 (2026-08-25): the detailPane anchor re-assert is DELETED, not
+                        // updated. It carried a PRIVATE COPY of the retired 0.05 portrait floor and
+                        // wrote it back AFTER Open() and BEFORE RenderCanvasToPng -> AuditGeometry,
+                        // so the oracle measured THIS number instead of the panel's. a2162f17d had
+                        // already replaced 0.05 with RumorBoardPanel.CloseReserveTopFraction, which
+                        // reads the Close's own seated anchor -- its commit says "instead of hoping
+                        // a hardcoded 0.05 clears it". The panel was correct on device the whole
+                        // time; only the captured frame was wrong, and it produced 18 phantom
+                        // findings that reopened a finished ticket.
+                        // A harness must PHOTOGRAPH the panel, never RE-AUTHOR it. Re-adding any
+                        // literal here re-creates the duplicated constant this deletion removes.
                     }
                     else
                     {

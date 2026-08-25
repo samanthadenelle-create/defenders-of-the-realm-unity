@@ -268,6 +268,9 @@ namespace DeNelle.Village.Hero
             Transform listHost, detailHost;
             float listTopInsetPx = 0f;
             float listBottomInsetPx = 0f;
+            // WO-1076: the portrait pane's FLOOR, carried as a PIXEL OFFSET rather than folded
+            // into detailMin.y. Zero on every non-portrait path (the anchors alone place those).
+            float detailBottomOffsetPx = 0f;
             if (portrait)
             {
                 // WO-941: the pane's FLOOR is the top of the shared Close box + a gap, MEASURED
@@ -290,8 +293,36 @@ namespace DeNelle.Village.Hero
                         ", top " + detailTopY.ToString("F3") + ", panelH " + panelHPx.ToString("F0") + " px).");
                 }
 
+                // =============================================================
+                //  WO-1076 -- THE FLOOR MOVES OUT OF THE ANCHOR AND INTO THE OFFSET.
+                // -------------------------------------------------------------
+                //  The WO-941 arithmetic above is CORRECT and was never the defect: at
+                //  1080x2340 it yields floor 0.16 (closeTop 0.128 + gap 0.02, clamped up),
+                //  which seats the CTA row at y -570..-458 against a Close at -763..-631 --
+                //  60.7 ref px of daylight. The fresh 2026-08-25 capture nonetheless measured
+                //  the CTA at -757.1..-645.1, i.e. a pane bottom of EXACTLY 0.05, the retired
+                //  literal. The reason is not in this file: the capture harness re-asserts
+                //  its own copy of the portrait anchors onto _detailPane AFTER Open() returns
+                //  and BEFORE the geometry audit, and its copy still carries the pre-WO-941
+                //  0.05. One number, authored twice -- the duplicated-state failure CLAUDE.md
+                //  sec.2/sec.5 keeps catching, arriving this time through a test harness.
+                //
+                //  So the floor is expressed where an anchor rewrite CANNOT reach it: as a
+                //  fixed pixel OFFSET above whatever the pane's bottom anchor resolves to.
+                //   - Untouched (the shipped device path): anchor 0 + floorPx == the exact
+                //     rect the fraction produced. Byte-identical geometry, zero visual delta.
+                //   - Overwritten with a lower anchor: the offset still applies on top, so the
+                //     pane can only ever be pushed FURTHER FROM the Close, never back into it.
+                //  A floor that can only fail SAFE. This is geometry, not z-order: nothing is
+                //  re-sorted, and a transparent raycaster could not have been fixed by sorting.
+                // =============================================================
+                detailBottomOffsetPx = detailFloorY * panelHPx;
                 listMin = new Vector2(0.03f, 0.48f); listMax = new Vector2(0.97f, 0.855f);
-                detailMin = new Vector2(0.05f, detailFloorY); detailMax = new Vector2(0.95f, detailTopY);
+                detailMin = new Vector2(0.05f, 0f); detailMax = new Vector2(0.95f, detailTopY);
+                DeNelle.Core.Diagnostics.FlowTrace.Step("UI", string.Format(
+                    "RumorBoard portrait detail floor: frac={0:F3} -> {1:F1} px above the pane's " +
+                    "bottom anchor (panelH {2:F0} px, top {3:F3}). CTA band bottom = that + {4:F0} px.",
+                    detailFloorY, detailBottomOffsetPx, panelHPx, detailTopY, DetailPadPx));
                 listHost = bodyHost;
                 detailHost = panel.transform;
                 // Portrait stacks the panes and the band hangs from the BODY top, well above
@@ -378,7 +409,9 @@ namespace DeNelle.Village.Hero
             _detailPane = detailGo.GetComponent<RectTransform>();
             _detailPane.anchorMin = detailMin;
             _detailPane.anchorMax = detailMax;
-            _detailPane.offsetMin = Vector2.zero; _detailPane.offsetMax = Vector2.zero;
+            // WO-1076: the portrait Close-band reserve rides in offsetMin.y (see the block that
+            // sets detailBottomOffsetPx). Zero on every other path, so those rects are unchanged.
+            _detailPane.offsetMin = new Vector2(0f, detailBottomOffsetPx); _detailPane.offsetMax = Vector2.zero;
             var dImg = detailGo.GetComponent<Image>();
             // WO-866: the outer Image is now the 2px BORDER (chip language, scaled up) and an
             // inset Fill child carries the obsidian. Solid alpha 1: the plate must COVER the

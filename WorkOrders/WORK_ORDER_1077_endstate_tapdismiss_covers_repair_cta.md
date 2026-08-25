@@ -1,6 +1,6 @@
 # WORK ORDER 1077 — EndStateView: the full-panel dismiss catcher sits on top of the Repair All CTA
 
-**Status:** READY TO IMPLEMENT
+**Status:** FIXED - proven by the 2026-08-25 capture (zero findings on EndStateView); owner felt-close owed.
 
 **Minted:** 2026-08-24, UI seat, from the `CLI_LANES_WO_NUMBERS.md` UI-seat block (1077; banner bumped 1075 → 1079 in the same edit).
 **Parent:** WO-1060 (`WORK_ORDER_1060_touch_clamp_and_overlap_oracle.md`) — the touch/overlap oracle that found this.
@@ -113,3 +113,19 @@ count, or a raycast identity — all readable without hue.
 - ⛔ `Assets/_Modules/Core/UI/LayoutOracle.cs` **unless the lead explicitly rules path (b)** — and then
       it is one edit, coordinated with WO-1078, never two seats editing the oracle at once.
 - ⛔ `ElarionUiKit.MinTouchPx` / `CanonCtaHeight`.
+
+---
+
+## Status corrected 2026-08-25 (CLI lead)
+
+Proven by a FRESH capture: `Builds/uicap-0825am.log` (2026-08-25 06:00, marker `UI_CAPTURE_OK 89`). The panel returns **ZERO** `touch-oracle` findings.
+
+The fix landed in `ee7763db3`; the status line was never flipped, so the board advertised finished work as available. That is the exact failure `docs/BOARD.md` section 2 exists to prevent - the board is only as truthful as these lines.
+
+Awaiting the owner's felt-close (PO closes, not CLI - CLAUDE.md section 13).
+
+!! The `UI_TOUCH_FAIL x43` baseline this ticket computed against is STALE. Measured total on 2026-08-25 is **21**, and none of it is this panel.
+
+Previous status line, kept for the record:
+
+> **Status:** READY TO IMPLEMENT
