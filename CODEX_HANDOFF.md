@@ -49,9 +49,13 @@ very process built to prevent it.
 
 `D:\eoa-codex-batch4` holds **WO-1163**, **WO-917 Phase B**, and **WO-1179's core**.
 ⭐ **WO-1161 needs no edit** — verified byte-identical in both canonical copies, corrected 2026-08-23
-by `4f6dfc251`. Its banner was stale; the clearing agent is fixing it. ⚠ Its **§6 remains open**
-(`EchoCardVM.FaucetBuildingIdFor` still routes iron to `collector_forge`) and is a **separate change
-needing a captured run**.
+by `4f6dfc251`. Its banner was stale; the clearing agent is fixing it. ⚠ **CORRECTED 2026-08-24 - the §6 sentence I wrote here was STALE.** At HEAD
+`EchoCardVM.FaucetBuildingIdFor("iron")` returns `ResourceBuildingProgression.ForgeId`, and
+**`ForgeId = "forge"`** (`ResourceBuildingProgression.cs:175`) - **not** `collector_forge`. The
+pairing seam also landed on 08-23. ⭐ What genuinely remains in §6 is the **display duplication**
+(`collector_forge`/`forge` both render "Forge"; `collector_lumbermill`/`lumbermill` both render
+"Lumber Mill") plus the captured run - **not** a mis-routed faucet.
+⚠ I repeated the stale sentence from the ticket without checking it. The clearing agent caught it.
 
 ---
 
