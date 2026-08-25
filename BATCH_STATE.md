@@ -89,6 +89,31 @@
 
 ---
 
+## ⛔ WHEN WORK COMES BACK — the lead CONFIRMS, then ANNOTATES or COMMITS. The lead does NOT FIX.
+
+**Owner ruling 2026-08-24.** Three outcomes on a handback, and only three:
+
+| outcome | what the lead does |
+|---|---|
+| **Correct** | Verify at source → gate → **commit** by explicit path |
+| **Wrong or incomplete** | ⭐ **ANNOTATE and SEND BACK.** ⛔ Do not repair it |
+| **Refused with a reason** | Read the reason, rule on it or route it — a refusal is a completion |
+
+⛔ **The lead fixing a handback is the failure this rule closes.** It hides the defect from the seat that
+made it, so the same mistake returns; it makes the lead the least-reviewed writer in the system; and it
+means nobody ever learns which specs are unclear. ⚠ **It also happened repeatedly on 2026-08-24** — the
+lead corrected a status flip, restored a file it had itself broken, and edited an oracle rather than
+sending any of it back.
+
+⭐ **An annotation is worth more than a fix.** It names *what* is wrong and *why*, so the next spec is
+better. A silent repair teaches nobody and the lead's own error rate today was the highest of any seat.
+
+⚠ **The one exception, and it is narrow:** the lead may touch a handback to **run the gate** — the Unity
+lock and the commit are the lead's alone. ⛔ Gating is not fixing. If the gate fails, that is an
+annotation, not a repair.
+
+---
+
 ## 📥 RESULTS COME BACK IN A SEPARATE FILE — ⛔ do not write them here
 
 The owner creates and carries a **separate result file** for the dev lane's handbacks. ⛔ **Nothing is
