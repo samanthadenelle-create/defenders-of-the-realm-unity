@@ -1,6 +1,6 @@
 # WORK ORDER 1198 - show the real price, and announce the saving
 
-**Status:** READY TO IMPLEMENT
+**Status:** FIXED 2026-08-25 (`5b375cb82`) - all five build items landed; awaiting owner felt-verify (a price on the approval screen is a felt judgement). SERVER: `api/_lib/purchase-catalog.js:358` ships `usdEffective: quotedUsd` - the exact figure that priced the SKR - alongside a server-computed `usdSaving`, and `api/purchases/quote.js:121` forwards both, while `:144` keeps the pinned proof-of-rail canary null so it renders nothing rather than `$0.00`. `usdAnchor` STAYS as the auditable authored price; neither replaces the other. CLIENT: `PurchaseQuoteService.cs:84` binds `usdEffective`; `UsdApproxLabel` (`:189`) shows the effective figure as THE price and deliberately refuses to fall back to `UsdAnchor` on a discounted quote, which is what retires the contradictory full-price label; `UsdSavingLabel` (`:203`) renders `was $2.99 - save $0.60` - a word AND a number, ASCII, legible in greyscale, no colour or strikethrough - and `PackStore.cs:2412-2416` puts it on the confirmation string. The `discountedUsd` pin was RE-POINTED, NEVER DELETED (`test/purchases.quote.test.js:270-289`): it now fails if client code derives a price or binds payment to USD/rate, so the AUTHORITY fear it encoded is kept while display is allowed. Gate: `COMPILE_GATE_OK` + `REGRESSION_OK 279/279 suites, 0 red`.
 **Minted:** 2026-08-25 (CLI lead, main line; banner bumped 1198 -> 1199 in the same edit)
 **Silo:** Monetization / store
 **Ruling:** owner, 2026-08-25.
