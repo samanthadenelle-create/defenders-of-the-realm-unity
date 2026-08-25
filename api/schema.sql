@@ -1012,7 +1012,17 @@ CREATE TABLE IF NOT EXISTS purchase_quotes (
     issued_at           TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     expires_at          TIMESTAMPTZ NOT NULL,
     consumed_at         TIMESTAMPTZ,
-    consumed_tx         TEXT                        -- the signature that spent it
+    consumed_tx         TEXT,                       -- the signature that spent it
+    -- ⭐ WO-1177, the shortfall discount. BOTH NULLABLE BY DESIGN: every quote
+    -- issued before 2026-08-24, and every undiscounted quote after it,
+    -- legitimately has no discount. A NOT NULL DEFAULT 0 would make "no discount"
+    -- and "a zero-bps discount" indistinguishable — and this column exists
+    -- precisely so the real discount rate is a number we can READ, not assume.
+    discount_bps        INT,                        -- basis points off usd_anchor (2000 = 20%)
+    -- ⛔ The SERVER's label, never the client's `reason` hint. That hint is
+    -- logged and never trusted; storing it here would turn an audit column into
+    -- a repetition of whatever the caller typed.
+    discount_reason     TEXT
 );
 
 -- The lookup verify.js actually does.
@@ -1021,6 +1031,12 @@ CREATE INDEX IF NOT EXISTS idx_purchase_quotes_wallet_sku
 -- Sweeping expired, never-consumed quotes.
 CREATE INDEX IF NOT EXISTS idx_purchase_quotes_expiry
     ON purchase_quotes (expires_at) WHERE consumed_at IS NULL;
+-- ⭐ WO-1177's 7-day rate limit asks "has this wallet had a discounted quote
+-- since NOW() - 7 days". Without this index that is a full scan of every quote
+-- ever issued, ON THE MONEY PATH, at purchase time. Partial: only discounted
+-- rows can ever be the answer.
+CREATE INDEX IF NOT EXISTS idx_purchase_quotes_discount
+    ON purchase_quotes (wallet, issued_at DESC) WHERE discount_bps IS NOT NULL;
 
 -- =============================================================================
 -- END OF SCHEMA
