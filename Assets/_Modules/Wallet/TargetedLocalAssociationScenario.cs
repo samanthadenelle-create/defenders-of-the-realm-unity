@@ -511,9 +511,103 @@ namespace DeNelle.Wallet
         {
             try
             {
-                var installed = new List<string>();
+                var installed = QueryInstalledWalletPackages(_currentActivity);
+                string reason;
+                string resolved = ResolveWalletPackage(installed, out reason);
+                FlowTrace.Step("Wallet", "MWA package resolved=" +
+                    (string.IsNullOrEmpty(resolved) ? "<implicit>" : resolved) + " reason=" + reason + ".");
+                return resolved;
+            }
+            catch (Exception ex)
+            {
+                // Package-visibility query is best effort. Never block connect.
+                FlowTrace.Warn("Wallet",
+                    $"MWA handler query failed ({ex.GetType().Name}: {ex.Message}) - using the implicit intent.");
+                return null;
+            }
+        }
 
-                using (var pm = _currentActivity.Call<AndroidJavaObject>("getPackageManager"))
+        /// <summary>Installed MWA package ids for the player-facing picker.</summary>
+        public static IReadOnlyList<string> GetInstalledWalletPackages()
+        {
+#if UNITY_ANDROID && !UNITY_EDITOR && SOLANA_SDK
+            try
+            {
+                using (var unityPlayer = new AndroidJavaClass("com.unity3d.player.UnityPlayer"))
+                using (var activity = unityPlayer.GetStatic<AndroidJavaObject>("currentActivity"))
+                    return QueryInstalledWalletPackages(activity).ToArray();
+            }
+            catch (Exception ex)
+            {
+                FlowTrace.Warn("Wallet", "MWA picker handler query failed (" +
+                    ex.GetType().Name + ": " + ex.Message + ").");
+                return Array.Empty<string>();
+            }
+#else
+            return Array.Empty<string>();
+#endif
+        }
+
+        /// <summary>
+        /// Player-facing switch entry point. The caller must present the ruled
+        /// kingdom warning first; this method independently refuses an unconfirmed
+        /// or currently uninstalled selection and clears the sealed session on change.
+        /// </summary>
+        public static bool TrySwitchPreferredWallet(
+            string packageName, bool kingdomSwitchConfirmed, out string reason)
+        {
+            return WalletPreferenceStore.TrySetPreferredPackage(
+                packageName,
+                GetInstalledWalletPackages(),
+                kingdomSwitchConfirmed,
+                out reason);
+        }
+
+        /// <summary>
+        /// Pure resolution seam used by runtime and tests. Stored installed choice
+        /// wins; otherwise the original Seeker-first chain is byte-for-byte intact.
+        /// </summary>
+        public static string ResolveWalletPackage(IReadOnlyList<string> installed, out string reason)
+        {
+            string stored = WalletPreferenceStore.StoredPackage;
+            if (!string.IsNullOrEmpty(stored))
+            {
+                foreach (string have in installed ?? Array.Empty<string>())
+                {
+                    if (string.Equals(have, stored, StringComparison.OrdinalIgnoreCase))
+                    {
+                        reason = "stored choice";
+                        return have;
+                    }
+                }
+                FlowTrace.Warn("Wallet", "MWA stored package " + stored +
+                    " is not installed; falling back to the Seeker-first chain.");
+            }
+
+            for (int rank = 0; rank < PreferredWalletPackages.Length; rank++)
+            {
+                string preferred = PreferredWalletPackages[rank];
+                foreach (string have in installed ?? Array.Empty<string>())
+                {
+                    if (string.Equals(have, preferred, StringComparison.OrdinalIgnoreCase))
+                    {
+                        reason = "chain rank " + (rank + 1);
+                        // Preserve the exact package string used before WO-1196.
+                        return preferred;
+                    }
+                }
+            }
+
+            reason = installed != null && installed.Count > 0
+                ? "installed handlers are outside the known chain; implicit chooser"
+                : "no visible handler; implicit fallback";
+            return null;
+        }
+
+        private static List<string> QueryInstalledWalletPackages(AndroidJavaObject activity)
+        {
+            var installed = new List<string>();
+            using (var pm = activity.Call<AndroidJavaObject>("getPackageManager"))
                 using (var probe = new AndroidJavaObject("android.content.Intent"))
                 using (var uriClass = new AndroidJavaClass("android.net.Uri"))
                 {
@@ -544,32 +638,9 @@ namespace DeNelle.Wallet
                     }
                 }
 
-                FlowTrace.Step("Wallet",
-                    "MWA handlers visible: " + (installed.Count == 0 ? "<none>" : string.Join(", ", installed)));
-
-                foreach (var preferred in PreferredWalletPackages)
-                {
-                    foreach (var have in installed)
-                    {
-                        if (string.Equals(have, preferred, StringComparison.OrdinalIgnoreCase))
-                            return preferred;
-                    }
-                }
-
-                if (installed.Count > 0)
-                {
-                    FlowTrace.Warn("Wallet",
-                        "MWA: a wallet is installed but none is in the preference chain - using the implicit intent.");
-                }
-                return null;
-            }
-            catch (Exception ex)
-            {
-                // Package-visibility query is best effort. Never block connect.
-                FlowTrace.Warn("Wallet",
-                    $"MWA handler query failed ({ex.GetType().Name}: {ex.Message}) - using the implicit intent.");
-                return null;
-            }
+            FlowTrace.Step("Wallet",
+                "MWA handlers visible: " + (installed.Count == 0 ? "<none>" : string.Join(", ", installed)));
+            return installed;
         }
 
         /// <summary>Dials the local socket until the wallet accepts, or the timeout elapses.</summary>

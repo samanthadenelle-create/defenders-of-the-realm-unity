@@ -66,9 +66,11 @@ namespace DeNelle.Village
         private WallRepairController _repair;
         private GameObject _canvas;
         private Button _button;
+        private Button _acknowledgeButton;
         private Image _buttonImg;
         private TextMeshProUGUI _label;
         private float _timer;
+        private string _acknowledgedShortfall = string.Empty;
 
         // Dead-tap tally + its rate gate (OnClick's unaffordable branch).
         private int _refusedTaps;
@@ -288,9 +290,20 @@ namespace DeNelle.Village
             bool affordable = repair != null && repair.CanAffordMaterials(cost);
             CoreCost shortfall = Shortfall(cost);
 
+            string shortfallKey = CostKey(shortfall);
+            if (!affordable && shortfallKey == _acknowledgedShortfall)
+            {
+                // The player explicitly closed this exact refusal. Do not reopen it every
+                // 0.75 seconds; a changed wallet/shortfall produces a new key and may surface.
+                SetVisible(false);
+                return;
+            }
+
             SetVisible(true);
+            if (_acknowledgeButton != null) _acknowledgeButton.gameObject.SetActive(!affordable);
             if (affordable)
             {
+                _acknowledgedShortfall = string.Empty;
                 // Copy lives in WallRepairStrings (LOCALIZE). The old "  (tap)" suffix is
                 // GONE - a button already reads as tappable, and those glyphs were part of
                 // what pushed this line into the kit's ellipsis on the owner's Seeker.
@@ -419,6 +432,9 @@ namespace DeNelle.Village
             };
         }
 
+        private static string CostKey(CoreCost cost) =>
+            $"{cost.wood}:{cost.iron}:{cost.food}:{cost.crystals}";
+
         /// <summary>Compact wallet line for FlowTrace (matches WallRepairController's format).</summary>
         private static string WalletLine()
         {
@@ -477,6 +493,25 @@ namespace DeNelle.Village
                         $"size=[{_label.fontSizeMin:F0}..{_label.fontSizeMax:F0}]");
                 }
             }
+
+            // PROD-014(b): an unaffordable repair is a refusal card, not a dead button.
+            // The shared labeled Close is visible only in that state. It routes through the
+            // controller's one existing cancellation path, which clears selection + marker.
+            _acknowledgeButton = ElarionUiKit.ObsidianCloseButton(_canvas.transform,
+                AcknowledgeRefusal, new Vector4(0.215f, 0.42f, 0.405f, 0.58f));
+            if (_acknowledgeButton != null) _acknowledgeButton.gameObject.SetActive(false);
+        }
+
+        private void AcknowledgeRefusal()
+        {
+            var repair = EnsureRepair();
+            if (repair != null)
+            {
+                _acknowledgedShortfall = CostKey(Shortfall(repair.RepairAllCost()));
+                repair.CancelRepair();
+            }
+            FlowTrace.Step("Repair", "hub repair refusal acknowledged; selection and marker cleared.");
+            SetVisible(false);
         }
 
         /// <summary>

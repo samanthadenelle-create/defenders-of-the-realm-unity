@@ -521,6 +521,7 @@ namespace DeNelle.Editor
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "waves-schema suite", () => { if (!WavesSchemaRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[waves-schema] " + r); });
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "wave-authoring suite", () => { if (!WaveAuthoringLiveRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[wave-authoring] " + r); });
             // --- WO-808 Option A: gear power-level ladder data integrity ---
+            if (!DeNelle.Editor.Regression.GeneratedFallbackParityRegression.Run(out var generatedFallbackReason)) failures.Add(generatedFallbackReason); else log.AppendLine(generatedFallbackReason);
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "gear-levels suite", () => { if (!GearLevelsRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[gear-levels] " + r); });
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "pack-cosmetic-integrity suite", () => { if (!PackCosmeticIntegrityRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[pack-cosmetic-integrity] " + r); });
             // --- WO-992 (2026-08-21): an EQUIPPED cosmetic reaches a real renderer. The pack/catalog suites above only ever checked DATA, and data was never the problem — CosmeticApplier.ApplyCosmetic was called from NOWHERE, so a player could earn or BUY Glimmer (packs.json sells it), purchase a skin, equip it, and see nothing change. Rule 1 reads the colour back off a live Renderer. ---
