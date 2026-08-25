@@ -400,12 +400,21 @@ def parse_wos():
         # it - the thing that would have been silently off for a private series. The tag
         # only sets the DISPLAY label and the priority sort.
         # Matches WORK_ORDER_<num>_MON_<slug> and WORK_ORDER_<num>_MON-<slug>.
+        #
+        # UI-### is a THIRD sanctioned series, on exactly the PROD- footing (lead ruling
+        # 2026-08-24). Same failure mode as PROD before it was taught: `is_work_order`
+        # already RECOGNISED WORK_ORDER_UI-001_*.md, but no pattern could read its number,
+        # so two live tickets rendered as the unassignable "WO-?" - including UI-001, which
+        # is on the owner's active felt-test route. `ui` is carried alongside `num` and
+        # `prod`, never merged, so UI-001 can never collide with legacy WO-1 or PROD-001.
         mon_tag = bool(re.match(r"WORK_ORDER_\d+[_-]MON[_-]", base, re.IGNORECASE))
         prod_m  = re.match(r"WORK_ORDER_PROD-(\d+)", base, re.IGNORECASE)
+        ui_m    = re.match(r"WORK_ORDER_UI-(\d+)", base, re.IGNORECASE)
         num_m   = re.match(r"WORK_ORDER_(\d+)", base)
         mon     = None
         prod    = int(prod_m.group(1)) if prod_m else None
-        num     = int(num_m.group(1)) if (num_m and not prod_m) else None
+        ui      = int(ui_m.group(1)) if ui_m else None
+        num     = int(num_m.group(1)) if (num_m and not prod_m and not ui_m) else None
         title_m = re.search(r"^#\s+(.+)$", text, re.MULTILINE)
         title = title_m.group(1).strip() if title_m else base
         title = re.sub(r"[*`]", "", title)
@@ -421,7 +430,7 @@ def parse_wos():
             age_days = 0
         bucket, fallback_bucketed = classify_status(status, has_result, is_wo)
         rows.append({
-            "num": num, "prod": prod, "mon_tag": mon_tag, "file": base, "title": title, "status": status,
+            "num": num, "prod": prod, "ui": ui, "mon_tag": mon_tag, "file": base, "title": title, "status": status,
             "bucket": bucket, "result": has_result, "malformed_status": malformed_status,
             "near_miss_status": near_miss_status,
             "fallback_bucketed": fallback_bucketed,
@@ -442,6 +451,8 @@ def build_html(rows):
         # distinct on the board — at a glance you can see whether a row predates going live.
         if r.get("prod") is not None:
             num = f"PROD-{r['prod']:03d}"
+        elif r.get("ui") is not None:
+            num = f"UI-{r['ui']:03d}"
         elif r["num"] is not None:
             num = f"WO-{r['num']}"
         else:
@@ -481,6 +492,8 @@ def build_html(rows):
         0 if r.get("mon_tag") else 1,              # MON is the priority lane (owner 2026-08-22)
         0 if r.get("prod") is not None else 1,
         -(r.get("prod") or 0),
+        0 if r.get("ui") is not None else 1,      # UI-### ranks after PROD, ahead of legacy
+        -(r.get("ui") or 0),
         -(r["num"] or 0)))
     body_rows = "\n".join(row_html(r) for r in rows_sorted)
     filters = "".join(
@@ -646,7 +659,8 @@ def main():
     # the Economy Store Packs) answer to the same handle and the duplicate guard above cannot
     # see them (it keys on `num`, which is None here). Report them by name; a ticket nobody
     # can address by number is a ticket that gets lost.
-    unnumbered = [r["file"] for r in rows if r["is_wo"] and r["num"] is None and r["prod"] is None]
+    unnumbered = [r["file"] for r in rows if r["is_wo"] and r["num"] is None
+                  and r["prod"] is None and r.get("ui") is None]
     if unnumbered:
         print(f"UNNUMBERED_WO {len(unnumbered)} work order(s) render as WO-? "
               f"(not an assignable key - mint a number from the CLI_LANES_WO_NUMBERS.md banner):")
@@ -677,15 +691,26 @@ def main():
     else:
         print(f"BANNER_OK next mint - CLI: {_main_next}, UI seat: {_ui_next}")
 
-    if check:
-        problems = []
-        if unlabeled: problems.append(f"{len(unlabeled)} unlabeled")
-        if contradictions: problems.append(f"{len(contradictions)} status contradiction(s)")
-        if banner_errors: problems.append(f"{len(banner_errors)} banner parse error(s)")
-        if problems:
-            print("BOARD_CHECK_FAIL " + ", ".join(problems))
-            return 1
-        print("BOARD_CHECK_OK 0 unlabeled, 0 status contradictions, mint numbers readable")
+    # ⛔ THE MARKER EMITS ON EVERY RUN, not only under --check (lead ruling 2026-08-24).
+    # This repo judges gates by MARKER PRESENCE ON A FRESH LOG, never by exit code
+    # (CLAUDE.md 8/16; memory `gates-report-success-without-proving-it`). A marker you only
+    # get when a human remembers a second flag is not a gate - it is the exact shape of
+    # tools/regression/checkin_gate.ps1, which looked like a gate while failing to parse
+    # under PS 5.1 for months. A plain `python tools/board_build.py` must now leave either
+    # BOARD_CHECK_OK or BOARD_CHECK_FAIL on the log, so ABSENCE stays a failure signal.
+    #
+    # WHAT --check STILL OWNS, and it is the only thing: the EXIT CODE. Report-only by
+    # default is deliberate (a plain run must never start failing builds because a WO file
+    # is sloppy); the check-in gate opts into rejection. The checks themselves are
+    # unchanged and unweakened - a dirty board never prints OK.
+    problems = []
+    if unlabeled: problems.append(f"{len(unlabeled)} unlabeled")
+    if contradictions: problems.append(f"{len(contradictions)} status contradiction(s)")
+    if banner_errors: problems.append(f"{len(banner_errors)} banner parse error(s)")
+    if problems:
+        print("BOARD_CHECK_FAIL " + ", ".join(problems))
+        return 1 if check else 0
+    print("BOARD_CHECK_OK 0 unlabeled, 0 status contradictions, mint numbers readable")
     return 0
 
 if __name__ == "__main__":

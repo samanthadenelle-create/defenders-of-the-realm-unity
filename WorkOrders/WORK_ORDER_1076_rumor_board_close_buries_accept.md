@@ -1,10 +1,57 @@
 # WORK ORDER 1076 — RumorBoardPanel: the Close button is stacked on Accept and Track; only one can win the tap
 
-**Status:** READY TO IMPLEMENT
+**Status:** FIXED — ALREADY SHIPPED before this ticket was minted, in `a2162f17d` (2026-08-21, WO-941). Flipped 2026-08-24 after verifying at source; owner felt-verify still owed (PO closes, CLAUDE.md §13).
 
 **Minted:** 2026-08-24, UI seat, from the `CLI_LANES_WO_NUMBERS.md` UI-seat block (1076; banner bumped 1075 → 1079 in the same edit).
 **Parent:** WO-1060 (`WORK_ORDER_1060_touch_clamp_and_overlap_oracle.md`) — the touch/overlap oracle that found this.
 **Silo:** UI / Village-Hero. **File-disjoint from WO-1075, WO-1077, WO-1078** — run all four in parallel.
+
+---
+
+## ⚠ ALREADY SHIPPED — DO NOT IMPLEMENT THIS TICKET (recorded 2026-08-24)
+
+**This ticket was minted from a capture log that predates the fix, and describes a defect the tree no
+longer has.** It was handed to a dev seat, which correctly REFUSED it (see `batch_results_state.md`,
+`HANDOFF 2026-08-24 21:34`, WO-1076) — a wasted seat.
+
+**What is actually in the tree.** `a2162f17d` *"fix(ui): RumorBoard + RealmMap stop overlapping the
+Close, and the capture harness stops photographing the wrong frame"* (2026-08-21, WO-941 + WO-942, an
+ancestor of HEAD) added the fix this ticket asks for, and it is the fix this ticket asks for:
+`RumorBoardPanel.CloseReserveTopFraction` (`Assets/_Modules/Village/Hero/RumorBoardPanel.cs:563`)
+reads the shared Close's own seated `anchorMin.y`, adds the canonical `ElarionUiKit.CanonCtaHeight`
+converted to fraction space, adds `CloseReserveGapFrac`, and clamps into
+`[PortraitDetailFloorY 0.16, CloseReserveMaxFrac 0.45]`. The portrait branch (`:279`) uses that as the
+detail pane's FLOOR and, when the remaining span starves the declared fixed stack, grows the pane
+**upward** toward `PortraitDetailTopMaxY` rather than back down into the Close's band. The hardcoded
+`0.05` floor this ticket's root-cause section describes is gone.
+
+**Proof the source log is pre-fix, stated as arithmetic rather than as a timestamp.** The floor is
+clamped to a minimum of `0.16` of the panel band **on every path, including the un-measurable
+fallback**. `Builds/wo1060-capture.log` shows `DetailCta/ObsBtn_Accept` resolving to y
+-757.1..-645.1 at 1080x2340 while `CloseButton` resolves to y -763.1..-631.1 — i.e. the detail pane's
+bottom sitting BELOW the Close's top. That is geometrically impossible with the 0.16 floor in place,
+so the run that produced those lines did not carry `a2162f17d`.
+
+⚠ **And note what that means about the log's own timestamp:** `Builds/wo1060-capture.log` carries an
+mtime of 2026-08-23 12:40 and an in-log licensing timestamp of 2026-08-23T17:39:59Z — both NEWER than
+the 2026-08-21 fix commit — yet its content is provably pre-fix. **A capture log's file date is not
+evidence of the tree it measured.** The mechanism that would have caught this (the capture recording
+the HEAD commit it was taken at, and a minted ticket citing it) is specified in **WO-1080**.
+
+⛔ **The 18 findings in this file are STALE. Do not use them to re-edit
+`Assets/_Modules/Village/Hero/RumorBoardPanel.cs`.** If the `RumorBoard_` panel labels still appear in
+a touch-oracle run, that is a NEW finding against post-`a2162f17d` geometry and needs a NEW ticket
+minted from a FRESH capture — not this one. Re-run first:
+
+```
+powershell -File .
+un-unity-method.ps1 -Method DeNelle.Editor.UICaptureLaunch.RunCaptureHeadless -LogName ui-capture.log
+```
+
+⚠ Its `UI_TOUCH_FAIL x43` baseline, and the "drops by exactly 18, from x43 to x25" acceptance
+criterion below, are stale for the same reason — and WO-1077 and WO-1078 each computed a DIFFERENT
+repo-wide drop from that SAME x43. Everything below this banner is kept for history and is NOT a
+work instruction.
 
 ---
 

@@ -200,6 +200,7 @@ and **429** = the owner's "store stock from DB" spec renumbered from a colliding
 9. ▶ **WO-57** — Mobile quality settings.
 10. ⏸ **WO-282** — Heroes → Addressables (HELD — daytime play-verified session).
 11. ★ **WO-410** — **P0:** 0.1 fps in MainCastle_Hall — main-thread GC storm (13–22 MB alloc/frame) + combat-object leak (PERFDIAG logs on the Notion row).
+12. ▶ **WO-1080** — **Capture-provenance gate for layout/touch tickets** (READY): `RunCaptureHeadless` emits `UI_CAPTURE_HEAD <sha>`, a minted layout ticket cites it via a `**Capture:**` line, and `tools/board_build.py` flags the pair as STALE-CAPTURE. Minted after WO-1075/1076/1077/1078 were all authored from the one aged `Builds/wo1060-capture.log` — 1076 was already fixed in `a2162f17d`, and three of them computed different repo-wide drops from the same `UI_TOUCH_FAIL x43`. Files: `Assets/Editor/UICaptureLaunch.cs`, `tools/board_build.py`, `docs/INSTRUMENTATION_STANDARD.md`. Parallel-safe with every panel lane (it edits no panel `.cs`).
 
 ## Lane 11 — Build Mode / Player Base  (keystone — mostly own files in BuildMode/*)
 

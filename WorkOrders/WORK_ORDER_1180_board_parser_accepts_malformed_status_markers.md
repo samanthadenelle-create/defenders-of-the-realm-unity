@@ -122,6 +122,23 @@ given an id, whereas these were given an id from a series the board cannot resol
 ⛔ **Do not "fix" them by minting CLI numbers from the banner** — that would renumber live work and
 break every inbound reference. The board needs to **resolve** their series, not overwrite it.
 
+> ### ⚠ SUPERSEDED 2026-08-24 (lead ruling) — this paragraph was HALF right, and the two halves split.
+> The audit above is preserved as written; the disposition of those three files has since been ruled,
+> and it is **not the same ruling for both series**, because they are not the same thing:
+> * **`UI-###` IS a sanctioned series** — it now parses, exactly like `PROD-###`. `UI-001` and
+>   `UI-002` render with their real identifiers and are no longer in the `WO-?` set. This is the
+>   "resolve their series, not overwrite it" call, and it was the right one.
+> * **`MON002` was NOT a series at all** and could not be resolved without contradicting the owner
+>   ruling of 2026-08-22 that **MON is a LANE TAG riding on an ordinary banner-minted number**.
+>   Teaching the parser `MON###` would have encoded the forbidden thing, so the FILE was fixed:
+>   minted **WO-1079** from the UI-seat banner block and `git mv`'d to
+>   **`WORK_ORDER_1079_MON_mainnet_skr_one_wood_canary.md`** (the filename above is therefore stale;
+>   the ticket is the same ticket, status untouched). Only ONE file carried this id in a filename, so
+>   the "break every inbound reference" cost did not apply — the prose/commit references keep using
+>   `MON002` as a historical alias and still read correctly.
+>
+> **`UNNUMBERED_WO` therefore drops 20 → 17** (UI-001, UI-002, MON002).
+
 ### ⛔ Duplicate ids are ~61, not ~40
 
 The board's own guard, run at HEAD:

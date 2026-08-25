@@ -431,6 +431,48 @@ public bool FirstRaidSoftGate; // NEW: presentation-only — lets the screen say
 `army.MaxArmySize`. `FirstRaidMinDeployableSlots` therefore lives in the **same unit as `CapSlots`**,
 which is what makes "3 of 10" read correctly. ⛔ Do not compare it against a headcount.
 
+> ### ✅ VERIFIED FACTS — read before touching the number (added 2026-08-24, sourced at HEAD)
+>
+> Every line below was opened at source this session. It answers the owner's *"could be 3 huge ones"*
+> concern and fixes what the remaining work actually is.
+>
+> **1. Slot cost ALREADY scales with the unit — nothing to build here.**
+> `TroopDialogueCommands.SlotOf` (`Assets/_Modules/Village/Troops/TroopDialogueCommands.cs:122`)
+> resolves `TroopDef.Slots` (`Assets/_Modules/Village/Troops/TroopDef.cs:41`,
+> `[JsonProperty("slots")]`), authored **per troop** in
+> `Assets/Resources/Data/Canonical/troops.json` (byte-identical twin at
+> `Assets/StreamingAssets/Data/Canonical/troops.json`).
+>
+> **2. The authored table:** footman **1**, archer **1**, spearman **1**, field-cleric **2**,
+> shieldguard **2**, outrider **2**, battlemage **2**, echo-legionnaire **3**, catapult **4**.
+>
+> **3. Therefore 3 slots = at most ONE elite**, and the **catapult (4 slots) does not fit in the
+> first-raid allowance at all**. "Three huge ones" is arithmetically impossible.
+>
+> **4. ⭐ On a FRESH save it is three tier-1 basics BY CONSTRUCTION.** At Barracks tier 1
+> (`TroopUnlock.EffectiveBarracksTier` floors to 1 —
+> `Assets/_Modules/Village/Troops/TroopUnlock.cs:34-46`) only **footman** and **archer** are
+> trainable, and both cost **1 slot**. ⛔ **THE NUMBER 3 STAYS.** Nobody is to "fix" this
+> non-problem by lowering it.
+>
+> **5. ⚠ The real remaining work is PRESENTATION.** The deploy budget must render as a **SLOT
+> METER that fills by each unit's own slot cost**, so picking a 2-slot shieldguard visibly eats
+> two of the three. A bare "3 of 10" reads as "three troops" and is misleading. This is exactly
+> what the presentation-only `FirstRaidSoftGate` flag above is for — and it must **NOT** be
+> allowed to re-decide the gate itself.
+>
+> **6. ⛔ PHASE E IS NOT BUILT.**
+> `grep -rn "FirstRaidMinDeployableSlots|EverCompletedRaid|FirstRaidSoftGate|RequiredSlots" --include=*.cs Assets`
+> returns **ZERO hits**. The live gate is still the WO-820 full-army rule
+> (`Ready = deployableSlots + queuedSlots >= cap`), softened only by the `ff.raidtest` bypass at
+> `RaidSelectionScreen.cs:96`.
+>
+> **7. Latent risk to annotate while you are in there.** `RaidDeployScreen.cs:477` and `:526` read
+> `_vm.DeployableCount`, a **HEADCOUNT, not slots**. It is safe **today** only because it is guarded
+> by `GateDeployAtZeroTroops` (default **OFF**) and tests only `> 0` / `<= 0`, where headcount and
+> slots agree by construction. **Raise that threshold above zero and it becomes a unit mismatch.**
+> Leave a comment at that site saying exactly that.
+
 ### ⚠ AND THERE IS ALREADY A SECOND CHECK IN THE RAID SCREEN — this is the bug, live
 
 `Assets/_Modules/Village/Hero/RaidDeployScreen.cs` bypasses `ArmyReadiness` in two places:

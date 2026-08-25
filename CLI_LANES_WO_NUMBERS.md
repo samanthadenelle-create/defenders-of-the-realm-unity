@@ -429,7 +429,43 @@
 > never as BUILD STATUS** -- "under construction"/"coming soon"/"dev"/"WIP" are BANNED player-facing
 > strings and get a REGRESSION ORACLE, not a comment, because that is the rule most likely to rot.
 > Status READY TO IMPLEMENT, 3 open rulings. No code yet.)*
-> ## ⚠ RECONCILED 2026-08-24 (UI seat): UI seat next free = **1079**.
+> ## ⚠ RECONCILED 2026-08-24 (UI seat): UI seat next free = **1081**.
+> *(UI seat minted **WO-1080** and bumped 1080 -> 1081 in this SAME edit. **WO-1080** = THE CAPTURE-
+> PROVENANCE GATE. All four of WO-1075/1076/1077/1078 were minted from ONE aged capture,
+> `Builds/wo1060-capture.log`, and three of the four described a game that had moved on: **1076 was
+> ALREADY FIXED** in `a2162f17d` (2026-08-21, WO-941, `CloseReserveTopFraction`) and was handed out
+> anyway - a wasted seat, refused by the dev lane; **1077**'s premise is disputed by its own source
+> (`EndStateView.cs:720` documents the layering as deliberate under WO-672); **1078** asked to shrink
+> a `TapAdvance` overlay a correctly-scoped second control had already superseded. And three of them
+> computed a DIFFERENT repo-wide drop (43->39, 43->25, 43->25) from the SAME `UI_TOUCH_FAIL x43`
+> baseline - arithmetic that cannot all hold if they land together.
+> ⛔ **A DATE CHECK CANNOT CATCH THIS AND MUST NOT BE THE FIX:** that log's mtime (2026-08-23) is
+> NEWER than the commit it fails to contain (2026-08-21); its content is proven pre-fix by ARITHMETIC
+> (a 0.16 detail-floor clamp that the logged rects violate), not by chronology. So the capture must
+> record the COMMIT (`UI_CAPTURE_HEAD <sha>` from `RunCaptureHeadless`), a minted layout ticket must
+> CITE it (a `**Capture:**` line), and `tools/board_build.py` FLAGS the pair as STALE-CAPTURE - the
+> same flag-never-silently-repair posture it already takes on `DUPLICATE_WO_NUMBERS`. Plus: per-panel
+> counts bind, a repo-wide total must name its baseline, and re-run the capture before minting
+> (`run-unity-method.ps1 -Method DeNelle.Editor.UICaptureLaunch.RunCaptureHeadless`). READY TO
+> IMPLEMENT; spec only, CLI implements/gates/commits.
+> ⚠ **This mint was first drafted as 1079 and renumbered.** The MON-canary rename below took 1079
+> while this file was being written; that file was first-on-disk-and-referenced, so this one moved to
+> 1080 - the banner was RE-READ before the bump rather than trusted from the earlier read.
+> Also this edit: **WO-1076 flipped READY TO IMPLEMENT -> FIXED** with its shipped-in-`a2162f17d`
+> evidence and a banner marking its 18 findings STALE. No other WorkOrder status line was touched.)*
+>
+> ### superseded: RECONCILED 2026-08-24 (UI seat): UI seat next free = **1080**.
+> *(UI seat minted **WO-1079** and bumped 1079 -> 1080 in this SAME edit. **WO-1079** is NOT new work:
+> it is the number minted for the existing mainnet SKR canary ticket, which had been filed as
+> **`MON002`** — a private series that violates the owner ruling of 2026-08-22 that **MON is a LANE
+> TAG, not a number series**. With no banner number it rendered as the unassignable `WO-?` and sat
+> outside the duplicate guard. `git mv` to `WORK_ORDER_1079_MON_mainnet_skr_one_wood_canary.md`, which
+> the board's existing `WORK_ORDER_<num>[_-]MON[_-]` rule reads as the MON lane. Status preserved
+> verbatim (BLOCKED ON CONFIG — needs the Squads treasury owner pubkey); a rename, not a
+> re-adjudication. The fix was made in the FILE, deliberately not in the parser: teaching the parser
+> `MON###` would have encoded the very thing the ruling forbids.)*
+>
+> ### superseded: RECONCILED 2026-08-24 (UI seat): UI seat next free = **1079**.
 > *(UI seat minted **WO-1075 through WO-1078** and bumped 1075 -> 1079 in this SAME edit. The four
 > newly-red panels from the WO-1060 touch/overlap oracle, **one ticket per file so four seats can run
 > in parallel** - all four files are mutually disjoint. **1075** = `RaidDeployScreen` - `Army Ready?`

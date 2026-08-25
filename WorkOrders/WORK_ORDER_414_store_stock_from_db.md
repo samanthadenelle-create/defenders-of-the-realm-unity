@@ -1,6 +1,6 @@
 # WORK ORDER 414 — RENUMBERED → WO-429 (see `WORK_ORDER_429_store_stock_from_db.md`)
 
-**Status: SUPERSEDED — do not implement from this file.**
+**Status:** SUPERSEDED — do not implement from this file.
 
 Number collision: the Notion board's WO-414 = "Black circle under TALK button — AttentionGlowUi
 first-frame color" (minted 06-12, cross-referenced by WO-416/428). This store-stock spec was
