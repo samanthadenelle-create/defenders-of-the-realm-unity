@@ -50,8 +50,9 @@
         },
         "convenience": []
       },
-      "storeVisible": true,
-      "_shelfNote": "WO-1118: contents rewritten to the $1.99 impulse basket (1500 wood / 800 iron / 150 crystals / 500 food); the pack cosmetic was stripped because pack cosmetic art does not render yet. OWNER TODO: the canon 'theme'/'tagline' above still say 'beginner cosmetic', which is no longer true - they are verbatim monetization-v2-spec strings and were left untouched deliberately. Reword them, or restore the cosmetic when the art lands. | UI-001 7 (2026-08-22): `storeBadge: BEST VALUE` REMOVED from this row and moved to patron-of-elarion. The arithmetic contradicted the claim - hearth-spark is 754 wood/$ and 1,533 total-goods/$, LAST of the five baskets (folks 1,922 / patron 1,968 / vow 1,962 / starters 1,703) - so BEST VALUE was sitting on the WORST-value basket. WO-1050 bans a badge the arithmetic contradicts."
+      "storeVisible": false,
+      "_shelfNote": "WO-1118: contents rewritten to the $1.99 impulse basket (1500 wood / 800 iron / 150 crystals / 500 food); the pack cosmetic was stripped because pack cosmetic art does not render yet. OWNER TODO: the canon 'theme'/'tagline' above still say 'beginner cosmetic', which is no longer true - they are verbatim monetization-v2-spec strings and were left untouched deliberately. Reword them, or restore the cosmetic when the art lands. | UI-001 7 (2026-08-22): `storeBadge: BEST VALUE` REMOVED from this row and moved to patron-of-elarion. The arithmetic contradicted the claim - hearth-spark is 754 wood/$ and 1,533 total-goods/$, LAST of the five baskets (folks 1,922 / patron 1,968 / vow 1,962 / starters 1,703) - so BEST VALUE was sitting on the WORST-value basket. WO-1050 bans a badge the arithmetic contradicts.",
+      "_hiddenReason": "WO-1069 2026-08-24: repriced 1.99 -> 4.99 to stop it dominating impulse-wood-small. At 4.99 it is STRICTLY DOMINATED BY starters-hand (more of all five resources at the same price), so it leaves the SHELF rather than sitting there as the bad buy on the entry rung. It REMAINS in the catalog and quotable: it is DEVNET_CANARY_SKU and the whole quote/verify test path pins it."
     },
     {
       "sku": "keepers-satchel",

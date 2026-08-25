@@ -76,7 +76,12 @@ namespace DeNelle.Editor.Regression
         /// </summary>
         private static readonly KeyValuePair<string, double>[] Ladder =
         {
-            new KeyValuePair<string, double>("hearth-spark",      1.99d),
+            // ⭐ ENTRY RUNG IS $4.99 (owner ruling 2026-08-24). It was `hearth-spark` at $1.99
+            // until WO-1069 repriced that pack to 4.99 to stop it dominating impulse-wood-small.
+            // ⛔ hearth-spark did NOT move to this row: at 4.99 `starters-hand` STRICTLY DOMINATES
+            // it (more of all five resources, same price), so hearth-spark left the SHELF entirely
+            // rather than sitting on the entry rung as the bad buy. It stays quotable as
+            // DEVNET_CANARY_SKU. ⚠ This amends WO-1121's "$1.99..$49.99" to "$4.99..$49.99".
             new KeyValuePair<string, double>("starters-hand",     4.99d),
             new KeyValuePair<string, double>("folks-thanks",      9.99d),
             new KeyValuePair<string, double>("patron-of-elarion", 19.99d),
