@@ -55,6 +55,51 @@
 
 ---
 
+## 🆕 BATCH 5 - SIX PARALLEL SEATS (composed 2026-08-24 from the corrected board)
+
+⭐ **There IS more handable work now** - six seats, proven file-disjoint by listing paths. Not padding:
+the Ready bucket is 18 and only 8 survive all five tests.
+
+| # | WO | What | Files it owns |
+|---|---|---|---|
+| **5A** | **WO-875** | Un-gate hero cast VFX that already exist in the library | `Village/Hero/HeroAbilities.cs`, `Village/Vfx/SpellVfxFactory.cs` (read), `motion-castings.json` |
+| **5B** | **PROD-012 r2** | Honest first-run "no connection" screen with Retry | `Core/UI/LoadingOverlay.cs`, `OfflineOptInPanel.cs`, `Core/Addressables/OfflineContentService.cs`, `canon-strings.json` ×2 |
+| **5C** | **WO-1171 §4** | Player-facing home for wallet connect/disconnect | `Settings/SettingsController.cs`, `SettingsModel.cs`, `Core/Platform/PiSignInController.cs` |
+| **5D** | **WO-1129 §3.3** | Repoint six editor tools at the derived art path | six `Assets/Editor/*.cs` |
+| **5E** | **WO-814** | Per-rarity gear ability slot, locked line visible from Lv1 | `gear-levels.json` ×2, `Village/Hero/GearProgression.cs`, `EquipVM.cs`, `InventoryVM.cs`, `Village/Enemies/PlayerAttackController.cs` |
+| **5F** | **WO-978 regression slice** | Lint pinning requested-vs-credited in the four callers | ONE new `Assets/Editor/Regression/*.cs` |
+
+### ⛔ Pins on batch 5
+
+- **5A** — ⛔ **no new VFX authored.** Pure code-wiring. `FOUNDATIONAL_RULINGS.md` §4 makes map-by-name the
+  lead's call; **WO-874's three boss keys stay the OWNER's.**
+- **5B** — ⛔ **MUST NOT edit `Core/UI/ElarionUiKit.cs`** (WO-917 Phase B owns it). **Reuse only.**
+- **5C** — ⛔ route through `CurrencySkinResolver`, **never `WalletService`** (asmdef boundary).
+- **5E** — ⚠ **the ticket names `GearStatResolver` and NO SUCH FILE EXISTS.** It is `GearProgression.cs`.
+  Ships with **empty ability rows** — the identities are the owner's.
+- **5F** — ⚠ the ticket reads `BLOCKED`, but the block is on the §1/§6 **doc** reconciliation.
+  ⭐ The owner's send-back says verbatim *"the regression slice is unaffected."*
+- ⛔ **ALL SEATS: leave `Assets/Editor/Regression/DataRegression.cs` alone.** Five tickets want a
+  registration line there; it is **committer-fenced**. Hand the lead the one-liner.
+
+## 🆕 BATCH 6 - ONE SEQUENTIAL SEAT, sole occupant of `WorkOrders/*.md`
+
+**WO-1180 remainder** — tighten `--check` so malformed markers and duplicate ids **fail** rather than
+warn, then drain the 26 malformed / 32 fallback rows by hand.
+⛔ **It edits `tools/board_build.py` AND dozens of status lines.** ⚠ Any other seat flipping a Status in
+that window corrupts the before/after bucket counts the ticket demands. **Nothing else touches
+`WorkOrders/*.md` while it runs.**
+
+## ⛔ NEW HELD - do not assign
+
+- **WO-1170 Site 2** — behind **WO-1163** (`build-categories.json` + `Village/Catalog/Generated/`).
+- **WO-1173 + WO-1159 §5** — one seat, sequential, **after a spec pass**. Both edit the three root ship
+  chain scripts and contend with **WO-1178** on `.githooks/pre-push`.
+- **WO-1100** — ruled the lead's, but it is **prefab/material serialized editing**: Unity-bound, not a
+  code seat, ⛔ cannot run concurrently with a bake.
+
+---
+
 ## ⏸ HELD — do not start
 
 | Ticket | Held behind | Why |
