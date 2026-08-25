@@ -73,9 +73,39 @@ namespace DeNelle.Core.UI
             }
             _lastShownAt[s.Resource] = now;
 
+            // WO-1191 -- TWO SITUATIONS, TWO SENTENCES. `FOUNDATIONAL_RULINGS.md` section 7 governs;
+            // cite it, never restate it.
+            //
+            //   s.OverCap == false : the ordinary full-or-nearly-full bank. Something the player
+            //                        earned did not fit and is gone. Existing words, unchanged.
+            //
+            //   s.OverCap == true  : the balance is ALREADY above capacity. That state is created on
+            //                        purpose, and after a player has PAID to reach it the old
+            //                        sentence -- "storage FULL, N lost, build a bigger container" --
+            //                        reads as a penalty for the purchase. Nothing of theirs is being
+            //                        taken: every unit above the cap is still in the wallet and still
+            //                        spendable, the earned faucet is merely paused, and it restarts by
+            //                        itself. So the copy states the amount, states that it is theirs,
+            //                        and names the ONE condition that resumes income -- and it is NOT
+            //                        a Danger toast, because nothing went wrong.
+            //
+            // Both lines are ASCII, state text-encoded in words, never carried by colour alone (the
+            // owner is red/green colourblind) -- the tone accent is decoration in both branches.
+            //
+            // *** THE EXACT PLAYER WORDING BELOW IS A PROPOSAL AWAITING THE OWNER (WO-1191). ***
+            // The BEHAVIOUR -- two branches, no loss language above the cap, the resume condition
+            // named with the measured number -- is the part this file is asserting.
+            if (s.OverCap)
+            {
+                string msg = $"{s.ResourceName} is above storage - {s.Current} of {s.Max}. All of it is yours to spend. "
+                           + $"Harvests and rewards add no {s.ResourceName.ToLowerInvariant()} until you are back under {s.Max}.";
+                ElarionUiKit.ShowToast(msg, ElarionUiKit.ToastTone.Info, 4.5f);
+                return;
+            }
+
             // ASCII, text-encoded, names the resource AND the amount lost AND the fix.
-            string msg = $"{s.ResourceName} storage FULL - {s.Lost} lost. Build or upgrade a {s.ContainerName}, or spend {s.ResourceName.ToLowerInvariant()}.";
-            ElarionUiKit.ShowToast(msg, ElarionUiKit.ToastTone.Danger, 3.2f);
+            string full = $"{s.ResourceName} storage FULL - {s.Lost} lost. Build or upgrade a {s.ContainerName}, or spend {s.ResourceName.ToLowerInvariant()}.";
+            ElarionUiKit.ShowToast(full, ElarionUiKit.ToastTone.Danger, 3.2f);
         }
     }
 }

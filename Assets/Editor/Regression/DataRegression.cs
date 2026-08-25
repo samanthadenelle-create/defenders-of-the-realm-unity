@@ -671,6 +671,17 @@ namespace DeNelle.Editor
             // fill/drain is ONE pure capacity-ascending function, and an over-cap save is grandfathered ---
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "town-bank-cap suite", () => { if (!DeNelle.Editor.Regression.TownBankCapRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[town-bank-cap] " + r); });
 
+            // --- WO-1191: income while a resource sits ABOVE its cap. Ruling: `FOUNDATIONAL_RULINGS.md`
+            // section 7 -- read it there, it is not restated. The suite above proves the clamp helper
+            // RETURNS the right number, which is the same act as reading the code; this one reads the
+            // WALLET before and after a real EconomyService credit and asserts the DELTA -- the only
+            // shape that catches the WO-978 failure where four callers logged the request as though it
+            // were the credit. Paid overflows in full; earned adds exactly zero above the cap; spending
+            // back under restarts it; uncapped resources (enumerated from IsCapped, never a name list)
+            // are untouched; and the above-cap state is published on a named axis so the toast stops
+            // calling a purchase a loss ---
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "over-cap-income suite", () => { if (!DeNelle.Editor.Regression.WO1191OverCapIncomeRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[over-cap-income] " + r); });
+
             // --- ECON-SWEEP 2026-08-16: the four economy-silo defects from the cross-silo sweep ---
             // (1) no spend/grant may move the UNSAVED _wood/_iron pool during play without a hard,
             // F8-visible FlowTrace.Fail; (2) a bank-cap-clamped grant logs and pops the APPLIED amount,

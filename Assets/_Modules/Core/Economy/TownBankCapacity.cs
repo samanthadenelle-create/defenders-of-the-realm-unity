@@ -41,6 +41,18 @@
 //      never an incidental code path, and TownBankCapRegression case
 //      [purchased-grant-never-clamped] fails the build if a paid grant is ever clamped.
 //
+//   6. ABOVE THE CAP IS A LEGITIMATE STATE, AND THE COPY MUST NOT CALL IT A LOSS.
+//      See `FOUNDATIONAL_RULINGS.md` section 7 -- read it there, it is deliberately not
+//      restated here (a paraphrase in a second place is this repo's dominant failure).
+//      MECHANICALLY nothing new was needed: ClampGrant's room = max(0, max - current)
+//      already returns 0 above the cap, and IsClampable already exempts a paid grant
+//      entirely, so the two behaviours the ruling names were ALREADY TRUE at WO-1191.
+//      What was missing was the FRAMING -- above the cap this warn said "BANK FULL ...
+//      LOST N ... build a bigger container", which after a purchase reads as a penalty
+//      for having paid. BankOverflowStatus.OverCap is the named axis (never a resource
+//      name, never a sourceTag string match), and WO1191OverCapIncomeRegression proves
+//      the deltas by MEASUREMENT.
+//
 //   4. AN EXISTING SAVE OVER THE CAP IS GRANDFATHERED, NEVER DRAINED. Nothing here
 //      writes a wallet. Over-cap totals are reported as Apportionment.Overflow and are
 //      spent down normally; RoomFor simply reads 0 until the total falls under Max.
@@ -207,6 +219,21 @@ namespace DeNelle.Core.Economy
         /// <summary>Units LOST to the cap (Requested - Granted). Always &gt; 0 on a real event.</summary>
         public int Lost;
         public int Max;
+        /// <summary>The MEASURED wallet total the grant was weighed against, before anything was
+        /// applied. Present so presentation can say "3,400 of 2,000" without re-deriving a number
+        /// that could disagree with the one the clamp actually used.</summary>
+        public int Current;
+        /// <summary>
+        /// True when the balance was ALREADY STRICTLY ABOVE the cap when this earned credit arrived
+        /// -- the state a purchase legitimately creates under `FOUNDATIONAL_RULINGS.md` section 7.
+        /// <para>This is a DIFFERENT SITUATION from a full bank, and the copy must not read the same.
+        /// At <c>Current == Max</c> the player is simply full and the fix is more storage. Above
+        /// <c>Max</c> the surplus is value they were given in full on purpose, none of it is being
+        /// taken away, and the earned faucet resumes on its own once they spend back under. Framing
+        /// that as "LOST -- build a bigger lumberyard" reads as a punishment for having paid.</para>
+        /// <para>False on the ordinary at-or-below-cap partial fit, which keeps its existing words.</para>
+        /// </summary>
+        public bool OverCap;
         /// <summary>Short tag naming the income path that overflowed ("Grant", "OfflineHarvest").</summary>
         public string Source;
         /// <summary>Bumps on every publish -- cheap change-detect for a polling HUD
@@ -493,11 +520,34 @@ namespace DeNelle.Core.Economy
             string resName = DisplayName(r);
             string container = ContainerNameFor(r);
 
+            // WO-1191 -- WHICH SITUATION IS THIS? Two different things reach this line and they must
+            // not narrate the same. `FOUNDATIONAL_RULINGS.md` section 7 governs; cite it, never
+            // restate it.
+            //   current <= max : the ordinary full/partly-full bank. Existing words, unchanged.
+            //   current >  max : the balance is ALREADY above capacity -- the state a purchase
+            //                    legitimately creates. Nothing is being taken from the player here;
+            //                    an earned credit simply does not add while they are up there, and
+            //                    it starts adding again by itself once they spend back under. The
+            //                    old "LOST N -- build a bigger container" sentence, aimed at that
+            //                    state, reads as a penalty for having paid.
+            bool overCap = Mathf.Max(0, current) > max;
+
             // Sec.12 -- NEVER throttled, NEVER swallowed. If this line is missing, resources
             // vanished silently and that is the defect the owner's ruling is one line away from.
-            FlowTrace.Warn("Bank",
-                $"BANK FULL [{sourceTag ?? "?"}] {resName}: requested {requested}, banked {granted}, " +
-                $"LOST {lost} (wallet {current}/{max}). Build or upgrade a {container}, or spend {resName.ToLowerInvariant()}.");
+            if (overCap)
+            {
+                FlowTrace.Warn("Bank",
+                    $"OVER CAPACITY [{sourceTag ?? "?"}] {resName}: earned {requested}, added 0 " +
+                    $"(wallet {current}/{max} -- {current - max} above capacity). Earned income does not add " +
+                    $"while this resource is above its cap and NOTHING is held or queued; it resumes on its " +
+                    $"own once the balance falls back under {max}. `FOUNDATIONAL_RULINGS.md` section 7.");
+            }
+            else
+            {
+                FlowTrace.Warn("Bank",
+                    $"BANK FULL [{sourceTag ?? "?"}] {resName}: requested {requested}, banked {granted}, " +
+                    $"LOST {lost} (wallet {current}/{max}). Build or upgrade a {container}, or spend {resName.ToLowerInvariant()}.");
+            }
 
             var status = new BankOverflowStatus
             {
@@ -509,6 +559,8 @@ namespace DeNelle.Core.Economy
                 Granted = granted,
                 Lost = lost,
                 Max = max,
+                Current = Mathf.Max(0, current),
+                OverCap = overCap,
                 Source = sourceTag ?? "?",
                 Version = ++_overflowVersion,
             };
