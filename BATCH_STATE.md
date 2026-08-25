@@ -156,6 +156,22 @@ reconciling so a later reader does not think a suite shrank.
 | **Wrong or incomplete** | ⭐ **ANNOTATE and SEND BACK.** ⛔ Do not repair it |
 | **Refused with a reason** | Read the reason, rule on it or route it — a refusal is a completion |
 
+### ⛔ TURN IT AROUND IMMEDIATELY, ALWAYS (owner directive 2026-08-24)
+
+⭐ **A handback sitting unanswered means the dev lane is IDLE. Turnaround time IS throughput.**
+
+⛔ **The lead does not batch responses, does not wait for a convenient moment, and does not hold a
+handback while finishing something else.** Read it, answer it, hand it back — **the same turn it
+arrives.**
+
+⚠ **This costs more than the idle time.** A lane waiting on an answer starts guessing, or starts
+something adjacent, and both produce work the lead then has to unpick. Today a lane refused two
+worktrees on exactly the right instinct while missing one fact the lead had and had not passed on —
+**a fast answer is also a correct one, because the context is still true when it lands.**
+
+⭐ **If the answer needs a ruling from the owner, send back what IS decided immediately** and name the
+one open item, rather than holding the whole response for it.
+
 ⛔ **The lead fixing a handback is the failure this rule closes.** It hides the defect from the seat that
 made it, so the same mistake returns; it makes the lead the least-reviewed writer in the system; and it
 means nobody ever learns which specs are unclear. ⚠ **It also happened repeatedly on 2026-08-24** — the
