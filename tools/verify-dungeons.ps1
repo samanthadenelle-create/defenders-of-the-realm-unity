@@ -18,13 +18,13 @@
 # E the return). Assertion C is the one that matters most here: an on-mesh but
 # PINNED hero passes B and fails C. That is "never past room 1", caught.
 #
-# ⛔ RUN THIS AFTER ANY COMPOSER OR BAKER CHANGE. The drift this exists to catch
+# STOP RUN THIS AFTER ANY COMPOSER OR BAKER CHANGE. The drift this exists to catch
 # is real and already happened: HeroStartPoint_PlayerSpawn was added to
 # DungeonBaker.cs on 2026-08-21 and EXACTLY ONE of five scenes was re-baked, so
 # four dungeons silently lost their arrival safety net. A per-dungeon sweep after
 # every baker change turns that from a five-month bug into a same-day one.
 #
-# ⚠ JUDGE THE MARKER, NEVER THE EXIT CODE. This repo's runners exit 0 on refusals
+# !! JUDGE THE MARKER, NEVER THE EXIT CODE. This repo's runners exit 0 on refusals
 # and FAILs (CLAUDE.md s8; memory gates-report-success-without-proving-it).
 # Marker ABSENCE on a fresh log is a FAILURE, not an unknown.
 #
@@ -43,7 +43,7 @@ $ErrorActionPreference = 'Continue'
 $repo = Split-Path -Parent $PSScriptRoot
 Set-Location $repo
 
-# ── The dungeon set is DERIVED from the composed layouts on disk, never typed.
+# -- The dungeon set is DERIVED from the composed layouts on disk, never typed.
 # A hand-maintained list is the duplicated state this project keeps paying for:
 # a dungeon added to the composer and forgotten here would be unverified and
 # nothing would say so. Probe/rig/demo fixtures are excluded by name - they are
@@ -74,7 +74,7 @@ Write-Host ""
 
 $results = @()
 foreach ($id in $ids) {
-    Write-Host "───────────────────────────────────────────────" -ForegroundColor DarkGray
+    Write-Host "-----------------------------------------------" -ForegroundColor DarkGray
     Write-Host "[verify-dungeons] $id" -ForegroundColor Cyan
 
     & .\run-autopilot-fleet.ps1 -ExePath $ExePath -Graphics `
@@ -107,7 +107,7 @@ foreach ($id in $ids) {
     Write-Host ""
 }
 
-Write-Host "═══════════════════════════════════════════════" -ForegroundColor DarkGray
+Write-Host "===============================================" -ForegroundColor DarkGray
 $ok = @($results | Where-Object { $_.Pass }).Count
 $total = $results.Count
 $results | ForEach-Object {

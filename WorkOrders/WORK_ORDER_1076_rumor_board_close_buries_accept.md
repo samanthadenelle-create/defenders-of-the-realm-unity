@@ -1,6 +1,6 @@
 # WORK ORDER 1076 — RumorBoardPanel: the Close button is stacked on Accept and Track; only one can win the tap
 
-**Status:** FIXED — ALREADY SHIPPED before this ticket was minted, in `a2162f17d` (2026-08-21, WO-941). Flipped 2026-08-24 after verifying at source; owner felt-verify still owed (PO closes, CLAUDE.md §13).
+**Status:** READY TO IMPLEMENT - REOPENED 2026-08-25. The "already shipped in `a2162f17d`" flip is REFUTED by a fresh capture (`Builds/uicap-0825am.log`, 06:00): all 18 findings are still live.
 
 **Minted:** 2026-08-24, UI seat, from the `CLI_LANES_WO_NUMBERS.md` UI-seat block (1076; banner bumped 1075 → 1079 in the same edit).
 **Parent:** WO-1060 (`WORK_ORDER_1060_touch_clamp_and_overlap_oracle.md`) — the touch/overlap oracle that found this.
@@ -156,3 +156,52 @@ count, both readable without hue.
 - ⛔ `TouchBaseline` in `UICaptureLaunch.cs`.
 - ⛔ `ElarionUiKit.MinTouchPx` / `CanonCtaHeight` / `SeatSharedCloseInside` — the shared Close is
       shared. Fixing this panel by moving the canonical close moves every other panel with it.
+
+---
+
+## REOPENED 2026-08-25 - the FIXED flip was refuted by captured data
+
+**Verified by the CLI lead. Proving log: `Builds/uicap-0825am.log` (fresh, 06:00, marker `UI_CAPTURE_OK 89`).**
+
+The ticket was flipped to FIXED on 2026-08-24 on the reasoning that `a2162f17d` had already shipped
+the fix. That commit **is** real and **did** touch this panel (+90 lines) and shipped
+`RumorBoardLayoutRegression.cs`, which is **green in today's `REGRESSION_OK 274/274`**. The panel is
+still broken anyway.
+
+### The proving lines, verbatim from the fresh capture
+
+```
+[touch-oracle] BUTTON OVER TEXT [RumorBoard] 'ObsidianPanel/PanelContent/CloseButton'                    x10
+[touch-oracle] BUTTONS OVERLAP  [RumorBoard] 'ObsidianPanel/PanelContent/CloseButton'                    x4
+[touch-oracle] BUTTON OVER TEXT [RumorBoard] '.../DetailPane/DetailCta/ObsBtn_Track'                     x2
+[touch-oracle] BUTTON OVER TEXT [RumorBoard] '.../DetailPane/DetailCta/ObsBtn_Accept'                    x2
+```
+
+**18 findings, composed exactly as this ticket originally described** (14 BUTTON OVER TEXT + 4
+BUTTONS OVERLAP). The pin warning that **BOTH `ObsBtn_Accept` AND `ObsBtn_Track` are buried** is
+confirmed - a fix clearing only Accept leaves the panel red.
+
+### WHY THE GREEN GATE DID NOT CATCH IT - the transferable part
+
+`RumorBoardLayoutRegression` is a **source-structural** check: it reads authored constants out of the
+source (`ConstFloat(kit, "MinTouchPx", ...)`) and asserts they are correct. The touch oracle measures
+the **resolved rectangles of the rendered panel**. Those are different claims, and only the second one
+is about what the player's thumb hits.
+
+⛔ **So the suite can be green while the panel is broken, forever.** This is
+`docs/INSTRUMENTATION_STANDARD.md` §1.4b - *assert outcomes, not intent; resolved sizes rather than
+authored ones* - and it is the WO-1138 hollow-pass family arriving through a door nobody was watching.
+
+⚠ **Do not "fix" this by weakening either check.** The structural regression is useful; it is simply
+not evidence about geometry. The acceptance criterion for this ticket is **a fresh capture showing
+RumorBoard at zero findings**, not a green suite.
+
+### The baseline number in this ticket is stale - use 21, not 43
+
+⛔ This ticket (and 1075/1077/1078) each computed a drop from `UI_TOUCH_FAIL x43`, taken from
+`Builds/wo1060-capture.log`. **The current measured total is 21**, and 18 of them are this panel.
+The other three panels are now **clean** - `RaidDeployScreen`, `EndStateView` and `DialogueView` each
+return **zero** touch findings on the fresh capture, so their fixes are proven, not merely reasoned.
+
+**Remaining after this ticket lands: 3**, all on `BuildPaletteDock` - a panel no ticket covered until
+today. See the newly minted work order for it.

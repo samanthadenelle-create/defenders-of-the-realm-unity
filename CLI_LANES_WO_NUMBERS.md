@@ -137,7 +137,13 @@
 > fine as history. A copied number is the bug **even when it was right the day it was written** -
 > that is exactly how the retired 860-899 UI block kept re-seeding collisions from CLAUDE.md sec.2.
 
-> ## ⚠ RECONCILED 2026-08-24 (CLI): main line next free = **1186**.
+> ## ⚠ RECONCILED 2026-08-25 (CLI): main line next free = **1187**.
+> *(CLI seat minted **WO-1186** and bumped 1186 -> 1187 in this SAME edit. **1186** = the build
+> palette's `Chip_Other` covers the "Crystals: 0" readout by 135x96 ref px at ALL THREE captured
+> resolutions, including the Seeker's 2670x1200. Found by the 2026-08-25 capture pass; no ticket
+> covered this panel. Proving log `Builds/uicap-0825am.log`.)*
+>
+> ### superseded: RECONCILED 2026-08-24 (CLI): main line next free = **1186**.
 > *(CLI seat minted **WO-1176** and bumped 1176 -> 1177 in this SAME edit. **1176** = THE SHELF
 > REDESIGN - one-time starter + choose-your-resource packs + server-side purchase limits.
 > Finding: founderOnly is DECORATION, nothing limits any purchase.)*
