@@ -79,7 +79,11 @@ It is `private`; a fix needs a Core-side public accessor (Onboarding → Core on
 
 ---
 
-## 5. ⛔ OWNER DECISION GATE — what does the badge show on mobile?
+## 5. ✅ OWNER RULING (2026-08-25) — RESOLVED: candidate (d)
+
+> **Approved (d): desktop-only letter.** Mobile shows NO key-letter — the ability NAME owns the row (drop the `SlotBadge` letter, and the plate with it, so mobile does not inherit unnecessary visual shorthand). Desktop/EXE keeps Q/W/E/R on the badge (real keyboard). Owner note: "§13 retiring letters for cost representation doesn't need to kill a desktop badge treatment on a different surface." So implement the platform gate (§4, `IsTouchTarget()`-style, via a Core-side accessor). Desktop letter set = Q/W/E/R per canon. The candidate table below is retained for rationale only.
+
+## 5a. Original decision gate (rationale — superseded by §5 ruling) — what does the badge show on mobile?
 
 The CLI listed four candidates; **the owner rules.** For each, "desktop" = a Windows/Mac/Linux EXE build (has a real keyboard).
 

@@ -76,7 +76,16 @@ Every site in §3 hardcodes a 4/5-resource list, and so does the reference `Buil
 
 > ⚠ **UNVERIFIED PIXELS — a check the CLI must do before shipping icon-only.** The `currency_*.png` files are Git-LFS pointers on `wip`; I could not confirm the four resource icons read *apart in greyscale at chip size*. By subject (log / ingot / food / crystal / coin) they are different objects and should be shape-distinct, and project law is shape-not-colour — but the CLI must **pull the LFS assets and eyeball a greyscale render at the real chip size**. If they differ mainly by tint, that is a finding to escalate. **Mitigation regardless: keep an always-visible name/tag beside the icon** in the chip contexts (as `BuildResourceChips` already does). In the tight inline cost strings, see the §6 gate.
 
-## 6. ⛔ OWNER DECISION GATE (small)
+## 6. ✅ OWNER RULINGS (2026-08-25) — RESOLVED
+
+1. **Tight cost lines = icon + amount** (NOT icon + name). The icon IS the noun; repeating "Wood/Iron/…" burns scarce width. Example grammar: `[wood] 250  [stone] 175  [iron] 80`. Applies to the 6 letter cost formatters + the `BuildWalletRow` "WIS" strip.
+2. **Resource NAMES stay available** in tooltips / accessible labels, and in instructional / onboarding contexts — just not inline in the compact cost line.
+3. **Word-spelling formatters are narrowly scoped to prose / non-mechanical surfaces ONLY.** They must NOT rewrite compact costs, prices, badges, quantities, HUD counters, requirement lines, or any mechanically significant numeric UI. So the word-spelling family (§3: `BuildingUpgradeVM`, `WallRepairController`, `EndStateVM`) — being mechanical cost/reward numerics — converts to **icon + amount** too; it does NOT keep spelling words. `1,500 Wood` must never become "one thousand five hundred wood" because a prose formatter wandered into a cost line.
+4. **`magic`/`wisdom` icon — MAP an existing sprite, do not author new art** (owner: the library is rich). Add a one-line `magic` (and `wisdom` if the WIS strip needs it) → `{role,name}` mapping in `concept-icons.json` pointing at an existing arcane sprite (e.g. `Arcanist*`); shape-distinct + greyscale-legible; never a text fallback while neighbours are iconized. Confirm the sprite with the CLI (asked via seat-mail). CLI data-lane.
+
+The gate below is retained as rationale.
+
+## 6a. Original decision gate (rationale — superseded by §6 rulings)
 
 1. **Inline cost strings — icon+number only, or icon+number+word?** In the HUD Resources tab there is room for icon + name + number. In a build-card cost line ("[wood]140 [iron]10") space is tight and the name would crowd it. Options:
    - **(i) Icon + number only** in cost strings (relies on icon shape alone). Cleanest, matches "little wood symbol, 140" — **but** leans on §5(b) passing the greyscale check.
