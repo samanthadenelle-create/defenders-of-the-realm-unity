@@ -31,10 +31,10 @@ namespace DeNelle.Core.Quests
 
         /// <summary>
         /// Fired when a stage's reward is earned (on AdvanceQuest / CompleteQuest).
-        /// Core raises only the numbers; a Village bridge grants them — Core never
-        /// references the wallet.
+        /// Core raises only the typed lines; a Village bridge grants them — Core never
+        /// references the wallet. Payload is the stage's reward list (WO-1202).
         /// </summary>
-        public event Action<QuestReward> RewardEarned;
+        public event Action<IReadOnlyList<QuestRewardLine>> RewardEarned;
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
         private static void Bootstrap()
@@ -125,9 +125,10 @@ namespace DeNelle.Core.Quests
                 if (leaving != null)
                 {
                     if (leaving.GrantsKeystone) GiveKeystoneInternal(id + ":" + (leaving.StageId ?? st.BeatIndex.ToString()));
-                    if (leaving.Reward != null)
+                    if (leaving.Reward != null && leaving.Reward.Count > 0)
                     {
-                        DeNelle.Core.Diagnostics.FlowTrace.Step("Quest", $"reward earned on '{id}' beat {st.BeatIndex} (crystals={leaving.Reward.Crystals},food={leaving.Reward.Food},magic={leaving.Reward.Magic},item='{leaving.Reward.GrantItemId}').");
+                        DeNelle.Core.Diagnostics.FlowTrace.Step("Quest",
+                            $"reward earned on '{id}' beat {st.BeatIndex} [{QuestRewardMath.Describe(leaving.Reward)}].");
                         RewardEarned?.Invoke(leaving.Reward);
                     }
                 }

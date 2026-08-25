@@ -1,19 +1,23 @@
 // =============================================================================
 // QuestRewardBridge — Village-side listener that DISPENSES story-quest rewards.
 // -----------------------------------------------------------------------------
-// QuestService (Core) raises RewardEarned(QuestReward) when a stage's reward is
-// earned, but Core cannot reference the wallet (EconomyService). This bridge
-// closes that gap: it subscribes to RewardEarned and grants crystals / food /
-// magic / items through the live Village economy. Mirrors the DailyQuest reward
-// pattern (QuestCompleted → grant) and the DailyQuestGateBridge lifecycle.
+// QuestService (Core) raises RewardEarned(IReadOnlyList<QuestRewardLine>) when a
+// stage's reward is earned, but Core cannot reference the wallet (EconomyService).
+// This bridge closes that gap: it switches on each typed kind (WO-1202).
 //
-// Self-bootstraps via RuntimeInitializeOnLoadMethod into a DontDestroyOnLoad
-// object. Village → Core only; all cross-calls are null-conditional.
+// XP resolves via XpEarnerRegistry.TryGet(HeroProgression.Id) — the sanctioned
+// earner seam — never HeroProgression.Instance alone.
+//
+// Unknown kinds FAIL LOUD (FlowTrace.Fail) and skip that line only — never silent
+// drop (WO-1163). kind "troop" is reserved/shape-only this pass.
 // =============================================================================
 
+using System.Collections.Generic;
 using DeNelle.Core.Diagnostics;
+using DeNelle.Core.Progression;
 using DeNelle.Core.Quests;
 using DeNelle.Village.Crafting;
+using DeNelle.Village.Hero;
 using UnityEngine;
 
 namespace DeNelle.Village
@@ -44,8 +48,6 @@ namespace DeNelle.Village
 
         private void Update()
         {
-            // QuestService self-bootstraps too; if it wasn't up yet at Awake, retry
-            // cheaply until the subscription lands.
             if (!_subscribed) TrySubscribe();
         }
 
@@ -64,41 +66,121 @@ namespace DeNelle.Village
             if (_instance == this) _instance = null;
         }
 
-        private void OnRewardEarned(QuestReward reward)
+        private void OnRewardEarned(IReadOnlyList<QuestRewardLine> lines)
         {
-            if (reward == null) return;
+            if (lines == null || lines.Count == 0) return;
 
-            // Crystals + food route through the single economy wallet.
-            if (reward.Crystals > 0 || reward.Food > 0)
-                EconomyService.Instance?.Grant(crystals: reward.Crystals, food: reward.Food);
+            int wood = 0, iron = 0, food = 0, crystals = 0, magic = 0, xp = 0;
+            var items = new List<string>();
 
-            // Magic is a building-upgrade tech axis (GameState.Magic top-level field,
-            // no EconomyService bucket / no Add helper). Write it directly + persist.
-            if (reward.Magic > 0)
+            for (int i = 0; i < lines.Count; i++)
+            {
+                var line = lines[i];
+                if (line == null) continue;
+                string kind = line.NormalizedKind;
+                switch (kind)
+                {
+                    case QuestRewardLine.KindXp:
+                        xp += Mathf.Max(0, line.Amount);
+                        break;
+                    case QuestRewardLine.KindCrystals:
+                        crystals += Mathf.Max(0, line.Amount);
+                        break;
+                    case QuestRewardLine.KindWood:
+                        wood += Mathf.Max(0, line.Amount);
+                        break;
+                    case QuestRewardLine.KindIron:
+                        iron += Mathf.Max(0, line.Amount);
+                        break;
+                    case QuestRewardLine.KindFood:
+                        food += Mathf.Max(0, line.Amount);
+                        break;
+                    case QuestRewardLine.KindMagic:
+                        magic += Mathf.Max(0, line.Amount);
+                        break;
+                    case QuestRewardLine.KindItem:
+                        if (!string.IsNullOrEmpty(line.Id)) items.Add(line.Id);
+                        else
+                            FlowTrace.Fail("Quest", "reward kind 'item' with empty id — line skipped.");
+                        break;
+                    case QuestRewardLine.KindTroop:
+                        // Shape reserved (WO-1201/1202). Not granted this pass.
+                        FlowTrace.Warn("Quest",
+                            "reward kind 'troop' id='" + (line.Id ?? "") +
+                            "' is OUT OF SCOPE this pass — not granted.");
+                        break;
+                    default:
+                        FlowTrace.Fail("Quest",
+                            "unknown reward kind '" + (line.Kind ?? "") +
+                            "' — line skipped (WO-1202 unknown-kind must never silent-drop).");
+                        break;
+                }
+            }
+
+            // Resources: one GrantSpendable for wood/iron/food/crystals (ECON-01).
+            if (wood > 0 || iron > 0 || food > 0 || crystals > 0)
+            {
+                var econ = EconomyService.Instance;
+                if (econ != null)
+                {
+                    // Prefer GrantSpendable when wood/iron present; Grant(crystals,food) for
+                    // the legacy two-arg path when only those are set — GrantSpendable covers all.
+                    econ.GrantSpendable(wood: wood, food: food, iron: iron, crystals: crystals);
+                    FlowTrace.Step("Economy",
+                        $"Story quest granted resources wood={wood} iron={iron} food={food} crystals={crystals}");
+                }
+                else
+                {
+                    FlowTrace.Fail("Economy",
+                        $"Story quest resources lost (wood={wood} iron={iron} food={food} crystals={crystals}) — EconomyService not ready");
+                }
+            }
+
+            if (magic > 0)
             {
                 var svc = DeNelle.Core.State.GameStateService.Instance;
                 if (svc != null && svc.State != null)
                 {
-                    svc.State.Magic += reward.Magic;
+                    svc.State.Magic += magic;
                     svc.Save();
-                }
-            }
-
-            // Item grants (WO-564): grant into the persisted larder / gear store
-            // (VillageInventory.Add -> GameState.GearInventory, survives reload +
-            // Neon-syncs) — the same store the shop/crafting use. Was log-only before.
-            if (!string.IsNullOrEmpty(reward.GrantItemId))
-            {
-                var inv = VillageInventory.Instance;
-                if (inv != null)
-                {
-                    inv.Add(reward.GrantItemId, 1);
-                    FlowTrace.Step("Economy", $"Story quest granted item '{reward.GrantItemId}' x1");
+                    FlowTrace.Step("Economy", $"Story quest granted magic={magic}");
                 }
                 else
                 {
-                    FlowTrace.Warn("Economy", $"Story quest item '{reward.GrantItemId}' lost — VillageInventory not ready");
+                    FlowTrace.Fail("Economy", $"Story quest magic={magic} lost — GameStateService not ready");
                 }
+            }
+
+            for (int i = 0; i < items.Count; i++)
+            {
+                string itemId = items[i];
+                var inv = VillageInventory.Instance;
+                if (inv != null)
+                {
+                    inv.Add(itemId, 1);
+                    FlowTrace.Step("Economy", $"Story quest granted item '{itemId}' x1");
+                }
+                else
+                {
+                    FlowTrace.Fail("Economy", $"Story quest item '{itemId}' lost — VillageInventory not ready");
+                }
+            }
+
+            if (xp > 0)
+            {
+                Guard.Try("Quest", "grant story-quest XP", () =>
+                {
+                    var earner = XpEarnerRegistry.TryGet(HeroProgression.Id);
+                    if (earner == null)
+                    {
+                        FlowTrace.Fail("Quest",
+                            $"Story quest XP={xp} lost — XpEarnerRegistry has no '{HeroProgression.Id}' earner yet");
+                        return;
+                    }
+                    int levels = earner.AddXp(xp);
+                    FlowTrace.Step("Economy",
+                        $"Story quest granted xp={xp} (levelsGained={levels}) via XpEarnerRegistry");
+                });
             }
         }
     }

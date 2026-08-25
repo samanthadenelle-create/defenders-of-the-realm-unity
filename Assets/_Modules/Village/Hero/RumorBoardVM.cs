@@ -154,17 +154,21 @@ namespace DeNelle.Village.Hero
             var parts = new List<string>();
             var def = FindDef(id);
             if (def == null || def.Stages == null) return parts;
-            int crystals = 0, food = 0, magic = 0;
+            int xp = 0, crystals = 0, wood = 0, iron = 0, food = 0, magic = 0;
             var items = new List<string>();
             foreach (var st in def.Stages)
             {
                 if (st == null || st.Reward == null) continue;
-                crystals += st.Reward.Crystals;
-                food += st.Reward.Food;
-                magic += st.Reward.Magic;
-                if (!string.IsNullOrEmpty(st.Reward.GrantItemId)) items.Add(st.Reward.GrantItemId);
+                QuestRewardMath.Sum(st.Reward,
+                    out int sXp, out int sC, out int sW, out int sIr, out int sF, out int sM, out var sItems);
+                xp += sXp; crystals += sC; wood += sW; iron += sIr; food += sF; magic += sM;
+                if (sItems != null) items.AddRange(sItems);
             }
+            // XP first — owner ruling WO-1202: primary reward on the board slab.
+            if (xp > 0) parts.Add("XP " + xp);
             if (crystals > 0) parts.Add("Crystals " + crystals);
+            if (wood > 0) parts.Add("Wood " + wood);
+            if (iron > 0) parts.Add("Iron " + iron);
             if (food > 0) parts.Add("Food " + food);
             if (magic > 0) parts.Add("Magic " + magic);
             // NAME the item, never key it. The "Item: " prefix is deliberately gone: it cost

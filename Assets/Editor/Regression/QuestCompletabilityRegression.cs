@@ -512,6 +512,7 @@ namespace DeNelle.Editor.Regression
             public string RequiresFlag = "";
             public bool GrantsKeystone;
             public int Crystals, Food, Magic;
+            public int Xp, Wood, Iron; // WO-1202 typed list axes
             public string GrantItemId = "";
             public bool HasCompleteOn;
             public string OnKind = "";
@@ -673,13 +674,41 @@ namespace DeNelle.Editor.Regression
                         RequiresFlag = Str(so["requiresFlag"]),
                         GrantsKeystone = Bool(so["grantsKeystone"]),
                     };
-                    var rw = so["reward"] as JObject;
-                    if (rw != null)
+                    // WO-1202: reward is a typed list. Legacy object form is rejected by
+                    // catalog-shape once migration lands — parse list only.
+                    var rwArr = so["reward"] as JArray;
+                    if (rwArr != null)
                     {
-                        s.Crystals = Int(rw["crystals"]);
-                        s.Food = Int(rw["food"]);
-                        s.Magic = Int(rw["magic"]);
-                        s.GrantItemId = Str(rw["grantItemId"]);
+                        foreach (var tok in rwArr)
+                        {
+                            var line = tok as JObject;
+                            if (line == null) continue;
+                            string kind = Str(line["kind"]).Trim().ToLowerInvariant();
+                            int amt = Int(line["amount"]);
+                            string iid = Str(line["id"]);
+                            switch (kind)
+                            {
+                                case "xp": s.Xp += amt; break;
+                                case "crystals": s.Crystals += amt; break;
+                                case "wood": s.Wood += amt; break;
+                                case "iron": s.Iron += amt; break;
+                                case "food": s.Food += amt; break;
+                                case "magic": s.Magic += amt; break;
+                                case "item":
+                                    if (!string.IsNullOrEmpty(iid) && string.IsNullOrEmpty(s.GrantItemId))
+                                        s.GrantItemId = iid;
+                                    break;
+                            }
+                        }
+                    }
+                    else if (so["reward"] is JObject rwLegacy)
+                    {
+                        failures.Add("[catalog-shape] quest '" + q.Id + "' stage '" + s.StageId +
+                                     "' still uses legacy object reward — WO-1202 requires a typed list.");
+                        s.Crystals = Int(rwLegacy["crystals"]);
+                        s.Food = Int(rwLegacy["food"]);
+                        s.Magic = Int(rwLegacy["magic"]);
+                        s.GrantItemId = Str(rwLegacy["grantItemId"]);
                     }
                     var on = so["completeOn"] as JObject;
                     if (on != null)
@@ -1795,31 +1824,56 @@ namespace DeNelle.Editor.Regression
                              "gone EVERY quest reward in the game is silently dropped.");
 
             string bridge = ReadText(RewardBridgeSrc, failures);
-            bool paysCrystalsFood = false, paysMagic = false, paysItem = false;
+            bool paysResources = false, paysMagic = false, paysItem = false, paysXp = false;
             if (bridge != null)
             {
                 string code = StripComments(bridge);
                 if (code.IndexOf("RewardEarned", StringComparison.Ordinal) < 0)
                     failures.Add("[reward-payable] QuestRewardBridge no longer subscribes RewardEarned - nothing " +
                                  "listens for a quest reward, so nothing is ever granted.");
-                paysCrystalsFood = Regex.IsMatch(code, @"Grant\s*\(\s*crystals\s*:");
+                // WO-1202: GrantSpendable covers wood/iron/food/crystals; legacy Grant(crystals:) also OK.
+                paysResources = code.IndexOf("GrantSpendable", StringComparison.Ordinal) >= 0 ||
+                                Regex.IsMatch(code, @"Grant\s*\(\s*crystals\s*:");
                 paysMagic = code.IndexOf("State.Magic", StringComparison.Ordinal) >= 0;
                 paysItem = Regex.IsMatch(code, @"\binv\s*\.\s*Add\s*\(") ||
                            code.IndexOf("VillageInventory", StringComparison.Ordinal) >= 0;
+                paysXp = code.IndexOf("XpEarnerRegistry", StringComparison.Ordinal) >= 0 &&
+                         code.IndexOf("AddXp", StringComparison.Ordinal) >= 0;
+                if (!paysXp)
+                    failures.Add("[reward-payable] QuestRewardBridge has no XpEarnerRegistry+AddXp path — " +
+                                 "WO-1202 XP rewards would evaporate.");
+                if (code.IndexOf("unknown reward kind", StringComparison.Ordinal) < 0 &&
+                    code.IndexOf("unknown reward kind", StringComparison.OrdinalIgnoreCase) < 0)
+                {
+                    // Accept either exact Fail string fragment.
+                    if (code.IndexOf("NormalizedKind", StringComparison.Ordinal) >= 0 &&
+                        code.IndexOf("FlowTrace.Fail", StringComparison.Ordinal) >= 0)
+                    { /* switch default Fail is enough */ }
+                    else
+                        notes.Add("[reward-payable] could not confirm unknown-kind Fail-loud by string match — review bridge");
+                }
             }
 
             int rewardedStages = 0;
+            int missingXp = 0;
             foreach (var q in ctx.Quests)
                 foreach (var s in q.Stages)
                 {
-                    bool any = s.Crystals > 0 || s.Food > 0 || s.Magic > 0 || !string.IsNullOrEmpty(s.GrantItemId);
+                    bool any = s.Xp > 0 || s.Crystals > 0 || s.Wood > 0 || s.Iron > 0 || s.Food > 0 ||
+                               s.Magic > 0 || !string.IsNullOrEmpty(s.GrantItemId);
                     if (!any) continue;
                     rewardedStages++;
 
-                    if ((s.Crystals > 0 || s.Food > 0) && bridge != null && !paysCrystalsFood)
+                    if (s.Xp <= 0)
+                        missingXp++;
+
+                    if ((s.Crystals > 0 || s.Food > 0 || s.Wood > 0 || s.Iron > 0) && bridge != null && !paysResources)
                         failures.Add("[reward-payable] quest '" + q.Id + "' stage '" + s.StageId + "' pays " +
-                                     "crystals/food but QuestRewardBridge has no EconomyService.Grant call - the " +
+                                     "resources but QuestRewardBridge has no GrantSpendable/Grant route — the " +
                                      "wallet route is gone and the reward evaporates.");
+                    if (s.Xp > 0 && bridge != null && !paysXp)
+                        failures.Add("[reward-payable] quest '" + q.Id + "' stage '" + s.StageId + "' pays XP " +
+                                     "but the bridge has no XpEarnerRegistry.AddXp path.");
                     if (s.Magic > 0 && bridge != null && !paysMagic)
                         failures.Add("[reward-payable] quest '" + q.Id + "' stage '" + s.StageId + "' pays magic " +
                                      "but QuestRewardBridge no longer writes GameState.Magic - magic has no " +
@@ -1839,6 +1893,9 @@ namespace DeNelle.Editor.Regression
                                          "the item.");
                     }
                 }
+            if (missingXp > 0)
+                failures.Add("[reward-payable] " + missingXp + " rewarded stage(s) pay no XP — WO-1202 requires " +
+                             "XP on every stage (empty XP slabs are the defect).");
             notes.Add(rewardedStages + " of " + ctx.TotalStages + " stages carry a non-zero reward; a reward on a " +
                       "stage that is not yet completable has never been dispensed even once");
         }

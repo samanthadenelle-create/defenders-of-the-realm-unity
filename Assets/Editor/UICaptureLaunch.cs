@@ -2367,11 +2367,19 @@ namespace DeNelle.Editor
                                               int crystals, int food, int magic, string itemId)
             {
                 var def = new QuestDef { Id = id, Title = title, Type = type };
+                var lines = new List<QuestRewardLine>();
+                // Capture fixture: worst-case reward slab — include XP so the chip is exercised.
+                lines.Add(new QuestRewardLine { Kind = QuestRewardLine.KindXp, Amount = 400 });
+                if (crystals > 0) lines.Add(new QuestRewardLine { Kind = QuestRewardLine.KindCrystals, Amount = crystals });
+                if (food > 0) lines.Add(new QuestRewardLine { Kind = QuestRewardLine.KindFood, Amount = food });
+                if (magic > 0) lines.Add(new QuestRewardLine { Kind = QuestRewardLine.KindMagic, Amount = magic });
+                if (!string.IsNullOrEmpty(itemId))
+                    lines.Add(new QuestRewardLine { Kind = QuestRewardLine.KindItem, Id = itemId });
                 def.Stages.Add(new QuestStage
                 {
                     StageId = id + "_s1",
                     ObjectiveText = hook,
-                    Reward = new QuestReward { Crystals = crystals, Food = food, Magic = magic, GrantItemId = itemId },
+                    Reward = lines,
                 });
                 return def;
             }

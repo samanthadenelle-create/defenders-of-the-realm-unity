@@ -1,6 +1,6 @@
 {
   "version": 3,
-  "_comment": "WO-854 Phases 3+4 (Silo C, 2026-08-04). PASS 1 RETARGET, per the owner ruling 'retarget onto what ships': every objective now names only shipped content. Regions renamed to the realm-map.json titles (Verdant Forest -> The Thornwood, Frost Peaks -> Hollowfrost Vale, Ashen Wastes -> The Emberwastes, the Mire -> The Mirewood, Stone Mountains -> The Starfall Reach). The eight petbond.* species folded onto the three that ship in pets.json (ice-wolf / flame-pup / aether-sprite). Stonebelly -> the Orc Raider family (enemies.json orc-raider). Inn -> Barracks, Stable -> Echo Hollow, Granary -> Silo/Mill (structures-catalog.json). grantItemId iron-sword -> knight_iron (weapons.json 'Iron Longsword'). The Spire framing replaced by the living Heart of Elarion (2026-06-26 reversal). PASS 2: completeOn authored on every stage whose signal has a LIVE emitter (talk/panel/wave/build/arena). The eight terminal pet-bond stages carry NO completeOn - they need the pet.bonded:<species> emitter (Silo E), which does not exist yet. Quest ids and stageIds are DELIBERATELY unchanged: they key save state and gear-recipes.json requiresQuestId. See the WO-854 Silo C report for the full retarget table.",
+  "_comment": "WO-1202 typed reward list. XP derived: base(type)*chainDepth*stageWeight. Resources follow placement; rare items: knight_iron, armor_knight_common, ring_heartward. Unknown kinds must Fail loud at dispense.",
   "quests": [
     {
       "id": "elarion.welcome",
@@ -10,12 +10,16 @@
         {
           "stageId": "meet-elder",
           "objectiveText": "Speak with the Village Elder at the Heart of Elarion.",
-          "reward": {
-            "crystals": 50,
-            "food": 0,
-            "magic": 0,
-            "grantItemId": ""
-          },
+          "reward": [
+            {
+              "kind": "xp",
+              "amount": 315
+            },
+            {
+              "kind": "crystals",
+              "amount": 50
+            }
+          ],
           "requiresFlag": "",
           "grantsKeystone": false,
           "completeOn": {
@@ -27,12 +31,20 @@
         {
           "stageId": "first-defense",
           "objectiveText": "Survive the first wave at the gate.",
-          "reward": {
-            "crystals": 100,
-            "food": 20,
-            "magic": 0,
-            "grantItemId": ""
-          },
+          "reward": [
+            {
+              "kind": "xp",
+              "amount": 900
+            },
+            {
+              "kind": "crystals",
+              "amount": 100
+            },
+            {
+              "kind": "food",
+              "amount": 20
+            }
+          ],
           "requiresFlag": "",
           "grantsKeystone": true,
           "completeOn": {
@@ -51,12 +63,20 @@
         {
           "stageId": "gather-iron",
           "objectiveText": "Bring iron to Borin Emberhand at the Forge.",
-          "reward": {
-            "crystals": 0,
-            "food": 0,
-            "magic": 0,
-            "grantItemId": ""
-          },
+          "reward": [
+            {
+              "kind": "xp",
+              "amount": 227
+            },
+            {
+              "kind": "wood",
+              "amount": 150
+            },
+            {
+              "kind": "iron",
+              "amount": 200
+            }
+          ],
           "requiresFlag": "",
           "grantsKeystone": false,
           "completeOn": {
@@ -68,12 +88,28 @@
         {
           "stageId": "claim-weapon",
           "objectiveText": "Claim the Iron Longsword Borin Emberhand forged - open your pack and take it up.",
-          "reward": {
-            "crystals": 0,
-            "food": 0,
-            "magic": 10,
-            "grantItemId": "knight_iron"
-          },
+          "reward": [
+            {
+              "kind": "xp",
+              "amount": 650
+            },
+            {
+              "kind": "wood",
+              "amount": 200
+            },
+            {
+              "kind": "iron",
+              "amount": 250
+            },
+            {
+              "kind": "magic",
+              "amount": 10
+            },
+            {
+              "kind": "item",
+              "id": "knight_iron"
+            }
+          ],
           "requiresFlag": "",
           "grantsKeystone": false,
           "completeOn": {
@@ -92,12 +128,20 @@
         {
           "stageId": "talk-vendor",
           "objectiveText": "Visit Coppin at the Store and take the supply run.",
-          "reward": {
-            "crystals": 25,
-            "food": 0,
-            "magic": 0,
-            "grantItemId": ""
-          },
+          "reward": [
+            {
+              "kind": "xp",
+              "amount": 400
+            },
+            {
+              "kind": "crystals",
+              "amount": 25
+            },
+            {
+              "kind": "food",
+              "amount": 20
+            }
+          ],
           "requiresFlag": "",
           "grantsKeystone": false,
           "completeOn": {
@@ -116,12 +160,20 @@
         {
           "stageId": "relight-forge",
           "objectiveText": "Bring Borin Emberhand wood and iron to relight the forge.",
-          "reward": {
-            "crystals": 0,
-            "food": 0,
-            "magic": 0,
-            "grantItemId": ""
-          },
+          "reward": [
+            {
+              "kind": "xp",
+              "amount": 227
+            },
+            {
+              "kind": "wood",
+              "amount": 120
+            },
+            {
+              "kind": "iron",
+              "amount": 160
+            }
+          ],
           "requiresFlag": "",
           "grantsKeystone": false,
           "completeOn": {
@@ -133,12 +185,24 @@
         {
           "stageId": "quench-blade",
           "objectiveText": "Raise a Crystal Mine and bring Borin Emberhand a flawless stone to quench the first true blade.",
-          "reward": {
-            "crystals": 0,
-            "food": 0,
-            "magic": 10,
-            "grantItemId": ""
-          },
+          "reward": [
+            {
+              "kind": "xp",
+              "amount": 358
+            },
+            {
+              "kind": "wood",
+              "amount": 120
+            },
+            {
+              "kind": "iron",
+              "amount": 160
+            },
+            {
+              "kind": "magic",
+              "amount": 10
+            }
+          ],
           "requiresFlag": "",
           "grantsKeystone": false,
           "completeOn": {
@@ -150,12 +214,24 @@
         {
           "stageId": "field-test",
           "objectiveText": "Field-test the new blade: clear an Orc Raider wave at the west gate.",
-          "reward": {
-            "crystals": 75,
-            "food": 0,
-            "magic": 0,
-            "grantItemId": ""
-          },
+          "reward": [
+            {
+              "kind": "xp",
+              "amount": 650
+            },
+            {
+              "kind": "crystals",
+              "amount": 75
+            },
+            {
+              "kind": "wood",
+              "amount": 300
+            },
+            {
+              "kind": "iron",
+              "amount": 400
+            }
+          ],
           "requiresFlag": "",
           "grantsKeystone": true,
           "completeOn": {
@@ -174,12 +250,16 @@
         {
           "stageId": "recover-salvage",
           "objectiveText": "Recover garrison salvage - win an encounter beyond the walls.",
-          "reward": {
-            "crystals": 0,
-            "food": 0,
-            "magic": 0,
-            "grantItemId": ""
-          },
+          "reward": [
+            {
+              "kind": "xp",
+              "amount": 227
+            },
+            {
+              "kind": "iron",
+              "amount": 140
+            }
+          ],
           "requiresFlag": "",
           "grantsKeystone": false,
           "completeOn": {
@@ -191,12 +271,16 @@
         {
           "stageId": "reforge-plate",
           "objectiveText": "Reforge the plate with Halvard at the Blacksmith.",
-          "reward": {
-            "crystals": 0,
-            "food": 0,
-            "magic": 0,
-            "grantItemId": ""
-          },
+          "reward": [
+            {
+              "kind": "xp",
+              "amount": 358
+            },
+            {
+              "kind": "iron",
+              "amount": 140
+            }
+          ],
           "requiresFlag": "",
           "grantsKeystone": false,
           "completeOn": {
@@ -208,12 +292,24 @@
         {
           "stageId": "hold-the-line",
           "objectiveText": "Hold the line: survive a wave in the new armor.",
-          "reward": {
-            "crystals": 75,
-            "food": 0,
-            "magic": 0,
-            "grantItemId": ""
-          },
+          "reward": [
+            {
+              "kind": "xp",
+              "amount": 650
+            },
+            {
+              "kind": "crystals",
+              "amount": 75
+            },
+            {
+              "kind": "iron",
+              "amount": 350
+            },
+            {
+              "kind": "item",
+              "id": "armor_knight_common"
+            }
+          ],
           "requiresFlag": "",
           "grantsKeystone": true,
           "completeOn": {
@@ -232,12 +328,20 @@
         {
           "stageId": "clear-grove",
           "objectiveText": "Clear the blight from Old Pell's grove at the edge of The Thornwood.",
-          "reward": {
-            "crystals": 0,
-            "food": 0,
-            "magic": 0,
-            "grantItemId": ""
-          },
+          "reward": [
+            {
+              "kind": "xp",
+              "amount": 140
+            },
+            {
+              "kind": "wood",
+              "amount": 400
+            },
+            {
+              "kind": "food",
+              "amount": 8
+            }
+          ],
           "requiresFlag": "",
           "grantsKeystone": false,
           "completeOn": {
@@ -249,12 +353,20 @@
         {
           "stageId": "plant-sapling",
           "objectiveText": "Carry a sapling from the Heart of Elarion, plant it, and raise a Lumber Mill to tend the new growth.",
-          "reward": {
-            "crystals": 0,
-            "food": 0,
-            "magic": 0,
-            "grantItemId": ""
-          },
+          "reward": [
+            {
+              "kind": "xp",
+              "amount": 220
+            },
+            {
+              "kind": "wood",
+              "amount": 400
+            },
+            {
+              "kind": "food",
+              "amount": 8
+            }
+          ],
           "requiresFlag": "",
           "grantsKeystone": false,
           "completeOn": {
@@ -266,12 +378,24 @@
         {
           "stageId": "defend-sapling",
           "objectiveText": "Defend the sapling through one night raid.",
-          "reward": {
-            "crystals": 50,
-            "food": 30,
-            "magic": 0,
-            "grantItemId": ""
-          },
+          "reward": [
+            {
+              "kind": "xp",
+              "amount": 400
+            },
+            {
+              "kind": "crystals",
+              "amount": 50
+            },
+            {
+              "kind": "wood",
+              "amount": 1000
+            },
+            {
+              "kind": "food",
+              "amount": 50
+            }
+          ],
           "requiresFlag": "",
           "grantsKeystone": true,
           "completeOn": {
@@ -290,12 +414,16 @@
         {
           "stageId": "restore-mill",
           "objectiveText": "Restore food flow: open the upgrade for Mother Wren's Mill and raise what it yields.",
-          "reward": {
-            "crystals": 0,
-            "food": 40,
-            "magic": 0,
-            "grantItemId": ""
-          },
+          "reward": [
+            {
+              "kind": "xp",
+              "amount": 140
+            },
+            {
+              "kind": "food",
+              "amount": 56
+            }
+          ],
           "requiresFlag": "",
           "grantsKeystone": false,
           "completeOn": {
@@ -307,12 +435,16 @@
         {
           "stageId": "grow-population",
           "objectiveText": "Grow the stores so the ranks can grow: raise a Silo.",
-          "reward": {
-            "crystals": 0,
-            "food": 0,
-            "magic": 0,
-            "grantItemId": ""
-          },
+          "reward": [
+            {
+              "kind": "xp",
+              "amount": 220
+            },
+            {
+              "kind": "food",
+              "amount": 16
+            }
+          ],
           "requiresFlag": "",
           "grantsKeystone": false,
           "completeOn": {
@@ -324,12 +456,20 @@
         {
           "stageId": "assign-workers",
           "objectiveText": "Report the new harvest rota to Mother Wren.",
-          "reward": {
-            "crystals": 50,
-            "food": 50,
-            "magic": 0,
-            "grantItemId": ""
-          },
+          "reward": [
+            {
+              "kind": "xp",
+              "amount": 400
+            },
+            {
+              "kind": "crystals",
+              "amount": 50
+            },
+            {
+              "kind": "food",
+              "amount": 90
+            }
+          ],
           "requiresFlag": "",
           "grantsKeystone": true,
           "completeOn": {
@@ -348,12 +488,12 @@
         {
           "stageId": "chase-spawn",
           "objectiveText": "Raise a Crystal Mine and harvest a rare stone before the seam fades.",
-          "reward": {
-            "crystals": 0,
-            "food": 0,
-            "magic": 0,
-            "grantItemId": ""
-          },
+          "reward": [
+            {
+              "kind": "xp",
+              "amount": 140
+            }
+          ],
           "requiresFlag": "",
           "grantsKeystone": false,
           "completeOn": {
@@ -365,12 +505,16 @@
         {
           "stageId": "cut-heartgem",
           "objectiveText": "Cut your first gem at the Jeweler bench and socket it.",
-          "reward": {
-            "crystals": 0,
-            "food": 0,
-            "magic": 15,
-            "grantItemId": ""
-          },
+          "reward": [
+            {
+              "kind": "xp",
+              "amount": 220
+            },
+            {
+              "kind": "magic",
+              "amount": 15
+            }
+          ],
           "requiresFlag": "",
           "grantsKeystone": false,
           "completeOn": {
@@ -382,12 +526,16 @@
         {
           "stageId": "broker-choice",
           "objectiveText": "Decide what to do about Sable and the outside broker.",
-          "reward": {
-            "crystals": 75,
-            "food": 0,
-            "magic": 0,
-            "grantItemId": ""
-          },
+          "reward": [
+            {
+              "kind": "xp",
+              "amount": 400
+            },
+            {
+              "kind": "crystals",
+              "amount": 75
+            }
+          ],
           "requiresFlag": "",
           "grantsKeystone": true,
           "completeOn": {
@@ -406,12 +554,12 @@
         {
           "stageId": "clear-road",
           "objectiveText": "Clear the trade road to the next outpost - win an encounter beyond the walls.",
-          "reward": {
-            "crystals": 0,
-            "food": 0,
-            "magic": 0,
-            "grantItemId": ""
-          },
+          "reward": [
+            {
+              "kind": "xp",
+              "amount": 140
+            }
+          ],
           "requiresFlag": "",
           "grantsKeystone": false,
           "completeOn": {
@@ -423,12 +571,16 @@
         {
           "stageId": "establish-route",
           "objectiveText": "Establish a steady trade route with Coppin for a trickle of crystals.",
-          "reward": {
-            "crystals": 50,
-            "food": 0,
-            "magic": 0,
-            "grantItemId": ""
-          },
+          "reward": [
+            {
+              "kind": "xp",
+              "amount": 220
+            },
+            {
+              "kind": "crystals",
+              "amount": 50
+            }
+          ],
           "requiresFlag": "",
           "grantsKeystone": false,
           "completeOn": {
@@ -440,12 +592,16 @@
         {
           "stageId": "expand-network",
           "objectiveText": "Expand the network until the rumor board opens - Brom will have work waiting.",
-          "reward": {
-            "crystals": 75,
-            "food": 0,
-            "magic": 0,
-            "grantItemId": ""
-          },
+          "reward": [
+            {
+              "kind": "xp",
+              "amount": 400
+            },
+            {
+              "kind": "crystals",
+              "amount": 75
+            }
+          ],
           "requiresFlag": "",
           "grantsKeystone": true,
           "completeOn": {
@@ -464,12 +620,20 @@
         {
           "stageId": "defend-inn",
           "objectiveText": "Defend the hall through a surprise raid.",
-          "reward": {
-            "crystals": 50,
-            "food": 30,
-            "magic": 0,
-            "grantItemId": ""
-          },
+          "reward": [
+            {
+              "kind": "xp",
+              "amount": 140
+            },
+            {
+              "kind": "crystals",
+              "amount": 50
+            },
+            {
+              "kind": "food",
+              "amount": 38
+            }
+          ],
           "requiresFlag": "",
           "grantsKeystone": false,
           "completeOn": {
@@ -481,12 +645,20 @@
         {
           "stageId": "rally-point",
           "objectiveText": "Raise a Barracks as the rally and respawn point.",
-          "reward": {
-            "crystals": 50,
-            "food": 0,
-            "magic": 0,
-            "grantItemId": ""
-          },
+          "reward": [
+            {
+              "kind": "xp",
+              "amount": 400
+            },
+            {
+              "kind": "crystals",
+              "amount": 50
+            },
+            {
+              "kind": "food",
+              "amount": 20
+            }
+          ],
           "requiresFlag": "",
           "grantsKeystone": true,
           "completeOn": {
@@ -505,12 +677,16 @@
         {
           "stageId": "tame-beast",
           "objectiveText": "Track a wild echo beyond the walls and win its measure.",
-          "reward": {
-            "crystals": 0,
-            "food": 0,
-            "magic": 0,
-            "grantItemId": ""
-          },
+          "reward": [
+            {
+              "kind": "xp",
+              "amount": 140
+            },
+            {
+              "kind": "food",
+              "amount": 12
+            }
+          ],
           "requiresFlag": "",
           "grantsKeystone": false,
           "completeOn": {
@@ -522,12 +698,16 @@
         {
           "stageId": "train-ability",
           "objectiveText": "Train a pet ability with Fenn Wildmane.",
-          "reward": {
-            "crystals": 0,
-            "food": 0,
-            "magic": 0,
-            "grantItemId": ""
-          },
+          "reward": [
+            {
+              "kind": "xp",
+              "amount": 220
+            },
+            {
+              "kind": "food",
+              "amount": 12
+            }
+          ],
           "requiresFlag": "",
           "grantsKeystone": false,
           "completeOn": {
@@ -539,12 +719,20 @@
         {
           "stageId": "put-to-work",
           "objectiveText": "Ask the Echo Warden at the Echo Hollow to set your bonded pet to harvest.",
-          "reward": {
-            "crystals": 50,
-            "food": 0,
-            "magic": 0,
-            "grantItemId": ""
-          },
+          "reward": [
+            {
+              "kind": "xp",
+              "amount": 400
+            },
+            {
+              "kind": "crystals",
+              "amount": 50
+            },
+            {
+              "kind": "food",
+              "amount": 30
+            }
+          ],
           "requiresFlag": "",
           "grantsKeystone": true,
           "completeOn": {
@@ -563,12 +751,20 @@
         {
           "stageId": "raise-tier2",
           "objectiveText": "Raise Elarion to its second tier: raise a Silo so the stores can hold a season.",
-          "reward": {
-            "crystals": 0,
-            "food": 0,
-            "magic": 0,
-            "grantItemId": ""
-          },
+          "reward": [
+            {
+              "kind": "xp",
+              "amount": 315
+            },
+            {
+              "kind": "wood",
+              "amount": 320
+            },
+            {
+              "kind": "iron",
+              "amount": 160
+            }
+          ],
           "requiresFlag": "",
           "grantsKeystone": false,
           "completeOn": {
@@ -580,12 +776,20 @@
         {
           "stageId": "rearm-walls",
           "objectiveText": "Re-arm the walls: raise a Stone Wall on the breach.",
-          "reward": {
-            "crystals": 0,
-            "food": 0,
-            "magic": 0,
-            "grantItemId": ""
-          },
+          "reward": [
+            {
+              "kind": "xp",
+              "amount": 405
+            },
+            {
+              "kind": "wood",
+              "amount": 320
+            },
+            {
+              "kind": "iron",
+              "amount": 160
+            }
+          ],
           "requiresFlag": "",
           "grantsKeystone": false,
           "completeOn": {
@@ -597,12 +801,20 @@
         {
           "stageId": "rekindle-wards",
           "objectiveText": "Rekindle the wards: raise the Healing Caravan.",
-          "reward": {
-            "crystals": 0,
-            "food": 0,
-            "magic": 0,
-            "grantItemId": ""
-          },
+          "reward": [
+            {
+              "kind": "xp",
+              "amount": 495
+            },
+            {
+              "kind": "wood",
+              "amount": 320
+            },
+            {
+              "kind": "iron",
+              "amount": 160
+            }
+          ],
           "requiresFlag": "",
           "grantsKeystone": false,
           "completeOn": {
@@ -614,12 +826,28 @@
         {
           "stageId": "awaken-spire",
           "objectiveText": "Rekindle the Heart of Elarion and march on the Warband Deathspeaker.",
-          "reward": {
-            "crystals": 250,
-            "food": 0,
-            "magic": 50,
-            "grantItemId": ""
-          },
+          "reward": [
+            {
+              "kind": "xp",
+              "amount": 900
+            },
+            {
+              "kind": "crystals",
+              "amount": 250
+            },
+            {
+              "kind": "wood",
+              "amount": 800
+            },
+            {
+              "kind": "iron",
+              "amount": 400
+            },
+            {
+              "kind": "magic",
+              "amount": 50
+            }
+          ],
           "requiresFlag": "",
           "grantsKeystone": true,
           "completeOn": {
@@ -638,12 +866,12 @@
         {
           "stageId": "gather-the-four",
           "objectiveText": "Meet the four crafts of Elarion - the Forge, the Blacksmith, the Lumber Mill, the Mill - and hear Borin Emberhand tell the legend of the broken Aegis of Elarion.",
-          "reward": {
-            "crystals": 0,
-            "food": 0,
-            "magic": 0,
-            "grantItemId": ""
-          },
+          "reward": [
+            {
+              "kind": "xp",
+              "amount": 900
+            }
+          ],
           "requiresFlag": "",
           "grantsKeystone": false,
           "completeOn": {
@@ -663,12 +891,20 @@
         {
           "stageId": "steel-truth",
           "objectiveText": "Hear Halvard's side of the old quarrel at the Blacksmith - the truth of the fallen Aegis of Elarion.",
-          "reward": {
-            "crystals": 0,
-            "food": 0,
-            "magic": 0,
-            "grantItemId": ""
-          },
+          "reward": [
+            {
+              "kind": "xp",
+              "amount": 394
+            },
+            {
+              "kind": "wood",
+              "amount": 160
+            },
+            {
+              "kind": "iron",
+              "amount": 80
+            }
+          ],
           "requiresFlag": "",
           "grantsKeystone": false,
           "completeOn": {
@@ -680,12 +916,20 @@
         {
           "stageId": "bough-for-tree",
           "objectiveText": "Reconcile Old Pell and the forge - prove the bough is cut to defend the Heart of Elarion, not to bleed it.",
-          "reward": {
-            "crystals": 0,
-            "food": 0,
-            "magic": 0,
-            "grantItemId": ""
-          },
+          "reward": [
+            {
+              "kind": "xp",
+              "amount": 506
+            },
+            {
+              "kind": "wood",
+              "amount": 160
+            },
+            {
+              "kind": "iron",
+              "amount": 80
+            }
+          ],
           "requiresFlag": "",
           "grantsKeystone": false,
           "completeOn": {
@@ -697,12 +941,28 @@
         {
           "stageId": "one-hearth",
           "objectiveText": "Gather all four to Mother Wren's table for one shared meal - the night the wound closes.",
-          "reward": {
-            "crystals": 100,
-            "food": 60,
-            "magic": 0,
-            "grantItemId": ""
-          },
+          "reward": [
+            {
+              "kind": "xp",
+              "amount": 619
+            },
+            {
+              "kind": "crystals",
+              "amount": 100
+            },
+            {
+              "kind": "wood",
+              "amount": 160
+            },
+            {
+              "kind": "iron",
+              "amount": 80
+            },
+            {
+              "kind": "food",
+              "amount": 60
+            }
+          ],
           "requiresFlag": "",
           "grantsKeystone": false,
           "completeOn": {
@@ -714,12 +974,24 @@
         {
           "stageId": "master-tier",
           "objectiveText": "Take the master's word from Borin Emberhand: the four crafts work as one again, and what was lost can be recovered.",
-          "reward": {
-            "crystals": 0,
-            "food": 0,
-            "magic": 25,
-            "grantItemId": ""
-          },
+          "reward": [
+            {
+              "kind": "xp",
+              "amount": 1125
+            },
+            {
+              "kind": "wood",
+              "amount": 400
+            },
+            {
+              "kind": "iron",
+              "amount": 200
+            },
+            {
+              "kind": "magic",
+              "amount": 25
+            }
+          ],
           "requiresFlag": "",
           "grantsKeystone": true,
           "completeOn": {
@@ -739,12 +1011,12 @@
         {
           "stageId": "gather-components",
           "objectiveText": "Recover the four scattered techniques - the threefold fold of The Starfall Reach, the oathweld of Hollowfrost Vale, the heartwood bough of The Thornwood, the last pressing of The Emberwastes. Win four encounters beyond the walls to bring them home.",
-          "reward": {
-            "crystals": 0,
-            "food": 0,
-            "magic": 0,
-            "grantItemId": ""
-          },
+          "reward": [
+            {
+              "kind": "xp",
+              "amount": 840
+            }
+          ],
           "requiresFlag": "",
           "grantsKeystone": false,
           "completeOn": {
@@ -756,12 +1028,20 @@
         {
           "stageId": "all-gathered",
           "objectiveText": "All four secured - bring them to Mother Wren's table for the reforging.",
-          "reward": {
-            "crystals": 150,
-            "food": 0,
-            "magic": 50,
-            "grantItemId": ""
-          },
+          "reward": [
+            {
+              "kind": "xp",
+              "amount": 2400
+            },
+            {
+              "kind": "crystals",
+              "amount": 150
+            },
+            {
+              "kind": "magic",
+              "amount": 50
+            }
+          ],
           "requiresFlag": "",
           "grantsKeystone": true,
           "completeOn": {
@@ -781,12 +1061,24 @@
         {
           "stageId": "the-choice",
           "objectiveText": "Choose the aether for the quench - draw from the Heart of Elarion, or gather it from the cleansed lands - and reforge the Aegis of Elarion at the Workshop.",
-          "reward": {
-            "crystals": 300,
-            "food": 0,
-            "magic": 100,
-            "grantItemId": ""
-          },
+          "reward": [
+            {
+              "kind": "xp",
+              "amount": 2800
+            },
+            {
+              "kind": "crystals",
+              "amount": 300
+            },
+            {
+              "kind": "magic",
+              "amount": 100
+            },
+            {
+              "kind": "item",
+              "id": "ring_heartward"
+            }
+          ],
           "requiresFlag": "",
           "grantsKeystone": true,
           "completeOn": {
@@ -805,12 +1097,20 @@
         {
           "stageId": "cleanse-site",
           "objectiveText": "Cleanse a blighted harvest site at the edge of The Thornwood and leave an offering.",
-          "reward": {
-            "crystals": 0,
-            "food": 0,
-            "magic": 0,
-            "grantItemId": ""
-          },
+          "reward": [
+            {
+              "kind": "xp",
+              "amount": 140
+            },
+            {
+              "kind": "wood",
+              "amount": 120
+            },
+            {
+              "kind": "food",
+              "amount": 8
+            }
+          ],
           "requiresFlag": "",
           "grantsKeystone": false,
           "completeOn": {
@@ -822,12 +1122,20 @@
         {
           "stageId": "follow-home",
           "objectiveText": "Walk the Flame Pup home past Mother Wren's fields and let the bond set.",
-          "reward": {
-            "crystals": 0,
-            "food": 0,
-            "magic": 0,
-            "grantItemId": ""
-          },
+          "reward": [
+            {
+              "kind": "xp",
+              "amount": 220
+            },
+            {
+              "kind": "wood",
+              "amount": 120
+            },
+            {
+              "kind": "food",
+              "amount": 8
+            }
+          ],
           "requiresFlag": "",
           "grantsKeystone": false,
           "completeOn": {
@@ -839,12 +1147,20 @@
         {
           "stageId": "bond-sproutling",
           "objectiveText": "Bond the Flame Pup - its hearth fire quickens what the fields give back.",
-          "reward": {
-            "crystals": 0,
-            "food": 30,
-            "magic": 0,
-            "grantItemId": ""
-          },
+          "reward": [
+            {
+              "kind": "xp",
+              "amount": 400
+            },
+            {
+              "kind": "wood",
+              "amount": 300
+            },
+            {
+              "kind": "food",
+              "amount": 50
+            }
+          ],
           "requiresFlag": "",
           "grantsKeystone": false,
           "completeOn": {
@@ -863,12 +1179,12 @@
         {
           "stageId": "shield-hound",
           "objectiveText": "Protect a wounded wolf through a raid at the walls.",
-          "reward": {
-            "crystals": 0,
-            "food": 0,
-            "magic": 0,
-            "grantItemId": ""
-          },
+          "reward": [
+            {
+              "kind": "xp",
+              "amount": 140
+            }
+          ],
           "requiresFlag": "",
           "grantsKeystone": false,
           "completeOn": {
@@ -880,12 +1196,12 @@
         {
           "stageId": "bring-to-wall",
           "objectiveText": "Bring the Ice Wolf home through the west gate to the Echo Hollow.",
-          "reward": {
-            "crystals": 0,
-            "food": 0,
-            "magic": 0,
-            "grantItemId": ""
-          },
+          "reward": [
+            {
+              "kind": "xp",
+              "amount": 220
+            }
+          ],
           "requiresFlag": "",
           "grantsKeystone": false,
           "completeOn": {
@@ -897,12 +1213,16 @@
         {
           "stageId": "bond-craghound",
           "objectiveText": "Bond the Ice Wolf - its frost hide turns a blow meant for the Heart of Elarion.",
-          "reward": {
-            "crystals": 40,
-            "food": 0,
-            "magic": 0,
-            "grantItemId": ""
-          },
+          "reward": [
+            {
+              "kind": "xp",
+              "amount": 400
+            },
+            {
+              "kind": "crystals",
+              "amount": 40
+            }
+          ],
           "requiresFlag": "",
           "grantsKeystone": false,
           "completeOn": {
@@ -921,12 +1241,12 @@
         {
           "stageId": "approach-frostkit",
           "objectiveText": "Make a slow, patient approach on the cold ground below Hollowfrost Vale.",
-          "reward": {
-            "crystals": 0,
-            "food": 0,
-            "magic": 0,
-            "grantItemId": ""
-          },
+          "reward": [
+            {
+              "kind": "xp",
+              "amount": 140
+            }
+          ],
           "requiresFlag": "",
           "grantsKeystone": false,
           "completeOn": {
@@ -938,12 +1258,12 @@
         {
           "stageId": "warm-stall",
           "objectiveText": "Bring the Ice Wolf down out of the cold - Fenn Wildmane will make it a warm stall.",
-          "reward": {
-            "crystals": 0,
-            "food": 0,
-            "magic": 0,
-            "grantItemId": ""
-          },
+          "reward": [
+            {
+              "kind": "xp",
+              "amount": 220
+            }
+          ],
           "requiresFlag": "",
           "grantsKeystone": false,
           "completeOn": {
@@ -955,12 +1275,16 @@
         {
           "stageId": "bond-frostkit",
           "objectiveText": "Bond the Ice Wolf - its bite leaves the cold behind in the wound.",
-          "reward": {
-            "crystals": 40,
-            "food": 0,
-            "magic": 0,
-            "grantItemId": ""
-          },
+          "reward": [
+            {
+              "kind": "xp",
+              "amount": 400
+            },
+            {
+              "kind": "crystals",
+              "amount": 40
+            }
+          ],
           "requiresFlag": "",
           "grantsKeystone": false,
           "completeOn": {
@@ -979,12 +1303,12 @@
         {
           "stageId": "stand-in-fire",
           "objectiveText": "Stand in the worst heat of The Emberwastes beside the Flame Pup.",
-          "reward": {
-            "crystals": 0,
-            "food": 0,
-            "magic": 0,
-            "grantItemId": ""
-          },
+          "reward": [
+            {
+              "kind": "xp",
+              "amount": 140
+            }
+          ],
           "requiresFlag": "",
           "grantsKeystone": false,
           "completeOn": {
@@ -996,12 +1320,12 @@
         {
           "stageId": "bring-home-ember",
           "objectiveText": "Bring the Flame Pup home to settle at the Echo Hollow.",
-          "reward": {
-            "crystals": 0,
-            "food": 0,
-            "magic": 0,
-            "grantItemId": ""
-          },
+          "reward": [
+            {
+              "kind": "xp",
+              "amount": 220
+            }
+          ],
           "requiresFlag": "",
           "grantsKeystone": false,
           "completeOn": {
@@ -1013,12 +1337,16 @@
         {
           "stageId": "bond-emberpup",
           "objectiveText": "Bond the Flame Pup - its bite sets the enemy alight and the burn lingers.",
-          "reward": {
-            "crystals": 40,
-            "food": 0,
-            "magic": 0,
-            "grantItemId": ""
-          },
+          "reward": [
+            {
+              "kind": "xp",
+              "amount": 400
+            },
+            {
+              "kind": "crystals",
+              "amount": 40
+            }
+          ],
           "requiresFlag": "",
           "grantsKeystone": false,
           "completeOn": {
@@ -1037,12 +1365,12 @@
         {
           "stageId": "cleanse-mire",
           "objectiveText": "Cleanse the poisoned water of The Mirewood at its source.",
-          "reward": {
-            "crystals": 0,
-            "food": 0,
-            "magic": 0,
-            "grantItemId": ""
-          },
+          "reward": [
+            {
+              "kind": "xp",
+              "amount": 140
+            }
+          ],
           "requiresFlag": "",
           "grantsKeystone": false,
           "completeOn": {
@@ -1054,12 +1382,12 @@
         {
           "stageId": "roost-mirewing",
           "objectiveText": "Bring the Aether Sprite home to roost at the Echo Hollow.",
-          "reward": {
-            "crystals": 0,
-            "food": 0,
-            "magic": 0,
-            "grantItemId": ""
-          },
+          "reward": [
+            {
+              "kind": "xp",
+              "amount": 220
+            }
+          ],
           "requiresFlag": "",
           "grantsKeystone": false,
           "completeOn": {
@@ -1071,12 +1399,16 @@
         {
           "stageId": "bond-mirewing",
           "objectiveText": "Bond the Aether Sprite - its light eases what the mire left behind.",
-          "reward": {
-            "crystals": 0,
-            "food": 0,
-            "magic": 15,
-            "grantItemId": ""
-          },
+          "reward": [
+            {
+              "kind": "xp",
+              "amount": 400
+            },
+            {
+              "kind": "magic",
+              "amount": 15
+            }
+          ],
           "requiresFlag": "",
           "grantsKeystone": false,
           "completeOn": {
@@ -1095,12 +1427,12 @@
         {
           "stageId": "flawless-gem",
           "objectiveText": "Obtain a flawless stone from Sable at the Jeweler.",
-          "reward": {
-            "crystals": 0,
-            "food": 0,
-            "magic": 0,
-            "grantItemId": ""
-          },
+          "reward": [
+            {
+              "kind": "xp",
+              "amount": 140
+            }
+          ],
           "requiresFlag": "",
           "grantsKeystone": false,
           "completeOn": {
@@ -1112,12 +1444,12 @@
         {
           "stageId": "coax-moth",
           "objectiveText": "Raise a Crystal Mine and coax the Aether Sprite to the new seam with the flawless stone.",
-          "reward": {
-            "crystals": 0,
-            "food": 0,
-            "magic": 0,
-            "grantItemId": ""
-          },
+          "reward": [
+            {
+              "kind": "xp",
+              "amount": 220
+            }
+          ],
           "requiresFlag": "",
           "grantsKeystone": false,
           "completeOn": {
@@ -1129,12 +1461,16 @@
         {
           "stageId": "bond-glimmermoth",
           "objectiveText": "Bond the Aether Sprite - it scents richer crystal than any hand can find.",
-          "reward": {
-            "crystals": 60,
-            "food": 0,
-            "magic": 0,
-            "grantItemId": ""
-          },
+          "reward": [
+            {
+              "kind": "xp",
+              "amount": 400
+            },
+            {
+              "kind": "crystals",
+              "amount": 60
+            }
+          ],
           "requiresFlag": "",
           "grantsKeystone": false,
           "completeOn": {
@@ -1153,12 +1489,16 @@
         {
           "stageId": "free-calf",
           "objectiveText": "Clear an Orc Raider camp beyond the walls and free the caged wolf.",
-          "reward": {
-            "crystals": 0,
-            "food": 0,
-            "magic": 0,
-            "grantItemId": ""
-          },
+          "reward": [
+            {
+              "kind": "xp",
+              "amount": 140
+            },
+            {
+              "kind": "iron",
+              "amount": 60
+            }
+          ],
           "requiresFlag": "",
           "grantsKeystone": false,
           "completeOn": {
@@ -1170,12 +1510,20 @@
         {
           "stageId": "bond-stoneback",
           "objectiveText": "The freed Ice Wolf bonds at once - it will carry, and it will cover.",
-          "reward": {
-            "crystals": 50,
-            "food": 0,
-            "magic": 0,
-            "grantItemId": ""
-          },
+          "reward": [
+            {
+              "kind": "xp",
+              "amount": 400
+            },
+            {
+              "kind": "crystals",
+              "amount": 50
+            },
+            {
+              "kind": "iron",
+              "amount": 150
+            }
+          ],
           "requiresFlag": "",
           "grantsKeystone": false,
           "completeOn": {
@@ -1194,12 +1542,12 @@
         {
           "stageId": "walk-healed-ground",
           "objectiveText": "Hold the restored ground in the light of the Heart of Elarion and let the Aether Sprite find you worthy.",
-          "reward": {
-            "crystals": 0,
-            "food": 0,
-            "magic": 0,
-            "grantItemId": ""
-          },
+          "reward": [
+            {
+              "kind": "xp",
+              "amount": 140
+            }
+          ],
           "requiresFlag": "",
           "grantsKeystone": false,
           "completeOn": {
@@ -1211,12 +1559,12 @@
         {
           "stageId": "witness-at-heart",
           "objectiveText": "Bring the Aether Sprite to the Village Elder at the Heart of Elarion.",
-          "reward": {
-            "crystals": 0,
-            "food": 0,
-            "magic": 0,
-            "grantItemId": ""
-          },
+          "reward": [
+            {
+              "kind": "xp",
+              "amount": 220
+            }
+          ],
           "requiresFlag": "",
           "grantsKeystone": false,
           "completeOn": {
@@ -1228,12 +1576,20 @@
         {
           "stageId": "bond-aetherfox",
           "objectiveText": "Bond the Aether Sprite - its aura lightens every ability you spend.",
-          "reward": {
-            "crystals": 100,
-            "food": 0,
-            "magic": 50,
-            "grantItemId": ""
-          },
+          "reward": [
+            {
+              "kind": "xp",
+              "amount": 400
+            },
+            {
+              "kind": "crystals",
+              "amount": 100
+            },
+            {
+              "kind": "magic",
+              "amount": 50
+            }
+          ],
           "requiresFlag": "",
           "grantsKeystone": false,
           "completeOn": {

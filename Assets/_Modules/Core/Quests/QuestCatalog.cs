@@ -5,7 +5,7 @@
 // Resources dual-copy wins at load).
 // -----------------------------------------------------------------------------
 // One file holds:
-//   • QuestReward / QuestStage / QuestDef — the JSON shape of quests.json.
+//   • QuestRewardLine / QuestRewardMath / QuestStage / QuestDef — quests.json shape (WO-1202).
 //   • QuestCatalogData — the file root ({ version, quests:[…] }).
 //   • QuestCatalog — static loader (mirrors DailyQuestCatalog EXACTLY).
 //
@@ -23,16 +23,89 @@ namespace DeNelle.Core.Quests
 {
     // ── JSON DTOs ────────────────────────────────────────────────────────────
 
-    /// <summary>One stage's reward. Zero / empty slots mean "no reward there".
-    /// Economy grants happen on the Village side (QuestRewardBridge) — Core only
-    /// carries the numbers.</summary>
+    /// <summary>
+    /// One typed reward line (WO-1201 / WO-1202). Shape:
+    ///   { "kind": "xp"|"crystals"|"wood"|"iron"|"food"|"magic"|"item", "amount": N }
+    ///   { "kind": "item", "id": "knight_iron" }   // amount unused
+    ///   { "kind": "troop", "id": "pikeman" }      // OUT OF SCOPE to grant; shape reserved
+    /// Unknown kinds must FAIL LOUD at dispense time — never silent-drop (WO-1163).
+    /// </summary>
     [Serializable]
-    public sealed class QuestReward
+    public sealed class QuestRewardLine
     {
-        [JsonProperty("crystals")] public int Crystals;
-        [JsonProperty("food")] public int Food;
-        [JsonProperty("magic")] public int Magic;
-        [JsonProperty("grantItemId")] public string GrantItemId;
+        public const string KindXp = "xp";
+        public const string KindCrystals = "crystals";
+        public const string KindWood = "wood";
+        public const string KindIron = "iron";
+        public const string KindFood = "food";
+        public const string KindMagic = "magic";
+        public const string KindItem = "item";
+        public const string KindTroop = "troop"; // reserved; not granted this pass
+
+        [JsonProperty("kind")] public string Kind;
+        [JsonProperty("amount")] public int Amount;
+        [JsonProperty("id")] public string Id;
+
+        public string NormalizedKind =>
+            string.IsNullOrEmpty(Kind) ? string.Empty : Kind.Trim().ToLowerInvariant();
+    }
+
+    /// <summary>
+    /// Helpers over a stage's typed reward list. Prefer these over hand-walking lines so
+    /// board UI, oracles, and bridges stay consistent.
+    /// </summary>
+    public static class QuestRewardMath
+    {
+        public static void Sum(
+            IList<QuestRewardLine> lines,
+            out int xp, out int crystals, out int wood, out int iron, out int food, out int magic,
+            out List<string> itemIds)
+        {
+            xp = crystals = wood = iron = food = magic = 0;
+            itemIds = new List<string>();
+            if (lines == null) return;
+            for (int i = 0; i < lines.Count; i++)
+            {
+                var line = lines[i];
+                if (line == null) continue;
+                switch (line.NormalizedKind)
+                {
+                    case QuestRewardLine.KindXp: xp += Math.Max(0, line.Amount); break;
+                    case QuestRewardLine.KindCrystals: crystals += Math.Max(0, line.Amount); break;
+                    case QuestRewardLine.KindWood: wood += Math.Max(0, line.Amount); break;
+                    case QuestRewardLine.KindIron: iron += Math.Max(0, line.Amount); break;
+                    case QuestRewardLine.KindFood: food += Math.Max(0, line.Amount); break;
+                    case QuestRewardLine.KindMagic: magic += Math.Max(0, line.Amount); break;
+                    case QuestRewardLine.KindItem:
+                        if (!string.IsNullOrEmpty(line.Id)) itemIds.Add(line.Id);
+                        break;
+                    // troop / unknown: ignored here; dispenser Fail-louds unknowns
+                }
+            }
+        }
+
+        public static bool HasAny(IList<QuestRewardLine> lines)
+        {
+            Sum(lines, out int xp, out int c, out int w, out int ir, out int f, out int m, out var items);
+            return xp > 0 || c > 0 || w > 0 || ir > 0 || f > 0 || m > 0 || (items != null && items.Count > 0);
+        }
+
+        public static string Describe(IList<QuestRewardLine> lines)
+        {
+            if (lines == null || lines.Count == 0) return "(none)";
+            var parts = new List<string>(lines.Count);
+            for (int i = 0; i < lines.Count; i++)
+            {
+                var line = lines[i];
+                if (line == null) continue;
+                if (line.NormalizedKind == QuestRewardLine.KindItem ||
+                    line.NormalizedKind == QuestRewardLine.KindTroop)
+                    parts.Add(line.NormalizedKind + ":" + (line.Id ?? ""));
+                else
+                    parts.Add(line.NormalizedKind + "=" + line.Amount);
+            }
+            return string.Join(",", parts);
+        }
     }
 
     /// <summary>
@@ -178,7 +251,8 @@ namespace DeNelle.Core.Quests
     {
         [JsonProperty("stageId")] public string StageId;
         [JsonProperty("objectiveText")] public string ObjectiveText;
-        [JsonProperty("reward")] public QuestReward Reward;
+        /// <summary>WO-1202 typed list. Empty/null = no reward. Was a fixed struct pre-1202.</summary>
+        [JsonProperty("reward")] public List<QuestRewardLine> Reward;
         [JsonProperty("requiresFlag")] public string RequiresFlag;
         [JsonProperty("grantsKeystone")] public bool GrantsKeystone;
         // WO-854 Phase 2: how the player finishes this stage. Absent/null keeps the

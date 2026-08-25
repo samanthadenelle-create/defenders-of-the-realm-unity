@@ -1,6 +1,7 @@
 # WO-1202 — Quest rewards: typed list + placement/difficulty scale (lore-aligned)
 
-**Status:** READY TO IMPLEMENT — **creative rulings LOCKED** (owner 2026-08-17: *"yes use your guidance"*)  
+**Status:** PARTIAL — IMPLEMENTED locally; awaiting gate + owner felt-close — see `.RESULT.md`
+**Creative rulings:** LOCKED (owner 2026-08-17: *"yes use your guidance"*)
 **Minted:** 2026-08-17 (CLI seat) — banner bumped 1202 → 1203 in the same edit  
 **Silo:** Progression / Quests / Rumor Board  
 **Folds / sequences:** **WO-1201** (schema Option B + XP seam) — implement 1201’s migration **as Phase A of this ticket**, then author the scale table in Phase B. Do not leave 1201 as a second competing pickup.  

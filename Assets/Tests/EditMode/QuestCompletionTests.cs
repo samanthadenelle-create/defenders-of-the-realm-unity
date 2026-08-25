@@ -355,9 +355,23 @@ namespace DeNelle.Tests.EditMode
                 {
                     var reward = s["reward"];
                     if (reward == null) continue;
-                    string item = (string)reward["grantItemId"];
-                    if (string.IsNullOrEmpty(item) || items.Contains(item)) continue;
-                    unresolved.Add(item);
+                    // WO-1202: reward is a typed list of {kind,id}/{kind,amount}.
+                    if (reward is JArray lines)
+                    {
+                        foreach (var line in lines)
+                        {
+                            if ((string)line["kind"] != "item") continue;
+                            string item = (string)line["id"];
+                            if (string.IsNullOrEmpty(item) || items.Contains(item)) continue;
+                            unresolved.Add(item);
+                        }
+                    }
+                    else
+                    {
+                        string item = (string)reward["grantItemId"];
+                        if (string.IsNullOrEmpty(item) || items.Contains(item)) continue;
+                        unresolved.Add(item);
+                    }
                 }
             }
 
