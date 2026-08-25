@@ -231,17 +231,32 @@ intact but keyed to the wallet they just left. That is a support catastrophe wea
 already - *"Her save DID come back (GameState.BoundWallet is persisted...)"* - i.e. identity/save
 coupling has already surprised someone once.
 
-**Required before the switch is reachable by a player - name which you chose:**
-- (a) the picker states plainly, before switching, that a different wallet means a different saved
-  kingdom, and requires a deliberate confirm; **or**
-- (b) switching is offered ONLY at a point where no local progress can be stranded; **or**
-- (c) the save is re-keyed to follow the player - ⛔ which is a DATA MIGRATION on a live build and is
-  the OWNER's call, not the lane's.
+### ⭐ RULED BY THE OWNER 2026-08-25: OPTION (a). No question remains on this lane.
 
-⭐ **Recommended: (a).** It is honest, it is one screen, and it needs no migration. ⛔ Do NOT pick (c)
-unilaterally.
+**The picker states plainly, BEFORE switching, that a different wallet means a different saved
+kingdom, and requires a deliberate confirm.**
 
-⚠ Copy for that confirm is the OWNER's - propose, do not settle it.
+⛔ **(b) is not chosen** - do not restrict WHERE the switch is offered as a substitute for saying what
+it does.
+⛔ **(c) is NOT AUTHORIZED.** Do not re-key the save to follow the player. That is a data migration on
+a live build and remains the owner's decision alone. ⛔ Nothing in this lane may move, copy, merge or
+re-key save data.
+
+**What (a) means concretely:**
+- The confirm names the CONSEQUENCE, not the mechanism. A player does not know what a "save key" is;
+  they know what "your kingdom" is.
+- ⛔ It must be a DELIBERATE confirm, not a toast and not an inline caption - the whole point is that
+  the player cannot switch by accident and then find an empty town.
+- The currently-bound wallet is **identified** in the picker, so the player can see which one holds the
+  kingdom they are standing in.
+- ⛔ Switching still clears the sealed `MwaSessionStore` session (pin 4 above) - the warning does not
+  replace that, it accompanies it.
+- ⭐ Nothing is destroyed either way. The old kingdom remains keyed to the old wallet and returns when
+  that wallet is reselected. **Say that in the copy** - it turns a frightening dialog into an
+  understandable one, and it is TRUE.
+
+⚠ **Exact wording is still the OWNER's.** Propose it in the handback; do not treat your draft as
+settled. ⛔ But do NOT block on it - build the flow with proposed copy and flag the strings.
 
 ### 4. Site 3, PROD-014(b), WO-1171 §4 — UNCHANGED and unblocked.
 
