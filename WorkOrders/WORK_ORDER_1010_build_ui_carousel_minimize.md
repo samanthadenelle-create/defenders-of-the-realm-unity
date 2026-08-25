@@ -1,6 +1,8 @@
 # WORK ORDER 1010 — Build-mode UI redesign: "Carousel + minimize" (CoC grammar, chips on the ghost)
 
-**Status:** PARTIAL - remaining: external-tester re-test only (all code is in HEAD)
+**Status:** FIXED — all code is in HEAD; the only thing remaining is the **external-tester re-test**, which is verification, not work. AWAITING THAT RE-TEST + OWNER CLOSE. ⚠ The "all code is in HEAD" claim is the ticket's own and has not been re-verified at source by this pass.
+
+*(Board note 2026-08-24: bucket corrected. The verdict word was non-canonical, so the parser fell through to its substring pass and bucketed this row as **Done** on a word that appeared later in the sentence — the WO-1180 laundering path, and it only ever errs toward "finished". No claim about the work changed; only the leading token, so the row buckets where its own text says it belongs.)*
 
 > **PARTIAL - re-scoped 2026-08-14 (phantom sweep).** Remaining work: EXTERNAL-TESTER RE-TEST ONLY. All of the code is present in HEAD; this file's own RESULT is stale.
 > Everything else in this WO is present in HEAD. The named remainder IS the ticket now - do not

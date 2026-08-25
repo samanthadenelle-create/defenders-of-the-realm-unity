@@ -1,6 +1,8 @@
 # WORK ORDER 971 — Remove the original tutorial: ONE tutorial, ONE guide
 
-**Status:** DONE — shipped `17cf8736` ("feat(tutorial): WO-971"); owner felt-verify still PENDING (see the Owner-verify line below). RESULT file still owed (not fabricated).
+**Status:** FIXED — shipped `17cf8736` ("feat(tutorial): WO-971"); owner felt-verify still PENDING (see the Owner-verify line below). RESULT file still owed (not fabricated).
+
+*(Board note 2026-08-24: bucket corrected DONE/IMPLEMENTED → **FIXED**. Nothing about the work changed — §13 reserves DONE/closing for the PO, and this line's own text says the owner's felt-verify is still owed, so the row belongs in the felt-test queue, not the closed pile.)*
 **Silo:** Tutorial / FTUE
 **Minted:** 2026-08-10 (banner bumped 971 → 972 in the SAME edit as this mint)
 **Supersedes in part:** WO-1014 (its "gate the stand-in" approach), WO-702 (the Sylas steward body)

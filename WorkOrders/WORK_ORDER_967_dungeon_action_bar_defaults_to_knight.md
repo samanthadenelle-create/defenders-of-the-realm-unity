@@ -1,6 +1,8 @@
 # WORK ORDER 967 — The dungeon action bar defaults to the KNIGHT kit (hardcoded literal)  — **OWNER CLOSED 2026-08-22** (felt-verified by the owner; PO closes, section 13).
 
-**Status:** DONE — shipped `70eaf1c6` ("fix(hud): WO-967"); owner felt-verify owed (PO closes, §13). RESULT file still owed (not fabricated). *(Status corrected 2026-08-14: the line still read READY after the commit landed.)*
+**Status:** FIXED — shipped `70eaf1c6` ("fix(hud): WO-967"); owner felt-verify owed (PO closes, §13). RESULT file still owed (not fabricated). *(Status corrected 2026-08-14: the line still read READY after the commit landed.)*
+
+*(Board note 2026-08-24: bucket corrected DONE/IMPLEMENTED → **FIXED**. Nothing about the work changed — §13 reserves DONE/closing for the PO, and this line's own text says the owner's felt-verify is still owed, so the row belongs in the felt-test queue, not the closed pile.)*
 
 > ### VERIFIED AT SOURCE 2026-08-22 (status audit) - and the symptom is now unreachable
 > **Scene: `Dungeon_HealersCottage` - LEGACY / SUPERSEDED PIPELINE.** This ticket targeted the **hand-built**

@@ -1,6 +1,8 @@
 # WORK_ORDER_514 — tower cap (perf) + Population → "Saved Echoes" → skill points
 
-**Status:** DESIGN CAPTURED (owner felt-test brain-dump 2026-06-25, F8) · Economy/Defense lane · NOT yet implemented (needs owner confirm + deliberate build)
+**Status:** SPEC — DESIGN CAPTURED (owner felt-test brain-dump 2026-06-25, F8) · Economy/Defense lane · **NOT yet implemented** (needs owner confirm + a deliberate build).
+
+*(Board note 2026-08-24: bucket corrected. The verdict word was non-canonical, so the parser fell through to its substring pass and bucketed this row as **Done** on a word that appeared later in the sentence — the WO-1180 laundering path, and it only ever errs toward "finished". No claim about the work changed; only the leading token, so the row buckets where its own text says it belongs.)*
 **Origin:** owner F8 note: "we never touched POPULATION and we never enforced or counted number of TOWERS. Capping towers is smart for performance. We can kill population unless we rebrand it to Saved Echoes X/10, and every 3 echoes saved releases one SP."
 
 ## Item A — Tower cap (counted + enforced) — PERF *and* anti-turtle balance

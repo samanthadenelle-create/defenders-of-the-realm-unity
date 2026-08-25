@@ -4,7 +4,9 @@
 
 # WORK ORDER — Economy Store Packs (resource / farming-boost / offline-storage)
 
-**Status:** IN PROGRESS — owner priority 2026-08-21.
+**Status:** READY — owner priority 2026-08-21; work in progress. ⚠ Aged (git first-add 2026-06-28) — re-verify before pulling (see the era-sweep banner at the top of this file).
+
+*(Board note 2026-08-24: the line read "IN PROGRESS", which carries no canonical keyword, so the row bucketed as **Unlabeled** and dropped out of every board query. The verdict word is now canonical; the claim is unchanged and this pass did not re-verify it.)*
 **Type:** NEW CONTENT on an EXISTING system (PackStore) — do NOT greenfield
 **Silo:** Monetization / Backend (CLAUDE.md §9 — isolated lane)
 **Author:** design pass (no `.cs` written)

@@ -1,6 +1,6 @@
 # WORK ORDER 1174 — Sell in USDC as well as SKR. The player swaps in their own wallet; we integrate nothing.
 
-**Status:** ⏸ **PARKED by the owner, 2026-08-24** — see §0. The analysis stands and the work is
+**Status:** PARKED by the owner, 2026-08-24 ⏸ — see §0. The analysis stands and the work is
 real; it is simply not the next thing. Sequenced AFTER WO-1173 (schema-parity gate) whenever it
 is picked up, because this adds a currency to the money path and today proved that path is only
 as safe as the schema behind it.

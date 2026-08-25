@@ -1,6 +1,8 @@
 # WORK ORDER 557 — Full YarnSpinner Removal → code-built C# Obsidian dialogue
 
-**Status:** Phase 1 DONE · Phase 2 PARTIAL (faithful subset migrated + enabler-gaps specced) · Phase 3 DEFERRED (package-rip specced, NOT executed)
+**Status:** READY — PARTIAL: Phase 1 DONE · Phase 2 partial (faithful subset migrated + enabler-gaps specced) · Phase 3 DEFERRED (package-rip specced, **NOT executed**). ⚠ An RCA verdict on what Yarn remains at HEAD is owed before implementation.
+
+*(Board note 2026-08-24: bucket corrected. The verdict word was non-canonical, so the parser fell through to its substring pass and bucketed this row as **Done** on a word that appeared later in the sentence — the WO-1180 laundering path, and it only ever errs toward "finished". No claim about the work changed; only the leading token, so the row buckets where its own text says it belongs.)*
 **Owner decision (binding):** FULL Yarn removal ("Yarn has been a pain every step"). Custom system (WO-455) is built + flag-gated `ff.customdialogue` (default OFF). Migrate ALL dialogue, echo-Hollow FIRST as the proof, then sweep, then rip the package.
 **Date:** 2026-06-28
 **Branch:** wip/village2-and-f8-tickets (agent worktree, ff-merged to tip 2a6bac4e before work)

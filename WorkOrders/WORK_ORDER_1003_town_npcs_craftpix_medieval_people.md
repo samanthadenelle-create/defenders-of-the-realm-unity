@@ -6,7 +6,9 @@
 
 # WORK ORDER 1003 — Replace town NPCs with the CraftPix medieval people pack
 
-**Status:** DONE (reconciled 2026-08-08; owner felt-verification outstanding) · **Silo:** World/characters/art · **For:** CLAUDE CLI · **Date:** 2026-08-07 · ⚠ **§0's RIGGING DIRECTION WAS WRONG AND WAS CORRECTED 2026-08-20 — see the note directly below.**
+**Status:** FIXED (reconciled 2026-08-08; owner felt-verification outstanding) · **Silo:** World/characters/art · **For:** CLAUDE CLI · **Date:** 2026-08-07 · ⚠ **§0's RIGGING DIRECTION WAS WRONG AND WAS CORRECTED 2026-08-20 — see the note directly below.**
+
+*(Board note 2026-08-24: bucket corrected DONE/IMPLEMENTED → **FIXED**. Nothing about the work changed — §13 reserves DONE/closing for the PO, and this line's own text says the owner's felt-verify is still owed, so the row belongs in the felt-test queue, not the closed pile.)*
 
 > ## ⚠ CORRECTION 2026-08-20 — "link through our existing animator" put civilians in a combat stance
 > §0 of this WO directs: *"retarget onto the FULL SHARED humanoid animation set … the shared NPC

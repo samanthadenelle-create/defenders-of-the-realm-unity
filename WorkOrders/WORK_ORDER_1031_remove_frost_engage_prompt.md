@@ -1,6 +1,8 @@
 # WORK ORDER 1031 — Remove the "Frost" task prompt from town (⚠ NOT the wolf — they are the SAME OBJECT)  — **OWNER CLOSED 2026-08-22** (felt-verified by the owner; PO closes, section 13).
 
-**Status:** DONE (shipped 2026-08-16; status flipped 2026-08-17 by the READY-staleness audit) - re-confirmed 2026-08-22. Owner felt-verify still owed (PO closes, CLAUDE.md 13).
+**Status:** FIXED (shipped 2026-08-16; status flipped 2026-08-17 by the READY-staleness audit) - re-confirmed 2026-08-22. Owner felt-verify still owed (PO closes, CLAUDE.md §13).
+
+*(Board note 2026-08-24: bucket corrected DONE/IMPLEMENTED → **FIXED**. Nothing about the work changed — §13 reserves DONE/closing for the PO, and this line's own text says the owner's felt-verify is still owed, so the row belongs in the felt-test queue, not the closed pile.)*
 
 > ### VERIFIED AT SOURCE 2026-08-22 - the removal is **MACHINE-PINNED AS AN ABSENCE**, which is stronger than a grep
 > `Assets/Editor/Regression/EchoEngageDialogueRegression.cs` is **INVERTED by WO-1031** (`:2`) and asserts the

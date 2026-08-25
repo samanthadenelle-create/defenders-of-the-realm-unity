@@ -1,6 +1,8 @@
 # WORK ORDER 831 — Echo Emergence Sprite Beat (2D unlock cutscene-lite)
 
-**Status:** IMPLEMENTED 2026-08-02 — pending gates + art (code wired with the Guard fallback; the 6 emergence PNGs under `Assets/Resources/Echoes/Emergence/` are owner/art-supplied and NOT yet present — the beat degrades to the portrait until they land). See `WORK_ORDER_831_echo_emergence_sprite_beat.RESULT.md`.
+**Status:** BLOCKED — on owner/art delivery. The code is implemented (2026-08-02, wired with the Guard fallback; see `WORK_ORDER_831_echo_emergence_sprite_beat.RESULT.md`), but the 6 emergence PNGs under `Assets/Resources/Echoes/Emergence/` are owner/art-supplied and **still absent at HEAD — the directory does not exist** (verified 2026-08-24). The beat degrades to the portrait until they land.
+
+*(Board note 2026-08-24: bucket corrected Done → **BLOCKED**. The row led with IMPLEMENTED while its own text said the art had never arrived, so it rendered as finished work; the missing directory was checked at source this pass. Gates: unverified by this pass — the line's "pending gates" claim is 22 days old.)*
 **Author:** UI/QA triage (read-only RCA, §13) — Claude UI
 **Lane:** VFX/Presentation (§9) — self-contained, no gameplay/economy dependency. Runs parallel to WO-830.
 **Sibling:** WO-830 (affinity/synergy economy). Do NOT couple; this is presentation only.

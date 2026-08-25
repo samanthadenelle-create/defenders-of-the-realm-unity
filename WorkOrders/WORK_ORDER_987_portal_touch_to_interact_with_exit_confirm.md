@@ -1,6 +1,8 @@
 # WORK ORDER 987 — Dungeon exit portal: TOUCH to interact, then a "Continue to exit / Cancel" confirm
 
-**Status:** IMPLEMENTED — 2026-08-15 touch opens Obsidian confirm; PO felt-verify owed.
+**Status:** FIXED — 2026-08-15 touch opens Obsidian confirm; PO felt-verify owed.
+
+*(Board note 2026-08-24: bucket corrected DONE/IMPLEMENTED → **FIXED**. Nothing about the work changed — §13 reserves DONE/closing for the PO, and this line's own text says the owner's felt-verify is still owed, so the row belongs in the felt-test queue, not the closed pile.)*
 **Minted:** 2026-08-14 (CLI)
 **Silo:** Dungeon exit / UX
 **Source:** OWNER RULING, 2026-08-14

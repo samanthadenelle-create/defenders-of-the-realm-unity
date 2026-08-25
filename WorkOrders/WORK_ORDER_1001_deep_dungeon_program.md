@@ -6,7 +6,9 @@
 
 # WORK ORDER 1001 — Deep Dungeon Program: large multi-level dungeons as data + the engine to run them
 
-**Status:** PARTIAL - authored complete through Phase 2; traversal broken (reconciled 2026-08-08) · **Silo:** Dungeons / content / systems · **For:** CLAUDE CLI · **Date:** 2026-08-07
+**Status:** READY — PARTIAL: authored complete through Phase 2; **traversal broken** (reconciled 2026-08-08) · **Silo:** Dungeons / content / systems · **For:** CLAUDE CLI · **Date:** 2026-08-07. ⚠ An RCA verdict is owed across WO-1001/1004/1008 (deduplicated remainder) before a dev lane touches any of them.
+
+*(Board note 2026-08-24: bucket corrected. The verdict word was non-canonical, so the parser fell through to its substring pass and bucketed this row as **Done** on a word that appeared later in the sentence — the WO-1180 laundering path, and it only ever errs toward "finished". No claim about the work changed; only the leading token, so the row buckets where its own text says it belongs.)*
 **PO:** Samantha (owner) · **Author:** UI seat · **UI-seat block:** 1000–1099
 **Owner:** *"create other full complex dungeon instructions … for large real depth levels … we use a portal that takes you to a new scene."*
 **Related:** WO-1000 (starter-dungeon visual overhaul), the VFX facade (WO-884/885 — candles/fog), the harvest-VFX subtlety ruling (WO-890).

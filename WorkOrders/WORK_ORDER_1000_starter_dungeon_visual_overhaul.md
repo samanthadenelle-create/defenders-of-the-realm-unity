@@ -6,7 +6,9 @@
 
 # WORK ORDER 1000 — Starter dungeon (KayKit Challenge Outpost) visual overhaul
 
-**Status:** DONE (reconciled 2026-08-08; owner felt-verification outstanding) · **Silo:** World/art/dungeon · **For:** CLAUDE CLI · **Date:** 2026-08-07
+**Status:** FIXED (reconciled 2026-08-08; owner felt-verification outstanding) · **Silo:** World/art/dungeon · **For:** CLAUDE CLI · **Date:** 2026-08-07
+
+*(Board note 2026-08-24: bucket corrected DONE/IMPLEMENTED → **FIXED**. Nothing about the work changed — §13 reserves DONE/closing for the PO, and this line's own text says the owner's felt-verify is still owed, so the row belongs in the felt-test queue, not the closed pile.)*
 **PO:** Samantha (owner) · **Author:** UI seat · **UI-seat block:** 1000–1099 (new; 860–899 closed)
 **Owner:** *"STARTER DUNGEON IS HORRIBLY NOT DONE WELL VISUALLY."* Bring it up to the **Healer's Cottage** bar.
 

@@ -1,6 +1,8 @@
 # WORK ORDER 972 — Walls cannot be built beside each other (the 2x2 claim on a 1-cell tile)  — **OWNER CLOSED 2026-08-22** (felt-verified by the owner; PO closes, section 13).
 
-**Status:** DONE — shipped `66b5628c` ("fix(build): WO-972"). The code landed AND `WallAdjacencyRegression` is registered in `DataRegression` as the `[wall-adjacency]` suite, so the fix is regression-covered. Owner felt-verify owed; RESULT file still owed (not fabricated). *(Status corrected 2026-08-14: the line still read READY after the commit landed.)*
+**Status:** FIXED — shipped `66b5628c` ("fix(build): WO-972"). The code landed AND `WallAdjacencyRegression` is registered in `DataRegression` as the `[wall-adjacency]` suite, so the fix is regression-covered. Owner felt-verify owed; RESULT file still owed (not fabricated). *(Status corrected 2026-08-14: the line still read READY after the commit landed.)*
+
+*(Board note 2026-08-24: bucket corrected DONE/IMPLEMENTED → **FIXED**. Nothing about the work changed — §13 reserves DONE/closing for the PO, and this line's own text says the owner's felt-verify is still owed, so the row belongs in the felt-test queue, not the closed pile.)*
 
 > ### VERIFIED AT SOURCE 2026-08-22 (status audit) - the fix is present on BOTH paths
 > * `StructureFactory.MeasureClaimFootprintXZ` (`Assets/_Modules/Village/Catalog/StructureFactory.cs:965-979`) returns the **authored** `repo.placement.footprint` on both axes for `CatalogType.Wall`; the mesh is not resized.

@@ -7,7 +7,9 @@
 
 # WORK ORDER 1004 — Composed-dungeon (Pipeline A) visual fixes: rainbow floor, stray markers, enclose + relight
 
-**Status:** PARTIAL - mostly done; sec. 1.3 candle light still a seat (reconciled 2026-08-08) · **Silo:** Dungeons/art/pipeline · **For:** CLAUDE CLI · **Date:** 2026-08-07
+**Status:** READY — PARTIAL: mostly done; sec. 1.3 candle light still a seat (reconciled 2026-08-08) · **Silo:** Dungeons/art/pipeline · **For:** CLAUDE CLI · **Date:** 2026-08-07. ⚠ An RCA verdict is owed across WO-1001/1004/1008 (deduplicated remainder) before a dev lane touches any of them.
+
+*(Board note 2026-08-24: bucket corrected. The verdict word was non-canonical, so the parser fell through to its substring pass and bucketed this row as **Done** on a word that appeared later in the sentence — the WO-1180 laundering path, and it only ever errs toward "finished". No claim about the work changed; only the leading token, so the row buckets where its own text says it belongs.)*
 **PO:** Samantha (owner) · **Author:** UI seat · **UI-seat block:** 1000–1099
 **Owner (felt-test 2026-08-07):** "dungeon issues" on the composed dungeon (`dg_starter_loop`).
 **Fix at the PIPELINE level** (the bake), so every composed dungeon — incl. the WO-1001 deep dungeons — comes out clean by default. Complements WO-1000 (which fixed the hand-coded outpost) and WO-1001 (which extends this pipeline).
