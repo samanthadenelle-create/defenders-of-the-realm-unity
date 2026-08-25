@@ -1,6 +1,7 @@
 # PROD-017 — `bug_reports` is at an old schema, so in-game bug reports cannot be written
 
-**Status:** READY — ⛔ blocks the player-facing bug channel. **Silo:** Backend/schema.
+**Status:** CLOSED 2026-08-24 - **owner-verified end to end.** ⭐ A real submission from the Seeker landed as **`report_id 1`** - *"CLI test after bug_reports rebuild 2026-08-24"*. **The first bug report this game has ever recorded.** The table was rebuilt to the declared shape (`report_id` identity PK, `created_at` TIMESTAMPTZ, `wallet` added), and the write path is proven by a row rather than by a schema match.
+>  PRIOR: **Status:** READY — ⛔ blocks the player-facing bug channel. **Silo:** Backend/schema.
 **Found:** 2026-08-24, while checking whether the owner's remote-session reports had landed. They had not — and this is one reason why.
 
 ## Evidence
