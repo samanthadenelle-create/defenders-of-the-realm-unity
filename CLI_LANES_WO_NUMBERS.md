@@ -137,7 +137,32 @@
 > fine as history. A copied number is the bug **even when it was right the day it was written** -
 > that is exactly how the retired 860-899 UI block kept re-seeding collisions from CLAUDE.md sec.2.
 
-> ## ⚠ RECONCILED 2026-08-25 (CLI): main line next free = **1190**.
+> ## ⚠ RECONCILED 2026-08-25 (CLI): main line next free = **1194**.
+> *(CLI seat minted **WO-1193** and bumped 1193 -> 1194 in this SAME edit. **1193** = the marker
+> uniqueness ratchet decides ownership by scanning source text, so it counts a MENTION as an
+> EMISSION. SECOND instance - HollowPassFixtures.cs already carries a named exclusion whose own
+> comment PREDICTED this recurrence; two more sit latent. The obvious "sink on the same line"
+> fix was MEASURED and is wrong: it would strip protection from 13+ genuine emitters, trading a
+> loud false positive for a quiet false negative.)*
+>
+> ### superseded: RECONCILED 2026-08-25 (CLI): main line next free = **1193**.
+> *(CLI seat minted **WO-1192** and bumped 1192 -> 1193 in this SAME edit. **1192** = Brom's Rumor
+> Board full layout redesign, ROUTED TO THE UI SEAT (design spec + mockup only, no code).
+> Owner 2026-08-25: "that needs handed back to UI to redo because it doesn't look good."
+> Portrait: an empty parchment slab, every title truncated to "Standing Wa...", the Daily tab
+> sheared, objective clipped mid-word. Landscape: the status line BISECTS a quest row and the
+> bottom 40% is empty black. The panel reported only 2 touch findings and looks like that -
+> a marker cannot see emptiness or truncation. Supersedes WO-1189's layout.)*
+>
+> ### superseded: RECONCILED 2026-08-25 (CLI): main line next free = **1192**.
+> *(CLI seat minted **WO-1190** and **WO-1191** and bumped 1190 -> 1192 in this SAME edit.
+> **1190** = browsing the store must not authenticate - RefreshPricesAsync says it "binds
+> nothing and charges nothing" and then requires a signing wallet and an authed POST, so
+> opening the shelf mints a session from a signature. Owner-reported 2026-08-25.
+> **1191** = the EARNED half of the overflow ruling (FOUNDATIONAL_RULINGS section 7): paid
+> value overflows the cap, earned value adds nothing while above it.)*
+>
+> ### superseded: RECONCILED 2026-08-25 (CLI): main line next free = **1190**.
 > *(CLI seat minted **WO-1189** and bumped 1189 -> 1190 in this SAME edit. **1189** = ObsBtn_Accept
 > overlaps the Rumor Board status line by 7.4px. These two findings were HIDDEN by the capture
 > harness override deleted in WO-1076 - the same two lines manufactured 18 phantoms and concealed

@@ -329,6 +329,12 @@ namespace DeNelle.Village.Hero
                 // the list's own 0.855 ceiling -- no inset to take (landscape is the shipped
                 // orientation; this path only has to stay sane).
                 listTopInsetPx = 0f;
+                // WO-1189: portrait takes the SAME bottom inset landscape does, because the
+                // status line now lives in the LIST column on this path too (see the Status
+                // block below). Reserving it here is what keeps the last card off the line --
+                // the identical guarantee ListBottomInsetPx gives the landscape well, and the
+                // one RumorBoardLayoutRegression already pins (ListBottomInsetPx >= StatusBandPx).
+                listBottomInsetPx = ListBottomInsetPx;
             }
             else
             {
@@ -509,6 +515,34 @@ namespace DeNelle.Village.Hero
 
             // Status line at the BOTTOM OF THE LIST COLUMN (fixed 44px band, FontMicro; the
             // viewport is inset above it), so it can never touch Close or the parchment band.
+            //
+            // =================================================================
+            //  WO-1189 -- PORTRAIT'S STATUS LINE WAS NOT IN THE LIST COLUMN AT ALL.
+            // -----------------------------------------------------------------
+            //  The comment above has said "BOTTOM OF THE LIST COLUMN" since WO-866, and on
+            //  LANDSCAPE it was true: the band hangs off zoneLeft's floor and the viewport
+            //  is inset 52 px above it. PORTRAIT fell into the else-branch and hung the band
+            //  off the BODY ZONE's floor (anchor y = 0) instead -- the bottom of the whole
+            //  body, which in portrait is the region the DETAIL PANE occupies (the list only
+            //  starts at 0.48). So the status text sat at y -466..-422 while the detail
+            //  pane's CTA band ran up to -458.5, and ObsBtn_Accept covered the line by
+            //  324.8 x 7.4 ref px at 1080x2340 (and the same at 1200x2670).
+            //
+            //  *** This was never a tune-the-number problem: the band was parented to the
+            //  WRONG COLUMN, and a 7.4 px overlap is just how close the two columns happen
+            //  to come at these two aspects. Nudging the CTA or the band by 8 px would have
+            //  left the same latent adjacency for the next aspect to re-open.
+            //
+            //  So portrait now anchors the band to the LIST's OWN FLOOR (listMin.y) exactly
+            //  the way landscape anchors it to zoneLeft's floor, and takes the same
+            //  ListBottomInsetPx reservation in the viewport above it. The two bands are now
+            //  in different columns BY CONSTRUCTION on every aspect, which is the same
+            //  disjointness law Case3 of the regression already enforces for the tab band.
+            //  Nothing about the detail pane moves: DetailCtaPx stays 112, the CTA rect is
+            //  byte-identical, the WO-1076 pixel-offset floor is untouched, and no sibling
+            //  order changes (this is geometry, not z-order -- a raycasting transparent
+            //  control could not have been fixed by sorting).
+            // =================================================================
             var statusGo = new GameObject("Status", typeof(TMPro.TextMeshProUGUI));
             var sRect = statusGo.GetComponent<RectTransform>();
             if (!portrait && zoneLeft != null)
@@ -520,6 +554,24 @@ namespace DeNelle.Village.Hero
                 sRect.offsetMin = Vector2.zero; sRect.offsetMax = Vector2.zero;
                 sRect.sizeDelta = new Vector2(0f, StatusBandPx);   // one FontMicro line (never culled)
                 sRect.anchoredPosition = new Vector2(0f, 4f);
+            }
+            else if (portrait)
+            {
+                // The list column's own floor line, read off the SAME listMin/listMax the
+                // viewport above it uses -- one authored number, not a second copy of 0.48.
+                statusGo.transform.SetParent(bodyHost, false);
+                sRect.anchorMin = new Vector2(listMin.x, listMin.y);
+                sRect.anchorMax = new Vector2(listMax.x, listMin.y);
+                sRect.pivot = new Vector2(0.5f, 0f);
+                sRect.offsetMin = Vector2.zero; sRect.offsetMax = Vector2.zero;
+                sRect.sizeDelta = new Vector2(0f, StatusBandPx);
+                sRect.anchoredPosition = new Vector2(0f, 4f);
+                DeNelle.Core.Diagnostics.FlowTrace.Step("UI", string.Format(
+                    "RumorBoard portrait status band: anchored to the LIST floor y={0:F3} of the body " +
+                    "zone, {1:F0} px tall, {2:F0} px above that line; viewport inset {3:F0} px above it. " +
+                    "WO-1189 - it used to hang off the body zone's own floor (y=0), inside the detail " +
+                    "pane's column, where ObsBtn_Accept covered it by 7.4 ref px.",
+                    listMin.y, StatusBandPx, 4f, listBottomInsetPx));
             }
             else
             {
