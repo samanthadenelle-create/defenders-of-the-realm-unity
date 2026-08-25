@@ -1958,10 +1958,27 @@ namespace DeNelle.Village
                 FlowTrace.Warn("Wave",
                     $"wave {waveId}: field is already at the concurrency cap " +
                     $"({_liveEnemies.Count}/{_maxSimultaneousEnemies}) — releasing NOTHING now and " +
-                    $"holding all {_heldSmartReinforcements} for reinforcement.");
+                    $"holding all {_heldSmartReinforcements} for reinforcement. WARNING: the " +
+                    $"{SmartEnemySpawner.SideCountForWave(waveId)}-side escalation for this wave " +
+                    "therefore arrives ENTIRELY as reinforcements, side by side as slots free - " +
+                    "it will read as a trickle, not a simultaneous multi-side assault.");
                 DrainSmartReinforcements(deferred, waveId, composition).Forget();
                 return true;   // composed: the legacy batch paths must NOT also fire
             }
+
+            // ⛔ WO-1179 — THIS IS **ONE** CALL, AND IT MUST STAY ONE CALL.
+            // Waves now attack from 1 / 2 / 4 SIDES (SmartEnemySpawner.SideCountForWave), but the
+            // side split happens INSIDE SpawnWave, under the SINGLE `budget` computed above.
+            // Calling SpawnWave once per side would hand EACH call the full budget and DOUBLE the
+            // field on screen — silently defeating _maxSimultaneousEnemies, a cap that exists
+            // because of a measured phone frame-rate cliff (WO-1113). WaveManager also stays the
+            // SINGLE spawn authority: side escalation is this wave loop getting harder, never a
+            // second system on its own difficulty curve (SiegeSpawnAuthorityRegression enforces it).
+            int sidesThisWave = SmartEnemySpawner.SideCountForWave(waveId);
+            FlowTrace.Step("Wave",
+                $"wave {waveId}: side ladder wants {sidesThisWave} side(s); ONE SpawnWave call with a " +
+                $"SHARED budget of {budget} (cap {_maxSimultaneousEnemies}, live {_liveEnemies.Count}, " +
+                $"roster {composition.TotalCount}).");
 
             List<Enemy> squad = _smartSpawner.SpawnWave(
                 composition,
@@ -1976,6 +1993,22 @@ namespace DeNelle.Village
 
             bool spawnedAny = RegisterSmartSquad(squad);
 
+            // MEASURED, not intended: the live count AFTER registration, against the cap it is
+            // supposed to respect. If a side split ever did double the field, this is the line
+            // that says so — a value above the cap is impossible under a correct shared budget.
+            int liveNow = _liveEnemies.Count;
+            if (_maxSimultaneousEnemies > 0 && liveNow > _maxSimultaneousEnemies)
+                FlowTrace.Fail("Wave",
+                    $"wave {waveId}: CONCURRENCY CAP BREACHED — {liveNow} live enemies against a cap of " +
+                    $"{_maxSimultaneousEnemies} after ONE SpawnWave call across {sidesThisWave} side(s). " +
+                    "A shared budget cannot produce this; something released outside the budget " +
+                    "(a per-side SpawnWave call, or a second spawn authority).");
+            else
+                FlowTrace.Step("Wave",
+                    $"wave {waveId}: post-spawn live={liveNow}/{(_maxSimultaneousEnemies > 0 ? _maxSimultaneousEnemies.ToString() : "uncapped")} " +
+                    $"released={squad?.Count ?? 0} across up to {sidesThisWave} side(s) " +
+                    "(see the SmartSpawner MEASURED partition line for the per-side split).");
+
             if (deferred.Count > 0)
             {
                 int heldTotal = CountOf(deferred);
@@ -1983,7 +2016,8 @@ namespace DeNelle.Village
                 FlowTrace.Step("Wave",
                     $"wave {waveId}: concurrency cap {_maxSimultaneousEnemies} released {squad.Count} now, " +
                     $"HOLDING {heldTotal} for reinforcement (total roster unchanged at " +
-                    $"{squad.Count + heldTotal}).");
+                    $"{squad.Count + heldTotal}). The drain re-calls SpawnWave with the SAME waveId, so " +
+                    "held bodies return to the SAME sides.");
                 DrainSmartReinforcements(deferred, waveId, composition).Forget();
             }
 
