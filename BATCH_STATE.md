@@ -25,17 +25,18 @@
 > - ⭐ Manual couriering also **serialises the two writers**, which makes the clobber risk below mostly
 >   theoretical — the zones stay documented anyway, because the moment either side automates, it returns.
 >
-> ## ⛔ TWO WRITERS, TWO ZONES — the rule that stops us clobbering each other
-> **The dev lane writes ONLY inside `## 📥 HANDBACKS`, at the bottom. The lead writes ONLY above it.**
+> ## ⭐ ONE FILE PER DIRECTION — there is no shared write at all
+> **`BATCH_STATE.md` is OUTBOUND ONLY: lead → dev lane.** ⛔ **The dev lane never writes to this file.**
+> Its results go into a **separate result file the owner creates**, which is INBOUND: dev lane → lead.
 >
-> ⚠ **Why:** if both seats rewrite the whole file, whoever saves second wins and the other's update
-> vanishes **silently** — the same failure as two committers on one `.git/index.lock`, and this repo has
-> already paid for that once.
-> - ⭐ **Dev lane: APPEND a dated entry to HANDBACKS. Never edit anything above it, never reorder it.**
-> - ⭐ **Lead: when replacing the state above, PRESERVE the HANDBACKS section verbatim.** ⛔ Replacing the
->   file without carrying it forward destroys the other seat's report.
-> - ⚠ **If you find your own last entry missing, say so immediately** — that means a replace dropped it,
->   and the protocol failed rather than the work.
+> ⭐ **That removes the clobber hazard by construction rather than by discipline** — a rule nobody has to
+> remember cannot be forgotten. The earlier two-zone version of this section is superseded; it depended
+> on both seats respecting a boundary inside one document, and boundaries inside a shared file are the
+> thing this repo keeps losing edits to.
+>
+> ⚠ **Still true, and it is the part discipline cannot remove:** the owner carries both files by hand, so
+> **nothing here reaches the dev lane until she relays it, and nothing in the result file reaches the lead
+> until she brings it back.** ⛔ Never assume delivery.
 
 ---
 
@@ -88,21 +89,21 @@
 
 ---
 
-## 📥 HANDBACKS — ⛔ THE DEV LANE OWNS THIS SECTION. The lead never rewrites it.
+## 📥 RESULTS COME BACK IN A SEPARATE FILE — ⛔ do not write them here
 
-**Append a dated entry as each ticket completes.** ⛔ Do not edit anything above this heading.
+The owner creates and carries a **separate result file** for the dev lane's handbacks. ⛔ **Nothing is
+appended to `BATCH_STATE.md` by the dev lane.**
 
-**One entry per ticket, and say these five things:**
+**Each handback should say these five things — the third and fourth earn their place:**
 1. **WO + what landed** — one line.
 2. **Where it is** — worktree/branch, or "in the shared tree by explicit path".
-3. ⛔ **What you did NOT do**, and why — a blocked slice, a dependency, a refused spec. ⭐ **This is the
-   most valuable line**; today it corrected more tickets than the code in them.
+3. ⛔ **What you did NOT do, and why** — a blocked slice, a dependency, a refused spec.
 4. ⚠ **What you could NOT find, or where the spec did not match the code.**
-5. **Verification you ran** — tests, counts, `node --check`. ⛔ **Never a gate** — the gate is the lead's
-   (one Unity lock, one committer), and ⛔ **never a commit or push.**
+5. **Verification run** — tests, counts, `node --check`. ⛔ **Never a gate, never a commit or push** —
+   one Unity lock, one committer, both the lead's.
 
-⚠ **A refusal is a completion.** If a ticket turned out already-shipped, unimplementable as written, or
+⭐ **Points 3 and 4 corrected more tickets today than the code in them did.**
+
+⚠ **A REFUSAL IS A COMPLETION.** A ticket that turns out already-shipped, unimplementable as written, or
 gated behind a ruling — **that is the handback**, and it is worth more than an implementation. Three
-tickets today were "already shipped" and were wrong in **both** directions.
-
-<!-- entries below this line -->
+tickets today were called "already shipped" and were wrong in **both** directions.
