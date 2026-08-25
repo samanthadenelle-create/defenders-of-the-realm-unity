@@ -166,3 +166,29 @@ strike the crystal framing. Once §1 no longer asserts a crystal cap, the behavi
 
 ⚠ The **regression half** stays unaffected — the source-structural seam decided by the lead 2026-08-24
 pins honest REPORTING and is correct under every possible ruling.
+
+---
+
+## ⭐ OWNER CLARIFICATION 2026-08-24 - "the CAPPED THREE, whatever they're called"
+
+The ruling's worked example said *"240 of 500 **stone** collected."* ⚠ **Stone does not exist yet** - it
+arrives with WO-1163's rename, which is unshipped. Today the capped three are **wood / iron / food**.
+
+⭐ **Owner: "yes the capped three whatever they're called."** So the rule is recorded **STRUCTURALLY, not
+by name**, and it survives this rename and every future one:
+
+> **A reward pays what fits and discloses the shortfall in words for any resource where
+> `TownBankCapacity.IsCapped()` returns TRUE. Resources it returns FALSE for always pay in full.**
+
+⛔ **Do NOT hardcode a resource-name list anywhere.** `TownBankCapacity.UncappableResources` (`:238-242`)
+is the single authority; `IsCapped()` (`:290-296`) is the single read. ⚠ A hardcoded list is a fact
+written twice — this repo's dominant failure mode — and it would go stale **the day WO-1163 lands**,
+which is *this week*.
+
+⭐ **Crystals and Coins stay uncapped and always pay in full**, verified five ways at source, with
+`[no-crystal-cap]` (`TownBankCapRegression.cs:162`) **failing the build** if that changes.
+
+⚠ **§1's premise is still FALSE and still owed a correction** — it claims crystals route to a clampable
+kind and a player is credited 0 while the log reads `+500 crystals`. **That scenario cannot occur.** The
+real defect (callers logging *requested* rather than *credited*) applies **only to the capped set**.
+⛔ The regression slice is unaffected and remains handable.

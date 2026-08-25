@@ -319,3 +319,13 @@ Verified at source today, not assumed.
 | **WO-874, WO-887** | **Implemented 2026-08-22.** The only residue is WO-874's three untagged boss keys, folded into ruling 3. |
 | **WO-978 (the seam)** | **Lead decided 2026-08-24** — a source-structural assertion, not `internal` + `InternalsVisibleTo`. Only the §6 behaviour question is yours, and it is ruling 5. |
 | **MON-002** | Blocked on "a real Squads vault address." One now exists and was **re-verified on chain 2026-08-24** (2-of-3, timeLock 0). Lead reconcile, not a ruling. |
+
+---
+
+## ⭐ RULING 5 - CLARIFIED AND CLOSED 2026-08-24
+
+Owner: **"yes the capped three whatever they're called."**
+
+⭐ Recorded **structurally**: pay-what-fits-and-disclose applies wherever `TownBankCapacity.IsCapped()`
+is TRUE; uncapped resources always pay in full. ⛔ **No resource-name list is hardcoded anywhere** — the
+"stone" in the original wording would have gone stale the day WO-1163 lands.
