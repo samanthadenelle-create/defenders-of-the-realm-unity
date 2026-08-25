@@ -1,6 +1,15 @@
 # PROD-014 — The "NEED MORE TO REPAIR" toast truncates on both lines
 
-**Status:** READY — PARTIAL. The **label-clipping half is FIXED 2026-08-24** (`130ec84ab`: `HubRepairAffordance` now calls `FitBlock` at the legibility floor, copy moved to `WallRepairStrings.cs`, plus a new ellipsis detector) and awaits owner felt-verify. **STILL OPEN:** the acknowledge control, the crystals-repair option and the smallest-sufficient pack offer (the discount half is split out to WO-1177). **Silo:** HUD.
+**Status:** READY — **but exactly ONE slice is takeable; the others are fixed, blocked, or elsewhere.** Per-slice state (2026-08-24):
+- **(a) Label clipping — FIXED 2026-08-24** (`130ec84ab`: `HubRepairAffordance` now calls `FitBlock` at the legibility floor, copy moved to `WallRepairStrings.cs`, plus a new ellipsis detector). Awaiting **owner felt-verify only** — no code work here.
+- **(b) Acknowledge / close control — READY. THIS is the slice to take.** Component, UI primitive, handler and the selection-clearing path (`WallRepairController.CancelRepair`) are all specified in the body below.
+- **(c) Smallest-sufficient pack offer — ⛔ BLOCKED** until WO-1069 is integrated; it must reuse `PackStore.FocusShortfall`, never a second offer path.
+- **(d) Crystals-for-repair — ⛔ BLOCKED.** The ruling says price it *above the natural exchange* but names **no rate**; choosing one would be inventing economy policy. Needs an owner number first.
+- **(e) Discount — NOT PART OF THIS TICKET**, split out to **WO-1177**.
+
+**Silo:** HUD.
+⚠ **The TITLE is historical.** The truncation it names is fixed; what actually remains is *a refused repair needs an exit*. ⛔ **Do NOT rename the file** — it is referenced elsewhere.
+*(Board note 2026-08-24: the previous `READY — PARTIAL` banner was too broad and would have authorised the whole ticket, including the two blocked slices. Bucket unchanged (Ready); the slices are now named individually.)*
 **Reported:** owner felt-test, Seeker, 2026-08-24.
 
 ## Symptom
