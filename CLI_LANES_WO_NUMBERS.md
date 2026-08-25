@@ -429,7 +429,51 @@
 > never as BUILD STATUS** -- "under construction"/"coming soon"/"dev"/"WIP" are BANNED player-facing
 > strings and get a REGRESSION ORACLE, not a comment, because that is the rule most likely to rot.
 > Status READY TO IMPLEMENT, 3 open rulings. No code yet.)*
-> ## ⚠ RECONCILED 2026-08-24 (UI seat): UI seat next free = **1081**.
+> ## ⚠ RECONCILED 2026-08-24 (UI seat): UI seat next free = **1083**.
+> *(UI seat minted **WO-1081** and **WO-1082** and bumped 1081 -> 1083 in this SAME edit. Both come
+> from ONE owner felt-test on the shipped Seeker APK, 2026-08-24, in a session where EVERY automated
+> gate was green — *"not a single issue other than guessing what the crystal mine does"*.
+>
+> **WO-1081** = THE PALETTE NEVER SAYS WHAT A BUILDING DOES. ⭐ THE BRIEF'S PREMISE WAS WRONG AND THE
+> TRUTH IS WORSE: she said *"i didnt open the card, only placed cause it was an item"* — and **she could
+> not have opened it.** `BuildStructureInfoPanel` is reachable ONLY via `BuildPaletteUI.OnCardTapped`,
+> which has **ZERO subscribers**: `BuildModeController.cs:3820-3828` disabled the WO-352 preview on
+> 2026-06-19 (its UIToolkit panel laid an invisible screen-blocking scrim) and reverted to IMMEDIATE-ARM.
+> **Placement costs 3 gestures (2 on desktop); reading costs infinity.** A tile renders **icon + name +
+> cost** and nothing else (`BuildPaletteUI.BuildCard:1014-1353`) — and for a first-placement freebie the
+> cost is suppressed too (`:1293`), so it is icon + name. ⛔ AND THE ONE SENTENCE THAT EXISTS IS FALSE:
+> `StructureCardVM.DescriptionFor:238-249` is a hardcoded switch on `type`, so the Crystal Mine reads
+> *"A resource structure — gathers materials over time."* It does not gather and does not work over time
+> — `CrystalMine.cs:124-138` awards on `WaveManager.OnWaveCleared`, `crystalsPerWave [1,2,4]`
+> (`buildings.json:21-34`). A building called a MINE pays only when a defence wave is cleared, which is
+> why this is the row she noticed. The schema has **no** description field
+> (`CatalogEntry.cs:29-108`) — yet `structures-catalog.json:162` already AUTHORS one on
+> `tower_siege_tower` and the loader eats it silently (`MissingMemberHandling.Ignore`,
+> `CatalogBootstrap.cs:279`). All 14 Town rows share the gap. Fix = add the field, author 14 sentences,
+> render ONE ≤48-char line on the tile, + an oracle. ⛔ NOT re-enabling the info panel, NOT changing the
+> gesture count, NOT the `blue_mine` node evolution, NOT rebalancing.
+>
+> **WO-1082** = THE PALETTE LEADS WITH THE WRONG ROWS. Owner: *"can we order the collectors as last item
+> in array as they are only items they dont get free and build time is 7 minutes"*. ⭐ THE WO-1167
+> CONTRADICTION DISSOLVES: WO-1167 shipped as WO-1172 **Option B filter CHIPS**, and
+> `BuildPaletteUI.cs:826-834` makes **"All" the default** — so the default strip is FLAT and "last in the
+> array" DOES reach the player as last on screen. One data move, zero code. ⚠ BUT BOTH HER STATED FACTS
+> DESCRIBE THE **STORAGE CONTAINERS**, NOT THE `collector_*` ROWS: the pallets are the only rows carved
+> out of the free 15 s first build (her own 2026-08-06 ruling *"other than the pallets"*,
+> `BuildModeController.cs:2077-2083` + `GraceReasonFor:2140`) and the only ones at **7.68 min** (tier 2,
+> `BuildTimerConfig.cs:94/274-288`); the three collectors build in **15 s** and are **free** on first
+> placement (`FreeBuildAvailable:2986`). ⛔ AND THE OBVIOUS FIX IS BACKWARDS: a HIGH `displayOrder` sorts
+> a row to the FRONT, because unauthored = `int.MaxValue` (`BuildPaletteVM.cs:466-470`) — the only lever
+> is array position. ⛔ The `collector_*` variant additionally FAILS a green gate
+> (`BuildCarouselTutorialOrderRegression.cs:265-266`, *"the tutorial's FIRST placement must be the
+> carousel's first card"*) and would reverse WO-963, so it needs an owner word. Both variants specified;
+> tutorial highlights are id-keyed and cannot break.
+>
+> ⭐ RECORDED FOR BOTH: there is no log line, no FlowTrace entry and no LayoutOracle finding for *"I
+> placed a thing without knowing what it was."* Third instrument-blind class named this month, after
+> WO-1080 (capture provenance) and PROD-008 (orientation) — and the only one with no instrument at all.)*
+>
+> ### superseded: RECONCILED 2026-08-24 (UI seat): UI seat next free = **1081**.
 > *(UI seat minted **WO-1080** and bumped 1080 -> 1081 in this SAME edit. **WO-1080** = THE CAPTURE-
 > PROVENANCE GATE. All four of WO-1075/1076/1077/1078 were minted from ONE aged capture,
 > `Builds/wo1060-capture.log`, and three of the four described a game that had moved on: **1076 was

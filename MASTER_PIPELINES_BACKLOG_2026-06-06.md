@@ -214,6 +214,8 @@ and **429** = the owner's "store stock from DB" spec renumbered from a colliding
 8. ▶ **WO-239** — Node claiming + outpost build.
 9. ★ **WO-292** — Keystone → Spire finale wiring (≥6 Keystones → Spire Defense → Necromancer; needs WO-290, DEF-37/38, WO-190).
 10. ★ **WO-314** — BuildPreviewModal preview-pane cleanup (isolate RT/layer/camera; fix non-functional preview; precursor to WO-282).
+11. ⭐★ **WO-1081** — The palette never says what a building DOES (owner felt-test 2026-08-24, gates all green). No reachable detail card since 2026-06-19 — placement = 3 gestures, reading = none; a tile is icon + name + cost; the one existing sentence is a hardcoded per-`type` switch and is FALSE for the Crystal Mine. Adds an authored `description` field + 14 Town strings + one tile line + an oracle. READY TO IMPLEMENT. **Sequence BEFORE WO-1082** (it adds keys to `structures-catalog.json`; WO-1082 moves rows in the same file).
+12. ★ **WO-1082** — Build palette leads with the wrong rows (owner ask 2026-08-24, "order the collectors last"). Data-only row move, zero code; the default "All" chip view renders flat, so array order IS screen order. ⚠ ONE OWNER WORD OWED: her two stated reasons both describe the **storage containers**, not the `collector_*` rows. READY TO IMPLEMENT (default variant has no gate conflict; the alternative fails `BuildCarouselTutorialOrderRegression`).
 
 ## Lane 12 — Narrative / Onboarding / Quests
 
