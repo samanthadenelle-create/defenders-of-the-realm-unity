@@ -1,5 +1,37 @@
 # BATCH_STATE — the live handoff. Read this FIRST, every time.
 
+> ## ⛔⛔ PRECEDENCE RULE (added 2026-08-25, because this file was self-contradicting)
+>
+> **The NEWEST DATED SECTION WINS. Everything below the newest one is HISTORY, not instruction.**
+>
+> ⚠ Codex returned this as Batch 9 finding 6 and was right: the protocol line *"if a section says
+> something, it is current"* held only while this file had one live block. It now has several, and
+> older blocks still listed **WO-1173 as held for a spec pass** and **Batch 1/4/7 as ACTIVE** while the
+> newest block said otherwise. A reader following the old rule would act on both.
+>
+> ⛔ **Batch 1, Batch 4, Batch 5, Batch 6, Batch 7 and Batch 8 are ALL HISTORICAL.** None is active.
+> Batch 8 was WITHDRAWN. The live block is the newest dated one, currently **BATCH 9**.
+> ⭐ Where an older section contradicts the newest, **the newest is right and the older is kept only
+> for its reasoning** - the same rule CLAUDE.md section 15 applies to canon anchors.
+>
+> ## ⭐ OWNERSHIP — CORRECTED BY THE OWNER, 2026-08-25
+>
+> **CODEX WRITES THE CODE.** Owner, verbatim: *"codex can write it, as it writes clearer and more
+> robust code than you."*
+>
+> **CLAUDE (the CLI lead) specs, routes, verifies, gates and commits.** It is the sole committer and
+> the sole batchmode hands. It does NOT take implementation lanes for itself.
+>
+> ⚠ **This corrects a wrong turn worth recording.** Codex's Batch 9 handback reported the owner's
+> standing rule as *"Claude owns all actions; Codex performs read-only inspection"* and refused all six
+> lanes on that basis (finding 1). The lead accepted that reading and rewrote this section to match.
+> **The owner has corrected it: that reading was wrong.** ⛔ Codex does not need to re-derive ownership
+> from a remembered rule - it is stated here, and this file is the authority the protocol points at.
+>
+> ⭐ **Codex's other five findings (2-6) stand and have all been applied** - they were about SCOPE, not
+> ownership, and every one was correct.
+
+
 **Last written:** 2026-08-24 (later) by the CLI lead. ⭐ **NEW since you last saw it: WO-1177 is COMMITTED (`2c3ed6c24`) AND DEPLOYED, the migration RAN — so WO-1163 IS UNBLOCKED and has been waiting all night.** Batch 1 is fully closed; there are now **SEVEN file-disjoint seats free**. ⭐ **ALSO NEW: BATCH 7 — four panel tickets (WO-1075/1076/1077/1078) minted after the last state file went out; the lane has never seen them, and all four run IN PARALLEL.** All of it is in the blocks directly under the ACTIVE table — it supersedes the older WO-1177 correction beneath it.
 
 > ## ⛔ THE PROTOCOL
@@ -37,6 +69,74 @@
 > ⚠ **Still true, and it is the part discipline cannot remove:** the owner carries both files by hand, so
 > **nothing here reaches the dev lane until she relays it, and nothing in the result file reaches the lead
 > until she brings it back.** ⛔ Never assume delivery.
+
+---
+
+## 🆕 BATCH 9 — SIX VERIFIED LANES FOR CODEX (2026-08-25, rescoped after the Batch 9 intake review)
+
+> ⭐ **Every row below was verified AT SOURCE by a dedicated pipeline seat before it was written here** -
+> the ticket's own status line quoted, the tree grepped for evidence the work is genuinely absent, and
+> `git status` checked for a dirty-file collision. **That verification exists because Batch 8 was
+> refused for skipping it.** The tree is CLEAN on every path below (HEAD is 49 ahead, nothing pushed).
+>
+> ⚠ **The stale statuses the pipeline seat flagged are now FIXED** - nine tickets that had shipped while
+> still reading READY were corrected and committed. The board no longer advertises finished work.
+
+| # | WO | The work | Files | The pin you must not miss |
+|---|---|---|---|---|
+| 1 | **WO-1173** | Wire the schema-parity gate into a chain + create `api/migrations/` | `tools/schema-parity.mjs` (READ ONLY), **ONE** ship-chain script, NEW `api/migrations/` | ⭐ **BLOCKS `MAINNET_SALES_ENABLED=true`.** Both open boxes confirmed absent. ⛔ **SCOPE WAS UNDERSTATED - corrected per Codex finding 2.** The ticket needs FOUR things, not one: (a) `SCHEMA_PARITY_OK` against PRODUCTION, (b) a deliberately narrowed CHECK / dropped column proven **RED** in a scratch DB, (c) **BLOCKING** pre-ship wiring for anything reaching a device or store, (d) execution after every production API deploy and schema edit. ⚠ One unnamed chain does not demonstrate those trigger surfaces. ⛔ **(a) and (b) need an AUTHORIZED DB EXECUTOR - this seat has none, and `DATABASE_URL` is redacted.** Name the exact chain and the verification authority before calling this scoped. |
+| 2 | **WO-1170 site 2** | `BuildCategoryRegistry.BuildFallback()` retires 3 hand-mirrored tables | `Village/Catalog/BuildCategoryRegistry.cs` + a new generator + `.g.cs` | Highest-risk site - economy gating, the WO-1168 defect class. `:335` still reads *"Mirrors build-categories.json ... keep the two in sync."* Site 1 landed at `f6e306847`. ⛔ **Do NOT emit into `Assets/_Modules/Village/Buildings/Generated/`** - untracked dirt owned by another seat. Emit to a NEW folder. ⛔ **THIS SITE OWNS THE SHARED PARITY REGISTRATION** for all three 1170 lanes - see the correction below. |
+| 3 | **WO-1170 site 3** | `StakeRewardsResolver.DefaultTiers()` retires | `Core/Platform/StakeRewardsResolver.cs` + generator + `.g.cs` | Small and mechanical, same landed pattern. `:219` `?? DefaultTiers()` and `:303` both still present. |
+| 4 | **WO-1170 site 6** | Enemy per-type VFX hardcoded fallbacks retire | `Village/Enemies/Enemy.cs`, `Village/Enemies/EnemyTypeVfxLibrary.cs` | ⭐ Both files **document the defect in their own headers** (`EnemyTypeVfxLibrary.cs:17`, `Enemy.cs:1046`) - the evidence is in-tree, not inferred. |
+| 5 | **PROD-014 slice (b)** | A refused repair needs an acknowledge / exit | `Village/Walls/WallRepairHudBridge.cs`, `WallRepairController.cs`, `HubRepairAffordance.cs` | ⛔ **SLICE (b) ONLY.** (c) and (d) are explicitly BLOCKED. Slice (a) landed `130ec84ab`. Clearing path exists: `WallRepairController.cs:486 CancelRepair()`. ⛔ **ACCEPTANCE NEEDS EYES, per Codex finding 5:** complete rendering at **2670x1200 AND the narrowest supported width**, with the PNGs OPENED. Compile + regression cannot close this lane. |
+| 6 | **WO-1171 §4** | Player-facing home for wallet connect AND disconnect | `Settings/SettingsController.cs`, `Wallet/*` | The mechanism is FINISHED (`SolanaWalletProvider.Disconnect():394`, `StubWalletProvider.Disconnect():115`) and the host screen EXISTS - **placement is the whole job**. ⛔ **SCOPE NARROWED per Codex finding 4: `Wallet/*` is READ-ONLY.** Granting it could authorize edits to an already-finished mechanism. Write ONLY `Settings/SettingsController.cs` and call through `CurrencySkinResolver`. ⚠ If a genuinely missing seam is found in `Wallet/`, RECORD it and stop - do not widen silently. |
+
+### ⛔ CORRECTION — "one file each" was FALSE (Codex finding 3, and it was right)
+
+I wrote that the three WO-1170 sites are "one file each in three different modules." **They are not.**
+Sites 2 and 3 each add a **generator PLUS a generated `.g.cs`**, and site 6 must first choose
+**delete-vs-codegen** under the ticket's section 5 and may need a **hash-parity suite**. The ticket's
+standing-oracle acceptance therefore creates a **SHARED registration surface** - three lanes editing
+`DataRegression.cs` and a parity oracle at once is the collision this batch claimed to avoid.
+
+**Binding split before any of the three starts:**
+- Each site gets a **DISTINCT generator path and a DISTINCT `.g.cs` output path**, named up front.
+- ⛔ **Site 2 is the SINGLE OWNER of any shared parity/registration surface.** Sites 3 and 6 do not
+  touch `DataRegression.cs` or a shared parity oracle; if either needs registration, it goes through
+  site 2 or lands after it.
+- Site 6 records its **delete-vs-codegen decision** before writing anything - they are different
+  tickets wearing one number.
+
+⭐ The rest of the disjointness claim holds: 1173 is tools/api only, PROD-014(b) is Village/Walls,
+1171 is Settings (with `Wallet/` read-only).
+
+### ⛔ DO NOT RE-OFFER THESE — the pipeline seat rejected them with evidence
+
+**Already landed today** (statuses now corrected): 1080, 1081, 814, 1179, 1186, 1188, 1189, 1190,
+1191, 1193. · **Already FIXED days ago:** 1137, 1138 - ⛔ this is the exact pair Batch 8 was refused
+over. · **Routed to the UI seat as design:** 1192, 1194, 1195. · **PROD-016** is a declared
+duplicate-of-record for WO-1163. · **WO-1060's `UI_TOUCH_FAIL x43` premise is DEAD** - the tree now
+reads `UI_TOUCH_OK 89/89`; it needs a re-measure before it is handable.
+
+⚠ **WO-1170 site 5 could NOT be confirmed** - the ticket cites `OverworldEncounterSpawner.cs:925` as a
+JSON seed mirror, but that region now holds a random pool pick. The line reference has drifted;
+re-locate before anyone is sent at it. **Site 4 needs a spec pass** - its own comment says a true
+single source needs an asmdef ref or a Core-side reader, which is an architecture decision.
+
+### ⛔ THE LEAD'S OWN QUEUE — blocked on this seat, not on Codex
+
+Named so they are not mistaken for available work: **WO-1152** (code FIXED at `f295971b6`, the re-baked
+L1 prefab is on NO DEVICE until `tools
+2-ship.ps1` runs) · **WO-1178** (handed back, at lead review,
+uncommitted) · **the verify-dungeons fleet run** (needs a fresh gated build; the exe is 08-23) ·
+**WO-1129** (needs Unity `AssetDatabase.MoveAsset` to preserve GUIDs) · **PROD-008** (verification only,
+one controlled RED run) · **WO-970** (one approved line, acceptance is an owner-vetoed capture).
+
+### ⚠ OWNER RULINGS OWED — still the binding constraint
+
+Quest art scope · `MAINNET_SALES_ENABLED` from a non-owner wallet (⭐ **costs nothing - it is a quote,
+not a purchase**) · the auth handshake · WO-1163's tier basket · whether guests reach the money path ·
+WO-1082's one word on §3 · gold/crystals in the new resource readout.
 
 ---
 

@@ -242,3 +242,43 @@ The new ownership-attribution section resolves findings 3 and 4 procedurally: th
 2. **The dungeon lane is file-disjoint but not evidence-ready.** Calling it safe to assign does not cure the stale-player condition: the only Windows executable remains dated 2026-08-23, while the script explicitly rejects stale builds as proof of current composer output. **CLI action still required:** after the active dirty changes are committed/gated, provide a fresh Windows build (or authorize that build from a clean settled tree), then assign the eight-dungeon run.
 
 **Disposition remains refusal on these residuals.** No implementation or stale-build fleet run was started.
+
+## HANDOFF 2026-08-25 - completed-worktree cleanup ledger
+
+Owner authorized cleanup of old completed Codex worktrees. Each target was checked before removal: its branch had **zero commits not already contained by** `wip/village2-and-f8-tickets`; for dirty completed lanes, every status-path file was SHA-256 compared with the corresponding main-tree file.
+
+### Removed - completed work already landed
+
+- **WO-917 Phase B:** removed `D:\eoa-codex-batch4-clean` and deleted local branch `codex/batch4-clean`. Its `HudKitController.cs` handback was already landed; the worktree copy matched the main tree byte-for-byte.
+- **WO-978 regression slice:** removed with the same `batch4-clean` tree. `EconomyCreditReportingRegression.cs` and `.meta` matched the landed main-tree copies byte-for-byte.
+- **WO-1075:** removed `D:\eoa-codex-ui-panels` and deleted local branch `codex/ui-panels-1075-1078`. `RaidDeployScreen.cs` matched main byte-for-byte.
+- **WO-1076:** the same UI-panel tree was removed. This ticket had correctly returned **already shipped / no implementation diff**, so no unique work was discarded.
+- **WO-1077:** the same UI-panel tree was removed. `EndStateView.cs` matched main byte-for-byte.
+- **WO-1078:** the same UI-panel tree was removed. `DialogueView.cs` matched main byte-for-byte.
+- **UI cohesion lane:** removed clean `D:\eoa-ui-cohesion` and deleted local branch `codex/ui-cohesion`; the branch had zero commits ahead of main and no working-tree changes. **Ticket mapping could not be found in `BATCH_STATE.md`, `batch_results_state.md`, `READY_FOR_REVIEW.md`, `CODEX_HANDOFF.md`, or `WorkOrders/`; CLI should attach the ticket id if this lane needs a per-ticket historical note.**
+
+### Preserved - not proven safe to delete
+
+- **WO-1163:** kept `D:\eoa-codex-1163` / `codex/wo1163`; the lane is blocked on the tier-basket ruling, not completed.
+- **WO-1177 and WO-1178:** kept `D:\eoa-codex-batch1-clean` / `codex/batch1-clean`; 11 status-path files no longer match the current main tree, so deletion would discard non-identical provenance even though the original handbacks landed.
+- **WO-1069:** kept stale/misnamed `D:\eoa-codex-batch4` / `codex/batch1`; its four status-path files differ from current main. Prior handoff says the intended work landed as `6bb61a810`, but byte identity is no longer true, so cleanup was refused pending provenance disposition.
+- **WO-1184 plus WO-1180/WO-1181 remnants:** kept `D:\eoa-codex-ready` / `codex/wo-1069-1177-1178`; `tools/board_build.py` and `CODEX_READY_FOR_REVIEW.md` differ from or are absent in main. Prior handoff says the Village/Siege work was harvested, but the residuals are not safe to destroy silently.
+- **Batch 6 ticket set:** kept `D:\eoa-codex-six` / `codex/wo-six` under the existing quarantine. No rebase, cleanup, commit, or deletion was attempted.
+- **Dungeon bake / WO-740 family:** kept `D:\eoa-dungeon-bake`. It shares the active main branch and carries extensive staged state; it was not treated as a completed disposable Codex lane.
+
+**Recovery note:** removed worktree contents were not uniquely recoverable from those folders, but all ticketed files were first proven present identically in the main tree. The deleted local branch tips remain reachable through Git reflogs until normal expiry.
+
+## HANDOFF 2026-08-25 - Batch 9 read-only intake review
+
+Owner's standing ownership rule now supersedes implementation routing: **Claude owns all actions. Codex performs read-only inspection and writes only this results handback.** No Batch 9 code, generated asset, migration, test, build, branch, or ticket was changed by Codex.
+
+### Issues returned for Claude to resolve before action
+
+1. **Batch ownership is wrong:** the section title says `READY TO HAND TO CODEX` and presents six implementation lanes. Under the owner's explicit rule, these must be routed to Claude. Codex does not accept action ownership for any of the six.
+2. **WO-1173 is underspecified against its own acceptance:** Batch 9 describes “wire into ONE ship-chain script + create `api/migrations/`” with `schema-parity.mjs` read-only. The ticket additionally requires (a) `SCHEMA_PARITY_OK` against production, (b) a deliberately narrowed CHECK/dropped column proven RED in a scratch DB, (c) blocking pre-ship wiring for anything reaching a device/store, and (d) execution after every production API deploy and schema edit. One unnamed chain is not enough to demonstrate those trigger surfaces, and the DB-dependent RED/production proofs require an authorized executor. Claude should name the exact chain and verification authority before treating this as complete scope.
+3. **WO-1170 “three independent lanes” needs an ownership split for generated infrastructure:** sites 2 and 3 explicitly add a generator plus `.g.cs`; site 6 must choose delete-vs-codegen under WO-1170 §5 and may also require a generator/hash-parity suite. The statement that the three sites are “one file each” is false as written, and the ticket's standing-oracle acceptance can create a shared regression/registration surface. Claude should assign distinct generator/output paths and one owner for any shared parity registration before parallel edits.
+4. **WO-1171 §4 file scope is broader than the work:** the ticket says the disconnect mechanism and Core seam are finished; only player-facing placement remains. Batch 9 nevertheless grants `Wallet/*`, which could authorize edits to the already-finished mechanism. The implementation scope should be the Settings host plus calls through `CurrencySkinResolver`; Wallet files should be read-only unless Claude finds and records a specific missing seam.
+5. **PROD-014(b) acceptance requires headed evidence:** the slice is correctly limited to acknowledge/exit, but its ticket still requires complete rendering at 2670x1200 and the narrowest supported width, with captured PNGs opened. Source wiring and compile/regression alone cannot close it. Claude should retain the headed capture/felt-verification step in the lane acceptance.
+6. **Older live-state text still contradicts Batch 9:** later sections in the same `BATCH_STATE.md` continue to list WO-1173 as held for a spec pass and older Batch 1/4/7 work as ACTIVE. The protocol says “if a section says something, it is current,” while Batch 9 does not explicitly supersede all older ACTIVE/HELD blocks. Claude should mark the older blocks historical or state an unambiguous precedence rule before using this as an action board.
+
+**Disposition:** review returned; zero implementation started. Once Claude corrects routing and scope, Claude owns execution and Codex remains the verification/reporting seat.
