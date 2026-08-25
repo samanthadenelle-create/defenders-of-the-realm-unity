@@ -121,6 +121,12 @@ Owner, 2026-08-25: *"I should have a screen that reflects store at that moment i
 
 ⭐ **That is the whole output. Do not add columns.**
 
+⛔ **AND THE PRESENTATION IS NOT THE POINT.** Owner: *"The screen is stupid, the data is what I care
+about."* The table is just a legible way to read four numbers. Add `-Json` emitting the same values as
+an object, so the data can be diffed day over day, fed into a post, or compared against yesterday
+without anyone re-typing it. ⚠ Same source either way - if the JSON and the table can ever disagree,
+something is being computed twice.
+
     STORE  2026-08-25 14:52 UTC  production
     PACK                      MSRP     SALE     OFF
     hearth-spark             $4.99        -       -
