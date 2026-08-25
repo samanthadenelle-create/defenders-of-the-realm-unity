@@ -13,6 +13,7 @@
 // per-species bond ranks from VillageController; see week4-hero-pets-gate.md.
 // =============================================================================
 
+using System;
 using System.Collections.Generic;
 using UnityEngine;
 using DeNelle.Core.Diagnostics;
@@ -28,6 +29,8 @@ namespace DeNelle.Pets
     [DisallowMultipleComponent]
     public sealed class PetDeployer : MonoBehaviour
     {
+        /// <summary>One-owner lifecycle notice fired immediately before an Echo body is destroyed.</summary>
+        public static event Action<Transform> EchoBodyDespawning;
         [Header("Pet prefab")]
         [Tooltip("Prefab carrying a Pet component. When null, the deployer builds " +
                  "a placeholder primitive (the KayKit pet meshes import later).")]
@@ -251,6 +254,7 @@ namespace DeNelle.Pets
             }
 
             // 1) Remove deployed pets whose species is no longer wanted.
+            var torn = new HashSet<int>();
             for (int i = _deployed.Count - 1; i >= 0; i--)
             {
                 var pet = _deployed[i];
@@ -258,8 +262,7 @@ namespace DeNelle.Pets
                 string sp = SpeciesOfDeployed(pet);
                 if (string.IsNullOrEmpty(sp) || !wanted.Contains(sp))
                 {
-                    Destroy(pet.gameObject);
-                    _deployed.RemoveAt(i);
+                    if (TearDownPetBody(pet, torn)) _deployed.RemoveAt(i);
                 }
             }
 
@@ -530,6 +533,9 @@ namespace DeNelle.Pets
 
             int id = pet.GetInstanceID();
             bool ok = false;
+            // Lifecycle observers can clean their own projections, but an observer
+            // failure can never veto the one-owner destruction verb below.
+            NotifyEchoBodyDespawning(pet.transform);
             Guard.Try("Echo", "tear down echo body '" + go.name + "'", () =>
             {
                 var leash = go.GetComponent<PetHeroLeash>();
@@ -541,6 +547,18 @@ namespace DeNelle.Pets
             });
             if (ok) torn?.Add(id);
             return ok;
+        }
+
+        private static void NotifyEchoBodyDespawning(Transform worker)
+        {
+            Delegate[] observers = EchoBodyDespawning?.GetInvocationList();
+            if (observers == null) return;
+            foreach (Delegate observer in observers)
+            {
+                var callback = observer as Action<Transform>;
+                if (callback == null) continue;
+                Guard.Try("Echo", "notify echo body despawn observer", () => callback(worker));
+            }
         }
 
         // Destroy() throws in edit mode (the headless oracle runs there); DestroyImmediate

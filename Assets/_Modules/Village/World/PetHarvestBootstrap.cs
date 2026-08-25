@@ -68,11 +68,21 @@ namespace DeNelle.Village
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void Bootstrap()
         {
+            PetDeployer.EchoBodyDespawning -= UnassignDespawningEcho;
+            PetDeployer.EchoBodyDespawning += UnassignDespawningEcho;
             if (Instance != null) return;
             // DEF-258: do not even create the bootstrap host when placeholder nodes are
             // disabled — nothing to spawn, so no MonoBehaviour and no scene scan run.
             if (!PlaceholderNodesEnabled()) return;
             new GameObject("PetHarvestBootstrap").AddComponent<PetHarvestBootstrap>();
+        }
+
+        private static void UnassignDespawningEcho(Transform worker)
+        {
+            if (worker == null) return;
+            var sites = FindObjectsByType<HarvestSite>(FindObjectsInactive.Include, FindObjectsSortMode.None);
+            foreach (var site in sites)
+                if (site != null) site.UnassignPet(worker);
         }
 
         /// <summary>Whether the dev placeholder mine nodes should spawn. Off by default

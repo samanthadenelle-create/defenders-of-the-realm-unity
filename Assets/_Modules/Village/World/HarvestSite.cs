@@ -52,7 +52,15 @@ namespace DeNelle.Village.World
         private bool _broken;
 
         public bool IsClaimed => _claimed;
-        public int AssignedCount => _assignedWorkers.Count;
+        public int AssignedCount
+        {
+            get
+            {
+                for (int i = _assignedWorkers.Count - 1; i >= 0; i--)
+                    if (_assignedWorkers[i] == null) _assignedWorkers.RemoveAt(i);
+                return _assignedWorkers.Count;
+            }
+        }
 
         /// <summary>True once a raid broke this site (hp 0) — no harvest until <see cref="Repair"/>. (WO-672)</summary>
         public bool IsBroken => _broken;
@@ -140,7 +148,7 @@ namespace DeNelle.Village.World
                 }
 
                 // Floating text
-                Vector3 popupPos = _assignedWorkers.Count > 0 && _assignedWorkers[0] != null
+                Vector3 popupPos = AssignedCount > 0
                     ? _assignedWorkers[0].position + Vector3.up * 1.5f
                     : transform.position + Vector3.up * 2.2f;
 
@@ -167,7 +175,7 @@ namespace DeNelle.Village.World
 
         public bool AssignPet(Transform worker)
         {
-            if (worker == null || _assignedWorkers.Count >= MaxAssigned) return false;
+            if (worker == null || AssignedCount >= MaxAssigned) return false;
             if (_assignedWorkers.Contains(worker)) return true;
 
             _assignedWorkers.Add(worker);
