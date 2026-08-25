@@ -65,8 +65,22 @@ console.log('[repair] applying...\n');
 // function with no .query(), and it CANNOT run a multi-statement transaction -
 // this migration carries its own BEGIN/COMMIT and must arrive as one unit.
 // `Client` speaks the real wire protocol over a WebSocket and honours it.
+// A connection failure arrives ASYNCHRONOUSLY as an 'error' event on the client,
+// not as a rejection from connect(). Without this listener Node treats it as an
+// unhandled error and dumps a WebSocket stack trace over the top of any message
+// we would have printed. Attach it BEFORE connecting.
 const { Client } = await import('@neondatabase/serverless');
 const client = new Client(url);
+client.on('error', (e) => {
+  // An ErrorEvent stringifies to "[object ErrorEvent]", which tells the reader
+  // nothing. Dig for the real cause before giving up on it.
+  const why = (e && (e.message || (e.error && e.error.message) || e.reason || e.type)) || String(e);
+  die('the database connection failed: ' + why + '\n' +
+      '  Most common cause: DATABASE_URL is not the real string. Check it does not still contain\n' +
+      '  "..." from a redacted example, and that it is wrapped in SINGLE quotes so PowerShell does\n' +
+      '  not split it at the & before channel_binding.\n' +
+      '  Nothing was applied - the migration is transactional and never began.');
+});
 
 try {
   await client.connect();
