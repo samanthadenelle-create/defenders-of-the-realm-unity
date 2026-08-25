@@ -87,6 +87,8 @@ if ($judgeOnly) {
     $chosen = $candidates | Where-Object { $_.Name -eq $pinned } | Select-Object -First 1
     if (-not $chosen) { $chosen = $candidates | Where-Object { $_.Name -like '6000.*' } | Sort-Object Name -Descending | Select-Object -First 1 }
     if (-not $chosen) { $chosen = $candidates | Sort-Object Name -Descending | Select-Object -First 1 }
+    & (Join-Path $proj 'tools\assert-unity-editor-pin.ps1') -ProjectRoot $proj -ExpectedVersion $pinned -SelectedVersion $chosen.Name
+    if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
     $unity = Join-Path $chosen.FullName 'Editor\Unity.exe'
 
     # --- refuse if an editor is already open (project lock) -------------------

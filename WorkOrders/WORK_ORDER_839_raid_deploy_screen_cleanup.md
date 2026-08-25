@@ -1,6 +1,6 @@
 # WORK ORDER 839 — Raid Deploy screen: cleaner layout (header, button row, preview)
 
-**Status:** IMPLEMENTED (pending gates — CompileGate + headless UI capture; FrameCore is shared, capture 2-3 other FrameCore panels)
+**Status:** FIXED 2026-08-02 (`6f22a5fe4`) — awaiting owner felt-verify. *(Status audit 2026-08-24: BUCKET CORRECTION — the prior line predated the commit and still advertised gates/commit as owed; verified at source in `git log`, `6f22a5fe4` (2026-08-02) landed this work. Body unchanged. Prior line: IMPLEMENTED (pending gates — CompileGate + headless UI capture; FrameCore is shared, capture 2-3 other FrameCore panels))*
 **Implementation note (2026-08-02):** root cause refined — the sweep-9413 factory relocation DID re-seat FrameCore's
 inherited footer above the Close, but kept its designed ~0.065 height; that band is too thin for the `MinTouchPx=112`
 button floor, so `ClampMinTouch` grew Auto Recommend/DEPLOY past the band into the Close underneath. Fix = explicit

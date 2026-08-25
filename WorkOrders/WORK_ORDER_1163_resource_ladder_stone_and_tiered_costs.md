@@ -1,6 +1,6 @@
 # WORK ORDER 1163 — The resource ladder: Food becomes Stone, and tiers cost by depth
 
-**Status:** READY — §6 fully answered (§6.1 + §6.2 ruled by the owner 2026-08-24; §6.3 ruled 08-23). ⛔ Still a save-schema-adjacent change on a LIVE build with an ACTIVATED pay path (WO-1159) — follow §7's sequencing exactly; not a lane to rush.
+**Status:** READY — ⭐ **UNBLOCKED 2026-08-24: WO-1177 landed (`2c3ed6c24`) and released the shared `api/_lib/purchase-catalog.js` / `test/purchases.quote.test.js` lock**, and the owner ruled the food SKU ids **DO** rename — the remap is IN SCOPE here, not a follow-up. ⚠ Three files move together under the MIRROR LAW (server `USD_ANCHORS`, both canonical `packs.json` copies, the quote test's hardcoded resource-key list) or it is a red build. *(Status audit 2026-08-24.)* §6 fully answered (§6.1 + §6.2 ruled by the owner 2026-08-24; §6.3 ruled 08-23). ⛔ Still a save-schema-adjacent change on a LIVE build with an ACTIVATED pay path (WO-1159) — follow §7's sequencing exactly; not a lane to rush.
 
 **Minted:** 2026-08-23 (CLI), banner bumped 1163 → 1164 in the same edit.
 **Ruled by:** the owner, 2026-08-23, in conversation. Verbatim below.

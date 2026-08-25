@@ -1,6 +1,6 @@
 # WORK ORDER 842 - Wood/Iron dual-wallet unification (spend/afford asymmetry)
 
-**Status:** IMPLEMENTED (pending gates - CompileGate + EditMode tests + DataRegression)
+**Status:** FIXED 2026-08-02 (`a7e4acb20`) — awaiting owner felt-verify. *(Status audit 2026-08-24: BUCKET CORRECTION — the prior line predated the commit and still advertised gates/commit as owed; verified at source in `git log`, `a7e4acb20` (2026-08-02) landed this work. Body unchanged. Prior line: IMPLEMENTED (pending gates - CompileGate + EditMode tests + DataRegression))*
 **Author:** CLI edit-agent (RCA from captured data, CLAUDE.md par.12)
 **Lane:** Combat/AI-adjacent economy - `EconomyService.cs` + upgrade panel VM/service (no scene files).
 **Origin:** owner F8 2026-08-02 (P1), proving line captured:

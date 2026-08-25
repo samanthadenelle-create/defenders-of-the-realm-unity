@@ -7,7 +7,7 @@
 
 # WORK ORDER 586 — Battle Animation Posture, Directional Death, Orc Cadence
 
-**Status:** IMPLEMENTED — pending CompileGate + controller rebuild + PO felt-verify (2026-07-05)
+**Status:** FIXED 2026-07-05 (`38c7fd4b9`) — awaiting owner felt-verify. *(Status audit 2026-08-24: BUCKET CORRECTION — the prior line predated the commit and still advertised gates/commit as owed; verified at source in `git log`, `38c7fd4b9` (2026-07-05) landed this work. Body unchanged. Prior line: IMPLEMENTED — pending CompileGate + controller rebuild + PO felt-verify (2026-07-05))*
 **Lane:** Combat/Animation (code + editor controller bake) — no scene files
 **Serves:** Senior animation assessment (2026-07-04/05) — high-ROI battle feel before WO-585 ability expansion
 **Related:** WO-491 (orc locomotion base), WO-585 (animation-driven actives — separate, design-only)

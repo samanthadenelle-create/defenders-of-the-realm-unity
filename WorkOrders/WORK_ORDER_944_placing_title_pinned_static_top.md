@@ -1,6 +1,6 @@
 # WORK ORDER 944 — Placing: the item's title pins STATIC at the top of the screen
 
-**Status:** IMPLEMENTED (same hour as the flag — capture-verified 2026-08-09 22:32; owner felt-verify pending)
+**Status:** FIXED 2026-08-09 (`ad0c795a5`) — awaiting owner felt-verify. *(Status audit 2026-08-24: BUCKET CORRECTION — the prior line predated the commit and still advertised gates/commit as owed; verified at source in `git log`, `ad0c795a5` (2026-08-09) landed this work. Body unchanged. Prior line: IMPLEMENTED (same hour as the flag — capture-verified 2026-08-09 22:32; owner felt-verify pending))*
 **Minted:** 2026-08-09 (number from the `CLI_LANES_WO_NUMBERS.md` banner; banner bumped 944 -> 945 in the SAME edit)
 **Lane:** Build HUD presentation (`BuildHudController.cs` only).
 **Provenance:** owner F8 seq 2250, 2026-08-09 22:24, flagged live in the fresh 22:11 build (verbatim):

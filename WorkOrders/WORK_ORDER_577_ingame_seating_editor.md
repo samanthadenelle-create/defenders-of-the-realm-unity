@@ -1,6 +1,6 @@
 # WORK ORDER 577 — In-Game Seating / Offset Editor (Offset Forge slice 2)
 
-**Status:** IMPLEMENTED (this branch worktree) — pending CLI batch-gate + commit
+**Status:** FIXED 2026-06-28 (`a09877248`) — awaiting owner felt-verify. *(Status audit 2026-08-24: BUCKET CORRECTION — the prior line predated the commit and still advertised gates/commit as owed; verified at source in `git log`, `a09877248` (2026-06-28) landed this work. Body unchanged. Prior line: IMPLEMENTED (this branch worktree) — pending CLI batch-gate + commit)*
 **Date:** 2026-06-28
 **Lane:** Combat/AI + UI (Hero gear seating) — file-disjoint from world/scene lanes
 **Supersedes nothing.** Extends WO-490 (AttachmentOffsetRegistry) and the editor-only Offset Forge.

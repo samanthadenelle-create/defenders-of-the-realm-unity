@@ -126,6 +126,8 @@ if (Test-Path $log) { Remove-Item $log -Force }
 $args = @('-batchmode','-quit','-projectPath',$BuildRoot,'-buildTarget','WebGL',
           '-executeMethod','DeNelle.Editor.WebGLBuild.BuildWebGL','-logFile',$log)
 if (-not $Brotli) { $args += '-noBrotli' }   # itch-safe uncompressed (size held down by WO-408 textures)
+& (Join-Path $dev 'tools\assert-unity-editor-pin.ps1') -ProjectRoot $BuildRoot -ExpectedVersion $pinned -SelectedVersion $chosen.Name
+if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 Step "launching WebGL batchmode (first IL2CPP compile can take 30-60 min)..."
 & $unity @args | Out-Null
 

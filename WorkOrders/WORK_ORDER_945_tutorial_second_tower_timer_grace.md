@@ -1,6 +1,6 @@
 # WORK ORDER 945 — Tutorial: the SECOND tower runs the full 90s curve while the teaching wave lands
 
-**Status:** DONE — implemented + `[grace]` regression green 2026-08-10; owner felt-verify pending
+**Status:** FIXED — awaiting owner felt-verify (PO closes, §13). *(Status audit 2026-08-24: bucket correction — the line led DONE while naming verification, and in WO-977's case engineering, still owed; DONE is reserved for a PO close. Body unchanged.)* Prior line: DONE — implemented + `[grace]` regression green 2026-08-10; owner felt-verify pending
 (rerun the tutorial: both towers 5s). See the RESULT file.
 **Minted:** 2026-08-10 (CLI seat, main line — banner bumped 945 → 947 in the same edit, together with WO-946)
 **Silo:** Village/BuildMode + Buildings (BuildTimerService callers) — disjoint from Wallet (WO-931 lane) and Hero/Arena (death-pin lane)

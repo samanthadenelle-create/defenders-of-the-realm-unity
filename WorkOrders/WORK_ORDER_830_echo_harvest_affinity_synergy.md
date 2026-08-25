@@ -1,6 +1,6 @@
 # WORK ORDER 830 — Echo Harvest Affinity + Synergy System
 
-**Status:** IMPLEMENTED 2026-08-02 — pending gates (CompileGate + DataRegression by the committer; see `WORK_ORDER_830_echo_harvest_affinity_synergy.RESULT.md` for the balance math + file list). OWNER CONFIRM defaults taken: Crafting chip removed; crystals Echo-farmable with the combined Bran+Maren trickle slowest.
+**Status:** FIXED 2026-08-02 (`6f22a5fe4`) — awaiting owner felt-verify. *(Status audit 2026-08-24: BUCKET CORRECTION — the prior line predated the commit and still advertised gates/commit as owed; verified at source in `git log`, `6f22a5fe4` (2026-08-02) landed this work. Body unchanged. Prior line: IMPLEMENTED 2026-08-02 — pending gates (CompileGate + DataRegression by the committer; see `WORK_ORDER_830_echo_harvest_affinity_synergy.RESULT.md` for the balance math + file list). OWNER CONFIRM defaults taken: Crafting chip removed; crystals Echo-farmable with the combined Bran+Maren trickle slowest.)*
 
 > ⚠ **OWNER RULING 2026-08-02 (afternoon, F8 seq 619 + verbal): the player SELECTS which resource
 > each Echo harvests.** "cant do anything from this screen should select harvest which resource" /

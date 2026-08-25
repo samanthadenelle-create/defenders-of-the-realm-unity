@@ -1,6 +1,6 @@
 # WORK_ORDER_505 — BATTLE CLOSING (victory/defeat audio + star rating)
 
-**Status:** DONE (gate + DataRegression verified; owner felt-verify pending) · Combat/Arena lane · 2026-06-24
+**Status:** FIXED — awaiting owner felt-verify (PO closes, §13). *(Status audit 2026-08-24: bucket correction — the line led DONE while naming verification, and in WO-977's case engineering, still owed; DONE is reserved for a PO close. Body unchanged.)* Prior line: DONE (gate + DataRegression verified; owner felt-verify pending) · Combat/Arena lane · 2026-06-24
 **Origin:** creative battle-arc gap-check (top-3 "fix first": the death-cam climax played in SILENCE; the
 time-box timer showed but no stars were ever revealed).
 

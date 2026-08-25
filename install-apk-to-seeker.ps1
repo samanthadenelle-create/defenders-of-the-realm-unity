@@ -8,7 +8,7 @@
 #   .\install-apk-to-seeker.ps1 -Install:$false # build only, no adb push
 #
 # Prerequisites:
-#   1. Unity Hub -> 6000.4.7f1 -> Add Modules -> Android Build Support (with
+#   1. Unity Hub -> 6000.4.8f1 -> Add Modules -> Android Build Support (with
 #      OpenJDK + SDK + NDK). The script aborts if AndroidPlayer is missing.
 #   2. Seeker connected via USB with Developer Options + USB Debugging on.
 #      First connect prompts "Allow USB debugging?" on the phone — accept.
@@ -22,20 +22,22 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
-$unity = 'C:\Program Files\Unity\Hub\Editor\6000.4.7f1\Editor\Unity.exe'
+$pinned = '6000.4.8f1'
+$unity = "C:\Program Files\Unity\Hub\Editor\$pinned\Editor\Unity.exe"
 $proj  = Split-Path -Parent $PSCommandPath
 $apk   = Join-Path $proj 'Builds\Android\DefendersOfTheRealm.apk'
-$adb   = 'C:\Program Files\Unity\Hub\Editor\6000.4.7f1\Editor\Data\PlaybackEngines\AndroidPlayer\SDK\platform-tools\adb.exe'
+$androidModule = "C:\Program Files\Unity\Hub\Editor\$pinned\Editor\Data\PlaybackEngines\AndroidPlayer"
+$adb   = Join-Path $androidModule 'SDK\platform-tools\adb.exe'
 
 # --- Preflight ---------------------------------------------------------------
 if (-not (Test-Path $unity)) {
     Write-Error "Unity not found at $unity"
     exit 1
 }
-if (-not (Test-Path 'C:\Program Files\Unity\Hub\Editor\6000.4.7f1\Editor\Data\PlaybackEngines\AndroidPlayer')) {
+if (-not (Test-Path $androidModule)) {
     Write-Error @"
-Android Build Support module is NOT installed for Unity 6000.4.7f1.
-Open Unity Hub -> Installs -> click the gear on 6000.4.7f1 -> Add Modules ->
+Android Build Support module is NOT installed for Unity $pinned.
+Open Unity Hub -> Installs -> click the gear on $pinned -> Add Modules ->
 check 'Android Build Support' (and its OpenJDK + SDK + NDK children).
 After the ~2 GB download finishes, re-run this script.
 "@
@@ -54,15 +56,15 @@ if ($Build) {
     if (Test-Path $apk) { Remove-Item $apk -Force }
 
     $log = Join-Path $proj 'Builds\build-android.log'
-    & $unity -batchmode -quit -buildTarget Android `
-        -projectPath $proj `
-        -executeMethod 'DeNelle.Editor.AndroidBuild.BuildSeekerApk' `
-        -logFile $log
-
-    # Wait for Unity to fully release the lock so a follow-up build doesn't race.
-    while (Get-Process -Name 'Unity' -ErrorAction SilentlyContinue |
-           Where-Object { $_.MainWindowTitle -eq '' }) {
-        Start-Sleep -Milliseconds 500
+    & powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $proj 'run-unity-method.ps1') `
+        -Method 'DeNelle.Editor.AndroidBuild.BuildSeekerApk' `
+        -LogName 'build-android.log' `
+        -BuildTarget Android `
+        -ExpectMarker '[AndroidBuild] SUCCEEDED' `
+        -TimeoutMin 120
+    if ($LASTEXITCODE -ne 0) {
+        Write-Error "Android build runner failed with exit code $LASTEXITCODE; marker [AndroidBuild] SUCCEEDED was not proven in a fresh log."
+        exit $LASTEXITCODE
     }
 
     if (-not (Test-Path $apk)) {

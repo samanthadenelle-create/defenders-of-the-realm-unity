@@ -63,6 +63,8 @@ function Get-UnityExe {
     $chosen = $cands | Where-Object { $_.Name -eq $pinned } | Select-Object -First 1
     if (-not $chosen) { $chosen = $cands | Where-Object { $_.Name -like '6000.*' } | Sort-Object Name -Descending | Select-Object -First 1 }
     if (-not $chosen) { $chosen = $cands | Sort-Object Name -Descending | Select-Object -First 1 }
+    & (Join-Path $proj 'tools\assert-unity-editor-pin.ps1') -ProjectRoot $proj -ExpectedVersion $pinned -SelectedVersion $chosen.Name
+    if ($LASTEXITCODE -ne 0) { throw "Unity editor pin assertion failed with exit code $LASTEXITCODE." }
     return (Join-Path $chosen.FullName 'Editor\Unity.exe')
 }
 
@@ -169,7 +171,8 @@ $compileOk = $false
 if ($staticOk) {
     Write-Host "`n[gate] 2/5 compile gate (CompileGate.Run)..."
     & powershell -ExecutionPolicy Bypass -File (Join-Path $proj 'run-unity-method.ps1') `
-        -Method 'DeNelle.Editor.CompileGate.Run' -LogName 'compilegate.log' -TimeoutMin $TimeoutMin
+        -Method 'DeNelle.Editor.CompileGate.Run' -LogName 'compilegate.log' -TimeoutMin $TimeoutMin `
+        -ExpectMarker 'COMPILE_GATE_OK'
     $rc = $LASTEXITCODE
     $clog = Join-Path $proj 'Builds\compilegate.log'
     $marker = $false
@@ -198,7 +201,8 @@ $dataRegressionOk = $false
 if ($compileOk) {
     Write-Host "`n[gate] 3/7 DATA regression - THE gate (DataRegression.RunAll)..."
     & powershell -ExecutionPolicy Bypass -File (Join-Path $proj 'run-unity-method.ps1') `
-        -Method 'DeNelle.Editor.DataRegression.RunAll' -LogName 'data-regression.log' -TimeoutMin $TimeoutMin
+        -Method 'DeNelle.Editor.DataRegression.RunAll' -LogName 'data-regression.log' -TimeoutMin $TimeoutMin `
+        -ExpectMarker 'REGRESSION_OK'
     $dlog = Join-Path $proj 'Builds\data-regression.log'
     $dmarker = $null
     if (Test-Path $dlog) {
@@ -228,7 +232,8 @@ $checkinSuiteOk = $false
 if ($compileOk) {
     Write-Host "`n[gate] 4/7 legacy check-in battery (RegressionSuite.RunAll)..."
     & powershell -ExecutionPolicy Bypass -File (Join-Path $proj 'run-unity-method.ps1') `
-        -Method 'DeNelle.Editor.RegressionSuite.RunAll' -LogName 'regression.log' -TimeoutMin $TimeoutMin
+        -Method 'DeNelle.Editor.RegressionSuite.RunAll' -LogName 'regression.log' -TimeoutMin $TimeoutMin `
+        -ExpectMarker 'CHECKIN_SUITE_OK'
     $rlog = Join-Path $proj 'Builds\regression.log'
     $rmarker = $null
     if (Test-Path $rlog) {

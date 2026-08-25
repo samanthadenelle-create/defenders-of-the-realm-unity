@@ -1,6 +1,6 @@
 # WORK ORDER 832 — Building Enhancement panel: ONE unambiguous Upgrade button
 
-**Status:** FIXED — implemented by an edit-only agent 2026-08-02; gates (CompileGate + RunCaptureHeadless) and owner felt-verify still owed
+**Status:** FIXED 2026-08-02 (`cec55163d`) — awaiting owner felt-verify. *(Status audit 2026-08-24: BUCKET CORRECTION — the prior line predated the commit and still advertised gates/commit as owed; verified at source in `git log`, `cec55163d` (2026-08-02) landed this work. Body unchanged. Prior line: FIXED — implemented by an edit-only agent 2026-08-02; gates (CompileGate + RunCaptureHeadless) and owner felt-verify still owed)*
 **Author:** UI/QA triage (read-only RCA, §13) — Claude UI
 **Lane:** HUD/UI — single file (`BuildingUpgradePanelMvvm.cs`), View-only. No VM/logic/scene change.
 **Origin:** owner felt-test 2026-08-02, "Lumber Mill Enhancements" screen — *"it's really impossible to know which

@@ -1,6 +1,6 @@
 # WORK ORDER 843 - Destroyed structure's build card stays "Built" (cannot rebuild)
 
-**Status:** IMPLEMENTED (pending gates - CompileGate + DataRegression destroyed-structure suite)
+**Status:** FIXED 2026-08-02 (`a7e4acb20`) — awaiting owner felt-verify. *(Status audit 2026-08-24: BUCKET CORRECTION — the prior line predated the commit and still advertised gates/commit as owed; verified at source in `git log`, `a7e4acb20` (2026-08-02) landed this work. Body unchanged. Prior line: IMPLEMENTED (pending gates - CompileGate + DataRegression destroyed-structure suite))*
 **Author:** CLI edit-agent (RCA from captured data + owner screenshot, CLAUDE.md par.12)
 **Lane:** World/BuildMode - `StructureSingleton.cs` / `BuildModeController.cs` / `Destructible.cs` (no scene files).
 **Origin:** owner F8 2026-08-02 - *"lumber mill destroyed no option to rebuild it"* (build-mode

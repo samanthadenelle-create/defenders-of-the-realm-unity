@@ -1,6 +1,6 @@
 # WORK ORDER 748 — Founding choice: "Default Town" vs "Build Your Own"
 
-**Status:** DONE — committed `f5fcbde2` 2026-07-19; RESULT: `WORK_ORDER_748_default_town_choice.RESULT.md`. Owner felt-verify pending.
+**Status:** FIXED — awaiting owner felt-verify (PO closes, §13). *(Status audit 2026-08-24: bucket correction — the line led DONE while naming verification, and in WO-977's case engineering, still owed; DONE is reserved for a PO close. Body unchanged.)* Prior line: DONE — committed `f5fcbde2` 2026-07-19; RESULT: `WORK_ORDER_748_default_town_choice.RESULT.md`. Owner felt-verify pending.
 **Classification:** NEW FEATURE (choice UI + apply path don't exist). No save-schema change.
 **Owner (PO):** Sam — resurrect the old prebuilt-city option as a "Default Town" choice at onboarding.
 

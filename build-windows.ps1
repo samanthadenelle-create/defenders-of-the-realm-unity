@@ -41,6 +41,8 @@ if (-not $chosen) {
         Write-Warning "No Unity 6 (6000.*) editor found; falling back to $($chosen.Name). Project targets 6000.x - verify compatibility before trusting the build."
     }
 }
+& (Join-Path $proj 'tools\assert-unity-editor-pin.ps1') -ProjectRoot $proj -ExpectedVersion $pinned -SelectedVersion $chosen.Name
+if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 $unity = Join-Path $chosen.FullName 'Editor\Unity.exe'
 Write-Host "[build] Editor: $($chosen.Name)  ->  $unity"
 

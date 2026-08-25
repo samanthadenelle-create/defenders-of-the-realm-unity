@@ -28,6 +28,27 @@
 root=$(git rev-parse --show-toplevel) || exit 1
 server="$root/ServerData"
 proof="$root/Builds/r2-parity.log"
+project_version_file="$root/ProjectSettings/ProjectVersion.txt"
+expected_unity="6000.4.8f1"
+
+# WO-1178: a raw editor launch can rewrite this file after every wrapper's
+# pre-run check. The repo cannot prevent that external process, but it can make
+# the resulting downgrade impossible to push silently.
+if [ ! -f "$project_version_file" ]; then
+    echo "PUSH BLOCKED - UNITY_EDITOR_PIN_MISSING: $project_version_file"
+    exit 1
+fi
+actual_unity=$(sed -n 's/^m_EditorVersion:[[:space:]]*//p' "$project_version_file" | head -1 | tr -d '\r')
+if [ "$actual_unity" != "$expected_unity" ]; then
+    echo ""
+    echo "  PUSH BLOCKED - UNITY_EDITOR_PIN_DOWNGRADE."
+    echo "  ProjectVersion.txt says '$actual_unity'; this branch requires '$expected_unity'."
+    echo "  A mismatched editor forces a full Bee rebuild and can make a gate exit 0"
+    echo "  before its success marker is emitted. Restore the pinned version and rerun."
+    echo ""
+    exit 1
+fi
+echo "[pre-push] Unity editor pin is $expected_unity. OK."
 
 # Nothing to serve -> nothing to keep in sync.
 [ -d "$server" ] || exit 0
