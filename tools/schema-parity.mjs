@@ -106,12 +106,33 @@ async function readDeployed(sql, tableNames) {
         WHERE c.contype = 'c' AND n.nspname = 'public'`;
     for (const r of cons) {
         if (!live.has(r.table_name)) continue;
-        const m = /\(\(?([a-z_]+)\s*=\s*ANY\s*\(ARRAY\[([^\]]*)\]/i.exec(r.def);
-        if (!m) continue;
-        const vals = m[2].split(',')
-            .map(v => v.trim().replace(/::text/g, '').replace(/^'|'$/g, ''))
-            .filter(Boolean);
-        live.get(r.table_name).checks.set(m[1], new Set(vals));
+        // TWO renderings, and missing the second one made this gate lie.
+        //
+        //   CHECK (col IN ('a','b'))  -> pg renders  col = ANY (ARRAY['a'::text, ...])
+        //   CHECK (col IN ('a'))      -> pg SIMPLIFIES a one-element IN to  col = 'a'::text
+        //
+        // Only the first was matched, so every SINGLE-VALUE check read as
+        // "CHECK MISSING" no matter how correctly it was defined. That hid
+        // purchase_quotes.currency IN ('SKR') and purchase_entitlements.rail IN
+        // ('solana') - BOTH on the money path, and both reported as drift while
+        // the database was right. A gate that cannot see a correct constraint
+        // sends people to "repair" a thing that is not broken.
+        let col = null;
+        let vals = null;
+
+        const many = /\(\(?([a-z_]+)\s*=\s*ANY\s*\(ARRAY\[([^\]]*)\]/i.exec(r.def);
+        if (many) {
+            col = many[1];
+            vals = many[2].split(',')
+                .map(v => v.trim().replace(/::text/g, '').replace(/^'|'$/g, ''))
+                .filter(Boolean);
+        } else {
+            const one = /\(\(?([a-z_]+)\s*=\s*'([^']*)'(?:::[a-z ]+)?\)?\)/i.exec(r.def);
+            if (one) { col = one[1]; vals = [one[2]]; }
+        }
+
+        if (!col || !vals || !vals.length) continue;
+        live.get(r.table_name).checks.set(col, new Set(vals));
     }
     return live;
 }

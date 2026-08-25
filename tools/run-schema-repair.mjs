@@ -33,7 +33,15 @@ import { dirname, join } from 'node:path';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const repo = join(here, '..');
-const MIGRATION = join(repo, 'api', 'migrations', '20260824_0001_repair_schema_parity.sql');
+// ORDER MATTERS, and 0002 exists because 0001 could not do its own job.
+// purchase_quotes and purchase_entitlements ALREADY EXISTED, so 0001's
+// CREATE TABLE IF NOT EXISTS skipped them whole - and skipped the CHECK
+// constraints written inside those CREATEs with them. Re-running 0001 alone will
+// never fix that: it is a no-op against an existing table, forever.
+const MIGRATIONS = [
+  join(repo, 'api', 'migrations', '20260824_0001_repair_schema_parity.sql'),
+  join(repo, 'api', 'migrations', '20260825_0002_repair_parity_remainder.sql'),
+];
 
 function die(msg) { console.error('\nSCHEMA_REPAIR_FAIL: ' + msg); process.exit(16); }
 
@@ -45,19 +53,24 @@ if (!url) {
       '  (Vercel dashboard -> project env vars. It is deliberately not in the repo.)');
 }
 
-let sql;
-try { sql = readFileSync(MIGRATION, 'utf8'); }
-catch (e) { die('cannot read the migration at ' + MIGRATION + ' - ' + e.message); }
+const loaded = [];
+for (const m of MIGRATIONS) {
+  try { loaded.push({ path: m, sql: readFileSync(m, 'utf8') }); }
+  catch (e) { die('cannot read the migration at ' + m + ' - ' + e.message); }
+}
 
 // Refuse to run anything destructive, even though the file was audited clean.
 // A guard that only trusts a past audit is not a guard.
-const destructive = sql.split('\n').filter(l => /^\s*(DROP|DELETE|TRUNCATE)\b/i.test(l));
-if (destructive.length) {
-  die('the migration contains ' + destructive.length + ' destructive statement(s) and was NOT run:\n  ' +
-      destructive.join('\n  '));
+for (const { path, sql: body } of loaded) {
+  const destructive = body.split('\n').filter(l => /^\s*(DROP|DELETE|TRUNCATE)\b/i.test(l));
+  if (destructive.length) {
+    die(path + ' contains ' + destructive.length + ' destructive statement(s), and NOTHING was run:\n  ' +
+        destructive.join('\n  '));
+  }
 }
 
-console.log('[repair] migration : ' + MIGRATION);
+console.log('[repair] migrations: ' + loaded.length + ', applied in order:');
+for (const { path } of loaded) console.log('[repair]   - ' + path.split(/[\\/]/).pop());
 console.log('[repair] statements: additive only (0 DROP/DELETE/TRUNCATE) - verified just now, not assumed');
 console.log('[repair] applying...\n');
 
@@ -84,9 +97,12 @@ client.on('error', (e) => {
 
 try {
   await client.connect();
-  // Simple-query protocol: the whole file, BEGIN/COMMIT included, as one send.
-  await client.query(sql);
-  console.log('[repair] migration executed without error.');
+  // Simple-query protocol: each file, BEGIN/COMMIT included, as one send.
+  for (const { path, sql: body } of loaded) {
+    await client.query(body);
+    console.log('[repair] applied ' + path.split(/[\\/]/).pop());
+  }
+  console.log('[repair] all migrations executed without error.');
 } catch (e) {
   await client.end().catch(() => {});
   die('the migration threw and NOTHING was committed (it is transactional):\n  ' + e.message);

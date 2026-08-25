@@ -24,7 +24,7 @@ ALTER ROLE neondb_owner WITH PASSWORD 'REPLACE_ME_WITH_A_REAL_PASSWORD';
 -- =============================================================================
 --
 -- 1. UPDATE VERCEL. Project -> Settings -> Environment Variables -> DATABASE_URL.
---    ⛔ The app reads the connection string from there, NOT from this repo. Until
+--    STOP The app reads the connection string from there, NOT from this repo. Until
 --    this is updated the API is holding a password that no longer works, and every
 --    authed endpoint - save, load, quote, verify, bug-report - starts failing.
 --
