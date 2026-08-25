@@ -412,3 +412,81 @@ separately if the owner wants them:
 3. **A comprehension oracle does not exist and may not be buildable.** §0 is the real finding. Worth an
    owner conversation about whether a scripted first-session walkthrough — a human, once per milestone,
    against a written expectation — becomes a standing ritual, in the Sunday-housekeeping shape.
+
+---
+
+## 12. ⛔ VERIFICATION PROVENANCE — what I opened, and what the implementer must confirm first
+
+This ticket was written under a wrap-up deadline. **Accuracy about coverage matters more than the
+appearance of completeness**, so the citations are split honestly below. Nothing here changes the
+finding; it changes how much of the ticket you may take on faith.
+
+### Read at source by me, this session — treat as verified
+
+- `build-categories.json` Town row in full: `lockedIds` is `["jeweler","mill","lumbermill"]`
+  (`mine_crystal` is **NOT** locked), and `paletteGroups` names no `crystal_producer`.
+- `structures-catalog.json:426-478` — the whole `mine_crystal` row: role, type, `behaviorId`,
+  `maxLevel: 3`, cost wood 320 / iron 200 / crystals 0, and **no `displayOrder`**.
+- `StructureCardVM.DescriptionFor` at `:238-249` — the hardcoded per-`type` switch, quoted verbatim in §4.
+- `CatalogEntry.cs` public field list — **no description field**, confirmed field by field.
+- `structures-catalog.json:162` — `tower_siege_tower` authors a `"description"`.
+- `BuildPaletteVM` — `SortForDisplay`, `OrderKey` (`displayOrder > 0 ? displayOrder : int.MaxValue`),
+  `Rebuild`, and the hardcoded `"Other"` label at `:506` / `:547`.
+- `BuildPaletteUI.cs:820-950` — the WO-1172 Option B chip block and **"All" is the default**.
+- `BuildModeController.cs:3820-3828` (the WO-352 disable comment, quoted verbatim), `:3848-3862`
+  (`EnsureInfoPanel` / `OnPaletteCardTapped`), `FoundingKit` `:2860-2904`, `isPallet` `:2077-2083`,
+  `GraceReasonFor` `:2140`.
+- A repo-wide grep for `BuildStructureInfoPanel`: the only hits outside its own file are
+  `BuildModeController` (the disabled block), `SiblingPanelSettings`, and two comments in
+  `StructureCardVM`. **The "no live subscriber" claim rests on this grep**, which is strong evidence
+  but is not the same as tracing every delegate assignment.
+- `CrystalMine.cs` — `OnWaveCleared` at `:124`, `economy.AddCrystals(yield)` at `:136`, the
+  `crystalsPerWave` parse at `:180`, and the `OnWaveCleared.AddListener` subscribe at `:308`.
+  `StructureFactory.cs:1182-1183` — `case "CrystalMine": root.AddComponent<CrystalMine>();`
+  ⭐ **The core behavioural claim of this ticket is verified in code, not from comments.**
+- `buildings.json:16` — the `crystalsPerWave` curve note (⚠ this one is a **comment**; see below).
+- The full Town cost table in §5 / WO-1082 §3 — computed by parsing the JSON directly.
+
+### ⚠ NOT opened by me — OPEN ITEMS, confirm before implementing
+
+Phrased as questions on purpose. Do not treat any of these as established:
+
+1. **The per-field line numbers in the §2 tile table** (`:1150-1154` name, `:1190-1226` art,
+   `:1287-1300` cost, `:1252-1265` Built chip, `:1315-1335` lock words, `:1337-1352` targeting,
+   `:1101` `CardTapGuard`) come from greps and structural reading, **not from reading `BuildCard` end
+   to end.** ⛔ **First implementation step: read `BuildPaletteUI.BuildCard` in full and confirm the
+   table.** The *conclusion* — a tile shows icon + name + cost and no description — is safe, because
+   `card.Description` has **zero** reads in that file. The line numbers may drift.
+2. **Does a freebie tile really suppress the cost entirely** (`:1293`, WO-1010 D20)? If it does not,
+   §2's "icon + name only" softens to "icon + name + cost". Does not change the fix.
+3. **`crystalsPerWave: [1, 2, 4]`** — I read the *note* in `buildings.json` and the *parse site* in
+   `CrystalMine.cs`, but did not open the data row itself. **Confirm the literal array** before quoting
+   1/2/4 anywhere player-facing. (§12 of CLAUDE.md: comments lie.)
+4. **`CatalogBootstrap.cs:279` `MissingMemberHandling.Ignore`** — asserted, not opened. **Verify that
+   `tower_siege_tower.description` is genuinely discarded** rather than read somewhere I did not find.
+   If it is already read, §6.1 gets simpler, not harder.
+5. **`BuildStructureInfoPanel.cs:46`** — only `:290` (`_descLabel.text = card.Description;`) was
+   confirmed by grep. The `:46` class-declaration line is unverified.
+6. **`WaveManager.cs:314` / `:2886`** (the `OnWaveCleared` declaration and invoke sites) — inferred from
+   `CrystalMine`'s subscribe, not opened. The subscription itself IS verified.
+7. **`CrystalProductionRegression.cs`** — I asserted it drives `OnWaveCleared` and asserts a non-zero L1
+   delta. **I did not open it.** Confirm it exists and covers what §3 claims before relying on it as
+   existing coverage.
+8. **The md5 / byte-equality of the two `structures-catalog.json` copies** — asserted, not computed.
+   Verify with a hash before and after your edit; the byte-equality *requirement* is real regardless
+   (`build-categories.json:4`).
+9. **`structures-catalog.json:798-818`** (the crossed `forge` / `armorer` display-name defect) — I read
+   the `_artNote2026_08_17` and `_productionNote` via grep at `:851` and `:872`, not that line range.
+   The **ruling** it records is verified; the line numbers are not. ⛔ Either way: **do not rename
+   either row.**
+10. **Character counts** in the §6.4 table were counted by eye for the Crystal Mine string only.
+    **Machine-count all fourteen against the 48-char cap** — the oracle in §6.6(2) will catch it, but do
+    not ship a table you have not measured.
+
+### Deliberately not investigated at all
+
+- Whether the effect line **fits** the existing tile geometry at the shipped `CardWidthPx`. §6.3 sets a
+  48-char cap as a starting constraint, **not a measured fit.** The first capture will tell you; if it
+  does not fit, the constraint moves, not the ticket.
+- Whether any **non-Town** verb (Defense / Walls / Support) needs different copy. Out of scope here;
+  §6.6(1) only requires `Resource`/`Collector` rows to author a string.
