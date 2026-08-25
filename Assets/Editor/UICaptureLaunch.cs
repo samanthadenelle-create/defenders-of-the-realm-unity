@@ -40,6 +40,40 @@
 //                                              >= 0.995 of the content's own demand
 //                                              (or UI_ENDSTATE_FIT_FAIL x<n>, an error).
 //                                              Carries the numbers on BOTH paths.
+//     UI_CAPTURE_HEAD <sha> <branch> dirty=<bool>
+//                                           -- WO-1080 PROVENANCE. Printed FIRST, before a
+//                                              single pixel is shot, so even a run that
+//                                              throws still says which tree it measured.
+//                                              `dirty=true` means tracked files under
+//                                              Assets/ were uncommitted: there is no commit
+//                                              for a later reader to diff against, so that
+//                                              log MAY NOT BE CITED by a layout ticket.
+//                                              (or UI_CAPTURE_PROVENANCE_FAIL, an error --
+//                                              deliberately NOT a UI_CAPTURE_HEAD* suffix,
+//                                              so a grep for the good marker cannot match it.)
+//     UI_CAPTURE_STAMP head=.. targets=.. pngs=.. touchFindings=..
+//                                           -- WO-1080. The run's OWN totals on the SAME line
+//                                              as the sha, so a ticket quoting
+//                                              "from UI_TOUCH_FAIL x43" can be checked against
+//                                              the log it claims to come from. Printed LAST,
+//                                              after every Report* has counted.
+//
+// =============================================================================
+//  WO-1080 -- WHY A CAPTURE STAMPS THE COMMIT AND NOT JUST A DATE. READ ONCE.
+// -----------------------------------------------------------------------------
+//  Four layout tickets (WO-1075/1076/1077/1078) were minted from ONE aged log,
+//  `Builds/wo1060-capture.log`, describing a tree that had moved on. WO-1076 was
+//  reopened against a panel fixed three days earlier and cost a seat a morning.
+//
+//  ⛔ A CAPTURE LOG'S FILE DATE IS NOT EVIDENCE OF THE TREE IT MEASURED. That log's
+//  mtime is 2026-08-23; the fix it fails to contain landed 2026-08-21. It is NEWER
+//  than the commit it does not have -- so an mtime comparison is defeated by the very
+//  case that motivated it. Only the COMMIT identifies the tree.
+//
+//  The resolver lives in `Assets/Editor/Regression/CaptureProvenanceRegression.cs`
+//  (assembly DeNelle.EditorRegression) and NOT beside this file, because the assembly
+//  reference runs DeNelle.Editor -> DeNelle.EditorRegression one way only; putting it
+//  there is what lets an oracle prove it still resolves. See that file's banner.
 //
 // =============================================================================
 //  THE FIDELITY HOLE THIS FILE USED TO HAVE (fixed 2026-08-05) -- READ THIS
@@ -494,6 +528,12 @@ namespace DeNelle.Editor
             _touchPanelsClean = 0;
             _endStateFits.Clear();
             _endStateFitFailures.Clear();
+
+            // WO-1080: stamp the tree BEFORE anything is shot. Deliberately outside the try
+            // below -- a run that throws mid-capture still leaves a log that says which
+            // commit it was measuring, which is the one fact a later reader cannot recover.
+            var head = ReportCaptureProvenance();
+
             try
             {
                 Directory.CreateDirectory(OutDir);
@@ -559,6 +599,106 @@ namespace DeNelle.Editor
 
             // The marker a headless caller greps to confirm the run produced pixels.
             Debug.Log("UI_CAPTURE_OK " + count);
+
+            // WO-1080: LAST, because it carries every Report*'s totals. This is the line a
+            // reviewer diffs a ticket's quoted baseline against.
+            ReportCaptureStamp(head, count);
+        }
+
+        // ---------------------------------------------------------------------
+        //  WO-1080 provenance markers.
+        // ---------------------------------------------------------------------
+        /// <summary>
+        /// Emit <c>UI_CAPTURE_HEAD &lt;sha&gt; &lt;branch&gt; dirty=&lt;bool&gt;</c>. Written by
+        /// the CAPTURE, never by a human remembering a second command -- CLAUDE.md §16 records
+        /// that a step whose remedy is "someone remembers" is not a gate.
+        /// </summary>
+        private static DeNelle.Editor.Regression.CaptureProvenance.Head ReportCaptureProvenance()
+        {
+            var head = default(DeNelle.Editor.Regression.CaptureProvenance.Head);
+            try
+            {
+                head = DeNelle.Editor.Regression.CaptureProvenance.Resolve();
+            }
+            catch (Exception e)
+            {
+                Debug.LogError(DeNelle.Editor.Regression.CaptureProvenance.FailMarker +
+                               " provenance resolve threw: " + e);
+                return head;
+            }
+
+            string line = DeNelle.Editor.Regression.CaptureProvenance.FormatHeadLine(head);
+            if (line == null)
+            {
+                // NOT a UI_CAPTURE_HEAD* suffix on purpose: a grep for the good marker must
+                // never match this line and read an unidentified tree as an identified one.
+                Debug.LogError(DeNelle.Editor.Regression.CaptureProvenance.FailMarker +
+                               " -- this run cannot say which commit it measured, so NO layout or " +
+                               "touch ticket may be minted from its log (WO-1080). Reason: " +
+                               (head.Failure ?? "unstated"));
+                return head;
+            }
+
+            Debug.Log(line);
+
+            if (head.Dirty)
+            {
+                Debug.LogWarning("[UICap-HL] WO-1080: the working tree is DIRTY under Assets/" +
+                                 (head.DirtyMeasured ? "" : " (dirtiness could NOT be measured, so it is " +
+                                  "reported dirty -- unknown must never read as clean)") +
+                                 ". This log records geometry that exists in NO commit, so a later " +
+                                 "reader has nothing to diff it against: do not cite it in a ticket. " +
+                                 "Commit, then re-run the capture.");
+            }
+            return head;
+        }
+
+        /// <summary>
+        /// Emit <c>UI_CAPTURE_STAMP ...</c> -- the sha, the DEFAULT landscape target set (a
+        /// panel with its own target array, e.g. RumorBoardTargets, is not reflected here), and
+        /// this run's OWN marker totals, on one parseable line. WO-1080 R2: a
+        /// repo-wide total quoted in a ticket ("drops from UI_TOUCH_FAIL x43") is only
+        /// checkable if the log states the total AND the tree it belongs to together.
+        /// </summary>
+        private static void ReportCaptureStamp(DeNelle.Editor.Regression.CaptureProvenance.Head head, int pngs)
+        {
+            try
+            {
+                var targets = new System.Text.StringBuilder();
+                for (int i = 0; i < LandscapeTargets.Length; i++)
+                {
+                    if (i > 0) targets.Append(',');
+                    targets.Append(LandscapeTargets[i].Tag);
+                }
+
+                string sha = head.Resolved ? head.Sha : "unknown";
+                string branch = head.Resolved ? head.Branch : "unknown";
+                // An UNRESOLVED head is a `default(Head)`, whose Dirty field is false. Printing
+                // that as dirty=false would report "clean and citable" about a run that could not
+                // name its own tree at all -- the precise inversion this ticket exists to stop.
+                string dirty = head.Resolved ? (head.Dirty ? "true" : "false") : "unknown";
+
+                Debug.Log(DeNelle.Editor.Regression.CaptureProvenance.StampMarker +
+                          " head=" + sha +
+                          " branch=" + branch +
+                          " dirty=" + dirty +
+                          // 'T' and 'Z' escaped: unescaped they are at the mercy of custom-format
+                          // specifier lookup, and this line must never throw its own run away.
+                          " utc=" + DateTime.UtcNow.ToString("yyyy-MM-dd'T'HH:mm:ss'Z'") +
+                          " targets=" + targets +
+                          " pngs=" + pngs +
+                          " panelBuilds=" + (_fidelityOk + _fidelityDegraded) +
+                          " canvases=" + _geoCanvasesChecked +
+                          " geometryFindings=" + _geoFailures.Count +
+                          " touchPanels=" + _touchPanelsChecked +
+                          " touchClean=" + _touchPanelsClean +
+                          " touchFindings=" + _touchFailures.Count);
+            }
+            catch (Exception e)
+            {
+                // Never let the stamp throw away a run that produced real pngs.
+                Debug.LogWarning("[UICap-HL] WO-1080 stamp line failed: " + e.Message);
+            }
         }
 
         /// <summary>Did every panel get BUILT at the size it was SHOT at?</summary>

@@ -352,6 +352,114 @@ def git_added_dates():
         pass  # no git / not a repo: every row falls back to the marked mtime estimate
     return dates
 
+# ── WO-1080: CAPTURE PROVENANCE, and why a DATE cannot do this job ────────────
+# Four layout tickets (WO-1075/1076/1077/1078) were minted from ONE aged capture log,
+# `Builds/wo1060-capture.log`, and described a tree that had already moved on. WO-1076 was
+# reopened against a panel fixed three days earlier (a2162f17d) and cost a seat a morning.
+#
+# ⛔ A CAPTURE LOG'S FILE DATE IS NOT EVIDENCE OF THE TREE IT MEASURED. That log's mtime is
+# 2026-08-23 and its in-log licensing stamp is 2026-08-23T17:39:59Z; the fix it fails to
+# contain landed 2026-08-21. The log is NEWER than the commit it does not have — so any
+# mtime comparison is defeated by the exact case that motivated it. Only the COMMIT identifies
+# the tree, which is why `UICaptureLaunch.RunCaptureHeadless` now stamps
+# `UI_CAPTURE_HEAD <sha> <branch> dirty=<bool>` into every log it writes.
+#
+# A layout/touch ticket therefore carries, in its header block:
+#
+#     **Capture:** `Builds/<log>.log` @ `<sha>` — targets `Assets/.../<File>.cs`
+#
+# and this parser + the check below turn "is that citation still true?" into arithmetic:
+# if the newest commit touching the target is NOT reachable from the cited sha, the capture
+# predates the target's current state and the ticket is STALE-CAPTURE.
+#
+# REPORT-ONLY, exactly like DUPLICATE_WO_NUMBERS: a collision is its own finding and the board
+# flags it rather than silently repairing it. A WO with no `**Capture:**` line is untouched —
+# this binds layout/touch tickets, not the whole board.
+_CAPTURE = re.compile(
+    r"^\*\*Capture:?\*\*:?\s*`([^`]+)`\s*@\s*`([0-9a-fA-F]{7,40})`(.*)$",
+    re.MULTILINE)
+
+def parse_capture(text):
+    """(log, sha, [target paths]) or (None, None, []) when the WO cites no capture."""
+    m = _CAPTURE.search(text)
+    if not m:
+        return None, None, []
+    log, sha, tail = m.group(1).strip(), m.group(2).strip().lower(), m.group(3)
+    # Every backticked path on the rest of the line is a target. Multiple targets are
+    # allowed on purpose: one ticket may legitimately name a panel and its VM.
+    targets = [t.strip() for t in re.findall(r"`([^`]+)`", tail) if t.strip()]
+    return log, sha, targets
+
+def _git(args, timeout=30):
+    """(returncode, stdout) — never raises. Returns (None, '') when git is unavailable."""
+    try:
+        out = subprocess.run(["git"] + args, cwd=ROOT, capture_output=True,
+                             text=True, timeout=timeout)
+        return out.returncode, (out.stdout or "").strip()
+    except Exception:
+        return None, ""
+
+def check_capture_staleness(rows):
+    """Annotate rows carrying a **Capture:** line with capture_verdict / capture_detail.
+
+    Only rows that cite a capture cost a git call, so the ~2 s build is unaffected while
+    the count of such tickets is small. Verdicts:
+      FRESH   — the newest commit touching every target is reachable from the cited sha
+      STALE   — it is NOT: the capture measured a tree that predates the target's state
+      UNKNOWN — the sha, the target, or git itself could not be resolved (never silently FRESH)
+    """
+    cited = [r for r in rows if r.get("capture_sha")]
+    if not cited:
+        return []
+    rc, _ = _git(["rev-parse", "--git-dir"])
+    if rc != 0:
+        for r in cited:
+            r["capture_verdict"] = "UNKNOWN"
+            r["capture_detail"] = "git unavailable, so the citation could not be checked"
+        return cited
+
+    newest_cache = {}
+    for r in cited:
+        sha = r["capture_sha"]
+        rc, resolved = _git(["rev-parse", "--verify", "--quiet", sha + "^{commit}"])
+        if rc != 0 or not resolved:
+            r["capture_verdict"] = "UNKNOWN"
+            r["capture_detail"] = "cited sha %s is not a commit in this clone" % sha
+            continue
+        if not r.get("capture_targets"):
+            r["capture_verdict"] = "UNKNOWN"
+            r["capture_detail"] = ("the **Capture:** line names no target file, so there is "
+                                   "nothing to date the citation against")
+            continue
+
+        stale_for = []
+        unknown_for = []
+        for target in r["capture_targets"]:
+            if target not in newest_cache:
+                newest_cache[target] = _git(
+                    ["log", "-1", "--format=%H", "--", target])[1]
+            newest = newest_cache[target]
+            if not newest:
+                unknown_for.append(target + " (no commit touches it)")
+                continue
+            # Reachability, not dates: a commit made on another branch at an earlier clock
+            # time can still be absent from the cited tree, and a later clock time can still
+            # be an ancestor. `--is-ancestor` answers the only question that matters.
+            anc, _ = _git(["merge-base", "--is-ancestor", newest, resolved])
+            if anc != 0:
+                stale_for.append("%s newest=%s" % (target, newest[:12]))
+
+        if stale_for:
+            r["capture_verdict"] = "STALE"
+            r["capture_detail"] = ("cited capture %s predates: " % sha[:12]) + "; ".join(stale_for)
+        elif unknown_for:
+            r["capture_verdict"] = "UNKNOWN"
+            r["capture_detail"] = "; ".join(unknown_for)
+        else:
+            r["capture_verdict"] = "FRESH"
+            r["capture_detail"] = "cited capture %s contains every target's newest commit" % sha[:12]
+    return cited
+
 def resolve_created(text, base, mtime, added_dates):
     """(YYYY-MM-DD, is_estimate) per the priority order above."""
     m = _MINTED.search(text)
@@ -429,7 +537,9 @@ def parse_wos():
         except ValueError:
             age_days = 0
         bucket, fallback_bucketed = classify_status(status, has_result, is_wo)
+        cap_log, cap_sha, cap_targets = parse_capture(text)   # WO-1080; (None, None, []) if absent
         rows.append({
+            "capture_log": cap_log, "capture_sha": cap_sha, "capture_targets": cap_targets,
             "num": num, "prod": prod, "ui": ui, "mon_tag": mon_tag, "file": base, "title": title, "status": status,
             "bucket": bucket, "result": has_result, "malformed_status": malformed_status,
             "near_miss_status": near_miss_status,
@@ -471,6 +581,14 @@ def build_html(rows):
         old = ' <span class="oldm">7d+</span>' if days > 7 else ""
         color = BUCKET_COLOR[r["bucket"]]
         res = ' <span class="res">RESULT</span>' if r["result"] else ""
+        # WO-1080. Rendered ONLY on a row that cites a capture, so every other row's HTML is
+        # byte-identical to before. Reuses the existing word-plus-colour badge class: the
+        # owner is red/green colourblind, so the WORD carries the finding, never the hue.
+        cap = r.get("capture_verdict")
+        if cap == "STALE":
+            res += ' <span class="oldm">STALE-CAPTURE</span>'
+        elif cap == "UNKNOWN":
+            res += ' <span class="oldm">CAPTURE-UNVERIFIED</span>'
         # filename is in the search text so companion docs stay FINDABLE by name - that
         # discoverability is the whole reason they are bucketed rather than dropped (WO-937 A).
         search = " ".join((num, r["file"], r["title"], r["status"])).lower()
@@ -604,6 +722,9 @@ def main():
     # --check exit code), not just the page. A seat reading the terminal must not have to
     # open the HTML to discover the numbering authority went unreadable (WO-1112).
     _main_next, _ui_next, banner_errors = parse_banner()
+    # WO-1080: annotate BEFORE the HTML is built, so a stale citation is visible on the page
+    # as well as on the console. Costs nothing while no ticket cites a capture.
+    cited_captures = check_capture_staleness(rows)
     html_text = build_html(rows)
     with open(OUT, "w", encoding="utf-8") as f:
         f.write(html_text)
@@ -679,6 +800,29 @@ def main():
               f"(flagged, not renumbered - resolve first-on-disk-and-referenced-wins):")
         for n in sorted(dupes):
             print(f"    WO-{n}: " + " | ".join(sorted(dupes[n])))
+    # WO-1080: a layout/touch ticket minted from a capture that predates its own target is
+    # the defect that produced WO-1075/1076/1077/1078. Reported, never repaired - the same
+    # contract as DUPLICATE_WO_NUMBERS above, and deliberately NOT part of the --check exit
+    # code, so a plain run's existing pass/fail contract is unchanged.
+    if cited_captures:
+        stale = [r for r in cited_captures if r.get("capture_verdict") == "STALE"]
+        unknown = [r for r in cited_captures if r.get("capture_verdict") == "UNKNOWN"]
+        fresh = len(cited_captures) - len(stale) - len(unknown)
+        if stale:
+            print(f"STALE_CAPTURE {len(stale)} work order(s) cite a capture log taken BEFORE the "
+                  f"newest commit touching their own target file - their measured geometry "
+                  f"describes a tree that has moved on (do not act on the numbers; re-run the "
+                  f"capture and re-mint):")
+            for r in stale:
+                print(f"    {r['file']}  {r.get('capture_detail','')}")
+        if unknown:
+            print(f"CAPTURE_UNVERIFIED {len(unknown)} work order(s) cite a capture that could not "
+                  f"be checked (absence of proof is NOT freshness):")
+            for r in unknown:
+                print(f"    {r['file']}  {r.get('capture_detail','')}")
+        print(f"CAPTURE_PROVENANCE {len(cited_captures)} cited - {fresh} fresh, "
+              f"{len(stale)} stale, {len(unknown)} unverified")
+
     # WO-1112: the mint numbers are the two-seat collision guard. An unreadable banner is a
     # LOUD failure, never a "?" on the page - a seat that cannot read the next free number
     # mints on top of another seat, which is the five-collision day the banner documents.

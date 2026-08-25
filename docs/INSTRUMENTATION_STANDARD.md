@@ -284,6 +284,61 @@ regressions go here; never put regression code in a runtime assembly.
 - **Never downgrade a true failure to `Warn`** to "keep the log clean" — that hides it from
   the flight recorder. Real failures use `Fail`.
 
+### 5.1 A capture must record the tree it measured (WO-1080, BINDING)
+
+⛔ **A capture log's FILE DATE is not evidence of the tree it measured.** `Builds/wo1060-capture.log`
+carries an mtime of 2026-08-23 and an in-log stamp of 2026-08-23T17:39:59Z; the fix it fails to
+contain landed **2026-08-21**. The log is *newer than the commit it does not have* — so any staleness
+rule built on dates is defeated by the exact case that motivated it. **Only the commit identifies the
+tree.** Four layout tickets (WO-1075/1076/1077/1078) were minted from that one log; WO-1076 was
+reopened against a panel fixed three days earlier and cost a seat a morning.
+
+The chain, and every link is mechanical — a rule that lives only in prose is the duplicated fact
+this exists to kill:
+
+1. **The capture stamps itself.** `UICaptureLaunch.RunCaptureHeadless` emits, *before* it shoots
+   anything, a marker DISTINCT from every other `UI_CAPTURE_*` line:
+
+   ```
+   UI_CAPTURE_HEAD <40-hex sha> <branch> dirty=<true|false>
+   ```
+
+   and, *after* every `Report*` has counted, `UI_CAPTURE_STAMP head=… targets=… pngs=… canvases=…
+   geometryFindings=… touchPanels=… touchClean=… touchFindings=…` — the run's own totals on the same
+   line as the sha, so a ticket quoting *"from `UI_TOUCH_FAIL x43`"* can be checked against the log it
+   claims to come from. `dirty=true` means tracked files under `Assets/` were uncommitted: there is no
+   commit for a later reader to diff against, so **that log may not be cited.** Unresolvable
+   provenance prints `UI_CAPTURE_PROVENANCE_FAIL` — deliberately *not* a `UI_CAPTURE_HEAD…` suffix, so
+   a grep for the good marker can never match the failure line.
+   ⛔ The stamp is written **by the capture**, never by a human remembering a second command
+   (CLAUDE.md §16 — a step whose remedy is "someone remembers" is not a gate).
+
+2. **A layout/touch ticket cites it**, in a fixed parseable shape in its header block:
+
+   ```
+   **Capture:** `Builds/<log>.log` @ `<sha>` — targets `Assets/.../<File>.cs`
+   ```
+
+3. **`tools/board_build.py` enforces the pair.** For each such ticket it resolves the newest commit
+   touching each named target and asks `git merge-base --is-ancestor` against the cited sha —
+   *reachability, not dates.* Not reachable ⇒ **`STALE_CAPTURE`**, printed loudly and badged on the
+   row; unresolvable ⇒ **`CAPTURE_UNVERIFIED`** (absence of proof is never freshness). Reported, never
+   repaired — the same contract as `DUPLICATE_WO_NUMBERS`, and outside the `--check` exit code. A WO
+   with no `**Capture:**` line is untouched.
+
+**Per-panel counts bind; a repo-wide total must name its baseline.** The binding number in a layout
+ticket is *its own panel's* finding count — local to the file it targets, and it survives a sibling
+ticket landing beside it. A repo-wide `UI_TOUCH_FAIL x<n>` may appear only when measured for THAT
+ticket and written with its baseline named (*"from `x43` as measured at `<sha>`"*), and ⛔ **never as
+the sole acceptance criterion** — file-disjoint tickets are designed to land in parallel (CLAUDE.md
+§11) and each one moves that total.
+
+Mechanism + oracle: `Assets/Editor/Regression/CaptureProvenanceRegression.cs`
+(`CaptureProvenance.Resolve/FormatHeadLine/TryParseHeadLine`), registered in `DataRegression.cs` as
+the **`capture-provenance`** suite. It lives in the regression assembly on purpose: the reference runs
+`DeNelle.Editor` → `DeNelle.EditorRegression` one way only, so a resolver placed beside the capture
+would be unreachable from any oracle.
+
 ---
 
 ## 6. Adoption

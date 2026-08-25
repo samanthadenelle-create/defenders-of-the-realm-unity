@@ -1195,6 +1195,16 @@ namespace DeNelle.Editor
             // suite file's own namespace before registering it.
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "economy-credit-reporting suite", () => { if (!DeNelle.Editor.EconomyCreditReportingRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[economy-credit-reporting] " + r); });
 
+            // --- CAPTURE PROVENANCE (WO-1080, 2026-08-25): four layout tickets were minted from
+            // ONE aged capture log and described a tree that had moved on; a capture log's mtime
+            // is NOT evidence of the tree it measured (that log is NEWER than the commit it does
+            // not contain). This suite proves the fix is ALIVE, not merely present: the resolver
+            // really answers on this machine, the UI_CAPTURE_HEAD wire shape round-trips, the
+            // parser REFUSES an abbreviated/hand-typed sha, and RunCaptureHeadless still stamps
+            // itself. Namespace is DeNelle.Editor.Regression (read the suite file, not this
+            // neighbour). ---
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "capture-provenance suite", () => { if (!DeNelle.Editor.Regression.CaptureProvenanceRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[capture-provenance] " + r); });
+
             // =====================================================================
             //  >>> REGISTERED ORACLE SUITES — END FENCE <<<  (new lines go ABOVE)
             // =====================================================================
