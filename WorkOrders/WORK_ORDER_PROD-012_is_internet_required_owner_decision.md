@@ -1,6 +1,6 @@
 # PROD-012 — Is an internet connection REQUIRED on first run? An OWNER DECISION, not a defect
 
-**Status:** READY — ⭐ **owner ruled 2026-08-24 (batch 2, ruling 1): internet IS required**, all three sub-questions answered (declare on the listing · honest setup screen with Retry · ⛔ no offline asset floor). The ruling section at the bottom carries her exact copy string. *(This line said "BLOCKED — SPEC only, awaiting owner rulings" until the ruling landed.)*
+**Status:** FIXED 2026-08-25 - source acceptance landed at `c3b40829b`; awaiting owner Seeker reconnect felt-test and OPS dApp Store listing update.
 **Minted:** 2026-08-18 (docs seat) — PROD series.
 **Priority:** MEDIUM — but it gates a **store-listing** claim on a LIVE published app, so it cannot sit indefinitely.
 **Silo:** Product / content delivery policy. **Lane:** decision first; implementation scope depends entirely on the ruling.

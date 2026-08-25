@@ -4,7 +4,7 @@
 
 # WORK ORDER 875 — Hero cast VFX: element-coded flash + windup telegraph (cast-on-magic)
 
-**Status:** READY — ⭐ **unblocked 2026-08-24 by the owner's VFX-authority ruling (`FOUNDATIONAL_RULINGS.md` §4)**: this is a MAP by existing semantic name, which is the lead's call. Proceed and send her a capture. *(Prior line preserved:)* NOT STARTED (reconciled 2026-08-08) — child of WO-872. **Lane:** Combat/Hero VFX. **WO#:** UI-seat block; **875**.
+**Status:** FIXED 2026-08-25 - source acceptance landed at `1772be8af`; awaiting owner device visual/capture approval.
 **Origin:** owner 2026-08-04 — *"cast on magic."* Audit-backed (WO-872 §2, H1/H3/H7). **Layer:** B/D.
 **Ties:** feeds WO-861 (Thrain/Sylas kits) — their cast VFX ride this.
 

@@ -1,6 +1,6 @@
 # WORK ORDER 1195 - a resource is named by its ICON, never by a letter
 
-**Status:** READY TO IMPLEMENT (one design decision inside it, see section 4)
+**Status:** READY - PARTIAL 2026-08-25: formatter, call-site conversion, source oracle, and registration landed at `0c65af9b0` + `905fe686b`; approved stone/magic/wisdom art/mapping and headed greyscale/NEED captures remain open. Do not close.
 **Minted:** 2026-08-25 (CLI lead, main line; banner bumped 1195 -> 1196 in the same edit)
 **Silo:** UI / consistency
 **Origin:** owner, 2026-08-25.
