@@ -1,6 +1,8 @@
 # WORK ORDER 932 — Raids: full functional audit + step-by-step to “working end-to-end”
 
-**Status:** READY — **PARTIAL: PHASES 1–4 CODE LANDED 2026-08-08** (see `WORK_ORDER_932_raids_full_functional_audit_and_fix.RESULT.md`); Phase 0 felt matrix + Phase 5/6 gates remain. Verified in the tree 2026-08-24: `RaidCapabilityHudBridge`, `RaidDeployScreen` "BEGIN ASSAULT", `RaidScoring` "RAID CLOCK armed". *(This line read "READY TO IMPLEMENT" until 2026-08-24 — the board therefore showed shipped work as not-started.)*  
+**Status:** SPEC — SPLIT RECOMMENDED. The raid spine LANDED (Phases 1–4, 2026-08-08; `RaidCapabilityHudBridge`, `RaidDeployScreen` "BEGIN ASSAULT", `RaidScoring` "RAID CLOCK armed" all verified in the tree 2026-08-24). What remains is not one coherent implementation: it mixes **device verification** (Phase 0 felt matrix, Phase 5/6 gates), **handable fixes**, and **unresolved policy** on the hero, IronBastion, and the entry gates. ⭐ Split into those three before any seat pulls it.
+
+*(Board note 2026-08-24 — Ready-queue audit, `READY_FOR_REVIEW.md`: leading token corrected to a canonical bucket word. Only the status token and this note changed; the ticket body and its claims are untouched.)*
 **Minted:** 2026-08-08 (CLI / Grok — owner: detailed raids audit + guidance to fully functional)  
 **Silo:** Raids / Troops / Scenes (Combat + UI; no VillageSceneBuilder)  
 **Roles:** CLI implements phases in order; PO felt-closes each phase  

@@ -77,9 +77,10 @@ def is_work_order(basename):
     return bool(_WO_FILENAME.match(basename))
 
 # ── status bucketing (keyword priority order) ─────────────────────────────────
-def bucket_of(status_text, has_result, is_wo=True):
+def classify_status(status_text, has_result, is_wo=True):
+    """Return (bucket, used_substring_fallback) for one status line."""
     # Companion docs are out of the status workflow entirely - never Unlabeled, never a defect.
-    if not is_wo: return "Doc"
+    if not is_wo: return "Doc", False
     s = (status_text or "").upper()
     # ⛔ THE VERDICT IS THE FIRST WORD. Everything after it is commentary (2026-08-23).
     #
@@ -103,14 +104,14 @@ def bucket_of(status_text, has_result, is_wo=True):
     # First word wins when it is canonical; otherwise we fall back to the old behaviour.
     lead = s.lstrip().split(None, 1)
     lead = lead[0].strip("*:-—,.") if lead else ""
-    if lead in ("SUPERSEDED", "CLOSED", "CANCELLED"): return "Closed"
-    if lead == "FIXED": return "Fixed"
-    if lead in ("DONE", "IMPLEMENTED", "COMPLETE"): return "Done"
-    if lead == "BLOCKED": return "Blocked"
+    if lead in ("SUPERSEDED", "CLOSED", "CANCELLED"): return "Closed", False
+    if lead == "FIXED": return "Fixed", False
+    if lead in ("DONE", "IMPLEMENTED", "COMPLETE"): return "Done", False
+    if lead == "BLOCKED": return "Blocked", False
     if lead in ("READY", "SPEC", "DRAFT", "PROPOSAL", "PARKED", "FUTURE", "LATENT"):
-        return "Ready" if lead == "READY" else "Spec"
+        return ("Ready" if lead == "READY" else "Spec"), False
 
-    if "SUPERSEDED" in s or "CLOSED" in s or "CANCELLED" in s: return "Closed"
+    if "SUPERSEDED" in s or "CLOSED" in s or "CANCELLED" in s: return "Closed", True
     # FIXED = built, gated and on disk, but NOT closed: it is waiting on the owner's felt test
     # (CLAUDE.md 13 - "PO felt-verifies + CLOSES"; headless cannot judge feel). Owner ruling
     # 2026-08-23.
@@ -128,17 +129,128 @@ def bucket_of(status_text, has_result, is_wo=True):
     # one of them was yanked back out of Done into the owner's to-test queue - handing her work
     # she had already closed, which is the exact opposite of what the bucket is for. The status
     # VERDICT is the first word of the line; anything later is commentary.
-    if s.lstrip().startswith("FIXED"): return "Fixed"
-    if has_result or "DONE" in s or "IMPLEMENTED" in s or "COMPLETE" in s: return "Done"
-    if "BLOCKED" in s: return "Blocked"
-    if "READY" in s or "IN PROGRESS" in s: return "Ready"
+    if s.lstrip().startswith("FIXED"): return "Fixed", True
+    if has_result or "DONE" in s or "IMPLEMENTED" in s or "COMPLETE" in s: return "Done", True
+    if "BLOCKED" in s: return "Blocked", True
+    if "READY" in s or "IN PROGRESS" in s: return "Ready", True
     # PARKED / FUTURE / LATENT are all "real, understood, deliberately not scheduled" - the same
     # shape as SPEC, and all three were in live use on WO status lines while landing in Unlabeled
     # (owner-reported 2026-08-23: WO-1148 "FUTURE - not scheduled", WO-1140 "LATENT GUARD - NOT AN
     # ACTIVE DEFECT"). Bucketing them is right BECAUSE they are considered decisions, not gaps.
     if ("DRAFT" in s or "SPEC" in s or "NOT STARTED" in s or "PROPOSAL" in s
-            or "PARKED" in s or "FUTURE" in s or "LATENT" in s): return "Spec"
-    return "Unlabeled"
+            or "PARKED" in s or "FUTURE" in s or "LATENT" in s): return "Spec", True
+    return "Unlabeled", False
+
+def bucket_of(status_text, has_result, is_wo=True):
+    """Compatibility wrapper for callers that need only the bucket."""
+    return classify_status(status_text, has_result, is_wo)[0]
+
+# Exact markdown is part of the board contract. A near miss remains visible, but is
+# named as a defect instead of being silently accepted (WO-1180).
+_STATUS_EXACT = re.compile(r"^\*\*Status:\*\*\s*(.+)$", re.MULTILINE)
+_STATUS_MALFORMED = re.compile(r"^\*\*Status\b[^\r\n]*$", re.MULTILINE)
+
+def parse_status(text):
+    """Return (status text, malformed_marker) without dropping malformed rows.
+
+    Returns (status, malformed, near_miss).
+
+    A malformed marker is REPORTED, never dropped - a row that vanishes is the failure
+    WO-1180 exists to prevent.
+
+    TWO TIERS, deliberately, because they are not the same risk:
+      * malformed = the row's verdict CAME FROM a near-miss line, because the file has no
+        exact `**Status:**` at all. These are the rows one edit from vanishing (the WO-932
+        shape). This is the drainable worklist.
+      * near_miss  = the file has a good `**Status:**` AND also carries a near-miss line
+        somewhere. Cosmetic under the exact pattern - but it is what shadowed WO-414 under
+        the OLD loose pattern, which took whichever line came first. Counted, not listed in
+        full: 264 of these exist (mostly the legacy `**Status: READY TO IMPLEMENT**`), and a
+        264-line wave is a report nobody drains.
+    """
+    exact = _STATUS_EXACT.search(text)
+    bad = [m.group(0).strip() for m in _STATUS_MALFORMED.finditer(text)
+           if not _STATUS_EXACT.match(m.group(0))]
+    if exact:
+        return exact.group(1).strip(), False, bool(bad)
+    if not bad:
+        return "", False, False
+    value = re.sub(r"^\*\*Status\s*:?[\s*]*", "", bad[0], count=1,
+                   flags=re.IGNORECASE).strip()
+    value = re.sub(r"\*\*\s*$", "", value).strip()
+    return value, True, False
+
+# WORK REMAINING != VERIFICATION REMAINING (WO-1181, and this is the whole ship/no-ship line).
+# CLAUDE.md 13 reserves CLOSING for the PO, so EVERY correctly handled Fixed row says it is
+# awaiting the owner. A lint that flags "awaiting owner felt-verify" flags the entire healthy
+# bucket and gets switched off inside a day. Ban the PHRASE, never the WORD.
+#
+# Each entry is (pattern, close_context_exempt). The close_context_exempt ones are the OPEN
+# family: "4 still open" is work remaining, but "owner felt-close still open" is the NORMAL
+# state of a healthy row - that false positive is what WO-999 cost on the first HEAD run.
+_STATUS_CONTRADICTIONS = (
+    (re.compile(r"\bPARTIAL\b", re.IGNORECASE), False),
+    (re.compile(r"\bNOT(?:\s+YET)?\s+(?:DONE|BUILT|ADDED)\b", re.IGNORECASE), False),
+    (re.compile(r"\bSTILL\s+OPEN\b", re.IGNORECASE), True),
+    (re.compile(r"\b(?:IS|REMAINS)\s+OPEN\b", re.IGNORECASE), True),
+    (re.compile(r"\bOWNER\s+RULING\s+(?:IS\s+)?OPEN\b", re.IGNORECASE), False),
+    (re.compile(r"\bAWAITING\s+OWNER\s+RULING\b", re.IGNORECASE), False),
+    (re.compile(r"\bNUMBERS\s+OPEN\b", re.IGNORECASE), False),
+    (re.compile(r"\bBULK\s+OF\s+THE\s+TICKET\b", re.IGNORECASE), False),
+    # Bare "owed" is mostly healthy verification debt. Name implementation artefacts only.
+    (re.compile(r"\b(?:R2\s+)?PUSH\s+OWED\b", re.IGNORECASE), False),
+    (re.compile(r"\b(?:CODE|IMPLEMENTATION|MIGRATION|GATE|RESULT\s+FILE)\s+OWED\b",
+                re.IGNORECASE), False),
+)
+
+# What turns an OPEN-family match into VERIFICATION debt rather than work debt: the words
+# immediately in front of it are the owner's close / felt test / sign-off.
+_CLOSE_CONTEXT = re.compile(
+    r"(?:OWNER|PO)\b[^.;:|]{0,40}?\b(?:FELT[-\s]?(?:TEST|VERIFY|CHECK)?|CLOSE|CLOSES|CLOSURE|"
+    r"SIGN[-\s]?OFF|VERIFY|VERIFICATION)\b[^.;:|]{0,25}$", re.IGNORECASE)
+
+# A phrase inside quotation marks is being REPORTED, not asserted - the same reason
+# "PRIOR STATUS:" and "(THIS LINE SAID ...)" are already stripped below. WO-1157 reads
+#: the slice this line called "not done" IS IN THE TREE - a refutation, not a confession.
+_QUOTED_SPAN = re.compile(r"\"[^\"]{0,200}\"|\u201c[^\u201d]{0,200}\u201d")
+
+# ...and an OPEN-family match that is being DENIED is not a claim of work remaining either.
+# PROD-007 reads: preservePrefabRotation ... is NOT evidence 6 is open.
+_REFUTATION_CONTEXT = re.compile(r"\b(?:NOT|NO)\s+(?:EVIDENCE|PROOF)\b[^.;:|]{0,40}$", re.IGNORECASE)
+
+_FINISHED_LEADS = ("FIXED", "DONE", "IMPLEMENTED", "COMPLETE",
+                   "CLOSED", "SUPERSEDED", "CANCELLED")
+
+def status_contradiction(status, bucket, filename=""):
+    """Return the first contradictory phrase on a finished verdict, or an empty string."""
+    # *.RESULT.md is EXEMPT. CLAUDE.md 15 freezes RESULT files ("never rewrite"), so a finding
+    # on one would demand an edit canon forbids and this lint's acceptance could never go
+    # green. (They are already skipped upstream in parse_wos; this states the contract.)
+    if filename.endswith(".RESULT.md"):
+        return ""
+    # Lint only an explicit finished verdict, never a legacy row merely rescued into a
+    # finished bucket by substring fallback. WO-1180 reports that separate fragility.
+    upper = (status or "").lstrip().upper()
+    lead = upper.split(None, 1)
+    lead = lead[0].strip("*:-,.\u2014") if lead else ""
+    if lead not in _FINISHED_LEADS:
+        return ""
+    # Historical status prose is evidence, not a claim about current work.
+    active = re.split(r"\bPRIOR\s+STATUS\s*:", status or "", maxsplit=1,
+                      flags=re.IGNORECASE)[0]
+    active = re.sub(r"\*?\(THIS LINE SAID .*?\)\*?", "", active, flags=re.IGNORECASE)
+    quoted = [m.span() for m in _QUOTED_SPAN.finditer(active)]
+    for pattern, close_exempt in _STATUS_CONTRADICTIONS:
+        for match in pattern.finditer(active):
+            if any(a <= match.start() and match.end() <= b for a, b in quoted):
+                continue  # reported, not asserted
+            before = active[:match.start()]
+            if close_exempt and _CLOSE_CONTEXT.search(before):
+                continue  # verification remaining, not work remaining
+            if close_exempt and _REFUTATION_CONTEXT.search(before):
+                continue  # the line is denying it, not admitting it
+            return match.group(0)
+    return ""
 
 # Fixed sits directly after Ready because that is the owner's queue: what is built and waiting
 # on her, before anything that is merely proposed. It is deliberately NOT next to Done - Done is
@@ -297,8 +409,8 @@ def parse_wos():
         title_m = re.search(r"^#\s+(.+)$", text, re.MULTILINE)
         title = title_m.group(1).strip() if title_m else base
         title = re.sub(r"[*`]", "", title)
-        status_m = re.search(r"^\*\*Status:?\*?\*?:?\s*(.+)$", text, re.MULTILINE)
-        status = re.sub(r"[*`]", "", status_m.group(1)).strip() if status_m else ""
+        status, malformed_status, near_miss_status = parse_status(text)
+        status = re.sub(r"[*`]", "", status).strip()
         has_result = base in results
         is_wo = is_work_order(base)
         mtime = os.path.getmtime(path)
@@ -307,9 +419,12 @@ def parse_wos():
             age_days = (today - datetime.date(*map(int, created.split("-")))).days
         except ValueError:
             age_days = 0
+        bucket, fallback_bucketed = classify_status(status, has_result, is_wo)
         rows.append({
             "num": num, "prod": prod, "mon_tag": mon_tag, "file": base, "title": title, "status": status,
-            "bucket": bucket_of(status, has_result, is_wo), "result": has_result,
+            "bucket": bucket, "result": has_result, "malformed_status": malformed_status,
+            "near_miss_status": near_miss_status,
+            "fallback_bucketed": fallback_bucketed,
             "is_wo": is_wo, "mtime": mtime,
             "created": created, "created_est": created_est, "age_days": max(0, age_days),
         })
@@ -497,6 +612,47 @@ def main():
         if len(unlabeled) > 40:
             print(f"    ... and {len(unlabeled) - 40} more")
 
+    malformed = [r for r in rows if r.get("malformed_status")]
+    if malformed:
+        print(f"MALFORMED_STATUS_MARKER {len(malformed)} work order(s) whose verdict comes from a "
+              f"near-miss marker - no exact **Status:** in the file (row still rendered):")
+        for r in malformed:
+            print(f"    {r['file']}  status={r.get('status', '')!r}")
+    near_miss = [r for r in rows if r.get("near_miss_status")]
+    if near_miss:
+        print(f"NEAR_MISS_STATUS_MARKER {len(near_miss)} work order(s) carry a `**Status: ...**` "
+              f"line alongside a good marker (cosmetic now; it SHADOWED the real line under the "
+              f"pre-WO-1180 pattern - e.g. WO-414). First 5:")
+        for r in near_miss[:5]:
+            print(f"    {r['file']}")
+
+    fallback = [r for r in rows if r.get("fallback_bucketed")]
+    print(f"FALLBACK_BUCKETED {len(fallback)} work order(s):")
+    for r in fallback:
+        print(f"    {r['file']}  -> {r['bucket']}  status={r.get('status', '')!r}")
+
+    contradictions = []
+    for r in rows:
+        phrase = status_contradiction(r.get("status", ""), r["bucket"], r["file"])
+        if phrase:
+            contradictions.append((r, phrase))
+    if contradictions:
+        print(f"STATUS_CONTRADICTION {len(contradictions)} finished-verdict status line(s):")
+        for r, phrase in contradictions:
+            print(f"    {r['file']}  phrase={phrase!r}  status={r.get('status', '')!r}")
+
+    # WO-1180: an UNNUMBERED work order renders as "WO-?", and "WO-?" is NOT an assignable
+    # key - every unnumbered file shares it, so two unrelated tickets (the Ad Generator and
+    # the Economy Store Packs) answer to the same handle and the duplicate guard above cannot
+    # see them (it keys on `num`, which is None here). Report them by name; a ticket nobody
+    # can address by number is a ticket that gets lost.
+    unnumbered = [r["file"] for r in rows if r["is_wo"] and r["num"] is None and r["prod"] is None]
+    if unnumbered:
+        print(f"UNNUMBERED_WO {len(unnumbered)} work order(s) render as WO-? "
+              f"(not an assignable key - mint a number from the CLI_LANES_WO_NUMBERS.md banner):")
+        for f in sorted(unnumbered):
+            print(f"    {f}")
+
     # WO-937: duplicate WO numbers are REPORTED, never silently renumbered - a collision
     # is its own finding. Report-only: it does not change the --check exit contract.
     by_num = {}
@@ -524,11 +680,12 @@ def main():
     if check:
         problems = []
         if unlabeled: problems.append(f"{len(unlabeled)} unlabeled")
+        if contradictions: problems.append(f"{len(contradictions)} status contradiction(s)")
         if banner_errors: problems.append(f"{len(banner_errors)} banner parse error(s)")
         if problems:
             print("BOARD_CHECK_FAIL " + ", ".join(problems))
             return 1
-        print("BOARD_CHECK_OK 0 unlabeled, mint numbers readable")
+        print("BOARD_CHECK_OK 0 unlabeled, 0 status contradictions, mint numbers readable")
     return 0
 
 if __name__ == "__main__":

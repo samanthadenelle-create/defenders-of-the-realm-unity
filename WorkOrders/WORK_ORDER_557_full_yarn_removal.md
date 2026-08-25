@@ -1,6 +1,8 @@
 # WORK ORDER 557 — Full YarnSpinner Removal → code-built C# Obsidian dialogue
 
-**Status:** READY — PARTIAL: Phase 1 DONE · Phase 2 partial (faithful subset migrated + enabler-gaps specced) · Phase 3 DEFERRED (package-rip specced, **NOT executed**). ⚠ An RCA verdict on what Yarn remains at HEAD is owed before implementation.
+**Status:** FIXED 2026-06-28 — full Yarn removal verified at source 2026-08-24: no Yarn package in `Packages/manifest.json` or `packages-lock.json`, no `.yarn`/`.yarnproject` assets, no `.asmdef` references, no `using Yarn` and no live Yarn type usage anywhere under `Assets/`. Commits `4a91395ab`, `be39c4db7`; custom code-built dialogue is the live path. Residue is cosmetic only: three orphaned `ProjectSettings/Packages/dev.yarnspinner/*.json` settings files and two legacy identifier names (`DialogueResetService.YarnVariableClear`, `RegressionSuite.Case_YarnCommandPrefix`) — names, not couplings.
+
+*(Board note 2026-08-24 — Ready-queue audit, `READY_FOR_REVIEW.md`: leading token corrected to a canonical bucket word. Only the status token and this note changed; the ticket body and its claims are untouched.)*
 
 *(Board note 2026-08-24: bucket corrected. The verdict word was non-canonical, so the parser fell through to its substring pass and bucketed this row as **Done** on a word that appeared later in the sentence — the WO-1180 laundering path, and it only ever errs toward "finished". No claim about the work changed; only the leading token, so the row buckets where its own text says it belongs.)*
 **Owner decision (binding):** FULL Yarn removal ("Yarn has been a pain every step"). Custom system (WO-455) is built + flag-gated `ff.customdialogue` (default OFF). Migrate ALL dialogue, echo-Hollow FIRST as the proof, then sweep, then rip the package.

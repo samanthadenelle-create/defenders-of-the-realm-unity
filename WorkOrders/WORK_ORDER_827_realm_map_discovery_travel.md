@@ -1,6 +1,8 @@
 # WORK ORDER 827 — Realm Map discovery, zone identity, and travel
 
-**Status: READY TO IMPLEMENT — the WO-826 gate is LIFTED (826 shell shipped eb5d0710). ⚠ 2026-08-23 board reconcile: `RegionProgress` exists in GameState/SaveSchema/SaveMigrator and `RealmMapVM` is wired at HEAD — this ticket may be partly shipped; a CLI acceptance pass is owed before anyone re-implements it.**  
+**Status:** SPEC — ACCEPTANCE/RCA PASS REQUIRED. Partial state/VM seams exist at HEAD (`RegionProgress` in GameState/SaveSchema/SaveMigrator; `RealmMapVM` wired) and the WO-826 shell shipped (`eb5d0710`), but **travel is disabled** and the **zone-identity / progress-clear policy is unreconciled**. ⛔ Not handable as one implementation until an acceptance pass says what is already shipped and the identity/clear policy is ruled.
+
+*(Board note 2026-08-24 — Ready-queue audit, `READY_FOR_REVIEW.md`: the marker was MALFORMED (`**Status:` with no closing `**`), so the parser could not read it; the marker is now canonical and the leading token buckets correctly. Only the status marker and this note changed; the ticket body and its claims are untouched.)*
 **Minted:** 2026-08-01  
 **Program:** WO-825  
 **Silo:** Core state + Village world + map panel wiring  

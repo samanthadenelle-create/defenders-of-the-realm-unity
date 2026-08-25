@@ -4,7 +4,9 @@
 
 # WORK ORDER — Economy Store Packs (resource / farming-boost / offline-storage)
 
-**Status:** READY — owner priority 2026-08-21; work in progress. ⚠ Aged (git first-add 2026-06-28) — re-verify before pulling (see the era-sweep banner at the top of this file).
+**Status:** CLOSED — SUPERSEDED / DISPATCHED 2026-08-24. This aged aggregate (git first-add 2026-06-28) conflicts with current canon and its scope has been dispatched to **WO-1037, WO-1119, WO-1071, WO-1163, WO-1164 and WO-1176**. ⛔ It gets **no new number** — it is not an assignable ticket. Kept for provenance only.
+
+*(Board note 2026-08-24 — Ready-queue audit, `READY_FOR_REVIEW.md`: leading token corrected to a canonical bucket word. Only the status token and this note changed; the ticket body and its claims are untouched.)*
 
 *(Board note 2026-08-24: the line read "IN PROGRESS", which carries no canonical keyword, so the row bucketed as **Unlabeled** and dropped out of every board query. The verdict word is now canonical; the claim is unchanged and this pass did not re-verify it.)*
 **Type:** NEW CONTENT on an EXISTING system (PackStore) — do NOT greenfield

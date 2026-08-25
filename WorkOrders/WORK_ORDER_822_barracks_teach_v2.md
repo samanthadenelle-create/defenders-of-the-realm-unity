@@ -1,6 +1,8 @@
 # WORK ORDER 822 — Barracks teach v2 (813b): discovery beats, not toasts
 
-**Status: READY TO IMPLEMENT — the WO-823 gate is LIFTED (phase A ArmyReadiness landed 8560fced). ⚠ 2026-08-23 board reconcile: `barracks_intro` and `BarracksNpcInjector`/`BarracksBlankTownRegression` EXIST at HEAD — this ticket may be partly or wholly shipped; a CLI acceptance pass is owed before anyone re-implements it.**
+**Status:** SPEC — ACCEPTANCE/RCA PASS REQUIRED, PARTIAL. The Barracks NPC / recovery / oracle seams LANDED (`barracks_intro`, `BarracksNpcInjector` and `BarracksBlankTownRegression` all exist at HEAD; WO-823 phase A `ArmyReadiness` landed `8560fced`). Still **unproven or unspecified**: the world marker / coach beat, the "Train 3 Footmen" quest row and its reward, and the first-raid beat. ⛔ An acceptance pass is owed before anyone re-implements the shipped half.
+
+*(Board note 2026-08-24 — Ready-queue audit, `READY_FOR_REVIEW.md`: the marker was MALFORMED (`**Status:` with no closing `**`), so the parser could not read it; the marker is now canonical and the leading token buckets correctly. Only the status marker and this note changed; the ticket body and its claims are untouched.)*
 **Source:** WO-813 shipped only the safety half (intro toast + empty-army redirect); PM review
 2026-08-01 verdict: "Toasts are not teach. Players will still miss the drillmaster if they never
 walk the right pad." This WO is the full discovery loop 813 specced but did not land.

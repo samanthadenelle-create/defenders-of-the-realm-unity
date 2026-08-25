@@ -24,7 +24,9 @@
 
 # WORK ORDER — Ad Generator (Rewarded-Ad Hook Logic + Creative Ad Generator)
 
-**Status:** READY TO IMPLEMENT (design finished; data + schema shipped; sense B — the creative AdCreativeGenerator — is UNBUILT at HEAD)
+**Status:** SPEC — RCA/SPEC PASS REQUIRED. **Sense A (the rewarded-ad hook logic) SHIPPED** — `AdGateService` (WO-1120) over `AdPlacementCatalog` / `RewardedAdManager` (WO-1125); do not rebuild it. **Sense B (the creative generator) is not handable**: its golden copy is false, its catalog/capture assumptions are stale, and it has **no reader and no feature flag**. ⛔ **Do NOT mint a number for this** — it earns one only if the creative-generator design survives an RCA pass. Two of its placements are BANNED by owner ruling D7 (2026-08-07).
+
+*(Board note 2026-08-24 — Ready-queue audit, `READY_FOR_REVIEW.md`: leading token corrected to a canonical bucket word. Only the status token and this note changed; the ticket body and its claims are untouched.)*
 **Author:** CLI agent (design only — no `.cs` written, per §2/§13)
 **Silo:** Monetization/Backend (§9 — isolated lane)
 **Date:** 2026-06-28

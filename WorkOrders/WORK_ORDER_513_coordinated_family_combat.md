@@ -18,7 +18,9 @@
 
 # WORK_ORDER_513 — coordinated family combat AI (the orc family GANGS the hero)
 
-**Status:** READY TO IMPLEMENT (owner-driven, felt-test 2026-06-24) · Combat/AI lane · the "real feature" slice (vs the quick pathing/role tuning handled inline)
+**Status:** SPEC — RCA/SPEC PASS REQUIRED, FEATURE OPEN. The headline ask is still real: the arena **hard-disbands** the family, so a pack that GANGS the hero (surround / flank / expressed roles after arrival) is genuinely unbuilt. ⛔ But every path and ownership claim in "Diagnosed current state" is STALE — re-map `Assets/_Modules/Village/Arena/BattleArena.cs`, the `Village/Families` types (`FamilyLeader` / `FamilyMember`), and the now **wave-owned** `EnemyGroupCoordinator` at HEAD before scoping. Do not scope from the cited line numbers.
+
+*(Board note 2026-08-24 — Ready-queue audit, `READY_FOR_REVIEW.md`: leading token corrected to a canonical bucket word. Only the status token and this note changed; the ticket body and its claims are untouched.)*
 **Origin:** owner felt-test — "I thought they would FORMATION attack but they seem LAX." Diagnosis (this session) proved the family formation is TRAVEL-ONLY and disbands on arrival, after which all 3 orcs run identical solo melee-Rush — no surround, no flank, no roles expressed. This WO delivers the coordinated-family threat she pictures.
 
 ## Diagnosed current state (the seams to build on — verified from code)
