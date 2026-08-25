@@ -1,6 +1,6 @@
 # WORK ORDER 978 — Economy callers log the amount REQUESTED, not the amount CREDITED
 
-**Status:** READY TO IMPLEMENT (regression slice) - the testable seam is DECIDED by the lead 2026-08-24: a **source-structural** assertion over the four callers, ⛔ **not** `internal` + `InternalsVisibleTo`. ⚠ The §6 behaviour question stays open for the owner and does **not** block this - the suite pins honest REPORTING, correct under every possible ruling.
+**Status:** BLOCKED - ⛔ **SENT BACK by the owner 2026-08-24** (batch 2, ruling 5): the §6 recommendation used a **crystal** example, but crystals are the one UNCAPPED currency - verified at source today (`TownBankCapacity.cs:238-242`, `:478-482`; `EconomyService.cs:469-476`; `TownBankCapRegression.cs` case `[no-crystal-cap]` fails the build if that ever changes). ⛔ This ticket's §1 crystal example is factually wrong. **The unblock: reconcile §1 and §6 onto capped resources (wood/iron/stone) only.** ⚠ The regression slice is unaffected. *(Prior line:)* READY TO IMPLEMENT (regression slice) - the testable seam is DECIDED by the lead 2026-08-24: a **source-structural** assertion over the four callers, ⛔ **not** `internal` + `InternalsVisibleTo`. ⚠ The §6 behaviour question stays open for the owner and does **not** block this - the suite pins honest REPORTING, correct under every possible ruling.
 >  PRIOR: **Status:** BLOCKED - owner question open. All four callers log measured before/after deltas, but ⛔ **§6 (what should happen AT cap) is still open for the owner**, and the regression + `DataRegression` registration were NOT added. *(Bucket corrected 2026-08-24: led with DONE while naming two open items.)*
 >  PRIOR: **Status:** DONE — all four callers now log MEASURED before/after wallet deltas as `credited/requested` with a `Warn` on any shortfall; `EconomyService.cs` untouched (it was already correct). No site fell back to a bare `requested=` label: every callee is `void` (or returns levels/bool, not an amount), but each had an observable total (`EconomyService.Wood/Food/Iron/Crystals/Coins`, `GameState.Resources.*`, `GlimmerCurrencyService.Glimmer`, `HeroProgression.LifetimeXp`, `VillageInventory.Get`, `GameState.EchoCount`), so every axis is a real measurement. Also fixed in scope: `DailyQuestRewardBridge`'s latch-before-grant (same shape as WO-977) — a re-entrancy set now guards double-grants and `ClaimedAtUnix` latches only after a confirmed credit. **The §6 open question (what should happen AT cap) is still open for the owner — logging only.** Regression + `DataRegression` registration NOT added (lane-fenced to the committer).
 **Lane:** Economy / instrumentation
@@ -119,3 +119,50 @@ does not.
 - One NEW `Assets/Editor/Regression/<name>.cs`, **read-only over the four callers**.
 - ⚠ The `DataRegression.cs` registration line is **lane-fenced to the committer** — the seat writes
   the suite, the lead registers it. Two seats in the registry is how it collides.
+
+---
+
+## ⛔ SENT BACK 2026-08-24 — batch 2, ruling 5: the recommendation contradicted itself, and this ticket's §1 is factually wrong.
+
+**The owner caught it.** The §6 recommendation used *"Storage full — 240 of 500 **crystals** collected"*
+as its worked example. ⛔ **But WO-1165 establishes crystals as the one UNCAPPED currency.** Both
+cannot be canon.
+
+### ⭐ HER RULING
+
+- **Crystals remain UNCAPPED and ALWAYS PAY IN FULL.** ⛔ This ruling must **never** be implemented in
+  a way that introduces a crystal cap, implicitly or otherwise.
+- **Capped resources — wood / iron / stone — pay what fits, DISCARD the overflow, and disclose exactly
+  what was collected.** The honest sentence, with a capped resource in it:
+  > *"Storage full: 240 of 500 stone collected."*
+- ⛔ **No secret overflow wallet, either way.** An overflow store is a second wallet with its own caps,
+  its own UI and its own bugs, bought to avoid a sentence.
+- ⛔ Never colour alone, and never a number that quietly differs from the announced one.
+
+### ⭐ VERIFIED AT SOURCE 2026-08-24 — crystals are NOT capped anywhere in the code
+
+Read at source, not assumed. The owner's ruling matches the code; **this ticket's §1 does not.**
+
+- `Assets/_Modules/Core/Economy/TownBankCapacity.cs:238-242` — `UncappableResources = { BankResource.Crystals, BankResource.Coins }`.
+- `TownBankCapacity.cs:290-296` — `IsCapped()` is false for those, so the capped set is exactly **Wood, Iron, Food**.
+- `TownBankCapacity.cs:478-482` — **the** clamp, `ClampGrant`; line 481 returns `requested` unchanged for an uncapped resource, with the owner ruling cited inline.
+- `TownBankCapacity.cs:381-383` / `:407-409` / `:436-438` — `BaseCapOf` / `MaxOf` / `RoomFor` all early-return `int.MaxValue` for crystals: infinite ceiling, infinite headroom.
+- `Assets/_Modules/Village/EconomyService.cs:469-476` — the crystal credit path makes **no clamp call at all**; it goes straight to `GameStateService.AddCrystals`.
+- `Assets/_Modules/Core/State/GameStateService.cs:440-448` — `AddCrystals` applies a **floor only** (`Mathf.Max(0, …)`), never an upper bound.
+- `Assets/Resources/Data/Canonical/storage-caps.json` — authors caps for **wood / iron / food only**; a `crystals` key would be *unreachable* because `BaseCapOf` returns `int.MaxValue` before the dictionary is consulted.
+- `Assets/Editor/Regression/TownBankCapRegression.cs:162-191` — case `[no-crystal-cap]` **fails the build** if crystals or coins ever become capped.
+
+⛔ **CORRECTION OWED IN THIS TICKET'S §1.** `§1` (lines ~26-27) claims *"`EconomyService.Grant` routes
+to the clampable `EarnedIncome` kind. So when the town bank is at cap, the player is credited 0 while
+the log reads `+500 crystals`."* **That specific scenario cannot happen** — crystals are never
+clamped. The underlying defect (callers logging *requested* rather than *credited*) is real, but it
+applies **only to wood / iron / food**. Rewrite §1's example onto a capped resource.
+
+### The unblock
+
+**Status → BLOCKED**, on exactly one thing: **reconcile §1 and §6 against the verified code above** —
+re-state the behaviour spec for capped resources only, with a capped-resource example string, and
+strike the crystal framing. Once §1 no longer asserts a crystal cap, the behaviour half is buildable.
+
+⚠ The **regression half** stays unaffected — the source-structural seam decided by the lead 2026-08-24
+pins honest REPORTING and is correct under every possible ruling.

@@ -1,8 +1,8 @@
 # WORK ORDER 823 — Post-review hardening pack (army readiness + founding card + oracles + RESULT hygiene)
 
-**Status:** BLOCKED - on an owner ruling (reconciled 2026-08-09 - Phases A through D SHIPPED in `8560fced`; the single outstanding item, Phase E (optional PO-tunable first-raid softness, P3), is explicitly awaiting the owner's ruling and cannot move without it)
+**Status:** READY - ⭐ **Phase E's owner ruling LANDED 2026-08-24 (batch 2, ruling 8): the threshold is 3 OF 10**, first-ever raid only, and it MUST go through `ArmyReadiness`. Phases A-D shipped 2026-08-01 (`8560fced`). *(Prior line:)* BLOCKED - on an owner ruling (reconciled 2026-08-09 - Phases A through D SHIPPED in `8560fced`; the single outstanding item, Phase E (optional PO-tunable first-raid softness, P3), is explicitly awaiting the owner's ruling and cannot move without it)
 
-**Status: PHASES A-D SHIPPED 2026-08-01 (8560fced); Phase E (optional PO-tunable first-raid softness, P3) NOT BUILT — awaiting owner ruling.**  
+**Status: READY — Phases A-D SHIPPED 2026-08-01 (8560fced); Phase E is now RULED (owner 2026-08-24: **3 of 10**, first raid only, via `ArmyReadiness`) and buildable.**  
 **Minted:** 2026-08-01 (CLI / Grok — from PM code review of Claude Fable check-ins)  
 **Silo:** Core/Troops + Village/Onboarding + Editor/Regression (file-disjoint phases; can fan-out)  
 **Depends on:** 819/820 code already on origin (consume, do not re-litigate)  
@@ -195,3 +195,25 @@ readiness + over-queue. Founding Echo: soft deadline so the card cannot stay
 pending forever. Write 819/820 RESULT files. Do NOT implement 822/817/818/821 here.
 COMPILE_GATE_OK + REGRESSION_OK; brace-check every .cs; sole committer commits by path.
 ```
+
+---
+
+## ⭐ OWNER RULING 2026-08-24 — batch 2, ruling 8 — Phase E: **soften the first raid. THE NUMBER IS 3 OF 10.**
+
+**Recorded by the UI seat from `OWNER_RULINGS_OWED_2.md` §8. The number is hers; do not re-tune it
+without her.**
+
+⭐ **Her reasoning — keep it, it is why 3 and not 1 or 5:**
+- **One unit feels like a scripted tutorial.**
+- **Five starts feeling like waiting again.**
+- **Three communicates troop selection, deployment, multiple actors, losses/survivors, and combat
+  pacing** — the whole vocabulary of a raid, in the smallest army that can teach it.
+
+### The shape, unchanged from the spec
+
+- ⛔ **FIRST-EVER RAID ONLY.** The threshold applies only when the save has **never completed a raid**;
+  once the first raid returns, the normal full-army rule resumes **permanently**.
+- ⛔ **It MUST go through `ArmyReadiness`** — the single source Phase A built. **Never a second check
+  inside the raid screen**, or the grey-button-versus-open-gate bug comes straight back.
+
+**Status → READY.** Phase E is the last outstanding phase; Phases A–D shipped 2026-08-01 (`8560fced`).

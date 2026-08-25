@@ -1,4 +1,4 @@
-**Status:** BLOCKED - two owner rulings open. The oracle landed (`57b2c4595`) and works, but its OWN acceptance is unmet: the required four-entry baseline has **two** entries and **43 panels are still red**.  *(Bucket corrected 2026-08-24: the line led with FIXED while its own text said work remained. Prior line preserved below.)*
+**Status:** READY - ⭐ **the owner ruled 2026-08-24 (batch 2, ruling 9): NO WAIVERS** - the allow-list stays at TWO and the four newly-red panels get FIXED. ⚠ The ~21 tap-catcher panels are a LEAD call about the tool, not hers. The oracle landed (`57b2c4595`); the remaining work is fixing real defects. *(Prior line:)* BLOCKED - two owner rulings open. The oracle landed (`57b2c4595`) and works, but its OWN acceptance is unmet: the required four-entry baseline has **two** entries and **43 panels are still red**.  *(Bucket corrected 2026-08-24: the line led with FIXED while its own text said work remained. Prior line preserved below.)*
 >  PRIOR: **Status:** FIXED 2026-08-23 (57b2c4595) — rules moved out of the assembly cycle that made them unrunnable; registered as [ui-touch-oracle], 269->270 suites. ⚠ RED ON 43 REAL PANELS — that is the oracle working, and TWO OWNER CALLS are open (see the RESULT): baseline the 4 newly-red panels, and rule on the ~21 full-panel tap-catcher overlaps. AWAITING OWNER RULING.
 ⚠ Read the 2026-08-23 section: `UI_TOUCH_FAIL` is RED TODAY on 43 real findings across four panels
 that were NOT on anyone's list. Those are new tickets, not a reason to grow the allow-list.
@@ -324,3 +324,21 @@ the overlap in px, and stayed silent on the same controls laid apart -- at 2 lan
 - **Edit** `Assets/Editor/Regression/DataRegression.cs` (braces 928/928) — registration
 - **Edit** `Assets/Editor/Regression/DeNelle.EditorRegression.asmdef` — `UnityEngine.UI` +
   `Unity.TextMeshPro` made explicit (the suite builds real uGUI controls)
+
+---
+
+## ⭐ OWNER RULING 2026-08-24 — batch 2, ruling 9: **NO WAIVERS. The allow-list stays at TWO.**
+
+⭐ **Owner, verbatim:**
+> *"Do not celebrate creating a smoke alarm by taking the batteries out when it starts beeping."*
+
+- ⛔ **The four newly-red panels are NOT added to the allow-list.** They get **fixed**. The list may
+  only ever **shrink**; adding to it takes her word, and her word is no.
+- These are real defects — including the buried Close button on the live Rumor Board sharing
+  194x112 px with an Accept button, where only one can win the tap. Each is a small ticket.
+
+⚠ **The ~21 full-screen transparent tap-catcher panels are a LEAD call, not hers.** That is a question
+about the *tool* (whether the oracle's existing graphic-less-hit-area exclusion extends to the overlap
+assert), not about the *game*. The lead takes it and reports which way, with the red count after.
+
+**Status → READY.**

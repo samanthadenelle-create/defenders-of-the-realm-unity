@@ -154,6 +154,11 @@ Design consequences that follow from the use case, not from monetization:
   after paying that they left the leaderboard has been surprised by a term, and that is a refund
   request and a review, not a design detail.
 
+  ⚠ **AND IT BINDS THE ANTI-CHEAT POSTURE — see WO-1128 and §6 below.** The moment leaderboard
+  standing carries **material consequence**, client-authoritative combat outcomes stop being harmless
+  and **combat outcome verification becomes required BEFORE those rewards launch**. This clause and
+  §6 must be read together; changing either one changes the other.
+
   ⚠ The remaining risk is **retention, not fairness**: a player can buy their way out of the loop that
   keeps them playing, and then churn. That is worth **watching in the data**, not designing around -
   and it is the player's call to make.
@@ -185,7 +190,90 @@ Away time **banks pressure**; it does not resolve combat. ⭐ **So while the pla
 
 ---
 
+## 4. VFX AUTHORITY IS SPLIT BY WHAT THE ACT ACTUALLY IS: repair · map · substitute.
+
+> *"If a prefab literally says Fire Cast, mapping a fire ability to it isn't creative direction.
+> It's plugging the toaster into the toaster outlet."* — owner, 2026-08-24
+
+⚠ **This SCOPES the standing rule; it does NOT retire it.** The standing rule — *the owner tags the
+key, the CLI maps it verbatim, the CLI never picks* — is intact. What was wrong was reading it as
+"no VFX moves without her," which parked tickets where nothing was being chosen at all.
+
+| Act | Whose call |
+|---|---|
+| **REPAIR** — restoring a prefab to what it already had (a null material slot, a neutral default after the underlying defect is fixed) | ⭐ **the lead** |
+| **MAP by an EXISTING SEMANTIC NAME** — a fire ability onto the prefab that says *Fire Cast* | ⭐ **the lead** |
+| **SUBSTITUTE / creatively choose** — a *new* effect picked for a hook that no existing prefab names | ⛔ **the owner** |
+
+**How to apply.** Ask: *does the library already name the answer, or am I choosing one?* If the label
+answers it, proceed and **show her a capture**. If you would be picking, it is hers.
+
+⛔ **The three untagged boss keys in WO-874 — `Boss_AttackImpact` / `Boss_PhaseTransition` /
+`Boss_Telegraph` — stay HERS.** No prefab names itself the answer there, so mapping one is a choice.
+They are the worked example of the right-hand column, not an exception to it.
+
+⚠ **The owner is red/green colourblind.** This rule deliberately never asks her to choose between two
+hues — only to accept or veto a named element mapping.
+
+---
+
+## 5. THE LEAD MAY BUMP THE SAVE SCHEMA — but only under FOUR conditions, ALL required together.
+
+> *"engineering room without handing them a chainsaw next to the save files."* — owner, 2026-08-24
+
+A schema bump is the moment old builds and new builds stop agreeing. The risk was never in **adding**
+a field; it is in **reinterpreting one that already exists**, which is where a player's town changes
+under them. So the authority splits on exactly that line.
+
+### ✅ The lead may bump when ALL FOUR hold — this is a conjunction, not a menu
+
+1. **Old saves deserialize successfully.**
+2. **A missing field gets a safe default.**
+3. **The migration has regression coverage.**
+4. **Existing field semantics do not change.**
+
+Any one of the four failing sends it to her. The repo already has the safe pattern: v36, v37 and v38
+were all additive with a read-migration, and a pre-bump save simply reads the default.
+
+### ⛔ Still HERS, always
+
+**Rename · removal · reinterpretation · conversion · any destructive migration.** No exceptions, and
+no "it's only a rename" — a rename of a live save key is the destructive case wearing a small word.
+
+---
+
+## 6. CLIENT-AUTHORITATIVE COMBAT IS ACCEPTABLE ONLY WHILE STANDINGS HAVE NO MATERIAL CONSEQUENCE.
+
+> *"The moment standing gives anything economically meaningful, combat outcome verification becomes
+> required BEFORE those rewards launch."* — owner, 2026-08-24
+
+We verify the **clock** (offline accrual is server-reconciled; a forwards-clock claim is scaled down)
+and stop there. Action outcomes stay client-authoritative — a locally edited save claiming a won
+battle or a loot roll cannot be caught without simulating the game server-side. That is acceptable
+**today** because the opponents are NPCs and a cheater takes nothing from anyone else.
+
+⛔ **DO NOT record this trigger as "while the leaderboard is cosmetic."** The owner deliberately
+hardened the wording, and her reason is the point: the soft version lets someone later argue *"well,
+technically the leaderboard isn't competitive."*
+
+### The trigger, in her terms — ANY of these flips it
+
+Combat outcome verification becomes **required BEFORE launch** the moment leaderboard standing confers
+any of: **crystals · currency · exclusive gear · progression advantage · paid-equivalent rewards ·
+valuable seasonal prizes.**
+
+⚠ **Reads together with §3's leaderboard clause** (a shield forfeits the season). §3 makes standing a
+thing players trade against; §6 fences what standing is allowed to be worth until outcomes are
+verified. **Change one, revisit the other in the same change.**
+
+---
+
 ## Where these came from
 
-Ten rulings on 2026-08-24 (`OWNER_RULINGS_OWED.md`). Seven answered a ticket. **These three answered a
-class**, so they were pulled up here where the next ticket can find them.
+Ten rulings on 2026-08-24 (`OWNER_RULINGS_OWED.md`). Seven answered a ticket. **Three answered a
+class** (§§1-3), so they were pulled up here where the next ticket can find them.
+
+Eleven more on 2026-08-24 (`OWNER_RULINGS_OWED_2.md`). **Three of those answered a class** and were
+elevated here at the owner's own request: **§4** (VFX authority, from rulings on WO-875 / WO-1100 /
+WO-874), **§5** (save-schema bumps, from WO-1154 §5 — *"it governs a class"*), and **§6** (anti-cheat
+posture, from WO-1128, which also binds §3's leaderboard clause).

@@ -1,6 +1,6 @@
 # WORK ORDER 1169 — The Command Center: the parts are built, there is no console — and the MONEY is the part nobody can see
 
-**Status:** SPEC — ⭐ **§3 IS DONE 2026-08-24** (`4f8c2f23d` + `ecbd5047a`): `purchase_quotes` / `purchase_entitlements` are in the `api/admin/db.js` probe list, and `api/admin/stats.js` serves `?view=purchases` from `purchase_entitlements` with the quote→settle funnel, the analytics view kept and relabelled, and `client_events_without_entitlement` as the alert. ⚠ **§§5–7 still need scoping by the ticket's own text** and the joined triage view is unbuilt — so this is a spec pass, not implementable work. *(Status audit 2026-08-24: lead-verified bucket correction; body unchanged.)*
+**Status:** SPEC — ⭐ **§3 IS DONE 2026-08-24** (`4f8c2f23d` + `ecbd5047a`): `purchase_quotes` / `purchase_entitlements` are in the `api/admin/db.js` probe list, and `api/admin/stats.js` serves `?view=purchases` from `purchase_entitlements` with the quote→settle funnel, the analytics view kept and relabelled, and `client_events_without_entitlement` as the alert. ⭐ **§5 Q4 IS RULED 2026-08-24** (batch 2, ruling 7): *"push promos"* means **promo-code AUTHORING ONLY** — ⛔ notifications are a separate ticket, never a line item here. ⚠ **§§5–7 otherwise still need scoping by the ticket's own text** and the joined triage view is unbuilt — so this is a spec pass, not implementable work. *(Status audit 2026-08-24: lead-verified bucket correction; body unchanged.)*
 
 **Minted:** 2026-08-24 (CLI), banner bumped 1169 → 1170 in the same edit.
 **Provenance:** owner, 2026-08-24 — *"I wanna really start thinking about how we set up a command
@@ -204,3 +204,22 @@ correlatable rather than silently reading as unverified.
 
 **Still to build:** the actual joined triage view (report -> that wallet's purchases / auth rejects).
 The column makes it *possible*; nothing consumes it yet.
+
+---
+
+## ⭐ OWNER RULING 2026-08-24 — batch 2, ruling 7 — §5 Q4: **"push promos" means promo-code AUTHORING ONLY.**
+
+⛔ **Owner, verbatim:** *"Do not let 'push promo' casually smuggle an entire notification platform into
+an admin-console work order."*
+
+- ✅ **In scope for this ticket:** authoring a promo code — a table and an admin form (and per the
+  already-taken Q3 lead decision, a script, because it is auditable in git).
+- ⛔ **Out of scope, entirely:** pushing a notification to players. No push service, no device tokens,
+  no consent surface, no send-time policy exists anywhere in this repo. **If notifications are ever
+  wanted, they are a SEPARATE TICKET**, and the code one ships first.
+
+⚠ **And if that separate ticket is ever written:** `FOUNDATIONAL_RULINGS.md` §3's hard fence — ⛔ *a
+notification may never be paired with a shield offer* — has to be **extended to cover promos in the
+same change**, or the marketing surface walks straight through the door the fence was built to close.
+
+⭐ **This closes the §5–§7 scoping question**, which was the only thing keeping that section open.

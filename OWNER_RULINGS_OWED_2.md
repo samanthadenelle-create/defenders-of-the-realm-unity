@@ -1,5 +1,31 @@
 # Rulings owed — batch 2, 2026-08-24
 
+> # ✅ ALL ELEVEN ANSWERED 2026-08-24 — this document is CLOSED.
+> Every ruling below has been **recorded in its own ticket** and each ticket's `**Status:**` line
+> updated. ⭐ **Three answered a CLASS and were elevated into `FOUNDATIONAL_RULINGS.md`** — §4 (VFX
+> authority: repair · map · substitute), §5 (save-schema bumps, four conditions), §6 (anti-cheat:
+> client-authoritative combat only while standings carry no material consequence, cross-referenced
+> with §3's leaderboard clause). ⛔ **Two were SENT BACK, not approved:** ruling 5 (WO-978 — the
+> crystal example contradicts WO-1165; ticket → BLOCKED) and ruling 10 (WO-1159 §5 — modified into a
+> two-state WARN/BLOCK policy). ⚠ Per `FOUNDATIONAL_RULINGS.md`'s own no-paraphrase rule, the tickets
+> **cite** §§4-6 rather than restating them.
+>
+> | # | Ticket | Outcome | New status |
+> |---|---|---|---|
+> | 1 | PROD-012 | APPROVED — internet IS required, all three | READY |
+> | 2 | WO-1160 | APPROVED — ONE deployment, four post-deploy requirements | BLOCKED (evidence owed) |
+> | 3 | WO-875 / WO-1100 / WO-874 | APPROVED → `FOUNDATIONAL_RULINGS.md` §4 | READY / READY / BLOCKED (3 boss keys stay hers) |
+> | 4 | WO-1154 | APPROVED with four conditions → §5 | BLOCKED (faucet measurement only) |
+> | 5 | WO-978 | ⛔ SENT BACK — crystals stay UNCAPPED | BLOCKED |
+> | 6 | WO-1128 | APPROVED, trigger HARDENED → §6 | READY |
+> | 7 | WO-1169 §5 Q4 | APPROVED — promo-code authoring only | SPEC (scoping closed) |
+> | 8 | WO-823 Phase E | APPROVED — **3 of 10** | READY |
+> | 9 | WO-1060 | APPROVED — NO waivers | READY |
+> | 10 | WO-1159 §5 | ⛔ MODIFIED — two-state WARN/BLOCK | READY |
+> | 11 | WO-814 | APPROVED — per-rarity, weapons first | READY |
+> | — | WO-970 (bottom) | APPROVED — reset staff grip to (0,0,0), capture to veto | READY |
+> | — | WO-831 (bottom) | ⛔ NOT a ruling — stays an art task | unchanged |
+
 **Recommendation first on every one, same as last time.** Fourteen candidates went in; **five were
 already answered and are listed at the bottom with the evidence**, and two were engineering calls the
 lead has taken rather than hand you. ⭐ **Eleven survive**, ordered by how much they unblock.
@@ -14,7 +40,9 @@ yours.
 
 ---
 
-## 1. Does the game require an internet connection? (PROD-012 §4) — three yes/nos
+## ✅ ANSWERED 2026-08-24 — 1. Does the game require an internet connection? (PROD-012 §4)
+
+> **RULED: YES, all three.** Declare it on the listing · honest setup screen with Retry, exact copy *"An internet connection is required to finish setting up Elarion."* · ⛔ NO offline asset floor. Recorded in PROD-012 → READY.
 
 > ⭐ **RECOMMEND: (1) YES, declare it. (2) YES, an honest screen with a retry. (3) NO offline floor.**
 
@@ -36,7 +64,9 @@ cache, so this is a **first-run-per-build** requirement, not a per-launch one.
 
 ⭐ **Clash of Clans requires a connection and says so.** Nobody has ever churned over that sentence.
 
-## 2. May the lead promote `api/` to production? (WO-1160)
+## ✅ ANSWERED 2026-08-24 — 2. May the lead promote `api/` to production? (WO-1160)
+
+> **RULED: yes, ONE deployment only** — ⛔ *"This does not create standing production-deploy authority."* Four post-deploy requirements set (quote health · session health · purchase-quote smoke test · **capture the deployed commit hash**). Recorded in WO-1160; status stays BLOCKED until the evidence is posted.
 
 > ⭐ **RECOMMEND: yes — a one-time approval for this deploy, not a standing one.**
 
@@ -58,7 +88,9 @@ retire that rule — a per-deploy word keeps it intact.
 ⚠ One honest note: the Vercel CLI is not installed on this machine, so the first promotion carries an
 install step.
 
-## 3. VFX: must you tag every key by hand, or may the lead map into a library you already own?
+## ✅ ANSWERED 2026-08-24 — 3. VFX authority
+
+> **RULED: split it — REPAIR → lead · MAP by existing semantic name → lead · SUBSTITUTE → owner.** Elevated to `FOUNDATIONAL_RULINGS.md` §4 at her request. ⛔ WO-874's three boss keys stay hers. WO-875 + WO-1100 → READY.
 
 > ⭐ **RECOMMEND: split it — REPAIR and MAP are the lead's; SUBSTITUTE stays yours.**
 
@@ -83,7 +115,9 @@ to what it had, the lead proceeds and shows you a capture. Where a *new* effect 
 hook, it comes to you. ⚠ You are red/green colourblind — this deliberately never asks you to pick
 between two hues, only to accept a named element mapping.
 
-## 4. Who decides a save-schema bump? (WO-1154 §5, and every save-adjacent feature after it)
+## ✅ ANSWERED 2026-08-24 — 4. Who decides a save-schema bump? (WO-1154 §5)
+
+> **RULED: the lead may bump under FOUR conditions, all required together.** Elevated to `FOUNDATIONAL_RULINGS.md` §5. ⛔ Rename / removal / reinterpretation / conversion / destructive migration still hers.
 
 > ⭐ **RECOMMEND: the lead may bump for an ADDITIVE field with a read-migration; anything that changes
 > or removes an existing field comes to you.**
@@ -101,7 +135,9 @@ which is where a player's town changes under them.
 agreeing, and you own when that happens. The recommendation keeps that ownership for the cases that can
 actually hurt a save, and stops it gating the ones that cannot.
 
-## 5. When the bank is full and a reward lands, what happens? (WO-978 §6)
+## ⛔ SENT BACK 2026-08-24 — 5. When the bank is full and a reward lands? (WO-978 §6)
+
+> **The owner found a contradiction in the recommendation:** it used a **crystal** example, but WO-1165 establishes crystals as the one UNCAPPED currency. **RULED: crystals remain UNCAPPED and always pay in full; capped resources (wood/iron/stone) pay what fits, discard the overflow, and disclose exactly what was collected. ⛔ No secret overflow wallet.** ⭐ Verified at source: crystals are NOT capped anywhere in code (`TownBankCapacity.cs:238-242`, `:478-482`; `EconomyService.cs:469-476`; regression `[no-crystal-cap]`). WO-978 → BLOCKED pending reconciliation of its own §1.
 
 > ⭐ **RECOMMEND: pay up to the cap, keep the overflow nowhere, and SAY SO in words.**
 
@@ -124,7 +160,9 @@ one that never lies:
 ⭐ **This is the Clash answer too:** loot beyond your storage is simply not collected, and the game says
 your storage is full rather than pretending otherwise.
 
-## 6. Do we accept that a player can still cheat their own outcomes? (WO-1128)
+## ✅ ANSWERED 2026-08-24 — 6. Client-authoritative outcomes (WO-1128)
+
+> **RULED: accepted, but the trigger is HARDENED** — acceptable only while leaderboard standings have **NO MATERIAL CONSEQUENCE**. ⛔ NOT "while the leaderboard is cosmetic." Elevated to `FOUNDATIONAL_RULINGS.md` §6, cross-referenced with §3.
 
 > ⭐ **RECOMMEND: yes — verify the CLOCK, stop there, and revisit only if the leaderboard becomes
 > competitive.**
@@ -146,7 +184,9 @@ client-authoritative outcomes stop being harmless — a fabricated clear outrank
 recommendation holds only while the leaderboard is cosmetic.** If it is ever meant to be competitive,
 that is the trigger to revisit this, and §3 should say so in the same change.
 
-## 7. "Push promos" — do you mean authoring a code, or notifying players? (WO-1169 §5 Q4)
+## ✅ ANSWERED 2026-08-24 — 7. "Push promos" (WO-1169 §5 Q4)
+
+> **RULED: promo-code AUTHORING only.** ⛔ *"Do not let 'push promo' casually smuggle an entire notification platform into an admin-console work order."* Notifications = a separate ticket if ever.
 
 > ⭐ **RECOMMEND: authoring a code. Notifications are their own pillar, not a line item in the admin
 > console.**
@@ -166,7 +206,9 @@ the fence was built to close.
 
 ⭐ If you want both, they are two tickets and the code one ships first.
 
-## 8. Does the first raid still require a full army? (WO-823 Phase E)
+## ✅ ANSWERED 2026-08-24 — 8. First-raid army gate (WO-823 Phase E)
+
+> **RULED: soften it. THE NUMBER IS 3 OF 10.** First-ever raid only; ⛔ must go through `ArmyReadiness`. WO-823 → READY.
 
 > ⭐ **RECOMMEND: yes, soften it — the FIRST raid only, and the threshold number is yours.**
 
@@ -184,7 +226,9 @@ built — not a second check inside the raid screen, or the grey-button-versus-o
 target. ⛔ The number itself I will not invent; the ticket floated three of ten as an illustration, and
 it is yours.
 
-## 9. Do any of the 43 red UI panels get waived? (WO-1060)
+## ✅ ANSWERED 2026-08-24 — 9. Red UI panel waivers (WO-1060)
+
+> **RULED: NO WAIVERS.** Allow-list stays at two; the four newly-red panels get fixed. ⭐ *"Do not celebrate creating a smoke alarm by taking the batteries out when it starts beeping."* WO-1060 → READY.
 
 > ⭐ **RECOMMEND: none. Fix them; the allow-list stays at two.**
 
@@ -202,7 +246,9 @@ already excludes graphic-less hit areas as things that "cannot collide visually,
 exclusion extends to the overlap assert is a question about the *tool*, not the *game*. The lead is
 taking that call and will report which way, with the red count after.
 
-## 10. Treasury check on the ship chain: block, warn, or manual? (WO-1159 §5)
+## ⛔ MODIFIED 2026-08-24 — 10. Treasury check on the ship chain (WO-1159 §5)
+
+> **RULED: a TWO-STATE policy, stronger than the proposal.** Cannot query (RPC down/rate-limited) → **WARN**, build may continue with explicit acknowledgement. Query SUCCEEDS and config is wrong → **BLOCK**. ⛔ Always invoke with `--multisig`. WO-1159 → READY.
 
 > ⭐ **RECOMMEND: warn, don't block.**
 
@@ -220,7 +266,9 @@ means the check runs every time and is loud when it fails, without handing an ou
 having read no threshold at all, which is a green that proves the vault exists and nothing about
 whether it is safe.
 
-## 11. Gear ability at max level — what shape? (WO-814)
+## ✅ ANSWERED 2026-08-24 — 11. Gear ability at max level (WO-814)
+
+> **RULED: APPROVED** — per-rarity generic → weapons first → locked ability visible from Level 1. Ability identities stay hers. ⭐ Design caution recorded: favour abilities that CHANGE PLAYSTYLE, not *"+35% MORE DAMAGE."* WO-814 → READY.
 
 > ⭐ **RECOMMEND: per-RARITY generic, weapons first. The ability list itself stays yours, later.**
 
@@ -245,11 +293,11 @@ threshold), so there is no new machinery. When you want to write the abilities, 
 
 Listed so they are not mistaken for decisions and do not sit invisibly.
 
-- **WO-970 — two authored nudges need a re-dial.** `_staffGripEuler = (0, 90, 0)` and `sword_A`'s
+- ✅ **RULED 2026-08-24 — WO-970: APPROVED.** The lead may reset the staff grip to **(0,0,0)** and send a capture to veto; her reasoning ties it to ruling 3 — restoring a neutral default after the underlying defect is fixed is a **REPAIR**, not a substitution. WO-970 → READY. Original text: **two authored nudges need a re-dial.** `_staffGripEuler = (0, 90, 0)` and `sword_A`'s
   rotation were dialled on top of a broken base that has since been fixed, so both are now compensating
   for a bug that is gone. ⭐ **One thing you could rule instead of doing:** may the lead reset the staff
   value to (0,0,0) and send you a screenshot to veto? That turns an editor session into a glance.
-- **WO-831 — the 6 Echo emergence PNGs do not exist.** The code shipped 2026-08-02 with a safe
+- ⛔ **NOT A RULING 2026-08-24 — she declined to turn it into one.** WO-831 stays an **art task**; status unchanged. Original text: **the 6 Echo emergence PNGs do not exist.** The code shipped 2026-08-02 with a safe
   fallback, so the beat currently degrades to the portrait. `Assets/Resources/Echoes/Emergence/`
   is still absent at HEAD (verified today). Art is yours; nothing else pends.
 

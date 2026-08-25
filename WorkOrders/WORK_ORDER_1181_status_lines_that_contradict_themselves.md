@@ -110,3 +110,48 @@ close, and §13 reserves DONE for closed. Corrected to `FIXED`.
 are exactly what WO-1180 was written to make visible: an invisible class became a countable one.
 ⛔ **Do not bulk-rewrite them** - drain by hand, in batches, checking bucket counts before and after
 so no row silently changes meaning.
+
+## ⚠ INDEPENDENT GATE CHECK 2026-08-24 — the lint PASSES, and here is its honest limitation
+
+The independent check **passed** the lint. It also flagged a caveat that must not be lost with the
+green tick:
+
+⚠ **"Zero contradictions at HEAD" is PARTLY ZERO-BY-CONSTRUCTION.** The three exemptions that
+silence the findings are each named in the code comments **after the exact ticket that produced
+them**:
+
+| Exemption (`tools/board_build.py`) | Named for |
+|---|---|
+| `_QUOTED_SPAN` (`:215`) | WO-1157 |
+| `_REFUTATION_CONTEXT` (`:219`) | PROD-007 |
+| `_CLOSE_CONTEXT` (`:208`) | WO-999 |
+
+⛔ **The lint was tuned against its own findings**, and it has **never been observed firing on a real
+contradiction at HEAD** — only on synthetic input. That is the whole caveat, stated plainly, so a
+later reader does not mistake a clean run for a proven detector.
+
+### ⭐ Why this was judged legitimate NARROWING rather than SUPPRESSION
+
+Recorded so the judgement can be re-made, not merely trusted:
+
+- **The three principles generalise** — they are not per-ticket patches:
+  - *reported ≠ asserted* (`_QUOTED_SPAN`)
+  - *denied ≠ admitted* (`_REFUTATION_CONTEXT`)
+  - *verification ≠ work* (`_CLOSE_CONTEXT`)
+- **All three exempted cases are genuinely false positives, verified at source:**
+  - WO-1157 **quotes** *"not done"* in order to **refute** it.
+  - WO-1159's `IS OPEN` sits inside **both** quotation marks **and** a `(This line said …)` span.
+  - PROD-007 says `is NOT evidence §6 is open` — a **denial**, not a confession.
+- ⭐ **The detector WAS proven to fire.** Induced, this session:
+  - `status_contradiction('FIXED - PARTIAL, code owed', 'Fixed', 'WORK_ORDER_1.md')` → `'PARTIAL'`
+  - the identical status on `WORK_ORDER_1.RESULT.md` → `''` (the §15 freeze exemption)
+
+### ⛔ THE STANDING RISK — write it down or it recurs
+
+⛔ **Every future exemption must be justified by a PRINCIPLE, never by the ticket that tripped it.**
+An exemption added to silence one row is exactly how a lint becomes decoration: each addition looks
+reasonable in isolation, and the aggregate is a detector that agrees with itself by construction.
+
+⚠ **The first time this lint fires on a genuinely wrong status, SAY SO — loudly, in this file.** That
+event is the evidence it is doing real work. Until it happens, the clean HEAD run is a *consistency*
+result, not a *correctness* one.

@@ -1,6 +1,6 @@
 # WORK ORDER 1128 — Server-reconciled offline accrual: stop trying to verify the client, make it not matter
 
-**Status:** BLOCKED - owner question open. Server-reconciled offline accrual is IMPLEMENTED (`567eb7edf`), but ⚠ **the owner's open question is still open** and an acceptance gate is outstanding - that is more than felt-verification.  *(Bucket corrected 2026-08-24: the line led with FIXED while its own text said work remained. Prior line preserved below.)*
+**Status:** READY - ⭐ **the owner's question was ANSWERED 2026-08-24** (batch 2, ruling 6; posture elevated to `FOUNDATIONAL_RULINGS.md` §6 with a HARDENED trigger - material consequence, ⛔ not "while the leaderboard is cosmetic"). The remaining acceptance gate is lead work. *(Prior line:)* BLOCKED - owner question open. Server-reconciled offline accrual is IMPLEMENTED (`567eb7edf`), but ⚠ **the owner's open question is still open** and an acceptance gate is outstanding - that is more than felt-verification.  *(Bucket corrected 2026-08-24: the line led with FIXED while its own text said work remained. Prior line preserved below.)*
 >  PRIOR: **Status:** FIXED 2026-08-23 (567eb7edf + follow-ups; Codex audit 2026-08-23 confirms landed) — server-reconciled offline accrual is IMPLEMENTED. ⚠ THE OWNER’S OPEN QUESTION IS STILL OPEN: she asked whether it is correct that we only verify SERVER time. Answer it before closing — this is a money-adjacent path. AWAITING OWNER RULING + FELT-TEST.
 **Minted:** 2026-08-20 (CLI seat) — banner bumped 1128 → 1129 in the SAME edit
 **Lane:** Backend (`api/game/*`) + `GameStateService` sync + the offline opt-in panel copy.
@@ -184,3 +184,18 @@ which is an owner call and a different ticket.
 
 **STILL OPEN on this ticket:** acceptance 8 (`COMPILE_GATE_OK` + `REGRESSION_OK <n>/<n>`, CLI seat) and
 acceptance 9 (owner felt-verify + PO close). No gate was run and nothing was committed by this seat.
+
+---
+
+## ⭐ OWNER RULING 2026-08-24 — batch 2, ruling 6: **the posture is ACCEPTED, and the trigger is HARDENED.**
+
+The anti-cheat posture is now **canon in `FOUNDATIONAL_RULINGS.md` §6** — read it there; ⛔ not
+restated here, per that file's no-paraphrase rule. §6 and §3's leaderboard clause **cross-reference
+each other and must be read together.**
+
+⛔ **DO NOT record the trigger as "while the leaderboard is cosmetic."** The owner deliberately
+rejected that wording. Her reason is the whole point: the soft version lets someone later argue
+*"well, technically the leaderboard isn't competitive."* The recorded trigger is **material
+consequence** — see §6 for the enumerated list.
+
+**Status → READY.** The owner's question is answered; the outstanding acceptance gate is lead work.

@@ -1,6 +1,6 @@
 # WORK ORDER 1159 — GO LIVE: real mainnet pack sales, on the full authored ladder
 
-**Status:** FIXED 2026-08-23 — gated green (`COMPILE_GATE_OK`, `REGRESSION_OK 270/270 suites`, backend `node --test` 37/37), the new pin PROVEN red-then-green. ⚠ AWAITING OWNER FELT-TEST ON DEVICE. Not closed by the CLI — the PO closes. ⭐ **The §5 treasury red is RESOLVED 2026-08-24** (`3d17fc9e2`): the threshold was re-read from chain as **2-of-3** and the nine stale 1-of-1 copies in the repo were corrected — §5's body carries the proof. *(This line said "ONE TREASURY ITEM IS OPEN" until the 2026-08-24 board reconcile.)* The ship-chain `TREASURY_VERIFY_OK` call added in `45bd2df8e` is a **PROPOSAL awaiting an owner call**, deliberately not wired.
+**Status:** READY - ⭐ **§5 is now a specified policy** (owner ruling 2026-08-24, batch 2 ruling 10): **two-state** - cannot-query → **WARN** and continue with explicit acknowledgement; query-succeeds-and-config-is-wrong → **BLOCK**. ⛔ Always invoke with `--multisig`. The rest of the ticket remains gated-green and awaiting the owner's device felt-test; the PO closes, not the CLI. *(Prior line:)* FIXED 2026-08-23 — gated green (`COMPILE_GATE_OK`, `REGRESSION_OK 270/270 suites`, backend `node --test` 37/37), the new pin PROVEN red-then-green. ⚠ AWAITING OWNER FELT-TEST ON DEVICE. Not closed by the CLI — the PO closes. ⭐ **The §5 treasury red is RESOLVED 2026-08-24** (`3d17fc9e2`): the threshold was re-read from chain as **2-of-3** and the nine stale 1-of-1 copies in the repo were corrected — §5's body carries the proof. *(This line said "ONE TREASURY ITEM IS OPEN" until the 2026-08-24 board reconcile.)* The ship-chain `TREASURY_VERIFY_OK` call added in `45bd2df8e` is a **PROPOSAL awaiting an owner call**, deliberately not wired.
 
 **Owner ruling (explicit, 2026-08-23):** *"we test everything and make live"*, *"by owner explicitly"*.
 Scope ruled by the owner in the same exchange: **the full authored ladder, $1.99–$49.99.**
@@ -161,3 +161,26 @@ adding a network dependency to the ship chain is not a change to make unilateral
 - `Assets/Editor/Regression/MonetizationActivationRegression.cs` — re-pointed + matched-pair pin
 - `Assets/Editor/Regression/WalletProviderSelectionRegression.cs` — re-pointed pin
 - `CLI_LANES_WO_NUMBERS.md` — minted 1159, bumped 1159 → 1160 in the same edit
+
+
+---
+
+## ⭐ OWNER RULING 2026-08-24 — batch 2, ruling 10 — §5 treasury check: **MODIFIED into a TWO-STATE policy.**
+
+⛔ **Not simply "warn."** The owner rejected the flat recommendation and split it by *what the check
+actually learned*:
+
+| Outcome | Policy | Her reasoning |
+|---|---|---|
+| **Cannot query** — RPC down or rate-limited | **WARN.** The build may continue **with explicit acknowledgement.** | *"That isn't an outside service vetoing your build."* |
+| **Query SUCCEEDS and the config is WRONG** — e.g. expected 2-of-3, observed 1-of-3 | **BLOCK.** | *"That's your own validation catching a real production security regression."* |
+
+⭐ **This is stronger than what was proposed**, and it is the right shape: nobody else's outage can
+stop the build, but our own validation keeps its veto over a genuine security regression.
+
+⛔ **ALWAYS invoke with `--multisig`.** Without it the tool reports success **having read no threshold
+at all** — a green that proves the vault exists and nothing whatsoever about whether it is safe. The
+two-state policy is meaningless if the "success" state can be reached without reading a threshold.
+
+**Status → READY** — the §5 proposal is now a specified, buildable policy rather than an unwired
+proposal.

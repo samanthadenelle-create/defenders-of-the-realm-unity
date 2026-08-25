@@ -1,6 +1,6 @@
 # WORK ORDER 970 — The bounds align can only YAW, so a weapon whose mesh is not authored Y-long never stands up
 
-**Status:** BLOCKED - owner action owed. Shipped `af5e2e7d`, but the **owner's re-dial of the two authored nudges** is still outstanding, and the RESULT file is owed (deliberately not fabricated). *(Bucket corrected 2026-08-24: led with DONE while naming open owner work.)*
+**Status:** READY - ⭐ **the owner APPROVED 2026-08-24 (batch 2, bottom section): the lead may reset `_staffGripEuler` to (0,0,0) and send her a capture to veto** - a REPAIR under `FOUNDATIONAL_RULINGS.md` §4, not an owner action. The RESULT file is still owed. *(Prior line:)* BLOCKED - owner action owed. Shipped `af5e2e7d`, but the **owner's re-dial of the two authored nudges** is still outstanding, and the RESULT file is owed (deliberately not fabricated). *(Bucket corrected 2026-08-24: led with DONE while naming open owner work.)*
 >  PRIOR: **Status:** DONE — shipped `af5e2e7d` ("fix(gear): WO-970"). Still open: the owner's re-dial of the two authored nudges, plus owner felt-verify. RESULT file still owed (not fabricated). *(Status corrected 2026-08-14: the line still said "awaiting batch-gate + commit", and was written `**Status: …**` rather than the canonical `**Status:** …` the sibling files use.)*
 **Silo:** Hero / Equipment / Geometry — `WeaponBoundsOrient.cs` (orchestrator holds `EquipmentController.cs`)
 **Owner report (2026-08-10, felt-test, playing the Mage):** the Emberglass Staff (`tripo_staff_a`)
@@ -186,3 +186,17 @@ Touched exactly one file: `Assets/_Modules/Core/Geometry/WeaponBoundsOrient.cs`.
 No Unity run, no gate, no git, no commit — orchestrator batch-gates and is sole committer.
 Braces balanced 35/35, NUL-free. ASCII only. No FlowTrace stripped; one permanent trace added.
 No `manual=true` / authored value overwritten.
+
+---
+
+## ⭐ OWNER RULING 2026-08-24 — batch 2, bottom section: **APPROVED — reset the staff grip to (0,0,0) and send a capture to veto.**
+
+The lead may set `_staffGripEuler` back to **(0, 0, 0)** and send the owner a screenshot; she vetoes or
+accepts from the glance. That turns an editor session into a look.
+
+⭐ **Her reasoning ties this to batch 2 ruling 3 (`FOUNDATIONAL_RULINGS.md` §4):** restoring a neutral
+default **after the underlying defect has been fixed** is a **REPAIR**, not a substitution — so it is
+the lead's to do, with a capture back.
+
+⚠ `sword_A`'s rotation is the same shape of problem (dialled on top of a broken base that is now
+fixed); the approval above is written for the staff value she was asked about.

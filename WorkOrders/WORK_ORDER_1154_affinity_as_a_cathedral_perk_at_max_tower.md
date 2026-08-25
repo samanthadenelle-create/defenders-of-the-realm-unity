@@ -1,4 +1,4 @@
-**Status:** BLOCKED — owner ruled 2026-08-24 that NO numbers may be set until the **crystal faucet rate** is measured (crystals/day for an engaged player). Design is settled; balance stays unauthored. That measurement is the unblock — see the ruling section at the bottom.
+**Status:** BLOCKED — on the **crystal faucet measurement only** (a lead task). ⭐ The save-schema question is CLOSED 2026-08-24 (batch 2, ruling 4 → `FOUNDATIONAL_RULINGS.md` §5): the attunement state is additive with a read-migration, so the lead may bump. *(Prior line:)* owner ruled 2026-08-24 that NO numbers may be set until the **crystal faucet rate** is measured (crystals/day for an engaged player). Design is settled; balance stays unauthored. That measurement is the unblock — see the ruling section at the bottom.
 
 # WORK ORDER 1154 — Elemental affinity as a Cathedral perk, earned at max tower level
 
@@ -144,3 +144,20 @@ Once the faucet rate is known, price the affinity ladder so that:
   permanent `FlowTrace`, code-built uGUI at `MinTouchPx = 112`.
 - §6 items 1–5 stay **open**. Nothing here answers them; this states what must be true before they
   *can* be answered, and the shape the answers must take.
+
+---
+
+## ⭐ OWNER RULING 2026-08-24 — batch 2, ruling 4: **the attunement STATE is unblocked. The NUMBERS are not.**
+
+Save-schema authority is now **canon in `FOUNDATIONAL_RULINGS.md` §5** — read it there; ⛔ deliberately
+not restated here, per that file's no-paraphrase rule.
+
+⭐ **What it frees:** this ticket's attunement state is an **additive field with a read-migration**, so
+the lead may bump the schema for it without a further word from her — provided all four conditions in
+§5 hold together.
+
+⚠ **What it does NOT free:** the 2026-08-24 ruling that **no numbers may be set until the crystal
+faucet rate is measured** stands untouched. That measurement remains the unblock for this ticket, and
+it is a **lead task**, not an owner one.
+
+**Status stays BLOCKED** — on the faucet measurement only. The schema question is closed.

@@ -4,7 +4,7 @@
 
 # WORK ORDER 874 — Elite/Boss VFX: wire or kill `EliteVFXController` (+ DragonBoss spawn)
 
-**Status:** IMPLEMENTED 2026-08-22 - EliteVFXController is genuinely AddComponent-ed on the elite/boss spawn path (Enemy.EnsureEliteVfx from Configure); aura + OnEliteAttack + DragonBoss spawn entrance now actually run. A source-lint pins the AddComponent so the 4c1da079 static-shortcut shape cannot return. 3 keys still need an owner VFX tag (Boss_AttackImpact / Boss_PhaseTransition / Boss_Telegraph) - hooks live, art unmapped by design.
+**Status:** BLOCKED - three OWNER-OWED VFX art tags (`Boss_AttackImpact` / `Boss_PhaseTransition` / `Boss_Telegraph`), confirmed hers 2026-08-24 (`FOUNDATIONAL_RULINGS.md` §4 - no prefab names itself the answer, so it is a SUBSTITUTION). Everything else IMPLEMENTED 2026-08-22 - EliteVFXController is genuinely AddComponent-ed on the elite/boss spawn path (Enemy.EnsureEliteVfx from Configure); aura + OnEliteAttack + DragonBoss spawn entrance now actually run. A source-lint pins the AddComponent so the 4c1da079 static-shortcut shape cannot return. 3 keys still need an owner VFX tag (Boss_AttackImpact / Boss_PhaseTransition / Boss_Telegraph) - hooks live, art unmapped by design.
 
 > *(superseded status, kept for the record: BLOCKED - NEEDS OWNER RULING, reconciled 2026-08-09.)*
 

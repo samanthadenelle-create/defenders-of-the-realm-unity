@@ -86,3 +86,63 @@ behaviour is how a working capability gets broken.
 - [ ] ⭐ **The strengthened green bar:** a build is only clean when it reports `Unlabeled 0` **AND**
       zero malformed markers **AND** zero duplicate ids **AND** zero closed-status contradictions.
       Any one of those non-zero is a **FAILING** board, not a warning.
+
+## ⚠ SCOPE CORRECTION 2026-08-24 (independent gate check) — the duplicate-id worklist is UNDERSIZED BY HALF
+
+⚠ **Do not change this ticket's status — it is landed and committed.** This is a **scope-accuracy
+note** for whoever drains the backlog it exposed. Every figure below was recomputed from
+`tools/board_build.py`'s own parse at HEAD.
+
+### ⛔ `WO-?` is TWENTY files, not two
+
+§5 above relayed *"two unrelated files share `WO-?`"* (`WORK_ORDER_ad_generator.md`,
+`WORK_ORDER_economy_store_packs.md`). ⛔ **That pair was the ILLUSTRATION inside a code comment — the
+Ad Generator and Economy Store Packs example — not the count.** The real set is **20 work-order files
+that parse with no assignable number**, among them:
+
+`WORK_ORDER_COMBAT_VFX_BATCH_2026-07-10.md` · `WORK_ORDER_KNIGHT_ANIM_4button.md` ·
+`WORK_ORDER_MON002_mainnet_skr_one_wood_canary.md` · `WORK_ORDER_PROGRAM_723_731_coc_arena_barracks.md` ·
+`WORK_ORDER_PROGRAM_732_736_barracks_troop_roster.md` · `WORK_ORDER_PROGRAM_740_743_room_forge_into_mainline.md` ·
+`WORK_ORDER_UI-001_night_market_landscape_visual_redesign.md` · `WORK_ORDER_UI-002_store_commerce_state_clarity.md` ·
+`WORK_ORDER_Village2_Enemy_Stronghold.md` · `WORK_ORDER_ad_generator.md` ·
+`WORK_ORDER_economy_store_packs.md` · `WORK_ORDER_offline_storage_logic.md` ·
+`WORK_ORDER_outpost_base_footprint.md` · `WORK_ORDER_pi_browser_integration.md` ·
+`WORK_ORDER_pi_browser_integration_DEEP.md` · `WORK_ORDER_second_grom_companion.md` ·
+`WORK_ORDER_skr_staking_and_seeker.md` · `WORK_ORDER_skr_store_design.md` ·
+`WORK_ORDER_store_packs_content.md` · `WORK_ORDER_techdebt_ledger_2026-06-28.md`
+
+*(The 17 `WORK_ORDER_PROD-*` files also parse without a WO number, but they carry a resolved
+`PROD-N` id and are **not** part of the `WO-?` set.)*
+
+### ⚠ A real distinction inside that 20 — two different diseases
+
+⛔ **`MON002` and `UI-001`/`UI-002` are PRIVATE SERIES the banner authority does not mint.** They land
+in `WO-?` for a **different reason** than an unnumbered draft does: an unnumbered draft was never
+given an id, whereas these were given an id from a series the board cannot resolve.
+⛔ **Do not "fix" them by minting CLI numbers from the banner** — that would renumber live work and
+break every inbound reference. The board needs to **resolve** their series, not overwrite it.
+
+### ⛔ Duplicate ids are ~61, not ~40
+
+The board's own guard, run at HEAD:
+
+| Set | Numbers claimed by >1 file | Excess files |
+|---|---|---|
+| All parsed rows | **61** | **74** |
+| Restricted to real work orders | **56** | **69** |
+
+⭐ **Worst offender: `WO-430` is claimed by SIX files** — `Handover_Triage_Detailed_Work_Orders`,
+`city_upgrades_modifiers`, `comprehensive_instrumentation_TGVRU`, `gear_catalog_from_db`,
+`offline_troop_garrison_defense`, `ui_mvvm_seam`. Next worst are 3-way: `WO-110`, `WO-136`,
+`WO-282`, `WO-432`. `WO-280` = 2 (`go_live_blockers`, `village2_wiring_gate`).
+
+⚠ **`WO-1026` = 2 is an ARTEFACT, not a collision** — the guard keys on `num` without filtering
+plan/companion docs, so `WORK_ORDER_1026_IMPLEMENTATION_PLAN.md` collides with its own ticket
+`WORK_ORDER_1026_raid_defense_consequence_loop.md`. Filter companion docs before counting, or this
+class inflates the number and erodes trust in the rest of it.
+
+### ⭐ PROD ids have ZERO duplicates
+
+**17 PROD rows, 0 duplicate ids.** ⭐ Worth recording explicitly: it means the **PROD series' minting
+discipline works and the WO series' does not.** The fix for the WO series is therefore procedural,
+not merely a de-duplication pass — whatever PROD does at mint time is the thing to copy.
