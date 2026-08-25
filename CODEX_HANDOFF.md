@@ -1,3 +1,56 @@
+# ⭐⭐ SEAT HANDOFF — 2026-08-24 evening. Read this first.
+
+The owner is handing the seat to Codex. **This is the true state, counted rather than asserted.**
+
+## ⛔ "36 Ready" IS NOT 36 AVAILABLE TICKETS
+
+The board's Ready bucket is **55 rows** by leading token. Broken down by *why each is there*:
+
+| why it sits in Ready | count | who can move it |
+|---|---|---|
+| **already in flight** (batches 1-5) | **17** | in progress |
+| held behind another ticket | 3 | sequencing |
+| ⛔ **needs an OWNER RULING** | **16** | ⛔ **only the owner** |
+| SPEC / parked — not ready | 6 | needs a spec pass |
+| genuinely open | 13 | ⚠ mostly NOT dev work — see below |
+
+⭐ **Two independent sweeps of all 1,297 work orders found ZERO handable tickets outside batches 1-5.**
+That is a finding, not a gap. Of the 13 "genuinely open", the feeding agent proved nearly all fail a
+handability test: Unity `AssetDatabase` work (1129), an R2 push (1152), owner design picks (1001,
+1004, 1008), scoping owed (1169 §5-7), an owner action outside the repo (1175), or an RCA verdict owed
+before anyone implements (557, 822, 932).
+
+⛔ **Handing "the Ready list" to a dev lane sets it up to fail.** The constraint is **owner answers and
+lead captures**, not tickets.
+
+## What IS live right now
+
+- **Batch 1** — WO-1069 ✅ committed and gated; **WO-1177 in progress**, then WO-1178.
+  ⚠ WO-1177's migration is **already written and waiting**: `tmp/neon-migration-wo1177-discount.sql`.
+  ⛔ Run it BEFORE the code deploys — `/verify` runs after the transfer settles, so a schema fault
+  there is found with the money gone.
+- **Batch 4** — WO-1163, WO-917 Phase B, WO-1179 core. ⛔ **WO-1161 needs NO edit** (already fixed
+  08-23, both copies byte-identical). ⛔ **The WO-1163 pin at the top of this file is binding.**
+- **Batch 5** — held until batch 1 returns. ⚠ `packs.json` has **seven claimants** across three
+  batches: one seat, one queue.
+- **Batch 6** — ⛔ **QUARANTINED.** `D:\eoa-codex-six` is **156 commits stale**; a commit from it
+  would revert two days of work including scene files. Do not rebase it from a work lane.
+- **An APK + R2 ship chain is RUNNING** (`overnight-apk-build.ps1`). ⛔ Do not start Unity — one lock.
+
+## ⛔ The gate is the lead's, and judged by MARKER on a FRESH log
+
+`COMPILE_GATE_OK` · `REGRESSION_OK n/n` · `R2_PARITY_OK`. ⚠ **Never the exit code.** On 2026-08-24
+**five** false greens occurred across three unrelated systems — two gate runners exited 0 having done
+nothing, a wrapper reported `NO LOG` while the gate had passed, my own grep counted the wrong failure
+token, and `CREATE TABLE IF NOT EXISTS` reported success three times while changing nothing.
+
+## ⭐ The highest-leverage thing available
+
+**Not a ticket — the 16 rulings.** Two hours of the owner's time unblocks roughly five batches. The
+list is in the feeding agent's Half C, one line per question.
+
+---
+
 # ⛔⛔ LIVE PIN FOR WO-1163 — READ BEFORE TOUCHING A FOOD SKU (2026-08-24)
 
 **WO-1163 reaches into the file batch 1 is editing this minute, and its ticket never says so.**
