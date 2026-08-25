@@ -1,6 +1,6 @@
 # WORK ORDER 1069 — The shortfall resolver must never serve a dominated offer
 
-**Status:** READY TO IMPLEMENT (CLI). No open rulings — the two governing rulings are already taken.
+**Status:** FIXED 2026-08-24 (`6bb61a810`) — awaiting owner felt-verify. Verified at source: `api/_lib/purchase-catalog.js:84` reads `'hearth-spark': 4.99`, committed, and the quote suite is green. `ShortfallPackOffer` was correctly left UNCHANGED; the original resolver-oriented acceptance criteria are **superseded by the lead ruling** and do not read as open. *(Status audit 2026-08-24: lead-verified bucket correction; body unchanged.)*
 **Minted:** 2026-08-24 (UI seat), banner header bumped 1069 → 1074 in the same edit (with 1070–1073).
 **Provenance:** WO-1165 §6 (CLI-verified finding) + the external monetization review the owner
 ADOPTED 2026-08-24 (*"Find all SKUs capable of satisfying the shortfall → calculate effective player

@@ -6,7 +6,7 @@
 
 # WORK ORDER 1001 — Deep Dungeon Program: large multi-level dungeons as data + the engine to run them
 
-**Status:** READY — PARTIAL: authored complete through Phase 2; **traversal broken** (reconciled 2026-08-08) · **Silo:** Dungeons / content / systems · **For:** CLAUDE CLI · **Date:** 2026-08-07. ⚠ An RCA verdict is owed across WO-1001/1004/1008 (deduplicated remainder) before a dev lane touches any of them.
+**Status:** SPEC — re-spec at HEAD; an RCA/dedup verdict is owed across WO-1001/1004/1008 first. ⚠ **Its stated blocker is FALSE:** it calls traversal broken because NavMesh reports `PathPartial`, but composed dungeons deliberately use `DungeonPortLink` TELEPORTS between floors, so a partial cross-floor path is EXPECTED, not a defect. Real walkable stairs are **WO-923's** scope, not this ticket's. Authored scope remains complete through Phase 2. · **Silo:** Dungeons / content / systems · **For:** CLAUDE CLI · **Date:** 2026-08-07. *(Status audit 2026-08-24: lead-verified bucket correction; body unchanged.)*
 
 *(Board note 2026-08-24: bucket corrected. The verdict word was non-canonical, so the parser fell through to its substring pass and bucketed this row as **Done** on a word that appeared later in the sentence — the WO-1180 laundering path, and it only ever errs toward "finished". No claim about the work changed; only the leading token, so the row buckets where its own text says it belongs.)*
 **PO:** Samantha (owner) · **Author:** UI seat · **UI-seat block:** 1000–1099

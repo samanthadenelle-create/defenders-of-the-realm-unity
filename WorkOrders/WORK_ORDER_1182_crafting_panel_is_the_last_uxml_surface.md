@@ -1,6 +1,6 @@
 # WO-1182 - The dungeon crafting modal is the LAST UXML player-facing surface, and UXML is blank in builds
 
-**Status:** READY TO IMPLEMENT. **Silo:** Dungeons/UI.
+**Status:** SPEC — needs a spec pass, then READY. **Silo:** Dungeons/UI. ⚠ Scope is incomplete at HEAD: `Assets/Editor/DungeonSceneBuilder.cs:147` still declares `CraftingPanelUxmlPath = "Assets/_Modules/Dungeons/UI/CraftingPanel.uxml"` and `:1625` still builds a crafting `UIDocument`. See the 2026-08-24 scope/acceptance additions below. *(Status audit 2026-08-24: lead-verified bucket correction; body unchanged.)*
 **Origin:** split out of **WO-1005** on 2026-08-24. ⚠ It was living as a **follow-up sentence inside a
 ticket bucketed Done** (`IMPLEMENTED - PENDING GATE ... crafting panel UXML rebuild remains as
 follow-up`) - so the board rendered it green and the slice was unhandable. That is exactly the
@@ -35,6 +35,12 @@ runtime, and **tolerates the legacy `UIDocument` seat** rather than requiring a 
 3. Drop `[RequireComponent(typeof(UIDocument))]`; self-build the Canvas at runtime.
 4. Retire `CraftingPanel.uxml` and `CraftingPanel.uss` **and their `.meta` files together** - §4:
    moving or deleting assets without their meta is its own class of breakage.
+5. ⭐ **Added 2026-08-24 (status audit).** Update `Assets/Editor/DungeonSceneBuilder.cs` so it stops
+   creating/loading the crafting `UIDocument`: `:147` still declares
+   `CraftingPanelUxmlPath = "Assets/_Modules/Dungeons/UI/CraftingPanel.uxml"` and `:1625`
+   (`BuildCraftingPanel`) still builds a crafting `UIDocument`. **Keep creating the host GameObject
+   and keep attaching `CraftingPanelController`** - only the UXML/UIDocument half goes. ⛔ Still no
+   scene or prefab edits.
 
 ## ⛔ Do NOT
 
@@ -50,3 +56,7 @@ runtime, and **tolerates the legacy `UIDocument` seat** rather than requiring a 
 - [ ] ⚠ **Proven by a CAPTURED PNG that is actually opened** - `UI_CAPTURE_OK` plus eyes. A compile
       cannot prove a panel renders, and this exact bug class survived every gate last time.
 - [ ] The `.uxml`/`.uss` and their `.meta` files are removed together
+- [ ] ⭐ **Added 2026-08-24 (status audit):** zero `CraftingPanel.uxml` references anywhere under
+      `Assets/` - **including `Assets/Editor/DungeonSceneBuilder.cs`**, not just `Dungeons/UI/`
+- [ ] ⭐ **Added 2026-08-24 (status audit):** a future dungeon builder run creates the crafting host
+      **without a `UIDocument` and without a missing-UXML warning**

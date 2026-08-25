@@ -1,6 +1,6 @@
 # WORK ORDER 1176 — The shelf redesign: a one-time starter, choose-your-resource, discounts, and a companion worth $50
 
-**Status:** READY — design settled with the owner 2026-08-24. ⛔ Sequenced AFTER WO-1173 (schema-parity gate); §3 needs a schema change, and today proved this database drifts.
+**Status:** SPEC — design is largely settled (2026-08-24) but three things stop it being implementable: **§4c leaves companion IDENTITY owner-open**; the header claims a SCHEMA CHANGE while §3 says use the existing `purchase_entitlements` (pick one); and the discount scope OVERLAPS WO-1177, which is already assigned. ⛔ Still sequenced AFTER WO-1173 (schema-parity gate). *(Status audit 2026-08-24: lead-verified bucket correction; body unchanged.)*
 
 **Minted:** 2026-08-24 (CLI), banner bumped 1176 → 1177 in the same edit.
 **Provenance:** a single design conversation with the owner, 2026-08-24, immediately after the first

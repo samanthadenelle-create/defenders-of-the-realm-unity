@@ -1,6 +1,6 @@
 # WORK ORDER 1175 — Community first: a Discord, and SKR as the REWARDED path
 
-**Status:** READY. **Phase 2 (Discord) is now the higher priority** — see §0.
+**Status:** READY — ⚠ SPLIT-FLAGGED, the two phases are not one ticket. **Phase 2 (Discord)** is an owner/ops action **outside the repo** and is the higher priority (see §0). **Phase 1 (the SKR reward)** is **BLOCKED behind cosmetics rendering**. ⭐ Recommend splitting into two tickets so neither half blocks the other. *(Status audit 2026-08-24: lead-verified bucket correction; body unchanged.)*
 
 **Minted:** 2026-08-24 (CLI), banner bumped 1174 → 1176 in the same edit (with WO-1174).
 **Provenance:** owner, 2026-08-24 — *"earned a title in the discord and monthly free code?"*, then

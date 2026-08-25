@@ -1,6 +1,6 @@
 # WORK ORDER 1169 — The Command Center: the parts are built, there is no console — and the MONEY is the part nobody can see
 
-**Status:** READY — ⭐ **§3 IS DONE 2026-08-24** (4f8c2f23d + ecbd5047a): `purchase_quotes` / `purchase_entitlements` are in the `api/admin/db.js` probe list, and `api/admin/stats.js` serves `?view=purchases` from `purchase_entitlements` with the quote→settle funnel, the analytics view kept and relabelled, and `client_events_without_entitlement` as the alert. §5–§7 still need scoping — that is what keeps this Ready.
+**Status:** SPEC — ⭐ **§3 IS DONE 2026-08-24** (`4f8c2f23d` + `ecbd5047a`): `purchase_quotes` / `purchase_entitlements` are in the `api/admin/db.js` probe list, and `api/admin/stats.js` serves `?view=purchases` from `purchase_entitlements` with the quote→settle funnel, the analytics view kept and relabelled, and `client_events_without_entitlement` as the alert. ⚠ **§§5–7 still need scoping by the ticket's own text** and the joined triage view is unbuilt — so this is a spec pass, not implementable work. *(Status audit 2026-08-24: lead-verified bucket correction; body unchanged.)*
 
 **Minted:** 2026-08-24 (CLI), banner bumped 1169 → 1170 in the same edit.
 **Provenance:** owner, 2026-08-24 — *"I wanna really start thinking about how we set up a command

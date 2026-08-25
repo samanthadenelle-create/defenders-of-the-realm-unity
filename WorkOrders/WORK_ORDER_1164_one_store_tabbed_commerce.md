@@ -1,6 +1,6 @@
 # WORK ORDER 1164 — One Store: all selling moves to one tabbed shop, buildings keep their benches
 
-**Status:** READY — §5.1 and its sub-question RULED by the owner 2026-08-24: the HUD entry is a **TAB IN BAG**, the town Store building stays, both doorways open the one `PackStore`. ⛔ Land WO-1163 first (§6) — one ticket changes what RESOURCES are, this one changes where COMMERCE lives.
+**Status:** SPEC — §5.1 is RULED (HUD entry is a **TAB IN BAG**, the town Store building stays, both doorways open the one `PackStore`), but **§§5.2–5.3 remain OPEN**: vendor-NPC disposition and the four vendor-targeted quest stages. ⚠ Also unresolved: the ticket promises separate game-currency and Realm stores yet names the shared destination `PackStore` (the real-money surface) — say whether `PackStore` is EXTENDED, RENAMED, or merely the opening mechanism. ⛔ Land WO-1163 first (§6). *(Status audit 2026-08-24: lead-verified bucket correction; body unchanged.)*
 
 **Minted:** 2026-08-23 (CLI), banner bumped 1164 → 1165 in the same edit.
 **Ruled by:** the owner, 2026-08-23.

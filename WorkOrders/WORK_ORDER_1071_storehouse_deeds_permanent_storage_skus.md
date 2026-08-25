@@ -1,6 +1,6 @@
 # WORK ORDER 1071 — Storehouse Deeds I→III: the permanent storage SKU ladder
 
-**Status:** READY — §4 RULED by the owner 2026-08-24 (percentage multiplier + cosmetic evolution). Implementation still sequences behind WO-1176 §3 purchase limits. ⚠ The cosmetic half is NEW work in its own ticket (the lead is minting it) — do not absorb it here.
+**Status:** SPEC — §4 is RULED (percentage multiplier + cosmetic evolution) but the SKU set is not authorable yet: Deed II is only "+25–50%", Deed III carries no value at all, and prices depend on WO-1072 (blocked on an owner ruling). ⚠ The premise may also be STALE: **WO-1163 moves capacity onto producers**, so "existing storage buildings" needs reconciling before this is specced. ⚠ The cosmetic half is NEW work in its own ticket — do not absorb it here. *(Status audit 2026-08-24: lead-verified bucket correction; body unchanged.)*
 **Minted:** 2026-08-24 (UI seat), banner header bumped with the 1069–1074 block.
 **Provenance:** WO-1165 §3 (*"a permanent storage upgrade is the single best missing SKU"*) + the
 external review the owner ADOPTED 2026-08-24 (*"Storehouse Deed I → II → III … value that never

@@ -1,7 +1,6 @@
 # WORK ORDER 1072 — ONE crystal valuation, then promote the crystal row
 
-**Status:** READY TO IMPLEMENT (CLI) — the valuation curve shape is adopted; exact base rate is a
-data-authoring decision inside the stated discipline.
+**Status:** SPEC — ⛔ NOT a data-authoring task; there is a genuine CONTRADICTION the owner must resolve. The ticket adopts a modest volume curve ($1.99 base, $4.99 at base +5%) **while also treating the existing impulse-crystal rungs as the anchor** — and those rungs run ~126 / ~234 / ~321 crystals per dollar ($1.99→250, $2.99→700, $4.99→1600), i.e. the $4.99 rung is ~155% above the $1.99 rate, not 5%. **No single base rate satisfies both.** The owner must pick the authoritative anchor (the volume curve OR the impulse family) or authorize repricing the impulse family, and must rule rounding. *(Status audit 2026-08-24: lead-verified bucket correction; body unchanged.)*
 **Minted:** 2026-08-24 (UI seat), banner header bumped with the 1069–1074 block.
 **Provenance:** WO-1165 §5 (CLI-verified numbers) + the external review the owner ADOPTED
 2026-08-24 (*"first establish one crystal valuation … then make every SKU respect that underlying

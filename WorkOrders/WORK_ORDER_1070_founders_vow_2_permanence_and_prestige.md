@@ -1,6 +1,6 @@
 # WORK ORDER 1070 — Founder's Vow 2.0: the whale SKU sells permanence + prestige, and goods stop being the headline
 
-**Status:** READY — both §4 open items RULED by the owner 2026-08-24 (see the ruling section at the bottom). Implementation still sequences behind WO-1176 §3 purchase limits and the cosmetic rail.
+**Status:** BLOCKED — both §4 rulings are complete and the "Named on the Heart" copy removal is done, but the CONTENTS depend on unfinished work: purchase limits + companion (WO-1176), Founder's Citadel + cosmetic rail (WO-1074), Capacity Deed (WO-1071, itself unresolved), and the crystal grant (WO-1072, needs an owner ruling). Unblocks when those land. *(Status audit 2026-08-24: lead-verified bucket correction; body unchanged.)*
 **Minted:** 2026-08-24 (UI seat), banner header bumped 1069 → 1074 in the same edit (with 1069, 1071–1073).
 **Provenance:** WO-1165 §4/§9.1 + the external review the owner ADOPTED 2026-08-24 (*"I would not try
 to fix the $49.99 Founder's Vow by stuffing another 30,000 wood into it. That's putting a bigger
