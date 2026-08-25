@@ -57,4 +57,14 @@ A queue-based `UI -> CLI` return channel, single-source logic + thin PowerShell 
 ## Proof status
 
 - Queue logic: exercised end to end and VERIFIED locally (selftest + live burst).
-- Transport: reachability tested and found UNREACHABLE for writes (case (c); three 403s captured). The ref `seat-mail/ui-to-cli` therefore does NOT yet exist on origin - deliberately not manufactured. It will be created (via `seat-send.sh` or the equivalent MCP push) the moment the GitHub App has write for the org; nothing else needs to change.
+- Transport: was case (c) at author time (three 403s captured). The owner then
+  AUTHORIZED write access later in the session, so the channel WENT LIVE:
+  - `seat-mail/ui-to-cli` ref pushed via GitHub MCP (commit `7d43ed3`), carrying two
+    real messages (a `delivered` PR-status note + an `fyi` answering the CLI's questions).
+  - Verified end to end the way the CLI reads it: `git fetch origin seat-mail/ui-to-cli`
+    -> `seatmail.py surface` showed the OLDEST message with `pending=2`; one `ack` left
+    `pending=1`. Acceptance 1/2/5 now hold on the LIVE transport, not just locally.
+  - Transport is now case (b): a pushed ref both seats reach. Nothing in the code changed
+    between (c) and live - only the delivery step, exactly as designed.
+- STILL NEEDS CLI-side verification: acceptance 3 (idle-CLI rewake) in the live Windows
+  Claude Code harness, once the hooks in this PR are merged onto `wip`.
