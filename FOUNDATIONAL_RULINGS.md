@@ -515,6 +515,36 @@ Consequences, and they are the useful part:
 - ⚠ A quest whose action is genuinely unlike anything else earns its own image. The rule is one per
   questline as the DEFAULT, not a cap.
 
+### ⛔ SUPERSEDED IN PLACE 2026-08-25 — THE SLOT SHOWS THE REWARD, NOT AN ILLUSTRATION
+
+> **Owner, 2026-08-25:** *"instead of that, why not use that image place to highlight the rewards of
+> completing it — isn't that really what denotes what quest you want to take?"*
+
+⭐ **She is right, and it retires the art requirement rather than re-scoping it.** A player chooses a
+quest by what it PAYS and whether the trip is worth it. Flavour art is the least decisive information
+on the panel, and it was being given the largest element on it.
+
+**What this ruling does to the two above it:** sections 11's per-questline count and its
+generic-action-context amendment are **MOOT for the quest board**. ⛔ Do not commission quest
+illustrations. `docs/QUEST_IMAGE_BRIEFS.md` keeps its value as a quest INVENTORY (24 quests, givers,
+outcomes) — ⛔ but its IMAGE lines are no longer a work order for anyone.
+
+**What the slot shows instead:** the reward, at size, as **icon plus quantity** — the same grammar
+section 13 rules for costs. ⭐ This is the same fix, not a second one: the WO-1195 spec already routes
+every cost through ONE formatter, and this becomes its showcase surface.
+
+⚠ **THE EDGE CASE THIS RULING CREATES, and it is now a real defect rather than a footnote.**
+Quest 3 (`forgemasters_act1`, "Honest Steel") has **no authored reward at all** — no crystals, food,
+magic, item or keystone; its only payoff is unlocking act 2. Under an illustration that was a data
+note. Under a REWARD slab it is **an empty hero element on the screen where the player decides.**
+
+⛔ The slot may never render blank. Either author a reward, or render what the quest actually grants
+— ⭐ *"Unlocks Act 2"* is a legitimate reward and arguably a better one than 90 food. Any quest whose
+payoff is progression must SAY so.
+
+⭐ Consequence worth noting: the nine quests with no authored GIVER stop mattering under this design.
+The giver was only ever needed to caption a picture.
+
 ## 12. A SHELF SHOWS PRICES; ELIGIBILITY IS CHECKED AT THE TILL.
 
 > **Owner, 2026-08-25:** the store's display-price path serves everyone — **no wallet, no session.**
