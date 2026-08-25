@@ -116,3 +116,36 @@
 4. Route WO-1184 as a standalone review; do not count it toward Batch 1 or WO-1179.
 
 **Batch 5 remains held** until clean, verified WO-1177 and WO-1163 handbacks are accepted by the lead.
+
+## HANDOFF 2026-08-24 20:53 - clean-lane rework
+
+### WO-1177 - blocked at mandatory migration-first step
+
+1. **What landed:** **REFUSAL / NO CODE WRITTEN.** A clean current-head Batch 1 lane was created successfully.
+2. **Where:** `D:\eoa-codex-batch1-clean`, branch `codex/batch1-clean`, created from shared head `9bda8e61c`.
+3. **Not done:** the discount code was deliberately not started because the binding instruction says the production migration must run first. WO-1178 was not started because the lane is sequential.
+4. **Mismatch / could not find:** this environment exposes neither `DATABASE_URL` nor a `psql` executable. No sanctioned alternative migration executor was found in the repo; `tools/schema-parity.mjs` also requires `DATABASE_URL` for live verification.
+5. **Verification:** clean worktree status confirmed before work; migration and live parity **not run**. Required unblock: run `tmp/neon-migration-wo1177-discount.sql` against the intended production database and return its column/index/data-preservation evidence, or provide this lane an approved connection/executor.
+
+### WO-917 Phase B - empty ability-slot affordance
+
+1. **What landed:** empty ability slots now remain visible, render a dimmed `+`, clear stale icon/caption/count state, and show `Add a skill to activate` when tapped. Equipped slots retain the original `AbilityRequested(slot)` dispatch and cooldown/affordability behavior.
+2. **Where:** `D:\eoa-codex-batch4-clean`, branch `codex/batch4-clean`, one-file diff: `Assets/_Modules/HUD/Kit/HudKitController.cs`.
+3. **Not done:** Phase A dodge art was not touched; no second loadout UI or skill-tree routing was invented. No Unity gate, capture, commit, or push was run because those belong to the lead.
+4. **Mismatch / could not find:** the ticket says empty slots are absent because `BuildActionSlot` disables its icon. Current code had evolved: combat empty medallions already remained visible, but `SetEmptyMedallion` explicitly blanked the face and disabled taps; non-medallion empty slots were hidden. The implementation corrects the current binding seam rather than the stale stated cause.
+5. **Verification:** `git diff --check` clean; brace count **235/235**; NUL count **0**; exact diff inspected. Unity compile/regression/UI capture remain for the lead.
+
+### New sequencing acknowledged
+
+- Owner ruling received: Food SKU IDs **do rename**.
+- WO-1177 -> WO-1163 is now **one sequential seat**. WO-1163 has not been started.
+- WO-1163 must eventually move the server `USD_ANCHORS`, both canonical `packs.json` copies, and the quote test together under the mirror law.
+- `blue_mine` is recorded follow-up art, not WO-1163 scope; no farm-prefab visual edit is authorized.
+
+### Batch 5F / WO-978 regression slice - honest credit reporting oracle
+
+1. **What landed:** one new source-structural regression checks all four reward callers: each anchored reporting block contains the credit token, request token, and `FlowTrace.Warn`, while the caller source contains a before/credited measurement.
+2. **Where:** `D:\eoa-codex-batch4-clean`, branch `codex/batch4-clean`; new files `Assets/Editor/Regression/EconomyCreditReportingRegression.cs` and `.meta` only for this slice.
+3. **Not done:** no production economy behavior, player-facing presentation, crystal cap, or `DataRegression.cs` edit. The ticket's behavior/doc reconciliation remains blocked; only the explicitly unaffected regression slice was implemented. No gate, commit, or push was run.
+4. **Mismatch / could not find:** the ticket says assert literal `requested`, but the existing Population reporter says `request`. The oracle pins the stable `request` stem rather than forcing cosmetic production-copy churn. Reporting helpers receive measured deltas from their callers, so before/after is asserted across the caller file, not incorrectly required inside each helper body.
+5. **Verification:** `git diff --check` clean; all four anchors found and all six structural predicates true; regression source braces **12/12**, NUL count **0**. Lead registration owed in fenced `DataRegression.cs`: invoke `EconomyCreditReportingRegression.Run(out reason)` using the existing suite-registration pattern.

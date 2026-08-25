@@ -1,6 +1,6 @@
 # BATCH_STATE — the live handoff. Read this FIRST, every time.
 
-**Last written:** 2026-08-24 by the CLI lead.
+**Last written:** 2026-08-24 by the CLI lead. ⭐ **NEW since you last saw it:** the WO-1177 unblock correction, three accepted handbacks, and five freed batch-5 seats — all in the block directly under the ACTIVE table.
 
 > ## ⛔ THE PROTOCOL
 > 1. **Read this file at the START of every batch, and again before starting any NEW ticket inside one.**
@@ -47,11 +47,91 @@
 | **Batch 1** (Codex) | **WO-1177** → **WO-1178** | `api/_lib/purchase-catalog.js`, `api/purchases/quote.js`, `test/purchases.quote.test.js` · then `tools/` | ⛔ **ONE SEAT, SEQUENTIAL.** WO-1069 is **DONE** — landed `6bb61a810`. |
 | **Batch 4** (Codex) | **WO-1163** · **WO-917 Phase B** · **WO-1179 core** | catalog/data · `HudModelProducers.cs` + action-slot builder · `SmartEnemySpawner.cs`/`WaveManager.cs` | ⛔ **WO-1161 needs NO edit** — already fixed 08-23, both copies byte-identical. |
 
+### ⭐⭐ READ THIS FIRST — 2026-08-24 lead correction. **WO-1177's CODE IS UNBLOCKED. START IT NOW.**
+
+⛔ **The refusal — *"the discount code was deliberately not started because the binding instruction says
+the production migration must run first"* — is a MISREAD OF A PIN THE LEAD WROTE BADLY.** The fault is
+the lead's, not the lane's, and the correction never travelled. It travels now.
+
+> ⭐ **WO-1177's code CAN BE WRITTEN NOW. "Migration first" is a DEPLOY ordering constraint, NOT a WRITE one.**
+> **Why the constraint exists:** `/api/purchases/verify` runs **after** the transfer settles, so a schema
+> fault is discovered **with the money already gone and no refund route on an SPL transfer.** That governs
+> **when the code may be DEPLOYED** — it says nothing about when it may be **written**.
+
+⛔ **And the lane could never have run that SQL anyway — it is not the lane's action to take.** The lane
+itself proved `DATABASE_URL` is **redacted in `.env.local`**, and `vercel env run` returns the redacted
+value too. ⭐ **Running the migration is the OWNER's action**, exactly as the `bug_reports` rebuild was.
+So "migration first" could never have been a precondition the seat was able to satisfy — waiting on it
+was waiting on something that was never going to arrive from that seat.
+
+⭐ **THEREFORE: write WO-1177 against the migration's DECLARED SHAPE, and hand it back.**
+- The shape is already authored and stable — read it at source, do not invent it:
+  - `tmp/neon-migration-wo1177-discount.sql` (the unrun ALTER; idempotent `ADD COLUMN IF NOT EXISTS`)
+  - `api/schema.sql:1016-1039` (the same two columns in the canonical schema)
+- **`discount_bps INT`** — basis points off the USD anchor (2000 = 20%). **NULLABLE.**
+- **`discount_reason TEXT`** — the **SERVER's** label, e.g. `'repair_shortfall'`. **NULLABLE.**
+  ⛔ **Never the client's `reason` hint** — that is logged and never trusted; storing it would turn an
+  audit column into a repetition of whatever the caller typed.
+- ⚠ **NULLABLE is load-bearing, not laziness.** A `NOT NULL DEFAULT 0` makes "no discount" and "a
+  zero-bps discount" indistinguishable in the ledger, which is the exact thing the column exists to
+  prevent. Do not "tidy" it.
+- ⭐ Discount is applied **inside `buildQuoteBody`, BEFORE `quoteAmount`**, so the client never sees a
+  pre-discount number it could edit.
+
+⛔ **The lead holds it UNMERGED until the owner reports the migration run.** That is the lead's problem
+to carry, not the lane's — hand back working code and the ordering is honoured on the deploy side.
+
+⚠ **Sequencing that still binds, unchanged:** **WO-1163 may not start until WO-1177 is handed back.**
+The food SKU ids **do** rename, so WO-1163 now touches `api/_lib/purchase-catalog.js` and
+`test/purchases.quote.test.js` — **WO-1177's files.** ⛔ **Three files move together under the MIRROR
+LAW** (the server `USD_ANCHORS` table, both canonical `packs.json` copies, and the quote test's
+hardcoded resource-key list) **or it is a red build, not a staging step.**
+
+### ✅ ACCEPTED HANDBACKS — 2026-08-24. Nothing here needs rework.
+
+- **WO-917 Phase B — ACCEPTED, at the lead's gate now.** One file (`HUD/Kit/HudKitController.cs`),
+  braces **235/235**, NUL **0**, scope verified.
+  ⭐ **Credit for the finding:** the ticket's stated cause was **stale** — combat empty medallions
+  already stayed visible, and `SetEmptyMedallion` blanked the face. The lane corrected the **current**
+  seam rather than the described one. ⭐ **That is the report shape that keeps earning its place**
+  (handback points 3 + 4).
+- **WO-978 5F — ACCEPTED, at the gate.** New `Assets/Editor/Regression/EconomyCreditReportingRegression.cs`
+  + meta.
+  ⭐ **Credit for the judgement:** the ticket said assert the literal `requested`; the **live** Population
+  reporter says `request`. The lane pinned the **stable stem** instead of forcing cosmetic production
+  churn to satisfy a spec typo. Correct call.
+  ⚠ **Registration in `DataRegression.cs` is COMMITTER-FENCED and is OWED BY THE LEAD.** ⛔ It is an open
+  **lead** task — **not** the lane's, and not a defect in the handback.
+- **The clean-lane rework is ACCEPTED.** Both new lanes are correctly based on current shared head; the
+  old dirty worktrees stay **preserved and untouched** pending explicit provenance review.
+
+### ⭐ NEXT BATCH — FIVE SEATS FREE RIGHT NOW, all file-disjoint. Start any of them immediately.
+
+⛔ **Full detail is already in the BATCH 5 section below — do NOT duplicate it, read it there.** This is
+only the release note saying which rows are now **free to start**, plus the pin that matters on each.
+
+| # | WO | Now free — start immediately | The pin you must not miss |
+|---|---|---|---|
+| **5A** | **WO-875** | Un-gate hero cast VFX that already exist | ⛔ **No new VFX authored** — pure code-wiring. WO-874's **three boss keys stay the OWNER's.** |
+| **5B** | **PROD-012 ruling 2** | First-run **no-connection** screen + **Retry** | ⛔ **MUST NOT edit `Core/UI/ElarionUiKit.cs`** — WO-917 owns it, ⚠ **and it is at the gate right now, so that fence is LIVE.** Reuse only. |
+| **5C** | **WO-1171 §4** | Player-facing wallet **connect/disconnect** | ⛔ Route via **`CurrencySkinResolver`**, **never `WalletService`** (asmdef boundary). |
+| **5D** | **WO-1129 §3.3** | Repoint **six editor tools** at the derived art path | Six `Assets/Editor/*.cs`; no runtime files. |
+| **5E** | **WO-814** | Per-rarity **gear ability** machinery | ⚠ **The ticket names `GearStatResolver`; NO SUCH FILE EXISTS — it is `GearProgression.cs`.** Ships with **empty ability rows**; the identities are the **owner's**. |
+
+⭐ **PLUS: WO-1179 core is UNBLOCKED** — **WO-513 is a COMPOSER, not a prerequisite.** Already ruled (see
+the R3 response below); the Ready audit's "stated prerequisite" was an **over-read** of a nice-to-have
+line. ⭐ Take path (a): ship side partitioning without WO-513 behaviour, and state the limitation in the
+handback.
+
+⛔ **STILL BINDING ON EVERY SEAT:** leave `Assets/Editor/Regression/DataRegression.cs` alone — five
+tickets want a registration line there and it is **committer-fenced.** Hand the lead the one-liner.
+
+
 ### ⛔ Pins that are binding on active work
 
 - **WO-1163** — ⛔ do **NOT** rename any SKU id, and do **NOT** touch `api/_lib/purchase-catalog.js` or `test/purchases.quote.test.js`. The three food SKUs live in the `USD_ANCHORS` block **batch 1 owns**, and that file carries a **MIRROR LAW** proven by the quote test. The food→stone SKU remap is a **follow-up after batch 1 returns.**
 - **WO-1179** — ⛔ **ONE `SpawnWave` call.** Partition one wave's composition across active sides under **one shared concurrency budget**. Calling it per-side hands each call the full budget and doubles the field, defeating a cap that exists because of a phone frame-rate cliff. ⛔ `Gate.ForceFieldCollapsed` is **NOT** the breach signal (it also fires when the hero walks out of town), and ⛔ do not touch WO-1026's ring detector (behind a flag OFF since WO-579 — it records nothing, silently).
-- **WO-1177** — ⚠ its migration is **written and unrun**: `tmp/neon-migration-wo1177-discount.sql`. ⛔ **It must run BEFORE the code deploys** — `/verify` runs after the transfer settles, so a schema fault there is found with the money already gone.
+- **WO-1177** — ⚠ its migration is **written and unrun**: `tmp/neon-migration-wo1177-discount.sql`. ⛔ **It must run BEFORE the code deploys** — `/verify` runs after the transfer settles, so a schema fault there is found with the money already gone. ⭐ **DEPLOY ordering only — the CODE IS WRITTEN NOW.** See the correction block directly under the ACTIVE table; the migration is the **OWNER's** action and no lane can run it.
 
 ---
 

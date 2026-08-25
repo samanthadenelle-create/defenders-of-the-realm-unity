@@ -1183,6 +1183,14 @@ namespace DeNelle.Editor
             //     laid apart, at two landscape aspects. PROD-008's rule: an oracle never seen red is
             //     not evidence, so until this line is green a clean UI_TOUCH_OK proves nothing. ---
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "ui-touch-oracle suite", () => { if (!DeNelle.Editor.Regression.UiTouchClampRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[ui-touch-oracle] " + r); });
+            // WO-978 5F: registration is COMMITTER-FENCED - the seat writes the suite, the lead
+            // registers it, so two seats never edit this file. An unregistered oracle is a file that
+            // never runs, which this registry has now been bitten by twice.
+            // NOTE THE NAMESPACE: DeNelle.Editor, NOT DeNelle.Editor.Regression. This folder holds
+            // both conventions (StructureOrientationOracle is also DeNelle.Editor), so the neighbour
+            // line above is NOT a safe template -- copying it cost a full regression run. Read the
+            // suite file's own namespace before registering it.
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "economy-credit-reporting suite", () => { if (!DeNelle.Editor.EconomyCreditReportingRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[economy-credit-reporting] " + r); });
 
             // =====================================================================
             //  >>> REGISTERED ORACLE SUITES — END FENCE <<<  (new lines go ABOVE)

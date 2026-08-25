@@ -104,6 +104,8 @@ namespace DeNelle.HUD.Kit
         private ElarionUiKit.TargetFrameHandle _targetFrame;
         private ElarionUiKit.CastBarHandle _castBar;
         private ElarionUiKit.ActionSlotHandle[] _abilitySlots;
+        // WO-917 Phase B: click closures are built once while loadout state changes at runtime.
+        private bool[] _abilitySlotEquipped;
         private ElarionUiKit.SoftGlowCooldown[] _abilityGlows;   // WO-611: soft under-glow cooldown (combat HUD only)
         private ElarionUiKit.LockCrosshairHandle _lockBadge;     // WO-611: animated target lock crosshair (combat HUD only)
         private ElarionUiKit.ActionSlotHandle[] _assignableSlots;
@@ -1362,6 +1364,7 @@ namespace DeNelle.HUD.Kit
             rrt.offsetMin = Vector2.zero; rrt.offsetMax = Vector2.zero;
 
             _abilitySlots = new ElarionUiKit.ActionSlotHandle[4];
+            _abilitySlotEquipped = new bool[4];
             bool combat = FeatureFlags.CombatHud611;
             if (combat) _abilityGlows = new ElarionUiKit.SoftGlowCooldown[4];
 
@@ -1403,7 +1406,7 @@ namespace DeNelle.HUD.Kit
                     max = new Vector2((i + 1) * 0.25f - 0.01f, 0.95f);
                 }
                 _abilitySlots[i] = ElarionUiKit.BuildActionSlot(row.transform, min, max,
-                    () => { if (_owner != null) _owner.AbilityRequested?.Invoke(slot); });
+                    () => OnAbilitySlotTapped(slot));
                 if (combat)
                 {
                     // WO-750: null keyBadge — no Q/W/E/R letter on the touch medallion (icon = identity).
@@ -1990,15 +1993,17 @@ namespace DeNelle.HUD.Kit
                 bool medallion = _abilityGlows != null && i < _abilityGlows.Length && _abilityGlows[i] != null;
                 if (i >= a.Slots.Count)
                 {
-                    h.root.SetActive(medallion);
-                    if (medallion) SetEmptyMedallion(h);
+                    _abilitySlotEquipped[i] = false;
+                    h.root.SetActive(true);
+                    SetEmptyMedallion(h);
                     continue;
                 }
                 var s = a.Slots[i];
-                h.root.SetActive(medallion || s.Equipped);
+                _abilitySlotEquipped[i] = s.Equipped;
+                h.root.SetActive(true);
                 if (!s.Equipped)
                 {
-                    if (medallion) SetEmptyMedallion(h);
+                    SetEmptyMedallion(h);
                     continue;
                 }
                 if (medallion)
@@ -2066,18 +2071,30 @@ namespace DeNelle.HUD.Kit
             }
         }
 
-        // WO-611: present an UNASSIGNED combat medallion — dimmed face, no icon, no tap, no stale
-        // cooldown text — so the Q/W/E/R arc always renders in hostile postures (combat-HUD only;
-        // callers gate on the glow driver's presence, which exists only when the flag was ON at build).
+        // WO-611 + WO-917 Phase B: an unassigned slot is a dimmed "+" plate, not a blank.
+        // Its tap explains how to activate it; no cast is dispatched until the slot is equipped.
+        private void OnAbilitySlotTapped(int slot)
+        {
+            bool equipped = _abilitySlotEquipped != null && slot >= 0 &&
+                            slot < _abilitySlotEquipped.Length && _abilitySlotEquipped[slot];
+            if (!equipped)
+            {
+                ShowToast(ElarionUiKit.ToastTone.Info, "Add a skill to activate");
+                return;
+            }
+            if (_owner != null) _owner.AbilityRequested?.Invoke(slot);
+        }
+
         private static void SetEmptyMedallion(ElarionUiKit.ActionSlotHandle h)
         {
             if (h == null) return;
-            h.SetLabel(null);   // 2026-07-11: drop a stale text face (Dodge/Attack) with the icon
+            h.SetLabel("+");
             h.SetCaption(null); // WO-1105 REVISION: and the verb strip ("Shoot"), or it outlives its ability
             if (h.icon != null) h.icon.enabled = false;
             if (h.frame != null) h.frame.color = new Color(1f, 1f, 1f, 0.45f);
-            if (h.button != null) h.button.interactable = false;
+            if (h.button != null) h.button.interactable = true;
             if (h.cdText != null) h.cdText.text = "";
+            if (h.count != null) h.count.text = "";
         }
 
         private void OnAssignable()
