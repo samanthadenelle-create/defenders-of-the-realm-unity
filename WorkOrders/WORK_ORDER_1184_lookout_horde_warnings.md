@@ -62,9 +62,13 @@ anyone rebuilds it. A rebuild on inference is the banned move even when the infe
 `tower.Data.towerName.IndexOf("Archer" / "Watchtower")`. ⛔ Display names are **not stable keys**, and
 this repo already fixed keyword-matching **at the mechanism** once (`a698ec5ed`).
 
-⚠ **It is fragile right now, for a specific reason: WO-1163 is renaming buildings this week**
-(Farm → Quarry, Silo → Stoneyard). A rename that never touches this file can silently switch every
-lookout back to level 0 — and the failure is **silent**, because a level-0 lookout simply sends no
+⚠ **CORRECTION 2026-08-24, by the lead, against my own finding.** I first wrote that WO-1163 makes
+this fragile *right now*. **That overstated it:** WO-1163 renames `collector_farm` → Quarry and
+`silo` → Stoneyard, and **touches no tower name at all**. There is no live collision today.
+
+The finding still stands as a **pattern** rather than an emergency: a display name is not a stable
+key, this repo already fixed keyword-matching at the mechanism once (`a698ec5ed`), and **the failure
+mode is silent** — a level-0 lookout simply sends no
 force-size intel. Match a catalog **id** or the **role enum** instead.
 
 ## Acceptance
