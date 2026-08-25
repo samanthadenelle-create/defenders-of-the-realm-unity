@@ -24,6 +24,7 @@ using System;
 using System.Collections.Generic;
 using DeNelle.Core.Catalog;       // StructureRoles — the single naming authority
 using DeNelle.Core.UI.Mvvm;
+using DeNelle.Core.UI;
 using DeNelle.Village;            // GearCatalog
 using DeNelle.Village.Crafting;   // JewelerRecipeCatalog, JewelerCraftingService, VillageInventory
 
@@ -41,22 +42,6 @@ namespace DeNelle.Village.Items
         {
             Label = label ?? "";
             Value = value ?? "";
-        }
-    }
-
-    /// <summary>One wallet-cost entry as data (WO-693): currency key ("iron") + display name +
-    /// amount, so the View can render the WO-675/676 currency chips instead of parsing a string.</summary>
-    public readonly struct CostChipLineVM
-    {
-        public readonly string CurrencyId;   // "wood" | "food" | "iron" | "crystal"
-        public readonly string Name;         // "Wood" / "Iron" ...
-        public readonly int Amount;
-
-        public CostChipLineVM(string currencyId, string name, int amount)
-        {
-            CurrencyId = currencyId ?? "";
-            Name = name ?? "";
-            Amount = amount;
         }
     }
 
@@ -78,14 +63,14 @@ namespace DeNelle.Village.Items
         public readonly int ReqLevel;           // def.req.level or 0
         public readonly string Flavor;          // def.flavor (fallback def.saga) or ""
         public readonly IReadOnlyList<BestowLineVM> Bestows;    // every non-zero bonus field
-        public readonly IReadOnlyList<CostChipLineVM> CostChips; // structured wallet cost
+        public readonly IReadOnlyList<CostPart> CostChips; // structured wallet cost
 
         public JewelerRecipeVM(string recipeId, string outputId, string displayName, string outputName,
                                string outputIconPath, IReadOnlyList<CraftIngredientVM> ingredients,
                                string costLabel, bool canCraft,
                                string rarity, int reqLevel, string flavor,
                                IReadOnlyList<BestowLineVM> bestows,
-                               IReadOnlyList<CostChipLineVM> costChips)
+                               IReadOnlyList<CostPart> costChips)
         {
             RecipeId = recipeId;
             OutputId = outputId;
@@ -99,7 +84,7 @@ namespace DeNelle.Village.Items
             ReqLevel = reqLevel;
             Flavor = flavor ?? "";
             Bestows = bestows ?? Array.Empty<BestowLineVM>();
-            CostChips = costChips ?? Array.Empty<CostChipLineVM>();
+            CostChips = costChips ?? Array.Empty<CostPart>();
         }
     }
 
@@ -304,27 +289,18 @@ namespace DeNelle.Village.Items
 
         /// <summary>WO-693: the wallet cost as structured data (currency key + name + amount)
         /// so the View renders the WO-675/676 currency chips. Empty when free.</summary>
-        private static IReadOnlyList<CostChipLineVM> BuildCostChips(JewelerRecipeCost cost)
+        private static IReadOnlyList<CostPart> BuildCostChips(JewelerRecipeCost cost)
         {
-            if (cost == null) return Array.Empty<CostChipLineVM>();
-            var chips = new List<CostChipLineVM>();
-            if (cost.Wood > 0)     chips.Add(new CostChipLineVM("wood", "Wood", cost.Wood));
-            if (cost.Food > 0)     chips.Add(new CostChipLineVM("food", "Food", cost.Food));
-            if (cost.Iron > 0)     chips.Add(new CostChipLineVM("iron", "Iron", cost.Iron));
-            if (cost.Crystals > 0) chips.Add(new CostChipLineVM("crystal", "Crystals", cost.Crystals));
-            return chips;
+            if (cost == null) return Array.Empty<CostPart>();
+            return CostFormat.Parts(new[] { ("wood", "Wood", cost.Wood), ("stone", "Stone", cost.Food), ("iron", "Iron", cost.Iron), ("crystal", "Crystals", cost.Crystals) });
         }
 
         /// <summary>"Iron 60, Crystals 10" — only the non-zero wallet costs; "" when free.</summary>
         private static string CostLabel(JewelerRecipeCost cost)
         {
             if (cost == null) return "";
-            var parts = new List<string>();
-            if (cost.Wood > 0)     parts.Add("Wood " + cost.Wood);
-            if (cost.Food > 0)     parts.Add("Food " + cost.Food);
-            if (cost.Iron > 0)     parts.Add("Iron " + cost.Iron);
-            if (cost.Crystals > 0) parts.Add("Crystals " + cost.Crystals);
-            return parts.Count == 0 ? "" : string.Join(", ", parts);
+            var parts = DeNelle.Core.UI.CostFormat.Parts(new[] { ("wood", "Wood", cost.Wood), ("stone", "Stone", cost.Food), ("iron", "Iron", cost.Iron), ("crystal", "Crystals", cost.Crystals) });
+            return DeNelle.Core.UI.CostFormat.Words(parts);
         }
 
         private void Raise() { if (!_disposed) Changed?.Invoke(); }

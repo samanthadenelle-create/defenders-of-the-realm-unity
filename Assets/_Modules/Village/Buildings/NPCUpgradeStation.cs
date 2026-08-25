@@ -188,12 +188,8 @@ namespace DeNelle.Village
 
         private string CostString(ResourceCost c)
         {
-            var parts = new System.Collections.Generic.List<string>();
-            if (c.Wood > 0) parts.Add($"{c.Wood} Wood");
-            if (c.Food > 0) parts.Add($"{c.Food} Food");
-            if (c.Iron > 0) parts.Add($"{c.Iron} Iron");
-            if (c.Crystals > 0) parts.Add($"{c.Crystals} Crystals");
-            return parts.Count > 0 ? string.Join(", ", parts) : "Free";
+            var parts = DeNelle.Core.UI.CostFormat.Parts(new[] { ("wood", "Wood", c.Wood), ("stone", "Stone", c.Food), ("iron", "Iron", c.Iron), ("crystal", "Crystals", c.Crystals) });
+            return parts.Count > 0 ? DeNelle.Core.UI.CostFormat.Words(parts) : "Free";
         }
 
         private void TryUpgrade()

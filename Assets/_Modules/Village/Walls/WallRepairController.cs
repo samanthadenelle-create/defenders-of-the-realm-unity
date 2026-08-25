@@ -726,16 +726,12 @@ namespace DeNelle.Village
             // WO-697: currency amounts render through the ONE kit formatter
             // (ElarionUi.CompactNumber — verbatim below 10k, "98.6k"/"1.2m" above),
             // so a six-digit rebuild price can never clip a banner/prompt line.
-            var parts = new List<string>(3);
-            if (c.wood > 0) parts.Add(DeNelle.Core.UI.ElarionUi.CompactNumber(c.wood) + " wood");
-            if (c.iron > 0) parts.Add(DeNelle.Core.UI.ElarionUi.CompactNumber(c.iron) + " iron");
-            if (c.food > 0) parts.Add(DeNelle.Core.UI.ElarionUi.CompactNumber(c.food) + " stone");
+            var parts = DeNelle.Core.UI.CostFormat.Parts(new[] { ("wood", "Wood", c.wood), ("iron", "Iron", c.iron), ("stone", "Stone", c.food), ("crystal", "Crystals", c.crystals) });
             // ⚠ Crystals MUST be listed for the same reason MaterialsZero must count them:
             // without this line a crystals-only cost renders as "nothing" in the player's own
             // prompt WHILE BEING CHARGED. A price the UI calls nothing is worse than a wrong
             // price — the player cannot even dispute it. (PROD-014, owner ruling 2026-08-24.)
-            if (c.crystals > 0) parts.Add(DeNelle.Core.UI.ElarionUi.CompactNumber(c.crystals) + " crystals");
-            return parts.Count > 0 ? string.Join(", ", parts) : "nothing";
+            return parts.Count > 0 ? DeNelle.Core.UI.CostFormat.Words(parts) : "nothing";
         }
 
         // =====================================================================

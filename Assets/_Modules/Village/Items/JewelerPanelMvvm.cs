@@ -245,7 +245,7 @@ namespace DeNelle.Village.Items
             var cost = recipe.CostChips;
             for (int i = 0; i < cost.Count; i++)
                 chips.Add(new ElarionUiKit.DetailCardChip(
-                    "currency_" + cost[i].CurrencyId, cost[i].Name, cost[i].Amount));
+                    cost[i].ConceptId, cost[i].Word, cost[i].Amount));
 
             ElarionUiKit.BuildParchmentDetailCard(_detailHost, new ElarionUiKit.DetailCardSpec
             {

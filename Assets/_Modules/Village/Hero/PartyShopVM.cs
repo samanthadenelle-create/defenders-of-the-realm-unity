@@ -1643,13 +1643,8 @@ namespace DeNelle.Village.Hero
         private static string CostString(ResourceCost c)
         {
             // WO-697: cost numbers through the ONE kit formatter (compact >= 10k).
-            var parts = new List<string>();
-            if (c.Coins > 0) parts.Add(DeNelle.Core.UI.ElarionUi.CompactNumber(c.Coins) + " Gold");
-            if (c.Wood > 0) parts.Add(DeNelle.Core.UI.ElarionUi.CompactNumber(c.Wood) + "W");
-            if (c.Iron > 0) parts.Add(DeNelle.Core.UI.ElarionUi.CompactNumber(c.Iron) + "I");
-            if (c.Food > 0) parts.Add(DeNelle.Core.UI.ElarionUi.CompactNumber(c.Food) + "F");
-            if (c.Crystals > 0) parts.Add(DeNelle.Core.UI.ElarionUi.CompactNumber(c.Crystals) + "C");
-            return parts.Count == 0 ? "Free" : string.Join(" ", parts);
+            var parts = DeNelle.Core.UI.CostFormat.Parts(new[] { ("gold", "Gold", c.Coins), ("wood", "Wood", c.Wood), ("iron", "Iron", c.Iron), ("stone", "Stone", c.Food), ("crystal", "Crystals", c.Crystals) });
+            return parts.Count == 0 ? "Free" : DeNelle.Core.UI.CostFormat.Words(parts);
         }
 
         // ?12 INSTRUMENT helper: dump EVERY field of a ResourceCost (not just non-zero like CostString),

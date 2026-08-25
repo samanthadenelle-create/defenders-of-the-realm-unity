@@ -77,13 +77,13 @@ namespace DeNelle.Core.UI
         /// FallbackName renders as text when the currency art is absent.</summary>
         public readonly struct DetailCardChip
         {
-            public readonly string CurrencySprite;  // e.g. "currency_iron" (RpgUi/currency role)
+            public readonly string ConceptId;
             public readonly string FallbackName;    // e.g. "Iron" — text cue when art absent
             public readonly int Amount;
 
-            public DetailCardChip(string currencySprite, string fallbackName, int amount)
+            public DetailCardChip(string conceptId, string fallbackName, int amount)
             {
-                CurrencySprite = currencySprite ?? "";
+                ConceptId = conceptId ?? "";
                 FallbackName = fallbackName ?? "";
                 Amount = amount;
             }
@@ -345,8 +345,8 @@ namespace DeNelle.Core.UI
                 for (int i = 0; i < spec.CostChips.Count; i++)
                 {
                     var chip = spec.CostChips[i];
-                    var sprite = string.IsNullOrEmpty(chip.CurrencySprite)
-                        ? null : RpgUiCatalog.Get("currency", chip.CurrencySprite);
+                    var sprite = string.IsNullOrEmpty(chip.ConceptId)
+                        ? null : UiStyle.Icon(chip.ConceptId);
 
                     if (sprite != null)
                     {

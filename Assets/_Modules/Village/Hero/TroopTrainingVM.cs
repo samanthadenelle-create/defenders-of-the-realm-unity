@@ -463,9 +463,8 @@ namespace DeNelle.Village.Hero
         private static string CostString(TroopDef def)
         {
             if (def == null) return "Free";
-            var parts = new List<string>();
-            if (def.CostGold > 0) parts.Add(def.CostGold + " Gold");
-            return parts.Count == 0 ? "Free" : string.Join(" ", parts);
+            var parts = DeNelle.Core.UI.CostFormat.Parts(new[] { ("gold", "Gold", def.CostGold) });
+            return parts.Count == 0 ? "Free" : DeNelle.Core.UI.CostFormat.Words(parts);
         }
 
         private static int RoundToInt(float f) => (int)Math.Floor(f + 0.5f);

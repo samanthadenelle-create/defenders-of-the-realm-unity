@@ -383,7 +383,7 @@ almost always an IMPORT / CONVENTION / MATERIAL fault — not a mesh fault and n
   **SYMPTOM:** UI text renders as `□□□` on device; or two states are genuinely indistinguishable.
   **CAUSE:** a non-ASCII glyph missing from the TMP atlas; and **the owner is red/green colourblind**, so
   an affordable-vs-unaffordable TINT carries zero information. **FIX:** keep TMP strings ASCII, and give
-  every state a **word + shape**, never a colour alone (e.g. `NEED 80W 30I`). → `KEY_FACTS.md` · CLAUDE.md §7
+  every state a **word + shape**, never a colour alone (e.g. `NEED` + wood icon `80` + iron icon `30`). → `KEY_FACTS.md` · CLAUDE.md §7
 - **QR-5.12 · NEVER INFERENCE-FIX** — the meta-tip the other eleven keep proving. A plausible fix *feels*
   like progress and costs N blind cycles; instrumenting *feels* slow and costs one read. **If you cannot
   point at the data line, you have not earned the edit.** → CLAUDE.md §12 · rules 44–48

@@ -1128,7 +1128,7 @@ namespace DeNelle.Village.Buildings.Progression
                 new Vector2(x0, 0.10f), new Vector2(x1, 0.90f), PillFill,
                 line.Short ? BorderDim : BorderGoldDim, line.Short ? 1.5f : 2f);
 
-            Sprite ic = CurrencyIconFor(line.Label);
+            Sprite ic = UiStyle.Icon(line.ConceptId);
             float textX0 = 0.04f;
             if (ic != null)
             {
@@ -1786,7 +1786,7 @@ namespace DeNelle.Village.Buildings.Progression
             }
             else
             {
-                string cost = _vm != null ? _vm.CostFor(item.Id) : "";
+                var cost = _vm != null ? _vm.CostPartsFor(item.Id) : System.Array.Empty<CostPart>();
                 BuildCostChips(row.transform, cost, 0.50f, 0.795f);
                 BuildRowCta(row.transform, "Research", item.Affordable,
                     () => { FlowTrace.Step("UpgradeUI", "research " + id); _vm?.Select(id); });
@@ -1795,17 +1795,9 @@ namespace DeNelle.Village.Buildings.Progression
 
         // ── Inline cost chips (icon + number) — colorblind-safe ───────────────────
 
-        private void BuildCostChips(Transform parent, string costText, float x0, float x1)
+        private void BuildCostChips(Transform parent, IReadOnlyList<CostPart> parts, float x0, float x1)
         {
-            if (string.IsNullOrEmpty(costText)) return;
-            var raw = costText.Split('·');   // VM joins cost parts with U+00B7 middle-dot
-            var tokens = new List<string>();
-            foreach (var r in raw)
-            {
-                string t = r.Trim();
-                if (t.Length > 0) tokens.Add(t);
-            }
-            int n = tokens.Count;
+            int n = parts != null ? parts.Count : 0;
             if (n == 0) return;
 
             const float gap = 0.02f;
@@ -1815,16 +1807,16 @@ namespace DeNelle.Village.Buildings.Progression
             for (int i = 0; i < n; i++)
             {
                 float cx0 = x0 + i * (cw + gap);
-                BuildCostChip(parent, tokens[i], cx0, cx0 + cw);
+                BuildCostChip(parent, parts[i], cx0, cx0 + cw);
             }
         }
 
-        private void BuildCostChip(Transform parent, string token, float x0, float x1)
+        private void BuildCostChip(Transform parent, CostPart part, float x0, float x1)
         {
             RectTransform chip = RoundedCard(parent, "CostChip",
                 new Vector2(x0, 0.28f), new Vector2(x1, 0.72f), PillFill, BorderDim, 1.5f);
 
-            Sprite ic = CurrencyIconFor(token);
+            Sprite ic = UiStyle.Icon(part.ConceptId);
             float textX0 = 0.10f;
             if (ic != null)
             {
@@ -1838,7 +1830,9 @@ namespace DeNelle.Village.Buildings.Progression
                 textX0 = 0.44f;
             }
 
-            string shown = ic != null ? LeadingNumber(token) : token;
+            if (ic == null) FlowTrace.Once("CostFormat", "no-icon-" + part.ConceptId,
+                "no icon for concept=" + part.ConceptId + "; using full-word fallback");
+            string shown = ic != null ? part.AmountText : part.Word + " " + part.AmountText;
             var lbl = ElarionUiKit.Label(chip, shown, 0f, 1f,
                 ElarionUi.Parchment, ElarionUi.FontLabel,
                 ic != null ? TMPro.TextAlignmentOptions.MidlineLeft : TMPro.TextAlignmentOptions.Center,
@@ -1897,32 +1891,6 @@ namespace DeNelle.Village.Buildings.Progression
             int dash = id != null ? id.LastIndexOf('-') : -1;
             if (dash >= 0 && dash < id.Length - 1 && int.TryParse(id.Substring(dash + 1), out int n)) return n;
             return 1;
-        }
-
-        private static string LeadingNumber(string token)
-        {
-            if (string.IsNullOrEmpty(token)) return token;
-            int sp = token.IndexOf(' ');
-            return sp > 0 ? token.Substring(0, sp) : token;
-        }
-
-        private static Sprite CurrencyIconFor(string costText)
-        {
-            if (string.IsNullOrEmpty(costText)) return null;
-            string c = costText.ToLowerInvariant();
-            string name = null;
-            int best = int.MaxValue;
-            void Consider(string kw, string spriteName)
-            {
-                int i = c.IndexOf(kw, System.StringComparison.Ordinal);
-                if (i >= 0 && i < best) { best = i; name = spriteName; }
-            }
-            Consider("wood", "currency_wood");
-            Consider("food", "currency_food");
-            Consider("iron", "currency_iron");
-            Consider("crystal", "currency_crystal");
-            Consider("gold", "currency_gold");
-            return name != null ? RpgUiCatalog.Get(CurrencyRole, name) : null;
         }
 
         private static void DressRowPlate(Image plateImg)

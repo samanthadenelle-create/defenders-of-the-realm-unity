@@ -402,13 +402,8 @@ namespace DeNelle.Village.Hero
 
         private static string CostStr(ResourceCost c)
         {
-            var parts = new List<string>();
-            if (c.Wood > 0) parts.Add(c.Wood + "W");
-            if (c.Iron > 0) parts.Add(c.Iron + "I");
-            if (c.Food > 0) parts.Add(c.Food + "F");
-            if (c.Crystals > 0) parts.Add(c.Crystals + "C");
-            if (c.Coins > 0) parts.Add(c.Coins + "G");
-            return parts.Count == 0 ? "Free" : string.Join(" ", parts);
+            var parts = DeNelle.Core.UI.CostFormat.Parts(new[] { ("wood", "Wood", c.Wood), ("iron", "Iron", c.Iron), ("stone", "Stone", c.Food), ("crystal", "Crystals", c.Crystals), ("gold", "Gold", c.Coins) });
+            return parts.Count == 0 ? "Free" : DeNelle.Core.UI.CostFormat.Words(parts);
         }
 
         private static string TimeStr(float seconds)

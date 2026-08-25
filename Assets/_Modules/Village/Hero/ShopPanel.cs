@@ -787,8 +787,8 @@ namespace DeNelle.Village.Hero
         // shop rows; Free when 0). Matches the old CostString output for a coins-only cost.
         private static string PriceString(ItemVM item)
         {
-            // WO-697: price through the ONE kit formatter (compact >= 10k).
-            return item.Price > 0 ? ElarionUi.CompactNumber(item.Price) + " Gold" : "Free";
+            var parts = CostFormat.Parts(new[] { ("gold", "Gold", item.Price) });
+            return parts.Count > 0 ? CostFormat.Words(parts) : "Free";
         }
 
         private void CreateLabel(Transform parent, string txt, float y)

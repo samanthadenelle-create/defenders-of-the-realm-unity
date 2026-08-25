@@ -1425,19 +1425,17 @@ namespace DeNelle.Village
                 // state that matters while locked; the lock reason chip (below) carries the
                 // state in words. Never "FREE" (D20 holds here too -- freebie is forced off
                 // for locked cards at the VM).
-                string costText = locked ? CostLabel(cost)
-                    : freebie ? string.Empty
-                    : (affordable ? CostLabel(cost) : "NEED " + CostLabel(cost));
+                var costParts = CostParts(cost);
+                string costText = (locked || !freebie) ? CostFormat.Words(costParts) : string.Empty;
                 // An EMPTY price slot is built as nothing at all, not as an empty label — a
                 // zero-width TMP object in the band is invisible but still a layout participant,
                 // and "shows nothing" should mean nothing is there.
                 if (!string.IsNullOrEmpty(costText))
                 {
-                    var costLabel = MakeText(cardGo.transform, costText, 13,
-                        locked ? ElarionUi.Parchment
-                               : (affordable ? ElarionUi.Affordable : ElarionUi.Danger), FontStyles.Bold,
-                        TextAlignmentOptions.Center, new Vector2(0.06f, 0.03f), new Vector2(0.94f, 0.24f));
-                    costLabel.raycastTarget = false;
+                    ElarionUiKit.CostRow(cardGo.transform, costParts,
+                        new Vector2(0.06f, 0.03f), new Vector2(0.94f, 0.24f),
+                        locked ? ElarionUi.Parchment : (affordable ? ElarionUi.Affordable : ElarionUi.Danger),
+                        !locked && !affordable ? "NEED" : null);
                 }
             }
 
@@ -1620,21 +1618,20 @@ namespace DeNelle.Village
         // ── Cost string formatting (pure presentation; cost/affordability live in the VM) ──
 
         /// <summary>Compact per-resource cost string for the card (skips zero slots; ASCII only).</summary>
-        private static string CostLabel(DeNelle.Core.Catalog.ResourceCost c)
+        private static IReadOnlyList<CostPart> CostParts(DeNelle.Core.Catalog.ResourceCost c)
         {
             // WO-1010 D20: a zero cost prints NOTHING, not "Free". The freebie branch in
             // BuildCard already short-circuits, but a genuinely zero-priced catalog row would
             // otherwise sneak the retired word back onto a card through this formatter — which
             // is exactly how a removed label comes back six months later.
-            if (c.IsZero) return string.Empty;
-            // WO-697: cost numbers through the ONE kit formatter (compact >= 10k).
-            var parts = new List<string>(4);
-            if (c.wood     > 0) parts.Add(ElarionUi.CompactNumber(c.wood)     + "W");
-            if (c.food     > 0) parts.Add(ElarionUi.CompactNumber(c.food)     + "F");
-            if (c.iron     > 0) parts.Add(ElarionUi.CompactNumber(c.iron)     + "I");
-            if (c.crystals > 0) parts.Add(ElarionUi.CompactNumber(c.crystals) + "C");
-            return string.Join("  ", parts);
+            return CostFormat.Parts(new[]
+            {
+                ("wood", "Wood", c.wood), ("stone", "Stone", c.food),
+                ("iron", "Iron", c.iron), ("crystal", "Crystals", c.crystals)
+            });
         }
+
+        private static string CostLabel(DeNelle.Core.Catalog.ResourceCost c) => CostFormat.Words(CostParts(c));
 
         private void UpdateBalance()
         {

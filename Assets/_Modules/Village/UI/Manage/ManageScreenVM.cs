@@ -1398,12 +1398,8 @@ namespace DeNelle.Village.UI
         /// <summary>ASCII cost summary ("400 wood, 200 food"); "free" when nothing is charged.</summary>
         public static string DescribeCost(CoreCost c)
         {
-            var sb = new System.Text.StringBuilder();
-            if (c.wood > 0) sb.Append(c.wood).Append(" wood");
-            if (c.food > 0) { if (sb.Length > 0) sb.Append(", "); sb.Append(c.food).Append(" stone"); }
-            if (c.iron > 0) { if (sb.Length > 0) sb.Append(", "); sb.Append(c.iron).Append(" iron"); }
-            if (c.crystals > 0) { if (sb.Length > 0) sb.Append(", "); sb.Append(c.crystals).Append(" crystals"); }
-            return sb.Length > 0 ? sb.ToString() : "free";
+            var parts = DeNelle.Core.UI.CostFormat.Parts(new[] { ("wood", "Wood", c.wood), ("stone", "Stone", c.food), ("iron", "Iron", c.iron), ("crystal", "Crystals", c.crystals) });
+            return parts.Count > 0 ? DeNelle.Core.UI.CostFormat.Words(parts) : "free";
         }
 
         private void AddGoldBrowseRow(string label, CoreCost materials, int gold, string actionText, Action activate)

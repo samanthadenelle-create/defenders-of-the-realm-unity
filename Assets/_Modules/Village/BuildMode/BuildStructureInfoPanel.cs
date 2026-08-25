@@ -61,13 +61,13 @@ namespace DeNelle.Village
         private Label _tierBadge;
         private Label _descLabel;
         private Label _targetingLabel;   // "Land only" / "Land + Air" / "Air only" (towers)
-        private Label _costLabel;
+        private VisualElement _costLabel;
         private Label _footprintLabel;
         private VisualElement _statsBox;
         private VisualElement _nextTierBox;
         private Label _nextTierTitle;
         private Label _nextTierStats;
-        private Label _nextTierCost;
+        private VisualElement _nextTierCost;
 
         private void Awake()
         {
@@ -194,7 +194,7 @@ namespace DeNelle.Village
             _panel.Add(_targetingLabel);
 
             // Cost.
-            _costLabel = MakeKeyValue("Cost", "Free");
+            _costLabel = new VisualElement();
             _panel.Add(_costLabel);
 
             // Footprint.
@@ -229,9 +229,7 @@ namespace DeNelle.Village
             _nextTierStats.style.whiteSpace = WhiteSpace.Normal;
             _nextTierBox.Add(_nextTierStats);
 
-            _nextTierCost = new Label();
-            _nextTierCost.style.color = ElarionUi.Affordable;
-            _nextTierCost.style.fontSize = ElarionUi.FontLabel;
+            _nextTierCost = new VisualElement();
             _nextTierCost.style.marginTop = 2;
             _nextTierBox.Add(_nextTierCost);
             _panel.Add(_nextTierBox);
@@ -304,7 +302,11 @@ namespace DeNelle.Village
             // First-build freebie (owner 2026-07-13): the info panel agrees with the
             // palette/validator/commit — a live freebie reads "FREE" (the WORD, never
             // color-alone; ASCII); after consumption it reverts to the normal cost.
-            SetKeyValue(_costLabel, "Cost", card.Freebie ? "FREE" : CostLabel(card.EffectiveCost));
+            _costLabel.Clear();
+            var currentCostParts = CostParts(card.EffectiveCost);
+            _costLabel.Add(card.Freebie ? new Label("Cost: FREE")
+                : currentCostParts.Count == 0 ? new Label("Cost: Free")
+                : CostRowElement.Build(currentCostParts, "Cost:"));
             SetKeyValue(_footprintLabel, "Footprint", card.FootprintLabel);
 
             RenderCurrentStats(card);
@@ -331,22 +333,22 @@ namespace DeNelle.Village
             _nextTierBox.style.display = DisplayStyle.Flex;
             _nextTierTitle.text = card.NextTierTitle;
             _nextTierStats.text = card.NextTierStats;
-            _nextTierCost.text = "Cost: " + CostLabel(card.NextTierCost);
+            var nextCostParts = CostParts(card.NextTierCost);
+            _nextTierCost.Clear();
+            _nextTierCost.Add(nextCostParts.Count == 0 ? new Label("Cost: Free") : CostRowElement.Build(nextCostParts, "Cost:"));
         }
 
         // ── Cost string formatting (pure presentation; the math lives in the VM) ──────
 
         /// <summary>Compact multi-resource cost string (skips zero slots). The info-panel format
         /// (crystals as "*N"); mirrors the pre-MVVM view verbatim.</summary>
-        private static string CostLabel(DeNelle.Core.Catalog.ResourceCost c)
+        private static IReadOnlyList<CostPart> CostParts(DeNelle.Core.Catalog.ResourceCost c)
         {
-            if (c.IsZero) return "Free";
-            var parts = new List<string>(4);
-            if (c.wood     > 0) parts.Add(c.wood     + "W");
-            if (c.food     > 0) parts.Add(c.food     + "F");
-            if (c.iron     > 0) parts.Add(c.iron     + "I");
-            if (c.crystals > 0) parts.Add("*" + c.crystals);
-            return string.Join("  ", parts);
+            return CostFormat.Parts(new[]
+            {
+                ("wood", "Wood", c.wood), ("stone", "Stone", c.food),
+                ("iron", "Iron", c.iron), ("crystal", "Crystals", c.crystals)
+            });
         }
 
         // ── Small key/value row helper ───────────────────────────────────────────
