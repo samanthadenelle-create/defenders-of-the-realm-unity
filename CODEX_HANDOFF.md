@@ -1,3 +1,34 @@
+# ⛔⛔ LIVE PIN FOR WO-1163 — READ BEFORE TOUCHING A FOOD SKU (2026-08-24)
+
+**WO-1163 reaches into the file batch 1 is editing this minute, and its ticket never says so.**
+
+WO-1163 §: *"FOOD IS MONETIZED — three food-only SKUs are on sale (`packs.json:686/713/741`) …
+**Those SKUs MUST map to stone**."* ⚠ Those three SKUs are
+**`impulse-food-small/medium/large`, and they live at `api/_lib/purchase-catalog.js:103-105`** —
+inside the `USD_ANCHORS` block that **WO-1177 rewrites wholesale (`:83-114`)** and **WO-1069 already
+edited (`:84`)**.
+
+⛔ **And `purchase-catalog.js:64+` carries the MIRROR LAW:** the anchor table must equal the canonical
+client authoring **EXACTLY**, proven on every run by **`test/purchases.quote.test.js`** — the same
+test batch 1 disturbs. Its two client sources are `packs.json` **and** `battle_monthly.json`.
+
+⚠ **WO-1163 mentions `purchase-catalog.js` ZERO times** (grepped). So the collision is **invisible
+from the ticket**, and a seat obeying it either breaks the mirror test or edits batch 1's live file.
+
+## THE PIN — three lines
+
+1. ⛔ **Do NOT rename any SKU id.** SKU ids are **live purchase keys** — the same reason WO-1163
+   already freezes `collector_farm` and `silo`. Rename the **display**, never the id.
+2. ⛔ **Do NOT touch `api/_lib/purchase-catalog.js` or `test/purchases.quote.test.js`** in WO-1163.
+3. ⭐ **The food→stone SKU remap is a FOLLOW-UP, sequenced after batch 1 returns.** WO-1163 ships the
+   catalog/display half now; the monetized-SKU half waits for the anchor table to stop moving.
+
+⚠ **Batch 5 waits on batch 4 as well as batch 1.** `packs.json` now has **seven claimants** across
+three batches — WO-1163, WO-1164, WO-1071, WO-1070, WO-1073, WO-1072, WO-1176. **One seat, one
+queue.**
+
+---
+
 # ⭐⭐ NEXT UP — read this before starting anything (owner directive, 2026-08-24)
 
 > *"hold six, put codex on batch 1"*
