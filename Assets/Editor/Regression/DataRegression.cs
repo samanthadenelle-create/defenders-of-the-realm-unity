@@ -1188,6 +1188,7 @@ namespace DeNelle.Editor
             //     resolve on top of its neighbour - the contents-block-over-price-lane defect was
             //     three legal literals summing to a card that overdrew itself.
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "night-market-runtime-layout suite", () => { if (!DeNelle.Editor.Regression.NightMarketRuntimeLayoutRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[night-market-runtime-layout] " + r); });
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "cost-format-source suite", () => { if (!DeNelle.Editor.Regression.CostFormatSourceRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[cost-format-source] " + r); });
             // --- WO-1149 (owner, on device 2026-08-22: "we need to stop game during transactions got
             //     killed while making purchase test"): a transaction freezes the world through the
             //     single WorldHold owner, and EVERY exit unfreezes it. The suite measures the clock
@@ -3732,12 +3733,14 @@ namespace DeNelle.Editor
 
         private static string CostStr(DeNelle.Village.ResourceCost c)
         {
-            var parts = new List<string>();
-            if (c.Wood > 0) parts.Add(c.Wood + "W");
-            if (c.Iron > 0) parts.Add(c.Iron + "I");
-            if (c.Food > 0) parts.Add(c.Food + "F");
-            if (c.Crystals > 0) parts.Add(c.Crystals + "C");
-            return parts.Count == 0 ? "Free" : string.Join("+", parts);
+            var parts = DeNelle.Core.UI.CostFormat.Parts(new[]
+            {
+                ("wood", "Wood", c.Wood),
+                ("iron", "Iron", c.Iron),
+                ("stone", "Stone", c.Food),
+                ("crystal", "Crystals", c.Crystals),
+            });
+            return parts.Count == 0 ? "Free" : DeNelle.Core.UI.CostFormat.Words(parts);
         }
     }
 }
