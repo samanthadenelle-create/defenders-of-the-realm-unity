@@ -89,6 +89,63 @@
 
 ---
 
+## 📤 LEAD RESPONSE to `batch_results_state.md` (2026-08-24) - R1-R4 answered
+
+⭐ **The refusal was CORRECT on all four, and it is accepted.** ⛔ Nothing from either worktree will be
+committed as-is. Below is the missing context and the one ruling it asked for.
+
+### R1 + R2 - ⭐ **you are right, and here is WHY the diffs look stale: THE LEAD ALREADY HARVESTED THEM**
+
+Both lanes are dirty with work that is **already committed in the shared tree**, because the lead
+copied it out **by explicit path** and committed it:
+- `eoa-codex-batch4`'s four files = **WO-1069**, landed as **`6bb61a810`**.
+- `eoa-codex-ready`'s Village/Siege files = **WO-1184**, landed as **`4f0a6cb05`**; its
+  `tools/board_build.py` = **WO-1180 + WO-1181**, landed as **`eed0dbe94`**.
+
+⚠ **So those diffs are not wrong work - they are SPENT work**, and committing them again would
+duplicate landed changes and re-open the forbidden `purchase-catalog.js` edits inside the WO-1163 lane.
+⭐ **Your instinct to refuse was exactly right on the evidence you had**, and the harvest is what the
+evidence was missing. ⛔ **The lead should have told you the moment it harvested them** - a lane whose
+work has been taken out from under it cannot tell "already landed" from "wrong", and that is the lead's
+failure, not the lane's.
+
+**Accepted, both send-backs.** ⭐ **Recreate BOTH lanes clean from the current shared head**, correctly
+named, and ⛔ **preserve the old worktrees untouched until provenance is explicitly cleared** - your
+condition, and it is the right one.
+
+### R3 - ⭐ **RULED, and it is already recorded: WO-513 is NOT a prerequisite**
+
+⛔ **WO-513 is a COMPOSER, not a blocker.** WO-1179 is *what arrives, from where, and against how many
+gates*; WO-513 is *how a pack fights once it has arrived*. They compose - build 513 and 1179 inherits
+it - but 1179 does not need it to ship.
+
+⚠ **The "stated prerequisite" in that Ready audit is an OVER-READ of a nice-to-have line**, and the lead
+disputed it when the audit landed. A note to that effect is already in WO-1179's ticket; it clearly did
+not travel. ⭐ **Take path (a): WO-1179 may ship side partitioning without WO-513 behaviour**, with the
+limitation stated in the handback.
+
+### R4 - accepted, and the number moved
+
+⛔ `D:\eoa-codex-six` stays quarantined. ⚠ You measured **180 commits behind**; the lead measured 156
+earlier today. **It is drifting further with every commit** - which is the argument for provenance
+recovery being scheduled rather than deferred indefinitely. ⛔ Still: no rebase, no cleanup, no commit,
+no deletion from a work lane.
+
+### ⚠ One correction to your own file, offered not imposed
+
+Line 15 says WO-1069's suite reported **26/26**. ⭐ The lead's own run of both files reported **39/39**
+(quote + verify together); 26 is the quote suite alone. Not a defect - just two different scopes, worth
+reconciling so a later reader does not think a suite shrank.
+
+### Rework priority - accepted as written
+
+1. Clean **Batch 1** lane → WO-1177 (⛔ **migration first**), then WO-1178.
+2. Clean **Batch 4** lane → WO-1163's allowed slice, WO-917 Phase B, **and WO-1179 core** (R3 now ruled).
+3. **WO-1184 is already committed** - ⛔ do not route it again.
+4. **Batch 5 stays held.**
+
+---
+
 ## ⛔ WHEN WORK COMES BACK — the lead CONFIRMS, then ANNOTATES or COMMITS. The lead does NOT FIX.
 
 **Owner ruling 2026-08-24.** Three outcomes on a handback, and only three:
