@@ -61,16 +61,23 @@ console.log('[repair] migration : ' + MIGRATION);
 console.log('[repair] statements: additive only (0 DROP/DELETE/TRUNCATE) - verified just now, not assumed');
 console.log('[repair] applying...\n');
 
-const { neon } = await import('@neondatabase/serverless');
-const db = neon(url);
+// ⛔ NOT `neon()`. That is the HTTP one-shot driver: it returns a tagged-template
+// function with no .query(), and it CANNOT run a multi-statement transaction -
+// this migration carries its own BEGIN/COMMIT and must arrive as one unit.
+// `Client` speaks the real wire protocol over a WebSocket and honours it.
+const { Client } = await import('@neondatabase/serverless');
+const client = new Client(url);
 
 try {
-  // The file carries its own BEGIN/COMMIT, so hand it over whole.
-  await db.query(sql);
+  await client.connect();
+  // Simple-query protocol: the whole file, BEGIN/COMMIT included, as one send.
+  await client.query(sql);
   console.log('[repair] migration executed without error.');
 } catch (e) {
+  await client.end().catch(() => {});
   die('the migration threw and NOTHING was committed (it is transactional):\n  ' + e.message);
 }
+await client.end().catch(() => {});
 
 console.log('\n[repair] ---------------------------------------------------------');
 console.log('[repair] THE MIGRATION RUNNING IS NOT THE PROOF. Running the shape query.');
