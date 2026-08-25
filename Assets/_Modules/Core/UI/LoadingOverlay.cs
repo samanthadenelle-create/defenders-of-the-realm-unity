@@ -24,6 +24,7 @@ using UnityEngine;
 using UnityEngine.UI;
 using UnityEngine.SceneManagement;
 using DeNelle.Core.Diagnostics;
+using System.Collections;
 
 namespace DeNelle.Core.UI
 {
@@ -55,6 +56,10 @@ namespace DeNelle.Core.UI
 
         private CanvasGroup _group;
         private RectTransform _barFill;   // the animated fill of the standard loading bar
+        private TMPro.TextMeshProUGUI _messageLabel;
+        private Button _retryButton;
+        private bool _connectionRequired;
+        private bool _retrying;
         private float _barT;              // 0..1 sweep progress (indeterminate)
 
         private float _shownAt;          // unscaled time the overlay was shown
@@ -86,13 +91,62 @@ namespace DeNelle.Core.UI
             SceneManager.sceneLoaded += ui.OnSceneLoaded;
         }
 
+        /// <summary>
+        /// Blocks a disconnected first run whose content is not cached for this build.
+        /// Retry re-enters <see cref="OfflineContentService.ResolveContentSource"/>;
+        /// this overlay never guesses whether content is usable.
+        /// </summary>
+        public static void ShowConnectionRequired(string message, string retryLabel)
+        {
+            if (s_active != null)
+            {
+                s_active.EnterConnectionRequired(message, retryLabel);
+                return;
+            }
+
+            var go = new GameObject("FirstRunConnectionRequired");
+            var ui = go.AddComponent<LoadingOverlay>();
+            ui._connectionRequired = true;
+            ui.Build(message, retryLabel);
+            Object.DontDestroyOnLoad(go);
+            s_active = ui;
+            FlowTrace.Warn("LoadingOverlay", "first-run content unavailable - persistent connection screen shown");
+        }
+
+        private void EnterConnectionRequired(string message, string retryLabel)
+        {
+            _connectionRequired = true;
+            _dismissing = false;
+            ApplyConnectionBarrierState(_group);
+            SceneManager.sceneLoaded -= OnSceneLoaded;
+            if (_messageLabel != null) _messageLabel.text = message;
+            if (_retryButton == null)
+            {
+                _retryButton = ElarionUiKit.Button(transform,
+                    string.IsNullOrWhiteSpace(retryLabel) ? "Retry" : retryLabel,
+                    ElarionUiKit.ButtonKind.Gold,
+                    new Vector2(0.30f, 0.56f), new Vector2(0.70f, 0.64f), OnRetryConnection);
+            }
+        }
+
+        // Kept as one operation because this method can convert an overlay that is already
+        // fading out. Restoring only blocksRaycasts leaves alpha at zero and the CanvasGroup
+        // non-interactable, producing a visible Retry button that can never receive a click.
+        private static void ApplyConnectionBarrierState(CanvasGroup group)
+        {
+            if (group == null) return;
+            group.alpha = 1f;
+            group.blocksRaycasts = true;
+            group.interactable = true;
+        }
+
         /// <summary>Dismiss the loading cover early (fades out, then destroys). No-op if none is up.</summary>
         public static void Hide()
         {
             if (s_active != null) s_active.BeginDismiss();
         }
 
-        private void Build(string message)
+        private void Build(string message, string retryLabel = null)
         {
             // Own ScreenSpaceOverlay canvas, sorted just BELOW the modal band (31000) so it
             // covers all normal game UI during the load but is deliberately NOT a top-band
@@ -116,7 +170,7 @@ namespace DeNelle.Core.UI
 
             _group = gameObject.AddComponent<CanvasGroup>();
             _group.alpha = 1f;
-            _group.interactable = false;
+            _group.interactable = _connectionRequired;
             _group.blocksRaycasts = true;   // cover the load (no stray taps to whatever is behind)
 
             // Dark, near-opaque backdrop (raycast-blocking full cover).
@@ -127,7 +181,18 @@ namespace DeNelle.Core.UI
             var label = ElarionUiKit.Label(transform, message,
                 0.42f, 0.50f, ElarionUi.Parchment, ElarionUi.FontBody,
                 TMPro.TextAlignmentOptions.Center, 0.08f, 0.92f);
+            _messageLabel = label;
             if (label != null) label.raycastTarget = false;
+
+            if (_connectionRequired)
+            {
+                _retryButton = ElarionUiKit.Button(transform,
+                    string.IsNullOrWhiteSpace(retryLabel) ? "Retry" : retryLabel,
+                    ElarionUiKit.ButtonKind.Gold,
+                    new Vector2(0.30f, 0.56f), new Vector2(0.70f, 0.64f), OnRetryConnection);
+                _shownAt = Time.unscaledTime;
+                return;
+            }
 
             // Standard loading BAR (owner 2026-07-26 "can we do a standard loading bar"): a dark rounded
             // track with a gold fill that sweeps 0->100% and repeats — indeterminate, since the async scene
@@ -160,6 +225,8 @@ namespace DeNelle.Core.UI
 
         private void Update()
         {
+            if (_connectionRequired) return; // player-owned Retry; never timeout into a broken town
+
             // Animate the loading bar fill (unscaled so a paused game still animates it): sweep the
             // fill 0->100% then reset — an indeterminate "working" bar.
             if (_barFill != null)
@@ -192,6 +259,33 @@ namespace DeNelle.Core.UI
             bool settled = _sceneLoaded && (Time.unscaledTime - _sceneLoadedAt) >= SettleSeconds;
             if (settled && elapsed >= MinShowSeconds)
                 BeginDismiss();
+        }
+
+        private void OnRetryConnection()
+        {
+            if (_retrying) return;
+            _retrying = true;
+            if (_retryButton != null) _retryButton.interactable = false;
+            FlowTrace.Step("LoadingOverlay", "Retry -> resolving first-run content source again");
+            StartCoroutine(RetryConnection());
+        }
+
+        private IEnumerator RetryConnection()
+        {
+            ContentSource resolved = ContentSource.Unknown;
+            yield return OfflineContentService.ResolveContentSource(source => resolved = source);
+
+            _retrying = false;
+            if (resolved == ContentSource.Online || resolved == ContentSource.LocalCache)
+            {
+                FlowTrace.Step("LoadingOverlay", $"Retry recovered content source={resolved} -> dismissing");
+                _connectionRequired = false;
+                BeginDismiss();
+                yield break;
+            }
+
+            if (_retryButton != null) _retryButton.interactable = true;
+            FlowTrace.Warn("LoadingOverlay", $"Retry still unavailable (source={resolved}) - screen remains");
         }
 
         private void BeginDismiss()

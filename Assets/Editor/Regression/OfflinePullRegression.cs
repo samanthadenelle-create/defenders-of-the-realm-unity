@@ -64,10 +64,13 @@ using System.IO;
 using System.Text;
 using UnityEditor;
 using UnityEngine;
+using System.Reflection;
 using UnityEditor.AddressableAssets;
 using UnityEditor.AddressableAssets.Settings;
 using UnityEditor.AddressableAssets.Settings.GroupSchemas;
+using DeNelle.Core.UI;
 using DeNelle.Core;
+using Newtonsoft.Json.Linq;
 
 namespace DeNelle.Editor
 {
@@ -77,6 +80,9 @@ namespace DeNelle.Editor
         public const string MarkerFail = "OFFLINE_PULL_FAIL";
 
         private const string ServicePath = "Assets/_Modules/Core/Addressables/OfflineContentService.cs";
+        private const string OverlayPath = "Assets/_Modules/Core/UI/LoadingOverlay.cs";
+        private const string CanonResources = "Assets/Resources/Data/Canonical/canon-strings.json";
+        private const string CanonStreaming = "Assets/StreamingAssets/Data/Canonical/canon-strings.json";
 
         public static bool Run(out string reason)
         {
@@ -91,6 +97,7 @@ namespace DeNelle.Editor
             Group4_KeyPredicate(failures, log);
             Group5_RemoteGroupCoverage(failures, log);
             Group6_SourceLint(failures, log);
+            Group7_FirstRunConnectionRecovery(failures, log);
 
             // EXPLICIT, REACHABLE FAILURE EXIT. Every group above writes into `failures`, and
             // group 0 proves at runtime that a wrong answer really does land there — so this
@@ -103,7 +110,7 @@ namespace DeNelle.Editor
                 return false;
             }
 
-            log.AppendLine($"{MarkerOk} — 7/7 groups");
+            log.AppendLine($"{MarkerOk} — 8/8 groups");
             reason = log.ToString();
             return true;
         }
@@ -367,6 +374,92 @@ namespace DeNelle.Editor
                              "player must be MEASURED, never typed.");
 
             log.AppendLine("  [6] source lint: no WaitForCompletion, outcome assertion still present");
+        }
+
+        // -- 7 [PROD-012] disconnected first-run must stop and recover honestly ----
+        private static void Group7_FirstRunConnectionRecovery(List<string> failures, StringBuilder log)
+        {
+            string service = ReadCodeOnly(ServicePath, "[7]", failures);
+            string overlay = ReadCodeOnly(OverlayPath, "[7]", failures);
+            if (service != null)
+            {
+                if (!service.Contains("LoadingOverlay.ShowConnectionRequired"))
+                    failures.Add("[7] ContentSource.Unavailable no longer opens the first-run connection surface.");
+                if (!service.Contains("KeyFirstRunInternetRequired") || !service.Contains("KeyRetry"))
+                    failures.Add("[7] the service no longer resolves required/retry copy by canon key.");
+            }
+            if (overlay != null)
+            {
+                if (!overlay.Contains("OfflineContentService.ResolveContentSource"))
+                    failures.Add("[7] Retry no longer re-enters the one content-source authority.");
+                if (!overlay.Contains("ContentSource.Online || resolved == ContentSource.LocalCache"))
+                    failures.Add("[7] Retry can dismiss without a usable Online or LocalCache result.");
+                if (!overlay.Contains("_retryButton.interactable = true"))
+                    failures.Add("[7] a failed Retry cannot be tried again.");
+                if (!overlay.Contains("ApplyConnectionBarrierState(_group)"))
+                    failures.Add("[7] converting a dismissing overlay no longer restores the connection barrier atomically.");
+            }
+
+
+            // Behavioral containment proof: the actual helper used when converting an already
+            // dismissing overlay must restore visibility, input ownership, and the raycast wall
+            // together. The persistent full-screen Canvas then prevents town controls behind it
+            // from being reached while ContentSource is Unavailable.
+            var go = new GameObject("offline-connection-barrier-probe");
+            try
+            {
+                var group = go.AddComponent<CanvasGroup>();
+                group.alpha = 0f;
+                group.interactable = false;
+                group.blocksRaycasts = false;
+                var method = typeof(LoadingOverlay).GetMethod("ApplyConnectionBarrierState",
+                    BindingFlags.NonPublic | BindingFlags.Static);
+                if (method == null)
+                    failures.Add("[7] connection barrier state helper is missing.");
+                else
+                {
+                    method.Invoke(null, new object[] { group });
+                    if (group.alpha != 1f || !group.interactable || !group.blocksRaycasts)
+                        failures.Add($"[7] connection barrier restored alpha={group.alpha}, " +
+                                     $"interactable={group.interactable}, blocksRaycasts={group.blocksRaycasts}; " +
+                                     "Retry and town containment must be restored atomically.");
+                }
+            }
+            catch (Exception ex)
+            {
+                failures.Add("[7] connection barrier behavior probe threw: " + ex.Message);
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(go);
+            }
+
+            if (service != null && !service.Contains("if (!catalogUsable)"))
+                failures.Add("[7] radio reachability can still dismiss first-run containment without a usable catalog proof.");
+
+            try
+            {
+                string a = File.ReadAllText(CanonResources);
+                string b = File.ReadAllText(CanonStreaming);
+                if (!string.Equals(a, b, StringComparison.Ordinal))
+                    failures.Add("[7] canon-strings mirrors differ; first-run copy would depend on load path.");
+                var canon = JObject.Parse(a);
+                const string required = "An internet connection is required to finish setting up Elarion.";
+                string actual = canon.Value<string>("offlineFirstRunInternetRequired");
+                string retry = canon.Value<string>("offlineFirstRunRetry");
+                if (actual != required)
+                    failures.Add("[7] exact owner first-run sentence is absent or changed.");
+                if (retry != "Retry")
+                    failures.Add("[7] Retry label is absent or changed.");
+                foreach (char c in required + (retry ?? ""))
+                    if (c > 127) { failures.Add("[7] first-run copy is not ASCII-only."); break; }
+            }
+            catch (Exception ex)
+            {
+                failures.Add("[7] canon-strings parser failed: " + ex.Message);
+            }
+
+            log.AppendLine("  [7] disconnected first-run blocks honestly; Retry re-enters resolver; canon mirrors exact");
         }
 
         /// <summary>

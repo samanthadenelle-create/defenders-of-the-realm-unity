@@ -335,5 +335,7 @@
   "invPurseFlasks": "FLASKS",
   "_offlineOptInCopyNote": "WO-1128 section 3.4. The owner asked 'but then the save would only persist locally right?' and the offline opt-in screen did not answer it. These two lines answer it on the screen that offers the mode. ASCII only (TMP renders non-ASCII as tofu); no meaning by colour (the owner is red/green colourblind), so the consequence is WORDED, never tinted.",
   "offlineLocalSaveTitle": "While offline, your progress is saved on this device only.",
-  "offlineLocalSaveNote": "It uploads the next time you connect. Anything not uploaded yet is lost if this device is lost, wiped, or the game is reinstalled."
+  "offlineLocalSaveNote": "It uploads the next time you connect. Anything not uploaded yet is lost if this device is lost, wiped, or the game is reinstalled.",
+  "offlineFirstRunInternetRequired": "An internet connection is required to finish setting up Elarion.",
+  "offlineFirstRunRetry": "Retry"
 }

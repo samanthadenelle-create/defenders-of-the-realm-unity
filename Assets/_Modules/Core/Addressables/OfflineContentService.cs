@@ -113,6 +113,7 @@ using UnityEngine.AddressableAssets;
 using UnityEngine.AddressableAssets.ResourceLocators;
 using UnityEngine.ResourceManagement.AsyncOperations;
 using DeNelle.Core.Diagnostics;
+using DeNelle.Core.UI;
 
 namespace DeNelle.Core
 {
@@ -151,6 +152,8 @@ namespace DeNelle.Core
     public static class OfflineContentService
     {
         private const string Sys = "OfflineContent";
+        private const string KeyFirstRunInternetRequired = "offlineFirstRunInternetRequired";
+        private const string KeyRetry = "offlineFirstRunRetry";
 
         /// <summary>Player said yes to offline mode (persisted).</summary>
         private const string PrefOptedIn = "offline.optedin";
@@ -412,9 +415,13 @@ namespace DeNelle.Core
                     FlowTrace.Step(Sys, "no network -> LOCAL CACHE (full pull completed for this build; " +
                                         "catalog refresh deliberately SKIPPED so it cannot stall the launch)");
                 else
+                {
                     FlowTrace.Warn(Sys, "no network AND no completed pull for this build -> content UNAVAILABLE. " +
                                         "Buildings and enemies will not resolve; the player must be told plainly, " +
                                         "never left staring at an empty town (PROD-012).");
+                    LoadingOverlay.ShowConnectionRequired(
+                        HudStrings.Get(KeyFirstRunInternetRequired), HudStrings.Get(KeyRetry));
+                }
                 onDone?.Invoke(Source);
                 yield break;
             }
@@ -423,6 +430,7 @@ namespace DeNelle.Core
             // reachable radio is not a reachable CDN (captive portals, DNS, an R2 outage).
             AsyncOperationHandle<List<string>> check = default;
             bool started = false;
+            bool catalogUsable = false;
             try
             {
                 check = Addressables.CheckForCatalogUpdates(false);
@@ -451,9 +459,16 @@ namespace DeNelle.Core
                     if (updStarted)
                     {
                         while (!upd.IsDone) yield return null;
+                        catalogUsable = upd.Status == AsyncOperationStatus.Succeeded;
                         FlowTrace.Step(Sys, $"UpdateCatalogs {(upd.Status == AsyncOperationStatus.Succeeded ? "OK" : "FAILED - cached catalog kept")}");
                         Addressables.Release(upd);
                     }
+                }
+                else if (check.Status == AsyncOperationStatus.Succeeded)
+                {
+                    // A completed CDN/catalog probe with no update proves the shipped catalog
+                    // is current and usable. Radio reachability alone proves nothing.
+                    catalogUsable = true;
                 }
                 else if (check.Status != AsyncOperationStatus.Succeeded)
                 {
@@ -462,6 +477,24 @@ namespace DeNelle.Core
                 }
 
                 Addressables.Release(check);
+            }
+
+            if (!catalogUsable)
+            {
+                Source = PulledForThisBuild ? ContentSource.LocalCache : ContentSource.Unavailable;
+                if (Source == ContentSource.Unavailable)
+                {
+                    FlowTrace.Warn(Sys, "network is reachable but the content catalog could not be proven usable " +
+                                        "-> first-run content UNAVAILABLE (captive portal / DNS / CDN outage)");
+                    LoadingOverlay.ShowConnectionRequired(
+                        HudStrings.Get(KeyFirstRunInternetRequired), HudStrings.Get(KeyRetry));
+                }
+                else
+                {
+                    FlowTrace.Warn(Sys, "catalog probe failed -> using the verified per-build local cache");
+                }
+                onDone?.Invoke(Source);
+                yield break;
             }
 
             Source = ContentSource.Online;
