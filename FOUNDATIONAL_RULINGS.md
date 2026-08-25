@@ -372,6 +372,48 @@ lead, so no seat here can run it, verify it, or confirm it landed.
 
 ---
 
+## 10. EXPOSURE IS NOT WHAT THE REPO SAYS IT IS. Ask before you price the risk.
+
+> **Owner, 2026-08-25 (and 2026-08-24 before it):** the published dApp Store listing does not carry
+> this work. **The only person exposed is her, testing her own build.**
+
+STOP **THIS IS THE SECOND TIME THE LEAD OVERSTATED EXPOSURE IN TWO DAYS, AND THE SECOND TIME IT
+CHANGED THE ADVICE GIVEN.** Section 1 already records the first: *"I over-stated the exposure and it
+changed how I framed several decisions."* The lead read that section on the morning of 2026-08-25 and
+made the same error that afternoon - asserting that "every real player who has opened the store has
+seen Price unavailable" when no player has a build containing the store at all.
+
+### Why the mistake is structurally easy to make here
+
+This repo's canon states, loudly and correctly, that **the game is PUBLISHED on the Solana dApp
+Store.** It is true. But "published" says nothing about WHICH BUILD is published, and the listing can
+be - and is - many builds behind the tree. A seat that reads "live game" and infers "live players are
+exposed to today's commit" has made an inference the canon never supported.
+
+**Three facts that look like one, and are not:**
+1. The app is LISTED on the dApp Store.
+2. The listing carries a build that predates most of this work.
+3. `MAINNET_SALES_ENABLED` is unset, so only the owner's wallet can transact at all.
+
+Each is separately true. Only all three together tell you the exposure, and the exposure is: **the
+owner, on builds she installs herself.**
+
+### How to apply
+
+!! **Before pricing a decision on risk to players, ASK what the published listing actually contains.**
+Do not derive it from the fact of publication, and do not derive it from HEAD. The lead cannot see the
+store listing from the repo, and nothing in the tree records which build is live.
+
+STOP **The failure mode is not caution - it is MISDIRECTED caution.** Overstating exposure produces
+advice that sequences work around a danger that is not there, and it costs the owner the freedom to
+test. Both times, the corrected answer was *less* restrictive: flip the switch, deploy the build, try
+it - there is nobody to hurt.
+
+* **The inverse is equally binding.** The day the listing IS updated, this section stops applying and
+nobody will announce that. Re-ask; never cache the answer.
+
+---
+
 ## Where these came from
 
 Ten rulings on 2026-08-24 (`OWNER_RULINGS_OWED.md`). Seven answered a ticket. **Three answered a
