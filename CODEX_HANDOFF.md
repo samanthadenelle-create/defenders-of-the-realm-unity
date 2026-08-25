@@ -627,3 +627,32 @@ that already works** - which is a real risk right now, not a hypothetical.
 One short verdict per ticket, each with its evidence, plus - explicitly - **anything you looked for
 and could not find.** ⭐ That last list is the most valuable part: two handbacks today corrected the
 ticket that commissioned them, and both changed what got built.
+
+---
+
+# ⛔⛔ THE LEAD'S OWN FAILURE MODE — 2026-08-24, owner: *"its sad i have to audit your work"*
+
+**Every error on 2026-08-24 came from work the lead did BY HAND. Not one came from a delegated agent.**
+
+| what broke | how |
+|---|---|
+| Reported the new APK missing | `tail -3` on an **alphabetically** sorted listing hid it |
+| Reported `R2_PARITY_OK` absent | plain `grep` cannot read a **UTF-16** log — the repo's own hook strips NULs first |
+| Reported the regression clean | counted `[FAIL]`; the suite reports `failure(s)` — **1 red read as 0** |
+| "Corrected" PROD-007 §6 to OPEN | it was fixed by `7dcb83b75`; the lead reasoned carefully about the wrong commit and never looked for the right one |
+| Left WO-1069 at `READY TO IMPLEMENT` | ⛔ **CLAUDE.md §2 requires the status flip in the SAME COMMIT as the work.** Landed work advertised as available for an hour |
+| Quoted "16 rulings owed" | a number from an agent's sweep, presented as a standing ask the owner had never seen |
+
+⭐ **Meanwhile the delegated agents caught: 28 drifted status lines, 7 wrong Fixed rows, two live batch collisions, a
+stale premise the lead had written into this very document, and five of the six errors above.**
+
+## ⛔ THE RULE
+
+> **If answering a question takes more than one shell command, it is an AGENT.**
+> The lead's hands are for: **the gate, the commit, and talking to the owner.** Nothing else.
+
+⚠ **Not because delegation is process.** Because when the lead works by hand while also orchestrating, **the lead is
+the least reliable component in the system** — and the owner ends up auditing it. The evidence above is one day's worth.
+
+⛔ **Specifically NOT the lead's hands:** board queries · ticket edits · status flips · grepping for state · counting
+anything · "just checking one thing". ⭐ **That last one is the trap** — it is never one thing.
