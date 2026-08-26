@@ -9,6 +9,31 @@
 //   Normal ~  5 minutes between waves   (the existing default)
 //   Hard   ~  3 minutes between waves
 //
+// !! STALE AS OF 2026-08-26 -- READ THIS BEFORE TRUSTING THE MINUTES ABOVE.
+// The owner raised the between-wave window to 15 MINUTES ("can we extend the
+// time between raids to 15 minutes" / "need time to rebuild and farm", with
+// "they can always click start now" as the release valve). waves.json now
+// authors 900 s for waves 2-20 (wave 1 stays 45 s, FTUE).
+//
+// The constants below are RATIOS, not absolutes, so they still divide cleanly
+// (Easy 2.0 / Hard 0.6) -- but applied to a 900 s base they now yield:
+//   Normal  900 s = 15 min   <- the owner's ruling, correct
+//   Easy   1800 s = 30 min   <- was intended as 10 min
+//   Hard    540 s =  9 min   <- was intended as  3 min
+// RULED 2026-08-26: the owner reviewed that spread and APPROVED it -- "i like
+// that" / "changes from casual to hardcore". The widened gap is the POINT, not
+// a side effect: at 30 min a player can fully rebuild and farm between waves,
+// at 9 min they are permanently behind, so the toggle became a real casual-vs-
+// hardcore choice rather than a nudge. The 10/5/3 minute targets in the header
+// above are HISTORICAL -- they describe the pre-2026-08-26 300 s base and are
+// kept only to explain where the 2.0 / 0.6 ratios came from.
+//
+// The live targets are: Easy 30 min / Normal 15 min / Hard 9 min.
+//
+// !! Do NOT "restore" the old minute targets by editing these constants. They
+// are ratios; the base moved, the owner ruled on the result, and the ratios
+// are what she approved.
+//
 // IMPORTANT — the multiplier is computed against the canonical wave-build
 // window, NOT hard-coded seconds. waves.json authors the post-first-wave
 // countdown at 300 s (LATER_PREPARE_SECONDS, the React v1 value), so:

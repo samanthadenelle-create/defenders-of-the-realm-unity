@@ -137,7 +137,10 @@
 > fine as history. A copied number is the bug **even when it was right the day it was written** -
 > that is exactly how the retired 860-899 UI block kept re-seeding collisions from CLAUDE.md sec.2.
 
-> ## ⚠ RECONCILED 2026-08-26 (CLI): main line next free = **1233**.
+> ## ⚠ RECONCILED 2026-08-26 (CLI): main line next free = **1234**.
+> 1233 battle-lock survives the battle (8 of 9 arena wins) + timeScale leaks at 0.04.
+>
+> ### superseded: RECONCILED 2026-08-26 (CLI): main line next free = **1233**.
 > 1232 enemy "Lv 68" - two call sites still run the retired HP/25 heuristic.
 >
 > ### superseded: RECONCILED 2026-08-26 (CLI): main line next free = **1232**.
