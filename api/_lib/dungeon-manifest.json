@@ -1,0 +1,89 @@
+{
+  "_comment": [
+    "WO-1223 - THE DUNGEON COVERAGE MANIFEST. The one artifact both halves of the",
+    "portal gate can read.",
+    "",
+    "WHY IT EXISTS: the list of dungeons a player can REACH is client-side (a table",
+    "in DungeonWorldPortalSpawner plus the build scene list). The list of doors that",
+    "can be CLOSED is server-side (the dungeon_status rows in Neon). Neither side",
+    "could see the other, so a reachable dungeon with no row was invisible to every",
+    "gate in the repo - which is exactly how dg_healers_cottage shipped reachable,",
+    "populated and ungateable, and black-screened the owner with nothing to flip.",
+    "",
+    "SO THIS FILE IS THE CONTRACT, and BOTH sides assert against it:",
+    "  * Unity  - Assets/Editor/Regression/DungeonStatusRegression.cs case",
+    "             [door-coverage] asserts this list is EXACTLY the set of dungeon ids",
+    "             the player can reach, computed from the AuthoredPortals table INTERSECT",
+    "             the LoadDefs injections INTERSECT the enabled EditorBuildSettings scenes.",
+    "             It cannot be hand-edited into agreement: add an entry that is not",
+    "             reachable, or ship a dungeon that is not listed here, and it reds.",
+    "  * Node   - test/dungeon-status.manifest.test.js asserts every 'portal-gated'",
+    "             entry has a dungeon_status row in api/schema.sql, and that schema.sql",
+    "             seeds no id this manifest does not carry.",
+    "",
+    "IT IS DELIBERATELY A DUPLICATE of state that lives in C#, and CLAUDE.md is right",
+    "that duplicated state is how canon rots. The duplication is unavoidable - node",
+    "cannot read a C# array - so it is GUARDED instead: the Unity case asserts the two",
+    "against each other in both directions, so this file cannot drift without reddening.",
+    "",
+    "accounting values (the Unity case pins each one against a C# list):",
+    "  portal-gated  - id is in DungeonStatusCatalog.PortalDungeonIds. It has a door,",
+    "                  the door can be closed from the server, and it MUST have a row.",
+    "  not-gated     - id is in DungeonStatusRegression.MustNotBeGated. Reachable, but",
+    "                  deliberately outside this system, and 'reason' says why.",
+    "  unaccounted   - reachable and in NEITHER list. This is a FINDING for the owner,",
+    "                  never something an implementer quietly resolves by picking a list.",
+    "                  The Unity case FAILS on every one of these, by name, on purpose.",
+    "",
+    "OWNER RULING 2026-08-26 (WO-1223), verbatim: 'not acesable if not in table, if in",
+    "table and works then yes'. Two consequences, both live in the tree now:",
+    "  1. dg_folks_granary and dg_healers_cottage moved unaccounted -> portal-gated.",
+    "  2. THE CLIENT DEFAULT INVERTED. DungeonStatusCatalog.For no longer resolves an",
+    "     absent id / absent table / rejected payload / unparseable status to OPEN - all",
+    "     of those are now CLOSED. So a 'portal-gated' entry with no dungeon_status row",
+    "     is no longer merely ungateable: it is SHUT to every player. Seeding the row is",
+    "     mandatory, and test/dungeon-status.manifest.test.js is what makes it mandatory.",
+    "",
+    "THE COPY RULE TRAVELS WITH THE DATA (api/dungeon-status.js header): a closed",
+    "dungeon reads as WORLD. Nothing in this file is player-facing, but the headline",
+    "and body that seal one of these ids must be authored prose, never build status."
+  ],
+  "version": 1,
+  "dungeons": [
+    {
+      "id": "dg_starter_loop",
+      "accounting": "portal-gated",
+      "reason": "East portal. Composed starter loop; the first crawl the player meets."
+    },
+    {
+      "id": "dg_sunken_vault",
+      "accounting": "portal-gated",
+      "reason": "North-west portal. WO-1001 Phase 2A."
+    },
+    {
+      "id": "dg_bonecrypt",
+      "accounting": "portal-gated",
+      "reason": "South-west portal. WO-1001 Phase 2B."
+    },
+    {
+      "id": "dg_ember_deep",
+      "accounting": "portal-gated",
+      "reason": "North portal. WO-1001 Phase 2C."
+    },
+    {
+      "id": "dg_hollow_roads",
+      "accounting": "not-gated",
+      "reason": "The Rootways is a CROSSROADS, not a dungeon: one mouth, four arms into the biomes. Its portal row is DERIVED (DungeonWorldPortalSpawner.TryDeriveHollowRoadsPortal), not authored, and it is switched by FeatureFlags.BiomeRoads rather than by a door state. Gating it here would gate something that has no dungeon behind it."
+    },
+    {
+      "id": "dg_folks_granary",
+      "accounting": "portal-gated",
+      "reason": "West portal, restored 2026-08-22 pointing at the composed graph. RULED GATABLE by the owner 2026-08-26 (WO-1223: 'not acesable if not in table, if in table and works then yes'), so it joined PortalDungeonIds and now fails CLOSED until dungeon_status carries a row for it."
+    },
+    {
+      "id": "dg_healers_cottage",
+      "accounting": "portal-gated",
+      "reason": "South portal, re-pointed 2026-08-22 to the composed graph, and the one that cost the owner the black screen - she was standing in it ([Flow:HeroOwner] scene='dg_healers_cottage', 7 enemies) with no row to flip. RULED GATABLE by the owner 2026-08-26 (WO-1223), so it joined PortalDungeonIds and now fails CLOSED until dungeon_status carries a row for it."
+    }
+  ]
+}

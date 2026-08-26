@@ -11,11 +11,15 @@
 //   2. Nothing is disclosed. The reply is four dungeon ids the client already
 //      ships in DungeonWorldPortalSpawner, plus prose written to be read by
 //      players. No player datum, no key, no economy value.
-//   3. Auth would INVERT the safety property: an auth-gated status call fails for
-//      offline and guest players, and a fail-closed reading of that failure locks
-//      content — the exact outcome WO-1114 §6 forbids. Public read means the only
-//      failure mode is "the client falls back to open", which is the safe way to
-//      fail. (Precedent: api/leaderboard/get.js, public read, same reasoning.)
+//   3. Auth would make every sign-in failure a CONTENT OUTAGE. ⚠ This clause used
+//      to end "the only failure mode is the client falls back to open, which is
+//      the safe way to fail" — that half is RETIRED (owner ruling 2026-08-26,
+//      WO-1223: the client now fails CLOSED). The no-auth decision is UNCHANGED
+//      and in fact matters more than it did: with fail-closed, an auth-gated
+//      status call that fails for an offline or guest player would SHUT every
+//      dungeon door for them. Public read keeps this endpoint reachable in exactly
+//      the states where auth is not.
+//      (Precedent: api/leaderboard/get.js, public read, same reasoning.)
 // WRITES are admin-only and go through the existing api/admin/db.js path
 //   (X-Admin-Key). No new auth surface is minted here.
 //
@@ -30,9 +34,19 @@
 //   GET   /api/dungeon-status
 //   Reply : { success: true, version: 1, dungeons: { "<id>": { status, headline?, body?, sigil? } } }
 //
-// An EMPTY table is a correct, healthy answer: absence means open. The client
-// treats a missing id, an unknown status string and an unreachable server all as
-// OPEN — nothing this endpoint can do or fail to do may lock a player out.
+// ⛔ INVERTED 2026-08-26 (owner ruling, WO-1223): "not acesable if not in table,
+// if in table and works then yes". These three lines used to read "an EMPTY table
+// is a correct, healthy answer: absence means open ... nothing this endpoint can
+// do or fail to do may lock a player out." ALL OF THAT IS NOW FALSE.
+//   * A missing id, an unknown status string and an unreachable server are ALL
+//     read as CLOSED by DungeonStatusCatalog.For.
+//   * An empty table therefore SHUTS every gated dungeon. It is a syntactically
+//     valid answer and an operationally catastrophic one.
+// SO THIS ENDPOINT IS NOW LOAD-BEARING FOR AVAILABILITY, not just for closure.
+// Every id in api/_lib/dungeon-manifest.json marked accounting='portal-gated' must
+// come back from the query below with status='open' unless it is deliberately shut.
+// The client-side kill switch (FeatureFlags.DungeonStatus = 0) is the lever if this
+// table is ever wrong; there is no server-side equivalent.
 //
 // ⚠ vercel.json sets "git": { "deploymentEnabled": false } — PUSHING DOES NOT
 //   DEPLOY. This endpoint stays dead until someone runs `vercel --prod` by hand.
