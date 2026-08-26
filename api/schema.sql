@@ -875,12 +875,13 @@ $seed_test_codes$;
 --   status vocabulary is ALSO pinned below by CHECK constraint, and the prose
 --   rule is stated here because this table is outside the oracle's reach.
 --
---   The client treats an unknown status as OPEN and warns (it never fails
---   closed), so the CHECK is belt-and-braces on the other side of the network:
---   there is no reason to let a typo reach the wire in the first place.
---
---   An EMPTY table is correct and healthy — absence means open. The seed rows
---   below exist only so the admin DB viewer shows something.
+--   ⛔ CORRECTED 2026-08-26 (owner ruling, WO-1223). These two paragraphs used to
+--   read "the client treats an unknown status as OPEN and warns (it never fails
+--   closed)" and "an EMPTY table is correct and healthy — absence means open".
+--   BOTH ARE NOW FALSE, and inverted deliberately. The client fails CLOSED: an
+--   unparseable status, a missing row and an empty table all seal the door. The
+--   CHECK constraint below therefore stops being belt-and-braces and becomes a
+--   real outage guard — a status typo that reaches this table SHUTS that dungeon.
 --   ⚠ Every seed is 'open' ON PURPOSE. Which dungeons are finished is a
 --   play-feel judgement the owner has not made yet (WO-1114 §9), and seeding
 --   the wrong pair would close FINISHED content.
@@ -898,11 +899,33 @@ CREATE TABLE IF NOT EXISTS dungeon_status (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+-- OWNER RULING 2026-08-26 (WO-1223): "not acesable if not in table, if in table and
+-- works then yes". The CLIENT now FAILS CLOSED - DungeonStatusCatalog.For resolves an
+-- absent row, an absent table, a rejected payload and an unparseable status all to
+-- Sealed. Two things follow, and both are load-bearing:
+--   * A SEED ROW IS NO LONGER COSMETIC. The comment above says the seeds "exist only so
+--     the admin DB viewer shows something"; that is no longer true. A gated dungeon with
+--     no row is SHUT to every player. Every id in api/_lib/dungeon-manifest.json marked
+--     accounting='portal-gated' MUST have a row here, and
+--     test/dungeon-status.manifest.test.js reds if one does not.
+--   * ⚠ ON CONFLICT DO NOTHING means re-running this file will NOT add the two rows
+--     below to a database provisioned before today. Insert them into Neon by hand (or
+--     through api/admin/db.js) or those two doors stay closed in production.
+-- Every seed stays 'open' ON PURPOSE (WO-1114 §9) - which dungeons are finished is the
+-- owner's play-feel call, and seeding a wrong 'sealed' would close finished content.
 INSERT INTO dungeon_status (dungeon_id, status) VALUES
-    ('dg_starter_loop', 'open'),
-    ('dg_sunken_vault', 'open'),
-    ('dg_bonecrypt',    'open'),
-    ('dg_ember_deep',   'open')
+    ('dg_starter_loop',    'open'),
+    ('dg_sunken_vault',    'open'),
+    ('dg_bonecrypt',       'open'),
+    ('dg_ember_deep',      'open'),
+    ('dg_folks_granary',   'open'),
+    -- OWNER RULING 2026-08-26: 'sealed', NOT 'open'. This is the dungeon that BLACK-SCREENED
+    -- her (WO-1223) -- being able to shut it was the entire reason the row was wanted. The
+    -- "every seed stays 'open' ON PURPOSE" rule above guards against closing FINISHED content;
+    -- this is not finished content, so the rule does not apply. Written to the live Neon DB the
+    -- same day and verified by shape query (6/6 rows). Flip to 'open' when the black screen is
+    -- fixed and the owner has felt-tested it -- one UPDATE, no deploy.
+    ('dg_healers_cottage', 'sealed')
 ON CONFLICT (dungeon_id) DO NOTHING;
 
 -- =============================================================================

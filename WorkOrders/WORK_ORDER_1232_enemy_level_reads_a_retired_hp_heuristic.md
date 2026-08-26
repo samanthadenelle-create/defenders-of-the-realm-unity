@@ -104,3 +104,74 @@ Implement it in this order:
 - Wave HP scaling. The inflated HP is intended; reading a LEVEL off it is the defect.
 - The danger-skull VISUALS (colour/'art'). The owner is red/green colourblind and the plate's
   non-colour encoding is deliberate - this ticket changes the NUMBER feeding it, nothing else.
+
+---
+
+## ⛔ CORRECTION 2026-08-26 - THIS TICKET'S OWN PREMISE WAS HALF WRONG
+
+The section above says `Enemy.Level` is "the CORRECT value... set from the authored def (a STABLE
+per-archetype band)". **That is not what the code does.** `Enemy.cs:623`:
+
+```csharp
+_level = Mathf.Max(1, Mathf.RoundToInt(Mathf.Max(1f, def.Hp) / 25f));
+```
+
+**`Enemy.Level` IS the same HP/25 heuristic** - applied to the def's BASE hp instead of the runtime
+scaled hp. **There is no authored level field anywhere; `EnemyDef` has none.** Every level in the game
+is HP/25. The doc comment on `Enemy.Level` describing an "authored def / stable per-archetype band"
+is itself misleading, and this ticket believed it. Section 12's rule applies to doc comments exactly
+as it applies to code: comments lie.
+
+**So the owner's "Lv 68" was NOT printed by the two broken sites.** `necromancer` is authored at
+**hp 1700 -> exactly Lv 68**, and `waves.json` names it the **wave-6 boss**. The discriminator is
+arithmetic: wave-6 HP scaling (~1.4x) through the RETIRED heuristic would read ~**96**, not 68. Only
+the base-HP path yields exactly 68. She was on wave 7 and said *"it DIED but said it was lvl 68"* -
+she was looking at a boss whose level is its HP over 25.
+
+**The two fixes remain correct and necessary** - `ThreatSkullPlate` owns the danger skull and was
+genuinely reading inflated runtime HP, which is why every enemy read lethal. But **they do not close
+her report.** What closes it is the presentation ruling below.
+
+## The sweep result (complete)
+
+| Site | Disposition |
+|---|---|
+| `ThreatSkullPlate.cs:72` | FIXED - reads `Enemy.Level` |
+| `HudModelHost.cs:227` `EnemyLevelStub` | **DELETED** - it had ZERO callers; a pure landmine |
+| `HudModelProducers.cs:483` | already migrated; instrumentation added |
+| `Enemy.cs:623` | **the real authority, and itself HP/25** - reported, not touched |
+| `EnemyFamilyTestSpawner.cs:182` | legitimate - a debug spawner that INVERTS the mapping (`HP = level x 25`) |
+| `BattleHud9Zone.cs` | carries no level path today. **No fourth consumer exists.** |
+
+Post-fix sweep: **2203 `.cs` files, 0 hits** for `maxHp/25f`, the `MaxHp > 0.001f ?` probe, or
+`EnemyLevelStub`.
+
+## Threat bands - REPORTED, NOT RETUNED (owner ruling)
+
+`RiskyDelta = 3`, `LethalDelta = 7` (`ThreatSkullPlate.cs:47/49`). Against real levels vs a Lv 5 hero
+the bands now DISCRIMINATE (before, everything read lethal). Two consequences to rule on:
+1. `hollow-brute` (900 hp -> **Lv 36**) is an ordinary wave brute, not a boss, and reads LETHAL forever.
+2. Because levels are HP/25, the deltas are **HP ratios wearing a level costume**: `+7` means
+   "+175 HP", which is meaningless at high tiers. A LINEAR band over a quadratic-ish HP spread.
+
+## RECOMMENDED PRESENTATION - drop the number, show a WORD
+
+The data already supports it:
+- `EnemyDef.Boss` (bool) is authored `true` for exactly two: **`necromancer`** and **`troll-overlord`**;
+  `waves.json` names bosses at waves 5/6/12/18 plus `apexBoss` Syndrath (4200 hp) at wave 20.
+- `EnemyDef.RoleKind` already maps `role:"elite"` -> `EnemyRole.MiniBoss` (`WaveData.cs:227`), and
+  `HudModelHost.RoleName(MiniBoss)` **already returns the literal string `"Boss"`**.
+- The target frame already has a spare text slot (`ElarionUiKitObsidian.cs:1771` `extra`, currently
+  only "LOCKED"), and the name already takes a `!` / `!!` prefix.
+
+Two gaps: `Enemy.IsBossTier()` / `IsEliteTier()` are **private** (`Enemy.cs:3384/3390`) - one public
+accessor needed; and `HudModelHost.ToHudRole` **flattens `MiniBoss` -> `HudRole.Warrior`**
+(`:153`), so boss-ness currently dies at the model boundary.
+
+**Proposal: ordinary enemies show nothing, `role:"elite"` shows `ELITE`, `boss:true` shows `BOSS`,
+apex shows `APEX`.** Words, readable, colour-independent. `TierFor` keeps driving the existing
+`!`/`!!` + RISKY/LETHAL text, which is already word-based.
+
+⚠ **If the owner wants a NUMBER kept, it must first become a real authored `level` field on
+`EnemyDef`** - otherwise the arithmetic she objected to ("lvl 68 versus a lvl 5") is unavoidable,
+because the number IS the HP.
