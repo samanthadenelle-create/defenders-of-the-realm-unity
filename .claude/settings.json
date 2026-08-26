@@ -20,6 +20,12 @@
             "type": "command",
             "command": "powershell -NoProfile -ExecutionPolicy Bypass -File .claude/hooks/f8-prompt-check.ps1",
             "timeout": 30
+          },
+          {
+            "type": "command",
+            "command": "powershell -NoProfile -ExecutionPolicy Bypass -File .claude/hooks/lane-check.ps1",
+            "timeout": 30,
+            "statusMessage": "Checking unassigned READY lanes"
           }
         ]
       }
