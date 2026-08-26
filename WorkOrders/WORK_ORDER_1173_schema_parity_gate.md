@@ -1,6 +1,6 @@
 # WORK ORDER 1173 — SCHEMA_PARITY_OK: the deployed database drifted four times in one day, and the fourth took real money
 
-**Status:** FIXED - wiring landed 2026-08-25 (`957ca2e9f`), and PRODUCTION PARITY IS PROVEN: `SCHEMA_PARITY_OK 17 table(s) verified against api/schema.sql`, run by the owner against the live Neon database. Owner felt-close owed.
+**Status:** CLOSED 2026-08-26 — owner felt-tested PASS on APK `2026.08.26.342478` (source `bcef3be7`).
 
 **Minted:** 2026-08-24 (CLI), banner bumped 1173 → 1174 in the same edit.
 **Provenance:** four production failures on 2026-08-24, all the same shape, found one at a time by

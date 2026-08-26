@@ -1,6 +1,6 @@
 # WORK ORDER 1078 — DialogueView: TapAdvance covers every dialogue option row
 
-**Status:** FIXED - proven by the 2026-08-25 capture (zero findings on DialogueView); owner felt-close owed.
+**Status:** CLOSED 2026-08-26 — owner felt-tested PASS on APK `2026.08.26.342478` (source `bcef3be7`).
 
 **Minted:** 2026-08-24, UI seat, from the `CLI_LANES_WO_NUMBERS.md` UI-seat block (1078; banner bumped 1075 → 1079 in the same edit).
 **Parent:** WO-1060 (`WORK_ORDER_1060_touch_clamp_and_overlap_oracle.md`) — the touch/overlap oracle that found this.

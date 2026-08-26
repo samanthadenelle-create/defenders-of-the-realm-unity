@@ -6,7 +6,7 @@
 
 # WORK ORDER 1002 — Remove the yellow aura at the hub Heart of Elarion tree
 
-**Status:** FIXED (implemented + gated 2026-08-10, REGRESSION_OK 147/147) - three days after it was raised, and only because the owner asked a THIRD time. Owner felt-verify owed: open the hub and confirm the tree base is clean.
+**Status:** CLOSED 2026-08-26 — owner felt-tested PASS on APK `2026.08.26.342478` (source `bcef3be7`).
 
 *(Board note 2026-08-24: bucket corrected DONE/IMPLEMENTED → **FIXED**. Nothing about the work changed — §13 reserves DONE/closing for the PO, and this line's own text says the owner's felt-verify is still owed, so the row belongs in the felt-test queue, not the closed pile.)*
 **PO:** Samantha (owner) · **Author:** UI seat · **UI-seat block:** 1000–1099

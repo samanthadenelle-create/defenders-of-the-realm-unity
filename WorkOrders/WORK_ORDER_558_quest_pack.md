@@ -1,6 +1,6 @@
 # WORK ORDER 558 — Quest Pack (a ton of usable daily quests)
 
-**Status:** FIXED 2026-06-28 (`d8299b6cf`) — awaiting owner felt-verify. *(Status audit 2026-08-24: BUCKET CORRECTION — the prior line predated the commit and still advertised gates/commit as owed; verified at source in `git log`, `d8299b6cf` (2026-06-28) landed this work. Body unchanged. Prior line: IMPLEMENTED (data + minimal wiring) — pending CLI batch-gate + commit by explicit path)*
+**Status:** CLOSED 2026-08-26 — owner felt-tested PASS on APK `2026.08.26.342478` (source `bcef3be7`).
 **Lane:** Combat/AI + Data (quests) — file-disjoint from dialogues/PanelRouter/FeatureFlags
 **Author:** quest-pack agent (worktree `agent-af0d02f61a0302dbd`, ff-merged to branch tip `05d2f032` before editing)
 

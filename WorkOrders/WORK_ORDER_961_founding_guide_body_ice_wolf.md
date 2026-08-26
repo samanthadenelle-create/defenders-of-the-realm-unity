@@ -1,6 +1,6 @@
 # WO-961 — The founding Echo guide gets a BODY, and it is the Ice Wolf
 
-**Status:** FIXED (implemented + gated 2026-08-10, REGRESSION_OK 146/146; owner felt-verify owed: does the wolf walk, sit at the right scale and face the right way)
+**Status:** CLOSED 2026-08-26 — owner felt-tested PASS on APK `2026.08.26.342478` (source `bcef3be7`).
 
 *(Board note 2026-08-24: bucket corrected DONE/IMPLEMENTED → **FIXED**. Nothing about the work changed — §13 reserves DONE/closing for the PO, and this line's own text says the owner's felt-verify is still owed, so the row belongs in the felt-test queue, not the closed pile.)*
 **Date:** 2026-08-10 · **Priority:** HIGH (the FTUE's second beat tells the player to follow something that does not exist)

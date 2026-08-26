@@ -1,4 +1,4 @@
-**Status:** FIXED 2026-08-23 (Codex, 590464bd2) — claim controls use reserved layout bands with canonical state labels. ⚠ NO DEVICE SCREENSHOTS YET, and the new [ui-touch-oracle] still reports overlapping tap targets of this CLASS elsewhere (RumorBoard’s buried Close). AWAITING OWNER FELT-TEST.
+**Status:** CLOSED 2026-08-26 — owner felt-tested PASS on APK `2026.08.26.342478` (source `bcef3be7`).
 
 # WORK ORDER 1051 — Daily Chest panel: the claim buttons are drawn on top of the shared Close
 

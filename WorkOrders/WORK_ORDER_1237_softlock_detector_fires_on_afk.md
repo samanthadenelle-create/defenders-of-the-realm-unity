@@ -1,6 +1,6 @@
 # WORK ORDER 1237 - The softlock detector fires on AFK, and that noise will bury a real softlock
 
-**Status:** FIXED 2026-08-26 - `SOFTLOCK_CLASSIFIER_OK` + `COMPILE_GATE_OK` + `REGRESSION_OK 292/292`
+**Status:** CLOSED 2026-08-26 — owner felt-tested PASS on APK `2026.08.26.342478` (source `bcef3be7`).
 **Silo:** Tooling / F8 harness
 **Severity:** P2 by symptom, but it degrades the signal the whole section-14 pipeline depends on.
 **Origin:** CLI triage of device capture seq 3609, 2026-08-26 - one of the first two captures the

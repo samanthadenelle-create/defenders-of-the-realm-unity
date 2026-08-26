@@ -1,6 +1,6 @@
 # WORK ORDER 833 - KayKit NPC idle animation (fix "NPC Stuck in T Pose")
 
-**Status:** FIXED — implemented 2026-08-02; awaiting gate confirmation (compile gate + KayKitNpcAnimatorSetup.Build run + DataRegression NPC_MODELS) and owner felt-verify.
+**Status:** CLOSED 2026-08-26 — owner felt-tested PASS on APK `2026.08.26.342478` (source `bcef3be7`).
 **Trigger:** owner F8 2026-08-02 "NPC Stuck in T Pose" - all 12 KayKit structure NPCs (WO-818) render frozen T-poses in the hub.
 **Silo:** World/NPCs (follow-up to WO-818; its RESULT already flagged "KayKit bodies stand statically (no AmbientNPC/Animator) - animated idles = follow-up WO").
 

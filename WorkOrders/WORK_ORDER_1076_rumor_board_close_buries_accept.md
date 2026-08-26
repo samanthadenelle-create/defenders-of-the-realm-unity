@@ -1,6 +1,6 @@
 # WORK ORDER 1076 — RumorBoardPanel: the Close button is stacked on Accept and Track; only one can win the tap
 
-**Status:** FIXED - the PANEL was already correct (a2162f17d); the CAPTURE HARNESS was re-breaking it for the camera. Harness fix + a fail-safe floor landed 2026-08-25. Owner felt-close owed.
+**Status:** CLOSED 2026-08-26 — owner felt-tested PASS on APK `2026.08.26.342478` (source `bcef3be7`).
 
 **Minted:** 2026-08-24, UI seat, from the `CLI_LANES_WO_NUMBERS.md` UI-seat block (1076; banner bumped 1075 → 1079 in the same edit).
 **Parent:** WO-1060 (`WORK_ORDER_1060_touch_clamp_and_overlap_oracle.md`) — the touch/overlap oracle that found this.

@@ -1,6 +1,6 @@
 # WORK ORDER 557 — Full YarnSpinner Removal → code-built C# Obsidian dialogue
 
-**Status:** FIXED 2026-06-28 — full Yarn removal verified at source 2026-08-24: no Yarn package in `Packages/manifest.json` or `packages-lock.json`, no `.yarn`/`.yarnproject` assets, no `.asmdef` references, no `using Yarn` and no live Yarn type usage anywhere under `Assets/`. Commits `4a91395ab`, `be39c4db7`; custom code-built dialogue is the live path. Residue is cosmetic only: three orphaned `ProjectSettings/Packages/dev.yarnspinner/*.json` settings files and two legacy identifier names (`DialogueResetService.YarnVariableClear`, `RegressionSuite.Case_YarnCommandPrefix`) — names, not couplings.
+**Status:** CLOSED 2026-08-26 — owner felt-tested PASS on APK `2026.08.26.342478` (source `bcef3be7`).
 
 *(Board note 2026-08-24 — Ready-queue audit, `READY_FOR_REVIEW.md`: leading token corrected to a canonical bucket word. Only the status token and this note changed; the ticket body and its claims are untouched.)*
 

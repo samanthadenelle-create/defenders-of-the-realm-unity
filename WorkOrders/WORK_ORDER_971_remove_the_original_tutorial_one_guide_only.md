@@ -1,6 +1,6 @@
 # WORK ORDER 971 — Remove the original tutorial: ONE tutorial, ONE guide
 
-**Status:** FIXED — shipped `17cf8736` ("feat(tutorial): WO-971"); owner felt-verify still PENDING (see the Owner-verify line below). RESULT file still owed (not fabricated).
+**Status:** CLOSED 2026-08-26 — owner felt-tested PASS on APK `2026.08.26.342478` (source `bcef3be7`).
 
 *(Board note 2026-08-24: bucket corrected DONE/IMPLEMENTED → **FIXED**. Nothing about the work changed — §13 reserves DONE/closing for the PO, and this line's own text says the owner's felt-verify is still owed, so the row belongs in the felt-test queue, not the closed pile.)*
 **Silo:** Tutorial / FTUE
