@@ -137,7 +137,39 @@
 > fine as history. A copied number is the bug **even when it was right the day it was written** -
 > that is exactly how the retired 860-899 UI block kept re-seeding collisions from CLAUDE.md sec.2.
 
-> ## ⚠ RECONCILED 2026-08-26 (CLI): main line next free = **1214**.
+> ## ⚠ RECONCILED 2026-08-26 (CLI): main line next free = **1218**.
+> *(CLI seat minted **WO-1214 / 1215 / 1216 / 1217** and bumped 1214 -> 1218 in this SAME edit.
+> All four from ONE owner felt-test on Seeker build `2026.08.26.341419`, 2026-08-26.
+>
+> **1214** = A DROPPED SHIELD PERMANENTLY DISARMS THE MAGE. P0. 19 shields carry `job:"any"`, which
+> `GearCatalog.JobMatches:591` passes for EVERY class; the shield takes the off-hand, hand-slot
+> enforcement force-removes the 2H staff, and the fall-back `BestOneHandedWeapon("mage")` returns
+> NULL because all 8 mage weapons are staves - there is ZERO one-handed mage weapon in the catalog.
+> Owner RULED: any drop goes to INVENTORY (never auto-equips); ineligible gear is held, equip is
+> refused with a worded reason, and it can be SOLD. Enforce class+level AT the equip seam (the
+> F8 seq-642 hole: a manual equip enforced NEITHER gate). ⛔ Scoped to DROPS - level-up
+> auto-upgrade is INTENDED and STAYS (WO-860).
+>
+> **1215** = THAT SHIELD ALSO SITS THROUGH THE BODY. `offsets.json` has 26 rows and only TWO mention
+> a shield, so 18 of 19 attach at IDENTITY - the exact violation ARCHITECTURE_PRINCIPLES §4 names by
+> name. Fix the DERIVER, not 18 hand-typed Eulers; `manual=true` rows are canon and untouched.
+> Acceptance needs a DEVICE SCREENSHOT - headless gates cannot see orientation.
+>
+> **1216** = EVERY KILL PAYS WOOD/IRON/GOLD/STONE, derived at 25% of the gold base (~37 each per
+> wave). ⛔ NOT via `WaveManager._ironPerKill` - that is gated on `WavePhase.Active` and misses every
+> world encounter, which is the scope the owner corrected. Seam = the WO-432/433 grant at
+> `Enemy.cs:~3007`. ⛔⛔ STONE MUST GRANT TO `EconomyService.Food` (the visible balance), NEVER
+> `GameState.Stone` (the phantom one) - see WO-1212.
+>
+> **1217** = EARLY ECONOMY SINKS. Owner: *"would take hours just to level anything in the start"*.
+> Archer Tower L2 is 1080w/480i = 3.0x its build cost = ~29 waves. RULED: flatten the FIRST step to
+> ~1.5x build (540w/240i), leave L3 alone; seed starting Gold at 200 (currently ZERO) through
+> `StartingBudget`; and crystals gate ONLY at tier 3 on the Arcane Spire (its L2 is unsatisfiable
+> today - PROD-015, no crystal faucet in town). ⛔ Do not touch `s.Stone = 20` in that same block
+> (WO-1212) or the 2026-07-13 Wood/Iron zero-seed. ⚠ 1216 and 1217 felt-test TOGETHER - each is
+> tuned against the other. READY TO IMPLEMENT.)*
+>
+> ### superseded: RECONCILED 2026-08-26 (CLI): main line next free = **1214**.
 > *(CLI seat minted **WO-1213** and bumped 1213 -> 1214 in this SAME edit. **1213** = THE REWARDED-AD
 > CLAIM GRANTS IN SILENCE, AND ITS CTA IS JAMMED AGAINST THE PANEL EDGE. Owner felt-test on the
 > Seeker, 2026-08-26, build `2026.08.26.341419`. Slice A (P0): `DailyChestController.Claim` credits
