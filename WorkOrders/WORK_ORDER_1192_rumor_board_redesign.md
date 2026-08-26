@@ -186,3 +186,62 @@ seat, then CLI re-implementation.
    well; never truncates mid-word; Accept/Track never move.
 
 Redesign mockups from the UI seat follow on these rulings.
+
+
+---
+
+## ⚠ SUPERSEDES the earlier two-pane direction (2026-08-26, same day)
+The two-pane browse layout implied by this morning's rulings section is RETIRED by two further
+owner rulings: **the game is LANDSCAPE-ONLY** (portrait work is out of scope entirely - do not
+re-litigate portrait), and the two-pane density was rejected: *"that writing would be too small
+for a mobile screen. needs to be less detail more simple concept."*
+
+## APPROVED CONCEPT v3 (owner: "i like it" + tweaks, then "go") - THE spec to implement
+
+**Mockup:** `WorkOrders/WORK_ORDER_1192_mockup_v3_2670x1200.png` (the diff target).
+
+**The concept: three self-contained rumor POSTERS. No tabs, no detail pane, no In-Progress.**
+- Accept-first taken to its conclusion: this board only OFFERS work. In-Progress/tracking does
+  not appear here at all - that is the HUD tracker's job (owner ruling, this morning).
+- Each poster: a standout TYPE TAG, a two-line title, a ONE-line hook, reward chips, and its
+  OWN Accept button. No selection step anywhere.
+- The paragraph lore lives behind a "Read the letter >" tap - a simple full-card overlay with
+  the scrolling text and a Back face. The board itself never shows dense copy.
+- Paging: a single **Next >** button UP TOP that advances a page of 3 posters and WRAPS
+  (owner chose the keep-going form; no bottom arrows, no page dots). Swipe also pages,
+  same gesture family as hero-select.
+- **Close is a LABELED BUTTON next to Next** - no X glyph (owner ruling).
+
+Anchor rects - fractions of the 2670x1200 screen (x left->right, y BOTTOM->top):
+
+| Element        | xMin  | yMin  | xMax  | yMax  | px @2670x1200 |
+|----------------|-------|-------|-------|-------|----------------|
+| Title (left)   | 0.056 | 0.860 | 0.600 | 0.935 | baseline y ~108 |
+| Next > button  | 0.742 | 0.823 | 0.839 | 0.917 | x 1980-2240, y 100-212 |
+| Close button   | 0.858 | 0.823 | 0.955 | 0.917 | x 2290-2550, y 100-212 |
+| Poster 1       | 0.056 | 0.083 | 0.318 | 0.767 | x 150-850, y 280-1100 |
+| Poster 2       | 0.375 | 0.083 | 0.637 | 0.767 | x 1000-1700 |
+| Poster 3       | 0.693 | 0.083 | 0.955 | 0.767 | x 1850-2550 |
+
+Poster internals (px @1200, top-down, per card of width 700):
+- TYPE TAG: overhangs the card's TOP-LEFT corner (y 252-330), FILLED gold, ink text - the
+  loudest element on the card; distinct by fill+position, not hue (greyscale-safe). Label text
+  comes from the quest `type` field via a display map - owner showed MAIN/SIDE/DAILY in the
+  mockup; final label wording is a canon-strings row, not hardcoded.
+- NEW chip: small outlined chip on the top-RIGHT card edge, only when new.
+- Title: up to TWO lines at 46px, centered, FitLine per line.
+- Hook: ONE line, 32px. Smallest type anywhere on the board is 30px - that is a floor.
+- "Read the letter >": 30px gilt link line -> the lore overlay.
+- Reward chips: **ICON + number, never a letter** (WO-1195 law; the icon set including the
+  new magic/wisdom picks applies). XP and Relic render as words.
+- Accept: the card's own button, 520x140px (>= MinTouchPx with margin), gold-framed.
+
+Acceptance (unchanged in spirit from the WO body, tightened to v3):
+1. `COMPILE_GATE_OK` + `REGRESSION_OK <n>/<n> suites` fresh; the touch/layout oracle finds
+   ZERO overlaps on this panel (the fresh-capture BUTTON OVER TEXT findings above must be gone).
+2. A LANDSCAPE 2670x1200 capture, opened and looked at, diffed against the v3 mockup - posters,
+   tags, Next/Close, chips. `UI_CAPTURE_OK` alone is not acceptance.
+3. Greyscale check: type tag, NEW chip, and Accept all separable without hue.
+4. Next wraps across all pages of available rumors; Read overlay opens/closes; Accept on a
+   poster accepts THAT quest with no selection step.
+5. Owner felt-verifies and CLOSES.
