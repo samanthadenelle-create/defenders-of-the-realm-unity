@@ -137,7 +137,21 @@
 > fine as history. A copied number is the bug **even when it was right the day it was written** -
 > that is exactly how the retired 860-899 UI block kept re-seeding collisions from CLAUDE.md sec.2.
 
-> ## ⚠ RECONCILED 2026-08-25 (CLI): main line next free = **1211**.
+> ## ⚠ RECONCILED 2026-08-25 (CLI): main line next free = **1212**.
+> *(CLI seat minted **WO-1211** and bumped 1211 -> 1212 in this SAME edit. **1211** = THE GAME ASKS
+> THE PLAYER TO SIGN ON EVERY LAUNCH. Owner: "check why it asks for authentication everytime i load"
+> / "ive never had a game do that" - and that second sentence is the acceptance bar. Device log:
+> Connect is SILENT and works (auto-resume is NOT the defect - do not re-debug MWA from this
+> symptom); 200ms later GameStateService raises the wallet sheet by signing for the boot LOAD.
+> ⛔ ROOT CAUSE = TWO AUTH AUTHORITIES: GameStateService.cs:1637-1653 runs its own nonce+sign rail
+> (dotr-save:v1:...) on every sync and contains ZERO references to BackendRequestSigner, so WO-1157's
+> cached session - built precisely to stop repeated prompts - is never consulted by the save path.
+> One job, two implementations, the newer one carrying the guarantee and the older one wired to the
+> player. Fix: route sync through the session rail, persist it across launches, and NEVER sign for a
+> READ at boot. ⛔ Must not loosen any grant path - it moves WHEN proof is obtained, never WHETHER.
+> READY TO IMPLEMENT.)*
+>
+> ### superseded: RECONCILED 2026-08-25 (CLI): main line next free = **1211**.
 > *(CLI seat minted **WO-1210** and bumped 1210 -> 1211 in this SAME edit. **1210** = EVERY ENEMY
 > RENDERS AS A FLAT BLACK SILHOUETTE ON DEVICE. ⛔ SHIP-BLOCKER - it is the first thing a new player
 > sees. Owner: "combat is wrong still". Two causes are ALREADY RULED OUT by captured data, so nobody

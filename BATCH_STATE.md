@@ -1646,3 +1646,164 @@ the Resources copy is deliberately a superset) plus `skr_*` / `battle_*` / `*.sa
 - ⭐ Results go in **`batch_results_state.md`**. ⛔ **Never in this file.**
 - **One isolated worktree per lane.**
 - ⛔ **Nothing committed. Nothing promoted. No ticket status flipped.**
+
+
+## 📤 BATCH 13 - assignment set (2026-08-25 evening, CLI lead)
+
+⚠ **Precedence note:** dated 2026-08-25, appended at the END because this file is append-only by
+section. It supersedes nothing above it except where it names a lane explicitly.
+
+### The standing split - unchanged, restated once
+
+⭐ **Codex writes the code in its own isolated worktree. The CLI lead verifies, gates, commits and
+pushes.** ⛔ Codex does not gate. ⛔ Codex does not commit. ⛔ Codex does not flip a ticket status.
+One Unity lock, one committer, both the lead's. Results go in `batch_results_state.md`, never here.
+
+### ⭐ THE ACCEPTANCE RULE - still the one WO-1199 earned
+
+⛔ **A REFUSAL TEST IS NOT ACCEPTANCE.** Every lane proves the SUCCESS path - the thing working, not
+the guard declining. Where a lane genuinely cannot prove it from the dev seat (needs the Unity gate,
+a live deploy, a real DB, a headed capture, an owner felt-verify), **name those items as OPS-OWNED in
+writing, as a slice with the executor split.** Do not leave them implied and do not claim them.
+
+### ⛔ EVERY STATUS BELOW WAS RE-READ FROM DISK ON 2026-08-25 EVENING
+
+Five candidates were dropped because they are already FIXED: WO-1173, WO-1171, WO-1178, WO-1180,
+WO-1181. WO-1170's sites 1-3 are done and site 6 is withdrawn. **This check exists because Batch 8
+was refused for handing out finished work** - the single most expensive way to waste a dev seat.
+
+### ⛔ THREE SURFACES ARE LIVE RIGHT NOW AND ARE OFF LIMITS TO EVERY LANE
+
+| surface | who holds it |
+|---|---|
+| `Assets/_Modules/HUD/Kit/HudKitController.cs` + `Editor/Regression/CollectorTellRegression.cs` | a lead-run agent (WO-1205 resource rail) |
+| `Assets/_Modules/Village/Harvest/EchoService.cs` + `Core/UI/BankOverflowToastPresenter.cs` | a lead-run agent (WO-1207 harvest warn) |
+| `Assets/_Modules/Village/Enemies/**` | the LEAD (WO-1210 black enemies, needs the device) |
+
+⛔ Also fenced for everyone: `Assets/Editor/Regression/DataRegression.cs` - suite registration is
+**COMMITTER-FENCED**. Write the oracle, hand the lead the one line, never add it yourself. Several
+lanes below produce oracles; that file is the one place they would all collide.
+
+---
+
+## THE LANES - priority order
+
+### LANE 1 - WO-1211: the game asks the player to sign on EVERY launch ⭐ TAKE THIS FIRST
+**Files:** `Core/State/GameStateService.cs`, `Core/Web3/BackendRequestSigner.cs`.
+The RCA is DONE and written into the ticket - do not redo it. The device log proves the wallet connect
+is silent and the prompt comes from `GameStateService.cs:1637-1653` signing for the boot LOAD, because
+that file holds **zero references to `BackendRequestSigner`** and runs a second, private nonce+sign
+rail of its own.
+⛔ **DO NOT persist the session token.** Its in-memory-only design is a deliberate security ruling with
+its reason at `BackendRequestSigner.cs:61-66` (a bearer credential; PlayerPrefs is readable by an
+Android backup). The fix is to stop signing for a READ at boot - open on the local save and mint on the
+first action that genuinely needs proof - never to write the credential down.
+⛔ Must not loosen any grant path. This moves WHEN proof is obtained, never WHETHER.
+**Acceptance:** two cold launches with a bound wallet produce ZERO wallet sheets, proven by
+`sign_messages` being absent from the boot window of a fresh log; a save WRITE still refuses without
+valid auth, and you prove BOTH the refusal and the success.
+
+### LANE 2 - PROD-016: Food is still an Echo job and a world node
+**Files:** `Village/Harvest/EchoAssignments.cs`, `Village/World/HarvestSite.cs`.
+⛔ **`Village/Harvest/EchoService.cs` IS OFF LIMITS** - a live agent lane holds it. Same directory,
+different file; do not stray.
+The owner hit this on device tonight ("assigned to food node"). The ticket's old "duplicate-of-record"
+banner is RETIRED - this is the live remainder of WO-1163, which converted the economy and the town
+surfaces but never moved the Echo job or the world node.
+⛔ **NOT a string swap.** `EchoAssignments.cs:99` `PickableResources` values are PERSISTED assignment
+tokens in the `<resource>:<level>` grammar. A blind rename orphans every saved `food:N`, and migrating
+one to `idle` silently zeroes that Echo's yield. Read-migrate.
+
+### LANE 3 - WO-1209 PHASE A ONLY: instrument the oversized weapon
+**Files:** `Village/Hero/EquipmentController.cs`.
+⛔ **INSTRUMENT ONLY. NO FIX IN THIS LANE.** The staff renders correctly in town and enormous in
+`dg_starter_loop`. Two captured facts point somewhere but prove nothing yet: the dungeon poses
+equipment onto `Hero (Blaise)` while the HUD shows Thrain the Mage, and the seat solve re-fires every
+~5s with identical output on a motionless hero, contradicting the 2026-08-18 event-driven seat fix.
+Emit, on attach and on every re-solve: grip root, parent bone, `parent.lossyScale`, authored scale, the
+resulting `localScale`, and the instantiated body's name. **The lead runs the device capture** - name
+that as ops-owned. Phase B (the fix) is assigned only once the capture names the cause.
+
+### LANE 4 - WO-1208: WHY does the Quarry's collector unregister?
+**Files:** `Village/Buildings/Progression/ResourceCollectorBootstrap.cs`, `ResourceCollector.cs`.
+⛔ `ResourceBuildingHarvester.cs` already carries the lead's mitigation (the tick is HELD, not burned).
+Do not re-edit it; build on it.
+The device log shows the registry FLAPPING inside one session: `liveCollector=yes` at 19:12:31, `NO
+ResourceCollector is registered` at 19:22:31, `liveCollector=yes` again at 19:29:25. The collector
+belongs to the town's placed structure and appears to unregister while the player is in a dungeon.
+⭐ `collector_farm` already reads displayName **"Quarry"**, role `stone_producer` - so this is the NEW
+stone faucet paying nothing, not a legacy food building awaiting retirement.
+⚠ `EnsureFallbackCollector` contains a SILENT `if (host == null) return;` with no trace. A silent
+failure is forbidden (CLAUDE.md sec.12) - instrument it whatever else you find.
+
+### LANE 5 - WO-1206: a retired resource word must never reach a player surface again
+**Files:** ONE new oracle under `Assets/Editor/Regression/`, plus ONE new canonical data file
+(dual-copy, versioned) holding the retirement list.
+Two Food leaks in one hour were found by the OWNER rather than by a gate. Author the retirement list as
+DATA (`food -> stone` is the first row), never as a C# list.
+⛔ **Do NOT flag frozen persistence vocabulary** - `EconomyService.Food`, `PackEconomy.Food`,
+`BuildJobData.paidFood`, the `legacySkus` aliases and the quest wire fields are deliberately frozen by
+WO-1163. An oracle that cannot tell a display string from a persistence key gets switched off within a
+week, which is worse than no oracle. **Prove it RED first**, then green.
+
+### LANE 6 - WO-1159 Sev0: treasury verification is not wired into the ship command
+**Files:** `tools/command-centre.ps1`, `tools/treasury-verify.mjs`.
+`treasury-verify.mjs` supports the required multisig verification and `command-centre.ps1` never calls
+it. Wire the ruled two-state policy: an unreachable RPC WARNS and requires explicit acknowledgement; a
+successful query proving wrong configuration BLOCKS. **Always invoke with `--multisig`** - without that
+flag the tool proves the vault and reads NO threshold at all, which is exactly how the stale 1-of-1
+claim survived in eight separate files.
+
+### LANE 7 - WO-823 Phase E: first-ever raid readiness
+**Files:** `Core/State/SaveSchema.cs`, `Core/State/SaveMigrator.cs`, the army readiness authority.
+⛔ **`Core/State/GameStateService.cs` and `Core/Web3/**` belong to LANE 1** - same directory, different
+files; do not stray.
+Implement as schema **v40**; **v39 already belongs to `paidCoins`** - read `SaveSchema.CurrentVersion`
+at source, never from a doc. Persist a monotonic `EverCompletedRaid`, derive legacy truth from veterancy
+or raid cooldowns, stamp it at the shared `ReconcileRaidEnd` seam, and keep `ArmyReadiness` the SOLE
+threshold authority - do not add a second.
+
+### LANE 8 - PROD-014(c): repair shortfall routing
+**Files:** `Wallet/PackStore.cs`, `ShortfallPackOffer.cs`.
+Its WO-1069 dependency is fixed, so revalidate and then implement through the EXISTING
+`PackStore.FocusShortfall`. ⛔ Do not create another purchase or price authority - the server quote is
+the only price authority, and a second sellable-SKU list on the client is this repo's signature bug.
+
+### LANE 9 - WO-1100: None-mode particle systems are not a debt
+**Files:** the VFX oracle under `Assets/Editor/Regression/`, plus the stale comments it cites.
+All five alleged material offenders are authored `ParticleSystemRenderMode.None` - they intentionally
+render nothing. ⛔ **Do NOT assign materials to them.** Correct the runtime/oracle semantics so
+None-mode systems are counted as intentional non-renderers, fix the stale comments, then remove the
+false debt baseline.
+
+### LANE 10 - R3: structure toughness has two authorities that currently agree
+**Files:** `Village/Walls/WallSegment.cs` plus its behavioural oracle.
+Production duplicates the canonical authority and happens to match it numerically today - which is the
+dangerous state, because nothing fails when they drift. Delegate `WallSegment` to `HeroTalentModifiers`
+and strengthen the oracle so the agreement is ASSERTED rather than coincidental.
+
+### LANE 11 - WO-935 PHASE 0 ONLY: the VFX key and call-site inventory
+**Deliverable:** an inventory document under `docs/reference/`. No code change.
+WO-935 is a PROGRAM, not a lane. ⛔ **Take no numbered VFX phase until this inventory exists.** Map
+every `VFXType` key to its call sites and mark the ones with zero gameplay callers - canon records 26
+of 79 enum values wired to real art with no caller at all, and six tracked categories at 0% usage.
+
+---
+
+## ⛔ NOT IN THIS BATCH - do not pick these up
+
+- **WO-1128** (offline-accrual reconciliation bypass) - PARKED: needs a canonical server-side maximum
+  gain/rate approved by the owner before any code can be right.
+- **WO-1129** (enemy-art consolidation) - PARKED: requires an EXCLUSIVE Unity/import lane with
+  GUID-preserving `AssetDatabase.MoveAsset`; it cannot run beside eleven other lanes.
+- **WO-1073** (patronage entitlement/endpoint/schema) - PARKED: the RCA says it must be SPLIT and
+  specified before assignment. The lead owes that spec. Handing it out as-is repeats the WO-1201 failure.
+- **WO-1210** (black enemies) - the LEAD holds it; it needs the device. The owner has ruled it NOT a
+  blocker.
+- **WO-1205 / WO-1207** - live agent lanes; see the fence table above.
+
+## Return protocol - unchanged
+
+- ⭐ Results go in **`batch_results_state.md`**. ⛔ **Never in this file.**
+- **One isolated worktree per lane.**
+- ⛔ **Nothing committed. Nothing promoted. No ticket status flipped.**

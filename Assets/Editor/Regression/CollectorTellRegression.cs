@@ -99,14 +99,38 @@ namespace DeNelle.Editor.Regression
             string src = ReadSrc(ViewSrc);
             if (src == null) { failures.Add("[ambient-chip] missing source " + ViewSrc); return; }
 
+            // WO-1205 moved ONE token off this list: "TownBankCapacity.MaxOf". The owner
+            // retired the cap TEXT from the row ("recourse we should remove the /2000"), so
+            // the capacity NUMBER is no longer read for display. IsCapped stays required -
+            // it still decides whether the row is a capped resource at all - and the check
+            // below makes the retirement STRICTER, not softer: the cap string may never
+            // come back by accident.
             foreach (var token in new[] { "BuildCollectorsChip", "FormatCollectorChip",
                                           "collectorsChip", "CollectorStatusGate.Status",
                                           "SetCappedResourceValue", "TownBankCapacity.IsCapped",
-                                          "TownBankCapacity.MaxOf", "\"Wood\", \"Iron\", \"Stone\"" })
+                                          "\"Wood\", \"Iron\", \"Stone\"" })
                 if (src.IndexOf(token, StringComparison.Ordinal) < 0)
                     failures.Add("[ambient-chip] HudKitController no longer references '" + token +
                                  "' - the ambient tell is gone and the only remaining signal that a " +
                                  "collector stopped earning is the wallet number failing to move");
+
+            // WO-1205 - the ruled row shape: [icon] <count>.
+            // NB: match the CONCATENATION ("\" of \" +"), not the bare substring - an unrelated
+            // comment in that file quotes the "S" of "Settings", which contains ' of ' verbatim.
+            if (src.IndexOf("\" of \" +", StringComparison.Ordinal) >= 0)
+                failures.Add("[ambient-chip] the ' of ' cap string is back on the resource rows - " +
+                             "the owner retired it 2026-08-25 ('remove the /2000')");
+            if (src.IndexOf("SplitResourceRowChip", StringComparison.Ordinal) < 0)
+                failures.Add("[ambient-chip] the resource row no longer splits icon from digits - " +
+                             "the device capture tmp/wo970/crop-resources.png shows what that costs: " +
+                             "Stone's icon buried under its own '80'");
+            // The COLOURBLIND GUARD, re-pointed by WO-1205: the name label came off the row, so
+            // the no-art identity now rides CurrencyChip's tag fallback. Losing 'tag: names[i]'
+            // would leave an unresolved icon as a naked number, which must never ship.
+            if (src.IndexOf("tag: names[i]", StringComparison.Ordinal) < 0)
+                failures.Add("[ambient-chip] the resource chips no longer pass a no-art tag - an " +
+                             "unresolved icon would leave the row a naked number, breaching the " +
+                             "colourblind rule (identity is never carried by hue alone)");
 
             // The tap must reuse the EXISTING collect command, never mint a second one.
             if (src.IndexOf("CollectorStatusGate.RequestCollectAll", StringComparison.Ordinal) < 0)

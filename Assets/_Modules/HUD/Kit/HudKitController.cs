@@ -1266,10 +1266,10 @@ namespace DeNelle.HUD.Kit
             if (builders && _queueRail != null) { _queueRail.Sync(); _queueRailSyncFrames = 2; }
             else _queueRailSyncFrames = 0;
 
-            // WO-1194: capped-resource lines are ambient information, not an expanded rail.
-            _resPanelOpen = true;
-            if (_resExpandedRow != null && !_resExpandedRow.activeSelf)
-                _resExpandedRow.SetActive(true);
+            // WO-1205 re-points WO-1194: the capped-resource lines are NOT ambient furniture.
+            // The owner ruled the rail back to gold-only-until-tapped, so this arbiter no
+            // longer force-opens the resource panel; the tap window is its only opener.
+            // (Opening another rail section still leaves the resource panel to its own state.)
 
             FlowTrace.Step("HudKit", "right rail: expanded section = " + section +
                            " (one open at a time; the other two stay collapsed)");
@@ -1629,28 +1629,38 @@ namespace DeNelle.HUD.Kit
                 rowRt.anchoredPosition =
                     new Vector2(0f, -(ResPanelPadPx + i * (ResRowHeightPx + ResRowGapPx)));
 
-                // NAME — the colourblind-safe identity carrier. A sibling of the chip, in its
-                // own left sub-rect, so the icon-first rule inside CurrencyChip cannot drop it
-                // and a long amount can never overlap it.
-                var nameLbl = ElarionUiKit.Label(row.transform, names[i], 0f, 1f,
-                    ElarionUi.Parchment, ElarionUi.FontMicro, TextAlignmentOptions.MidlineLeft,
-                    0.02f, 0.44f);
-                nameLbl.raycastTarget = false;
-                ElarionUiKit.FitSingleLine(nameLbl);   // the name never clips its slot
-
+                // WO-1205 — OWNER RULING 2026-08-25: "just the count and not the wood name
+                // just the chip". The row is [icon] <count>. The sibling NAME label that used
+                // to sit in the 0.02->0.44 sub-rect is GONE from the ruled path.
+                //
+                // ⛔ THE COLOURBLIND GUARD IS RE-POINTED, NOT DELETED. The name was the
+                // identity carrier for the no-art case (owner is red/green colourblind; an
+                // icon-only row whose icon fails to resolve is unidentifiable). That duty now
+                // rides CurrencyChip's OWN icon-first fallback: `tag: names[i]` below renders
+                // the word ONLY when the icon sprite comes up null (ElarionUiKitObsidian
+                // CurrencyChip: `bool hasTag = iconSprite == null`). Icon resolves -> [icon] 80.
+                // Icon missing -> "Wood 80". A naked number never ships either way.
+                //
                 // OWNER 2026-07-15 (colorblind): in THIS resource strip Gold must read the SAME
                 // size + color as Wood/Iron/Food/Crystal — the earlier primary:Gold gave it gilt
                 // digits + FontHead (bigger) + bold (ElarionUiKitObsidian CurrencyChip:859-867),
                 // so it stood out. All five chips are peers here; the icon carries identity, never
                 // color/size. primary:false makes every chip uniform (Parchment, FontLabel, normal).
+                // WO-1205: the chip now owns the WHOLE row — nothing sits to its left any more.
                 _resChips[i] = ElarionUiKit.CurrencyChip(row.transform, kinds[i],
-                    new Vector2(0.46f, 0f), new Vector2(1f, 1f), primary: false,
+                    new Vector2(0f, 0f), new Vector2(1f, 1f), primary: false,
                     tag: names[i]);
+                SplitResourceRowChip(_resChips[i]);
                 _cappedResourceValues[i] = _resChips[i].amount;
             }
 
-            _resPanelOpen = true;
-            _resExpandedRow.SetActive(true);
+            // WO-1205 (owner 2026-08-25: "only should gold till clicked then showed all",
+            // "that was much more astetic"): COLLAPSED is the resting state everywhere. The
+            // panel is built inert and only the tap window (see the LateTick block that polls
+            // _chipsExpandUntil) raises it. This used to be an unconditional open, which is
+            // what made the three rows permanent furniture on the town rail.
+            _resPanelOpen = false;
+            _resExpandedRow.SetActive(false);
             Register("resourceChips", WrapAsWidget("resourceChips", _resDock));
 
             // Collapsed variant (calm(explore)): gold chip only; TAP expands the row for 6s.
@@ -1927,9 +1937,11 @@ namespace DeNelle.HUD.Kit
                 return;
             var label = _cappedResourceValues[index];
             if (label == null || !TownBankCapacity.IsCapped(resource)) return;
-            int capacity = TownBankCapacity.MaxOf(resource);
-            label.text = ElarionUi.CompactNumber(Mathf.Max(0, current)) + " of " +
-                         ElarionUi.CompactNumber(Mathf.Max(0, capacity));
+            // WO-1205 (owner: "recourse we should remove the /2000"): the row prints the COUNT
+            // ONLY. The IsCapped read above stays — it still decides whether this row is a
+            // capped resource at all — and CompactNumber still owns the formatting. The cap
+            // itself is untouched; WO-1191's collect toasts remain its surviving voice.
+            label.text = ElarionUi.CompactNumber(Mathf.Max(0, current));
         }
 
         private void OnWave()
@@ -2227,7 +2239,51 @@ namespace DeNelle.HUD.Kit
 
         private void SetResourcePanelOpen(bool open)
         {
-            // WO-1194: this legacy posture seam cannot collapse the ambient capacity rows.
+            // WO-1205: the panel is tap-driven again, so this seam once more carries the
+            // open flag. The tap window (LateTick) owns the SetActive; this only records
+            // the state so nothing else has to re-derive it from the GameObject.
+            _resPanelOpen = open;
+        }
+
+        /// <summary>
+        /// WO-1205 — pin the resource-row chip's icon and digits into DISJOINT sub-rects.
+        /// The kit chip right-aligns its amount and lets it grow LEFTWARD, which is how the
+        /// device capture (tmp/wo970/crop-resources.png) ended up with Stone's icon buried
+        /// under its own "80". This strip pins them apart; no other CurrencyChip consumer
+        /// is touched, so nobody else's layout moves.
+        /// Icon resolved  -> [icon] on the left, digits to its right, no word.
+        /// Icon UNresolved -> the chip's own no-art tag ("Wood"/"Iron"/"Stone") takes the
+        /// left sub-rect instead. The colourblind guard rides that branch (see the build
+        /// block); a row is never a naked number.
+        /// </summary>
+        private static void SplitResourceRowChip(ElarionUiKit.CurrencyChipHandle chip)
+        {
+            if (chip == null) return;
+            bool iconResolved = chip.icon != null && chip.icon.gameObject.activeSelf;
+
+            if (iconResolved)
+            {
+                var irt = (RectTransform)chip.icon.transform;
+                irt.anchorMin = new Vector2(0.04f, 0.12f);
+                irt.anchorMax = new Vector2(0.20f, 0.88f);
+                irt.offsetMin = Vector2.zero; irt.offsetMax = Vector2.zero;
+            }
+            else if (chip.tag != null)
+            {
+                var trt = (RectTransform)chip.tag.transform;
+                trt.anchorMin = new Vector2(0.05f, 0f);
+                trt.anchorMax = new Vector2(0.52f, 1f);
+                trt.offsetMin = Vector2.zero; trt.offsetMax = Vector2.zero;
+            }
+
+            if (chip.amount != null)
+            {
+                var art = (RectTransform)chip.amount.transform;
+                // Digits start clear of whichever identity carrier is present.
+                art.anchorMin = new Vector2(iconResolved ? 0.24f : 0.56f, 0f);
+                art.anchorMax = new Vector2(0.95f, 1f);
+                art.offsetMin = Vector2.zero; art.offsetMax = Vector2.zero;
+            }
         }
 
         // WO-835 §3c: the old OpenQuestOrUpgrade context relabel is SPLIT into two
@@ -2770,10 +2826,17 @@ namespace DeNelle.HUD.Kit
             // Self-throttled (cached hub test, log only on a flip) — see ApplyHeartSceneGate.
             if (_evaluator != null) ApplyHeartSceneGate(_evaluator.Posture);
             // Collapsed chips: the tap-expand window temporarily shows the full row.
-            if (_widgets.TryGetValue("resourceChipsCollapsed", out var col) && col.activeSelf &&
-                _widgets.TryGetValue("resourceChips", out var row))
+            // WO-1205 — THE PANEL CAN NEVER OUTLIVE ITS OPENER. This used to run only while
+            // the collapsed chip was live, so a panel raised by some other caller stayed up
+            // in a posture that does not carry it (owner 2026-08-25: "the resource stayed
+            // active during build screen which it shouldnt"). The gate is now evaluated every
+            // frame in BOTH directions: no live opener (build / modal / battle occupancy) or
+            // an expired window => the panel closes itself, whoever opened it.
+            if (_widgets.TryGetValue("resourceChips", out var row))
             {
-                bool expand = Time.unscaledTime < _chipsExpandUntil;
+                bool openerLive = _widgets.TryGetValue("resourceChipsCollapsed", out var col) &&
+                                  col.activeSelf;
+                bool expand = openerLive && Time.unscaledTime < _chipsExpandUntil;
                 if (row.activeSelf != expand)
                 {
                     if (expand)
@@ -2784,6 +2847,8 @@ namespace DeNelle.HUD.Kit
                     row.SetActive(expand);
                     // WO-440: the explore tap-window shows the full chips panel (not just the tab).
                     SetResourcePanelOpen(expand);
+                    FlowTrace.Step("HudKit", "resource panel " + (expand ? "expanded" : "collapsed") +
+                                   " (opener live=" + openerLive + ")");
                 }
             }
 

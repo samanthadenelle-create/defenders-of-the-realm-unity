@@ -16,19 +16,50 @@
 //   toast seam (ElarionUiKit.ShowToast). No new reflection bridge, no static_gate allowlist
 //   entry, no HudKitController coupling -- Core observing a Core event.
 //
+// ** WO-1207 -- THE ON-SCREEN WARN IS NOW OPT-IN PER CALL SITE. READ THIS BEFORE EDITING. **
+//   Owner ruling 2026-08-25, verbatim: "they get a warn on harvest but no warn on battle
+//   rewards cause one is choice".
+//
+//   COLLECTING is a choice the player TIMES -- she could have built storage, spent first, or
+//   collected sooner -- so at-cap loss on that path is actionable and teaches the cap. A
+//   BATTLE REWARD arrives whether she wants it or not and lands mid combat-resolution;
+//   warning there scolds her for something she did not choose, and noise is how the
+//   actionable warn gets ignored.
+//
+//   MECHANICALLY that means this presenter can no longer render EVERY Overflowed event: both
+//   paths reach ClampGrant with the same BankGrantKind.EarnedIncome and the same "Grant"
+//   source tag, so the event alone cannot tell them apart, and TownBankCapacity/BattleArena
+//   are deliberately not being taught about toasts. So the SUBSCRIPTION stays (it is what
+//   collects the truth) and the RENDER became opt-IN: a call site that has decided the
+//   player can act on the loss opens a BeginWarnScope/WarnScope around its grant. Outside a
+//   scope this observer records nothing on screen -- the [Flow:Bank] Warn in ClampGrant is
+//   still unthrottled and unswallowable, so the loss is never undetectable, only unscolded.
+//
+//   OPT-IN IS THE POINT: a future income path cannot inherit a toast by accident. The one
+//   opted-in call site today is EchoService.DumpSilos (the harvest collect).
+//
+//   ONE TOAST PER SCOPE. A dump can clamp wood AND iron AND food in a single tap. Rendering
+//   per event would stack three scolds for one action, and the kit toast is single-slot
+//   (a new call destroys the old), so the player would see only the last of them. The scope
+//   COLLECTS the trims and emits ONE sentence-per-resource toast when it closes.
+//
 // COPY LAW (WO-901 Sec.4)
 //   This surface owns the words "Storage" / "Bank" / current-max -- it is the WALLET.
 //   It must NEVER say "collectors N/M full" (that is the pending pools, WO-900).
 //   ASCII only, state text-encoded, never colour alone (the owner is red/green colourblind):
 //   the tone accent is decoration, the sentence carries the whole message.
+//   The two sentences below are the OWNER'S COPY -- reuse them, never reword them. WO-1207
+//   explicitly forbids authoring new at-cap words: one voice for the cap.
 //
 // THROTTLING
 //   Per RESOURCE, on storage-caps.json overflowWarnCooldownSeconds, so a hot income loop
-//   (per-kill trickle, offline catch-up) cannot spam the screen. The FlowTrace warn is
-//   deliberately NOT throttled -- the break-log must carry every event even when the
+//   (per-kill trickle, offline catch-up) cannot spam the screen -- and so a player who
+//   collects again while still full is not scolded on every following collect. The FlowTrace
+//   warn is deliberately NOT throttled -- the break-log must carry every event even when the
 //   screen shows one.
 // =============================================================================
 
+using System;
 using System.Collections.Generic;
 using UnityEngine;
 using DeNelle.Core.Diagnostics;
@@ -36,11 +67,35 @@ using DeNelle.Core.Economy;
 
 namespace DeNelle.Core.UI
 {
-    /// <summary>Renders <see cref="TownBankCapacity.Overflowed"/> as the one transient toast.</summary>
+    /// <summary>Renders <see cref="TownBankCapacity.Overflowed"/> as the one transient toast --
+    /// but ONLY inside an opted-in <see cref="WarnScope"/> (WO-1207 ruling 3).</summary>
     public static class BankOverflowToastPresenter
     {
         private static readonly Dictionary<BankResource, float> _lastShownAt = new Dictionary<BankResource, float>();
+        private static readonly List<BankOverflowStatus> _scopeTrims = new List<BankOverflowStatus>();
         private static bool _attached;
+        private static int _scopeDepth;
+        private static string _scopeSource;
+
+        /// <summary>Player-facing toasts raised since the last <see cref="ResetDiagnostics"/>.
+        /// The oracle seam: ElarionUiKit.ShowToast is a no-op outside play, so a suite cannot
+        /// observe the card itself -- it observes the DECISION to show one.</summary>
+        public static int ToastCount { get; private set; }
+
+        /// <summary>The exact text of the most recent player-facing toast ("" if none).</summary>
+        public static string LastToastMessage { get; private set; } = string.Empty;
+
+        /// <summary>Test/teardown seam: clears the counters, the per-resource throttle and any
+        /// half-open scope so one case can never colour the next.</summary>
+        public static void ResetDiagnostics()
+        {
+            ToastCount = 0;
+            LastToastMessage = string.Empty;
+            _lastShownAt.Clear();
+            _scopeTrims.Clear();
+            _scopeDepth = 0;
+            _scopeSource = null;
+        }
 
         /// <summary>Self-attaches once per play session (and re-attaches after a domain reload).</summary>
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
@@ -50,7 +105,7 @@ namespace DeNelle.Core.UI
             _attached = true;
             _lastShownAt.Clear();
             TownBankCapacity.Overflowed += OnOverflow;
-            FlowTrace.Step("Bank", "BankOverflowToastPresenter attached -- clamped grants will surface on screen.");
+            FlowTrace.Step("Bank", "BankOverflowToastPresenter attached -- clamped grants inside an opted-in warn scope will surface on screen (WO-1207).");
         }
 
         /// <summary>Detach (tests / teardown). Idempotent.</summary>
@@ -61,18 +116,150 @@ namespace DeNelle.Core.UI
             _attached = false;
         }
 
+        // =====================================================================
+        //  WO-1207 -- the OPT-IN scope. One toast per scope, or none at all.
+        // =====================================================================
+
+        /// <summary>
+        /// Opens an opt-in warn scope around a grant the player CHOSE to take (the harvest
+        /// collect). Every clamp raised while it is open is collected; closing it emits ONE
+        /// toast naming every trimmed resource. Dispose it -- prefer <c>using</c>.
+        /// <para>A grant made OUTSIDE a scope is silent on screen by design (ruling 3): the
+        /// player did not time it, so a scold is noise she cannot act on. Do not open one
+        /// "just in case" -- opting a path in is a design decision about whether the loss was
+        /// avoidable, not a logging convenience.</para>
+        /// </summary>
+        /// <param name="sourceTag">Short name of the opted-in call site, for the trace.</param>
+        public static WarnScope BeginWarnScope(string sourceTag) => new WarnScope(sourceTag);
+
+        /// <summary>Disposable handle from <see cref="BeginWarnScope"/>. Nesting is counted, so
+        /// only the OUTERMOST close emits -- an inner grant can never split the one toast.</summary>
+        public struct WarnScope : IDisposable
+        {
+            private bool _open;
+
+            internal WarnScope(string sourceTag)
+            {
+                _open = true;
+                if (_scopeDepth == 0)
+                {
+                    _scopeTrims.Clear();
+                    _scopeSource = string.IsNullOrEmpty(sourceTag) ? "?" : sourceTag;
+                }
+                _scopeDepth++;
+            }
+
+            /// <summary>Closes the scope; the outermost close emits the single toast.</summary>
+            public void Dispose()
+            {
+                if (!_open) return;                 // idempotent: a double Dispose must not unbalance the depth
+                _open = false;
+                if (_scopeDepth > 0) _scopeDepth--;
+                if (_scopeDepth == 0) EmitScopeToast();
+            }
+        }
+
         private static void OnOverflow(BankOverflowStatus s)
         {
             if (s.Lost <= 0) return;
 
-            float now = Time.unscaledTime;
-            if (_lastShownAt.TryGetValue(s.Resource, out float last))
-            {
-                float cooldown = StorageCapsCatalog.OverflowWarnCooldownSeconds;
-                if (now - last < cooldown) return;   // screen-only throttle; the Flow warn already fired
-            }
-            _lastShownAt[s.Resource] = now;
+            // Ruling 3 (WO-1207): NO SCOPE, NO SCOLD. The unthrottled [Flow:Bank] Warn in
+            // ClampGrant has already recorded the loss, so nothing is hidden from triage --
+            // this is a decision about whose attention the loss deserves, not about evidence.
+            if (_scopeDepth <= 0) return;
 
+            _scopeTrims.Add(s);
+        }
+
+        /// <summary>
+        /// ONE toast for the whole scope: the owner's sentence per trimmed resource, joined.
+        /// Repeat clamps of the SAME resource inside one scope are summed into one sentence --
+        /// the player lost one total, not two events. Resources still inside their per-resource
+        /// cooldown are dropped here, which is what stops a repeated scold on every following
+        /// collect while the store stays full.
+        /// </summary>
+        private static void EmitScopeToast()
+        {
+            if (_scopeTrims.Count == 0) return;
+
+            float now = Time.unscaledTime;
+            float cooldown = StorageCapsCatalog.OverflowWarnCooldownSeconds;
+
+            // Merge per resource, preserving first-seen order (deterministic sentence order).
+            var order = new List<BankResource>();
+            var merged = new Dictionary<BankResource, BankOverflowStatus>();
+            for (int i = 0; i < _scopeTrims.Count; i++)
+            {
+                var s = _scopeTrims[i];
+                if (merged.TryGetValue(s.Resource, out var prev))
+                {
+                    s.Lost = prev.Lost + s.Lost;
+                    s.Requested = prev.Requested + s.Requested;
+                    s.Granted = prev.Granted + s.Granted;
+                    merged[s.Resource] = s;
+                }
+                else
+                {
+                    order.Add(s.Resource);
+                    merged[s.Resource] = s;
+                }
+            }
+            _scopeTrims.Clear();
+
+            var sentences = new List<string>();
+            bool anyLoss = false;
+            int spoken = 0;
+            int throttled = 0;
+            for (int i = 0; i < order.Count; i++)
+            {
+                var s = merged[order[i]];
+                if (_lastShownAt.TryGetValue(s.Resource, out float last) && now - last < cooldown)
+                {
+                    throttled++;
+                    continue;                       // screen-only throttle; the Flow warn already fired
+                }
+                _lastShownAt[s.Resource] = now;
+                sentences.Add(SentenceFor(s));
+                if (!s.OverCap) anyLoss = true;
+                spoken++;
+            }
+
+            if (spoken == 0)
+            {
+                FlowTrace.Step("Bank",
+                    $"bank-cap toast SUPPRESSED for [{_scopeSource ?? "?"}] -- all {throttled} trimmed resource(s) inside the "
+                    + $"{cooldown:0.#}s per-resource cooldown (no repeated scold on a following collect).");
+                _scopeSource = null;
+                return;
+            }
+
+            string msg = string.Join(" ", sentences.ToArray());
+
+            // The kit card holds ~2 lines at the 480x76 default; a multi-resource dump needs room,
+            // and ToastCard overflows OUTSIDE the plate rather than clipping. Grow, never clip.
+            float width = spoken > 1 ? 620f : 480f;
+            float height = spoken > 1 ? 76f + 34f * (spoken - 1) : 76f;
+            float life = spoken > 1 ? 4.2f : (anyLoss ? 3.2f : 4.5f);
+
+            // Tone is DECORATION (colourblind law) -- the sentence carries the whole message.
+            var tone = anyLoss ? ElarionUiKit.ToastTone.Danger : ElarionUiKit.ToastTone.Info;
+
+            ToastCount++;
+            LastToastMessage = msg;
+            ElarionUiKit.ShowToast(msg, tone, life, 720, width, height);
+            FlowTrace.Step("Bank",
+                $"bank-cap toast for [{_scopeSource ?? "?"}] naming {spoken} trimmed resource(s)"
+                + (throttled > 0 ? $" ({throttled} suppressed by cooldown)" : "") + ".");
+            _scopeSource = null;
+        }
+
+        /// <summary>
+        /// The OWNER'S COPY -- one sentence, chosen by state. WO-1207 forbids new at-cap words;
+        /// this method exists so the single-resource and the multi-resource toast speak with the
+        /// same voice, not so the words can be edited in one place.
+        /// </summary>
+        private static string SentenceFor(BankOverflowStatus s)
+        {
             // WO-1191 -- TWO SITUATIONS, TWO SENTENCES. `FOUNDATIONAL_RULINGS.md` section 7 governs;
             // cite it, never restate it.
             //
@@ -97,15 +284,12 @@ namespace DeNelle.Core.UI
             // named with the measured number -- is the part this file is asserting.
             if (s.OverCap)
             {
-                string msg = $"{s.ResourceName} is above storage - {s.Current} of {s.Max}. All of it is yours to spend. "
-                           + $"Harvests and rewards add no {s.ResourceName.ToLowerInvariant()} until you are back under {s.Max}.";
-                ElarionUiKit.ShowToast(msg, ElarionUiKit.ToastTone.Info, 4.5f);
-                return;
+                return $"{s.ResourceName} is above storage - {s.Current} of {s.Max}. All of it is yours to spend. "
+                     + $"Harvests and rewards add no {s.ResourceName.ToLowerInvariant()} until you are back under {s.Max}.";
             }
 
             // ASCII, text-encoded, names the resource AND the amount lost AND the fix.
-            string full = $"{s.ResourceName} storage FULL - {s.Lost} lost. Build or upgrade a {s.ContainerName}, or spend {s.ResourceName.ToLowerInvariant()}.";
-            ElarionUiKit.ShowToast(full, ElarionUiKit.ToastTone.Danger, 3.2f);
+            return $"{s.ResourceName} storage FULL - {s.Lost} lost. Build or upgrade a {s.ContainerName}, or spend {s.ResourceName.ToLowerInvariant()}.";
         }
     }
 }

@@ -1,6 +1,6 @@
 # WORK ORDER 1210 - Every enemy renders as a flat black silhouette on device
 
-**Status:** READY TO IMPLEMENT - ⛔ **SHIP-BLOCKER.** This is the first thing a new player sees.
+**Status:** OPEN - ⭐ **NOT A SHIP-BLOCKER. OWNER RULED 2026-08-25:** *"i dont care so much about the black enemies, until you said something i assumed that was expected"*. She had seen them and read them as the intended look for the Hollow family, so this does NOT hold a build or a store submission. ⚠ The CLI raised it as a blocker on its own read of the evidence - the same enemy's lock-on portrait renders fully textured in the frame where its body renders black - which is a real inconsistency worth an answer, but **what the game should LOOK like is the owner's call, never the CLI's.** What is owed here is one creative ruling, not an emergency: is a flat black silhouette the intended Hollow read? If YES, close this and instead pin the intent so no future seat "fixes" it. If NO, the investigation below stands as written.
 **Minted:** 2026-08-25 (CLI lead, main line; banner bumped 1210 -> 1211 in the same edit)
 **Silo:** Village / enemies + rendering
 **Reported:** the owner, 2026-08-25, felt-testing build `2026.08.25.341262`: *"combat is wrong still"*.

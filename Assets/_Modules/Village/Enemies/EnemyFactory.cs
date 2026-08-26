@@ -401,6 +401,12 @@ namespace DeNelle.Village
                 // Armed HERE, at the single skin choke point, so the late re-skin gets it too.
                 EnemyBodyColorGuard.Arm(vis, def, model, rigForModel.ToString(), FamilyFallbackTint(def, model));
 
+                // WO-1210: the colour guard above proves the SKIN is present (textured=6/7,
+                // unpainted=0) and the owner still sees flat black bodies on device. So the
+                // remaining question is not "is it painted" but "is it LIT" - and that is a
+                // reading, not a theory. One dump per family, enemy and hero side by side.
+                EnemyRenderDiagnostic.ReportOnce(vis, def != null ? def.Id : null, model);
+
                 // WIGHT HALF-UNDERGROUND FIX (RCA 2026-06-17): the Tripo/AccuRIG FBXs pivot at
                 // the mesh CENTRE, so when the visual is scaled up (the Demon/wight at 4x) the
                 // feet sink well below the root's spawn Y=0 and the body renders half-buried.

@@ -673,6 +673,14 @@ namespace DeNelle.Editor
             // fill/drain is ONE pure capacity-ascending function, and an over-cap save is grandfathered ---
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "town-bank-cap suite", () => { if (!DeNelle.Editor.Regression.TownBankCapRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[town-bank-cap] " + r); });
 
+            // WO-1207 (owner rulings 2026-08-25): a trimmed HARVEST is TOLD, a trimmed BATTLE REWARD
+            // is SILENT. "they get a warn on harvest but no warn on battle rewards cause one is
+            // choice" - collecting is timed by the player, a reward is not. Both halves are pinned
+            // here so a later refactor cannot quietly widen the warning to every grant path.
+            // Registered by the COMMITTER, never by the lane that wrote the suite (this line is the
+            // one file every parallel oracle lane would otherwise collide in).
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "harvest-trim-warn suite", () => { if (!DeNelle.Editor.Regression.WO1207HarvestTrimWarnRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[harvest-trim-warn] " + r); });
+
             // --- WO-1191: income while a resource sits ABOVE its cap. Ruling: `FOUNDATIONAL_RULINGS.md`
             // section 7 -- read it there, it is not restated. The suite above proves the clamp helper
             // RETURNS the right number, which is the same act as reading the code; this one reads the

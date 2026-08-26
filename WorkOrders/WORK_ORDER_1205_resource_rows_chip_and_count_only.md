@@ -7,6 +7,39 @@
 
 ---
 
+## ⛔ SCOPE FENCE - TWO resource surfaces exist and only ONE is in this ticket
+
+Owner, 2026-08-25: *"the ones on build screen are correct just should be Stone not food and in bottom
+minial is perfect"* and *"but the resources on HUD with the /2000 i hate that"*.
+
+| surface | files | verdict |
+|---|---|---|
+| **Build-screen strip** (`W 8 \| I 0 \| S 130 \| C 550 \| G 1053`) | `Village/BuildMode/BuildWalletRow.cs`, `LiveWalletSource.cs` | ⛔ **RULED CORRECT - DO NOT TOUCH.** "in bottom minial is perfect". Its only defect was the letter F for retired Food, fixed by the lead (binds `stone`/`S`). Do not convert it to icon chips, restyle or re-space it. |
+| **Town HUD resource rail** (the rows carrying "of 2000") | `HUD/Kit/HudKitController.cs` | ✅ **THE WHOLE OF THIS TICKET.** "I hate that." |
+
+An unrequested change to the build strip is a regression to something the owner likes.
+
+## ⛔ AMENDED BY THE OWNER 2026-08-25, MID-IMPLEMENTATION - the SHAPE changes, not just the contents
+
+> "fix the ui issue. I prefered the other way it was, only should gold till clicked then showed all"
+> "that was much more astetic"
+
+The always-expanded three-row panel (Wood / Iron / Stone stacked under the rail) is NOT the wanted
+shape. **COLLAPSED IS THE RESTING STATE: the GOLD chip alone, and the full set appears only on TAP.**
+
+⭐ **The mechanism already exists - do not build a second one.** `HudKitController` already constructs
+`_resGoldOnly` as *"Collapsed variant (calm(explore)): gold chip only; TAP expands the row for 6s"*,
+with `_resExpandedRow` / `_resChips` as the expansion. Today the file runs `_resPanelOpen = true;`
+and `_resExpandedRow.SetActive(true);` unconditionally, which is the likely reason the panel is
+always open. Restore the collapsed default through that existing seam.
+
+The chip+count rulings below still apply **to the expanded rows when they are shown**: no cap text,
+no word label, no icon-over-digits, and the no-art name fallback stays.
+
+⚠ TWO OWNER CALLS NOT ANSWERED IN CODE: whether the expansion auto-collapses after 6 s or stays
+until tapped again, and whether the collapsed chip shows Gold ONLY or Gold plus a hidden-count. Ship
+the existing 6 s behaviour and surface both questions rather than inventing an answer.
+
 ## Owner ruling, verbatim
 
 > "recourse we should remove the /2000"

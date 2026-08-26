@@ -403,7 +403,20 @@ namespace DeNelle.Village
                 // locals told the player she banked resources she never received -- a log that shows
                 // the pre-clamp number is how a silent loss hides (the pattern OfflineHarvestService
                 // documents). Gold is uncapped, so it applies in full.
-                var applied = eco.GrantSpendable(wood: wood, food: food, iron: iron, crystals: crystals);
+                // WO-1207 (owner, 2026-08-25): "they get a warn on harvest but no warn on battle
+                // rewards cause one is choice". THIS is the choice path -- the player TIMED this
+                // collect, so a trim here is actionable (build storage, spend first, collect
+                // sooner) and it is what makes the cap mean anything. So the harvest OPTS IN to
+                // the on-screen warn; the toast is not inherited by any other grant path, and the
+                // scope emits exactly ONE toast for the whole dump no matter how many of
+                // wood/iron/food the cap trimmed. Presentation stays a separate layer: this opens
+                // a scope, it does not build UI and never learns a toast exists
+                // (ARCHITECTURE_PRINCIPLES Sec.2).
+                ResourceCost applied;
+                using (DeNelle.Core.UI.BankOverflowToastPresenter.BeginWarnScope("EchoService.DumpSilos"))
+                {
+                    applied = eco.GrantSpendable(wood: wood, food: food, iron: iron, crystals: crystals);
+                }
                 if (gold > 0) eco.AddCoins(gold);
                 if (applied.Wood != wood || applied.Iron != iron || applied.Food != food)
                     FlowTrace.Warn("Echo",
