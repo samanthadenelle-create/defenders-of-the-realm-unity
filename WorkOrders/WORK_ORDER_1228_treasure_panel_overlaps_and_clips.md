@@ -1,6 +1,6 @@
 # WORK ORDER 1228 - The TREASURE FOUND panel overlaps its own title, clips its list, and buries its footer
 
-**Status:** IMPLEMENTED + gate-green - DEVICE/GREYSCALE/FELT-VERIFY OWED (not FIXED/DONE)
+**Status:** FIXED 2026-08-26 - `COMPILE_GATE_OK` + `REGRESSION_OK 292/292`; post-fix APK visual/greyscale verification queued
 **Silo:** UI layout
 **Origin:** Owner felt-test, Seeker build `2026.08.26.342290`, 2026-08-26. Owner verbatim:
 *"needs cleaned up"*.
@@ -128,5 +128,5 @@ The panel implementation and oracle landed in `b303c4fbf`. Fresh evidence:
 `Builds/batch0-regression-2.log:83583` `DUNGEON TREASURE OK` proves five exclusive bands,
 six-then-scroll overflow, and a 3/3-collision historical RED control; `:83814` is
 `REGRESSION_OK 291/291`. Source inspection established this panel does not consume `chrome.layout`,
-so the close-band reservation was not the cause. Still owed: five-line and deliberately longer
+so the close-band reservation was not the cause. **Post-FIXED APK checklist:** five-line and deliberately longer
 2670x1200 device captures opened and inspected, greyscale check, and owner close.

@@ -69,6 +69,9 @@ namespace DeNelle.Core.Diagnostics
         Transform _hero;
         Vector3 _lastHeroPos;
         float _lastProgressTime;
+        float _lastInputTime;
+        float _lastWorldTime;
+        float _lastWorldAdvanceTime;
         bool _softlockReported;
         float _nextWatchdog;
 
@@ -139,6 +142,9 @@ namespace DeNelle.Core.Diagnostics
                 _outDir = ResolveOutDir();
                 _logPath = Path.Combine(_outDir, "break-log.jsonl");
                 _lastProgressTime = Time.realtimeSinceStartup;
+                _lastInputTime = _lastProgressTime;
+                _lastWorldTime = Time.time;
+                _lastWorldAdvanceTime = _lastProgressTime;
                 _nextWatchdog = Time.realtimeSinceStartup + WatchdogInterval;
 
                 Application.logMessageReceived += OnLog;
@@ -283,6 +289,21 @@ namespace DeNelle.Core.Diagnostics
             _softlockReported = false;
         }
 
+        /// <summary>The watchdog's auditable result. Idle is still recorded, but is not page-worthy.</summary>
+        public enum StallClassification { Idle, Softlock }
+
+        /// <summary>
+        /// Pure classifier seam for the live watchdog and its regression. A backgrounded app is idle.
+        /// In focus, a live world plus no player input is idle; a frozen world, or player input that
+        /// produces no progress, is a possible softlock.
+        /// </summary>
+        public static StallClassification ClassifyStall(bool hadInput, bool appFocused, bool worldAdvanced)
+        {
+            if (!appFocused) return StallClassification.Idle;
+            if (!hadInput && worldAdvanced) return StallClassification.Idle;
+            return StallClassification.Softlock;
+        }
+
         bool _f8PollWarned;
         void Update()
         {
@@ -292,6 +313,20 @@ namespace DeNelle.Core.Diagnostics
             catch (Exception ex) { if (!_f8PollWarned) { _f8PollWarned = true; Debug.LogWarning("[BreakCapture] F8 poll/flag threw (capture disabled?): " + ex); } }
 
             float now = Time.realtimeSinceStartup;
+            try
+            {
+                if (Input.anyKeyDown || Input.touchCount > 0) _lastInputTime = now;
+            }
+            catch { /* input telemetry is best-effort; the watchdog remains fail-safe */ }
+
+            // Time.time is the world heartbeat. Sampling it against realtime distinguishes a hero
+            // who is merely standing still from a world whose simulation has stopped.
+            float worldNow = Time.time;
+            if (worldNow > _lastWorldTime + 0.0001f)
+            {
+                _lastWorldTime = worldNow;
+                _lastWorldAdvanceTime = now;
+            }
             if (now < _nextWatchdog) return;
             _nextWatchdog = now + WatchdogInterval;
             try
@@ -369,8 +404,14 @@ namespace DeNelle.Core.Diagnostics
                 if (!_softlockReported && now - _lastProgressTime > SoftlockSeconds)
                 {
                     _softlockReported = true;
-                    Record("possible_softlock",
-                           $"No movement or progress for {SoftlockSeconds:0}s in '{SceneManager.GetActiveScene().name}'",
+                    bool hadInput = _lastInputTime > _lastProgressTime;
+                    bool focused = Application.isFocused;
+                    bool worldAdvanced = now - _lastWorldAdvanceTime <= WatchdogInterval * 2.5f;
+                    StallClassification classification = ClassifyStall(hadInput, focused, worldAdvanced);
+                    string kind = classification == StallClassification.Idle ? "idle" : "possible_softlock";
+                    Record(kind,
+                           $"No movement or progress for {SoftlockSeconds:0}s in '{SceneManager.GetActiveScene().name}'" +
+                           $"; classification={classification.ToString().ToUpperInvariant()} input={hadInput} focused={focused} worldLive={worldAdvanced}",
                            null, screenshot: true);
                 }
             }

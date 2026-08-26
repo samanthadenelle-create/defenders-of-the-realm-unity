@@ -1,6 +1,6 @@
 # WORK ORDER 1225 - A toast rendered UNDER a modal is still a silent grant
 
-**Status:** IMPLEMENTED + gate-green - DEVICE VISIBILITY/FELT-VERIFY OWED (not FIXED/DONE)
+**Status:** FIXED 2026-08-26 - `COMPILE_GATE_OK` + `REGRESSION_OK 292/292`; post-fix APK visibility/felt verification queued
 **Silo:** HUD / presentation ordering
 **Origin:** Owner felt-test, Seeker build `2026.08.26.342290`, 2026-08-26 12:14.
 Owner verbatim: *"it didt show or if it did it was under the echo introdution window that popped."*
@@ -116,5 +116,5 @@ The shared `RewardFlightLayer` acknowledgement implementation and regression lan
 `Builds/batch0-regression-2.log:83800` proves modal precedence (34500 over 34000), pooling,
 measured-value counting, chest/celebration producers, HUD lifecycle wiring, and words-not-colour;
 `:83814` is `REGRESSION_OK 291/291`. The regression explicitly partial-skips actual rendered
-visibility in batchmode. Still owed: the acknowledgement/device screenshot while the Echo unlock
+visibility in batchmode. **Post-FIXED APK checklist:** the acknowledgement/device screenshot while the Echo unlock
 dialogue is open, in-play visibility proof, and owner felt-close.

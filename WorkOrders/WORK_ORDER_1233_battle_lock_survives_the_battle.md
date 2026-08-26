@@ -1,6 +1,6 @@
 # WORK ORDER 1233 - The battle-lock SURVIVES the battle 8 times out of 9, and the world clock leaks at 4% speed
 
-**Status:** IMPLEMENTED + gate-green + RED-proven - DEVICE SOAK/FELT-VERIFY OWED (not FIXED/DONE)
+**Status:** FIXED 2026-08-26 - `COMPILE_GATE_OK` + `REGRESSION_OK 292/292` + RED-proven; post-fix APK soak/felt verification queued
 **Silo:** Combat / lifecycle
 **Severity:** P0. The player is left in a town they cannot interact with. This is the "the game is
 frozen" class of defect and it has a KNOWN PRIOR (2026-08-20) that the instrumentation names itself.
@@ -100,5 +100,5 @@ The unified battle-end release landed in `b303c4fbf`. Fresh evidence:
 `REGRESSION_OK 291/291`. Load-bearing RED was banked in
 `Builds/wo1233-red-proof.log` / `Builds/wo1233-red-proof-retry.log`: removing the single
 `ClearPursuits` call failed arena win, arena loss, and retreat; the call was restored exactly once.
-Still owed: a multi-battle device capture with zero `BATTLE_QUIESCENCE_FAIL`, the skipped-release
+**Post-FIXED APK checklist:** a multi-battle device capture with zero `BATTLE_QUIESCENCE_FAIL`, the skipped-release
 trace quoted in a RESULT, and the owner's win/retreat/town-interaction felt-close.

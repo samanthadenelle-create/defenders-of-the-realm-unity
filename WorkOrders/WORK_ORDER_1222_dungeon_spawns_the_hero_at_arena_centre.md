@@ -1,6 +1,6 @@
 # WORK ORDER 1222 - Entering the composed Healer's Cottage leaves the hero 7km away at ArenaCentre (black screen)
 
-**Status:** IMPLEMENTED + gate-green - DEVICE/FELT-VERIFY OWED (not FIXED/DONE)
+**Status:** FIXED 2026-08-26 - `COMPILE_GATE_OK` + `REGRESSION_OK 292/292`; post-fix APK visual/felt verification queued
 **Silo:** Dungeons / scene routing
 **Severity:** P0 — an unplayable black screen on a reachable dungeon, on a LIVE build that takes
 real money. The player has a working joystick and nothing to see.
@@ -99,5 +99,5 @@ The shared `DungeonHeroSeat` arrival authority landed in `b303c4fbf`. Fresh evid
 `Builds/batch0-compile-2.log:1966` `COMPILE_GATE_OK`;
 `Builds/batch0-regression-2.log:83490` `COMPOSED DUNGEON RUN OK` proves the composed arrival pose one
 frame after load through that single authority; `:83814` is `REGRESSION_OK 291/291`.
-Still owed: the opened device screenshot showing the composed Healer's Cottage room, the requested
+**Post-FIXED APK checklist:** the opened device screenshot showing the composed Healer's Cottage room, the requested
 arrival trace/capture checks, and owner device felt-close.

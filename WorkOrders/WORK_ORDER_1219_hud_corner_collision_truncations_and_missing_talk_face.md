@@ -1,6 +1,6 @@
 # WORK ORDER 1219 - The top-left HUD corner is over-subscribed, two labels truncate, and the action bar is missing Talk
 
-**Status:** IMPLEMENTED + gate-green - DEVICE/FELT-VERIFY OWED (not FIXED/DONE)
+**Status:** FIXED 2026-08-26 - `COMPILE_GATE_OK` + `REGRESSION_OK 292/292`; post-fix APK visual/felt verification queued
 **Silo:** HUD layout
 **Origin:** CLI observation from owner felt-test device captures, 2026-08-26, Seeker build
 `2026.08.26.341419`. Three separate defects, one lane (all HUD layout), so one ticket and one seat.
@@ -132,7 +132,7 @@ Relevant implementation/proof files inspected in this closeout:
 - `Assets/_Modules/Village/Walls/HubRepairAffordance.cs`
 - `Assets/Editor/Regression/HudUiRegression.cs`
 
-This does **not** earn FIXED/DONE yet. Acceptance still owed: a post-fix 2670x1200 device capture
+**Post-FIXED APK checklist:** a 2670x1200 device capture
 opened and visually inspected; its capture log's `UI_CAPTURE_HEAD <sha> <branch> dirty=false`
 stamp; device confirmation that Talk appears while standing at an NPC; and owner felt-verification
 and close. The pre-fix screenshots in this ticket prove the defect, not the repaired pixels.

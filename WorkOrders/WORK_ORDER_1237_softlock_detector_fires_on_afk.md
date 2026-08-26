@@ -1,6 +1,6 @@
 # WORK ORDER 1237 - The softlock detector fires on AFK, and that noise will bury a real softlock
 
-**Status:** READY TO IMPLEMENT
+**Status:** FIXED 2026-08-26 - `SOFTLOCK_CLASSIFIER_OK` + `COMPILE_GATE_OK` + `REGRESSION_OK 292/292`
 **Silo:** Tooling / F8 harness
 **Severity:** P2 by symptom, but it degrades the signal the whole section-14 pipeline depends on.
 **Origin:** CLI triage of device capture seq 3609, 2026-08-26 - one of the first two captures the
@@ -69,3 +69,19 @@ be RECORDED and simply not paged, so the distinction stays auditable.
 - `f8-inbox-lib.ps1`'s queue semantics or the ack watermark (WO-965).
 - The WO-1227 device bridge's transport or its `device-state.json` watermark. It works and is proven
   idempotent three ways; this ticket is CLASSIFICATION, not transport.
+
+---
+
+## FIXED EVIDENCE (2026-08-26)
+
+- `Builds/wo1237-focused.log:3247` - `SOFTLOCK_CLASSIFIER_OK`; the load-bearing RED control shows
+  the legacy classifier reports all 3/3 fixtures as `possible_softlock`, while the corrected
+  classifier records idle without paging and preserves both frozen-world and input-without-progress
+  as real softlocks.
+- `Builds/pre-seeker-compile.log:529` - `COMPILE_GATE_OK :: scripts compiled clean`.
+- `Builds/pre-seeker-regression.log:83416` - `SOFTLOCK_CLASSIFIER_OK` inside the full suite.
+- `Builds/pre-seeker-regression.log:83815` - `REGRESSION_OK 292/292 suites -- 292 green, 0 red, 0 skipped`.
+
+Historical backfill result: **2 of 8** `possible_softlock` entries reclassify as idle. The other
+**6 remain unknown**, not softlock-confirmed, because those older records do not carry enough input
+and world-liveness telemetry for the new classifier. Idle captures remain recorded but do not page.

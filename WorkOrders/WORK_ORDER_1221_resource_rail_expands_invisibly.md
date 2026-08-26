@@ -1,6 +1,6 @@
 # WORK ORDER 1221 - Tapping the resource chip logs "expanded" and renders NOTHING
 
-**Status:** IMPLEMENTED + gate-green - DEVICE/FELT-VERIFY OWED (not FIXED/DONE)
+**Status:** FIXED 2026-08-26 - `COMPILE_GATE_OK` + `REGRESSION_OK 292/292`; post-fix APK visual/felt verification queued
 **Silo:** HUD
 **Severity:** P1 — the player cannot see Wood / Iron / Stone / Crystals anywhere in town.
 **Origin:** Owner felt-test, Seeker build `2026.08.26.341419`, 2026-08-26.
@@ -133,5 +133,5 @@ The resource-rail geometry/raise implementation landed in `b303c4fbf`. Fresh evi
 `Builds/batch0-compile-2.log:1966` `COMPILE_GATE_OK`;
 `Builds/batch0-regression-2.log:24804` and `:83504` `HUDUI_OK` explicitly pin the
 `SetResourcePanelOpen` raise and measured expansion; `:83814` is `REGRESSION_OK 291/291`.
-Still owed: the 2670x1200 screenshot taken inside the expansion window showing Wood, Iron, Stone
+**Post-FIXED APK checklist:** the 2670x1200 screenshot taken inside the expansion window showing Wood, Iron, Stone
 and Crystals, visual inspection, and owner felt-close.

@@ -1,6 +1,6 @@
 # WORK ORDER 1232 - "Lv 68" on a wave-7 enemy: two call sites still run the RETIRED HP/25 heuristic
 
-**Status:** IMPLEMENTED + gate-green - DEVICE/FELT-VERIFY OWED (not FIXED/DONE)
+**Status:** FIXED 2026-08-26 - `COMPILE_GATE_OK` + `REGRESSION_OK 292/292`; post-fix APK visual/felt verification queued
 **Silo:** HUD / Combat presentation
 **Severity:** P1. It also drives the DANGER SKULL, so the threat warning is wrong by the same factor.
 **Origin:** Owner felt-test, Seeker build `2026.08.26.342290`, 2026-08-26. Owner verbatim:
@@ -181,5 +181,5 @@ The two retired HP-derived display sites were removed in `b303c4fbf`. Fresh evid
 `Builds/batch0-compile-2.log:1966` `COMPILE_GATE_OK`;
 `Builds/batch0-regression-2.log:83802` `WO1232_ENEMY_LEVEL OK` proves target and threat read
 `Enemy.Level`, remain invariant through x1..x9.7 HP scaling, and finds no remaining `maxHp/25`
-derivation across 2208 C# files; `:83814` is `REGRESSION_OK 291/291`. Still owed: the specified
+derivation across 2208 C# files; `:83814` is `REGRESSION_OK 291/291`. **Post-FIXED APK checklist:** the specified
 2670x1200 wave-enemy target-frame screenshot and owner felt-close.

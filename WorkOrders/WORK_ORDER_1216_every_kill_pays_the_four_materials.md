@@ -1,6 +1,6 @@
 # WORK ORDER 1216 - Every kill pays Wood / Iron / Gold / Stone, tuned so grinding funds repair
 
-**Status:** IMPLEMENTED + gate-green - RESULT MEASUREMENT/DEVICE FELT-VERIFY OWED (not FIXED/DONE)
+**Status:** FIXED 2026-08-26 - `COMPILE_GATE_OK` + `REGRESSION_OK 292/292`; post-fix measurement/device verification queued
 **Silo:** Economy / rewards
 **Origin:** Owner ruling, 2026-08-26, from a Seeker felt-test on build `2026.08.26.341419`.
 
@@ -154,5 +154,5 @@ including both canonical `waves.json` copies. Fresh evidence:
 `Builds/batch0-regression-2.log:83801` proves a non-raid kill pays the unchanged WO-1216 amount,
 the identical raid kill pays zero per-kill materials, and the single end-of-raid payout remains
 wired; it records the shipped median as 20 of each material. `:83814` is
-`REGRESSION_OK 291/291`. Still owed: the ticket's measured kills-to-afford-Repair-All RESULT across
+`REGRESSION_OK 291/291`. **Post-FIXED APK checklist:** the ticket's measured kills-to-afford-Repair-All RESULT across
 the required encounter contexts and owner device felt-close.

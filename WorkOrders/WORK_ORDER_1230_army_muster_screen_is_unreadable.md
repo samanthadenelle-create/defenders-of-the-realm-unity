@@ -1,6 +1,6 @@
 # WORK ORDER 1230 - The Army Muster screen is unreadable: six collisions, and the edited number wraps
 
-**Status:** IMPLEMENTED + gate-green - DEVICE/FELT-VERIFY OWED (not FIXED/DONE)
+**Status:** FIXED 2026-08-26 - `COMPILE_GATE_OK` + `REGRESSION_OK 292/292`; post-fix APK visual/greyscale verification queued
 **Silo:** UI layout  --  **routed to the UI SEAT** for the layout spec/mockup, per owner ("send this to ui")
 **Severity:** P1. This is the screen that spends the player's gold, and the quantity field cannot be read.
 **Origin:** Owner felt-test, Seeker build `2026.08.26.342290`, 2026-08-26. Owner verbatim:
@@ -238,7 +238,7 @@ Relevant implementation/proof files inspected in this closeout:
 - `Assets/Editor/Regression/ArmyMusterLayoutRegression.cs.meta`
 - `Assets/Editor/Regression/DataRegression.cs`
 
-This does **not** earn FIXED/DONE yet. Acceptance still owed: a post-fix 2670x1200 device capture,
+**Post-FIXED APK checklist:** a 2670x1200 device capture,
 opened and visually inspected, showing a staged three-digit count; a greyscale check of that capture;
 and owner felt-verification and close. The existing `tmp/wo-army-muster-2026-08-26.png` is the
 pre-fix defect evidence and cannot prove the repaired presentation.
