@@ -137,7 +137,10 @@
 > fine as history. A copied number is the bug **even when it was right the day it was written** -
 > that is exactly how the retired 860-899 UI block kept re-seeding collisions from CLAUDE.md sec.2.
 
-> ## ⚠ RECONCILED 2026-08-26 (CLI): main line next free = **1227**.
+> ## ⚠ RECONCILED 2026-08-26 (CLI): main line next free = **1231**.
+> 1227 device->inbox bridge | 1228 treasure panel | 1229 Env_Candle leak | 1230 army muster unreadable (routed to UI seat).
+>
+> ### superseded: RECONCILED 2026-08-26 (CLI): main line next free = **1227**.
 > *(CLI seat minted **WO-1226** and bumped 1226 -> 1227 in this SAME edit. **1226** = THE STAFF LIES
 > ACROSS THE BODY — FIX THE SEAT, NOT THE DERIVER. Owner hit it on TWO builds (`.341419` and
 > `.342290`): *"why is the staff still horizontal during fights?"* / *"thought we fixed that many

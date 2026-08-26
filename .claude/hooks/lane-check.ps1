@@ -29,11 +29,11 @@ if (-not (Test-Path $WoDir)) { exit 0 }
 # A RESULT file means the work is done; the board's Done bucket keys off it. Exclude them, or a
 # finished ticket whose spec still says READY reads as outstanding forever.
 #
-# ⚠ PERF: this runs on EVERY prompt, so it is ONE Select-String pass over the whole glob, not one
+# !! PERF: this runs on EVERY prompt, so it is ONE Select-String pass over the whole glob, not one
 # call per file. The per-file loop this replaced took 9.1s against ~570 work orders -- a per-turn
 # tax that big would earn the hook a disable, which is the same outcome as not having it.
 #
-# ⚠ COUNTING AUTHORITY: `python tools/board_build.py` -> BOARD.html is the authority on bucket
+# !! COUNTING AUTHORITY: `python tools/board_build.py` -> BOARD.html is the authority on bucket
 # counts; it applies nuances this cheap scan does not (partials, supersedes, RESULT pairing), so
 # the two numbers can differ. That is fine and deliberate -- this hook exists to make the queue
 # VISIBLE, not to be the ledger. Read the board before quoting a number to the owner.
