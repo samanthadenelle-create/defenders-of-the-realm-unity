@@ -1,6 +1,6 @@
 # WORK ORDER 1163 - RESULT: resource ladder and Food-to-Stone conversion
 
-**Status:** IMPLEMENTED AND INTEGRATED - awaiting owner Seeker felt-test to close.
+**Status:** DONE - owner-closed 2026-08-25 on a Seeker felt-test of build `2026.08.25.341262` ("stone yes"). Implementation was integrated through `45907e7e`; the owner-held device acceptance in section 7 is now satisfied.
 
 ## Final integrated result (2026-08-25)
 

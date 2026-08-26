@@ -137,7 +137,19 @@
 > fine as history. A copied number is the bug **even when it was right the day it was written** -
 > that is exactly how the retired 860-899 UI block kept re-seeding collisions from CLAUDE.md sec.2.
 
-> ## ⚠ RECONCILED 2026-08-25 (CLI): main line next free = **1205**.
+> ## ⚠ RECONCILED 2026-08-25 (CLI): main line next free = **1206**.
+> *(CLI seat minted **WO-1205** and bumped 1205 -> 1206 in this SAME edit. **1205** = THE
+> RESOURCE ROWS READ AS CHIP + COUNT. Owner ruling while felt-testing build 2026.08.25.341262:
+> *"recourse we should remove the /2000"* and *"just the count and not the wood name just the
+> chip"*. Proving capture `tmp/wo970/crop-resources.png` also shows a second, unruled defect in
+> the same row: **the icon is drawn ON TOP OF the digits** - Stone's icon is all but occluded by
+> its own "80" - so "chip + count" cannot be built without separating them. ⛔ The name label is
+> the colourblind-safe identity carrier (`HudKitController.cs:1633-1635`); the ruling is
+> implemented as written and the guard is RE-POINTED, not deleted - the name auto-returns only
+> when the icon art fails to resolve. Seams: `HudKitController.cs:1931` (the " of " string),
+> `:1633-1640` (the label), `:1645-1648` (the overlapping chip). READY TO IMPLEMENT.)*
+>
+> ### superseded: RECONCILED 2026-08-25 (CLI): main line next free = **1205**.
 > *(CLI seat minted **WO-1204** and bumped 1204 -> 1205 in this SAME edit. **1204** = REWARDED
 > ADS RETURN TO THEIR CALLER, not Pause/Settings. Owner report: after an ad played, the game
 > returned to Pause/Settings instead of the screen/context that invoked it. Commit `76ba97a9d`
