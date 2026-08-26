@@ -18,6 +18,25 @@
 >
 > Per CLAUDE.md §15 THIS file is LIVING — edited in place, never snapshotted. The `CANON_GROUND_TRUTH_*`
 > anchors are the dated snapshots.
+> ## ⛔ EVERY UNIT OF REVENUE SO FAR IS THE OWNER'S OWN (2026-08-25, owner-stated)
+>
+> Both rails now WORK, and neither has been paid by a stranger:
+> - **Purchases:** the 1 SKR canary and both 391 SKR ladder purchases were made by the owner from her
+>   own wallet, and the 783 SKR was withdrawn again under 2-of-3 multisig. Money circulated; it did
+>   not arrive.
+> - **Ads:** the LevelPlay/ironSource dashboard reads **$0.04 over 14 days** - owner verbatim,
+>   *"that was only me from testing"*. Her own impressions on her own device.
+>
+> ⭐ **What that DOES prove is the infrastructure**, and it is not nothing: quote -> wallet -> vault ->
+> multisig withdrawal on the money rail, and SDK -> placement -> mediation -> attribution -> a real
+> dollar figure on the ad rail. Every link is real and observed.
+>
+> ⛔ **What it does NOT prove is demand. NOBODY OUTSIDE THIS HOUSEHOLD HAS PAID THIS GAME ANYTHING,
+> in money or attention.** Write that plainly wherever revenue is described. This canon spent weeks
+> saying "the game is published" while quietly meaning "and has never taken money"; the successor
+> mistake is reading "purchases live + $0.04 revenue" as "the game is earning". It is not. It is
+> READY to earn, which is a different and still-good fact.
+
 # KEY FACTS — the living fact sheet (update IN PLACE, never snapshot)
 
 > **Rule (owner directive 2026-07-12):** this file is LIVING — when a fact changes, edit the line
