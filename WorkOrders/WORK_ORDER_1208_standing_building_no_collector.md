@@ -29,12 +29,18 @@ candidates:
 
 1. the prefab lost its `ResourceCollector` component;
 2. it is present but never registers (a lifecycle/order problem);
-3. **`farm` is mid-retirement** - it is the FOOD collector, and food is retired (WO-1163, PROD-016),
-   so it may be a legacy structure whose replacement is the Quarry/Stoneyard line.
+3. ~~`farm` is mid-retirement~~ - **REFUTED the same evening, and the refutation makes this ticket
+   MORE urgent, not less.** `structures-catalog.json` id `collector_farm` already reads
+   **displayName "Quarry", description "Extracts Stone for your town over time.", role
+   `stone_producer`**, and its `collectorBuildingId` is **`farm`** - the id in the trace. So the
+   building withholding income is **not a legacy food building awaiting removal: it is the QUARRY,
+   the NEW stone producer WO-1163 just shipped.** The word "Food" in the trace is the internal enum
+   name (`def.Yields`) printing the frozen save slot, not a player-facing string.
 
-Candidate 3 changes the entire shape of the fix: if `farm` is being retired, the answer is a migration
-for towns that already built one, NOT re-wiring a collector onto a structure that is about to be
-removed. Read PROD-016 and WO-1163 sec.6 before deciding.
+⛔ **Re-rank accordingly.** This is not retirement housekeeping - a player who builds the town's
+primary Stone faucet gets **nothing per tick** from it, on a build that takes real money. Candidates
+1 and 2 (missing component / never registers) are the live ones; check whether the rename from Farm
+to Quarry moved a prefab or a collector wiring reference with it.
 
 ## Acceptance criteria
 

@@ -681,8 +681,6 @@ namespace DeNelle.Editor
             int woodBefore = state.Wood, ironBefore = state.Iron;
             int foodBefore = state.Resources.Food, coinsBefore = state.Resources.Coins, crysBefore = state.Resources.Crystals;
             int banked = echo.DumpSilos();
-            if (banked != fullRosterOneHour)
-                Fail($"DumpSilos banked {banked} (expected the full one-hour pool {fullRosterOneHour})");
             int dWood = state.Wood - woodBefore;
             int dIron = state.Iron - ironBefore;
             int dFood = state.Resources.Food - foodBefore;
@@ -693,6 +691,31 @@ namespace DeNelle.Editor
             if (dFood <= 0) Fail($"Dump: Food wallet did not move (+{dFood})");
             if (dGold <= 0) Fail($"Dump: Gold/Coins wallet did not move (+{dGold}) — Corvin's affinity must credit AddCoins");
             if (dCrys <= 0) Fail($"Dump: Crystals wallet did not move (+{dCrys}) — Bran+Maren must credit the Aether wallet");
+
+            // ⛔ THE RETURN VALUE MUST EQUAL WHAT THE WALLETS ACTUALLY RECEIVED (WO-1207, 2026-08-25).
+            // This replaces `if (banked != fullRosterOneHour)`, which was a HOLLOW ASSERTION: DumpSilos
+            // used to return the PRE-CLAMP pool, i.e. the very number the fixture had just written into
+            // SiloResources, so the check compared a value against itself and could never fail — while
+            // three lines below, this same file already conceded "Wood/Iron/Food may be trimmed by the
+            // real town-bank capacity". It passed green on the owner's device while the chip printed
+            // banked=17 against 0 actually credited.
+            // Measured deltas are the only honest oracle here (WO-978's rule: report the MEASURED
+            // before/after delta, never the amount requested).
+            int measuredIntoWallets = dWood + dIron + dFood + dGold + dCrys;
+            if (banked != measuredIntoWallets)
+                Fail($"DumpSilos returned {banked} but the wallets moved by {measuredIntoWallets} " +
+                     "— the return value must be what was BANKED, never the pre-clamp pool (WO-1207).");
+
+            // Production is still asserted, but through the silo it emptied rather than through a
+            // return value whose meaning is now 'what landed'. The per-lane split maths is asserted
+            // by the individual wallet deltas above and below.
+            if (state.SiloResources > 0.5)
+                Fail($"DumpSilos left {state.SiloResources:0} in the silo (expected the full one-hour " +
+                     $"pool {fullRosterOneHour} consumed and the silo reset).");
+            if (measuredIntoWallets < fullRosterOneHour)
+                notes.Add($"[echo-spec] the town bank cap trimmed this dump: pool {fullRosterOneHour}, " +
+                          $"banked {measuredIntoWallets}, {fullRosterOneHour - measuredIntoWallets} lost " +
+                          "to the clamp — EXPECTED at default capacity, and recorded rather than hidden.");
             // Wood/Iron/Food may be trimmed by the real town-bank capacity. Gold and
             // crystals are uncapped; their movement is asserted individually above.
             foreach (int other in new[] { dWood, dIron, dFood, dGold })

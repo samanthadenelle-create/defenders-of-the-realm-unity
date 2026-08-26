@@ -447,7 +447,16 @@ namespace DeNelle.Village
             SpawnDumpPops(wood, iron, food, gold, crystals);
 
             Changed?.Invoke();
-            return pool;
+
+            // ⛔ RETURN WHAT WAS BANKED, NOT WHAT WAS ASKED FOR (WO-1207, owner device 2026-08-25).
+            // `pool` is the PRE-CLAMP split. The block above already read GrantSpendable back into
+            // `applied` and reassigned these locals - and then this method handed the caller the
+            // number it had just disproved. Captured: 17 iron discarded at a full bank while
+            // ResourceCollectorService summed 17 and CollectorStatusPublisher printed "banked=17".
+            // WO-978's class ("logged the amount requested as though it were credited"), one layer up.
+            // `pool` still owns the SILO RESET above - that is correct, the silo really did empty.
+            // Only the caller-facing answer changes: what the town actually received.
+            return wood + iron + food + gold + crystals;
         }
 
         /// <summary>

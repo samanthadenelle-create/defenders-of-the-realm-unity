@@ -3001,10 +3001,21 @@ namespace DeNelle.Village.Arena
             var econ = EconomyService.Instance;
             if (econ != null)
             {
-                econ.Grant(wood: wood, iron: iron);
-                summary.Wood = wood;
-                summary.Iron = iron;
-                FlowTrace.Step("BattleArena", $"GrantWinReward: +{wood} wood, +{iron} iron.");
+                // ⛔ REPORT WHAT THE BANK TOOK, NOT WHAT WE ASKED FOR (WO-1207, owner device
+                // 2026-08-25: "7 foes killed earned 12 iron?" against a trace reading +15 iron).
+                // Grant(ResourceCost) RETURNS the applied amount after the town bank cap clamps it;
+                // the void convenience overload throws that answer away, so a victory screen with a
+                // near-full store printed a number the player never received. Owner ruling the same
+                // evening: battle rewards do NOT warn - collecting is a choice, a battle reward is
+                // not - but silence is not a licence to be wrong. Silent and true, not loud and false.
+                var appliedReward = econ.Grant(new ResourceCost(wood: wood, iron: iron));
+                summary.Wood = appliedReward.Wood;
+                summary.Iron = appliedReward.Iron;
+                FlowTrace.Step("BattleArena",
+                    $"GrantWinReward: +{appliedReward.Wood} wood, +{appliedReward.Iron} iron banked" +
+                    (appliedReward.Wood != wood || appliedReward.Iron != iron
+                        ? $" (requested +{wood}/+{iron}; the town bank cap trimmed it - no warning by ruling)"
+                        : "."));
             }
             else
             {

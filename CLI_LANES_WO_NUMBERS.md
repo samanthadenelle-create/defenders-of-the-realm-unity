@@ -137,7 +137,21 @@
 > fine as history. A copied number is the bug **even when it was right the day it was written** -
 > that is exactly how the retired 860-899 UI block kept re-seeding collisions from CLAUDE.md sec.2.
 
-> ## ⚠ RECONCILED 2026-08-25 (CLI): main line next free = **1210**.
+> ## ⚠ RECONCILED 2026-08-25 (CLI): main line next free = **1211**.
+> *(CLI seat minted **WO-1210** and bumped 1210 -> 1211 in this SAME edit. **1210** = EVERY ENEMY
+> RENDERS AS A FLAT BLACK SILHOUETTE ON DEVICE. ⛔ SHIP-BLOCKER - it is the first thing a new player
+> sees. Owner: "combat is wrong still". Two causes are ALREADY RULED OUT by captured data, so nobody
+> re-hunts them: it is NOT a missed R2 push (models resolve and pool - [Flow:EnemyPool]
+> key=model:Hollow_Walker - behind R2_PARITY_OK on the matching catalog), and it is NOT untextured
+> art ([Flow:EnemyColor] audits report textured=6/7, unpainted=0, repaired=0 across skeleton AND orc
+> families). The lock-on portrait of the SAME enemy renders fully textured in the same frame while
+> the world body is black, and the hero beside it is lit - so the remaining candidates are the
+> LIGHTING/SHADER path: dynamic-renderer ambient/probe state, a stripped Android shader variant, or
+> the pooled bodies' probe configuration. ⛔ INSTRUMENT FIRST - emit ambient/light/probe/shader
+> readings for an enemy AND the hero in the same frame; the hero is the control group and the
+> difference is the answer. READY TO IMPLEMENT.)*
+>
+> ### superseded: RECONCILED 2026-08-25 (CLI): main line next free = **1210**.
 > *(CLI seat minted **WO-1209** and bumped 1209 -> 1210 in this SAME edit. **1209** = THE WEAPON
 > RENDERS OVERSIZED IN A DUNGEON AND THE SEAT SOLVE RE-FIRES FOREVER. Owner: "staff oversized in
 > starter loop dugeon" / "same thing we saw with the knight sword and shield" - and she is right that

@@ -182,10 +182,30 @@ namespace DeNelle.Village.Buildings.Progression
                     continue;
                 }
 
+                // ⛔ HOLD THE TICK, DO NOT BURN IT (WO-1208, owner device 2026-08-25).
+                // The rollover above already CONSUMED this interval, so before this change a tick
+                // with no live collector computed its payout and threw it away - permanently. That
+                // is not a rare wiring case: the collector belongs to the town's PLACED structure
+                // and unregisters while the player is in a dungeon, so the DDOL harvester kept
+                // ticking over an absent collector and quietly destroyed the income. Captured on
+                // device, the registry flapping across one session:
+                //   19:12:31 existence gate OPEN for 'farm' (liveCollector=yes)
+                //   19:22:31 'farm' ... NO ResourceCollector is registered - 13 WITHHELD this tick
+                //   19:29:25 existence gate OPEN for 'farm' (liveCollector=yes)
+                // Restoring the interval makes the tick OWED instead of LOST: it pays once the
+                // collector comes back.
+                //
+                // CLAMPED TO EXACTLY ONE INTERVAL on purpose. The ever-built ledger is monotonic and
+                // cannot see a SOLD or destroyed collector (this file's own header ruling), so an
+                // uncapped hold would bank a limitless backlog for a building that no longer stands.
+                // One owed tick is the most a returning collector can ever be handed.
+                _elapsed[i] = Mathf.Min(_elapsed[i] + interval, interval);
+
                 DeNelle.Core.Diagnostics.FlowTrace.Throttle("Harvest", "no-live-collector-" + id, 10f,
                     $"'{id}' is in the ever-built ledger but NO ResourceCollector is registered - " +
-                    $"{amount} {def.Yields} WITHHELD this tick (a standing building with no collector " +
-                    "component is a wiring bug; income is never granted straight to the wallet).");
+                    $"{amount} {def.Yields} HELD (not lost) this tick; the interval is preserved and " +
+                    "pays when a collector registers. A standing building with no collector component " +
+                    "is still a wiring bug; income is never granted straight to the wallet.");
             }
         }
 
