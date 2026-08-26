@@ -633,8 +633,43 @@ namespace DeNelle.Village
         // 0 tilt is the safe neutral for a symmetric shaft. These remain Inspector-tunable + CANON
         // (never auto-overwritten). Any per-mesh delta still layers on top via offsets.json.
         // WO-970 residual: the former +90Y compensated for the old yaw-only bounds solve.
-        // The geometry authority now seats the staff long axis on +Y, so the safe default is neutral.
-        [SerializeField] private Vector3 _staffGripEuler = new Vector3(0f, 0f, 0f);
+        // The geometry authority now seats the staff long axis on +Y, so the safe default WAS neutral.
+        //
+        // ── ⭐ OWNER RULING 2026-08-26 — THE DRAWN STAFF STANDS VERTICAL ────────────────────────
+        // Owner verbatim: *"staff drawn is showing horizontal"* / *"should be up and down vertical"*,
+        // on top of her standing rule *"the pointed object is Y top, flat is bottom"*. So: in hand,
+        // in combat, the shaft's long axis runs along the BODY'S UP AXIS, pointed end UP.
+        //
+        // WHY NEUTRAL WAS WRONG, and why the correction is exactly +90 about X — the arithmetic,
+        // not a dialled guess (six prior fixes tuned the MEASUREMENT; the measurement was fine):
+        //
+        //   The drawn seat is  ApplyGlobalWeaponYaw(ComposeMeleeGripRotation(blade, up, N))
+        //                   =  rigAligned * Euler(N) * RotY(180).
+        //   With the shipped rig axes _handBladeAxis (0,1,0) / _handGripUpAxis (0,0,1),
+        //   rigAligned = Quaternion.LookRotation((0,0,1),(0,1,0)) == IDENTITY, and RotY(180)
+        //   leaves a +Y vector untouched — so the prop's long axis (prop-local +Y, put there by
+        //   NormalizeInto) reaches the hand-bone frame as  Euler(N) * (0,1,0).
+        //   With N = 0 that is (0,1,0) = the bone's BLADE axis, which on the hand bone points
+        //   HORIZONTALLY out of the fist (world (0,0,-1) in the regression's synthetic bone) —
+        //   the SWORD rule, applied to a staff. That is the defect, stated as a vector.
+        //
+        //   Required: the shaft must land on the axis that maps to the body's vertical, which in
+        //   the corrected frame is the GRIP-UP axis, local +Z. Solve  Euler(N) * (0,1,0) = (0,0,1):
+        //   a rotation about X by t sends (0,1,0) -> (0, cos t, sin t), so cos t = 0, sin t = +1,
+        //   t = +90. => N = (90, 0, 0). The +SIGN is the ruling's "pointed end up": prop +Y (the
+        //   tip, per "pointed object is Y top") maps to +Z, which the bone carries to world +Y.
+        //   (-90 would stand it tip-DOWN and read identical to the undirected tilt oracle.)
+        //
+        // Note this is stated in the CORRECTED frame — "put the shaft on the grip-up axis, not the
+        // blade axis" — so it stays right if the rig axes are re-picked in the Inspector; it is an
+        // ARCHETYPE correction and covers every staff, present and future, not a per-mesh row.
+        // ⛔ This is the DRAWN pose only. It does not touch the sheathed path, and it is NOT a
+        // reason to flip _sheatheLongAxisSign (WO-1136).
+        /// <summary>Owner-ruled drawn-staff archetype correction (2026-08-26) — see the derivation
+        /// above. Single source of truth: the serialized default below initialises from it and the
+        /// headless oracle drives the shipped composition with it, so the two can never disagree.</summary>
+        public static readonly Vector3 StaffDrawnGripNudgeDefault = new Vector3(90f, 0f, 0f);
+        [SerializeField] private Vector3 _staffGripEuler = StaffDrawnGripNudgeDefault;
         [SerializeField] private Vector3 _wandGripEuler  = new Vector3(0f, 90f, 0f);
         [SerializeField] private Vector3 _axeGripEuler   = new Vector3(-25f, 90f, 0f);
         [SerializeField] private Vector3 _maceGripEuler  = new Vector3(0f, 90f, 0f);
@@ -2652,6 +2687,11 @@ namespace DeNelle.Village
                     // Sheathed pose: explicit "<meshKey>@sheathed" wins; else fall back to the drawn
                     // offset ("<meshKey>") as a nudge on this built-in sheathe pose (town carry fix).
                     ApplySheathedOffset(_gripRoot, _currentWeaponMeshKey);
+                    // WO-1226: AFTER ApplySheathedOffset, never before. ComputeSheathRotation's own
+                    // tiltFromVertical line measures the quaternion it is about to RETURN, and the
+                    // line above can still compose more rotation onto the transform. This measures
+                    // the prop that is actually on screen.
+                    TraceSeatChain("SHEATHED", sheatheMain);
                     if (_currentWeaponKind == WeaponClass.Bow)
                         TraceBowSeatMeasured(_gripRoot, _weaponHand, _currentWeaponId, _bowSeatDerived);
                 }
@@ -2665,6 +2705,12 @@ namespace DeNelle.Village
                             ref _weaponCompState);
                     _gripRoot.localPosition = _weaponDrawnLocalPos;
                     _gripRoot.localRotation = _baseGripRot;
+                    // WO-1226: THE DRAWN BRANCH HAD NO SEAT MEASUREMENT AT ALL. Every "is it
+                    // standing up?" number this file printed came from ComputeSheathRotation, which
+                    // only ever runs on the SHEATHED branch - so the owner's report ("weapon combat
+                    // still horizontal") was about the one carry state no trace covered, and the
+                    // sheathed line's honest 0deg was read as though it answered it.
+                    TraceSeatChain("DRAWN", _gripRoot.parent);
                     if (_currentWeaponKind == WeaponClass.Bow)
                         TraceBowSeatMeasured(_gripRoot, _weaponHand, _currentWeaponId, _bowSeatDerived);
                 }
@@ -2959,13 +3005,52 @@ namespace DeNelle.Village
             // reader assumed the first. Inactive renderers are counted separately because
             // GetComponentsInChildren skips them here while SeatNative's TryLocalBounds includes
             // them — so a prop can be SIZED off a renderer this measurement cannot see.
+            // ── WO-1226: MEASURE THE PROP, NOT THE VFX BOLTED TO IT ─────────────────────────────
+            // ⭐ THIS LINE REPORTED A ROD AS A CUBE, ON TWO BUILDS, AND THE CUBE BECAME THE
+            // EVIDENCE. The owner's two device captures both read `renderers=2(inactive=0)` on a
+            // staff and `worldBounds=(1.519, 1.401, 1.624)` / `(1.318, 1.509, 1.169)` — near-
+            // isotropic, no long axis, on a mesh this repo has measured at (0.079, 0.097, 1.265).
+            //
+            // THE SECOND RENDERER IS NOT A SECOND MESH. `staff_A.fbx` contains exactly one Geometry
+            // and one Model. It is the code-built **TrailRenderer** that
+            // `WeaponTrailController.EnsureTrail` parents onto `EquipmentController.GripRoot` (a
+            // GameObject named "WeaponTrail", created on the first swing and re-created on every
+            // weapon swap). A TrailRenderer's `bounds` is the WORLD AABB of the emitted ribbon —
+            // the arc the hero just swung through — so encapsulating it with the prop's own bounds
+            // inflates a 1.3 m shaft into roughly a 1.5 m box centred on the hand.
+            //
+            // ⚠ AND THE NUMBER WAS ONLY EVER IN THIS LOG LINE. No deriver reads it: every
+            // orient path measures `prop` (the CHILD), not `gripRoot`, and WeaponOrientHelper
+            // .TryLocalBounds reads mesh-local bounds off a MeshFilter/SkinnedMeshRenderer, which a
+            // TrailRenderer has neither of. So the cube never reached the seat — it corrupted the
+            // DIAGNOSTIC, which is worse in its own way: it sent readers hunting a measurement bug
+            // that did not exist. Split the walk so the reported volume is the PROP's, and say what
+            // else was hanging there rather than silently dropping it (§12: nothing goes unlogged).
             Bounds wb = default; bool hasB = false;
-            int rendTotal = 0, rendInactive = 0;
+            int rendTotal = 0, rendInactive = 0, rendMesh = 0, rendNonMesh = 0;
+            string nonMeshNames = null;
             foreach (var r in gripRoot.GetComponentsInChildren<Renderer>(true))
             {
                 if (r == null) continue;
                 rendTotal++;
                 if (!r.gameObject.activeInHierarchy) { rendInactive++; continue; }
+                // A renderer that owns geometry (MeshFilter or SkinnedMeshRenderer) is the PROP.
+                // Anything else — TrailRenderer, LineRenderer, ParticleSystemRenderer — is an
+                // effect riding the same anchor and its world AABB describes the effect, not the item.
+                var smr0 = r as SkinnedMeshRenderer;
+                var mf0  = smr0 == null ? r.GetComponent<MeshFilter>() : null;
+                bool ownsGeometry = smr0 != null
+                    ? smr0.sharedMesh != null
+                    : (mf0 != null && mf0.sharedMesh != null);
+                if (!ownsGeometry)
+                {
+                    rendNonMesh++;
+                    nonMeshNames = nonMeshNames == null
+                        ? r.GetType().Name + " '" + r.gameObject.name + "'"
+                        : nonMeshNames + ", " + r.GetType().Name + " '" + r.gameObject.name + "'";
+                    continue;
+                }
+                rendMesh++;
                 if (!hasB) { wb = r.bounds; hasB = true; } else wb.Encapsulate(r.bounds);
             }
             bool measuresNothing = !hasB || wb.size.sqrMagnitude <= 1e-8f;
@@ -3008,7 +3093,11 @@ namespace DeNelle.Village
                 $"parentBone='{p.name}' " +
                 $"lossy=({ls.x:0.###},{ls.y:0.###},{ls.z:0.###}) authored={authoredScale:0.###} " +
                 $"localScale={gripRoot.localScale} " +
-                $"renderers={rendTotal}(inactive={rendInactive}) " +
+                $"renderers={rendTotal}(inactive={rendInactive} mesh={rendMesh} nonMesh={rendNonMesh}" +
+                (nonMeshNames != null
+                    ? " [" + nonMeshNames + " -> EXCLUDED from worldBounds (WO-1226): an effect's " +
+                      "world AABB describes the effect, not the item; folding it in reported this rod as a cube]"
+                    : "") + ") " +
                 $"-> worldBounds={(hasB ? wb.size.ToString("0.###") : "<no renderer>")} " +
                 "(the proportional solve should read here as heldLength * authored on the longest axis)";
             // ESCALATION: a prop that measures NOTHING is invisible to the player. That is the
@@ -3557,10 +3646,32 @@ namespace DeNelle.Village
         // field, defaulted 0). The rig-hand-axis basis is identical across families — every melee
         // weapon's primary axis is prop-local +Y (placed there by NormalizeInto + SeatByHandle),
         // so the same blade/grip-up axes seat it forward-from-the-fist; only the residual nudge differs.
-        private Quaternion ComputeMeleeGripRotation(WeaponClass kind)
+        private Quaternion ComputeMeleeGripRotation(WeaponClass kind) =>
+            ComposeMeleeGripRotation(_handBladeAxis, _handGripUpAxis, MeleeGripNudge(kind));
+
+        // ── WO-1226: THE DRAWN MELEE COMPOSITION, EXTRACTED AS ONE PURE FUNCTION ────────────────
+        // Byte-for-byte the body ComputeMeleeGripRotation used to carry — nothing about the math
+        // moved. It is `public static` so a HEADLESS REGRESSION CAN DRIVE THE SHIPPED COMPOSITION
+        // ITSELF instead of re-typing it, which is the mistake that let six prior fixes each assert
+        // a rotation the game never applied ("derivation is not self-proving", 2026-08-16).
+        //
+        // ⭐ READ THE ALGEBRA BEFORE THEORISING ABOUT THIS METHOD. With the SHIPPED serialized
+        // defaults — _handBladeAxis (0,1,0), _handGripUpAxis (0,0,1) — the line below is
+        //     Quaternion.LookRotation(forward:(0,0,1), upwards:(0,1,0)) == Quaternion.identity
+        // so for any archetype whose nudge is ZERO this whole "rig-aware derivation" is the
+        // IDENTITY, and the prop's long axis (prop-local +Y, put there by NormalizeInto) lands on
+        // the HAND BONE'S RAW LOCAL +Y. That is the sword rule, and it is doing precisely what it
+        // is told — nothing here is "90 degrees wrong". What it is told is the ARCHETYPE NUDGE.
+        // ⭐ UPDATED 2026-08-26: the staff no longer feeds this a zero. Owner ruling — *"staff drawn
+        // is showing horizontal"* / *"should be up and down vertical"* — put the drawn staff's
+        // correction at StaffDrawnGripNudgeDefault (90,0,0), which moves the shaft off the blade
+        // axis and onto the grip-up axis, i.e. the body's vertical. The full arithmetic lives on
+        // that field. See TraceSeatChain for the measurement that proves it on device.
+        public static Quaternion ComposeMeleeGripRotation(Vector3 handBladeAxis, Vector3 handGripUpAxis,
+                                                          Vector3 archetypeNudge)
         {
-            Vector3 blade = _handBladeAxis.sqrMagnitude > 1e-6f ? _handBladeAxis.normalized : Vector3.up;
-            Vector3 up    = _handGripUpAxis.sqrMagnitude > 1e-6f ? _handGripUpAxis.normalized : Vector3.forward;
+            Vector3 blade = handBladeAxis.sqrMagnitude > 1e-6f ? handBladeAxis.normalized : Vector3.up;
+            Vector3 up    = handGripUpAxis.sqrMagnitude > 1e-6f ? handGripUpAxis.normalized : Vector3.forward;
 
             // Orthonormalize `up` against `blade` so the basis is valid even if the two
             // chosen axes aren't perfectly perpendicular on this rig.
@@ -3578,8 +3689,176 @@ namespace DeNelle.Village
             // +Y (its primary line) to land on `blade` and its +Z (its flat-plane normal) on
             // `up`, so feed forward=up, upwards=blade.
             Quaternion rigAligned = Quaternion.LookRotation(up, blade);
-            return rigAligned * Quaternion.Euler(MeleeGripNudge(kind));
+            return rigAligned * Quaternion.Euler(archetypeNudge);
         }
+
+        // =====================================================================
+        //  WO-1226 - THE SEAT CHAIN, MEASURED STEP BY STEP (owner F8 2026-08-26)
+        // =====================================================================
+        //
+        // WHY THIS EXISTS, and why it is not another tilt number. Six commits fixed the
+        // MEASUREMENT and the staff still lay across the body. The reason is structural, and this
+        // repo already wrote it down on 2026-08-16: "derivation did NOT save the bow: its held
+        // rotation was 90 degrees wrong at the ATTACH SEAT - a different failure from the grip
+        // POSITION, which measured correct. Derivation is not self-proving."
+        //
+        // Concretely, the shipped `tiltFromVertical` line inside ComputeSheathRotation measures
+        //     (socket.rotation * result) * Vector3.up
+        // - the value that method is ABOUT TO RETURN, composed with the socket. It is a true
+        // statement about the DERIVER'S OUTPUT and it proves nothing about the prop, because:
+        //   1. it assumes grip-root-local +Y IS the prop's long axis (it asks Vector3.up, not the
+        //      mesh), so a prop whose long axis landed on local X or Z reads a perfect 0 while
+        //      hanging sideways - the flat-shield failure, restated for the main hand;
+        //   2. ApplySheathedOffset composes MORE rotation onto the transform on the very next
+        //      line, so the measured quaternion is not always the one that ends up on the prop;
+        //   3. there is NO equivalent line at all on the DRAWN branch, which is the state the
+        //      owner is reporting ("weapon combat still horizontal").
+        // So the broken build prints tiltFromVertical=0deg and is telling the truth about the
+        // wrong thing. THIS trace measures the prop's OWN measured long axis, transformed through
+        // every step of the real chain, AFTER the final write.
+        //
+        // IT IS A MEASUREMENT AND ONLY A MEASUREMENT. It changes no transform (CLAUDE.md 12:
+        // instrument first, and never strip the instrument afterwards).
+
+        /// <summary>One rung of the seat chain, so a capture can name WHICH transform moved the
+        /// long axis instead of only reporting where it ended up.</summary>
+        public struct SeatedAxisMeasure
+        {
+            /// <summary>The prop's measured long axis as a unit vector in GRIP-ROOT-local space.
+            /// If this is not ~(0,1,0) the seat's whole premise ("prop +Y is the long line") is
+            /// already false before any rotation is applied.</summary>
+            public Vector3 LocalUnit;
+            /// <summary>The same axis after the grip root's own localRotation - i.e. expressed in
+            /// the PARENT (hand bone / sheathe socket) frame.</summary>
+            public Vector3 ParentUnit;
+            /// <summary>The same axis in WORLD, after the parent's world rotation.</summary>
+            public Vector3 WorldUnit;
+            /// <summary>Angle between the seated long axis and the body's vertical, FOLDED to
+            /// 0..90: a tip-down staff is upright, not 180 deg wrong. ~0 = standing, ~90 = lying
+            /// across the body, which is the owner's report in one number.</summary>
+            public float TiltFromVerticalDeg;
+        }
+
+        /// <summary>
+        /// PURE. Pushes a prop-local long-axis unit vector through the two rotations that make up a
+        /// seat and reports every intermediate. Public + static so the headless regression asserts
+        /// the SEATED WORLD ROTATION through this exact function rather than re-deriving it.
+        /// </summary>
+        public static SeatedAxisMeasure MeasureSeatedLongAxis(Quaternion parentWorldRot,
+                                                              Quaternion gripLocalRot,
+                                                              Vector3 longAxisLocalUnit,
+                                                              Vector3 bodyUp)
+        {
+            var m = new SeatedAxisMeasure();
+            m.LocalUnit  = longAxisLocalUnit.sqrMagnitude > 1e-9f ? longAxisLocalUnit.normalized : Vector3.up;
+            m.ParentUnit = (gripLocalRot * m.LocalUnit).normalized;
+            m.WorldUnit  = (parentWorldRot * m.ParentUnit).normalized;
+            Vector3 up = bodyUp.sqrMagnitude > 1e-9f ? bodyUp.normalized : Vector3.up;
+            float a = Vector3.Angle(m.WorldUnit, up);
+            m.TiltFromVerticalDeg = Mathf.Min(a, 180f - a);   // undirected: a tip-down staff is upright
+            return m;
+        }
+
+        /// <summary>Unit vector along a measured axis role (0=X, 1=Y, 2=Z).</summary>
+        private static Vector3 AxisUnit(int axis) =>
+            axis == 0 ? Vector3.right : axis == 2 ? Vector3.forward : Vector3.up;
+
+        /// <summary>
+        /// THE PER-STEP SEAT TRACE. Called at the END of each ApplyHoldPose main-weapon branch -
+        /// after the final localRotation write and after ApplySheathedOffset - so what it reads is
+        /// what the player is looking at, never a deriver's return value. Throttled (ApplyHoldPose
+        /// re-asserts at frame rate) and keyed on state so DRAWN and SHEATHED cannot share a slot
+        /// the way the weapon and the shield once shared the compensate slot.
+        /// </summary>
+        private void TraceSeatChain(string state, Transform parent)
+        {
+            if (_gripRoot == null || parent == null) return;
+            GameObject prop = _gripRoot.childCount > 0 ? _gripRoot.GetChild(0).gameObject : null;
+            if (prop == null) return;
+            Transform body = _animator != null ? _animator.transform : transform;
+
+            // The long axis is MEASURED off the prop's mesh bounds in the grip root's frame -
+            // mesh.bounds, never vertices: shipped props may import with Read/Write OFF, which
+            // makes a vertex approach SILENTLY INERT ON DEVICE while looking right in the editor.
+            if (!Guard.Try("Equip", "TraceSeatChain measure",
+                    () => WeaponOrientHelper.TryMeasureAxes(prop, _gripRoot, out _seatChainAxes), false))
+                return;
+
+            Vector3 localUnit = AxisUnit(_seatChainAxes.LongestAxis);
+            var m = MeasureSeatedLongAxis(parent.rotation, _gripRoot.localRotation, localUnit, body.up);
+
+            // Step 1 is the clause the shipped tiltFromVertical line silently ASSUMES. Say it out
+            // loud: a long axis that is not Y in the grip root's frame means every downstream angle
+            // is a true statement about the wrong direction.
+            bool longAxisIsY = _seatChainAxes.LongestAxis == 1;
+            bool upright = m.TiltFromVerticalDeg <= 30f;
+
+            string line =
+                "SEAT CHAIN [" + state + "] main-hand id='" +
+                (string.IsNullOrEmpty(_currentWeaponId) ? "<none>" : _currentWeaponId) + "' mesh='" +
+                (string.IsNullOrEmpty(_currentWeaponMeshKey) ? "<none>" : _currentWeaponMeshKey) + "' " +
+                $"kind={_currentWeaponKind} on '{name}'\n" +
+                $"  step1 PROP->GRIPROOT : {_seatChainAxes.Describe()} " +
+                $"longAxisLocal={m.LocalUnit.ToString("0.###")} " +
+                $"propLocalEuler={prop.transform.localRotation.eulerAngles.ToString("0.#")} " +
+                (longAxisIsY
+                    ? "(long axis IS grip-local +Y - the seat's premise holds)"
+                    : "LONG AXIS IS NOT GRIP-LOCAL +Y - every angle below is a true statement about " +
+                      "the WRONG direction; fix the seat (NormalizeInto / the authored native frame), " +
+                      "not the sign") + "\n" +
+                $"  step2 GRIPROOT.LOCAL : localEuler={_gripRoot.localRotation.eulerAngles.ToString("0.#")} " +
+                $"localPos={_gripRoot.localPosition.ToString("0.###")} " +
+                $"localScale={_gripRoot.localScale.ToString("0.###")} " +
+                $"-> longAxis in PARENT frame={m.ParentUnit.ToString("0.###")}\n" +
+                $"  step3 PARENT (SEAT)  : '{parent.name}' " +
+                $"worldEuler={parent.rotation.eulerAngles.ToString("0.#")} " +
+                $"lossy={parent.lossyScale.ToString("0.###")}\n" +
+                $"  step4 SEATED WORLD   : longAxisWorld={m.WorldUnit.ToString("0.###")} " +
+                $"tiltFromVertical={m.TiltFromVerticalDeg:0.#}deg " +
+                "(~0 = standing; ~90 = LYING ACROSS THE BODY) " +
+                $"bodyUp={body.up.ToString("0.###")} " +
+                $"dotBodyUp={Vector3.Dot(m.WorldUnit, body.up):0.##} " +
+                $"dotBodyFwd={Vector3.Dot(m.WorldUnit, body.forward):0.##} " +
+                $"dotBodyRight={Vector3.Dot(m.WorldUnit, body.right):0.##}";
+
+            // WHICH STEP MOVED IT is the whole point, so name it rather than leaving the reader
+            // to diff three vectors: step 2 is the seat rotation this controller composed, step 3
+            // is the animated bone it inherited. A drawn melee prop with a ZERO archetype nudge has
+            // an IDENTITY step 2 (see ComposeMeleeGripRotation) - every degree then comes from the
+            // BONE, which is the sword rule being applied to a prop that is not a sword.
+            float step2Turn = Vector3.Angle(m.LocalUnit, m.ParentUnit);
+            float step3Turn = Vector3.Angle(m.ParentUnit, m.WorldUnit);
+            line += "\n  ATTRIBUTION        : step2 (this controller's seat rotation) turned the long axis " +
+                    $"{step2Turn:0.#}deg; step3 (the '{parent.name}' bone's world rotation) turned it a " +
+                    $"further {step3Turn:0.#}deg. " +
+                    (step2Turn <= 1f
+                        ? "STEP 2 IS THE IDENTITY: this controller applied NO archetype correction, so " +
+                          "the prop inherited the bone's raw axes verbatim. That is a seat, not a derivation."
+                        : "step 2 is doing real work.");
+
+            if (upright && longAxisIsY)
+                FlowTrace.Throttle("Equip", "seat-chain-" + state + "-" + name, 5f, line + "  - ok.");
+            else
+                FlowTrace.Throttle("Equip", "seat-chain-" + state + "-" + name, 5f, line +
+                    "\n  THIS PROP IS NOT STANDING. Report the four steps above verbatim; do NOT " +
+                    "flip _sheatheLongAxisSign (WO-1136: that only moves the defect onto the other heroes).");
+        }
+
+        // Scratch for TryMeasureAxes' out-parameter: a lambda cannot carry an `out`, and Guard.Try
+        // is the section-12 mandated wrapper. One field, written only inside TraceSeatChain.
+        private MeasuredAxes _seatChainAxes;
+
+        /// <summary>
+        /// WO-1226: the COMPLETE drawn-melee grip-root local rotation for a prop with no authored
+        /// offset row — the composition ApplyHoldPose actually writes, global yaw included. One
+        /// function so a regression and the game can never disagree about what "the drawn seat" is.
+        /// A prop WITH an offsets.json row composes `* Quaternion.Euler(fo.eulerRot)` on top of
+        /// this (see the NUDGE branch in AttachLoadedProp); staff_A and tripo_staff_a have no row.
+        /// </summary>
+        public static Quaternion ComposeDrawnMeleeLocalRotation(Vector3 handBladeAxis,
+                                                                Vector3 handGripUpAxis,
+                                                                Vector3 archetypeNudge) =>
+            ApplyGlobalWeaponYaw(ComposeMeleeGripRotation(handBladeAxis, handGripUpAxis, archetypeNudge));
 
         // The per-archetype additive calibration nudge (CANON; never auto-overwritten). Sword and
         // dagger share the bladed _swordGripEuler; the rest map to their own inspector field.

@@ -130,7 +130,8 @@ namespace DeNelle.Village
             if (medallion != null)
             {
                 string portraitSlug = ActiveHeroPortraitSlug();
-                var portraitTex = Resources.Load<Texture2D>("HeroPortraits/" + portraitSlug);
+                // WO-1234: folder from the ONE constant (DeNelle.Core.HeroPortraitPaths).
+                var portraitTex = Resources.Load<Texture2D>(DeNelle.Core.HeroPortraitPaths.ResourceKey(portraitSlug));
                 if (portraitTex != null)
                 {
                     var raw = new GameObject("HeroPortrait", typeof(RawImage));

@@ -3055,11 +3055,51 @@ namespace DeNelle.Village
                 // choke every income source flows through and it applies the town bank cap
                 // (clamp-and-warn, WO-901 §5). Deliberately NOT GrantUncapped (a cheat seam) and
                 // NOT GrantPurchased (a paid entitlement) — a kill reward is earned income.
+                //
+                // ⛔ WO-1227 — A RAID PAYS ONCE, AT THE END. Owner ruling 2026-08-26, verbatim:
+                // "raids only pay at end of raid". WO-1216 put the material faucet on THIS seam
+                // (correctly — it is the one every kill flows through), and the unintended
+                // consequence was that a raid banked materials TWICE: once per defender the
+                // player's troops cut down, and again in the victory summary
+                // (RaidVictoryController.GrantLoot -> RaidScoring.ComputeLoot). The summary grant
+                // is the one the owner wants, so the PER-KILL half is suppressed while a raid is
+                // live — and ONLY the material half: XP and the WO-432/433 gold above are
+                // untouched, because the ruling is about the raid's resource payout, not about
+                // stripping a kill of its progression.
+                //
+                // The raid test is RaidScoring.RaidInProgress — the scorer's own lifetime, which
+                // is what every other raid system already treats as "a raid is running". It can
+                // ONLY be true inside a RaidBase_* scene, so an open-world encounter, a wave kill
+                // and a dungeon kill all take the else-branch and pay exactly the WO-1216 amount
+                // they pay today. Those three are the felt-verified behaviour and are the main
+                // risk in this change; the gate is written so they are literally unreachable
+                // from it.
+                bool raidInProgress = RaidScoring.RaidInProgress;
                 int rolledWood = 0, rolledIron = 0, rolledStone = 0;
                 int creditedWood = 0, creditedIron = 0, creditedStone = 0;
-                int matBaseWood = KillRewardBalanceCatalog.MaterialBaseFromGold(goldBase, "wood");
-                int matBaseIron = KillRewardBalanceCatalog.MaterialBaseFromGold(goldBase, "iron");
-                int matBaseStone = KillRewardBalanceCatalog.MaterialBaseFromGold(goldBase, "stone");
+                int matBaseWood = KillRewardBalanceCatalog.KillMaterialBase(goldBase, "wood", raidInProgress);
+                int matBaseIron = KillRewardBalanceCatalog.KillMaterialBase(goldBase, "iron", raidInProgress);
+                int matBaseStone = KillRewardBalanceCatalog.KillMaterialBase(goldBase, "stone", raidInProgress);
+
+                // §12: a SILENT suppression is indistinguishable from a broken faucet, and this
+                // repo has been burned by exactly that. One line per suppressed kill naming the
+                // reason AND the amount withheld, so "my raid kills pay nothing" is answered by
+                // the log instead of by a code-read.
+                if (raidInProgress)
+                {
+                    int withheldWood  = KillRewardBalanceCatalog.MaterialBaseFromGold(goldBase, "wood");
+                    int withheldIron  = KillRewardBalanceCatalog.MaterialBaseFromGold(goldBase, "iron");
+                    int withheldStone = KillRewardBalanceCatalog.MaterialBaseFromGold(goldBase, "stone");
+                    string scorer = RaidScoring.Instance != null ? "live" : "absent(scene-fallback)";
+                    DeNelle.Core.Diagnostics.FlowTrace.Step("Reward",
+                        $"KILL MATERIALS SUPPRESSED (raid active) id={_def.Id} baseGold={goldBase} " +
+                        $"scorer={scorer} " +
+                        $"withheldBase={withheldWood}/{withheldIron}/{withheldStone} wood/iron/stone " +
+                        "- WO-1227 owner ruling \"raids only pay at end of raid\"; the payout comes " +
+                        "ONCE from RaidVictoryController.GrantLoot at the summary. XP and gold are " +
+                        "deliberately unaffected.");
+                }
+
                 if (econ != null)
                 {
                     rolledWood  = EnemyDef.RollReward(matBaseWood,  variance);
@@ -3693,6 +3733,27 @@ namespace DeNelle.Village
             float raw = goldBase * GoldToMaterialMultiplier * PerMaterialMultiplier(material);
             int rounded = Mathf.RoundToInt(raw);
             return Mathf.Clamp(rounded, MaterialFloorPerKill, MaterialCapPerKill);
+        }
+
+        /// <summary>
+        /// WO-1227 — the RAID-AWARE material base, and the ONE decision point for
+        /// "does this kill pay materials at all".
+        /// <para>Owner ruling 2026-08-26: <i>"raids only pay at end of raid"</i>. A kill taken
+        /// while a raid is running pays ZERO materials; the raid's whole resource payout is the
+        /// single end-of-raid grant in <c>RaidVictoryController.GrantLoot</c>. Every other kill —
+        /// open world, wave, dungeon, arena — is passed straight through to
+        /// <see cref="MaterialBaseFromGold"/> UNCHANGED, so the WO-1216 balance the owner has
+        /// already felt-verified is bit-for-bit what it was.</para>
+        /// <para>PURE and static on purpose: the raid state is an ARGUMENT, not a lookup, so a
+        /// regression can assert both branches with no scene, no raid and no enemy
+        /// (<c>KillRewardRaidSuppressionRegression</c>). The caller — Enemy's death grant — is the
+        /// only place that reads the live raid state, so there is exactly one place that can be
+        /// wrong about it.</para>
+        /// </summary>
+        public static int KillMaterialBase(int goldBase, string material, bool raidInProgress)
+        {
+            if (raidInProgress) return 0;
+            return MaterialBaseFromGold(goldBase, material);
         }
 
         /// <summary>Force a re-read (test / hot-reload).</summary>

@@ -12,22 +12,38 @@
 //                 [body y 0.075-0.855] gives the full-height well the layout needs.)
 //                NO UXML, NO borrowed PanelSettings. The kit's shared Close is
 //                HIDDEN (this is a forced-flow screen; confirm is the only exit).
-//   LEFT       : the CLASS COLUMN — one Obsidian button per HeroCatalog entry
-//                (data-driven; catalog order). Selectable-to-confirm == in
-//                PlayableHeroes.All, which since 2026-08-05 is Grom/Sylas/Thrain
-//                (ff.knightonly defaults OFF). A non-playable class - today only
-//                the Cleric, Elara, who has no authored kit - is still TAPPABLE for
-//                a PREVIEW but renders visibly locked ("Coming soon" tag under the
-//                button + LOCKED scrim on the stage).
-//   CENTER     : the HERO — the large focal portrait (Resources/HeroPortraits/
-//                <slug>, sprite-first, texture fallback, accent-glyph last resort)
-//                in a dark well, hero name + role beneath it.
-//   RIGHT      : the SPECS panel — lore blurb, HP/ATTACK/SPEED pip rows (uGUI
-//                image pips — NO unicode glyphs in TMP), signature ability, and
-//                the primary Q/F/E/R skill kit, all from HeroCatalog data.
-//   FOOTER     : the single confirm CTA (Obsidian GREEN) in the frame's footer
-//                zone — "Enter Elarion" enabled on the playable hero, disabled
-//                "Coming Soon" on a locked preview.
+//
+//   ★ LAYOUT REBUILT BY WO-1083 (2026-08-26, owner-approved mockup
+//     WorkOrders/WORK_ORDER_1083_mockup_2670x1200.png). It used to be three side-by-
+//     side columns (classes LEFT / hero CENTER / specs RIGHT) with the CTA squeezed
+//     into the same band as the arrows — which on the Seeker's 2670x1200 produced
+//     five overlaps and left the bottom third of the frame empty. It is now BANDED
+//     top-to-bottom inside ONE stage well. The band table is the const block at the
+//     top of the class; read THAT, not the call sites.
+//   TOP BAND   : the ROTATING CAROUSEL — PREV | side card | FOCAL card | side card |
+//                NEXT. The focal card is larger AND gold-framed; the two side cards
+//                are smaller, lower and dimmed (that size difference IS the rotation
+//                cue, and it survives greyscale). A locked hero's side card carries a
+//                SOON word-ribbon. All four heroes are in the ring; wrap-around.
+//                Three inputs rotate one step: swipe, PREV/NEXT tap, side-card tap.
+//   MID BAND   : role label under the focal card, then the page-dot rail (DISPLAY
+//                ONLY — never tappable, so nothing here is under MinTouchPx), then
+//                a divider rule.
+//   LOWER BAND : the DETAILS STRIP — the SAME four sections as the old right-hand
+//                specs rail, laid ACROSS in four columns: LORE | STATS (HP/ATTACK/
+//                SPEED pip rows, uGUI image pips — NO unicode glyphs in TMP) |
+//                SIGNATURE | PRIMARY SKILLS. Content and data sources are unchanged.
+//   BOTTOM     : the single confirm CTA (Obsidian GREEN) in an EXCLUSIVE band no
+//                other element may enter — "Choose <Hero>" enabled on the playable
+//                hero, disabled "Coming Soon" on a locked preview.
+//
+//   ROSTER     : selectable-to-confirm == in PlayableHeroes.All, which since
+//                2026-08-05 is Grom/Sylas/Thrain (ff.knightonly defaults OFF). A
+//                non-playable class - today only the Cleric, Elara, who has no
+//                authored kit - is still TAPPABLE for a PREVIEW but renders visibly
+//                locked (SOON ribbon / LOCKED scrim, "Abilities revealed at launch",
+//                CTA disabled). ⛔ WO-1083 §3: that Cleric behaviour is CORRECT AS
+//                SHIPPED and four cards / four dots is INTENDED — do not "fix" it.
 //
 // WHY CODE-BUILT (history, preserved): the original screen bound to named UXML
 // elements and blanked whenever the UXML failed to instantiate in a player build
@@ -67,9 +83,9 @@ namespace DeNelle.Onboarding
     /// <summary>
     /// Drives the hero-select screen (WO-C uGUI conversion of the WO-559 design):
     /// builds — entirely in code, on the Blink Obsidian FrameCharacter chrome — a
-    /// class column (left, one Obsidian button per <see cref="HeroCatalog"/> entry),
-    /// the focal hero portrait (center) and the specs panel (right), with a single
-    /// green confirm CTA in the frame footer. Every class is tappable for a preview;
+    /// top-band rotating carousel over the <see cref="HeroCatalog"/> entries, the
+    /// role/page-dot strip, and a four-column details strip, with a single green
+    /// confirm CTA in an exclusive bottom band. Every class is tappable for a preview;
     /// only the playable hero (Grom == Knight) is confirmable — locked classes show
     /// a "Coming soon" tag and a LOCKED stage scrim with the CTA disabled. On
     /// confirm it writes <see cref="GameState.HeroClass"/> and routes to the home
@@ -93,15 +109,89 @@ namespace DeNelle.Onboarding
         // -- Built UI (all created in code; one kit canvas per open) ----------
         private GameObject _canvas;                       // the kit modal canvas root
         private ElarionUiKit.PanelChrome _chrome;         // Blink FrameCharacter chrome
-        private RectTransform _classColumn;               // LEFT — class buttons (persistent)
-        private RectTransform _stageCenter;               // CENTER — portrait (rebuilt per pick)
-        private RectTransform _stageRight;                // RIGHT — specs (rebuilt per pick)
+        private RectTransform _stageWell;                 // WO-1083 — THE full-height stage well
+        private RectTransform _classColumn;               // TOP band — the rotating carousel
+        private RectTransform _stageCenter;               // focal card column (rebuilt per pick)
+        private RectTransform _stageRight;                // details strip (rebuilt per pick)
         private Button _confirmButton;                    // footer CTA (Obsidian Green)
         private TextMeshProUGUI _confirmLabel;            // the CTA's kit label (retext per pick)
         private readonly Button[] _carouselCards = new Button[2];
         private readonly Image[] _carouselPortraits = new Image[2];
         private readonly TextMeshProUGUI[] _carouselLabels = new TextMeshProUGUI[2];
+        private readonly GameObject[] _carouselSoon = new GameObject[2];
         private RectTransform _dotRail;
+
+        // =====================================================================
+        //  WO-1083 — THE BAND TABLE (the whole layout lives here, in ONE place)
+        // ---------------------------------------------------------------------
+        //  Every number below is a fraction of THE STAGE WELL (Well* consts) or of
+        //  the band that owns the element (Car* / Det* consts). Authoring the bands
+        //  here — rather than sprinkling literals down the builders — is what makes
+        //  the no-overlap invariant checkable: read the table, not the call sites.
+        //
+        //  ⛔ WHY THE WELL IS *NOT* `_chrome.layout.body` (measured, not inferred):
+        //  BuildObsidianPanel's CLOSE-BAND RESERVATION raises FrameCore's body zone
+        //  floor from the frame-measured 0.075 to ~0.353 of the panel on a landscape
+        //  canvas (ElarionUiKit.cs:628-677 — footer relocation 0.155->0.2075, then
+        //  bodyFloor = footer.w + 0.015). At 2670x1200 that leaves a well only 875 px
+        //  tall whose BOTTOM edge is screen y=770 of 1200 — which IS defect #5 of the
+        //  WO ("bottom ~35% of the panel is empty while everything crams into the top
+        //  half"), and it is also why the CTA had to be crushed into the same band as
+        //  the arrows and the skill rows (defects #1 and #2). The reservation exists to
+        //  keep content off the SHARED CLOSE — and this screen HIDES the shared Close
+        //  (forced flow, confirm is the only exit) and uses no footer zone, so there is
+        //  nothing to reserve for. We therefore anchor our own well at FrameCore's
+        //  frame-MEASURED body rect, which is exactly the mockup's inner area.
+        private const float WellXMin = 0.055f, WellXMax = 0.945f;   // == ZonesFor(FrameCore).body x
+        private const float WellYMin = 0.075f, WellYMax = 0.835f;   // == ZonesFor(FrameCore).body y, UNreserved
+
+        // Vertical bands of the well (0 = well bottom, 1 = well top). Disjoint by construction.
+        private const float CtaBandTop     = 0.185f;   // ⛔ EXCLUSIVE band — nothing else may enter
+        private const float CtaBtnYMin     = 0.015f, CtaBtnYMax = 0.180f;
+        private const float DetailsYMin    = 0.205f, DetailsYMax = 0.430f;
+        private const float DividerY       = 0.440f;
+        private const float DotRailYMin    = 0.452f, DotRailYMax = 0.500f;
+        private const float CarouselYMin   = 0.500f;   // -> 1.000 (the top band)
+
+        // Horizontal lanes of the carousel band (fractions of the well's width).
+        private const float PrevXMin = 0.148f, PrevXMax = 0.216f;
+        private const float SideLXMin = 0.2591f, SideLXMax = 0.3505f;
+        private const float FocalXMin = 0.4353f, FocalXMax = 0.5650f;
+        private const float SideRXMin = 0.6494f, SideRXMax = 0.7409f;
+        private const float NextXMin = 0.784f, NextXMax = 0.852f;
+
+        // ── WO-1234 — WHAT THE DELIVERED ART IS, declared once ───────────────────────
+        // The owner's 2026-08-26 delivery is a FULL CARD, not a bare portrait: it bakes
+        // in the gold frame AND a name/role plate ("SYLAS / Ranger"). Two pieces of
+        // chrome this screen used to draw are therefore now DUPLICATES, and one — the
+        // separate name/role band — is what let the LOCKED scrim leave Elara's plate
+        // uncovered. This ONE const gates both, so a future bare-portrait delivery
+        // restores the frame and the LOCALISED labels together by flipping it to false;
+        // nothing was deleted. See BuildCenterStage for the localisation note.
+        // ⚠ static readonly, NOT const, deliberately: a const bool would constant-fold every
+        // gated branch below and bury the bare-portrait path under CS0162 unreachable-code
+        // warnings — noise that trains a seat to ignore the warning list. This keeps both
+        // paths compiled and inspectable.
+        private static readonly bool PortraitArtIsFullCard = true;
+
+        // Aspect of that art, width/height. 1086x1448 = 3:4 (it was 832x1248 = 2:3).
+        // ⛔ The focal card rect is derived from THIS by an AspectRatioFitter, never by a
+        // hardcoded band fraction — a fraction is only correct at one canvas aspect, and
+        // the wrong one letterboxes the card inside its own rect.
+        private const float PortraitArtAspect = 1086f / 1448f;
+
+        // Vertical lanes INSIDE the carousel band (0 = band bottom, 1 = band top).
+        private const float CarSideYMin = 0.42f, CarSideYMax = 0.92f;   // side cards: smaller + lower
+        private const float CarArrowYMin = 0.53f, CarArrowYMax = 0.86f; // arrows: outboard, card-centred
+
+        // The four details columns (fractions of the well's width).
+        private static readonly Vector2[] DetailColumns =
+        {
+            new Vector2(0.005f, 0.300f),   // LORE
+            new Vector2(0.320f, 0.640f),   // STATS
+            new Vector2(0.660f, 0.800f),   // SIGNATURE
+            new Vector2(0.820f, 0.995f),   // PRIMARY SKILLS
+        };
         private Image[] _pageDots;
         private Vector2 _swipeStart;
         private bool _trackingSwipe;
@@ -115,7 +205,8 @@ namespace DeNelle.Onboarding
         private int _shownIndex;
 
         // Portrait JPGs import as Texture2D rather than Sprite. Convert each once so every
-        // carousel lane uses Image.preserveAspect; RawImage stretched the 2:3 art to its card.
+        // carousel lane uses Image.preserveAspect; RawImage stretched the art to its card.
+        // (WO-1234: that art is now 3:4 card art, PortraitArtAspect — see the band table.)
         private static readonly Dictionary<HeroClass, Sprite> PortraitSpriteCache =
             new Dictionary<HeroClass, Sprite>();
 
@@ -156,11 +247,13 @@ namespace DeNelle.Onboarding
             _confirmLabel = null;
             _dotRail = null;
             _pageDots = null;
+            _stageWell = null;
             for (int i = 0; i < _carouselCards.Length; i++)
             {
                 _carouselCards[i] = null;
                 _carouselPortraits[i] = null;
                 _carouselLabels[i] = null;
+                _carouselSoon[i] = null;
             }
             _trackingSwipe = false;
             _built = false;
@@ -189,12 +282,14 @@ namespace DeNelle.Onboarding
         /// <summary>
         /// Builds the entire hero-select screen in code on a fresh kit canvas:
         ///   canvas (ScreenSpaceOverlay, kit-built)
-        ///     └─ Obsidian FrameCharacter chrome (title in the header zone; Close hidden)
-        ///          ├─ body zone
-        ///          │    ├─ class column (LEFT — one Obsidian button per catalog hero)
-        ///          │    ├─ hero stage  (CENTER — focal portrait + name/role)
-        ///          │    └─ specs panel (RIGHT — lore / stats pips / signature / skills)
-        ///          └─ footer zone — the confirm CTA (Obsidian Green)
+        ///     └─ Obsidian FrameCore chrome (title in the header zone; Close hidden)
+        ///          ├─ subtitle eyebrow (sub-header band)
+        ///          └─ HeroStageWell (WO-1083 — the frame-measured body rect), banded:
+        ///               ├─ TOP     HeroCarousel — PREV | side card | FOCAL card | side card | NEXT
+        ///               ├─         (inside the focal column: portrait well, hero name, role label)
+        ///               ├─ MID     page-dot rail, then the divider rule
+        ///               ├─ LOWER   DetailsStrip — LORE | STATS | SIGNATURE | PRIMARY SKILLS
+        ///               └─ BOTTOM  the EXCLUSIVE CTA band — the confirm CTA (Obsidian Green)
         /// No UIDocument, no UXML, no PanelSettings — nothing scene-hosted can blank it.
         /// </summary>
         private void BuildScreen()
@@ -235,40 +330,75 @@ namespace DeNelle.Onboarding
             ElarionUiKit.AttachPanelOpenFx(_canvas,
                 _chrome.root != null ? _chrome.root.GetComponent<RectTransform>() : null);
 
-            // Drop-zones (frame art present) or content fallback (procedural panel).
-            Transform body = _chrome.layout != null && _chrome.layout.body != null
-                ? _chrome.layout.body.transform
-                : _chrome.content.transform;
+            // ── WO-1083: THE STAGE WELL ───────────────────────────────────────────
+            // Parented on chrome.content (which exists on BOTH the frame and the
+            // procedural path) at FrameCore's frame-MEASURED body rect — see the band
+            // table's ⛔ note for why layout.body cannot be used here (its floor is
+            // raised ~0.28 of the panel by a Close-band reservation for a Close this
+            // screen HIDES, which is defect #5 of WO-1083 in one line).
+            Transform content = _chrome.content != null
+                ? _chrome.content.transform
+                : (_chrome.layout != null && _chrome.layout.body != null
+                    ? _chrome.layout.body.transform
+                    : _canvas.transform);
 
-            // Subtitle eyebrow across the top of the body well.
-            var subtitle = ElarionUiKit.Label(body, FallbackLocale(SubtitleKey, "Only one may answer the call."),
-                0.94f, 1.00f, ElarionUi.Gold, ElarionUi.FontLabel,
-                TextAlignmentOptions.Center, 0.02f, 0.98f, spacing: 1f, bold: true);
+            _stageWell = MakeZone(content, "HeroStageWell",
+                new Vector2(WellXMin, WellYMin), new Vector2(WellXMax, WellYMax));
+
+            // The kit only paints its obsidian backing behind the RESERVED body zone, so
+            // the recovered lower third would show raw frame art through it. Paint the
+            // well ourselves; first child, raycast-off, so it never eats a card tap.
+            var wellFill = ElarionUiKit.AddImage(_stageWell, "WellFill", Vector2.zero, Vector2.one,
+                ElarionUiKit.ObsidianFill, rounded: false);
+            wellFill.transform.SetAsFirstSibling();
+            var wellFillImg = wellFill.GetComponent<Image>();
+            if (wellFillImg != null) wellFillImg.raycastTarget = false;
+
+            // Subtitle eyebrow — the frame's SUB-HEADER band, under the title and ABOVE
+            // the well (it used to ride the body top and stole a row from the carousel).
+            var subtitle = ElarionUiKit.Label(content, FallbackLocale(SubtitleKey, "Only one may answer the call."),
+                0.845f, 0.900f, ElarionUi.Gold, ElarionUi.FontLabel,
+                TextAlignmentOptions.Center, 0.24f, 0.945f, spacing: 1f, bold: true);
             subtitle.raycastTarget = false;
             FitLine(subtitle);
 
-            // ── The three stage containers (fraction-anchored inside the body well).
-            // Owner F8 2026-07-03: lifted the stage floor from 0.020 -> 0.145 so the
-            // bottom of the (now full-height FrameCore) body well is reserved for the
-            // confirm CTA — "move everything up a little so the [CTA] stays in the frame."
-            // Cosmetic flag C (owner 2026-07-24): widen the inter-column gutters (0.020 -> 0.040)
-            // so the columns don't crowd each other, and widen the SpecsPanel (0.390 -> 0.405) for
-            // horizontal breathing on its dense lore/stats/signature/skills stack — the slack is
-            // taken from the center 3D-preview stage, which can afford it. Vertical layout below is
-            // left intact (FitBlock/FitLine already guard overflow) to stay conservative.
-            _classColumn = MakeZone(body, "HeroCarousel", new Vector2(0.000f, 0.145f), new Vector2(0.575f, 0.920f));
-            _stageCenter = MakeZone(_classColumn, "HeroStage", new Vector2(0.205f, 0.10f), new Vector2(0.795f, 0.98f));
-            _stageRight  = MakeZone(body, "SpecsPanel",  new Vector2(0.595f, 0.145f), new Vector2(1.000f, 0.920f));
+            // ── The bands (see the band table above; all disjoint by construction) ──
+            //   TOP     : the rotating carousel  (_classColumn, focal card = _stageCenter)
+            //   MIDDLE  : role label + page dots + divider rule
+            //   LOWER   : the four-column details strip (_stageRight)
+            //   BOTTOM  : the EXCLUSIVE CTA band
+            _classColumn = MakeZone(_stageWell, "HeroCarousel",
+                new Vector2(0f, CarouselYMin), new Vector2(1f, 1f));
+            _stageCenter = MakeZone(_classColumn, "HeroStage",
+                new Vector2(FocalXMin, 0f), new Vector2(FocalXMax, 1f));
+            _stageRight  = MakeZone(_stageWell, "DetailsStrip",
+                new Vector2(0f, DetailsYMin), new Vector2(1f, DetailsYMax));
 
             BuildCarousel();
 
-            // ── Confirm CTA — Obsidian GREEN, the one exit. Anchored in the RESERVED
-            // bottom band of the body well (not the thin filigree footer strip) so it is
-            // guaranteed to sit comfortably INSIDE the frame art on every aspect (the
-            // owner's out-of-frame F8 was the footer-anchored CTA falling below the art).
-            Transform ctaParent = body;
-            Vector2 ctaMin = new Vector2(0.34f, 0.020f);
-            Vector2 ctaMax = new Vector2(0.66f, 0.120f);
+            // Divider rule between the carousel/dots block and the details strip.
+            var divider = ElarionUiKit.AddImage(_stageWell, "DividerRule",
+                new Vector2(0.005f, DividerY), new Vector2(0.995f, DividerY + 0.0035f),
+                new Color(ElarionUi.Gold.r, ElarionUi.Gold.g, ElarionUi.Gold.b, 0.45f), rounded: false);
+            var dividerImg = divider.GetComponent<Image>();
+            if (dividerImg != null) dividerImg.raycastTarget = false;
+
+            FlowTrace.Step("Onboarding", string.Format(
+                "BuildScreen bands (WO-1083, fractions of the stage well x[{0:F3},{1:F3}] y[{2:F3},{3:F3}] of the panel): " +
+                "carousel y[{4:F3},1.000] dots y[{5:F3},{6:F3}] divider y={7:F3} details y[{8:F3},{9:F3}] " +
+                "CTA-EXCLUSIVE y[0.000,{10:F3}] (button y[{11:F3},{12:F3}]).",
+                WellXMin, WellXMax, WellYMin, WellYMax,
+                CarouselYMin, DotRailYMin, DotRailYMax, DividerY,
+                DetailsYMin, DetailsYMax, CtaBandTop, CtaBtnYMin, CtaBtnYMax));
+
+            // ── Confirm CTA — Obsidian GREEN, the one exit. It now owns an EXCLUSIVE
+            // band at the bottom of the well (nothing else is authored below
+            // DetailsYMin), which is what retires defects #1 (CTA over NEXT) and #2
+            // (CTA clipping the skill badges): those two elements are no longer in the
+            // CTA's band at all, so no MinTouch clamp growth can bring them back.
+            Transform ctaParent = _stageWell;
+            Vector2 ctaMin = new Vector2(0.36f, CtaBtnYMin);
+            Vector2 ctaMax = new Vector2(0.64f, CtaBtnYMax);
             _confirmButton = ElarionUiKit.BuildObsidianButton(ctaParent,
                 FallbackLocale(DiveKey, "Enter Elarion"),
                 ElarionUiKit.ObsidianButtonStyle.Style2, ElarionUiKit.ObsidianButtonColor.Green,
@@ -312,15 +442,17 @@ namespace DeNelle.Onboarding
         }
 
         // =====================================================================
-        //  LEFT — the class column (data-driven from HeroCatalog)
+        //  TOP BAND — the rotating carousel (data-driven from HeroCatalog)
         // =====================================================================
 
         /// <summary>
-        /// Builds one Obsidian class button per <see cref="HeroCatalog"/> entry, in
-        /// catalog order. The playable class gets the GOLD face; locked classes get
-        /// the GRAY face with a "Coming soon" micro-tag under the button. Every
-        /// button is tappable (locked classes preview into the stage); only the
-        /// playable class can be confirmed.
+        /// Builds the TOP BAND: a full-band swipe surface, the two POOLED side cards
+        /// (the heroes either side of the focal one, repainted per rotation by
+        /// <see cref="RefreshCarouselChrome"/>), the outboard PREV/NEXT buttons, and
+        /// the display-only page-dot rail in its own band beneath. All three rotation
+        /// inputs are wired here: swipe (this surface + the focal well), the arrow
+        /// buttons, and a side-card tap. Every card is tappable (a locked hero previews
+        /// into the stage); only a playable hero can be confirmed.
         /// </summary>
         private void BuildCarousel()
         {
@@ -333,29 +465,65 @@ namespace DeNelle.Onboarding
             AddTrigger(trigger, EventTriggerType.BeginDrag, e => BeginSwipe((PointerEventData)e));
             AddTrigger(trigger, EventTriggerType.EndDrag, e => EndSwipe((PointerEventData)e));
 
-            BuildPreviewCard(0, new Vector2(0.005f, 0.24f), new Vector2(0.205f, 0.79f));
-            BuildPreviewCard(1, new Vector2(0.795f, 0.24f), new Vector2(0.995f, 0.79f));
+            // Side (previous / next) cards — SMALLER and LOWER than the focal card, which
+            // is the depth cue that reads the rotation. Tapping one rotates a step.
+            BuildPreviewCard(0, new Vector2(SideLXMin, CarSideYMin), new Vector2(SideLXMax, CarSideYMax));
+            BuildPreviewCard(1, new Vector2(SideRXMin, CarSideYMin), new Vector2(SideRXMax, CarSideYMax));
 
-            ElarionUiKit.BuildObsidianButton(_classColumn, "PREV",
+            // PREV/NEXT — OUTBOARD of the side cards (defects #3/#4: they used to sit in a
+            // bottom strip UNDER the cards and the MinTouch floor grew them into the card
+            // rects). The x lanes are disjoint from the card lanes by ~0.043 of the well
+            // (~99 px at 2670x1200), and both buttons are authored ABOVE MinTouchPx on
+            // both axes so ClampMinTouch has nothing to grow. ASCII arrow glyphs.
+            ElarionUiKit.BuildObsidianButton(_classColumn, "< PREV",
                 ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Gray,
-                new Vector2(0.015f, 0.02f), new Vector2(0.205f, 0.15f), () => StepCarousel(-1));
-            ElarionUiKit.BuildObsidianButton(_classColumn, "NEXT",
+                new Vector2(PrevXMin, CarArrowYMin), new Vector2(PrevXMax, CarArrowYMax), () => StepCarousel(-1));
+            ElarionUiKit.BuildObsidianButton(_classColumn, "NEXT >",
                 ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Gray,
-                new Vector2(0.795f, 0.02f), new Vector2(0.985f, 0.15f), () => StepCarousel(1));
-            _dotRail = MakeZone(_classColumn, "PageDots", new Vector2(0.27f, 0.035f), new Vector2(0.73f, 0.125f));
+                new Vector2(NextXMin, CarArrowYMin), new Vector2(NextXMax, CarArrowYMax), () => StepCarousel(1));
+
+            // Page dots — DISPLAY ONLY by design (rotation is swipe / arrow / side-card
+            // tap), so they are raycast-off and deliberately below the touch floor; making
+            // them tappable would put a real touch target under MinTouchPx. They live in
+            // their OWN band under the carousel, not inside it.
+            _dotRail = MakeZone(_stageWell, "PageDots",
+                new Vector2(0.44f, DotRailYMin), new Vector2(0.56f, DotRailYMax));
             int n = HeroCatalog.Heroes.Length;
             _pageDots = new Image[n];
-            const float dot = 0.08f;
-            float total = n * dot + Mathf.Max(0, n - 1) * dot;
+            float total = n * DotW + Mathf.Max(0, n - 1) * DotGap;
             float start = (1f - total) * 0.5f;
             for (int i = 0; i < n; i++)
             {
-                float x = start + i * dot * 2f;
+                float cx = start + i * (DotW + DotGap) + DotW * 0.5f;
                 var marker = ElarionUiKit.AddImage(_dotRail, "PageDot_" + i,
-                    new Vector2(x, 0.30f), new Vector2(x + dot, 0.70f), Color.gray, rounded: true);
+                    new Vector2(cx - DotW * 0.5f, 0.24f), new Vector2(cx + DotW * 0.5f, 0.76f),
+                    Color.gray, rounded: true);
                 _pageDots[i] = marker.GetComponent<Image>();
                 if (_pageDots[i] != null) _pageDots[i].raycastTarget = false;
             }
+            FlowTrace.Step("Onboarding",
+                $"BuildCarousel: top band built - 2 side cards + PREV/NEXT outboard + {n} display-only page dots.");
+        }
+
+        // Page-dot geometry. The ACTIVE dot is larger AND gilt (size + colour), never
+        // colour alone — the owner is red/green colourblind, so the state must survive a
+        // greyscale check. Centres are fixed; only the half-extents change.
+        private const float DotW = 0.09f, DotGap = 0.055f;
+        private const float DotActiveHalfW = 0.055f, DotIdleHalfW = 0.032f;
+        private const float DotActiveYMin = 0.02f, DotActiveYMax = 0.98f;
+        private const float DotIdleYMin = 0.24f, DotIdleYMax = 0.76f;
+
+        /// <summary>Re-sizes one page dot for its active/idle state about its fixed centre.</summary>
+        private static void ApplyDotState(Image dot, bool active)
+        {
+            if (dot == null) return;
+            var rt = dot.rectTransform;
+            float cx = (rt.anchorMin.x + rt.anchorMax.x) * 0.5f;
+            float half = active ? DotActiveHalfW : DotIdleHalfW;
+            rt.anchorMin = new Vector2(cx - half, active ? DotActiveYMin : DotIdleYMin);
+            rt.anchorMax = new Vector2(cx + half, active ? DotActiveYMax : DotIdleYMax);
+            rt.offsetMin = Vector2.zero; rt.offsetMax = Vector2.zero;
+            dot.color = active ? ElarionUi.Gilt : new Color(0.40f, 0.40f, 0.40f, 1f);
         }
 
         private void BuildPreviewCard(int slot, Vector2 min, Vector2 max)
@@ -378,6 +546,21 @@ namespace DeNelle.Onboarding
                 ElarionUi.Parchment, ElarionUi.FontMicro, TextAlignmentOptions.Center, 0.03f, 0.97f, bold: true);
             _carouselLabels[slot].raycastTarget = false;
             FitLine(_carouselLabels[slot]);
+
+            // SOON word-ribbon for a locked hero on this side card (WO-1083 §2). The WORD
+            // carries the state — never colour alone (greyscale check). Decorative: raycast
+            // off, so it can never swallow the card's rotate tap.
+            var ribbon = ElarionUiKit.AddImage(card.transform, "SoonRibbon",
+                new Vector2(0.30f, 0.82f), new Vector2(0.98f, 0.98f), ElarionUi.GoldButton, rounded: true);
+            var ribbonImg = ribbon.GetComponent<Image>();
+            if (ribbonImg != null) ribbonImg.raycastTarget = false;
+            var ribbonLbl = ElarionUiKit.Label(ribbon.transform, "SOON", 0f, 1f,
+                ElarionUi.Ink, ElarionUi.FontMicro, TextAlignmentOptions.Center, 0.04f, 0.96f,
+                spacing: 1f, bold: true);
+            ribbonLbl.raycastTarget = false;
+            FitLine(ribbonLbl);
+            ribbon.SetActive(false);
+            _carouselSoon[slot] = ribbon;
         }
 
         private static void AddTrigger(EventTrigger trigger, EventTriggerType type, System.Action<BaseEventData> action)
@@ -454,25 +637,71 @@ namespace DeNelle.Onboarding
             RefreshCarouselChrome();
         }
 
-        /// <summary>CENTER — the focal hero portrait in a dark well + name/role beneath.</summary>
+        /// <summary>CENTER — the focal hero card (its own frame + baked plate when the art is
+        /// card-style), with the LOCKED scrim over the WHOLE card.</summary>
         private void BuildCenterStage(HeroCardInfo info, bool playable)
         {
-            // Portrait well (dark recess) filling the upper ~78% of the stage.
-            var well = ElarionUiKit.Well(_stageCenter, new Vector2(0.02f, 0.22f), new Vector2(0.98f, 1.00f));
+            // ── WO-1234 — GOLD FRAME: drawn ONLY when the art is a bare portrait ──────
+            // The 2026-08-26 art carries its own gold frame, so drawing this one puts a
+            // frame inside a frame. The code stays, gated on PortraitArtIsFullCard, so a
+            // future bare-portrait delivery restores the focal chrome by flipping ONE
+            // const — WO-1083 §2/§4's "focal reads as frame AND size, never colour alone"
+            // still holds either way, because the card art's own frame is gold too and the
+            // focal card is still the largest on the rail (greyscale-safe by SIZE).
+            if (!PortraitArtIsFullCard)
+            {
+                var focalFrame = ElarionUiKit.AddImage(_stageCenter, "FocalFrame",
+                    new Vector2(0f, 0.280f), new Vector2(1f, 1.000f), ElarionUi.GoldButton, rounded: true);
+                var focalFrameImg = focalFrame.GetComponent<Image>();
+                if (focalFrameImg != null) focalFrameImg.raycastTarget = false;
+            }
+
+            // ── The card rect ────────────────────────────────────────────────────────
+            // Card-style: a TRANSPARENT rect sized by an AspectRatioFitter to the LARGEST
+            // PortraitArtAspect box that fits the focal lane, so the art fills it edge to
+            // edge with NO letterbox at any resolution (the fitter re-measures per layout
+            // pass — a hardcoded fraction would only be right at 2670x1200). No dark well
+            // fill and no inner rim, because the card supplies its own background; the
+            // Image stays raycast-ON so it is still the swipe surface.
+            // Bare-portrait: the old dark recess, unchanged.
+            GameObject well;
+            if (PortraitArtIsFullCard)
+            {
+                well = ElarionUiKit.AddImage(_stageCenter, "HeroCard",
+                    Vector2.zero, Vector2.one, new Color(0f, 0f, 0f, 0f), rounded: false);
+                var fitter = well.GetComponent<AspectRatioFitter>() ?? well.AddComponent<AspectRatioFitter>();
+                fitter.aspectMode = AspectRatioFitter.AspectMode.FitInParent;
+                fitter.aspectRatio = PortraitArtAspect;
+            }
+            else
+            {
+                well = ElarionUiKit.Well(_stageCenter, new Vector2(0.022f, 0.295f), new Vector2(0.978f, 0.985f));
+            }
             var swipeTrigger = well.GetComponent<EventTrigger>() ?? well.AddComponent<EventTrigger>();
             AddTrigger(swipeTrigger, EventTriggerType.BeginDrag, e => BeginSwipe((PointerEventData)e));
             AddTrigger(swipeTrigger, EventTriggerType.EndDrag, e => EndSwipe((PointerEventData)e));
 
             // The hero image itself — sprite-first, texture fallback, glyph last.
+            // Card-style fills the rect EXACTLY (0..1): the card IS the rect, which is what
+            // lets the scrim below cover the baked nameplate by covering the same 0..1.
             var portraitGo = new GameObject("HeroPortrait", typeof(RectTransform));
             portraitGo.transform.SetParent(well.transform, false);
             var prt = (RectTransform)portraitGo.transform;
-            prt.anchorMin = new Vector2(0.04f, 0.03f);
-            prt.anchorMax = new Vector2(0.96f, 0.97f);
+            prt.anchorMin = PortraitArtIsFullCard ? Vector2.zero : new Vector2(0.04f, 0.03f);
+            prt.anchorMax = PortraitArtIsFullCard ? Vector2.one  : new Vector2(0.96f, 0.97f);
             prt.offsetMin = Vector2.zero; prt.offsetMax = Vector2.zero;
             ApplyPortrait(portraitGo, info, playable);
 
-            // LOCKED scrim over the portrait for a locked class.
+            // ── WO-1234 ⭐ — LOCKED scrim over the WHOLE CARD, plate included ─────────
+            // It was already parented to this rect at 0..1; what was BROKEN is that the
+            // rect used to be the portrait recess INSET inside the frame, while the name
+            // and role were separate labels OUTSIDE it. Elara is the Cleric and the Cleric
+            // is locked, so the screen rendered a crisp gold "ELARA / Cleric" plate sitting
+            // cleanly BELOW a greyed LOCKED / Coming Soon scrim — the locked state visibly
+            // contradicting itself. Now the rect IS the card (0..1, aspect-fitted) and the
+            // name/role are BAKED INTO that art, so one 0..1 scrim covers portrait, frame
+            // and plate together. Greyscale-safe: it is an alpha wash plus the WORD
+            // "LOCKED", never a hue.
             if (!playable)
             {
                 var scrim = ElarionUiKit.AddImage(well.transform, "LockScrim",
@@ -494,19 +723,36 @@ namespace DeNelle.Onboarding
                 FitLine(soon);
             }
 
-            // Name + role under the portrait. Owner F8 2026-07-03: the playable hero's
-            // name (Knight) uses WHITE so it pops against the frame; a locked hero stays dim.
-            var nameLabel = ElarionUiKit.Label(_stageCenter, CanonStrings.Locale(info.NameKey),
-                0.115f, 0.205f, playable ? Color.white : ElarionUi.ParchmentDim,
-                ElarionUi.FontTitle, TextAlignmentOptions.Center, 0.02f, 0.98f, spacing: 1f, bold: true);
-            nameLabel.raycastTarget = false;
-            FitLine(nameLabel);
+            // ── WO-1234 — name + role: SUPPRESSED for card art, NOT DELETED ──────────
+            // ⚠ THESE ARE THE LOCALISED PATH. CanonStrings.Locale(info.NameKey/RoleKey)
+            // reads en.json; the baked plate on the card art is ENGLISH ONLY. Deleting
+            // them would make this screen permanently untranslatable and the loss would be
+            // invisible until a second locale shipped — so the code stays, whole, behind
+            // one const.
+            //
+            // HOW LOCALISATION RE-ENABLES THEM: today CanonStrings has exactly one string
+            // table (en.json — Canon()/Locale() with no locale selector), so the plate can
+            // never disagree with the labels. The moment a second locale lands, this
+            // condition becomes the locale test rather than a flat const — render the
+            // labels whenever the active locale is not the one baked into the plate — and
+            // the card art gets a plate-free variant for those locales. Nothing here needs
+            // to be rewritten to get there; only the predicate changes.
+            if (!PortraitArtIsFullCard)
+            {
+                // Owner F8 2026-07-03: the playable hero's name (Knight) uses WHITE so it
+                // pops against the frame; a locked hero stays dim.
+                var nameLabel = ElarionUiKit.Label(_stageCenter, CanonStrings.Locale(info.NameKey),
+                    0.150f, 0.270f, playable ? Color.white : ElarionUi.ParchmentDim,
+                    ElarionUi.FontTitle, TextAlignmentOptions.Center, 0.02f, 0.98f, spacing: 1f, bold: true);
+                nameLabel.raycastTarget = false;
+                FitLine(nameLabel);
 
-            var roleLabel = ElarionUiKit.Label(_stageCenter, CanonStrings.Locale(info.RoleKey),
-                0.035f, 0.115f, ElarionUi.Gold, ElarionUi.FontLabel,
-                TextAlignmentOptions.Center, 0.02f, 0.98f, spacing: 1.5f, bold: true);
-            roleLabel.raycastTarget = false;
-            FitLine(roleLabel);
+                var roleLabel = ElarionUiKit.Label(_stageCenter, CanonStrings.Locale(info.RoleKey),
+                    0.020f, 0.140f, ElarionUi.Gold, ElarionUi.FontLabel,
+                    TextAlignmentOptions.Center, 0.02f, 0.98f, spacing: 1.5f, bold: true);
+                roleLabel.raycastTarget = false;
+                FitLine(roleLabel);
+            }
         }
 
         /// <summary>
@@ -515,30 +761,43 @@ namespace DeNelle.Onboarding
         /// </summary>
         private void BuildSpecsPanel(HeroCardInfo info, bool playable)
         {
-            // — LORE — (upper band)
-            SectionHead(_stageRight, "LORE", 0.955f, 1.00f);
-            var blurb = ElarionUiKit.Label(_stageRight, CanonStrings.Locale(info.BlurbKey),
-                0.760f, 0.950f, ElarionUi.Parchment, ElarionUi.FontLabel,
+            // WO-1083: the same four sections, the same data sources, the same strings —
+            // laid ACROSS in four columns under the carousel instead of stacked down a
+            // right-hand rail. Each column is a zone, so every section's fractions below
+            // are of ITS OWN column and can never bleed into a neighbour.
+            var lore   = MakeZone(_stageRight, "Col_Lore",
+                new Vector2(DetailColumns[0].x, 0f), new Vector2(DetailColumns[0].y, 1f));
+            var stats  = MakeZone(_stageRight, "Col_Stats",
+                new Vector2(DetailColumns[1].x, 0f), new Vector2(DetailColumns[1].y, 1f));
+            var sig    = MakeZone(_stageRight, "Col_Signature",
+                new Vector2(DetailColumns[2].x, 0f), new Vector2(DetailColumns[2].y, 1f));
+            var skillsCol = MakeZone(_stageRight, "Col_Skills",
+                new Vector2(DetailColumns[3].x, 0f), new Vector2(DetailColumns[3].y, 1f));
+
+            // — LORE —
+            SectionHead(lore, "LORE", 0.85f, 1.00f);
+            var blurb = ElarionUiKit.Label(lore, CanonStrings.Locale(info.BlurbKey),
+                0.02f, 0.80f, ElarionUi.Parchment, ElarionUi.FontLabel,
                 TextAlignmentOptions.TopLeft, 0.02f, 0.98f);
             blurb.textWrappingMode = TextWrappingModes.Normal;
             blurb.raycastTarget = false;
             FitBlock(blurb);
 
             // — STATS — (pip rows; uGUI image pips, no unicode glyphs in TMP)
-            SectionHead(_stageRight, "STATS", 0.705f, 0.750f);
-            BuildPipRow(_stageRight, "HP",     info.Hp,     0.645f, 0.700f);
-            BuildPipRow(_stageRight, "ATTACK", info.Attack, 0.585f, 0.640f);
-            BuildPipRow(_stageRight, "SPEED",  info.Speed,  0.525f, 0.580f);
+            SectionHead(stats, "STATS", 0.85f, 1.00f);
+            BuildPipRow(stats, "HP",     info.Hp,     0.58f, 0.80f);
+            BuildPipRow(stats, "ATTACK", info.Attack, 0.31f, 0.53f);
+            BuildPipRow(stats, "SPEED",  info.Speed,  0.04f, 0.26f);
 
             // — SIGNATURE —
-            SectionHead(_stageRight, "SIGNATURE", 0.460f, 0.505f);
-            var sigName = ElarionUiKit.Label(_stageRight, info.AbilityName,
-                0.405f, 0.458f, ElarionUi.Gold, ElarionUi.FontBody,
+            SectionHead(sig, "SIGNATURE", 0.85f, 1.00f);
+            var sigName = ElarionUiKit.Label(sig, info.AbilityName,
+                0.56f, 0.80f, ElarionUi.Gold, ElarionUi.FontBody,
                 TextAlignmentOptions.Left, 0.02f, 0.98f, bold: true);
             sigName.raycastTarget = false;
             FitLine(sigName);
-            var sigDesc = ElarionUiKit.Label(_stageRight, info.AbilityDesc,
-                0.330f, 0.403f, ElarionUi.ParchmentDim, ElarionUi.FontLabel,
+            var sigDesc = ElarionUiKit.Label(sig, info.AbilityDesc,
+                0.02f, 0.54f, ElarionUi.ParchmentDim, ElarionUi.FontLabel,
                 TextAlignmentOptions.TopLeft, 0.02f, 0.98f);
             sigDesc.textWrappingMode = TextWrappingModes.Normal;
             sigDesc.raycastTarget = false;
@@ -546,30 +805,40 @@ namespace DeNelle.Onboarding
 
             // — PRIMARY SKILLS — the hero's Q/F/E/R kit (mirrored from abilities.json
             // via HeroCatalog). A labelled placeholder shows for a hero whose kit is
-            // not yet authored (e.g. the Cleric).
-            SectionHead(_stageRight, "PRIMARY SKILLS", 0.265f, 0.310f);
+            // not yet authored (e.g. the Cleric — ⛔ WO-1083 §3, unchanged).
+            SectionHead(skillsCol, "PRIMARY SKILLS", 0.85f, 1.00f);
             var skills = info.PrimarySkills;
             if (skills != null && skills.Length > 0)
             {
-                const float sTop = 0.255f;
-                const float sBottom = 0.015f;
+                const float sTop = 0.80f;
+                const float sBottom = 0.02f;
                 float sRow = (sTop - sBottom) / Mathf.Max(1, skills.Length);
                 for (int s = 0; s < skills.Length; s++)
                 {
                     float y1 = sTop - s * sRow;
-                    BuildSkillRow(_stageRight, skills[s].Slot, skills[s].Name,
-                                  y1 - sRow * 0.92f, y1 - sRow * 0.08f);
+                    // The skills column is NARROW (a quarter of the strip), so the slot
+                    // badge gets a wider lane than the old full-width rail used or the
+                    // Q/W/E/R glyph autosizes into a smear.
+                    BuildSkillRow(skillsCol, skills[s].Slot, skills[s].Name,
+                                  y1 - sRow * 0.92f, y1 - sRow * 0.08f,
+                                  badgeX1: 0.22f, nameX0: 0.28f);
                 }
             }
             else
             {
-                var soon = ElarionUiKit.Label(_stageRight, "Abilities revealed at launch",
-                    0.185f, 0.255f, ElarionUi.ParchmentDim, ElarionUi.FontLabel,
+                var soon = ElarionUiKit.Label(skillsCol, "Abilities revealed at launch",
+                    0.40f, 0.80f, ElarionUi.ParchmentDim, ElarionUi.FontLabel,
                     TextAlignmentOptions.TopLeft, 0.02f, 0.98f);
                 soon.fontStyle = FontStyles.Italic;
+                soon.textWrappingMode = TextWrappingModes.Normal;
                 soon.raycastTarget = false;
                 FitBlock(soon);
             }
+
+            FlowTrace.Step("Onboarding", string.Format(
+                "BuildSpecsPanel: details strip built as 4 columns (LORE/STATS/SIGNATURE/SKILLS) " +
+                "in well band y[{0:F3},{1:F3}] - skills={2}, playable={3}.",
+                DetailsYMin, DetailsYMax, skills != null ? skills.Length : 0, playable));
         }
 
         /// <summary>A small gilt section heading with a hairline rule beneath it.</summary>
@@ -624,11 +893,12 @@ namespace DeNelle.Onboarding
         /// (element/element_stat, 9-sliced, chrome-tinted) with the pre-existing
         /// procedural gold chip as the null-art fallback — the badge ink follows the
         /// plate (parchment on the dark pack plate, Ink on the gold fallback).</summary>
-        private static void BuildSkillRow(Transform parent, string slot, string name, float y0, float y1)
+        private static void BuildSkillRow(Transform parent, string slot, string name, float y0, float y1,
+                                          float badgeX1 = 0.115f, float nameX0 = 0.15f)
         {
             var plateSprite = RpgUiCatalog.Get(RpgUiCatalog.RoleElement, RpgUiCatalog.ElementStat);
             var badge = ElarionUiKit.AddImage(parent, "SlotBadge",
-                new Vector2(0.02f, y0), new Vector2(0.115f, y1),
+                new Vector2(0.02f, y0), new Vector2(badgeX1, y1),
                 plateSprite != null ? ElarionUiKit.ChromeTint : ElarionUi.GoldButton,
                 rounded: plateSprite == null);
             var badgeImg = badge.GetComponent<Image>();
@@ -650,7 +920,7 @@ namespace DeNelle.Onboarding
 
             var nameLbl = ElarionUiKit.Label(parent, name, y0, y1,
                 ElarionUi.Parchment, ElarionUi.FontLabel,
-                TextAlignmentOptions.Left, 0.15f, 0.98f, bold: true);
+                TextAlignmentOptions.Left, nameX0, 0.98f, bold: true);
             nameLbl.raycastTarget = false;
             FitLine(nameLbl);
         }
@@ -693,13 +963,15 @@ namespace DeNelle.Onboarding
                 }
                 if (_carouselLabels[slot] != null)
                     _carouselLabels[slot].text = ClassLabelFor(info);
+                // The SOON ribbon is presentation of the EXISTING IsPlayable state — the
+                // roster, the coercion and Elara's card behaviour are untouched (WO-1083 §3).
+                if (_carouselSoon[slot] != null)
+                    _carouselSoon[slot].SetActive(!IsPlayable(info.Hero));
             }
 
             if (_pageDots == null) return;
             for (int i = 0; i < _pageDots.Length; i++)
-                if (_pageDots[i] != null)
-                    _pageDots[i].color = i == _shownIndex
-                        ? ElarionUi.Gilt : new Color(0.40f, 0.40f, 0.40f, 1f);
+                ApplyDotState(_pageDots[i], i == _shownIndex);
         }
 
         // =====================================================================
@@ -763,7 +1035,7 @@ namespace DeNelle.Onboarding
         /// Applies a hero's portrait art to the portrait GameObject — sprite-first
         /// (uGUI Image, aspect kept), Texture2D fallback (RawImage), accent glyph
         /// (the catalog's ASCII letter) last. No missing-asset risk —
-        /// Grom/Thrain/Sylas/Elara portraits all exist in Resources/HeroPortraits.
+        /// Grom/Thrain/Sylas/Elara card art all exists under HeroPortraitPaths.ResourcesFolder.
         /// </summary>
         private static void ApplyPortrait(GameObject host, HeroCardInfo info, bool playable)
         {
@@ -783,7 +1055,7 @@ namespace DeNelle.Onboarding
                 return;
             }
 
-            var portraitTex = Resources.Load<Texture2D>($"HeroPortraits/{slug}");
+            var portraitTex = Resources.Load<Texture2D>(HeroPortraitPaths.ResourceKey(slug));
             if (portraitTex != null)
             {
                 var raw = host.AddComponent<RawImage>();
@@ -917,7 +1189,8 @@ namespace DeNelle.Onboarding
             if (PortraitSpriteCache.TryGetValue(hero, out var cached) && cached != null)
                 return cached;
 
-            string path = $"HeroPortraits/{SlugFor(hero)}";
+            // WO-1234: the FOLDER comes from the one constant; SlugFor stays the id->filename map.
+            string path = HeroPortraitPaths.ResourceKey(SlugFor(hero));
             var sprite = Resources.Load<Sprite>(path);
             if (sprite == null)
             {
@@ -954,7 +1227,7 @@ namespace DeNelle.Onboarding
 //      enters HeroSelect cold, the controller logs a warning and still routes on
 //      (the choice just is not saved).
 //
-//   4. CLASS COLUMN: every catalog hero is tappable for a stage preview; only a
+//   4. CAROUSEL: every catalog hero is tappable for a stage preview; only a
 //      PLAYABLE hero is confirmable. WO-861 Phase 0: the playable set is
 //      DeNelle.Core.State.PlayableHeroes — { Knight, Ranger, Mage } since the
 //      2026-08-05 unlock (ff.knightonly defaults OFF); the Cleric is the one locked

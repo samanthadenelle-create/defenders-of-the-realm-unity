@@ -518,7 +518,8 @@ namespace DeNelle.Village.Arena
             // (candidate B: hero already reads in-arena / elsewhere before this stage even runs).
             var beHero = GameObject.FindWithTag("Player");
             FlowTrace.Step("BattleArena",
-                $"BeginEncounter HERO-POS: pos={(beHero != null ? beHero.transform.position.ToString() : "<no Player>")} inArena={(beHero != null && IsArenaPosition(beHero.transform.position))} centre={ArenaCentre}.");
+                $"BeginEncounter HERO-POS: scene='{UnityEngine.SceneManagement.SceneManager.GetActiveScene().name}' " +
+                $"pos={(beHero != null ? beHero.transform.position.ToString() : "<no Player>")} inArena={(beHero != null && IsArenaPosition(beHero.transform.position))} centre={ArenaCentre}.");
 
             // Battle-STAGED signal (before the stage coroutine): lets a scene owner switch camera
             // framing for the fight (dungeon FPV -> over-the-shoulder). Null-safe; never blocks staging.
@@ -1760,6 +1761,17 @@ namespace DeNelle.Village.Arena
             // this note carries the arena context either way.
             DeathTrace.Note($"HERO MOVE REQUESTED: BattleArena.WarpHero {hero.transform.position} -> {pos} (arena stage/return warp)");
 
+            // WO-1222 — NAME THE SCENE THIS WARP LANDS IN. The arena host is DontDestroyOnLoad and
+            // its staged stance is ~7km out at (5000, 0, 5000); a hero found standing there inside a
+            // DUNGEON scene can only have been written by this method. That was the 2026-08-26
+            // black screen in dg_healers_cottage — and the trace could not prove the writer, because
+            // no arena line carried the scene. It does now: an arena warp whose scene is a dungeon
+            // is either a legitimately staged dungeon encounter or an orphaned fight, and this line
+            // is what tells the two apart on the NEXT capture instead of the next felt-test.
+            FlowTrace.Step("BattleArena",
+                $"WarpHero REQUEST scene='{UnityEngine.SceneManagement.SceneManager.GetActiveScene().name}' " +
+                $"from={hero.transform.position} to={pos} intoArena={IsArenaPosition(pos)} battleInProgress={AnyBattleInProgress}.");
+
             // ── F8 2026-08-05 (owner, live on device): "when i land i could not move at all" /
             //    "the dungeon is unmovable" — after WINNING a dungeon fight. Owner ruling:
             //    "IF YOU CANNOT WALK AND NAVIGATE THROUGH THE DUNGEON ITS A FAIL."
@@ -2342,6 +2354,15 @@ namespace DeNelle.Village.Arena
             _current = null;
             BattleInProgress = false;
 
+            // WO-1233: the SECOND (and last) lifecycle end. An abandoned fight has no outcome, but
+            // it opened exactly the same pursuit window and the same global state a resolved one
+            // did — and it is the path most likely to strand them, because it runs when a scene
+            // pulled the stage out from under a LIVE chase. Announced here for the same reason
+            // RepEngageWatcher.ResumeAll and TownSuspension.Resume are: a leak on this path is
+            // permanent for the rest of the session.
+            Guard.Try("BattleArena", "announce battle session end (abandoned)",
+                () => BattleSessionEnd.Release($"abandoned: {reason}"));
+
             // DELIBERATELY NOT raising OnBattleEnded: its dungeon listener settles the run
             // (SettleEncounter -> loot grant / boss credit / a SECOND ExitToVillage scene load). An
             // abandoned fight has no settlement — whoever abandoned it owns its own unwind
@@ -2639,6 +2660,20 @@ namespace DeNelle.Village.Arena
             var done = _current;
             _current = null;
             BattleInProgress = false;
+
+            // WO-1233: THE SESSION END, ANNOUNCED ONCE. A battle can finish as a win, a loss, a
+            // retreat, a watchdog break-off or a timeout — five outcomes, ONE lifecycle end, and
+            // this is it. Everything that must unwind a global at battle end subscribes to
+            // BattleSessionEnd instead of adding a sixth release call here; the captured defect
+            // (eight identical arena-win failures) is what a per-outcome release looks like.
+            //
+            // It also performs the clear this line has needed since the arena went in-place:
+            // PostureSignals.ClearPursuits() is documented "hub return / combat end" and its ONLY
+            // caller in the repo was a scene-load reset — which an in-place arena never triggers —
+            // so every staged enemy that chased the hero left a live pursuit pulse behind it,
+            // holding BattleLock through PursuitBattleProbe past the end of the fight.
+            Guard.Try("BattleArena", "announce battle session end",
+                () => BattleSessionEnd.Release(won ? "arena win" : "retreat"));
 
             OnBattleEnded?.Invoke(done, won);
 

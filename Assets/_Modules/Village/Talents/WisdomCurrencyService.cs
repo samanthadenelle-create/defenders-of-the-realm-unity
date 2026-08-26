@@ -28,6 +28,7 @@ using System.Collections.Generic;
 using Newtonsoft.Json;
 using UnityEngine;
 using DeNelle.Core.Quests;
+using DeNelle.Core.State;   // WO-1220 — GameStateService.NewGameStarted / TalentPrefKey
 
 namespace DeNelle.Village.Talents
 {
@@ -41,7 +42,10 @@ namespace DeNelle.Village.Talents
     [DisallowMultipleComponent]
     public sealed class WisdomCurrencyService : MonoBehaviour
     {
-        private const string PrefKey = "dotr-talents-v1";
+        // WO-1220 — the key is now owned by GameStateService (ProgressionPrefKeys), so the New
+        // Game reset and this store can never drift onto two different keys. It was a private
+        // const here, invisible to the reset, which is why the reset never cleared it.
+        private const string PrefKey = DeNelle.Core.State.GameStateService.TalentPrefKey;
 
         public static WisdomCurrencyService Instance { get; private set; }
         public event Action Changed;
@@ -66,6 +70,38 @@ namespace DeNelle.Village.Talents
             if (Instance != null && Instance != this) { Destroy(gameObject); return; }
             Instance = this;
             Load();
+            // WO-1220 — this service is DontDestroyOnLoad and holds Wisdom + the unlocked
+            // talent-node ids IN MEMORY. GameStateService.ResetToNewGame deletes the PlayerPrefs
+            // blob, but without this subscription the live singleton would still be holding the
+            // previous hero's tree and would write it straight back out on the next Grant/Unlock
+            // — which is how a brand-new Ranger came up with a Mage's shared.n5 applied.
+            GameStateService.NewGameStarted += ResetForNewGame;
+        }
+
+        private void OnDestroy()
+        {
+            if (Instance == this) Instance = null;
+            GameStateService.NewGameStarted -= ResetForNewGame;   // WO-1220 — static event: never leak.
+        }
+
+        /// <summary>
+        /// WO-1220 — a New Game starts with ZERO Wisdom and ZERO unlocked talent nodes.
+        ///
+        /// Talent node ids are hero-prefixed ("mage.n3") but the unlocked SET is a single
+        /// shared pool, and the <c>shared.*</c> nodes carry no hero prefix at all — so a
+        /// surviving set does not merely leak the old hero's talents, it applies them to
+        /// whatever class the player picks next. Clearing the set and the balance together,
+        /// then persisting, leaves the store in exactly the state a first-ever launch sees.
+        /// </summary>
+        public void ResetForNewGame()
+        {
+            DeNelle.Core.Diagnostics.FlowTrace.Step("HeroTalents",
+                $"ResetForNewGame: dropping {_wisdom} Wisdom and {_unlocked.Count} unlocked talent " +
+                "node(s) — a New Game starts on an empty tree, whatever class was played before.");
+            _wisdom = 0;
+            _unlocked = new HashSet<string>();
+            Save();
+            Changed?.Invoke();
         }
 
         // -- Public API ---------------------------------------------------------

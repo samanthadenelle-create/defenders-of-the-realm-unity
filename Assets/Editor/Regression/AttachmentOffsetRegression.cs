@@ -90,6 +90,8 @@ namespace DeNelle.Editor.Regression
                 Case(failures, "staff-neutral-default", () => Case5_StaffNeutralDefault(failures));
                 Case(failures, "shield-seat-substantiation",
                      () => shieldSummary = Case6_ShieldSeatSubstantiation(failures));
+                Case(failures, "drawn-seat-verticality",
+                     () => Case7_DrawnSeatVerticality(failures));
             }
             catch (Exception ex)
             {
@@ -214,9 +216,28 @@ namespace DeNelle.Editor.Regression
                 "the fullOverride seat no longer applies the authored Offset Forge rotation");
         }
 
-        // WO-970 residual: once WeaponBoundsOrient learned to put a Z-long staff on +Y,
-        // the old +90Y staff default became a stranded compensation. Keep the staff
-        // neutral without erasing the independently authored wand calibration.
+        // ⭐ RE-POINTED 2026-08-26 BY OWNER RULING — this case used to pin _staffGripEuler to
+        // NEUTRAL (0f,0f,0f) as a WO-970 residual (once WeaponBoundsOrient learned to put a Z-long
+        // staff on +Y, the old +90Y compensation was stranded, so neutral was the safe default).
+        // That pin encoded the PRE-RULING state and is exactly why six staff fixes bounced: any
+        // repair that gave the staff its own drawn correction reddened this case and got reverted.
+        //
+        // The owner ruled on 2026-08-26, felt-testing in combat: *"staff drawn is showing
+        // horizontal"* / *"should be up and down vertical"*, with her standing rule *"the pointed
+        // object is Y top, flat is bottom"*. THE DRAWN STAFF STANDS VERTICAL, long axis on the
+        // body's up axis, pointed end up. The archetype correction that achieves it is
+        // EquipmentController.StaffDrawnGripNudgeDefault = (90,0,0) — derived, not dialled: with
+        // the shipped rig axes the rig-aware step is the IDENTITY, so the seat reduces to
+        // Euler(N)*(0,1,0), and Euler(90,0,0) is the unique X-rotation sending the prop's +Y (its
+        // tip) onto the grip-up axis (+Z), which the hand bone carries to world UP.
+        //
+        // THE PIN MOVES WITH THE RULING — it is not deleted. It still does the two jobs it was
+        // written for: (a) exactly ONE staff default exists, so a stray second one cannot drift,
+        // and (b) the independently authored WAND +90Y calibration is untouched by a staff repair.
+        // It now additionally guards that the correction is sourced from the single shared constant
+        // rather than re-typed, so the game and the [drawn-seat-verticality] oracle cannot disagree.
+        // ⛔ DRAWN pose only. Nothing here licenses touching the sheathed seat or _sheatheLongAxisSign
+        // (WO-1136).
         private static void Case5_StaffNeutralDefault(List<string> failures)
         {
             if (!File.Exists(EquipSrc))
@@ -226,16 +247,34 @@ namespace DeNelle.Editor.Regression
             }
 
             string src = Regex.Replace(File.ReadAllText(EquipSrc), @"//[^\r\n]*", "");
+
+            // The field must take its value from the ONE shared owner-ruled constant.
             MatchCollection staffDefaults = Regex.Matches(src,
-                @"_staffGripEuler\s*=\s*new\s+Vector3\s*\(\s*0f\s*,\s*0f\s*,\s*0f\s*\)");
+                @"_staffGripEuler\s*=\s*StaffDrawnGripNudgeDefault\s*;");
             if (staffDefaults.Count != 1)
-                failures.Add("[staff-neutral-default] expected exactly one neutral _staffGripEuler default; found " +
-                             staffDefaults.Count + ". The retired +90Y compensation must not return.");
+                failures.Add("[staff-neutral-default] expected exactly one _staffGripEuler default sourced " +
+                             "from StaffDrawnGripNudgeDefault; found " + staffDefaults.Count +
+                             ". Owner ruling 2026-08-26 (\"staff drawn is showing horizontal\" / \"should be " +
+                             "up and down vertical\"): the drawn staff stands vertical, and its archetype " +
+                             "correction lives in ONE constant so the game and the [drawn-seat-verticality] " +
+                             "oracle cannot disagree. Do not re-type the euler at the field.");
+
+            // ...and that constant must still be the owner-ruled value. (90,0,0) is DERIVED: with the
+            // shipped rig axes the rig-aware step is the identity, so Euler(90,0,0) is the unique
+            // X-rotation putting the prop's +Y tip on the grip-up axis == the body's vertical, tip up.
+            MatchCollection staffConst = Regex.Matches(src,
+                @"StaffDrawnGripNudgeDefault\s*=\s*new\s+Vector3\s*\(\s*90f\s*,\s*0f\s*,\s*0f\s*\)");
+            if (staffConst.Count != 1)
+                failures.Add("[staff-neutral-default] expected exactly one StaffDrawnGripNudgeDefault = " +
+                             "new Vector3(90f, 0f, 0f); found " + staffConst.Count + ". That value IS the " +
+                             "owner ruling of 2026-08-26 (drawn staff vertical, pointed end up). Neither the " +
+                             "retired +90Y yaw compensation (WO-970) nor a return to neutral (0,0,0) is " +
+                             "correct any more - neutral is what left the staff lying across the body.");
 
             Require(failures, src, "_wandGripEuler  = new Vector3(0f, 90f, 0f)",
                 "the independent wand +90Y calibration changed with the staff repair");
             Require(failures, src, "case WeaponClass.Staff:  return _staffGripEuler;",
-                "staff no longer consumes its explicit neutral calibration");
+                "staff no longer consumes its archetype calibration - the owner-ruled drawn correction would never reach the seat");
             Require(failures, src, "return Staff(\"staff_A\");",
                 "the shipped staff_A fallback no longer routes through the Staff weapon definition");
         }
@@ -567,6 +606,124 @@ namespace DeNelle.Editor.Regression
         /// <summary>The offset-registry key the equip path uses: the mesh name. For an Addressable
         /// row that is the address's last segment ("gear/weapon/ShieldWithItemLogic" ->
         /// "ShieldWithItemLogic"); otherwise the resource path's last segment; else the id.</summary>
+        // =====================================================================
+        //  Case 7 - WO-1226: THE SEATED WORLD ROTATION, NOT THE DERIVED VALUE
+        // =====================================================================
+        //
+        // WHY THIS CASE HAD TO BE NEW. Six prior commits asserted the DERIVER. The one number the
+        // shipped build prints - "sheathed long axis ... tiltFromVertical=0deg" - is computed
+        // inside ComputeSheathRotation from the quaternion that method is about to RETURN, and it
+        // asks Vector3.up rather than the mesh. It is therefore green on a build in which the staff
+        // is visibly lying across the body, which is exactly what the owner captured on 2026-08-26
+        // on TWO builds. An assertion built on that number can never redden. This case asserts the
+        // COMPOSED SEAT instead, through the SHIPPED composition function, on a synthetic bone -
+        // no scene, no rig, no hero.
+        //
+        // WHAT IT PROVES, in the owner's own words ("the pointed object is Y top, flat is bottom"):
+        // take a prop whose long axis is prop-local +Y (NormalizeInto guarantees this on the
+        // geometry path, which is the path every staff takes - no staff mesh has an offsets.json
+        // row, so fullOverride/native never apply), seat it with the DRAWN melee composition for
+        // its archetype, hang it on a hand bone that points its local +Y horizontally out of the
+        // fist, and ask how far the long axis ends up from the body's vertical.
+        //
+        //   - SWORD: expected to lie forward out of the fist. That is the archetype, it is
+        //     felt-verified, and the case asserts it STAYS that way (a guard against "fixing" the
+        //     staff by rotating every melee family).
+        //   - STAFF: the owner's rule stands it UP. ComposeMeleeGripRotation with the shipped
+        //     defaults - _handBladeAxis (0,1,0), _handGripUpAxis (0,0,1) - is
+        //     Quaternion.LookRotation((0,0,1),(0,1,0)) == IDENTITY, so the whole drawn seat reduces
+        //     to Euler(N)*RotY(180) and EVERY degree of staff verticality comes from the archetype
+        //     nudge N. This case reads N from the shipped constant and measures the result.
+        //
+        // ⭐ RESOLVED 2026-08-26 BY OWNER RULING. This case was RED BY CONSTRUCTION while N was
+        // (0,0,0): the staff inherited the bone's horizontal blade axis - the sword rule, applied
+        // to a staff. The owner then ruled ("staff drawn is showing horizontal" / "should be up and
+        // down vertical"), N became EquipmentController.StaffDrawnGripNudgeDefault = (90,0,0), and
+        // the case goes green FOR THE RIGHT REASON: the composed seat genuinely puts the shaft on
+        // the body's vertical, tip up. The collision this case existed to surface is also resolved
+        // - Case5_StaffNeutralDefault no longer pins the WO-970 neutral; the pin MOVED WITH THE
+        // RULING and now pins the same constant. The two cases agree again, on the ruled value.
+        // ⛔ If this ever reddens, the ROTATION is wrong. Fix the rotation. Never the oracle.
+        private static void Case7_DrawnSeatVerticality(List<string> failures)
+        {
+            // A hand bone whose LOCAL +Y points along world +Z - "out of the fist", horizontal,
+            // which is what the shipped _handBladeAxis (0,1,0) selects. Quaternion.LookRotation
+            // (forward: +Y-of-world? no) - build it explicitly: we want local +Y -> world +Z and
+            // local +Z -> world -Y, i.e. a -90 deg pitch about X.
+            Quaternion handWorld = Quaternion.Euler(-90f, 0f, 0f);
+            Vector3 bodyUp = Vector3.up;
+
+            // The prop's long axis after NormalizeInto is prop-local +Y, and the grip root carries
+            // it unrotated, so the long axis in grip-root-local space is +Y.
+            Vector3 longAxisLocal = Vector3.up;
+
+            // Sanity on the probe itself: if the bone did not point local +Y horizontally, the
+            // whole case is measuring nothing. (A probe that cannot fail is the WO-1138 lesson.)
+            Vector3 boneBladeWorld = handWorld * Vector3.up;
+            if (Vector3.Angle(boneBladeWorld, bodyUp) < 60f)
+            {
+                failures.Add("[drawn-seat-verticality] the synthetic hand bone is not horizontal " +
+                             "(bone local +Y -> " + boneBladeWorld.ToString("0.###") + "); the case " +
+                             "would pass for the wrong reason. Fix the probe, not the game.");
+                return;
+            }
+
+            // SWORD - the felt-verified archetype. It should NOT stand up; assert it stays put so a
+            // staff repair that rotates all melee is caught here instead of on the owner's screen.
+            Quaternion swordSeat = EquipmentController.ComposeDrawnMeleeLocalRotation(
+                new Vector3(0f, 1f, 0f), new Vector3(0f, 0f, 1f), new Vector3(-25f, 90f, 0f));
+            var sword = EquipmentController.MeasureSeatedLongAxis(
+                handWorld, swordSeat, longAxisLocal, bodyUp);
+            if (sword.TiltFromVerticalDeg < 40f)
+                failures.Add("[drawn-seat-verticality] the SWORD now stands up (tiltFromVertical=" +
+                             sword.TiltFromVerticalDeg.ToString("0.#") + "deg). The bladed archetype " +
+                             "is felt-verified extending forward from the fist (owner 2026-08-19); a " +
+                             "staff repair must not rotate every melee family to fix one.");
+
+            // STAFF - the owner's rule, now ruled and implemented (2026-08-26). The nudge is READ
+            // FROM THE SHIPPED CONSTANT, never re-typed here: re-typing is precisely how six prior
+            // fixes asserted a rotation the game never applied ("derivation is not self-proving").
+            Quaternion staffSeat = EquipmentController.ComposeDrawnMeleeLocalRotation(
+                new Vector3(0f, 1f, 0f), new Vector3(0f, 0f, 1f),
+                EquipmentController.StaffDrawnGripNudgeDefault);
+            var staff = EquipmentController.MeasureSeatedLongAxis(
+                handWorld, staffSeat, longAxisLocal, bodyUp);
+            if (staff.TiltFromVerticalDeg > 30f)
+                failures.Add("[drawn-seat-verticality] THE DRAWN STAFF IS LYING ACROSS THE BODY: " +
+                             "seated long axis is " + staff.TiltFromVerticalDeg.ToString("0.#") +
+                             "deg off the body's vertical (owner rule: 'the pointed object is Y top, " +
+                             "flat is bottom' - it should stand). Composed seat localEuler=" +
+                             staffSeat.eulerAngles.ToString("0.#") + ", long axis in the bone's frame=" +
+                             staff.ParentUnit.ToString("0.###") + ", in WORLD=" +
+                             staff.WorldUnit.ToString("0.###") + ". PROVING CHAIN: " +
+                             "ComposeMeleeGripRotation with the shipped _handBladeAxis (0,1,0) / " +
+                             "_handGripUpAxis (0,0,1) is Quaternion.LookRotation((0,0,1),(0,1,0)) == " +
+                             "IDENTITY, so the drawn staff seat reduces to Euler(N)*RotY(180) and the " +
+                             "shaft lands wherever the ARCHETYPE NUDGE N puts it. N is read here from " +
+                             "EquipmentController.StaffDrawnGripNudgeDefault, which ships as " +
+                             EquipmentController.StaffDrawnGripNudgeDefault.ToString("0.#") + ". The " +
+                             "owner-ruled value is (90,0,0): Euler(90,0,0)*(0,1,0) = (0,0,1) = the " +
+                             "grip-up axis, which the hand bone carries to the body's vertical. If this " +
+                             "line is firing, that constant has been moved off the ruling (owner " +
+                             "2026-08-26: 'staff drawn is showing horizontal' / 'should be up and down " +
+                             "vertical'). Neither staff_A nor tripo_staff_a has an offsets.json row, so " +
+                             "nothing else corrects it. FIX THE CONSTANT, NOT THIS ORACLE. Do NOT flip " +
+                             "_sheatheLongAxisSign (WO-1136) - that is the SHEATHED path.");
+
+            // DIRECTION, not just axis: TiltFromVerticalDeg is folded to 0..90 on purpose (a
+            // tip-down staff still reads 0), so it alone cannot tell "stands up" from "stands
+            // upside down". The owner's standing rule is "the pointed object is Y top, flat is
+            // bottom", and the prop's tip is prop-local +Y - so the seated axis must point along
+            // body UP, not against it. This is an ADDED assertion; it narrows nothing.
+            float dotUp = Vector3.Dot(staff.WorldUnit, bodyUp);
+            if (dotUp < 0.5f)
+                failures.Add("[drawn-seat-verticality] the drawn staff is not POINTED-END-UP: seated " +
+                             "long axis . bodyUp = " + dotUp.ToString("0.##") + " (want ~+1). The prop's " +
+                             "tip is prop-local +Y (owner: 'the pointed object is Y top, flat is bottom'), " +
+                             "so a negative dot means the archetype correction stood the shaft up the " +
+                             "wrong way round - the X nudge sign is inverted (+90, not -90).");
+        }
+
         private static string MeshKeyFor(WeaponDef def)
         {
             string path = def != null ? def.prefabPath : null;

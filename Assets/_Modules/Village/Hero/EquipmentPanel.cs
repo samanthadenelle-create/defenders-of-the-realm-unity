@@ -1053,6 +1053,24 @@ namespace DeNelle.Village.Hero
         {
             if (_vm == null) return;
             _vm.Equip(id);
+
+            // WO-1214 Ruling 2 — a REFUSED equip must not be reported as a success. This block
+            // used to be a single unconditional "Equipped <item>." toast, which meant a Mage who
+            // tapped a dropped shield was TOLD the shield was equipped while the seam had refused
+            // it and changed nothing. That is worse than a silent failure: the player walks away
+            // believing the slot changed. The refusal SENTENCE is shown instead — words naming the
+            // reason, never a greyed control and never colour alone (the owner is red/green
+            // colourblind, so the tone is a redundant cue and never the message).
+            string refusal = _vm.LastRefusal;
+            if (!string.IsNullOrEmpty(refusal))
+            {
+                ElarionUiKit.ShowToast(refusal, ElarionUiKit.ToastTone.Danger);
+                DeNelle.Core.Diagnostics.FlowTrace.Warn("EquipPanel",
+                    $"DoEquip('{id}') REFUSED — shown to the player as: \"{refusal}\" (the item stays in the bag " +
+                    "and stays sellable). No slot was changed and no confirmation was claimed.");
+                return;
+            }
+
             if (_vm.ActiveTargetIndex == 0 && _equip != null && (id == "basic_sword" || id == "leather_armor"))
                 _equip.Equip(id);
             // WO-713 A.5 — visible confirmation as the ONE transient kit toast (WO-714 P5);

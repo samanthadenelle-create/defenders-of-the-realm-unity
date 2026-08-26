@@ -956,18 +956,25 @@ namespace DeNelle.Dungeons
             if (_heroController != null)
             {
                 _heroController.Teleport(spawnPos, facingY);
-                return;
+            }
+            else
+            {
+                // No DungeonHero present — the shared authority does the mover-safe move
+                // (HeroLocomotion.WarpTo, else a CharacterController-suspended transform write).
+                // WO-1222: this used to be an inline copy of that logic. It is now the SAME code
+                // the composed pipeline runs, so the two dungeon paths cannot drift apart again.
+                DungeonHeroSeat.Seat(_hero, spawnPos, facingY, "data-driven Begin()");
             }
 
-            // No DungeonHero present — fall back to a raw transform move,
-            // disabling any CharacterController so it does not fight the teleport.
-            var cc = _hero.GetComponent<CharacterController>();
-            if (cc != null) cc.enabled = false;
-
-            _hero.position = spawnPos;
-            _hero.rotation = Quaternion.Euler(0f, facingY, 0f);
-
-            if (cc != null) cc.enabled = true;
+            // WO-1222 — PROVE IT LANDED. The hand-built path has always CALLED a placement; what
+            // neither path had was an assertion that the hero is still there once every other
+            // writer has had its say. The hero root can be DontDestroyOnLoad and BattleArena
+            // (also DDOL) warps it ~7km to the staged arena, which is exactly how the composed
+            // Healer's Cottage handed the owner a black screen on 2026-08-26. One authority,
+            // both pipelines — a healthy placement costs one captured line and nothing else.
+            DungeonHeroSeat.VerifyArrival(_hero.gameObject,
+                UnityEngine.SceneManagement.SceneManager.GetActiveScene(),
+                spawnPos, facingY, "data-driven");
         }
 
         // ── Camera ───────────────────────────────────────────────────────────

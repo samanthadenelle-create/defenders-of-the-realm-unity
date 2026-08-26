@@ -71,6 +71,7 @@ namespace DeNelle.Editor
         private const string BootRel     = "_Modules/Dungeons/ComposedDungeonBootstrap.cs";
         private const string ExitRel     = "_Modules/Dungeons/DungeonExitInteractable.cs";
         private const string DungeonCtlRel = "_Modules/Dungeons/DungeonController.cs";
+        private const string SeatRel     = "_Modules/Dungeons/DungeonHeroSeat.cs";
         private const string LanternRel  = "_Modules/Dungeons/Lantern.cs";
         private const string BalanceResRel    = "Resources/Data/Canonical/dungeon-balance.json";
         private const string BalanceStreamRel = "StreamingAssets/Data/Canonical/dungeon-balance.json";
@@ -93,14 +94,16 @@ namespace DeNelle.Editor
             Case(failures, "oil-meter",      () => Case3_ComposedInstallsTheOilHud(assetsRoot, src, failures, log));
             Case(failures, "exit-pays",      () => Case4_ComposedExitReachesThePayout(assetsRoot, src, failures, log));
             Case(failures, "lantern-burn",   () => Case5_LanternBurnIsAuthoredData(assetsRoot, src, failures, log));
+            Case(failures, "arrival-seat",   () => Case6_ComposedArrivalIsProven(assetsRoot, src, failures, log));
 
             if (failures.Count == 0)
             {
                 Debug.Log(log.ToString() + "COMPOSED_DUNGEON_RUN_OK");
-                reason = "COMPOSED DUNGEON RUN OK - 5/5 cases pass (the town hero with its abilities is carried into dg_* via the " +
+                reason = "COMPOSED DUNGEON RUN OK - 6/6 cases pass (the town hero with its abilities is carried into dg_* via the " +
                          "ONE WO-1109 carry, keys and locks build a visible body at runtime, the composed host installs the code-built " +
                          "oil HUD, the composed exit reaches the single GrantRunPayout authority and writes LastPolishScore, and the " +
-                         "lantern burn is authored in dungeon-balance.json at >=3x the old 62.5s)";
+                         "lantern burn is authored in dungeon-balance.json at >=3x the old 62.5s, and the composed " +
+                         "arrival pose is PROVEN one frame after load by the one shared DungeonHeroSeat authority)";
                 return true;
             }
 
@@ -437,6 +440,84 @@ namespace DeNelle.Editor
                 failures.Add($"[lantern-burn] the authored lantern burns for {seconds:F0}s, below the {required:F0}s floor (owner ruling 2026-08-16: 'make the lanterns last triple that at minimum'; the old burn was {OldSecondsToEmpty:F1}s). Below this the player is back in permanent darkness about a minute into every run");
             else
                 log.AppendLine($"OK: authored lantern burn = {seconds:F0}s to empty ({seconds / OldSecondsToEmpty:F1}x the old {OldSecondsToEmpty:F1}s), darkness latch at ~{seconds * 0.88f:F0}s");
+        }
+
+        // =====================================================================
+        //  Case 6 (WO-1222) -- the composed arrival pose is PROVEN, not assumed
+        // =====================================================================
+        // THE DEFECT: entering the composed Healer’s Cottage gave the owner a BLACK SCREEN with
+        // a working joystick (Seeker build 2026.08.26.341419). The scene was healthy -- 7 enemies,
+        // 60 fps, nothing threw. The hero was at (5000, 0, 4991), which is BattleArena’s staged
+        // hero stance to the centimetre (ArenaCentre + (0, 0, -ArenaHalfDepth + 9)); the camera
+        // was honestly following a hero standing ~7km away in an arena staging area.
+        //
+        // THE STRUCTURAL CAUSE: the two dungeon pipelines were asymmetric. The hand-built one
+        // teleports its Keeper every Begin() (DungeonController.PlaceHero). The composed one has
+        // no DungeonController, therefore no PlaceHero, therefore NOTHING that ever checked where
+        // the carried hero ended up -- and the hero root is DontDestroyOnLoad, so other DDOL
+        // systems (BattleArena above all) can write that transform with nobody watching.
+        //
+        // WHAT THIS PINS is the OUTCOME contract, not a call order: both pipelines run the SAME
+        // authority, and that authority tests the arena coordinate explicitly. A second, parallel
+        // placement path in the composed host would satisfy a naive "does it seat the hero" lint
+        // and would drift from the hand-built one exactly as these two already did.
+        private static void Case6_ComposedArrivalIsProven(string root, Dictionary<string, string> src,
+                                                          List<string> failures, StringBuilder log)
+        {
+            string seat = Load(root, SeatRel, src, failures);
+            string host = Load(root, HostRel, src, failures);
+            string ctl  = Load(root, DungeonCtlRel, src, failures);
+            if (seat == null || host == null || ctl == null) return;
+
+            // (a) The authority exists and is genuinely shared (public, not a host-private helper).
+            if (seat.IndexOf("class DungeonHeroSeat", StringComparison.Ordinal) < 0)
+                failures.Add("[arrival-seat] DungeonHeroSeat is GONE - there is no shared placement authority, so the composed pipeline is back to having NO arrival check at all, and a hero parked at the arena stance renders a black screen at 60fps through every headless gate");
+            else
+                log.AppendLine("OK: DungeonHeroSeat exists (the one placement authority for both dungeon pipelines)");
+
+            // (b) It tests the arena coordinate BY NAME. A generic "is the hero near its seat"
+            //     check would still pass a hero standing 7km away in a scene that bakes no seat;
+            //     the arena test is what makes that case unambiguous and nameable in the trace.
+            if (seat.IndexOf("IsArenaPosition", StringComparison.Ordinal) < 0)
+                failures.Add("[arrival-seat] DungeonHeroSeat no longer tests BattleArena.IsArenaPosition. That coordinate is the ONE pose no dungeon layout can produce and only BattleArena.WarpHero can write - dropping the test turns the exact 2026-08-26 black screen back into an unexplained 'the hero is somewhere odd'");
+            else
+                log.AppendLine("OK: DungeonHeroSeat names the arena coordinate explicitly (IsArenaPosition)");
+
+            // (c) It STANDS DOWN for a live staged battle. Dungeons legitimately stage arena
+            //     fights (EncounterTrigger -> BeginEncounter); teleporting the player out of one
+            //     would be a worse defect than the one being fixed.
+            if (seat.IndexOf("AnyBattleInProgress", StringComparison.Ordinal) < 0)
+                failures.Add("[arrival-seat] DungeonHeroSeat no longer checks for a live staged battle before correcting the pose. A dungeon CAN stage a real arena encounter, and yanking the hero out of a live fight is a worse defect than the arrival bug this net exists for");
+            else
+                log.AppendLine("OK: DungeonHeroSeat stands down while a staged battle owns the hero");
+
+            // (d) THE COMPOSED PIPELINE ACTUALLY CALLS IT. This is the missing half -- the whole
+            //     defect is that the composed path had no assertion, however good the authority is.
+            if (TryExtractMethodBody(host, "void ArmHeroPillars()", out string armBody))
+            {
+                if (armBody.IndexOf("DungeonHeroSeat", StringComparison.Ordinal) < 0)
+                    failures.Add("[arrival-seat] ComposedDungeonHost.ArmHeroPillars does NOT run the DungeonHeroSeat arrival check. That method is the composed pipeline's one hero-resolution point (deliberately one frame after load, once the duplicate-hero destroy has resolved) - without the check here nothing in the composed path ever proves where the player arrived, which is exactly how a 60fps black screen shipped");
+                else
+                    log.AppendLine("OK: ComposedDungeonHost.ArmHeroPillars proves the arrival through DungeonHeroSeat");
+            }
+            else
+            {
+                failures.Add("[arrival-seat] ComposedDungeonHost.ArmHeroPillars() is GONE - the composed pipeline's hero-resolution point cannot be located, so its arrival check is unverifiable");
+            }
+
+            // (e) The HAND-BUILT pipeline runs the SAME authority. Two placement paths that do not
+            //     share code are how these two drifted apart in the first place.
+            if (TryExtractMethodBody(ctl, "void PlaceHero(Vector3 spawnPos)", out string placeBody))
+            {
+                if (placeBody.IndexOf("DungeonHeroSeat", StringComparison.Ordinal) < 0)
+                    failures.Add("[arrival-seat] DungeonController.PlaceHero no longer routes through DungeonHeroSeat. The hand-built and composed dungeons are then placing heroes with two independent copies of the same logic - the exact asymmetry that left the composed path with no assertion for its whole life");
+                else
+                    log.AppendLine("OK: DungeonController.PlaceHero runs the same shared authority (one placement owner, both pipelines)");
+            }
+            else
+            {
+                failures.Add("[arrival-seat] DungeonController.PlaceHero(Vector3) is GONE - the hand-built pipeline's placement cannot be located");
+            }
         }
 
         // =====================================================================

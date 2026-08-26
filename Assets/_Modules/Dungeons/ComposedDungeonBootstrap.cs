@@ -99,6 +99,20 @@ namespace DeNelle.Dungeons
             state.StartRun(dungeonId, "entry", heroPos, Environment.TickCount);
             FlowTrace.Step(Sys, $"StartRun id='{dungeonId}' hero={heroPos} scene='{scene.name}'");
 
+            // WO-1222 — THE LOAD-FRAME POSE, CAPTURED BEFORE ANYTHING ELSE RUNS. This is the
+            // first of two readings (the second is DungeonHeroSeat.VerifyArrival one frame later
+            // from ComposedDungeonHost); together they say whether a wrong arrival pose was
+            // ALREADY wrong when the scene loaded, or was written in the frame after. Without the
+            // pair, a hero standing 7km away is a single number with no history. NOTE the hero
+            // read here can be the DOOMED duplicate (Destroy is deferred to end of frame), which
+            // is precisely why the authoritative check waits a frame — see the host's header.
+            FlowTrace.Step(Sys,
+                $"LOAD-FRAME hero pose: {heroPos} tagged='{(heroGo != null ? heroGo.name : "<no Player>")}' " +
+                $"heroScene='{(heroGo != null ? heroGo.scene.name : "n/a")}' " +
+                $"inBattleArena={DeNelle.Village.Arena.BattleArena.IsArenaPosition(heroPos)} " +
+                $"battleInProgress={DeNelle.Village.Arena.BattleArena.AnyBattleInProgress} " +
+                $"seatBaked={(DungeonHeroSeat.FindBakedSeat(scene).HasValue ? "yes" : "NO")}");
+
             // WO-1112: the run state is HANDED TO A LIVE OWNER instead of dying with this local
             // scope. That is what makes a composed exit payable — DungeonExitInteractable reads
             // ComposedDungeonHost.Current.RunState to judge the run and grant the rough stone.

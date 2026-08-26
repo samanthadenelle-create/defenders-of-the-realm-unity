@@ -107,10 +107,21 @@ namespace DeNelle.Village
 
         private static readonly List<IProximityAura> _registered = new List<IProximityAura>(48);
 
-        // Scratch, reused every tick (no per-tick allocation).
-        private readonly List<IProximityAura> _candidates = new List<IProximityAura>(48);
-        private readonly List<float> _sqrDistances = new List<float>(48);
+        // WO-1229: the AMBIENT ENVIRONMENT ring. A SECOND registry inside THIS class, not a
+        // second culler - the header's own rule ("two independent nearest-N implementations
+        // would be two things to tune and one to forget") applies to this ticket more than
+        // any other, because the two rings differ ONLY in their budget. Same registry shape,
+        // same distance sort, same edge/poll grant call; different budget and different
+        // trace tag. See VfxLoopBudget.AmbientEnvBudget for why ambient's budget is dynamic
+        // where the combat ring's is fixed.
+        private static readonly List<IProximityAura> _registeredAmbient = new List<IProximityAura>(64);
+
+        // Scratch, reused every tick (no per-tick allocation). Both passes share it: the
+        // combat pass has finished with it before the ambient pass clears and refills it.
+        private readonly List<IProximityAura> _candidates = new List<IProximityAura>(64);
+        private readonly List<float> _sqrDistances = new List<float>(64);
         private readonly HashSet<IProximityAura> _granted = new HashSet<IProximityAura>();
+        private readonly HashSet<IProximityAura> _grantedAmbient = new HashSet<IProximityAura>();
 
         private Transform _hero;
         private float _heroFindTimer;
@@ -149,8 +160,35 @@ namespace DeNelle.Village
             _registered.Remove(aura);
         }
 
+        /// <summary>
+        /// WO-1229: opt an AMBIENT ENVIRONMENT loop (dungeon candle, brazier, steam vent)
+        /// into the ambient ring. Separate from <see cref="Register"/> on purpose: room
+        /// dress must not compete with enemy/pet auras for the SAME N, or 44 candles would
+        /// take all eight slots of a ring that exists to keep enemy role-reads on screen.
+        /// Idempotent; safe before the culler component exists.
+        /// </summary>
+        public static void RegisterAmbient(IProximityAura ambient)
+        {
+            if (ambient == null) return;
+            if (_registeredAmbient.Contains(ambient)) return;
+            _registeredAmbient.Add(ambient);
+        }
+
+        /// <summary>Remove an ambient loop from the ambient ring. See <see cref="Unregister"/>.</summary>
+        public static void UnregisterAmbient(IProximityAura ambient)
+        {
+            if (ambient == null) return;
+            _registeredAmbient.Remove(ambient);
+        }
+
         /// <summary>How many drivers are currently in the ring. Exposed for headless verification.</summary>
         public static int RegisteredCount => _registered.Count;
+
+        /// <summary>How many ambient loops are registered. Exposed for headless verification.</summary>
+        public static int AmbientRegisteredCount => _registeredAmbient.Count;
+
+        /// <summary>How many ambient loops currently hold a grant. Exposed for headless verification.</summary>
+        public int AmbientGrantedCount => _grantedAmbient.Count;
 
         /// <summary>How many candidates the last tick revoked. Exposed for headless verification.</summary>
         public int LastCulledCount => _lastCulledCount;
@@ -195,7 +233,18 @@ namespace DeNelle.Village
                 if (a != null) Guard.Try("VfxAuraCuller", "restore grant on teardown",
                                          () => a.SetAuraAllowed(true));
             }
+            // WO-1229: the ambient ring gets the SAME permissive teardown, for the same
+            // reason - a revoked candle with nothing left to re-grant it would be dark
+            // forever with no error anywhere. Ambient drivers additionally self-permit
+            // while Instance is null, so this is belt AND braces.
+            for (int i = 0; i < _registeredAmbient.Count; i++)
+            {
+                var a = _registeredAmbient[i];
+                if (a != null) Guard.Try("VfxAuraCuller", "restore ambient grant on teardown",
+                                         () => a.SetAuraAllowed(true));
+            }
             _granted.Clear();
+            _grantedAmbient.Clear();
             Instance = null;
         }
 
@@ -282,6 +331,106 @@ namespace DeNelle.Village
                     "). This is the budget guard working, NOT a missing effect - the revoked auras " +
                     "return automatically as their hosts close on the view. Towers, the Heart, boss " +
                     "phases and all one-shots are never culled here (they do not register).");
+            }
+
+            TickAmbient(origin);
+        }
+
+        // =====================================================================
+        //  WO-1229 - the ambient environment ring
+        // =====================================================================
+        //
+        // THE LINE THIS EXISTS TO DELETE, captured on the owner's device in
+        // dg_starter_loop (08-25 19:30:29 -> 19:31:26, saturated the whole time):
+        //
+        //   [Flow:DungeonVFX] bound 44 CandleAnchor marker(s) ... in 'dg_starter_loop'.
+        //   [Flow:VFXManager] PlayLoop('Env_Candle')     SKIPPED - active loops 24/24
+        //   [Flow:VFXManager] PlayLoop('Aura_NearDeath') SKIPPED - active loops 24/24
+        //   [Flow:HeroHpAura] 'NearDeath' aura was REFUSED ... the hero has no
+        //                     non-colour danger signal. Retrying.
+        //
+        // TWO DELIBERATE DIFFERENCES FROM THE COMBAT PASS ABOVE:
+        //
+        //  1. THE GRANT CALL IS A POLL, NOT AN EDGE. The combat pass may be edge-
+        //     triggered because an enemy driver's own WantsAura is what starts and stops
+        //     its aura; the grant only gates it. An ambient candle has no such driver -
+        //     the grant IS its whole policy - so a candle that entered the ring between
+        //     ticks, or that was constructed after the last edge, must still be told.
+        //     44 virtual calls every 0.35 s is not a cost worth a correctness hole.
+        //  2. THE BUDGET IS DYNAMIC (VfxLoopBudget.AmbientEnvBudget). The combat ring is
+        //     a fixed 8 because enemy auras are the only thing in it. Ambient dress is
+        //     the class that must YIELD to everything else in the pool, so its ring
+        //     shrinks as the rest of the pool fills, and it stops entirely before it can
+        //     touch the accessibility reserve.
+        private void TickAmbient(Vector3 origin)
+        {
+            _candidates.Clear();
+            _sqrDistances.Clear();
+
+            for (int i = _registeredAmbient.Count - 1; i >= 0; i--)
+            {
+                var a = _registeredAmbient[i];
+                if (a == null) { _registeredAmbient.RemoveAt(i); continue; }
+
+                Transform t = a.AuraTransform;
+                if (t == null)
+                {
+                    _registeredAmbient.RemoveAt(i);
+                    _grantedAmbient.Remove(a);
+                    continue;
+                }
+
+                if (!a.WantsAura)
+                {
+                    // Out of its own range: it is not a candidate and it is not holding a
+                    // grant. The driver stops its own flame on the same edge (range is the
+                    // driver's question, budget is ours).
+                    _grantedAmbient.Remove(a);
+                    continue;
+                }
+
+                _candidates.Add(a);
+                _sqrDistances.Add((t.position - origin).sqrMagnitude);
+            }
+
+            int live = 0, cap = VfxLoopBudget.CurrentCap;
+            var mgr = VFXManager.Instance;
+            if (mgr != null) { live = mgr.ActiveLoopCount; cap = mgr.MaxActiveLoops; }
+
+            int budget = VfxLoopBudget.AmbientEnvBudget(live, _grantedAmbient.Count, cap);
+            int total  = _candidates.Count;
+
+            if (total > budget) SortCandidatesByDistance();
+
+            int revoked = 0, granted = 0;
+            for (int i = 0; i < total; i++)
+            {
+                var a = _candidates[i];
+                bool allow = i < budget;
+                bool had   = _grantedAmbient.Contains(a);
+
+                if (allow && !had)  { _grantedAmbient.Add(a);    granted++; }
+                if (!allow && had)  { _grantedAmbient.Remove(a); revoked++; }
+
+                // Poll, not edge - see difference (1) in the header above.
+                Guard.Try("VfxAmbientRing", "SetAuraAllowed(" + allow + ")",
+                          () => a.SetAuraAllowed(allow));
+            }
+
+            // THE RECLAIM LINE. Section 12: the fix for WO-1229 is not "a Stop() was
+            // added", it is a captured line showing the ambient hold going UP AND DOWN
+            // while the pool stays off its ceiling. This prints the ambient hold, the
+            // budget that produced it, the pool occupancy and the reserve - every number
+            // needed to judge the guard from a log with no code in front of you.
+            if (total > 0)
+            {
+                FlowTrace.Throttle("VfxAmbientRing", "ambient-ring", 1f,
+                    "ambient env ring: " + _grantedAmbient.Count + " of " + total +
+                    " candidate(s) hold a loop (budget " + budget + ", ring max " +
+                    VfxLoopBudget.AmbientEnvRing + "; +" + granted + " granted / -" + revoked +
+                    " RELEASED this tick). Pool " + live + "/" + cap + ", reserve " +
+                    VfxLoopBudget.AccessibilityReserve + " slot(s) held open for the low-HP tell. " +
+                    "Beyond-ring dress is dark BY BUDGET, not missing - it relights as the hero closes.");
             }
         }
 

@@ -162,8 +162,15 @@ namespace DeNelle.Core.Combat
             Guard.Try(Sys, "probe battle lock", () =>
             {
                 if (BattleLock.IsInBattle())
+                    // WO-1233: the original sentence is preserved VERBATIM and the HOLDER is
+                    // APPENDED. Nine of these fired on the owner's device on 2026-08-26 and not one
+                    // said who held the lock — the holder had to be reconstructed from a HUD line in
+                    // a neighbouring log. This is a strengthening of the message, never a narrowing:
+                    // the finding fires on exactly the same condition it always did.
                     failures.Add("battle-lock: still HELD after the battle ended. Combat input stays " +
-                                 "suppressed and the HUD cannot return to its town context.");
+                                 "suppressed and the HUD cannot return to its town context. " +
+                                 $"HOLDER(S): {BattleLock.DescribeHolders()} (of {BattleLock.ProbeCount} " +
+                                 $"registered: {BattleLock.DescribeAll()}).");
             });
 
             // 3. modal — the Echo-modal FTUE cascade was exactly this, and it is invisible until a

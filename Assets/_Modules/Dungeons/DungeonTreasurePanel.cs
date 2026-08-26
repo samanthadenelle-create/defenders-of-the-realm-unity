@@ -24,18 +24,40 @@
 //  - ASCII-only source (DungeonTreasureRegression case 5 fails the first non-ASCII
 //    character - TMP renders it as tofu on device).
 //  - Meaning never by colour: every material line prints "Name xN" as TEXT, so the
-//    payout is readable red/green colourblind.
-//  - Text bands are FIXED PIXELS (>= the font's line height), never parent
-//    fractions - fractional bands silently cull glyphs (the WO-832/841 truncation
-//    root cause). EnsureBand stamps that height after the kit builds the label.
-//  - Registered with PanelManager (ONE cached handle for the panel's lifetime, as
-//    PanelHandle's contract requires) so the shared Interact button - which bails
-//    on PanelManager.AnyOpen - stays hidden under the modal.
+//    payout is readable red/green colourblind, and the TITLE separates from the
+//    SUBTITLE by SIZE + WEIGHT (FontTitle bold vs FontBody regular), never by hue.
+//
+// =============================================================================
+// WO-1228 (2026-08-26) - FIVE EXCLUSIVE BANDS REPLACE THE PIXEL FLOW.
+// -----------------------------------------------------------------------------
+// The owner's device capture (Seeker 2026.08.26.342290, 2670x1200) showed THREE
+// collisions at once: "TREASURE FOUND" drawn on top of "The cache holds:", the
+// fifth cache line clipped, and "Take" painted over the first-clear sentence
+// ("First clear -- [Take] membered."). All three came from ONE cause and it is
+// NOT the shared close-band reservation:
+//
+//   * The WO-1041 layout hung every element from chrome.content's TOP EDGE in
+//     PIXELS (StackTopPx 24, then HeadingPx/LinePx bands). chrome.content is the
+//     FULL panel rect 0..1, and the kit seats the gold title inside the frame's
+//     header ZONE (FrameCore header = 0.900..0.972 of the panel). At 2670x1200 the
+//     panel was 0.24..0.78 of screen = 648 screen px, so the title band occupied
+//     roughly 18..65 px from the panel top while the subtitle was pinned at
+//     24..90 px. That 24..65 px overlap IS collision 1, and no reservation is
+//     involved: the reservation only raises z.body / z.footer / z.bodyLeft /
+//     z.bodyRight, and this panel consumed NONE of those zones.
+//   * Downstream, the same flow put the payout block at 104..404 local units and
+//     the first-clear line at 418..484, while the CTA's authored band (0.05..0.245
+//     of content) topped out at 393 - so the tail of the list and the whole footer
+//     sentence sat UNDER the button. Collisions 2 and 3, same cause.
+//
+// The fix is to stop flowing and start BANDING: five exclusive rects, authored as
+// fractions of the modal, none of which may intersect (pinned by
+// DungeonTreasureRegression cases 8-10). A list that outgrows its band SCROLLS
+// inside the band - the modal never grows, and "Take" never moves.
 // =============================================================================
 
 using System;
 using System.Collections.Generic;
-using System.Text;
 using UnityEngine;
 using TMPro;
 using DeNelle.Core.Diagnostics;
@@ -50,19 +72,127 @@ namespace DeNelle.Dungeons
         private const string Sys = "DungeonTreasure";
         private const string PanelName = "DungeonTreasure";
 
-        // Fixed-pixel line bands (see header). The kit's reference canvas is 1080x1920 and
-        // ElarionUi.FontBody is 50px, so a body line needs ~60px; the payout block is sized
-        // as LinePx per line. HeadingPx gives a single heading line the same clearance.
-        private const float LinePx = 60f;
-        private const float HeadingPx = 66f;
+        /// <summary>
+        /// THE authored geometry, in ONE place, so the panel and its regression read the same
+        /// numbers (a second copy is how the numbers drift apart - CLAUDE.md section 2/5).
+        /// Every band is (xMin, yMin, xMax, yMax) as FRACTIONS OF THE MODAL RECT, y bottom-to-top,
+        /// matching the approved mockup WorkOrders/WORK_ORDER_1228_mockup_2670x1200.png.
+        /// </summary>
+        public static class Layout
+        {
+            /// <summary>Modal footprint (fractions of the SCREEN). The mockup authored
+            /// 0.167..0.833; the plate is 0.120..0.880 here so that SIX kit-font rows and a
+            /// MinTouchPx-tall CTA both fit WITHOUT shrinking type (WO-1040 section 4 forbids
+            /// shrinking the font to buy room). Nothing moved relative to the design - the whole
+            /// plate is ~6% taller.</summary>
+            public static readonly Vector2 ModalMin = new Vector2(0.210f, 0.120f);
+            public static readonly Vector2 ModalMax = new Vector2(0.790f, 0.880f);
 
-        // WO-1041 flow layout (see StackDown). The body hangs from the content rect's TOP edge:
-        // StackTopPx is the first element's inset, StackGapPx the breathing room between elements,
-        // and CtaReserveFraction the bottom strip the "Take" button owns (its rect is 0.05-0.245 of
-        // content, so ~0.28 keeps a margin above it).
-        private const float StackTopPx = 24f;
-        private const float StackGapPx = 14f;
-        private const float CtaReserveFraction = 0.28f;
+            /// <summary>Band 1 - the gold title. The KIT owns this rect: BuildObsidianPanel seats
+            /// chrome.title inside the frame's header zone, so this constant MIRRORS FrameCore's
+            /// header zone in ElarionUiKit.ZonesFor. DungeonTreasureRegression case 8 re-reads the
+            /// kit source and FAILS if the two ever drift.</summary>
+            public static readonly Vector4 TitleBand = new Vector4(0.24f, 0.900f, 0.88f, 0.972f);
+
+            /// <summary>Band 2 - "The cache holds:". Its OWN band, clear of the title above.</summary>
+            public static readonly Vector4 SubtitleBand = new Vector4(0.10f, 0.813f, 0.90f, 0.875f);
+
+            /// <summary>Band 3 - the loot well (scroll viewport + overflow hint strip).</summary>
+            public static readonly Vector4 WellBand = new Vector4(0.039f, 0.322f, 0.961f, 0.788f);
+
+            /// <summary>Band 4 - the first-clear sentence, never overlaid.</summary>
+            public static readonly Vector4 NoteBand = new Vector4(0.10f, 0.238f, 0.90f, 0.300f);
+
+            /// <summary>Band 5 - the single exit. Authored 0.175 of the modal tall so the
+            /// MinTouchPx=112 floor is met BY CONSTRUCTION at the reference device and
+            /// ClampMinTouch never has to grow it into band 4 (the hero-select failure).</summary>
+            public static readonly Vector4 CtaBand = new Vector4(0.339f, 0.045f, 0.661f, 0.220f);
+
+            /// <summary>SIX LINES THEN SCROLL (owner ruling 2026-08-26). WO-1230 adopts the same
+            /// affordance for the Army roster - the two list surfaces must not diverge.</summary>
+            public const int VisibleRows = 6;
+
+            /// <summary>Bottom slice of the well reserved for the "+ N more (scroll)" hint. It is
+            /// reserved WHETHER OR NOT it is populated, so the row pitch (and therefore every band
+            /// in the table) is identical at 1 line and at 100.</summary>
+            public const float HintStripFraction = 0.14f;
+
+            /// <summary>Kit scroll-zone chrome, in canvas units.</summary>
+            public const float ScrollSpacingPx = 4f;
+            public const int ScrollPaddingPx = 6;
+
+            /// <summary>Row floor: FontFloor(30) x 1.25 line height. A well too short to seat six
+            /// rows at this pitch is a LAYOUT bug, and RowHeightPx says so out loud rather than
+            /// letting TMP cull the glyphs (the section 12 "no silent clipping" law).</summary>
+            public const float MinRowPx = 38f;
+
+            /// <summary>Modal height in POST-SCALE canvas units.</summary>
+            public static float ModalHeightPx(float canvasHeightPx)
+            {
+                return (ModalMax.y - ModalMin.y) * canvasHeightPx;
+            }
+
+            /// <summary>Loot-well height in canvas units.</summary>
+            public static float WellHeightPx(float canvasHeightPx)
+            {
+                return (WellBand.w - WellBand.y) * ModalHeightPx(canvasHeightPx);
+            }
+
+            /// <summary>Scrolling viewport height (the well minus the reserved hint strip).</summary>
+            public static float ViewportHeightPx(float canvasHeightPx)
+            {
+                return WellHeightPx(canvasHeightPx) * (1f - HintStripFraction);
+            }
+
+            /// <summary>Row pitch that seats exactly <see cref="VisibleRows"/> rows in the viewport,
+            /// floored at <see cref="MinRowPx"/>.</summary>
+            public static float RowHeightPx(float canvasHeightPx)
+            {
+                float usable = ViewportHeightPx(canvasHeightPx)
+                             - 2f * ScrollPaddingPx
+                             - (VisibleRows - 1) * ScrollSpacingPx;
+                return Mathf.Max(MinRowPx, usable / VisibleRows);
+            }
+
+            /// <summary>CTA height in canvas units - compare against ElarionUiKit.MinTouchPx.</summary>
+            public static float CtaHeightPx(float canvasHeightPx)
+            {
+                return (CtaBand.w - CtaBand.y) * ModalHeightPx(canvasHeightPx);
+            }
+
+            /// <summary>True when the cache carries more lines than the well shows at once.</summary>
+            public static bool Overflows(int lineCount)
+            {
+                return lineCount > VisibleRows;
+            }
+
+            /// <summary>The WO-1230 overflow affordance, WORD FOR WORD - "+ N more (scroll)".
+            /// Empty when everything fits.</summary>
+            public static string OverflowHint(int lineCount)
+            {
+                if (!Overflows(lineCount)) return string.Empty;
+                return "+ " + (lineCount - VisibleRows) + " more (scroll)";
+            }
+
+            /// <summary>The five named bands, in draw order. The regression asserts they are
+            /// pairwise NON-intersecting.</summary>
+            public static Vector4[] Bands()
+            {
+                return new[] { TitleBand, SubtitleBand, WellBand, NoteBand, CtaBand };
+            }
+
+            /// <summary>Names parallel to <see cref="Bands"/> (for failure messages).</summary>
+            public static string[] BandNames()
+            {
+                return new[] { "title", "subtitle", "well", "note", "cta" };
+            }
+
+            /// <summary>Half-open rect intersection on (xMin,yMin,xMax,yMax) fractions.</summary>
+            public static bool Intersect(Vector4 a, Vector4 b)
+            {
+                return a.x < b.z && b.x < a.z && a.y < b.w && b.y < a.w;
+            }
+        }
 
         private static GameObject s_canvas;
         private static PanelHandle s_handle;
@@ -93,7 +223,7 @@ namespace DeNelle.Dungeons
 
             var modal = ElarionUiKit.BuildObsidianModal(
                 PanelName, "TREASURE FOUND",
-                new Vector2(0.20f, 0.24f), new Vector2(0.80f, 0.78f),
+                Layout.ModalMin, Layout.ModalMax,
                 onClose: null, sortingOrder: 31030,
                 frameName: RpgUiCatalog.FrameCore);
             if (modal == null || modal.canvas == null || modal.chrome == null || modal.chrome.content == null)
@@ -108,27 +238,19 @@ namespace DeNelle.Dungeons
             // ONE exit: retire the shared Close so Take is the only way out (owner F8 seq 628).
             if (modal.chrome.close != null) modal.chrome.close.gameObject.SetActive(false);
 
-            // -- body: one ASCII line per material, top-down, fixed-pixel bands ----
-            // !! WO-1041 / WO-1040 section 2 FIX - THE WO-865 CLASS (a variable-height element among fixed
-            // fractional neighbours). Until 2026-08-16 all three text blocks were placed with
-            // EnsureBand, which COLLAPSES a label's vertical anchor pair to the midpoint of its
-            // authored fraction and then pins +/- half its pixel height around that FROZEN centre.
-            // The heading sat at 0.74, the payout at 0.53 and the first-clear line at 0.34 - three
-            // fixed centres that never reflow. The payout's half-height is 30px PER LINE, so at two
-            // lines everything cleared (which is how it shipped) and from four or five it grew
-            // straight through the first-clear line below it and then the heading above it.
-            //
-            // The fix is FLOW, not smaller text (WO-1040 section 4 forbids shrinking the font): the block
-            // is laid out top-down from a single fixed top edge, each element pinned in PIXELS below
-            // the previous one, so a taller payout PUSHES what follows instead of overlapping it.
-            // Same shape as LoreReadingModal's measured hint band. Fixed-pixel bands are preserved
-            // (the header's law) - what changed is that the CURSOR moves.
-            float cursor = StackTopPx;
+            // Geometry is derived from the POST-SCALE canvas height, never from rect.height:
+            // on a canvas's creation frame the CanvasScaler has not applied yet and rect.height
+            // returns RAW SCREEN PIXELS (the F8-5 DlgLayout capture, 1351 vs the real 1047).
+            float canvasH = ElarionUiKit.PostScaleCanvasHeight(content);
 
-            var heading = ElarionUiKit.Label(content, "The cache holds:", 0.70f, 0.78f,
+            // -- BAND 2: the subtitle, in its own band under the kit's gold title ---
+            // Band 1 (the title) is drawn by the kit into FrameCore's header zone; the two are
+            // separated by SIZE + WEIGHT (FontTitle bold vs FontBody regular), so the greyscale
+            // read survives - the owner is red/green colourblind and hue may carry nothing.
+            var heading = ElarionUiKit.Label(content, "The cache holds:",
+                Layout.SubtitleBand.y, Layout.SubtitleBand.w,
                 ElarionUi.ParchmentDim, ElarionUi.FontBody, TextAlignmentOptions.Center,
-                0.08f, 0.92f);
-            StackDown(heading, HeadingPx, ref cursor);
+                Layout.SubtitleBand.x, Layout.SubtitleBand.z);
             ElarionUiKit.FitSingleLine(heading);
 
             var lines = new List<string>();
@@ -142,41 +264,62 @@ namespace DeNelle.Dungeons
             }
             if (lines.Count == 0) lines.Add("(empty)");
 
-            // Single TMP block for the payout keeps every line in ONE fixed band whose
-            // height is computed from the line count - no per-line fractional anchors.
-            var sb = new StringBuilder();
+            // -- BAND 3: the loot well - SIX rows visible, then scroll ---------------
+            // FIXED HEIGHT (owner ruling 2026-08-26). The modal never grows with the roll:
+            // growth is how this defect class comes back. Beyond six lines the SAME well
+            // scrolls (RectMask2D clips inside the well, so nothing can paint over the
+            // chrome) and a "+ N more (scroll)" hint - the identical affordance WO-1230 uses
+            // for the Army roster - says so in words, never by a cut-off glyph.
+            var well = ElarionUiKit.AddImage(content, "TreasureWell",
+                new Vector2(Layout.WellBand.x, Layout.WellBand.y),
+                new Vector2(Layout.WellBand.z, Layout.WellBand.w),
+                ElarionUiKit.ObsidianFill, rounded: true);
+
+            var viewport = ElarionUiKit.AddImage(well.transform, "WellViewport",
+                new Vector2(0f, Layout.HintStripFraction), Vector2.one,
+                new Color(0f, 0f, 0f, 0f), rounded: false);
+
+            var scroll = ElarionUiKit.MakeScrollZone(viewport.transform,
+                Layout.ScrollSpacingPx, Layout.ScrollPaddingPx);
+
+            float rowPx = Layout.RowHeightPx(canvasH);
             for (int i = 0; i < lines.Count; i++)
             {
-                if (i > 0) sb.Append('\n');
-                sb.Append(lines[i]);
+                // Rows are sized by EXPLICIT sizeDelta: MakeScrollZone's column runs
+                // childControlHeight=false precisely because kit rows carry no ILayoutElement.
+                var row = ElarionUiKit.Label(scroll.content, lines[i], 0f, 1f,
+                    ElarionUi.Parchment, ElarionUi.FontBody, TextAlignmentOptions.Center,
+                    0f, 1f, bold: true);
+                row.rectTransform.sizeDelta = new Vector2(0f, rowPx);
+                ElarionUiKit.FitSingleLine(row);
             }
-            var payout = ElarionUiKit.Label(content, sb.ToString(), 0.40f, 0.66f,
-                ElarionUi.Parchment, ElarionUi.FontBody, TextAlignmentOptions.Center,
-                0.08f, 0.92f, bold: true);
-            // The one variable-height element. It now advances the cursor by its FULL height, so
-            // whatever follows starts below it no matter how many lines the bundle carries.
-            StackDown(payout, LinePx * Mathf.Max(1, lines.Count), ref cursor);
 
+            // The hint strip is RESERVED whether or not it is populated, so the row pitch - and
+            // with it every band in the table - is identical at one line and at a hundred.
+            var hint = ElarionUiKit.Label(well.transform, Layout.OverflowHint(lines.Count),
+                0f, Layout.HintStripFraction,
+                ElarionUi.ParchmentDim, ElarionUi.FontMicro, TextAlignmentOptions.Center,
+                0.04f, 0.96f);
+            ElarionUiKit.FitSingleLine(hint);
+
+            // -- BAND 4: the first-clear sentence, never overlaid -------------------
             if (firstClear)
             {
                 var unlock = ElarionUiKit.Label(content,
-                    "First clear -- a new recipe is remembered.", 0.30f, 0.38f,
+                    "First clear -- a new recipe is remembered.",
+                    Layout.NoteBand.y, Layout.NoteBand.w,
                     ElarionUi.Gilt, ElarionUi.FontBody, TextAlignmentOptions.Center,
-                    0.06f, 0.94f);
-                StackDown(unlock, HeadingPx, ref cursor);
+                    Layout.NoteBand.x, Layout.NoteBand.z);
                 ElarionUiKit.FitSingleLine(unlock);
             }
 
-            // NO SILENT CLIPPING (CLAUDE.md section 12.2). The flow above cannot overlap any more, but a bundle far
-            // larger than anything authored today could still run past the CTA. Say so loudly rather
-            // than letting a future 12-line payout quietly disappear behind the button - that is
-            // precisely how the original defect stayed invisible at two lines.
-            WarnIfStackOverflows(content as RectTransform, cursor, lines.Count);
-
-            // -- the ONE CTA (same bottom-row budget as the Echo beat) -------------
+            // -- BAND 5: the ONE CTA, in a band no other element may enter ----------
             ElarionUiKit.Button(content, "Take", ElarionUiKit.ButtonKind.Confirm,
-                new Vector2(0.34f, 0.05f), new Vector2(0.66f, 0.245f),
+                new Vector2(Layout.CtaBand.x, Layout.CtaBand.y),
+                new Vector2(Layout.CtaBand.z, Layout.CtaBand.w),
                 CloseAndGrant);
+
+            WarnIfBandsCannotSeatContent(canvasH, rowPx, lines.Count);
 
             // ONE handle for the panel's lifetime (PanelHandle's documented contract).
             // The pending grant is armed only AFTER the arbiter accepts: NotifyOpened can
@@ -193,7 +336,12 @@ namespace DeNelle.Dungeons
             }
             s_onTake = onTake;
 
-            FlowTrace.Step(Sys, $"reward panel opened ({lines.Count} line(s), firstClear={firstClear}).");
+            FlowTrace.Step(Sys, string.Format(
+                "reward panel opened: {0} line(s), firstClear={1}, canvasH={2:0} modalH={3:0} " +
+                "wellH={4:0} rowPx={5:0.0} visible={6} scrolls={7} ctaH={8:0.0} (minTouch={9:0})",
+                lines.Count, firstClear, canvasH, Layout.ModalHeightPx(canvasH),
+                Layout.WellHeightPx(canvasH), rowPx, Layout.VisibleRows,
+                Layout.Overflows(lines.Count), Layout.CtaHeightPx(canvasH), ElarionUiKit.MinTouchPx));
             return true;
         }
 
@@ -236,56 +384,43 @@ namespace DeNelle.Dungeons
         }
 
         /// <summary>
-        /// Place <paramref name="label"/> as the next element in a top-down PIXEL flow, then advance
-        /// <paramref name="cursor"/> past it.
-        /// <para>
-        /// !! THIS REPLACES EnsureBand, AND THE DIFFERENCE IS THE WHOLE BUG FIX. EnsureBand pinned a
-        /// fixed-pixel band around each label's OWN authored fractional midpoint, so three siblings
-        /// held three frozen centres and a block that grew with its line count expanded straight
-        /// through its neighbours (WO-865 class; WO-1040 2 documents it; WO-1030's clipped dialogue
-        /// is the same shape). Here every element hangs from the SAME top edge and each one's
-        /// position depends on the measured height of everything above it, so growth PUSHES rather
-        /// than OVERLAPS. Fixed-pixel heights are kept exactly as the file header requires - a
-        /// fractional band culls glyphs - only the vertical ORIGIN changed, from per-element and
-        /// frozen to shared and flowing.
-        /// </para>
-        /// <para>
-        /// The x anchors the kit authored are preserved untouched, so horizontal layout is unchanged.
-        /// </para>
+        /// NO SILENT FAILURES (CLAUDE.md section 12.2). The bands cannot overlap any more - they are
+        /// authored disjoint and pinned by regression - but a canvas short enough to squeeze the
+        /// well below six legible rows, or a CTA that would need ClampMinTouch's rescue, is still a
+        /// LAYOUT bug and must announce itself rather than shipping as a squint.
         /// </summary>
-        private static void StackDown(TMP_Text label, float pixels, ref float cursor)
+        private static void WarnIfBandsCannotSeatContent(float canvasH, float rowPx, int lineCount)
         {
-            if (label == null) return;
-            var rt = label.rectTransform;
+            if (canvasH <= 1f) return;   // no meaningful canvas yet; the stacking is correct either way
 
-            // Hang from the parent's TOP edge (y anchors both at 1) and express the band purely in
-            // pixels below it. offsetMax.y is the band's top, offsetMin.y its bottom; both negative
-            // because they run downward from the top edge.
-            rt.anchorMin = new Vector2(rt.anchorMin.x, 1f);
-            rt.anchorMax = new Vector2(rt.anchorMax.x, 1f);
-            rt.offsetMax = new Vector2(0f, -cursor);
-            rt.offsetMin = new Vector2(0f, -(cursor + pixels));
+            float seats = (Layout.ViewportHeightPx(canvasH) - 2f * Layout.ScrollPaddingPx
+                           - (Layout.VisibleRows - 1) * Layout.ScrollSpacingPx) / Layout.VisibleRows;
+            if (seats < Layout.MinRowPx)
+            {
+                FlowTrace.Warn(Sys, string.Format(
+                    "loot well seats only {0:0.0}px per row at canvasH={1:0}, below the {2:0}px legibility " +
+                    "floor - showing {3} rows at the floored pitch {4:0.0}px instead ({5} line(s) in the " +
+                    "cache), which will overflow the well. The well band needs to grow, NOT the font.",
+                    seats, canvasH, Layout.MinRowPx, Layout.VisibleRows, rowPx, lineCount));
+            }
 
-            cursor += pixels + StackGapPx;
-        }
+            float ctaH = Layout.CtaHeightPx(canvasH);
+            if (ctaH < ElarionUiKit.MinTouchPx)
+            {
+                FlowTrace.Warn(Sys, string.Format(
+                    "Take is {0:0.0}px tall, under the {1:0}px touch floor - ClampMinTouch will GROW it, " +
+                    "which is how a CTA walks into the band above it (the hero-select failure). Re-author " +
+                    "CtaBand rather than relying on the rescue.",
+                    ctaH, ElarionUiKit.MinTouchPx));
+            }
 
-        /// <summary>
-        /// Trace a warning when the stacked body would run into the CTA's reserved strip. The flow
-        /// itself cannot overlap, but the panel is not scrollable, so an unexpectedly large bundle
-        /// still deserves a loud line rather than silence (CLAUDE.md section 12.2). Pre-layout (height 0) the check
-        /// is skipped - the stacking is correct either way.
-        /// </summary>
-        private static void WarnIfStackOverflows(RectTransform content, float usedPx, int lineCount)
-        {
-            if (content == null) return;
-            float h = content.rect.height;
-            if (h <= 1f) return;                       // not laid out yet; nothing meaningful to test
-            float available = h * (1f - CtaReserveFraction);
-            if (usedPx <= available) return;
-            FlowTrace.Warn(Sys,
-                $"treasure body needs {usedPx:0}px but only {available:0}px clears the Take button " +
-                $"({lineCount} payout line(s), content {h:0}px). Nothing overlaps, but the tail may sit " +
-                "under the CTA - the bundle has outgrown this modal and it needs a scroll region.");
+            if (Layout.Overflows(lineCount))
+            {
+                FlowTrace.Step(Sys, string.Format(
+                    "cache carries {0} line(s); {1} visible, the rest scroll inside the well with a " +
+                    "\"{2}\" hint (WO-1230 affordance).",
+                    lineCount, Layout.VisibleRows, Layout.OverflowHint(lineCount)));
+            }
         }
     }
 }

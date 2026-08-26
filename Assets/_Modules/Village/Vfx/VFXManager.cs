@@ -185,6 +185,20 @@ namespace DeNelle.Village
         [Tooltip("Maximum simultaneous active aura/loop GameObjects.")]
         [SerializeField, Min(1)] private int _maxActiveLoops = 20;
 
+        // WO-1229: READ-ONLY windows onto the loop budget. Before these existed the only
+        // way anything outside this class could learn the pool was full was to ASK FOR A
+        // LOOP AND BE REFUSED - which is exactly how 44 dungeon candles discovered
+        // saturation 44 times a second while the colourblind low-HP aura was refused
+        // alongside them. A consumer that can SEE the budget can yield before it starves
+        // something. Getters only: nothing outside VFXManager may write either number
+        // (the ceiling is VfxLoopBudget's, the count is derived from the registries).
+
+        /// <summary>Live loop count across both loop registries. Read-only.</summary>
+        public int ActiveLoopCount => _activeLoops;
+
+        /// <summary>The ceiling currently in force for loops. Read-only.</summary>
+        public int MaxActiveLoops => _maxActiveLoops;
+
         [Header("Dungeon (WO-59)")]
         [Tooltip("ScriptableObject with darker prefab overrides for dungeon scenes. " +
                  "Call ApplyDungeonMode(true) on dungeon load to activate.")]
@@ -582,13 +596,36 @@ namespace DeNelle.Village
             if (type == VFXType.None) return null;
 
             // T+U §12: a loop cap hit means auras/trails silently stop appearing. Throttle-report.
-            if (_activeLoops >= _maxActiveLoops)
+            //
+            // WO-1229 ruling 2 (owner, 2026-08-26): the decision is DELEGATED to
+            // VfxLoopBudget.WouldRefuseLoop so that the accessibility allowlist cannot be true
+            // there and false here. The two colourblind low-HP types bypass this cap entirely.
+            // They are NOT tested by name at this site on purpose - an id written inline where
+            // it is checked is the duplicated-state drift this repo keeps paying for (the stale
+            // WO number block, the retired dependency table, the hardcoded repo root). One list,
+            // one predicate, in VfxLoopBudget.
+            bool refused = VfxLoopBudget.WouldRefuseLoop(type, _activeLoops, _maxActiveLoops);
+            if (refused)
             {
                 FlowTrace.Throttle("VFXManager", "loop-cap", 1f,
                     $"PlayLoop('{type}') SKIPPED — active loops {_activeLoops}/{_maxActiveLoops} " +
-                    "(cap hit; auras/trails dropping). Handles not Stop()'d, or cap too low?");
+                    "(cap hit; auras/trails dropping). Handles not Stop()'d, or cap too low? " +
+                    "NOTE: the colourblind low-HP tell is NOT subject to this check (WO-1229) - if " +
+                    "an Aura_LowHealth / Aura_NearDeath refusal ever appears in a log again, the " +
+                    "allowlist in VfxLoopBudget.AccessibilityLoops has been broken.");
                 return null;
             }
+
+            // The allowlist actually biting is worth a line of its own: it is the only way a
+            // loop count can legitimately exceed its ceiling, and a reader who finds 25/24 in a
+            // capture must be able to see WHY without reading this file.
+            if (_activeLoops >= _maxActiveLoops)
+                FlowTrace.Throttle("VFXManager", "loop-cap-exempt", 1f,
+                    $"PlayLoop('{type}') GRANTED OVER THE CAP ({_activeLoops}/{_maxActiveLoops}) - " +
+                    "accessibility allowlist (WO-1229). The colourblind low-HP tell is a LOOP, so a " +
+                    "refusal leaves the hero with no non-colour danger signal at all. Bounded: " +
+                    "HeroHpStateAura holds exactly one handle, so this can exceed the ceiling by at " +
+                    "most the length of AccessibilityLoops, only across a recipe swap.");
 
             if (_catalog != null && _catalog.TryGet(type, out var entry))
             {

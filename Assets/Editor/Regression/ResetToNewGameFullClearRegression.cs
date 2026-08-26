@@ -49,6 +49,23 @@
 //   3 [settlement-wipe] Settlements is cleared to a FRESH EMPTY list (an assignment
 //                       alone would satisfy Case 1).
 //   4 [behaviour-home]  The EditMode fixture still holds the behavioural assertions.
+//   5 [talent-prefs-clear]     WO-1220. The reset erases WisdomCurrencyService's OWN
+//                       PlayerPrefs blob (Wisdom + unlocked talent node ids), which lives
+//                       OUTSIDE the save envelope and which Case 1 is structurally blind
+//                       to - Case 1 sweeps GameState fields, and this store is not one.
+//                       That blind spot is how a brand-new RANGER came up with a level-4
+//                       MAGE's shared.n5 talent applied (owner felt-test 2026-08-26).
+//                       Half lint, half behavioural: it invokes the CLEAR HELPER only
+//                       (never ResetToNewGame, per the trade above) and snapshots and
+//                       restores the developer's real key around the probe.
+//   6 [live-progression-wipe]  WO-1220. Zeroing the save is only half a reset: the
+//                       progression the player SEES is held by DontDestroyOnLoad
+//                       singletons no scene load touches (HeroProgression,
+//                       WisdomCurrencyService, SkillSystem - the last persisted NOWHERE,
+//                       so its survival is proof the state came from memory). The reset
+//                       raises GameStateService.NewGameStarted and all three subscribe;
+//                       this case pins the event, the raise, and both ends of every
+//                       subscription.
 //
 // Markers: RESET_FULL_CLEAR_OK / RESET_FULL_CLEAR_FAIL.
 // Standalone: run-unity-method DeNelle.Editor.Regression.ResetToNewGameFullClearRegression.RunAll
@@ -122,6 +139,8 @@ namespace DeNelle.Editor.Regression
                     Case(failures, "field-coverage",  () => Case1_FieldCoverage(body, failures, notes));
                     Case(failures, "zone-reseed",     () => Case2_ZoneReseed(body, StripComments(src), failures));
                     Case(failures, "settlement-wipe", () => Case3_SettlementWipe(body, failures));
+                    Case(failures, "talent-prefs-clear", () => Case5_TalentPrefsClear(body, failures));
+                    Case(failures, "live-progression-wipe", () => Case6_LiveProgressionWipe(body, failures));
                 }
                 Case(failures, "behaviour-home", () => Case4_BehaviourHome(failures));
             }
@@ -245,6 +264,136 @@ namespace DeNelle.Editor.Regression
         }
 
         // =====================================================================
+        //  CASE 5 - WO-1220: the TALENT store is erased, and it is erased for
+        //           EVERY hero, not just the one that was played
+        // =====================================================================
+        //
+        // THE DEFECT (owner felt-test 2026-08-26, Seeker 2026.08.26.341419): a New Game
+        // came up on a blank town with one Echo - and the hero read Lv 4 with
+        // "[Flow:HeroTalents] Aether Bond applied: +20 % mana regen (shared.n5)". The
+        // previous run was a MAGE; the new game was a RANGER. Wisdom and the unlocked
+        // talent-node ids live in WisdomCurrencyService's OWN PlayerPrefs blob, outside the
+        // save envelope, and ResetToNewGame had never heard of it. Node ids are hero-
+        // prefixed but the SET is one shared pool and shared.* nodes carry no prefix at
+        // all, so the carryover crosses classes - the cross-class shape is not incidental,
+        // it is what this store guarantees when it survives.
+        //
+        // Both halves are asserted here because either alone passes on a broken tree: the
+        // lint alone cannot see a helper that deletes the wrong key, and the behavioural
+        // half alone cannot see a helper that exists but is never called.
+        private static void Case5_TalentPrefsClear(string body, List<string> failures)
+        {
+            var clear = typeof(GameStateService).GetMethod(
+                "ClearProgressionPrefs", BindingFlags.NonPublic | BindingFlags.Public | BindingFlags.Static);
+            if (clear == null)
+            {
+                failures.Add("[talent-prefs-clear] GameStateService.ClearProgressionPrefs (static) not found - " +
+                             "WO-1220 is not in this tree, so every New Game still re-reads the PREVIOUS " +
+                             "hero's Wisdom and unlocked talent nodes (a Mage's shared.n5 applied to a " +
+                             "brand-new Ranger)");
+                return;
+            }
+
+            // A helper nobody invokes fixes nothing - and it must be invoked by the RESET,
+            // not merely referenced somewhere in the file.
+            if (body.IndexOf("ClearProgressionPrefs();", StringComparison.Ordinal) < 0)
+                failures.Add("[talent-prefs-clear] ResetToNewGame does not call ClearProgressionPrefs() - the " +
+                             "eraser exists but New Game never runs it (the exact shape WO-860 A1 fixed for " +
+                             "the equip prefs and WO-1019 for the hot-swap bar)");
+
+            var keys = GameStateService.ProgressionPrefKeys;
+            if (keys == null || keys.Length == 0)
+            {
+                failures.Add("[talent-prefs-clear] GameStateService.ProgressionPrefKeys is EMPTY - the clear " +
+                             "would loop over nothing and pass vacuously");
+                return;
+            }
+
+            // Snapshot the developer's real prefs so a batch run never eats their editor state.
+            var snapshot = new Dictionary<string, string>(StringComparer.Ordinal);
+            foreach (var k in keys)
+                if (PlayerPrefs.HasKey(k)) snapshot[k] = PlayerPrefs.GetString(k, string.Empty);
+
+            try
+            {
+                // The fixture is deliberately a level-4 MAGE tree carrying a shared node -
+                // the owner's actual carryover, not a generic sentinel.
+                const string MageTree =
+                    "{\"Wisdom\":170,\"Unlocked\":[\"mage.n1\",\"mage.n4\",\"shared.n5\"]}";
+                foreach (var k in keys) PlayerPrefs.SetString(k, MageTree);
+                PlayerPrefs.Save();
+
+                clear.Invoke(null, null);
+
+                var survivors = new List<string>();
+                foreach (var k in keys) if (PlayerPrefs.HasKey(k)) survivors.Add(k);
+                if (survivors.Count > 0)
+                    failures.Add("[talent-prefs-clear] " + survivors.Count + " talent/Wisdom key(s) SURVIVED " +
+                                 "the New Game clear: " + string.Join(", ", survivors) + " - the next hero, of " +
+                                 "ANY class, inherits that tree (shared.* nodes are not hero-scoped)");
+            }
+            finally
+            {
+                foreach (var k in keys) PlayerPrefs.DeleteKey(k);
+                foreach (var kv in snapshot) PlayerPrefs.SetString(kv.Key, kv.Value);
+                PlayerPrefs.Save();
+            }
+        }
+
+        // =====================================================================
+        //  CASE 6 - WO-1220: the LIVE runtime singletons are told, not just the save
+        // =====================================================================
+        //
+        // Zeroing heroLevel/heroXp in GameState is only half a reset. The progression the
+        // player SEES is held by DontDestroyOnLoad singletons that no scene load touches:
+        //   * HeroProgression       - the live per-run level/XP authority, which writes
+        //                             itself BACK over GameState on the next XP grant;
+        //   * WisdomCurrencyService - Wisdom + unlocked talent nodes, in memory as well as
+        //                             in its own PlayerPrefs blob;
+        //   * SkillSystem           - craft levels + banked points, persisted NOWHERE, so
+        //                             its survival across a "new game" is proof the state
+        //                             came from memory rather than from any save.
+        // ResetToNewGame therefore raises GameStateService.NewGameStarted, and each of the
+        // three subscribes. This case pins all four ends: a subscriber that quietly stops
+        // subscribing puts its system straight back into the previous run's state.
+        private static void Case6_LiveProgressionWipe(string body, List<string> failures)
+        {
+            var evt = typeof(GameStateService).GetEvent(
+                "NewGameStarted", BindingFlags.Public | BindingFlags.Static);
+            if (evt == null)
+            {
+                failures.Add("[live-progression-wipe] GameStateService.NewGameStarted (public static event) not " +
+                             "found - WO-1220 is not in this tree, so a New Game taken while the previous run's " +
+                             "HeroProgression is alive lets that carrier re-stamp its level onto the fresh save");
+                return;
+            }
+
+            if (body.IndexOf("NewGameStarted", StringComparison.Ordinal) < 0)
+                failures.Add("[live-progression-wipe] ResetToNewGame never raises NewGameStarted - the event " +
+                             "exists but the reset does not fire it, so every live progression singleton keeps " +
+                             "the previous run's values");
+
+            foreach (var sub in new[]
+            {
+                "Assets/_Modules/Village/Hero/HeroProgression.cs",
+                "Assets/_Modules/Village/Talents/WisdomCurrencyService.cs",
+                "Assets/_Modules/Core/Progression/SkillSystem.cs",
+            })
+            {
+                string src = ReadSource(sub, failures);
+                if (src == null) continue;
+                if (src.IndexOf("NewGameStarted += ResetForNewGame", StringComparison.Ordinal) < 0)
+                    failures.Add("[live-progression-wipe] " + sub + " no longer subscribes to " +
+                                 "GameStateService.NewGameStarted - that system now carries the PREVIOUS run's " +
+                                 "progression into every New Game, and nothing else can clear it");
+                if (src.IndexOf("NewGameStarted -= ResetForNewGame", StringComparison.Ordinal) < 0)
+                    failures.Add("[live-progression-wipe] " + sub + " subscribes to the STATIC " +
+                                 "NewGameStarted but never unsubscribes - a static event pins every instance " +
+                                 "that ever existed, so destroyed carriers would be reset forever");
+            }
+        }
+
+        // =====================================================================
         //  CASE 4 - the behavioural half still exists
         // =====================================================================
         private static void Case4_BehaviourHome(List<string> failures)
@@ -256,6 +405,10 @@ namespace DeNelle.Editor.Regression
             {
                 "reset_reseeds_the_zone_graph_instead_of_inheriting_it",
                 "reset_clears_claimed_and_razed_settlements",
+                // WO-1220 - the behavioural half of cases 5 and 6: a real service, a real
+                // reset call, a level-4 Mage's talents in the store beforehand.
+                "reset_clears_the_talent_store_so_a_new_class_inherits_no_talents",
+                "reset_notifies_the_live_progression_singletons",
             })
             {
                 if (test.IndexOf(probe, StringComparison.Ordinal) < 0)

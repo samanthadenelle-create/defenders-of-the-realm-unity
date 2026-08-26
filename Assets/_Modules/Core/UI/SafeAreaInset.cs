@@ -78,12 +78,20 @@ namespace DeNelle.Core.UI
         /// top-right corner (anchorMin = anchorMax = pivot = (1,1)), inset inside
         /// the safe area by <paramref name="marginPx"/>.
         /// </summary>
+        /// <param name="marginPxY">Optional SEPARATE vertical margin. Defaults to
+        /// <paramref name="marginPx"/>, so every existing caller and every existing
+        /// assertion is byte-identical. It exists because a corner widget can need more
+        /// clearance on ONE axis than the other — WO-1083 defect #6: the wallet chip's
+        /// vertical position already lands inside the hero-select frame's header band, but
+        /// horizontally it runs onto the frame's right-hand border art, so only x moves.</param>
         public static Vector2 TopRightAnchoredPosition(Rect safeArea, int screenWidth, int screenHeight,
-                                                       float marginPx = EdgeMarginPx)
+                                                       float marginPx = EdgeMarginPx,
+                                                       float marginPxY = -1f)
         {
             float m = Mathf.Max(0f, marginPx);
+            float my = marginPxY < 0f ? m : Mathf.Max(0f, marginPxY);
             return new Vector2(-(RightInset(safeArea, screenWidth) + m),
-                               -(TopInset(safeArea, screenHeight) + m));
+                               -(TopInset(safeArea, screenHeight) + my));
         }
 
         /// <summary>
@@ -93,11 +101,13 @@ namespace DeNelle.Core.UI
         /// asserts against <c>Screen.safeArea</c>.
         /// </summary>
         public static Rect TopRightScreenRect(Rect safeArea, int screenWidth, int screenHeight,
-                                              Vector2 size, float marginPx = EdgeMarginPx)
+                                              Vector2 size, float marginPx = EdgeMarginPx,
+                                              float marginPxY = -1f)
         {
             float m = Mathf.Max(0f, marginPx);
+            float my = marginPxY < 0f ? m : Mathf.Max(0f, marginPxY);
             float xMax = screenWidth - RightInset(safeArea, screenWidth) - m;
-            float yMax = screenHeight - TopInset(safeArea, screenHeight) - m;
+            float yMax = screenHeight - TopInset(safeArea, screenHeight) - my;
             return new Rect(xMax - size.x, yMax - size.y, size.x, size.y);
         }
 
@@ -109,21 +119,23 @@ namespace DeNelle.Core.UI
         /// resolution / safe-area changes. Anchors, pivot and position are all set
         /// here — the caller only supplies the (fixed-pixel) size.
         /// </summary>
-        public static void ApplyTopRight(RectTransform rt, float marginPx = EdgeMarginPx)
+        public static void ApplyTopRight(RectTransform rt, float marginPx = EdgeMarginPx,
+                                         float marginPxY = -1f)
         {
             if (rt == null) return;
             rt.anchorMin = rt.anchorMax = new Vector2(1f, 1f);
             rt.pivot = new Vector2(1f, 1f);
             var watcher = rt.GetComponent<SafeAreaCornerWatcher>();
             if (watcher == null) watcher = rt.gameObject.AddComponent<SafeAreaCornerWatcher>();
-            watcher.Bind(marginPx);
+            watcher.Bind(marginPx, marginPxY);
         }
 
         /// <summary>Reads the live Screen and writes the top-right anchoredPosition once.</summary>
-        private static void FitTopRightNow(RectTransform rt, float marginPx)
+        private static void FitTopRightNow(RectTransform rt, float marginPx, float marginPxY)
         {
             if (rt == null) return;
-            Vector2 screenPx = TopRightAnchoredPosition(Screen.safeArea, Screen.width, Screen.height, marginPx);
+            Vector2 screenPx = TopRightAnchoredPosition(Screen.safeArea, Screen.width, Screen.height,
+                                                        marginPx, marginPxY);
 
             // anchoredPosition is in CANVAS units, not screen px. Under the default
             // ConstantPixelSize scaler these are identical (scaleFactor 1 — which is
@@ -143,15 +155,17 @@ namespace DeNelle.Core.UI
         {
             private RectTransform _rt;
             private float _margin = EdgeMarginPx;
+            private float _marginY = -1f;
             private Rect _lastSafe;
             private int _lastW = -1, _lastH = -1;
 
             private void Awake() { _rt = transform as RectTransform; }
 
             /// <summary>(Re)bind the margin and force an immediate fit.</summary>
-            public void Bind(float marginPx)
+            public void Bind(float marginPx, float marginPxY = -1f)
             {
                 _margin = marginPx;
+                _marginY = marginPxY;
                 if (_rt == null) _rt = transform as RectTransform;
                 Refit();
             }
@@ -169,7 +183,7 @@ namespace DeNelle.Core.UI
                 _lastW = Screen.width;
                 _lastH = Screen.height;
                 _lastSafe = Screen.safeArea;
-                FitTopRightNow(_rt, _margin);
+                FitTopRightNow(_rt, _margin, _marginY);
             }
         }
     }

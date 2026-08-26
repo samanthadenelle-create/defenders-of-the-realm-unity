@@ -18,12 +18,34 @@
 //   headlessly, with no network and no PlayMode. The fetch/cache lifecycle is
 //   a SEPARATE file — DungeonStatusService (same folder).
 //
-// THE SAFETY DIRECTION IS ONE-WAY — read this before changing any branch:
-//   EVERY failure resolves toward OPEN. Unknown id, unknown status string,
-//   absent id, null id, empty table, version mismatch, bad parse — all OPEN.
-//   A backend typo, a stale cache or a dropped network must NEVER lock a
-//   player out of working content. The only thing that closes a door is a
-//   well-formed row that explicitly says so. (WO-1114 §6, every line.)
+// ⛔ THE SAFETY DIRECTION IS FAIL-CLOSED — read this before changing any branch.
+//   OWNER RULING, 2026-08-26 (WO-1223), verbatim:
+//       "not acesable if not in table, if in table and works then yes"
+//   That INVERTS WO-1114 §6, and the inversion is the point. Until today a
+//   dungeon with no row read OPEN, which is precisely why dg_healers_cottage
+//   was reachable, black-screened the owner, and could not be sealed: there
+//   was nothing to flip and the default let the player through anyway.
+//
+//   THE THREE-LINE CONTRACT, and there is no fourth state:
+//     * A GATED id (PortalDungeonIds) is enterable ONLY when the standing
+//       table carries a well-formed row for it whose status parses to `open`.
+//     * EVERYTHING else about a gated id is CLOSED: absent id, null/empty id,
+//       null table (no cache, server unreachable, timed out), rejected/empty/
+//       malformed payload, a row with an unparseable status string.
+//     * Two NAMED escapes, both deliberate and both loud:
+//       (a) the kill switch — provenance "flag-off" (FeatureFlags.DungeonStatus
+//           = 0) forces every door OPEN with no rebuild. It is the one lever
+//           that survives a bad table, and it is why fail-closed is safe to ship.
+//       (b) UngatedIds — reachable ids that are NOT dungeons (the Rootways
+//           crossroads, fixtures, probes). Each carries a stated reason and is
+//           pinned by DungeonStatusRegression. This is an ALLOWLIST, which is
+//           what fail-closed means; it is not a fallback.
+//
+//   ⚠ THE COST, STATED OUT LOUD: a first-run player who has never reached the
+//   network has no cache, so every gated dungeon reads CLOSED (as authored
+//   WORLD prose, never as build status). A player who HAS reached the network
+//   once keeps the cached table and is unaffected offline. That trade is the
+//   owner's ruling; do not soften it back toward open without a new one.
 //
 // ATOMIC SWAP: ApplyPayload builds a whole new dictionary and assigns the
 //   field in one statement. A malformed live payload therefore leaves the
@@ -40,6 +62,27 @@ using System.Collections.Generic;
 using DeNelle.Core.Diagnostics;
 using Newtonsoft.Json;
 
+// =============================================================================
+// OWNER RULING 2026-08-26 -- THE OFFLINE FIRST-RUN CONSEQUENCE IS ACCEPTED.
+//
+// Fail-closed means a BRAND-NEW player with no cache and no network sees EVERY
+// gatable dungeon SEALED (provenance 'no-table'). The owner was shown that
+// consequence explicitly, with the alternatives (a starter allowlist; a
+// connectivity-specific door message), and ruled: SEALED IS CORRECT.
+//
+// !! So the offline-sealed world is the FEATURE, not a bug report waiting to
+// happen. Do NOT "fix" it by reintroducing an open default for the no-table,
+// unreachable, timeout, malformed-payload or unparseable-status branches --
+// ALL FIVE of those were wide open before today (ParseState literally ended
+// `default: return Open`), which is why the gate was no gate at all in every
+// degraded condition.
+//
+// The sanctioned levers, both already pinned by DungeonStatusRegression:
+//   * FeatureFlags.DungeonStatus = 0  -- the kill switch, provenance 'flag-off'
+//   * UngatedIds                      -- doors that can never have a row
+// Cached players are unaffected offline; they keep the last known table.
+// =============================================================================
+
 namespace DeNelle.Core.World
 {
     /// <summary>
@@ -48,7 +91,9 @@ namespace DeNelle.Core.World
     /// </summary>
     public enum DungeonDoorState
     {
-        /// <summary>Enterable. The ground state, and the state every failure resolves to.</summary>
+        /// <summary>Enterable. ⚠ NO LONGER the ground state — since the owner's
+        /// fail-closed ruling (2026-08-26) this is reached ONLY by a well-formed row
+        /// that says "open". Every failure resolves to <see cref="Sealed"/> instead.</summary>
         Open = 0,
         /// <summary>Barred from the outside.</summary>
         Sealed = 1,
@@ -93,13 +138,24 @@ namespace DeNelle.Core.World
             Sigil = sigil;
         }
 
-        /// <summary>The ground state. Every failure path returns this.</summary>
+        /// <summary>An explicitly-open door. ⚠ Only the kill switch and the
+        /// <see cref="DungeonStatusCatalog.UngatedIds"/> allowlist reach this now —
+        /// it is NO LONGER the failure default (owner ruling 2026-08-26, WO-1223).</summary>
         public static DungeonDoorInfo OpenDefault => new DungeonDoorInfo(DungeonDoorState.Open, null, null, null);
+
+        /// <summary>
+        /// THE GROUND STATE since the fail-closed ruling. Every unresolved gated id
+        /// returns this: <see cref="DungeonDoorState.Sealed"/> with NO authored prose,
+        /// so DungeonSealedDoorPanel falls back to canon-strings.json
+        /// (dungeonSealedHeadline / dungeonSealedBody) and the player reads WORLD,
+        /// never build status. ⛔ Do not type a player sentence here (CLAUDE.md §7).
+        /// </summary>
+        public static DungeonDoorInfo ClosedDefault => new DungeonDoorInfo(DungeonDoorState.Sealed, null, null, null);
     }
 
     /// <summary>
     /// Static, transport-free table of dungeon door states. Always answers;
-    /// never throws; always resolves unknowns toward OPEN.
+    /// never throws; resolves every unknown toward CLOSED (owner ruling 2026-08-26).
     /// </summary>
     public static class DungeonStatusCatalog
     {
@@ -118,18 +174,65 @@ namespace DeNelle.Core.World
         public const string ProvenanceDefault = "default";
         public const string ProvenanceFlagOff = "flag-off";
 
-        /// <summary>The four AuthoredPortal dungeon ids this system's domain covers.
-        /// Fixtures and probes (dg_descent_probe, dg_stair_rig, dg_stairwell_probe)
-        /// have no portal and can never be gated; dg_hollow_roads is a CROSSROADS,
-        /// not a dungeon, and is gated by FeatureFlags.BiomeRoads instead.
-        /// ⛔ Never add an id here that has no AuthoredPortal row.</summary>
+        /// <summary>
+        /// THE GATED DOMAIN — the AuthoredPortal dungeon ids this system closes over.
+        /// Since the fail-closed ruling this list is also the FENCE: an id in here is
+        /// enterable only while the table says so, so membership is a real safety
+        /// property and not just a lint target.
+        /// <para>
+        /// ⛔ Never add an id here that has no AuthoredPortal row — DungeonStatusRegression
+        /// case [door-ids] source-lints exactly that, and case [door-coverage] proves the
+        /// list is TOTAL over every reachable dungeon.
+        /// </para>
+        /// </summary>
         public static readonly string[] PortalDungeonIds =
         {
             "dg_starter_loop",
             "dg_sunken_vault",
             "dg_bonecrypt",
             "dg_ember_deep",
+
+            // ── OWNER RULING, 2026-08-26 (WO-1223), verbatim: ────────────────────
+            //   "not acesable if not in table, if in table and works then yes"
+            // Both ids were REACHABLE (authored portal + injected def + enabled build
+            // scene) and in NEITHER list, so [door-coverage] red-flagged them by name
+            // and refused to self-resolve. The owner ruled them GATABLE, not exempt:
+            // they belong in the domain that fails closed, NOT in UngatedIds.
+            // dg_healers_cottage is the one she black-screened in with no row to flip.
+            "dg_folks_granary",
+            "dg_healers_cottage",
         };
+
+        /// <summary>
+        /// THE ALLOWLIST — reachable ids that are NOT dungeons, and therefore sit
+        /// outside the fail-closed fence. Every entry needs a stated reason; this is
+        /// the ONLY way an id escapes the closed default other than the kill switch.
+        /// <para>
+        /// ⛔ Adding an id here is how fail-closed gets softened back to fail-open one
+        /// entry at a time. It is a design ruling, never an implementer's convenience.
+        /// DungeonStatusRegression consumes THIS array (it no longer keeps a second
+        /// copy) so the two cannot drift — CLAUDE.md's duplicated-state failure.
+        /// </para>
+        /// <list type="bullet">
+        /// <item>dg_hollow_roads — the Rootways is a CROSSROADS, not a dungeon: one
+        /// mouth, four arms into the biomes. Its portal row is DERIVED
+        /// (DungeonWorldPortalSpawner.TryDeriveHollowRoadsPortal) and it is switched by
+        /// FeatureFlags.BiomeRoads, not by a door state. It will never have a row, so
+        /// fail-closed would permanently bar a passage that has no dungeon behind it.</item>
+        /// <item>dg_descent_probe / dg_stair_rig / dg_stairwell_probe — test fixtures and
+        /// probes with no AuthoredPortal at all. Nothing can place a door in front of a
+        /// player for them, so there is nothing to close.</item>
+        /// </list>
+        /// </summary>
+        public static readonly string[] UngatedIds =
+        {
+            "dg_hollow_roads", "dg_descent_probe", "dg_stair_rig", "dg_stairwell_probe",
+        };
+
+        /// <summary>True when <paramref name="dungeonId"/> is on the <see cref="UngatedIds"/>
+        /// allowlist — i.e. outside this system by design, not by accident.</summary>
+        public static bool IsUngated(string dungeonId) =>
+            !string.IsNullOrEmpty(dungeonId) && Array.IndexOf(UngatedIds, dungeonId) >= 0;
 
         // Swapped atomically by ApplyPayload. Never mutated in place.
         private static Dictionary<string, DungeonDoorInfo> s_table;
@@ -143,36 +246,123 @@ namespace DeNelle.Core.World
         /// <summary>True once a payload has been accepted from any source.</summary>
         public static bool Loaded => s_table != null;
 
-        /// <summary>Number of rows in the standing table (0 when all-open).</summary>
+        /// <summary>Number of rows in the standing table. ⚠ 0 no longer means "all open" —
+        /// since the fail-closed ruling a table with no rows closes every gated door.</summary>
         public static int RowCount => s_table?.Count ?? 0;
 
         // ─────────────────────────────────────────────────────────────────────
-        //  READ SIDE — always answers, never throws, unknown => Open
+        //  READ SIDE — always answers, never throws. ABSENCE => CLOSED.
         // ─────────────────────────────────────────────────────────────────────
 
         /// <summary>
-        /// Resolve a dungeon's door. NEVER throws. A null/empty/unknown id, or an
-        /// id absent from the payload, resolves <see cref="DungeonDoorState.Open"/>
-        /// — absence is not a closure (WO-1114 §6 row 6).
+        /// Resolve a dungeon's door. NEVER throws.
+        /// <para>
+        /// ⛔ FAIL-CLOSED (owner ruling 2026-08-26, WO-1223: <i>"not acesable if not in
+        /// table, if in table and works then yes"</i>). A null/empty id, an id absent from
+        /// the standing table, and a null table (no cache / server unreachable / timed out
+        /// / payload rejected) ALL resolve <see cref="DungeonDoorState.Sealed"/>. The only
+        /// ways through are a row that parses to <c>open</c>, the kill switch
+        /// (<see cref="ProvenanceFlagOff"/>), and the <see cref="UngatedIds"/> allowlist.
+        /// </para>
+        /// <para>
+        /// Every refusal is TRACED (CLAUDE.md §12 — no silent failures), throttled to
+        /// ~1/5 s per id because DungeonPortal re-reads this on a 0.15 s proximity tick.
+        /// </para>
         /// </summary>
         public static DungeonDoorInfo For(string dungeonId)
         {
-            if (string.IsNullOrEmpty(dungeonId)) return DungeonDoorInfo.OpenDefault;
+            // (a) KILL SWITCH. DungeonStatusService.Bootstrap stamps this provenance when
+            //     FeatureFlags.DungeonStatus is off. It is the one lever that survives a
+            //     bad table with no rebuild, so it wins over everything below.
+            if (string.Equals(s_provenance, ProvenanceFlagOff, StringComparison.Ordinal))
+                return DungeonDoorInfo.OpenDefault;
+
+            // (b) A null/empty id is not a dungeon. Closed, and loud - nothing should be
+            //     asking about one, so this is a caller bug, not a data state.
+            if (string.IsNullOrEmpty(dungeonId))
+            {
+                FlowTrace.Throttle(Sys, "for-null-id", 5f,
+                    "For(null/empty id) - CLOSED by the fail-closed default (owner ruling 2026-08-26). " +
+                    "A caller is asking about a dungeon it cannot name.");
+                return DungeonDoorInfo.ClosedDefault;
+            }
+
+            // (c) ALLOWLIST. Crossroads, fixtures, probes - outside this system by design.
+            if (IsUngated(dungeonId)) return DungeonDoorInfo.OpenDefault;
+
             var table = s_table;
-            if (table == null) return DungeonDoorInfo.OpenDefault;
-            return table.TryGetValue(dungeonId, out var info) ? info : DungeonDoorInfo.OpenDefault;
+
+            // (d) NO TABLE AT ALL: no cache on disk, or the server was unreachable /
+            //     timed out / answered garbage and the payload was rejected. Under the
+            //     old fail-open default this returned OPEN, which is the hole the ruling
+            //     closes: an unreachable server could not gate anything.
+            if (table == null)
+            {
+                FlowTrace.Throttle(Sys, "for-no-table:" + dungeonId, 5f,
+                    "'" + dungeonId + "' CLOSED: no standing status table (provenance=" + s_provenance +
+                    "). No cache, or the fetch failed / timed out / was rejected. Fail-closed by " +
+                    "owner ruling 2026-08-26 (WO-1223).");
+                return DungeonDoorInfo.ClosedDefault;
+            }
+
+            // (e) TABLE PRESENT, NO ROW FOR THIS ID. The literal case the owner ruled on.
+            if (!table.TryGetValue(dungeonId, out var info))
+            {
+                FlowTrace.Throttle(Sys, "for-no-row:" + dungeonId, 5f,
+                    "'" + dungeonId + "' CLOSED: NOT IN THE TABLE (rows=" + table.Count +
+                    ", provenance=" + s_provenance + "). \"not acesable if not in table\" - " +
+                    "owner ruling 2026-08-26 (WO-1223).");
+                return DungeonDoorInfo.ClosedDefault;
+            }
+
+            return info;
         }
 
         /// <summary>Convenience for the hot path. Same contract as <see cref="For"/>.</summary>
         public static bool IsOpen(string dungeonId) => For(dungeonId).IsOpen;
+
+        /// <summary>
+        /// WO-1223 — THE REVERSE DIRECTION. Which of <see cref="PortalDungeonIds"/> the
+        /// STANDING table carries no row for.
+        /// <para>
+        /// ⚠ CORRECTED 2026-08-26: this doc used to say "an absent id resolves OPEN and
+        /// always will". The owner ruled the opposite the same day - an absent id now
+        /// resolves CLOSED (see <see cref="For"/>), so this detector names the doors that
+        /// are SHUT for want of a row, not doors that are merely ungateable.
+        /// The original defect stands: the absence was SILENT. <see cref="ApplyPayload"/>
+        /// has detected the other direction since day one (a row naming a dungeon this
+        /// build does not ship, :FlowTrace.Step "payload carries unshipped id"); the
+        /// direction that actually cost the owner an ungateable black screen — a
+        /// SHIPPED DUNGEON WITH NO ROW — logged nothing at all.
+        /// </para>
+        /// <para>
+        /// Returned as data, not just logged, so DungeonStatusRegression can pin the
+        /// detector itself rather than trusting a log line nobody reads.
+        /// </para>
+        /// </summary>
+        /// <returns>Never null. Empty when every shipped portal id has a row.</returns>
+        public static string[] MissingPortalRows()
+        {
+            var table = s_table;
+            var missing = new List<string>(PortalDungeonIds.Length);
+            for (int i = 0; i < PortalDungeonIds.Length; i++)
+            {
+                string id = PortalDungeonIds[i];
+                if (table == null || !table.ContainsKey(id)) missing.Add(id);
+            }
+            return missing.ToArray();
+        }
 
         // ─────────────────────────────────────────────────────────────────────
         //  WRITE SIDE
         // ─────────────────────────────────────────────────────────────────────
 
         /// <summary>
-        /// Reset to the all-open ground state. Used by the kill switch and by the
-        /// regression oracle between cases.
+        /// Drop the standing table. ⚠ RENAMED IN MEANING 2026-08-26: this used to be
+        /// "reset to the all-open ground state" and it no longer is. With no table every
+        /// GATED id resolves CLOSED (<see cref="For"/> branch d); only the kill-switch
+        /// provenance <see cref="ProvenanceFlagOff"/> still forces open. Used by the
+        /// kill switch and by the regression oracle between cases.
         /// </summary>
         public static void Clear(string provenance = ProvenanceDefault)
         {
@@ -247,8 +437,26 @@ namespace DeNelle.Core.World
             s_table = next;
             s_provenance = string.IsNullOrEmpty(provenance) ? ProvenanceDefault : provenance;
 
+            // WO-1223 — THE OTHER DIRECTION, and it is the expensive one. Above, a row
+            // naming a dungeon we do not ship gets a Step. A dungeon we DO ship that has
+            // no row got nothing, which is how a reachable dungeon stayed ungateable
+            // without anyone being told.
+            // ⚠ ESCALATED Warn -> Fail, 2026-08-26: under the owner's fail-closed ruling an
+            // uncovered id is no longer a harmless silence - it is a SHIPPED DUNGEON NO PLAYER
+            // CAN ENTER. This line is the operator's early warning that a row is missing from
+            // dungeon_status, and it must be as loud as the outage it describes.
+            string[] uncovered = MissingPortalRows();
+            if (uncovered.Length > 0)
+            {
+                FlowTrace.Fail(Sys, "payload has NO row for " + uncovered.Length + " shipped portal id(s): " +
+                                    string.Join(",", uncovered) + " - under the fail-closed default (owner " +
+                                    "ruling 2026-08-26) those doors are CLOSED to every player until a row " +
+                                    "exists in dungeon_status. Seed them.");
+            }
+
             FlowTrace.Step(Sys, "payload accepted (provenance=" + s_provenance + ") rows=" + next.Count +
                                 " closed=" + closed + " unshipped=" + unshipped +
+                                " uncovered=" + uncovered.Length +
                                 " portalCoverage=" + DescribePortalCoverage(next));
             return true;
         }
@@ -258,13 +466,25 @@ namespace DeNelle.Core.World
         // ─────────────────────────────────────────────────────────────────────
 
         /// <summary>
-        /// Case-insensitive status parse. An unparseable value maps to
-        /// <see cref="DungeonDoorState.Open"/> and warns. NEVER fails closed —
-        /// a future backend typo must not lock a player out (WO-1114 §3).
+        /// Case-insensitive status parse.
+        /// <para>
+        /// ⛔ INVERTED 2026-08-26 (owner ruling, WO-1223). A blank or unparseable value
+        /// now maps to <see cref="DungeonDoorState.Sealed"/> and WARNS. It used to map to
+        /// Open so that "a backend typo cannot lock a player out"; the ruling is
+        /// <i>"if in table and works then yes"</i> — a row whose status does not parse
+        /// does not work, so it does not open. A typo now closes a door instead of
+        /// silently opening one, which is the direction the owner chose.
+        /// </para>
         /// </summary>
         public static DungeonDoorState ParseState(string raw, string idForLog)
         {
-            if (string.IsNullOrWhiteSpace(raw)) return DungeonDoorState.Open;
+            if (string.IsNullOrWhiteSpace(raw))
+            {
+                FlowTrace.Warn(Sys, "blank status for id='" + (idForLog ?? "?") +
+                                    "' - a row that says nothing does not say open. CLOSED (Sealed) " +
+                                    "by owner ruling 2026-08-26 (WO-1223).");
+                return DungeonDoorState.Sealed;
+            }
             switch (raw.Trim().ToLowerInvariant())
             {
                 case "open": return DungeonDoorState.Open;
@@ -274,8 +494,9 @@ namespace DeNelle.Core.World
                 case "flooded": return DungeonDoorState.Flooded;
                 default:
                     FlowTrace.Warn(Sys, "unknown status '" + raw + "' for id='" + (idForLog ?? "?") +
-                                        "' - treating as OPEN.");
-                    return DungeonDoorState.Open;
+                                        "' - it does not parse, so it does not work. CLOSED (Sealed) " +
+                                        "by owner ruling 2026-08-26 (WO-1223).");
+                    return DungeonDoorState.Sealed;
             }
         }
 
@@ -286,7 +507,7 @@ namespace DeNelle.Core.World
             for (int i = 0; i < PortalDungeonIds.Length; i++)
             {
                 string id = PortalDungeonIds[i];
-                parts.Add(table.TryGetValue(id, out var info) ? id + "=" + info.State : id + "=absent(open)");
+                parts.Add(table.TryGetValue(id, out var info) ? id + "=" + info.State : id + "=absent(CLOSED)");
             }
             return string.Join(",", parts);
         }

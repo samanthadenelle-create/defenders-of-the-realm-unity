@@ -236,6 +236,7 @@ namespace DeNelle.Editor
                 CheckResourcePaths(modulesDir, failures, notes);
                 CheckSafeAreaCorner(failures, notes);
                 CheckCombatHudComposition(failures, notes);
+                CheckResourceRailRaise(modulesDir, failures, notes);
             }
             catch (Exception ex)
             {
@@ -250,7 +251,7 @@ namespace DeNelle.Editor
             if (failures.Count == 0)
             {
                 reason = "HUDUI_OK — tofu oracle, UIDocument fence, kit conformance, Resources paths, " +
-                         "safe-area corner, combat-hud composition all green" + noteStr;
+                         "safe-area corner, combat-hud composition, resource-rail raise all green" + noteStr;
                 Debug.Log(reason);
                 return true;
             }
@@ -1172,5 +1173,82 @@ namespace DeNelle.Editor
                 return null;
             }
         }
+
+        // =====================================================================
+        // CHECK 7 — THE TOWN RESOURCE RAIL IS ACTUALLY RAISED (WO-1221)
+        // ---------------------------------------------------------------------
+        // WHAT SHIPPED, AND WHY A SOURCE PIN CATCHES IT: WO-1205 built the expanded
+        // rail inert (`_resExpandedRow.SetActive(false)`) and left a comment saying the
+        // LateTick tap window would raise it. Nothing did — the tick toggles the widget
+        // WRAPPER around the full-screen dock, whose only meaningful child is that
+        // inert row. Tapping the gold chip therefore activated an empty container and
+        // logged "resource panel expanded (opener live=True)". Compile-green, marker-
+        // green, zero pixels.
+        //
+        // Two invariants, both of which were RED on the pre-fix tree:
+        //   7a  the OWNER of the open state must actually raise the row — the string
+        //       `_resExpandedRow.SetActive` must appear inside SetResourcePanelOpen.
+        //   7b  the expand trace must not be the hollow token again. `openerLive` is
+        //       true by construction on the expand branch, so a line whose only claim
+        //       is `opener live=` cannot fail; the file must instead measure through
+        //       UiSurfaceProbe (docs/reference/HOLLOW_ASSERTIONS_REGISTRY.md).
+        //
+        // SOURCE-LINT, like checks 1/2/4: reads .cs text, runs no PlayMode. A rename of
+        // the field or the method degrades to a NOTE, never a false FAIL.
+        // =====================================================================
+        private static void CheckResourceRailRaise(string modulesDir, List<string> failures, List<string> notes)
+        {
+            string path = Path.Combine(modulesDir, "HUD", "Kit", "HudKitController.cs");
+            if (!File.Exists(path))
+            {
+                // FIXTURE-ABSENT, NOT A CAPABILITY GAP: HudKitController.cs is tracked source that
+                // this check exists to lint. If it is gone, 7a and 7b assert NOTHING and WO-1221
+                // regresses unseen — so this is red, and it names the path it looked at.
+                failures.Add("RESOURCE RAIL — the source this check lints is MISSING at " + path +
+                             ". HudKitController.cs is tracked source, not an optional fixture: without it " +
+                             "neither 7a (SetResourcePanelOpen raises _resExpandedRow) nor 7b (the expand " +
+                             "verify measures through UiSurfaceProbe) is checked at all.");
+                return;
+            }
+
+            string src;
+            try { src = File.ReadAllText(path); }
+            catch (Exception ex)
+            {
+                notes.Add("resource-rail raise: unreadable (" + ex.GetType().Name + ") — check skipped");
+                return;
+            }
+
+            // 7a — the open-state owner must raise the row.
+            int idx = src.IndexOf("private void SetResourcePanelOpen", StringComparison.Ordinal);
+            if (idx < 0)
+            {
+                notes.Add("resource-rail raise: SetResourcePanelOpen not found (renamed?) — 7a skipped");
+            }
+            else
+            {
+                // Terminate at the next class-indent member declaration, NOT at a closing brace:
+                // CLAUDE.md §1's gate counts RAW '{' / '}' characters, so a brace inside a string
+                // literal here would fail the brace check on a perfectly correct file.
+                int end = src.IndexOf("\n        private ", idx + 1, StringComparison.Ordinal);
+                string body = end > idx ? src.Substring(idx, end - idx) : src.Substring(idx);
+                if (body.IndexOf("_resExpandedRow.SetActive", StringComparison.Ordinal) < 0)
+                    failures.Add("RESOURCE RAIL — SetResourcePanelOpen records the open flag but never calls " +
+                                 "_resExpandedRow.SetActive. The row is built inert (WO-1205), so the tap window " +
+                                 "raises an EMPTY dock: the player taps the gold chip and sees nothing, while the " +
+                                 "trace reports the panel expanded. This is WO-1221 regressing.");
+            }
+
+            // 7b — the expand trace must stay falsifiable.
+            if (src.IndexOf("UiSurfaceProbe", StringComparison.Ordinal) < 0 ||
+                src.IndexOf("expand VERIFIED PAINTED", StringComparison.Ordinal) < 0)
+                failures.Add("RESOURCE RAIL — the post-expand MEASURED verify is gone (no UiSurfaceProbe / no " +
+                             "'expand VERIFIED PAINTED' emit). The expand trace is back to asserting only that " +
+                             "the handler ran, which is true by construction and cannot report a blank rail. " +
+                             "See docs/reference/HOLLOW_ASSERTIONS_REGISTRY.md (WO-1221).");
+
+            notes.Add("resource-rail raise: SetResourcePanelOpen raise + measured expand verify pinned (WO-1221)");
+        }
+
     }
 }

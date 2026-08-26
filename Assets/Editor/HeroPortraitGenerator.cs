@@ -19,7 +19,8 @@ namespace DeNelle.Editor
     public static class HeroPortraitGenerator
     {
         // Must live under a Resources/ folder so runtime can Resources.Load it.
-        private const string OutputDir = "Assets/_Modules/Onboarding/Resources/HeroPortraits";
+        // WO-1234: the ONE declaration lives in DeNelle.Core.HeroPortraitPaths.
+        private const string OutputDir = DeNelle.Core.HeroPortraitPaths.AuthoringFolder;
         private const int PortraitSize = 512;
 
         // Render the portraits from the ACTUAL in-game hero bodies (Resources/Heroes

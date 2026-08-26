@@ -206,6 +206,31 @@ namespace DeNelle.Core.State
         /// <summary>Raised after a full <see cref="ResetToNewGame"/> or <see cref="Load"/>.</summary>
         public readonly UnityEvent StateReplaced = new UnityEvent();
 
+        /// <summary>
+        /// WO-1220 — raised by <see cref="ResetToNewGame"/> ONLY (never by <see cref="Load"/>),
+        /// after every persisted field has been re-seeded and before the notify/persist tail.
+        ///
+        /// THE DEFECT IT EXISTS FOR (owner felt-test 2026-08-26, Seeker 2026.08.26.341419):
+        /// a New Game re-seeded ~60 GameState fields and the town came up blank and correct —
+        /// and the hero still read <c>Lv 4</c> with a previous class's talent applied. The save
+        /// is only HALF of the progression: the other half lives in **DontDestroyOnLoad runtime
+        /// singletons that a scene load never touches** —
+        ///   • <c>HeroProgression</c> (Village) — the LIVE per-run level/XP authority, which
+        ///     writes itself back over GameState on the next XP grant;
+        ///   • <c>WisdomCurrencyService</c> (Village) — Wisdom + the unlocked talent-node ids,
+        ///     persisted in its OWN PlayerPrefs blob, hero-prefixed but pooled, so a Mage node
+        ///     stays applied on a brand-new Ranger;
+        ///   • <c>SkillSystem</c> (Core) — craft-skill levels + banked skill points, which are
+        ///     not persisted AT ALL, so their survival is proof the process never restarted.
+        /// Zeroing the save fields cannot reach any of them. This event does.
+        ///
+        /// STATIC by necessity: the subscribers outlive any one service instance and two of the
+        /// three live in DeNelle.Village, which DeNelle.Core must never reference (CLAUDE.md §5).
+        /// Village -> Core subscription is the sanctioned direction. Subscribers MUST unsubscribe
+        /// (OnDisable / OnDestroy) — a static event holds its listeners forever otherwise.
+        /// </summary>
+        public static event Action NewGameStarted;
+
         // =====================================================================
         //  Lifecycle
         // =====================================================================
@@ -378,6 +403,13 @@ namespace DeNelle.Core.State
             ApplyPersisted(validation.Data);
             _state.SchemaVersion = SaveSchema.CurrentVersion;
             FlowTrace.Step("Save", $"Load OK — applied save (storeVersion={file.StoreVersion} -> schema v{SaveSchema.CurrentVersion}).");
+            // WO-1220 §12 — name the hero progression this load just installed. A Load that
+            // runs AFTER a New Game is one of only two ways GameState.HeroLevel can climb back
+            // above 1 (the other is HeroProgression.WriteBackToState, which warns on the same
+            // shape), so this line and that one between them account for every re-introduction.
+            FlowTrace.Step("Save",
+                $"Load OK — hero progression installed from the save: level={_state.HeroLevel} " +
+                $"xp={_state.HeroXp:0.#} lifetime={_state.HeroLifetimeXp:0.#}.");
             // LB-3 one-time migration: a legacy save had no integrity signature.
             // Re-write it now so the NEXT load is gated by a valid HMAC. Idempotent
             // (Save writes payload + sig); existing players keep their progress.
@@ -1001,6 +1033,17 @@ namespace DeNelle.Core.State
             // other accessor guards _state; Reset() must too). Fixes 16 save/reset tests.
             if (_state == null) _state = ScriptableObject.CreateInstance<GameState>();
             var s = _state;
+            // WO-1220 §12 — the ORDER is the evidence. The owner's device showed the hero
+            // restoring at level 4 AFTER this method ran, so the one thing the trace has to
+            // make legible is what the hero fields held ON ENTRY vs what this reset leaves,
+            // vs what the LIVE HeroProgression stamps back afterwards (see
+            // HeroProgression.WriteBackToState, which now warns when it clobbers a fresh
+            // save). Captured before a single assignment lands.
+            int priorHeroLevel = s.HeroLevel;
+            float priorHeroXp = s.HeroXp;
+            FlowTrace.Step("Save",
+                $"ResetToNewGame: ENTER — hero on entry level={priorHeroLevel} xp={priorHeroXp:0.#} " +
+                $"lifetime={s.HeroLifetimeXp:0.#} (about to re-seed every persisted field).");
             // PET-ACQUISITION REWORK (owner 2026-06-13): a New Game starts with NO pet —
             // the pet is acquired ONLY from the Echo Hollow pet-shop (PetHouse Yarn node →
             // <<spawn_named_pet>> → PetAcquisitionService.Acquire), never pre-granted. So a
@@ -1127,9 +1170,41 @@ namespace DeNelle.Core.State
             s.Zones = null;
             EnsureZoneGraph(s);
             ClearEquipPrefs();                                // WO-860 Part A1 — see below.
+            ClearProgressionPrefs();                          // WO-1220 — see below.
             // NOTE: BoundWallet, BreachStyle and every social field are deliberately
             // left untouched — preferences and identity survive a New Game.
             s.SchemaVersion = SaveSchema.CurrentVersion;
+
+            // WO-1220 — the save is only half the progression. Tell the LIVE runtime
+            // singletons (HeroProgression / WisdomCurrencyService / SkillSystem) that this
+            // is a New Game so they drop the previous run's in-memory state, BEFORE the
+            // notify tail and BEFORE Save() — so anything a subscriber writes back lands in
+            // the snapshot this call persists rather than in the NEXT one.
+            // Guard.TryEach is not usable on a raw multicast delegate, so the invoke is
+            // wrapped: one throwing subscriber must never abort the rest of the reset, and
+            // it must never fail silently either (§12).
+            var newGame = NewGameStarted;
+            if (newGame != null)
+            {
+                foreach (var handler in newGame.GetInvocationList())
+                {
+                    try { ((Action)handler).Invoke(); }
+                    catch (Exception ex)
+                    {
+                        FlowTrace.Fail("Save",
+                            $"ResetToNewGame: a NewGameStarted subscriber THREW " +
+                            $"({handler.Method?.DeclaringType?.Name}.{handler.Method?.Name}) — that " +
+                            $"system KEPT the previous run's in-memory progression. " +
+                            $"{ex.GetType().Name}: {ex.Message}");
+                    }
+                }
+            }
+
+            FlowTrace.Step("Save",
+                $"ResetToNewGame: EXIT — hero level {priorHeroLevel}->{s.HeroLevel} " +
+                $"xp {priorHeroXp:0.#}->{s.HeroXp:0.#}; notified " +
+                $"{(newGame == null ? 0 : newGame.GetInvocationList().Length)} live progression " +
+                "subscriber(s). Anything that reads level>1 after this line re-introduced it.");
 
             StateReplaced.Invoke();
             Save();
@@ -1186,6 +1261,60 @@ namespace DeNelle.Core.State
                 "(dotr-equip-* + dotr-loadout-* + dotr-skillbar-*) - a new game starts on the class " +
                 "STARTER loadout, never an old equip and never another hero's hot-swap bar.");
         }
+
+        /// <summary>
+        /// WO-1220 — New Game must not inherit the old hero's TALENTS.
+        ///
+        /// THE BUG THIS FIXES (owner felt-test 2026-08-26): a brand-new Ranger came up with a
+        /// level-4 Mage's talent applied — <c>[Flow:HeroTalents] Aether Bond applied: +20 % mana
+        /// regen (shared.n5)</c> — and a talent HP bonus of +35 on a hero that had never spent a
+        /// point. Wisdom and the unlocked talent-node ids are persisted OUTSIDE the save
+        /// envelope, in WisdomCurrencyService's own PlayerPrefs blob
+        /// (<c>dotr-talents-v1</c>: <c>{ Wisdom, Unlocked[] }</c>), for the reason its header
+        /// states — "we deliberately keep state local to this service rather than extending
+        /// GameState". ResetToNewGame re-seeded ~60 GameState fields and never touched that key,
+        /// so every New Game re-read the previous run's talents. Node ids are hero-prefixed but
+        /// the POOL is shared, and <c>shared.*</c> nodes are not hero-prefixed at all — which is
+        /// why the carryover crossed classes rather than staying with the Mage.
+        ///
+        /// This is the SAME defect shape as <see cref="ClearEquipPrefs"/> (WO-860 A1) and the
+        /// hot-swap bar (WO-1019): a second persistence store that the one reset never learned
+        /// about. Deleting the key is the half that survives an app restart; the
+        /// <see cref="NewGameStarted"/> event is the half that reaches the LIVE
+        /// DontDestroyOnLoad service, which is holding the same values in memory and would
+        /// otherwise write them straight back out.
+        ///
+        /// DeleteKey on an absent key is a documented no-op, so this is safe + idempotent.
+        /// </summary>
+        private static void ClearProgressionPrefs()
+        {
+            int deleted = 0;
+            foreach (var key in ProgressionPrefKeys)
+            {
+                if (PlayerPrefs.HasKey(key)) { PlayerPrefs.DeleteKey(key); deleted++; }
+            }
+            PlayerPrefs.Save();
+            FlowTrace.Step("Save",
+                $"ResetToNewGame: cleared {deleted} of {ProgressionPrefKeys.Length} stale talent/Wisdom " +
+                "PlayerPrefs key(s) (dotr-talents-v1) - a new game starts with ZERO Wisdom and ZERO " +
+                "unlocked talent nodes, never the previous hero's tree.");
+        }
+
+        /// <summary>
+        /// WO-1220 — the progression stores that live OUTSIDE the save envelope and must be
+        /// erased by a New Game. Named here so the reset and its regression read the SAME list
+        /// (a key restated in a second place is this repo's most repeated defect).
+        /// <c>dotr-talents-v1</c> is WisdomCurrencyService's blob (Wisdom + unlocked node ids).
+        /// </summary>
+        public static readonly string[] ProgressionPrefKeys = { TalentPrefKey };
+
+        /// <summary>
+        /// WO-1220 — the ONE authority for WisdomCurrencyService's PlayerPrefs key. The service
+        /// itself (DeNelle.Village.Talents) now reads it from here rather than declaring its own
+        /// copy: the reset and the store must never be able to drift onto two different keys,
+        /// which is exactly how this store stayed invisible to the reset for so long.
+        /// </summary>
+        public const string TalentPrefKey = "dotr-talents-v1";
 
         // =====================================================================
         //  Backend Delta Sync — JSON + Neon (Mobile-Optimised)

@@ -49,7 +49,7 @@ namespace DeNelle.Core.Progression
         // LevelUpSkillPopup. All backing fields are [SerializeField] private with
         // public getters (DEF-77 CP1 Issue 4).
         [SerializeField] private int _gatheringSpeed  = 0;
-        [SerializeField] private int _availablePoints = 2;   // Decision 2: new-player gift (tunable)
+        [SerializeField] private int _availablePoints = NewPlayerPointGift;   // Decision 2: new-player gift (tunable)
 
         public int GatheringSpeed  => _gatheringSpeed;
         public int AvailablePoints => _availablePoints;
@@ -73,9 +73,46 @@ namespace DeNelle.Core.Progression
         {
             if (Instance != null && Instance != this) { Destroy(gameObject); return; }
             Instance = this;
+            // WO-1220 — this singleton is DontDestroyOnLoad and persists NOTHING, so its
+            // levels and banked points survive a New Game for as long as the process lives.
+            // That is also what makes it the cleanest proof of the defect: skill points that
+            // reappear on a "new game" can only have come from memory.
+            DeNelle.Core.State.GameStateService.NewGameStarted += ResetForNewGame;
         }
 
-        private void OnDestroy() { if (Instance == this) Instance = null; }
+        private void OnDestroy()
+        {
+            if (Instance == this) Instance = null;
+            DeNelle.Core.State.GameStateService.NewGameStarted -= ResetForNewGame;   // WO-1220 — static event: never leak.
+        }
+
+        /// <summary>
+        /// WO-1220 — restores the authored FIRST-LAUNCH values: every craft skill back to 0
+        /// (Owner Decision 2, 2026-05-27) and the banked points back to the new-player gift of
+        /// 2. This is the state a freshly-constructed SkillSystem holds, not an arbitrary zero
+        /// — a New Game that handed the player 0 points would be a harsher start than a cold
+        /// launch, and one that kept the old total is the bug this closes.
+        /// </summary>
+        public void ResetForNewGame()
+        {
+            DeNelle.Core.Diagnostics.FlowTrace.Step("HeroXp",
+                $"SkillSystem.ResetForNewGame: dropping banked points {_availablePoints}->{NewPlayerPointGift} " +
+                $"and skills (bs={_blacksmithLevel} wood={_woodworkingLevel} arcane={_arcaneLevel} " +
+                $"gather={_gatheringSpeed}) to the first-launch baseline — this singleton is " +
+                "DontDestroyOnLoad and persists nothing, so nothing else would have cleared it.");
+            _blacksmithLevel = 0;
+            _woodworkingLevel = 0;
+            _arcaneLevel = 0;
+            _gatheringSpeed = 0;
+            _availablePoints = NewPlayerPointGift;
+            OnSkillsChanged?.Invoke();
+        }
+
+        /// <summary>
+        /// The new-player skill-point gift (Decision 2). Named so the field initializer and
+        /// <see cref="ResetForNewGame"/> can never drift onto two different numbers.
+        /// </summary>
+        public const int NewPlayerPointGift = 2;
 
         /// <summary>
         /// True when the requirement is satisfied: no requirement (type == None) or

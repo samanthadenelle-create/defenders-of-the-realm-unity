@@ -96,6 +96,21 @@ namespace DeNelle.Dungeons
                 return;
             }
             FlowTrace.Step(Sys, $"hero resolved as '{heroGo.name}' (scene='{heroGo.scene.name}') - carried hero wins the dedupe when GoDungeonScene armed the WO-1112 carry.");
+
+            // WO-1222 -- THE PLACEMENT ASSERTION THE COMPOSED PIPELINE NEVER HAD.
+            // The hand-built pipeline teleports its Keeper every Begin() (DungeonController.
+            // PlaceHero); a composed scene has no DungeonController, so until this line NOTHING
+            // in the composed path ever checked where the carried hero actually ended up. It is
+            // deliberately an OUTCOME check rather than a placement call: the hero root is DDOL
+            // and other DDOL systems write that same transform -- on 2026-08-26 the owner entered
+            // dg_healers_cottage standing at (5000, 0, 4991), which is BattleArena's staged hero
+            // stance to the centimetre, and the black screen was the camera honestly following a
+            // hero parked ~7km away in an arena staging area. One authority, both pipelines:
+            // DungeonHeroSeat. It stands down while a real staged battle owns the hero, so the
+            // seat is re-checked by the watchdog below once that fight resolves.
+            DungeonHeroSeat.VerifyArrival(heroGo, gameObject.scene, null, 0f, "composed");
+            StartCoroutine(SeatWatchdog(heroGo));
+
             DungeonCandleVfxInstaller.Rebind(gameObject.scene, heroGo.transform);
 
             // Collect baked oil stones (planar refill, same contract as cottage).
@@ -158,6 +173,78 @@ namespace DeNelle.Dungeons
                 FlowTrace.Step(Sys,
                     $"pillars present in '{gameObject.scene.name}': stairPorts={ports} lockedPorts={locks} " +
                     $"keys={keys} traps={traps} oilStones={stones.Count}");
+            }
+        }
+
+        /// <summary>
+        /// WO-1222 — THE STANDING NET, not just an entry check.
+        /// <para>
+        /// The entry assertion above proves the ARRIVAL. It cannot prove the next thirty seconds:
+        /// the hero root is DontDestroyOnLoad and so is BattleArena, whose staged stance sits ~7km
+        /// out at (5000, 0, 5000) — a fight that stages and then leaves the hero there (an
+        /// orphaned encounter, a return warp that never lands) puts the player back on a black
+        /// screen with a working joystick, at 60 fps, with nothing thrown. That state is
+        /// unrecoverable by the player and must never be silent.
+        /// </para>
+        /// <para>
+        /// So: while a staged battle is live, this stands down completely — the arena legitimately
+        /// owns the hero. Only when the hero is inside the arena footprint with NO battle running,
+        /// for a sustained window, does it call the one authority. The window is what keeps a
+        /// legitimate mid-warp frame (the arena's own stage-in / return hops pass through) from
+        /// tripping it, exactly as BattleArena's own out-of-arena grace does.
+        /// </para>
+        /// </summary>
+        private IEnumerator SeatWatchdog(GameObject heroGo)
+        {
+            const float PollSeconds = 0.5f;
+            const float StrandedGraceSeconds = 3f;
+            var wait = new WaitForSecondsRealtime(PollSeconds);
+            float stranded = 0f;
+            FlowTrace.Step(Sys,
+                $"seat watchdog ARMED on '{gameObject.scene.name}' - a hero left inside the staged arena with no live " +
+                $"battle for {StrandedGraceSeconds:0}s is corrected by DungeonHeroSeat and reported, never left silent.");
+
+            while (true)
+            {
+                yield return wait;
+                if (heroGo == null)
+                {
+                    FlowTrace.Step(Sys, "seat watchdog STOPPED - the hero object is gone (scene teardown or hero swap).");
+                    yield break;
+                }
+                if (DeNelle.Village.Arena.BattleArena.AnyBattleInProgress)
+                {
+                    stranded = 0f;   // the arena owns the hero; nothing here is a fault
+                    continue;
+                }
+                if (!DeNelle.Village.Arena.BattleArena.IsArenaPosition(heroGo.transform.position))
+                {
+                    stranded = 0f;
+                    continue;
+                }
+
+                stranded += PollSeconds;
+                if (stranded < StrandedGraceSeconds) continue;
+
+                FlowTrace.Fail(Sys,
+                    $"seat watchdog FIRED: hero has been inside BattleArena's staged arena at {heroGo.transform.position} " +
+                    $"for {stranded:0.0}s in composed scene '{gameObject.scene.name}' with NO battle running. That is the " +
+                    "black-screen state - the camera follows the hero honestly and there is nothing there to draw. " +
+                    "Handing it to the one placement authority.");
+                var verdict = DungeonHeroSeat.VerifyArrival(heroGo, gameObject.scene, null, 0f, "composed/watchdog");
+                stranded = 0f;
+
+                // A net that cannot fix the thing it found must not become a per-3s log firehose:
+                // say so ONCE, plainly, and stop. The Fail above is already in the break-log, and a
+                // repeating line would bury it under copies of itself.
+                if (!verdict.Corrected && !verdict.DeferredToBattle)
+                {
+                    FlowTrace.Fail(Sys,
+                        $"seat watchdog STANDING DOWN in '{gameObject.scene.name}': the hero is in the arena and this scene " +
+                        $"offers no seat to correct it to ({verdict.Detail}). The run is unplayable and no further correction " +
+                        "is possible from here - re-bake the dungeon so it carries a '" + DungeonHeroSeat.ArrivalMarkerName + "'.");
+                    yield break;
+                }
             }
         }
 

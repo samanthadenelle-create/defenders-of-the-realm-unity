@@ -26,7 +26,8 @@ namespace DeNelle.Editor
 {
     public static class HeroPortraitRenderer
     {
-        private const string ResourcesDir = "Assets/_Modules/Onboarding/Resources/HeroPortraits";
+        // WO-1234: the ONE declaration lives in DeNelle.Core.HeroPortraitPaths.
+        private const string ResourcesDir = DeNelle.Core.HeroPortraitPaths.AuthoringFolder;
         private const int PortraitWidth = 512;
         private const int PortraitHeight = 700;
 
@@ -140,7 +141,7 @@ namespace DeNelle.Editor
             Debug.Log("[HeroPortraitRenderer] Wrote " + outPath + " (" + pngBytes.Length + " bytes)");
 
             // Remove any stale opaque .jpg of the same slug — HeroSelectController
-            // loads the portrait by name (Resources.Load("HeroPortraits/<slug>")),
+            // loads the portrait by name (HeroPortraitPaths.ResourceKey(slug)),
             // so a leftover knight.jpg/ranger.jpg alongside the new .png makes the
             // load ambiguous and can win over the transparent .png.
             string slug = Path.GetFileNameWithoutExtension(pngName);

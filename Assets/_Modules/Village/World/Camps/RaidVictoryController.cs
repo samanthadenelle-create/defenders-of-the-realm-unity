@@ -378,6 +378,18 @@ namespace DeNelle.Village.World.Camps
 
         private void GrantLoot(ResourceCost loot)
         {
+            // WO-1227 §12 — THIS is the raid's whole resource payout. Owner ruling 2026-08-26:
+            // "raids only pay at end of raid". Its counterpart is the per-kill suppression trace
+            // in Enemy's death grant ("KILL MATERIALS SUPPRESSED (raid active)"), and the two
+            // lines are meant to be read together: N suppressed kills followed by exactly ONE of
+            // these is the ruling working. Logged BEFORE the zero-check so a raid that pays
+            // NOTHING still says so — a silent nothing is what a suppressed faucet looks like.
+            DeNelle.Core.Diagnostics.FlowTrace.Step("Reward",
+                $"RAID END PAYOUT (the ONE raid grant, WO-1227) crystals={loot.Crystals} " +
+                $"food={loot.Food} wood={loot.Wood} iron={loot.Iron} coins={loot.Coins} " +
+                $"zero={loot.IsZero} - per-kill materials were withheld for the whole raid on " +
+                "purpose; this grant is the payout.");
+
             if (loot.IsZero) return;
 
             _crystalsCredited = 0; _foodCredited = 0; _rewardShort = false;

@@ -20,6 +20,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
 using DeNelle.Core.Diagnostics;
+using DeNelle.Core.UI;   // WO-1219: HudLayoutBands owns the left-column geometry
 
 namespace DeNelle.HUD.Kit
 {
@@ -95,7 +96,10 @@ namespace DeNelle.HUD.Kit
             Group = gameObject.AddComponent<CanvasGroup>();
 
             // A4 area geometry (reference-fraction anchors; hostile HIGH, friendly LOW/thumbs).
-            Add(HudArea.Vitals,      new Vector2(0.010f, 0.800f), new Vector2(0.330f, 0.985f));
+            // WO-1219: the Vitals mount spans the hero plate AND the SKILL chip band
+            // beneath it; the two are exclusive sub-rects (HudLayoutBands.HeroPlateInVitals /
+            // SkillChipInVitals), never one shared box.
+            Add(HudArea.Vitals,      HudLayoutBands.VitalsMount);
             Add(HudArea.Status,      new Vector2(0.340f, 0.845f), new Vector2(0.660f, 0.990f));
             Add(HudArea.System,      new Vector2(0.845f, 0.880f), new Vector2(0.995f, 0.985f));
             Add(HudArea.TargetInfo,  new Vector2(0.280f, 0.660f), new Vector2(0.720f, 0.840f));
@@ -106,18 +110,18 @@ namespace DeNelle.HUD.Kit
             // face near the previous 6-face touch size at the constant per-button width.
             Add(HudArea.ActionBar,   new Vector2(0.270f, 0.015f), new Vector2(0.730f, 0.150f));
             Add(HudArea.MoveCluster, new Vector2(0.010f, 0.030f), new Vector2(0.270f, 0.330f));
-            // WO-1219: the Dock band now abuts the Minimap band exactly (0.440) instead of
-            // stopping 0.010 short of it. It hosts a FIXED-PIXEL 112 px control row (gear +
-            // Store, side by side since WO-1219 - see BuildSlideDock for the full band
-            // arithmetic), and at 2670x1200 the old 0.330..0.430 band resolved to ~96.5
-            // reference units: SHORTER than the one row it has to hold. It is still shorter
-            // than 112 at this aspect - a fraction band cannot promise a pixel height - but
-            // the extra 0.010 buys ~9.6 units of the shortfall back and, with the row no longer
-            // stacked, the residual overhang clears the minimap plate above and the analog
-            // stick below. Do not shrink this band again.
-            Add(HudArea.Dock,        new Vector2(0.000f, 0.330f), new Vector2(0.230f, 0.440f));
-            // Heart of Elarion status: left column, directly BELOW the Vitals cluster (WO-432).
-            Add(HudArea.HeartStatus, new Vector2(0.010f, 0.700f), new Vector2(0.330f, 0.792f));
+            // ⭐ WO-1219 - THE LEFT COLUMN IS NO LONGER AUTHORED HERE.
+            // Vitals / HeartStatus / Minimap / Dock are read from DeNelle.Core.UI.HudLayoutBands,
+            // the ONE table that owns the whole column (hero plate -> SKILL chip -> Heart bar ->
+            // minimap -> status line -> gear + Store). Four files used to place seven things into
+            // one strip with nobody owning the sum, which is exactly how the gear/Store row came to
+            // sit on the minimap's lower edge and the region status line came to read out from
+            // UNDER the gear (tmp/screen-103219.png + tmp/shield-seat-101829.png, both 2670x1200).
+            // HudUiRegression check 8 resolves the same table and FAILS the build if any two bands
+            // intersect at the owner's resolution, so the collision is a red gate now, not a
+            // felt-test report. ⛔ Do not hardcode a left-column rect here again.
+            Add(HudArea.Dock,        HudLayoutBands.DockMount);
+            Add(HudArea.HeartStatus, HudLayoutBands.HeartMount);
             // WO-778: Builders/Training chip — right column, below System (.88), above the
             // ActionRail top (.42); the only occupant of this free band (no collision).
             // WO-864 (2026-08-03): the occupant is now a MinTouchPx summary button over a
@@ -126,17 +130,12 @@ namespace DeNelle.HUD.Kit
             // 2340x1080). Nothing inside is a fraction of the band any more, so leftover
             // height is transparent rather than the old full-height dark rows plate that
             // reserved five rows to show one job. Still clear of ActionRail (tops 0.420).
+            // (RIGHT column - deliberately not in HudLayoutBands, which owns the LEFT one.)
             Add(HudArea.QueueStatus, new Vector2(0.780f, 0.530f), new Vector2(0.995f, 0.865f));
-            // WO-828: the minimap plate — the LEFT column's one free band, boxed in by the
-            // Dock above nothing (Dock tops at 0.430) and HeartStatus below it (bottoms at
-            // 0.700). Deliberately on the OPPOSITE side of the screen from the compass
-            // (top-centre Status) so the two navigation reads never crowd each other, and
-            // clear of the MoveCluster thumb arc (tops at 0.330) so the map is never under
-            // the moving thumb. At 2340x1080 this band resolves to roughly 678 x 244
-            // reference units; HudMinimapWidget draws a FIXED 200x200 square hanging from
-            // its top-left plus a ~30-unit region chip, so it fits with room to spare and
-            // stays square on every aspect (a fraction-sized square would not).
-            Add(HudArea.Minimap,     new Vector2(0.010f, 0.440f), new Vector2(0.330f, 0.690f));
+            // The Minimap mount now carries TWO exclusive bands: the square plate hanging from its
+            // top-left, and the region STATUS LINE in its own band immediately below the plate -
+            // never across it, never beside it competing with the Dock row.
+            Add(HudArea.Minimap,     HudLayoutBands.MinimapMount);
             Add(HudArea.Feedback,    Vector2.zero,                Vector2.one);
 
             // Feedback overlay never eats taps (stamps/toasts are decorative).
@@ -144,6 +143,12 @@ namespace DeNelle.HUD.Kit
             if (fb != null) fb.SetAsLastSibling();
 
             FlowTrace.Step("HudKit", "HudAreasHost built: 9 area mounts on one canvas (scaffolding only)");
+        }
+
+        /// <summary>WO-1219: mount an area straight from an authored band rect.</summary>
+        private void Add(HudArea area, Rect band)
+        {
+            Add(area, new Vector2(band.xMin, band.yMin), new Vector2(band.xMax, band.yMax));
         }
 
         private void Add(HudArea area, Vector2 anchorMin, Vector2 anchorMax)

@@ -45,6 +45,37 @@ namespace DeNelle.Village
         public static RaidScoring Instance { get; private set; }
 
         /// <summary>
+        /// WO-1227 — THE ONE "am I inside a raid" ANSWER. Owner ruling 2026-08-26, verbatim:
+        /// <i>"raids only pay at end of raid"</i>.
+        /// <para>A raid pays ONCE, through <see cref="RaidVictoryController"/>'s
+        /// <c>ComputeLoot</c> grant. So the WO-1216 per-kill MATERIAL faucet must not run while a
+        /// raid is live, or the player banks wood/iron/stone twice — once per defender their
+        /// troops kill, and again at the summary.</para>
+        /// <para>This is deliberately the SCORER's own lifetime and not a new flag: the scorer
+        /// self-installs into (and only into) a <c>RaidBase_*</c> scene and nulls itself in
+        /// <c>OnDestroy</c>, so its existence already IS "a raid is running" — every other raid
+        /// system (HUD clock, victory payout, army reconcile) already reads it as exactly that.
+        /// Inventing a second flag is how two answers to one question drift apart.</para>
+        /// <para>It stays TRUE after <see cref="Finalized"/> on purpose: the victory screen is up
+        /// and the player is still standing in the enemy base, and a mop-up kill during the
+        /// summary is still a raid kill.</para>
+        /// <para>The scene test is a FALLBACK, not the definition — it covers a raid scene where
+        /// the scorer failed to install (the scorer warns loudly when that happens). It can only
+        /// ever fire in a <c>RaidBase_*</c> scene, so open-world / wave / dungeon kills are
+        /// untouched by it: <c>HubScenes.IsRaid</c> is the same single naming authority the HUD
+        /// and the deploy controller read.</para>
+        /// </summary>
+        public static bool RaidInProgress
+        {
+            get
+            {
+                if (Instance != null) return true;
+                return DeNelle.Core.HubScenes.IsRaid(
+                    UnityEngine.SceneManagement.SceneManager.GetActiveScene().name);
+            }
+        }
+
+        /// <summary>
         /// The LIVE raid clock default (seconds). Selection/deploy UI must display this
         /// (or the authored config time only when it matches) — never a longer "target"
         /// that scoring does not use (honesty pass 2026-08-09).

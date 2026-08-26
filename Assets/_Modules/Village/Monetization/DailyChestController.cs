@@ -356,6 +356,21 @@ namespace DeNelle.Village.Monetization
             // the sentence carries the whole message. Default 480x76 card holds ~2 lines.
             ElarionUiKit.ShowToast(msg, ElarionUiKit.ToastTone.Info, 3.2f, 720);
             FlowTrace.Step("DailyChest", "claim toast path=" + path + " -> '" + msg + "'");
+
+            // WO-1225 -- ADDITIVE. Everything above is WO-1213 and is untouched: the grant, the
+            // canon sentence, the toast and its trace all still run exactly as committed. The
+            // toast simply is not ENOUGH: on 2026-08-26 it fired correctly and EchoUnlockDialogue
+            // opened over it 3 ms later (sortingOrder 31020 + a full-screen scrim, vs the toast's
+            // 720), so a provably-correct grant read to the owner as nothing happening.
+            //
+            // This raise adds a SECOND, un-occludable acknowledgement anchored to the persistent
+            // gold chip (owner ruling: "can it show streamers and +1000 showing to gold? counting
+            // up animation?"). It renders NOTHING here and passes no number to the screen: `gold`
+            // travels only as the shortfall oracle. HudKitController waits for the wallet's own
+            // push and animates to the MEASURED balance -- so if this grant were ever clamped or
+            // refused, the player would see the true, smaller number and the log would carry a
+            // SHORTFALL warn.
+            RewardCelebration.Raise("Gold", gold, "daily.chest." + path);
         }
 
         private void SetStatus(string text)

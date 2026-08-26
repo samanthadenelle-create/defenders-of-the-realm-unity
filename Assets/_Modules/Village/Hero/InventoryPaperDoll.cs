@@ -120,7 +120,7 @@ namespace DeNelle.Village
         }
 
         // WO-573 — load the active hero's portrait art for the frame's medallion socket. The
-        // portraits in Resources/HeroPortraits are imported as DEFAULT textures (spriteMode:0),
+        // portraits under HeroPortraitPaths.ResourcesFolder are imported as DEFAULT textures (spriteMode:0),
         // so Resources.Load<Sprite> returns NULL — we try Sprite first (future-proof if the
         // import flips) then load the Texture2D and wrap it in a Sprite. Returns null when no
         // art exists for the class (caller shows a crest).
@@ -129,16 +129,18 @@ namespace DeNelle.Village
             string slug = PortraitSlug(job);
             if (string.IsNullOrEmpty(slug)) return null;
 
-            var sp = Resources.Load<Sprite>("HeroPortraits/" + slug);
+            // WO-1234: folder from the ONE constant, never re-typed here.
+            string key = DeNelle.Core.HeroPortraitPaths.ResourceKey(slug);
+            var sp = Resources.Load<Sprite>(key);
             if (sp != null) return sp;
 
-            var tex = Resources.Load<Texture2D>("HeroPortraits/" + slug);
+            var tex = Resources.Load<Texture2D>(key);
             if (tex != null)
                 return Sprite.Create(tex, new Rect(0f, 0f, tex.width, tex.height),
                                      new Vector2(0.5f, 0.5f), 100f);
 
             FlowTrace.Warn("Inventory",
-                $"LoadHeroPortrait: no Resources/HeroPortraits/{slug} sprite or texture for job '{job}' — using class-crest placeholder.");
+                $"LoadHeroPortrait: no Resources/{key} sprite or texture for job '{job}' — using class-crest placeholder.");
             return null;
         }
 

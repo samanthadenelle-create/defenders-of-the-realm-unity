@@ -498,6 +498,17 @@ namespace DeNelle.Village.Hud
             if (sig == _sig) return;
             _sig = sig;
             _hadTarget = true;
+
+            // WO-1232 (CLAUDE.md S12): NAME THE SOURCE of the level the player is about to read,
+            // so the next "why does it say Lv 68" is one log read instead of a felt-test. The line
+            // fires only when the target signature CHANGES (sig-gated above), never per frame.
+            // Enemy.Level is the authored per-def band; maxHp is printed beside it precisely so a
+            // future regression back to an HP-derived level is visible as the two moving together.
+            DeNelle.Core.Diagnostics.FlowTrace.Step("HudTarget",
+                $"target level resolved: Lv {level} from Enemy.Level (authored def band, def='{en.EnemyDefId}') " +
+                $"— NOT maxHp-derived (runtime maxHp={maxHp}); playerLevel={playerLevel}, " +
+                $"delta={level - playerLevel}, threatTier={threatTier} " +
+                $"(risky>={ThreatSkullPlate.RiskyDelta}, lethal>={ThreatSkullPlate.LethalDelta}).");
             Model.Target.Set(true, name, level, hp, maxHp, frac, ToHudRole(role), locked);
         }
     }

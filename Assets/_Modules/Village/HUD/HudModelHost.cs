@@ -218,13 +218,12 @@ namespace DeNelle.Village.Hud
             }
         }
 
-        // Derive a readable LEVEL stub from the enemy's max HP (Enemy exposes no Level).
-        // Mirrors BattleHud9Zone.EnemyLevelStub so the two read the same value.
-        protected static int EnemyLevelStub(Enemy e)
-        {
-            if (e == null) return 1;
-            float maxHp = e.MaxHp > 0.001f ? e.MaxHp : e.Hp;
-            return Mathf.Max(1, Mathf.RoundToInt(maxHp / 25f));
-        }
+        // WO-1232: EnemyLevelStub is DELETED, not repaired. It derived a "level" from the
+        // RUNTIME maxHp (round-to-int of the runtime maxHp over 25) — the heuristic WO-611 F3 retired when
+        // Enemy.Level landed — so it crept upward every wave as scaling inflated HP (a wave-7
+        // enemy at 1700 HP read as "Lv 68" beside a Lv 5 hero). There is exactly ONE authored
+        // level and it is Enemy.Level; read that. It had no callers left, so nothing replaces
+        // it here — a stub reintroduced in any form is the same defect returning.
+        // See HudModelProducers.TargetProducer (en.Level) and ThreatSkullPlate.EnemyThreatLevel.
     }
 }

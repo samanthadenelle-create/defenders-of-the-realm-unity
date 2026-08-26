@@ -35,6 +35,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Globalization;   // WO-1225: N0 grouping on the measured reward delta
 using UnityEngine;
 using UnityEngine.SceneManagement;   // heartStatus scene gate (see ApplyHeartSceneGate)
 using UnityEngine.UI;
@@ -100,6 +101,35 @@ namespace DeNelle.HUD.Kit
         private const float XpGainHoldSeconds  = 1.6f;       // readable hold before the fade
         private const float XpGainFadeSeconds  = 0.45f;      // fade-out duration
         private const float XpFlashSeconds     = 0.35f;      // strip brighten duration
+
+        // ── WO-1225 — the gold acknowledgement that a modal cannot occlude ────────────────
+        // WO-1213 proved its toast fired and the owner still saw nothing: EchoUnlockDialogue
+        // opened 3 ms later at sortingOrder 31020 behind a full-screen scrim, over a toast at
+        // 720. Owner ruling 2026-08-26: "can it show streamers and +1000 showing to gold?
+        // counting up animation?" -- so the acknowledgement moves onto the persistent gold chip.
+        //
+        // ⛔ THE COUNT-UP MUST NOT LIE. Nothing here ever renders the amount the grant path
+        // ASKED for. A raise merely ARMS a window; the number shown is the MEASURED delta
+        // between two EconomyModel pushes, and the count runs to the MEASURED post-grant
+        // balance. Same discipline as NoteXpGain above, and as Enemy.cs's rolled-vs-credited
+        // kill grant: a shortfall WARNS and shows the smaller, true number.
+        private bool  _goldPrevValid;                        // an economy baseline has been captured
+        private long  _goldPrev;                             // last MEASURED balance pushed by the model
+        private bool  _goldCelebrateArmed;                   // a raise is waiting for its wallet push
+        private float _goldCelebrateUntil;                   // unscaled time the armed window expires
+        private long  _goldCelebrateRequested;               // ORACLE ONLY -- never rendered
+        private string _goldCelebrateReason = "";
+        private Vector2 _goldCelebrateOrigin;                // screen point the headline flies from
+        // The LOOK-BACK half: the grant path credits the wallet BEFORE it raises, and the economy
+        // push is synchronous, so the measured move is usually already behind us when the raise
+        // lands. These record the last measured gain so it can still be acknowledged.
+        private long  _goldLastGainFrom, _goldLastGainTo, _goldLastGainDelta;
+        private float _goldLastGainTime;
+        private bool  _goldLastGainConsumed = true;              // nothing to acknowledge at boot
+        private const float GoldCelebrateWindowSeconds   = 2.5f; // grant push must arrive inside this
+        private const float GoldCelebrateLookbackSeconds = 1.5f; // ...or have landed this recently
+        private const float GoldCelebrateCountSeconds    = 1.15f;// chip count matches the readout's
+
         private ElarionUiKit.CurrencyChipHandle _wisdomChip;
         private ElarionUiKit.PartyNameplateHandle _heartPlate;   // WO-432: Heart of Elarion on the shared plate
         private ElarionUiKit.TargetFrameHandle _targetFrame;
@@ -126,6 +156,7 @@ namespace DeNelle.HUD.Kit
         private TMP_Text[] _cappedResourceValues;                 // Wood / Iron / Stone current of capacity
         private ElarionUiKit.CurrencyChipHandle _resGoldOnly;     // collapsed variant
         private GameObject _resExpandedRow;
+        private TMP_Text _resHintLabel;   // WO-1221: the collapsed chip's "+N more" hint
         private GameObject _resDock;        // WO-440: right-edge tab + collapsible chips container
         private bool _resPanelOpen;         // WO-440: town collapse state (collapsed by default)
         private Button _fleeButton, _startWaveButton;
@@ -215,7 +246,23 @@ namespace DeNelle.HUD.Kit
         private readonly List<Action> _unsubscribe = new List<Action>();
 
         private bool _startWaveAvailable;
-        private float _chipsExpandUntil;   // collapsed chips: tap-expand window
+
+        // ⭐ WO-1221 - THE RAIL IS A TOGGLE, NOT A TIMED PEEK (owner ruling 2026-08-26).
+        // It used to be `float _chipsExpandUntil` - a tap set `Time.unscaledTime + 6f` and the
+        // rail closed itself six seconds later. That timer was never ruled; it was simply what
+        // WO-440 happened to build, and a player checking whether she can afford something is
+        // very often slower than six seconds. The owner ruled it OUT explicitly: tap the gold
+        // chip -> the rail opens and STAYS open; tap again -> it closes.
+        // ⛔ Do not reintroduce a duration here. The rail still closes itself when its OPENER
+        // goes away (build / modal / battle occupancy) - see the LateTick gate - which is the
+        // WO-1205 invariant "the panel can never outlive its opener" and is a different rule.
+        private bool _resChipsExpanded;
+
+        // WO-1221 — post-expand MEASURED verify (see TickResourceExpandVerify).
+        // Frames remaining in the settle poll. WO-976's travelling rule: measure AFTER layout
+        // settles, and POLL — do not guess a frame count. The observed ceiling elsewhere is 8.
+        private const int ResExpandVerifyMaxFrames = 8;
+        private int _resExpandVerifyFrames;
 
         // heartStatus scene gate (ApplyHeartSceneGate): the hub test is cached per ACTIVE
         // SCENE (Scene.name allocates a string, and the gate runs on every occupancy apply
@@ -394,9 +441,13 @@ namespace DeNelle.HUD.Kit
             if (mount == null) return null;
             var parts = ElarionUiKit.ToastCard(mount, tone, accentLeft: true, align: TextAnchor.MiddleCenter);
             var rt = (RectTransform)parts.card.transform;
-            rt.anchorMin = new Vector2(0.28f, 0.90f);
-            rt.anchorMax = new Vector2(0.72f, 0.97f);
-            rt.offsetMin = Vector2.zero; rt.offsetMax = Vector2.zero;
+            // ⭐ WO-1219 - THE ONE RESERVED TOAST ZONE, centred above the action bar.
+            // Every transient toast on this screen lands here, whichever module raised it, so a
+            // toast can never again be authored against a corner whose contents its own module
+            // cannot see (that is how the Repair All card came to sit on the minimap, the region
+            // status line AND the gear at once - tmp/shield-seat-101829.png). The seat is DATA
+            // now: HudLayoutBands.ToastZone, shared with DeNelle.Village and DeNelle.Dungeons.
+            HudLayoutBands.ApplyToastZone(rt);
             parts.label.text = text ?? "";
             Destroy(parts.card, lifetime);
             FlowTrace.Step("HudKit", "toast: " + text);
@@ -415,8 +466,14 @@ namespace DeNelle.HUD.Kit
             // withXpStrip (owner 07-06): thin gold XP-to-next-level strip under HP/MP, built on
             // the SHARED plate path so it renders in BOTH CombatHud611 flag states (a vitals
             // fact, not combat chrome). Bound from HeroVitalsModel in OnVitals.
+            // WO-1219: the plate's seat inside the Vitals mount is authored ONCE, in
+            // HudLayoutBands (the left column's one owner) - it is no longer a magic 0.35f here.
+            // The mount now spans the plate band AND the SKILL chip band beneath it, so the two
+            // are exclusive sub-rects rather than a plate with a chip tucked under its skirt.
             _vitals = ElarionUiKit.BuildPartyNameplate(pool, "Hero",
-                new Vector2(0f, 0.35f), new Vector2(1f, 1f), withXpStrip: true);
+                new Vector2(HudLayoutBands.HeroPlateInVitals.xMin, HudLayoutBands.HeroPlateInVitals.yMin),
+                new Vector2(HudLayoutBands.HeroPlateInVitals.xMax, HudLayoutBands.HeroPlateInVitals.yMax),
+                withXpStrip: true);
             if (FeatureFlags.CombatHud611)
             {
                 // WO-611 (mockup v8): HP/MP bars RECESSED in an inset WELL inside the plate — a darker
@@ -450,8 +507,22 @@ namespace DeNelle.HUD.Kit
             // Owner F8 07-06: Wisdom = skill points; the chip's icon art is a known gap, so
             // "434" read as an unlabeled naked number. "SKILL" text tag is ALWAYS visible
             // (colorblind law: icon + TEXT, never icon-or-nothing).
+            //
+            // ⭐ WO-1219 - THE CHIP GETS WIDTH, NOT A SHORTER WORD (owner ruling, 2026-08-26).
+            // The device captured "SK... 177" (tmp/screen-103219.png): the chip's own sub-rect
+            // was 0.02..0.34 x / 0.00..0.16 y of a Vitals mount that was 0.320 x 0.185 of screen,
+            // i.e. ~220 x 29 REFERENCE units at 2670x1200 - shorter than the kit's FontFloor of
+            // 30, so the tag could not even render at the legibility floor before FitSingleLine
+            // ellipsised it. The band now comes from HudLayoutBands.SkillChipInVitals: ~243 x 50
+            // units, its OWN exclusive band under the hero plate, sized so "SKILL" (~93 units at
+            // FontMicro) and a six-digit amount both fit whole before any autoshrink.
+            // ⛔ Do not solve a truncation by shortening the authored string - a two-glyph stub in
+            // front of a number is a naked number with noise on it, which is what this tag exists
+            // to prevent.
             _wisdomChip = ElarionUiKit.CurrencyChip(pool, ElarionUiKit.CurrencyKind.Wisdom,
-                new Vector2(0.02f, 0.00f), new Vector2(0.34f, 0.16f), tag: "SKILL");
+                new Vector2(HudLayoutBands.SkillChipInVitals.xMin, HudLayoutBands.SkillChipInVitals.yMin),
+                new Vector2(HudLayoutBands.SkillChipInVitals.xMax, HudLayoutBands.SkillChipInVitals.yMax),
+                tag: "SKILL");
             Register("wisdomChip", WrapAsWidget("wisdomChip", _wisdomChip.root));
 
             // ── status: wave block (calm(town), between waves only) + heart ──
@@ -1056,6 +1127,15 @@ namespace DeNelle.HUD.Kit
         private const float ResRowHeightPx = 40f;
         private const float ResRowGapPx = 5f;
         private const float ResPanelPadPx = 10f;
+        /// <summary>WO-1221: the expanded rail hangs BELOW the collapsed gold chip, which is the
+        /// approved shape ("the gold chip stays seated, four chips slide in below it"). The panel
+        /// used to hang from yFromTopPx 0 - the very top of the dock - so once the dock was
+        /// reparented into the ActionRail mount the rail was drawn straight over the chip that
+        /// opened it. The offset is the chip's touch height plus the section gap, exactly the
+        /// "chip 112 + gap 6 + panel" arithmetic the comment above already assumed.</summary>
+        private const float ResPanelTopOffsetPx = ElarionUiKit.MinTouchPx + 6f;   // 118
+        /// <summary>WO-1221: height of the collapsed chip's "+N more" hint tag, reference px.</summary>
+        private const float ResHintHeightPx = 26f;
 
         // WO-778: the always-visible CoC-style Builders chip — busy count, tap opens
         // the WORK QUEUE. Player copy: "Builders"/"Training" — never "Obsidian".
@@ -1594,12 +1674,18 @@ namespace DeNelle.HUD.Kit
             drt.anchorMin = Vector2.zero; drt.anchorMax = Vector2.one;
             drt.offsetMin = Vector2.zero; drt.offsetMax = Vector2.zero;
 
+            // WO-1221: Crystals joins the town rail. The severity line of the ticket is "the player
+            // cannot see Wood / Iron / Stone / Crystals anywhere in town", and Crystals is the one
+            // resource with no other town readout at all. Note Crystals is UNCAPPABLE by design
+            // (TownBankCapacity.UncappableResources, owner ruling WO-901 §6), so its row is fed by
+            // the chip's own SetAmount in OnEconomy — SetCappedResourceValue early-returns on it.
+            // The word "Stone" stays paired with CurrencyKind.Food (canon §7 naming).
             var kinds = new[]
             {
                 ElarionUiKit.CurrencyKind.Wood, ElarionUiKit.CurrencyKind.Iron,
-                ElarionUiKit.CurrencyKind.Food,
+                ElarionUiKit.CurrencyKind.Food, ElarionUiKit.CurrencyKind.Crystal,
             };
-            var names = new[] { "Wood", "Iron", "Stone" };
+            var names = new[] { "Wood", "Iron", "Stone", "Crystals" };
 
             // The collapsed chip — THE shared rail chip, identical to Builders and Echoes.
 
@@ -1607,7 +1693,7 @@ namespace DeNelle.HUD.Kit
             // the chip. Fixed rows, never a fraction of the band (WO-841).
             float panelH = ResPanelPadPx * 2f + kinds.Length * ResRowHeightPx +
                            (kinds.Length - 1) * ResRowGapPx;
-            var rrt = RailBand(drt, "ResourceChips", 0f,
+            var rrt = RailBand(drt, "ResourceChips", ResPanelTopOffsetPx,
                                panelH, RailPanelWidthPx);
             _resExpandedRow = rrt.gameObject;
 
@@ -1620,7 +1706,7 @@ namespace DeNelle.HUD.Kit
             if (frameImg != null) frameImg.raycastTarget = false;
 
             _resChips = new ElarionUiKit.CurrencyChipHandle[kinds.Length];
-            _cappedResourceValues = new TMP_Text[3];
+            _cappedResourceValues = new TMP_Text[kinds.Length];   // WO-1221: was a hardcoded 3
             for (int i = 0; i < kinds.Length; i++)
             {
                 // One row = a fixed-pixel band inside a fixed-pixel panel. Display only (no
@@ -1663,13 +1749,14 @@ namespace DeNelle.HUD.Kit
             // WO-1205 (owner 2026-08-25: "only should gold till clicked then showed all",
             // "that was much more astetic"): COLLAPSED is the resting state everywhere. The
             // panel is built inert and only the tap window (see the LateTick block that polls
-            // _chipsExpandUntil) raises it. This used to be an unconditional open, which is
+            // _resChipsExpanded toggle) raises it. This used to be an unconditional open, which is
             // what made the three rows permanent furniture on the town rail.
             _resPanelOpen = false;
             _resExpandedRow.SetActive(false);
             Register("resourceChips", WrapAsWidget("resourceChips", _resDock));
 
-            // Collapsed variant (calm(explore)): gold chip only; TAP expands the row for 6s.
+            // Collapsed variant: gold chip + a "+N" hint; TAP TOGGLES the row open/shut
+            // (WO-1221 owner ruling 2026-08-26 - the old 6-second peek is retired).
             // WO-697 icon-first: the coin icon carries identity; "Gold" is the no-art
             // fallback tag only (builder-enforced — the chip is never a naked number).
             _resGoldOnly = ElarionUiKit.CurrencyChip(pool, ElarionUiKit.CurrencyKind.Gold,
@@ -1679,10 +1766,35 @@ namespace DeNelle.HUD.Kit
             tapBtn.transition = Selectable.Transition.None;
             tapBtn.onClick.AddListener(() =>
             {
-                _chipsExpandUntil = Time.unscaledTime + 6f;
-                FlowTrace.Step("HudKit", "resource chips tap-expanded (6s window)");
+                // WO-1221 owner ruling: TOGGLE. Open stays open until tapped again.
+                _resChipsExpanded = !_resChipsExpanded;
+                FlowTrace.Step("HudKit", "resource chips tapped -> " +
+                               (_resChipsExpanded ? "EXPAND" : "COLLAPSE") +
+                               " (toggle; the WO-440 six-second window is retired by owner ruling " +
+                               "2026-08-26 - the rail no longer closes itself on a clock).");
             });
             _resGoldOnly.plate.raycastTarget = true;   // the chip is the tap target here
+
+            // ⭐ WO-1221 - THE "+N" HINT (owner ruling 2026-08-26): the collapsed chip is the ONLY
+            // resource UI on screen by default, so Gold alone gives the player no reason to believe
+            // anything is behind it. The hint says how many resource rows the tap will reveal.
+            // It is a WORD-AND-NUMBER tell, never a colour or a glyph-only affordance (the owner is
+            // red/green colourblind), and it is COUNTED from the built rows rather than authored -
+            // add a fifth resource and the hint says +5 with no second edit.
+            // It hangs BELOW the chip's right edge rather than inside it: the chip's amount is
+            // right-aligned to 0.94 and would collide with anything seated in the same band.
+            var hint = ElarionUiKit.Label(tapGo.transform, "+" + kinds.Length, 0f, 1f,
+                                          ElarionUi.Parchment, ElarionUi.FontMicro,
+                                          TextAlignmentOptions.MidlineRight, 0f, 1f);
+            hint.raycastTarget = false;
+            _resHintLabel = hint;
+            var hrt = (RectTransform)hint.transform;
+            hrt.anchorMin = new Vector2(0f, 0f);
+            hrt.anchorMax = new Vector2(1f, 0f);
+            hrt.pivot = new Vector2(0.5f, 1f);
+            hrt.sizeDelta = new Vector2(0f, ResHintHeightPx);
+            hrt.anchoredPosition = new Vector2(0f, -2f);
+            ElarionUiKit.FitSingleLine(hint);
             // Same shared gutter as the town rail — one right edge in every posture.
             tapGo.AddComponent<HudRailGutter>();
             Register("resourceChipsCollapsed", WrapAsWidget("resourceChipsCollapsed", tapGo));
@@ -1729,7 +1841,15 @@ namespace DeNelle.HUD.Kit
             Sub(m.TargetCycle, OnTargetCycle);  OnTargetCycle();
             _targetFrame.Bind(m.Target);
             _castBar.Bind(m.Cast);
-            FlowTrace.Step("HudKit", "models bound (vitals/economy/wave/world/abilities/cycle/target/cast)");
+
+            // WO-1225: the View owns the gold chip, so the View renders the acknowledgement.
+            // Village raises through the Core seam (DeNelle.HUD never references DeNelle.Village
+            // -- CLAUDE.md §5), and the unsubscribe rides the same teardown list as every model.
+            RewardCelebration.Requested += OnRewardCelebrationRequested;
+            _unsubscribe.Add(() => RewardCelebration.Requested -= OnRewardCelebrationRequested);
+
+            FlowTrace.Step("HudKit", "models bound (vitals/economy/wave/world/abilities/cycle/target/cast) " +
+                                     "+ RewardCelebration acknowledgement listener");
         }
 
         // =====================================================================
@@ -1944,7 +2064,190 @@ namespace DeNelle.HUD.Kit
             SetCappedResourceValue(0, BankResource.Wood, e.Wood);
             SetCappedResourceValue(1, BankResource.Iron, e.Iron);
             SetCappedResourceValue(2, BankResource.Food, e.Food);
-            _resGoldOnly.SetAmount(e.Gold);
+            // WO-1221: Crystals is uncapped by design, so SetCappedResourceValue early-returns on
+            // it (TownBankCapacity.IsCapped == false). Feed the chip directly, or the row would
+            // sit at its built value of 0 forever — a silently-wrong number, which is worse than
+            // the missing row it replaced.
+            if (_resChips.Length > 3 && _resChips[3] != null) _resChips[3].SetAmount(e.Crystals);
+
+            // ⭐ WO-1225 -- THE MEASURED BALANCE. e.Gold is the wallet's post-grant value as the
+            // economy model pushed it; it is the ONLY number the chip and the acknowledgement
+            // ever count to. Nothing here reads the amount any grant path asked for.
+            long measuredGold = e.Gold;
+            bool celebrating = _goldCelebrateArmed && measuredGold > _goldPrev && _goldPrevValid;
+            _resGoldOnly.SetAmount(measuredGold, animate: true,
+                                   seconds: celebrating ? GoldCelebrateCountSeconds : 0.35f);
+            NoteGoldGain(measuredGold);
+        }
+
+        /// <summary>
+        /// WO-1225. A marquee grant asks for an acknowledgement. This renders from the last
+        /// MEASURED wallet move when one has just landed (the usual case - see the look-back
+        /// below), and otherwise ARMS a window and waits for one. Either way the number that
+        /// reaches the screen is the wallet's, never the amount the caller asked for.
+        /// </summary>
+        private void OnRewardCelebrationRequested(RewardCelebration.Request r)
+        {
+            // Only Gold is anchored to a chip today (the rail's other chips live in the
+            // collapsed panel and are not on screen at rest). Anything else is REFUSED OUT
+            // LOUD rather than silently dropped.
+            if (!string.Equals(r.Resource, "Gold", StringComparison.OrdinalIgnoreCase))
+            {
+                FlowTrace.Warn("HudKit",
+                    $"reward celebration for '{r.Resource}' ({r.Reason}) IGNORED - only Gold has a " +
+                    "persistent chip to anchor to; that resource's grant will go unacknowledged.");
+                return;
+            }
+
+            _goldCelebrateRequested = r.RequestedAmount;
+            _goldCelebrateReason = r.Reason ?? "unknown";
+            _goldCelebrateOrigin = r.HasOrigin
+                ? r.OriginScreen
+                : new Vector2(Screen.width * 0.5f, Screen.height * 0.52f);   // where a claim modal sits
+
+            // ⚠ THE PUSH USUALLY ARRIVES *BEFORE* THE RAISE, AND THAT IS NOT A RACE TO PAPER OVER.
+            // DailyChestController.Claim credits the wallet (EconomyService.AddCoins) and only THEN
+            // calls AcknowledgeClaim. EconomyService.OnChanged is synchronous into EconomyProducer
+            // (Village/HUD/HudModelProducers.cs:374) which pushes EconomyModel immediately, so
+            // OnEconomy has already measured this grant by the time we are called. A pure
+            // wait-for-the-next-push design would sit armed until it EXPIRED and show nothing —
+            // exactly the silent grant this ticket exists to end.
+            //
+            // So the arm looks BACKWARD first, at the last measured positive move, and only waits
+            // if there is nothing there. Both directions use the SAME measured numbers; nothing
+            // here reconstructs an amount.
+            bool lookback = _goldLastGainDelta > 0 && !_goldLastGainConsumed &&
+                            (Time.unscaledTime - _goldLastGainTime) <= GoldCelebrateLookbackSeconds;
+            if (lookback)
+            {
+                _goldCelebrateArmed = false;
+                FlowTrace.Step("HudKit",
+                    $"reward celebration ARMED reason={_goldCelebrateReason} requested={r.RequestedAmount} " +
+                    "- the MEASURED wallet push had already landed; acknowledging it from the look-back " +
+                    $"({(Time.unscaledTime - _goldLastGainTime):0.000}s ago, within {GoldCelebrateLookbackSeconds}s)");
+                FireGoldAcknowledgement(_goldLastGainFrom, _goldLastGainTo, _goldLastGainDelta, replayChipCount: true);
+                return;
+            }
+
+            _goldCelebrateArmed = true;
+            _goldCelebrateUntil = Time.unscaledTime + GoldCelebrateWindowSeconds;
+            FlowTrace.Step("HudKit",
+                $"reward celebration ARMED reason={_goldCelebrateReason} requested={r.RequestedAmount} " +
+                $"window={GoldCelebrateWindowSeconds}s - waiting for the MEASURED wallet push");
+        }
+
+        /// <summary>
+        /// WO-1225 -- MEASURE the gold move off this push versus the last one, exactly as
+        /// NoteXpGain does, and hand the acknowledgement the two measured balances.
+        ///
+        /// ⛔ The parameter is the post-grant balance READ FROM THE ECONOMY MODEL. The delta is
+        /// derived from it and the previous push; the requested amount is compared against that
+        /// delta for a shortfall WARN and is never displayed. An animation counting to a number
+        /// that was never banked is a new hollow assertion -- the whole reason WO-1213's green
+        /// log was worse than no log.
+        /// </summary>
+        private void NoteGoldGain(long measuredGold)
+        {
+            if (!_goldPrevValid)
+            {
+                // First bind is a BASELINE, never a gain (the whole banked total would fly).
+                _goldPrevValid = true;
+                _goldPrev = measuredGold;
+                return;
+            }
+
+            long previous = _goldPrev;
+            _goldPrev = measuredGold;
+            long measuredDelta = measuredGold - previous;
+
+            if (measuredDelta > 0)
+            {
+                // Record EVERY measured gain, armed or not, so a raise that arrives just after
+                // its own wallet push can still acknowledge the real move (see the look-back in
+                // OnRewardCelebrationRequested). This is a record of what happened, never a
+                // trigger: an unclaimed gain shows nothing.
+                _goldLastGainFrom = previous;
+                _goldLastGainTo = measuredGold;
+                _goldLastGainDelta = measuredDelta;
+                _goldLastGainTime = Time.unscaledTime;
+                _goldLastGainConsumed = false;
+            }
+
+            if (!_goldCelebrateArmed) return;
+
+            if (measuredDelta <= 0)
+            {
+                // A spend or a no-op push inside the window. Keep waiting -- the grant's own
+                // push may still be a frame away. TickGoldCelebration owns the timeout.
+                return;
+            }
+
+            _goldCelebrateArmed = false;
+            FireGoldAcknowledgement(previous, measuredGold, measuredDelta, replayChipCount: false);
+        }
+
+        /// <summary>
+        /// WO-1225 -- render the acknowledgement from three MEASURED values and nothing else.
+        /// <paramref name="replayChipCount"/> is set on the look-back path, where the chip has
+        /// already snapped to the new balance before anyone asked for a celebration: it rewinds
+        /// the chip to the measured PRE-grant balance and re-counts to the measured POST-grant
+        /// one, so the climb the owner asked for is visible. Both ends are measured, so the
+        /// rewind shows a number that was true a moment ago, never an invented one.
+        /// </summary>
+        private void FireGoldAcknowledgement(long previous, long measuredGold, long measuredDelta,
+                                             bool replayChipCount)
+        {
+            _goldLastGainConsumed = true;
+
+            if (measuredDelta < _goldCelebrateRequested)
+            {
+                // Same distinction Enemy.cs draws between rolled and credited: the shortfall is
+                // the interesting fact, and the player is shown the SMALLER, TRUE number.
+                FlowTrace.Warn("HudKit",
+                    $"reward SHORTFALL reason={_goldCelebrateReason} requested={_goldCelebrateRequested} " +
+                    $"creditedMeasured={measuredDelta} - the acknowledgement shows the credited amount, " +
+                    "never the requested one.");
+            }
+
+            string headline = "+" + measuredDelta.ToString("N0", CultureInfo.InvariantCulture) + " Gold";
+            var layer = RewardFlightLayer.Instance;
+            var targetRect = (_resGoldOnly != null && _resGoldOnly.root != null)
+                ? (RectTransform)_resGoldOnly.root.transform : null;
+
+            if (replayChipCount && _resGoldOnly != null)
+            {
+                _resGoldOnly.SetAmount(previous, animate: false);
+                _resGoldOnly.SetAmount(measuredGold, animate: true, seconds: GoldCelebrateCountSeconds);
+            }
+
+            if (layer != null)
+                layer.Fly(headline, "Gold", _goldCelebrateOrigin, targetRect, previous, measuredGold);
+
+            // §12 permanent trace: every value here is measured, and 'layerPresent'/'chipPresent'
+            // separate "never asked" from "asked and nothing could render it" -- the exact
+            // distinction WO-1213's green line could not make.
+            FlowTrace.Step("HudKit",
+                $"GOLD GAIN reason={_goldCelebrateReason} measuredDelta={measuredDelta} " +
+                $"measuredBalance={previous}->{measuredGold} requested={_goldCelebrateRequested} " +
+                $"headline='{headline}' replayChipCount={replayChipCount} " +
+                $"layerPresent={(layer != null)} chipPresent={(targetRect != null)}");
+        }
+
+        /// <summary>
+        /// WO-1225 timeout. An armed celebration whose wallet push never arrives means the grant
+        /// did not reach the economy model at all -- a real defect, and one that must NOT be
+        /// papered over with an animation. Fail loudly and show nothing.
+        /// </summary>
+        private void TickGoldCelebration()
+        {
+            if (!_goldCelebrateArmed) return;
+            if (Time.unscaledTime < _goldCelebrateUntil) return;
+            _goldCelebrateArmed = false;
+            FlowTrace.Fail("HudKit",
+                $"reward celebration EXPIRED reason={_goldCelebrateReason} requested={_goldCelebrateRequested} " +
+                $"- no positive gold move reached the economy model within {GoldCelebrateWindowSeconds}s. " +
+                "The grant did not land, or the model never pushed. NOTHING was shown, deliberately: " +
+                "an acknowledgement for a grant we cannot measure would be a hollow assertion.");
         }
 
         private void SetCappedResourceValue(int index, BankResource resource, int current)
@@ -2255,10 +2558,98 @@ namespace DeNelle.HUD.Kit
 
         private void SetResourcePanelOpen(bool open)
         {
-            // WO-1205: the panel is tap-driven again, so this seam once more carries the
-            // open flag. The tap window (LateTick) owns the SetActive; this only records
-            // the state so nothing else has to re-derive it from the GameObject.
+            // ⭐ WO-1221 — THE DEFECT, AND WHY THIS SEAM NOW OWNS THE SetActive.
+            // WO-1205 made COLLAPSED the resting state by calling _resExpandedRow.SetActive(false)
+            // at build time, and left a comment saying "the tap window (see the LateTick block that
+            // polls the expand toggle) raises it". THE LATETICK BLOCK NEVER TOUCHED IT. It toggles
+            // _widgets["resourceChips"] — the Widget_resourceChips WRAPPER around _resDock, a
+            // full-screen stretch container whose only meaningful child is _resExpandedRow. So a
+            // tap activated an EMPTY dock: zero pixels, no Fail, and a cheerful "expanded" line.
+            // Nothing anywhere else in the tree re-activated _resExpandedRow, which is why the town
+            // rail has painted nothing since WO-1205 while the Build-mode strip
+            // (Village/BuildMode/BuildHudController.BuildResourceStrip — a DIFFERENT widget in a
+            // DIFFERENT module) kept rendering fine and made the data look healthy.
+            // ONE OWNER: this method raises/lowers the panel; LateTick decides only WHETHER.
             _resPanelOpen = open;
+            if (_resExpandedRow != null && _resExpandedRow.activeSelf != open)
+                _resExpandedRow.SetActive(open);
+        }
+
+        /// <summary>
+        /// WO-1221 — the MEASURED half of the expand trace. Runs for up to
+        /// <see cref="ResExpandVerifyMaxFrames"/> frames after an expand is requested and reports
+        /// what the player can actually see: the rail's resolved rect, its resolved opacity, its
+        /// occlusion, and how many ROWS measured non-zero.
+        ///
+        /// Three rules from WO-976, all load-bearing:
+        ///  * MEASURE AFTER LAYOUT SETTLES — a read taken on the activation frame is pre-settle and
+        ///    would report 0x0 forever (registry shape H4). So this POLLS and only concludes when a
+        ///    measurement clears, or when the poll budget runs out.
+        ///  * UNMEASURABLE => NAMED SKIP, NEVER A PASS. Batchmode runs no layout pass;
+        ///    UiSurfaceProbe.Report turns that into an explicit MEASURE_SKIPPED Warn. "Not measured"
+        ///    and "measured and fine" must never be the same value.
+        ///  * DO NOT RE-DERIVE THE ARITHMETIC. Rect/opacity/coverage and the four-way
+        ///    ZERO_SIZE / TRANSPARENT / OFFSCREEN / BEHIND split all come from UiSurfaceProbe.
+        ///
+        /// The row count is the half that catches THIS ticket's exact failure: the rail's own rect
+        /// can be perfectly healthy while its contents are inactive, which is what shipped.
+        /// </summary>
+        private void TickResourceExpandVerify()
+        {
+            if (_resExpandVerifyFrames <= 0) return;
+            _resExpandVerifyFrames--;
+            bool lastFrame = _resExpandVerifyFrames <= 0;
+            int settleFrames = ResExpandVerifyMaxFrames - _resExpandVerifyFrames;
+
+            if (_resExpandedRow == null)
+            {
+                _resExpandVerifyFrames = 0;
+                FlowTrace.Fail("HudKit",
+                    "resource panel expand UNVERIFIABLE — _resExpandedRow is null, so the expanded " +
+                    "rail was never built. The tap window can raise nothing.");
+                return;
+            }
+
+            var m = UiSurfaceProbe.MeasureRect((RectTransform)_resExpandedRow.transform);
+
+            // Keep polling while the answer could still change: not measurable yet, or measurable
+            // but still pre-settle at 0x0. Only the LAST frame is allowed to conclude.
+            if (!lastFrame && (!m.Measurable || m.ZeroSize)) return;
+            _resExpandVerifyFrames = 0;   // one verdict per expand, never a per-frame repeat
+
+            int rowsLive = 0, rowsMeasured = 0;
+            var t = _resExpandedRow.transform;
+            for (int i = 0; i < t.childCount; i++)
+            {
+                var c = t.GetChild(i);
+                if (c == null || !c.name.StartsWith("ResRow_") || !c.gameObject.activeInHierarchy) continue;
+                rowsLive++;
+                var rm = UiSurfaceProbe.MeasureRect(c as RectTransform);
+                if (rm.Measurable && !rm.ZeroSize && !rm.Offscreen) rowsMeasured++;
+            }
+            int rowsExpected = _resChips != null ? _resChips.Length : 0;
+
+            // The four-way surface split, named separately, on the shared helper.
+            bool surfaceOk = UiSurfaceProbe.Report("HudKit", "resource panel expand", m);
+
+            if (!m.Measurable)
+                return;   // Report already emitted the NAMED SKIP. Never upgrade a skip to a pass.
+
+            if (rowsMeasured < rowsExpected)
+            {
+                FlowTrace.Fail("HudKit",
+                    "resource panel expand ROWS_MISSING — " + rowsMeasured + "/" + rowsExpected +
+                    " resource rows measured non-zero on screen (" + rowsLive + " active in hierarchy). " +
+                    "The rail surface is " + (surfaceOk ? "fine" : "ALSO failing") + ", so the player " +
+                    "sees a frame with nothing in it. Panel: " + m.Describe());
+                return;
+            }
+
+            if (surfaceOk)
+                FlowTrace.Step("HudKit",
+                    "resource panel expand VERIFIED PAINTED — " + rowsMeasured + "/" + rowsExpected +
+                    " rows measured on screen, panel " + m.Describe() +
+                    " (settled after " + settleFrames + " frame(s)).");
         }
 
         /// <summary>
@@ -2842,6 +3233,9 @@ namespace DeNelle.HUD.Kit
             // WO-1104: run the XP strip flash + the "+N XP" readout hold/fade.
             AnimateXpGain();
 
+            // WO-1225: time out an armed reward acknowledgement whose wallet push never came.
+            TickGoldCelebration();
+
             // WO-611: drive the animated lock crosshair badge from the target model (combat HUD only).
             // 0 = no target (unlocked/faint), 1 = target held but not locked (acquiring pulse),
             // 2 = manual lock (locked/gold). Bound to TargetModel.HasTarget/Locked.
@@ -2880,7 +3274,16 @@ namespace DeNelle.HUD.Kit
             {
                 bool openerLive = _widgets.TryGetValue("resourceChipsCollapsed", out var col) &&
                                   col.activeSelf;
-                bool expand = openerLive && Time.unscaledTime < _chipsExpandUntil;
+                // WO-1221: the OPENER gate survives (a panel can never outlive its opener - it
+                // must not still be up in build/modal/battle occupancy); the CLOCK is gone. If the
+                // opener disappears, the toggle is reset too, so returning to town does not
+                // silently re-open a rail the player never asked for again.
+                if (!openerLive && _resChipsExpanded) _resChipsExpanded = false;
+                bool expand = openerLive && _resChipsExpanded;
+                // The hint reads "+4" only while the rail is shut - once it is open the four rows
+                // ARE the answer, and a hint pointing at visible content is noise.
+                if (_resHintLabel != null && _resHintLabel.gameObject.activeSelf == expand)
+                    _resHintLabel.gameObject.SetActive(!expand);
                 if (row.activeSelf != expand)
                 {
                     if (expand)
@@ -2891,10 +3294,35 @@ namespace DeNelle.HUD.Kit
                     row.SetActive(expand);
                     // WO-440: the explore tap-window shows the full chips panel (not just the tab).
                     SetResourcePanelOpen(expand);
-                    FlowTrace.Step("HudKit", "resource panel " + (expand ? "expanded" : "collapsed") +
-                                   " (opener live=" + openerLive + ")");
+
+                    // ⭐ WO-1221 — THE HOLLOW LINE, MADE FALSIFIABLE (registry shape H5+H4).
+                    // What used to print here was
+                    //     "resource panel expanded (opener live=" + openerLive + ")"
+                    // and `openerLive` is the predicate that got us INTO this branch: on the expand
+                    // path it is True by construction, so the line printed the same cheerful token
+                    // whether the rail painted or, as it did for the whole of WO-1205's life, painted
+                    // NOTHING. There is no broken state that makes it read differently — the exact
+                    // definition of a hollow assertion. The intent is kept; the CLAIM now waits for a
+                    // MEASUREMENT (TickResourceExpandVerify) taken after layout settles.
+                    if (expand)
+                    {
+                        _resExpandVerifyFrames = ResExpandVerifyMaxFrames;
+                        FlowTrace.Step("HudKit",
+                            "resource panel expand REQUESTED (opener live=" + openerLive +
+                            ", toggle=ON, no timer - WO-1221 owner ruling) — NOT yet a claim " +
+                            "that anything painted; measuring for up to " +
+                            ResExpandVerifyMaxFrames + " frames.");
+                    }
+                    else
+                    {
+                        _resExpandVerifyFrames = 0;
+                        FlowTrace.Step("HudKit",
+                            "resource panel collapsed (opener live=" + openerLive + ", cause=" +
+                            (openerLive ? "player toggled it shut" : "opener left this posture") + ").");
+                    }
                 }
             }
+            TickResourceExpandVerify();
 
             // WO-778: Builders chip repaint — poll the Core static (the HudBuildingFocus
             // precedent, no model event); repaint only when the published Version moves

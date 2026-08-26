@@ -61,15 +61,21 @@ namespace DeNelle.Village
         }
 
         /// <summary>
-        /// Enemy "difficulty" derived from max HP (the Enemy carries no explicit Level).
-        /// Mirrors HudModelHost.EnemyLevelStub so the target frame's "Lv" and this warning
-        /// read exactly one value. Falls back to 1 when the enemy is null.
+        /// Enemy "difficulty" for the threat tell = the enemy's REAL <see cref="Enemy.Level"/>
+        /// (authored per-def in <c>Configure</c>, STABLE per archetype).
+        ///
+        /// WO-1232: this used to run the RETIRED HP/25 heuristic
+        /// (<c>round-to-int of the runtime maxHp over 25</c>) that WO-611 F3 replaced on the target frame
+        /// but never removed here. Because it read the RUNTIME maxHp, wave scaling inflated it
+        /// every wave: an ordinary wave-7 enemy at 1700 HP read as "level 68", so
+        /// <c>delta = 68 - 5</c> put EVERY enemy past <see cref="LethalDelta"/> and the warning
+        /// carried no information at all. The heuristic is deleted, not re-tuned - there is an
+        /// authored value and it must not survive in any form. Falls back to 1 for a null enemy.
         /// </summary>
         public static int EnemyThreatLevel(Enemy e)
         {
             if (e == null) return 1;
-            float maxHp = e.MaxHp > 0.001f ? e.MaxHp : e.Hp;
-            return Mathf.Max(1, Mathf.RoundToInt(maxHp / 25f));
+            return Mathf.Max(1, e.Level);
         }
 
         private static readonly Color SkullColor   = new Color(0.92f, 0.16f, 0.13f, 1f);  // danger red
@@ -109,7 +115,7 @@ namespace DeNelle.Village
         /// Universal self-resolving attach used by the enemy nameplate path
         /// (<see cref="FloatingHealthBar"/>) so EVERY enemy — not just RegionMobSpawner
         /// roamers — carries the difficulty tell. Resolves the <see cref="Enemy"/> on the
-        /// host and feeds its HP-derived level (<see cref="EnemyThreatLevel"/>) as the threat
+        /// host and feeds its authored level (<see cref="EnemyThreatLevel"/>) as the threat
         /// versus the player's level. A no-op on a non-enemy host (e.g. the hero's HP bar).
         /// The explicit spawner <see cref="Attach"/> (ZoneManager threat) still overrides this
         /// later for region mobs — Attach reuses the same component, so nothing double-stacks.

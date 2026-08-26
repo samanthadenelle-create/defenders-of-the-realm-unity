@@ -23,6 +23,19 @@ namespace DeNelle.Core.Platform
         // Same Vercel backend the rest of the client uses (GameStateService.BackendBase).
         private const string VerifyUrl = "https://defenders-of-the-realm-v2.vercel.app/api/pi/verify";
 
+        /// <summary>
+        /// HORIZONTAL screen-edge inset for the corner chip (WO-1083 defect #6).
+        /// DERIVED, not eyeballed: the hero-select panel spans screen x [0.015,0.985] and
+        /// ElarionUiKit's pixel-measured FrameCore zones put the frame's INTERIOR at panel
+        /// x 0.945 — i.e. everything right of screen x = 2488 (of 2670) is border ART. The
+        /// default 44-px margin put the chip at x[2326..2626], squarely on that border,
+        /// which is the defect. 240 px lands it at x[2130..2430], clear of the border strip
+        /// by ~58 px and inside the frame's dark header region. Fixed pixels by law; the
+        /// VERTICAL inset stays <see cref="SafeAreaInset.EdgeMarginPx"/>, which already
+        /// seats the chip in FrameCore's header band (screen y 56..139).
+        /// </summary>
+        private const float FramedCornerMarginXPx = 240f;
+
         [Tooltip("Develop entirely on Testnet/Sandbox; flip off for mainnet go-live.")]
         [SerializeField] private bool sandbox = true;
 
@@ -332,7 +345,21 @@ namespace DeNelle.Core.Platform
             // "Connect Wallet" was clipped off the top-right corner. ApplyTopRight sets the
             // anchors + pivot + position from Screen.safeArea (so it adapts to ANY cutout) plus
             // a fixed-pixel margin, and re-fits on rotation / resolution change.
-            SafeAreaInset.ApplyTopRight(rt);
+            // WO-1083 defect #6 (hero-select capture tmp/heroselect2-104958.png, 2670x1200):
+            // with the default 44-px margin this chip lands at x[2326..2626] — and the
+            // hero-select panel's FrameCore border art runs from x 2488 (the frame's measured
+            // interior edge, panel x 0.945) to the panel edge at 2630, so the chip drew ON TOP
+            // of the frame's top-right border. This button is
+            // shown in EXACTLY TWO scenes (UpdateButtonVisibility: "Title" and "HeroSelect"),
+            // both full-screen menu contexts, so a larger HORIZONTAL inset is the whole fix:
+            // it pulls the chip clear of the border and into the header band, and on Title
+            // (no frame) it simply sits slightly further in.
+            // Vertical is NOT changed — 44 px already seats the chip inside FrameCore's
+            // header band (screen y 56..139 at this size), which is where the WO-1083 mockup
+            // puts it. Widening it too would push the chip down into the body well.
+            // The margin stays FIXED PIXELS and still routes through SafeAreaInset, so the
+            // WO-868 contract (cutout-aware, never a hand-placed inset) is intact.
+            SafeAreaInset.ApplyTopRight(rt, FramedCornerMarginXPx, SafeAreaInset.EdgeMarginPx);
 
             // WO-603: under the Solana/$SKR skin this corner is a wallet-connect entry, not Pi sign-in.
             // The full wallet-connect flow lives in DeNelle.Wallet (Core cannot reference it) and is a

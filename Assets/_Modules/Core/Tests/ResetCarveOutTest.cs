@@ -13,8 +13,11 @@
 // progression field is back at its starter value.
 // =============================================================================
 
+using System;
 using System.Collections.Generic;
 using NUnit.Framework;
+using UnityEngine;
+using UnityEngine.TestTools;
 using DeNelle.Core.State;
 
 namespace DeNelle.Core.Tests
@@ -256,6 +259,106 @@ namespace DeNelle.Core.Tests
             _service.ResetToNewGame();
             Assert.That(_state.SchemaVersion, Is.EqualTo(SaveSchema.CurrentVersion),
                 "Reset() must stamp SchemaVersion to CurrentVersion.");
+        }
+
+        // =====================================================================
+        //  WO-1220 — a New Game must reset the progression that is NOT in the save
+        // =====================================================================
+        //
+        // Owner felt-test 2026-08-26 (Seeker 2026.08.26.341419): the town reset perfectly
+        // and the hero did not. A brand-new RANGER came up at Lv 4 with a level-4 MAGE's
+        // talent applied. Two stores caused it, and neither is a GameState field, which is
+        // why every existing reset oracle was green:
+        //   * WisdomCurrencyService's own PlayerPrefs blob (Wisdom + unlocked node ids),
+        //   * the DontDestroyOnLoad runtime singletons holding the same values in memory.
+
+        [Test]
+        public void reset_clears_the_talent_store_so_a_new_class_inherits_no_talents()
+        {
+            // A level-4 Mage's tree, including a shared.* node — shared nodes carry no hero
+            // prefix at all, which is precisely why the carryover crossed classes rather
+            // than staying with the Mage that earned it.
+            string key = GameStateService.TalentPrefKey;
+            string restore = PlayerPrefs.HasKey(key) ? PlayerPrefs.GetString(key) : null;
+            try
+            {
+                PlayerPrefs.SetString(key, "{\"Wisdom\":170,\"Unlocked\":[\"mage.n1\",\"shared.n5\"]}");
+                PlayerPrefs.Save();
+
+                _service.ResetToNewGame();
+
+                Assert.That(PlayerPrefs.HasKey(key), Is.False,
+                    "A New Game must erase the talent store. While it survives, the NEXT hero — of " +
+                    "any class — starts with the previous hero's Wisdom and unlocked nodes applied.");
+            }
+            finally
+            {
+                PlayerPrefs.DeleteKey(key);
+                if (restore != null) PlayerPrefs.SetString(key, restore);
+                PlayerPrefs.Save();
+            }
+        }
+
+        [Test]
+        public void reset_zeroes_the_hero_progression_fields()
+        {
+            _state.HeroLevel = 4;
+            _state.HeroXp = 3531.9f;
+            _state.HeroLifetimeXp = 7531.9f;
+
+            _service.ResetToNewGame();
+
+            Assert.That(_state.HeroLevel, Is.EqualTo(1), "A New Game starts at hero level 1.");
+            Assert.That(_state.HeroXp, Is.EqualTo(0f), "A New Game starts with no banked XP.");
+            Assert.That(_state.HeroLifetimeXp, Is.EqualTo(0f), "A New Game starts with no lifetime XP.");
+        }
+
+        [Test]
+        public void reset_notifies_the_live_progression_singletons()
+        {
+            // The save half of the reset cannot reach HeroProgression / WisdomCurrencyService /
+            // SkillSystem: they are DontDestroyOnLoad and outlive both the scene and the save
+            // write. The event is the ONLY seam that does, so its absence is the whole defect.
+            int fired = 0;
+            Action handler = () => fired++;
+            GameStateService.NewGameStarted += handler;
+            try
+            {
+                _service.ResetToNewGame();
+                Assert.That(fired, Is.EqualTo(1),
+                    "ResetToNewGame must raise NewGameStarted exactly once so every live " +
+                    "progression singleton drops the previous run's in-memory state.");
+            }
+            finally { GameStateService.NewGameStarted -= handler; }
+        }
+
+        [Test]
+        public void reset_survives_a_throwing_new_game_subscriber()
+        {
+            // One bad subscriber must never abort the rest of the reset — the town clearing
+            // and the hero not clearing is exactly the half-reset this ticket is about.
+            Action thrower = () => throw new InvalidOperationException("WO-1220 fixture");
+            int after = 0;
+            Action counter = () => after++;
+            GameStateService.NewGameStarted += thrower;
+            GameStateService.NewGameStarted += counter;
+            // The throw is REPORTED (FlowTrace.Fail -> Debug.LogError) on purpose — §12 forbids
+            // a silent swallow — so the runner must be told this LogError is the expected
+            // outcome rather than an unhandled one.
+            LogAssert.ignoreFailingMessages = true;
+            try
+            {
+                _state.HeroLevel = 4;
+                Assert.DoesNotThrow(() => _service.ResetToNewGame());
+                Assert.That(after, Is.EqualTo(1), "a later subscriber must still be notified");
+                Assert.That(_state.HeroLevel, Is.EqualTo(1), "the reset must still complete");
+            }
+            finally
+            {
+                GameStateService.NewGameStarted -= thrower;
+                GameStateService.NewGameStarted -= counter;
+                LogAssert.ignoreFailingMessages = false;
+            }
         }
 
         [Test]

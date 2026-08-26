@@ -1,7 +1,8 @@
 // =============================================================================
 // PortraitCache — a lazily-built, persistable collection of speaker portraits.
 // -----------------------------------------------------------------------------
-// Dialogue speaker portraits live at Resources/HeroPortraits/<Name>, but the art
+// Dialogue speaker portraits live under HeroPortraitPaths.ResourcesFolder (WO-1234 —
+// the folder is declared once in DeNelle.Core, never re-typed at a call site), but the art
 // is imported as plain Textures (not Sprites), so Resources.Load<Sprite> returns
 // null — we wrap the Texture2D in a runtime Sprite. Building a Sprite per line
 // would churn allocations, so this is the shared registry: build once on first
@@ -33,8 +34,9 @@ namespace DeNelle.DialogueUI
         public static bool Has(string resourcePath) => Get(resourcePath) != null;
 
         /// <summary>
-        /// Returns the portrait Sprite for a Resources path (e.g.
-        /// "HeroPortraits/Sylas"), building + caching it on first request. Returns
+        /// Returns the portrait Sprite for a Resources path, which callers compose with
+        /// HeroPortraitPaths.ResourceKey(slug) (WO-1234). Building + caching it on first
+        /// request; returns
         /// null (cached) when no art exists at that path.
         /// </summary>
         public static Sprite Get(string resourcePath)
@@ -56,11 +58,12 @@ namespace DeNelle.DialogueUI
             Sprite sprite = Build(resourcePath);
             _sprites[resourcePath] = sprite;   // cache nulls too — one lookup per missing speaker
             if (sprite == null)
-                // The bug the trace must prove: Resources/HeroPortraits folder is ABSENT, so
-                // BOTH the Sprite and the Texture2D loads return null and this caches a null
-                // silently (the speaker renders no portrait, no error). Warn, don't fix.
+                // ⚠ THE OLD COMMENT HERE WAS FALSE FROM 2026-08-26. It said the hero art folder
+                // is ABSENT; it is present and populated (Sylas/Elara/Thrain/Grom card art). A miss
+                // now means a speaker whose NAME has no art, not a missing tree. Warn, don't fix.
                 FlowTrace.Warn("Portrait", $"NO art resolved for '{resourcePath}' -> caching null " +
-                    "(folder likely absent, e.g. Resources/HeroPortraits/* — speaker shows no portrait)");
+                    "(no such key under Resources/" + DeNelle.Core.HeroPortraitPaths.ResourcesFolder +
+                    "/ — speaker shows no portrait)");
             return sprite;
         }
 

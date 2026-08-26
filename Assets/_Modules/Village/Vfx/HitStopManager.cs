@@ -82,15 +82,78 @@ namespace DeNelle.Village
             if (Instance != null && Instance != this) { Destroy(gameObject); return; }
             Instance = this;
             DontDestroyOnLoad(gameObject);
+
+            // WO-1233 — THE BATTLE-END UNWIND. See EndStopNow for the captured defect.
+            // Registered by OWNER NAME, so a re-created singleton replaces rather than stacks.
+            DeNelle.Core.Combat.BattleSessionEnd.RegisterUnwind("hit-stop", EndStopNow);
         }
 
         private void OnDestroy()
         {
+            DeNelle.Core.Combat.BattleSessionEnd.UnregisterUnwind("hit-stop");
+
             // Guarantee timeScale is restored if this object is torn down mid-stop
             // (scene unload / domain reload) so a freeze can never leak past us.
             if (_hitStopRoutine != null || _frozenScaleApplied >= 0f) Time.timeScale = 1f;
             _frozenScaleApplied = -1f;
             if (Instance == this) Instance = null;
+        }
+
+        // =====================================================================
+        //  BATTLE-END UNWIND (WO-1233) — a cosmetic stop must never outlive the fight
+        // =====================================================================
+
+        /// <summary>
+        /// End any in-flight hit stop RIGHT NOW because the battle session that produced it is over.
+        ///
+        /// <para>CAPTURED DEFECT (2026-08-26, Seeker 2026.08.26.342290). Two of nine
+        /// BATTLE_QUIESCENCE_FAIL events read <c>timeScale: the world clock is 0.04 (4% speed)</c> —
+        /// this class's own <see cref="HitTier.Medium"/> value, and the exact 2026-08-20 signature
+        /// the gate's own text names. The 2026-08-20 fix added THREE unwind paths (the routine, the
+        /// LateUpdate deadline, OnDisable/OnDestroy) and it came back anyway, which says the missing
+        /// path was never one of those: all three are keyed to THIS OBJECT's lifetime, and none of
+        /// them is keyed to the BATTLE's. The killing blow fires a stop on the very frame the battle
+        /// resolves — the frame after which the victory screen, the masked warp home and a stack of
+        /// teardown work all run — so the whole leak window sits between the stop and its deadline,
+        /// on the one path that had no unwind at all.</para>
+        ///
+        /// <para>This closes the window instead of racing it: the moment the session ends, the stop
+        /// ends. It only ever reverts a scale THIS class applied (<see cref="_frozenScaleApplied"/>),
+        /// so an ArenaDeathCam or WaveCelebration slow-mo is never stamped over — the same
+        /// discipline as the deadline watchdog, and the reason this is safe to run unconditionally
+        /// on every battle end.</para>
+        ///
+        /// <para>⚠ Deliberately a SEPARATE fix from the battle-lock release, with a separate owner.
+        /// They arrive at the same moment and share the announcement, but the clock is this class's
+        /// state and nothing else's — merging them would have produced one change with two owners,
+        /// which is the shape of the defect, not the fix.</para>
+        /// </summary>
+        /// <param name="context">The session context ("arena win" / "retreat" / "abandoned: …").</param>
+        public void EndStopNow(string context)
+        {
+            if (_hitStopRoutine != null) { StopCoroutine(_hitStopRoutine); _hitStopRoutine = null; }
+            if (_frozenScaleApplied < 0f) return;   // no stop of ours in flight — nothing to unwind
+
+            float ours = _frozenScaleApplied;
+            _frozenScaleApplied = -1f;
+            _hitStopEndTime = 0f;
+
+            if (Mathf.Abs(Time.timeScale - ours) > 0.001f)
+            {
+                // Someone else owns the clock now (a death cam, a pause). Our stop is simply over;
+                // say so, and above all do NOT stamp 1f over their scale.
+                FlowTrace.Step("HitStop",
+                    $"hit stop ended by battle end ({context}) - our {ours:F2} had already been " +
+                    $"superseded (clock now {Time.timeScale:F2}); left to its current owner.");
+                return;
+            }
+
+            Time.timeScale = 1f;
+            FlowTrace.Step("HitStop",
+                $"hit stop ({ours:F2}) ENDED by battle end ({context}) - timeScale restored to 1.00 " +
+                "before the teardown could out-race the stop's own deadline. This is the unwind the " +
+                "2026-08-20 fix lacked: its three paths were keyed to this object's lifetime, not the " +
+                "battle's.");
         }
 
         // ── Inspector ─────────────────────────────────────────────────────────

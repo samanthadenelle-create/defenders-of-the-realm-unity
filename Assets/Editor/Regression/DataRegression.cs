@@ -1250,6 +1250,13 @@ namespace DeNelle.Editor
             // oracle that is written but never registered is an oracle that never runs — exactly
             // what RegressionMarkerRegression exists to catch.
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "drops-to-inventory suite", () => { if (!DeNelle.Editor.Regression.DropsGoToInventoryRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[drops-to-inventory] " + r); });
+            // WO-1225 — the reward acknowledgement flies to the gold chip and counts up to the
+            // MEASURED post-grant balance. Registered here by the LEAD, per the note above: this
+            // file is the one every parallel oracle lane would otherwise collide in.
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "reward-fly suite", () => { if (!DeNelle.Editor.Regression.WO1225RewardFlyRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[reward-fly] " + r); });
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "kill-reward-raid-suppression suite", () => { if (!DeNelle.Editor.Regression.KillRewardRaidSuppressionRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[kill-reward-raid-suppression] " + r); });
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "wo1232 enemy-level source suite", () => { if (!DeNelle.Editor.WO1232EnemyLevelSourceRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[wo1232-enemy-level] " + r); });
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "vfx-ambient-budget suite", () => { if (!DeNelle.Editor.Regression.VfxAmbientLoopBudgetRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[vfx-ambient-budget] " + r); });
 
             // =====================================================================
             //  >>> REGISTERED ORACLE SUITES — END FENCE <<<  (new lines go ABOVE)

@@ -129,6 +129,13 @@ namespace DeNelle.Village
         {
             Instance = this;
             XpEarnerRegistry.Register(this);
+            // WO-1220 — a New Game must reset the LIVE component, not just the save. This
+            // component is the per-run authority and it writes itself BACK over GameState
+            // (WriteBackToState) on the next XP grant, so a survivor from the previous run
+            // re-stamps its level onto a freshly-reset save. Village -> Core subscription is
+            // the sanctioned direction (CLAUDE.md §5); unsubscribed in OnDisable because the
+            // event is static and would otherwise pin every carrier that ever existed.
+            GameStateService.NewGameStarted += ResetForNewGame;
             // F8-47 — adopt the persisted level/XP (never downgrades a live higher
             // level). Runs after Awake's bootstrap-migration, so a fresh attach on a
             // scene load lands on the saved level instead of a default level 1.
@@ -139,6 +146,49 @@ namespace DeNelle.Village
         {
             if (Instance == this) Instance = null;
             XpEarnerRegistry.Unregister(this);
+            GameStateService.NewGameStarted -= ResetForNewGame;   // WO-1220 — static event: never leak a carrier.
+        }
+
+        /// <summary>
+        /// WO-1220 — drops this LIVE component back to the state of a component that was
+        /// just added, because a New Game was started while it was alive.
+        ///
+        /// WHY THE SAVE ZERO IS NOT ENOUGH: <c>GameStateService.ResetToNewGame</c> sets GameState's
+        /// heroLevel/heroXp/heroLifetimeXp to 1/0/0, but THIS component is the run's
+        /// authority and pushes its own values back out through
+        /// <see cref="WriteBackToState"/> on the very next XP grant. A carrier that survived
+        /// the New Game (a hero carried DontDestroyOnLoad across a Single load, or a reset
+        /// taken in-place from the dev overlay) therefore re-introduces the old level into the
+        /// freshly-reset save, and the next fresh attach restores it as if it had been earned.
+        ///
+        /// ⛔ THIS IS NOT A BLIND ZERO, and specifically NOT a change to the WO-981 starter
+        /// latch. The latch is not persisted — it is INFERRED at
+        /// <see cref="RestoreFromSave"/> from <c>_level &gt; 1</c>, and that inference is
+        /// untouched here. What this method restores is exactly the field state of a
+        /// newly-constructed HeroProgression (level 1, no XP, latch OPEN, baseline unset), so
+        /// a genuinely new hero receives its DEF-82 starter gift on its first level-up just as
+        /// it would on a cold launch. Leaving the latch CLOSED would have silently deleted
+        /// that gift from every new game — the WO-981 §A loss, made permanent.
+        ///
+        /// Deliberately does NOT call <see cref="WriteBackToState"/>: the reset already wrote
+        /// 1/0/0 into GameState and is about to persist it, and writing back mid-reset would
+        /// re-enter the state the reset is still assembling.
+        /// </summary>
+        public void ResetForNewGame()
+        {
+            FlowTrace.Step("HeroXp",
+                $"ResetForNewGame: LIVE carrier on '{gameObject.name}' dropped from level={_level} " +
+                $"xp={_xp:0.#} lifetime={_lifetimeXp:0.#} (starterLatch={_hasGrantedStarterPoints}) " +
+                "to a fresh level-1 hero — a New Game was started while this component was alive.");
+            _level = 1;
+            _xp = 0f;
+            _lifetimeXp = 0f;
+            // WO-981: the latch re-OPENS so the new hero still earns its DEF-82 starter points
+            // on its first level-up. The RestoreFromSave:level>1 inference is not touched.
+            _hasGrantedStarterPoints = false;
+            _starterBaseline = -1;
+            HasRestoredFromSave = false;
+            OnXpChanged?.Invoke(_xp, XpToNextFor(_level));
         }
 
         private void OnDestroy()
@@ -196,7 +246,17 @@ namespace DeNelle.Village
             var s = GameStateService.Instance?.State;
             if (s == null) return false;
             bool savedAhead = s.HeroLevel > _level || (s.HeroLevel == _level && s.HeroXp > _xp);
-            if (!savedAhead) return false;
+            if (!savedAhead)
+            {
+                // WO-1220 §12 — the DECLINED branch used to return in silence, which is the
+                // half of the ordering the owner's capture could not show: a trace that only
+                // fires when a restore SUCCEEDS cannot distinguish "the save was level 1" from
+                // "this call never looked". Both outcomes are now on the record.
+                FlowTrace.Step("HeroXp",
+                    $"RestoreFromSave DECLINED — live level={_level} xp={_xp:0.#} is at or ahead of " +
+                    $"the save (level={s.HeroLevel} xp={s.HeroXp:0.#}); the live values stand.");
+                return false;
+            }
 
             FlowTrace.Step("HeroXp", $"RestoreFromSave: level {_level}->{s.HeroLevel} xp {_xp:0.#}->{s.HeroXp:0.#} (lifetime={s.HeroLifetimeXp:0.#})");
             _level = Mathf.Max(1, s.HeroLevel);
@@ -219,6 +279,22 @@ namespace DeNelle.Village
         {
             var s = GameStateService.Instance?.State;
             if (s == null) return;
+            // WO-1220 §12 — THE CLOBBER DETECTOR. GameState.HeroLevel has exactly two runtime
+            // writers: the Load path (which traces what it installs) and this line. If the save
+            // is sitting at a pristine new-game 1/0/0 and this component is about to stamp a
+            // level above 1 over it, the previous run's carrier outlived the New Game — the
+            // exact shape of the owner's 2026-08-26 capture (a fresh Ranger restoring the
+            // Mage's level=4 xp=3531.9 "fromSave=True"). Name it at the moment it happens
+            // rather than five minutes later at the attach that reads the result.
+            if (_level > 1 && s.HeroLevel <= 1 && s.HeroXp <= 0f && s.HeroLifetimeXp <= 0f)
+            {
+                FlowTrace.Warn("HeroXp",
+                    $"WriteBackToState is OVERWRITING a pristine new-game save (level={s.HeroLevel} " +
+                    $"xp={s.HeroXp:0.#}) with this carrier's level={_level} xp={_xp:0.#} on " +
+                    $"'{gameObject.name}' scene '{gameObject.scene.name}' — a HeroProgression from " +
+                    "the PREVIOUS run outlived ResetToNewGame and was never sent ResetForNewGame " +
+                    "(WO-1220).");
+            }
             s.HeroLevel = _level;
             s.HeroXp = _xp;
             s.HeroLifetimeXp = _lifetimeXp;

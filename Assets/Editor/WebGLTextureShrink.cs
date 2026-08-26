@@ -75,7 +75,10 @@ namespace DeNelle.Editor
         private static readonly (string fragment, int maxSize)[] FolderRules =
         {
             // ── UI / portraits / dialogue → 256 (web; small on-screen) ──────────
-            ("HeroPortraits", 256),
+            // WO-1234: folder name from the ONE constant. ⚠ the 2026-08-26 art is a CARD with a
+            // baked name plate — 256 px is legible on a phone portrait but marginal for the plate.
+            // Owner call if WebGL ships this screen; unchanged here.
+            (DeNelle.Core.HeroPortraitPaths.ResourcesFolder, 256),
             ("PetPortraits",  256),
             ("Portraits",     256),
             ("Dialogue",      256),

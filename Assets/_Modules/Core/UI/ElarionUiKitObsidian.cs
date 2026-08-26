@@ -729,8 +729,20 @@ namespace DeNelle.Core.UI
             private long _shown = long.MinValue;
             private long _target;
 
-            /// <summary>Set the shown amount. animate:true count-tweens 0.35s eased; no colour flash ever.</summary>
-            public void SetAmount(long v, bool animate = true)
+            /// <summary>WO-1225: true once a real value has been written. False means the chip has
+            /// never been fed, so <see cref="Shown"/> is a placeholder, not a balance.</summary>
+            public bool HasShown => _shown != long.MinValue;
+
+            /// <summary>WO-1225: the value currently PAINTED on the chip (0 before the first write).
+            /// Exposed so a reward acknowledgement can animate from the balance the player can
+            /// actually see rather than re-deriving one.</summary>
+            public long Shown => _shown == long.MinValue ? 0L : _shown;
+
+            /// <summary>Set the shown amount. animate:true count-tweens eased; no colour flash ever.
+            /// <paramref name="seconds"/> (WO-1225, appended optional - every existing caller keeps
+            /// the 0.35s it has today) lengthens the count for a marquee grant, so the owner's
+            /// "counting up animation" reads as a climb instead of a blink.</summary>
+            public void SetAmount(long v, bool animate = true, float seconds = 0.35f)
             {
                 _target = v;
                 if (amount == null) return;
@@ -741,7 +753,8 @@ namespace DeNelle.Core.UI
                     return;
                 }
                 long from = _shown;
-                UiKitTween.Value(this, from, v, 0.35f, val => WriteAmount((long)Math.Round(val)));
+                UiKitTween.Value(this, from, v, Mathf.Max(0.05f, seconds),
+                                 val => WriteAmount((long)Math.Round(val)));
             }
 
             private void WriteAmount(long v)

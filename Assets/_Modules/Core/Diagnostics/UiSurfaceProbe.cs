@@ -215,6 +215,40 @@ namespace DeNelle.Core.Diagnostics
             return m;
         }
 
+        /// <summary>
+        /// WO-1221: measure a RectTransform that is a CHILD of somebody else's canvas — a rail,
+        /// a row, a band. <see cref="Measure(GameObject)"/> requires a Canvas or UIDocument UNDER
+        /// the root, which is true of Addressable panel prefabs and false of every code-built HUD
+        /// sub-surface; those would otherwise always come back as the named skip "no ACTIVE
+        /// UIDocument … and no ACTIVE Canvas", i.e. never falsifiable. The canvas is resolved from
+        /// the ANCESTORS instead, and the arithmetic is the same shared core — do not fork it.
+        /// </summary>
+        public static UiSurfaceMeasure MeasureRect(RectTransform rt)
+        {
+            var m = new UiSurfaceMeasure { Kind = SurfaceKind.UGui, Measurable = false };
+
+            if (rt == null) { m.SkipReason = "RectTransform is null"; return m; }
+            if (!rt.gameObject.activeInHierarchy)
+            {
+                m.SkipReason = "rect is INACTIVE in hierarchy (an ancestor or the object itself is off)";
+                return m;
+            }
+            if (IsUnmeasurableEnvironment(out string envReason)) { m.SkipReason = envReason; return m; }
+
+            try
+            {
+                var canvas = rt.GetComponentInParent<Canvas>();
+                if (canvas == null) { m.SkipReason = "no Canvas ancestor — the rect is not on any draw surface"; return m; }
+                return MeasureRectCore(rt, rt.gameObject, canvas.rootCanvas != null ? canvas.rootCanvas : canvas);
+            }
+            catch (System.Exception ex)
+            {
+                m.Measurable = false;
+                m.SkipReason = $"probe THREW: {ex.GetType().Name}: {ex.Message}";
+                return m;
+            }
+        }
+
         private static UiSurfaceMeasure MeasureUGui(GameObject go, Canvas canvas)
         {
             var m = new UiSurfaceMeasure { Kind = SurfaceKind.UGui, Measurable = false };
@@ -223,11 +257,20 @@ namespace DeNelle.Core.Diagnostics
             if (rt == null) rt = canvas.GetComponent<RectTransform>();
             if (rt == null) { m.SkipReason = "Canvas has no RectTransform"; return m; }
 
-            var rootCanvas = canvas.rootCanvas != null ? canvas.rootCanvas : canvas;
+            // Alpha stays sourced from `go` (not rt.gameObject) so the fallback-to-canvas-rect
+            // branch above keeps the exact behaviour WO-976's callers were written against.
+            return MeasureRectCore(rt, go, canvas.rootCanvas != null ? canvas.rootCanvas : canvas);
+        }
+
+        /// <summary>The one copy of the uGUI measurement. Both entry points route here.</summary>
+        private static UiSurfaceMeasure MeasureRectCore(RectTransform rt, GameObject alphaSource, Canvas rootCanvas)
+        {
+            var m = new UiSurfaceMeasure { Kind = SurfaceKind.UGui, Measurable = false };
+
             m.SortingOrder = rootCanvas.sortingOrder;
             m.ViewportPx   = new Rect(0, 0, Screen.width, Screen.height);
             m.RectPx       = ScreenRectOf(rt, rootCanvas);
-            m.Opacity      = EffectiveAlpha(go, rootCanvas);
+            m.Opacity      = EffectiveAlpha(alphaSource, rootCanvas);
 
             FindCoverer(ref m, rootCanvas);
             m.Measurable = true;

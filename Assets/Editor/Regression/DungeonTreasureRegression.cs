@@ -35,6 +35,19 @@
 //                     [RuntimeInitializeOnLoadMethod] hook - without it the chest is never
 //                     injected and the deepest room is empty in every shipped build.
 //
+//   8 [layout-bands]   WO-1228: the FIVE authored bands (title/subtitle/well/note/cta) are
+//                     pairwise NON-INTERSECTING, ordered top-down, the title band still mirrors
+//                     the kit's FrameCore header zone (parsed from ElarionUiKit.cs), and the
+//                     Take CTA meets MinTouchPx at 2670x1200 WITHOUT a ClampMinTouch rescue that
+//                     would grow it into the first-clear band.
+//   9 [layout-overflow] SIX lines then scroll (owner ruling 2026-08-26, shared with WO-1230):
+//                     six rows fit the well viewport at the capture device, ten do not, the
+//                     panel builds a real kit scroll zone, and the affordance reads exactly
+//                     "+ N more (scroll)" - the same words WO-1230's roster uses.
+//  10 [layout-control] THE ANTI-HOLLOW CONTROL (WO-1138): the same intersection oracle is run
+//                     over the FROZEN pre-fix geometry and must find all THREE collisions the
+//                     owner photographed. If it finds none, case 8 is measuring nothing.
+//
 // Markers: DUNGEON_TREASURE_OK / DUNGEON_TREASURE_FAIL.
 // Standalone: run-unity-method DeNelle.Editor.Regression.DungeonTreasureRegression.RunAll
 // Covenant contract Run(out reason) is DataRegression-shaped; wiring into
@@ -100,6 +113,9 @@ namespace DeNelle.Editor.Regression
                 Case(failures, "panel", () => Case5_PanelLaws(failures));
                 Case(failures, "grant-seam", () => Case6_GrantSeam(failures));
                 Case(failures, "spawner", () => Case7_SpawnerHook(failures));
+                Case(failures, "layout-bands", () => Case8_LayoutBands(failures, notes));
+                Case(failures, "layout-overflow", () => Case9_OverflowScrolls(failures, notes));
+                Case(failures, "layout-control", () => Case10_LegacyGeometryControl(failures, notes));
             }
             catch (Exception ex)
             {
@@ -112,7 +128,8 @@ namespace DeNelle.Editor.Regression
                 reason = "DUNGEON TREASURE OK - fixed bundle resolves in both materials.json copies, " +
                          "deepest-room BFS deterministic + matches an independent oracle, pure math " +
                          "(chain/tie/undirected/degenerate), per-dungeon one-shot on SeenTutorials, " +
-                         "panel kit+single-exit+Take, single granting seam, spawner hooked" + noteStr;
+                         "panel kit+single-exit+Take, single granting seam, spawner hooked, WO-1228 five " +
+                         "exclusive bands pairwise disjoint + six-then-scroll + the legacy-geometry control" + noteStr;
                 return true;
             }
             reason = "dungeon-treasure FAIL x" + failures.Count + ": " + string.Join(" | ", failures) + noteStr;
@@ -700,6 +717,285 @@ namespace DeNelle.Editor.Regression
                 }
             }
             return best;
+        }
+
+        // =====================================================================
+        //  WO-1228 GEOMETRY ORACLE - cases 8, 9, 10
+        // ---------------------------------------------------------------------
+        //  The owner's device capture (Seeker 2026.08.26.342290, 2670x1200) showed the title
+        //  drawn over the subtitle, the last cache line clipped, and "Take" painted over the
+        //  first-clear sentence. These three cases pin the fix AND, in case 10, keep the
+        //  PRE-FIX geometry executable as a CONTROL so the oracle can never go hollow
+        //  (WO-1138): a detector that reports "no collisions" on a layout we KNOW collided is
+        //  a detector that would report "no collisions" on the next broken one too.
+        // =====================================================================
+
+        /// <summary>The Seeker's screen (the device the defect was captured on).</summary>
+        private const float RefScreenW = 2670f;
+        private const float RefScreenH = 1200f;
+
+        /// <summary>
+        /// Replicate ElarionUiKit.PostScaleCanvasHeight for a ScaleWithScreenSize modal canvas
+        /// (reference 1080x1920, MatchWidthOrHeight 0.5 - see ElarionUiKit.BuildModalCanvas).
+        /// Reading a live rect is NOT an option in a batch oracle, and is wrong on a canvas's
+        /// creation frame anyway (the F8-5 DlgLayout capture: raw screen px, not post-scale).
+        /// </summary>
+        private static float ReferenceCanvasHeight()
+        {
+            const float refW = 1080f, refH = 1920f;
+            double logW = Math.Log(RefScreenW / refW, 2d);
+            double logH = Math.Log(RefScreenH / refH, 2d);
+            double scale = Math.Pow(2d, 0.5d * logW + 0.5d * logH);
+            return (float)(RefScreenH / scale);
+        }
+
+        private static bool Intersect(Vector4 a, Vector4 b)
+        {
+            return a.x < b.z && b.x < a.z && a.y < b.w && b.y < a.w;
+        }
+
+        // =====================================================================
+        //  CASE 8 - the five bands are EXCLUSIVE, and the CTA meets the touch floor
+        //           without growing into the band above it
+        // =====================================================================
+        private static void Case8_LayoutBands(List<string> failures, List<string> notes)
+        {
+            var bands = DeNelle.Dungeons.DungeonTreasurePanel.Layout.Bands();
+            var names = DeNelle.Dungeons.DungeonTreasurePanel.Layout.BandNames();
+            if (bands.Length != names.Length || bands.Length != 5)
+            {
+                failures.Add($"[layout-bands] expected 5 named bands, got {bands.Length} rect(s) / " +
+                             $"{names.Length} name(s) - the band table and its labels have drifted apart");
+                return;
+            }
+
+            for (int i = 0; i < bands.Length; i++)
+            {
+                if (bands[i].z <= bands[i].x || bands[i].w <= bands[i].y)
+                    failures.Add($"[layout-bands] band '{names[i]}' is degenerate " +
+                                 $"({bands[i].x:F3},{bands[i].y:F3})-({bands[i].z:F3},{bands[i].w:F3}) - " +
+                                 "a zero/negative rect renders nothing and cannot be seen to collide");
+            }
+
+            // THE assertion the ticket asks for: no two named elements' rects intersect.
+            for (int i = 0; i < bands.Length; i++)
+                for (int j = i + 1; j < bands.Length; j++)
+                    if (Intersect(bands[i], bands[j]))
+                        failures.Add($"[layout-bands] '{names[i]}' and '{names[j]}' INTERSECT " +
+                                     $"({bands[i].x:F3},{bands[i].y:F3})-({bands[i].z:F3},{bands[i].w:F3}) vs " +
+                                     $"({bands[j].x:F3},{bands[j].y:F3})-({bands[j].z:F3},{bands[j].w:F3}) - " +
+                                     "this is the WO-1228 defect class: two elements sharing one band");
+
+            // Reading order top-to-bottom: title, subtitle, well, note, cta.
+            for (int i = 0; i < bands.Length - 1; i++)
+                if (bands[i].y < bands[i + 1].w)
+                    failures.Add($"[layout-bands] '{names[i]}' (yMin {bands[i].y:F3}) does not sit ABOVE " +
+                                 $"'{names[i + 1]}' (yMax {bands[i + 1].w:F3}) - the reading order is authored " +
+                                 "top-down and a re-ordered table would put the CTA in the middle of the copy");
+
+            // The kit OWNS band 1: BuildObsidianPanel seats chrome.title in FrameCore's header
+            // zone. Re-read that zone from the kit source so the panel's mirror can never drift.
+            var kitTitle = FrameCoreHeaderZoneFromKitSource(failures);
+            if (kitTitle.HasValue)
+            {
+                var t = DeNelle.Dungeons.DungeonTreasurePanel.Layout.TitleBand;
+                var k = kitTitle.Value;
+                if (Mathf.Abs(t.x - k.x) > 0.0005f || Mathf.Abs(t.y - k.y) > 0.0005f ||
+                    Mathf.Abs(t.z - k.z) > 0.0005f || Mathf.Abs(t.w - k.w) > 0.0005f)
+                    failures.Add($"[layout-bands] TitleBand ({t.x:F3},{t.y:F3},{t.z:F3},{t.w:F3}) no longer mirrors " +
+                                 $"ElarionUiKit's FrameCore header zone ({k.x:F3},{k.y:F3},{k.z:F3},{k.w:F3}) - the " +
+                                 "kit draws the title THERE, so a stale mirror means the panel is asserting " +
+                                 "non-collision against a rect the title does not occupy (exactly how the original " +
+                                 "title-over-subtitle overlap went unseen)");
+            }
+
+            // Touch floor, measured at the capture device - and the CTA must still clear the
+            // band above it AFTER any ClampMinTouch rescue, which is what broke hero-select.
+            float canvasH = ReferenceCanvasHeight();
+            float ctaH = DeNelle.Dungeons.DungeonTreasurePanel.Layout.CtaHeightPx(canvasH);
+            float modalH = DeNelle.Dungeons.DungeonTreasurePanel.Layout.ModalHeightPx(canvasH);
+            if (ctaH < DeNelle.Core.UI.ElarionUiKit.MinTouchPx)
+                failures.Add($"[layout-bands] Take is {ctaH:F1} canvas px tall at {RefScreenW:0}x{RefScreenH:0}, " +
+                             $"under the {DeNelle.Core.UI.ElarionUiKit.MinTouchPx:F0}px floor - ClampMinTouch would " +
+                             "GROW it symmetrically into the first-clear band above (the hero-select failure). " +
+                             "Author CtaBand tall enough; do not rely on the rescue");
+
+            float grow = Mathf.Max(0f, DeNelle.Core.UI.ElarionUiKit.MinTouchPx - ctaH) * 0.5f;
+            var cta = DeNelle.Dungeons.DungeonTreasurePanel.Layout.CtaBand;
+            var note = DeNelle.Dungeons.DungeonTreasurePanel.Layout.NoteBand;
+            float ctaTopAfterClamp = cta.w + (modalH > 1f ? grow / modalH : 0f);
+            if (ctaTopAfterClamp >= note.y)
+                failures.Add($"[layout-bands] after a MinTouchPx rescue the Take band would top out at " +
+                             $"{ctaTopAfterClamp:F3}, at or above the first-clear band's floor {note.y:F3} - " +
+                             "satisfying the touch floor may NOT create a new overlap (WO-1228 constraint)");
+
+            notes.Add($"bands@{RefScreenW:0}x{RefScreenH:0}: canvasH={canvasH:F0} modalH={modalH:F0} " +
+                      $"ctaH={ctaH:F1} (floor {DeNelle.Core.UI.ElarionUiKit.MinTouchPx:F0})");
+        }
+
+        /// <summary>Parse FrameCore's header zone out of the kit source (ZonesFor is private and
+        /// there is no InternalsVisibleTo - the same reflection-or-source bind case 5 uses).</summary>
+        private static Vector4? FrameCoreHeaderZoneFromKitSource(List<string> failures)
+        {
+            const string KitSrc = "Assets/_Modules/Core/UI/ElarionUiKit.cs";
+            string src = ReadSource(KitSrc, failures);
+            if (src == null) return null;
+            int at = src.IndexOf("case RpgUiCatalog.FrameCore:", StringComparison.Ordinal);
+            if (at < 0)
+            {
+                failures.Add("[layout-bands] no 'case RpgUiCatalog.FrameCore:' in ElarionUiKit.ZonesFor - the frame " +
+                             "the treasure modal names has no zone case, so the title lands wherever the default puts it");
+                return null;
+            }
+            int end = src.IndexOf("break;", at, StringComparison.Ordinal);
+            if (end < 0) end = Math.Min(src.Length, at + 4000);
+            var m = new Regex(@"z\.header\s*=\s*new\s+Vector4\(\s*([-0-9.]+)f\s*,\s*([-0-9.]+)f\s*,\s*([-0-9.]+)f\s*,\s*([-0-9.]+)f\s*\)")
+                .Match(src.Substring(at, end - at));
+            if (!m.Success)
+            {
+                failures.Add("[layout-bands] could not parse z.header from the FrameCore zone case - the oracle cannot " +
+                             "prove the panel's TitleBand still matches where the kit draws the title");
+                return null;
+            }
+            return new Vector4(
+                float.Parse(m.Groups[1].Value, System.Globalization.CultureInfo.InvariantCulture),
+                float.Parse(m.Groups[2].Value, System.Globalization.CultureInfo.InvariantCulture),
+                float.Parse(m.Groups[3].Value, System.Globalization.CultureInfo.InvariantCulture),
+                float.Parse(m.Groups[4].Value, System.Globalization.CultureInfo.InvariantCulture));
+        }
+
+        // =====================================================================
+        //  CASE 9 - SIX LINES THEN SCROLL (owner ruling 2026-08-26). A 10-line cache
+        //           SCROLLS inside the same well; it never clips and never grows the modal.
+        // =====================================================================
+        private static void Case9_OverflowScrolls(List<string> failures, List<string> notes)
+        {
+            if (DeNelle.Dungeons.DungeonTreasurePanel.Layout.VisibleRows != 6)
+                failures.Add($"[layout-overflow] VisibleRows is " +
+                             $"{DeNelle.Dungeons.DungeonTreasurePanel.Layout.VisibleRows}, not 6 - the owner ruled " +
+                             "SIX lines then scroll on 2026-08-26 and WO-1230's roster adopts the same rule; two " +
+                             "list surfaces with two conventions is what these tickets were written together to prevent");
+
+            if (DeNelle.Dungeons.DungeonTreasurePanel.Layout.Overflows(6))
+                failures.Add("[layout-overflow] six lines are reported as OVERFLOWING - the sixth line must be " +
+                             "visible, not hinted at");
+            if (!DeNelle.Dungeons.DungeonTreasurePanel.Layout.Overflows(7))
+                failures.Add("[layout-overflow] seven lines are NOT reported as overflowing - the seventh line " +
+                             "would render outside the well or be silently dropped");
+
+            string none = DeNelle.Dungeons.DungeonTreasurePanel.Layout.OverflowHint(5);
+            if (!string.IsNullOrEmpty(none))
+                failures.Add($"[layout-overflow] a 5-line cache renders the hint '{none}' - the affordance must be " +
+                             "absent when everything fits");
+
+            // The WO-1230 affordance, word for word.
+            string ten = DeNelle.Dungeons.DungeonTreasurePanel.Layout.OverflowHint(10);
+            if (ten != "+ 4 more (scroll)")
+                failures.Add($"[layout-overflow] a 10-line cache hints '{ten}', expected '+ 4 more (scroll)' - " +
+                             "WO-1230's Army roster uses that exact affordance and the two panels must not diverge");
+            if (!new Regex(@"^\+ \d+ more \(scroll\)$").IsMatch(ten))
+                failures.Add($"[layout-overflow] the hint '{ten}' does not match the shared '+ N more (scroll)' shape");
+            foreach (char c in ten)
+                if (c > (char)126)
+                {
+                    failures.Add("[layout-overflow] the overflow hint carries a non-ASCII character - TMP renders it " +
+                                 "as tofu on device");
+                    break;
+                }
+
+            // Geometry: six rows really do fit the viewport at the capture device, and ten rows
+            // really do exceed it (so the ScrollRect has something to scroll).
+            float canvasH = ReferenceCanvasHeight();
+            float viewport = DeNelle.Dungeons.DungeonTreasurePanel.Layout.ViewportHeightPx(canvasH);
+            float rowPx = DeNelle.Dungeons.DungeonTreasurePanel.Layout.RowHeightPx(canvasH);
+            float chrome = 2f * DeNelle.Dungeons.DungeonTreasurePanel.Layout.ScrollPaddingPx
+                         + (DeNelle.Dungeons.DungeonTreasurePanel.Layout.VisibleRows - 1)
+                           * DeNelle.Dungeons.DungeonTreasurePanel.Layout.ScrollSpacingPx;
+            float sixTall = DeNelle.Dungeons.DungeonTreasurePanel.Layout.VisibleRows * rowPx + chrome;
+
+            if (rowPx < DeNelle.Dungeons.DungeonTreasurePanel.Layout.MinRowPx)
+                failures.Add($"[layout-overflow] the row pitch is {rowPx:F1}px, below the " +
+                             $"{DeNelle.Dungeons.DungeonTreasurePanel.Layout.MinRowPx:F0}px legibility floor - TMP " +
+                             "CULLS a whole line when the floor font's line height exceeds the cell, so the row " +
+                             "would render blank rather than small");
+            if (sixTall > viewport + 0.5f)
+                failures.Add($"[layout-overflow] six rows need {sixTall:F1}px but the well viewport is only " +
+                             $"{viewport:F1}px at {RefScreenW:0}x{RefScreenH:0} - the sixth line would be CLIPPED, " +
+                             "which is the exact defect reported ('Spring Water x1' cut off at five)");
+
+            float tenTall = 10f * rowPx + chrome;
+            if (tenTall <= viewport)
+                failures.Add($"[layout-overflow] ten rows ({tenTall:F1}px) fit the viewport ({viewport:F1}px), so " +
+                             "the overflow path is never exercised - the assertion would be vacuous");
+
+            // A hint alone is not a scroll: the panel must build a REAL kit scroll zone.
+            string panel = ReadSource(PanelSrc, failures);
+            if (panel != null)
+            {
+                if (panel.IndexOf("MakeScrollZone", StringComparison.Ordinal) < 0)
+                    failures.Add("[layout-overflow] the panel does not call ElarionUiKit.MakeScrollZone - a fixed " +
+                                 "well with a hint line and no ScrollRect is still clipping, just politely");
+                if (panel.IndexOf("BuildObsidianModal", StringComparison.Ordinal) < 0)
+                    failures.Add("[layout-overflow] the panel no longer builds through BuildObsidianModal");
+            }
+
+            notes.Add($"well@{RefScreenW:0}x{RefScreenH:0}: viewport={viewport:F0}px rowPx={rowPx:F1} " +
+                      $"six={sixTall:F0}px ten={tenTall:F0}px");
+        }
+
+        // =====================================================================
+        //  CASE 10 - THE CONTROL (WO-1138 anti-hollow). Run the SAME intersection oracle
+        //            over the PRE-FIX geometry and require it to find the three collisions
+        //            the owner photographed. If this case ever passes silently, case 8 is
+        //            measuring nothing.
+        // =====================================================================
+        private static void Case10_LegacyGeometryControl(List<string> failures, List<string> notes)
+        {
+            // The WO-1041 pixel flow, frozen: modal 0.20,0.24-0.80,0.78; body hung from
+            // chrome.content's TOP edge at StackTopPx=24, HeadingPx=66, LinePx=60 per payout
+            // line (five lines in the captured cache), StackGapPx=14; CTA 0.34,0.05-0.66,0.245.
+            float canvasH = ReferenceCanvasHeight();
+            float modalH = (0.78f - 0.24f) * canvasH;
+            if (modalH <= 1f)
+            {
+                failures.Add("[layout-control] the reference canvas resolved to zero height - the control cannot run");
+                return;
+            }
+
+            float cursor = 24f;
+            Vector4 legacySubtitle = LegacyBand(0.08f, 0.92f, cursor, 66f, modalH);
+            cursor += 66f + 14f;
+            Vector4 legacyPayout = LegacyBand(0.08f, 0.92f, cursor, 60f * 5f, modalH);
+            cursor += 60f * 5f + 14f;
+            Vector4 legacyNote = LegacyBand(0.06f, 0.94f, cursor, 66f, modalH);
+            Vector4 legacyTitle = DeNelle.Dungeons.DungeonTreasurePanel.Layout.TitleBand;   // kit-owned, unchanged
+            Vector4 legacyCta = new Vector4(0.34f, 0.05f, 0.66f, 0.245f);
+
+            int found = 0;
+            if (Intersect(legacyTitle, legacySubtitle)) found++;
+            else failures.Add("[layout-control] the oracle does NOT see the captured title-over-subtitle overlap in " +
+                              "the pre-fix geometry - it is therefore blind to the defect it is supposed to catch " +
+                              "(WO-1138 hollow-test class)");
+            if (Intersect(legacyPayout, legacyCta)) found++;
+            else failures.Add("[layout-control] the oracle does NOT see the captured payout-under-Take clip in the " +
+                              "pre-fix geometry - it would pass a panel whose last loot line is behind the button");
+            if (Intersect(legacyNote, legacyCta)) found++;
+            else failures.Add("[layout-control] the oracle does NOT see the captured 'First clear -- [Take] membered' " +
+                              "overlap in the pre-fix geometry - it would pass a panel whose footer is under the CTA");
+
+            if (found < 3)
+                failures.Add($"[layout-control] only {found}/3 of the photographed collisions were detected - case 8 " +
+                             "is not measuring what the owner saw");
+
+            notes.Add($"control: {found}/3 pre-fix collisions detected (oracle proven non-vacuous)");
+        }
+
+        /// <summary>A legacy top-down pixel band, converted to modal fractions (y bottom-to-top).</summary>
+        private static Vector4 LegacyBand(float x0, float x1, float topPx, float heightPx, float modalHeightPx)
+        {
+            float yMax = 1f - (topPx / modalHeightPx);
+            float yMin = 1f - ((topPx + heightPx) / modalHeightPx);
+            return new Vector4(x0, yMin, x1, yMax);
         }
 
         private static string ReadSource(string path, List<string> failures)

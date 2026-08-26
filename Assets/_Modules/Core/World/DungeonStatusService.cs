@@ -7,7 +7,8 @@
 //   about transport. THIS file owns transport and ONLY transport, so the
 //   catalog stays headlessly drivable by the regression oracle.
 //
-// RESOLUTION ORDER — live -> cached -> all-open (WO-1114 §4d), realised as:
+// RESOLUTION ORDER — live -> cached -> ALL-CLOSED (owner ruling 2026-08-26, WO-1223,
+//   which inverted WO-1114 §4d's all-open tail), realised as:
 //
 //   Bootstrap()  [RuntimeInitializeOnLoadMethod(AfterSceneLoad)]
 //     |
@@ -15,8 +16,14 @@
 //     |
 //     (1) LOAD CACHE SYNCHRONOUSLY  - one small local file. Table is populated
 //         at frame 0, so a device that has NEVER reached the network still gets
-//         the last good answer. A miss leaves the table empty = ALL OPEN, which
-//         is exactly the game as it ships today.
+//         the last good answer.
+//         ⛔ CORRECTED 2026-08-26 (owner ruling, WO-1223). This line used to end
+//         "a miss leaves the table empty = ALL OPEN, which is exactly the game as
+//         it ships today." That is now the OPPOSITE of the truth: a cache miss
+//         leaves NO table, and with no table every GATED dungeon resolves CLOSED
+//         (DungeonStatusCatalog.For branch d). The cache is therefore no longer a
+//         nicety - it is the offline continuity path. The kill switch
+//         (FeatureFlags.DungeonStatus = 0) is the lever that reopens everything.
 //     |
 //     (2) RefreshAsync().Forget()   <-- NOTHING AWAITS THIS.
 //         The title screen must never wait on a network call. Non-blocking here
@@ -136,8 +143,10 @@ namespace DeNelle.Core.World
         // ─────────────────────────────────────────────────────────────────────
 
         /// <summary>
-        /// Read the last good payload off disk. A miss is NOT an error — it is the
-        /// all-open ground state. A CORRUPT cache is deleted so the next boot is clean.
+        /// Read the last good payload off disk. A miss is not an exception — but since
+        /// the fail-closed ruling (2026-08-26) it is no longer harmless either: with no
+        /// table every gated dungeon reads CLOSED until the live fetch lands. Traced as
+        /// such below. A CORRUPT cache is deleted so the next boot is clean.
         /// </summary>
         public static void LoadCache()
         {
@@ -148,13 +157,17 @@ namespace DeNelle.Core.World
             if (string.IsNullOrWhiteSpace(json))
             {
                 DungeonStatusCatalog.Clear(DungeonStatusCatalog.ProvenanceDefault);
-                FlowTrace.Step(Sys, "no cached payload at '" + path + "' - all dungeon doors OPEN (ground state).");
+                FlowTrace.Warn(Sys, "no cached payload at '" + path + "' - every GATED dungeon door is " +
+                                    "CLOSED until the live fetch lands (fail-closed, owner ruling 2026-08-26). " +
+                                    "Ungated ids (crossroads/fixtures) are unaffected.");
                 return;
             }
 
             if (!DungeonStatusCatalog.ApplyPayload(json, DungeonStatusCatalog.ProvenanceCache))
             {
-                FlowTrace.Fail(Sys, "cache rejected + deleted; falling back to all-open. path='" + path + "'");
+                FlowTrace.Fail(Sys, "cache rejected + deleted; NO table stands, so every gated door is " +
+                                    "CLOSED until a live payload lands (fail-closed, owner ruling 2026-08-26). " +
+                                    "path='" + path + "'");
                 DungeonStatusCatalog.Clear(DungeonStatusCatalog.ProvenanceDefault);
                 Guard.Try(Sys, "delete corrupt cache", () => { if (File.Exists(path)) File.Delete(path); });
             }
@@ -190,16 +203,19 @@ namespace DeNelle.Core.World
                 }
                 catch (Exception ex)
                 {
-                    FlowTrace.Warn(Sys, "fetch threw (" + req.responseCode + ") " + ex.GetType().Name +
-                                        " - keeping provenance=" + DungeonStatusCatalog.Provenance);
+                    // ⚠ "keeping" is the whole story on a device with a cache, and the whole
+                    // PROBLEM on one without: no cache means no table means every gated door
+                    // stays CLOSED. Fail, not Warn, when there is nothing standing.
+                    LogFetchFailure("fetch threw (" + req.responseCode + ") " + ex.GetType().Name);
                     return;
                 }
 
                 if (req.result != UnityWebRequest.Result.Success)
                 {
-                    FlowTrace.Warn(Sys, "fetch failed (" + req.responseCode + ") " + req.result +
-                                        ": " + (req.error ?? "no error text") +
-                                        " - keeping provenance=" + DungeonStatusCatalog.Provenance);
+                    // Covers the TIMEOUT path too: req.timeout expiring surfaces here as
+                    // Result.ConnectionError, not as an exception.
+                    LogFetchFailure("fetch failed (" + req.responseCode + ") " + req.result +
+                                    ": " + (req.error ?? "no error text"));
                     return;
                 }
 
@@ -224,6 +240,29 @@ namespace DeNelle.Core.World
         //  Cache write — only ever called after a SUCCESSFUL parse
         // ─────────────────────────────────────────────────────────────────────
 
+        /// <summary>
+        /// One voice for every live-fetch failure (threw / non-2xx / TIMED OUT). The
+        /// severity is DERIVED from whether a table is standing, because that is what
+        /// decides whether the player notices: with a cache the doors keep the last good
+        /// answer; with none, the fail-closed default (owner ruling 2026-08-26, WO-1223)
+        /// shuts every gated dungeon and the operator needs to see it as a failure.
+        /// ⛔ CLAUDE.md §12 - never let this path go quiet.
+        /// </summary>
+        private static void LogFetchFailure(string what)
+        {
+            if (DungeonStatusCatalog.Loaded)
+            {
+                FlowTrace.Warn(Sys, what + " - the standing table survives (provenance=" +
+                                    DungeonStatusCatalog.Provenance + ", rows=" +
+                                    DungeonStatusCatalog.RowCount + "); doors keep their last good state.");
+                return;
+            }
+            FlowTrace.Fail(Sys, what + " - and NO table is standing (provenance=" +
+                                DungeonStatusCatalog.Provenance + "). Every GATED dungeon door is CLOSED " +
+                                "for this session (fail-closed, owner ruling 2026-08-26). Kill switch: " +
+                                FlagKey + "=0.");
+        }
+
         private static void WriteCache(string json)
         {
             if (string.IsNullOrWhiteSpace(json)) return;
@@ -242,7 +281,8 @@ namespace DeNelle.Core.World
             string path = CachePath;
             Guard.Try(Sys, "clear cache", () => { if (File.Exists(path)) File.Delete(path); });
             DungeonStatusCatalog.Clear(DungeonStatusCatalog.ProvenanceDefault);
-            FlowTrace.Step(Sys, "cache cleared by hand - all dungeon doors OPEN.");
+            FlowTrace.Step(Sys, "cache cleared by hand - no table stands, so every GATED dungeon door " +
+                                "is CLOSED until a live payload lands (fail-closed, owner ruling 2026-08-26).");
         }
     }
 }

@@ -59,6 +59,29 @@
 //                          the main hand through ResolveAutoBestMainHand. Ruling 1
 //                          is scoped to DROPS and must never disable this.
 //
+//   6 [eligible-equips]  THE GOOD PATH. For EVERY playable class, the first weapon
+//                          and the first armor the catalog itself says the class may
+//                          hold at the probe level DO equip through the real seam,
+//                          with LastEquipRefusal left null. Cases 1-5 are all refusal
+//                          oracles, and a suite made only of those certifies a gate
+//                          that refuses EVERYTHING just as happily as a correct one -
+//                          this repo has already shipped that exact failure once.
+//   7 [armor-weight-gate]  Every class x mismatched-authored-weight armor pair is
+//                          REFUSED, in ASCII words that name selling. Reports the open
+//                          owner item `blink_armor_dragonic` (job:"any" + weight:heavy,
+//                          so every job-only filter offers it to a light-armour Mage)
+//                          explicitly. Its AUTHORED weight is an owner ruling and is
+//                          never touched here - only the GATE's answer is asserted.
+//   8 [held-and-sellable]  Ruling 2's second half. (a) PartyShopVM.BuildSellGear stays
+//                          eligibility-BLIND, so a refused drop is still worth coins -
+//                          a sell list filtered by what the hero can wear would turn
+//                          every refusal into permanent dead weight. (b) the one
+//                          remaining shipping non-UI path that equips onto the PLAYER
+//                          hero (CompanionGearSetup.Apply, a scripted story grant -
+//                          ResolveLoadout resolves the Player-tagged hero despite the
+//                          file name) BANKS before it equips, so a fail-closed refusal
+//                          can never lose the gift.
+//
 // Markers: DROPS_TO_INVENTORY_OK / DROPS_TO_INVENTORY_FAIL.
 // Standalone: run-unity-method DeNelle.Editor.Regression.DropsGoToInventoryRegression.RunAll
 // Covenant contract Run(out reason) is DataRegression-shaped; wiring into
@@ -89,6 +112,9 @@ namespace DeNelle.Editor.Regression
         private const string ArenaSrc    = "Assets/_Modules/Village/Arena/BattleArena.cs";
         private const string OutpostSrc  = "Assets/_Modules/Village/World/Camps/EnemyOutpost.cs";
         private const string LoadoutSrc  = "Assets/_Modules/Village/Hero/GearLoadout.cs";
+        private const string PartyShopSrc  = "Assets/_Modules/Village/Hero/PartyShopVM.cs";
+        private const string CompanionSrc  = "Assets/_Modules/Village/NPCs/CompanionGearSetup.cs";
+        private const string PanelSrc      = "Assets/_Modules/Village/Hero/EquipmentPanel.cs";
 
         /// <summary>Standalone batch entry - prints the marker.</summary>
         public static void RunAll()
@@ -110,6 +136,9 @@ namespace DeNelle.Editor.Regression
                 Case(failures, "armed-hero-closed", () => Case3_ShieldNeverDisarms(failures, notes));
                 Case(failures, "ranger-1h",         () => Case4_RangerFromCatalog(failures, notes));
                 Case(failures, "wo860-intact",      () => Case5_LevelUpAutoUpgradeIntact(failures, notes));
+                Case(failures, "eligible-equips",   () => Case6_EligibleGearStillEquips(failures, notes));
+                Case(failures, "armor-weight-gate", () => Case7_ArmorWeightGate(failures, notes));
+                Case(failures, "held-and-sellable", () => Case8_IneligibleStaysSellable(failures, notes));
             }
             catch (Exception ex)
             {
@@ -120,8 +149,9 @@ namespace DeNelle.Editor.Regression
             if (failures.Count == 0)
             {
                 reason = "DROPS TO INVENTORY OK - neither loot roll equips, the equip seam refuses " +
-                         "class/level-ineligible gear in words and logs it, no class can be disarmed by a " +
-                         "job:\"any\" shield, and level-up auto-upgrade (WO-860) is intact" + noteStr;
+                         "class/level/weight-ineligible gear in words and logs it, no class can be disarmed by a " +
+                         "job:\"any\" shield, ELIGIBLE gear still equips normally for every class, a refused item " +
+                         "stays sellable, and level-up auto-upgrade (WO-860) is intact" + noteStr;
                 return true;
             }
             reason = "drops-to-inventory FAIL x" + failures.Count + ": " + string.Join(" | ", failures) + noteStr;
@@ -402,6 +432,334 @@ namespace DeNelle.Editor.Regression
         }
 
         // =====================================================================
+        //  CASE 6 - THE GOOD PATH. A class-ELIGIBLE item still equips normally.
+        // ---------------------------------------------------------------------
+        //  Cases 1-5 are all refusal/absence oracles. A suite that only asserts
+        //  what must NOT happen certifies a gate that refuses EVERYTHING just as
+        //  happily as one that refuses correctly - and this repo has already
+        //  shipped exactly that failure (a pin guard that aborted every good run
+        //  while exiting 0). So: for EVERY playable class, take the first weapon
+        //  and the first armor row the catalog itself says the class may hold at
+        //  the probe level, push them through the REAL seam, and assert they LAND
+        //  with LastEquipRefusal left null.
+        // =====================================================================
+        private static void Case6_EligibleGearStillEquips(List<string> failures, List<string> notes)
+        {
+            var classes = PlayableHeroes.AllKnownJobKeys();
+            if (classes == null || classes.Count == 0)
+            {
+                failures.Add("[eligible-equips] PlayableHeroes.AllKnownJobKeys() is EMPTY - this case would sweep " +
+                             "zero classes and pass vacuously");
+                return;
+            }
+
+            const int ProbeLevel = 1;   // a bare GearLoadout carries no HeroProgression
+            int weaponsProven = 0, armorProven = 0;
+
+            foreach (var job in classes)
+            {
+                // -- the main hand --------------------------------------------------------
+                WeaponDef legal = null;
+                foreach (var w in GearCatalog.AllWeapons())
+                {
+                    if (w == null || w.IsOffHandItem) continue;
+                    if (!GearCatalog.CanEquipWeapon(w, job, ProbeLevel, out _)) continue;
+                    legal = w;
+                    break;
+                }
+                if (legal == null)
+                {
+                    failures.Add("[eligible-equips] '" + job + "': the catalog serves this class NO main-hand weapon " +
+                                 "at level " + ProbeLevel + ", so the good path cannot be proven for it at all - the " +
+                                 "class is unarmable before any gate is involved");
+                }
+                else
+                {
+                    var p = RunProbe(job, equipWeaponId: legal.id);
+                    if (p.Failure != null)
+                    {
+                        failures.Add("[eligible-equips] '" + job + "': the weapon probe could not run: " + p.Failure);
+                    }
+                    else if (p.MainHand == null ||
+                             !string.Equals(p.MainHand.id, legal.id, StringComparison.OrdinalIgnoreCase))
+                    {
+                        failures.Add("[eligible-equips] '" + job + "': EquipWeaponById('" + legal.id + "') did NOT take - " +
+                                     "the main hand reads '" + (p.MainHand?.id ?? "<null>") + "'" +
+                                     (string.IsNullOrEmpty(p.Refusal) ? " with NO stated refusal" :
+                                      " and the seam refused it: \"" + Condense(p.Refusal) + "\"") +
+                                     ". GearCatalog.CanEquipWeapon says this class MAY hold it at level " + ProbeLevel +
+                                     ", so the WO-1214 gate is over-refusing: it is now rejecting legal gear, which is a " +
+                                     "worse defect than the one it was added to fix");
+                    }
+                    else if (!string.IsNullOrEmpty(p.Refusal))
+                    {
+                        failures.Add("[eligible-equips] '" + job + "': the weapon equipped but LastEquipRefusal was left " +
+                                     "set to \"" + Condense(p.Refusal) + "\" - a stale refusal on an ACCEPTED equip " +
+                                     "makes the UI show a reason for something that succeeded");
+                    }
+                    else weaponsProven++;
+                }
+
+                // -- the armor ------------------------------------------------------------
+                ArmorDef legalArmor = null;
+                foreach (var a in GearCatalog.AllArmors())
+                {
+                    if (a == null) continue;
+                    if (!GearCatalog.CanEquipArmor(a, job, ProbeLevel, out _)) continue;
+                    legalArmor = a;
+                    break;
+                }
+                if (legalArmor == null)
+                {
+                    failures.Add("[eligible-equips] '" + job + "': the catalog serves this class NO wearable armor row " +
+                                 "at level " + ProbeLevel + " - GearLoadout.Refresh's BestArmor would resolve to null " +
+                                 "and the class would run at ArmorDefense 0");
+                    continue;
+                }
+
+                var pa = RunProbe(job, equipArmorId: legalArmor.id);
+                if (pa.Failure != null)
+                {
+                    failures.Add("[eligible-equips] '" + job + "': the armor probe could not run: " + pa.Failure);
+                }
+                else if (pa.Armor == null ||
+                         !string.Equals(pa.Armor.id, legalArmor.id, StringComparison.OrdinalIgnoreCase))
+                {
+                    failures.Add("[eligible-equips] '" + job + "': EquipArmorById('" + legalArmor.id + "') did NOT take - " +
+                                 "the chest slot reads '" + (pa.Armor?.id ?? "<null>") + "'" +
+                                 (string.IsNullOrEmpty(pa.Refusal) ? " with NO stated refusal" :
+                                  " and the seam refused it: \"" + Condense(pa.Refusal) + "\"") +
+                                 ". CanEquipArmor says the weight and level both fit, so the gate is over-refusing");
+                }
+                else armorProven++;
+            }
+
+            notes.Add("good path: " + weaponsProven + "/" + classes.Count + " classes equipped a legal weapon, " +
+                      armorProven + "/" + classes.Count + " a legal armor, none with a refusal");
+        }
+
+        // =====================================================================
+        //  CASE 7 - the WEIGHT gate, which is what refuses heavy plate to a Mage.
+        // ---------------------------------------------------------------------
+        //  Open owner item: `blink_armor_dragonic` is authored job:"any" +
+        //  weight:"heavy" and is therefore OFFERED to a light-armour Mage by every
+        //  job-only filter. Its authored weight is an OWNER RULING and is NOT
+        //  touched here - what is asserted is that the ELIGIBILITY GATE refuses it
+        //  for a light class, in words, and points at selling.
+        // =====================================================================
+        private static void Case7_ArmorWeightGate(List<string> failures, List<string> notes)
+        {
+            var classes = PlayableHeroes.AllKnownJobKeys();
+            if (classes == null || classes.Count == 0)
+            {
+                failures.Add("[armor-weight-gate] PlayableHeroes.AllKnownJobKeys() is EMPTY - vacuous sweep");
+                return;
+            }
+
+            int mismatches = 0, refused = 0;
+            foreach (var job in classes)
+            {
+                string classWeight = GearCatalog.ClassWeight(job);
+                foreach (var a in GearCatalog.AllArmors())
+                {
+                    if (a == null) continue;
+                    string w = (a.weight ?? string.Empty).Trim().ToLowerInvariant();
+                    if (w.Length == 0 || w == "any") continue;          // fits everyone by authoring
+                    if (w == (classWeight ?? string.Empty)) continue;    // matches - Case 6 covers it
+                    if (!GearCatalog.MeetsReq(a.req, 1)) continue;       // level gate would mask the weight gate
+
+                    mismatches++;
+                    if (GearCatalog.CanEquipArmorNow(a, job, 1, out string words, out _))
+                    {
+                        failures.Add("[armor-weight-gate] '" + job + "' (wears " + classWeight + ") was ALLOWED to equip '" +
+                                     (a.id ?? "<null>") + "', authored weight '" + w + "'. The weight gate is not being " +
+                                     "asked at the seam, so any non-UI caller can dress a caster in plate");
+                        continue;
+                    }
+                    refused++;
+
+                    if (string.IsNullOrEmpty(words))
+                    {
+                        failures.Add("[armor-weight-gate] '" + job + "' x '" + (a.id ?? "<null>") + "': refused with an " +
+                                     "EMPTY player sentence. WO-1214 Ruling 2 - the owner is red/green colourblind, so a " +
+                                     "refusal that is not WORDS is not a refusal she can read");
+                    }
+                    else if (!IsAscii(words))
+                    {
+                        failures.Add("[armor-weight-gate] '" + job + "' x '" + (a.id ?? "<null>") + "': the refusal " +
+                                     "sentence is not ASCII: \"" + Condense(words) + "\"");
+                    }
+                    else if (words.IndexOf("sell", StringComparison.OrdinalIgnoreCase) < 0)
+                    {
+                        failures.Add("[armor-weight-gate] '" + job + "' x '" + (a.id ?? "<null>") + "': the refusal says " +
+                                     "\"" + Condense(words) + "\" but never tells the player the item is still theirs to " +
+                                     "SELL. Ruling 2 is HELD AND SELLABLE - a refusal that reads as a confiscation is " +
+                                     "the same dead-weight problem in different words");
+                    }
+                }
+            }
+
+            if (mismatches == 0)
+            {
+                failures.Add("[armor-weight-gate] armor.json has NO row whose authored weight mismatches some class at " +
+                             "level 1, so this case swept nothing and would pass vacuously");
+                return;
+            }
+            notes.Add("weight gate: " + refused + "/" + mismatches + " class x mismatched-weight pairs refused in words");
+
+            // The named open item, reported explicitly so the answer lands in the log rather
+            // than being re-derived by hand next time.
+            var dragonic = GearCatalog.FindArmor("blink_armor_dragonic");
+            if (dragonic == null)
+            {
+                notes.Add("blink_armor_dragonic: NOT in armor.json (row removed or renamed)");
+            }
+            else
+            {
+                bool mageMay = GearCatalog.CanEquipArmorNow(dragonic, "mage", 1, out string mageWords, out _);
+                if (mageMay)
+                {
+                    failures.Add("[armor-weight-gate] blink_armor_dragonic (job='" + (dragonic.job ?? "<null>") +
+                                 "', weight='" + (dragonic.weight ?? "<null>") + "') is EQUIPPABLE by a Mage. It is " +
+                                 "authored heavy and the Mage wears " + GearCatalog.ClassWeight("mage") + " - the weight " +
+                                 "gate is being bypassed for job:\"any\" rows");
+                }
+                else
+                {
+                    notes.Add("blink_armor_dragonic (job=any, weight=heavy) REFUSED for mage: \"" +
+                              Condense(mageWords) + "\"");
+                }
+            }
+        }
+
+        // =====================================================================
+        //  CASE 8 - RULING 2's second half: HELD and SELLABLE, never destroyed.
+        // ---------------------------------------------------------------------
+        //  A refusal is only humane if the item retains value. Two things have to
+        //  hold, and neither is provable from the equip seam alone:
+        //    (a) the SELL list must not apply the eligibility filter - if the
+        //        vendor only lists what the hero can wear, an ineligible drop is
+        //        unsellable dead weight and Ruling 2 is a promise the game breaks;
+        //    (b) a grant must BANK before it equips, so a refusal costs the player
+        //        nothing. CompanionGearSetup is the one remaining shipping path
+        //        that equips onto the player hero from a scripted beat.
+        // =====================================================================
+        private static void Case8_IneligibleStaysSellable(List<string> failures, List<string> notes)
+        {
+            // (a) the sell list is eligibility-blind.
+            string shop = ReadSource(PartyShopSrc, failures);
+            if (shop != null)
+            {
+                string sell = ExtractMethodBody(StripComments(shop), "BuildSellGear");
+                if (sell == null)
+                {
+                    failures.Add("[held-and-sellable] PartyShopVM.BuildSellGear is gone - the only builder that lists " +
+                                 "owned gear for sale. Without it there is no proven route to turn a refused drop back " +
+                                 "into value, and Ruling 2 (\"they can sell\") is unverified");
+                }
+                else
+                {
+                    var gate = Regex.Match(sell, @"CanEquip\w*|ArmorFitsClass|WeaponFitsClass|JobMatches|MeetsReq");
+                    if (gate.Success)
+                    {
+                        failures.Add("[held-and-sellable] PartyShopVM.BuildSellGear now consults '" + gate.Value +
+                                     "'. The SELL list must stay eligibility-BLIND: the whole point of Ruling 2 is that " +
+                                     "the shield a Mage cannot use is still worth coins to her. Filtering the sell list " +
+                                     "by what the hero can equip turns every refused drop into permanent dead weight");
+                    }
+                    else notes.Add("sell list is eligibility-blind (no class/weight/level filter in BuildSellGear)");
+                }
+            }
+
+            // (b) a scripted grant banks BEFORE it equips.
+            string comp = ReadSource(CompanionSrc, failures);
+            if (comp == null) return;
+            string apply = ExtractMethodBody(StripComments(comp), "Apply");
+            if (apply == null)
+            {
+                failures.Add("[held-and-sellable] CompanionGearSetup.Apply is gone - this oracle can no longer verify " +
+                             "the one shipping non-UI path that equips onto the PLAYER hero (ResolveLoadout resolves " +
+                             "the Player-tagged hero, not an NPC, despite the file name)");
+                return;
+            }
+
+            var equipAt = Regex.Match(apply, @"Equip(Weapon|Armor|OffHand)ById\s*\(");
+            var bankAt = Regex.Match(apply, @"\.Add\s*\(\s*grant\.");
+            if (!equipAt.Success)
+            {
+                notes.Add("CompanionGearSetup.Apply no longer equips at all - deposit-only, the strongest form of Ruling 1");
+                return;
+            }
+            if (!bankAt.Success)
+            {
+                failures.Add("[held-and-sellable] CompanionGearSetup.Apply equips the grant onto the player hero but " +
+                             "never banks it into VillageInventory. The equip seam now FAILS CLOSED, so a grant the hero " +
+                             "cannot yet hold (several starter grants are req.level 3) is simply LOST - the refusal " +
+                             "turns a gift into nothing, which is the opposite of Ruling 2");
+                return;
+            }
+            if (bankAt.Index > equipAt.Index)
+            {
+                failures.Add("[held-and-sellable] CompanionGearSetup.Apply banks the grant AFTER it equips it. The order " +
+                             "is load-bearing: bank first so a seam refusal still leaves the player owning the item");
+                return;
+            }
+            notes.Add("CompanionGearSetup.Apply banks the grant before equipping (a refusal cannot lose the gift)");
+
+            // (c) the panel must not CLAIM a success the seam refused.
+            CheckPanelDoesNotLie(failures, notes);
+        }
+
+        /// <summary>
+        /// EquipmentPanel.DoEquip used to fire an unconditional "Equipped &lt;item&gt;." toast right
+        /// after calling EquipVM.Equip, with no idea whether the equip had been REFUSED. A Mage who
+        /// tapped a dropped shield was therefore TOLD it was equipped while nothing had changed -
+        /// a confident lie, which is strictly worse than a silent failure because it sends the
+        /// player away believing the slot changed. The panel must read the refusal and leave before
+        /// the confirmation.
+        /// </summary>
+        private static void CheckPanelDoesNotLie(List<string> failures, List<string> notes)
+        {
+            string panel = ReadSource(PanelSrc, failures);
+            if (panel == null) return;
+
+            string body = ExtractMethodBody(StripComments(panel), "DoEquip");
+            if (body == null)
+            {
+                failures.Add("[held-and-sellable] EquipmentPanel.DoEquip is gone - the handler that turns a tap into an " +
+                             "equip and tells the player what happened. The WO-1214 Ruling 2 guarantee at the UI is now " +
+                             "UNVERIFIED, which is not the same as safe");
+                return;
+            }
+
+            int refusalAt = body.IndexOf("LastRefusal", StringComparison.Ordinal);
+            var confirmAt = Regex.Match(body, @"ShowToast\s*\(\s*""Equipped");
+
+            if (refusalAt < 0)
+            {
+                failures.Add("[held-and-sellable] EquipmentPanel.DoEquip never reads EquipVM.LastRefusal, so it cannot " +
+                             "tell an accepted equip from a refused one. Every tap reports success - including the Mage " +
+                             "tapping the shield that started WO-1214");
+                return;
+            }
+            if (confirmAt.Success && confirmAt.Index < refusalAt)
+            {
+                failures.Add("[held-and-sellable] EquipmentPanel.DoEquip fires its \"Equipped ...\" confirmation BEFORE " +
+                             "it checks LastRefusal. The order is the whole guarantee: a refused equip must never reach " +
+                             "the confirmation line");
+                return;
+            }
+            if (!Regex.IsMatch(body, @"ShowToast\s*\(\s*refusal"))
+            {
+                failures.Add("[held-and-sellable] EquipmentPanel.DoEquip detects the refusal but never SHOWS it. Ruling 2 " +
+                             "requires WORDS the player can read - a tap that quietly does nothing is the same " +
+                             "silent-failure class this ticket exists to end");
+                return;
+            }
+            notes.Add("EquipmentPanel.DoEquip shows the refusal sentence and skips the success toast");
+        }
+
+        // =====================================================================
         //  THE HEADLESS PROBE - drives the REAL GearLoadout, no scene.
         //  Mirrors ArmedHeroInvariantRegression.RunProbe: snapshot + clear this
         //  class's equip PlayerPrefs (the gear half of ResetToNewGame), build a
@@ -411,11 +769,13 @@ namespace DeNelle.Editor.Regression
         {
             public WeaponDef MainHand;
             public WeaponDef OffHand;
+            public ArmorDef  Armor;
             public string Refusal;
             public string Failure;
         }
 
-        private static Probe RunProbe(string job, string equipWeaponId = null, string equipOffHandId = null)
+        private static Probe RunProbe(string job, string equipWeaponId = null, string equipOffHandId = null,
+                                      string equipArmorId = null)
         {
             var p = new Probe();
 
@@ -442,9 +802,11 @@ namespace DeNelle.Editor.Regression
 
                 if (!string.IsNullOrEmpty(equipWeaponId)) loadout.EquipWeaponById(equipWeaponId);
                 if (!string.IsNullOrEmpty(equipOffHandId)) loadout.EquipOffHandById(equipOffHandId);
+                if (!string.IsNullOrEmpty(equipArmorId)) loadout.EquipArmorById(equipArmorId);
 
                 p.MainHand = loadout.EquippedWeapon;
                 p.OffHand = loadout.EquippedOffHand;
+                p.Armor = loadout.EquippedArmor;
                 p.Refusal = loadout.LastEquipRefusal;
             }
             catch (Exception ex)

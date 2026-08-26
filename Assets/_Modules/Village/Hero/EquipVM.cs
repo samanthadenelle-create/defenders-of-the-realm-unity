@@ -191,6 +191,18 @@ namespace DeNelle.Village.Hero
         public string Status { get; private set; }
 
         /// <summary>
+        /// WO-1214 Ruling 2 - the player-facing sentence explaining why the LAST <see cref="Equip"/>
+        /// call was refused, or null when it went through. ADDITIVE and separate from
+        /// <see cref="Status"/> on purpose: Status carries every kind of transient line ("Equipped.",
+        /// "Select an item first.") so a View cannot tell a refusal from a confirmation by reading
+        /// it, and EquipmentPanel.DoEquip was doing exactly that - it toasted "Equipped &lt;item&gt;."
+        /// unconditionally, so a Mage who tapped a shield was TOLD it had been equipped while the
+        /// seam had refused it and changed nothing. A confident lie is worse than a silent failure:
+        /// it sends the player away believing the slot changed.
+        /// </summary>
+        public string LastRefusal { get; private set; }
+
+        /// <summary>
         /// The one-line GRANT a FILLED slot shows ("+25% dmg" / "+35% def  +12 hp"), keyed by slot.
         /// Moved out of EquipmentPanel.GrantLine (which read GearCatalog in the View) — the projection
         /// now lives here (banned symbols are legit inside a VM). Returns "" when the slot is empty or
@@ -258,6 +270,7 @@ namespace DeNelle.Village.Hero
         /// <summary>Equip an owned item into the selected slot (routes by slot kind).</summary>
         public void Equip(string itemId)
         {
+            LastRefusal = null;
             if (string.IsNullOrEmpty(itemId)) { Status = "Select an item first."; Raise(); return; }
             var t = Active;
             if (t == null) { Status = "No hero to equip."; Raise(); return; }
@@ -270,7 +283,14 @@ namespace DeNelle.Village.Hero
             // each grew their own copy of the class gate and drifted.
             if (!CanWearHere(t, itemId, out string refusal))
             {
+                LastRefusal = refusal;
                 Status = refusal;
+                // §12: the refusal is CAPTURED as well as shown. A recurrence of "it says
+                // equipped but nothing changed" is then one log read, not a repro hunt.
+                DeNelle.Core.Diagnostics.FlowTrace.Warn("Equip",
+                    "EQUIP REFUSED (WO-1214) at the UI seam: item='" + itemId + "' slot='" + _selectedSlotKey +
+                    "' -> shown to the player as: \"" + refusal + "\" | the item is NOT equipped, NOT destroyed, " +
+                    "and stays in the bag as sellable stock (Ruling 2).");
                 Raise();
                 return;
             }

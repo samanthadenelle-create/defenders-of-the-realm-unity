@@ -71,10 +71,13 @@ namespace DeNelle.Village
         //   • a status flip lands within a cache period with NO rebuild, and
         //   • a hero already inside a dungeon scene has no DungeonPortal in scope, so a
         //     mid-run flip can never eject an active delve.
-        // Ground state is OPEN and every failure path in DungeonStatusCatalog resolves
-        // back to it — a network blip must never lock finished content.
-        private DungeonDoorInfo _door = DungeonDoorInfo.OpenDefault;
-        private DungeonDoorState _lastLoggedDoorState = DungeonDoorState.Open;
+        // ⛔ GROUND STATE IS CLOSED (owner ruling 2026-08-26, WO-1223: "not acesable if
+        // not in table, if in table and works then yes"). This field used to seed
+        // OpenDefault, so for the frames between Awake and the first Update resolve the
+        // door read ENTERABLE even with no table behind it. Seeded ClosedDefault now:
+        // the door opens only once DungeonStatusCatalog.For has said so out loud.
+        private DungeonDoorInfo _door = DungeonDoorInfo.ClosedDefault;
+        private DungeonDoorState _lastLoggedDoorState = DungeonDoorState.Sealed;
 
         private void Start()
         {
