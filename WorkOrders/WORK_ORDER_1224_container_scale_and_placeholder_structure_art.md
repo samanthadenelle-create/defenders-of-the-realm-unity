@@ -1,6 +1,6 @@
 # WORK ORDER 1224 - The storage containers render at ~2x town scale, and five structures ship placeholder art
 
-**Status:** READY TO IMPLEMENT (Slice A) / BLOCKED ON OWNER ART (Slice B)
+**Status:** READY - PARTIAL 2026-08-26. Slice A implemented at `heightMul: 0.5` for all three container rows; RED 3/3 at the prior 1.0, focused JSON green 3/3, fallback regenerated (`CATALOG_FALLBACK_GEN_OK`) and `COMPILE_GATE_OK`. Full regression is still owed after two transient `LICENSE_ERROR` runs, and the owner device-size check is owed. Slice B remains BLOCKED ON OWNER ART.
 **Silo:** Catalog data / art
 **Origin:** Owner felt-test in Build mode, Seeker build `2026.08.26.341419`, 2026-08-26.
 Owner verbatim: *"and crystal mine is a wrong image"* -> *"its the well"* -> *"the three are the

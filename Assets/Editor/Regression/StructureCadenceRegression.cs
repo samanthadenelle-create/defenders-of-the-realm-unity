@@ -273,6 +273,9 @@ namespace DeNelle.Editor
             // ---- C4: the production path can actually carry a cap ------------
             CheckProductionPathCarriesCap(entries, failures, log);
 
+            // ---- C5: WO-1224's three shared storage-container rows -----------
+            CheckStorageContainerScale(entries, failures, log);
+
             // ---- C2: the outlier band ---------------------------------------
             if (samples.Count < MinFamilyForMedian)
             {
@@ -514,6 +517,41 @@ namespace DeNelle.Editor
         /// fit target and rotation policy still come from the real StructureFactory.OptsFor so no
         /// formula is re-typed here.</para>
         /// </summary>
+        private static void CheckStorageContainerScale(List<CatalogEntry> entries, List<string> failures, StringBuilder log)
+        {
+            string[] ids = { "lumberyard", "foundry", "silo" };
+            const float expected = 0.5f;
+            int matched = 0;
+
+            foreach (string id in ids)
+            {
+                CatalogEntry entry = entries.Find(e => e != null && e.id == id);
+                if (entry == null)
+                {
+                    failures.Add("[storage-container-scale] structures-catalog.json is missing required row '" +
+                                 id + "'. WO-1224 applies to the complete three-container family.");
+                    continue;
+                }
+                if (entry.repo == null)
+                {
+                    failures.Add("[storage-container-scale] '" + id + "' has no repo block, so it cannot " +
+                                 "author the WO-1224 height dial.");
+                    continue;
+                }
+                if (Mathf.Abs(entry.repo.heightMul - expected) > 0.0001f)
+                {
+                    failures.Add("[storage-container-scale] '" + id + "' heightMul=" +
+                                 entry.repo.heightMul.ToString("0.###") + "; expected 0.5. The three " +
+                                 "GenericContainer rows move together so their apparent scale cannot drift.");
+                    continue;
+                }
+                matched++;
+            }
+
+            if (matched == ids.Length)
+                log.AppendLine("C5 [storage-container-scale]: lumberyard/foundry/silo all author heightMul 0.5.");
+        }
+
         private static bool TryMeasure(GameObject prefab, CatalogEntry entry, out Vector3 size, out string note)
         {
             size = Vector3.zero;

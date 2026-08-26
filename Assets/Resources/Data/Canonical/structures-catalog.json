@@ -1,5 +1,6 @@
 {
- "version": 38,
+ "version": 39,
+ "_containerScaleNote2026_08_26": "WO-1224 Slice A: lumberyard, foundry and silo share the wide GenericContainer art, which the owner measured on device as reading about twice town scale. All three author heightMul 0.5 as one family. Lowering the uniform fit shrinks both height and footprint and is save-overlap-safe; device felt-test owns the final visual dial. Slice B placeholder-art replacement remains blocked and is not part of this version.",
  "_rolePassNote2026_08_24": "WO-1167 grouped the Town palette by authored roles. mine_crystal is unlocked and its crystal_producer role belongs in the Producers group (WO-1081); mill and lumbermill remain locked legacy rows with unique roles. Role grouping remains data-authored, never a code map (WO-1161).",
  "_sinkPassNote": "v24 = ECONOMY SINK PASS 2026-08-21 (OWNER RULING): a committed daily player should need 8-12 WEEKS to exhaust current content, a casual ~6 months; it was ONE EVENING. THE LEVER IS THE SINKS, NOT THE FAUCET -- harvest stays exactly 5 per 5 seconds (EchoBonusCalculator CommonResourcePerHour 3600) because \" 5 wood every 5 seconds\" is legible and a player can feel it; nudging it to 3.7/tick buys nothing and costs comprehension. Scaling factors: build x4, upgrade->L2 x10, upgrade->L3 x14. The THREE STORAGE ROWS (lumberyard/foundry/silo) use their own DECREASING ladder (x16/x16/x10/x8/x6.5/x6) because a uniform multiplier on a ladder that already doubles per step walks the cost off the end of the cap ladder it is gated behind -- foundry and silo wood steps were then lowered again by hand to 2000/2700/4000/6800/12000 because they are paid in WOOD, capped by the LUMBERYARD, and must fit the MATCHED container level. HARD CONSTRAINT, pinned by DeNelle.Editor.Regression.EconomySinkCapRegression [sink-cap]: NO COST MAY EXCEED THE MAX BANKABLE AMOUNT OF THAT RESOURCE (base 2000 + one container at level 1..6 = 3k/4k/6k/10k/18k/34k). A 3000-wood cost under a 2000 cap is UNCOMPLETABLE and nothing in the game explains why. CRYSTALS AND COINS ARE UNCAPPED BY DESIGN (TownBankCapacity.UncappableResources) -- that is why the crystal-priced magical ladders run to five figures. Cost baskets are UNCHANGED in shape: scaling never moves a resource across the WO-947 regular/magical line. NOTE the knock-on: BuildTimerConfig.TierForCost derives build TIME from the authored basket, so this pass also lifts the time ladder -- which is the intended coupling (see that file: \"the whole ladder re-tunes itself for free when the JSON cost pass lands\").",
  "_firstStepRule": "v38 = WO-1217 SLICE A — THE FIRST UPGRADE STEP IS A RULE, NOT A HAND-AUTHORED ROW. OWNER RULING 2026-08-26, verbatim: \"would take hours just to level anything in the start\". ⭐ THE RULE: repo.upgradeCost[0] (the L1->L2 rung) == round(repo.cost[r] * 1.5) FOR EVERY RESOURCE r, on every entry that authors an upgradeCost array. It was a flat x3 of the build cost on all four towers (Archer Tower L2 = 1080 wood / 480 iron, which at WO-1216's ~37 wood per wave is ~29 waves for ONE rung) and x7.5 on mine_crystal. Archer L2 is now 540 / 240 — the owner's own number. ⛔ ONLY THE FIRST RUNG IS FLATTENED: upgradeCost[1..] (L3 and beyond, including the six-level storage ladders) keep their ECONOMY SINK PASS values VERBATIM, so the ladder still climbs steeply and a maxed structure stays a real commitment — only the first rung stops being a wall. ⛔ APPLIED BY FORMULA ACROSS ALL 10 ROWS THAT AUTHOR AN ARRAY, IN ONE PASS — never row by row. A hand-edited cost table is the exact drift shape WO-1137 was written about (a mirror covering 3 of 28 rows that drifted four times). If you re-tune this, re-tune the MULTIPLIER and re-derive, do not edit a row. ⚠ THE 11th maxLevel>1 ROW AUTHORS NO ARRAY: 'healing_caravan' (maxLevel 3, no upgradeCost) falls back to BuildModeController.UpgradeCostFor's scaler — build cost x the level being LEFT, i.e. 1.0x for L1->L2 — which is already BELOW this 1.5x ceiling, so it is deliberately left unauthored rather than given a table it does not need. A regression pinning this rule must therefore assert equality (first step == round(cost * 1.5)) over rows that HAVE an array and 'no worse than 1.5x' in general; a flat equality check over every maxLevel>1 row FAILS a row that is already cheaper than the rule. ⚠ KNOCK-ON, FLAGGED NOT HIDDEN: BuildTimerConfig.TierForCost derives build/upgrade TIME from the authored basket, so lowering these baskets also SHORTENS the first-rung timer — the same intended coupling the sink pass relied on, running the other way. And CostBasketSeparationRegression's frozen AppliedRows totals move for 'tower_siege_tower' (step 1: 3240 -> 1620), 'tower_ballista' (step 1: 1920 -> 960) and 'tower_arcane_spire' (see its _wo1217CrystalGateNote); that dictionary must be re-baselined with these numbers or the [applied] case goes RED.",
@@ -1246,6 +1247,7 @@
    "visualPrefabPath": "Structures/GenericContainer",
    "repo": {
     "behaviorId": "GameplayBuilding",
+    "heightMul": 0.5,
     "storageCapacity": 1000,
     "storageResource": "wood",
     "buildCost": 1280,
@@ -1324,6 +1326,7 @@
    "visualPrefabPath": "Structures/GenericContainer",
    "repo": {
     "behaviorId": "GameplayBuilding",
+    "heightMul": 0.5,
     "storageCapacity": 1000,
     "storageResource": "iron",
     "buildCost": 1600,
@@ -1402,6 +1405,7 @@
    "visualPrefabPath": "Structures/GenericContainer",
    "repo": {
     "behaviorId": "GameplayBuilding",
+    "heightMul": 0.5,
     "storageCapacity": 1000,
     "storageResource": "stone",
     "buildCost": 1280,
