@@ -137,7 +137,22 @@
 > fine as history. A copied number is the bug **even when it was right the day it was written** -
 > that is exactly how the retired 860-899 UI block kept re-seeding collisions from CLAUDE.md sec.2.
 
-> ## ⚠ RECONCILED 2026-08-26 (CLI): main line next free = **1225**.
+> ## ⚠ RECONCILED 2026-08-26 (CLI): main line next free = **1226**.
+> *(CLI seat minted **WO-1225** and bumped 1225 -> 1226 in this SAME edit. **1225** = A TOAST
+> RENDERED UNDER A MODAL IS STILL A SILENT GRANT. Found during the owner's own felt-test of
+> WO-1213 on build `2026.08.26.342290`: she said *"it didt show or if it did it was under the echo
+> introdution window that popped"* and the log proves her right — `claimed +1000 Gold` at
+> 12:14:16.401, `kit toast -> 'Claimed - 1,000 Gold added to your realm.'` at .404, then
+> `current=EchoUnlockDialogue` at .405. THREE MILLISECONDS. ⭐ WO-1213 WORKED and is NOT re-opened;
+> the defect is one layer up, and it is the SAME class WO-1213 killed arriving by another door — a
+> grant the player never sees, with a trace that says success. ⭐ OWNER RULING supersedes the
+> z-order fix: *"can it show streamers and +1000 showing to gold? counting up animation?"* — the
+> acknowledgement moves OFF the toast layer ONTO the always-present gold chip, so no modal can land
+> on it. ⛔ REUSE `DamageNumberSpawner`, the `Enemy.cs` earned-label pop and DOTween — do not
+> greenfield floating numbers; POOL per §2b.2. ⛔ Count up to the MEASURED post-grant balance, never
+> the requested amount. READY TO IMPLEMENT.)*
+>
+> ### superseded: RECONCILED 2026-08-26 (CLI): main line next free = **1225**.
 > *(CLI seat minted **WO-1220 / 1221 / 1222 / 1223 / 1224** and bumped 1220 -> 1225 in this SAME
 > edit. All five PROVEN FROM CAPTURED DEVICE DATA (logcat + screenshots), 2026-08-26, build
 > `2026.08.26.341419` — after the owner's ruling *"you need to prove all with DATA"*.
