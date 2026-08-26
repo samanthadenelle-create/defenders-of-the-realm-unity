@@ -41,7 +41,7 @@ cannot be done from your device.
 | **Windows exe** | ✅ BUILT - `Builds/Windows/`, 1.9 GB with a 1.8 GB data payload (the "0.6 MB" in the success line is the launcher stub only - verified separately) |
 | **Seeker APK** | ✅ BUILT + INSTALLED - `2026.08.26.341419`, three-way stamp match (APK / catalog / device), `R2_PUSH_OK` + `R2_PARITY_OK 43` |
 | **Firebase distribution** | ⛔ BLOCKED, CORRECTLY - `distribute-android.ps1` requires `SCHEMA_PARITY_OK`, which requires `DATABASE_URL`. `.env.local` holds the literal placeholder `"[SENSITIVE]"`, not a connection string. **Run it from your credentialed shell:** `.\distribute-android.ps1 -Groups testers -Notes "..."` (add `-Build` only if you want a fresh APK; the current one is already built and installed). ⛔ Do not bypass the gate - it exists so a build cannot be distributed against an unverified database. |
-| **WebGL -> Vercel** | RUNNING when this was written. Detached; markers land in `Builds/overnight-chain-status.txt` and the URL in `Builds/vercel-deploy.txt`. **PREVIEW only, never `--prod`** - promotion stays yours. |
+| **WebGL -> Vercel** | ✅ DONE. `WEBGL_BUILD_OK` 22:39 (255 MB), `CHAIN_DONE` 22:40. Preview: **https://defenders-of-the-realm-v2-a64vgrcbe.vercel.app** - it 302s to Vercel SSO, which is deployment protection working; open it while signed in. **Production was NOT touched** (still serving 200 from the previous deployment) - promotion is yours. |
 
 ### The dApp Store submission is ready whenever you are
 Four pre-ship markers all green on fresh logs: `COMPILE_GATE_OK`, `REGRESSION_OK 285/285`,
