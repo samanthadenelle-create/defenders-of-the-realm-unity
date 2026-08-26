@@ -1879,3 +1879,62 @@ the same way: player vocabulary moves freely, persistence vocabulary is frozen a
 proposing any rename, grep for RAW STRING COMPARISONS of the thing being renamed - two of the three
 consumers here were `==` against a catalog-derived token, which no compiler and no test would have
 caught.
+
+
+## ⛔ STOP - BATCH 13 FOOD-TO-STONE GUIDANCE IS AMENDED. WO-1212 IS A P0 PRECONDITION. (2026-08-25, CLI lead)
+
+### The dev seat's sweep was right about the smoke. The mechanism is worse than naming.
+
+The sweep flagged `api/game/save.js` / `load.js` as "treating food and stone as separate balances" and
+recommended: *"make every active JSON key, UI label, grant, calculation, and runtime route use stone."*
+
+⛔ **DO NOT ACT ON THAT RECOMMENDATION YET. It would cost players money on this tree.** Verified at
+source by the lead:
+
+| | the PLAYER's Stone | the OTHER Stone |
+|---|---|---|
+| field | `EconomyService.Food` / `_state.Resources.Food` | `GameState.Stone` (`NestedTypes.cs:151`, `SaveSchema.cs:249`) |
+| wire key | `food` | `stone` |
+| HUD | shown, labelled Stone | nowhere but `DebugCanvasUI.cs:137` |
+| spent by | build costs, upgrades, training | **nothing** |
+| seeded | by play | `GameStateService.cs:1026` -> **20 at new game** |
+
+```csharp
+// GameStateService.ReadTimeDerivedBalance / WriteTimeDerivedBalance - the offline clamp mirror
+case "stone": return _state.Stone;            // nothing displays or spends this
+case "food":  return _state.Resources.Food;   // the balance the player calls Stone
+```
+
+**Migrating an active grant key from `food` to `stone` on this tree routes that value into the
+invisible balance.** The player would earn - or BUY - stone and receive nothing: no exception, no log,
+no red test. It is the `packs.json` money bug from earlier today pointed the other way, on a build that
+now takes real money.
+
+⚠ WO-1163's reuse of the Food slot was CORRECT and is not in question. What nobody noticed is that a
+`Stone` field already existed, so the reuse created a SECOND authority rather than replacing one.
+
+### What this changes for the batch, effective immediately
+
+- **WO-1212 is minted as the P0 precondition.** It forces an authority ruling - retire
+  `GameState.Stone` into the live slot (cheap, matches WO-1163's precedent), or move everything onto it
+  (large, must be atomic) - **before any Food-to-Stone key moves anywhere.**
+- ⛔ **NO lane may migrate an active JSON grant key** currently authoring `food`: `quests.json`,
+  `realm-map.json`, `offline-storage.json`, `FarmUpgrades.json`. They are CORRECT TODAY precisely
+  because they say `food`. They become wrong only once an authority is picked.
+- ✅ **PROD-016's corrected display-only lane still stands** and is unaffected - labels and the world
+  node model, touching no balance at all. That fence was already right for this reason.
+- ✅ **LANE 5 (WO-1206)** stands, with `GameState.Stone` added to what it must understand: the
+  detector's job is player-visible vocabulary, and it must not read either balance as a defect until
+  WO-1212 rules.
+- ⛔ `legacySkus`' `impulse-food-*` aliases stay. They are purchase aliases and must keep resolving.
+
+### The rule this cost us, worth carrying
+
+**A sweep finds surfaces; it cannot see which of two identically-named things is load-bearing.** Both
+"stone" balances are real, persisted, guarded and server-synced - a text sweep reads them as one
+concept with a spelling problem. The difference only shows when you ask *which one does the HUD read
+and which one does a cost spend*. Before migrating any key, answer that question for the destination,
+not just the source.
+
+⭐ Credit where due: the dev seat surfaced this by refusing to ship a partial migration and then
+sweeping wider than its own lane. That is exactly the behaviour that catches this class.

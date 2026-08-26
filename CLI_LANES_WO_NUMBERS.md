@@ -137,7 +137,21 @@
 > fine as history. A copied number is the bug **even when it was right the day it was written** -
 > that is exactly how the retired 860-899 UI block kept re-seeding collisions from CLAUDE.md sec.2.
 
-> ## ⚠ RECONCILED 2026-08-25 (CLI): main line next free = **1212**.
+> ## ⚠ RECONCILED 2026-08-25 (CLI): main line next free = **1213**.
+> *(CLI seat minted **WO-1212** and bumped 1212 -> 1213 in this SAME edit. **1212** = THERE ARE TWO
+> STONE BALANCES AND ONLY ONE IS THE PLAYER'S. ⛔ P0 PRECONDITION for the whole Food-to-Stone
+> program. `EconomyService.Food` / `_state.Resources.Food` is what the HUD shows as Stone and what
+> every cost spends; `GameState.Stone` (NestedTypes.cs:151, SaveSchema.cs:249) is a SECOND persisted
+> balance, seeded 20 at new game (GameStateService.cs:1026), server-guarded and time-derived in BOTH
+> lists (save.js:62,:492), displayed only in DebugCanvasUI and spent by NOTHING. WO-1163 reused the
+> Food slot rather than migrating - correct - but a Stone field already existed, so the reuse created
+> a second authority instead of replacing one. ⛔ THE TRAP: the obvious sweep recommendation - "make
+> every active JSON key and grant route use stone" - would route grants into the INVISIBLE balance,
+> so the player earns or BUYS stone and receives nothing, silently, on a build that takes real money.
+> The ticket forces an authority ruling (retire GameState.Stone, or move everything to it) before any
+> key migrates. READY TO IMPLEMENT.)*
+>
+> ### superseded: RECONCILED 2026-08-25 (CLI): main line next free = **1212**.
 > *(CLI seat minted **WO-1211** and bumped 1211 -> 1212 in this SAME edit. **1211** = THE GAME ASKS
 > THE PLAYER TO SIGN ON EVERY LAUNCH. Owner: "check why it asks for authentication everytime i load"
 > / "ive never had a game do that" - and that second sentence is the acceptance bar. Device log:
