@@ -336,3 +336,203 @@ Ownership correction received: Codex writes implementation; Claude specs, verifi
 3. **Not done:** generator, `.g.cs`, removal of all three hand mirrors, shared parity/oracle registration for sites 2/3/6, deliberate RED proof, Unity gate, commit, and ticket flip.
 4. **Mismatch / could not find:** none beyond the already-recorded Batch 9 correction that this lane owns the shared parity surface. Because that shared owner must be complete and collision-free, no partial source-only diff is being offered as finished work.
 5. **Verification:** worktree was created from the corrected Batch 9 base and left clean. The existing `BuildFallback()` still contains the ticketed types, `lockedIds`, and `visibleLockedIds` mirrors.
+
+## HANDOFF 2026-08-25 - Batch 9 Revision 2 implementation returns
+
+### WO-1170 site 2 - generated build-category fallback and shared parity owner
+
+1. **What landed:** `BuildCategoryRegistry` no longer contains the hand-maintained `BuildType`/`CatalogType`, `lockedIds`, or `visibleLockedIds` fallback tables. Runtime-file and fallback paths now parse the same DTO shape. Added a deterministic editor generator and generated `.g.cs` snapshot sourced from `build-categories.json`. Added and registered one shared generated-fallback parity suite; it checks both canonical copies and the generated hashes for build categories and the separately returned stake-reward artifact.
+2. **Where:** `D:\eoa-codex-b9-1170s2`, branch `codex/b9-1170s2`. Modified `Assets/_Modules/Village/Catalog/BuildCategoryRegistry.cs` and `Assets/Editor/Regression/DataRegression.cs`; added `Assets/Editor/BuildCategoryFallbackGenerator.cs`, `Assets/_Modules/Village/Catalog/Generated/BuildCategoryFallbackData.g.cs`, `Assets/Editor/Regression/GeneratedFallbackParityRegression.cs`, and their `.meta` files.
+3. **Not done:** no canonical JSON edit, Unity generator invocation, deliberate JSON-drift RED run, compile/regression gate, commit, or ticket flip. Site 3 must be harvested before the shared suite runs, because absence of its generated artifact is deliberately RED. Site 6 remains withdrawn and has no parity registration.
+4. **Mismatch / could not find:** none after Revision 2. The distinct output is `Village/Catalog/Generated/BuildCategoryFallbackData.g.cs`; the pre-existing `Village/Buildings/Generated/` lane was untouched.
+5. **Verification:** both canonical copies are byte-identical at SHA-256 `5acd1ba494770cba3cab3cdadf1d0004517a8921d69c3f8b2ce47dcb690ad83c`; the checked-in generated payload parses to schema version 3 and five categories; `git diff --check` clean; braces balanced and NUL count zero in all new/modified implementation files. Claude owns the Unity generator, deliberate RED, compile, and regression markers.
+
+### WO-1173 - device/store schema gate wiring plus tracked repair migration
+
+1. **What landed:** schema parity now blocks all three actual Android/device distribution entry points: the complete morning chain, detached APK build, and Firebase distribution of an existing APK. Each writes a fresh `Builds/schema-parity.log`, invokes the read-only `tools/schema-parity.mjs`, and requires both successful execution and a line-start `SCHEMA_PARITY_OK` marker. The pre-push hook now detects outgoing commits that edit `api/schema.sql` and applies the same blocking marker rule. Added a fresh ordered, idempotent migration covering the absent `dungeon_status`, `auth_sessions`, and `purchase_quotes` tables plus the four entitlement audit columns and widened network CHECK.
+2. **Where:** `D:\eoa-codex-b9-1173`, branch `codex/b9-1173`. Modified `morning-ship-chain.ps1`, `overnight-apk-build.ps1`, `distribute-android.ps1`, and `.githooks/pre-push`; added `api/migrations/20260824_0001_repair_schema_parity.sql`. `tools/schema-parity.mjs` remained read-only.
+3. **Not done:** no production DB execution, scratch-DB destructive RED proof, migration application, production deploy, commit, or ticket flip. `overnight-webgl-deploy.ps1` was inspected and intentionally left untouched.
+4. **Mismatch / could not find:** the granted WebGL script explicitly performs a Vercel **preview** and says `never --prod`; no tracked script in the tree invokes `vercel --prod`. Therefore it cannot honestly satisfy "after every production API deploy." Revision 2 moved production proof out of lane, but a real production-deploy trigger still needs an ops-owned script or CI surface. Wiring the preview script would label the wrong event as covered.
+5. **Verification:** PowerShell parser clean for all three modified `.ps1` files; pre-push shell syntax clean after the repository's CRLF normalization; `git diff --check` clean; `node tools/schema-parity.mjs --expected-only` emitted `SCHEMA_PARSE_OK` for 17 declared tables. Live `SCHEMA_PARITY_OK` remains owner/ops-owned because `DATABASE_URL` is redacted.
+
+### WO-1171 section 4 - Revision 2 wallet-choice scope conflict
+
+1. **What landed:** no additional edit beyond the earlier Settings-only connect/disconnect return.
+2. **Where:** existing isolated return `D:\eoa-codex-b9-1171`, branch `codex/b9-1171`.
+3. **Not done:** persisted preferred wallet package, installed-handler enumeration, sealed-session clearing, kingdom-identity confirmation, or chooser UI.
+4. **Mismatch / could not find:** Revision 2 requires a stored package preference consulted by `TargetedLocalAssociationScenario` and clearing `MwaSessionStore` when it changes, but its final binding scope simultaneously says `Settings/` is the only writable area and `Wallet/` remains read-only. Those requirements cannot be implemented through `SettingsController.cs` alone or through the existing `CurrencySkinResolver` seam. **Required CLI action:** grant the exact Wallet files/seams needed after the UI design arrives, or split the new preference-chain mechanism into a separately scoped ticket. The existing Settings placement remains a valid partial return and was not widened silently.
+5. **Verification:** current narrow worktree still modifies only `Assets/_Modules/Settings/SettingsController.cs`; Wallet files remain untouched.
+
+## OWNER/OPS EVIDENCE 2026-08-25 - WO-1173 production schema parity
+
+- **Command:** `node tools/schema-parity.mjs` from `D:\eoa`.
+- **Fresh production marker supplied by owner:** `SCHEMA_PARITY_OK 17 table(s) verified against api/schema.sql`.
+- **Disposition:** WO-1173 acceptance item "SCHEMA_PARITY_OK against production" is now proven. This evidence does not by itself prove the separate deliberately narrowed CHECK/dropped-column RED run in a scratch database; keep that item open unless separately evidenced.
+
+## HANDOFF 2026-08-25 - WO-1196 wallet preference-chain mechanism
+
+1. **What landed:** added a device-local PlayerPrefs wallet-package preference with Seeker as the unchanged default. The existing scenario now exposes the actually installed MWA package ids, resolves an installed stored choice before the unchanged Seeker-first chain, and records whether the winner came from the stored choice, chain rank, or implicit fallback. Its public switch entry point requires an explicit confirmation boolean, refuses uninstalled packages, persists the choice, and calls `MwaSessionStore.Clear(...)` on every effective wallet change so boot-time auto-resume cannot reconnect the old wallet. A stored choice whose app was removed warns and falls through to the original chain. The targeted association clone, `setPackage`, identity URI, association token, websocket lifecycle, and implicit fallback remain intact.
+2. **Where:** isolated worktree `D:\eoa-codex-1196`, branch `codex/wo1196`. Modified `Assets/_Modules/Wallet/TargetedLocalAssociationScenario.cs`; added `Assets/_Modules/Wallet/WalletPreferenceStore.cs` and `.meta`. `MwaSessionStore.cs` already exposed the necessary public `Clear` seam and was not edited.
+3. **Not done:** no picker/confirm UI, Settings edit, Core edit, provider protocol edit, save migration/re-key, Unity compile, device proof, gate, commit, or ticket flip. Presentation remains with WO-1171/the UI seat.
+4. **Mismatch / could not find:** no implementation blocker. The mechanism exposes `MwaSessionStore.StoredAddress` as `CurrentSessionWalletAddress` for picker identification; it deliberately does not read `GameState.BoundWallet`, because this lane may not read/write/move save data. **Proposed owner copy:** title `Switch wallet and kingdom?`; body `A different wallet opens a different saved kingdom. Your current kingdom is not deleted; it returns when you reconnect this wallet.`; actions `Stay Here` / `Switch Wallet`. These strings are proposed only, not settled or rendered by this lane.
+5. **Verification:** `git diff --check` clean; new store braces **7/7**, NUL **0**, non-ASCII **0**; every added scenario line is ASCII-only. Structural checks confirm the only preference persistence is `PlayerPrefs`, the effective-change path calls `MwaSessionStore.Clear`, the old `LocalAssociationIntentCreator` + targeted `setPackage` path remains, and neither changed file references any save service or re-key operation. Claude still owes compile/regression and Android proofs for default Seeker, stored installed choice, sealed-session clearing, and stored-uninstalled fallback.
+
+## HANDOFF 2026-08-25 - WO-1073 architecture slice only
+
+1. **What landed:** added a pure CommonJS patronage library with the server-owned lifetime-USD aggregate over `purchase_entitlements`, keyed by wallet. Every durable entitlement participates: there is deliberately no SKU, date-window, or fulfillment-status filter, and NULL canary anchors contribute zero through SQL `SUM`. Added one frozen, data-authored three-tier table at the ruled tentative thresholds ($50 Patron, $150 High Patron, $500 Founder / Benefactor), with only the approved cosmetic/status capability descriptors and no tier above $500. Threshold comparison uses exact integer cents parsed from Postgres NUMERIC text rather than floating point. Added a seven-case oracle covering exact boundaries, all-entitlement aggregation, empty history, immutable cosmetic-only schema, forbidden power/spendable vocabulary, and absence of any entitlement mutation export/SQL.
+2. **Where:** isolated worktree `D:\eoa-codex-1073`, branch `codex/wo1073-architecture`; two greenfield files only: `api/_lib/patronage.js` and `test/patronage.test.js`.
+3. **Not done:** **THIS IS A NAMED ARCHITECTURE SLICE AND DOES NOT CLOSE WO-1073.** No patronage entitlement flip, migration, endpoint, authentication surface, client/UI surface, cosmetic renderer, public profile output, Unity file, deployment, commit, or ticket status was touched. The excluded entitlement flip remains migration-owned; client tiers remain unrendered and therefore are not wired to any player surface.
+4. **Mismatch / could not find:** none. The existing backend suite baseline was 49 tests, not the post-slice count; the seven new architecture/oracle tests bring the full fleet to 56.
+5. **Verification:** `NODE_PATH=D:\eoa\node_modules node --test test/*.test.js` completed **56/56 green** with no `DATABASE_URL`; `git diff --check` clean; worktree contains exactly the two granted untracked files. The oracle explicitly proves the module exports status/aggregation only and contains no `INSERT`, entitlement `UPDATE`, or `DELETE` path.
+
+## HANDOFF 2026-08-25 - WO-1198 real quoted price and visible saving
+
+1. **What landed:** the server now transports `usdEffective`, the exact `quotedUsd` input used to calculate `amountBaseUnits`, plus server-computed `usdSaving`. `usdAnchor` remains the auditable authored price. Ordinary undiscounted quotes carry effective=anchor and no saving; pinned canaries carry null for both. The client deserializes these as nullable display facts, shows effective USD as the price, and announces `was $X - save $Y` in words and digits beside the exact SKR. A discounted response missing `usdEffective` fails closed to no dollar label instead of falling back to the wrong full-price anchor.
+2. **Where:** isolated worktree `D:\eoa-codex-1198`, branch `codex/wo1198`. Modified `api/_lib/purchase-catalog.js`, `api/purchases/quote.js`, `test/purchases.quote.test.js`, `Assets/_Modules/Wallet/PurchaseQuoteService.cs`, and `Assets/_Modules/Wallet/PackStore.cs`.
+3. **Not done:** no quote amount/rate/rounding/settlement change, verify-path change, SKU allowlist, migration, deployment, Unity compile, headed greyscale capture, commit, or ticket flip.
+4. **Mismatch / could not find:** none. Dollar saving also had to travel from the server: calculating `usdAnchor - usdEffective` on the client would violate the ticket's no-client-price-arithmetic rule just as surely as deriving the effective price there.
+5. **Verification:** the old `discountedUsd` absence pin was re-pointed, not deleted. It now asserts discounted `usdEffective`, server-computed `usdSaving`, endpoint wire preservation, client deserialization, `amountBaseUnits` as the binding client origin, and absence of client-side anchor/rate derivation. Full backend suite **56/56 green** without `DATABASE_URL`; `git diff --check` clean. Claude still owes Unity compile and the ruled greyscale approval-screen capture.
+
+## HANDOFF 2026-08-25 - WO-1199 deploy chain steps 1-8 only
+
+1. **What landed:** added one ASCII PowerShell command centre that runs fresh compile and registered regression markers in order, calls the existing R2 authority and explicitly decodes its UTF-16 parity log, runs production schema parity, captures the current production deployment id before any promote, builds and preview-deploys, byte-compares the served preview `index.html` to the local artifact, promotes that exact preview URL, proves the production database with the row-writing nonce endpoint, and automatically promotes the captured deployment id if that final proof fails. Every refusal records step, wanted marker, log, and reason. PowerShell was chosen because the Unity/R2 authorities are already PowerShell and the R2 log needs native UTF-16 handling.
+2. **Where:** isolated worktree `D:\eoa-codex-1199`, branch `codex/wo1199`; added `tools/command-centre.ps1` only.
+3. **Not done:** no sale schedule, store table/JSON, `-Status`, analytics view, schema/R2 authority edit, live deploy, production promote, rollback, Unity gate, R2 upload, commit, or ticket flip. This is explicitly WO-1199 steps 1-8 only, as ordered.
+4. **Mismatch / could not find:** none. The script always invokes R2 because every full command-centre run ships repo content. Vercel and database credentials are required from `VERCEL_TOKEN` and `DATABASE_URL` environment variables and are never placed in CLI arguments or logs. The operator is explicitly told that `.vercelignore` re-includes `api/`, so promotion is not WebGL-only.
+5. **Verification:** PowerShell parser clean; script bytes are pure ASCII; grep proves there is no token CLI argument; `git diff --check` clean. A deliberate missing-secret run was seen RED with exit 20 and the complete refusal `step=5 wanted=VERCEL_TOKEN_SET log=environment reason=VERCEL_TOKEN_MISSING`; its command-centre log was verified ASCII with zero NUL bytes. Claude/ops still owe full live GREEN plus deliberate failed-gate/no-promote and failed-post-deploy/automatic-rollback RED proofs.
+
+## HANDOFF 2026-08-25 - WO-1197 partial-landed board badge
+
+1. **What landed:** chose shape **(a), the PARTIAL sub-badge**. Ready rows whose status says `PARTIAL`, or explicitly says a `SLICE ... LANDED`, remain assignable in the Ready bucket and now render a separate word-bearing PARTIAL badge. This is the smallest truthful fix: it makes landed work visible without imposing a new mandatory field across the repo's legacy partial statuses or making `--check` noisy. The documented status contract explains that this is presentation, not a fourth bucket.
+2. **Where:** isolated worktree `D:\eoa-codex-1197`, branch `codex/wo1197`; modified `tools/board_build.py`, `docs/BOARD.md`, and regenerated `BOARD.html` through the generator (not by hand).
+3. **Not done:** no new bucket, no bucket priority change, no work-order status edit, no `RESIDUAL:` grammar, no legacy near-miss cleanup, no commit, and no ticket flip.
+4. **Mismatch / could not find:** none. A badge was chosen over required `RESIDUAL:` because enforcing the latter honestly would immediately broaden this small lane into migration of numerous legacy partial rows; a non-enforced field would only look stronger while proving nothing.
+5. **Verification:** `python tools/board_build.py --check` emitted `BOARD_CHECK_OK 0 unlabeled, 0 status contradictions, mint numbers readable`. The generated real rows for WO-1170, PROD-014, and WO-1073 each contain both `Ready` and `PARTIAL`; `git diff --check` clean.
+
+## HANDOFF 2026-08-25 - WO-1196 wallet preference oracle gap
+
+1. **What landed:** extended the already-registered wallet-session regression suite with the three missing runtime cases: no explicit choice resolves Seeker at chain rank 1 even when another handler is listed first; an installed stored package wins over the default chain; and changing from implicit Seeker to a confirmed installed wallet persists the choice and clears both halves of the sealed MWA session. The probe snapshots and restores the real preference/token/address PlayerPrefs keys in `finally`.
+2. **Where:** isolated worktree `D:\eoa-codex-1196-oracle`, branch `codex/wo1196-oracle`; modified only `Assets/Editor/Regression/WalletSessionPersistenceRegression.cs`. It is already invoked by `DataRegression` as `[wallet-session]`, so no shared registration edit is needed.
+3. **Not done:** no production Wallet code change, Settings/UI change, save-data read/write/re-key, Android picker launch, Unity compile/regression execution, commit, or ticket flip.
+4. **Mismatch / could not find:** none. The suite invokes the internal preference-store seam by reflection because the public switch entry point correctly enumerates Android handlers and therefore returns none in the Editor; this still exercises the exact store method the public path calls after enumeration.
+5. **Verification:** structural oracle check confirms references to `WalletPreferenceStore`, both resolution expectations, the preference-change seam, and the sealed-session assertion; braces **31/31**, NUL **0**, `git diff --check` clean. Claude owns the fresh Unity `COMPILE_GATE_OK` and registered `REGRESSION_OK` markers.
+
+## HANDOFF 2026-08-25 - WO-1199 revision B1-B4
+
+1. **What landed:** fixed `Invoke-Captured` so native stderr is non-terminating inside the capture boundary and all stderr/stdout reaches the log. Added a credential-free synthetic regression that emits two stderr lines followed by stdout and proves all three plus exit 0. Replaced preview promotion with an explicit production-target candidate flow: `vercel deploy --target production --skip-domain` creates a non-live candidate using production environment; authenticated `vercel curl` byte-proves that exact deployment despite preview protection; `vercel promote` receives its immutable id, for which the CLI preview-rebuild branch is structurally unreachable. Promotion and rollback no longer trust prose or exit code: both poll the production alias until its inspected `.id` equals the expected id, with a bounded timeout/refusal.
+2. **Where:** revised isolated worktree `D:\eoa-codex-1199`, branch `codex/wo1199`; `tools/command-centre.ps1` plus new `test/command-centre.capture.test.ps1`.
+3. **Not done:** no live Unity gate, R2 push, candidate deployment, production promotion, induced gate failure, induced post-deploy failure, rollback, commit, or ticket flip. **OPS-OWNED SLICE:** WO-1199 acceptance items 1, 2, 3, and 6 require the single Unity executor, real credentials/deployment, and two induced live failure paths; the dev lane cannot close them.
+4. **Mismatch / could not find:** the original ticket's literal preview-then-promote design is incompatible with installed Vercel CLI 56.4.0 because promoting a preview rebuilds it with production environment. The revision therefore uses the ticket-authorized explicit design change: an unaliased production-target candidate is the only artifact that can both carry production environment and later be promoted without rebuilding. No unresolved local blocker remains.
+5. **Verification:** `COMMAND_CENTRE_CAPTURE_OK stderr=2 stdout=1 exit=0`; PowerShell parser clean for script and regression; both files pure ASCII; static check proves the production candidate, authenticated candidate fetch, exact-id promote, promotion alias poll, and rollback alias poll are present and the obsolete prose-success regex/preview promotion are absent; `git diff --check` clean.
+
+## HANDOFF 2026-08-25 - WO-1163 money-path correction
+
+1. **What landed:** completed the missing Unity side of the food-to-stone impulse conversion without changing amounts, rates, settlement, or schema. `PackEconomy`, `ShortfallPackOffer`, and `ImpulsePackRegression` now bind/read `stone`; each renamed impulse SKU carries its former `impulse-food-*` id in `legacySkus`. The Node dominance oracle derives its resource list from canonical authored economy keys, and the Unity oracle compares raw authored keys to `PackEconomy`'s `JsonProperty` bindings so Newtonsoft cannot silently discard a future resource.
+2. **Where:** isolated worktree `D:\eoa-codex-1163-r2`, branch `codex/wo1163`. Modified exactly seven files: both canonical `packs.json` copies, `api/_lib/purchase-catalog.js`, `test/purchases.quote.test.js`, `PackCatalog.cs`, `ShortfallPackOffer.cs`, and `ImpulsePackRegression.cs`.
+3. **Not done:** no food-themed player copy, tier amount, exchange-rate, schema, settlement, deployment, commit, or ticket flip. Owner retains copy.
+4. **Mismatch / could not find:** none after correction. The historic internal `PackEconomy.Food` field name remains to avoid an unrelated serialized/C# rename, but its authoritative JSON binding is now `stone` and every public economy path reports stone.
+5. **Verification:** quote suite **31/31 green**; canonical pack copies byte-identical at SHA-256 `6F6F7BE3722599980CFBFF6F2A457109654ED7BD1E69C897C8771939763A65F5`; `git diff --check` clean. Claude owns Unity compile/regression execution and commit.
+
+## HANDOFF 2026-08-25 - WO-1199 revision B5-B6
+
+1. **What landed:** removed `--no-color` from authenticated `vercel curl`, because that subcommand forwards unknown flags to the real curl binary. The candidate fetch now deletes any prior remote-index artifact first, captures and requires curl exit zero, and independently requires a newly created output file before hashing it.
+2. **Where:** existing isolated worktree `D:\eoa-codex-1199`, branch `codex/wo1199`; revised `tools/command-centre.ps1` only. The synthetic capture regression remains unchanged.
+3. **Not done:** no live deploy, promote, rollback, credentials, Unity gate, commit, or ticket flip.
+4. **Mismatch / could not find:** none after correction. A stale `index.html` can no longer survive a failed fetch and satisfy STEP 5.
+5. **Verification:** PowerShell parser clean; `COMMAND_CENTRE_CAPTURE_OK stderr=2 stdout=1 exit=0`; static B5/B6 assertions green; `git diff --check` clean. Claude/ops own the live proofs.
+
+## HANDOFF 2026-08-25 - UtcDay save-contract oracle
+
+1. **What landed:** corrected `UtcDay.cs`'s drifted migration ledger from three copies to five and fixed the two Wallet paths. Added an editor oracle pinning the persisted `yyyy-MM-dd` constant, invariant culture, Local-to-UTC conversion, and the UTC-midnight boundary. Its source lint requires the exact 2+2+1 outstanding formatter set and fails on any sixth private formatter, while explicitly allowing the two owner-ruled local-day variants.
+2. **Where:** isolated worktree `D:\eoa-codex-utcday`, branch `codex/utcday-oracle`; modified `Assets/_Modules/Core/UtcDay.cs`; added `Assets/Editor/Regression/UtcDayContractRegression.cs` and `.meta`.
+3. **Not done:** none of the five live monetization call sites was migrated; the two local-day implementations were not changed; `DataRegression.cs` registration is lead-owned and untouched. No Unity run, commit, or ticket mint/status occurred.
+4. **Mismatch / could not find:** none. Source inspection confirms BattlePass has two copies, MonthlyCard two, and AdGate one.
+5. **Verification:** independent source scan returns exactly those three files with counts **2/2/1**; `git diff --check` clean. Claude owns registration and the Unity marker run.
+
+## HANDOFF 2026-08-25 - username-policy oracle
+
+1. **What landed:** added four DB-free tests for exact length boundaries/trimming, the ASCII character contract, embedded reserved/abuse terms, and the exported leetspeak/punctuation/repeat normalizer.
+2. **Where:** `D:\eoa-codex-username-policy`, branch `codex/username-policy-oracle`; new `test/username-policy.test.js` only.
+3. **Not done:** no policy/runtime edit, registry, deployment, commit, or ticket mint.
+4. **Mismatch / could not find:** none.
+5. **Verification:** full Node fleet **60/60 green**; `git diff --check` clean.
+
+## HANDOFF 2026-08-25 - audit privacy oracle
+
+1. **What landed:** added four DB-free behavioral tests pinning stable short salted IP correlation, absence of raw IP/query/body data from logs and stored properties, bounded diagnostic shape, console-only operation, rejecting-DB degradation, and circular-detail non-throw behavior.
+2. **Where:** `D:\eoa-codex-audit-privacy`, branch `codex/audit-privacy-oracle`; new `test/audit.privacy.test.js` only.
+3. **Not done:** no audit/runtime edit, DB call, deployment, commit, or ticket mint.
+4. **Mismatch / could not find:** `safeJson` is private rather than exported as the pipeline note implied; its invariant is exercised through `logAuthReject` instead.
+5. **Verification:** full Node fleet **60/60 green**; `git diff --check` clean.
+
+## HANDOFF 2026-08-25 - WO-939 backend-auth define oracle
+
+1. **What landed:** added an editor settings oracle requiring `BACKEND_AUTH_ENFORCED` on both shipping target groups, Android and WebGL, using Unity's PlayerSettings API.
+2. **Where:** `D:\eoa-codex-wo939-oracle`, branch `codex/wo939-oracle`; new `BackendAuthEnforcedRegression.cs` and `.meta` only.
+3. **Not done:** no ProjectSettings edit, registration, Unity execution, commit, or DONE-status change.
+4. **Mismatch / could not find:** **EXPECTED RED DISCOVERY:** current Android and WebGL `scriptingDefineSymbols` rows both lack `BACKEND_AUTH_ENFORCED`, despite WO-939 being DONE. Claude must decide whether to restore both defines before registering or reopen the ticket; the oracle was not weakened to current state.
+5. **Verification:** source/settings inspection confirms both missing rows; `git diff --check` clean.
+
+## HANDOFF 2026-08-25 - WO-774 raid-copy oracle
+
+1. **What landed:** added the named source oracle for the Defenders readout, absence of razed/base-percent player copy in HUD and victory, and the rule that modal and tray cannot both label an action `Deploy`.
+2. **Where:** `D:\eoa-codex-wo774-oracle`, branch `codex/wo774-oracle`; new `RaidCopyRegression.cs` and `.meta` only.
+3. **Not done:** no player-copy correction, registration, Unity execution, commit, or DONE-status change.
+4. **Mismatch / could not find:** **EXPECTED RED DISCOVERY:** HEAD still authors `Razed 0%`, runtime `Razed N%`, and victory `% razed`, and does not author the required `Defenders` label. The pre-raid CTA is already `BEGIN ASSAULT`, so the deploy-collision half is structurally green. Claude must reopen/correct the copy before registering; the oracle preserves the written acceptance.
+5. **Verification:** offending source literals confirmed at HEAD; `git diff --check` clean.
+
+## HANDOFF 2026-08-25 - WO-929 aura-reparent oracle
+
+1. **What landed:** added a scene-free EditMode-shaped runtime oracle that creates a host and real manager aura, proves the spawned aura is parented to its host, forces the inactive-host deferred-return path, invokes the next-frame sweep, and proves the aura ends inactive outside the host under the pool root.
+2. **Where:** `D:\eoa-codex-wo929-oracle`, branch `codex/wo929-oracle`; new `AuraReparentRegression.cs` and `.meta` only.
+3. **Not done:** no VFX runtime edit, scene load, registration, Unity execution, commit, or status change.
+4. **Mismatch / could not find:** none at source. This is intentionally runtime-shaped and still needs Claude's EditMode/registered execution.
+5. **Verification:** reflection seams and cleanup are explicit; `git diff --check` clean.
+
+## HANDOFF 2026-08-25 - guest-identity second-client-copy oracle
+
+1. **What landed:** extended WalletIdentityRegression case 2 so it reads both GameStateService and BackendRequestSigner, requires both guest prefixes, and compares normalized `IsGuestIdentity` bodies before comparing the client contract to the server regex.
+2. **Where:** `D:\eoa-codex-guest-identity-oracle`, branch `codex/guest-identity-oracle`; modified only `Assets/Editor/Regression/WalletIdentityRegression.cs`.
+3. **Not done:** no production identity edit, server edit, shared registration edit, Unity run, commit, or ticket mint.
+4. **Mismatch / could not find:** none; the two client bodies match at current HEAD.
+5. **Verification:** structural checks confirm the second source and body comparison are live; `git diff --check` clean. Claude owns the already-registered suite run.
+
+## HANDOFF 2026-08-25 - Batch 12 R4 phantom harvest yield
+
+1. **What landed:** `HarvestSite.AssignedCount` now self-heals by pruning Unity-null worker transforms before yield is calculated, so a destroyed Echo cannot continue paying `YieldPerAssignedPet`. The one owner of Echo teardown, `PetDeployer`, now emits a pre-destroy lifecycle notice; `PetHarvestBootstrap` subscribes once at runtime and explicitly unassigns that worker from every live/inactive harvest site before destruction. No second recall/despawn path was added.
+2. **Where:** isolated worktree `D:\eoa-codex-b12-r4`, branch `codex/b12-r4-harvest`; modified `Assets/_Modules/Pets/PetDeployer.cs`, `Assets/_Modules/Village/World/HarvestSite.cs`, and `Assets/_Modules/Village/World/PetHarvestBootstrap.cs`.
+3. **Not done:** no quest file, save schema, economy amount, deployment, commit, or ticket status was touched. WO-1195 was deliberately not half-landed; its temporary scaffold was removed cleanly when the owner prioritized today's stable APK/production build.
+4. **Mismatch / could not find:** the bootstrap component is normally gated off with placeholder nodes, so the lifecycle subscription is installed in its static runtime initializer before that component gate. This keeps real HarvestSites covered without resurrecting placeholder content.
+5. **Verification:** fresh pinned-Unity gate emitted `COMPILE_GATE_OK` in `Builds/b12-r4-compile.log`; wrapper verdict PASS; `git diff --check` clean. The full EditMode baseline ran **956/973**, with 17 failures across ability/pack/wave catalogs, barracks/dev grants, roster/raid/shop, null-coalesce lint, and wallet defaults; none references HarvestSite, PetHarvestBootstrap, PetDeployer, assignment, yield, or this lane's three paths. Therefore compile acceptance is green but the repository-wide test fleet is honestly RED and must not be represented as APK-stable without baseline disposition. Unity's import-only FBX/meta mutations were restored and are not part of the lane.
+
+## VERIFY 2026-08-25 - WO-1163 R2 money-path correction
+
+1. **Verdict:** source-ready handoff in `D:\eoa-codex-1163-r2`, branch `codex/wo1163-r2`; no further edit was required during verification. The seven-file diff implements all six bounce instructions: authored `stone` binds to the reused internal `PackEconomy.Food` slot, impulse amount and shortfall paths use `stone`, the Unity resource family and raw-key-vs-DTO oracle use `stone`, all three retired food SKU ids survive through `legacySkus`, and Node derives its dominance-key union from canonical grants instead of a fail-open literal.
+2. **Scope held:** exactly the two canonical `packs.json` copies, `api/_lib/purchase-catalog.js`, `test/purchases.quote.test.js`, `PackCatalog.cs`, `ShortfallPackOffer.cs`, and `ImpulsePackRegression.cs` are modified. No quest path is present; `SaveSchema.CurrentVersion` remains 38; no amount, price, rate, rounding, settlement, or player-facing food-themed pack-name/tagline edit was added.
+3. **Verification:** quote suite **31/31 green**; complete backend fleet **57/57 green** using `NODE_PATH=D:\eoa\node_modules`; canonical mirrors byte-identical at MD5 `A711238D20A51A29E294236AB25B3D3D`; the only remaining JSON `food` key tokens are the six intentional `legacySkus` aliases across the two mirrors; `git diff --check` clean.
+4. **Lead-owned:** run the registered Unity compile/regression gate before harvesting, then commit/push by explicit path. The dev lane did not commit, push, stage, deploy, or change ticket status.
+
+## HANDOFF 2026-08-25 - Batch 13 WO-1211 cold-launch signing
+
+1. **What changed:** boot cloud reads now attach only an already-usable cached backend session (or the non-interactive guest header) and otherwise keep the local save without invoking `sign_messages`. Connect/auto-resume session warm-up no longer mints a session; the first authenticated action mints lazily. Cloud save writes route through `BackendRequestSigner.TryAttachAsync` and retain the existing fail-closed return/requeue behavior. The duplicated private nonce/sign rail and its response DTO were removed from `GameStateService`; the bearer token remains deliberately memory-only.
+2. **Where:** isolated worktree `D:\eoa-codex-b13-1211`, branch `codex/wo1211`; modified `Assets/_Modules/Core/State/GameStateService.cs` and `Assets/_Modules/Core/Web3/BackendRequestSigner.cs`; added unregistered `Assets/Editor/Regression/BackendSaveAuthRegression.cs` plus `.meta`.
+3. **Oracle:** source/method-bounded checks pin cached-only boot load, guest routing at both load and save call sites even when enforcement is off, no connect-time mint/sign, shared-signer write routing with the auth-failure branch structurally bound to `return false`, and zero remaining auth-message/nonce/sign authority in `GameStateService`. `DataRegression.cs` was not touched; committer must register `BackendSaveAuthRegression.Run` and judge `BACKEND_SAVE_AUTH_OK`.
+4. **Review corrections:** first pass was rejected because `WarmUpSessionAsync` still signed during auto-resume and guest headers were lost when enforcement was off. Both were corrected. A second review required removal of the dead private authority and stronger guest/refusal oracle bindings; those corrections are included.
+5. **Verification/ownership:** `git diff --check` clean and exact runtime fence held. Per Batch 13, Codex did not run Unity gates, commit, push, or flip status. CLI lead owns compile, focused marker, full regression, commit/push, and the two-cold-launch device proof. OPS-OWNED acceptance: fresh device boot logs must contain no `sign_messages`; cloud-row success after an authenticated session and write refusal/success both require the live backend/wallet.
+6. **Binding precedence noted:** Batch 13 forbids persisting the bearer token and explicitly chooses local-first boot when no in-memory session exists. This supersedes the older ticket paragraph asking to persist the token. A manual-connect versus auto-resume warm-up split would require `WalletSkinBootstrap.cs`, outside this lane's file fence; this implementation follows the newer batch rule and defers warm-up for both paths.
+
+## BOUNCE 2026-08-25 - Batch 13 PROD-016 fence is not closed under the required token migration
+
+1. **Verdict:** no code written in `D:\eoa-codex-b13-prod016`; the authorized two-file fence cannot safely implement the required `food:N -> stone:N` read-migration.
+2. **Why:** `EchoAssignments.ResourceTokenOf` is consumed as a public token outside the fence. `EchoBonusCalculator.cs:240,465` compares it directly with `EchoRosterCatalog.TargetToken(entry.Affinity)`, which still returns `food` for Aldwin. Returning migrated `stone` would silently remove the affinity/match bonus. `EchoCardVM.cs:342` maps only `EchoAssignments.ResFood` to `ResourceBuildingProgression.FarmId`; a `stone` picker token would no longer follow the intended prerequisite. `EchoRosterCatalog.TryTargetFromToken` also recognizes `food` but not `stone`, so `TryTargetOf` and labels fail unless adapted.
+3. **World-node half:** `Assets/Resources/Harvest/stone.fbx` exists and `HarvestSite` can safely keep the frozen `MineResource.Food` enum while routing its model/display behavior to Stone. That does not make a partial landing safe because the persisted Echo token and consumers must move atomically.
+4. **Required fence correction:** add at least `EchoRosterCatalog.cs`, `EchoBonusCalculator.cs`, and `EchoCardVM.cs` (plus their focused oracle) or explicitly rule that `food` remains the frozen internal/persisted token and only display/model output changes. The latter contradicts Batch 13's explicit read-migration requirement.
+5. **Preserved:** no edit to live-agent-owned `EchoService.cs`, no blind rename, no `idle` migration, no commit/gate/status change.
+
+## HANDOFF 2026-08-25 - Batch 13 WO-1209 Phase A weapon-scale instrumentation
+
+1. **What changed:** the existing event-driven parent-scale solve now records the complete scale chain required by the ticket: grip-root name, instantiated body-child name, parent bone, parent lossy scale, authored multiplier, and resulting grip-root local scale. Existing renderer counts and resulting world bounds remain in the same line.
+2. **Why this seam:** `CompensateParentScale` is reached at initial attach and every meaningful re-solve/re-parent, but its four-input change gate prevents frame-rate log spam. This captures both required moments without changing weapon seating or scale behavior.
+3. **Where:** isolated worktree `D:\eoa-codex-b13-1209`, branch `codex/b13-1209`; modified only `Assets/_Modules/Village/Hero/EquipmentController.cs`.
+4. **Not done:** no scale correction, offset edit, prefab/model edit, Unity gate, device capture, commit, push, or ticket status change. Phase A is measurement only; the lead/device seat owns the oversized-weapon capture and Phase B ruling from those numbers.
+5. **Verification:** exact one-file fence held and `git diff --check` is clean (Git reports only the repository's LF-to-CRLF working-copy notice).
