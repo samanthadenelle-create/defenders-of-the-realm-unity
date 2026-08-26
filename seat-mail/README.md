@@ -16,31 +16,28 @@ The outbound half (CLI -> UI) already works and is untouched.
 - **UI seat SENDS** (enqueue). It is the writer.
 - **CLI seat SURFACES + ACKS** (reads oldest-un-acked, acts, acks exactly one).
 
-## Transport - case (c), resolved BY EVIDENCE (WO-1200 sec.3)
+## Transport - case (b), LIVE, resolved BY EVIDENCE (WO-1200 sec.3)
 
-The UI seat can READ the repo but cannot WRITE it by any channel, and cannot share the
-CLI's tree. So the return path is BUILT but cannot go live from the cloud seat yet;
-the owner remains the courier until the Claude GitHub App is granted WRITE for the org.
-Evidence, quoted at source:
+The UI seat cannot share the CLI's tree but CAN write the repo, so messages ride a
+dedicated `seat-mail/ui-to-cli` git ref the CLI fetches. The ref is live on origin and
+carries real messages. Evidence, quoted at source:
 
 - UI seat is a cloud **Linux** session (`cwd /home/user/defenders-unity`); the CLI
   seat is on **Windows `D:\EoA`** -> the working tree is **not shared**. (case (a) out)
 - UI seat **cannot call the CLI**: `SendMessage` returned verbatim - *"this cloud
   session cannot message other sessions yet - its credential is accepted for its own
-  work but not for delivering to another session."*
-- UI seat **cannot write the repo**: `git push` -> `403 Claude doesn't have GitHub
-  access ... for your organization`; GitHub MCP write (`create_branch`) -> `403
-  Resource not accessible by integration`. Reads work (`git fetch`, MCP `list_branches`).
+  work but not for delivering to another session."* (this is the one real block, and it
+  is why the channel is a git ref, not a message)
+- UI seat **CAN write the repo.** `git push` succeeds under `GIT_LFS_SKIP_PUSH=1`;
+  GitHub MCP `push_files` also succeeds (how the live messages here were sent).
+  ⚠ CORRECTION: an earlier read of a bare `git push` `403` called this case (c). That
+  403 was **git-LFS** failing to reach the LFS server (this container cannot push the
+  repo's LFS objects), which aborts the WHOLE push - it is NOT a repo-write block.
+  Skipping the LFS pre-push fixes it. (MCP `create_branch` does 403 - a different API
+  endpoint - but `push_files` does not, so it is not needed.)
 
-=> case **(c)**: neither share nor push. Per the ticket this is a legitimate outcome -
-SAY SO AND STOP, do NOT manufacture a transport ("a mailbox neither seat can read is
-worse than an honest gap"). The queue LOGIC below is transport-agnostic and kept
-regardless, so when a write channel arrives ONLY the delivery step changes.
-
-**Unblock:** install/reconnect the Claude GitHub App with WRITE for the
-`samanthadenelle-create` org (`github.com/apps/claude/installations/select_target`, or
-reconnect from claude.ai settings). Then push the ref `seat-mail/ui-to-cli` and the CLI
-fetches it - case (c) becomes (b) with no code change.
+=> case **(b)**, LIVE: cannot share, but can push. The CLI reads it with
+`git fetch origin seat-mail/ui-to-cli`. No GitHub App change is required.
 
 ## Queue semantics - a MAILBOX IS A QUEUE, NOT A SLOT (WO-1200 sec.1)
 
@@ -84,10 +81,11 @@ whole job.
 
 ## Usage
 
-UI seat send (any env where the seat can write the repo): `seat-mail/seat-send.sh
-<kind> "<subject>" "<body>"`.
-In THIS cloud env the seat cannot write the repo (case (c) above), so send is not
-possible until the GitHub App gets WRITE; the owner couriers messages meanwhile.
+UI seat send: `seat-mail/seat-send.sh <kind> "<subject>" "<body>"` (git push; in a
+container whose LFS objects are unpushable, run it under `GIT_LFS_SKIP_PUSH=1`). Or,
+from a cloud seat, build the queue content with `seatmail.py enqueue` into a temp and
+push `QUEUE.jsonl` + `msg/NNNNNN.json` to `seat-mail/ui-to-cli` via GitHub MCP
+`push_files` (how the live messages here were sent).
 
 CLI seat: hooks surface automatically. Manual peek: `powershell -File
 .claude/hooks/seat-mail-check.ps1`. After acting: `powershell -File
@@ -101,11 +99,13 @@ Prove the queue logic anywhere: `python3 seat-mail/seatmail.py selftest`.
   2 (ack one -> `pending=1`, not zero), burst (2 acks -> 2), 4 (instruction-shaped body
   surfaced as inert quoted data), 6 (no board/status write) - `seatmail.py selftest` +
   a live `QUEUE.jsonl` burst demo.
-- **TRANSPORT UNREACHABLE, case (c) (acceptance 5):** git-push 403, MCP write 403,
-  SendMessage 403 all captured. The channel cannot go live from the cloud seat until the
-  GitHub App gets WRITE for the org. Not faked (WO: "do not manufacture a transport").
-- **NEEDS CLI-SIDE VERIFICATION (Windows, live Claude Code) once a write channel exists:**
-  acceptance 3 (an idle CLI
+- **TRANSPORT LIVE, case (b) (acceptance 5):** the ref `seat-mail/ui-to-cli` is on
+  origin with real messages, verified end-to-end (`git fetch` -> `seatmail.py surface`
+  showed the OLDEST with `pending`>1; one `ack` decremented it). `git push` works under
+  `GIT_LFS_SKIP_PUSH=1` and MCP `push_files` works; the earlier "case (c)" read was a
+  git-LFS 403 masking an otherwise-fine push (see Transport above). SendMessage UI->CLI
+  is the only genuinely blocked channel.
+- **NEEDS CLI-SIDE VERIFICATION (Windows, live Claude Code):** acceptance 3 (an idle CLI
   seat is rewoken with no owner input) - the Stop asyncRewake wiring runs only in the
   CLI's live harness. Run `seat-mail/test_seatmail.ps1` (parity) and confirm the rewake
   fires on the next pushed message.
