@@ -137,7 +137,26 @@
 > fine as history. A copied number is the bug **even when it was right the day it was written** -
 > that is exactly how the retired 860-899 UI block kept re-seeding collisions from CLAUDE.md sec.2.
 
-> ## ⚠ RECONCILED 2026-08-26 (CLI): main line next free = **1218**.
+> ## ⚠ RECONCILED 2026-08-26 (CLI): main line next free = **1220**.
+> *(CLI seat minted **WO-1218 / 1219** and bumped 1218 -> 1220 in this SAME edit. Both from CLI
+> observation of owner felt-test device captures, Seeker build `2026.08.26.341419`, 2026-08-26.
+>
+> **1218** = THE GROUND SHIMMERS AND BLOWS OUT ON DEVICE. Dense high-frequency sparkle across the
+> whole grass plane, worsening with distance - the signature of a tiling texture sampled near pixel
+> frequency with an absent/ineffective mip chain. Owner confirms it has ALWAYS looked like this, so
+> there is NO regression to bisect. Unseen because 2670x1200 was never rendered in this repo until
+> `7e05e6d3`. ⛔ NOT a palette question and never to be handed to the owner as one - the defect is
+> spatial frequency and value blow-out, both of which survive a greyscale check.
+>
+> **1219** = THE TOP-LEFT HUD CORNER COLLIDES WITH ITSELF (minimap + status line + gear + Store all
+> claiming one space - proven in a capture with NO toast up, so the toast is not the cause), `SK...
+> 177` truncates, `Raids ...` truncates, and the action bar shows FIVE faces with **Talk absent**
+> where CLAUDE.md §7 says six. ⛔ Three possible causes for the missing face - diagnose, never guess;
+> if canon is the one that is wrong, fix the doc in the same commit. ⛔ NEVER renumber
+> `ActionBarButtonId` - `Map` is dormant at ordinal 4 and the face arrays index BY ORDINAL.
+> READY TO IMPLEMENT.)*
+>
+> ### superseded: RECONCILED 2026-08-26 (CLI): main line next free = **1218**.
 > *(CLI seat minted **WO-1214 / 1215 / 1216 / 1217** and bumped 1214 -> 1218 in this SAME edit.
 > All four from ONE owner felt-test on Seeker build `2026.08.26.341419`, 2026-08-26.
 >
@@ -155,8 +174,10 @@
 > name. Fix the DERIVER, not 18 hand-typed Eulers; `manual=true` rows are canon and untouched.
 > Acceptance needs a DEVICE SCREENSHOT - headless gates cannot see orientation.
 >
-> **1216** = EVERY KILL PAYS WOOD/IRON/GOLD/STONE, derived at 25% of the gold base (~37 each per
-> wave). ⛔ NOT via `WaveManager._ironPerKill` - that is gated on `WavePhase.Active` and misses every
+> **1216** = EVERY KILL PAYS WOOD/IRON/GOLD/STONE. ⚠ THE 25% FIRST WRITTEN HERE IS SUPERSEDED -
+> it was agreed on a misread (per-WAVE taken for per-KILL) and paid only 1-4 per kill on the enemies
+> fought early. ⭐ RULED 2026-08-26: *"around 20 per enemy per kill"* = `round(gold*1.1)` floored 6,
+> capped 40 - median enemy pays exactly 20, gold base measured min 3 / median 18 / max 120. ⛔ NOT via `WaveManager._ironPerKill` - that is gated on `WavePhase.Active` and misses every
 > world encounter, which is the scope the owner corrected. Seam = the WO-432/433 grant at
 > `Enemy.cs:~3007`. ⛔⛔ STONE MUST GRANT TO `EconomyService.Food` (the visible balance), NEVER
 > `GameState.Stone` (the phantom one) - see WO-1212.

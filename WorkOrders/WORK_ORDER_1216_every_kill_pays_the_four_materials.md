@@ -63,31 +63,49 @@ three, and prove it by reading the balance the HUD reads.
 **Do not attempt to reconcile the two balances in this ticket.** That is WO-1212's job and it
 carries its own owner ruling (retire `GameState.Stone`, DISCARD its value).
 
-## 4. THE MATH - and the honest problem with the 25% the owner first ruled
+## 4. THE MATH - ⭐ RULED 2026-08-26: ~20 PER ENEMY PER KILL
 
-The owner ruled iron at **~25% of the gold base**, derived rather than authored per enemy, so it
-scales with difficulty for free and a newly added enemy pays automatically. That derivation shape is
-**correct and stays**. What needs a second look is the constant, because 25% does not reach the felt
-target in quote (4):
+⚠ **A 25% constant was discussed first and is SUPERSEDED. Do not implement 0.25.** It was agreed on
+a misread - "around 30 to 40 a resource" was taken as per-WAVE, and the owner meant per-KILL. At 25%
+the enemies you actually fight early pay **1 to 4** per kill, roughly 10x under intent. Recorded
+because the wrong number is written in this ticket's own commit history and in the banner.
 
-Average authored `coinReward` across the 19 enemies is roughly **10**, so at 25% a kill pays ~2-3 of
-each material. Against a **155 Wood** Repair All that is **~60 kills - about four waves.** That is a
-chore, not "grinding some kills."
+**Measured from `enemies.json` (19 enemies) at source, 2026-08-26:**
+gold base **min 3 · median 18 · mean 31.1 · max 120** (the mean is skewed by two bosses; the median
+is the honest centre).
 
-**To land a Repair All at 20-30 kills (one to two waves), the constant needs to be nearer 0.60.**
+**⭐ OWNER RULING: *"lets do around 20 per enemy per kill."***
 
-| enemy | gold | at 0.25 | at 0.60 |
-|---|---|---|---|
-| hollow-walker | 4 | 1 | 2 |
-| hollow-rogue | 6 | 2 | 4 |
-| hollow-warrior | 10 | 3 | 6 |
-| hollow-reaper | 28 | 7 | 17 |
-| hollow-brute | 60 | 15 | 36 |
-| necromancer | 120 | 30 | 72 |
+Implement as **`round(goldBase * 1.1)`, floored at 6, capped at 40.** This hits the ruled number on
+the MEDIAN enemy while preserving the owner's earlier ruling that the drop scales with difficulty:
 
-**⚠ THIS IS A NUMBER THE OWNER MUST CONFIRM before it ships.** Implement the mechanism with the
-constant in DATA so she can move it in one edit, start it at **0.60**, and put the measured
-kills-to-Repair-All figure in the RESULT so she is ruling on evidence rather than a guess.
+| enemy | gold | pays |
+|---|---|---|
+| cellar-hollow | 3 | 6 (floor) |
+| hollow-walker | 4 | 6 (floor) |
+| hollow-warrior | 10 | 11 |
+| **troll-mage (median)** | **18** | **20** |
+| troll | 24 | 26 |
+| hollow-reaper | 28 | 31 |
+| hollow-brute | 60 | 40 (cap) |
+| necromancer | 120 | 40 (cap) |
+
+**Why floor and cap, not a bare multiplier:**
+- **Floor 6** - a cellar-hollow would otherwise pay 3-4, and a kill that pays almost nothing reads
+  as broken.
+- **Cap 40** - uncapped, a necromancer pays **132 of every material**, so one boss out-earns a whole
+  wave and the felt curve inverts. The cap keeps bosses worth killing without making them the only
+  thing worth killing.
+- ⛔ **A FLAT 20 for every enemy was considered and rejected** - it makes farming the weakest enemy
+  the optimal way to earn, which is the exact failure the owner rejected when she chose the
+  scales-with-difficulty shape.
+
+**All three numbers (1.1 / 6 / 40) are DATA**, authored in a balance JSON so the owner retunes them
+in one edit. ⛔ Never a code literal.
+
+**Expected feel at this rate** - state the MEASURED equivalents in the RESULT, do not restate these:
+Repair All (155 Wood) is roughly **8 kills**; a flattened Archer Tower L2 (540 Wood, WO-1217) is
+roughly **27 kills**, about two waves.
 
 ### Per-material rules
 
