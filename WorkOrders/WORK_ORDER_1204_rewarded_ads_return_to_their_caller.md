@@ -1,6 +1,6 @@
 # WORK ORDER 1204 - rewarded ads return to their caller
 
-**Status:** IMPLEMENTED 2026-08-25 in `76ba97a9d` - compile and focused oracle green; awaiting owner Seeker felt-test from at least two invoking screens.
+**Status:** DONE - CLOSED BY THE OWNER 2026-08-25 on a Seeker felt-test of build `2026.08.25.341262`. Owner verbatim: *"ad plays"* then *"good and clsoed to screen was loaded from"* - the rewarded ad returned to its invoking screen, which is this ticket's entire acceptance. ⭐ Closing it surfaced a gap in its OWN oracle and that gap is now closed too: `AdGateAndArenaReturnRegression` proved only the SUPPRESSION half (an ad does not open Pause) and asserted NOTHING about suppression ENDING, so a leaked scope would have silently retired ordinary backgrounding's Pause - strictly worse than the defect this ticket fixed - while the suite stayed green. The inverse is now pinned (no scope active -> backgrounding MUST auto-open Pause), verified `AD_GATE_ARENA_OK` inside `REGRESSION_OK 283/283`. A refusal test is not acceptance. *(Prior line:)* **Status:** IMPLEMENTED 2026-08-25 in `76ba97a9d` - compile and focused oracle green; awaiting owner Seeker felt-test from at least two invoking screens.
 **Minted:** 2026-08-25 (CLI lead, main line; banner bumped 1204 -> 1205 in the same edit)
 **Silo:** Monetization / navigation
 **Origin:** Owner-reported live behavior on 2026-08-25: "after an ad plays, the game returns to Pause/Settings instead of the screen/context that invoked the ad."

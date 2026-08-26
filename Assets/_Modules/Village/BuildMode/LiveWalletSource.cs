@@ -77,7 +77,14 @@ namespace DeNelle.Village
         {
             int wood     = _economy != null ? _economy.Wood : 0;
             int iron     = _economy != null ? _economy.Iron : 0;
-            int food     = _economy != null ? _economy.Food : 0;
+            // ⛔ STONE, NOT FOOD (WO-1163; leak caught by the owner on device 2026-08-25).
+            // `EconomyService.Food` is the FROZEN INTERNAL SAVE SLOT that Stone now occupies -
+            // WO-1163 deliberately reused it rather than migrating, so the field name is
+            // persistence vocabulary and must NOT be renamed here. Everything the PLAYER reads
+            // is Stone. The town strip converted; THIS surface did not, and shipped "F 130" to a
+            // live build. Same "one fact written twice" class as the WO number block and the
+            // assembly table - the conversion was applied per-surface instead of at one seam.
+            int stone    = _economy != null ? _economy.Food : 0;
             int crystals = _economy != null ? _economy.Crystals : 0;
             int gold     = _economy != null ? _economy.Coins : 0;
 
@@ -85,7 +92,7 @@ namespace DeNelle.Village
             {
                 new WalletVM.Entry("wood",     IconRoleLetter, "W", wood),
                 new WalletVM.Entry("iron",     IconRoleLetter, "I", iron),
-                new WalletVM.Entry("food",     IconRoleLetter, "F", food),
+                new WalletVM.Entry("stone",    IconRoleLetter, "S", stone),
                 new WalletVM.Entry("crystals", IconRoleLetter, "C", crystals),
                 new WalletVM.Entry("gold",     IconRoleLetter, "G", gold),
             });

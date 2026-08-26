@@ -117,9 +117,21 @@ namespace DeNelle.Editor
                 }
                 if (DeNelle.Core.UI.PanelManager.OpenPanelName != caller || !open)
                     failures.Add("closing external presentation did not return to " + caller);
+
+                // ⛔ THE INVERSE, AND IT IS THE HALF THAT WAS MISSING (2026-08-25, owner felt-test).
+                // Everything above proves the SUPPRESSION works. Nothing proved that suppression
+                // ENDS — and a scope that leaks would silently retire ordinary backgrounding's
+                // Pause, which is strictly worse than the defect WO-1204 fixed. A refusal test is
+                // not acceptance: assert the SUCCESS path too (memory:
+                // prove-the-success-path-not-just-the-refusal; the 2026-08-21 hollow-pass taxonomy).
+                if (!DeNelle.Core.UI.PauseGate.ShouldAutoPause(true, false))
+                    failures.Add("with no external presentation active, ordinary backgrounding no " +
+                                 "longer auto-opens Pause (the scope leaked past " + caller + ")");
+
                 DeNelle.Core.UI.PanelManager.NotifyClosed(handle);
             }
-            log.AppendLine("[ad-return] Daily Chest and Manage remain their own callers across native presentation");
+            log.AppendLine("[ad-return] Daily Chest and Manage remain their own callers across native presentation, " +
+                           "and ordinary backgrounding still auto-opens Pause once the scope ends");
         }
 
         // ── 1. the rewarded-ad gate ──────────────────────────────────────────

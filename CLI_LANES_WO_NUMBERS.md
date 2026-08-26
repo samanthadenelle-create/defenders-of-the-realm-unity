@@ -137,7 +137,18 @@
 > fine as history. A copied number is the bug **even when it was right the day it was written** -
 > that is exactly how the retired 860-899 UI block kept re-seeding collisions from CLAUDE.md sec.2.
 
-> ## ⚠ RECONCILED 2026-08-25 (CLI): main line next free = **1206**.
+> ## ⚠ RECONCILED 2026-08-25 (CLI): main line next free = **1207**.
+> *(CLI seat minted **WO-1206** and bumped 1206 -> 1207 in this SAME edit. **1206** = A RETIRED
+> RESOURCE WORD MUST NEVER REACH A PLAYER SURFACE AGAIN. WO-1163 retired Food, the owner CLOSED it,
+> and within the hour she hit TWO surfaces it never converted: the build menu ("F 130", fixed today
+> at `LiveWalletSource.cs:88`) and the Echo job + world node (`EchoAssignments.cs:99`,
+> `HarvestSite.cs:368` - still open as PROD-016). The conversion was applied per-surface with NOTHING
+> asserting the retirement. ⚠ The same day's Ready-board RCA had filed PROD-016 as "stale/duplicate";
+> acting on that would have deleted a live defect. ⛔ The oracle must NOT flag frozen persistence
+> vocabulary (`EconomyService.Food`, `paidFood`, `legacySkus`) - WO-1163 froze those deliberately.
+> READY TO IMPLEMENT.)*
+>
+> ### superseded: RECONCILED 2026-08-25 (CLI): main line next free = **1206**.
 > *(CLI seat minted **WO-1205** and bumped 1205 -> 1206 in this SAME edit. **1205** = THE
 > RESOURCE ROWS READ AS CHIP + COUNT. Owner ruling while felt-testing build 2026.08.25.341262:
 > *"recourse we should remove the /2000"* and *"just the count and not the wood name just the

@@ -148,6 +148,28 @@ namespace DeNelle.Editor.Regression
                 }
             }
 
+            // (1b) [storage-last] OWNER RULING 2026-08-25, pinned with its reason ----
+            // Verbatim, felt-testing build 2026.08.25.341262: "Storage should be last, as those
+            // take a real building and 7 min" / "so if you start two you have to wait or ad to
+            // continue". THE REASON IS THE RULING: a store costs a real footprint AND a
+            // builder-queue slot for ~7 minutes against only 2 free slots, so surfacing stores
+            // FIRST sells the most expensive, least-felt purchase before the producers that make
+            // the town work - and starting two stalls the player into waiting or an ad.
+            // Pinned here, not merely authored, because the palette order is display-only data:
+            // nothing else would notice a tidy-up pass moving it back (CLAUDE.md sec.15 - a
+            // ruling recorded but not asserted is indistinguishable from no ruling).
+            if (town?.PaletteGroups != null && town.PaletteGroups.Count > 0)
+            {
+                var last = town.PaletteGroups[town.PaletteGroups.Count - 1];
+                string lastLabel = last?.Label ?? "";
+                if (!string.Equals(lastLabel, "Storage", StringComparison.OrdinalIgnoreCase))
+                    failures.Add("[storage-last] the OWNER RULED (2026-08-25) that Storage is the LAST " +
+                                 "palette group in the Town row - a store costs a real footprint plus a " +
+                                 "builder slot for ~7 minutes against 2 free slots. The last group is " +
+                                 "currently '" + lastLabel + "'. Re-order build-categories.json (both " +
+                                 "canonical copies) and regenerate the fallback; do not weaken this case.");
+            }
+
             // (2) [coverage] + (3) [role-unique] -------------------------------
             if (entries == null || entries.Count == 0)
             {
