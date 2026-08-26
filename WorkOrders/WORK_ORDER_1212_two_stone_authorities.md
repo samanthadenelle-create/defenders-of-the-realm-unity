@@ -1,7 +1,9 @@
 # WORK ORDER 1212 - There are TWO Stone balances, and only one of them is the player's
 
-**Status:** READY TO IMPLEMENT - ⛔ **P0 PRECONDITION. Nothing else in the Food-to-Stone program may
-land before this is ruled.**
+**Status:** READY TO IMPLEMENT - ⛔ **P0 PRECONDITION for the Food-to-Stone program.** The authority
+question is RULED (option A, 2026-08-25, lead): `Resources.Food` stays the Stone slot and
+`GameState.Stone` is retired into it. ⛔ **SEQUENCING: this edits `GameStateService.cs`, which WO-1211
+also edits. The two CANNOT run in parallel - WO-1211 lands first.**
 **Minted:** 2026-08-25 (CLI lead, main line; banner bumped 1212 -> 1213 in the same edit)
 **Silo:** Core/State + backend
 **Found:** 2026-08-25, verifying a dev-seat sweep that flagged `api/game/save.js` and `load.js` as
@@ -51,7 +53,31 @@ on a build that now takes real money.
 (`:1026`), and `ResetCarveOutTest` / `SaveLoadRoundTripTest` both assert that 20. Those tests pin the
 dead field, so a naive deletion turns them red and looks like a regression.
 
-## The ruling this ticket must produce (owner or lead architecture call, NOT an implementer's)
+## ⭐ RULED 2026-08-25 BY THE LEAD - OPTION (A). This ticket is now IMPLEMENTABLE.
+
+**`Resources.Food` remains the Stone slot. `GameState.Stone` is RETIRED into it.**
+
+This is an internal-authority call, not a creative one - the player sees the word "Stone" either way -
+so the lead makes it rather than parking the ticket. ⚠ Reversible on the owner's word.
+
+Why (A) and not (B), recorded so the question stays closed:
+
+1. **It is WO-1163's own precedent.** That ticket kept the legacy persistence name and moved only the
+   player's vocabulary. Doing the opposite here would split the project across two conventions.
+2. **(B) is a migration of every cost, HUD read, pack grant, quest reward and the whole offline path,
+   atomically, for zero player-visible benefit.** The name of a private field is not worth that risk on
+   a build taking real money.
+3. **(A)'s risk is one-shot and testable**: a single read-migration of a non-zero dead balance, provable
+   on a real save.
+
+⛔ **The one thing that must not be lost in (A): the seeded 20.** `GameStateService.cs:1026` writes
+`s.Stone = 20` at new game and two tests pin it (`ResetCarveOutTest`, `SaveLoadRoundTripTest`). Fold it
+into the live balance, re-point both tests at the live one, and do NOT simply delete the field before
+the migration has run for existing saves - a deleted field cannot be read-migrated.
+
+## The original two options, kept as the reasoning behind the ruling above
+
+### (superseded framing - the choice below is now settled as A)
 
 Choose ONE and write it into canon before any Food-to-Stone key moves:
 
