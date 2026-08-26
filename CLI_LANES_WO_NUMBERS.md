@@ -137,7 +137,43 @@
 > fine as history. A copied number is the bug **even when it was right the day it was written** -
 > that is exactly how the retired 860-899 UI block kept re-seeding collisions from CLAUDE.md sec.2.
 
-> ## ⚠ RECONCILED 2026-08-26 (CLI): main line next free = **1220**.
+> ## ⚠ RECONCILED 2026-08-26 (CLI): main line next free = **1225**.
+> *(CLI seat minted **WO-1220 / 1221 / 1222 / 1223 / 1224** and bumped 1220 -> 1225 in this SAME
+> edit. All five PROVEN FROM CAPTURED DEVICE DATA (logcat + screenshots), 2026-08-26, build
+> `2026.08.26.341419` — after the owner's ruling *"you need to prove all with DATA"*.
+>
+> **1220** (P0) = A NEW GAME KEEPS THE OLD HERO'S LEVEL, XP AND TALENTS. `ResetToNewGame` clears
+> equip/loadout/skillbar PlayerPrefs and NOT the v29 persisted progression. Proof: new game at
+> 10:49:17, then `[Flow:HeroXp] restored level=4 xp=3531.9 (fromSave=True)` + `Aether Bond applied`
+> at 10:54:04 — a brand-new RANGER wearing a level-4 MAGE's talent. Town DID reset (blank-town gate
+> CLOSED, towers=0, echoes 1/6) — the town is the CONTROL GROUP, not the bug.
+>
+> **1221** = THE RESOURCE RAIL EXPANDS INVISIBLY. Injected `adb input tap` on the gold chip logged
+> `tap-expanded` + `resource panel expanded (opener live=True)` while the capture INSIDE the 6s
+> window showed only the gold chip. §12 class: BUILT-BUT-INVISIBLE. ⭐ Second defect in the same
+> line — `opener live=True` prints whether or not a chip appeared; falsify it with `UiSurfaceProbe`,
+> never delete it. Narrowed further: the rail renders CORRECTLY in Build mode, so widget+data work.
+>
+> **1222** (P0) = COMPOSED HEALER'S COTTAGE = BLACK SCREEN. Hero at `pos=(5000.00, 0.00, 4991.00)`,
+> `ownerAgent=off-mesh`, camera `room=none size=(0x0)` — while the scene runs `enemies=7` at
+> `fps=60`. That coordinate is `BattleArena.ArenaCentre` (5000,0,5000) minus 9 on Z. ⛔ The dungeon
+> is HEALTHY; do not hunt a load failure. Hypothesis to TEST (not proven): the composed path has no
+> `DungeonController`, so `PlaceHero` never runs.
+>
+> **1223** = THE PORTAL GATE'S COVERAGE IS NEVER ASSERTED (owner: *"the regression needs to confirm
+> that table has mapping for every dungeon"*). WO-1114's gate is fully wired, but `dg_healers_cottage`
+> is in NEITHER `PortalDungeonIds` NOR `MustNotBeGated` — reachable, populated, ungatable. Case 4
+> validates the domain's CONTENTS, never its COMPLETENESS. ⛔ Fail-open stays; the implementer may
+> NOT extend either list to go green.
+>
+> **1224** = CONTAINERS AT ~2x TOWN SCALE + FIVE STRUCTURES ON PLACEHOLDER ART. `lumberyard`/
+> `foundry`/`silo` have NO `heightMul` — which is 1.0, NOT "unnormalised" — so a wide open lattice
+> fit to 4m height balloons its footprint (the `collector_farm` 1.4 caveat in reverse). Owner-dialled
+> start: 0.5; lowering is overlap-safe. Slice B BLOCKED ON OWNER ART: `mine_crystal` AND
+> `healing_caravan` both point at `Structures/Well`; the three containers share `GenericContainer`;
+> `repair_default` has none. READY / BLOCKED as marked.)*
+>
+> ### superseded: RECONCILED 2026-08-26 (CLI): main line next free = **1220**.
 > *(CLI seat minted **WO-1218 / 1219** and bumped 1218 -> 1220 in this SAME edit. Both from CLI
 > observation of owner felt-test device captures, Seeker build `2026.08.26.341419`, 2026-08-26.
 >

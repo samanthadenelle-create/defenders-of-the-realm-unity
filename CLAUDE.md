@@ -245,7 +245,16 @@ hardcoded repo root (§0). **Do not restore a hand-maintained dependency table h
     PlayerPrefs `ff.maptab`) because realm travel is a WO-827 stub and the areas do not connect yet.
     `ActionBarButtonId.Map` stays **dormant at ordinal 4** — never renumber it, the face arrays are
     indexed by ordinal.
-  - **calm(town) bar = SIX faces: Build, Talk, Bag, Raids, Quests, Manage.** *(The old "6 faces" line
+  - **calm(town) bar = FOUR always-on faces (Build, Bag, Quests, Manage) + TWO CONDITIONAL ones.**
+    ⚠ **CORRECTED 2026-08-26 — the old line here said "SIX faces" flat, and that is FALSE.** `Talk`
+    is added only `if (_source.TalkAvailable)` (`HudActionBarModel.ComputeMask`), which
+    `TalkHudBridge.cs:69` sets from `TalkPromptRegistry.Count > 0` — i.e. **only while a talkable NPC
+    is in range**. `Raids` is likewise gated on `RaidCapable`. So the bar is normally **FIVE in open
+    town** and six only when standing at an NPC. **`MaxVisibleFaces = 6` is the MAXIMUM, never the
+    count** — a five-face bar in open ground is the feature working, not a missing face. *(This line
+    cost a felt-test report and an RCA on 2026-08-26: the owner correctly saw five faces, canon said
+    six, and the CLI opened a defect against working code. The same conditional shape applies to
+    `calm(explore)`.)* `ButtonCount` stays 7. *(The old "6 faces" line
     here was stale for a different reason — it was 7 once `upgradeButton` landed. Six is now correct
     for the new membership.)* `HudActionBarModel.ButtonCount` stays **7** (enum-identity / array bound);
     the number that went 7 → 6 is `HudActionBarModel.MaxVisibleFaces`, which the View's slot geometry

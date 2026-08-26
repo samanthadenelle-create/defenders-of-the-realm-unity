@@ -1,5 +1,5 @@
 {
-  "version": 2,
+  "version": 3,
   "_note": "WO-996 2026-08-15: StreamingAssets is the ARMOR LIBRARY (superset). Class ladders merged from Resources (runtime curated set). Resources remains the curated runtime roster (wins at CanonicalJson). Do not add blink_ placeholders into Resources. Gear v1 armor catalog. defense = fractional incoming-damage reduction (0.04 = 4%). hpBonus is carried for a later pass (v1 applies defense only, to avoid HeroHealth maxHp surgery untested). job 'any' = all classes. req level-gated like weapons. PRICING (buy*): iron-primary (plate/mail) + food (hides/padding); crystals gate the rare+ Oathweld wards; tiered common floor -> legendary sink.",
   "armor": [
     {
@@ -697,7 +697,7 @@
       "defense": 0.08,
       "hpBonus": 25,
       "req": {
-        "level": 3
+        "level": 1
       },
       "buyWood": 20,
       "buyFood": 20,
@@ -778,7 +778,7 @@
       "defense": 0.08,
       "hpBonus": 25,
       "req": {
-        "level": 3
+        "level": 1
       },
       "buyWood": 20,
       "buyFood": 20,
