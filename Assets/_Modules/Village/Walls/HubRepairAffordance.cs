@@ -463,24 +463,25 @@ namespace DeNelle.Village
             scaler.matchWidthOrHeight = 0.5f;
             _canvas.AddComponent<GraphicRaycaster>();
 
-            // PLACEMENT (owner may move): the mid CENTRE-LEFT vertical band.
+            // *** WO-1219 - THIS CARD NOW LANDS IN THE ONE RESERVED TOAST ZONE. ***
             //
-            // ⚠ WO-1219 - IT WAS AT x 0.015..0.205 AND THAT SEAT WAS NEVER FREE. The comment
-            // above it reasoned "chrome clusters top and bottom, so a mid-LEFT box is the
-            // lowest-collision seat", which is true of the top and bottom EDGES and false of the
-            // left COLUMN: HudAreasHost puts the Minimap band at x 0.010..0.330 / y 0.440..0.690
-            // and the Dock band (gear + Store + the slide-out drawer) at x 0.000..0.230 /
-            // y 0.330..0.440, so this card was landing on the minimap plate, the region status
-            // line AND the gear. The owner captured exactly that (tmp/shield-seat-101829.png:
-            // "REPAIR ALL / Wood 155 Iron 78" drawn straight across the minimap).
+            // IT HAS BEEN IN TWO WRONG SEATS AND THE ROOT CAUSE OF BOTH IS THE SAME: a card
+            // authored in DeNelle.Village cannot see what DeNelle.HUD has put in the corner it
+            // picks. The first seat (x 0.015..0.205, reasoned as "chrome clusters top and bottom,
+            // so a mid-LEFT box is the lowest-collision seat") landed on the minimap plate, the
+            // region status line AND the gear at once - the owner captured exactly that
+            // (tmp/shield-seat-101829.png: "REPAIR ALL / Wood 155 Iron 78" drawn straight across
+            // the minimap). The second was a hand-picked free band: correct on the day, and
+            // re-derived from HudAreasHost rects this module does not own and is not told about
+            // when they move.
             //
-            // THE FREE BAND, checked against every HudArea rect at this height: x 0.340..0.770.
-            // Minimap/Dock end at 0.330 (and the OPEN dock drawer, which is fixed-pixel, reaches
-            // ~0.322 at 2670x1200); ActionRail and QueueStatus start at 0.780; TargetInfo does not
-            // begin until y 0.660 and the ActionBar tops out at 0.150. Nothing else claims it.
-            // ⛔ Do not move this back into the left column - it is the busiest strip on the HUD.
+            // THE FIX IS NOT A THIRD HAND-PICKED SEAT. It is the shared convention:
+            // HudLayoutBands.ToastZone - centred above the action bar, verified clear of every
+            // HUD band by HudUiRegression check 8, and used by every transient toast on this
+            // screen whichever module raises it. Do NOT author a rect here again; if the zone is
+            // wrong, it is wrong for everybody and it moves in ONE place.
             _button = ElarionUiKit.Button(_canvas.transform, "REPAIR ALL", ElarionUiKit.ButtonKind.Confirm,
-                new Vector2(0.345f, 0.42f), new Vector2(0.535f, 0.58f), OnClick);
+                ToastZoneMin(0f, 0.72f), ToastZoneMax(0f, 0.72f), OnClick);
             if (_button != null)
             {
                 _buttonImg = _button.GetComponent<Image>();
@@ -511,9 +512,25 @@ namespace DeNelle.Village
             // controller's one existing cancellation path, which clears selection + marker.
             // Travels with the button (WO-1219): same width, same height, immediately to its
             // right, still inside the 0.340..0.770 free band.
+            // Travels with the button, inside the SAME reserved zone - never spilling out of it.
+            var ack = HudLayoutBands.ToastZoneSlice(0.76f, 1f);
             _acknowledgeButton = ElarionUiKit.ObsidianCloseButton(_canvas.transform,
-                AcknowledgeRefusal, new Vector4(0.545f, 0.42f, 0.735f, 0.58f));
+                AcknowledgeRefusal, new Vector4(ack.xMin, ack.yMin, ack.xMax, ack.yMax));
             if (_acknowledgeButton != null) _acknowledgeButton.gameObject.SetActive(false);
+        }
+
+        // WO-1219: the card's rect, taken as a horizontal slice of the shared toast zone. Two
+        // tiny helpers rather than a local, because the Button factory takes min/max Vector2s.
+        private static Vector2 ToastZoneMin(float from, float to)
+        {
+            var r = HudLayoutBands.ToastZoneSlice(from, to);
+            return new Vector2(r.xMin, r.yMin);
+        }
+
+        private static Vector2 ToastZoneMax(float from, float to)
+        {
+            var r = HudLayoutBands.ToastZoneSlice(from, to);
+            return new Vector2(r.xMax, r.yMax);
         }
 
         private void AcknowledgeRefusal()

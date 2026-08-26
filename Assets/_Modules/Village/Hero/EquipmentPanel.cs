@@ -1066,7 +1066,7 @@ namespace DeNelle.Village.Hero
             {
                 ElarionUiKit.ShowToast(refusal, ElarionUiKit.ToastTone.Danger);
                 DeNelle.Core.Diagnostics.FlowTrace.Warn("EquipPanel",
-                    $"DoEquip('{id}') REFUSED — shown to the player as: \"{refusal}\" (the item stays in the bag " +
+                    $"DoEquip('{id}') REFUSED - shown to the player as: \"{refusal}\" (the item stays in the bag " +
                     "and stays sellable). No slot was changed and no confirmation was claimed.");
                 return;
             }

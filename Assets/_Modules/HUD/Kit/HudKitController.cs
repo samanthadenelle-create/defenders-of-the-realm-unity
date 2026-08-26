@@ -2784,9 +2784,12 @@ namespace DeNelle.HUD.Kit
             // bottom) and 16 below (analog-stick ring top) instead of being sat on. The Dock band
             // also grows 0.430 -> 0.440 in HudAreasHost so it abuts the Minimap band exactly.
             // ⛔ Do NOT re-stack these two. The left column has no vertical room left.
-            const float dockTabPx = ElarionUiKit.MinTouchPx;   // 112 - the kit touch floor, verbatim
-            const float dockGapPx = 12f;
-            float safeLeftPx = SafeAreaInset.EdgeMarginPx;
+            // WO-1219: all three numbers come from the shared left-column table now, so the
+            // regression that asserts this row clears the status line above it and the thumb
+            // stick below it is resolving the SAME values the row is built from.
+            const float dockTabPx = HudLayoutBands.DockControlPx;   // == ElarionUiKit.MinTouchPx (112)
+            const float dockGapPx = HudLayoutBands.DockGapPx;
+            float safeLeftPx = HudLayoutBands.DockEdgePx;
             // The drawer opens to the right of BOTH faces now, not just the gear - otherwise the
             // panel would park on the Store button, which is the WO-908 handle-on-panel defect
             // wearing a different hat.

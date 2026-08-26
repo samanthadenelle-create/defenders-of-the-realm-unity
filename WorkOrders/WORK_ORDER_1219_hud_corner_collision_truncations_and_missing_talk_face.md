@@ -1,6 +1,6 @@
 # WORK ORDER 1219 - The top-left HUD corner is over-subscribed, two labels truncate, and the action bar is missing Talk
 
-**Status:** READY TO IMPLEMENT
+**Status:** IMPLEMENTED + gate-green - DEVICE/FELT-VERIFY OWED (not FIXED/DONE)
 **Silo:** HUD layout
 **Origin:** CLI observation from owner felt-test device captures, 2026-08-26, Seeker build
 `2026.08.26.341419`. Three separate defects, one lane (all HUD layout), so one ticket and one seat.
@@ -111,3 +111,28 @@ CLAUDE.md sec.7 corrected 2026-08-26: the calm(town) bar is FOUR always-on faces
 are open ground -> FIVE faces is the feature working. CLI verifies the gate (stand at an NPC, see
 Talk appear) and records it; nobody "fixes" the five-face bar. `MaxVisibleFaces = 6` is a MAXIMUM.
 `ActionBarButtonId` ordinals and `ButtonCount = 7` untouched, per this WO's own fence.
+
+---
+
+## IMPLEMENTATION CLOSEOUT AUDIT (2026-08-26)
+
+The implementation is present and the fresh Batch 0 gates are green:
+
+- `Builds/batch0-compile-2.log:1966` - `COMPILE_GATE_OK :: scripts compiled clean`
+- `Builds/batch0-regression-2.log:24804` and `:83504` - `HUDUI_OK`; the marker reports five
+  resolution/cutout cases for the safe-area corner and the shared resource-rail checks green.
+- `Builds/batch0-regression-2.log:83814` - `REGRESSION_OK 291/291 suites -- 291 green, 0 red, 0 skipped`
+
+Relevant implementation/proof files inspected in this closeout:
+
+- `Assets/_Modules/Core/UI/HudLayoutBands.cs`
+- `Assets/_Modules/HUD/Kit/HudAreasHost.cs`
+- `Assets/_Modules/HUD/Kit/HudKitController.cs`
+- `Assets/_Modules/HUD/Kit/HudMinimapWidget.cs`
+- `Assets/_Modules/Village/Walls/HubRepairAffordance.cs`
+- `Assets/Editor/Regression/HudUiRegression.cs`
+
+This does **not** earn FIXED/DONE yet. Acceptance still owed: a post-fix 2670x1200 device capture
+opened and visually inspected; its capture log's `UI_CAPTURE_HEAD <sha> <branch> dirty=false`
+stamp; device confirmation that Talk appears while standing at an NPC; and owner felt-verification
+and close. The pre-fix screenshots in this ticket prove the defect, not the repaired pixels.

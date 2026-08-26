@@ -79,14 +79,16 @@ namespace DeNelle.HUD.Kit
         private const float RadiusWorld = 150f;
 
         /// <summary>Map plate edge, in canvas reference units. ~200 ref units resolves to
-        /// roughly 220 device px on a 2340x1080 phone — inside WO-828's 120-160 dp corner
-        /// brief, and comfortably shorter than the area mount's ~244 unit band. ⚠ WO-1219: the
-        /// region chip no longer sits BENEATH the plate (that stacked 234 units into a ~241
-        /// unit band and left nothing for the gear/Store row in the Dock band below) — it sits
-        /// BESIDE it, on the ~487 units of mount width the plate does not use.</summary>
-        private const float PlateSize = 200f;
-        /// <summary>Region chip height in reference units (font floor + padding).</summary>
-        private const float ChipHeight = 30f;
+        /// roughly 220 device px on a 2340x1080 phone - inside WO-828's 120-160 dp corner brief.
+        /// WARNING WO-1219: the VALUE lives in HudLayoutBands, not here. The Minimap MOUNT is
+        /// sized around this plate PLUS the status-line band beneath it, so the plate size and
+        /// the band it has to fit inside must move together, or the column silently
+        /// over-subscribes again - which is how the gear/Store row ended up on the map's lower
+        /// edge and the status line ended up under the gear.</summary>
+        private const float PlateSize = HudLayoutBands.MinimapPlatePx;
+        /// <summary>Region status-line height in reference units (font floor + padding). Shared
+        /// with HudLayoutBands, which reserves the band this line is drawn in.</summary>
+        private const float ChipHeight = HudLayoutBands.StatusLinePx;
 
         /// <summary>Layout cadence. WO-828 §7 asks for 4-10 Hz; 10 Hz is the top of that
         /// band — smooth enough to read as motion, 6x cheaper than per-frame.</summary>
@@ -249,26 +251,33 @@ namespace DeNelle.HUD.Kit
                 // on top of this line; none of them is load-bearing.
                 _chip = AddText((RectTransform)transform, "", ElarionUi.FontMicro,
                                 ElarionUi.Parchment, TextAlignmentOptions.Left);
-                // WO-1219 - the chip moved from UNDER the plate to BESIDE it (top-right of the
-                // plate), and the reason is band arithmetic, not taste:
-                //   * At 2670x1200 the kit canvas resolves to ~2148 x 965 REFERENCE units, so
-                //     HudArea.Minimap (0.010..0.330 x, 0.440..0.690 y) is ~687 x 241 units.
-                //   * Stacked, this widget demanded PlateSize + 4 + ChipHeight = 234 of those
-                //     241 units of HEIGHT and used only 200 of the 687 units of WIDTH.
-                //   The left column is the most over-subscribed strip on the HUD (vitals, heart,
-                //   minimap, dock, thumb stick) and it was spending its scarcest axis on a
-                //   30-unit text line while ~487 units sat empty beside the plate. Moving the
-                //   chip onto the free axis hands 34 units of height back to the column, which
-                //   is what stops the gear/Store row below from being sat on the chip.
-                // It STRETCHES to the mount's right edge rather than carrying a fixed width: a
-                // fixed PlateSize+60 would overhang the mount into the Status crown on a
-                // narrower aspect, which is the same class of bug one band up.
+                // ⭐ WO-1219 (owner-approved design, 2026-08-26) - THE STATUS LINE GETS ITS OWN
+                // BAND, DIRECTLY BELOW THE PLATE. It has now been in two wrong seats and the
+                // reason both were wrong is the same: it was placed against whatever space this
+                // widget happened to have, not against what the COLUMN had.
+                //   * Originally it stacked UNDER the plate inside a 241-unit band that could not
+                //     hold PlateSize + 4 + ChipHeight = 234 plus the gear/Store row below it, so
+                //     the row overflowed up and "Elarion - Safe - N threats" read from UNDER the
+                //     gear (tmp/screen-103219.png, tmp/shield-seat-101829.png).
+                //   * The interim fix moved it BESIDE the plate, which bought height back but put
+                //     a text line in the middle of the column at the plate's own eye level.
+                // The column is now one table (DeNelle.Core.UI.HudLayoutBands) and the Minimap
+                // MOUNT is deliberately taller than the plate: the plate takes the top
+                // MinimapPlatePx of it, this line takes its own band immediately beneath, and the
+                // gear/Store row lives in the Dock band below that with clear air between them.
+                // HudUiRegression check 8 asserts exactly that - the line lies wholly BELOW the
+                // plate and inside the mount, and no two left-column bands intersect.
+                // It STRETCHES to the mount's edges rather than carrying a fixed width: a fixed
+                // PlateSize + 60 would overhang the mount on a narrower aspect, which is the same
+                // class of bug one band up.
                 var crt = (RectTransform)_chip.transform;
                 crt.anchorMin = new Vector2(0f, 1f);
                 crt.anchorMax = new Vector2(1f, 1f);
                 crt.pivot     = new Vector2(0f, 1f);
-                crt.offsetMin = new Vector2(PlateSize + 10f, -(ChipHeight + 4f));
-                crt.offsetMax = new Vector2(-4f, -4f);
+                crt.offsetMin = new Vector2(HudLayoutBands.StatusLineGapPx,
+                                            -(PlateSize + HudLayoutBands.StatusLineGapPx + ChipHeight));
+                crt.offsetMax = new Vector2(-HudLayoutBands.StatusLineGapPx,
+                                            -(PlateSize + HudLayoutBands.StatusLineGapPx));
                 _chip.enableAutoSizing = true;
                 _chip.fontSizeMin = 16f;
                 _chip.fontSizeMax = ElarionUi.FontMicro;

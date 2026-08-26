@@ -197,16 +197,19 @@ namespace DeNelle.Village
         public static BandRect[] ComputeRowBands(float rowW)
         {
             rowW = Mathf.Max(1f, rowW);
-            float step = Mathf.Clamp((ElarionUiKit.MinTouchPx + 8f) / rowW, 0.08f, 0.22f);
-
+            // Fixed-pixel requirements expressed in row fractions. The old 0.22 ceiling made
+            // both steppers only 106 px wide on portrait, so ClampMinTouch grew them into the
+            // count. Work backwards from the right edge instead: two 120 px controls, a count
+            // wide enough for "999" at CountFontSize, and explicit gaps between all three.
+            float step = Mathf.Clamp((ElarionUiKit.MinTouchPx + 8f) / rowW, 0.08f, 0.32f);
+            float countSpan = Mathf.Clamp(104f / rowW, 0.12f, 0.24f);
             float plusRight = 0.985f;
             float plusLeft = plusRight - step;
             float countRight = plusLeft - 0.010f;
-            float minusLeft = 0.535f;
-            float minusRight = minusLeft + step;
-            float countLeft = minusRight + 0.010f;
+            float countLeft = countRight - countSpan;
+            float minusRight = countLeft - 0.010f;
+            float minusLeft = minusRight - step;
             float textRight = minusLeft - 0.015f;
-            if (countRight < countLeft + 0.05f) countRight = countLeft + 0.05f;   // never invert
 
             return new[]
             {

@@ -79,6 +79,10 @@ namespace DeNelle.Editor.Regression
         private static readonly (string File, string Literal)[] Allowed =
         {
             ("TownSuspendSceneFloorRegression.cs", "MainCastle_Hall"),
+            // WO-1229 classifier controls: these are deliberate negative TEST INPUTS proving
+            // neither live nor legacy hub names are misclassified as dungeon scenes.
+            ("VfxAmbientLoopBudgetRegression.cs", "Main_Castle_Overworld"),
+            ("VfxAmbientLoopBudgetRegression.cs", "MainCastle_Hall"),
         };
 
         /// <summary>Standalone batch entry - prints HUB_SCENE_LITERAL_OK / _FAIL.</summary>

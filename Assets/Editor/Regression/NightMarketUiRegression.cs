@@ -405,8 +405,8 @@ namespace DeNelle.Editor.Regression
             Require(hud, "RealmStoreHudButton", "dedicated HUD Store face is absent", failures);
             Require(hud, "sizeDelta = new Vector2(dockTabPx, dockTabPx)",
                 "HUD Store face is not pinned to the touch floor", failures);
-            Require(hud, "SafeAreaInset.EdgeMarginPx",
-                "HUD Store face is not seated inside the common safe-area margin", failures);
+            Require(hud, "HudLayoutBands.DockEdgePx",
+                "HUD Store face is not seated from the shared dock safe-edge value", failures);
             Require(hud, "PanelRouter.Open(PanelId.RealmStore)",
                 "HUD Store does not route to the existing Realm Store door", failures);
 

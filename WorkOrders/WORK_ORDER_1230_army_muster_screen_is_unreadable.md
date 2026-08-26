@@ -1,6 +1,6 @@
 # WORK ORDER 1230 - The Army Muster screen is unreadable: six collisions, and the edited number wraps
 
-**Status:** READY TO IMPLEMENT
+**Status:** IMPLEMENTED + gate-green - DEVICE/FELT-VERIFY OWED (not FIXED/DONE)
 **Silo:** UI layout  --  **routed to the UI SEAT** for the layout spec/mockup, per owner ("send this to ui")
 **Severity:** P1. This is the screen that spends the player's gold, and the quantity field cannot be read.
 **Origin:** Owner felt-test, Seeker build `2026.08.26.342290`, 2026-08-26. Owner verbatim:
@@ -217,3 +217,28 @@ Spec rules the mockup encodes (binding):
   "5 start now, 15 stay staged" is legible without reading the summary panel.
 - Greyscale-safe: active slot = frame weight + ACTIVE word; shortfall = framed chip + word;
   count emphasis = border, not hue.
+
+---
+
+## IMPLEMENTATION CLOSEOUT AUDIT (2026-08-26)
+
+The implementation, load-bearing RED control, and fresh Batch 0 gates are proven:
+
+- `Builds/batch0-compile-2.log:1966` - `COMPILE_GATE_OK :: scripts compiled clean`
+- `Builds/batch0-regression-2.log:18313-18314` - the historical layout remains RED in the oracle:
+  the selector/action geometry collides twice and the pre-fix count band wraps `999`.
+- `Builds/batch0-regression-2.log:83417` - `ARMY MUSTER LAYOUT OK`; three live-canvas surfaces
+  measured, named bands disjoint, touch bands at least 112, `999` on one line, historical geometry RED.
+- `Builds/batch0-regression-2.log:83814` - `REGRESSION_OK 291/291 suites -- 291 green, 0 red, 0 skipped`
+
+Relevant implementation/proof files inspected in this closeout:
+
+- `Assets/_Modules/Village/Troops/ArmyMusterPanel.cs`
+- `Assets/Editor/Regression/ArmyMusterLayoutRegression.cs`
+- `Assets/Editor/Regression/ArmyMusterLayoutRegression.cs.meta`
+- `Assets/Editor/Regression/DataRegression.cs`
+
+This does **not** earn FIXED/DONE yet. Acceptance still owed: a post-fix 2670x1200 device capture,
+opened and visually inspected, showing a staged three-digit count; a greyscale check of that capture;
+and owner felt-verification and close. The existing `tmp/wo-army-muster-2026-08-26.png` is the
+pre-fix defect evidence and cannot prove the repaired presentation.
