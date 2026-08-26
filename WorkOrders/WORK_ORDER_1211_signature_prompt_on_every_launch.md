@@ -74,6 +74,27 @@ have the same cure - mint once, early, and reuse - which is why they should be d
    stays on every route that grants value. ⛔ This ticket must not loosen a single grant path - it
    moves WHEN the proof is obtained, never WHETHER.
 
+## ⭐ THE ORACLE FROM THE BOUNCED ATTEMPT IS PRESERVED - START THE REWORK FROM IT
+
+`WorkOrders/preserved/WO-1211_BackendSaveAuthRegression.preserved.cs.txt`
+
+The bounced attempt shipped a genuinely good oracle. It is kept OUT of `Assets/` (and with a `.txt`
+extension) for two reasons: an unregistered suite under `Assets/Editor/Regression/` fails
+`RegressionMarkerRegression` RULE 2, and registering this one against the current tree would be
+deliberately RED - backing the attempt out restored the second signing authority it asserts is gone.
+
+**Owner ruled 2026-08-25: HOLD it, do not register it red**, because `REGRESSION_OK` is a pre-ship
+gate and a store submission was in flight. It is preserved rather than deleted per the WO-1053
+precedent: when reconciling parallel seats, PRESERVE before you delete.
+
+It pins cached-only boot load, guest routing at BOTH load and save call sites even when enforcement is
+off, no connect-time mint or sign, shared-signer write routing with the auth-failure branch
+structurally bound to `return false`, and zero remaining auth/nonce/sign authority in
+`GameStateService`.
+
+⛔ The rework moves it back and the COMMITTER registers it - never the lane that wrote it. ⛔ Do not
+weaken it to make a rework pass; it is the pin that would have caught the bounce.
+
 ## Acceptance criteria
 
 - **Cold launch, twice in a row, with a bound wallet: ZERO wallet sheets.** Judged on device, by the

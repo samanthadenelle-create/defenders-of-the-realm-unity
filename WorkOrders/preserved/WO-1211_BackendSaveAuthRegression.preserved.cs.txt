@@ -1,0 +1,127 @@
+// PRESERVED 2026-08-25 - the WO-1211 oracle, kept OUT of Assets/ on purpose.
+//
+// WHY IT IS HERE AND NOT REGISTERED:
+//   The WO-1211 implementation was BOUNCED for weakening fail-closed auth, and backing it out
+//   restored the second signing authority in GameStateService. This oracle asserts that authority
+//   is GONE, so it would fail against the current tree. The owner ruled 2026-08-25 to HOLD it for
+//   the rework rather than register it RED, because REGRESSION_OK is a pre-ship gate and a store
+//   submission was in flight that night.
+//
+// WHY IT IS PRESERVED AT ALL:
+//   It lives in an isolated dev worktree that will be removed, and it is good work: it pins
+//   cached-only boot load, guest routing at BOTH load and save call sites even when enforcement is
+//   off, no connect-time mint or sign, shared-signer write routing with the auth-failure branch
+//   structurally bound to `return false`, and zero remaining auth/nonce/sign authority in
+//   GameStateService. Canon rule (WO-1053 precedent): when reconciling parallel seats, PRESERVE
+//   before you delete - nothing is unrecoverable only if you preserve it first.
+//
+// EXTENSION IS .txt SO UNITY NEVER COMPILES IT. The rework moves it back to
+// Assets/Editor/Regression/BackendSaveAuthRegression.cs and the COMMITTER registers it in
+// DataRegression.RunAll - never the lane that wrote it.
+//
+// ⛔ DO NOT WEAKEN IT to make a rework pass. It is the pin that would have caught the bounce.
+// =============================================================================================
+
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Text.RegularExpressions;
+using UnityEngine;
+
+namespace DeNelle.Editor.Regression
+{
+    /// <summary>WO-1211: boot reads never sign; writes use the shared auth authority.</summary>
+    public static class BackendSaveAuthRegression
+    {
+        private const string StatePath = "Assets/_Modules/Core/State/GameStateService.cs";
+        private const string SignerPath = "Assets/_Modules/Core/Web3/BackendRequestSigner.cs";
+
+        public static void RunAll()
+        {
+            if (Run(out string reason)) Debug.Log("BACKEND_SAVE_AUTH_OK - " + reason);
+            else Debug.LogError("BACKEND_SAVE_AUTH_FAIL - " + reason);
+        }
+
+        public static bool Run(out string reason)
+        {
+            var failures = new List<string>();
+            try
+            {
+                string state = Strip(File.ReadAllText(StatePath));
+                string signer = Strip(File.ReadAllText(SignerPath));
+                string load = Method(state, "LoadFromBackend");
+                string save = Method(state, "SendCurrentSnapshot");
+                string warm = Method(signer, "WarmUpSessionAsync");
+                string cached = Method(signer, "TryAttachCachedSession");
+
+                Require(failures, load, "TryAttachCachedSession", "boot load no longer uses cached-only proof");
+                Require(failures, load, "BackendRequestSigner.IsGuestIdentity",
+                    "boot load no longer routes guests through shared proof when enforcement is off");
+                Reject(failures, load, "TryAttachAsync", "boot load may mint/sign again");
+                Reject(failures, load, "SignMessageBase58", "boot load directly signs again");
+
+                Require(failures, save, "BackendRequestSigner.TryAttachAsync", "save write bypasses shared auth");
+                Require(failures, save, "BackendRequestSigner.IsGuestIdentity",
+                    "save no longer routes guests through shared proof when enforcement is off");
+                if (!Regex.IsMatch(save,
+                        @"!await\s+DeNelle\.Core\.Web3\.BackendRequestSigner\.TryAttachAsync\s*\([^;]+?\)\s*\)\s*\{[^{}]*?return\s+false\s*;",
+                        RegexOptions.Singleline))
+                    failures.Add("failed shared save auth is not structurally bound to refusal/requeue");
+
+                Reject(failures, warm, "MintSessionAsync", "connect/auto-resume warm-up signs during boot");
+                Reject(failures, warm, "SignMessageBase58", "connect/auto-resume signs during boot");
+                Require(failures, warm, "first authenticated action will mint", "deferred-mint posture is missing");
+
+                Require(failures, cached, "X-Guest-Id", "guest proof was dropped from cached-only reads");
+                Require(failures, cached, "SessionUsable", "wallet cached proof does not validate expiry/wallet");
+                Require(failures, cached, "X-Session", "cached wallet session header is missing");
+                Require(failures, cached, "X-Wallet", "cached session is no longer paired with wallet identity");
+
+                Reject(failures, state, "TryAttachAuthHeaders", "GameStateService still owns a second auth rail");
+                Reject(failures, state, "FetchNonce(", "GameStateService still owns nonce fetching");
+                Reject(failures, state, "SignMessageBase58", "GameStateService still owns wallet signing");
+                Reject(failures, state, "dotr-save:v1:", "GameStateService still constructs auth messages");
+            }
+            catch (Exception ex)
+            {
+                failures.Add("oracle threw " + ex.GetType().Name + ": " + ex.Message);
+            }
+
+            reason = failures.Count == 0
+                ? "boot uses cached-only proof, guests retain headers, writes use the sole shared signer"
+                : string.Join(" | ", failures.ToArray());
+            return failures.Count == 0;
+        }
+
+        private static string Strip(string source)
+        {
+            source = Regex.Replace(source, @"/\*.*?\*/", "", RegexOptions.Singleline);
+            return Regex.Replace(source, @"//[^\r\n]*", "");
+        }
+
+        private static string Method(string source, string name)
+        {
+            int nameAt = source.IndexOf(name + "(", StringComparison.Ordinal);
+            if (nameAt < 0) throw new InvalidOperationException("method not found: " + name);
+            int open = source.IndexOf('{', nameAt);
+            if (open < 0) throw new InvalidOperationException("method body not found: " + name);
+            int depth = 0;
+            for (int i = open; i < source.Length; i++)
+            {
+                if (source[i] == '{') depth++;
+                else if (source[i] == '}' && --depth == 0) return source.Substring(open, i - open + 1);
+            }
+            throw new InvalidOperationException("unterminated method: " + name);
+        }
+
+        private static void Require(List<string> failures, string source, string token, string message)
+        {
+            if (!source.Contains(token)) failures.Add(message);
+        }
+
+        private static void Reject(List<string> failures, string source, string token, string message)
+        {
+            if (source.Contains(token)) failures.Add(message);
+        }
+    }
+}
