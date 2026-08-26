@@ -64,7 +64,9 @@ namespace DeNelle.Village
         {
             MineResource.Wood          => "Harvest/wood",
             MineResource.Iron          => "Harvest/iron",
-            MineResource.Food          => "Harvest/food",
+            // WO-1163/PROD-016: enum frozen, DISPLAY moves. Same route as HarvestSite - the two must
+            // never disagree about which model a node wears.
+            MineResource.Food          => "Harvest/stone",
             MineResource.AetherCrystal => "Harvest/crystals",
             _                          => null,
         };

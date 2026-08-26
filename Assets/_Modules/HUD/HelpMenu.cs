@@ -612,8 +612,8 @@ namespace DeNelle.HUD
                 new[] { typeof(int) }, null);
             if (addCoins != null) addCoins.Invoke(eco, new object[] { 50000 });
 
-            FlowTrace.Step("UI", "HelpMenu: dev Grant Resources fired (50k wood/iron, 25k food/crystals, 50k coins).");
-            ShowToast("Granted: 50k wood/iron, 25k food/crystals, 50k gold.");
+            FlowTrace.Step("UI", "HelpMenu: dev Grant Resources fired (50k wood/iron, 25k stone/crystals, 50k coins).");
+            ShowToast("Granted: 50k wood/iron, 25k stone/crystals, 50k gold.");
         }
 #endif // DEVELOPMENT_BUILD || UNITY_EDITOR — 5-tap dev resource grant (store-hardening S1)
 

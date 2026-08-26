@@ -386,7 +386,8 @@ namespace DeNelle.Village.UI
             if (lootFood > 0)
                 vm.Spoils.Add(new SpoilRowVM
                 {
-                    Label = "Food", Amount = "+" + ElarionUi.CompactNumber(lootFood),
+                    // WO-1163: end-of-battle spoils read STONE. lootFood is the frozen slot name.
+                    Label = "Stone", Amount = "+" + ElarionUi.CompactNumber(lootFood),
                 });
             return vm;
         }

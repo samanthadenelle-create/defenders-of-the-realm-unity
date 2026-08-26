@@ -1,6 +1,32 @@
 # PROD-014 — The "NEED MORE TO REPAIR" toast truncates on both lines
 
 **Status:** READY - PARTIAL (board reconcile 2026-08-25). **Slice (b) CODE HAS LANDED (`10912de95`) but its acceptance capture is still OWED, and slices (c) + (d) remain blocked** - so the ticket stays in Ready. Per-slice state:
+
+## ⭐ OWNER RULING 2026-08-25 - the multi-shortfall question is ANSWERED. This unblocks the bounce.
+
+The lane bounced partly because multi-resource priority needed a ruling: when a repair needs several
+resources and the player is short on more than one, which shortfall does the store offer?
+
+> **"personally id suggest the pack that allows fixing everything at a discount"**
+> **"id rather upsell them when it helps more"**
+
+⛔ **So it is NOT "offer the cheapest shortfall" and NOT "offer the largest single one".** The offer is
+the pack that CLEARS EVERY outstanding shortfall for that repair, at a discount against buying the
+pieces separately.
+
+⭐ **The reasoning is the constraint, so keep it when you implement:** the upsell is justified because
+it HELPS MORE - one purchase actually completes the repair, where a single-resource pack leaves the
+player still blocked and still short. An upsell that does not finish the job is just a bigger ask.
+A cheaper offer that leaves the player stuck is the worse outcome for both sides.
+
+⛔ Still binding from the original lane fence: route through the EXISTING `PackStore.FocusShortfall`.
+Do not create a second purchase or price authority - the SERVER quote decides what is sellable and at
+what amount, and a discount must be server-issued (the WO-1177 rail), never computed on the client.
+
+⚠ The bounce's OTHER blocker stands and is unaffected by this ruling: the missing caller
+`HubRepairAffordance.cs` is outside the lane's file fence. The fence needs widening to include it
+before this can be implemented.
+
 - **(a) Label clipping — FIXED 2026-08-24** (`130ec84ab`: `HubRepairAffordance` now calls `FitBlock` at the legibility floor, copy moved to `WallRepairStrings.cs`, plus a new ellipsis detector). Awaiting **owner felt-verify only** — no code work here.
 - **(b) Acknowledge / close control — READY. THIS is the slice to take.** Component, UI primitive, handler and the selection-clearing path (`WallRepairController.CancelRepair`) are all specified in the body below.
 - **(c) Smallest-sufficient pack offer — ⛔ BLOCKED** until WO-1069 is integrated; it must reuse `PackStore.FocusShortfall`, never a second offer path.

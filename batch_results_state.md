@@ -545,3 +545,61 @@ Ownership correction received: Codex writes implementation; Claude specs, verifi
 4. **Where:** isolated worktree `D:\eoa-codex-b13-1208`, branch `codex/b13-1208`; modified only `ResourceCollectorBootstrap.cs` and `ResourceCollector.cs` under `Assets/_Modules/Village/Buildings/Progression/`.
 5. **Review/verification:** two read-only lifecycle reviews rejected the initial unconditional `OnDisable` retry because it would resurrect sold collectors, then caught reset retaining a live fallback. Both blockers were corrected; final review reports no remaining blocker. `git diff --check` is clean apart from Git's LF-to-CRLF notice.
 6. **Lead-owned:** compile, registered oracle/marker, dungeon round-trip device proof, commit/push, and ticket status. `ResourceBuildingHarvester.cs` and its held-income mitigation were not touched.
+
+## HANDOFF 2026-08-25 - Batch 13 WO-1206 retired-vocabulary gate
+
+1. **What changed:** added versioned canonical retirement data (`food -> stone`, WO-1163, 2026-08-25) in byte-identical Resources and StreamingAssets copies, plus an unregistered `RetiredVocabularyRegression` oracle and Unity metas.
+2. **Scope:** the oracle scans only player-facing canonical JSON fields, quoted source strings on UI/presentation seams, picker declarations, and visible `Harvest/...` resource-art routes. It strips comments, skips generated embedded catalog source, and does not flag frozen variable/property names or wire/persistence keys such as `Food`, `paidFood`, `legacySkus`, or quest `kind`.
+3. **Expected RED evidence in the current source:** `HarvestSite` and `MineNodeVisual` still route to `Harvest/food`; `EndStateVM` authors label `Food`; `HelpMenu` authors a food grant toast; `EchoService` passes `"Food"` to its player gain popup; canonical visible copy such as the Mill description, guide tips, and localization values still says Food. Each failure reports surface plus file:line and replacement. The frozen `EchoAssignments.ResFood` picker token is deliberately not flagged; its display mapping is the surface that must say Stone.
+4. **Where:** isolated worktree `D:\eoa-codex-b13-1206`, branch `codex/b13-1206`; six new files only (oracle + meta, two JSON copies + metas). `DataRegression.cs` remains committer-fenced.
+5. **Verification:** canonical JSON mirrors SHA-256 match at `6CC5692129AAF142A71AC1C5CD306235F260C81E7B8AB669726962215FC024A6`; `git diff --check` clean. Standalone Unity execution was attempted but correctly refused because another Unity editor currently holds the project lock. Lead must register the suite, capture the RED before merging the surface cleanup, then capture green by marker on a fresh log.
+
+## HANDOFF 2026-08-25 - Batch 13 WO-1159 treasury ship verification
+
+1. **What changed:** `command-centre.ps1` now reads the public vault and Squads multisig from canonical `wallets.json`, invokes `treasury-verify.mjs` before any WebGL build/upload, and always passes `--multisig`. It authors no duplicate address or threshold.
+2. **Two-state owner policy:** `TREASURY_VERIFY_FAIL` (a query that proves configuration wrong, local SDK/config failure, or missing account) blocks unconditionally. Pure RPC/network query failures emit `TREASURY_VERIFY_UNREACHABLE`; the ship command refuses unless that invocation carries explicit `-AcknowledgeTreasuryRpcFailure`, then records an acknowledged warning and continues. The acknowledgement cannot downgrade a real failure.
+3. **Verifier contract:** RPC/network failures are separated from configuration problems. Mixed results remain blocking whenever any configuration problem exists. The existing `TREASURY_VERIFY_OK` marker is unchanged.
+4. **Where:** isolated worktree `D:\eoa-codex-b13-1159`, branch `codex/b13-1159`; modified only `tools/command-centre.ps1` and `tools/treasury-verify.mjs`.
+5. **Verification:** `node --check tools/treasury-verify.mjs` green; PowerShell AST parse emits `POWERSHELL_PARSE_OK`; `git diff --check` clean apart from LF-to-CRLF notices. The offline behavioral probe could not import `@solana/web3.js` from the isolated worktree because dependencies are installed only in the main checkout; lead must run the live marker tests from the dependency-bearing tree while harvesting.
+## BOUNCE 2026-08-25 - Batch 13 WO-823 Phase E cannot close inside its file fence
+
+- **Result:** no implementation attempted; a schema-only partial would serialize no runtime truth and never retire the first-raid soft gate.
+- **Verified current source:** `SaveSchema.CurrentVersion` is 39 and `SaveMigrator` already owns `MigrateToV39` for `paidCoins`, so WO-823 correctly requires schema v40.
+- **Batch fence provided:** `Core/State/SaveSchema.cs`, `Core/State/SaveMigrator.cs`, and the `ArmyReadiness` authority.
+- **Required additional writers:** `Core/State/GameState.cs` for the monotonic runtime field; `Core/State/GameStateService.cs` for capture, restore, and new-game initialization; and `Village/Troops/RaidDeployController.cs` for the shared `ReconcileRaidEnd` false-to-true stamp.
+- **Collision:** `GameStateService.cs` is owned by Batch 13 Lane 1 / WO-1211, so its fence must not be expanded while that lane is active.
+- **Residual explicitly surfaced:** the work order also requires `RaidDeployScreen.cs` to remove its two raw-headcount readiness bypasses and route them through the snapshot; that file is outside the Batch 13 Lane 7 fence and needs its own coordinated grant/coverage.
+- **Recommendation:** reissue WO-823 after WO-1211 lands with the five required runtime/schema files plus a deliberate ruling on the `RaidDeployScreen` residual. Do not accept a `SaveSchema`/`SaveMigrator`-only implementation.
+## BOUNCE 2026-08-25 - Batch 13 PROD-014(c) file fence excludes the caller
+
+1. **Disposition:** no code changed. WO-1069 is integrated and the dependency is genuinely clear, but the exact Lane 8 fence cannot implement repair shortfall routing.
+2. **Verified existing seam:** `Assets/_Modules/Wallet/PackStore.cs:553` already exposes `FocusShortfall(resourceLabel, missing)`, and `:1393-1407` resolves the smallest sufficient pack through `ShortfallPackOffer.Resolve`. `ShortfallPackOffer.cs:119-188` already rejects non-shortfalls, walks small-to-large, and stops at the first sufficient rung. There is no second purchase or price authority to add here.
+3. **Missing caller:** the only `FocusShortfall(` occurrence in the tree is its declaration. `Assets/_Modules/Village/Walls/HubRepairAffordance.cs:380-405` owns the unaffordable repair click, computes the exact shortfall, logs it, refreshes, and returns; it never opens `PanelId.RealmStore` or passes the gap to `PackStore.FocusShortfall`. No repair file references `PackStore`.
+4. **Required correction:** expand the lane by exactly `Assets/_Modules/Village/Walls/HubRepairAffordance.cs` (and keep the two Wallet files read-only unless implementation proves a missing seam). That caller must select the repair shortfall resource/amount, hand it to the existing `FocusShortfall`, and open the existing Realm Store route. If multi-resource repair shortfalls are possible, the spec must state which single gap wins; choosing that silently would invent offer policy.
+5. **Workspace:** isolated clean worktree `D:\eoa-codex-b13-prod014c`, branch `codex/b13-prod014c`, base `3a05432f32`. `git diff --check` clean; no implementation, registration, gate, commit, push, or ticket status change.
+
+## HANDOFF 2026-08-25 - Batch 13 WO-1100 None-mode particle semantics
+
+1. **What changed:** `VfxParticleNullSlotRegression` now exempts an all-null particle renderer only when its authored `renderMode` is `ParticleSystemRenderMode.None`. Those systems are counted and reported as intentional non-renderers. Enabled renderers in any drawable mode with all-null material slots still fail hard; disabled vendor containers keep their existing normalization/reporting behavior.
+2. **False debt removed:** deleted the five-entry `KnownEnabledNullSlot` baseline (`PP_EarthShatter`, the three Goop rows, and `PP_LightnigStormCloud`). All five were authored None-mode, so treating them as repair debt or assigning materials would change intentionally invisible systems rather than fix a rendering defect.
+3. **Where:** isolated worktree `D:\eoa-codex-b13-1100`, branch `codex/b13-wo1100`; modified only `Assets/Editor/Regression/VfxParticleNullSlotRegression.cs`. No prefab, material, runtime VFX, `DataRegression.cs`, status, commit, or push change.
+4. **Verification:** exact one-file implementation fence held; source scan confirms the false baseline and its five labels are gone, the None-mode classification is explicit, and `git diff --check` is clean apart from the repository LF-to-CRLF notice. Lead owns Unity execution and the registered full gate.
+5. **Fenced stale comment:** `DataRegression.cs:826-834` still describes every enabled all-null renderer as drawable Magenta debt. The lane explicitly fenced that shared registration file, so the lead should update that registration comment while harvesting without changing the call or marker.
+## HANDOFF 2026-08-25 - Batch 13 R3 structure-toughness authority
+
+- **Worktree / branch:** `D:\eoa-codex-b13-r3` / `codex/b13-r3`, based on `3a05432f3`.
+- **Files changed:**
+  - `Assets/_Modules/Village/Walls/WallSegment.cs`
+  - `Assets/Editor/Regression/TalentStrategyRegression.cs`
+- **Implementation:** `WallSegment.StructureToughnessReduction` still owns hero-class lookup, live-wave lookup, tracing, and the caller-side `Faction == Friendly` safety contract, but now delegates the reduction calculation to the canonical `HeroTalentModifiers.StructureToughnessReduction(heroClass, waveActive)` authority. The hand-copied `StatSum + wave slice + Mathf.Clamp` table is removed.
+- **Oracle strengthened:** the already-registered behavioural talent oracle still drives the real authority to prove the 0.5 cap with both talent slices, and now also fails if the production wall/gate seam stops delegating or regains a local `StatSum`/clamp authority. This pins agreement structurally instead of merely observing that two copies currently return the same number.
+- **Safety preserved:** no change to `WallSegment`'s `Faction` check; hostile raid walls still receive no player BULWARK reduction. `Gate` continues through the same shared `WallSegment` seam.
+- **Verification:** `git diff --check` clean; focused source assertion emitted `R3_DELEGATION_SOURCE_OK`. Unity regression execution is left to the central gate per Batch 13 protocol.
+- **Commit/status:** not committed or pushed; no work-order/board/DataRegression changes.
+## HANDOFF 2026-08-25 - Batch 13 WO-935 Phase 0 VFXType inventory
+
+1. **What changed:** added the dated, documentation-only `docs/reference/VFX_TYPE_CALLSITE_INVENTORY_2026-08-25.md`. It maps every current `VFXType` ordinal/key to serialized-art presence and runtime gameplay call sites, and separates direct gameplay ownership from router/procedural availability.
+2. **Measured truth:** current source contains 94 enum values (`None` + 93 effects), not the older ticket's ~79/~95 figures. The serialized `VFXCatalog.asset` contains 75 distinct numeric rows. Twenty-nine effects have no direct gameplay owner; 24 of those have a catalog row. Nine keys have no runtime reference at all.
+3. **New structural finding:** `VFXCatalog.asset` contains serialized Type ordinals 94 and 95 even though the current enum ends at 93. They are orphaned on this snapshot and must be investigated before regeneration or any append-only enum work; this documentation lane did not modify code or assets.
+4. **Compatibility pin:** the inventory explicitly records `Harvest_Food` as a frozen append-only enum name whose presentation is Stone. Resource retirement must not delete/insert/renumber that member.
+5. **Where/verification:** isolated worktree `D:\eoa-codex-b13-wo935`, branch `codex/b13-wo935`, base `3a05432f3`; one new Markdown file only. The table has exactly 94 enum rows, exactly 29 zero-direct-owner rows, and nine `ZERO runtime references` rows. `git diff --check` is clean. No code, catalog, DataRegression registration, Unity gate, commit, push, or ticket status was changed.

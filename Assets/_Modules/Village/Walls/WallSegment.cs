@@ -448,17 +448,15 @@ namespace DeNelle.Village
             var abilities = hero != null ? hero.GetComponent<HeroAbilities>() : null;
             string heroClass = abilities != null ? abilities.HeroClass : "knight";
 
-            float reduction = Talents.HeroTalentModifiers.StatSum(heroClass, "structureToughness");
             var wm = WaveManager.Instance;
             bool waveActive = wm != null && wm.Phase == WavePhase.Active;
-            float waveSlice = waveActive
-                ? Talents.HeroTalentModifiers.StatSum(heroClass, "structureToughnessWave") : 0f;
-            reduction = Mathf.Clamp(reduction + waveSlice, 0f, 0.5f);   // WO-676 G2 cap
+            float reduction = Talents.HeroTalentModifiers.StructureToughnessReduction(
+                heroClass, waveActive);
 
             if (reduction > 0f)
                 DeNelle.Core.Diagnostics.FlowTrace.Once(traceSystem, "talent-structureToughness",
                     $"BULWARK structureToughness applied: -{reduction:P0} intake " +
-                    $"(always-on Σ + waveActive={waveActive} slice {waveSlice:P0}, cap 0.5).");
+                    $"(canonical talent authority, waveActive={waveActive}, cap 0.5).");
             return reduction;
         }
 

@@ -284,8 +284,18 @@ namespace DeNelle.Editor
                 string sy = vmIdle.Vm.SynergyText;
                 if (sy.Contains("ACTIVE"))
                     Fail($"broken-pair SynergyText '{sy}' still claims ACTIVE");
-                if (!sy.Contains("Aldwin") || !sy.Contains("Food"))
-                    Fail($"broken-pair SynergyText '{sy}' must hint the partner and its resource (Aldwin / Food)");
+                // ⛔ RE-POINTED 2026-08-25, NOT WEAKENED. This asserted the literal "Food", which was
+                // the resource's DISPLAY NAME until WO-1163 retired it. The enum member and the
+                // persisted token are still Food - frozen on purpose - but what this text shows the
+                // player is now Stone, so a hardcoded "Food" here fails on CORRECT code.
+                // DERIVE the expected label from the same authority the UI reads instead of naming
+                // it, so the next vocabulary ruling cannot break this suite again. The assertion is
+                // unchanged in strength: the hint must still name the partner AND their resource.
+                string aldwinResource = DeNelle.Village.EchoRosterCatalog.TargetLabel(
+                    DeNelle.Village.HarvestTarget.Food);
+                if (!sy.Contains("Aldwin") || !sy.Contains(aldwinResource))
+                    Fail($"broken-pair SynergyText '{sy}' must hint the partner and its resource " +
+                         $"(Aldwin / {aldwinResource})");
             }
         }
 

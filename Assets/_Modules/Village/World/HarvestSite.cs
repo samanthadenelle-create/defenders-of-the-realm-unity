@@ -365,7 +365,10 @@ namespace DeNelle.Village.World
         {
             MineResource.Wood          => "Harvest/wood",
             MineResource.Iron          => "Harvest/iron",
-            MineResource.Food          => "Harvest/food",
+            // WO-1163/PROD-016: the ENUM member stays Food (frozen persistence vocabulary), but the
+            // model the player sees is STONE. Resources/Harvest/stone.fbx has existed since WO-1163
+            // landed - it ships with its own texture folder, so this route is art-complete.
+            MineResource.Food          => "Harvest/stone",
             MineResource.AetherCrystal => "Harvest/crystals",
             _ => null,
         };

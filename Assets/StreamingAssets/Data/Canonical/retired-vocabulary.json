@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "retirements": [
+    {
+      "retired": "food",
+      "replacement": "stone",
+      "date": "2026-08-25",
+      "ticket": "WO-1163"
+    }
+  ]
+}

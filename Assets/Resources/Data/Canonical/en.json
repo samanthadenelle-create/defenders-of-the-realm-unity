@@ -164,7 +164,6 @@
   "elementBlurb.ice": "Ice. The patient cold that holds the dark still until the song catches up.",
 
   "resourceBlurb.crystals": "Crystals. The Heart's slow gift. Mined where its overflow seeps up through the stone.",
-  "resourceBlurb.food": "Food. What the Folk gather while you keep watch. It feeds the spirits as it feeds the bond.",
   "resourceBlurb.coins": "Coins. Quiet currency, brought by the wanderers from valleys still standing. Spend them on what cannot be grown here.",
 
   "buildingDesc.crystalMine": "Where the Heart's gem-sap seeps into stone. Pets here tend the seam.",
@@ -177,8 +176,6 @@
 
   "tooltip.resourceCrystals.title": "Crystals",
   "tooltip.resourceCrystals.body": "The Heart's slow gift. Mined where its overflow seeps up through the stone.",
-  "tooltip.resourceFood.title": "Food",
-  "tooltip.resourceFood.body": "What the Folk gather while you keep watch. It feeds the spirits as it feeds the bond.",
   "tooltip.resourceCoins.title": "Coins",
   "tooltip.resourceCoins.body": "Quiet currency, brought by the wanderers from valleys still standing. Spend it on what cannot be grown here.",
   "tooltip.resourceVoidshards.title": "Voidshards",

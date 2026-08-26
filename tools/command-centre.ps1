@@ -15,6 +15,7 @@ param(
     [string]$ProofWallet = '11111111111111111111111111111111',
     [int]$UnityTimeoutMin = 45,
     [int]$AliasTimeoutSec = 180,
+    [switch]$AcknowledgeTreasuryRpcFailure,
     [switch]$LibraryOnly
 )
 
@@ -184,6 +185,38 @@ $activeStep = 3; $activeMarker = 'SCHEMA_PARITY_OK'; $activeLog = $schemaLog
 $started = Get-Date
 Invoke-Captured { node (Join-Path $root 'tools\schema-parity.mjs') } $schemaLog | Out-Null
 Assert-FreshMarker 3 'SCHEMA_PARITY_OK' $schemaLog $started
+
+# WO-1159: compute treasury safety from mainnet before building or uploading. Read the
+# public vault + multisig from canonical data so this chain authors no second address list.
+# Owner policy: proven bad configuration BLOCKS; an unreachable RPC may continue only
+# when the operator explicitly acknowledges degraded proof on this invocation.
+$treasuryLog = Join-Path $builds 'treasury-verify.log'
+$activeStep = 3; $activeMarker = 'TREASURY_VERIFY_OK'; $activeLog = $treasuryLog
+$walletsPath = Join-Path $root 'Assets\Resources\Data\Canonical\wallets.json'
+try { $wallets = Get-Content -LiteralPath $walletsPath -Raw | ConvertFrom-Json }
+catch { Refuse 3 'TREASURY_VERIFY_OK' $walletsPath 'WALLET_CANON_INVALID' }
+$vault = [string]$wallets.mainnetPurchaseRecipient.address
+$multisig = [string]$wallets.mainnetPurchaseRecipient.squadsMultisig
+if ([string]::IsNullOrWhiteSpace($vault) -or [string]::IsNullOrWhiteSpace($multisig)) {
+    Refuse 3 'TREASURY_VERIFY_OK' $walletsPath 'VAULT_OR_MULTISIG_ABSENT'
+}
+$started = Get-Date
+Invoke-Captured {
+    node (Join-Path $root 'tools\treasury-verify.mjs') $vault --multisig $multisig
+} $treasuryLog | Out-Null
+$treasuryText = Get-Content -LiteralPath $treasuryLog -Raw
+if ($treasuryText -match 'TREASURY_VERIFY_OK') {
+    Assert-FreshMarker 3 'TREASURY_VERIFY_OK' $treasuryLog $started
+} elseif ($treasuryText -match 'TREASURY_VERIFY_UNREACHABLE') {
+    if (-not $AcknowledgeTreasuryRpcFailure) {
+        Refuse 3 'TREASURY_VERIFY_OK' $treasuryLog 'RPC_UNREACHABLE_REQUIRES_-AcknowledgeTreasuryRpcFailure'
+    }
+    Write-Run "STEP_3_WARN marker=TREASURY_VERIFY_UNREACHABLE acknowledged=true log=$treasuryLog"
+} else {
+    # Includes TREASURY_VERIFY_FAIL. An acknowledgement can never downgrade a query that
+    # successfully proved the production configuration wrong.
+    Refuse 3 'TREASURY_VERIFY_OK' $treasuryLog 'TREASURY_CONFIGURATION_NOT_PROVEN'
+}
 
 # Step 4: resolve the alias BEFORE promotion and persist its immutable deployment
 # id. This file is the rollback authority if the database proof later fails.

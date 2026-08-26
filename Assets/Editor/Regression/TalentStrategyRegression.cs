@@ -82,6 +82,7 @@
 // =============================================================================
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Text;
@@ -489,6 +490,29 @@ namespace DeNelle.Editor
                         failures.Add($"{stAccessor.Name}('oracle', waveActive:true) = {v:0.###} with a 1.5 raw sum — the WO-676 structureToughness total cap is 0.5");
                     else log.AppendLine($"  {stAccessor.Name} clamps 1.5 raw -> 0.5 ok (wave slice folded)");
                 }
+                // R3: proving the authority's value is insufficient if production keeps a
+                // hand-mirrored clamp that happens to agree today. Pin that WallSegment's
+                // shared wall/gate intake seam delegates to the accessor exercised above.
+                string wallPath = Path.Combine(Application.dataPath,
+                    "_Modules/Village/Walls/WallSegment.cs");
+                string wallSource = File.Exists(wallPath) ? File.ReadAllText(wallPath) : "";
+                const string seam = "internal static float StructureToughnessReduction(string traceSystem)";
+                int seamStart = wallSource.IndexOf(seam, StringComparison.Ordinal);
+                int seamEnd = seamStart >= 0
+                    ? wallSource.IndexOf("public void Repair", seamStart, StringComparison.Ordinal)
+                    : -1;
+                string seamSource = seamStart >= 0 && seamEnd > seamStart
+                    ? wallSource.Substring(seamStart, seamEnd - seamStart)
+                    : "";
+                if (seamSource.Length == 0)
+                    failures.Add("WallSegment.StructureToughnessReduction source seam is missing/unreadable; re-point the R3 delegation oracle");
+                else if (!seamSource.Contains("HeroTalentModifiers.StructureToughnessReduction"))
+                    failures.Add("WallSegment duplicates structure-toughness math instead of delegating to HeroTalentModifiers.StructureToughnessReduction");
+                else if (seamSource.Contains("HeroTalentModifiers.StatSum") || seamSource.Contains("Mathf.Clamp"))
+                    failures.Add("WallSegment's delegated structure-toughness seam still carries a second StatSum/clamp authority");
+                else
+                    log.AppendLine("  WallSegment wall/gate intake delegates to the one structure-toughness authority");
+
                 var hrAccessor = FindClampedAccessor("harvestrate", "harvest");
                 if (hrAccessor == null)
                     failures.Add("no clamped harvestRate accessor found on HeroTalentModifiers (public static float X(string) with 'harvest' in the name) — the A3 lane must expose a sanely-capped read; re-point this probe if it is named otherwise");

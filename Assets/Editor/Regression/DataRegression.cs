@@ -673,6 +673,17 @@ namespace DeNelle.Editor
             // fill/drain is ONE pure capacity-ascending function, and an over-cap save is grandfathered ---
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "town-bank-cap suite", () => { if (!DeNelle.Editor.Regression.TownBankCapRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[town-bank-cap] " + r); });
 
+            // WO-1206: a RETIRED resource word must never reach a player surface again. Two Food
+            // leaks in one hour were found by the OWNER, not by a gate, because WO-1163's conversion
+            // was applied per-surface with nothing asserting the retirement. The retirement list is
+            // DATA (retired-vocabulary.json, dual-copy) - never a C# list, which would be one fact
+            // written twice. ⛔ It scopes itself by SYNTAX, not by a hand-maintained name list:
+            // frozen persistence vocabulary (JsonProperty, const string, case ", PlayerPrefs,
+            // FlowTrace/Debug) is excluded, because an oracle that cannot tell a display string from
+            // a wire key gets switched off within a week.
+            // Registered by the COMMITTER; the lane that wrote it is fenced out of this file.
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "retired-vocabulary suite", () => { if (!DeNelle.Editor.Regression.RetiredVocabularyRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[retired-vocabulary] " + r); });
+
             // WO-1207 (owner rulings 2026-08-25): a trimmed HARVEST is TOLD, a trimmed BATTLE REWARD
             // is SILENT. "they get a warn on harvest but no warn on battle rewards cause one is
             // choice" - collecting is timed by the player, a reward is not. Both halves are pinned

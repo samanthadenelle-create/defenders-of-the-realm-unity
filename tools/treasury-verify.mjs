@@ -34,9 +34,15 @@ const rpcIdx = args.indexOf('--rpc');
 const rpc = rpcIdx >= 0 ? args[rpcIdx + 1] : 'https://api.mainnet-beta.solana.com';
 
 const problems = [];
+const queryProblems = [];
 const notes = [];
 function fail(s) { problems.push(s); }
+function queryFail(s) { queryProblems.push(s); }
 function ok(s) { notes.push('  ok    ' + s); }
+function isRpcFailure(e) {
+  const s = String(e?.message ?? e ?? '');
+  return /(fetch|network|socket|timeout|timed out|rate.?limit|ECONN|ENOTFOUND|server error|service unavailable|gateway|\b(?:401|403|408|425|429|500|502|503|504)\b|-32\d{3})/i.test(s);
+}
 
 if (!vaultArg) {
   console.log('usage: node tools/treasury-verify.mjs <vaultPubkey> [--rpc <url>]');
@@ -71,7 +77,8 @@ try {
          `STOP and re-derive them — do not adjust this script to match.`);
   }
 } catch (e) {
-  fail(`could not read the SKR mint: ${e.message}`);
+  if (isRpcFailure(e)) queryFail(`could not read the SKR mint: ${e.message}`);
+  else fail(`could not read the SKR mint: ${e.message}`);
 }
 
 // ── 2. IS IT ACTUALLY A VAULT? ───────────────────────────────────────────────────────────
@@ -110,7 +117,8 @@ try {
          `Program. Do not author this address.`);
   }
 } catch (e) {
-  fail(`could not read the vault account: ${e.message}`);
+  if (isRpcFailure(e)) queryFail(`could not read the vault account: ${e.message}`);
+  else fail(`could not read the vault account: ${e.message}`);
 }
 
 // ── 4. THE SKR TOKEN ACCOUNT ─────────────────────────────────────────────────────────────
@@ -129,8 +137,9 @@ try {
        (decimals !== null ? ` (balance ${Number(acct.amount) / 10 ** decimals} SKR)` : ''));
   }
 } catch (e) {
-  fail(`SKR ATA ${ata.toBase58()} does not exist yet (${e.name}). Create it deliberately and ` +
-       `funded — never let the first transfer create it.`);
+  const message = `SKR ATA ${ata.toBase58()} could not be read (${e.name}: ${e.message}).`;
+  if (isRpcFailure(e)) queryFail(message);
+  else fail(message + ` Create it deliberately and funded - never let the first transfer create it.`);
 }
 
 // ── 5. THE MULTISIG THAT CONTROLS IT ─────────────────────────────────────────────────────
@@ -175,7 +184,8 @@ if (msArg) {
         ok(`multisig is ${threshold}-of-${members}, timeLock ${ms.timeLock}s — production-shaped`);
       }
     } catch (e) {
-      fail(`could not read the multisig: ${e.message}`);
+      if (isRpcFailure(e)) queryFail(`could not read the multisig: ${e.message}`);
+      else fail(`could not read the multisig: ${e.message}`);
     }
   }
 } else {
@@ -185,10 +195,15 @@ if (msArg) {
 
 // ── verdict ──────────────────────────────────────────────────────────────────────────────
 console.log(notes.join('\n'));
-if (problems.length === 0) {
+if (problems.length === 0 && queryProblems.length === 0) {
   console.log(`\nTREASURY_VERIFY_OK ${vault.toBase58()} is a vault, holds an SKR ATA at ${ata.toBase58()}, mint decimals=${decimals}`);
+} else if (problems.length === 0) {
+  console.log('\nquery unavailable:');
+  for (const p of queryProblems) console.log('  WARN  ' + p);
+  console.log(`\nTREASURY_VERIFY_UNREACHABLE ${queryProblems.length} RPC query failure(s) - explicit ship acknowledgement required`);
 } else {
   console.log('\nproblems:');
   for (const p of problems) console.log('  FAIL  ' + p);
+  for (const p of queryProblems) console.log('  WARN  ' + p);
   console.log(`\nTREASURY_VERIFY_FAIL ${problems.length} problem(s) — do NOT author this address anywhere`);
 }

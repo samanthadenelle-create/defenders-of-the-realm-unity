@@ -506,7 +506,9 @@ namespace DeNelle.Village
             // world-pop precedent; warm coin gold, named in TEXT like every other.
             Pop(wood,     "Wood",     new Color(0.55f, 0.38f, 0.22f));
             Pop(iron,     "Iron",     new Color(0.62f, 0.64f, 0.70f));
-            Pop(food,     "Food",     new Color(0.72f, 0.62f, 0.28f));
+            // WO-1163: the "+N" pop the player reads says STONE; the local is named food because
+            // it carries the frozen internal slot. Display moves, the slot does not.
+            Pop(food,     "Stone",    new Color(0.72f, 0.62f, 0.28f));
             Pop(gold,     "Gold",     new Color(1.00f, 0.85f, 0.35f));
             Pop(crystals, "Crystals", new Color(0.35f, 0.72f, 0.95f));
         }

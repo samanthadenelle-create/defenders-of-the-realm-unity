@@ -271,7 +271,10 @@ namespace DeNelle.Village
             {
                 case HarvestTarget.Wood:     return "Wood";
                 case HarvestTarget.Iron:     return "Iron";
-                case HarvestTarget.Food:     return "Food";
+                // WO-1163: the ENUM member stays Food - it is frozen persistence vocabulary keyed by
+            // saved assignment tokens - but what the PLAYER reads is Stone. Display moves, the
+            // token does not (PROD-016 ruling, 2026-08-25).
+            case HarvestTarget.Food:     return "Stone";
                 case HarvestTarget.Gold:     return "Gold";
                 case HarvestTarget.Crystals: return "Crystals";
                 default:                     return "Wood";
