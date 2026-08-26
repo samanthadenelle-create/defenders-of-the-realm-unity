@@ -137,7 +137,25 @@
 > fine as history. A copied number is the bug **even when it was right the day it was written** -
 > that is exactly how the retired 860-899 UI block kept re-seeding collisions from CLAUDE.md sec.2.
 
-> ## ⚠ RECONCILED 2026-08-26 (CLI): main line next free = **1226**.
+> ## ⚠ RECONCILED 2026-08-26 (CLI): main line next free = **1227**.
+> *(CLI seat minted **WO-1226** and bumped 1226 -> 1227 in this SAME edit. **1226** = THE STAFF LIES
+> ACROSS THE BODY — FIX THE SEAT, NOT THE DERIVER. Owner hit it on TWO builds (`.341419` and
+> `.342290`): *"why is the staff still horizontal during fights?"* / *"thought we fixed that many
+> times"*. She is right — git log carries SIX prior fixes and nearly all tuned the MEASUREMENT.
+> ⭐ A STAFF MEASURES AS A CUBE on both builds, both sockets, both item ids:
+> `worldBounds=(1.519,1.401,1.624)` and `(1.318,1.509,1.169)`, versus this repo's own recorded rod
+> at `(0.079,0.097,1.265)`. `renderers=2(inactive=0)` — a second renderer inflating a rod into a
+> box — CHECK FIRST. Meanwhile the code prints `tiltFromVertical=0deg` on a staff the screen shows
+> across the body, and grip-origin RESOLVES cleanly (relGap 0.64, hilt at -Y) while only the taper
+> is ambiguous (0.019). So the derivation is defensible and lands wrong anyway — the 2026-08-16 bow
+> lesson verbatim: *"derivation is not self-proving"*. ⛔ Do NOT flip `_sheatheLongAxisSign`
+> (WO-1136). ⛔ Acceptance is a DEVICE SCREENSHOT, not a marker and not a trace line — the broken
+> build already prints 0deg.
+> ⚠ PROCESS: the CLI diagnosed this at ~11:00, said it would mint it, and did not. It sat as an RCA
+> with no board entry until she hit it again. An un-minted ticket is invisible to the READY queue
+> and therefore to the orchestration hook. READY TO IMPLEMENT.)*
+>
+> ### superseded: RECONCILED 2026-08-26 (CLI): main line next free = **1226**.
 > *(CLI seat minted **WO-1225** and bumped 1225 -> 1226 in this SAME edit. **1225** = A TOAST
 > RENDERED UNDER A MODAL IS STILL A SILENT GRANT. Found during the owner's own felt-test of
 > WO-1213 on build `2026.08.26.342290`: she said *"it didt show or if it did it was under the echo
