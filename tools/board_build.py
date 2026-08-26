@@ -76,6 +76,46 @@ def is_work_order(basename):
     if _WO_COMPANION_KIND.match(basename): return False
     return bool(_WO_FILENAME.match(basename))
 
+OWNER_AREAS = [
+    "UI / HUD / Panels", "Village / Buildings", "Combat / Heroes / Gear",
+    "Dungeons / Portals", "Economy / Crafting / Resources",
+    "Store / Wallet / Monetization", "NPC / Tutorial / Quests",
+    "World / Misc Player Experience", "Technical / Build / Backend",
+]
+
+def owner_area(row):
+    """Put a felt-test ticket near the place the owner will exercise it."""
+    text = " ".join((row.get("file", ""), row.get("title", ""), row.get("status", ""))).lower()
+    rules = [
+        ("Store / Wallet / Monetization", ("store", "wallet", "purchase", "iap", "monet", "receipt", "levelplay", "rewarded ad", "solana")),
+        ("Dungeons / Portals", ("dungeon", "portal", "raid", "outpost", "boss room")),
+        ("Combat / Heroes / Gear", ("combat", "battle", "hero", "gear", "equip", "weapon", "armor", "army muster", "troop")),
+        ("Village / Buildings", ("village", "building", "build mode", "structure", "wall", "pallet", "spire", "town")),
+        ("Economy / Crafting / Resources", ("economy", "craft", "resource", "crystal", "food", "wood", "iron", "harvest", "queue")),
+        ("NPC / Tutorial / Quests", ("npc", "tutorial", "quest", "onboarding", "dialog", "rumor")),
+        ("Technical / Build / Backend", ("backend", "database", "schema", "api", "android", "addressable", "manifest", "telemetry", "softlock", "regression")),
+        ("UI / HUD / Panels", ("ui", "hud", "panel", "layout", "button", "modal", "toast", "safe area", "touch", "label")),
+    ]
+    for area, words in rules:
+        if any(word in text for word in words): return area
+    return "World / Misc Player Experience"
+
+def apk_identity():
+    """Identify the artifact without pretending later board commits are inside it."""
+    apk = os.path.join(ROOT, "Builds", "Android", "DefendersOfTheRealm.apk")
+    apk_mtime = os.path.getmtime(apk) if os.path.exists(apk) else time.time()
+    catalogs = glob.glob(os.path.join(ROOT, "ServerData", "Android", "catalog_*.hash"))
+    eligible = [p for p in catalogs if os.path.getmtime(p) <= apk_mtime + 120]
+    chosen = max(eligible or catalogs, key=os.path.getmtime) if catalogs else ""
+    match = re.search(r"catalog_(.+)\.hash$", os.path.basename(chosen))
+    build_id = match.group(1) if match else "unknown-apk"
+    try:
+        before = datetime.datetime.fromtimestamp(apk_mtime).isoformat()
+        source = subprocess.check_output(["git", "rev-list", "-1", f"--before={before}", "HEAD"], cwd=ROOT, text=True, stderr=subprocess.DEVNULL).strip()
+    except Exception:
+        source = "unknown"
+    return build_id, source or "unknown"
+
 # ── status bucketing (keyword priority order) ─────────────────────────────────
 def classify_status(status_text, has_result, is_wo=True):
     """Return (bucket, used_substring_fallback) for one status line."""
@@ -577,6 +617,7 @@ def build_html(rows):
     counts = {b: 0 for b in BUCKET_ORDER}
     for r in rows: counts[r["bucket"]] += 1
     stamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
+    apk_build, apk_source = apk_identity()
 
     def row_html(r):
         # PROD tickets render as PROD-001 (post-launch, zero-padded so they sort as text
@@ -643,6 +684,30 @@ def build_html(rows):
         -(r.get("ui") or 0),
         -(r["num"] or 0)))
     body_rows = "\n".join(row_html(r) for r in rows_sorted)
+    fixed_rows = [r for r in rows_sorted if r["bucket"] == "Fixed" and r["is_wo"]]
+    validation_groups = []
+    for area in OWNER_AREAS:
+        items = [r for r in fixed_rows if owner_area(r) == area]
+        if not items: continue
+        item_html = []
+        for r in items:
+            if r.get("prod") is not None: key = f"PROD-{r['prod']:03d}"
+            elif r.get("ui") is not None: key = f"UI-{r['ui']:03d}"
+            elif r.get("num") is not None: key = f"WO-{r['num']}"
+            else: key = r["file"]
+            # Filename is the durable unique state key. This repo has historical duplicate WO
+            # numbers, so using the friendly label here would make two unrelated rows share a
+            # felt-test result in localStorage.
+            item_html.append(f'<div class="vitem" data-ticket="{html.escape(r["file"])}">'
+                f'<button class="validated" type="button">Validate</button>'
+                f'<a href="WorkOrders/{html.escape(r["file"])}">{html.escape(key)}</a>'
+                f'<span class="vtitle">{html.escape(r["title"][:120])}</span>'
+                '<select class="verdict" aria-label="felt-test result"><option value="">Untested</option>'
+                '<option>Pass</option><option>Fail</option><option>Needs Work</option></select>'
+                '<input class="vnote" aria-label="validation notes" placeholder="Optional device notes"></div>')
+        validation_groups.append(f'<details class="vgroup" open><summary>{html.escape(area)} '
+            f'<span class="gcount">0 / {len(items)}</span></summary>' + "".join(item_html) + '</details>')
+    validation_html = "".join(validation_groups)
     filters = "".join(
         f'<button class="fbtn" data-f="{b}" style="border-color:{BUCKET_COLOR[b]}">'
         f'{b} <span class="cnt">{counts[b]}</span></button>' for b in BUCKET_ORDER)
@@ -711,12 +776,25 @@ def build_html(rows):
  .agef{{margin-left:18px;color:#888;font-size:13px}}
  .abtn{{background:#1e2027;border:1px solid #555;color:#ccc;padding:6px 12px;margin-left:6px;
         border-radius:14px;cursor:pointer;opacity:.35}} .abtn.on{{opacity:1;border-color:#e0b341}}
+ .validation{{margin:18px 0;padding:16px;border:1px solid #3a3d48;border-radius:10px;background:#191b21}}
+ .validation h2{{margin:0;color:#e0b341;font-size:18px}} .vmeta{{color:#999;margin:3px 0 12px}}
+ .vtoolbar{{display:flex;gap:10px;align-items:center;margin-bottom:10px}} #vprogress{{font-weight:700}}
+ #needsFelt{{background:#242730;border:1px solid #4fb3c4;color:#ddd;border-radius:14px;padding:6px 12px;cursor:pointer}} #needsFelt.on{{background:#17343a}}
+ .vgroup{{border-top:1px solid #30333d;padding:8px 0}} .vgroup summary{{cursor:pointer;font-size:15px;font-weight:650}} .gcount{{color:#888;font-weight:400}}
+ .vitem{{display:grid;grid-template-columns:82px 76px minmax(220px,1fr) 120px minmax(180px,1fr);gap:8px;align-items:center;padding:6px 0}}
+ .vitem a{{color:#e0b341;text-decoration:none}} .vtitle{{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}}
+ .validated,.verdict,.vnote{{background:#20232b;border:1px solid #484c59;color:#ddd;border-radius:5px;padding:5px}} .validated{{cursor:pointer}}
+ .vitem.isvalidated .validated{{background:#24513d;border-color:#66bb88}} .vitem.isvalidated{{opacity:.72}}
+ @media(max-width:850px){{.vitem{{grid-template-columns:82px 70px 1fr}}.verdict,.vnote{{grid-column:3}}}}
 </style></head><body>
 <h1>Echoes of Elarion — Work Order Board</h1>
 <div class="sub">Generated <b>{stamp}</b> from the repo (WorkOrders/*.md) — the repo is the source of
  truth, this page is a view. Regenerate: <b>python tools/board_build.py</b>
  &nbsp;|&nbsp; {mint_html}</div>
 <div class="canon">{canon_links}</div>
+<section class="validation"><h2>Owner Validation</h2>
+<div class="vmeta">APK <b>{html.escape(apk_build)}</b> &middot; source commit <b>{html.escape(apk_source[:12])}</b>. Results stay in this browser for this exact APK and never change work-order status.</div>
+<div class="vtoolbar"><span id="vprogress">0 / {len(fixed_rows)} verified</span><button id="needsFelt" type="button">Needs Felt-Test</button></div>{validation_html}</section>
 <input id="q" placeholder="Search number / title / status...">{filters}{lane_filters}{age_filters}
 <table><tbody id="tb">
 {body_rows}
@@ -740,6 +818,22 @@ document.querySelectorAll('.abtn').forEach(b=>b.addEventListener('click',()=>{{
  ageMax=(b.dataset.a==='all')?Infinity:+b.dataset.a;
  document.querySelectorAll('.abtn').forEach(x=>x.classList.remove('on'));
  b.classList.add('on'); apply()}}));
+const validationKey='eoa-owner-validation:{html.escape(apk_build)}:{html.escape(apk_source)}';
+let validation={{}}; try{{validation=JSON.parse(localStorage.getItem(validationKey)||'{{}}')}}catch(_e){{validation={{}}}}
+let needsOnly=false;
+function saveValidation(){{localStorage.setItem(validationKey,JSON.stringify(validation));renderValidation()}}
+function renderValidation(){{let done=0;
+ document.querySelectorAll('.vitem').forEach(item=>{{const state=validation[item.dataset.ticket]||{{}};
+  item.querySelector('.verdict').value=state.verdict||'';item.querySelector('.vnote').value=state.note||'';
+  item.classList.toggle('isvalidated',!!state.validated);item.style.display=(needsOnly&&state.validated)?'none':'';
+  item.querySelector('.validated').textContent=state.validated?'Validated':'Validate';if(state.validated)done++;}});
+ document.querySelectorAll('.vgroup').forEach(g=>{{const xs=[...g.querySelectorAll('.vitem')],n=xs.filter(x=>(validation[x.dataset.ticket]||{{}}).validated).length;g.querySelector('.gcount').textContent=`${{n}} / ${{xs.length}}`;}});
+ document.getElementById('vprogress').textContent=`${{done}} / {len(fixed_rows)} verified`;}}
+document.querySelectorAll('.vitem').forEach(item=>{{
+ item.querySelector('.validated').addEventListener('click',()=>{{const s=validation[item.dataset.ticket]||{{}};s.validated=!s.validated;validation[item.dataset.ticket]=s;saveValidation();}});
+ item.querySelector('.verdict').addEventListener('change',e=>{{const s=validation[item.dataset.ticket]||{{}};s.verdict=e.target.value;validation[item.dataset.ticket]=s;saveValidation();}});
+ item.querySelector('.vnote').addEventListener('change',e=>{{const s=validation[item.dataset.ticket]||{{}};s.note=e.target.value;validation[item.dataset.ticket]=s;saveValidation();}});}});
+document.getElementById('needsFelt').addEventListener('click',e=>{{needsOnly=!needsOnly;e.currentTarget.classList.toggle('on',needsOnly);renderValidation();}});renderValidation();
 </script></body></html>"""
 
 def main():
