@@ -1,6 +1,6 @@
 # WORK ORDER 1208 - A standing building with no collector silently withholds its income
 
-**Status:** READY TO IMPLEMENT
+**Status:** IMPLEMENTED 2026-08-25 - awaiting owner device verification (a dungeon round trip: leave town, return, confirm the Quarry still pays). Root cause was NOT a missing component: the fallback wiring ran synchronously at `sceneLoaded`, either before `GameState` was ready (a null state correctly reads as "nothing built") or while the OUTGOING placed collector was still registered, with no state-ready or post-teardown retry. The DDOL host now owns a retry driver bound to `GameStateService.StateReplaced` plus a next-frame reconciliation per scene transition, and the formerly SILENT missing-host return warns. ⭐ Single owner per id: a real placed collector outranks the DDOL fallback, which is PARKED rather than deactivated so its stale snapshot cannot overwrite the placed collector's PlayerPrefs. ⚠ Two dev self-reviews rejected earlier versions - an unconditional OnDisable retry would have RESURRECTED a sold Quarry from the monotonic ledger, and reset could retain a live fallback that paid a new town from a dead save. Gates: `COMPILE_GATE_OK` + `REGRESSION_OK 284/284`. RESULT file owed. *(Prior line:)* **Status:** READY TO IMPLEMENT
 **Minted:** 2026-08-25 (CLI lead, main line; banner bumped 1207 -> 1209 with WO-1207 in the same edit)
 **Silo:** Economy / Village buildings
 

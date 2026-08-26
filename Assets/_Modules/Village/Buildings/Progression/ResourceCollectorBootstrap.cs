@@ -6,6 +6,7 @@
 using UnityEngine;
 using UnityEngine.SceneManagement;
 using DeNelle.Core.Diagnostics;
+using DeNelle.Core.State;
 
 namespace DeNelle.Village.Buildings.Progression
 {
@@ -22,7 +23,18 @@ namespace DeNelle.Village.Buildings.Progression
             SceneManager.sceneLoaded += OnSceneLoaded;
         }
 
-        private static void OnSceneLoaded(Scene scene, LoadSceneMode mode) => WireScene(scene);
+        private static void OnSceneLoaded(Scene scene, LoadSceneMode mode)
+        {
+            WireScene(scene);
+            // sceneLoaded can run while an outgoing placed collector is still registered. Recheck
+            // on the next frame, after its scene teardown/OnDisable has completed. This is scoped
+            // to a scene transition: a sold collector must NOT be resurrected from the monotonic
+            // ever-built ledger.
+            var host = GameObject.Find(HostName);
+            var retry = host != null ? host.GetComponent<ResourceCollectorFallbackRetry>() : null;
+            if (retry != null) retry.QueueAll();
+            else FlowTrace.Warn("Harvest", "scene loaded but collector fallback retry driver is unavailable");
+        }
 
         private static void EnsureHost()
         {
@@ -38,7 +50,27 @@ namespace DeNelle.Village.Buildings.Progression
             // idempotent: an existing host (a re-entered scene) just keeps the component it has.
             if (host.GetComponent<CollectorStatusPublisher>() == null)
                 host.AddComponent<CollectorStatusPublisher>();
+            if (host.GetComponent<ResourceCollectorFallbackRetry>() == null)
+                host.AddComponent<ResourceCollectorFallbackRetry>();
         }
+
+        /// <summary>When a real placed collector takes ownership, park the DDOL logical fallback.
+        /// Both share PlayerPrefs keys, so leaving both active creates two writers.</summary>
+        internal static void NotifyCollectorConfigured(ResourceCollector collector)
+        {
+            if (!Application.isPlaying || collector == null) return;
+            var host = GameObject.Find(HostName);
+            if (host == null || collector.transform.IsChildOf(host.transform)) return;
+            Transform fallback = host.transform.Find("Collector_" + collector.BuildingId);
+            if (fallback == null || !fallback.gameObject.activeSelf) return;
+            var fallbackCollector = fallback.GetComponent<ResourceCollector>();
+            if (fallbackCollector != null) fallbackCollector.ParkWithoutPersisting();
+            else fallback.gameObject.SetActive(false);
+            FlowTrace.Step("Harvest",
+                $"placed collector '{collector.BuildingId}' took ownership; DDOL fallback parked");
+        }
+
+        internal static void RetryAllAfterStateReady() => WireScene(SceneManager.GetActiveScene());
 
         private static void WireScene(Scene scene)
         {
@@ -96,10 +128,15 @@ namespace DeNelle.Village.Buildings.Progression
         /// </summary>
         private static void EnsureFallbackCollector(string buildingId)
         {
-            if (ResourceCollectorRegistry.Get(buildingId) != null) return;
+            var registered = ResourceCollectorRegistry.Get(buildingId);
+            // A real placed collector is stronger evidence than the monotonic ledger and always
+            // owns this id. Only DDOL fallbacks are reconciled against StateReplaced/reset.
+            if (registered != null && !IsFallback(registered)) return;
 
             if (!HasEverBuilt(buildingId))
             {
+                if (registered != null)
+                    registered.ParkWithoutPersisting();
                 FlowTrace.Once("Harvest", $"fallback-skipped-{buildingId}",
                     $"NO fallback collector for '{buildingId}' - it is not in the WO-834 ever-built ledger " +
                     "(a live collector would open the existence gate, so an unbuilt building must never get one).");
@@ -107,7 +144,14 @@ namespace DeNelle.Village.Buildings.Progression
             }
 
             var host = GameObject.Find(HostName);
-            if (host == null) return;
+            if (host == null)
+            {
+                FlowTrace.Warn("Harvest",
+                    $"cannot create fallback collector for '{buildingId}' - '{HostName}' is MISSING");
+                return;
+            }
+
+            if (registered != null) return;
 
             var childName = "Collector_" + buildingId;
             Transform child = host.transform.Find(childName);
@@ -119,6 +163,8 @@ namespace DeNelle.Village.Buildings.Progression
                 go = new GameObject(childName);
                 go.transform.SetParent(host.transform, false);
             }
+
+            if (!go.activeSelf) go.SetActive(true);
 
             var col = go.GetComponent<ResourceCollector>();
             if (col == null) col = go.AddComponent<ResourceCollector>();
@@ -150,6 +196,52 @@ namespace DeNelle.Village.Buildings.Progression
             for (int i = 0; i < catalogIds.Count; i++)
                 if (state.HasEverBuilt(catalogIds[i])) return true;
             return false;
+        }
+
+        private static bool IsFallback(ResourceCollector collector)
+        {
+            if (collector == null) return false;
+            var host = GameObject.Find(HostName);
+            return host != null && collector.transform.IsChildOf(host.transform);
+        }
+    }
+
+    /// <summary>
+    /// WO-1208 lifecycle bridge. The initial AfterSceneLoad pass may run before GameState exists,
+    /// and a placed collector may unregister after sceneLoaded has already observed it. This DDOL
+    /// driver retries at the two actual readiness edges without polling once it is bound/idle.
+    /// </summary>
+    internal sealed class ResourceCollectorFallbackRetry : MonoBehaviour
+    {
+        private GameStateService _stateService;
+        private bool _retryAll;
+
+        internal void QueueAll() => _retryAll = true;
+
+        private void Update()
+        {
+            if (_stateService == null && GameStateService.Instance != null)
+            {
+                _stateService = GameStateService.Instance;
+                _stateService.StateReplaced.AddListener(OnStateReplaced);
+                _retryAll = true; // State may already have loaded before this listener bound.
+                FlowTrace.Step("Harvest", "fallback retry bound to GameStateService.StateReplaced");
+            }
+
+            if (_retryAll)
+            {
+                _retryAll = false;
+                ResourceCollectorBootstrap.RetryAllAfterStateReady();
+            }
+
+        }
+
+        private void OnStateReplaced() => _retryAll = true;
+
+        private void OnDestroy()
+        {
+            if (_stateService != null)
+                _stateService.StateReplaced.RemoveListener(OnStateReplaced);
         }
     }
 }

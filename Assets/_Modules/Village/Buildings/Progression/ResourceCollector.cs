@@ -56,6 +56,11 @@ namespace DeNelle.Village.Buildings.Progression
         // fires Awake+OnEnable synchronously, the factory configures on the next line), so the
         // away catch-up runs in Start where the building id is finally correct - see CatchUpAway.
         private bool _started;
+        // AddComponent invokes OnEnable before Configure. Preserve an existing owner of the
+        // serialized-default key so a lumbermill/forge collector cannot temporarily replace the
+        // farm fallback and then orphan it while re-keying.
+        private ResourceCollector _displacedOnEnable;
+        private bool _suppressNextDisableSave;
 
         public string BuildingId => _buildingId;
         public string SourceId => _buildingId;
@@ -209,6 +214,8 @@ namespace DeNelle.Village.Buildings.Progression
 
         private void OnEnable()
         {
+            var prior = ResourceCollectorRegistry.Get(_buildingId);
+            _displacedOnEnable = prior != null && prior != this ? prior : null;
             ResourceCollectorRegistry.Register(this);
             HarvestSourceRegistry.Register(this);
 
@@ -239,9 +246,21 @@ namespace DeNelle.Village.Buildings.Progression
 
         private void OnDisable()
         {
+            // A parked DDOL fallback is not the registry owner once a real placed collector has
+            // taken over. It must not overwrite that owner's newer pending/HP/accrual PlayerPrefs.
+            bool ownedRegistrySlot = ResourceCollectorRegistry.Get(_buildingId) == this;
             HarvestSourceRegistry.Unregister(this);
             ResourceCollectorRegistry.Unregister(this);
-            SaveState();
+            if (ownedRegistrySlot && !_suppressNextDisableSave) SaveState();
+            _suppressNextDisableSave = false;
+        }
+
+        /// <summary>Park a DDOL fallback during ownership handoff or state replacement without
+        /// allowing its stale snapshot to overwrite the real/new state's PlayerPrefs.</summary>
+        internal void ParkWithoutPersisting()
+        {
+            _suppressNextDisableSave = true;
+            gameObject.SetActive(false);
         }
 
         /// <summary>
@@ -347,10 +366,19 @@ namespace DeNelle.Village.Buildings.Progression
         {
             string previousId = _buildingId;
             bool live = isActiveAndEnabled;
+            var displaced = _displacedOnEnable;
+            _displacedOnEnable = null;
 
             // Unregister while BuildingId still returns the OLD key (the registry removes by
             // current id), otherwise the stale "farm" entry is orphaned forever.
             if (live) ResourceCollectorRegistry.Unregister(this);
+
+            // OnEnable registered this new component under its serialized default before the
+            // factory supplied its real id. If that displaced a different live collector, restore
+            // it before registering this component under the final id.
+            if (displaced != null && displaced.isActiveAndEnabled &&
+                !string.Equals(previousId, buildingId, System.StringComparison.Ordinal))
+                ResourceCollectorRegistry.Register(displaced);
 
             _buildingId = buildingId;
             _maxHp = Mathf.Max(1f, maxHp);
@@ -364,6 +392,7 @@ namespace DeNelle.Village.Buildings.Progression
                     FlowTrace.Step("Harvest",
                         $"collector re-keyed '{previousId}' -> '{buildingId}' on Configure " +
                         "(AddComponent registers under the serialized default before Configure runs).");
+                ResourceCollectorBootstrap.NotifyCollectorConfigured(this);
             }
 
             // A collector configured AFTER Start (re-purposed host) still owes its away catch-up
