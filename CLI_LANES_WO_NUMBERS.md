@@ -137,7 +137,10 @@
 > fine as history. A copied number is the bug **even when it was right the day it was written** -
 > that is exactly how the retired 860-899 UI block kept re-seeding collisions from CLAUDE.md sec.2.
 
-> ## ⚠ RECONCILED 2026-08-26 (CLI): main line next free = **1238**.
+> ## ⚠ RECONCILED 2026-08-26 (CLI): main line next free = **1239**.
+> 1238 tutorial STEP-STUCK with coachBeats=0 - it watched the player stall 120s in silence.
+>
+> ### superseded: RECONCILED 2026-08-26 (CLI): main line next free = **1238**.
 > 1236 dungeon action bar collapses to one floating face + flag overlay eats the minimap.
 > 1237 softlock detector fires on AFK.
 >
