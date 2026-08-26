@@ -71,6 +71,7 @@ namespace DeNelle.Editor
                 CheckModelInvariants(failures, log);
                 CheckViewPurity(failures, log);
                 CheckWiring(failures, log);
+                CheckDungeonFlagAcknowledgement(failures, log);
             }
             catch (System.Exception ex)
             {
@@ -152,8 +153,13 @@ namespace DeNelle.Editor
                 failures.Add($"the bar renders {model.Active.Count} faces but the View sizes slots from " +
                              $"MaxVisibleFaces = {HudActionBarModel.MaxVisibleFaces} — the group would overflow its zone");
 
-            // Explore parity with its occupancy row; non-calm postures drop the bar.
+            // WO-1236 cause pin: a dungeon forwards calm(explore). With no nearby talk target its
+            // exact mask is Bag only (ordinal 2 => 0x04). The owner's capture was therefore a
+            // correct one-face MASK, not a layout failure. Adding dungeon faces is an owner ruling.
             model.SetPosture(HudActionBarModel.PostureExplore);
+            src.Talk = false; model.Tick();
+            ExpectSet(model, failures, "dungeon explore mask 0x04", ActionBarButtonId.Bag);
+            src.Talk = true; model.Tick();
             ExpectSet(model, failures, "explore (talk on)", ActionBarButtonId.Talk, ActionBarButtonId.Bag);
             model.SetPosture("build");
             if (model.Active.Count != 0)
@@ -171,6 +177,30 @@ namespace DeNelle.Editor
                 failures.Add($"one set change raised {events} events (expected exactly 1)");
 
             log.AppendLine("  model invariants (baseline/talk/raids hide+dim/map/quests-upgrade/explore/edge-trigger) OK-checked");
+        }
+
+        private static void CheckDungeonFlagAcknowledgement(List<string> failures, StringBuilder log)
+        {
+            string harnessPath = Path.Combine(Application.dataPath, "_Modules/Core/Diagnostics/BreakCaptureHarness.cs");
+            string buttonPath = Path.Combine(Application.dataPath, "_Modules/Core/Dev/FlagCaptureButton.cs");
+            if (!File.Exists(harnessPath) || !File.Exists(buttonPath))
+            {
+                failures.Add("[dungeon-flag-ack] flag presentation source missing");
+                return;
+            }
+
+            string harness = File.ReadAllText(harnessPath);
+            string button = File.ReadAllText(buttonPath);
+            if (harness.IndexOf("HudLayoutBands.ToastZone", System.StringComparison.Ordinal) < 0)
+                failures.Add("[dungeon-flag-ack] BreakCaptureHarness does not seat FLAGGED in the shared ToastZone");
+            if (harness.IndexOf("new Rect(18, 16, 260, 34)", System.StringComparison.Ordinal) >= 0)
+                failures.Add("[dungeon-flag-ack] retired top-left FLAGGED rect returned over the minimap");
+            if (button.IndexOf("_label.text = FlaggedLabel", System.StringComparison.Ordinal) >= 0)
+                failures.Add("[dungeon-flag-ack] FlagCaptureButton paints a second acknowledgement on its own chip");
+            if (harness.IndexOf("_toastUntil = Time.realtimeSinceStartup + 1.6f", System.StringComparison.Ordinal) < 0)
+                failures.Add("[dungeon-flag-ack] shared FLAGGED acknowledgement lost its realtime timeout");
+
+            log.AppendLine("  WO-1236 dungeon flag acknowledgement: one timed ToastZone band, no minimap/second-chip seat");
         }
 
         private static void ExpectSet(HudActionBarModel model, List<string> failures,

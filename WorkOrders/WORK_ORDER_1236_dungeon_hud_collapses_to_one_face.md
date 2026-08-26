@@ -1,6 +1,6 @@
 # WORK ORDER 1236 - In a dungeon the action bar collapses to ONE floating face, and the flag overlay eats the minimap
 
-**Status:** READY TO IMPLEMENT
+**Status:** READY - PARTIAL 2026-08-26. The proven FLAG/minimap collision is implemented: one timed acknowledgement now uses the shared toast zone and the duplicate FLAG-chip acknowledgement is removed; mask telemetry and a focused regression were added, RED 2/2 and `COMPILE_GATE_OK`. Full regression is still owed after two transient `LICENSE_ERROR` runs. The one-face dungeon `calm(explore)` mask is correctly `0x04` (Bag only); adding Quests/Manage/exit remains an OWNER PRODUCT RULING, not an inferred bug fix. Device screenshot/greyscale proof owed.
 **Silo:** HUD / dungeon presentation
 **Origin:** Owner FLAG on device, Seeker build `2026.08.26.342290`, scene `dg_ember_deep`, 2026-08-26.
 **First capture ever delivered by the WO-1227 device bridge** (seq 3608) - the owner pressed FLAG and

@@ -658,7 +658,21 @@ namespace DeNelle.Core.Diagnostics
                 var prev = GUI.color;
                 GUI.color = new Color(1f, 0.85f, 0.2f, 0.95f);
                 // ASCII only -- the leading flag glyph rendered as a tofu box.
-                GUI.Label(new Rect(18, 16, 260, 34), "  FLAGGED", new GUIStyle(GUI.skin.box) { fontSize = 20, fontStyle = FontStyle.Bold });
+                // WO-1236: the old top-left pixel rect covered the dungeon minimap. Convert the
+                // shared bottom-origin HUD anchor to IMGUI's top-origin pixel coordinates so every
+                // transient acknowledgement uses the one reserved, overlap-free toast band.
+                Rect zone = DeNelle.Core.UI.HudLayoutBands.ToastZone;
+                var toastRect = new Rect(
+                    Screen.width * zone.xMin,
+                    Screen.height * (1f - zone.yMax),
+                    Screen.width * zone.width,
+                    Screen.height * zone.height);
+                GUI.Label(toastRect, "FLAGGED", new GUIStyle(GUI.skin.box)
+                {
+                    fontSize = 20,
+                    fontStyle = FontStyle.Bold,
+                    alignment = TextAnchor.MiddleCenter
+                });
                 GUI.color = prev;
             }
             catch { }

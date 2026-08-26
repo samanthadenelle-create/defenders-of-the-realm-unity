@@ -411,7 +411,7 @@ namespace DeNelle.Core.HudModel
                 for (int i = 0; i < ButtonCount; i++)
                     if ((mask & (1 << i)) != 0) _active.Add((ActionBarButtonId)i);
                 FlowTrace.Step("HudKit", "action bar set -> [" + DescribeActive() +
-                               "] (posture '" + _postureKey + "')");
+                               "] mask=0x" + mask.ToString("X2") + " (posture '" + _postureKey + "')");
                 ActiveButtonsChanged?.Invoke();
             }
 

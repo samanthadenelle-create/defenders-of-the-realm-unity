@@ -36,11 +36,11 @@
 //   D-pad (bottom-left) and the attack pill (bottom-right) - so it can be tapped in
 //   any state (incl. mid-combat) without covering them. ASCII-only, colorblind-safe
 //   (the owner is red/green colorblind, so meaning is carried by the TEXT label,
-//   never by hue): idle "FLAG", flashes "FLAGGED" for ~1s on tap.
+//   never by hue). The chip stays "FLAG" on tap; BreakCaptureHarness owns the ONE
+//   timed "FLAGGED" acknowledgement in HudLayoutBands.ToastZone (WO-1236).
 // =============================================================================
 
 using System;
-using System.Collections;
 using UnityEngine;
 using UnityEngine.UI;
 using DeNelle.Core;                 // FeatureFlags
@@ -61,19 +61,14 @@ namespace DeNelle.Core.Dev
 
         // ASCII-only labels (owner is red/green colorblind - meaning via TEXT, not hue).
         private const string IdleLabel    = "FLAG";
-        private const string FlaggedLabel = "FLAGGED";
-        private const float  FlashSeconds = 1.0f;
 
         // Grey/white kit style, semi-transparent so it does not wreck screenshots.
         private static readonly Color IdleColor    = new Color(0.22f, 0.24f, 0.28f, 0.55f);
-        private static readonly Color FlaggedColor = new Color(0.85f, 0.85f, 0.88f, 0.95f);
         private static readonly Color IdleText     = new Color(0.95f, 0.95f, 0.95f, 0.95f);
-        private static readonly Color FlaggedText  = new Color(0.06f, 0.06f, 0.07f, 1.00f);
 
         private GameObject _canvasGo;
         private Image _buttonImage;
         private Text  _label;
-        private Coroutine _flash;
 
         // ------------------------------------------------------------------
         // DEV / TESTER GATE (mirrors ResourceDevTool.ShouldShow)
@@ -210,29 +205,6 @@ namespace DeNelle.Core.Dev
                     "BreakCaptureHarness.Instance is null - harness not installed on this platform (WebGL?); capture skipped.");
             }
 
-            FlashFeedback();
-        }
-
-        // Brief on-screen confirmation so the owner knows the tap registered.
-        private void FlashFeedback()
-        {
-            if (_flash != null) StopCoroutine(_flash);
-            _flash = StartCoroutine(FlashRoutine());
-        }
-
-        private IEnumerator FlashRoutine()
-        {
-            if (_label != null)       _label.text = FlaggedLabel;
-            if (_label != null)       _label.color = FlaggedText;
-            if (_buttonImage != null) _buttonImage.color = FlaggedColor;
-
-            // Realtime wait so the flash is unaffected by any timeScale changes.
-            yield return new WaitForSecondsRealtime(FlashSeconds);
-
-            if (_label != null)       _label.text = IdleLabel;
-            if (_label != null)       _label.color = IdleText;
-            if (_buttonImage != null) _buttonImage.color = IdleColor;
-            _flash = null;
         }
 
         // ------------------------------------------------------------------
