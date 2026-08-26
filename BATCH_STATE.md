@@ -1807,3 +1807,75 @@ of 79 enum values wired to real art with no caller at all, and six tracked categ
 - ⭐ Results go in **`batch_results_state.md`**. ⛔ **Never in this file.**
 - **One isolated worktree per lane.**
 - ⛔ **Nothing committed. Nothing promoted. No ticket status flipped.**
+
+
+## ⛔ BATCH 13 CORRECTION - PROD-016: the LEAD's fence was wrong, and the RULING changes (2026-08-25, CLI lead)
+
+### The bounce is UPHELD. Verified at source, not taken on trust.
+
+Codex refused to write a partial migration and was RIGHT to. Every citation in its bounce is exact at
+HEAD:
+
+```
+EchoBonusCalculator.cs:240   ResourceTokenOf(index)   == EchoRosterCatalog.TargetToken(entry.Affinity)
+EchoBonusCalculator.cs:465   ResourceTokenOf(echoIndex) == EchoRosterCatalog.TargetToken(entry.Affinity)
+EchoCardVM.cs:342            case EchoAssignments.ResFood: return ResourceBuildingProgression.FarmId;
+EchoAssignments.cs:140/150/295  round-trip through TargetToken / TryTargetFromToken
+```
+
+A two-file landing would have migrated one side of a raw string comparison and left the other, which
+**silently removes Aldwin's affinity match bonus** - no exception, no log, no red test. That is the
+exact defect class this repo keeps paying for, and refusing to ship it is the correct call.
+
+⭐ **The lead owns this error.** Batch 13 LANE 2 instructed a `food:N -> stone:N` read-migration inside
+a two-file fence. That instruction was not implementable safely and the fence was not closed under it.
+
+### THE RULING - option (b): `food` is FROZEN as the internal token. Display moves. The token does not.
+
+⛔ **Do NOT migrate the persisted assignment token. Do NOT widen the fence to four files.** The
+migration is withdrawn, not deferred.
+
+**Why this and not the atomic rename**, so nobody re-opens it:
+
+1. **It is what WO-1163 already did, one layer down.** That ticket retired Food for the PLAYER and
+   deliberately FROZE the internal slot: `EconomyService.Food` still carries the name, and
+   `PackEconomy.Food` binds the authored key `stone`. Persistence vocabulary and player vocabulary
+   were split on purpose. The Echo token is the same shape of thing and gets the same treatment.
+2. **The token is a live save key.** `structures-catalog`'s own rule - ids are frozen save keys -
+   applies: renaming one requires a read-migration of every stored `food:N` plus four consumers that
+   compare it by raw string, for a change the player cannot see.
+3. **The player-visible half needs none of it.** What the owner reported is what she READS: "assigned
+   to food node". A display mapping fixes that without touching a single persisted byte.
+
+### THE CORRECTED LANE - what PROD-016 actually is now
+
+**Files:** `Village/World/HarvestSite.cs`, plus the picker's DISPLAY path in
+`Village/Harvest/EchoCardVM.cs` (label/model output ONLY - `:342`'s prerequisite mapping stays keyed
+on `ResFood` and must not move).
+
+1. **The world node reads Stone.** `HarvestSite.cs:368` maps `MineResource.Food -> "Harvest/food"`.
+   The enum stays FROZEN; route the model/display to Stone. Codex confirmed
+   `Assets/Resources/Harvest/stone.fbx` exists, so the art is already there.
+2. **The picker says Stone.** The option the player taps must be labelled Stone. The TOKEN behind it
+   stays `food`, unchanged and unmigrated.
+3. ⛔ **`EchoAssignments.ResFood`, `EchoRosterCatalog.TargetToken` and both `EchoBonusCalculator`
+   comparisons are UNTOUCHED.** If a change would move any of them, it is out of scope by ruling.
+4. **An oracle asserting the split**: the persisted token remains `food`, the displayed label is
+   Stone, and Aldwin's match bonus still resolves. That last case is the one that would have caught
+   the defect Codex refused to ship - write it even though nothing is being migrated.
+
+### CONSEQUENCE FOR LANE 5 (WO-1206, the retired-vocabulary detector)
+
+⛔ **Add `EchoAssignments.ResFood`, `EchoRosterCatalog.TargetToken` and the persisted `food:N`
+assignment-token grammar to the FROZEN list** alongside `EconomyService.Food`, `PackEconomy.Food`,
+`BuildJobData.paidFood` and the `legacySkus` aliases. The detector flags player-visible surfaces only.
+A detector that flags these would be flagging the ruling itself, which is how a good oracle gets
+switched off in a week.
+
+### THE TRANSFERABLE RULE, since this is now the second time in one day
+
+**A rename is only cheap where the name is not an identity.** Both halves of today's Food work split
+the same way: player vocabulary moves freely, persistence vocabulary is frozen and mapped. Before
+proposing any rename, grep for RAW STRING COMPARISONS of the thing being renamed - two of the three
+consumers here were `==` against a catalog-derived token, which no compiler and no test would have
+caught.
