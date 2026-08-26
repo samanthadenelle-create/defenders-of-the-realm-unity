@@ -137,7 +137,10 @@
 > fine as history. A copied number is the bug **even when it was right the day it was written** -
 > that is exactly how the retired 860-899 UI block kept re-seeding collisions from CLAUDE.md sec.2.
 
-> ## ⚠ RECONCILED 2026-08-26 (CLI): main line next free = **1231**.
+> ## ⚠ RECONCILED 2026-08-26 (CLI): main line next free = **1232**.
+> 1231 echo passive repair is invisible and spends silently.
+>
+> ### superseded: RECONCILED 2026-08-26 (CLI): main line next free = **1231**.
 > 1227 device->inbox bridge | 1228 treasure panel | 1229 Env_Candle leak | 1230 army muster unreadable (routed to UI seat).
 >
 > ### superseded: RECONCILED 2026-08-26 (CLI): main line next free = **1227**.
