@@ -137,7 +137,23 @@
 > fine as history. A copied number is the bug **even when it was right the day it was written** -
 > that is exactly how the retired 860-899 UI block kept re-seeding collisions from CLAUDE.md sec.2.
 
-> ## ⚠ RECONCILED 2026-08-25 (CLI): main line next free = **1213**.
+> ## ⚠ RECONCILED 2026-08-26 (CLI): main line next free = **1214**.
+> *(CLI seat minted **WO-1213** and bumped 1213 -> 1214 in this SAME edit. **1213** = THE REWARDED-AD
+> CLAIM GRANTS IN SILENCE, AND ITS CTA IS JAMMED AGAINST THE PANEL EDGE. Owner felt-test on the
+> Seeker, 2026-08-26, build `2026.08.26.341419`. Slice A (P0): `DailyChestController.Claim` credits
+> via `EconomyService.AddCoins`, saves, writes a `FlowTrace.Step` and calls `Close()` - the reward
+> LANDS but the player is told nothing, so a successful double-reward and a cancelled ad are
+> INDISTINGUISHABLE from the player's seat (reported as "cancelling to the home screen"). Fix =
+> acknowledge through the EXISTING `ElarionUiKit.ShowToast` seam (precedent
+> `BankOverflowToastPresenter.cs:249`), on BOTH claim paths, string via `VillageStrings.Canon`.
+> Slice B (P2): CTA rects `:66-69` give 0.015 outer margins against a 0.030 inter-button gutter, so
+> each button sits half as far from the panel wall as from its neighbour. ⛔ The 0.025-0.280
+> vertical band is load-bearing (clears MinTouchPx 112, making ClampMinTouch a deliberate no-op) -
+> never shrink height to buy width; make the panel taller, the recorded precedent in this same
+> file. ⛔ `ClampMinTouch` is already ruled out at three sites - do not name it. Acceptance needs a
+> 2670x1200 screenshot OPENED, not a marker. READY TO IMPLEMENT.)*
+>
+> ### superseded: RECONCILED 2026-08-25 (CLI): main line next free = **1213**.
 > *(CLI seat minted **WO-1212** and bumped 1212 -> 1213 in this SAME edit. **1212** = THERE ARE TWO
 > STONE BALANCES AND ONLY ONE IS THE PLAYER'S. ⛔ P0 PRECONDITION for the whole Food-to-Stone
 > program. `EconomyService.Food` / `_state.Resources.Food` is what the HUD shows as Stone and what
