@@ -137,7 +137,38 @@
 > fine as history. A copied number is the bug **even when it was right the day it was written** -
 > that is exactly how the retired 860-899 UI block kept re-seeding collisions from CLAUDE.md sec.2.
 
-> ## ⚠ RECONCILED 2026-08-25 (CLI): main line next free = **1207**.
+> ## ⚠ RECONCILED 2026-08-25 (CLI): main line next free = **1210**.
+> *(CLI seat minted **WO-1209** and bumped 1209 -> 1210 in this SAME edit. **1209** = THE WEAPON
+> RENDERS OVERSIZED IN A DUNGEON AND THE SEAT SOLVE RE-FIRES FOREVER. Owner: "staff oversized in
+> starter loop dugeon" / "same thing we saw with the knight sword and shield" - and she is right that
+> it is a returning class: EquipmentController.cs:2828 records the 2026-07-06 "Shield larger than
+> hero" F8 and ParentScaleCompensation(:2847) exists to prevent exactly this. The same staff is
+> CORRECT in the town fight 19 minutes earlier, so it is scene-dependent. Two captured facts, not
+> theories: (1) the dungeon poses equipment onto 'Hero (Blaise)' while the HUD shows Thrain the Mage
+> - retired canon, and a different rig carries a different bone lossyScale, which is the prime
+> suspect; (2) ApplyHoldPose/ComputeSheathRotation re-fire every ~5s with identical output while
+> [Flow:HeroOwner] shows the hero motionless, contradicting the 2026-08-18 event-driven seat-trace
+> fix - something keeps invalidating ParentCompensationState. ⛔ Do NOT add a second compensation
+> path or a per-scene scale constant. ⛔ Distinct from WO-970, which owns the sheathed SEAT.
+> READY TO IMPLEMENT.)*
+>
+> ### superseded: RECONCILED 2026-08-25 (CLI): main line next free = **1209**.
+> *(CLI seat minted **WO-1207** and **WO-1208** and bumped 1207 -> 1209 in this SAME edit. Both were
+> read off harvest events on the owner device during the 2026.08.25.341262 felt-test.
+> **1207** = CAPACITY MUST MEAN SOMETHING. Owner: "i expect that, but id like to warn" /
+> "otherwise the capacity means nothing" / "they get a warn on harvest but no warn on battle rewards
+> cause one is choice". The LOSS stays; the SILENCE goes; and the warning is FENCED to harvest,
+> because collecting is timed by the player and a battle reward is not. 17 iron were discarded at a
+> full bank while the chip reported banked=17: EchoService.cs:450 returns the PRE-CLAMP pool even
+> though the block above already read back the applied amounts and traced banked +0. WO-978 class,
+> one layer up. Reuse the EXISTING at-cap sentence (BankOverflowToastPresenter.cs:107) - never author
+> new copy.
+> **1208** = a standing farm sits in the ever-built ledger with NO ResourceCollector, withholding 13
+> per tick (ResourceBuildingHarvester.cs:186). The withhold is CORRECT; resolve WHY first - farm is
+> the FOOD collector and food is retired, so the answer may be a migration, not a re-wire.
+> Both READY TO IMPLEMENT.)*
+>
+> ### superseded: RECONCILED 2026-08-25 (CLI): main line next free = **1207**.
 > *(CLI seat minted **WO-1206** and bumped 1206 -> 1207 in this SAME edit. **1206** = A RETIRED
 > RESOURCE WORD MUST NEVER REACH A PLAYER SURFACE AGAIN. WO-1163 retired Food, the owner CLOSED it,
 > and within the hour she hit TWO surfaces it never converted: the build menu ("F 130", fixed today
