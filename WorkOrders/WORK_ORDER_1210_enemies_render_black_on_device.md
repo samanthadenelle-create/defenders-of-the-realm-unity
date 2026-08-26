@@ -1,11 +1,25 @@
 # WORK ORDER 1210 - Every enemy renders as a flat black silhouette on device
 
-**Status:** OPEN - ⭐ **NOT A SHIP-BLOCKER. OWNER RULED 2026-08-25:** *"i dont care so much about the black enemies, until you said something i assumed that was expected"*. She had seen them and read them as the intended look for the Hollow family, so this does NOT hold a build or a store submission. ⚠ The CLI raised it as a blocker on its own read of the evidence - the same enemy's lock-on portrait renders fully textured in the frame where its body renders black - which is a real inconsistency worth an answer, but **what the game should LOOK like is the owner's call, never the CLI's.** What is owed here is one creative ruling, not an emergency: is a flat black silhouette the intended Hollow read? If YES, close this and instead pin the intent so no future seat "fixes" it. If NO, the investigation below stands as written.
+**Status:** CLOSED 2026-08-25 - **NOT A DEFECT. OWNER RULED THE LOOK INTENDED AND PINNED IT.** Verbatim: *"yes thats the intended look for hollow, pin it"* (and earlier, *"i dont care so much about the black enemies, until you said something i assumed that was expected"*). The flat black Hollow silhouette is ART, not a rendering fault. ⛔ The pin lives in CODE, at the exact place a future seat would "fix" it - `EnemyFactory.FamilyFallbackTint` - not only in this file, because a ruling recorded where nobody reads it is indistinguishable from no ruling. ⚠ **THE CLI WAS WRONG TO CALL THIS A SHIP-BLOCKER.** It raised the block on its own reading of the evidence and the owner overruled it: what the game should LOOK like is hers, never the CLI's. The evidence below stays as history and as the mechanism hunt (see the caveat), not as a defect report.
 **Minted:** 2026-08-25 (CLI lead, main line; banner bumped 1210 -> 1211 in the same edit)
 **Silo:** Village / enemies + rendering
 **Reported:** the owner, 2026-08-25, felt-testing build `2026.08.25.341262`: *"combat is wrong still"*.
 
 ---
+
+## ⚠ WHAT STAYS OPEN AFTER THE CLOSE - the mechanism, not the look
+
+The look is ruled and pinned. **We still do not know WHY the bodies render black**, and that matters
+for one reason only: if a future lighting, ambient or probe change makes the Hollow bodies suddenly
+LIT, that is not an improvement - it is this ruling being broken by accident, and nobody will
+recognise it as a regression because it will look like a fix.
+
+`EnemyRenderDiagnostic` (committed, in the build) dumps ambient mode/intensity, probe and lightmap
+counts, the directional light's culling mask against the enemy layer, and per-renderer/per-material
+state **with the hero as the control group in the same frame**. One wave reads it.
+
+⛔ Read that dump BEFORE touching ambient or probes in the merged world. Do not re-open this ticket as
+a defect.
 
 ## The symptom, with a picture
 

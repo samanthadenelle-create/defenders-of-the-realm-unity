@@ -1048,6 +1048,25 @@ namespace DeNelle.Village
             // never wears green: the grunt arm reads HostilePalette.PlaceholderBodyTint (umber
             // PLACEHOLDER — final hue = owner look pass). Troll/ogre/warlord stay: all three are
             // desaturated near-neutrals that fail the green-dominance margin (they read grey/slate).
+            // ⭐ OWNER RULING 2026-08-25, PINNED HERE BECAUSE THIS IS WHERE IT WOULD BE "FIXED":
+            // THE HOLLOW FAMILY'S FLAT BLACK SILHOUETTE IS THE INTENDED LOOK. Verbatim, after
+            // felt-testing build 2026.08.26.341323: "yes thats the intended look for hollow, pin it"
+            // and, earlier, "until you said something i assumed that was expected".
+            //
+            // ⛔ DO NOT BRIGHTEN, RE-TINT OR RE-LIGHT THE HOLLOW BODIES, and do not add a Hollow arm
+            // to the tint chain below to "rescue" them. The CLI raised the black read as a
+            // ship-blocker on its own reading of the evidence (WO-1210: the same enemy's lock-on
+            // portrait renders fully textured in the frame where its body renders black) and the
+            // owner OVERRULED it. What the game should LOOK like is hers, never the CLI's.
+            //
+            // ⚠ THE ONE HONEST CAVEAT, kept so nobody is surprised later: we still do not know the
+            // MECHANISM that produces the black. EnemyBodyColorGuard's device audit reports the art
+            // healthy (textured=6/7, unpainted=0, repaired=0), so the darkness is not missing skin -
+            // it is something in the lighting/shader path. EnemyRenderDiagnostic (same directory) is
+            // in the build and dumps ambient/probe/shader state with the HERO as a control group.
+            // If a future lighting or probe change makes the Hollow bodies suddenly LIT, that is not
+            // an improvement - it is this ruling being broken by accident, and the diagnostic is how
+            // you will find out why. Read it before touching ambient in the merged world.
             return isTroll   ? new Color(0.38f, 0.40f, 0.34f) :   // grey-green troll hide (near-neutral, reads grey)
                    isOgre    ? new Color(0.48f, 0.47f, 0.52f) :   // cold ogre grey
                    isWarlord ? new Color(0.22f, 0.20f, 0.26f) :   // Warlord/Necromancer boss — dark undead slate
