@@ -1,6 +1,6 @@
 # WORK ORDER 1220 - A NEW GAME keeps the old hero's level, XP and talents
 
-**Status:** READY TO IMPLEMENT
+**Status:** IMPLEMENTED + gate-green - OWNER DEVICE/FELT-VERIFY OWED (not FIXED/DONE)
 **Silo:** Save / state reset
 **Severity:** P0 — a "new game" is not new. Silent, persisted, cross-class power carryover on a LIVE
 build that takes real money.
@@ -84,3 +84,11 @@ find which step reintroduces level 4.
 - ⛔ The blank-town / `everBuiltStructureIds` / `strategicPlacementMigrated` path — it is WORKING
   and is the control group in §PROOF item 2.
 - ⛔ The starter-latch inference at `RestoreFromSave:202` without reading WO-981 first.
+## LANDED-WORK AUDIT (2026-08-26)
+
+The full reset implementation and behavioural fixture landed in `b303c4fbf`. Fresh evidence:
+`Builds/batch0-compile-2.log:1966` `COMPILE_GATE_OK`;
+`Builds/batch0-regression-2.log:83606` `RESET FULL CLEAR OK` sweeps 85 persisted fields, preserves
+only 13 named carve-outs, force-reseeds the zone graph, clears settlements, and passes the EditMode
+fixture; `:83814` is `REGRESSION_OK 291/291`. Remaining acceptance: owner device felt-verification
+that New Game visibly starts with fresh hero progression, then owner close.

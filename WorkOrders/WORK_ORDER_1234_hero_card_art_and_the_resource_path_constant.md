@@ -1,6 +1,6 @@
 # WORK ORDER 1234 - Hero card art: re-point the UI, and put the resource path in ONE constant
 
-**Status:** READY TO IMPLEMENT
+**Status:** IMPLEMENTED + gate-green - SCREENSHOT/GREYSCALE PROOF OWED (not FIXED/DONE)
 **Silo:** Onboarding / UI
 **Origin:** Owner supplied new hero art 2026-08-26 and ruled: ***"the point you said is correct and i
 am ok if you repoint and use a constrant string for reference"*** -> ***"to start moving to
@@ -83,3 +83,11 @@ the point: it stops the list being a fourth copy.
 - ⛔ WO-1083's `HeroStageWell` / close-band work beyond re-proportioning the well for 3:4 — read its
   RESULT first; that screen's overlaps came from ONE cause and must not be re-fragmented.
 - ⛔ Which classes are playable. Cleric stays locked; that is owner-ruled ("its a one day thing").
+## LANDED-WORK AUDIT (2026-08-26)
+
+The portrait path consolidation landed in `b303c4fbf`: `HeroPortraitPaths.cs` is the shared
+authority used by the hero-select and portrait loaders. Fresh evidence:
+`Builds/batch0-compile-2.log:1966` `COMPILE_GATE_OK`;
+`Builds/batch0-regression-2.log:83492` `ART RESOURCES OK`; and `:83814`
+`REGRESSION_OK 291/291`. Still owed: the 2670x1200 playable/locked-Elara screenshot opened and
+inspected, doubled-name/frame checks, greyscale locked-state check, and a RESULT citing assembly ownership.

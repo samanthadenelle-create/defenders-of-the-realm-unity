@@ -1,6 +1,6 @@
 # WORK ORDER 1228 - The TREASURE FOUND panel overlaps its own title, clips its list, and buries its footer
 
-**Status:** READY TO IMPLEMENT
+**Status:** IMPLEMENTED + gate-green - DEVICE/GREYSCALE/FELT-VERIFY OWED (not FIXED/DONE)
 **Silo:** UI layout
 **Origin:** Owner felt-test, Seeker build `2026.08.26.342290`, 2026-08-26. Owner verbatim:
 *"needs cleaned up"*.
@@ -121,3 +121,12 @@ that affordance here or state why this panel differs.
 **Implementation may proceed on everything else.** The overflow rule is the only item that must be
 settled before the list container's height is authored, since it determines whether the height is
 fixed or content-driven.
+## LANDED-WORK AUDIT (2026-08-26)
+
+The panel implementation and oracle landed in `b303c4fbf`. Fresh evidence:
+`Builds/batch0-compile-2.log:1966` `COMPILE_GATE_OK`;
+`Builds/batch0-regression-2.log:83583` `DUNGEON TREASURE OK` proves five exclusive bands,
+six-then-scroll overflow, and a 3/3-collision historical RED control; `:83814` is
+`REGRESSION_OK 291/291`. Source inspection established this panel does not consume `chrome.layout`,
+so the close-band reservation was not the cause. Still owed: five-line and deliberately longer
+2670x1200 device captures opened and inspected, greyscale check, and owner close.

@@ -1,6 +1,6 @@
 # WORK ORDER 1221 - Tapping the resource chip logs "expanded" and renders NOTHING
 
-**Status:** READY TO IMPLEMENT
+**Status:** IMPLEMENTED + gate-green - DEVICE/FELT-VERIFY OWED (not FIXED/DONE)
 **Silo:** HUD
 **Severity:** P1 — the player cannot see Wood / Iron / Stone / Crystals anywhere in town.
 **Origin:** Owner felt-test, Seeker build `2026.08.26.341419`, 2026-08-26.
@@ -127,3 +127,11 @@ Design facts the fix must land on (per the approved mockup + WO-1205's row rulin
 The BUILT-BUT-INVISIBLE diagnosis itself stays CLI per this WO (find the `Update()` consumer,
 falsify the hollow trace line via `UiSurfaceProbe`, RED-first regression, device screenshot taken
 INSIDE the expanded state - now trivially possible since the state no longer self-closes).
+## LANDED-WORK AUDIT (2026-08-26)
+
+The resource-rail geometry/raise implementation landed in `b303c4fbf`. Fresh evidence:
+`Builds/batch0-compile-2.log:1966` `COMPILE_GATE_OK`;
+`Builds/batch0-regression-2.log:24804` and `:83504` `HUDUI_OK` explicitly pin the
+`SetResourcePanelOpen` raise and measured expansion; `:83814` is `REGRESSION_OK 291/291`.
+Still owed: the 2670x1200 screenshot taken inside the expansion window showing Wood, Iron, Stone
+and Crystals, visual inspection, and owner felt-close.

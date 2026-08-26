@@ -1,6 +1,6 @@
 # WORK ORDER 1225 - A toast rendered UNDER a modal is still a silent grant
 
-**Status:** READY TO IMPLEMENT
+**Status:** IMPLEMENTED + gate-green - DEVICE VISIBILITY/FELT-VERIFY OWED (not FIXED/DONE)
 **Silo:** HUD / presentation ordering
 **Origin:** Owner felt-test, Seeker build `2026.08.26.342290`, 2026-08-26 12:14.
 Owner verbatim: *"it didt show or if it did it was under the echo introdution window that popped."*
@@ -109,3 +109,12 @@ general ordering fixed too, that is a follow-up ticket, not a silent widening of
 - ⛔ `EchoUnlockDialogue`'s own behaviour or timing. It is not misbehaving; it opened when it should.
 - ⛔ The `PanelManager` single-modal contract itself.
 - ⛔ Never convey the acknowledgement by colour alone (owner is red/green colourblind) — words.
+## LANDED-WORK AUDIT (2026-08-26)
+
+The shared `RewardFlightLayer` acknowledgement implementation and regression landed in
+`b303c4fbf`. Fresh evidence: `Builds/batch0-compile-2.log:1966` `COMPILE_GATE_OK`;
+`Builds/batch0-regression-2.log:83800` proves modal precedence (34500 over 34000), pooling,
+measured-value counting, chest/celebration producers, HUD lifecycle wiring, and words-not-colour;
+`:83814` is `REGRESSION_OK 291/291`. The regression explicitly partial-skips actual rendered
+visibility in batchmode. Still owed: the acknowledgement/device screenshot while the Echo unlock
+dialogue is open, in-play visibility proof, and owner felt-close.

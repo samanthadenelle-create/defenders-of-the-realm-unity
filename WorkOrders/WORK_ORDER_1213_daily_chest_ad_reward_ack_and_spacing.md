@@ -1,6 +1,6 @@
 # WORK ORDER 1213 - The rewarded-ad claim grants in SILENCE, and its CTA is jammed against the panel edge
 
-**Status:** READY TO IMPLEMENT
+**Status:** IMPLEMENTED + gate-green - DEVICE/FELT-VERIFY OWED (not FIXED/DONE)
 **Silo:** UI / Monetization presentation
 **Origin:** Owner felt-test, 2026-08-26, on Seeker build `2026.08.26.341419`. Owner verbatim:
 *"get someone to style the watch ad for double reward and give it proper spacing"* and *"after the
@@ -100,3 +100,12 @@ Vertical band 0.025-0.280 UNCHANGED (load-bearing; ~135/~117 px clears MinTouchP
 aspects, keeping ClampMinTouch a deliberate NO-OP - do not shrink the band, make the panel
 taller if anything ever needs room, per this WO's own precedent). Slice A (the claim toast) is
 fully specced in the WO body already; no design addition needed.
+## LANDED-WORK AUDIT (2026-08-26)
+
+The daily-chest acknowledgement path landed in `b303c4fbf`. Fresh evidence:
+`Builds/batch0-compile-2.log:1966` `COMPILE_GATE_OK`;
+`Builds/batch0-regression-2.log:83800` proves both the WO-1213 chest toast and WO-1225 celebration
+raise above authored modals, use measured values, and communicate with words/numerals; `:83814` is
+`REGRESSION_OK 291/291`. The suite explicitly partial-skips rendered-surface measurement in
+batchmode. Still owed: the required 2670x1200 panel/acknowledgement screenshot opened and inspected,
+its spacing and measured-value checks, and owner felt-close.

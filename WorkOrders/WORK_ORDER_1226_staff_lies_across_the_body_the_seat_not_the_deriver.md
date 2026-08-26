@@ -1,6 +1,6 @@
 # WORK ORDER 1226 - The staff lies across the body. Fix the SEAT, not the deriver - six attempts fixed the wrong half.
 
-**Status:** READY TO IMPLEMENT
+**Status:** IMPLEMENTED + gate-green - DEVICE/FELT-VERIFY OWED (not FIXED/DONE)
 **Silo:** Gear seating / attachment orientation
 **Origin:** Owner felt-test, 2026-08-26, across TWO builds (`2026.08.26.341419` and `.342290`).
 Owner verbatim: *"why is the staff still horizontal during fights?"* -> *"thought we fixed that many
@@ -114,3 +114,10 @@ grip-origin is already computing. Use it to VALIDATE the seat, not to replace th
 - ⛔ The structure orientation channels (`entry.orientation`, `HubStructureVisualInjector.pitchDeg`).
 - ⛔ Offset Forge, for Tripo assets: `TripoAxisBake.cs:143-158` regex-rewrites an authored `x:-90`
   to `0.0` on baked rows, so a correction parked there is actively erased.
+## LANDED-WORK AUDIT (2026-08-26)
+
+The seat correction and moved regression pin landed in `b303c4fbf`. Fresh evidence:
+`Builds/batch0-compile-2.log:1966` `COMPILE_GATE_OK`; the attachment/equipment regression is green
+inside `Builds/batch0-regression-2.log`, whose `:83814` marker is `REGRESSION_OK 291/291`.
+Still owed: the ticket-mandated combat device screenshot opened and inspected, the RESULT's exact
+`renderers=2`/rotation-source diagnosis, and owner device felt-close. Headless orientation is not pixel proof.

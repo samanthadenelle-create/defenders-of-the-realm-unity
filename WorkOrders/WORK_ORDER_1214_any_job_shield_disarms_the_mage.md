@@ -1,6 +1,6 @@
 # WORK ORDER 1214 - A dropped shield PERMANENTLY DISARMS the Mage. Drops go to inventory; ineligible gear is held and sellable, never equipped.
 
-**Status:** READY TO IMPLEMENT
+**Status:** IMPLEMENTED + gate-green - OWNER DEVICE/FELT-VERIFY OWED (not FIXED/DONE)
 **Silo:** Gear / equip logic + inventory
 **Severity:** P0 - unrecoverable loss of the player's only weapon, on a LIVE build that takes real money.
 **Origin:** Owner felt-test, Seeker build `2026.08.26.341419`, 2026-08-26.
@@ -127,3 +127,11 @@ way, so this is a design preference, not a blocker. ⛔ Do not edit the 19 rows 
 - ⛔ Auto-upgrade-on-level-up (WO-860). See Ruling 1.
 - ⛔ The 19 `job: "any"` rows, pending the owner's answer above.
 - The shield SEATING defect is **WO-1215**, a different lane. No geometry work here.
+## LANDED-WORK AUDIT (2026-08-26)
+
+Implementation landed across `b303c4fbf`'s gear/drop files. Fresh evidence:
+`Builds/batch0-compile-2.log:1966` `COMPILE_GATE_OK`;
+`Builds/batch0-regression-2.log:83799` `DROPS TO INVENTORY OK` proves both loot paths deposit without
+equipping, the Mage shield refusal preserves the staff and sellable item, legal paths still equip,
+and level-up auto-upgrade remains wired; `:83814` reports `REGRESSION_OK 291/291`.
+The remaining acceptance item is owner device felt-verification and close.

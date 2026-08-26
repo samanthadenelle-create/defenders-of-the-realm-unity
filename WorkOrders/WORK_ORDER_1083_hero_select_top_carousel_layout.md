@@ -1,6 +1,6 @@
 # WORK ORDER 1083 — Hero Select: top rotating carousel, details below (layout rebuild)
 
-**Status:** READY TO IMPLEMENT
+**Status:** IMPLEMENTED + gate-green - DEVICE/GREYSCALE/FELT-VERIFY OWED (not FIXED/DONE)
 **Minted:** 2026-08-26, UI-seat banner block (bumped 1083 -> 1084 in the same edit)
 **Silo:** Onboarding / UI layout
 **Owner rulings (2026-08-26, this session):** *"redo it and make it clear, it should be a rotaing
@@ -131,3 +131,10 @@ guess"*. Closed — do not re-open.)
 7. PO (owner) felt-verifies on device and closes — CLI never closes this.
 
 Route: CLI implements, gates, commits; result file per protocol; board regenerated with the flip.
+## LANDED-WORK AUDIT (2026-08-26)
+
+Implementation landed in `b303c4fbf` (`HeroSelectController.cs`, `HeroPortraitPaths.cs`, portrait
+loaders, and `ArtResourceRegression.cs`). Fresh evidence: `Builds/batch0-compile-2.log:1966`
+`COMPILE_GATE_OK`; `Builds/batch0-regression-2.log:83492` `ART RESOURCES OK`; and
+`:83814` `REGRESSION_OK 291/291`. Still owed by this WO: the post-fix 2670x1200 device screenshot,
+visual comparison against the approved mockup, explicit collision checks, greyscale check, and owner close.

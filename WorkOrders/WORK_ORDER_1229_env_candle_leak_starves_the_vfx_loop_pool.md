@@ -1,6 +1,6 @@
 # WORK ORDER 1229 - Env_Candle leaks the VFX loop pool, and it is eating the colourblind low-health signal
 
-**Status:** READY TO IMPLEMENT
+**Status:** IMPLEMENTED + gate-green - DEVICE SOAK/TRACE PROOF OWED (not FIXED/DONE)
 **Silo:** VFX
 **Severity:** P1, and it carries an ACCESSIBILITY consequence the instrumentation names itself.
 **Origin:** CLI triage of the owner's device log, Seeker build `2026.08.26.342290`, 2026-08-26,
@@ -78,3 +78,11 @@ captured line showing the active-loop count going DOWN when a candle leaves.
   owner-ruled and correct. The defect is that it is being refused, not what it looks like.
 - ⛔ The ONESHOT pool. Different pool, different reclaim path, explicitly still open — do not conflate
   the two or "fix" both in one change.
+## LANDED-WORK AUDIT (2026-08-26)
+
+The bounded-demand implementation landed in `b303c4fbf`; diagnosis corrected the premise from a
+leak to unrestrained ambient demand. Fresh evidence: `Builds/batch0-compile-2.log:1966`
+`COMPILE_GATE_OK`; `Builds/batch0-regression-2.log:83803` `VFX AMBIENT BUDGET OK` proves an ambient
+cap of 8, accessibility reserve of 2, release-to-zero, unrefusable low-health/near-death auras, and
+runtime scene-tier binding; `:83814` is `REGRESSION_OK 291/291`. Still owed: the several-minute
+device soak showing counts rise and fall with zero pool-exhaustion skips, plus the reclaim trace in a RESULT.

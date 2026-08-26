@@ -1,6 +1,6 @@
 # WORK ORDER 1233 - The battle-lock SURVIVES the battle 8 times out of 9, and the world clock leaks at 4% speed
 
-**Status:** READY TO IMPLEMENT
+**Status:** IMPLEMENTED + gate-green + RED-proven - DEVICE SOAK/FELT-VERIFY OWED (not FIXED/DONE)
 **Silo:** Combat / lifecycle
 **Severity:** P0. The player is left in a town they cannot interact with. This is the "the game is
 frozen" class of defect and it has a KNOWN PRIOR (2026-08-20) that the instrumentation names itself.
@@ -92,3 +92,13 @@ The two failure modes are ALSO distinct and must not be conflated:
 These nine events sat unread on the device because of WO-1227 (device captures never reach the
 inbox). This ticket is the strongest single argument for that bridge: a P0 softlock class was
 recorded, correctly diagnosed by our own instrumentation, and reached nobody for weeks.
+## LANDED-WORK AUDIT (2026-08-26)
+
+The unified battle-end release landed in `b303c4fbf`. Fresh evidence:
+`Builds/batch0-compile-2.log:1966` `COMPILE_GATE_OK`;
+`Builds/batch0-regression-2.log:83416` `BATTLE_QUIESCENCE_SUITE_OK`; and `:83814`
+`REGRESSION_OK 291/291`. Load-bearing RED was banked in
+`Builds/wo1233-red-proof.log` / `Builds/wo1233-red-proof-retry.log`: removing the single
+`ClearPursuits` call failed arena win, arena loss, and retreat; the call was restored exactly once.
+Still owed: a multi-battle device capture with zero `BATTLE_QUIESCENCE_FAIL`, the skipped-release
+trace quoted in a RESULT, and the owner's win/retreat/town-interaction felt-close.

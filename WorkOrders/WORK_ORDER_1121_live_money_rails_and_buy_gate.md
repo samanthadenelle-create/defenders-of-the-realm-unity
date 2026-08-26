@@ -2,7 +2,9 @@
 
 > ⚠ CARRIED FORWARD, not part of this closure: the ticket body's "Known gaps" table is ~60% STALE and its footer cites dead line numbers (FeatureFlags.cs:659/:651 - the real ones are :681 and SolanaWalletProvider.cs:591). Also worth amending §2: "SKR mint set for the network you claim to support" should read "mint AND decimals" - as written, that checklist would have passed the build that authorised 1,000 SKR instead of 1.
 
-**Status:** READY TO IMPLEMENT after owner R5 (WO-1117) + WO-915 rulings  
+> **Status reconciliation 2026-08-26:** the stale `READY TO IMPLEMENT` line formerly here was
+> removed because it contradicted the owner-closed `DONE` status above. The carried-forward stale
+> documentation cleanup remains non-blocking and is not a reopened implementation ticket.
 **Minted:** 2026-08-17 (CLI seat) — program WO-1117  
 **Lane:** Wallet / PackStore / FeatureFlags  
 **Depends on:** WO-1118 honest shelf; WO-915; WO-931 (never ship free grants); **PROD-003** storefront  

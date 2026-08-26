@@ -1,6 +1,6 @@
 # WORK ORDER 1223 - The portal gate's COVERAGE is never asserted: a reachable dungeon with no row is silently open
 
-**Status:** READY TO IMPLEMENT
+**Status:** FIXED 2026-08-26 - backend manifest gate landed in `4efbbfde`; Unity/Node gate-green
 **Silo:** Gates / oracles (+ one server-side row)
 **Origin:** Owner, 2026-08-26, on being shown that the dungeon she had just black-screened in was
 absent from the door table. Owner verbatim: ***"so the regression needs to confirm that table has
@@ -120,3 +120,13 @@ header): a closed dungeon reads as **WORLD**, never as build status — never "u
 - ⛔ `PortalDungeonIds` / `MustNotBeGated` membership, pending the owner's ruling.
 - ⛔ The banned-word lint (`construction`, `coming soon`, `wip`, `dev`, …) — that is the copy rule
   and it is load-bearing.
+## LANDED-WORK AUDIT (2026-08-26)
+
+The fail-closed client half landed in `b303c4fbf`; the backend manifest enforcement landed in
+`4efbbfde` (`api/dungeon-status.js`, `api/_lib/dungeon-manifest.json`,
+`test/dungeon-status.manifest.test.js`). Fresh evidence: `Builds/batch0-compile-2.log:1966`
+`COMPILE_GATE_OK`; `Builds/batch0-regression-2.log:83628` `DUNGEON STATUS OK` lists all seven
+reachable ids with zero unaccounted; `:83814` `REGRESSION_OK 291/291`. Node is GREEN 4/4; deliberate
+removal of `dg_folks_granary` produced the named missing-row RED, the row was restored, and Node
+reran GREEN 4/4. `api/schema.sql` is unchanged. The owner's placement ruling is recorded above:
+`dg_folks_granary` and `dg_healers_cottage` are both portal-gated. All ticket acceptance items are proven.

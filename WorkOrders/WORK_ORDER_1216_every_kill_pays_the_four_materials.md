@@ -1,6 +1,6 @@
 # WORK ORDER 1216 - Every kill pays Wood / Iron / Gold / Stone, tuned so grinding funds repair
 
-**Status:** READY TO IMPLEMENT
+**Status:** IMPLEMENTED + gate-green - RESULT MEASUREMENT/DEVICE FELT-VERIFY OWED (not FIXED/DONE)
 **Silo:** Economy / rewards
 **Origin:** Owner ruling, 2026-08-26, from a Seeker felt-test on build `2026.08.26.341419`.
 
@@ -146,3 +146,13 @@ else.** This ticket does not touch those fields; leave them so one felt-test att
 - ⛔ `GameState.Stone` in any direction - that is WO-1212 (§3).
 - ⛔ Repair PRICING (`WallRepairController.CostForFraction`). The owner chose to fix the faucet
   rather than the cost; changing both at once makes the felt-test unattributable.
+## LANDED-WORK AUDIT (2026-08-26)
+
+The owner-approved kill-reward tuning and raid double-pay suppression landed in `b303c4fbf`,
+including both canonical `waves.json` copies. Fresh evidence:
+`Builds/batch0-compile-2.log:1966` `COMPILE_GATE_OK`;
+`Builds/batch0-regression-2.log:83801` proves a non-raid kill pays the unchanged WO-1216 amount,
+the identical raid kill pays zero per-kill materials, and the single end-of-raid payout remains
+wired; it records the shipped median as 20 of each material. `:83814` is
+`REGRESSION_OK 291/291`. Still owed: the ticket's measured kills-to-afford-Repair-All RESULT across
+the required encounter contexts and owner device felt-close.
