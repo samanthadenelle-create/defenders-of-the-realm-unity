@@ -153,8 +153,10 @@ release:
       #   AND out of testing_instructions, or the listing declares a feature the
       #   reviewer cannot reach.
       new_in_version: >-
-        Expanded dungeon adventures, a redesigned inventory and skill experience,
-        optional rewarded bonuses, and wallet-approved SKR packs.
+        Stone replaces Food across the realm, mined at the new Quarry. The Realm
+        Store and Night Market now accept SKR. Later waves arrive from more than
+        one side, and sieges leave a Defense Report you can read. Quest rewards,
+        the Rumor Board and the build palette have been rebuilt.
 
       # saga_features is OPTIONAL (not in the schema's `required` list) and is
       # deliberately OMITTED — no Saga/Seeker-exclusive feature has been verified.
