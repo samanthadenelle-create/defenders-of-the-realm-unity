@@ -63,3 +63,61 @@ assume it because it is convenient.
   1 loot line(s)` proves the data path works. This is presentation only.
 - ⛔ `BuildObsidianPanel`'s close-band reservation itself without reading WO-1083 first — other
   screens depend on it.
+
+
+---
+
+## UI SEAT DELIVERABLE (2026-08-26) - APPROVED LAYOUT SPEC + MOCKUP + OVERFLOW RULING
+
+**Owner approved the design this session ("go").**
+**Mockup (diff target for the acceptance screenshot):**
+`WorkOrders/WORK_ORDER_1228_mockup_2670x1200.png` (also `tmp/treasure_mockup_2670x1200.png`).
+
+Modal footprint on the 2670x1200 screen: x 0.210-0.790, y 0.167-0.833 (screen fractions,
+y BOTTOM->top). Bands below are fractions OF THE MODAL rect (y bottom->top), five exclusive
+bands - no element may enter another band:
+
+| Band                          | xMin  | yMin  | xMax  | yMax  | notes |
+|-------------------------------|-------|-------|-------|-------|-------|
+| 1. Title "TREASURE FOUND"     | 0.10  | 0.888 | 0.90  | 0.975 | gold, alone |
+| 2. Subtitle "The cache holds:"| 0.10  | 0.813 | 0.90  | 0.875 | parchment, own band |
+| 3. Loot list well (inset)     | 0.039 | 0.298 | 0.961 | 0.788 | lines at 64px pitch @1200 |
+| 4. First-clear note           | 0.10  | 0.213 | 0.90  | 0.275 | full sentence, never overlaid |
+| 5. Take CTA                   | 0.339 | 0.035 | 0.661 | 0.190 | 500x124px @2670x1200, single exit |
+
+**OVERFLOW RULING (design lane, owner-approved):** the list well is FIXED HEIGHT showing up to
+SIX lines; at 7+ lines it becomes a kit scroll INSIDE the same well. The modal footprint never
+grows and Take never moves. At 10 lines: 6 visible, scrollbar, zero clipping. Do NOT grow the
+panel with the roll - growth is how this defect class re-appears.
+
+Greyscale rule: title vs subtitle separable by SIZE + WEIGHT (52px bold gold vs 34px regular
+parchment), not hue alone. The RESULT must still state, with the measurement, whether the
+close-band reservation was the cause (required by Acceptance 4 above).
+
+## MOCKUP REVIEWED 2026-08-26 (CLI) - APPROVED as the layout direction, with ONE open item
+
+`WorkOrders/WORK_ORDER_1228_mockup_2670x1200.png`, 2670x1200. All three reported collisions are
+resolved:
+
+1. `TREASURE FOUND` sits in its own band ABOVE `The cache holds:` - no overlap.
+2. All five cache lines sit inside the list container with vertical headroom - nothing clipped.
+3. `Take` occupies an exclusive band BELOW `First clear -- this cache is remembered.` - the footer
+   is fully legible.
+
+**Greyscale: PASSES.** The title separates from the subtitle by SIZE and WEIGHT, not by gold-vs-grey,
+so it survives without colour. That was acceptance criterion 3 and it is met by construction.
+
+### ⚠ OPEN - the overflow case is still unanswered
+
+The ticket asked: *"a cache can hold more than five lines, so a fixed height that happens to fit today
+is not a fix. State what happens at 10 lines."* **The mockup answers for five.** There is no scroll
+affordance or truncation rule shown.
+
+**Resolve it CONSISTENTLY WITH WO-1230**, which solved the identical problem with a
+`+ N more (scroll)` line under its list. Two reward/list panels inventing two different overflow
+conventions is the divergence this ticket and 1230 were explicitly written to prevent. Either adopt
+that affordance here or state why this panel differs.
+
+**Implementation may proceed on everything else.** The overflow rule is the only item that must be
+settled before the list container's height is authored, since it determines whether the height is
+fixed or content-driven.

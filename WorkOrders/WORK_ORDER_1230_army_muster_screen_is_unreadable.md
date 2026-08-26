@@ -106,6 +106,34 @@ many start now while the remainder stays staged. **The label is accurate and sti
 communicate.** Whatever the layout fix is, the muster CTA must make "5 start now, 15 stay staged"
 legible without the player reading the summary panel.
 
+## OWNER RULING 2026-08-26 - "MUSTER" IS THE DEFECT, not just the layout
+
+Owner verbatim, shown the UI seat's mockup: ***"what dos muster army mean? Thats where im lost"***.
+
+"Muster" is archaic military jargon (to assemble troops for a roll-call). The screen is a TRAINING
+ORDER FORM - `ArmyMusterService.Muster()` enqueues Train jobs into the Obsidian queue and they build
+while the player plays - and the word on the CTA is the one word that does not say so. **No layout
+work fixes this**, and the word appears in several places, so it must be settled before the mockup is
+implemented.
+
+**RULED:**
+- The CTA reads **`Train Army`**, keeping the two-line explainer beneath it:
+  `Train Army` / `5 start now - 15 stay staged`.
+- The tip line becomes **"Training auto-saves this slot. Fill the army, then Raids."**
+- Scope is **PLAYER-FACING STRINGS ONLY**. Sweep the panel title, CTA, tip line, and any toast for
+  the word "Muster" and replace it.
+- ⛔ **Do NOT rename code identifiers.** `ArmyMusterPanel`, `ArmyMusterService.Muster()`,
+  `ArmyMusterPlanner` and the `"Muster"` FlowTrace tags STAY. They are live identifiers and a
+  rename is a wide mechanical diff across several files and regressions with zero player benefit.
+  A regression that greps for the FlowTrace tag must keep passing.
+
+## The UI seat's mockup is APPROVED as the layout direction
+
+The mockup resolves all six collisions: the count field fits three digits (`Spearman 120`), the title
+has its own band above the slot buttons, `SHORT OF: Gold` is a readable WORD-CHIP rather than a colour
+(correct for a red/green colourblind owner), the wallet reads as one value (`Gold: 1664`), and the
+list carries a `+ 4 more (scroll)` affordance. Implement to it, applying the rename above.
+
 ## Required
 
 - The count field is wide enough for **three digits without wrapping**, at the roster's font size.
@@ -147,3 +175,45 @@ legible without the player reading the summary panel.
 - `BuildObsidianPanel`'s close-band reservation without reading WO-1083's RESULT first - other
   screens depend on it.
 - The "opens unaffordable" behaviour - flagged above, owner's call.
+
+---
+
+## UI SEAT DELIVERABLE (2026-08-26) - APPROVED LAYOUT SPEC + MOCKUP
+
+**Owner approved the design this session ("go").**
+**Mockup (the diff target for the acceptance screenshot):**
+`WorkOrders/WORK_ORDER_1230_mockup_2670x1200.png` (also `tmp/armymuster_mockup_2670x1200.png`).
+
+Normative anchor rects - fractions of the 2670x1200 SCREEN (x left->right, y BOTTOM->top).
+Implementer maps into the panel's real layout zones (per the RCA above, the fix IS the zone
+parenting - the two command bands move INTO zones matching these bands).
+
+| Band / element                | xMin  | yMin  | xMax  | yMax  | notes |
+|-------------------------------|-------|-------|-------|-------|-------|
+| TITLE band (exclusive)        | 0.120 | 0.892 | 0.880 | 0.975 | title alone, nothing overlays |
+| Close X (the `Cl...` control) | 0.911 | 0.888 | 0.955 | 0.982 | shared kit Close, header right |
+| Selector band                 | 0.262 | 0.770 | 0.816 | 0.867 | below title, never over it |
+| - Raid slot                   | 0.262 | 0.770 | 0.382 | 0.867 | active: gold frame + "ACTIVE - <name>" subline (word, not hue) |
+| - Hold slot                   | 0.397 | 0.770 | 0.517 | 0.867 | subline "slot 2" |
+| - Siege slot                  | 0.532 | 0.770 | 0.652 | 0.867 | subline "slot 3" |
+| - Clear (offset gap)          | 0.697 | 0.770 | 0.816 | 0.867 | visually apart from the slots |
+| Roster band (scrolls)         | 0.049 | 0.217 | 0.580 | 0.750 | 5 rows visible, row height 128px @1200 |
+| - stepper minus               | 0.356 | (row) | 0.398 | (row) | 112x112 px |
+| - COUNT FIELD                 | 0.404 | (row) | 0.479 | (row) | 200px wide: 3 digits + headroom for 4, NO wrap; gold border |
+| - stepper plus                | 0.485 | (row) | 0.527 | (row) | 112x112 px |
+| Summary panel (obsidian)      | 0.607 | 0.217 | 0.951 | 0.750 | CARD fill, kit palette - cream retired |
+| - SHORT OF chip               |   -   |   -   |   -   |   -   | framed word-chip "SHORT OF: <res>", never hue alone |
+| Wallet row                    | 0.049 | 0.160 | 0.337 | 0.197 | coin icon ADJACENT to "Gold: <n>" - one value |
+| Bottom bar - Name field       | 0.049 | 0.052 | 0.337 | 0.147 | full name, no clip (FitLine) |
+| Bottom bar - Save slot N      | 0.360 | 0.052 | 0.584 | 0.147 | exclusive lane |
+| Bottom bar - Muster CTA       | 0.607 | 0.052 | 0.951 | 0.147 | gold-framed; TWO lines: "Muster Army" + "<f> start now - <r> stay staged" from live data |
+
+Spec rules the mockup encodes (binding):
+- Cost/time strings are ONE line: `<gold> Gold - <t>` with compact time (`45s`, `60s`, `90s`,
+  `2m`), never `1m 00s each`. Row height still accommodates two lines as the fallback guard.
+- At 4 digits the count field autosizes down (FitLine) inside its 200px box - it never wraps.
+- Roster overflow scrolls with a `+ N more (scroll)` hint line under the visible rows.
+- The Muster CTA subline is computed from the live queue numbers (the `Fits now` values), so
+  "5 start now, 15 stay staged" is legible without reading the summary panel.
+- Greyscale-safe: active slot = frame weight + ACTIVE word; shortfall = framed chip + word;
+  count emphasis = border, not hue.
