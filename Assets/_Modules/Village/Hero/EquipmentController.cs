@@ -2955,9 +2955,17 @@ namespace DeNelle.Village
             // sword lines (authored=1.1, the sword_A offsets row) and one unattributable
             // authored=1 line: two props were sharing one throttle slot on every character.
             string key = "parent-scale-compensate-" + p.GetInstanceID() + "-" + subject;
+            // WO-1209 Phase A: this change-gated solve is the one seam reached both when a
+            // weapon is first attached and whenever ApplyHoldPose re-parents/re-solves it. Keep
+            // the complete identity + scale chain in one event-driven line so a device capture
+            // can distinguish an oversized authored body from parent-scale multiplication.
+            Transform instantiatedBody = gripRoot.childCount > 0 ? gripRoot.GetChild(0) : null;
             string line =
-                $"parent-scale compensate: {subject} on '{name}' parent='{p.name}' " +
+                $"parent-scale compensate: {subject} on '{name}' " +
+                $"gripRoot='{gripRoot.name}' body='{(instantiatedBody != null ? instantiatedBody.name : "<no child>")}' " +
+                $"parentBone='{p.name}' " +
                 $"lossy=({ls.x:0.###},{ls.y:0.###},{ls.z:0.###}) authored={authoredScale:0.###} " +
+                $"localScale={gripRoot.localScale} " +
                 $"renderers={rendTotal}(inactive={rendInactive}) " +
                 $"-> worldBounds={(hasB ? wb.size.ToString("0.###") : "<no renderer>")} " +
                 "(the proportional solve should read here as heldLength * authored on the longest axis)";

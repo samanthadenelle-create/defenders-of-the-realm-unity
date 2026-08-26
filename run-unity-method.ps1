@@ -185,7 +185,9 @@ if ($ExpectMarker -eq '') {
             # Keep the license-specific signal (exit 7) - it tells the caller to refresh
             # the Hub, not to go hunting for a code defect.
             Write-Host "[run] VERDICT=FAIL reason=LICENSE_ERROR (and $reason) - this run is NOT PROVEN. $evidence"
-            Write-Host "[run] *** LICENSE ERROR (run did not complete) - needs interactive Hub refresh or reboot; do NOT kill processes. ***"
+            Write-Host "[run] *** LICENSE ERROR (run did not complete). FIRST: RETRY ONCE - this is often transient. ***"
+            Write-Host "[run] *** STILL FAILING? CLOSE UNITY HUB (owner remedy, 2026-08-25: 'i close the hub ... seems to help'). ***"
+            Write-Host "[run] *** The Hub is NOT needed for batchmode. Reboot only if closing the Hub does not clear it, and do NOT kill processes. ***"
             exit 7
         }
         Write-Host "[run] VERDICT=FAIL reason=$reason - this run is NOT PROVEN. $evidence"
@@ -207,7 +209,9 @@ if ($succeeded -and -not $compileErr) {
 }
 if ($license) {
     Write-Host "[run] VERDICT=FAIL reason=LICENSE_ERROR (run did not complete) $evidence"
-    Write-Host "[run] *** LICENSE ERROR (run did not complete) - needs interactive Hub refresh or reboot; do NOT kill processes. ***"
+    Write-Host "[run] *** LICENSE ERROR (run did not complete). FIRST: RETRY ONCE - this is often transient. ***"
+            Write-Host "[run] *** STILL FAILING? CLOSE UNITY HUB (owner remedy, 2026-08-25: 'i close the hub ... seems to help'). ***"
+            Write-Host "[run] *** The Hub is NOT needed for batchmode. Reboot only if closing the Hub does not clear it, and do NOT kill processes. ***"
     exit 7
 }
 Write-Host "[run] VERDICT=FAIL reason=LOG_SCAN (no clean-exit line, or compile errors present) $evidence"

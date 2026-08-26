@@ -1,6 +1,6 @@
 # WORK ORDER 1211 - The game asks the player to sign on EVERY launch
 
-**Status:** READY TO IMPLEMENT - ⛔ **retention defect on a live, paying store build.**
+**Status:** READY - ⛔ **A FIRST ATTEMPT WAS BOUNCED 2026-08-25: it removed the launch prompt by WEAKENING FAIL-CLOSED AUTH.** Harvested, compiled clean, then turned the regression RED with two failures: `[real-wallet-gate] TryAttachAuthHeaders no longer FAILS CLOSED when there is no real signer`, and `save no longer routes guests through shared proof when enforcement is off`. Both are `whether`, and this ticket forbids exactly that - it moves WHEN proof is obtained, never WHETHER. Backed out; not committed. ⭐ The SHAPE was right and the rework should keep it: +11/-158 in GameStateService (deleting the second signing authority rather than working around it), boot reads attaching an already-usable session or the guest header and otherwise keeping the local save. ⛔ The rework must preserve BOTH guards that caught it and must NOT edit either oracle. Acceptance now also requires proving the REFUSAL path: with no signer and enforcement ON, the sync ABORTS. *(Prior line:)* **Status:** READY TO IMPLEMENT - ⛔ **retention defect on a live, paying store build.**
 **Minted:** 2026-08-25 (CLI lead, main line; banner bumped 1211 -> 1212 in the same edit)
 **Silo:** Core / backend auth + Wallet
 **Reported:** the owner, 2026-08-25, on build `2026.08.26.341323`: *"check why it asks for
@@ -59,9 +59,13 @@ have the same cure - mint once, early, and reuse - which is why they should be d
 
 1. **Route the save sync through the WO-1157 session rail.** `GameStateService`'s load/save attaches
    the cached bearer token; it signs **only** when no usable session exists.
-2. **Persist the session across launches.** A token that dies with the process guarantees a prompt on
-   every cold start, which is the defect. It must survive an app restart and be re-mintable silently
-   where the wallet allows it.
+2. ⛔ **SUPERSEDED - DO NOT PERSIST THE SESSION TOKEN.** This item originally said to persist it
+   across launches. That is WRONG and the batch ruling overrides it: the in-memory-only design is a
+   deliberate security decision with its reason at `BackendRequestSigner.cs:61-66` - it is a bearer
+   credential, and PlayerPrefs on Android is readable by a backup. The dev seat raised the conflict
+   rather than silently following the older paragraph, which was the correct move.
+   **The prompt is removed by not signing for a READ at boot (item 3), not by writing the credential
+   down.**
 3. **A boot must never sign for a READ.** Loading the player's own town is not a value-granting
    action. If the server requires proof for a load, that proof comes from the session; if no session
    exists, **the game opens on the local save and mints on the first action that actually needs it** -

@@ -1938,3 +1938,67 @@ not just the source.
 
 ⭐ Credit where due: the dev seat surfaced this by refusing to ship a partial migration and then
 sweeping wider than its own lane. That is exactly the behaviour that catches this class.
+
+
+## ⛔ BOUNCE 2026-08-25 - Batch 13 LANE 1 (WO-1211) FAILS THE GATE. It weakened fail-closed auth.
+
+### The verdict
+
+Harvested into the lead's tree, compiled clean, and then **turned the full regression RED**:
+
+```
+REGRESSION_FAIL: 2 failure(s) (283/285 registered suites green, 0 skipped)
+
+  - wallet-identity FAIL x1: [real-wallet-gate] TryAttachAuthHeaders no longer FAILS CLOSED
+    when there is no real signer - wallet-signature verification has been weakened
+
+  - save write bypasses shared auth | save no longer routes guests through shared proof
+    when enforcement is off
+```
+
+⛔ **This is the one thing the lane was explicitly forbidden to do.** Batch 13 LANE 1 and the ticket
+both say, in those words: *"Must not loosen any grant path. It moves WHEN proof is obtained, never
+WHETHER."* Both failures are `whether`.
+
+**WO-1211 is BACKED OUT of the lead's tree** (`GameStateService.cs`, `BackendRequestSigner.cs`, the
+unregistered oracle and its registration). It is NOT committed and NOT in tonight's build.
+
+### What was RIGHT about it, so the rework does not start from scratch
+
+The diagnosis and the SHAPE were correct, and the rework should keep both:
+
+- **+11 / -158 in `GameStateService.cs`** - deleting the second signing authority rather than working
+  around it is exactly right. The defect is two auth rails; a fix that leaves both is not a fix.
+- Boot cloud reads attaching an already-usable session, or the guest header, and otherwise keeping
+  the local save without minting - correct, and it is what removes the launch prompt.
+- Respecting the batch's precedence over the older ticket paragraph (do NOT persist the bearer token)
+  - correct, and the note about it was the right way to raise a conflict.
+
+### What the rework MUST preserve - the two guards that caught this
+
+1. **`[real-wallet-gate]`: no real signer must FAIL CLOSED.** With enforcement on and no signer, the
+   request is ABORTED, never sent unauthenticated. The old hand-rolled path did this with an explicit
+   `Debug.LogError(... ABORTING sync (fail-closed) ...)` and `return false`. Whatever replaces it must
+   return the same answer on the same input.
+2. **Guests must still route through the shared proof, INCLUDING when enforcement is off.** The guest
+   rail (`X-Guest-Id`, `guest-local-` + 64 hex) is the credential for a player with no wallet at all.
+   A save write that skips it when `BackendAuthConfig.Enforced` is false is a bypass, not a shortcut.
+
+⭐ **Both suites did their job.** The security guard is not decoration and it is not in the way - it
+caught a real weakening in a change that compiled cleanly and read well. **Do not weaken either suite
+to make the fix fit** (2026-08-23 lesson: re-point a pin, never soften it). If the rework believes a
+suite is wrong, say so with evidence and let the lead rule - do not edit the oracle.
+
+### Ops note for the rework
+
+The lane's own acceptance still stands and is still owner-owned: two cold launches with a bound wallet
+producing ZERO wallet sheets, proven by `sign_messages` being absent from the boot window of a fresh
+device log. **Add to it:** a proof that with no signer and enforcement ON, the sync ABORTS - the
+success path AND the refusal path, because this bounce is what happens when only one is checked.
+
+### Also for every lane: NORMALISE LINE ENDINGS ON HANDBACK
+
+Both harvested lanes tonight carried MIXED CRLF/LF. `GameStateService.cs` rendered as **4,547 changed
+lines** against a real change of **169**. The lead normalises on harvest, but a handback whose diff
+looks like a whole-file rewrite cannot be reviewed by anyone else, and hides exactly the kind of
+regression this bounce is about.
