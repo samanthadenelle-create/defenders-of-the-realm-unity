@@ -87,3 +87,16 @@ corners. Give the row real, symmetric breathing room.
 - `SetAdFace` / the three-state CTA relabel (WO-1051 defect 5) - it is correct.
 - `FeatureFlags.RewardedAdSkip` and the preload path.
 - Any other panel's geometry. This is one file.
+
+
+---
+
+## UI SEAT DELIVERABLE (2026-08-26) - SLICE B SPACING SPEC
+
+Symmetric gutters: outer margins and the inter-button gutter all read 0.015. New rects:
+- Claim: min.x **0.015**, max.x **0.4925**
+- Watch-ad: min.x **0.5075**, max.x **0.985**
+Vertical band 0.025-0.280 UNCHANGED (load-bearing; ~135/~117 px clears MinTouchPx 112 at both
+aspects, keeping ClampMinTouch a deliberate NO-OP - do not shrink the band, make the panel
+taller if anything ever needs room, per this WO's own precedent). Slice A (the claim toast) is
+fully specced in the WO body already; no design addition needed.

@@ -150,3 +150,39 @@ per-quest illustrations can be added later through quest data without another la
 
 WO-1201/1202's landed `QuestRewardLine` / `QuestRewardMath` structure is the reward-row authority.
 WO-1192 must reuse it and must not author a fixed reward-chip count or a second reward schema.
+
+
+---
+
+## UI SEAT EYES-ON (2026-08-26) - FRESH CAPTURES OPENED: NOT CLOSED, portrait still broken
+
+Fresh headed captures generated this session on a COMPILE_GATE_OK tree (log
+`Builds/wo1192-ui-capture.log`, marker `UI_CAPTURE_OK 89`, PNGs mtime 2026-08-26 ~13:2x):
+
+- **PORTRAIT (`Builds/ui-capture/RumorBoard_1080x2340.png`): FAIL.** The detail pane overlays
+  the entire list - cards render UNDER it, the `* All` tab chip floats orphaned over the
+  "In Progress" heading, reward chips truncate to `X... / Crys... / St... / Ma...`, left status
+  truncates to "The tal...". Matches the run's oracle lines verbatim (BUTTON OVER TEXT:
+  `Card_uicap_rumor_active1/2` over `Chip_all` label by 103.9x48 ref px and over `DetailBody`
+  by 42x124 ref px, at BOTH 1080x2340 and 1200x2670).
+- **LANDSCAPE (`Builds/ui-capture/RumorBoard_2670x1200.png`): close, four residuals.**
+  (1) the second In-Progress card sits half-buried under the status line "The talk of
+  Elarion..."; (2) objective text ends mid-word ("begun to sin") with no ellipsis or scroll
+  affordance; (3) both card titles truncate to the identical string "Standing Watch Over the
+  Wester..." - indistinguishable rows; (4) the lower ~third below the status line is dead black.
+
+The `5e990f8d1` responsive slice is NOT sufficient; the ticket stays OPEN. Next: owner rulings
+on the parked design questions, then a full both-orientation layout spec + mockup from the UI
+seat, then CLI re-implementation.
+
+## OWNER RULINGS (2026-08-26, via the UI seat - three explicit choices)
+
+1. **The board is for ACCEPTING new quests.** Browse-first: the rumor list leads, the detail
+   pane sells the quest, Accept is the hero action. Tracking is the HUD tracker's job.
+2. **Quest art = per-TYPE plates** (Story / Daily / Gear / Endgame - 4 pieces, not 24). The
+   art region COLLAPSES until a plate lands (per the standing rule: never an empty parchment
+   promise).
+3. **Objective text SCROLLS in the detail pane** - full text always available inside its own
+   well; never truncates mid-word; Accept/Track never move.
+
+Redesign mockups from the UI seat follow on these rulings.

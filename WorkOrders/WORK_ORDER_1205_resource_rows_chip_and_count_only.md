@@ -124,3 +124,20 @@ even when the art is missing, she says so and the fallback comes out.
 With the cap text gone from the row, **at-cap and over-cap are no longer visible at a glance** - the
 only signal becomes the toast at collect time. If she wants a persistent tell (the chip changing
 state at cap), that is a separate ruling and a separate ticket.
+
+
+---
+
+## UI SEAT DELIVERABLE (2026-08-26) - APPROVED ROW DESIGN + CROSS-RULINGS
+
+**Mockup:** `WorkOrders/WORK_ORDER_1221_resource_rail_mockup_2670x1200.png` (shared with WO-1221).
+
+- Row shape confirmed as ruled: `[icon] count` - name label dropped on this path, `of 2000` cap
+  text dropped. Uniform chip size/colour every row (2026-07-15 uniformity ruling preserved).
+- Icon-first identity by SILHOUETTE: coin / log / ingot / rock / crystal must stay separable in
+  the greyscale check of the acceptance capture.
+- **Open rulings (a) and (b) of this WO are now CLOSED by the owner (2026-08-26, explicit
+  choice via the UI seat):** (a) expansion is a TOGGLE (tap to open, tap to close - the 6 s
+  auto-collapse is ruled out); (b) collapsed = Gold + a small `+4` hidden-count hint tag.
+  Recorded in full in WO-1221's addendum - the two WOs land on ONE surface and must not diverge.
+- Ruling (c) (an at-cap/over-cap persistent tell once cap text is gone) stays a separate ticket.

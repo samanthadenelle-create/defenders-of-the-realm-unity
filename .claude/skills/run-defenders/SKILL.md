@@ -147,6 +147,21 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .claude\skills\run-defenders
 | `f8-watch-poll.ps1` | Agent background poller; exits on un-acked capture |
 | `f8-check-inbox.ps1` | Sync poll (`NEW_CAPTURE` + `pending=N`, oldest first / exit 1) |
 | `f8-ack.ps1` | Ack ONE capture after triage (`-Seq n`, `-All`) |
+| `f8-device-bridge.ps1` | **WO-1227** DEVICE producer: pulls the phone's `break-log.jsonl` + `break_*.png`/`flag_*.png` over adb and publishes new captures into the SAME queue |
+| `f8-device-bridge-start.ps1` / `-stop.ps1` | Background 30 s loop for the above (auto-started by `f8-watch-start.ps1`) |
+| `f8-device-backfill-digest.ps1` | One-shot digest of a device log's history -> `logs/f8-inbox/DEVICE_BACKFILL_<date>.md` |
+
+**WO-1227 - the device half.** `f8-watch-daemon.ps1` watches ONLY the desktop persistentDataPath.
+Nothing moved a capture off the phone, so on the one platform the owner actually plays the section 14
+chain was severed at the first link: on 2026-08-26 the inbox read `NO_CAPTURE ack=3607` all day while
+the Seeker held 736 unread entries back to 2026-07-20 - including 8 of the owner's own FLAG presses
+and 9 `BATTLE_QUIESCENCE_FAIL` softlocks. `f8-device-bridge.ps1` closes it as an ADDITIVE second
+producer into the same `QUEUE.jsonl` (no second inbox, no second ack state). It keeps a DEVICE-SIDE
+read watermark in `logs/f8-inbox/device-state.json` (line offset + `lastUtc` + a rolling dedupe set)
+so a poll is incremental and idempotent, filters to `flagged`/`error`/`exception`/`possible_softlock`
+exactly as the desktop daemon does, and is a **silent exit-0 no-op with no phone attached**.
+`adb` is resolved (never assumed on PATH) and always invoked from PowerShell - Git Bash rewrites
+`/sdcard/...` into `C:/Program Files/Git/sdcard/...` and the pull fails.
 
 **WO-965:** captures are an append-only queue (`logs/f8-inbox/QUEUE.jsonl`). `LATEST_CAPTURE.md` and
 `PING.json` show only the NEWEST — before the queue existed, a burst collapsed into them and one ack

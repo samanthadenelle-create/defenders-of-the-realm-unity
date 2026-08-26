@@ -93,3 +93,15 @@ When a slot has no mapped ability (`_empty` / no ability id):
 ## 5. RESULT
 
 `WorkOrders/WORK_ORDER_917_hud_dodge_icon_empty_skill_slot.RESULT.md`
+
+
+---
+
+## OWNER RULING (2026-08-26, via the UI seat): PHASE A DEFERRED - "no art"
+
+The catalog audit stands (commit `a35163e1`): no dodge/roll concept art exists in-project and the
+only candidate is style-mismatched teal clipart. **Owner ruled: DEFER Phase A** rather than
+restyle the clipart or commission now. Record "no art - deferred" in the RESULT per this WO's own
+acceptance clause; the dodge face keeps its current text treatment until real art lands in the
+catalog. Phase B (empty-slot dimmed `+`) remains landed (`78c3ecbec`). No code change from this
+ruling.

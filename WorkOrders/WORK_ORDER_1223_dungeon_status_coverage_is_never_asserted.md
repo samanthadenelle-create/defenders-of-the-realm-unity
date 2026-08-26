@@ -42,6 +42,19 @@ because a fifth dungeon is not in the list it iterates.**
 reports success while the thing it exists to protect is untested.* It is not a hollow PASS (nothing
 is skipped); it is a hollow SCOPE.
 
+> ### ⚠ SUPERSEDED IN PART — OWNER RULING 2026-08-26
+> The owner ruled on this WO, verbatim: ***"not acesable if not in table, if in table and works
+> then yes"***. That **REVERSES** the paragraph immediately below and the first bullet of *What NOT
+> to touch*. The client now **FAILS CLOSED**: an absent row, an absent table (no cache / server
+> unreachable / timed out), a rejected or empty payload, and a row whose status does not parse all
+> resolve **Sealed**. Two named escapes survive — the kill switch (`FeatureFlags.DungeonStatus = 0`)
+> and `DungeonStatusCatalog.UngatedIds` (the Rootways crossroads + the fixtures/probes, which have
+> no door and can never have a row).
+> She also ruled `dg_folks_granary` and `dg_healers_cottage` **GATABLE**: both are in
+> `DungeonStatusCatalog.PortalDungeonIds`, **not** in the ungated allowlist.
+> The paragraph below is preserved unrewritten (CLAUDE.md §15 — frozen ledgers get a banner, not
+> a rewrite); read it as the *pre-ruling* rationale.
+
 **The client's fail-open default is CORRECT and must not change.** `api/dungeon-status.js` records
 why: the status resolves before sign-in, and auth *"would INVERT the safety property — an
 auth-gated status call fails for offline and guest players, and a fail-closed reading of that

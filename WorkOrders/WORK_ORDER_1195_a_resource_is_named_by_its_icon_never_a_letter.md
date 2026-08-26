@@ -350,3 +350,33 @@ whether the build palette card keeps its building image is **open and NOT decide
 removing the image for text-plus-costs; the lead countered with a thumbnail-plus-text card. ⛔ **Neither
 is recorded as decided, and a seat that implements either one is inventing a ruling.** This spec
 changes the composition of the cost string inside the card and touches the card's art band not at all.
+
+
+---
+
+## OWNER ART RULINGS (2026-08-26, via the UI seat contact sheet - all four explicit choices)
+
+Contact sheet shown at actual chip size (96px): `tmp/wo1195_icon_contact_sheet.png`.
+
+1. **FOOD -> `Assets/Resources/HudIcons/hud_food.png`** (the distinct 332x321 art, NOT the
+   byte-identical-to-currency 1200px illustration). Replaces the current chip art.
+2. **MAGIC -> the Arcanist emblem** (`Assets/Resources/RpgUi/emblem/Arcanist.png`). ⛔ The
+   aether shard was DISQUALIFIED: silhouette-identical to the existing crystal chip (both
+   faceted shards) - fails the greyscale gate.
+3. **WISDOM -> the spellbook tome** (`Assets/Resources/ItemIcons/blink_spellbook1h_01.png`).
+   128px source is adequate for a 96px chip.
+4. **STONE -> KEEP AS-IS.** Already mapped (`concept-icons.json` rows `stone`/`stones` ->
+   `currency/currency_stone`) and pinned by `CostFormatSourceRegression.cs:126,159-173` - the
+   WO's "stone is missing" premise was stale. Optional housekeeping only: downscale the 1.5MB
+   source with no visual change.
+
+Implementation notes for CLI (mechanics, not creative):
+- `concept-icons.json` `role` resolves under `Resources/RpgUi/<role>/`. Arcanist is addressable
+  as `{role:"emblem", name:"Arcanist"}`; hud_food and the tome live OUTSIDE RpgUi, so either
+  copy/recut them into `RpgUi/currency/` under canonical names (currency_food replacement,
+  currency_magic, currency_wisdom) or extend the resolver - prefer the copy, no resolver change.
+- Add `magic`/`wisdom` (+ plurals) rows; keep the dual StreamingAssets copy md5-identical.
+- Normalise all three fit-to-height like their siblings; icons are labels
+  (`raycastTarget=false`), never inflated to MinTouchPx.
+- The letter-suffix oracle allowlist stays ZERO; greyscale check of the acceptance capture must
+  show coin/log/ingot/rock/crystal/food/emblem/tome all separable by silhouette.

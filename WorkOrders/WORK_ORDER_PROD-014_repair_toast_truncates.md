@@ -264,3 +264,24 @@ Confirmed: **exactly one price authority** (`api/_lib/purchase-catalog.js` `USD_
 `buildQuoteBody`; the client is arithmetic-free by construction) and **zero existing discount concept
 anywhere under `api/`** - `grep -rni discount api/` returns **0**. It is greenfield server work and
 the largest item here, so it ships separately rather than holding up the reported defect.
+
+
+---
+
+## OWNER RULING (2026-08-26, via the UI seat): slice (d) rate = 1.0 CRYSTAL PER IRON
+
+Measured natural-exchange band (research read at source this session; full anchor table in the
+session record): monthly ledgers ~0.062-0.067, multi-resource baskets ~0.1875-0.2011, best-buy
+impulse cross-rate 0.5333, quest faucet 0.5721, **$1.99 impulse rung 0.6250 = the binding
+floor**. No authored exchange constant exists anywhere in data or code today (verified:
+`WallRepairController.CostForFraction:590` hard-zeroes crystals; `repair_default` authors
+`crystals: 0`).
+
+**RULED: P = 1.0 crystals per iron** - 60% above the floor, clean to read (115 iron short =
+115 crystals). Author it in `structures-catalog.json` beside `repair_default` per this WO's
+direction; never client-computed.
+
+⚠ Same-pass requirement re-confirmed: `WallRepairController.MaterialsZero:698` ignores the
+crystals slot, so a crystals-only cost reads as FREE until fixed in the same pass.
+⚠ Caveat on record: WO-1072 holds the crystal line mispriced ~3.46x across SKUs. If WO-1072
+re-prices the impulse rungs above 1.0 implied, this rate must be revisited - noted there.

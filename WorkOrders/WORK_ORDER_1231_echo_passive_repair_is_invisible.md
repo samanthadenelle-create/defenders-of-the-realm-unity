@@ -92,3 +92,34 @@ already spent before they touched anything.
 Should passive Echo repair **spend materials at all**? It currently does. The alternative - free
 mending, with the Echo count as the only pace knob - is simpler to communicate and arguably what
 "passive" implies to a player. This is an economy decision and it is the owner's.
+
+
+---
+
+## UI SEAT DELIVERABLE (2026-08-26) - APPROVED SURFACES + OWNER ECONOMY RULING
+
+**Owner approved the design this session (explicit choice via the UI seat's question).**
+**Mockup:** `WorkOrders/WORK_ORDER_1231_mockup_2670x1200.png`.
+
+The two surfaces (both EXISTING surfaces, no new HUD element, per this WO's fence):
+
+1. **Echo card - PASSIVE MENDING block** (under the existing harvest line):
+   - Explainer: "Your Echoes mend the town's walls on their own. Every Echo you wake mends
+     faster - no assignment needed." (ASCII; final copy may route via canon-strings.)
+   - Live rate line: "Mend rate now: +X% wall health / hour" - bound to
+     `EchoBonusCalculator.RepairFractionsPerSecond()`, never hardcoded.
+   - Spend line: "Mending uses Wood + Iron as it works."
+   - **Stall chip**: framed word-chip "PAUSED - waiting for materials (<resource>)" - shown ONLY
+     while stalled, hidden otherwise. Word + frame, never hue alone; greyscale-safe.
+2. **While-you-were-away summary** - the spend-attribution home (option chosen: offline-return
+   summary entry; NEVER a per-repair toast):
+   - "Echoes mended the walls  +X% wall health"
+   - "  spent while mending  -X Wood, -X Iron"
+   - "Mending paused Xh - ran out of <resource>" (only when it happened)
+   All values from the live claim math (`EchoRepairService.ClaimOffline`), zero invented numbers.
+
+**OWNER RULED (2026-08-26): the material spend STAYS.** Mending remains a Wood+Iron sink; the
+defect was invisibility, not the economy. The flagged question in this WO is CLOSED.
+
+CLI scope unchanged: wire strings/values through the two surfaces, RED-first regression, device
+screenshot at 2670x1200 opened, greyscale check, owner felt-verify closes.

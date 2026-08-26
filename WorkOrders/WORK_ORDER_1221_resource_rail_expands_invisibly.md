@@ -102,3 +102,28 @@ Report the recommendation; do not change the duration silently.
 - ⛔ The collapsed gold-only chip itself. It renders correctly; the expansion is the defect.
 - ⛔ Never convey the resource identity by colour alone (owner is red/green colourblind) — icon plus
   WORD, as `HudKitController.cs:1591-1596` already pairs `CurrencyKind.Food` with the label `"Stone"`.
+
+
+---
+
+## UI SEAT DELIVERABLE (2026-08-26) - OWNER RULINGS + APPROVED SURFACE DESIGN
+
+**Mockup (shared with WO-1205):** `WorkOrders/WORK_ORDER_1221_resource_rail_mockup_2670x1200.png`.
+
+**OWNER RULED (2026-08-26, via the UI seat's question, explicit choice):**
+1. **The expansion is a TOGGLE, not a timed peek.** Tap the gold chip -> rail opens and STAYS
+   open; tap again -> collapses. The ~6 s `_chipsExpandUntil` timer semantics are replaced by a
+   toggle state. (The timer was never ruled; it is now ruled OUT.)
+2. **The collapsed chip is Gold + a small `+4` hint tag**, so the player can tell more resources
+   sit behind the tap. Hint count = number of hidden resource chips.
+
+Design facts the fix must land on (per the approved mockup + WO-1205's row ruling):
+- Expanded = gold chip stays seated, four chips slide in BELOW it: Wood, Iron, Stone, Crystals.
+- Each row is `[icon] count` - no name label, no cap text. Same chip size + colour every row.
+- Icon identity is by SILHOUETTE (coin / log / ingot / rock / crystal) and must survive the
+  greyscale check.
+- Every tappable face >= MinTouchPx 112, no new overlap.
+
+The BUILT-BUT-INVISIBLE diagnosis itself stays CLI per this WO (find the `Update()` consumer,
+falsify the hollow trace line via `UiSurfaceProbe`, RED-first regression, device screenshot taken
+INSIDE the expanded state - now trivially possible since the state no longer self-closes).

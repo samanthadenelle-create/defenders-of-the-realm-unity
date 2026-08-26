@@ -71,3 +71,43 @@ arrays are indexed BY ORDINAL. `Upgrade = 6` keeps its value, its `upgradeButton
 - ⛔ `ClampMinTouch` as a diagnosis - it has already been checked and ruled out at three sites
   (bands 117 / 116.7-130.6 / exactly 112.0 px). Check the band arithmetic before naming it.
 - The `MinTouchPx` 112 floor. Nothing here may shrink a touch target below it.
+
+
+---
+
+## UI SEAT DELIVERABLE (2026-08-26) - APPROVED CORNER RE-SEAT + TOAST ZONE + RULINGS
+
+**Owner approved the design this session ("go").**
+**Mockup:** `WorkOrders/WORK_ORDER_1219_mockup_2670x1200.png` (also `tmp/hudcorner_mockup_2670x1200.png`).
+The white outline in the mockup marks the reserved toast ZONE - it does not ship.
+
+### Slice A - the left column becomes ONE vertical stack of exclusive bands
+Screen fractions (x left->right, y BOTTOM->top), px @2670x1200 (top-down y):
+
+| Band            | xMin  | yMin  | xMax  | yMax  | px |
+|-----------------|-------|-------|-------|-------|----|
+| Hero plate      | 0.011 | 0.883 | 0.240 | 0.983 | x 30-640, y 20-140 |
+| SKR chip        | 0.011 | 0.818 | 0.124 | 0.870 | x 30-330, y 156-218 |
+| Heart bar       | 0.011 | 0.748 | 0.240 | 0.805 | x 30-640, y 234-302 |
+| Minimap         | 0.011 | 0.485 | 0.124 | 0.735 | x 30-330, y 318-618 |
+| Status line     | 0.011 | 0.428 | 0.240 | 0.472 | x 30-640, y 634-686 - its OWN band, below the minimap, never across it |
+| Gear            | 0.011 | 0.322 | 0.055 | 0.415 | 116x112 px |
+| Store           | 0.061 | 0.322 | 0.142 | 0.415 | beside the gear, not under the status text |
+
+### The legal toast zone (Repair All and any transient toast on this screen)
+x 0.375-0.625, y-up 0.203-0.308 (px x 1000-1670, y 830-956) - centered above the action bar,
+overlapping nothing in either capture's state. Toasts land HERE, never in the corner.
+
+### Slice B rulings
+- **SKR chip: WIDTH, not a shorter string.** The chip fits `SKR 177` whole, sized for six digits
+  before FitLine autoshrink. A truncated money-adjacent readout is worse than none (WO's own law).
+- **Dark Raids face: CLI diagnosis, required in the RESULT with the proving line** - real disabled
+  state (`RaidCapable` false) vs styling bug. If it IS a disabled state, the treatment must be
+  non-hue (dimmed label + count, e.g. `Raids 0/3`), greyscale-separable from enabled peers.
+
+### Slice C - CLOSED BY CANON, no defect
+CLAUDE.md sec.7 corrected 2026-08-26: the calm(town) bar is FOUR always-on faces + Talk ONLY while
+`TalkPromptRegistry.Count > 0` (TalkHudBridge.cs:69) and Raids gated on RaidCapable. Both captures
+are open ground -> FIVE faces is the feature working. CLI verifies the gate (stand at an NPC, see
+Talk appear) and records it; nobody "fixes" the five-face bar. `MaxVisibleFaces = 6` is a MAXIMUM.
+`ActionBarButtonId` ordinals and `ButtonCount = 7` untouched, per this WO's own fence.
