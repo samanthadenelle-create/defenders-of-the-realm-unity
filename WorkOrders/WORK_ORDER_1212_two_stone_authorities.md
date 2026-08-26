@@ -95,12 +95,46 @@ landing splits the player's balance in half, live.
 ⭐ **Either way the invariant is the same and it is the deliverable: ONE balance the player can see,
 spend and be granted into. Never two.**
 
+## ⛔ CORRECTION 2026-08-25 - DO NOT MIGRATE THE VALUE. RETIRE IT.
+
+The dev seat flagged: *"Do not sum both balances blindly until duplicate server rows are audited."*
+Right instinct - and following it changes the rule, because **my own acceptance criterion below was
+wrong** and would have credited value nobody earned.
+
+**The phantom balance contains NO EARNED PLAYER VALUE.** Every writer is accounted for:
+
+| writer | what it puts there |
+|---|---|
+| `GameStateService.cs:1026` | the seeded **20** at new game |
+| `:582` / `:1565` | replays what was already persisted, or what the server echoed back |
+| `WriteTimeDerivedBalance` | the offline clamp - and its own summary says **"Subtractions only"** |
+| `DevPanelController.cs:727` | the dev "Load up (full base)" top-up |
+| ⛔ gameplay grants, quest rewards, purchases | **NOTHING.** Purchase `stone` already deserializes into the live `PackEconomy.Food` slot |
+
+So the stored numbers are a seed, a dev top-up, and echoes of those two. **Summing them into the live
+balance would hand every existing save a free +20 and could double-credit a dev top-up** - inventing
+value out of a bookkeeping error, on a build that takes real money. That is a worse failure than the
+one this ticket exists to prevent.
+
+⭐ **THE RULE: retire the field and DISCARD its value. Do not migrate, do not sum, do not take the
+larger.** Nothing the player earned, bought or could ever spend is stored there.
+
+**And that removes the audit from the critical path.** The server-row audit is still worth doing for
+confidence - `player_data` holds 26 rows and the admin `players` view exposes metadata only, so the
+payload query is CREDENTIALED and OWNER-OWNED - but the migration no longer depends on its answer,
+because the answer cannot change a rule of "discard".
+
+⛔ **Keep the `stone` WIRE KEY as an inbound ALIAS onto the live slot.** Retiring the field must not
+make a server or an older client that sends `stone` silently drop the value on the floor. Alias in,
+never a second balance.
+
 ## Acceptance criteria
 
 - A registered oracle that FAILS if any grant path can credit a resource the HUD does not read - the
   general shape, not a one-off assertion about stone.
-- A migration proven on a real save: a pre-migration save carrying a non-zero dead balance loads with
-  that value present in the live one, exactly once, and no double-credit on a second load.
+- ⛔ SUPERSEDED BY THE CORRECTION ABOVE - do NOT write a value migration. Instead: a save carrying a
+  non-zero dead balance loads with the field GONE, the live balance UNCHANGED, and a trace saying what
+  was discarded and why. Prove no path adds it back on a second load.
 - Client and server agree on the balance list. `TIME_DERIVED_BALANCES` in `api/game/save.js` and the
   `ReadTimeDerivedBalance`/`WriteTimeDerivedBalance` switch must not name a key the other lacks -
   that switch already `FlowTrace.Fail`s on the mismatch, which is how this class announces itself.
