@@ -262,6 +262,73 @@ namespace DeNelle.Core.Geometry
             => ResolveSource(hasAuthoredOffset, manual, true) == SeatSource.Derived;
 
         // =====================================================================
+        //  WO-1215 — `manual` MUST NAME A CORRECTION THAT EXISTS
+        // =====================================================================
+        //
+        // ⛔ READ THIS BEFORE CHANGING THE LADDER ABOVE. The ladder is CORRECT and is NOT touched.
+        // What was wrong is the VALUE fed into its `manual` input.
+        //
+        // `manual: true` means, in ARCHITECTURE_PRINCIPLES §4's own words, "a rare human nudge
+        // perfects it" — an OWNER-DIALLED SEAT that the auto pass must never overwrite. It is a
+        // claim about a human act, and a claim about a human act is only worth honouring when the
+        // artefact of that act exists.
+        //
+        // MEASURED, not assumed (Assets/Resources/Data/Canonical/weapons.json, re-parsed 2026-08-26):
+        //   • 96 rows. 81 carry `manual: true`.
+        //   • 77 of those 81 ALSO carry `generated: true` — i.e. the row was emitted by
+        //     Assets/Editor/Catalog/GearCatalogGenerator.cs, which stamps `["manual"] = false`
+        //     on a fresh row with the comment "set true by hand to lock the row forever" (:386-387).
+        //     `generated:true` + `manual:true` together is therefore a CONTRADICTION on its face.
+        //   • The contradiction has a named origin: commit af96fe788 ("apply the ratified WO-500
+        //     curve to the 65 and unhide them"), a DATA-ONLY BALANCE PASS, whose own body records
+        //     "blink_ rows 65, manual=true 65/65" — and, two paragraphs later, predicts this exact
+        //     defect: "offsets.json has authored seating for exactly sword_A/D/F/G + shield_A ...
+        //     and ZERO blink mesh key has authored seating. The shelf traded dialed weapons for
+        //     un-dialed ones. Screenshot-class risk, not log-class."
+        //   • All 19 shield rows: 18 have NO row in Assets/OffsetForge/offsets.json at all.
+        //
+        // CONSEQUENCE OF FEEDING THE RAW FLAG IN: `manual` vetoed the derivation to protect a seat
+        // that had never been dialled, so the shield fell through to the archetype constant — which,
+        // on the NATIVE addressable path those 18 shields take, is IDENTITY. That is the flat slab
+        // through the hero's chest in tmp/shield-seat-101829.png, and it is the construct §4 bans
+        // by name. The flag read as protection and protected nothing — the SAME failure WO-1123
+        // fixed one layer down, where `manual` was authored 81 times and read zero times.
+        //
+        // ⚠ THE FIX IS NOT "IGNORE manual". A row that a human really did dial is still canon, and
+        // that is what the `hasAuthoredSeat` term below preserves: `tripo_shield_a` is
+        // generated+manual AND has an authored `shield_A` row, so it stays substantiated and
+        // untouched. `generated:false` rows (the 4 arrow rows, and every hand-authored row) are
+        // trusted unconditionally — a human wrote the row, so a human may have meant the flag.
+
+        /// <summary>
+        /// True when a row's <c>manual: true</c> names a correction that ACTUALLY EXISTS, and is
+        /// therefore entitled to veto a derived seat.
+        /// <para>
+        /// A row that was machine-emitted (<paramref name="rowIsGenerated"/>) and carries no
+        /// authored seat has no dialled pose to protect: its <c>manual</c> flag was stamped by a
+        /// generator or a data pass, not by the owner's eye. Honouring it does not preserve a
+        /// correction — it preserves IDENTITY, which is the one outcome §4 forbids.
+        /// </para>
+        /// Pure and scene-free, so <c>AttachmentOffsetRegression</c> can assert every combination
+        /// without a hero, a mesh or a play session.
+        /// </summary>
+        /// <param name="manual">The row's raw <c>manual</c> flag as loaded from the catalog.</param>
+        /// <param name="rowIsGenerated">The row's <c>generated</c> flag. True = machine-emitted.</param>
+        /// <param name="hasAuthoredSeat">True when an Offset Forge row exists for this prop's seat
+        /// key — the artefact of the human act <c>manual</c> claims.</param>
+        public static bool ManualSeatIsSubstantiated(bool manual, bool rowIsGenerated, bool hasAuthoredSeat)
+            => manual && (hasAuthoredSeat || !rowIsGenerated);
+
+        /// <summary>
+        /// <see cref="MayDerive(bool,bool)"/> with the WO-1215 substantiation test folded in — the
+        /// overload every catalog-driven call site should use, because a catalog row is exactly the
+        /// place an unsubstantiated <c>manual</c> can come from.
+        /// </summary>
+        public static bool MayDerive(bool hasAuthoredOffset, bool manual, bool rowIsGenerated)
+            => MayDerive(hasAuthoredOffset,
+                         ManualSeatIsSubstantiated(manual, rowIsGenerated, hasAuthoredOffset));
+
+        // =====================================================================
         //  THE ONE ENTRY POINT — mesh + archetype stipulations in, seat out
         // =====================================================================
 
@@ -670,9 +737,23 @@ namespace DeNelle.Core.Geometry
             CollectLocalVerts(prop, parent, verts);
             if (verts.Count < 12)
             {
+                // ⚠ SAY WHICH IT IS, DON'T ASK (WO-1215). This line used to end "(Read/Write disabled
+                // on the mesh?)" — a QUESTION in a device capture, which is the one thing a capture
+                // must never contain: the reader is then back to theorising, and the shipped-prop
+                // Read/Write trap is precisely the failure mode that "looks right in the editor and
+                // is silently inert on device". Count it and state it. Measured 2026-08-26: the 25
+                // Blink Shield1h_* FBXs all import with `isReadable: 0`, so on device this branch is
+                // the EXPECTED path for them and the seat below is bounds-only by construction.
+                CountMeshes(prop, out int meshTotal, out int meshUnreadable);
                 FlowTrace.Warn("Equip", $"ShieldHandleSide '{prop.name}': only {verts.Count} readable " +
-                    "vertices (Read/Write disabled on the mesh?) — the smooth-vs-handle face cannot be " +
-                    "measured, so NO flip is applied. The shield may be worn strap-outward.");
+                    $"vertices — {meshUnreadable} of {meshTotal} mesh(es) have Read/Write DISABLED " +
+                    "(`isReadable: 0` in the FBX .meta). The smooth-vs-handle face cannot be measured, " +
+                    "so NO flip is applied: the shield's ORIENTATION is still fully derived from " +
+                    "mesh.bounds (thickness -> away from the player, longest -> up), but which of its " +
+                    "two faces ends up outward is unresolved and it may be worn strap-outward. FIX, if " +
+                    "the owner wants the crest guaranteed outward: enable Read/Write on that FBX. " +
+                    "Do NOT invent a second face heuristic — a single-renderer plate has no bounds-only " +
+                    "signal that separates its two faces, so any such rule would be a coin-flip.");
                 return false;
             }
 
@@ -1464,6 +1545,28 @@ namespace DeNelle.Core.Geometry
                 Transform mt = smr.transform;
                 for (int v = 0; v < verts.Length; v++)
                     outVerts.Add(parent.InverseTransformPoint(mt.TransformPoint(verts[v])));
+            }
+        }
+
+        /// <summary>How many meshes this prop carries, and how many of them are NOT readable
+        /// (`isReadable: 0`). Used only to turn a Warn's question mark into a fact — the vertex
+        /// walkers above already skip unreadable meshes, so this changes no decision (WO-1215).</summary>
+        private static void CountMeshes(GameObject prop, out int total, out int unreadable)
+        {
+            total = 0;
+            unreadable = 0;
+            if (prop == null) return;
+            foreach (var mf in prop.GetComponentsInChildren<MeshFilter>(true))
+            {
+                if (mf == null || mf.sharedMesh == null) continue;
+                total++;
+                if (!mf.sharedMesh.isReadable) unreadable++;
+            }
+            foreach (var smr in prop.GetComponentsInChildren<SkinnedMeshRenderer>(true))
+            {
+                if (smr == null || smr.sharedMesh == null) continue;
+                total++;
+                if (!smr.sharedMesh.isReadable) unreadable++;
             }
         }
 

@@ -1,5 +1,6 @@
 using System;
 using System.Collections;
+using System.Globalization;
 using DeNelle.Core;
 using DeNelle.Core.Ads;
 using DeNelle.Core.Diagnostics;
@@ -42,6 +43,24 @@ namespace DeNelle.Village.Monetization
         private const string KeyAdUnavailable  = "chestAdUnavailable";
         private const string KeyAdNoReward     = "chestAdNoReward";
         private const string KeyLedgerLoading  = "chestLedgerLoading";
+        private const string KeyClaimedToast   = "chestClaimedToast";
+
+        // -- WO-1213 Slice A: the oracle seam. ElarionUiKit.ShowToast is a hard no-op outside
+        // play (Application.isPlaying), so a suite cannot observe the card; it observes the
+        // DECISION to raise one. Mirrors BankOverflowToastPresenter.ToastCount /
+        // LastToastMessage exactly, so the two acknowledgement paths are asserted the same way.
+        /// <summary>Player-facing claim toasts raised since the last <see cref="ResetDiagnostics"/>.</summary>
+        public static int ToastCount { get; private set; }
+
+        /// <summary>The exact text of the most recent claim toast ("" if none).</summary>
+        public static string LastToastMessage { get; private set; } = string.Empty;
+
+        /// <summary>Test/teardown seam: clears the counters so one case cannot colour the next.</summary>
+        public static void ResetDiagnostics()
+        {
+            ToastCount = 0;
+            LastToastMessage = string.Empty;
+        }
 
         /// <summary>The ad CTA's three player-readable states. The WORD carries the state
         /// (owner is red/green colourblind - hue may never be the only signal, CLAUDE.md);
@@ -63,10 +82,26 @@ namespace DeNelle.Village.Monetization
         // here - and a no-op clamp is the point: an inflating clamp is exactly what pushed the
         // FrameRaid Deploy row down into the shared Close (ElarionUiKit ~line 445). The panel
         // was made TALLER rather than the buttons made shorter, per that same note.
-        private static readonly Vector2 ClaimMin  = new Vector2(0.015f, 0.025f);
-        private static readonly Vector2 ClaimMax  = new Vector2(0.485f, 0.280f);
-        private static readonly Vector2 AdMin     = new Vector2(0.515f, 0.025f);
-        private static readonly Vector2 AdMax     = new Vector2(0.985f, 0.280f);
+        //
+        // WO-1213 Slice B - HORIZONTAL RHYTHM ONLY. The old row was 0.015 outer margin against a
+        // 0.030 gutter, so each button sat HALF as far from the panel wall as from its neighbour
+        // and the pair read as jammed into the corners. The row now runs on ONE spacing unit
+        // (0.050) used three times - wall, gutter, wall - so the rhythm is even end to end.
+        // THE VERTICAL BAND IS UNTOUCHED at 0.025-0.280 for the reason stated above: it is what
+        // makes ClampMinTouch a no-op, and buying width by shortening buttons is the exact move
+        // that pushed the FrameRaid Deploy row into the shared Close. Width is the only axis that
+        // paid: 0.470 -> 0.425 of the body well, still hundreds of reference px, nowhere near the
+        // 112 px floor - so nothing here can trip an inflating clamp either.
+        // The spacing is written ONCE and the four rects are derived from it, so wall and gutter
+        // cannot drift apart again the way 0.015/0.030 did.
+        private const float CtaSpacing = 0.050f;    // the ONE unit: outer margin AND gutter
+        private const float CtaTop     = 0.280f;    // load-bearing band, see the note above
+        private const float CtaBottom  = 0.025f;
+
+        private static readonly Vector2 ClaimMin  = new Vector2(CtaSpacing, CtaBottom);
+        private static readonly Vector2 ClaimMax  = new Vector2(0.5f - CtaSpacing * 0.5f, CtaTop);
+        private static readonly Vector2 AdMin     = new Vector2(0.5f + CtaSpacing * 0.5f, CtaBottom);
+        private static readonly Vector2 AdMax     = new Vector2(1f - CtaSpacing, CtaTop);
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void Install()
@@ -283,7 +318,44 @@ namespace DeNelle.Village.Monetization
             EconomyService.Instance.AddCoins(gold);
             service.Save();
             FlowTrace.Step("DailyChest", $"claimed +{gold} Gold path={path} day={state.DailyChestDayKey}");
+            AcknowledgeClaim(gold, path);
             Close();
+        }
+
+        /// <summary>WO-1213 Slice A. The grant was silent: AddCoins landed and the modal simply
+        /// vanished, so from the player's seat a successful rewarded double and a CANCELLED ad
+        /// looked identical - which is exactly how it was reported ("cancelling to the home
+        /// screen"). The FlowTrace above proves the grant to US and says nothing to THEM.
+        ///
+        /// Fires for BOTH paths (free and rewarded_double) - a player who takes the base reward
+        /// is owed the same acknowledgement.
+        ///
+        /// It is raised BEFORE Close() but it does NOT depend on that ordering: the kit toast
+        /// builds its own root GameObject with its own ScreenSpaceOverlay canvas
+        /// (ElarionUiKitConformance.ShowToast) and is never parented to this modal, so
+        /// Close()'s Destroy(_modal.canvas) cannot take it with it. Life is set past the
+        /// panel teardown so the sentence survives the close animation.</summary>
+        private void AcknowledgeClaim(int gold, string path)
+        {
+            string amount = gold.ToString("N0", CultureInfo.InvariantCulture);
+            string raw = VillageStrings.Canon(KeyClaimedToast);
+            string msg;
+            try { msg = string.Format(CultureInfo.InvariantCulture, raw, amount); }
+            catch (FormatException ex)
+            {
+                // No silent failures (CLAUDE.md section 12): a bad placeholder degrades to the
+                // raw sentence rather than throwing out of the claim path.
+                FlowTrace.Fail("DailyChest", "canon-strings key '" + KeyClaimedToast +
+                                             "' has a bad format placeholder: " + ex.Message);
+                msg = raw;
+            }
+
+            ToastCount++;
+            LastToastMessage = msg;
+            // Tone is DECORATION only (owner is red/green colourblind, CLAUDE.md section 7) -
+            // the sentence carries the whole message. Default 480x76 card holds ~2 lines.
+            ElarionUiKit.ShowToast(msg, ElarionUiKit.ToastTone.Info, 3.2f, 720);
+            FlowTrace.Step("DailyChest", "claim toast path=" + path + " -> '" + msg + "'");
         }
 
         private void SetStatus(string text)

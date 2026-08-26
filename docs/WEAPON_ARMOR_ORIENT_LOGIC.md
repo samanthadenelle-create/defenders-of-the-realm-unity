@@ -109,8 +109,51 @@ pure function, so no call site can re-order it by accident and `AttachmentOffset
 .IsManualOrientRow` is its one gear-side reader. 81 of the 96 rows in `weapons.json` author it and,
 until 2026-08-19, **nothing declared the field** — the flag read as protection and protected nothing.
 A `manual: true` row is left **exactly as loaded**: not normalized, not rotated, not shifted, so a
-second pass over it is a zero delta by construction. The 15 hand-authored rows (including
-`knight_shield_starter`, the live default shield) are the ones eligible for derivation.
+second pass over it is a zero delta by construction.
+
+> ### ⚠ UPDATED 2026-08-26 (WO-1215, BINDING) — `manual` MUST NAME A CORRECTION THAT EXISTS
+> The sentence that used to close this paragraph — *"The 15 hand-authored rows (including
+> `knight_shield_starter`, the live default shield) are the ones eligible for derivation"* — was
+> **true of the flag and false of the world**, and it is retired. Reading the raw flag straight into
+> the ladder left **18 of the 19 shields at IDENTITY**, sitting through the hero's body
+> (`tmp/shield-seat-101829.png`, owner felt-test 2026-08-26).
+>
+> **Measured, from the shipped catalogs:** 77 of the 81 `manual: true` rows also carry
+> `generated: true` — yet `GearCatalogGenerator.cs:386-387` emits a fresh row as
+> `["generated"] = true, ["manual"] = false` with the comment *"set true by hand to lock the row
+> forever"*. **The generator never writes that pair.** It exists because commit `af96fe788`, a
+> **data-only WO-500 balance pass**, stamped it across all 65 `blink_` rows — its own body records
+> *"blink_ rows 65, manual=true 65/65"* and, two paragraphs later, predicts this exact defect:
+> *"offsets.json has authored seating for exactly sword_A/D/F/G + shield_A … and ZERO blink mesh key
+> has authored seating. The shelf traded dialed weapons for un-dialed ones. Screenshot-class risk,
+> not log-class."*
+>
+> **The rule now:** `manual: true` is honoured when it names a correction that exists —
+> `WeaponOrientHelper.ManualSeatIsSubstantiated(manual, rowIsGenerated, hasAuthoredSeat)`:
+>
+> ```
+> substantiated = manual AND (an Offset Forge row exists  OR  the row is not machine-generated)
+> ```
+>
+> - A **hand-authored** row (`generated: false`) claiming `manual` is trusted unconditionally — a
+>   human wrote the row, so a human may have meant the flag.
+> - A **generated** row **with** an authored seat is canon: `tripo_shield_a` → `shield_A` keeps its
+>   hand-dialled `rot -160/-180/-84, pos 0.12/-0.01/0, scale 1.04, fullOverride` untouched.
+> - A **generated** row with **no** authored seat protects nothing but IDENTITY, so it no longer
+>   vetoes derivation. That is the 18 `blink_shield1h_*`.
+>
+> The **ladder itself is unchanged** — `ResolveSource` still reads authored → manual → derived →
+> archetype default. What changed is the VALUE fed to its `manual` input. Call sites take the 3-arg
+> `MayDerive(hasAuthoredOffset, manual, rowIsGenerated)`. Pinned by
+> `AttachmentOffsetRegression` case `shield-seat-substantiation`, which asserts the truth table, the
+> gate, every shield row in the live catalog, and `shield_A`'s dialled numbers value-by-value.
+>
+> ⚠ **Residual, named rather than guessed:** the 25 `Shield1h_*` FBXs import with `isReadable: 0`,
+> so on device the smooth-vs-handle face score cannot be measured and **no 180° face flip is
+> applied**. The seat is still fully derived from `mesh.bounds` (thickness → away from the player,
+> longest → up); only *which* of the two faces ends up outward is unresolved, and the Warn says so
+> by count. A single-renderer plate has **no bounds-only signal** separating its faces — the fix is
+> enabling Read/Write on those FBXs, never a second heuristic.
 
 **Ambiguity falls back, it never guesses.** Every measured decision carries a decision margin — the
 sword's taper gap, the shield's smooth-vs-handle face score, the shield's plate-shaped check. Under

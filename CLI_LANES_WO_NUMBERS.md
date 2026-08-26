@@ -758,7 +758,19 @@
 > never as BUILD STATUS** -- "under construction"/"coming soon"/"dev"/"WIP" are BANNED player-facing
 > strings and get a REGRESSION ORACLE, not a comment, because that is the rule most likely to rot.
 > Status READY TO IMPLEMENT, 3 open rulings. No code yet.)*
-> ## ⚠ RECONCILED 2026-08-24 (UI seat): UI seat next free = **1083**.
+> ## ⚠ RECONCILED 2026-08-26 (UI seat): UI seat next free = **1084**.
+> *(UI-seat lane minted **WO-1083** and bumped 1083 -> 1084 in this SAME edit. **WO-1083** = HERO
+> SELECT REBUILT AS A TOP ROTATING CAROUSEL with the details/specs strip BELOW it and the CTA in
+> an exclusive bottom band — from the courier handoff `tmp/HANDOFF_TO_UI_hero_select_layout.md`
+> plus two owner rulings this session (*"it should be a rotaing carosel"*, *"make the top part
+> the carosel and below it the details and specs"*) and an owner-APPROVED mockup archived at
+> `WorkOrders/WORK_ORDER_1083_mockup_2670x1200.png`. Fixes the five capture-proven overlaps of
+> `tmp/heroselect2-104958.png` (CTA-over-NEXT, CTA-clips-skill-stack, PREV/NEXT-over-cards, empty
+> lower third) + the wallet-chip-over-frame minor. ⛔ Cleric/Elara stays EXACTLY as shipped —
+> verified correct on device (`tmp/screen-105319.png`), four cards four dots intended; the WO
+> carries a do-not-touch section so nobody "fixes" it. READY TO IMPLEMENT, routed to CLI.)*
+>
+> ### superseded: RECONCILED 2026-08-24 (UI seat): UI seat next free = **1083**.
 > *(UI seat minted **WO-1081** and **WO-1082** and bumped 1081 -> 1083 in this SAME edit. Both come
 > from ONE owner felt-test on the shipped Seeker APK, 2026-08-24, in a session where EVERY automated
 > gate was green — *"not a single issue other than guessing what the crystal mine does"*.

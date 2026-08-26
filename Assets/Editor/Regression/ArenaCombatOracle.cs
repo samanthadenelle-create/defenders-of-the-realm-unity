@@ -273,13 +273,18 @@ namespace DeNelle.Editor
         {
             GearCatalog.Reload();
 
-            // Pick the highest-rarity MAIN-HAND weapon the catalog actually has (legendary
-            // -> epic -> rare). Catalog-driven so it stays valid as gear changes; if none
-            // exists we report it honestly rather than invent a fake.
-            WeaponDef high = PickHighRarityMainHand();
+            // Pick the highest-rarity MAIN-HAND weapon the PROBE can legally equip (legendary
+            // -> epic -> rare -> uncommon). Catalog-driven so it stays valid as gear changes; if
+            // none exists we report it honestly rather than invent a fake. The class + level are
+            // the probe's own (a bare GearLoadout carries no HeroProgression, so it is level 1) -
+            // see PickHighRarityMainHand for why WO-1214 made that filter mandatory.
+            const string TrailJob = "knight";
+            const int TrailLevel = 1;
+            WeaponDef high = PickHighRarityMainHand(TrailJob, TrailLevel);
             if (high == null)
             {
-                failures.Add("TRAIL: no legendary/epic/rare MAIN-HAND weapon in the catalog to prove a non-default trail");
+                failures.Add("TRAIL: no MAIN-HAND weapon above 'common' that a level-" + TrailLevel + " " +
+                             TrailJob + " may equip - cannot prove a non-default trail");
                 return;
             }
             string band = (high.rarity ?? "?").ToLowerInvariant();
@@ -299,7 +304,7 @@ namespace DeNelle.Editor
             }
 
             // Clear any persisted equip for the test class so the equip is deterministic.
-            const string Job = "knight";
+            const string Job = TrailJob;   // the SAME class the pick above was filtered against
             string key = Job.ToLowerInvariant();
             PlayerPrefs.DeleteKey("dotr-equip-weapon-" + key);
             PlayerPrefs.DeleteKey("dotr-equip-offhand-" + key);
@@ -313,14 +318,13 @@ namespace DeNelle.Editor
 
                 var attack = heroGo.AddComponent<PlayerAttackController>();
 
-                // Equip the high-rarity weapon through the REAL armory API. If it isn't a
-                // knight-eligible main-hand, equip still takes by id (EquipWeaponById finds
-                // it in the catalog) -- what matters is EquippedWeapon carries the rarity.
+                // Equip the high-rarity weapon through the REAL armory API. WO-1214: the seam now
+                // enforces class + level and FAILS CLOSED, so this only takes because the pick
+                // above was filtered to what this probe may legally hold. An ineligible id is
+                // refused with a Warn and leaves the slot untouched - which is the point.
                 loadout.EquipWeaponById(high.id);
                 if (loadout.EquippedWeapon == null || loadout.EquippedWeapon.id != high.id)
                 {
-                    // Some high-rarity weapons are off-hand/2H or class-gated; fall back to
-                    // forcing the id we know is a main-hand. Re-pick a main-hand of this band.
                     failures.Add($"TRAIL: could not equip '{high.id}' as the main hand (got " +
                                  $"'{loadout.EquippedWeapon?.id ?? "<null>"}') -- cannot drive the trail apply");
                     return;
@@ -356,14 +360,28 @@ namespace DeNelle.Editor
 
         // Highest-rarity main-hand weapon in the catalog (legendary -> epic -> rare).
         // Skips off-hand/shield items (they never carry the main-hand swing trail).
-        private static WeaponDef PickHighRarityMainHand()
+        /// <summary>
+        /// The highest-rarity MAIN-HAND weapon <paramref name="job"/> may equip at
+        /// <paramref name="level"/>, or null.
+        ///
+        /// WO-1214: this used to sweep the WHOLE catalog with no class or level filter, and its
+        /// caller's comment said out loud that "equip still takes by id" for an ineligible item.
+        /// That was true, and it was the hole: GearLoadout's equip seam enforced NEITHER gate, so
+        /// every non-UI caller walked straight in. The seam now fails closed (Ruling 3), so an
+        /// oracle that equips a level-10 legendary onto a level-1 probe would be refused - which
+        /// is correct behaviour and a broken test. The pick is therefore constrained to what the
+        /// probe can legally hold, with "uncommon" kept as the last band because it still resolves
+        /// a NON-steel trail colour (the only property this check actually proves).
+        /// </summary>
+        private static WeaponDef PickHighRarityMainHand(string job, int level)
         {
-            string[] order = { "legendary", "elarion", "epic", "rare" };
+            string[] order = { "legendary", "elarion", "epic", "rare", "uncommon" };
             foreach (var want in order)
             {
                 foreach (var w in GearCatalog.AllWeapons())
                 {
                     if (w == null || w.IsOffHandItem) continue;
+                    if (!GearCatalog.CanEquipWeapon(w, job, level, out _)) continue;
                     string r = (w.rarity ?? "").Trim().ToLowerInvariant();
                     if (r == want) return w;
                 }

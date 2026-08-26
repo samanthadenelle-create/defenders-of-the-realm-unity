@@ -262,6 +262,19 @@ namespace DeNelle.Village.Hero
             var t = Active;
             if (t == null) { Status = "No hero to equip."; Raise(); return; }
 
+            // WO-1214 Ruling 2 - an item the wearer cannot use is HELD, not equipped, and the
+            // refusal is shown as a SENTENCE naming why (never a greyed control, never colour
+            // alone: the owner is red/green colourblind). The words come from GearCatalog, the
+            // same authority GearLoadout's equip seam consults, so the UI and the seam can never
+            // disagree about what is legal - which is exactly how the arena and outpost loot rolls
+            // each grew their own copy of the class gate and drifted.
+            if (!CanWearHere(t, itemId, out string refusal))
+            {
+                Status = refusal;
+                Raise();
+                return;
+            }
+
             if (_selectedSlotKey == SlotMainhand) t.EquipWeaponById(itemId);
             else if (_selectedSlotKey == SlotOffHand) t.EquipOffHandById(itemId);
             else if (_selectedSlotKey == SlotChest) t.EquipArmorById(itemId);
@@ -271,6 +284,45 @@ namespace DeNelle.Village.Hero
             Status = "Equipped.";
             Rebuild();
             Raise();
+        }
+
+        /// <summary>
+        /// WO-1214 Ruling 2/3 - may <paramref name="t"/> equip <paramref name="itemId"/> into the
+        /// selected slot right now? On false, <paramref name="refusal"/> is the player-facing
+        /// sentence to show (never null, never empty).
+        ///
+        /// Accessories are exempt: rings/amulets carry job "any" and slot-match only, and the
+        /// accessory list is already built per slot. An unknown/unresolvable id is ALLOWED through
+        /// so the seam still owns the final word - a UI that silently swallowed unknown ids would
+        /// hide the very "no def in catalog" Warn the seam exists to emit.
+        /// </summary>
+        private bool CanWearHere(IEquipTarget t, string itemId, out string refusal)
+        {
+            refusal = null;
+            if (t == null || string.IsNullOrEmpty(itemId)) return true;
+            if (_selectedSlotKey == SlotRing || _selectedSlotKey == SlotAmulet) return true;
+
+            string job = t.TargetClass;
+            int level = t.TargetLevel;
+
+            var w = GearCatalog.FindWeapon(itemId);
+            if (w != null)
+            {
+                if (GearCatalog.CanEquipWeaponNow(w, t.EquippedWeapon, job, level, out string words, out _))
+                    return true;
+                refusal = words;
+                return false;
+            }
+
+            var a = GearCatalog.FindArmor(itemId);
+            if (a != null)
+            {
+                if (GearCatalog.CanEquipArmorNow(a, job, level, out string words, out _)) return true;
+                refusal = words;
+                return false;
+            }
+
+            return true;   // not gear we can judge here - let the seam answer.
         }
 
         /// <summary>Clear the selected slot on the active target.</summary>

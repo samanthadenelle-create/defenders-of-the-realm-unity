@@ -80,6 +80,32 @@ namespace DeNelle.Core.State
         public const int StrategicIron = 0;
 
         /// <summary>
+        /// WO-1217 Slice B — NEW-GAME GOLD SEED, 200 (owner ruling 2026-08-26, verbatim:
+        /// "so start gold at 200"). Gold is <c>GameState.Resources.Coins</c> (the shop/sell/
+        /// research wallet), NOT a GameState scalar like Wood/Iron — so
+        /// <c>GameStateService.ResetToNewGame</c> applies this AFTER seeding
+        /// <c>Resources = ResourceBalance.Starter</c>, overriding that struct's coins:15.
+        /// The seed lives HERE, beside the wood/iron pair, so the founding budget stays ONE
+        /// authoritative place and no literal 200 is scattered into ResetToNewGame.
+        ///
+        /// ⛔ THIS IS NOT A REVERSAL OF THE 2026-07-13 ZERO-SEED RULING. That ruling zeroed
+        /// WOOD and IRON specifically, and replaced them with the per-id free-first-build
+        /// flags, to prevent all-defense-no-town. Gold buys none of the town's structures
+        /// (regular baskets are wood+iron, magical are crystals+iron — WO-947), so a gold
+        /// seed cannot re-open that failure mode. <c>StrategicWood</c> and
+        /// <c>StrategicIron</c> above MUST STAY 0.
+        ///
+        /// ⚠ CORRECTION TO WO-1217's OWN SLICE B TEXT, recorded so it is not re-derived:
+        /// the ticket states "Gold is never seeded at all, so it starts at 0". It was
+        /// actually seeded at 15, via ResourceBalance.Starter (crystals 250 / food 80 /
+        /// coins 15). The ruling (200) is applied regardless; only the stated baseline was
+        /// wrong. ResourceBalance.Starter is deliberately LEFT ALONE — it is also the
+        /// SaveMigrator's default for a resource-less legacy save, so editing its coins
+        /// would silently grant 200 gold to migrating saves too, which nobody ruled.
+        /// </summary>
+        public const int StrategicGold = 200;
+
+        /// <summary>
         /// WO-949 (owner F8 2026-08-10 "Can we start the user with some potions"): the founding
         /// grant of Minor Healing Draughts, seeded into <c>GameState.GearInventory</c> (the
         /// persisted VillageInventory larder) by <c>GameStateService.ResetToNewGame</c> under the

@@ -463,12 +463,24 @@ namespace DeNelle.Village
             scaler.matchWidthOrHeight = 0.5f;
             _canvas.AddComponent<GraphicRaycaster>();
 
-            // DEFAULT PLACEMENT (owner may move): mid-LEFT vertical band - the HUD
-            // chrome clusters top (banners / Skip Tutorial / Menu) and bottom (ability
-            // + build bars), so a mid-left box is the lowest-collision seat. Sized well
-            // above the kit touch floor by the fraction rect.
+            // PLACEMENT (owner may move): the mid CENTRE-LEFT vertical band.
+            //
+            // ⚠ WO-1219 - IT WAS AT x 0.015..0.205 AND THAT SEAT WAS NEVER FREE. The comment
+            // above it reasoned "chrome clusters top and bottom, so a mid-LEFT box is the
+            // lowest-collision seat", which is true of the top and bottom EDGES and false of the
+            // left COLUMN: HudAreasHost puts the Minimap band at x 0.010..0.330 / y 0.440..0.690
+            // and the Dock band (gear + Store + the slide-out drawer) at x 0.000..0.230 /
+            // y 0.330..0.440, so this card was landing on the minimap plate, the region status
+            // line AND the gear. The owner captured exactly that (tmp/shield-seat-101829.png:
+            // "REPAIR ALL / Wood 155 Iron 78" drawn straight across the minimap).
+            //
+            // THE FREE BAND, checked against every HudArea rect at this height: x 0.340..0.770.
+            // Minimap/Dock end at 0.330 (and the OPEN dock drawer, which is fixed-pixel, reaches
+            // ~0.322 at 2670x1200); ActionRail and QueueStatus start at 0.780; TargetInfo does not
+            // begin until y 0.660 and the ActionBar tops out at 0.150. Nothing else claims it.
+            // ⛔ Do not move this back into the left column - it is the busiest strip on the HUD.
             _button = ElarionUiKit.Button(_canvas.transform, "REPAIR ALL", ElarionUiKit.ButtonKind.Confirm,
-                new Vector2(0.015f, 0.42f), new Vector2(0.205f, 0.58f), OnClick);
+                new Vector2(0.345f, 0.42f), new Vector2(0.535f, 0.58f), OnClick);
             if (_button != null)
             {
                 _buttonImg = _button.GetComponent<Image>();
@@ -497,8 +509,10 @@ namespace DeNelle.Village
             // PROD-014(b): an unaffordable repair is a refusal card, not a dead button.
             // The shared labeled Close is visible only in that state. It routes through the
             // controller's one existing cancellation path, which clears selection + marker.
+            // Travels with the button (WO-1219): same width, same height, immediately to its
+            // right, still inside the 0.340..0.770 free band.
             _acknowledgeButton = ElarionUiKit.ObsidianCloseButton(_canvas.transform,
-                AcknowledgeRefusal, new Vector4(0.215f, 0.42f, 0.405f, 0.58f));
+                AcknowledgeRefusal, new Vector4(0.545f, 0.42f, 0.735f, 0.58f));
             if (_acknowledgeButton != null) _acknowledgeButton.gameObject.SetActive(false);
         }
 

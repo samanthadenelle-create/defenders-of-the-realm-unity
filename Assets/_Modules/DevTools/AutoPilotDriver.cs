@@ -4862,21 +4862,36 @@ namespace DeNelle.DevTools
 
             // Pick a catalog weapon to force-equip. Prefer one DIFFERENT from whatever is
             // auto-equipped so the change is observable even if a best-weapon was auto-set.
+            // WO-1214: the candidate MUST be one this hero may legally hold. This loop used to
+            // take the FIRST row in the catalog regardless of class or level - which "worked"
+            // only because GearLoadout.EquipWeaponById enforced neither gate. The seam now fails
+            // closed (Ruling 3), so an ineligible pick would be refused and this phase would
+            // report a phantom "equip path is a no-op". Ask the ONE authority instead.
             WeaponDef target = null;
             var beforeWeapon = loadout.EquippedWeapon;
             string beforeId = beforeWeapon != null ? beforeWeapon.id : null;
             float multBefore = loadout.WeaponMult;
+
+            var heroAbilities = heroGo.GetComponent<HeroAbilities>();
+            var heroProgression = heroGo.GetComponent<HeroProgression>();
+            string equipJob = heroAbilities != null && !string.IsNullOrEmpty(heroAbilities.HeroClass)
+                ? heroAbilities.HeroClass : AbilityCatalog.DefaultClass;
+            int equipLevel = heroProgression != null ? heroProgression.Level : 1;
+
             foreach (var w in GearCatalog.AllWeapons())
             {
-                if (w == null) continue;
-                if (target == null) target = w;                 // first valid as a fallback
+                if (w == null || w.IsOffHandItem) continue;     // main hand only — a shield is a different slot
+                if (!GearCatalog.CanEquipWeapon(w, equipJob, equipLevel, out _)) continue;
+                if (target == null) target = w;                 // first ELIGIBLE as a fallback
                 if (beforeId == null || w.id != beforeId) { target = w; break; } // prefer a different one
             }
 
             if (target == null)
             {
-                FlowTrace.Warn("Auto", "AssertEquip: gear catalog has no weapons to equip — skipping (cannot assert equip wiring).");
-                _lastDetail = "no catalog weapons — skipped";
+                FlowTrace.Warn("Auto",
+                    $"AssertEquip: the gear catalog serves class '{equipJob}' NO main-hand weapon at level " +
+                    $"{equipLevel} — skipping (cannot assert equip wiring). This is a CATALOG gap, not an equip bug.");
+                _lastDetail = "no eligible catalog weapon — skipped";
                 yield break;
             }
 

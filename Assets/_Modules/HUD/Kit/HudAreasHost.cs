@@ -106,7 +106,16 @@ namespace DeNelle.HUD.Kit
             // face near the previous 6-face touch size at the constant per-button width.
             Add(HudArea.ActionBar,   new Vector2(0.270f, 0.015f), new Vector2(0.730f, 0.150f));
             Add(HudArea.MoveCluster, new Vector2(0.010f, 0.030f), new Vector2(0.270f, 0.330f));
-            Add(HudArea.Dock,        new Vector2(0.000f, 0.330f), new Vector2(0.230f, 0.430f));
+            // WO-1219: the Dock band now abuts the Minimap band exactly (0.440) instead of
+            // stopping 0.010 short of it. It hosts a FIXED-PIXEL 112 px control row (gear +
+            // Store, side by side since WO-1219 - see BuildSlideDock for the full band
+            // arithmetic), and at 2670x1200 the old 0.330..0.430 band resolved to ~96.5
+            // reference units: SHORTER than the one row it has to hold. It is still shorter
+            // than 112 at this aspect - a fraction band cannot promise a pixel height - but
+            // the extra 0.010 buys ~9.6 units of the shortfall back and, with the row no longer
+            // stacked, the residual overhang clears the minimap plate above and the analog
+            // stick below. Do not shrink this band again.
+            Add(HudArea.Dock,        new Vector2(0.000f, 0.330f), new Vector2(0.230f, 0.440f));
             // Heart of Elarion status: left column, directly BELOW the Vitals cluster (WO-432).
             Add(HudArea.HeartStatus, new Vector2(0.010f, 0.700f), new Vector2(0.330f, 0.792f));
             // WO-778: Builders/Training chip — right column, below System (.88), above the

@@ -73,7 +73,8 @@ namespace DeNelle.Village.World.Camps
         // each drop type to its EXISTING system (no parallel loot-economy):
         //   * Resources (wood/iron)  -> EconomyService.Grant
         //   * Crystals / rare gems   -> GameState.AetherCrystals (premium wallet)
-        //   * Weapon / armor          -> GearLoadout.EquipWeaponById/EquipArmorById
+        //   * Weapon / armor          -> VillageInventory.Add (WO-1214 Ruling 1: a drop goes to
+        //                                the INVENTORY; it is never auto-equipped)
         //   * Raid quest progress     -> DailyQuestService.Report (clean hook)
         // Rarity/quantity rise with the outpost's ZoneManager threat tier, so a
         // deadlier outpost pays better/rarer loot. All knobs are const here.
@@ -711,8 +712,15 @@ namespace DeNelle.Village.World.Camps
 
         // Roll the gear-drop chance (rising with threat); on a hit, pick a catalog
         // weapon OR armor at a threat-biased rarity that the hero qualifies for, and
-        // grant it via the REAL armory API (GearLoadout.EquipWeaponById/EquipArmorById).
+        // DEPOSIT IT INTO THE INVENTORY LEDGER.
         // Returns the granted item's display name, or null if nothing dropped.
+        //
+        // WO-1214 RULING 1 — A DROP NEVER AUTO-EQUIPS ("any drop should just go to inventory").
+        // This used to call GearLoadout.EquipWeaponById / EquipArmorById directly, which is how a
+        // job:"any" shield displaced a Mage's two-handed staff and left her permanently unarmed:
+        // the off-hand equip evicted the 2H, the 1H fall-back returned null, and nothing in the
+        // game could put a staff back. Scoped to DROPS — auto-upgrade-on-level-up (WO-860) is
+        // untouched and still lives in GearLoadout.Refresh.
         private string TryGrantGearDrop()
         {
             float chance = Mathf.Min(GearDropChanceMax,
@@ -736,18 +744,46 @@ namespace DeNelle.Village.World.Camps
             if (wantWeapon)
             {
                 var w = PickWeapon(job, level, targetRarity);
-                if (w != null) { hero.EquipWeaponById(w.id); return w.name; }
+                if (w != null) return GrantToInventory(w.id, w.name, "weapon");
                 var a = PickArmor(job, level, targetRarity);
-                if (a != null) { hero.EquipArmorById(a.id); return a.name; }
+                if (a != null) return GrantToInventory(a.id, a.name, "armor");
             }
             else
             {
                 var a = PickArmor(job, level, targetRarity);
-                if (a != null) { hero.EquipArmorById(a.id); return a.name; }
+                if (a != null) return GrantToInventory(a.id, a.name, "armor");
                 var w = PickWeapon(job, level, targetRarity);
-                if (w != null) { hero.EquipWeaponById(w.id); return w.name; }
+                if (w != null) return GrantToInventory(w.id, w.name, "weapon");
             }
             return null;
+        }
+
+        /// <summary>
+        /// WO-1214 Ruling 1 — deposit a dropped gear id into the player's inventory ledger
+        /// (VillageInventory, persisted as GameState.GearInventory) and return its display name
+        /// for the loot summary. NEVER equips.
+        ///
+        /// A null VillageInventory means the ledger is not up; depositing nowhere would SILENTLY
+        /// lose the player's prize, so this reports no drop and says why rather than announcing a
+        /// reward that was never granted.
+        /// </summary>
+        private static string GrantToInventory(string id, string displayName, string kind)
+        {
+            if (string.IsNullOrEmpty(id)) return null;
+            var inv = DeNelle.Village.Crafting.VillageInventory.Instance;
+            if (inv == null)
+            {
+                FlowTrace.Warn("EnemyOutpost",
+                    "TryGrantGearDrop: rolled " + kind + " '" + id + "' but VillageInventory.Instance is NULL, " +
+                    "so there is no ledger to deposit it into. Reporting NO drop rather than announcing a reward " +
+                    "the player never receives.");
+                return null;
+            }
+            inv.Add(id, 1);
+            FlowTrace.Step("EnemyOutpost",
+                "TryGrantGearDrop: " + kind + " '" + id + "' ADDED TO INVENTORY (WO-1214 Ruling 1 - drops never " +
+                "auto-equip).");
+            return string.IsNullOrEmpty(displayName) ? id : displayName;
         }
 
         // Bias rarity UP with threat: low threat = mostly common/uncommon, high
@@ -832,23 +868,27 @@ namespace DeNelle.Village.World.Camps
             return new HeroGearRef(loadout, abilities, progression);
         }
 
-        // Small bundle so the loot roll can read job/level + grant gear through ONE
-        // handle (the real GearLoadout equip API), without re-finding the hero.
+        // Small bundle so the loot roll can read the hero's job/level without re-finding
+        // the hero.
+        //
+        // WO-1214 Ruling 1: this used to ALSO carry EquipWeaponById / EquipArmorById wrappers
+        // onto the live GearLoadout - a second, unguarded door onto the equip seam sitting inside
+        // a LOOT file. They are deleted rather than left unused: a loot roll's only business with
+        // the hero is reading class + level to pick a prize. Where the prize GOES is the inventory
+        // ledger (GrantToInventory), and re-adding an equip call here re-opens the P0.
         private sealed class HeroGearRef
         {
-            private readonly GearLoadout _loadout;
             public string HeroClass { get; }
             public int    HeroLevel { get; }
 
             public HeroGearRef(GearLoadout loadout, HeroAbilities abilities, HeroProgression progression)
             {
-                _loadout  = loadout;
+                // `loadout` is still taken (and still resolved by FindHeroLoadout) because its
+                // presence is what proves a live hero exists to loot FOR; it is deliberately not
+                // stored, so no code path here can equip.
                 HeroClass = abilities != null ? abilities.HeroClass : AbilityCatalog.DefaultClass;
                 HeroLevel = progression != null ? progression.Level : 1;
             }
-
-            public void EquipWeaponById(string id) => _loadout?.EquipWeaponById(id);
-            public void EquipArmorById(string id)  => _loadout?.EquipArmorById(id);
         }
 
         // =====================================================================

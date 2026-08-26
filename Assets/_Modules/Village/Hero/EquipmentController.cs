@@ -299,6 +299,21 @@ namespace DeNelle.Village
             var def = GearCatalog.FindWeapon(id);
             return def != null && def.manual;
         }
+
+        /// <summary>
+        /// WO-1215: the ONE reader of <c>WeaponDef.generated</c>. True = the catalog row was
+        /// machine-emitted by GearCatalogGenerator, so a <c>manual: true</c> on it cannot record an
+        /// owner-dialled seat (the generator stamps <c>manual = false</c>; the pair only exists
+        /// because a data-only balance pass wrote it). Fed to
+        /// <see cref="WeaponOrientHelper.ManualSeatIsSubstantiated"/>, never consulted alone —
+        /// being generated is not by itself a reason to re-seat anything.
+        /// </summary>
+        private static bool IsGeneratedCatalogRow(string id)
+        {
+            if (string.IsNullOrEmpty(id)) return false;
+            var def = GearCatalog.FindWeapon(id);
+            return def != null && def.generated;
+        }
         // While a seating edit is live: suspend the auto idle/combat hold so the grip root
         // the editor drives is not stomped by ApplyHoldPose, and remember which slot is edited.
         private bool _seatingEditActive;
@@ -2139,7 +2154,34 @@ namespace DeNelle.Village
             // raw bone axes, and composing it onto a fully-derived world target spins the shield's
             // face to point back at the player — the very defect this fixes.
             bool offHandDerivedSeat = false;
-            _currentOffHandManual = IsManualOrientRow(id);
+            // ── WO-1215: SUBSTANTIATE `manual` BEFORE IT IS ALLOWED TO VETO ────────────────────
+            // The precedence ladder is unchanged and correct; what was wrong is the value handed to
+            // its `manual` input. 18 of the 19 shield rows in weapons.json are `generated:true` +
+            // `manual:true` with NO row in offsets.json — a claim of a hand-dialled seat with no
+            // hand-dialled seat behind it (stamped wholesale by the WO-500 balance pass, commit
+            // af96fe788). Honouring it vetoed the derivation and left the prop on the NATIVE
+            // addressable path's identity rotation: the flat slab through the hero's chest in
+            // tmp/shield-seat-101829.png. See WeaponOrientHelper.ManualSeatIsSubstantiated for the
+            // full measurement. `tripo_shield_a` is generated+manual AND has the authored `shield_A`
+            // row, so it stays substantiated — and it is fullOverride besides, so it never reaches
+            // this block at all. Nothing an owner dialled changes.
+            bool rawOffHandManual = IsManualOrientRow(id);
+            bool offHandRowGenerated = IsGeneratedCatalogRow(id);
+            _currentOffHandManual = WeaponOrientHelper.ManualSeatIsSubstantiated(
+                rawOffHandManual, offHandRowGenerated, hasOffset);
+            if (rawOffHandManual && !_currentOffHandManual)
+                FlowTrace.Step("Equip",
+                    $"off-hand '{id}' key='{offsetKey}': catalog manual:true DEMOTED (WO-1215) — the " +
+                    $"row is generated:true and AttachmentOffsetRegistry has no authored seat for " +
+                    $"'{offsetKey}' or '{id}', so the flag names a correction that does not exist. " +
+                    "It no longer vetoes the derived seat. If this shield SHOULD be hand-dialled, " +
+                    "dial it in the Seating Editor — that writes the offsets.json row this test " +
+                    "looks for, and the flag becomes true protection again.");
+            else if (rawOffHandManual)
+                FlowTrace.Step("Equip",
+                    $"off-hand '{id}' key='{offsetKey}': catalog manual:true SUBSTANTIATED " +
+                    $"(generated={offHandRowGenerated} authoredSeat={hasOffset}) — CANON, the derived " +
+                    "pass leaves this row exactly as loaded.");
             _currentOffHandShieldFrame = default;
             // ── MEASURE FIRST, DECIDE AFTER (owner ruling 2026-08-20) ────────────────────────────
             // The vertex walk used to live INSIDE the drawn-pose precedence gate below, so a shield

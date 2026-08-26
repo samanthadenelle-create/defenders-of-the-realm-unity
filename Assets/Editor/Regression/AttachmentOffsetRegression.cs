@@ -80,6 +80,7 @@ namespace DeNelle.Editor.Regression
             var failures = new List<string>();
             string rowSummary = "";
             string starterSummary = "";
+            string shieldSummary = "";
             try
             {
                 Case(failures, "registry-rows",   () => rowSummary = Case1_RegistryRows(failures));
@@ -87,6 +88,8 @@ namespace DeNelle.Editor.Regression
                 Case(failures, "seat-precedence", () => Case3_SeatPrecedence(failures));
                 Case(failures, "starter-shield-key", () => starterSummary = Case4_StarterShieldKey(failures));
                 Case(failures, "staff-neutral-default", () => Case5_StaffNeutralDefault(failures));
+                Case(failures, "shield-seat-substantiation",
+                     () => shieldSummary = Case6_ShieldSeatSubstantiation(failures));
             }
             catch (Exception ex)
             {
@@ -98,7 +101,7 @@ namespace DeNelle.Editor.Regression
                 reason = "ATTACHMENT OFFSET OK - " + rowSummary +
                          "; WO-994 seat-drift tripwire (both ApplyHoldPose writes + the " +
                          "scene-load checkpoint + both registry probes) wired at source" +
-                         "; " + starterSummary;
+                         "; " + starterSummary + "; " + shieldSummary;
                 return true;
             }
             reason = "attachment-offset FAIL x" + failures.Count + ": " + string.Join(" | ", failures);
@@ -413,6 +416,152 @@ namespace DeNelle.Editor.Regression
             return "starter shield '" + offHandId + "' -> mesh key '" + meshKey + "' (drawnRow=" + drawnRow +
                    " sheathedRow=" + sheathedRow + " derivedDrawn=" + derivedDrawnWired +
                    " derivedSheathed=" + derivedSheathWired + " sheathGateIsOwn=" + sheathGateIsOwn + ")";
+        }
+
+        // =====================================================================
+        //  Case 6 - WO-1215: every shield seats from SOMETHING, and `manual` only
+        //           vetoes when it names a correction that exists
+        // =====================================================================
+        //
+        // THE DEFECT THIS PINS (owner felt-test 2026-08-26, tmp/shield-seat-101829.png): a dropped
+        // shield rendered as a flat slab through the hero's chest. 18 of the 19 shield rows in
+        // weapons.json are `generated:true` + `manual:true` with NO row in offsets.json, so the
+        // precedence ladder's manual tier vetoed the derived seat to protect a pose nobody had ever
+        // dialled — and the NATIVE addressable path's fallback is IDENTITY, which
+        // ARCHITECTURE_PRINCIPLES §4 bans by name.
+        //
+        // WHAT BREAKS EACH ASSERTION (so none of them is decorative):
+        //   - delete WeaponDef.generated again  -> every generated row reads generated:false, the
+        //     substantiation test passes vacuously, and the 18 shields go back to vetoing. The
+        //     catalog probe below reddens on the row that authors generated:true.
+        //   - make ManualSeatIsSubstantiated ignore hasAuthoredSeat -> tripo_shield_a loses its
+        //     protection and the auto pass would overwrite the owner's shield_A dial. Reddens.
+        //   - make it ignore `manual` entirely  -> the 4 hand-authored manual rows lose canon.
+        //   - re-point EquipmentController at the 2-arg MayDerive -> the source lint reddens.
+        //   - touch the shield_A row in offsets.json -> the byte-guard below names the field.
+        private static string Case6_ShieldSeatSubstantiation(List<string> failures)
+        {
+            // ── 6a. THE PURE TRUTH TABLE. Scene-free, mesh-free, hero-free. ──────────────────
+            ExpectBool(failures, WeaponOrientHelper.ManualSeatIsSubstantiated(false, false, false), false,
+                "a row that does not claim manual can never be 'substantiated manual'");
+            ExpectBool(failures, WeaponOrientHelper.ManualSeatIsSubstantiated(false, true, true), false,
+                "manual:false stays false however the row was produced");
+            ExpectBool(failures, WeaponOrientHelper.ManualSeatIsSubstantiated(true, false, false), true,
+                "a HAND-AUTHORED row (generated:false) that claims manual is trusted unconditionally " +
+                "- a human wrote the row, so a human may have meant the flag");
+            ExpectBool(failures, WeaponOrientHelper.ManualSeatIsSubstantiated(true, true, true), true,
+                "a generated row WITH an authored Offset Forge seat is canon - this is exactly " +
+                "tripo_shield_a -> shield_A, and it must never lose its protection");
+            ExpectBool(failures, WeaponOrientHelper.ManualSeatIsSubstantiated(true, true, false), false,
+                "a MACHINE-EMITTED row claiming manual with NO authored seat behind it names a " +
+                "correction that does not exist - honouring it preserves IDENTITY, not a dial. " +
+                "This single cell IS the WO-1215 defect");
+
+            // ── 6b. THE GATE THE CALL SITE ACTUALLY USES ─────────────────────────────────────
+            if (!WeaponOrientHelper.MayDerive(false, true, true))
+                failures.Add("[shield-seat-substantiation] MayDerive(authored=false, manual=true, " +
+                             "generated=true) is FALSE - the 18 unseated shields still veto their own " +
+                             "derivation and stay at identity. This is the reported defect, unfixed.");
+            if (WeaponOrientHelper.MayDerive(false, true, false))
+                failures.Add("[shield-seat-substantiation] MayDerive(manual=true, generated=false) is " +
+                             "TRUE - a derived pass would overwrite a HAND-AUTHORED manual row. The " +
+                             "WO-1215 narrowing has overshot into the canon it was written to keep.");
+            if (WeaponOrientHelper.MayDerive(true, true, true))
+                failures.Add("[shield-seat-substantiation] MayDerive(authoredRow=true, ...) is TRUE - " +
+                             "an Offset Forge seat the owner dialled by eye would be overwritten.");
+
+            // ── 6c. THE SHIPPED CATALOG, RE-PARSED. Not a restated constant. ─────────────────
+            AttachmentOffsetRegistry.Reload();
+            int shields = 0, nowDerivable = 0, protectedByAuthoredSeat = 0, stillVetoed = 0;
+            var stuck = new List<string>();
+            foreach (var def in GearCatalog.AllWeapons())
+            {
+                if (def == null || !def.IsOffHandItem) continue;
+                shields++;
+                string meshKey = MeshKeyFor(def);
+                bool authored = !string.IsNullOrEmpty(meshKey) &&
+                                (AttachmentOffsetRegistry.TryGetOffset(meshKey, out _) ||
+                                 AttachmentOffsetRegistry.TryGetOffset(def.id, out _));
+                bool derivable = WeaponOrientHelper.MayDerive(authored, def.manual, def.generated);
+                if (authored) protectedByAuthoredSeat++;
+                if (derivable) nowDerivable++;
+                else if (!authored)
+                {
+                    // No authored row AND not derivable = the prop takes the archetype constant,
+                    // which on the native addressable path is identity. That is the defect, and it
+                    // must be IMPOSSIBLE for a shield to land here.
+                    stillVetoed++;
+                    stuck.Add(def.id + "(manual=" + def.manual + " generated=" + def.generated + ")");
+                }
+            }
+            if (shields == 0)
+                failures.Add("[shield-seat-substantiation] weapons.json resolved ZERO category:shield " +
+                             "rows - the catalog did not load, so nothing below was actually measured.");
+            if (stuck.Count > 0)
+                failures.Add("[shield-seat-substantiation] " + stuck.Count + " shield row(s) have NO " +
+                             "authored Offset Forge seat AND cannot derive one, so they attach at the " +
+                             "archetype constant (IDENTITY on the native addressable path - " +
+                             "ARCHITECTURE_PRINCIPLES §4): " + string.Join(", ", stuck));
+
+            // The protection half, named by id so a future narrowing cannot quietly drop it.
+            var dialled = GearCatalog.FindWeapon("tripo_shield_a");
+            if (dialled == null)
+                failures.Add("[shield-seat-substantiation] 'tripo_shield_a' did not load - the " +
+                             "protected-row probe could not run.");
+            else if (WeaponOrientHelper.MayDerive(
+                         AttachmentOffsetRegistry.TryGetOffset("shield_A", out _),
+                         dialled.manual, dialled.generated))
+                failures.Add("[shield-seat-substantiation] 'tripo_shield_a' is now DERIVABLE. It has " +
+                             "the owner's hand-dialled 'shield_A' row (rot -160/-180/-84, dialled " +
+                             "2026-07-07); a derived pass over it would overwrite canon.");
+
+            // ── 6d. THE shield_A BYTE-GUARD. WO-1215 acceptance 4, made permanent. ───────────
+            // Asserted VALUE BY VALUE rather than "it exists", because "the row is still there" is
+            // what Case 1 already says and is not what acceptance 4 asks. These are the numbers
+            // read off Assets/OffsetForge/offsets.json at source on 2026-08-26, before the change.
+            if (!AttachmentOffsetRegistry.TryGetOffset("shield_A", out var sa))
+                failures.Add("[shield-seat-substantiation] 'shield_A' MISSING - the owner's dialled " +
+                             "shield seat is gone.");
+            else
+            {
+                ExpectVec(failures, sa.eulerRot, new Vector3(-160f, -180f, -84f), "shield_A rot");
+                ExpectVec(failures, sa.pos, new Vector3(0.12f, -0.01f, 0f), "shield_A pos");
+                if (Mathf.Abs(sa.scale - 1.04f) > 1e-3f)
+                    failures.Add("[shield-seat-substantiation] shield_A scale is " + sa.scale +
+                                 ", owner-dialled value is 1.04 - a derived/auto pass has moved it.");
+                if (!sa.fullOverride)
+                    failures.Add("[shield-seat-substantiation] shield_A is no longer fullOverride.");
+            }
+
+            // ── 6e. SOURCE LINT: the call site must use the 3-arg gate. ──────────────────────
+            string src = File.Exists(EquipSrc) ? Regex.Replace(File.ReadAllText(EquipSrc), @"//[^\r\n]*", "") : "";
+            if (!src.Contains("ManualSeatIsSubstantiated"))
+                failures.Add("[shield-seat-substantiation] " + EquipSrc + " no longer calls " +
+                             "WeaponOrientHelper.ManualSeatIsSubstantiated - the raw catalog flag is " +
+                             "back in the ladder and the 18 shields veto themselves again.");
+            if (!src.Contains("IsGeneratedCatalogRow"))
+                failures.Add("[shield-seat-substantiation] " + EquipSrc + " no longer reads " +
+                             "WeaponDef.generated - the substantiation test cannot tell a machine " +
+                             "stamp from an owner dial and will trust every stamp.");
+
+            return "shields " + shields + ": derivable " + nowDerivable + ", authored-seat " +
+                   protectedByAuthoredSeat + ", stuck-at-constant " + stillVetoed +
+                   "; shield_A dial byte-checked";
+        }
+
+        private static void ExpectBool(List<string> failures, bool actual, bool expected, string why)
+        {
+            if (actual != expected)
+                failures.Add("[shield-seat-substantiation] expected " + expected + " but got " +
+                             actual + " - " + why + ".");
+        }
+
+        private static void ExpectVec(List<string> failures, Vector3 actual, Vector3 expected, string what)
+        {
+            if ((actual - expected).sqrMagnitude > 1e-4f)
+                failures.Add("[shield-seat-substantiation] " + what + " is " + actual +
+                             ", owner-dialled value is " + expected +
+                             " - the hand-dialled seat was overwritten (ARCHITECTURE_PRINCIPLES §4).");
         }
 
         /// <summary>The offset-registry key the equip path uses: the mesh name. For an Addressable

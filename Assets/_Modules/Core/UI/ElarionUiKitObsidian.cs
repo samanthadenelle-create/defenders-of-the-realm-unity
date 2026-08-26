@@ -847,10 +847,28 @@ namespace DeNelle.Core.UI
             bool hasTag = iconSprite == null;
             if (hasTag)
             {
+                // WO-1219 (owner Seeker felt-test 2026-08-26, tmp/screen-103219.png): the HUD's
+                // Wisdom chip rendered "SK... 177" - FitSingleLine below had ellipsised the word
+                // "SKILL" down to two characters. It is NOT a money readout (Wisdom = skill
+                // points; the wallet chips are Gold/Crystal/Wood/Iron/Food), but a two-character
+                // stub is still a naked number with noise in front of it, which is precisely what
+                // this tag exists to prevent.
+                // THE ARITHMETIC: the tag band was 0.33..0.58 = 25 % of the chip. The HUD chip is
+                // 0.32 of the Vitals area = 0.32 * 0.32 of screen width, ~220 reference units at
+                // 2670x1200, so the tag got ~55 units for a five-glyph word at the FontMicro
+                // floor - about half what it needs. The tag ALSO starts at 0.33 to clear an ICON
+                // WELL that is switched OFF on this exact path (hasTag is true only when the icon
+                // failed to resolve, and the icon GameObject is SetActive(false) above). So the
+                // band was reserving space for a thing that is not drawn and then clipping the
+                // one thing that is. The tag now begins where the chip begins and gets 0.05..0.55
+                // (~110 ref units at the HUD chip's size, against the ~93 that "SKILL" needs at
+                // FontMicro=32 and ~87 at the FontFloor=30 autoshrink floor). The amount keeps
+                // 0.57..0.94 (~81 units) - wide enough for any CompactNumber string, which is at
+                // most five glyphs ("12.3k"), and it right-aligns so it grows away from the tag.
                 string tagText = !string.IsNullOrEmpty(tag) ? tag : kind.ToString();
                 tagLabel = Label(go.transform, tagText, 0f, 1f,
                     ElarionUi.Parchment, ElarionUi.FontMicro,
-                    TextAlignmentOptions.MidlineLeft, 0.33f, 0.58f);
+                    TextAlignmentOptions.MidlineLeft, 0.05f, 0.55f);
                 tagLabel.raycastTarget = false;
                 EnsureFont(tagLabel, FontRole.Body);
                 FitSingleLine(tagLabel);                                   // §1.14 — tag never spills its slot
@@ -864,7 +882,7 @@ namespace DeNelle.Core.UI
             var amount = Label(go.transform, "0", 0f, 1f,
                 primary ? ElarionUi.Gilt : ElarionUi.Parchment,
                 primary ? ElarionUi.FontHead : ElarionUi.FontLabel,
-                TextAlignmentOptions.MidlineRight, hasTag ? 0.60f : 0.32f, 0.94f, bold: primary);
+                TextAlignmentOptions.MidlineRight, hasTag ? 0.57f : 0.32f, 0.94f, bold: primary);
             amount.raycastTarget = false;
             amount.textWrappingMode = TextWrappingModes.NoWrap;
             EnsureFont(amount, FontRole.Body);
@@ -872,7 +890,7 @@ namespace DeNelle.Core.UI
             var handle = new CurrencyChipHandle
             {
                 root = go, icon = icon, amount = amount, tag = tagLabel, plate = plate,
-                amountBand = (hasTag ? 0.94f - 0.60f : 0.94f - 0.32f),
+                amountBand = (hasTag ? 0.94f - 0.57f : 0.94f - 0.32f),
             };
             handle.SetAmount(0, animate: false);
             return handle;

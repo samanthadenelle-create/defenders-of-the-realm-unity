@@ -57,8 +57,37 @@ namespace DeNelle.Editor
                 return failures.Count == 0;
             }
             log.AppendLine($"  catalog row '{SpireId}': wood={rowCost.wood} food={rowCost.food} iron={rowCost.iron} crystals={rowCost.crystals}");
-            if (rowCost.crystals <= 0)
-                failures.Add($"[castle-plans] '{SpireId}' cost is NOT crystals-inclusive (crystals={rowCost.crystals}) -- the WO-947 arcane basket requires crystals");
+
+            // ⭐ RE-POINTED BY OWNER RULING 2026-08-26 (WO-1217 Slice C), verbatim: "i think only
+            // tier 3 should cost crystals on the arcane tower". The BUILD cost's 200 crystals were
+            // folded 1:1 into iron, so `rowCost.crystals` is now legitimately 0 and the old
+            // build-cost assertion below fired on correct data.
+            //
+            // ⛔ THE RULE IS NOT WEAKENED, IT MOVED: a magical row is still crystal-BASED, now at
+            // its FINAL rung. Lower rungs may be crystal-free (iron gets you started, crystals gate
+            // the top); the top rung may not. Identical re-point was applied to
+            // CostBasketSeparationRegression's [applied] case in the same change.
+            //
+            // ⚠ WHY THIS DUPLICATE EXISTS AT ALL: the WO-947 crystal rule is enforced in TWO
+            // suites. That is the "one fact written twice" shape this repo keeps paying for — the
+            // AUTHORITY is CostBasketSeparationRegression, which owns the whole basket contract.
+            // This copy is kept (never silently deleted — a fix that quietly removes a guard is its
+            // own defect) but narrowed to the one thing THIS suite is really about: the spire the
+            // castle-plans drop unlocks must still be a MAGICAL, crystal-gated structure.
+            //
+            // ⚠ AND IT COST A GATE RUN: this second site went RED after the first was re-pointed,
+            // which is exactly how a duplicated rule announces itself. If a future ruling moves the
+            // basket again, BOTH sites move — grep `crystals-inclusive` before assuming one.
+            if (!ReadCatalogTopTierCrystals(out int topCrystals, out string ladderErr))
+                failures.Add($"[castle-plans] could not read '{SpireId}' upgrade ladder: {ladderErr}");
+            else
+            {
+                log.AppendLine($"  catalog row '{SpireId}': TOP TIER crystals={topCrystals}");
+                if (topCrystals <= 0)
+                    failures.Add($"[castle-plans] '{SpireId}' TOP TIER charges NO crystals (crystals={topCrystals}) -- " +
+                                 "a magical row under WO-947 is crystal-BASED, and the owner's 2026-08-26 ruling moved " +
+                                 "that requirement to the FINAL rung, it did not remove it.");
+            }
 
             // ---- 1a: the spire is HIDDEN until earned (WO-964, owner ruling 2026-08-10) ----
             //
@@ -272,6 +301,41 @@ namespace DeNelle.Editor
         }
 
         // ---- data readers -------------------------------------------------------
+
+        /// <summary>
+        /// The crystals charged on the spire's FINAL rung — the last entry of repo.upgradeCost,
+        /// or repo.cost when no ladder is authored (a single-basket row's build cost IS its top
+        /// tier, so it is checked exactly as strictly). WO-1217 Slice C, owner ruling 2026-08-26.
+        /// </summary>
+        private static bool ReadCatalogTopTierCrystals(out int crystals, out string err)
+        {
+            crystals = 0; err = null;
+            string json = DeNelle.Core.CanonicalJson.Read("Data/Canonical/structures-catalog.json");
+            if (string.IsNullOrEmpty(json)) { err = "structures-catalog.json not found/empty"; return false; }
+            JObject root;
+            try { root = JObject.Parse(json); } catch (Exception ex) { err = "parse error: " + ex.Message; return false; }
+            var entries = root["entries"] as JArray;
+            if (entries == null) { err = "no 'entries' array"; return false; }
+            foreach (var tok in entries)
+            {
+                if (!(tok is JObject o) || o["id"]?.ToString() != SpireId) continue;
+                var steps = o["repo"]?["upgradeCost"] as JArray;
+                if (steps != null && steps.Count > 0)
+                {
+                    var top = steps[steps.Count - 1] as JObject;
+                    if (top == null) { err = "upgradeCost top entry is not an object"; return false; }
+                    crystals = top["crystals"]?.Value<int>() ?? 0;
+                    return true;
+                }
+                // No ladder authored: the build cost IS the top tier.
+                var c = o["repo"]?["cost"] as JObject;
+                if (c == null) { err = $"'{SpireId}' has neither repo.upgradeCost nor repo.cost"; return false; }
+                crystals = c["crystals"]?.Value<int>() ?? 0;
+                return true;
+            }
+            err = $"structures-catalog.json has no '{SpireId}' entry";
+            return false;
+        }
 
         private static bool ReadCatalogCost(out CoreCost cost, out string err)
         {

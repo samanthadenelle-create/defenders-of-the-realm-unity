@@ -3022,21 +3022,28 @@ namespace DeNelle.Village.Arena
                 FlowTrace.Warn("BattleArena", "GrantWinReward: EconomyService null - resources not granted.");
             }
 
-            // 4) GEAR (chance) — a low-tier drop equipped through the REAL armory API
-            // (GearLoadout.Equip*ById), exactly like the outpost loot path but capped at
-            // the low tiers so the arena stays a light, frequent reward.
+            // 4) GEAR (chance) — a low-tier drop DEPOSITED INTO THE INVENTORY, exactly like the
+            // outpost loot path but capped at the low tiers so the arena stays a light, frequent
+            // reward. WO-1214 Ruling 1 ("any drop should just go to inventory"): this used to
+            // auto-equip through GearLoadout.Equip*ById, which is how a job:"any" shield displaced
+            // a Mage's two-handed staff and left her permanently unarmed.
             string gear = TryGrantArenaGear(threat, stars);
             summary.GearName = gear;
             if (gear != null)
-                FlowTrace.Step("BattleArena", $"GrantWinReward: gear drop [{gear}] equipped.");
+                FlowTrace.Step("BattleArena", $"GrantWinReward: gear drop [{gear}] added to inventory (never auto-equipped).");
 
             return summary;
         }
 
-        // Low-tier gear drop for an arena win — reuses the outpost's armory-grant pattern
-        // (find the Player-tagged hero's GearLoadout, pick a catalog item the hero qualifies
-        // for, equip it) but biased to common/uncommon. Drop chance rises a little with
-        // threat. Returns the equipped item's display name, or null on no drop. Fake-null-safe.
+        // Low-tier gear drop for an arena win — reuses the outpost's loot pattern (find the
+        // Player-tagged hero to read class + level, pick a catalog item at the target rarity)
+        // but biased to common/uncommon. Drop chance rises a little with threat. Returns the
+        // GRANTED item's display name, or null on no drop. Fake-null-safe.
+        //
+        // WO-1214 RULING 1 — A DROP NEVER AUTO-EQUIPS. The item is deposited into
+        // VillageInventory (the same ledger a shop purchase writes, persisted as
+        // GameState.GearInventory) and the player chooses when to equip it. Scoped to DROPS:
+        // auto-equip-on-level-up (WO-860) is untouched and still lives in GearLoadout.Refresh.
         private static string TryGrantArenaGear(int threat, int stars)
         {
             // GEAR IS RARE (owner directive 2026-07-18): weapons/armor must feel like a special
@@ -3058,10 +3065,6 @@ namespace DeNelle.Village.Arena
             GameObject heroGo = GameObject.FindWithTag("Player");
             if (heroGo == null) return null;
 
-            var loadout = heroGo.GetComponent<DeNelle.Village.GearLoadout>();
-            if (loadout == null) loadout = heroGo.AddComponent<DeNelle.Village.GearLoadout>();
-            if (loadout == null) return null;
-
             var abilities   = heroGo.GetComponent<DeNelle.Village.HeroAbilities>();
             var progression = heroGo.GetComponent<DeNelle.Village.HeroProgression>();
             string job   = abilities != null ? abilities.HeroClass : DeNelle.Village.AbilityCatalog.DefaultClass;
@@ -3074,18 +3077,44 @@ namespace DeNelle.Village.Arena
             if (UnityEngine.Random.value < 0.5f)
             {
                 var w = PickArenaWeapon(job, level, targetRarity);
-                if (w != null) { loadout.EquipWeaponById(w.id); return w.name; }
+                if (w != null) return GrantToInventory(w.id, w.name, "weapon");
                 var a = PickArenaArmor(job, level, targetRarity);
-                if (a != null) { loadout.EquipArmorById(a.id); return a.name; }
+                if (a != null) return GrantToInventory(a.id, a.name, "armor");
             }
             else
             {
                 var a = PickArenaArmor(job, level, targetRarity);
-                if (a != null) { loadout.EquipArmorById(a.id); return a.name; }
+                if (a != null) return GrantToInventory(a.id, a.name, "armor");
                 var w = PickArenaWeapon(job, level, targetRarity);
-                if (w != null) { loadout.EquipWeaponById(w.id); return w.name; }
+                if (w != null) return GrantToInventory(w.id, w.name, "weapon");
             }
             return null;
+        }
+
+        /// <summary>
+        /// WO-1214 Ruling 1 — deposit a dropped gear id into the player's inventory ledger and
+        /// return its display name for the reward summary. NEVER equips.
+        ///
+        /// A null VillageInventory means the ledger is not up, and depositing nowhere would be a
+        /// SILENT loss of the player's prize — so it reports no drop (and says why) rather than
+        /// announcing a reward that does not exist.
+        /// </summary>
+        private static string GrantToInventory(string id, string displayName, string kind)
+        {
+            if (string.IsNullOrEmpty(id)) return null;
+            var inv = DeNelle.Village.Crafting.VillageInventory.Instance;
+            if (inv == null)
+            {
+                FlowTrace.Warn("BattleArena",
+                    $"TryGrantArenaGear: rolled {kind} '{id}' but VillageInventory.Instance is NULL, so there is " +
+                    "no ledger to deposit it into. Reporting NO drop rather than announcing a reward the player " +
+                    "never receives. If this fires in a real session the inventory singleton is missing from the scene.");
+                return null;
+            }
+            inv.Add(id, 1);
+            FlowTrace.Step("BattleArena",
+                $"TryGrantArenaGear: {kind} '{id}' ADDED TO INVENTORY (WO-1214 Ruling 1 - drops never auto-equip).");
+            return string.IsNullOrEmpty(displayName) ? id : displayName;
         }
 
         // Pick the eligible weapon at the target rarity the hero qualifies for; else the

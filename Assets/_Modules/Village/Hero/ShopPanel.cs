@@ -882,6 +882,12 @@ namespace DeNelle.Village.Hero
             public float EquippedArmorDefense => _panel._activeLoadout?.EquippedArmor != null
                 ? _panel._activeLoadout.EquippedArmor.defense : 0f;
 
+            // WO-1214: the wearer's class + level, read off the SAME GearLoadout the equip call
+            // lands on - so the shop asks the eligibility question about exactly the wearer the
+            // seam will gate, never a class the View re-derived for itself.
+            public string TargetClass => _panel._activeLoadout != null ? _panel._activeLoadout.WearerClass : "";
+            public int TargetLevel   => _panel._activeLoadout != null ? _panel._activeLoadout.WearerLevel : 1;
+
             public void EquipWeaponById(string id) { var l = _panel.EnsureLoadout(); if (l != null) l.EquipWeaponById(id); }
             public void EquipArmorById(string id)  { var l = _panel.EnsureLoadout(); if (l != null) l.EquipArmorById(id); }
         }

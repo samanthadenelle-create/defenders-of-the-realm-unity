@@ -200,6 +200,30 @@ namespace DeNelle.Village
         /// MUST leave it untouched (ARCHITECTURE_PRINCIPLES.md §4, WO-1123).</summary>
         public bool manual;
 
+        // ── WO-1215: `generated` — the term that tells `manual` apart from a machine stamp ──────
+        // Assets/Editor/Catalog/GearCatalogGenerator.cs emits every stub row with
+        //   ["generated"] = true,    // distinguishes generated from authored
+        //   ["manual"]    = false,   // set true by hand to lock the row forever
+        // (:386-387). So `generated:true` + `manual:true` on the same row is a CONTRADICTION: the
+        // generator never writes that pair. 77 of the 96 rows in weapons.json carry it anyway,
+        // because commit af96fe788 — a data-only WO-500 BALANCE pass — stamped manual on all 65
+        // blink_ rows ("blink_ rows 65, manual=true 65/65", its own body). None of them was ever
+        // seated by hand; 18 of the 19 shields have no Offset Forge row at all.
+        //
+        // Until this field existed Newtonsoft dropped `generated` on deserialize exactly as it once
+        // dropped `manual` (see the note above), so the runtime had no way to tell an owner-dialled
+        // row from a machine-stamped one and had to believe the stamp. The consequence was the
+        // WO-1215 defect: `manual` vetoed the derived shield seat to protect a pose that did not
+        // exist, leaving the shield at IDENTITY through the hero's body.
+        //
+        // READ BY: WeaponOrientHelper.ManualSeatIsSubstantiated, via EquipmentController's
+        // IsGeneratedCatalogRow. It NARROWS nothing that a human authored — a `generated:false` row
+        // is trusted unconditionally, and a generated row WITH an authored seat (tripo_shield_a ->
+        // shield_A) stays canon.
+        /// <summary>Catalog provenance: this row was machine-emitted by GearCatalogGenerator. A
+        /// `manual: true` on such a row cannot record an owner-dialled seat (WO-1215).</summary>
+        public bool generated;
+
         /// <summary>WO-295: part of the legendary Aegis of Elarion set.</summary>
         public bool IsAegis =>
             !string.IsNullOrEmpty(setId) && setId.Equals("aegis", StringComparison.OrdinalIgnoreCase);
@@ -665,6 +689,136 @@ namespace DeNelle.Village
             }
             reason = null;
             return true;
+        }
+
+        // =====================================================================
+        //  WO-1214 - THE PLAYER-FACING EQUIP QUESTION (Rulings 2, 3 and 4)
+        // ---------------------------------------------------------------------
+        //  CanEquipWeapon / CanEquipArmor above answer for the LOG: their reason
+        //  strings name fields and gates. Ruling 2 requires the same refusal to
+        //  reach the PLAYER in words ("Mages cannot use shields"), never as a
+        //  greyed control and never by colour alone (the owner is red/green
+        //  colourblind). Rather than let the UI re-derive the rule - which is how
+        //  the arena and outpost loot rolls each grew their own copy of
+        //  JobMatches and disagreed with the auto-best queries - the words are
+        //  produced HERE, by the same authority, and both the equip seam
+        //  (GearLoadout) and the equip UI (EquipVM / InventoryVM) call it.
+        //
+        //  ASCII ONLY in every player-facing string below (CLAUDE.md canon).
+        // =====================================================================
+
+        /// <summary>Display name for a weapon row (falls back to the id). Never null.</summary>
+        public static string ItemLabel(WeaponDef w) =>
+            w == null ? "that item" : (string.IsNullOrEmpty(w.name) ? (w.id ?? "that item") : w.name);
+
+        /// <summary>Display name for an armor row (falls back to the id). Never null.</summary>
+        public static string ItemLabel(ArmorDef a) =>
+            a == null ? "that item" : (string.IsNullOrEmpty(a.name) ? (a.id ?? "that item") : a.name);
+
+        /// <summary>The class name as a player reads it ("mage" -> "Mage"). "This hero" when unknown.</summary>
+        public static string ClassLabel(string job)
+        {
+            string j = (job ?? string.Empty).Trim();
+            if (j.Length == 0) return "This hero";
+            return char.ToUpperInvariant(j[0]) + j.Substring(1).ToLowerInvariant();
+        }
+
+        /// <summary>
+        /// True when the catalog serves this class ANY one-handed main-hand weapon at this level.
+        ///
+        /// Deliberately CATALOG-WIDE (owns = null): the question is "does the game contain a
+        /// weapon that could keep this hero armed", not "does the player own one". A false here
+        /// is the precondition of the WO-1214 disarm - a 2H main hand cannot coexist with an
+        /// off-hand, so evicting it with nothing to put back leaves the hero holding a shield and
+        /// nothing else, with no in-game way to recover.
+        /// </summary>
+        public static bool HasOneHandedMainHand(string job, int level) =>
+            PickBestWeapon(job, level, null, oneHandedOnly: true).Weapon != null;
+
+        /// <summary>
+        /// THE full equip question for a weapon / off-hand item, in one call: class gate, level
+        /// gate, and the WO-1214 Ruling 4 armed-hero gate that <see cref="CanEquipWeapon"/>
+        /// cannot ask because it does not know what the wearer is already holding.
+        ///
+        /// <paramref name="currentMainHand"/> is the wearer's MAIN hand right now (null when
+        /// empty). <paramref name="playerReason"/> is the sentence to SHOW; <paramref name="traceReason"/>
+        /// is the detail to LOG. Both are null on success and never null on refusal.
+        /// </summary>
+        public static bool CanEquipWeaponNow(WeaponDef w, WeaponDef currentMainHand, string job, int level,
+                                             out string playerReason, out string traceReason)
+        {
+            if (w == null)
+            {
+                playerReason = "That item is not in the armory.";
+                traceReason = "no WeaponDef";
+                return false;
+            }
+
+            if (!CanEquipWeapon(w, job, level, out traceReason))
+            {
+                playerReason = !WeaponFitsClass(w, job)
+                    ? "A " + ClassLabel(job) + " cannot use " + ItemLabel(w) + ". It stays in your bag - you can sell it."
+                    : ItemLabel(w) + " needs level " + RequiredLevel(w.req) + ". You are level " + level +
+                      ". It stays in your bag until then.";
+                return false;
+            }
+
+            // Ruling 4 - the armed-hero invariant FAILS CLOSED. Putting an off-hand item in the
+            // off slot evicts a two-handed main hand (a 2H takes both hands). If the catalog has
+            // no one-handed weapon this class could hold instead, that eviction disarms the hero
+            // permanently. Refuse the OFF-HAND rather than ship an unarmed hero.
+            if (w.IsOffHandItem && currentMainHand != null && currentMainHand.IsTwoHanded &&
+                !HasOneHandedMainHand(job, level))
+            {
+                playerReason = ItemLabel(currentMainHand) + " needs both hands, and a " + ClassLabel(job) +
+                               " has no one-handed weapon to hold instead. Equipping " + ItemLabel(w) +
+                               " would leave you unarmed, so it stays in your bag - you can sell it.";
+                traceReason = "armed-hero invariant (WO-1214 Ruling 4): off-hand '" + (w.id ?? "<null>") +
+                              "' would evict 2H main '" + (currentMainHand.id ?? "<null>") +
+                              "' and the catalog serves class '" + (job ?? "<null>") + "' NO one-handed " +
+                              "main-hand at level " + level + " - the equip is REFUSED, not degraded to null";
+                return false;
+            }
+
+            playerReason = null;
+            traceReason = null;
+            return true;
+        }
+
+        /// <summary>
+        /// The full equip question for ARMOR, in player words. Same gates as
+        /// <see cref="CanEquipArmor"/> (class + light/heavy weight + level); armor has no
+        /// hand-slot interaction, so there is no Ruling 4 branch here.
+        /// </summary>
+        public static bool CanEquipArmorNow(ArmorDef a, string job, int level,
+                                            out string playerReason, out string traceReason)
+        {
+            if (a == null)
+            {
+                playerReason = "That item is not in the armory.";
+                traceReason = "no ArmorDef";
+                return false;
+            }
+
+            if (CanEquipArmor(a, job, level, out traceReason))
+            {
+                playerReason = null;
+                traceReason = null;
+                return true;
+            }
+
+            if (!JobMatches(a.job, job) || !ArmorFitsClass(a, job))
+            {
+                playerReason = "A " + ClassLabel(job) + " cannot wear " + ItemLabel(a) + " (" +
+                               ClassLabel(job) + "s wear " + ClassWeight(job) + " armor). It stays in your bag - " +
+                               "you can sell it.";
+            }
+            else
+            {
+                playerReason = ItemLabel(a) + " needs level " + RequiredLevel(a.req) + ". You are level " +
+                               level + ". It stays in your bag until then.";
+            }
+            return false;
         }
 
         private static void EnsureLoaded()

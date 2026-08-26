@@ -714,6 +714,12 @@ namespace DeNelle.HUD.Kit
             _raidsButtonLabel = raids != null ? raids.GetComponentInChildren<TMP_Text>(true) : null;
             if (_raidsButtonImage != null) _raidsImageBuiltColor = _raidsButtonImage.color;
             if (_raidsButtonLabel != null) _raidsLabelBuiltColor = _raidsButtonLabel.color;
+            // WO-1219: the SECOND bar face that carries a second line (the WO-1008 slot numerals).
+            // BuildObsidianButton armed FitSingleLine, which is right for Build/Bag/Quests and
+            // WRONG here - no-wrap + ellipsis is exactly what produced the captured "Raids ...",
+            // and what it ellipsised away was the NUMBERS, i.e. the whole colourblind-safe tell.
+            // Identical treatment to the Manage face below, for identical reasons (WO-1144).
+            if (_raidsButtonLabel != null) ElarionUiKit.FitBlock(_raidsButtonLabel);
 
             // MAP — ⚠ NO LONGER A BAR FACE (WO-911, owner ruling Q10+Q13, 2026-08-06).
             // The Realm Map moved INTO Bag as a tab, which is half of how the bar went 7 -> 6
@@ -1829,13 +1835,23 @@ namespace DeNelle.HUD.Kit
             if (_raidsButtonLabel != null)
             {
                 _raidsButtonLabel.color = dim ? ElarionUi.Disabled : _raidsLabelBuiltColor;
-                string face = _barModel != null ? _barModel.RaidsFaceLabel : HudActionBarModel.RaidsBaseLabel;
+                // WO-1219: the model's RaidsFaceLabel is the one-line string ("Raids 0/5"). A bar
+                // face is ~144 ref px of label rect - about ten characters at the legibility floor,
+                // side padding included - so painting the one-liner is what the owner captured as
+                // "Raids ...". The face paints the WORD and the model's short BADGE on a second
+                // line instead; the one-liner keeps its home in the model (and in this trace).
+                string badge = _barModel != null ? _barModel.RaidsFaceBadge : "";
+                string face = string.IsNullOrEmpty(badge)
+                    ? HudActionBarModel.RaidsBaseLabel
+                    : HudActionBarModel.RaidsBaseLabel + "\n" + badge;
                 if (!string.IsNullOrEmpty(face) && !string.Equals(_raidsButtonLabel.text, face, StringComparison.Ordinal))
                 {
                     _raidsButtonLabel.text = face;
-                    FlowTrace.Step("HudKit", "Raids face text -> '" + face + "' (dim=" + dim +
+                    FlowTrace.Step("HudKit", "Raids face text -> '" + face.Replace("\n", " / ") + "' (dim=" + dim +
                                    ", reason=" + (_barModel != null ? _barModel.RaidsDimReason.ToString() : "n/a") +
-                                   ") - the greyed state is carried in WORDS, never hue alone.");
+                                   "; model one-liner: '" +
+                                   (_barModel != null ? _barModel.RaidsFaceLabel : HudActionBarModel.RaidsBaseLabel) +
+                                   "') - the greyed state is carried in WORDS, never hue alone.");
                 }
             }
         }
@@ -2354,14 +2370,41 @@ namespace DeNelle.HUD.Kit
             // own FIXED-PIXEL column at the edge and the panel STARTS where that column ends. The
             // handle therefore never moves on toggle (the owner taps the same spot to close), never
             // covers a row, and nothing overhangs the frame. Fixed px, never a parent fraction.
+            //
+            // WO-1219 (owner Seeker felt-test 2026-08-26, tmp/screen-103219.png +
+            // tmp/shield-seat-101829.png, both 2670x1200) - THE BAND ARITHMETIC, written out so
+            // nobody has to re-derive it:
+            //   * At 2670x1200 the kit canvas (1080x1920 reference, match 0.5) resolves to a
+            //     scale factor of sqrt((2670/1080) * (1200/1920)) = 1.243, i.e. a canvas of
+            //     ~2148 x 965 REFERENCE units.
+            //   * HudArea.Dock was 0.330..0.430 of screen height = 0.100 * 965 = ~96.5 ref units.
+            //   * The column mounted in it was STACKED: 112 + 12 + 112 = 236 ref units tall.
+            //   A 236-unit column centred in a 96.5-unit band overflows ~70 units in EACH
+            //   direction - up into the Minimap band (over the plate's lower edge AND over the
+            //   region chip, which is why "Elarion - Safe - N threats" read from under the gear)
+            //   and down into the MoveCluster thumb arc. Nothing was ever wrong with the two
+            //   buttons: they are authored at EXACTLY MinTouchPx, so ClampMinTouch is a no-op on
+            //   both and is NOT the cause. The band could not hold what was put in it.
+            //
+            // THE FIX: the two 112 px controls become a HORIZONTAL PAIR. The Dock band is ~494
+            // ref units WIDE and only ~96.5 tall, so the free axis is x, not y. Stacked the pair
+            // demanded 236 units of a 96.5-unit band; side by side it demands 112 - still 15.5
+            // over the band, but the neighbours now clear it by 38 units above (minimap plate
+            // bottom) and 16 below (analog-stick ring top) instead of being sat on. The Dock band
+            // also grows 0.430 -> 0.440 in HudAreasHost so it abuts the Minimap band exactly.
+            // ⛔ Do NOT re-stack these two. The left column has no vertical room left.
             const float dockTabPx = ElarionUiKit.MinTouchPx;   // 112 - the kit touch floor, verbatim
             const float dockGapPx = 12f;
             float safeLeftPx = SafeAreaInset.EdgeMarginPx;
+            // The drawer opens to the right of BOTH faces now, not just the gear - otherwise the
+            // panel would park on the Store button, which is the WO-908 handle-on-panel defect
+            // wearing a different hat.
+            const float dockColumnPx = dockTabPx + dockGapPx + dockTabPx;   // gear | gap | Store
             var dockPanelRt = _slideDock.panel;
             dockPanelRt.anchorMin = new Vector2(0f, 0.5f);
             dockPanelRt.anchorMax = new Vector2(0f, 0.5f);
             dockPanelRt.pivot = new Vector2(0f, 0.5f);
-            dockPanelRt.anchoredPosition = new Vector2(safeLeftPx + dockTabPx, 0f);
+            dockPanelRt.anchoredPosition = new Vector2(safeLeftPx + dockColumnPx + dockGapPx, 0f);
             // Height carries FIVE tabs now (Pause folded in — cosmetic flag A) at ~112px
             // touch targets each: 700 / 5 = 140px slot, well above MinTouchPx. Do NOT shrink 700:
             // AddDockTab's rows resolve to EXACTLY 112px (0.16 * 700), so any smaller panel puts
@@ -2372,10 +2415,11 @@ namespace DeNelle.HUD.Kit
             dockTabRt.anchorMin = new Vector2(0f, 0.5f);
             dockTabRt.anchorMax = new Vector2(0f, 0.5f);
             dockTabRt.pivot = new Vector2(0f, 0.5f);
-            // The left column is now two deliberate 112px controls: Menu above, Store below.
+            // The left column is two deliberate 112px controls: Menu (gear) LEFT, Store RIGHT
+            // (WO-1219 - they were stacked, and the stack did not fit its band; see above).
             // Both sit inside the shared safe-area breathing margin and the drawer begins after
             // their column, so neither can overlap a row when it opens.
-            dockTabRt.anchoredPosition = new Vector2(safeLeftPx, (dockTabPx + dockGapPx) * 0.5f);
+            dockTabRt.anchoredPosition = new Vector2(safeLeftPx, 0f);
             dockTabRt.sizeDelta = new Vector2(dockTabPx, dockTabPx);   // was 84 - under the 112 floor
 
             var storeButton = ElarionUiKit.BuildObsidianButton(_slideDock.root.transform, "Store",
@@ -2387,7 +2431,7 @@ namespace DeNelle.HUD.Kit
                 var storeRt = (RectTransform)storeButton.transform;
                 storeRt.anchorMin = storeRt.anchorMax = new Vector2(0f, 0.5f);
                 storeRt.pivot = new Vector2(0f, 0.5f);
-                storeRt.anchoredPosition = new Vector2(safeLeftPx, -(dockTabPx + dockGapPx) * 0.5f);
+                storeRt.anchoredPosition = new Vector2(safeLeftPx + dockTabPx + dockGapPx, 0f);
                 storeRt.sizeDelta = new Vector2(dockTabPx, dockTabPx);
                 ElarionUiKit.ClampMinTouch(storeButton);
             }

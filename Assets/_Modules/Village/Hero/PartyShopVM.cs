@@ -1378,6 +1378,19 @@ namespace DeNelle.Village.Hero
             var member = SelectedMember;
             if (member == null) { Status = "No hero selected to equip."; return; }
             if (w == null) return;
+
+            // WO-1214 Ruling 2 - ask the ONE authority BEFORE claiming success. GearLoadout's
+            // equip seam now fails closed on class + level + the armed-hero invariant, and a
+            // vendor screen that printed "Equipped X" over a refused equip would be exactly the
+            // silent failure this ticket exists to end.
+            if (!GearCatalog.CanEquipWeaponNow(w, member.EquippedWeapon, member.TargetClass,
+                                               member.TargetLevel, out string refusal, out _))
+            {
+                Status = refusal;
+                Rebuild();
+                return;
+            }
+
             member.EquipWeaponById(w.id);   // GearLoadout auto-routes shields to off-hand + enforces hand rules
             Status = "Equipped " + Display(w.name, w.id) + " to " + MemberName() + ".";
             Rebuild();
@@ -1388,6 +1401,16 @@ namespace DeNelle.Village.Hero
             var member = SelectedMember;
             if (member == null) { Status = "No hero selected to equip."; return; }
             if (a == null) return;
+
+            // WO-1214 Ruling 2 - see EquipWeapon: never report an equip the seam refused.
+            if (!GearCatalog.CanEquipArmorNow(a, member.TargetClass, member.TargetLevel,
+                                              out string refusal, out _))
+            {
+                Status = refusal;
+                Rebuild();
+                return;
+            }
+
             member.EquipArmorById(a.id);
             Status = "Equipped " + Display(a.name, a.id) + " to " + MemberName() + ".";
             Rebuild();

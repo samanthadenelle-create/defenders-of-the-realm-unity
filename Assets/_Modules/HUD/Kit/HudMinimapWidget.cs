@@ -80,8 +80,10 @@ namespace DeNelle.HUD.Kit
 
         /// <summary>Map plate edge, in canvas reference units. ~200 ref units resolves to
         /// roughly 220 device px on a 2340x1080 phone — inside WO-828's 120-160 dp corner
-        /// brief, and comfortably shorter than the area mount's ~244 unit band so the
-        /// region chip fits beneath it.</summary>
+        /// brief, and comfortably shorter than the area mount's ~244 unit band. ⚠ WO-1219: the
+        /// region chip no longer sits BENEATH the plate (that stacked 234 units into a ~241
+        /// unit band and left nothing for the gear/Store row in the Dock band below) — it sits
+        /// BESIDE it, on the ~487 units of mount width the plate does not use.</summary>
         private const float PlateSize = 200f;
         /// <summary>Region chip height in reference units (font floor + padding).</summary>
         private const float ChipHeight = 30f;
@@ -247,12 +249,26 @@ namespace DeNelle.HUD.Kit
                 // on top of this line; none of them is load-bearing.
                 _chip = AddText((RectTransform)transform, "", ElarionUi.FontMicro,
                                 ElarionUi.Parchment, TextAlignmentOptions.Left);
+                // WO-1219 - the chip moved from UNDER the plate to BESIDE it (top-right of the
+                // plate), and the reason is band arithmetic, not taste:
+                //   * At 2670x1200 the kit canvas resolves to ~2148 x 965 REFERENCE units, so
+                //     HudArea.Minimap (0.010..0.330 x, 0.440..0.690 y) is ~687 x 241 units.
+                //   * Stacked, this widget demanded PlateSize + 4 + ChipHeight = 234 of those
+                //     241 units of HEIGHT and used only 200 of the 687 units of WIDTH.
+                //   The left column is the most over-subscribed strip on the HUD (vitals, heart,
+                //   minimap, dock, thumb stick) and it was spending its scarcest axis on a
+                //   30-unit text line while ~487 units sat empty beside the plate. Moving the
+                //   chip onto the free axis hands 34 units of height back to the column, which
+                //   is what stops the gear/Store row below from being sat on the chip.
+                // It STRETCHES to the mount's right edge rather than carrying a fixed width: a
+                // fixed PlateSize+60 would overhang the mount into the Status crown on a
+                // narrower aspect, which is the same class of bug one band up.
                 var crt = (RectTransform)_chip.transform;
                 crt.anchorMin = new Vector2(0f, 1f);
-                crt.anchorMax = new Vector2(0f, 1f);
+                crt.anchorMax = new Vector2(1f, 1f);
                 crt.pivot     = new Vector2(0f, 1f);
-                crt.sizeDelta = new Vector2(PlateSize + 60f, ChipHeight);
-                crt.anchoredPosition = new Vector2(2f, -(PlateSize + 4f));
+                crt.offsetMin = new Vector2(PlateSize + 10f, -(ChipHeight + 4f));
+                crt.offsetMax = new Vector2(-4f, -4f);
                 _chip.enableAutoSizing = true;
                 _chip.fontSizeMin = 16f;
                 _chip.fontSizeMax = ElarionUi.FontMicro;

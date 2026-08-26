@@ -3025,20 +3025,96 @@ namespace DeNelle.Village
                     creditedGold = Mathf.Max(0, econ.Coins - goldBefore);
                 }
 
+                // WO-1216: WOOD / IRON / STONE on EVERY kill, riding THIS one seam.
+                // Owner ruling 2026-08-26 — "the drop is any kill, not just waves but in the
+                // world the encounters" + "wood iron gold stone, balance it so i can afford to
+                // repair by grinding some kills". This is deliberately here and NOT on
+                // WaveManager._ironPerKill: that grant is gated on WavePhase.Active and so pays
+                // for wave kills only, silently missing every world encounter / outpost / arena
+                // kill — precisely the scope the owner corrected. Leave those fields alone.
+                //
+                // The material base derives from the SAME resolved goldBase above (so every
+                // enemy pays, via the same XP fallback, and the payout scales with difficulty),
+                // through the DATA constants in Data/Canonical/kill-rewards.json —
+                // ⛔ never a code literal — and is then variance-rolled through the ONE roll
+                // authority (EnemyDef.RollReward) with this enemy's own rewardVariance, so all
+                // four materials read as ONE drop rather than four systems.
+                //
+                // ⛔⛔ THE STONE TRAP (WO-1212, a filed P0): there are TWO Stone balances and
+                // only ONE of them is the player's. The HUD chip labelled "Stone"
+                // (HudKitController.cs:1596 pairs CurrencyKind.Food with the name "Stone") reads
+                // GameState.Resources.Food via EconomyService.Food — DEF-121 repurposed the
+                // retired Stone axis onto Food, and that is the balance every cost actually
+                // spends. GameState.Stone (GameState.cs:60) is a second persisted balance
+                // displayed NOWHERE and spent by NOTHING; granting there means the player is
+                // told they earned Stone and receives nothing, silently. Stone therefore rides
+                // EconomyService.Grant's `food` slot below, and GameState.Stone is not touched
+                // in either direction (its reconciliation is WO-1212's job, not this ticket's).
+                //
+                // EconomyService.Grant(ResourceCost) is the EARNED-INCOME path: it is the single
+                // choke every income source flows through and it applies the town bank cap
+                // (clamp-and-warn, WO-901 §5). Deliberately NOT GrantUncapped (a cheat seam) and
+                // NOT GrantPurchased (a paid entitlement) — a kill reward is earned income.
+                int rolledWood = 0, rolledIron = 0, rolledStone = 0;
+                int creditedWood = 0, creditedIron = 0, creditedStone = 0;
+                int matBaseWood = KillRewardBalanceCatalog.MaterialBaseFromGold(goldBase, "wood");
+                int matBaseIron = KillRewardBalanceCatalog.MaterialBaseFromGold(goldBase, "iron");
+                int matBaseStone = KillRewardBalanceCatalog.MaterialBaseFromGold(goldBase, "stone");
+                if (econ != null)
+                {
+                    rolledWood  = EnemyDef.RollReward(matBaseWood,  variance);
+                    rolledIron  = EnemyDef.RollReward(matBaseIron,  variance);
+                    rolledStone = EnemyDef.RollReward(matBaseStone, variance);
+                    if (rolledWood > 0 || rolledIron > 0 || rolledStone > 0)
+                    {
+                        // WO-1104 discipline, per material: the wallet is read either side of
+                        // the mover. Grant returns the APPLIED basket, but the state delta is
+                        // the stronger proof (it also catches a wallet that never existed), and
+                        // it is what the shortfall Warn below is judged on. A single combined
+                        // number would be a hollow assertion — it could not show WHICH material
+                        // failed to bank.
+                        int woodBefore  = econ.Wood;
+                        int ironBefore  = econ.Iron;
+                        int stoneBefore = econ.Food;
+                        econ.Grant(new ResourceCost(
+                            wood: rolledWood, food: rolledStone, iron: rolledIron));
+                        creditedWood  = Mathf.Max(0, econ.Wood - woodBefore);
+                        creditedIron  = Mathf.Max(0, econ.Iron - ironBefore);
+                        creditedStone = Mathf.Max(0, econ.Food - stoneBefore);
+                    }
+                }
+
                 // §12 permanent trace: base/variance/ROLLED (asked) vs CREDITED (measured
                 // state delta) per grant. Kills are cold-path — one line per kill is cheap and
                 // makes both the roll AND the landing provable. Printing rolled as if it were
                 // final would be a hollow assertion; the two are logged separately on purpose,
                 // and a mismatch is the signal that a grant was swallowed downstream.
+                // WO-1216 extends the SAME shape to wood/iron/stone — one line per material,
+                // never one combined figure, so a shortfall names the material that was
+                // swallowed (a full store clamps ONE axis at a time).
                 DeNelle.Core.Diagnostics.FlowTrace.Step("Reward",
                     $"KILL GRANT id={_def.Id} baseXp={_def.XpReward} baseGold={goldBase} " +
                     $"var={variance:0.00} rolledXp={rolledXp} rolledGold={rolledGold} " +
-                    $"creditedXp={creditedXp} creditedGold={creditedGold} packBodies={_def.PackBodies}");
+                    $"creditedXp={creditedXp} creditedGold={creditedGold} packBodies={_def.PackBodies} " +
+                    $"| WO-1216 mult={KillRewardBalanceCatalog.GoldToMaterialMultiplier:0.00} " +
+                    $"floor={KillRewardBalanceCatalog.MaterialFloorPerKill} " +
+                    $"cap={KillRewardBalanceCatalog.MaterialCapPerKill} " +
+                    $"baseWood={matBaseWood} baseIron={matBaseIron} baseStone={matBaseStone} " +
+                    $"rolledWood={rolledWood} rolledIron={rolledIron} rolledStone={rolledStone} " +
+                    $"creditedWood={creditedWood} creditedIron={creditedIron} creditedStone={creditedStone}");
                 if (creditedXp != rolledXp || creditedGold != rolledGold)
                     DeNelle.Core.Diagnostics.FlowTrace.Warn("Reward",
                         $"KILL GRANT SHORTFALL id={_def.Id} askedXp={rolledXp} bankedXp={creditedXp} " +
                         $"askedGold={rolledGold} bankedGold={creditedGold} - a grant did not land " +
                         "(missing HeroProgression / EconomyService / clamped wallet).");
+                if (creditedWood != rolledWood || creditedIron != rolledIron || creditedStone != rolledStone)
+                    DeNelle.Core.Diagnostics.FlowTrace.Warn("Reward",
+                        $"KILL GRANT SHORTFALL (materials) id={_def.Id} " +
+                        $"askedWood={rolledWood} bankedWood={creditedWood} " +
+                        $"askedIron={rolledIron} bankedIron={creditedIron} " +
+                        $"askedStone={rolledStone} bankedStone={creditedStone} - a material grant " +
+                        "did not land in full (missing EconomyService/GameState, or the town bank " +
+                        "cap clamped that axis — TownBankCapacity warns separately with the ceiling).");
 
                 // WO-1103 item 3+4, on the CREDITED amounts (WO-1104): never announce an award
                 // that did not bank.
@@ -3506,5 +3582,161 @@ namespace DeNelle.Village
                 transform.forward * _contactProbeDistance);
         }
 #endif
+    }
+
+    // =========================================================================
+    // WO-1216 — kill-rewards.json: the DATA behind "every kill pays the four
+    // materials".
+    // -------------------------------------------------------------------------
+    // Owner ruling 2026-08-26: "lets do around 20 per enemy per kill". The three
+    // numbers that produce it (multiplier / floor / cap) are DATA, never code
+    // literals, so the owner retunes them in one edit with NO recompile. The
+    // field defaults below MIRROR the shipped json values on purpose: they are
+    // the fallback when the file is missing/invalid, and a fallback that differs
+    // from the authored value is how a silent balance drift starts (the lesson
+    // EchoBalanceData.RepairFractionPerHour records in as many words).
+    //
+    // Lives beside its ONE consumer (Enemy's death grant) rather than in a new
+    // file, so the formula and the seam that uses it cannot drift apart.
+    // Loaded through DeNelle.Core.CanonicalJson: the Resources/Data/Canonical
+    // dual-copy WINS at runtime (WebGL-safe), StreamingAssets is the desktop
+    // source — keep the two byte-identical.
+    //
+    // Guard-wrapped with sensible fallbacks (§12): a missing or malformed file
+    // logs a [Flow:Reward] Warn and returns the built-in defaults, so kills keep
+    // paying and nothing hard-fails. No silent failure — every miss is traced.
+    // =========================================================================
+
+    /// <summary>The parsed kill-rewards.json root. Field defaults ARE the built-in fallback,
+    /// and are kept equal to the authored json values.</summary>
+    [System.Serializable]
+    public sealed class KillRewardBalanceData
+    {
+        [Newtonsoft.Json.JsonProperty("version")] public int Version = 1;
+
+        /// <summary>Shared constant: material base = goldBase * this (before per-material
+        /// override, floor and cap). 1.1 puts the MEDIAN enemy (gold 18) at 20 — the ruled
+        /// number — while keeping the payout scaled to difficulty.</summary>
+        [Newtonsoft.Json.JsonProperty("goldToMaterialMultiplier")] public float GoldToMaterialMultiplier = 1.1f;
+
+        /// <summary>Minimum a single kill pays of each material. Without it a cellar-hollow
+        /// (gold 3) pays 3 and the kill reads as broken.</summary>
+        [Newtonsoft.Json.JsonProperty("materialFloorPerKill")] public int MaterialFloorPerKill = 6;
+
+        /// <summary>Maximum a single kill pays of each material. Without it a necromancer
+        /// (gold 120) pays 132 of every material and one boss out-earns a whole wave.</summary>
+        [Newtonsoft.Json.JsonProperty("materialCapPerKill")] public int MaterialCapPerKill = 40;
+
+        /// <summary>Optional per-material override on the shared constant, keyed "wood" /
+        /// "iron" / "stone". Absent or 0 = 1.0 (no override). GOLD is deliberately NOT a key:
+        /// it keeps its own WO-432/433 grant and is the reference the others derive from —
+        /// adding it here would double-pay.</summary>
+        [Newtonsoft.Json.JsonProperty("perMaterialMultiplier")]
+        public System.Collections.Generic.Dictionary<string, float> PerMaterialMultiplier
+            = new System.Collections.Generic.Dictionary<string, float>();
+    }
+
+    /// <summary>Static surface over kill-rewards.json — load + cache + the ONE material-base
+    /// formula (WO-1216). Every material grant site calls <see cref="MaterialBaseFromGold"/>;
+    /// none re-implements the arithmetic.</summary>
+    public static class KillRewardBalanceCatalog
+    {
+        private const string StreamingRelativePath = "Data/Canonical/kill-rewards.json";
+        private const int ExpectedVersion = 1;
+        private static KillRewardBalanceData _data;
+
+        /// <summary>The full parsed balance data (never null — defaults if the file is absent).</summary>
+        public static KillRewardBalanceData Data { get { EnsureLoaded(); return _data; } }
+
+        /// <summary>Shared gold-to-material constant (never negative).</summary>
+        public static float GoldToMaterialMultiplier
+        {
+            get { EnsureLoaded(); return Mathf.Max(0f, _data.GoldToMaterialMultiplier); }
+        }
+
+        /// <summary>Per-kill material floor (at least 1 — a kill that pays zero of a material
+        /// reads as broken, so the floor can be tuned down but never to nothing).</summary>
+        public static int MaterialFloorPerKill
+        {
+            get { EnsureLoaded(); return Mathf.Max(1, _data.MaterialFloorPerKill); }
+        }
+
+        /// <summary>Per-kill material cap, never below the floor (a bad data row that inverts
+        /// the two would otherwise clamp every payout to the smaller number).</summary>
+        public static int MaterialCapPerKill
+        {
+            get { EnsureLoaded(); return Mathf.Max(MaterialFloorPerKill, _data.MaterialCapPerKill); }
+        }
+
+        /// <summary>The per-material override for "wood" / "iron" / "stone" (1.0 when absent
+        /// or non-positive, so a blank/zeroed row can never silently kill a faucet).</summary>
+        public static float PerMaterialMultiplier(string material)
+        {
+            EnsureLoaded();
+            if (!string.IsNullOrEmpty(material) && _data.PerMaterialMultiplier != null
+                && _data.PerMaterialMultiplier.TryGetValue(material, out var m) && m > 0f)
+                return m;
+            return 1f;
+        }
+
+        /// <summary>
+        /// THE ONE FORMULA: <c>clamp(round(goldBase * multiplier * perMaterial), floor, cap)</c>.
+        /// <para>Returns 0 for a non-paying base (goldBase &lt;= 0) so a def that pays nothing
+        /// stays paying nothing — the floor must never MINT a reward from a zero base, exactly
+        /// as EnemyDef.RollReward refuses to mint one from variance.</para>
+        /// <para>The result is a BASE, not a payout: the caller variance-rolls it through
+        /// EnemyDef.RollReward so the four materials feel like one drop.</para>
+        /// </summary>
+        public static int MaterialBaseFromGold(int goldBase, string material)
+        {
+            if (goldBase <= 0) return 0;
+            float raw = goldBase * GoldToMaterialMultiplier * PerMaterialMultiplier(material);
+            int rounded = Mathf.RoundToInt(raw);
+            return Mathf.Clamp(rounded, MaterialFloorPerKill, MaterialCapPerKill);
+        }
+
+        /// <summary>Force a re-read (test / hot-reload).</summary>
+        public static void Reload() { _data = null; EnsureLoaded(); }
+
+        private static void EnsureLoaded()
+        {
+            if (_data != null) return;
+            _data = LoadData();
+        }
+
+        private static KillRewardBalanceData LoadData()
+        {
+            var parsed = DeNelle.Core.Diagnostics.Guard.Try("Reward", "load kill-rewards.json", () =>
+            {
+                string json = DeNelle.Core.CanonicalJson.Read(StreamingRelativePath);
+                if (string.IsNullOrEmpty(json))
+                {
+                    DeNelle.Core.Diagnostics.FlowTrace.Warn("Reward",
+                        "kill-rewards.json not found (Resources or StreamingAssets) -- using built-in " +
+                        "default kill-reward balance (mult 1.1 / floor 6 / cap 40).");
+                    return (KillRewardBalanceData)null;
+                }
+                var d = Newtonsoft.Json.JsonConvert.DeserializeObject<KillRewardBalanceData>(json);
+                if (d == null)
+                {
+                    DeNelle.Core.Diagnostics.FlowTrace.Warn("Reward",
+                        "kill-rewards.json parsed null -- using built-in default kill-reward balance.");
+                    return (KillRewardBalanceData)null;
+                }
+                if (d.Version != ExpectedVersion)
+                    DeNelle.Core.Diagnostics.FlowTrace.Warn("Reward",
+                        $"kill-rewards.json version {d.Version} != expected {ExpectedVersion} -- loading anyway (additive).");
+                int overrides = d.PerMaterialMultiplier != null ? d.PerMaterialMultiplier.Count : 0;
+                DeNelle.Core.Diagnostics.FlowTrace.Step("Reward",
+                    $"KillRewardBalanceCatalog loaded (version {d.Version}, mult {d.GoldToMaterialMultiplier:0.00}, " +
+                    $"floor {d.MaterialFloorPerKill}, cap {d.MaterialCapPerKill}, {overrides} per-material overrides).");
+                return d;
+            }, fallback: null);
+
+            if (parsed != null) return parsed;
+            DeNelle.Core.Diagnostics.FlowTrace.Warn("Reward",
+                "KillRewardBalanceCatalog falling back to built-in default balance (file missing/invalid).");
+            return new KillRewardBalanceData();
+        }
     }
 }

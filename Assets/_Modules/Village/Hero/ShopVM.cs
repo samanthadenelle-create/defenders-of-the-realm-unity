@@ -43,6 +43,18 @@ namespace DeNelle.Village.Hero
         float EquippedArmorDefense { get; }        // 0f when no armor
         void EquipWeaponById(string id);
         void EquipArmorById(string id);
+
+        // ── WO-1214: the EQUIP tab must be able to ask WHY, not just to call ──────────
+        // BuildEquip lists every OWNED gear id with no class or level filter, so an
+        // ineligible drop appears there, is tapped, is refused by the (now fail-closed)
+        // GearLoadout seam - and the old TryEquip printed "Equipped." over the refusal.
+        // A screen that reports success for an action that did nothing is the same silent
+        // failure this ticket exists to end, so the target now exposes the two facts the
+        // eligibility question needs. They mirror IEquipTarget.TargetClass/TargetLevel.
+        /// <summary>The wearer's class key ("mage"), as the equip seam resolves it. "" when unknown.</summary>
+        string TargetClass { get; }
+        /// <summary>The wearer's level, as the equip seam resolves it. 1 when unknown.</summary>
+        int TargetLevel { get; }
     }
 
     /// <summary>
@@ -628,11 +640,55 @@ namespace DeNelle.Village.Hero
             _onEquipRefreshHero?.Invoke(this);
             if (_equip == null) { Status = "No hero to equip."; return; }
 
-            if (isWeapon) _equip.EquipWeaponById(id);
-            else _equip.EquipArmorById(id);
+            // WO-1214 Rulings 2 + 3 - ask the ONE authority (GearCatalog) BEFORE claiming success.
+            // The EQUIP list above is built from the raw owned set with no class or level filter,
+            // so an ineligible drop reaches here; the seam refuses it, and this line used to print
+            // "Equipped." anyway. The item is KEPT and stays sellable - the refusal explains why.
+            string job = _equip.TargetClass;
+            int level = _equip.TargetLevel;
+            if (isWeapon)
+            {
+                var w = GearCatalog.FindWeapon(id);
+                var currentMain = GearCatalog.FindWeapon(_equipCurrentMainHandId());
+                if (w != null && !GearCatalog.CanEquipWeaponNow(w, currentMain, job, level,
+                                                               out string refusal, out _))
+                {
+                    Status = refusal;
+                    Rebuild();
+                    return;
+                }
+                _equip.EquipWeaponById(id);
+            }
+            else
+            {
+                var a = GearCatalog.FindArmor(id);
+                if (a != null && !GearCatalog.CanEquipArmorNow(a, job, level, out string refusal, out _))
+                {
+                    Status = refusal;
+                    Rebuild();
+                    return;
+                }
+                _equip.EquipArmorById(id);
+            }
 
             Status = "Equipped. Visuals + stats updated.";
             Rebuild();
+        }
+
+        /// <summary>
+        /// WO-1214 - the id of the wearer's CURRENT main hand, for the armed-hero (Ruling 4)
+        /// question. IShopEquipTarget only exposes the display NAME, so it is resolved back to a
+        /// row by name; a miss simply yields null, which makes the Ruling 4 branch inert rather
+        /// than wrong (the seam still fails closed either way - this only decides whether the
+        /// SHOP can explain the refusal in advance).
+        /// </summary>
+        private string _equipCurrentMainHandId()
+        {
+            string name = _equip != null ? _equip.EquippedWeaponName : null;
+            if (string.IsNullOrEmpty(name)) return null;
+            foreach (var w in GearCatalog.AllWeapons())
+                if (w != null && string.Equals(w.name, name, StringComparison.OrdinalIgnoreCase)) return w.id;
+            return null;
         }
 
         // ── Vendor gold pools ─────────────────────────────────────────────────────

@@ -388,6 +388,20 @@ namespace DeNelle.Village.Hero
             if (!sel.Value.CanEquip) { Status = "That item cannot be equipped."; Raise(); return; }
             if (_equip == null) { Status = "No hero to equip."; Raise(); return; }
 
+            // WO-1214 Ruling 2 - a drop the hero cannot use is KEPT and SELLABLE, never equipped,
+            // and the refusal says WHY in words. Asking GearCatalog (the same authority the
+            // GearLoadout equip seam consults) keeps one rule with two callers instead of a second
+            // copy of the class gate here.
+            if (!CanWearSelected(out string refusal))
+            {
+                Status = refusal;
+                FlowTrace.Step("Inventory",
+                    "Equip refused for '" + SelectedId + "': " + refusal +
+                    " (WO-1214 Ruling 2 - the item is KEPT in the bag and stays sellable).");
+                Raise();
+                return;
+            }
+
             if (_slotKind.TryGetValue(SelectedId, out var kind) && kind == InventoryTabKind.Weapons)
                 _equip.EquipWeaponById(SelectedId);
             else
@@ -396,6 +410,40 @@ namespace DeNelle.Village.Hero
             Status = "Equipped " + sel.Value.Name + ".";
             Rebuild();   // re-mark equipped; equip target may also raise via INotifyEquipChanged
             Raise();
+        }
+
+        /// <summary>
+        /// WO-1214 - may the equip target wear the SELECTED owned item? On false,
+        /// <paramref name="refusal"/> is the player-facing sentence naming why (ASCII, words -
+        /// never a bare disabled control and never colour alone). An id that resolves to neither
+        /// a weapon nor an armor def is allowed through so the equip seam still owns the last word.
+        /// </summary>
+        private bool CanWearSelected(out string refusal)
+        {
+            refusal = null;
+            if (_equip == null || string.IsNullOrEmpty(SelectedId)) return true;
+
+            string job = _equip.TargetClass;
+            int level = _equip.TargetLevel;
+
+            var w = GearCatalog.FindWeapon(SelectedId);
+            if (w != null)
+            {
+                if (GearCatalog.CanEquipWeaponNow(w, _equip.EquippedWeapon, job, level, out string words, out _))
+                    return true;
+                refusal = words;
+                return false;
+            }
+
+            var a = GearCatalog.FindArmor(SelectedId);
+            if (a != null)
+            {
+                if (GearCatalog.CanEquipArmorNow(a, job, level, out string words, out _)) return true;
+                refusal = words;
+                return false;
+            }
+
+            return true;
         }
 
         private void Raise() { if (!_disposed) Changed?.Invoke(); }

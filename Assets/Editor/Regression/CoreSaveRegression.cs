@@ -628,8 +628,20 @@ namespace DeNelle.Editor
                 svc2.ResetToNewGame();
                 if (st.BoundWallet != walletFixture) failures.Add("ResetToNewGame wiped BoundWallet — the carve-out contract broken");
                 if (st.BreachStyle != BreachStyle.TowerSim) failures.Add("ResetToNewGame wiped BreachStyle — preferences must survive New Game");
-                if (st.Resources.Crystals != 250 || st.Resources.Food != 80 || st.Resources.Coins != 15)
-                    failures.Add($"ResetToNewGame did not restore STARTER resources (got {st.Resources.Crystals}/{st.Resources.Food}/{st.Resources.Coins})");
+                // ⭐ RE-POINTED BY OWNER RULING 2026-08-26 (WO-1217 Slice B), verbatim: "so start
+                // gold at 200". Coins was 15 (the ResourceBalance.Starter value); a new game now
+                // seeds StartingBudget.StrategicGold on top of Starter. The pin MOVED WITH the
+                // ruling — it was NOT softened: crystals/food stay pinned at 250/80, and the coins
+                // arm still fails on any value other than the ruled one.
+                // ⚠ Read the expected coins off StartingBudget, never a literal here: a number
+                // restated in a second place is this repo's most repeated defect, and the whole
+                // point of routing the seed through StartingBudget was to have ONE authority.
+                // ⛔ ResourceBalance.Starter itself is deliberately UNCHANGED (still coins 15) —
+                // SaveMigrator uses it as the default for resource-less legacy saves, so editing it
+                // would silently hand 200 gold to every migrating save. Nobody ruled that.
+                if (st.Resources.Crystals != 250 || st.Resources.Food != 80
+                    || st.Resources.Coins != DeNelle.Core.State.StartingBudget.StrategicGold)
+                    failures.Add($"ResetToNewGame did not restore STARTER resources (got {st.Resources.Crystals}/{st.Resources.Food}/{st.Resources.Coins}; expected 250/80/{DeNelle.Core.State.StartingBudget.StrategicGold})");
                 if (st.BestWave != 0) failures.Add("ResetToNewGame did not zero bestWave");
                 if (st.HeroLevel != 1 || st.HeroXp != 0f) failures.Add("ResetToNewGame did not reset hero level/XP to 1/0");
                 if (st.HeroClass.ToNullable().HasValue) failures.Add("ResetToNewGame did not clear HeroClass (onboarding must re-prompt)");

@@ -4588,10 +4588,25 @@ namespace DeNelle.Editor
                         bool isRaids = id == DeNelle.Core.HudModel.ActionBarButtonId.Raids;
                         // WO-1008: the Raids face carries the model's STATE label, every other
                         // face its plain word -- exactly what ApplyRaidsDim paints.
-                        string word = isRaids ? model.RaidsFaceLabel : BarFaceWord(id);
+                        // WO-1219: and what it paints is now the base WORD plus the model's short
+                        // BADGE on a SECOND LINE (the one-line "Raids 0/5" ellipsised to
+                        // "Raids ..." on the owner's device, throwing away the numerals that are
+                        // the whole colourblind-safe tell). Mirrored here verbatim, FitBlock
+                        // included -- a capture that does not paint what the View paints is
+                        // worse than no capture.
+                        string word = isRaids
+                            ? (string.IsNullOrEmpty(model.RaidsFaceBadge)
+                                ? DeNelle.Core.HudModel.HudActionBarModel.RaidsBaseLabel
+                                : DeNelle.Core.HudModel.HudActionBarModel.RaidsBaseLabel + "\n" + model.RaidsFaceBadge)
+                            : BarFaceWord(id);
                         var face = ElarionUiKit.BuildObsidianButton(barBand, word,
                             ElarionUiKit.ObsidianButtonStyle.Style1, BarFaceColor(id),
                             new Vector2(x, 0f), new Vector2(x + barSlotW, 1f), null);
+                        if (isRaids && face != null)
+                        {
+                            var multiLine = face.GetComponentInChildren<TMP_Text>(true);
+                            if (multiLine != null) ElarionUiKit.FitBlock(multiLine);
+                        }
                         if (isRaids && model.RaidsDimmed && face != null)
                         {
                             // ApplyRaidsDim, verbatim: tint face + label toward Disabled and

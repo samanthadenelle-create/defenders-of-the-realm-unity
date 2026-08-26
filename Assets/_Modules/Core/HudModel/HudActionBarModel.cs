@@ -193,6 +193,7 @@ namespace DeNelle.Core.HudModel
         private bool _raidsDimComputed;
         private RaidDimReason _raidsDimReason = RaidDimReason.None;
         private string _raidsFaceLabel = RaidsBaseLabel;
+        private string _raidsFaceBadge = "";
         private string _manageFaceLabel = ManageBaseLabel;
         private string _manageFaceBadge = "";
         private int _manageStatusVersion = int.MinValue;   // change-detect on the published snapshot
@@ -297,6 +298,34 @@ namespace DeNelle.Core.HudModel
         public string RaidsFaceLabel => _raidsFaceLabel;
 
         /// <summary>
+        /// WO-1219 — the SAME dim tell, split into the half that can actually be PAINTED ON A
+        /// BAR FACE. Exactly the <see cref="ManageFaceBadge"/> split WO-1144 made, for exactly
+        /// the same proven reason and now with a second capture behind it.
+        ///
+        /// PROVEN CAUSE (owner Seeker felt-test 2026-08-26, tmp/screen-103219.png and
+        /// tmp/shield-seat-101829.png, both 2670x1200): the Raids face rendered "Raids ..." while
+        /// Build/Bag/Quests all fit. It is not a font fault and not a missing fit call —
+        /// <see cref="RaidsFaceLabel"/> is "Raids 0/5" (9 characters) and a bar face is one
+        /// <see cref="MaxVisibleFaces"/>-th of a 46 %-wide ActionBar zone, about 144 reference px
+        /// of label rect, which at ElarionUiKit's 30 px legibility FLOOR seats roughly ten
+        /// characters INCLUDING the button's own side padding. FitSingleLine did the only thing
+        /// left to it and ellipsised — and it ellipsised away the NUMBERS, which are the entire
+        /// colourblind-safe tell (WO-1008). A greyed face reading "Raids ..." says strictly less
+        /// than a greyed face reading "Raids".
+        ///
+        /// So the numerals move to a SECOND LINE on the face (the face is ~110 ref px tall — two
+        /// lines cost nothing) and the badge carries ONLY the count:
+        ///   live        -> ""      (the calm state IS the bare word)
+        ///   dimmed      -> "0/5"   (nothing trained) or "3/5" (army not full)
+        ///
+        /// <see cref="RaidsFaceLabel"/> is DELIBERATELY UNCHANGED — it stays the one-line string
+        /// WO-1008 authored, for traces, tooltips, the RaidsFaceStates capture caption and
+        /// anything with room for it. The View paints <see cref="RaidsBaseLabel"/> + newline +
+        /// this badge. ASCII only; never a colour, never a glyph.
+        /// </summary>
+        public string RaidsFaceBadge => _raidsFaceBadge;
+
+        /// <summary>
         /// WO-1008 — the full sentence for the greyed state, for any surface that can afford one
         /// (toast / tooltip). The Village-side RaidSelectionScreen owns the AUTHORITATIVE refusal
         /// copy on tap; this is the same distinction stated Core-side so a View never invents one.
@@ -364,10 +393,16 @@ namespace DeNelle.Core.HudModel
                 reason = (_source.RaidDeployableSlots + _source.RaidQueuedSlots) <= 0
                     ? RaidDimReason.NoTroops
                     : RaidDimReason.ArmyNotFull;
+            // WO-1219: the numerals are built ONCE and used twice — the one-line label (traces,
+            // tooltips, captures) and the face BADGE (the second line the bar actually paints).
+            // One source, so the sentence and the face can never disagree.
+            string faceBadge = reason == RaidDimReason.None
+                ? ""
+                : Math.Max(0, _source.RaidDeployableSlots + _source.RaidQueuedSlots) +
+                  "/" + Math.Max(1, _source.RaidCapSlots);
             string faceLabel = reason == RaidDimReason.None
                 ? RaidsBaseLabel
-                : RaidsBaseLabel + " " + Math.Max(0, _source.RaidDeployableSlots + _source.RaidQueuedSlots) +
-                  "/" + Math.Max(1, _source.RaidCapSlots);
+                : RaidsBaseLabel + " " + faceBadge;
 
             if (mask != _activeMask)
             {
@@ -383,12 +418,14 @@ namespace DeNelle.Core.HudModel
             // Edge on the REASON too, not just the bool: 0 troops -> 2 troops keeps dim==true but
             // changes the face text, and the View repaints only on this event.
             if (!_raidsDimComputed || dim != _raidsDimmed || reason != _raidsDimReason ||
-                !string.Equals(faceLabel, _raidsFaceLabel, StringComparison.Ordinal))
+                !string.Equals(faceLabel, _raidsFaceLabel, StringComparison.Ordinal) ||
+                !string.Equals(faceBadge, _raidsFaceBadge, StringComparison.Ordinal))
             {
                 _raidsDimComputed = true;
                 _raidsDimmed = dim;
                 _raidsDimReason = reason;
                 _raidsFaceLabel = faceLabel;
+                _raidsFaceBadge = faceBadge;
                 if (dim)
                     FlowTrace.Step("HudKit", "Raids face DIMMED reason=" + reason + " label='" + faceLabel +
                                    "' (visible + interactable - tap still reaches the drillmaster redirect)");

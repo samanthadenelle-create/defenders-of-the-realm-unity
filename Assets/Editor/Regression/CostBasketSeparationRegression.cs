@@ -76,9 +76,11 @@
 //   4 [applied]     every conversion already made (v17: tower_siege_tower; v18:
 //                   tower_ballista, jeweler, tower_arcane_spire,
 //                   healing_caravan; v19: arcane-tower) stays on its ruled side -- regular rows carry
-//                   zero crystals, magical rows carry zero wood and non-zero
-//                   crystals -- and each basket TOTAL is unchanged from its
-//                   pre-ruling value, because every fold was 1:1. A revert or a
+//                   zero crystals, magical rows carry zero wood at EVERY rung and
+//                   non-zero crystals AT THEIR TOP TIER (re-pointed from
+//                   every-rung by OWNER RULING 2026-08-26 / WO-1217 -- see the
+//                   in-method block; the pairing rule was NOT weakened) -- and each
+//                   basket TOTAL matches the pinned Totals[]. A revert or a
 //                   stealth re-balance both trip here.
 //
 // DELIBERATELY NOT DUPLICATED HERE: the structures-catalog dual-copy byte-equal
@@ -188,7 +190,11 @@ namespace DeNelle.Editor.Regression
             new Dictionary<string, AppliedRow>(StringComparer.OrdinalIgnoreCase)
             {
                 { "tower_siege_tower", new AppliedRow {
-                    Magical = false, Totals = new[] { 1080, 3240, 9450 },
+                    // ⚠ STEP 1 MOVED 3240 -> 1620 by WO-1217 Slice A (2026-08-26): the FIRST
+                    // upgrade step is now a flat 1.5x the build cost on every ladder
+                    // (1080 x 1.5 = 1620). Build and step 2 are untouched. Composition never
+                    // moved -- still wood + iron, crystals 0.
+                    Magical = false, Totals = new[] { 1080, 1620, 9450 },
                     Why = "REGULAR on the catalog's own evidence (displayName 'Sky Ballista (Anti-Air)', " +
                           "'Wall-mounted spear thrower', element None, projectileStyle 'bolt', _heightCadence " +
                           "SIEGE ENGINE group). v17, 2026-08-14. Crystals folded 1:1 into IRON. " +
@@ -201,7 +207,10 @@ namespace DeNelle.Editor.Regression
                           "application of the pass's per-ladder factors (a double application would read " +
                           "4320 on the build basket). Composition never moved: still wood + iron, crystals 0." } },
                 { "tower_ballista", new AppliedRow {
-                    Magical = false, Totals = new[] { 640, 1920, 5600 },
+                    // ⚠ STEP 1 MOVED 1920 -> 960 by WO-1217 Slice A (2026-08-26): flat 1.5x
+                    // the build cost on the first upgrade step (640 x 1.5 = 960). Build and
+                    // step 2 untouched; still wood + iron, crystals 0.
+                    Magical = false, Totals = new[] { 640, 960, 5600 },
                     Why = "REGULAR by OWNER ruling 2026-08-14, verbatim: \"thats a baliista mechanical\". The " +
                           "'wizard' in the id is stale naming; the row's data (displayName 'Ballista', element " +
                           "None, projectileStyle 'bolt', owner rename 2026-07-08) is what was ruled on. v18. " +
@@ -231,11 +240,25 @@ namespace DeNelle.Editor.Regression
                     // ⚠ IRON IS DELIBERATELY UNCHANGED (160/480/1400). At L3 iron is now the larger
                     // constraint — crystals gate ENTRY, iron gates SCALE — which is a consequence of
                     // the owner's crystal-only ruling, flagged rather than quietly rebalanced.
-                    Magical = true, Totals = new[] { 360, 880, 2200 },
+                    //
+                    // ⛔ RE-RULED AGAIN 2026-08-26 (WO-1217, catalog v38): ONLY TIER 3 COSTS
+                    // CRYSTALS. The build basket's 200 crystals and the L1->L2 step's 400 were
+                    // folded 1:1 into IRON, so those two rungs are now crystal-FREE
+                    // (build w0 f0 i360 c0; step1 w0 f0 i540 c0; step2 w0 f0 i1400 c800).
+                    // Step 1 also took Slice A's flat 1.5x-of-build rule (360 x 1.5 = 540),
+                    // which is why this total moves 880 -> 540 rather than staying at 600.
+                    // Totals therefore go 360/880/2200 -> 360/540/2200.
+                    // This is what re-pointed case 4's magical crystal assertion from
+                    // every-basket to top-tier -- see the ⛔ block in CaseAppliedRowStaysConverted.
+                    // The WO-947 PAIRING rule is untouched: wood is still 0 at every rung.
+                    Magical = true, Totals = new[] { 360, 540, 2200 },
                     Why = "MAGICAL (element 'Aether', behaviorId 'ArcaneTower', projectileStyle 'spell'); the " +
                           "PAIRING came from OWNER pin 1, verbatim: \"Crystals and Iron\". v18. Wood (40/48/100) " +
                           "folded 1:1 into CRYSTALS, the crystal-BASED side of the ruling. v37 (2026-08-24): " +
-                          "crystal MAGNITUDES re-ruled to 200/400/800 by the owner; pairing and fold unchanged." } },
+                          "crystal MAGNITUDES re-ruled to 200/400/800 by the owner; pairing and fold unchanged. " +
+                          "v38 (2026-08-26, WO-1217): ONLY TIER 3 costs crystals -- build + L2 crystals folded " +
+                          "1:1 into IRON, so this row is crystal-gated at the TOP of its ladder rather than at " +
+                          "every rung. Pairing (no wood) unchanged." } },
                 // NOTE: the Healer Tower row was converted here at v18 under the same pin-2 ruling and
                 // then RETIRED WHOLESALE at catalog v20 (WO-990, owner 2026-08-14). Its AppliedRow was
                 // removed with it -- case 4 FAILS on an entry whose row is missing, so a retirement must
@@ -732,13 +755,13 @@ namespace DeNelle.Editor.Regression
                     if (spec.Magical)
                     {
                         // Magical basket = CRYSTALS + IRON (owner pin 1, 2026-08-14). Wood is out.
+                        // ⚠ THE PAIRING HALF OF WO-947 IS UNTOUCHED BY THE 2026-08-26 RULING BELOW.
+                        // No wood may ever enter a magical row, at ANY rung. That is still checked
+                        // on EVERY basket, exactly as it was.
                         if (c.wood != 0)
                             failures.Add("[applied] '" + id + "' " + which + " charges " + c.wood + " wood - WO-947 " +
                                          "converted this row to MAGICAL (crystals + iron, NEVER wood). It has been " +
                                          "reverted or re-authored. " + spec.Why);
-                        if (c.crystals <= 0)
-                            failures.Add("[applied] '" + id + "' " + which + " charges NO crystals - a magical row " +
-                                         "under WO-947 is crystal-BASED. " + spec.Why);
                     }
                     else
                     {
@@ -756,6 +779,51 @@ namespace DeNelle.Editor.Regression
                                      "into the surviving side specifically so first-cost FEEL was unchanged. A " +
                                      "different total is a balance change riding on a composition ruling; if it is " +
                                      "intended, update AppliedRows with the owner's new numbers. " + spec.Why);
+                }
+
+                // =============================================================
+                // ⛔ RE-POINTED BY OWNER RULING 2026-08-26 (WO-1217). READ THIS BEFORE
+                //    TOUCHING IT -- it was moved by a RULING, not weakened to fit a change.
+                //
+                // WHAT THE RULE WAS (2026-08-14 -> 2026-08-26): a MAGICAL row had to carry
+                //   crystals > 0 in EVERY authored basket -- build cost AND every upgrade
+                //   step. That assertion lived inside the per-basket loop above.
+                //
+                // WHAT IT IS NOW: a MAGICAL row must carry crystals > 0 AT ITS TOP TIER --
+                //   the LAST authored basket. It is still crystal-BASED; the crystal gate
+                //   simply sits at the final rung instead of every rung.
+                //
+                // WHY IT CHANGED: the owner ruled on 2026-08-26 that on
+                //   'tower_arcane_spire' ONLY tier 3 costs crystals -- the build cost and
+                //   the L1->L2 step are now crystal-FREE, their crystals folded 1:1 into
+                //   IRON. That is a deliberate progression shape (iron gets you started,
+                //   crystals gate the top of the ladder), not a drift. The old
+                //   every-basket assertion is therefore FALSE AS WRITTEN and must be
+                //   re-pointed at the rung the ruling actually protects.
+                //
+                // WHAT IS *NOT* WEAKENED -- canon law here is "pin the exception, never
+                // soften the rule":
+                //   * WO-947 pin 1's PAIRING rule is fully intact and still enforced on
+                //     EVERY basket, above: NO WOOD may enter a magical row at any rung.
+                //   * A magical row that carries ZERO crystals ANYWHERE still FAILS here.
+                //     "Crystal-based" is not optional; only its POSITION on the ladder moved.
+                //   * Case 2 [regular] is untouched: crystals still appear on NO row outside
+                //     the pinned MagicalIds set.
+                //   * The frozen Totals[] still pin every rung, so the crystals that left
+                //     build/L2 had to land in iron 1:1 or case 4's total check trips.
+                // A future single-basket magical row (no upgrade ladder) is unaffected: its
+                // build cost IS its top tier.
+                // =============================================================
+                if (spec.Magical && baskets.Count > 0)
+                {
+                    var top = baskets[baskets.Count - 1];
+                    string topWhich = baskets.Count == 1 ? "build cost" : "upgrade step " + (baskets.Count - 1);
+                    if (top.crystals <= 0)
+                        failures.Add("[applied] '" + id + "' TOP TIER (" + topWhich + ") charges NO crystals - a " +
+                                     "magical row under WO-947 is crystal-BASED, and the owner's 2026-08-26 ruling " +
+                                     "moved that requirement to the FINAL rung, it did not remove it. Lower rungs " +
+                                     "may be crystal-free (iron gets you started, crystals gate the top); the top " +
+                                     "rung may not. " + spec.Why);
                 }
 
                 log.AppendLine("  [applied] '" + id + "' converted " + (spec.Magical ? "MAGICAL (crystals+iron)" : "REGULAR (wood+iron)") +

@@ -1031,6 +1031,14 @@ namespace DeNelle.Core.State
             // pair (NestedTypes.cs), now 0/0.
             s.Iron = StartingBudget.StrategicIron;
             s.Wood = StartingBudget.StrategicWood;
+            // WO-1217 Slice B (owner ruling 2026-08-26, verbatim: "so start gold at 200").
+            // Gold IS Resources.Coins — the shop/sell/research wallet — so this must land
+            // AFTER `s.Resources = ResourceBalance.Starter` above, whose coins:15 it replaces.
+            // Seeded through StartingBudget for the same reason wood/iron are: ONE authoritative
+            // home for the founding budget, no literal scattered here.
+            // ⛔ The two lines ABOVE stay ZERO (owner ruling 2026-07-13) and the `s.Stone = 20`
+            // line further up is WO-1212's to retire — neither is touched by this ruling.
+            s.Resources.Coins = StartingBudget.StrategicGold;
             s.BuildingCooldowns = new SerializableDict<string, double>();
             s.PendingBuilds = new List<PendingTowerBuild>();
             s.TutorialStep = TutorialStep.Step1;

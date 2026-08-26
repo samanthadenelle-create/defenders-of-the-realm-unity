@@ -1244,6 +1244,12 @@ namespace DeNelle.Editor
             // itself. Namespace is DeNelle.Editor.Regression (read the suite file, not this
             // neighbour). ---
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "capture-provenance suite", () => { if (!DeNelle.Editor.Regression.CaptureProvenanceRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[capture-provenance] " + r); });
+            // WO-1214 — drops bank to INVENTORY and never auto-equip; the equip seam refuses
+            // class/level-ineligible gear instead of disarming the hero. Registered here by the
+            // LEAD: the implementing agent was lane-fenced out of this file and said so, and an
+            // oracle that is written but never registered is an oracle that never runs — exactly
+            // what RegressionMarkerRegression exists to catch.
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "drops-to-inventory suite", () => { if (!DeNelle.Editor.Regression.DropsGoToInventoryRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[drops-to-inventory] " + r); });
 
             // =====================================================================
             //  >>> REGISTERED ORACLE SUITES — END FENCE <<<  (new lines go ABOVE)
@@ -3256,7 +3262,14 @@ namespace DeNelle.Editor
             log.AppendLine("[hand-slot] main-hand / off-hand mutual-exclusion rules:");
 
             const string Job = "knight";   // has BOTH a 1H main and a 2H in the catalog
-            int level = 99;                // unlock everything for the test
+            // WO-1214: the probe below is a bare GearLoadout with no HeroProgression, so the equip
+            // seam sees it as LEVEL 1 - and the seam now enforces the level requirement and fails
+            // closed (Ruling 3). Picking ids at level 99 used to "work" only because a manual
+            // equip enforced no gate at all; it would now be refused and this case would report a
+            // phantom hand-slot failure. Ids are therefore chosen at the level the probe HAS.
+            // Verified against weapons.json: a level-1 knight has a 1H, a 2H and a shield, so the
+            // three rules below are all still exercised for real.
+            int level = 1;
 
             WeaponDef oneH   = GearCatalog.BestOneHandedWeapon(Job, level);
             WeaponDef twoH   = FindTwoHanded(Job, level);

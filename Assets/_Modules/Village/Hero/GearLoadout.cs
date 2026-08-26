@@ -161,6 +161,47 @@ namespace DeNelle.Village
         /// <summary>Fired after any manual or auto equip change (shop/equip UI can subscribe to refresh lists or HUD).</summary>
         public event System.Action OnGearChanged;
 
+        // ── WO-1214: THE EQUIP SEAM REFUSES, IN WORDS ────────────────────────────
+        // Ruling 3: enforce class + level HERE, not only in the UI. GearCatalog.MeetsReq was made
+        // public by "F8 seq-642 Fix B" precisely so this seam COULD ask the question, and then
+        // nothing here asked it - so a manual/non-UI equip (arena grants, outpost drops, story
+        // grants, companion setup, AutoPilot) enforced NEITHER gate. Ruling 2: the refusal must
+        // reach the player as a SENTENCE, never a greyed control and never colour alone.
+        //
+        // The words come from GearCatalog.CanEquipWeaponNow / CanEquipArmorNow (ONE authority for
+        // both this seam and the equip UI), are published here for any View that wants to show the
+        // last refusal, and are ALSO raised as an event so a live panel can surface it immediately.
+
+        /// <summary>The player-facing sentence explaining the most recent REFUSED equip, or null
+        /// when the last equip was accepted. Set by the equip seam; read by the equip UI.</summary>
+        public string LastEquipRefusal { get; private set; }
+
+        /// <summary>Raised with the player-facing sentence whenever this seam refuses an equip.</summary>
+        public event System.Action<string> OnEquipRefused;
+
+        /// <summary>
+        /// The class this loadout equips FOR - the exact string the seam gates against
+        /// (see <see cref="CurrentJob"/> for the four-tier precedence). PUBLIC because a View
+        /// that wants to ASK the eligibility question before offering an equip has to ask it
+        /// about the SAME class the seam will use; re-deriving the wearer's class in the UI is
+        /// how the shop and the loadout end up disagreeing.
+        /// </summary>
+        public string WearerClass => CurrentJob();
+
+        /// <summary>The level the seam gates against (1 when this wearer has no HeroProgression).</summary>
+        public int WearerLevel => _progression != null ? _progression.Level : 1;
+
+        /// <summary>Record + log + announce a refused equip. Never mutates a slot - that is the
+        /// point of failing closed. <paramref name="traceDetail"/> is the §12 capture line.</summary>
+        private void RefuseEquip(string playerReason, string traceDetail)
+        {
+            LastEquipRefusal = playerReason;
+            FlowTrace.Warn("Gear", "EQUIP REFUSED (WO-1214): " + traceDetail +
+                " | shown to the player as: \"" + (playerReason ?? "<null>") + "\" | the item is NOT equipped " +
+                "and NOT destroyed - it stays in the inventory and remains sellable (Ruling 2).");
+            OnEquipRefused?.Invoke(playerReason);
+        }
+
         // ── WO-295: Legendary "Aegis of Elarion" set bonus ───────────────────────
         // The full Aegis set = an Aegis WEAPON (per-class) + the Aegis ARMOR, both
         // carrying setId "aegis". A full set grants:
@@ -1041,7 +1082,23 @@ namespace DeNelle.Village
                 }
                 else
                 {
-                    FlowTrace.Warn("Gear", $"EnforceHandSlots: no 1H main-hand exists for class '{job}' at level {level} — hero is UNARMED (off-hand retained).");
+                    // WO-1214 Ruling 4 - FAIL CLOSED. This branch used to leave the hero holding a
+                    // shield and NOTHING ELSE, permanently, with no in-game way back (the reported
+                    // P0). EquipOffHandById now refuses this equip up front, so reaching here means
+                    // the state was ALREADY corrupt (a save written before this fix, restored by
+                    // ApplyPersistedEquip). The off-hand is the piece we give up: it is still owned,
+                    // still in the bag and still sellable, whereas an unarmed hero cannot fight.
+                    var rearm = ResolveAutoBestMainHand(job, level, out string rearmBranch);
+                    FlowTrace.Warn("Gear",
+                        $"EnforceHandSlots: no 1H main-hand exists for class '{job}' at level {level}, so keeping " +
+                        $"off-hand '{EquippedOffHand?.id ?? "<null>"}' would leave the hero UNARMED. Ruling 4 fails " +
+                        $"closed: the OFF-HAND is dropped and the main hand is re-armed with " +
+                        $"'{rearm?.id ?? "<null>"}' (branch={rearmBranch}). The off-hand item is NOT destroyed - it " +
+                        "stays in the inventory and remains sellable. If this fires outside a legacy save, an equip " +
+                        "path bypassed EquipOffHandById's WO-1214 gate.");
+                    EquippedOffHand = null;
+                    EquippedWeapon = rearm;
+                    PersistHandSlotsAfterFailClosed();
                 }
             }
 
@@ -1054,18 +1111,57 @@ namespace DeNelle.Village
                 // (the off-hand was the thing just added in the shield-while-2H path, and the 2H
                 // path itself clears the off-hand BEFORE calling this). Fall the main hand back to
                 // a 1H so the hero is never unarmed.
-                FlowTrace.Step("Gear", $"EnforceHandSlots: 2H main '{EquippedWeapon.id}' conflicts with off-hand '{EquippedOffHand.id}' -> 2H removed, main falls back to a 1H.");
                 var fallback = ResolveOwnedOneHandedRefill(job, level);   // OWNED-gated; same floor
-                EquippedWeapon = fallback;   // may be null only if no 1H exists for this class AT ALL
                 if (fallback != null)
+                {
+                    FlowTrace.Step("Gear", $"EnforceHandSlots: 2H main '{EquippedWeapon.id}' conflicts with off-hand '{EquippedOffHand.id}' -> 2H removed, main falls back to a 1H.");
+                    EquippedWeapon = fallback;
                     FlowTrace.Step("Gear", $"EnforceHandSlots: main-hand fell back to 1H '{fallback.id}'.");
+                }
                 else
-                    FlowTrace.Warn("Gear", "EnforceHandSlots: no 1H fallback for class — main hand left empty (off-hand retained).");
+                {
+                    // WO-1214 Ruling 4 - FAIL CLOSED. The old code assigned the null fallback into
+                    // EquippedWeapon FIRST and only then logged, so the 2H was already gone: the
+                    // hero shipped with an empty main hand and a shield. The 2H now WINS and the
+                    // off-hand is dropped instead (still owned, still sellable).
+                    FlowTrace.Warn("Gear",
+                        $"EnforceHandSlots: 2H main '{EquippedWeapon.id}' conflicts with off-hand " +
+                        $"'{EquippedOffHand.id}', and class '{job}' has NO one-handed main-hand at level {level} " +
+                        "to fall back to. Ruling 4 fails closed: the 2H is KEPT and the off-hand is dropped, " +
+                        "because an unarmed hero cannot fight while a bagged shield can still be sold.");
+                    EquippedOffHand = null;
+                    PersistHandSlotsAfterFailClosed();
+                }
             }
             else if (mainIs2H && !haveOff)
             {
                 // Healthy 2H state — nothing to do, off-hand already empty.
             }
+        }
+
+        /// <summary>
+        /// WO-1214 Ruling 4 - persist the hands the fail-closed branch just rescued.
+        ///
+        /// WHY THIS WRITES PLAYERPREFS FROM AN ENFORCEMENT PATH. The disarmed state the owner hit
+        /// is PERSISTED: `equip.offhand-&lt;class&gt;` holds the shield and `equip.weapon-&lt;class&gt;` holds
+        /// the empty sentinel, so ApplyPersistedEquip restores the broken pair on EVERY load. Fixing
+        /// only the in-memory slots would leave the save re-creating the bug at the next boot, which
+        /// is precisely the "no in-game way to recover" half of the P0. Writing the rescued pair back
+        /// is what makes an existing broken save self-heal on first load.
+        ///
+        /// The off-hand ITEM is untouched by this - it lives in the inventory ledger, not in these
+        /// keys, so it stays owned, visible and sellable (Ruling 2).
+        /// </summary>
+        private void PersistHandSlotsAfterFailClosed()
+        {
+            string key = PrefJobKey();
+            PlayerPrefs.SetString(PrefOffHandKey + key, PrefNoneSentinel);
+            PlayerPrefs.SetString(PrefWeaponKey + key,
+                EquippedWeapon != null ? EquippedWeapon.id : PrefNoneSentinel);
+            PlayerPrefs.Save();
+            FlowTrace.Step("Gear",
+                $"EnforceHandSlots(fail-closed): persisted main='{EquippedWeapon?.id ?? PrefNoneSentinel}' " +
+                $"off='{PrefNoneSentinel}' under '{key}' so the disarmed pair cannot be restored on the next load.");
         }
 
         // Apply a NEW main-hand weapon and enforce the slot rules. A 2H clears the off-hand
@@ -1117,7 +1213,8 @@ namespace DeNelle.Village
                 return;
             }
 
-            // A shield/off-hand goes to the off slot (and persists there).
+            // A shield/off-hand goes to the off slot (and persists there). EquipOffHandById runs
+            // the WO-1214 gates itself, so routing before the check keeps ONE gate per slot.
             if (w.IsOffHandItem)
             {
                 EquipOffHandById(id);
@@ -1125,6 +1222,18 @@ namespace DeNelle.Village
             }
 
             int level = _progression != null ? _progression.Level : 1;
+
+            // WO-1214 Ruling 3 - class + level enforced AT THE SEAM, fail closed. Before this,
+            // every non-UI caller walked straight in and the only thing standing between a Mage
+            // and a Knight's blade was the shop list's pre-filter.
+            if (!GearCatalog.CanEquipWeaponNow(w, EquippedWeapon, CurrentJob(), level,
+                                               out string refuseWords, out string refuseTrace))
+            {
+                RefuseEquip(refuseWords, "EquipWeaponById('" + id + "') - " + refuseTrace);
+                return;
+            }
+
+            LastEquipRefusal = null;
             SetMainHand(w, CurrentJob(), level);
             PlayerPrefs.SetString(PrefWeaponKey + PrefJobKey(), id);   // persist per class
             // A 2H equip removed the off-hand — persist the empty off slot so it doesn't restore.
@@ -1162,6 +1271,20 @@ namespace DeNelle.Village
             }
 
             int level = _progression != null ? _progression.Level : 1;
+
+            // WO-1214 Rulings 3 + 4 - class gate, level gate, AND the armed-hero invariant.
+            // The Ruling 4 branch is the one that kills the reported defect outright: a job:"any"
+            // shield onto a Mage holding a 2H staff used to evict the staff and then ask for a 1H
+            // replacement that the catalog does not have, leaving the hero holding a shield and
+            // nothing else. The seam now REFUSES instead of degrading to a null main hand.
+            if (!GearCatalog.CanEquipWeaponNow(w, EquippedWeapon, CurrentJob(), level,
+                                               out string refuseWords, out string refuseTrace))
+            {
+                RefuseEquip(refuseWords, "EquipOffHandById('" + id + "') - " + refuseTrace);
+                return;
+            }
+
+            LastEquipRefusal = null;
             bool clearedTwoHander = EquippedWeapon != null && EquippedWeapon.IsTwoHanded;
             SetOffHand(w, CurrentJob(), level);
 
@@ -1204,6 +1327,19 @@ namespace DeNelle.Village
                 FlowTrace.Warn("Gear", $"EquipArmorById('{id}') — no ArmorDef in catalog; equip skipped.");
                 return;
             }
+
+            // WO-1214 Ruling 3 - the SAME class + weight + level question BestArmor asks, asked at
+            // the manual seam. Without it a Mage could be handed heavy plate by any non-UI caller
+            // and Refresh would silently drop it again on the next refresh (ArmorFitsClass).
+            int armorLevel = _progression != null ? _progression.Level : 1;
+            if (!GearCatalog.CanEquipArmorNow(a, CurrentJob(), armorLevel,
+                                              out string armorWords, out string armorTrace))
+            {
+                RefuseEquip(armorWords, "EquipArmorById('" + id + "') - " + armorTrace);
+                return;
+            }
+
+            LastEquipRefusal = null;
             EquippedArmor = a;
             PlayerPrefs.SetString(PrefArmorKey + PrefJobKey(), id);   // persist per class
             PlayerPrefs.Save();

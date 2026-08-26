@@ -15,9 +15,8 @@
 //      GearVisualApplier). We add it if the hero has none yet so this works on
 //      every hero with no scene/builder change.
 //   2. Pick a weapon id + armor id by the hero's class from GearTable (existing
-//      catalog ids in weapons.json / armor.json). Manual equip ignores the level
-//      req (it's a story grant, not a level unlock), so a level-1 hero still gets
-//      the proper piece.
+//      catalog ids in weapons.json / armor.json), then BANK BOTH into
+//      VillageInventory (WO-1214: the grant is a possession first, an equip second).
 //   3. Equip both -> the hero model updates (GearVisualApplier re-attaches the
 //      weapon/armor accents to the body bones; the bow path is handled by
 //      HeroBowAttachment as usual). A small heal-burst VFX + an equip SFX sell it.
@@ -59,8 +58,15 @@ namespace DeNelle.Village
         }
 
         /// <summary>
-        /// Gear-by-class table (WO-364). Ids resolve against weapons.json / armor.json;
-        /// manual equip ignores the level req so the grant always lands.
+        /// Gear-by-class table (WO-364). Ids resolve against weapons.json / armor.json.
+        ///
+        /// ⚠ WO-1214: the line that used to sit here - "manual equip ignores the level req so the
+        /// grant always lands" - IS RETIRED AND WAS FALSE-BY-CONSEQUENCE. It described a HOLE, not
+        /// a rule: GearLoadout's equip seam simply asked no question, which is the same hole that
+        /// let a job:"any" shield disarm a Mage. The seam now enforces class + level and fails
+        /// closed, so `knight_iron` (req level 3) and `mage_oak` (req level 3) will be REFUSED on a
+        /// level-1 hero. Apply() therefore BANKS the grant into VillageInventory first: the player
+        /// owns it, sees it in the bag and can sell it, and it equips the moment they qualify.
         ///   Knight  -> Iron Longsword (knight_iron) + Elarion Plate (armor_plate)
         ///   Ranger  -> Hunter's Shortbow (ranger_starter) + Tanned Leather (armor_leather)
         ///   Mage    -> Oakheart Staff (mage_oak) + Wanderer's Cloth (armor_cloth)
@@ -121,16 +127,42 @@ namespace DeNelle.Village
                     // try/catch — leaving the companion ARMOR-ONLY with the failure silently
                     // swallowed. Isolating each equip means a weapon failure never discards
                     // the armor result (and vice-versa), and each is Fail-rolled-up on throw.
+                    // WO-1214 Rulings 1-3: BANK THE GRANT BEFORE EQUIPPING. A story grant is a
+                    // POSSESSION, and the equip seam now enforces class + level and fails closed
+                    // - this file's own header used to say "manual equip ignores the level req so
+                    // the grant always lands", which was true only because the seam asked nothing.
+                    // Depositing into the ledger first means an item the hero cannot yet hold
+                    // (knight_iron and mage_oak both require level 3) is still OWNED, visible in
+                    // the bag and sellable, instead of evaporating on a refusal.
+                    var ledger = DeNelle.Village.Crafting.VillageInventory.Instance;
+                    if (ledger != null)
+                    {
+                        ledger.Add(grant.ArmorId, 1);
+                        ledger.Add(grant.WeaponId, 1);
+                        FlowTrace.Step("CompanionGear",
+                            $"banked grant into VillageInventory: armor='{grant.ArmorId}' weapon='{grant.WeaponId}' " +
+                            "(WO-1214 - the player owns the gift whether or not it can be equipped yet).");
+                    }
+                    else
+                    {
+                        FlowTrace.Warn("CompanionGear",
+                            "VillageInventory.Instance is NULL - the story grant cannot be banked, so anything the " +
+                            "equip seam refuses is LOST. Equip is attempted anyway.");
+                    }
+
                     bool armorOk = false, weaponOk = false;
+                    string armorRefusal = null, weaponRefusal = null;
                     FlowTrace.Try("CompanionGear", $"EquipArmorById '{grant.ArmorId}'", () =>
                     {
                         loadout.EquipArmorById(grant.ArmorId);
                         armorOk = true;
+                        armorRefusal = loadout.LastEquipRefusal;   // read BEFORE the next equip clears it
                     });
                     FlowTrace.Try("CompanionGear", $"EquipWeaponById '{grant.WeaponId}'", () =>
                     {
                         loadout.EquipWeaponById(grant.WeaponId);
                         weaponOk = true;
+                        weaponRefusal = loadout.LastEquipRefusal;
                     });
 
                     // V (§12): VERIFY the equip actually TOOK. EquipById can return without
@@ -145,12 +177,30 @@ namespace DeNelle.Village
                         $"weaponCall={weaponOk} weaponSlot={weaponTook} " +
                         $"(EquippedArmor='{loadout.EquippedArmor?.id ?? "<null>"}', EquippedWeapon='{loadout.EquippedWeapon?.id ?? "<null>"}').");
 
+                    // WO-1214: a slot that is empty because the SEAM REFUSED is not the same defect
+                    // as a slot that is empty for no stated reason. A refusal is expected, explained
+                    // and recoverable (the piece is banked and sellable), so it is a Warn naming the
+                    // player-facing sentence; an UNEXPLAINED miss stays a Fail.
                     if (!armorTook)
-                        FlowTrace.Fail("CompanionGear",
-                            $"armor '{grant.ArmorId}' did NOT take (EquippedArmor null after EquipArmorById call={armorOk}) — companion may render without armor.");
+                    {
+                        if (!string.IsNullOrEmpty(armorRefusal))
+                            FlowTrace.Warn("CompanionGear",
+                                $"armor '{grant.ArmorId}' was REFUSED by the equip seam: {armorRefusal} " +
+                                "It is banked in the inventory and stays sellable (WO-1214 Ruling 2).");
+                        else
+                            FlowTrace.Fail("CompanionGear",
+                                $"armor '{grant.ArmorId}' did NOT take (EquippedArmor null after EquipArmorById call={armorOk}) — companion may render without armor.");
+                    }
                     if (!weaponTook)
-                        FlowTrace.Fail("CompanionGear",
-                            $"weapon '{grant.WeaponId}' did NOT take (EquippedWeapon null after EquipWeaponById call={weaponOk}) — companion may be left ARMOR-ONLY (the owner symptom).");
+                    {
+                        if (!string.IsNullOrEmpty(weaponRefusal))
+                            FlowTrace.Warn("CompanionGear",
+                                $"weapon '{grant.WeaponId}' was REFUSED by the equip seam: {weaponRefusal} " +
+                                "It is banked in the inventory and stays sellable (WO-1214 Ruling 2).");
+                        else
+                            FlowTrace.Fail("CompanionGear",
+                                $"weapon '{grant.WeaponId}' did NOT take (EquippedWeapon null after EquipWeaponById call={weaponOk}) — companion may be left ARMOR-ONLY (the owner symptom).");
+                    }
 
                     // R (§12): the equip pieces that DID land stay — we never roll the whole
                     // grant back on a single-slot miss (a half-grant beats no grant). The
