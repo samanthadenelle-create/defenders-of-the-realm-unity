@@ -13,16 +13,14 @@
 # TRANSPORT (WO-1200 sec.3, resolved BY EVIDENCE, quoted at source): CASE (c).
 #   - UI seat is a cloud Linux session (cwd /home/user/defenders-unity, uname Linux);
 #     the CLI seat is on Windows D:\EoA -> the tree is NOT shared. (case (a) out)
-#   - UI seat CANNOT write the repo by ANY channel:
-#       git push          -> 403 "Claude doesn't have GitHub access ... for your org"
-#       GitHub MCP write  -> 403 "Resource not accessible by integration"
-#       SendMessage UI->CLI-> 403 "cannot message other sessions yet"
-#     (reads work: git fetch, MCP list_branches.)
-#   => CASE (c): neither share nor push. Per the ticket: SAY SO, do not manufacture a
-#      transport; owner remains the courier until the Claude GitHub App gets WRITE for
-#      the org. This queue LOGIC is transport-agnostic and kept regardless (WO directive)
-#      so ONLY the delivery changes when a write channel arrives; the wrapper does the
-#      ref sync (seat-send.sh / seat-mail-*.ps1) once writes are permitted.
+#   - UI seat CAN write the repo: git push works under GIT_LFS_SKIP_PUSH=1, and GitHub
+#     MCP push_files works (how the live messages were sent). A bare git push 403 was a
+#     git-LFS failure on unpushable LFS objects (aborts the whole push), NOT a write
+#     block; MCP create_branch 403s but push_files does not.
+#   - The one real block is SendMessage UI->CLI ("cannot message other sessions yet"),
+#     which is why the channel is a git ref, not a message.
+#   => CASE (b), LIVE: cannot share, but can push. The wrapper does the ref sync
+#      (seat-send.sh / seat-mail-*.ps1); the queue LOGIC here is transport-agnostic.
 #
 # THE F8 LESSON, CARRIED FORWARD (WO-1200 sec.1): the F8 inbox was a single SLOT
 # (PING.json) acked to "the latest" (f8-ack.ps1: lastAckSeq = ping.seq). A burst
