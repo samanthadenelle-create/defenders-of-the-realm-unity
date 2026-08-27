@@ -16,8 +16,11 @@ if (Test-Path 'Builds\WebGL\index.html') {
     "DEPLOY_START" | Out-File -Encoding ascii -Append $status
     $out = & vercel deploy --yes 2>&1
     $out | Out-File -Encoding ascii 'Builds\vercel-deploy.txt'
-    # capture the deployment URL (vercel prints the https://... url)
-    $url = ($out | Select-String -Pattern 'https://\S+' | Select-Object -Last 1).Matches.Value
+    # Capture the PLAYABLE deployment URL, not the final URL in the JSON block.
+    # Vercel also prints inspectorUrl and deploymentApiUrl after the preview URL;
+    # choosing the last generic https:// match records the API endpoint instead.
+    $url = ($out | Select-String -Pattern 'https://[a-zA-Z0-9-]+\.vercel\.app' -AllMatches |
+        ForEach-Object { $_.Matches.Value } | Select-Object -Last 1)
     "DEPLOY_URL $url" | Out-File -Encoding ascii -Append $status
     "CHAIN_DONE $(Get-Date -Format o)" | Out-File -Encoding ascii -Append $status
 } else {
