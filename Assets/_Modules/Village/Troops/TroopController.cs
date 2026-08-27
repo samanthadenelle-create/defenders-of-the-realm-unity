@@ -142,6 +142,21 @@ namespace DeNelle.Village
         private bool _hasSpeed, _hasAttack, _hasCast, _hasInCombat, _hasHit, _hasDead;
         /// <summary>Mage/Cleric controllers: strike fires Cast; melee/ranged fire Attack.</summary>
         private bool _useCastStrike;
+        /// <summary>
+        /// WO-935 Phase 3 (archer row): Ranger controllers read as a BOW SHOT - a released
+        /// arrow that flies to the target - instead of the melee connect arc. Mutually
+        /// exclusive with <see cref="_useCastStrike"/> by construction (one resolver,
+        /// TroopFactory.ResolveRoleController, returns exactly one of Mage / Ranger / Knight).
+        /// </summary>
+        private bool _useBowShot;
+        /// <summary>
+        /// Lazily attached bow-shot presentation (WO-935 Phase 3). RangedAttackVFX is the
+        /// INCUMBENT projectile launcher and is reused verbatim - Enemy.EnsureCastVfx attaches
+        /// the very same component the very same way for enemy ranged casts. It owns the
+        /// pooled body, the release flash and the arrival impact, so this slice writes NO
+        /// second projectile mover, which is exactly what the work order forbids.
+        /// </summary>
+        private RangedAttackVFX _bowVfx;
 
         // §12 instrumentation (owner defect 2026-08-02 "troops slide / T-pose"): the LAST step of the
         // chain — proof that a parameter was actually written to a live Animator. One line per troop,
@@ -322,8 +337,10 @@ namespace DeNelle.Village
                 _isSupport = string.Equals(def.Role, "support", System.StringComparison.OrdinalIgnoreCase);
                 _structureDamageMult = def.StructureDamageMult > 0f ? def.StructureDamageMult : 1f;
                 _unitDamageMult = def.UnitDamageMult > 0f ? def.UnitDamageMult : 1f;
-                // Melee → Knight Attack; archer → Ranger Attack; mage → Mage Cast.
+                // Melee -> Knight Attack; archer -> Ranger Attack; mage -> Mage Cast.
                 _useCastStrike = TroopFactory.UsesCastStrike(def, def.Model);
+                // WO-935 Phase 3 (archer row): the same resolver decides the STRIKE READ.
+                _useBowShot = TroopFactory.UsesBowShot(def, def.Model);
             }
 
             // WO-771.9: seed the re-base baseline from the def; ApplyUpgradeStats overwrites it
@@ -683,6 +700,40 @@ namespace DeNelle.Village
                 {
                     Vector3 hitPos = foeComp.transform.position + Vector3.up * 1.0f;
 
+                    // WO-935 Phase 3 (ARCHER ROW) - the bow shot, and the reason it forks here
+                    // rather than layering on top of the melee arc.
+                    //
+                    // The archer's damage was, and REMAINS, instant and hit-scan: TakeDamage has
+                    // already run at the top of this branch and is deliberately untouched, so DPS,
+                    // threat and every downstream damage hook are byte-identical to before this
+                    // change. This is option (a) of the work order - PURE PRESENTATION over the
+                    // existing instant damage. Option (b), a real travel time, moves combat maths
+                    // and is a different ticket.
+                    //
+                    // RangedAttackVFX is the INCUMBENT launcher and is reused verbatim: Enemy
+                    // attaches the identical component the identical way for enemy ranged casts
+                    // (Enemies/Enemy.cs, EnsureCastVfx). It already owns the muzzle/release flash,
+                    // the POOLED travelling body and the arrival impact, so this slice adds NO
+                    // second projectile mover - which the work order forbids by name.
+                    //
+                    // NO onArrive callback is passed, on purpose. An arrival payload here would
+                    // re-time the damage to the flight and quietly change DPS, and it would fire
+                    // after this troop can have died. The arrow is decoration over a hit that has
+                    // already landed.
+                    //
+                    // The melee arc is REPLACED, not layered: a stone-slash arc on a bow release
+                    // would read as the wrong verb, and the two must stay distinguishable at a
+                    // glance in greyscale (colourblind law).
+                    if (_useBowShot)
+                    {
+                        Guard.Try("TroopVisual", "bow shot vfx", () =>
+                        {
+                            var bow = EnsureBowVfx();
+                            if (bow != null) bow.FireArrow(hitPos);
+                        });
+                        return;
+                    }
+
                     Guard.Try("TroopVisual", "melee connect vfx", () =>
                         VFXManager.Play(VFXType.Impact_Physical, hitPos,
                                         Quaternion.identity, playSound: false));
@@ -711,6 +762,21 @@ namespace DeNelle.Village
                 case DamageElement.Ice:   return CombatCast.Arcane;
                 default:                  return CombatCast.Fireball;
             }
+        }
+
+        /// <summary>
+        /// WO-935 Phase 3 (archer row): lazily attach the INCUMBENT ranged launcher.
+        /// A VERBATIM mirror of Enemy.EnsureCastVfx - same component, same lazy
+        /// TryGetComponent-then-AddComponent shape - so both sides of a ranged exchange are
+        /// launched by one owner rather than by two near-copies that can drift.
+        /// Never returns a component on a dead body.
+        /// </summary>
+        private RangedAttackVFX EnsureBowVfx()
+        {
+            if (this == null) return null;
+            if (_bowVfx == null)
+                _bowVfx = TryGetComponent<RangedAttackVFX>(out var rv) ? rv : gameObject.AddComponent<RangedAttackVFX>();
+            return _bowVfx;
         }
 
         // =====================================================================

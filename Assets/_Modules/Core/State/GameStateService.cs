@@ -590,6 +590,7 @@ namespace DeNelle.Core.State
                 EverBuiltStructureIds = s.EverBuiltStructureIds != null ? new List<string>(s.EverBuiltStructureIds) : null,   // WO-834 — ever-player-built ledger (v36; monotonic — the blank-town baked-twin gate input)
                 DefenseReports = s.DefenseReports != null ? new List<DeNelle.Core.Defense.DefenseOutcomeRecord>(s.DefenseReports) : null,   // WO-1026 — defence-report ring buffer (additive default-on-read; NO schema bump)
                 LastSiegeUnixMs = s.LastSiegeUnixMs,   // WO-1026 — siege cadence clock (SEPARATE from LastHarvestClaimMs by design — WO-1147)
+                EverCompletedRaid = s.EverCompletedRaid,   // WO-823 Phase E (v41) - has this save ever finished a raid; the ONE input to the first-raid soft gate
                 RaidCooldowns = s.RaidCooldowns != null ? new List<RaidCooldownRecord>(s.RaidCooldowns) : null,   // WO-728 — per-camp raid cooldown windows (additive default-on-read; NO schema bump)
             };
         }
@@ -728,6 +729,11 @@ namespace DeNelle.Core.State
                     p.RaidCooldowns[i] = RaidCooldownRecord.Normalize(p.RaidCooldowns[i]);
                 s.RaidCooldowns = p.RaidCooldowns;
             }
+            // WO-823 Phase E (v41) - the first-raid soft gate signal. Absent on a pre-v41
+            // wire -> keep GameState's false, which is FAIL-OPEN (an easier first raid),
+            // never a lockout; MigrateToV41 derives a better answer for real old saves
+            // before this runs.
+            if (p.EverCompletedRaid.HasValue) s.EverCompletedRaid = p.EverCompletedRaid.Value;
             EnsureZoneGraph(s);                       // backfill a pre-v17 / empty save's zone graph
         }
 
@@ -1196,6 +1202,7 @@ namespace DeNelle.Core.State
             s.DefenseReports = new List<DeNelle.Core.Defense.DefenseOutcomeRecord>();   // WO-1026 — New Game: no attack history.
             s.LastSiegeUnixMs = 0;                            // WO-1026 — New Game: reseed the siege cadence clock on first evaluation (no retroactive assault).
             s.RaidCooldowns = new List<RaidCooldownRecord>();  // WO-728 — New Game: no camp is recovering, every raid is available. AUDIT NOTE: this line is what stops "Start New" inheriting the previous save's lockouts — exactly the Settlements defect found 2026-08-02 directly below.
+            s.EverCompletedRaid = false;                      // WO-823 Phase E (v41) - New Game: no raid has ever been finished, so the FIRST raid is softened to 3 deployable slots. RaidDeployController.ReconcileRaidEnd stamps it true at the first raid exit (victory, retreat OR hero death) and the full army cap applies from then on, permanently.
             s.EverBuiltStructureIds = new List<string>();     // WO-834 (v36) — New Game: nothing ever built. With StrategicPlacementMigrated=true (above) this makes every baked twin's surface gate CLOSED = the truly blank Build-Your-Own town; choosing Default Town clears the marker and the migration writer then grants the template ids.
             s.Tribes = new List<DeNelle.Core.World.TribeState>();          // WO-160 (v34) — New Game: no claimed tribe progress (managers re-seed from defs).
             s.Wards = new List<DeNelle.Core.World.WardStoneState>();       // WO-112 (v34) — New Game: no relit wards (base reach only).

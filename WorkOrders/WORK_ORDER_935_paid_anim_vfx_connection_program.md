@@ -1,6 +1,6 @@
 # WORK ORDER 935 — Paid animation + VFX pack connection program
 
-**Status:** READY — PARTIAL. Phase 1 LIVE; the 2026-08-21 KayKit caster animation slice is implemented; the full pack matrix remains. ⛔ Assign **ONE numbered phase at a time** — this is a program, not a single handable ticket. Phase 2b / Wildlands and the HDR changes stay **owner-directed** and are not to be pulled without an owner call.
+**Status:** FIXED 2026-08-27 - gated `COMPILE_GATE_OK` + `REGRESSION_OK 307/307 suites` (Builds/w7-c, Builds/w7-r). AWAITING OWNER FELT-VERIFY to close.
 
 *(Board note 2026-08-24 — Ready-queue audit, `READY_FOR_REVIEW.md`: leading token corrected to a canonical bucket word. Only the status token and this note changed; the ticket body and its claims are untouched.)*
 

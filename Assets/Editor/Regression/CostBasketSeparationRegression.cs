@@ -73,6 +73,11 @@
 //   3 [pins]        every pending-pin id still EXISTS and still VIOLATES (else the
 //                   exemption is stale and is hiding the next regression), and the
 //                   pins are logged distinguishably for the owner call.
+//   7 [repair-carve-out] the WO-947 REPAIR EXCEPTION, fenced: the crystals-per-iron
+//                   rate is authored on 'repair_default' and NO other row, at the RULED
+//                   number; the base repair price still emits zero crystals; an
+//                   unauthored slot is not convertible. Red-proved against four
+//                   deliberately-broken rows before the live pass is believed.
 //   4 [applied]     every conversion already made (v17: tower_siege_tower; v18:
 //                   tower_ballista, jeweler, tower_arcane_spire,
 //                   healing_caravan; v19: arcane-tower) stays on its ruled side -- regular rows carry
@@ -109,6 +114,10 @@ using Newtonsoft.Json.Converters;
 using Newtonsoft.Json.Linq;
 using UnityEngine;
 using DeNelle.Core.Catalog;
+// NOTE: NO 'using DeNelle.Village' here on purpose -- that namespace also declares a
+// ResourceCost (the EconomyService struct) and this file uses the Core.Catalog one bare
+// in four places. The repair carve-out's pricing authority is spelled out in full instead.
+using WallRepair = DeNelle.Village.WallRepairController;
 
 namespace DeNelle.Editor.Regression
 {
@@ -306,6 +315,7 @@ namespace DeNelle.Editor.Regression
                     CaseInvariantAndRegular(entries, failures, log);
                     CasePendingPinsStillStand(entries, failures, log);
                     CaseAppliedRowStaysConverted(entries, failures, log);
+                    CaseRepairCrystalCarveOut(entries, failures, log);
                 }
                 // WIDENED 2026-08-21 (owner ruling): "a rule that inspects one file while three
                 // files author costs is not a rule". Two WO-947 violations survived for months
@@ -327,7 +337,10 @@ namespace DeNelle.Editor.Regression
                          "ruled side with their basket totals intact. WIDENED 2026-08-21: " +
                          "building-tiers.json tier baskets carry no crystals on regular buildings " +
                          "(and no wood on the magical one), and no .cs under Assets/_Modules builds " +
-                         "a cost basket naming wood + iron + crystals together.";
+                         "a cost basket naming wood + iron + crystals together. WIDENED 2026-08-27 (PROD-014 slice d): " +
+                         "the crystals-for-repair carve-out is authored on '" + RepairRateRowId + "' ONLY at " +
+                         "the ruled " + RuledCrystalsPerIron + " crystals/iron, the base repair price still " +
+                         "emits zero crystals, and an unauthored slot is NOT CONVERTIBLE rather than free.";
                 Debug.Log("COST_BASKET_OK\n" + log);
                 return true;
             }
@@ -829,6 +842,186 @@ namespace DeNelle.Editor.Regression
                 log.AppendLine("  [applied] '" + id + "' converted " + (spec.Magical ? "MAGICAL (crystals+iron)" : "REGULAR (wood+iron)") +
                                ", totals " + string.Join("/", Array.ConvertAll(spec.Totals, t => t.ToString())) + " preserved");
             }
+        }
+
+        // =====================================================================
+        //  CASE 7 [repair-carve-out] -- PROD-014 slice (d). THE ONE PLACE CRYSTALS
+        //  MAY TOUCH A REGULAR STRUCTURE, AND THE FENCE AROUND IT.
+        // ---------------------------------------------------------------------
+        //  OWNER RULING 2026-08-24 AMENDS WO-947, it does not bypass it. The ruling now
+        //  reads: regular structures are BUILT and UPGRADED with wood + iron, magical
+        //  ones with crystals, and REPAIR may be paid in CRYSTALS for anything.
+        //  OWNER RULING 2026-08-26 sets the number: 1.0 CRYSTAL PER IRON, chosen 60%
+        //  above the measured 0.625 natural-exchange floor (the $1.99 impulse rung) so a
+        //  player who HAS iron still spends iron.
+        //
+        //  THE EXCEPTION IS THE POINT; THE ENFORCEMENT STAYS. The WO says this suite must
+        //  ENCODE the exception explicitly, and warns what happens if it is instead
+        //  loosened or deleted: the separation stops being enforced at all and the next
+        //  accidental crystal cost lands silently. So this case does not relax cases 1-4
+        //  by one row -- repair_default carries crystals 0 in its basket and is still
+        //  judged by them exactly like every other regular row. It adds a FENCE around
+        //  the new field:
+        //
+        //    a  repair_default authors repo.repairCrystalsPer.perIron == the RULED rate.
+        //    b  NO OTHER ROW authors a rate. The carve-out is a property of the repair
+        //       ECONOMY, and the moment it can be authored per-structure it is a crystal
+        //       cost on a regular building wearing a different name.
+        //    c  the repair pricing row itself carries NO crystal build cost.
+        //    d  BEHAVIOUR: WallRepairController.CostForFraction emits crystals = 0 at
+        //       every damage fraction, even from a build cost that carries crystals. The
+        //       base price stays in kind; crystals are only ever an opt-in top-up.
+        //    e  BEHAVIOUR: the conversion prices ONLY the slots that have an authored
+        //       rate, and reports the rest NOT CONVERTIBLE -- a rate of 0 must never read
+        //       as "free", which is the free-repair exploit MaterialsZero was fixed for.
+        //
+        //  RED-FIRST (WO-1138 / PROD-008). Rules a-c are a PURE predicate, run first over
+        //  four rows whose defects are authored on purpose. If any of those stays silent
+        //  the live pass proves nothing and this case fails on that instead.
+        // =====================================================================
+
+        /// <summary>The ONE row allowed to author a crystals-for-repair rate.</summary>
+        private const string RepairRateRowId = "repair_default";
+
+        /// <summary>OWNER RULING 2026-08-26. Changing this number takes another ruling, not an edit.</summary>
+        private const float RuledCrystalsPerIron = 1.0f;
+
+        private static void CaseRepairCrystalCarveOut(List<CatalogEntry> entries, List<string> failures, StringBuilder log)
+        {
+            // --- RED FIRST: the predicate must SEE each defect --------------------
+            var redIds   = new[] { RepairRateRowId, RepairRateRowId, "tower_ballista", RepairRateRowId };
+            var redRates = new[]
+            {
+                default(RepairCrystalRate),
+                new RepairCrystalRate { perIron = 0.5f },
+                new RepairCrystalRate { perIron = RuledCrystalsPerIron },
+                new RepairCrystalRate { perIron = RuledCrystalsPerIron },
+            };
+            var redCrystals = new[] { 0, 0, 0, 30 };
+            var redWhat = new[]
+            {
+                "the carve-out DELETED (no rate authored at all)",
+                "a rate BELOW the natural-exchange floor (crystals cheaper than earning the iron)",
+                "the rate LEAKING onto an ordinary structure row",
+                "a crystal BUILD cost on the repair pricing row",
+            };
+            for (int i = 0; i < redIds.Length; i++)
+            {
+                var probe = new List<string>();
+                InspectRepairRateRow(redIds[i], redRates[i], redCrystals[i], probe);
+                if (probe.Count == 0)
+                {
+                    failures.Add("[repair-carve-out] RED PROOF FAILED: " + redWhat[i] + " produced NO finding. " +
+                                 "The fence around the WO-947 repair exception cannot see its own defect, so a " +
+                                 "clean pass below is worth nothing.");
+                    return;
+                }
+                log.AppendLine("  [repair-carve-out] red-proof " + (i + 1) + ": " + redWhat[i] + " -> " + probe[0]);
+            }
+            // ...and stay silent on the correct shape, or it would be suppressed within a week.
+            var quiet = new List<string>();
+            InspectRepairRateRow(RepairRateRowId, new RepairCrystalRate { perIron = RuledCrystalsPerIron }, 0, quiet);
+            InspectRepairRateRow("tower_ballista", default(RepairCrystalRate), 0, quiet);
+            if (quiet.Count != 0)
+            {
+                failures.Add("[repair-carve-out] the predicate fires on the CORRECT shape (" +
+                             string.Join(" | ", quiet) + ") - a rule that reddens healthy data gets muted, not fixed.");
+                return;
+            }
+
+            // --- a / b / c: the LIVE catalog --------------------------------------
+            bool sawRateRow = false;
+            foreach (var e in entries)
+            {
+                if (e == null || e.repo == null) continue;
+                if (string.Equals(e.id, RepairRateRowId, StringComparison.OrdinalIgnoreCase)) sawRateRow = true;
+                InspectRepairRateRow(e.id, e.repo.repairCrystalsPer, e.repo.cost.crystals, failures);
+            }
+            if (!sawRateRow)
+                failures.Add("[repair-carve-out] the '" + RepairRateRowId + "' row is MISSING from the catalog. " +
+                             "It is where the crystals-for-repair rate is authored AND the fallback price for " +
+                             "every structure with no cost row of its own - losing it silently disables both.");
+
+            // --- d: repair pricing never emits crystals ----------------------------
+            var withCrystals = new DeNelle.Core.Catalog.ResourceCost { wood = 120, food = 0, iron = 60, crystals = 99 };
+            var fractions = new[] { 0.25f, 0.5f, 1f };
+            for (int i = 0; i < fractions.Length; i++)
+            {
+                var priced = WallRepair.CostForFraction(fractions[i], withCrystals);
+                if (priced.crystals != 0)
+                {
+                    failures.Add("[repair-carve-out] WallRepairController.CostForFraction(" + fractions[i] +
+                                 ") emitted " + priced.crystals + " crystals into the BASE repair price. The " +
+                                 "2026-08-24 amendment is an opt-in TOP-UP, not a crystal slot: the moment the " +
+                                 "base price carries crystals, every regular structure has a crystal cost and " +
+                                 "WO-947 is gone.");
+                    break;
+                }
+            }
+
+            // --- e: the conversion prices only what has an authored rate -----------
+            var ironShort = new DeNelle.Core.Catalog.ResourceCost { iron = 115 };
+            var ruled = new RepairCrystalRate { perIron = RuledCrystalsPerIron };
+            var price = WallRepair.CrystalPriceFor(ironShort, ruled, out bool ironOk);
+            if (!ironOk || price.crystals != 115)
+                failures.Add("[repair-carve-out] a 115-iron shortfall priced " + price.crystals + " crystals " +
+                             "(convertible=" + ironOk + ") at the ruled " + RuledCrystalsPerIron + "/iron. The " +
+                             "owner's own worked example is 115 iron short = 115 crystals.");
+            if (price.wood != 0 || price.food != 0 || price.iron != 0)
+                failures.Add("[repair-carve-out] the crystal top-up came back carrying materials (" +
+                             price.wood + "w/" + price.food + "f/" + price.iron + "i). It must be crystals ONLY - " +
+                             "the in-kind part of the price is the part the wallet already covers.");
+
+            var woodShort = new DeNelle.Core.Catalog.ResourceCost { wood = 10 };
+            var noRate = WallRepair.CrystalPriceFor(woodShort, ruled, out bool woodOk);
+            if (woodOk)
+                failures.Add("[repair-carve-out] a WOOD shortfall reported CONVERTIBLE with no perWood rate " +
+                             "authored, priced at " + noRate.crystals + " crystals. An unauthored rate means NOT " +
+                             "CONVERTIBLE, never free - the owner ruled one number (iron) and inventing the " +
+                             "others is economy policy.");
+
+            log.AppendLine("  [repair-carve-out] rate authored on '" + RepairRateRowId + "' ONLY, at " +
+                           RuledCrystalsPerIron + " crystals/iron (floor " +
+                           WallRepair.NaturalExchangeFloorCrystalsPerIron + "); base repair price " +
+                           "still emits zero crystals; unauthored slots are not convertible.");
+        }
+
+        /// <summary>
+        /// The pure fence, over ONE row's authored data. Kept parameterised (rather than reading
+        /// the entry) so the red-proof above can hand it defects that do not exist in the catalog.
+        /// </summary>
+        private static void InspectRepairRateRow(string id, RepairCrystalRate rate, int costCrystals, List<string> into)
+        {
+            bool isRateRow = string.Equals(id, RepairRateRowId, StringComparison.OrdinalIgnoreCase);
+
+            if (!isRateRow)
+            {
+                if (!rate.IsZero)
+                    into.Add("[repair-carve-out] row '" + id + "' authors a repairCrystalsPer rate. ONLY '" +
+                             RepairRateRowId + "' may: the crystals-for-repair exception is a property of the " +
+                             "repair ECONOMY, and a per-structure rate is a crystal price on a regular building " +
+                             "under another name. Delete it, or take an owner ruling.");
+                return;
+            }
+
+            if (rate.perIron <= 0f)
+                into.Add("[repair-carve-out] '" + RepairRateRowId + "' authors NO crystals-per-iron rate. The " +
+                         "owner ruled 1.0 on 2026-08-26; with the rate gone, a refused repair has no crystal " +
+                         "option at all and PROD-014 slice (d) is silently un-shipped.");
+            else if (rate.perIron != RuledCrystalsPerIron)
+                into.Add("[repair-carve-out] crystals-per-iron is " + rate.perIron + ", not the RULED " +
+                         RuledCrystalsPerIron + " (owner 2026-08-26). This number is a ruling, not a tuning knob" +
+                         (rate.perIron <= WallRepair.NaturalExchangeFloorCrystalsPerIron
+                            ? " - and it is at or BELOW the measured natural-exchange floor (" +
+                              WallRepair.NaturalExchangeFloorCrystalsPerIron + "), which makes crystals " +
+                              "the CHEAP way to repair and retires iron's sink"
+                            : "") + ".");
+
+            if (costCrystals != 0)
+                into.Add("[repair-carve-out] '" + RepairRateRowId + "' authors a crystal BUILD cost (" +
+                         costCrystals + "). It is the fallback price for every structure with no cost row of its " +
+                         "own, so a crystal slot here charges crystals to repair ordinary buildings - the exact " +
+                         "leak the carve-out is fenced against.");
         }
     }
 }

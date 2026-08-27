@@ -441,6 +441,27 @@ namespace DeNelle.Village.Hero
         // static readonly (not const) so the dead branch never trips CS0162.
         private static readonly bool GateDeployAtZeroTroops = false;
 
+        /// <summary>
+        /// WO-823 Phase E - the screen's ONE window onto readiness. Returns the SLOT-weighted
+        /// deployable count from <see cref="DeNelle.Village.ArmyReadiness"/>, the single
+        /// readiness formula, instead of the raw headcount this screen used to gate on.
+        ///
+        /// This is deliberately NOT a readiness predicate: it exposes a number the snapshot
+        /// already computed and decides nothing. Phase E REMOVED an opinion from this file;
+        /// it must never grow a new one. Anything that needs "may this player raid" reads
+        /// Snapshot.Ready upstream (RaidEntryGate / RaidSelectionScreen), never here.
+        ///
+        /// No GameState (headless / AutoPilot) -> Compute returns the never-false-block
+        /// snapshot with zero slots, and GateDeployAtZeroTroops is OFF by default, so the
+        /// deploy path stays open exactly as it does today.
+        /// </summary>
+        private static int ReadinessSlots()
+        {
+            var st = DeNelle.Core.State.GameStateService.Instance != null
+                ? DeNelle.Core.State.GameStateService.Instance.State : null;
+            return DeNelle.Village.ArmyReadiness.Compute(st).DeployableSlots;
+        }
+
         // FOOTER action strip — Auto Recommend (stub) + the big DEPLOY CTA.
         // WO-839 #5: FrameCore's footer is now an explicit RAISED band tall enough for
         // MinTouchPx buttons (root cause: the inherited thin default band forced
@@ -474,9 +495,15 @@ namespace DeNelle.Village.Hero
             SeatFooterCtaAtCanonicalHeight(deployBtn);
             // WO-839 #6: scouting stays the default (GateDeployAtZeroTroops=false). Either
             // way the WO-820 readiness gate upstream (RaidEntryGate / ArmyReadiness.Compute
-            // at the HUD button + selection grid) stays the ONE authority — this screen
+            // at the HUD button + selection grid) stays the ONE authority - this screen
             // never re-derives or bypasses readiness.
-            bool troopsOk = !GateDeployAtZeroTroops || (_vm != null && _vm.DeployableCount > 0);
+            //
+            // WO-823 Phase E: this line USED TO READ _vm.DeployableCount, a raw HEADCOUNT,
+            // while ArmyReadiness is SLOT-WEIGHTED. That was the grey-button-versus-open-gate
+            // bug in its original form - the button and the door disagreed about what "enough
+            // army" means, and neither was lying. It now reads the ONE snapshot, so the two
+            // agree by construction rather than by coincidence.
+            bool troopsOk = !GateDeployAtZeroTroops || ReadinessSlots() > 0;
             if (deployBtn != null) deployBtn.interactable = _vm != null && _vm.CanDeploy && troopsOk;
         }
 
@@ -536,8 +563,10 @@ namespace DeNelle.Village.Hero
                     $"BEGIN ASSAULT refused: scene '{_vm.SceneName}' not in Build Settings.");
                 return;
             }
-            // WO-839 #6 (flag OFF by default — scouting with 0 troops is deliberate).
-            if (GateDeployAtZeroTroops && _vm.DeployableCount <= 0)
+            // WO-839 #6 (flag OFF by default - scouting with 0 troops is deliberate).
+            // WO-823 Phase E: the second copy of the same bypass, routed through the ONE
+            // ArmyReadiness snapshot for the same reason as the button state above.
+            if (GateDeployAtZeroTroops && ReadinessSlots() <= 0)
             {
                 ElarionUiKit.ShowToast("No troops trained yet. Visit the Barracks.", ElarionUiKit.ToastTone.Danger);
                 Debug.Log("[RaidDeployScreen] DEPLOY blocked: 0 deployable troops (GateDeployAtZeroTroops).");

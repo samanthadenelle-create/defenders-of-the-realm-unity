@@ -102,7 +102,12 @@ namespace DeNelle.Core.UI
             rt.offsetMin = Vector2.zero; rt.offsetMax = Vector2.zero;
             var layout = root.GetComponent<HorizontalLayoutGroup>();
             layout.childAlignment = TextAnchor.MiddleCenter;
-            layout.childControlWidth = false; layout.childControlHeight = true;
+            // WO-1060: childControlWidth MUST stay true. With it false the group lays children out at
+            // their RAW sizeDelta (Image 100, TextMeshProUGUI 200) and IGNORES the LayoutElement
+            // preferredWidth authored in AddCostText below -- a 3-part row then measures ~920 ref px
+            // inside a 228.8 px band and spills onto the neighbouring build card (33 BUTTON OVER TEXT
+            // findings, Builds/ship-ui-capture.log 2026-08-25). Pinned by CostRowFitRegression.
+            layout.childControlWidth = true; layout.childControlHeight = true;
             layout.childForceExpandWidth = false; layout.childForceExpandHeight = false;
             layout.spacing = 4;
             if (!string.IsNullOrEmpty(prefix)) AddCostText(root.transform, prefix, color);

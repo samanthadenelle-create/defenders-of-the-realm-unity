@@ -507,6 +507,23 @@ namespace DeNelle.Village
         }
 
         /// <summary>
+        /// WO-935 Phase 3 (archer row) - true when this troop's strike should read as a BOW
+        /// SHOT rather than a melee connect.
+        ///
+        /// Deliberately derived from <see cref="ResolveRoleController"/>, the SAME resolver
+        /// <see cref="UsesCastStrike"/> uses, rather than from a second reading of def.Role or
+        /// def.AttackRange. Role alone would be wrong twice over: the battlemage is authored
+        /// role "ranged" but resolves to Mage (it casts, and already has its presentation), and
+        /// an archer body can be selected by MODEL name with no role at all. One resolver, three
+        /// mutually exclusive strike reads - cast, bow, melee.
+        /// </summary>
+        public static bool UsesBowShot(TroopDef def, string model)
+        {
+            return string.Equals(ResolveRoleController(def, model), "Ranger",
+                System.StringComparison.OrdinalIgnoreCase);
+        }
+
+        /// <summary>
         /// True when the animator's CURRENTLY BOUND controller declares the canonical
         /// <see cref="AnimParams.Speed"/> float — i.e. TroopController can actually drive it.
         /// Speed is the load-bearing one: it is the only per-frame write (TroopController.cs:330),

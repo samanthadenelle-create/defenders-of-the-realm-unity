@@ -13,7 +13,14 @@
 //   roster     = Army.SlotsUsed(SlotOf)                    (ALL roster incl. wounded)
 //   queued     = BarracksService.CommittedTrainingSlots()  (in-flight Train jobs)
 //   cap        = Army.MaxArmySize
-//   Ready      = deployable + queued >= cap
+//   required   = cap, OR FirstRaidMinDeployableSlots (3) while the save has never
+//                finished a raid (WO-823 Phase E soft gate, GameState.EverCompletedRaid)
+//   Ready      = deployable + queued >= required
+//
+// WO-823 Phase E also made this the ONLY readiness opinion again: RaidDeployScreen
+// used to gate on a raw HEADCOUNT (_vm.DeployableCount) while this file is
+// slot-weighted, so the two disagreed about what "enough army" means. Both of those
+// sites now read this Snapshot. Never add a third.
 //
 // Pure aside from two service reads: BuildTimerService.Instance (via
 // CommittedTrainingSlots, 0 when absent) and ModifierService (via MaxArmySize).
@@ -32,6 +39,17 @@ namespace DeNelle.Village
     /// </summary>
     public static class ArmyReadiness
     {
+        /// <summary>
+        /// WO-823 Phase E - the softened FIRST-RAID bar, in SLOTS (owner ruling 2026-08-24:
+        /// "soften the first raid. THE NUMBER IS 3 OF 10", and "3 of 10" means slots).
+        ///
+        /// THE ONE DEFINITION AND THE ONE READ BOTH LIVE IN THIS FILE, deliberately. Phase E
+        /// exists because readiness had grown a second opinion inside the raid screen; a copy
+        /// of this constant anywhere else would be a third. Surfaces that need the number for
+        /// COPY read Snapshot.RequiredSlots instead.
+        /// </summary>
+        public const int FirstRaidMinDeployableSlots = 3;
+
         /// <summary>One computed readiness snapshot — see class header for the formula.</summary>
         public struct Snapshot
         {
@@ -43,8 +61,23 @@ namespace DeNelle.Village
             public int CapSlots;
             /// <summary>ALL roster slots incl. wounded (SlotsUsed) — the enqueue-cap seed.</summary>
             public int RosterSlots;
-            /// <summary>True when DeployableSlots + QueuedSlots cover CapSlots.</summary>
+            /// <summary>True when DeployableSlots + QueuedSlots cover RequiredSlots.</summary>
             public bool Ready;
+            /// <summary>
+            /// The slot bar this snapshot was judged against (WO-823 Phase E). Normally
+            /// <see cref="CapSlots"/>; on a save that has never finished a raid it is the
+            /// softened <see cref="FirstRaidMinDeployableSlots"/>. Surfaces that SAY the
+            /// number ("Army 4 of 10") must read this, not CapSlots, or the copy will
+            /// disagree with the gate that produced it.
+            /// </summary>
+            public int RequiredSlots;
+            /// <summary>
+            /// True when this snapshot was judged against the softened first-raid bar
+            /// (WO-823 Phase E). PRESENTATION ONLY - it may WORD the copy and drive the
+            /// slot meter; it must NEVER re-decide whether the raid door opens. That
+            /// decision is <see cref="Ready"/> and it is already made here.
+            /// </summary>
+            public bool FirstRaidSoftGate;
         }
 
         /// <summary>
@@ -62,7 +95,7 @@ namespace DeNelle.Village
             foreach (var t in army.GetDeployable())
                 deployable += TroopDialogueCommands.SlotOf(t.TroopDefId);
 
-            return Compute(army, deployable, BarracksService.CommittedTrainingSlots());
+            return Compute(army, deployable, BarracksService.CommittedTrainingSlots(), st.EverCompletedRaid);
         }
 
         /// <summary>
@@ -70,16 +103,36 @@ namespace DeNelle.Village
         /// so CommittedTrainingSlots is 0 headless): same formula, injected queued count.
         /// Public because the test assembly is separate; runtime callers use Compute(GameState).
         /// </summary>
-        public static Snapshot Compute(ArmyStorage army, int deployableSlots, int queuedSlots)
+        public static Snapshot Compute(ArmyStorage army, int deployableSlots, int queuedSlots,
+            bool everCompletedRaid = true)
         {
             int cap = army.MaxArmySize;
+
+            // WO-823 Phase E - the FIRST RAID is softened, and only the first.
+            // The owner ruling is literal: "soften the first raid. THE NUMBER IS 3 OF 10",
+            // and "3 of 10" means SLOTS, not a headcount - so three 1-slot basics fit, one
+            // 2-slot elite plus a basic fits, and a 4-slot catapult does not fit at all.
+            // That cost trade IS the decision the player gets to make. On a fresh save at
+            // Barracks tier 1 only footman and archer are trainable and both cost 1 slot,
+            // so the bar is three tier-1 basics by construction.
+            // The bar reverts to the full cap the moment EverCompletedRaid is stamped by
+            // RaidDeployController.ReconcileRaidEnd, and never softens again.
+            // ONE read of the constant, on purpose - see its doc comment.
+            int required = everCompletedRaid ? cap : FirstRaidMinDeployableSlots;
+            // A small-cap army is never made HARDER by the soft gate: the softened bar
+            // can only ever LOWER the requirement, never raise it.
+            if (required > cap) required = cap;
+            bool soft = required < cap;
+
             return new Snapshot
             {
                 DeployableSlots = deployableSlots,
                 QueuedSlots = queuedSlots,
                 CapSlots = cap,
                 RosterSlots = army.SlotsUsed(TroopDialogueCommands.SlotOf),
-                Ready = deployableSlots + queuedSlots >= cap
+                RequiredSlots = required,
+                FirstRaidSoftGate = soft,
+                Ready = deployableSlots + queuedSlots >= required
             };
         }
     }

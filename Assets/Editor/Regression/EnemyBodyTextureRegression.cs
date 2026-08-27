@@ -84,7 +84,15 @@ namespace DeNelle.Editor
             // ── (C) the other direction: the KNOWN-BAD state must FAIL ────────────────
             // This is the exact pre-fix wiring: four AccuRig skeleton bodies all bound to
             // the Mage's diffuse through the single shared Materials/Material_Pbr.mat.
-            const string mageDiffuse = EnemyContent + "/Skeleton_Mage.fbm/Material_Pbr_Diffuse.png";
+            // WO-1129 slice B: DERIVED, not re-typed. This was
+            // EnemyContent + "/Skeleton_Mage.fbm/Material_Pbr_Diffuse.png" - three
+            // EnemyArtPaths-owned naming decisions (the .fbm sidecar suffix, the embedded
+            // diffuse stem, the enemy content root) spelled out at a call site, where they
+            // cannot be re-pointed when the convention moves and cannot be traced on a miss.
+            // No longer const, because EmbeddedFolder is a method - which is the point: the
+            // convention now answers a question instead of being copied.
+            string mageDiffuse = DeNelle.Core.EnemyArtPaths.EmbeddedFolder("Skeleton_Mage")
+                                 + "/" + DeNelle.Core.EnemyArtPaths.EmbeddedDiffuseStem + ".png";
             var knownBad = new Dictionary<string, HashSet<string>>
             {
                 { "Skeleton_Warrior", new HashSet<string> { mageDiffuse } },
@@ -176,10 +184,12 @@ namespace DeNelle.Editor
             {
                 string body = Path.GetFileNameWithoutExtension(fbx);
 
-                // In scope only when the body ships embedded media (a `<Body>.fbm` sibling).
-                if (!Directory.Exists($"{EnemyContent}/{body}.fbm")) continue;
+                // In scope only when the body ships embedded media (the sidecar folder Unity
+                // extracts a model's embedded art into). WO-1129 slice B: both paths are asked
+                // for, not spelled - EnemyArtPaths owns the sidecar suffix and the FBX layout.
+                if (!Directory.Exists(DeNelle.Core.EnemyArtPaths.EmbeddedFolder(body))) continue;
 
-                var go = AssetDatabase.LoadAssetAtPath<GameObject>($"{EnemyContent}/{body}.fbx");
+                var go = AssetDatabase.LoadAssetAtPath<GameObject>(DeNelle.Core.EnemyArtPaths.FbxPath(body));
                 if (go == null) { log.AppendLine($"{body}: model asset would not load — skipped."); continue; }
 
                 var maps = new HashSet<string>();

@@ -717,6 +717,25 @@ namespace DeNelle.Village
                 return;
             }
 
+            // WO-823 Phase E - THE FIRST-RAID STAMP, and the ONLY writer of this flag.
+            // ReconcileRaidEnd is the latched seam every raid exit already funnels through
+            // (victory -> RaidVictoryController, retreat -> DoRetreat's ReconcileRaidEnd(0),
+            // hero death -> HeroHealth's ReconcileRaidEnd(0)), so stamping here covers all
+            // three exits with one line and no exit-specific branching. It sits AFTER the
+            // army null-guard on purpose: headless has no GameState, so a headless run can
+            // never spend a live player's softened first raid.
+            // No second writer, ever - a raid screen/panel/VM that set this would fork the
+            // one-owner seam and re-create the very drift Phase E exists to remove.
+            var raidState = GameStateService.Instance != null ? GameStateService.Instance.State : null;
+            if (raidState != null && !raidState.EverCompletedRaid)
+            {
+                raidState.EverCompletedRaid = true;
+                DeNelle.Core.Diagnostics.FlowTrace.Step("Raid",
+                    "FIRST RAID COMPLETED (stars " + starsEarned + ") - everCompletedRaid false->true. " +
+                    "The raid door now requires the FULL army cap instead of the softened " +
+                    "first-raid slot floor, permanently.");
+            }
+
             // Survivors = the living deployed bodies' owning ids; everyone else we
             // deployed fell -> wounded (recovery countdown). NEVER deleted.
             var deployedIds = new List<string>();

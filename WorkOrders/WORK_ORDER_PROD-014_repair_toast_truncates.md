@@ -1,6 +1,6 @@
 # PROD-014 — The "NEED MORE TO REPAIR" toast truncates on both lines
 
-**Status:** READY - PARTIAL (board reconcile 2026-08-25). **Slice (b) CODE HAS LANDED (`10912de95`) but its acceptance capture is still OWED, and slices (c) + (d) remain blocked** - so the ticket stays in Ready. Per-slice state:
+**Status:** FIXED 2026-08-27 - gated `COMPILE_GATE_OK` + `REGRESSION_OK 307/307 suites` (Builds/w7-c, Builds/w7-r). AWAITING OWNER FELT-VERIFY to close.
 
 ## ⭐ OWNER RULING 2026-08-25 - the multi-shortfall question is ANSWERED. This unblocks the bounce.
 

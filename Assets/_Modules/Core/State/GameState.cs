@@ -581,6 +581,27 @@ namespace DeNelle.Core.State
         /// </summary>
         public List<RaidCooldownRecord> RaidCooldowns = new List<RaidCooldownRecord>();
 
+        // -- WO-823 Phase E -- the FIRST-RAID soft gate signal (v41) ----------
+        /// <summary>
+        /// True once this save has finished at least one raid, by ANY exit -- victory,
+        /// retreat or hero death. The ONE persisted input to the WO-823 Phase E soft gate:
+        /// while it is false, <see cref="DeNelle.Village.ArmyReadiness"/> asks for only
+        /// FirstRaidMinDeployableSlots (3) deployable slots instead of the full army cap,
+        /// so a brand-new player is not made to fill ten slots before ever seeing a raid.
+        /// The moment it flips true the requirement is the full cap, permanently.
+        ///
+        /// Written in exactly ONE place -- RaidDeployController.ReconcileRaidEnd, the
+        /// latched seam every raid exit already funnels through. Never written by a raid
+        /// screen, panel or VM: a second writer would fork the one-owner seam, which is
+        /// the same defect Phase E exists to remove from RaidDeployScreen.
+        ///
+        /// Round-trips through SaveSchema v41. Additive default-on-read (nullable on the
+        /// wire; absent -> this initializer). MigrateToV41 derives it for existing saves
+        /// from the evidence a raid leaves behind (veterancy / camp cooldowns) -- see that
+        /// migrator for the two documented gaps.
+        /// </summary>
+        public bool EverCompletedRaid = false;
+
         /// <summary>
         /// WO-834 — record that <paramref name="itemId"/> has been player-built at least
         /// once (idempotent set-add, OrdinalIgnoreCase — catalog-id convention). Returns

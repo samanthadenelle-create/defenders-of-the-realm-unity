@@ -95,7 +95,12 @@ namespace DeNelle.Editor.Regression
             "Assets/Editor/CellarHollowProof.cs",
             "Assets/Editor/Regression/EnemyArtCoverageRegression.cs",
             "Assets/Editor/Regression/EnemyRigColorRegression.cs",
-            "Assets/Editor/Regression/EnemyBodyTextureRegression.cs",
+            // WO-1129 slice B, 2026-08-26: EnemyBodyTextureRegression.cs LEFT this ledger.
+            // Its three token literals (the .fbm sidecar, the embedded diffuse stem, the FBX
+            // path) now come from EnemyArtPaths.EmbeddedFolder / EmbeddedDiffuseStem /
+            // FbxPath. The file set is a RATCHET: it may shrink, never grow - so this entry
+            // is deleted rather than commented out with the path still readable, and a
+            // regression that re-types a token there will now FAIL rather than be tolerated.
             "Assets/_Modules/Village/Enemies/EnemyFactory.cs",
             "Assets/_Modules/Village/Enemies/EnemyBodyColorGuard.cs",
             "Assets/_Modules/BattleATB/AtbCombatantSwapper.cs",

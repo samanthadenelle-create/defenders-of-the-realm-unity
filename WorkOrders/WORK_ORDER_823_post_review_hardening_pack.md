@@ -1,6 +1,6 @@
 # WORK ORDER 823 — Post-review hardening pack (army readiness + founding card + oracles + RESULT hygiene)
 
-**Status:** READY - ⭐ **Phase E is now BUILDABLE (2026-08-24, UI seat): see "Phase E — THE IMPLEMENTABLE SPEC" at the end of this file.** The ruling alone was not enough — no "has ever completed a raid" signal existed anywhere; E1-E7 spec the field, the v38→v39 bump (FOUNDATIONAL_RULINGS.md §5, no owner ruling needed), the `ReconcileRaidEnd` seam, the derive-don't-default read-migration, and the `ArmyReadiness` routing. *(Prior line:)* ⭐ **Phase E's owner ruling LANDED 2026-08-24 (batch 2, ruling 8): the threshold is 3 OF 10**, first-ever raid only, and it MUST go through `ArmyReadiness`. Phases A-D shipped 2026-08-01 (`8560fced`). *(Prior line:)* BLOCKED - on an owner ruling (reconciled 2026-08-09 - Phases A through D SHIPPED in `8560fced`; the single outstanding item, Phase E (optional PO-tunable first-raid softness, P3), is explicitly awaiting the owner's ruling and cannot move without it)
+**Status:** FIXED 2026-08-27 - gated `COMPILE_GATE_OK` + `REGRESSION_OK 307/307 suites` (Builds/w7-c, Builds/w7-r). AWAITING OWNER FELT-VERIFY to close.
 
 **Status: READY — Phases A-D SHIPPED 2026-08-01 (8560fced); Phase E is now RULED (owner 2026-08-24: **3 of 10**, first raid only, via `ArmyReadiness`) and buildable.**  
 **Minted:** 2026-08-01 (CLI / Grok — from PM code review of Claude Fable check-ins)  

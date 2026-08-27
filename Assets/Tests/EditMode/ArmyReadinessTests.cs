@@ -118,6 +118,73 @@ namespace DeNelle.Tests.EditMode
             Assert.That(withWounded.DeployableSlots, Is.EqualTo(deployable), "wounded excluded from deployable");
         }
 
+        // ---- WO-823 Phase E: the FIRST-RAID soft gate ----------------------
+        // Owner ruling 2026-08-24: "soften the first raid. THE NUMBER IS 3 OF 10",
+        // and "3 of 10" means SLOTS, not a headcount. These pin BOTH directions -
+        // a softened gate that never re-hardens is the same defect as no gate.
+
+        [Test]
+        public void first_raid_opens_at_three_deployable_slots()
+        {
+            int bar = ArmyReadiness.FirstRaidMinDeployableSlots;
+            Assert.That(bar, Is.EqualTo(3), "the owner ruling is literal: the number is 3");
+
+            AddHealthy(bar);
+            _state.EverCompletedRaid = false;   // never raided
+
+            var s = ArmyReadiness.Compute(_state);
+
+            Assert.That(s.RequiredSlots, Is.EqualTo(bar), "the softened bar is the requirement");
+            Assert.That(s.FirstRaidSoftGate, Is.True, "the copy/meter layer must be able to say WHY");
+            Assert.That(s.CapSlots, Is.EqualTo(_state.Army.MaxArmySize), "the CAP is unchanged - only the requirement softens");
+            Assert.That(s.Ready, Is.True, "3 deployable slots open the FIRST raid");
+        }
+
+        [Test]
+        public void first_raid_stays_shut_below_three_slots()
+        {
+            AddHealthy(ArmyReadiness.FirstRaidMinDeployableSlots - 1);
+            _state.EverCompletedRaid = false;
+
+            var s = ArmyReadiness.Compute(_state);
+
+            Assert.That(s.Ready, Is.False, "the soft gate is a FLOOR, not an open door");
+        }
+
+        [Test]
+        public void the_soft_gate_never_returns_after_the_first_raid()
+        {
+            int bar = ArmyReadiness.FirstRaidMinDeployableSlots;
+            AddHealthy(bar);
+            _state.EverCompletedRaid = true;   // ReconcileRaidEnd has stamped it
+
+            var s = ArmyReadiness.Compute(_state);
+
+            Assert.That(s.RequiredSlots, Is.EqualTo(_state.Army.MaxArmySize), "the bar is the full cap again");
+            Assert.That(s.FirstRaidSoftGate, Is.False, "the softening is FIRST RAID ONLY");
+            Assert.That(s.Ready, Is.False, "the same 3 slots must NOT open a raid on a save that has already raided");
+        }
+
+        [Test]
+        public void the_seam_overload_defaults_to_the_strict_full_army_bar()
+        {
+            // Adding the parameter must not silently weaken any existing caller.
+            var s = ArmyReadiness.Compute(_state.Army, ArmyReadiness.FirstRaidMinDeployableSlots, 0);
+
+            Assert.That(s.FirstRaidSoftGate, Is.False, "the default is everCompletedRaid: true (strict)");
+            Assert.That(s.Ready, Is.False, "3 of 10 is not ready under the default reading");
+        }
+
+        [Test]
+        public void headless_never_meets_the_soft_gate()
+        {
+            // Phase A contract: a missing GameState must never dim or gate the raid door.
+            var s = ArmyReadiness.Compute((GameState)null);
+
+            Assert.That(s.Ready, Is.True, "null GameState still publishes READY");
+            Assert.That(s.FirstRaidSoftGate, Is.False, "headless has no first raid to soften");
+        }
+
         // NOTE — enqueue-past-cap CHARGING (review item d): BarracksService.EnqueueTraining's
         // per-unit spend-after-cap-check loop requires a live BuildTimerService.Instance
         // (a bootstrapped MonoBehaviour singleton) and the ResourceLedger wallet — neither

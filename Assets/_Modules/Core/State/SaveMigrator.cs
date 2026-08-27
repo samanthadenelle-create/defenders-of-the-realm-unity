@@ -79,6 +79,7 @@ namespace DeNelle.Core.State
                 { 38, MigrateToV38 },
                 { 39, MigrateToV39 },
                 { 40, MigrateToV40 },
+                { 41, MigrateToV41 },
             };
 
         /// <summary>
@@ -734,6 +735,79 @@ namespace DeNelle.Core.State
             else
                 FlowTrace.Step("Save", "v39->v40 (WO-1235): every gated recipe was already recorded as taught " +
                     "on this save; nothing to grandfather.");
+
+            return s;
+        }
+
+        /// <summary>
+        /// v40 -> v41 (WO-823 Phase E) -- DERIVE "has this save ever finished a raid".
+        ///
+        /// Phase E softens the FIRST raid only: while <c>everCompletedRaid</c> is false the
+        /// raid door asks for 3 deployable slots instead of the full army cap. A brand-new
+        /// player wants that. An EXISTING player must not get it -- they already earned past
+        /// the full-army gate, and handing them a softened raid would silently re-open a door
+        /// they had closed. The field is new, so a v40 payload carries no answer, and the save
+        /// VERSION is the only fact that separates "existing" from "new": a new game is created
+        /// AT CurrentVersion and never enters this migrator.
+        ///
+        /// THE EVIDENCE A COMPLETED RAID LEAVES BEHIND -- both derivations read state that
+        /// ONLY a finished raid can write:
+        ///   1. Any troop at <c>veterancyRank &gt;= 1</c>. RaidDeployController.GrantVeterancy
+        ///      is the sole caller of ArmyStorage.AddVeterancy, and it only fires from
+        ///      ReconcileRaidEnd at a 3-star clear.
+        ///   2. Any <c>raidCooldowns</c> record. RaidCooldownService is the sole writer and
+        ///      only stamps one when a camp is cleared.
+        ///
+        /// TWO GAPS, BOTH DELIBERATE, BOTH FAIL-OPEN, BOTH SELF-HEALING AFTER ONE RAID:
+        ///   (a) A veteran whose raids were all sub-3-star or lost (no veterancy) AND whose
+        ///       camp cooldowns have all expired and been pruned derives FALSE, and gets ONE
+        ///       extra softened raid before ReconcileRaidEnd stamps the flag for real. That
+        ///       costs the player nothing -- the gate is a floor on how much army they must
+        ///       bring, so a wrong FALSE is generous, never a lockout. The owner ruling on
+        ///       WO-823 E7 offers a one-time manual set for named saves; accepting and
+        ///       documenting is the no-code default and is what ships here.
+        ///   (b) Village2RaidController does not call ReconcileRaidEnd at all, so a first-ever
+        ///       STRONGHOLD raid does not clear the flag either. That is its own change with
+        ///       its own capture -- it is NOT fixed here with a second stamp, because a second
+        ///       writer would fork the one-owner seam this field depends on.
+        ///
+        /// WARNING: the failure mode this ordering avoids: deriving TRUE from something a new game
+        /// also has would lock a genuinely new player behind the full cap, which IS
+        /// unrecoverable-feeling. Both clauses above are impossible on a fresh save.
+        /// Idempotent: it only ever sets the field, and a save that already carries a value
+        /// (never possible at v40, but cheap to honour) is left alone.
+        /// </summary>
+        private static PersistedState MigrateToV41(PersistedState s)
+        {
+            if (s == null) return null;
+            if (s.EverCompletedRaid.HasValue) return s;   // already answered - never overwrite
+
+            bool veteran = false;
+            var owned = s.Army != null ? s.Army.Owned : null;
+            if (owned != null)
+            {
+                for (int i = 0; i < owned.Count; i++)
+                {
+                    if (owned[i] != null && owned[i].VeterancyRank >= 1) { veteran = true; break; }
+                }
+            }
+
+            bool hasCooldown = s.RaidCooldowns != null && s.RaidCooldowns.Count > 0;
+            bool derived = veteran || hasCooldown;
+            s.EverCompletedRaid = derived;
+
+            // Section 12: no silent migration. Either way this states WHICH clause decided,
+            // so a future "why is my raid gate soft/hard" report is triaged from this line.
+            if (derived)
+                FlowTrace.Step("Save", "v40->v41 (WO-823 E): everCompletedRaid=TRUE - raid evidence found (" +
+                    (veteran ? "veterancy" : "") + (veteran && hasCooldown ? "+" : "") +
+                    (hasCooldown ? "camp cooldown" : "") + "). This save keeps the FULL army gate.");
+            else
+                FlowTrace.Warn("Save", "v40->v41 (WO-823 E): everCompletedRaid=FALSE - no veterancy and no camp " +
+                    "cooldown on this save, so it reads as never having finished a raid. If this player HAS " +
+                    "raided (all clears sub-3-star and every cooldown expired, or their only raid was a Village2 " +
+                    "stronghold, which never calls ReconcileRaidEnd) they get ONE softened raid and the flag " +
+                    "self-corrects at the next raid end. Fail-open by design: the gate is a floor, never a lock.");
 
             return s;
         }

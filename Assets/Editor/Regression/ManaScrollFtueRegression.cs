@@ -313,7 +313,19 @@ namespace DeNelle.Editor.Regression
             };
 
             // Migrate it the way a real load does: from the last version that predates the gate.
-            var migrated = SaveMigrator.Migrate(preGate, SaveSchema.CurrentVersion - 1);
+            //
+            // !! DO NOT WRITE THIS AS `SaveSchema.CurrentVersion - 1`. It was exactly that, and it
+            // silently stopped testing anything the moment an unrelated ticket bumped the schema:
+            // the recipe gate landed at v40, so "pre-gate" is v39 - a HISTORICAL FACT that never
+            // moves. When WO-823 took CurrentVersion to 41, `CurrentVersion - 1` became 40, the
+            // chain skipped MigrateToV40 altogether, and the grandfather never ran. The oracle then
+            // reported that live players lose crafting - against production code that is CORRECT.
+            //
+            // A relative reference to a moving value is not a constant; it is a slow bug. Same
+            // defect class as the stale WO-number block, the retired dependency table, the portrait
+            // path in eleven literals, and echo-spec restating CurrentVersion = 39.
+            const int RecipeGateSchemaVersion = 40;   // the version WO-1235's gate landed at
+            var migrated = SaveMigrator.Migrate(preGate, RecipeGateSchemaVersion - 1);
             if (migrated == null)
             {
                 failures.Add("[migration] SaveMigrator.Migrate returned null for a pre-gate save.");
@@ -337,7 +349,7 @@ namespace DeNelle.Editor.Regression
             }
 
             // Idempotent: re-running must never TAKE anything away.
-            var again = SaveMigrator.Migrate(migrated, SaveSchema.CurrentVersion - 1);
+            var again = SaveMigrator.Migrate(migrated, RecipeGateSchemaVersion - 1);   // same historical pin - see the note above
             foreach (string id in RecipeUnlockKeys.GatedRecipeIds)
             {
                 string key = RecipeUnlockKeys.KeyFor(id);

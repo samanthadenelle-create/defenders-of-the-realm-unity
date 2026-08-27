@@ -29,6 +29,37 @@ namespace DeNelle.Core.Catalog
         public bool IsZero => wood == 0 && food == 0 && iron == 0 && crystals == 0;
     }
 
+    /// <summary>
+    /// PROD-014 slice (d) -- the CRYSTALS-FOR-REPAIR exchange rate, in crystals per unit of the
+    /// material a repair is short of. Authored on the 'repair_default' catalog row ONLY.
+    ///
+    /// WHY IT IS A NAMED CARVE-OUT AND NOT A COST. WO-947 separates the baskets: regular
+    /// structures are BUILT and UPGRADED with wood + iron, magical ones with crystals. The owner
+    /// amended that ruling on 2026-08-24 -- REPAIR, and only repair, may be PAID IN CRYSTALS for
+    /// anything. This struct is that amendment's whole surface: it is a conversion rate a player
+    /// may opt into at a refusal, never a slot in any structure's authored basket. Nothing here
+    /// can appear in repo.cost or repo.upgradeCost, and CostBasketSeparationRegression's
+    /// [repair-carve-out] case fails if a second row ever authors one.
+    ///
+    /// A ZERO RATE MEANS "NOT CONVERTIBLE", NOT "FREE". The owner ruled exactly one number on
+    /// 2026-08-26 -- 1.0 crystal per IRON, 60% above the measured 0.625 natural-exchange floor so
+    /// a player holding iron still spends iron. No rate was ruled for wood or food, so those stay
+    /// 0 and the shortfall in them simply cannot be paid in crystals. Choosing a number for them
+    /// would be inventing economy policy, which is the exact reason this slice was blocked for two
+    /// days.
+    /// JSON deserializes the optional "repairCrystalsPer" object straight in.
+    /// </summary>
+    [System.Serializable]
+    public struct RepairCrystalRate
+    {
+        public float perWood;
+        public float perFood;
+        public float perIron;
+
+        /// <summary>True when no rate at all was authored -- repair cannot be paid in crystals.</summary>
+        public bool IsZero => perWood <= 0f && perFood <= 0f && perIron <= 0f;
+    }
+
     [System.Serializable]
     public sealed class RepoProps
     {
@@ -52,6 +83,17 @@ namespace DeNelle.Core.Catalog
         /// Crystals. JSON deserializes the optional "cost" object straight into this.
         /// </summary>
         public ResourceCost cost = new ResourceCost();
+
+        /// <summary>
+        /// PROD-014 slice (d) -- crystals per unit of shortfall when a player chooses to pay a
+        /// REPAIR in crystals. See <see cref="RepairCrystalRate"/> for why this is a named
+        /// carve-out from WO-947 and not a cost slot. Authored on 'repair_default' ONLY; every
+        /// other row leaves it zero, which means "this row does not price crystal repair" -- the
+        /// rate is a property of the repair economy, not of the structure.
+        /// All-zero (the default) = repair cannot be paid in crystals at all.
+        /// JSON deserializes the optional "repairCrystalsPer" object straight into this.
+        /// </summary>
+        public RepairCrystalRate repairCrystalsPer = new RepairCrystalRate();
 
         /// <summary>
         /// THE ceiling on any placed structure's upgrade level -- the ONE number

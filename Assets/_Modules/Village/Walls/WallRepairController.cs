@@ -589,9 +589,172 @@ namespace DeNelle.Village
                 wood     = Mathf.CeilToInt(buildCost.wood * frac),
                 food     = Mathf.CeilToInt(buildCost.food * frac),
                 iron     = Mathf.CeilToInt(buildCost.iron * frac),
-                crystals = 0,   // owner 2026-07-11: crystals are never spent on repair
+                crystals = 0,   // owner 2026-07-11: crystals are never spent on repair.
+                                // STILL TRUE, and deliberately so: the 2026-08-24 crystals-for-repair
+                                // ruling is an OPT-IN top-up applied on top of this price (see
+                                // CrystalPriceFor below), NEVER a crystal slot in the base cost. The
+                                // ordinary WO-947 basket is untouched by that carve-out, and
+                                // CostBasketSeparationRegression [repair-carve-out] fails if it stops
+                                // being true.
             };
         }
+
+        // =====================================================================
+        //  CRYSTALS FOR REPAIR - a NAMED CARVE-OUT from WO-947. PROD-014 slice (d).
+        // ---------------------------------------------------------------------
+        //  WO-947 separates the baskets by what a structure IS: regular structures are
+        //  BUILT and UPGRADED with wood + iron, magical ones with crystals. The owner
+        //  AMENDED that on 2026-08-24 -- "REPAIR may be paid in crystals for anything" --
+        //  and set the rate on 2026-08-26: 1.0 CRYSTAL PER IRON.
+        //
+        //  THIS IS A CARVE-OUT, NOT A LOOSENING, and the shape is what keeps it one:
+        //    * The base price stays IN KIND. CostForFraction still emits crystals = 0 at
+        //      every fraction, so no repair, rebuild or Repair-All sweep can put crystals
+        //      into an ordinary basket on its own.
+        //    * Crystals only ever enter as a TOP-UP the player chooses, covering exactly
+        //      the part of the price the wallet cannot -- and only through this one method.
+        //    * The rate is AUTHORED IN DATA on the 'repair_default' row and on no other row
+        //      (structures-catalog.json repo.repairCrystalsPer). No C# literal, so it cannot
+        //      be re-tuned in code, and no structure row can grow a rate of its own.
+        //  CostBasketSeparationRegression's [repair-carve-out] case pins all three.
+        //
+        //  ZERO MEANS NOT CONVERTIBLE, NEVER FREE. The owner ruled ONE number, for iron.
+        //  perWood/perFood are 0, so a wood-short repair simply cannot be paid in crystals
+        //  and says so. Inventing rates for them would be economy policy, which is exactly
+        //  why this slice sat blocked -- and a zero read as "costs nothing" would be the
+        //  free-repair exploit MaterialsZero was fixed to close.
+        // =====================================================================
+
+        /// <summary>
+        /// The measured NATURAL EXCHANGE FLOOR in crystals per iron: the best real cross-rate a
+        /// player can already get, the $1.99 impulse rung (0.625). The owner's ruling prices the
+        /// repair top-up ABOVE this on purpose -- crystals are a convenience for the player who
+        /// has none, never a discount for the player who has iron. Named here so the regression
+        /// that guards the ruled rate compares against a cited number rather than a magic one.
+        /// </summary>
+        public const float NaturalExchangeFloorCrystalsPerIron = 0.625f;
+
+        /// <summary>
+        /// The authored crystals-per-material rates, read off the 'repair_default' catalog row.
+        /// All-zero when the row or the field is missing -- which disables the carve-out entirely
+        /// rather than defaulting to a guess, and is warned once so a missing row is visible.
+        /// </summary>
+        public static RepairCrystalRate CrystalRate()
+        {
+            var entry = CatalogRegistry.Get(DefaultCostCatalogId);
+            var repo = entry != null ? entry.repo : null;
+            if (repo == null || repo.repairCrystalsPer.IsZero)
+            {
+                FlowTrace.Warn("Repair",
+                    $"crystals-for-repair DISABLED - catalog row '{DefaultCostCatalogId}' authors no " +
+                    "repairCrystalsPer rate. A refused repair can only be paid in materials until the " +
+                    "data row is restored (PROD-014 slice d).");
+                return default;
+            }
+            return repo.repairCrystalsPer;
+        }
+
+        /// <summary>
+        /// The crystal price of a MATERIALS shortfall, at the authored rate. Pure and rate-injected
+        /// so a regression can price a shortfall without a live catalog.
+        /// <para><paramref name="convertible"/> is false when some part of the shortfall has NO
+        /// authored rate -- the caller must then refuse rather than quietly charge for the rest,
+        /// which would repair a structure the player cannot actually pay for.</para>
+        /// </summary>
+        public static CoreCost CrystalPriceFor(CoreCost shortfall, RepairCrystalRate rate, out bool convertible)
+        {
+            int wood = Mathf.Max(0, shortfall.wood);
+            int food = Mathf.Max(0, shortfall.food);
+            int iron = Mathf.Max(0, shortfall.iron);
+
+            convertible = (wood == 0 || rate.perWood > 0f)
+                       && (food == 0 || rate.perFood > 0f)
+                       && (iron == 0 || rate.perIron > 0f);
+
+            float crystals = wood * Mathf.Max(0f, rate.perWood)
+                           + food * Mathf.Max(0f, rate.perFood)
+                           + iron * Mathf.Max(0f, rate.perIron);
+            // Ceil, like every other repair price: the house never rounds a shortfall down to free.
+            return new CoreCost { crystals = Mathf.CeilToInt(crystals) };
+        }
+
+        /// <summary>The crystal price of a shortfall at the LIVE authored rate.</summary>
+        public static CoreCost CrystalPriceFor(CoreCost shortfall, out bool convertible)
+            => CrystalPriceFor(shortfall, CrystalRate(), out convertible);
+
+        /// <summary>Per-slot materials the wallet cannot cover for <paramref name="cost"/>. All-zero = affordable.</summary>
+        public CoreCost ShortfallFor(CoreCost cost)
+        {
+            var econ = EconomyService.Instance;
+            int wood = econ != null ? econ.Wood : 0;
+            int food = econ != null ? econ.Food : 0;
+            int iron = econ != null ? econ.Iron : 0;
+            return new CoreCost
+            {
+                wood = Mathf.Max(0, cost.wood - wood),
+                food = Mathf.Max(0, cost.food - food),
+                iron = Mathf.Max(0, cost.iron - iron),
+                crystals = 0,
+            };
+        }
+
+        /// <summary>
+        /// <paramref name="cost"/> re-expressed as ONE cost the player can actually pay: every
+        /// material the wallet covers stays IN KIND, and only the shortfall becomes crystals. The
+        /// result goes through the SAME <see cref="SpendMaterials"/> path as any other repair, so
+        /// it is a SINGLE atomic EconomyService.TrySpend and there is no second repair economy.
+        /// <para>False = this repair cannot be paid in crystals (no authored rate for what is
+        /// missing, or not enough crystals). Nothing is spent and nothing is repaired.</para>
+        /// </summary>
+        public bool TryBlendWithCrystals(CoreCost cost, out CoreCost blended, out string why)
+        {
+            blended = cost;
+            why = null;
+
+            var shortfall = ShortfallFor(cost);
+            if (MaterialsZero(shortfall)) return true;   // affordable in kind; no crystals involved
+
+            var price = CrystalPriceFor(shortfall, out bool convertible);
+            if (!convertible)
+            {
+                why = "no crystal exchange rate is authored for " + DescribeMaterials(shortfall);
+                FlowTrace.Step("Repair", $"crystal top-up REFUSED - {why} (PROD-014 slice d: an " +
+                                         "unauthored rate is NOT CONVERTIBLE, never free).");
+                return false;
+            }
+
+            blended = new CoreCost
+            {
+                wood     = cost.wood - shortfall.wood,
+                food     = cost.food - shortfall.food,
+                iron     = cost.iron - shortfall.iron,
+                crystals = cost.crystals + price.crystals,
+            };
+
+            if (!CanAffordMaterials(blended))
+            {
+                why = "short " + DescribeMaterials(shortfall) + " = " + price.crystals +
+                      " crystals, and the crystal wallet does not cover it";
+                FlowTrace.Step("Repair", $"crystal top-up REFUSED - {why}; wallet={WalletLine()}");
+                return false;
+            }
+
+            FlowTrace.Step("Repair",
+                $"crystal top-up: short {DescribeMaterials(shortfall)} -> {price.crystals} crystals; " +
+                $"blended price {DescribeMaterials(blended)} (ONE TrySpend, WO-947 repair carve-out).");
+            return true;
+        }
+
+        /// <summary>
+        /// Repair-All, with the part of each price the wallet cannot cover paid in CRYSTALS at the
+        /// authored rate (owner rulings 2026-08-24 + 2026-08-26). Identical to
+        /// <see cref="RepairAll"/> in every other respect -- same worst-first sweep, same items,
+        /// same single spend path -- because it IS that sweep with the blend switched on, not a
+        /// second repair system. An item whose shortfall has no authored rate, or whose blended
+        /// price exceeds the crystal wallet, is skipped exactly like an unaffordable one.
+        /// </summary>
+        public (int repairedCount, CoreCost spent, int remainingDamaged) TryRepairAllWithCrystals()
+            => RepairAllInternal(payShortfallInCrystals: true);
 
         /// <summary>
         /// Resolves a structure's BUILD cost in materials from where that cost
@@ -780,6 +943,16 @@ namespace DeNelle.Village
         /// Returns (repairedCount, spentMaterials, remainingDamaged).
         /// </summary>
         public (int repairedCount, CoreCost spent, int remainingDamaged) RepairAll()
+            => RepairAllInternal(payShortfallInCrystals: false);
+
+        /// <summary>
+        /// The ONE Repair-All sweep. <paramref name="payShortfallInCrystals"/> is the PROD-014
+        /// slice (d) carve-out: with it on, each item's price is blended through
+        /// <see cref="TryBlendWithCrystals"/> before the same single spend. Written as one method
+        /// with a flag rather than two sweeps on purpose -- a second copy of this loop is a second
+        /// repair economy, and the WO's own constraint is "no second repair system".
+        /// </summary>
+        private (int repairedCount, CoreCost spent, int remainingDamaged) RepairAllInternal(bool payShortfallInCrystals)
         {
             var items = CollectRepairAllSet();
             items.Sort((a, b) => b.DamageFraction.CompareTo(a.DamageFraction));   // worst-first
@@ -790,28 +963,44 @@ namespace DeNelle.Village
             foreach (var item in items)
             {
                 bool rebuild = item.DamageFraction >= DestroyedFraction;
-                if (!MaterialsZero(item.Cost) && !SpendMaterials(item.Cost,
+
+                // PROD-014 slice (d): the price the player actually pays. Without the carve-out
+                // this IS item.Cost, byte for byte - the blend only ever moves the UNAFFORDABLE
+                // part into crystals, and only when the caller asked for it.
+                var price = item.Cost;
+                if (payShortfallInCrystals && !MaterialsZero(item.Cost) &&
+                    !TryBlendWithCrystals(item.Cost, out price, out string why))
+                {
+                    remaining++;
+                    FlowTrace.Step("Repair",
+                        $"RepairAll(crystals): SKIPPED '{item.Name}' (dmg {item.DamageFraction:0.00}) - " +
+                        $"cost {DescribeMaterials(item.Cost)}, {why}");
+                    continue;
+                }
+
+                if (!MaterialsZero(price) && !SpendMaterials(price,
                         (rebuild ? "rebuild " : "repair ") + item.Name))
                 {
                     remaining++;
                     FlowTrace.Step("Repair",
                         $"RepairAll: SKIPPED '{item.Name}' (dmg {item.DamageFraction:0.00}) — " +
-                        $"cost {DescribeMaterials(item.Cost)} unaffordable, wallet={WalletLine()}");
+                        $"cost {DescribeMaterials(price)} unaffordable, wallet={WalletLine()}");
                     continue;
                 }
                 var fix = item.Fix;
                 Guard.Try("Repair", $"RepairAll fix '{item.Name}'", () => fix?.Invoke());
                 repaired++;
-                spent.wood += item.Cost.wood;
-                spent.food += item.Cost.food;
-                spent.iron += item.Cost.iron;
+                spent.wood += price.wood;
+                spent.food += price.food;
+                spent.iron += price.iron;
+                spent.crystals += price.crystals;
                 // REP-1 post-fix state: re-read the live fraction AFTER the fix ran —
                 // a paid repair that leaves damage on the structure is a logged line.
                 float postFrac = item.FractionNow != null ? item.FractionNow() : -1f;
                 FlowTrace.Step("Repair",
                     $"RepairAll: {(rebuild ? "REBUILT" : "repaired")} '{item.Name}' " +
                     $"(dmg {item.DamageFraction:0.00} -> post-fix {postFrac:0.00}) " +
-                    $"for {DescribeMaterials(item.Cost)}");
+                    $"for {DescribeMaterials(price)}");
             }
 
             FlowTrace.Step("Repair",

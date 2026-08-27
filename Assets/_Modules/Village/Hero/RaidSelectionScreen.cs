@@ -111,18 +111,29 @@ namespace DeNelle.Village.Hero
                 // fill every slot" reads as a maths puzzle when the real instruction is "you have
                 // no troops at all, go train some". The dim reason on the face
                 // (HudActionBarModel.RaidDimReason) and this copy tell the SAME two stories.
+                // WO-823 Phase E: the denominator is REQUIREDSLOTS, not CapSlots. On a save
+                // that has never raided the bar is the softened 3, and telling that player to
+                // "fill every slot" of 10 would be the copy contradicting the gate that
+                // produced it - the same disagreement Phase E removed from RaidDeployScreen.
+                // FirstRaidSoftGate WORDS this line; it does NOT decide it. The decision was
+                // already made by readiness.Ready above.
                 int have = readiness.DeployableSlots + readiness.QueuedSlots;
-                int cap = Mathf.Max(1, readiness.CapSlots);
+                int need = Mathf.Max(1, readiness.RequiredSlots > 0 ? readiness.RequiredSlots : readiness.CapSlots);
                 bool noTroopsAtAll = have <= 0;
                 DeNelle.Core.Diagnostics.FlowTrace.Step("Raid",
                     (noTroopsAtAll ? "NO-TROOPS redirect: " : "full-army redirect: ") +
                     "raids opened with " + readiness.DeployableSlots +
                     " deployable + " + readiness.QueuedSlots + " queued of cap " +
-                    readiness.CapSlots + " -> drillmaster training panel.");
+                    readiness.CapSlots + " (required " + readiness.RequiredSlots +
+                    (readiness.FirstRaidSoftGate ? ", FIRST-RAID SOFT GATE" : "") +
+                    ") -> drillmaster training panel.");
                 ElarionUiKit.ShowToast(
                     noTroopsAtAll
                         ? "No troops yet - train troops at the Barracks, then open Raids."
-                        : "Army " + have + "/" + cap + " - fill every slot at the Barracks, then open Raids.",
+                        : readiness.FirstRaidSoftGate
+                            ? "Army " + have + "/" + need + " slots - your first raid only needs " + need +
+                              ". Train at the Barracks, then open Raids."
+                            : "Army " + have + "/" + need + " - fill every slot at the Barracks, then open Raids.",
                     ElarionUiKit.ToastTone.Info);
                 TroopDialogueCommands.ShowTrainingUI();
                 return;
