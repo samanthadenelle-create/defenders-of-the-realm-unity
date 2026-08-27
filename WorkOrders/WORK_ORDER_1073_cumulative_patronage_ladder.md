@@ -1,6 +1,6 @@
 # WORK ORDER 1073 — The Patronage ladder: cumulative lifetime support, visible status, zero combat stats
 
-**Status:** READY TO IMPLEMENT - the Benefactors of the Realm wall is RULED (owner 2026-08-27): global, cross-kingdom, $500 Founders only, player-chosen patron name, plus a custom monument. Architecture landed cb57b1a41; thresholds CONFIRMED at $50 / $150 / $500.
+**Status:** IN PROGRESS - the SERVER half is built and oracle-proven (2026-08-27), now including the owner's PER-PATRON bespoke-monument ruling: `patronage_benefactors` (11 columns) + migration 0003, `api/_lib/patron-name.js`, `api/_lib/benefactors.js`, `GET /api/patronage/benefactors`, `POST /api/patronage/name`, `test/benefactors.test.js` 34 cases (40 mutations proven RED, 1 control GREEN). REMAINING: the Unity render - place the stand-in monument near the Heart and open the wall on interact - plus the Command Center assign screen (WO-1244) that calls the seam. $500 switches on when the stand-in renders. Architecture slice landed cb57b1a41; thresholds CONFIRMED at $50 / $150 / $500.
 **Minted:** 2026-08-24 (UI seat), banner header bumped with the 1069–1074 block.
 **Provenance:** the external review the owner ADOPTED 2026-08-24 (*"Create a Patronage system based
 on cumulative support, with zero combat stats … Whales generally don't need 900,000 stone. They want
@@ -165,3 +165,154 @@ Stored beside the entitlement, separate from any account identity.
 
 ⭐ **Money is real now** (mainnet sales and SKR are live as of 2026-08-27), so `purchase_entitlements`
 will start carrying real lifetime totals. The evidence gate above is no longer hypothetical.
+
+
+---
+
+## IMPLEMENTATION NOTE 2026-08-27 - the server half of the wall, and what is deliberately NOT built
+
+### Built (api/, this repo)
+
+| Piece | File |
+|---|---|
+| `patronage_benefactors` table (wallet PK, tier CHECK pinned to founder, `patron_name` + generated `patron_name_ci` UNIQUE, `name_edits_used`, `granted_at`) | `api/schema.sql` section 17 |
+| The migration that provisions it on the live database | `api/migrations/20260827_0003_patronage_benefactors.sql` |
+| Patron-name policy: cap, charset, profanity + impersonation, wallet-resemblance, edit allowance | `api/_lib/patron-name.js` |
+| Wall reads/writes, eligibility re-derived from settled purchases on every call | `api/_lib/benefactors.js` |
+| `GET /api/patronage/benefactors` - PUBLIC, unauthenticated, one global list | `api/patronage/benefactors.js` |
+| `POST /api/patronage/name` - wallet-signed; no body = read own status, body = set/edit the name | `api/patronage/name.js` |
+| 24-case oracle, 26 mutations proven RED + 1 control proven GREEN | `test/benefactors.test.js` |
+
+The landed `api/_lib/patronage.js` (cb57b1a41) is **built on, not re-implemented**: it keeps its exact
+four exports and its own suite untouched; the lifetime aggregate exists in exactly one place, and a
+test fails if a second `SUM(usd_anchor)` ever appears in the wall module.
+
+### The patron name: cap, filter, and the EDIT PATH (decided, not omitted)
+
+- **Cap 24 characters** (`PATRON_NAME_MAX_LEN`), min 3. Wider than a username's 16 because a house
+  name is the point of the rung; narrow enough that one wall row is one line.
+- **Charset** is ASCII letters/digits/space/apostrophe/hyphen/underscore, must begin and end on an
+  alphanumeric, no punctuation runs. `@` is not in it, so an email shape cannot be typed; homoglyphs,
+  zero-width joiners and RTL overrides are not expressible; padding to sort to the top of the wall is
+  refused.
+- **Filter** reuses the username denylist (same leetspeak/repeat normalisation) plus reserved
+  impersonation tokens. `api/_lib/username-policy.js` gained ONE additive export
+  (`PROFANITY_DENYLIST`) so there is not a second copy of the list to drift.
+- **Never the address:** a name that is a 6+ character run of the caller's own wallet is refused.
+- **EDIT PATH = a bounded allowance: 3 self-serve edits** (`MAX_PATRON_NAME_EDITS`), each re-running
+  the whole gate. *Reasoning:* wall entry is permanent because an SPL transfer cannot reverse
+  (section 3.4), so with NO edit path one typo is permanent public harm on a list the player reached
+  by paying - the worst outcome available. With UNLIMITED edits the wall becomes a broadcast channel
+  a moderator cannot keep up with, and a filtered name can be swapped back once attention moves on.
+  Exhausting the allowance returns `PATRON_NAME_EDITS_EXHAUSTED`, a support decision, not a dead end.
+  Re-submitting the identical name is a no-op and never burns an edit, so a retried request after a
+  dropped response cannot cost one.
+
+### Privacy shape
+
+Membership is **opt-in by construction**: a row exists only once the player chooses a name, so a
+founder who never chooses one is never published - choosing the name IS the consent. The public read
+emits `{ ordinal, patronName, foundedOn }` and nothing else: no wallet, no email, no dollar figure,
+and a founding DATE rather than a timestamp.
+
+### The BESPOKE monument - per patron, not one mesh (owner ruling 2026-08-27)
+
+Owner verbatim: *"being it will be a custom fbx i will work with them one on to create and then add
+in game"*. The $500 rung is a **collaboration**, so there is no catalog row for it and there never
+will be one shared mesh.
+
+- **`monument_asset_id` lives on the PATRON'S ROW.** NULL means that patron is still on the shared
+  stand-in `monument_founder_standin`. That is the ONLY spelling of "placeholder": a database CHECK
+  forbids storing the stand-in id, so it can never be written two ways and drift.
+- **Per patron, never a global phase.** Founder A can carry their real monument in the same wall read
+  in which Founder B is still on the stand-in. The public row now carries `monumentAssetId` +
+  `monumentIsBespoke`, and a regression asserts exactly that mixed state.
+- The stand-in id is a **pinned literal** with a source-shape assertion, the same fix M03 earned for
+  `FOUNDER_TIER_ID` - a placeholder read out of "the first entry" of any list would silently
+  re-point every un-collaborated founder the day that list moved.
+
+### The seam the Command Center (WO-1244) will call
+
+`assignPatronMonument(sql, wallet, assetId, { verifyAssetPresent })` in `api/_lib/benefactors.js`.
+Not built here, per instruction; this is the contract it consumes.
+
+- `verifyAssetPresent(assetId) -> { present: boolean, source: string }` is a **REQUIRED argument**.
+  Omitting it is a `TypeError`, not a default - because a default here would be a default to "ship it
+  and hope". The console passes the probe that asks the shipped catalog/bucket, the same question
+  `tools/r2-ship.ps1` answers with `R2_PARITY_OK`.
+- `present !== true` (including `null`, `{}`, `'yes'`, `1`) **refuses and writes nothing**. A
+  monument nobody can see is never recorded as assigned.
+- Refuses the stand-in id, a malformed key (paths, extensions, capitals, >64 chars), and a wallet
+  that is not on the wall - the last WITHOUT probing the bucket.
+- On success it stamps `monument_verified_at` so the proof has a DATE.
+
+### How the R2 push is made impossible to forget (section 16)
+
+The one-time check at assignment is necessary and **not sufficient**: bundle names are
+content-hashed, so the next content build re-hashes every bundle and invalidates every earlier proof
+at once. `monumentsNeedingRepush(sql, contentBuildIso)` returns the asset ids whose proof predates a
+given content build - the list still needing a push - and **throws** if the build stamp is missing
+rather than quietly reporting "all current". It returns **asset ids only**, no wallet and no patron
+name, so the ship chain can print the answer without printing an identity.
+
+### Still deferred, and why
+
+- **The Unity render.** Server-side is done; the client is not. Needed: an addressable authored under
+  the exact key `monument_founder_standin` (it does not exist yet) and pushed per section 16; the
+  stand-in seated near the Heart via `HubStructureVisualInjector.Places[]` (runtime placer, no scene
+  edit, and `HeartOfElarion` is at world (0,0,12), so "near the Heart, never ON it" is satisfiable);
+  a code-built wall list on the `LeaderboardPanel.cs` pattern opened by interacting with the
+  monument; and a first remote list source for the client, which has none today
+  (`LocalStubLeaderboardSource` is the default). **$500 stays off until the stand-in renders** -
+  section 3.2 is unchanged by the ruling, it is simply now satisfiable.
+- **The Command Center assign screen** (WO-1244), by instruction. The seam above is its contract.
+
+### Flags for the lead
+
+- **`api/schema.sql` CHANGED** - it now declares `patronage_benefactors` (11 columns). Until migration 0003 is
+  applied to the provisioned database, `node tools/schema-parity.mjs` will report
+  `SCHEMA_PARITY_FAIL / TABLE MISSING: patronage_benefactors` and the push gate will refuse. That
+  failure is correct. `CREATE TABLE IF NOT EXISTS` + `ON CONFLICT DO NOTHING` do **not** back-fill a
+  provisioned database - verify by shape query, never by exit code.
+- **Migration 0003 was AMENDED, not superseded.** The three monument columns were added to it before
+  it had ever been applied to any database, so a 0004 would have been ceremony. It is guarded end to
+  end (`ADD COLUMN IF NOT EXISTS`, constraint-existence checks), so re-running it is a no-op.
+- **`api/schema.sql` also carries a SECOND uncommitted table from another seat**
+  (`maintenance_toggles`, section 18, WO-1243). Two new tables, two migrations to sequence.
+
+---
+
+## OWNER RULING 2026-08-27 (c) - THE MONUMENT IS BESPOKE PER PATRON
+
+Owner: *"being it will be a custom fbx i will work with them one on to create and then add in game"*
+plus, on the placeholder question: **placeholder now, real art later.**
+
+### This is NOT one shared monument mesh. Read that again before designing anything.
+Each Founder's monument is a **CUSTOM FBX the owner creates WITH that patron, one-on-one**, and adds
+to the game afterwards. The $500 reward is a COLLABORATION, not an unlock - which is what makes it
+the top of the ladder and why it cannot be a catalog row like every other cosmetic.
+
+### The two answers resolve together
+Because the tier ships with a **placeholder monument**, the monument EXISTS from day one - so it is
+the wall's door immediately, and the "where does the wall open from" question needs no separate
+answer. Walking up to the monument and reading the names is the moment; a menu item is not.
+
+### What this means for the build
+1. **A PER-PATRON monument asset slot**, not a single shared visual. The wall row must be able to
+   name that patron's own asset, defaulting to the placeholder until theirs exists.
+2. **The placeholder is temporary PER PATRON**, not a global phase. Founder A may have their real
+   monument while Founder B is still on the stand-in. Do not model this as one global flag.
+3. **The owner needs a way to ASSIGN a monument asset to a patron.** That is an operator action and
+   belongs on the Command Center console (WO-1244), not in a catalog file - she will do it as each
+   collaboration finishes.
+4. ⚠ **SECTION 16 APPLIES TO EVERY NEW MONUMENT.** Structure art is served from the R2 CDN with NO
+   local fallback, and bundle names are CONTENT-HASHED. So **each custom monument is its own bundle
+   and needs ITS OWN content build + push.** A monument that is authored but never pushed renders
+   as nothing, with no error on screen - the exact failure that has already hit this project three
+   times. Whatever assigns a monument must make that push impossible to forget.
+5. The $500 tier switches **ON** with the placeholder. The server already records lifetime totals, so
+   a patron who crosses $500 is credited and published immediately; their bespoke monument replaces
+   the stand-in later with no data change.
+
+⛔ Do NOT build one generic monument and call the tier done.
+⛔ Do NOT model the placeholder as a global on/off - it is per patron.

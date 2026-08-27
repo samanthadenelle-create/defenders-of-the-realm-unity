@@ -75,4 +75,9 @@ module.exports = {
     MAX_LEN,
     validateUsername,
     normalizeForMatch, // exported for tests
+    // WO-1073: the Benefactors wall's patron name reuses THIS list rather than
+    // keeping a second copy. Two denylists drift, and the copy that drifts is
+    // always the one nobody remembers to update -- the same duplicated-state
+    // failure CLAUDE.md keeps naming. Exported read-only; behaviour unchanged.
+    PROFANITY_DENYLIST: Object.freeze(DENYLIST.slice()),
 };
