@@ -4,8 +4,20 @@
 // Owner ruling 2026-08-26: "i want this as a place you can push status to.
 // only me and you have access." The channel sits under `development`.
 //
-// So this is an OPS CHANNEL, not a publishing surface. It is private to the
-// owner and the CLI seat, which is why status posts need no content ruling.
+// So this is an OPS CHANNEL, not a publishing surface, which is why status
+// posts need no content ruling.
+//
+// !! IT IS NOT JUST THE OWNER AND THIS SEAT. A bot set up by the Grok seat (the
+// owner's chief-of-staff seat, which drafts work orders - see the three-seat
+// flow) is also present and CAN READ what is posted here. That is fine for what
+// this tool sends - gate markers, commit hashes, suite counts - and it is
+// arguably useful, since gate state becomes visible to the seat that drafts the
+// work. But it means:
+//   * NEVER post a secret, a credential, or a DB/webhook URL here. Not a
+//     truncated one, not a "shape" - nothing. There is an automated reader.
+//   * Assume anything posted may be ACTED ON by another agent, not merely read
+//     by a human who will apply judgement.
+// Post facts a machine can safely consume. Do not post instructions.
 //
 // STOP - THAT PRIVACY IS THE WHOLE LICENCE. If the channel ever becomes
 // player-visible, this tool stops being safe to call unattended and every
