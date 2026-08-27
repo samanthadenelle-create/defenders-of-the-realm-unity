@@ -21,7 +21,30 @@ border-radius:4px;padding:1px 6px;margin-left:6px;color:#aab}
 .warn{border:1px solid #a04b4b;background:#2a1c1c;border-radius:8px;padding:12px;margin:0 0 18px}
 </style></head><body>
 <h1>Proof</h1>
-<p class='sub'>2 item(s) across 1 run(s). Generated 2026-08-27 02:48. Click any image to open it full size.</p>
+<p class='sub'>5 item(s) across 2 run(s). Generated 2026-08-27 04:13. Click any image to open it full size.</p>
+<div class='run'>
+<h2>Cycle 1-3 - READY 28 -&gt; 5</h2>
+<p class='meta'>COMPILE_GATE_OK + REGRESSION_OK 307/307 (Builds/w7-c, w7-r) - commits 3dfce4dbd, 090be8066, 9a66c22af</p>
+<div class='grid'>
+<div class='card'><div class='oracle'>STRUCTURE_ORIENTATION_FAIL: 1 issue(s):
+  - &#x27;tower_ground_archer&#x27; NOT STANDING: upright aspect 0.57
+    (height 2.72 m / max(width 2.47, depth 4.80) = 4.80 m) below the measured 1.2 floor.
+    WoodenWatchtowerBuilder measured this class at 1.70-1.92 upright, 0.52-0.59 lying down.
+
+Catalogs restored: PROD008_RESTORE_OK (md5 verified both copies)</div><div class='cap'><span class='wo'>PROD-008</span><span class='kind' title='No visual exists. Gate evidence stands in its place.'>ORACLE</span><div>Orientation oracle proven non-vacuous</div><div class='why'>Verification-only. A green run proves nothing unless the red direction is shown to fire.</div></div></div>
+<div class='card'><div class='oracle'>single-pixel contrast by depth:
+  near  hp1  9.1
+  mid   hp1  29.4   &lt;- 3.2x worse further away
+  far   hp1  23.7
+Flat 1px..16px at mid-field = Nyquist noise. Mipmaps were ON.
+Cause: aniso:4 on a plane at grazing pitch.
+Fix: aniso 8 in all 16 layer metas AND the importer.
+Desktop hid it (anisotropicTextures:2 = force 16x); Seeker_High honours 4.</div><div class='cap'><span class='wo'>1218</span><span class='kind' title='No visual exists. Gate evidence stands in its place.'>ORACLE</span><div>Ground shimmer - aniso 4 -&gt; 8</div><div class='why'>Cause MEASURED off the owner&#x27;s own capture, not theorised.</div></div></div>
+<div class='card'><div class='oracle'>dd73e4569 block-commented the retired method; StripComments erased it wholesale,
+so the lint matched code that no longer existed.
+The guarantee moved verbatim to BackendRequestSigner.TryAttachAsync and got STRICTER.
+Re-point verified by 8 mutations, ALL RED - including the block-comment shape.</div><div class='cap'><span class='wo'>1211</span><span class='kind' title='No visual exists. Gate evidence stands in its place.'>ORACLE</span><div>Fail-closed auth intact - oracle re-pointed</div><div class='why'>Red flagged a weakening; it was a stale oracle, proven by mutation.</div></div></div>
+</div></div>
 <div class='run'>
 <h2>Wave 1 - seven lanes gated GREEN</h2>
 <p class='meta'>COMPILE_GATE_OK + REGRESSION_OK 294/294 - Builds/g3-c, Builds/g3-r - commit c7268971d</p>
