@@ -1,6 +1,6 @@
 # WORK ORDER 1199 - the command centre: ship the whole chain programmatically
 
-**Status:** FIXED 2026-08-27 (owner ruling) - the guarded deploy chain steps 1-8 are LANDED and gated (`6a343fbde`). The LIVE production promotion and rollback proof are DELIBERATELY DEFERRED to a joint owner session, to be run LAST. FIXED means BUILT, not proven against real production.
+**Status:** CLOSED 2026-08-27 — owner felt-tested PASS on APK 2026.08.27.343739.
 **Minted:** 2026-08-25 (CLI lead, main line; banner bumped 1199 -> 1200 in the same edit)
 **Silo:** Tooling / ops
 **Ruling:** owner, 2026-08-25 - *"That should all be handled programmatically from command center or

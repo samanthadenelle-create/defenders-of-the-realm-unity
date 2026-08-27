@@ -26,7 +26,7 @@
 
 # WORK ORDER 501 - Store/Shop View Redesign (hero-filtered, slim list + 3D preview)
 
-**Status:** FIXED - awaiting owner felt-verify. ⛔ **Do NOT hand this to a dev lane.** Its own 2026-08-22 banner records all four owner points shipped in `PartyShopPanelMvvm.cs` with the flag `defaultOn: true`. ⚠ **Every `file:line` in its §1 is invalidated**: that survey was written against a **583-line** file and the file is now **1727 lines** (verified 2026-08-24). A seat working from those citations would be reading a different program.
+**Status:** CLOSED 2026-08-27 — owner felt-tested PASS on APK 2026.08.27.343739.
 >  PRIOR: **Status:** PROPOSAL / READY TO IMPLEMENT (DESIGN pass - read-only survey done)
 **Silo:** Monetization/UI (Store) - PartyShop MVVM. File-disjoint from combat/scene lanes.
 **Feature flag:** ships behind the existing FeatureFlags.PartyShop (OFF). No new flag.

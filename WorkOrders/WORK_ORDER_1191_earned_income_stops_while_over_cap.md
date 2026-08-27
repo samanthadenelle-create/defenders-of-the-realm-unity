@@ -1,6 +1,6 @@
 # WORK ORDER 1191 - earned income adds nothing while a resource is over cap
 
-**Status:** FIXED - landed 2026-08-25 at `bfcb1adaf`. The two oracle reds it shipped with are resolved and the suite is green: `REGRESSION_OK 277/277` on `Builds/reg-wave6.log`. Owner felt-close owed.
+**Status:** CLOSED 2026-08-27 — owner felt-tested PASS on APK 2026.08.27.343739.
 **Minted:** 2026-08-25 (CLI lead, main line; banner bumped 1190 -> 1192 with WO-1190 in the same edit)
 **Silo:** Economy
 **Ruling:** `FOUNDATIONAL_RULINGS.md` section 7 - CITE it, never restate it.

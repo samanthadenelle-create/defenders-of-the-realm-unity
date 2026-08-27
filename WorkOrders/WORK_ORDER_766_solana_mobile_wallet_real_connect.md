@@ -1,6 +1,6 @@
 # WORK ORDER 766 — Real Seeker/Android wallet connect (Solana Mobile SDK)
 
-**Status:** FIXED 2026-08-05 (`c457150df`) — awaiting owner felt-verify. *(Status audit 2026-08-24: BUCKET CORRECTION — the prior line predated the commit and still advertised gates/commit as owed; verified at source in `git log`, `c457150df` (2026-08-05) landed this work. Body unchanged. Prior line: IMPLEMENTED PENDING GATES (2026-08-02, WO-766 lane agent). SDK pinned in manifest)*
+**Status:** CLOSED 2026-08-27 — owner felt-tested PASS on APK 2026.08.27.343739.
 (`com.solana.unity_sdk` @ git tag v1.2.9) + `SOLANA_SDK` set for the ANDROID define group only
 (Standalone/desktop deliberately keeps the stub) + full `SDK-VERIFY` sweep against the v1.2.9 sources
 (drift fixed: no `LoginPhantom` in v1.2.9; `Logout()` is sync void; `Web3` MonoBehaviour host now

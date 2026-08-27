@@ -1,6 +1,6 @@
 # WORK ORDER 1205 - The resource rows read as chip + count, and the icon stops sitting on the number
 
-**Status:** FIXED 2026-08-27 - gated `COMPILE_GATE_OK` + `REGRESSION_OK 303/303 suites` (Builds/w3-c, Builds/w3-r). AWAITING OWNER FELT-VERIFY to close.
+**Status:** CLOSED 2026-08-27 — owner felt-tested PASS on APK 2026.08.27.343739.
 **Minted:** 2026-08-25 (CLI lead, main line; banner bumped 1205 -> 1206 in the same edit)
 **Silo:** HUD / presentation
 **Ruled by:** the owner, 2026-08-25, felt-testing build `2026.08.25.341262` on the Seeker.

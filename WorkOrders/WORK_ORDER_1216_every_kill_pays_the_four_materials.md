@@ -1,6 +1,6 @@
 # WORK ORDER 1216 - Every kill pays Wood / Iron / Gold / Stone, tuned so grinding funds repair
 
-**Status:** FIXED 2026-08-26 - `COMPILE_GATE_OK` + `REGRESSION_OK 292/292`; post-fix measurement/device verification queued
+**Status:** CLOSED 2026-08-27 — owner felt-tested PASS on APK 2026.08.27.343739.
 **Silo:** Economy / rewards
 **Origin:** Owner ruling, 2026-08-26, from a Seeker felt-test on build `2026.08.26.341419`.
 

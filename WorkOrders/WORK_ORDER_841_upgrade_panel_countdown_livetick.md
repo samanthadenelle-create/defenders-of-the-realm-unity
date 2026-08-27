@@ -1,6 +1,6 @@
 # WORK ORDER 841 — Upgrade panel "Under construction" countdown ticks live
 
-**Status:** FIXED 2026-08-02 (`6f22a5fe4`) — awaiting owner felt-verify. *(Status audit 2026-08-24: BUCKET CORRECTION — the prior line predated the commit and still advertised gates/commit as owed; verified at source in `git log`, `6f22a5fe4` (2026-08-02) landed this work. Body unchanged. Prior line: FIXED — implemented by an edit-only agent 2026-08-02; gates (CompileGate + EditMode + RunCaptureHeadless) and owner felt-verify still owed)*
+**Status:** CLOSED 2026-08-27 — owner felt-tested PASS on APK 2026.08.27.343739.
 
 > **Implementation note (2026-08-02, edit-only agent):** done per §2 with one MVVM refinement —
 > the countdown feed lives on the VM (`BuildingUpgradeVM.UnderConstruction` /

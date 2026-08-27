@@ -1,6 +1,6 @@
 # WORK ORDER 1207 - Capacity must mean something: a trimmed harvest is REPORTED, and the player is TOLD
 
-**Status:** FIXED 2026-08-27 - gated `COMPILE_GATE_OK` + `REGRESSION_OK 303/303 suites` (Builds/w3-c, Builds/w3-r). AWAITING OWNER FELT-VERIFY to close.
+**Status:** CLOSED 2026-08-27 — owner felt-tested PASS on APK 2026.08.27.343739.
 **Minted:** 2026-08-25 (CLI lead, main line; banner bumped 1207 -> 1209 with WO-1208 in the same edit)
 **Silo:** Economy / HUD
 **Ruled by:** the owner, 2026-08-25, felt-testing build `2026.08.25.341262`.

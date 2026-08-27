@@ -1,6 +1,6 @@
 # PROD-003 — The Realm Store gets its own permanent storefront
 
-**Status:** FIXED — AWAITING OWNER FELT-TEST TO CLOSE. Prior status: IMPLEMENTED — AWAITING OWNER FELT-VERIFY (2026-08-18; owner ruled §4 = (a), NO ruling outstanding).
+**Status:** CLOSED 2026-08-27 — owner felt-tested PASS on APK 2026.08.27.343739.
 Shipped across two commits: `233613615` (placement) and `72a43ea36` (scale, collider, oracle).
 DONE: storefront baked into Main_Castle_Overworld at (12,0,-32) by `Assets/Editor/RealmStorePlacer.cs`; RealmStoreVendor
 opens PanelId.RealmStore via the PackStoreBootstrap opener; NOT in structures-catalog.json or build-categories.json

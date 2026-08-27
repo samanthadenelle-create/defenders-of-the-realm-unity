@@ -17,7 +17,7 @@
 
 # WORK ORDER 911 — Timer speed-ups actually available (crystals + ads, all channels)
 
-**Status:** FIXED - awaiting owner felt-verify. ⛔ **This ticket's banner was 16 DAYS STALE and would have sent a seat to rebuild working code.** It claimed *"there is no `TryAdSkip` in `BuildTimerService`"* (reconciled 2026-08-08). Verified at HEAD 2026-08-24: a **channel-aware pair exists** - `BuildTimerService.cs:880` `CanWatchAdToSkip(string)` and `:888` `CanWatchAdToSkip(ChannelId, string)`, with `WatchAdToSkip` beside it - plus `Village/Monetization/AdGateService.cs` and a covenant regression over the placements. ⚠ Read the tree, not the banner.
+**Status:** CLOSED 2026-08-27 — owner felt-tested PASS on APK 2026.08.27.343739.
 >  PRIOR: **Status: PARTIAL — crystal channel DONE, ad channel NOT** (reconciled 2026-08-08, see banner)  
 **Minted:** 2026-08-05 (CLI / Grok — owner: “nothing is available as a speed up”)  
 **Silo:** Queue / Economy / Store (HUD presentation + BuildTimerService)  

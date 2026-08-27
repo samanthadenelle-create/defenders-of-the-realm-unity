@@ -1,6 +1,6 @@
 # WO-1119 — Crystal sink + 2× harvest boost (Version B only)
 
-**Status:** FIXED — AWAITING OWNER FELT-TEST TO CLOSE. Prior status: DONE - 2026-08-21 CLI, gate-green (COMPILE_GATE_OK + REGRESSION_OK 234/234).
+**Status:** CLOSED 2026-08-27 — owner felt-tested PASS on APK 2026.08.27.343739.
 **Minted:** 2026-08-17 (CLI seat) — program WO-1117  
 **Lane:** Economy / Echoes / Pack convenience  
 **Depends on:** WO-1117 R7; pairs with WO-1118 (boost lines in packs only after this lands)  

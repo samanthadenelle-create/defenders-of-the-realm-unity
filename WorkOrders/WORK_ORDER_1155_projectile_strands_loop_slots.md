@@ -1,4 +1,4 @@
-**Status:** FIXED 2026-08-23 — release path built, but ⚠ **UNVERIFIED AT RUNTIME** and the severity was wrong TWICE. Read §0 and §0b before acting on either.
+**Status:** CLOSED 2026-08-27 — owner felt-tested PASS on APK 2026.08.27.343739.
 
 # WORK ORDER 1155 — A projectile torn down in flight strands its VFX loop slot forever
 

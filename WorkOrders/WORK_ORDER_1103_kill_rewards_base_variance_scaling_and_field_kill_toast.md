@@ -1,6 +1,6 @@
 # WORK ORDER 1103 - Kill rewards: base value + bounded variance + kill-count scaling; field-kill earned toast
 
-**Status:** FIXED — AWAITING OWNER FELT-TEST TO CLOSE. Prior status: IMPLEMENTED 2026-08-16 - pending PO felt-verify (commit `8b1d1a649`); see RESULT
+**Status:** CLOSED 2026-08-27 — owner felt-tested PASS on APK 2026.08.27.343739.
 **Minted:** 2026-08-16 (orchestrator; banner bumped 1103 -> 1104 in the same edit)
 **Silo:** Combat economy / rewards
 **Source:** OWNER DIRECTIVE 2026-08-16 (verbatim): *"in a battle arena each enemy should have a

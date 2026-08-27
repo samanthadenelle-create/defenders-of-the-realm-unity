@@ -1,6 +1,6 @@
 # WORK ORDER 1068 — Store comparison, future preview, and hot-swap value
 
-**Status:** FIXED — AWAITING OWNER FELT-TEST TO CLOSE. Prior status: IMPLEMENTED — AWAITING COMBINED OWNER GATE
+**Status:** CLOSED 2026-08-27 — owner felt-tested PASS on APK 2026.08.27.343739.
 **Parent:** WO-1063 · **Requires:** WO-1064 through WO-1067
 
 > ### ⛔ TWO OF THE THREE THINGS IN THIS TITLE ALREADY SHIP. DO NOT GREENFIELD.

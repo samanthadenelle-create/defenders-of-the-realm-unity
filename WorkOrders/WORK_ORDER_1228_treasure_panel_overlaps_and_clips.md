@@ -1,6 +1,6 @@
 # WORK ORDER 1228 - The TREASURE FOUND panel overlaps its own title, clips its list, and buries its footer
 
-**Status:** FIXED 2026-08-26 - `COMPILE_GATE_OK` + `REGRESSION_OK 292/292`; post-fix APK visual/greyscale verification queued
+**Status:** CLOSED 2026-08-27 — owner felt-tested PASS on APK 2026.08.27.343739.
 **Silo:** UI layout
 **Origin:** Owner felt-test, Seeker build `2026.08.26.342290`, 2026-08-26. Owner verbatim:
 *"needs cleaned up"*.

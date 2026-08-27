@@ -1,6 +1,6 @@
 # WORK ORDER 1187 - fifteen PowerShell scripts are one stray character from silently not running
 
-**Status:** FIXED - all 14 files converted to pure ASCII (Phase 1 by the implementing seat, Phase 2 ship chain by the lead), oracle built and registered. Owner felt-close owed; gate evidence below.
+**Status:** CLOSED 2026-08-27 — owner felt-tested PASS on APK 2026.08.27.343739.
 **Minted:** 2026-08-25 (CLI lead, main line; banner bumped 1187 -> 1188 in the same edit)
 **Silo:** Tooling / gates
 **Parent finding:** the 2026-08-25 morning pass, while fixing `tools/verify-dungeons.ps1`

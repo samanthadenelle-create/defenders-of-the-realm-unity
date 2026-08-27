@@ -1,6 +1,6 @@
 # WORK ORDER 1073 — The Patronage ladder: cumulative lifetime support, visible status, zero combat stats
 
-**Status:** FIXED 2026-08-27 - both halves landed. SERVER: `patronage_benefactors` (11 columns) + migration 0003 applied to the LIVE database and verified by shape query, `api/_lib/patron-name.js`, `api/_lib/benefactors.js`, `GET /api/patronage/benefactors`, `POST /api/patronage/name`, 34 cases with 40 mutations proven RED. CLIENT: `DeNelle.Core.Patronage` (BenefactorsCatalog + BenefactorsService), `FoundersMonument` + `FoundersMonumentInjector` placing a stand-in near the Heart at RUNTIME (no scene edit), and `BenefactorsWallPanel` in DeNelle.HUD reaching Village only by reflection so the asmdef invariant holds. Pinned by `FoundersMonumentWallRegression` (9 cases), which the lead proved NON-HOLLOW by mutating the stand-in address through the real suite: REGRESSION_FAIL, 5 cases fired, restored green. Gated `COMPILE_GATE_OK` + `REGRESSION_OK 309/309 suites`. Thresholds CONFIRMED at $50 / $150 / $500.
+**Status:** CLOSED 2026-08-27 — owner felt-tested PASS on APK 2026.08.27.343739.
 **Minted:** 2026-08-24 (UI seat), banner header bumped with the 1069–1074 block.
 **Provenance:** the external review the owner ADOPTED 2026-08-24 (*"Create a Patronage system based
 on cumulative support, with zero combat stats … Whales generally don't need 900,000 stone. They want

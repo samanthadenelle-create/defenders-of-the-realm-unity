@@ -1,4 +1,4 @@
-**Status:** FIXED 2026-08-23 (Codex, 51de6bd31) — five weekly tabs, readable day cards, milestone/state words, obsidian modal, contained Close. ⚠ NO DEVICE SCREENSHOTS YET — this is a LOOK, so nothing is proven until seen. AWAITING OWNER FELT-TEST.
+**Status:** CLOSED 2026-08-27 — owner felt-tested PASS on APK 2026.08.27.343739.
 
 # WORK ORDER 1150 — The Monthly Ledger panel is unreadable, unframed, and colour-only
 

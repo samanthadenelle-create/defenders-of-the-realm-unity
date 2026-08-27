@@ -1,6 +1,6 @@
 # PROD-012 — Is an internet connection REQUIRED on first run? An OWNER DECISION, not a defect
 
-**Status:** FIXED 2026-08-25 - source acceptance landed at `c3b40829b`; awaiting owner Seeker reconnect felt-test and OPS dApp Store listing update.
+**Status:** CLOSED 2026-08-27 — owner felt-tested PASS on APK 2026.08.27.343739.
 **Minted:** 2026-08-18 (docs seat) — PROD series.
 **Priority:** MEDIUM — but it gates a **store-listing** claim on a LIVE published app, so it cannot sit indefinitely.
 **Silo:** Product / content delivery policy. **Lane:** decision first; implementation scope depends entirely on the ruling.

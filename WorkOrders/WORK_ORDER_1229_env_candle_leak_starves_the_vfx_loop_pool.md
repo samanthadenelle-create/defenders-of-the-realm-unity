@@ -1,6 +1,6 @@
 # WORK ORDER 1229 - Env_Candle leaks the VFX loop pool, and it is eating the colourblind low-health signal
 
-**Status:** FIXED 2026-08-26 - `COMPILE_GATE_OK` + `REGRESSION_OK 292/292`; post-fix APK soak/trace verification queued
+**Status:** CLOSED 2026-08-27 — owner felt-tested PASS on APK 2026.08.27.343739.
 **Silo:** VFX
 **Severity:** P1, and it carries an ACCESSIBILITY consequence the instrumentation names itself.
 **Origin:** CLI triage of the owner's device log, Seeker build `2026.08.26.342290`, 2026-08-26,

@@ -1,6 +1,6 @@
 # WORK ORDER 1213 - The rewarded-ad claim grants in SILENCE, and its CTA is jammed against the panel edge
 
-**Status:** FIXED 2026-08-26 - `COMPILE_GATE_OK` + `REGRESSION_OK 292/292`; post-fix APK visual/felt verification queued
+**Status:** CLOSED 2026-08-27 — owner felt-tested PASS on APK 2026.08.27.343739.
 **Silo:** UI / Monetization presentation
 **Origin:** Owner felt-test, 2026-08-26, on Seeker build `2026.08.26.341419`. Owner verbatim:
 *"get someone to style the watch ad for double reward and give it proper spacing"* and *"after the

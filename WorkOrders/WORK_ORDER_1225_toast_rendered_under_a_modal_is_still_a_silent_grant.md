@@ -1,6 +1,6 @@
 # WORK ORDER 1225 - A toast rendered UNDER a modal is still a silent grant
 
-**Status:** FIXED 2026-08-26 - `COMPILE_GATE_OK` + `REGRESSION_OK 292/292`; post-fix APK visibility/felt verification queued
+**Status:** CLOSED 2026-08-27 — owner felt-tested PASS on APK 2026.08.27.343739.
 **Silo:** HUD / presentation ordering
 **Origin:** Owner felt-test, Seeker build `2026.08.26.342290`, 2026-08-26 12:14.
 Owner verbatim: *"it didt show or if it did it was under the echo introdution window that popped."*
