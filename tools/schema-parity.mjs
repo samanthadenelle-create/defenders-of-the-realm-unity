@@ -180,9 +180,42 @@ if (process.argv.includes('--expected-only')) {
     process.exit(0);
 }
 
-const url = process.env.DATABASE_URL;
+// DATABASE_URL comes from the environment when there is one, and otherwise from
+// .env.local, which is where this repo actually keeps it.
+//
+// This fallback is NOT a softening of the gate — it is what makes the gate
+// RUNNABLE AT ALL. .githooks/pre-push invokes this tool with a bare environment,
+// so before the fallback existed EVERY api/schema.sql change was blocked with
+// "no DATABASE_URL in env", and the only way through was for a human to export a
+// secret by hand at the exact moment they were being told no. CLAUDE.md §16 names
+// that shape: a gate whose remedy is "a human remembers a second command" is not
+// a gate, it is a speed bump people learn to route around — and the routing
+// around is what eventually ships the unverified schema.
+//
+// The check itself is UNCHANGED. Parity is still proven against the LIVE database
+// and must still print SCHEMA_PARITY_OK. The value is never printed, logged, or
+// echoed into an error message.
+function resolveDatabaseUrl() {
+    if (process.env.DATABASE_URL) return process.env.DATABASE_URL;
+    try {
+        const text = readFileSync(join(HERE, '..', '.env.local'), 'utf8');
+        for (const line of text.split(/\r?\n/)) {
+            const m = line.match(/^\s*DATABASE_URL\s*=\s*(.*)$/);
+            if (!m) continue;
+            let v = m[1].trim();
+            if ((v.startsWith('"') && v.endsWith('"')) ||
+                (v.startsWith("'") && v.endsWith("'"))) {
+                v = v.slice(1, -1);
+            }
+            if (v) return v;
+        }
+    } catch { /* absent or unreadable — fall through to the honest failure below */ }
+    return null;
+}
+
+const url = resolveDatabaseUrl();
 if (!url) {
-    console.error('SCHEMA_PARITY_FAIL no DATABASE_URL in env. ' +
+    console.error('SCHEMA_PARITY_FAIL no DATABASE_URL in env and none in .env.local. ' +
                   'Run with --expected-only to check the parser without a database.');
     process.exit(1);
 }
