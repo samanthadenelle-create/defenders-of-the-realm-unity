@@ -41,7 +41,7 @@ namespace DeNelle.HUD
         // DEF-212 modal arbiter handle (same discipline as HelpMenu / the shop panels).
         private PanelHandle _panelHandle;
 
-#if DEVELOPMENT_BUILD || UNITY_EDITOR
+#if DEVELOPMENT_BUILD || UNITY_EDITOR || TESTER_BUILD
         // Dev orient tool — catalog id the owner types in. (dev-only — LB-11)
         private TextField _orientIdField;
 
@@ -67,7 +67,7 @@ namespace DeNelle.HUD
         private Type _gameStateServiceType;
         private object _gameStateInstance;
         private object _gameStateState;
-#if DEVELOPMENT_BUILD || UNITY_EDITOR
+#if DEVELOPMENT_BUILD || UNITY_EDITOR || TESTER_BUILD
         private Type _waveManagerType;
         private object _waveManagerInstance;
 #endif
@@ -232,7 +232,7 @@ namespace DeNelle.HUD
             // never reach them — only DEVELOPMENT_BUILD / the editor compile them in.
             // The Close button below stays so the (release-gated, can't-open) overlay
             // is still dismissable if it ever renders.
-#if DEVELOPMENT_BUILD || UNITY_EDITOR
+#if DEVELOPMENT_BUILD || UNITY_EDITOR || TESTER_BUILD
             scroll.Add(Button("Load resources (full base)",   OnLoadResources));
             // Level shortcuts — same REAL leveling path the F10 DevPanel uses
             // (HeroProgression.AddXp -> ApplyLevelRewards grants Wisdom + skill points),
@@ -360,7 +360,7 @@ namespace DeNelle.HUD
 
         // ── Dev orient tool row ──────────────────────────────────────────────
         // SECURITY (LB-11): dev-only tool — compile-stripped from release builds.
-#if DEVELOPMENT_BUILD || UNITY_EDITOR
+#if DEVELOPMENT_BUILD || UNITY_EDITOR || TESTER_BUILD
         private VisualElement BuildOrientRow()
         {
             var row = new VisualElement();
@@ -496,7 +496,7 @@ namespace DeNelle.HUD
             if (open) PanelMgr.NotifyOpened(_panelHandle);
             else PanelMgr.NotifyClosed(_panelHandle);
             if (open) SetStatus("Ready.");
-#if DEVELOPMENT_BUILD || UNITY_EDITOR
+#if DEVELOPMENT_BUILD || UNITY_EDITOR || TESTER_BUILD
             // Re-sync the queue time-skip readout every time the panel opens: the skip is
             // process-global (DevClock) and may have been moved from the F10 DevPanel or a
             // headless oracle since this panel was last shown.
@@ -530,7 +530,7 @@ namespace DeNelle.HUD
             _gameStateState = stateProp?.GetValue(_gameStateInstance);
         }
 
-#if DEVELOPMENT_BUILD || UNITY_EDITOR
+#if DEVELOPMENT_BUILD || UNITY_EDITOR || TESTER_BUILD
         private void ResolveWaveManager()
         {
             if (_waveManagerInstance != null) return;
@@ -552,7 +552,7 @@ namespace DeNelle.HUD
         // ── DEV-ONLY reflection helpers + action handlers (LB-11 / E-ADMIN / E-DEVTOOLS) ──
         // SECURITY: everything below mutates economy/level/save state or launches dev tools.
         // Compile-stripped from release builds — a player build contains none of this code.
-#if DEVELOPMENT_BUILD || UNITY_EDITOR
+#if DEVELOPMENT_BUILD || UNITY_EDITOR || TESTER_BUILD
         private static void SetField(object obj, string name, object value)
         {
             var t = obj.GetType();

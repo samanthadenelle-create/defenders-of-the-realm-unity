@@ -212,7 +212,7 @@ namespace DeNelle.HUD
             candidates.Add(new Candidate("controls", "Controls", false, false, true, HostShowControls));
             candidates.Add(new Candidate("reset_progress", "Reset Hero & Pet", true, false, true, HostResetProgress));
             candidates.Add(new Candidate("credits", "Credits", false, false, true, HostShowCredits));
-#if DEVELOPMENT_BUILD || UNITY_EDITOR
+#if DEVELOPMENT_BUILD || UNITY_EDITOR || TESTER_BUILD
             // SECURITY (LB-11 / store-hardening S1): both rows are compile-STRIPPED from
             // release, AND flagged DevOnly so the IsDevContext filter drops them even if
             // someone ever un-strips them. They sort LAST so the release list is a stable

@@ -1,6 +1,25 @@
 # WORK ORDER 1175 — Community first: a Discord, and SKR as the REWARDED path
 
-**Status:** READY — ⚠ SPLIT-FLAGGED, the two phases are not one ticket. **Phase 2 (Discord)** is an owner/ops action **outside the repo** and is the higher priority (see §0). **Phase 1 (the SKR reward)** is **BLOCKED behind cosmetics rendering**. ⭐ Recommend splitting into two tickets so neither half blocks the other. *(Status audit 2026-08-24: lead-verified bucket correction; body unchanged.)*
+**Status:** CLOSED AS MOOT 2026-08-27 (owner ruling). **The premise cannot be true.** This ticket
+rewards a player for CHOOSING SKR, and SKR is the only currency anyone can pay in: `purchase_quotes`
+carries `CHECK (currency IN ('SKR'))` — a constraint, not a default — and WO-1174 (dual-currency
+USDC) is **PARKED**. There is nothing to choose against, so a "rewarded path" cannot discriminate.
+
+⛔ **TWO CLAIMS IN THE BODY BELOW ARE FALSE. Do not carry them forward.**
+1. *"`purchase_entitlements.currency` records SKR vs USDC per settled purchase — SKR buyers are
+   identifiable."* No USDC row can ever exist, so `WHERE currency='SKR'` selects **every** buyer.
+2. *"WO-1165 found 9 of 13 SKUs hidden for exactly one reason — cosmetics do not render."* WO-1165 §8
+   gives **several distinct** reasons (duplicate clones, dominated pricing, tokens with no redeemer,
+   inert buffs) and names cosmetics only as one SKU's unauthored differentiator.
+
+The surviving ideas were **re-minted rather than salvaged here**, so nothing builds on a false
+premise: **WO-1246** (SKU visibility) and **WO-1247** (the patron covenant reward).
+
+Phase 2 (Discord) is partly overtaken by events: a server and **both** directions already exist
+(`tools/status-post.mjs`, `tools/discord-inbox.mjs`, both landed 2026-08-26 — *after* this ticket was
+minted). What remains of it is an owner action outside the repo.
+
+*(Superseded status: READY — ⚠ SPLIT-FLAGGED, the two phases are not one ticket.* **Phase 2 (Discord)** is an owner/ops action **outside the repo** and is the higher priority (see §0). **Phase 1 (the SKR reward)** is **BLOCKED behind cosmetics rendering**. ⭐ Recommend splitting into two tickets so neither half blocks the other. *(Status audit 2026-08-24: lead-verified bucket correction; body unchanged.)*
 
 **Minted:** 2026-08-24 (CLI), banner bumped 1174 → 1176 in the same edit (with WO-1174).
 **Provenance:** owner, 2026-08-24 — *"earned a title in the discord and monthly free code?"*, then

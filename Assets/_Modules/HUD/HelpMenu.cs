@@ -163,7 +163,7 @@ namespace DeNelle.HUD
         // WO-882: the tap COUNTER + the unlock rule moved into HelpMenuVM.TapTitle (they
         // are state). Only the persistence KEY stays here - the VM is UnityEngine-free and
         // reads/writes the pref through MenuHost (IHost.DevUnlockPersisted).
-#if DEVELOPMENT_BUILD || UNITY_EDITOR
+#if DEVELOPMENT_BUILD || UNITY_EDITOR || TESTER_BUILD
         private const string DevUnlockPref = "dotr.devunlock";
 #endif
 
@@ -316,7 +316,7 @@ namespace DeNelle.HUD
             }
             BuildRows();
 
-#if DEVELOPMENT_BUILD || UNITY_EDITOR
+#if DEVELOPMENT_BUILD || UNITY_EDITOR || TESTER_BUILD
             // Hidden dev unlock (owner 2026-07-12): 5 taps on the card TITLE (a TMP Graphic
             // — it carries the Button directly; no extra widget). The counter + window now
             // live in HelpMenuVM.TapTitle; revealing the grant row is a VM rebuild, not a
@@ -565,7 +565,7 @@ namespace DeNelle.HUD
 
         // SECURITY (store-hardening Path A, S1): the 5-tap dev unlock + resource grant are stripped from
         // release builds (see the guarded call sites + fields above). Preserved in Editor/Development.
-#if DEVELOPMENT_BUILD || UNITY_EDITOR
+#if DEVELOPMENT_BUILD || UNITY_EDITOR || TESTER_BUILD
         /// <summary>Title tap (owner 2026-07-12). The 5-tap COUNTER + the rolling window are
         /// VM state (HelpMenuVM.TapTitle); the View only forwards the tap and the clock.
         /// The VM raises Changed on unlock, which re-stamps the rows.</summary>
@@ -654,7 +654,7 @@ namespace DeNelle.HUD
 
         /// <summary>Opens the AdminOverlay (owner tools). SECURITY (LB-11):
         /// compile-stripped from release builds along with its launcher.</summary>
-#if DEVELOPMENT_BUILD || UNITY_EDITOR
+#if DEVELOPMENT_BUILD || UNITY_EDITOR || TESTER_BUILD
         private void OnOpenDevTools()
         {
             FlowTrace.Step("UI", "DevPanel toggle/click reached (HelpMenu 'Dev tools' -> AdminOverlay)");
@@ -701,7 +701,7 @@ namespace DeNelle.HUD
 
             public bool IsDevContext
             {
-#if DEVELOPMENT_BUILD || UNITY_EDITOR
+#if DEVELOPMENT_BUILD || UNITY_EDITOR || TESTER_BUILD
                 get { return true; }
 #else
                 get { return false; }
@@ -710,7 +710,7 @@ namespace DeNelle.HUD
 
             public bool DevUnlockPersisted
             {
-#if DEVELOPMENT_BUILD || UNITY_EDITOR
+#if DEVELOPMENT_BUILD || UNITY_EDITOR || TESTER_BUILD
                 get { return PlayerPrefs.GetInt(DevUnlockPref, 0) == 1; }
                 set { PlayerPrefs.SetInt(DevUnlockPref, value ? 1 : 0); PlayerPrefs.Save(); }
 #else
@@ -727,14 +727,14 @@ namespace DeNelle.HUD
 
             public void OpenDevTools()
             {
-#if DEVELOPMENT_BUILD || UNITY_EDITOR
+#if DEVELOPMENT_BUILD || UNITY_EDITOR || TESTER_BUILD
                 if (_menu != null) _menu.OnOpenDevTools();
 #endif
             }
 
             public void GrantResources()
             {
-#if DEVELOPMENT_BUILD || UNITY_EDITOR
+#if DEVELOPMENT_BUILD || UNITY_EDITOR || TESTER_BUILD
                 if (_menu != null) _menu.OnGrantResources();
 #endif
             }

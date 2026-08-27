@@ -705,7 +705,16 @@ def build_html(rows):
                 '<select class="verdict" aria-label="felt-test result"><option value="">Untested</option>'
                 '<option>Pass</option><option>Fail</option><option>Needs Work</option></select>'
                 '<input class="vnote" aria-label="validation notes" placeholder="Optional device notes"></div>')
-        validation_groups.append(f'<details class="vgroup" open><summary>{html.escape(area)} '
+        # COLLAPSED BY DEFAULT (owner request 2026-08-27: "start with the validation
+        # sections minimized. then i can expand as ready to test"). The summary still
+        # carries the "<area> 0 / N" count, so a collapsed board still shows at a glance
+        # where the felt-testing stands without opening anything.
+        #
+        # data-area is the localStorage key for the open/closed choice. Whichever areas
+        # she expands STAY expanded across rebuilds - the board is regenerated constantly,
+        # and re-collapsing an area she is actively testing on every regeneration would
+        # make the feature worse than leaving them all open.
+        validation_groups.append(f'<details class="vgroup" data-area="{html.escape(area)}"><summary>{html.escape(area)} '
             f'<span class="gcount">0 / {len(items)}</span></summary>' + "".join(item_html) + '</details>')
     validation_html = "".join(validation_groups)
     filters = "".join(
@@ -823,6 +832,18 @@ const validationKey='eoa-owner-validation:{html.escape(apk_build)}:{html.escape(
 let validation={{}}; try{{validation=JSON.parse(localStorage.getItem(validationKey)||'{{}}')}}catch(_e){{validation={{}}}}
 let needsOnly=false;
 function saveValidation(){{localStorage.setItem(validationKey,JSON.stringify(validation));renderValidation()}}
+/* Which validation areas the owner has expanded. Groups render COLLAPSED; whatever
+   she opens stays open across the constant board rebuilds. Deliberately keyed
+   WITHOUT the build id, unlike validationKey - felt-test RESULTS belong to one APK,
+   but "I am currently testing raids" should survive the next build. Wrapped in
+   try/catch because a browser with site data blocked throws on access, and the board
+   must still render. */
+const vopenKey='eoa-owner-validation-open';
+let vopen={{}}; try{{vopen=JSON.parse(localStorage.getItem(vopenKey)||'{{}}')}}catch(_e){{vopen={{}}}}
+document.querySelectorAll('.vgroup').forEach(g=>{{
+ const a=g.dataset.area; if(vopen[a]) g.open=true;
+ g.addEventListener('toggle',()=>{{vopen[a]=g.open;
+  try{{localStorage.setItem(vopenKey,JSON.stringify(vopen))}}catch(_e){{}}}});}});
 function renderValidation(){{let done=0;
  document.querySelectorAll('.vitem').forEach(item=>{{const state=validation[item.dataset.ticket]||{{}};
   item.querySelector('.verdict').value=state.verdict||'';item.querySelector('.vnote').value=state.note||'';
