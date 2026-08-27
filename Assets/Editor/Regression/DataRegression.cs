@@ -1259,6 +1259,8 @@ namespace DeNelle.Editor
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "kill-reward-raid-suppression suite", () => { if (!DeNelle.Editor.Regression.KillRewardRaidSuppressionRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[kill-reward-raid-suppression] " + r); });
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "wo1232 enemy-level source suite", () => { if (!DeNelle.Editor.WO1232EnemyLevelSourceRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[wo1232-enemy-level] " + r); });
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "vfx-ambient-budget suite", () => { if (!DeNelle.Editor.Regression.VfxAmbientLoopBudgetRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[vfx-ambient-budget] " + r); });
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "starter-armour suite", () => { if (!DeNelle.Editor.Regression.StarterArmourOwnershipRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[starter-armour] " + r); });
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "armour-catalog-job suite", () => { if (!DeNelle.Editor.Regression.ArmourCatalogJobRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[armour-catalog-job] " + r); });
 
             // =====================================================================
             //  >>> REGISTERED ORACLE SUITES — END FENCE <<<  (new lines go ABOVE)

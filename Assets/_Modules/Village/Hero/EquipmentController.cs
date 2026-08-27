@@ -4403,22 +4403,168 @@ namespace DeNelle.Village
             return _cachedHeroHeightM;
         }
 
-        // Renderer bounds on HeroBody (skips equipped props) — same frame GearVisualApplier targets.
+        // =====================================================================
+        //  WO-1209 - THE HERO MEASURED HER OWN WEAPON AS PART OF HER BODY
+        // =====================================================================
+        //
+        // THE RETIRED LINE, verbatim, was:
+        //     if (n.StartsWith("EquipmentProp") || n.StartsWith("GearVisual")) continue;
+        // and `n` is the renderer's OWN GameObject name. Both of those prefixes name a grip
+        // ROOT - a bare, renderer-less GameObject this controller creates (:1200, :2122). The
+        // geometry hangs one level DOWN, on the FBX's mesh node, whose name is whatever the
+        // artist called it ('staff_B', 'Object_2'), and the WeaponTrailController parents a
+        // second child called "WeaponTrail" onto the same grip root (WeaponTrailController.cs
+        // :183). NEITHER child starts with either prefix, so the test excluded the two empty
+        // holders and measured every attached prop - and every trail ribbon - as if it were
+        // the hero's own silhouette.
+        //
+        // ⭐ PROVEN BY CAPTURE, NOT INFERRED (owner felt-test 2026-08-25, build 2026.08.25.341262):
+        //   tmp/felt2/logcat-auth.txt:276652  19:29:25.481  scene 'dg_starter_loop'
+        //     [Flow:Equip] hero standing height=3.976m (ref=1.8m)
+        //     [Flow:Equip] heldLength 'mage_arcane' kind=Staff: archetype=1.3m proportional=2.871m
+        //   tmp/felt2/logcat-auth.txt:314023  19:31:31.409  scene 'Main_Castle_Overworld'
+        //     [Flow:Equip] hero standing height=1.75m (ref=1.8m)
+        //     [Flow:Equip] heldLength 'mage_arcane' kind=Staff: archetype=1.3m proportional=1.264m
+        //   ...and the RENDERED result, from the two `renderers=1` compensate lines (the only two
+        //   in the session with no trail riding the grip root, so the only two whose worldBounds
+        //   describe the prop alone):
+        //     :276798  dungeon  parent='SheatheSocket_HipMain' -> worldBounds=(1.488, 2.973, 0.613)
+        //     :314243  town     parent='SheatheSocket_HipMain' -> worldBounds=(0.177, 1.291, 0.445)
+        //   2.973 / 1.291 = 2.30x, against a height ratio of 3.976 / 1.75 = 2.27x and a heldLength
+        //   ratio of 2.871 / 1.264 = 2.27x. The three agree: the staff is rendering ~2.3x too long
+        //   in the dungeon and EVERY BIT of it comes from the measured height. That is the owner's
+        //   "staff oversized in starter loop dugeon" (tmp/wo970/staff-dungeon-193002.png), and her
+        //   "same thing we saw with the knight sword and shield" is the SAME LINE on the Knight a
+        //   week earlier - Logs/device/2026-08-20-portal.log:5335737 reads
+        //     hero standing height=3.848m -> heldLength 'knight_starter' Sword 0.65m -> 1.39m.
+        //
+        // ⛔ THE TICKET'S PRIME SUSPECT IS DISPROVEN BY ITS OWN LOG, and it is worth saying so
+        // here so nobody re-opens it: WO-1209 nominated "the dungeon instantiates a different hero
+        // body, so the bone lossyScale differs". Every parent-scale compensate line in that
+        // session - town AND dungeon, hand AND hip - reads `lossy=(1.72,1.72,1.72)`. Same rig,
+        // same Fit factor. And 'Hero (Blaise)' names the hero in the TOWN lines too (19:11, 19:20,
+        // 19:26, all Main_Castle_Overworld), so the stale display name is not a dungeon tell.
+        // The compensation maths is innocent (WO-970 sec 6 cleared it once already) and so is the
+        // rotation - the dungeon screenshot shows a correctly VERTICAL staff at the correct hip,
+        // simply 2.3x too big.
+        //
+        // WHY IT ONLY BIT IN A DUNGEON: the height is cached and re-measured exactly once per
+        // body, from InvalidateHeroHeightCache in CoReapplyGearAfterSceneLoad (:735). On a FRESH
+        // hero the measurement runs from HeroBodySwapper's Awake with nothing equipped yet - the
+        // clean 1.75. On a SURVIVING hero carried through a scene load the props are still on the
+        // rig when the re-measure fires (Equip's DestroyCurrentWeapon at :951 is a Unity Destroy,
+        // which is deferred to end of frame, so even the OUTGOING prop is still walkable) - so the
+        // measurement swallows the prop plus its trail. It is a feedback loop: a bigger measured
+        // height makes a bigger prop, which makes a bigger measured height on the next port.
+        //
+        // THE FIX IS STRUCTURAL, NOT A CLAMP (the ticket forbids a per-scene constant, and rightly:
+        // a clamp would hide a wrong measurement rather than take a right one). Two rules, both
+        // already proven elsewhere in this repo:
+        //   1. EXCLUDE THE WHOLE SUBTREE, not the node whose name matches. Attached gear hangs
+        //      under a named holder; its geometry does not carry the holder's name.
+        //   2. EXCLUDE NON-GEOMETRY RENDERERS. WO-1226 established this at CompensateParentScale
+        //      (:3040 and its comment block): a TrailRenderer's `bounds` is the WORLD AABB of the
+        //      ribbon the hero just swung through, which reported a 1.3 m rod as a 1.5 m cube.
+        //      That is the same corruption, and this was the second site carrying it.
+
+        /// <summary>
+        /// Node-name prefixes that mark the root of an ATTACHED-GEAR subtree hanging off the body
+        /// rig. Everything BELOW one of these belongs to a prop, an armour visual or an effect -
+        /// never to the hero's own silhouette. Kept as data (not three inline StartsWith calls) so
+        /// the regression asserts the same list the runtime walks.
+        /// </summary>
+        public static readonly string[] AttachedGearNodePrefixes =
+        {
+            "EquipmentProp",       // this controller's own grip roots (main hand + off hand)
+            "GearVisual",          // GearVisualApplier's armour/helmet meshes
+            "WeaponTrail",         // WeaponTrailController's ribbon AND its synthetic origin holder
+            "SheatheSocket",       // the code-built carry sockets (:3183) and anything parked on them
+        };
+
+        /// <summary>True when <paramref name="name"/> names an attached-gear subtree root.</summary>
+        public static bool IsAttachedGearNodeName(string name)
+        {
+            if (string.IsNullOrEmpty(name)) return false;
+            for (int i = 0; i < AttachedGearNodePrefixes.Length; i++)
+                if (name.StartsWith(AttachedGearNodePrefixes[i], System.StringComparison.Ordinal))
+                    return true;
+            return false;
+        }
+
+        /// <summary>
+        /// True when <paramref name="r"/> is part of the hero's OWN body silhouette - i.e. it owns
+        /// real mesh geometry AND no node between it and <paramref name="body"/> is an attached-gear
+        /// holder. Pure apart from the transform walk, so AttachmentOffsetRegression can prove both
+        /// the exclusion AND the inclusion on a synthetic hierarchy with no hero and no scene.
+        /// </summary>
+        /// <param name="excludedBy">On false, the rule that rejected it - so a capture can say WHY.</param>
+        public static bool IsBodyOwnRenderer(Renderer r, Transform body, out string excludedBy)
+        {
+            excludedBy = null;
+            if (r == null) { excludedBy = "null renderer"; return false; }
+
+            // Rule 2 (WO-1226): only a MeshFilter/SkinnedMeshRenderer owns geometry. A
+            // TrailRenderer / LineRenderer / ParticleSystemRenderer reports the world AABB of an
+            // EFFECT, which describes the swing, not the body.
+            var smr = r as SkinnedMeshRenderer;
+            bool ownsGeometry;
+            if (smr != null) ownsGeometry = smr.sharedMesh != null;
+            else
+            {
+                var mf = r.GetComponent<MeshFilter>();
+                ownsGeometry = mf != null && mf.sharedMesh != null;
+            }
+            if (!ownsGeometry)
+            {
+                excludedBy = "non-geometry renderer (" + r.GetType().Name + " '" + r.gameObject.name +
+                             "') - its bounds describe an effect, not the body (WO-1226)";
+                return false;
+            }
+
+            // Rule 1: walk UP to the body root; any attached-gear holder on the way disqualifies
+            // the whole subtree beneath it.
+            for (Transform t = r.transform; t != null && t != body; t = t.parent)
+            {
+                if (IsAttachedGearNodeName(t.name))
+                {
+                    excludedBy = "attached-gear subtree rooted at '" + t.name + "'";
+                    return false;
+                }
+            }
+            return true;
+        }
+
+        // Renderer bounds on HeroBody, BODY GEOMETRY ONLY - same frame GearVisualApplier targets.
         private float MeasureHeroBodyHeightM()
         {
             var body = transform.Find("HeroBody");
             if (body == null) return 0f;
             bool any = false;
             Bounds b = default;
+            int measured = 0, skipped = 0;
+            string firstSkip = null;
             foreach (var r in body.GetComponentsInChildren<Renderer>(true))
             {
                 if (r == null) continue;
-                var n = r.gameObject.name;
-                if (n.StartsWith("EquipmentProp") || n.StartsWith("GearVisual")) continue;
+                if (!IsBodyOwnRenderer(r, body, out string why))
+                {
+                    skipped++;
+                    if (firstSkip == null) firstSkip = why;
+                    continue;
+                }
+                measured++;
                 if (!any) { b = r.bounds; any = true; }
                 else b.Encapsulate(r.bounds);
             }
-            return any ? b.size.y : 0f;
+            float h = any ? b.size.y : 0f;
+            // Section 12: the number AND what produced it, on one line. The 2026-08-25 capture had
+            // only "hero standing height=3.976m" to go on, which cannot be split into "the hero is
+            // huge" and "the hero is holding something". These counts split it in one read.
+            FlowTrace.Step("Equip",
+                $"MeasureHeroBodyHeightM on '{name}': measured {measured} body renderer(s), " +
+                $"skipped {skipped} attached-gear/effect renderer(s) -> height={h:0.###}m " +
+                $"(first skip: {firstSkip ?? "<none>"})");
+            return h;
         }
 
         private void CacheRig()

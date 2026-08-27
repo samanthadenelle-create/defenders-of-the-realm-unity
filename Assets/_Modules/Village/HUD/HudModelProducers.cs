@@ -477,40 +477,44 @@ namespace DeNelle.Village.Hud
             int hp = Mathf.CeilToInt(Mathf.Max(0f, en.Hp));
             int maxHp = Mathf.CeilToInt(Mathf.Max(1f, en.MaxHp));
             float frac = en.HpFraction;
-            // F3 (WO-611): truthful level — read the enemy's REAL Level (authored per-def, stable),
-            // not the old EnemyLevelStub HP/25 heuristic that crept upward as wave-scaling inflated
-            // maxHp. Enemy.Level is derived from the authored def in Configure (see Enemy.Level).
-            int level = en.Level;
+            // WO-1232 (owner ruling 2026-08-26) — THE NUMBER IS GONE. What the frame shows beside
+            // the name is the enemy's AUTHORED classification WORD and nothing else:
+            //   boss:true      -> "BOSS"
+            //   role:"elite"   -> "ELITE"
+            //   anything else  -> "" (NOTHING is rendered - silence is the default, not a blank
+            //                         label the player has to interpret)
+            // The old "Lv N" was round(def.Hp / 25) - HP wearing a level costume, which is how a
+            // wave enemy read "Lv 68" beside a Lv 5 hero. Owner: "HP / 25 is not a level system.
+            // Dressing it up as one just produces very confident nonsense."
+            //
+            // APEX IS DELIBERATELY NOT EMITTED. waves.json authors an apexBoss, but until a tier is
+            // authored on purpose a third badge would re-invent the precision this ruling removed.
+            //
+            // The "!"/"!!" threat prefix that used to be pasted onto the name here is REMOVED with
+            // the RiskyDelta/LethalDelta banding that drove it - it graded a fake level against the
+            // hero's real one. Its replacement (a Combat Rating from HP/damage/cadence/armour/
+            // abilities/role, shown Low/Even/High/Deadly) is a SEPARATE, UNBUILT spec: do not stub
+            // it here. A WORD, never a tint - the owner is red/green colourblind. ASCII only.
+            string badge = EnemyBadge.For(en);
             bool locked = _indicator != null && _indicator.LockEngaged;
 
-            // Difficulty tell on the TARGET FRAME (mirrors the over-head ThreatSkullPlate).
-            // The kit's Bind only forwards Name (extra=LOCKED) to the frame, so surface the
-            // warning as a rich-text-coloured prefix on the name — gold "!" for caution,
-            // red "!!" for danger — using the SAME owner-tunable ThreatSkullPlate thresholds
-            // (TierFor) so the two surfaces always agree. ASCII glyph = font/WebGL-safe.
-            int playerLevel = HeroProgression.Instance != null ? Mathf.Max(1, HeroProgression.Instance.Level) : 1;
-            int threatTier = ThreatSkullPlate.TierFor(level, playerLevel);
-            if (threatTier > 0)
-                name = (threatTier >= 2 ? "<color=#FF3B30><b>!!</b></color> "
-                                        : "<color=#FFD24A><b>!</b></color> ") + name;
-
-            string sig = $"{name}|{level}|{hp}/{maxHp}|{role}|{locked}";
+            string sig = $"{name}|{badge}|{hp}/{maxHp}|{role}|{locked}";
             if (sig == _sig) return;
             _sig = sig;
             _hadTarget = true;
 
-            // WO-1232 (CLAUDE.md S12): NAME THE SOURCE of the level the player is about to read,
-            // so the next "why does it say Lv 68" is one log read instead of a felt-test. The line
-            // fires only when the target signature CHANGES (sig-gated above), never per frame.
-            // Enemy.Level is the authored per-def band; maxHp is printed beside it precisely so a
-            // future regression back to an HP-derived level is visible as the two moving together.
+            // CLAUDE.md S12 - PERMANENT instrumentation. It now names the source of the BADGE (the
+            // authored EnemyDef flags), and still prints the retired HP-derived magnitude beside it
+            // so a silent re-appearance of a numeric level on this frame is one log read rather than
+            // a felt-test. The line is sig-gated above, so it fires on target change, never a frame.
             DeNelle.Core.Diagnostics.FlowTrace.Step("HudTarget",
-                $"target level resolved: Lv {level} from Enemy.Level (authored def band, def='{en.EnemyDefId}') " +
-                $"— NOT maxHp-derived (runtime maxHp={maxHp}); playerLevel={playerLevel}, " +
-                $"delta={level - playerLevel}, threatTier={threatTier} " +
-                $"(risky>={ThreatSkullPlate.RiskyDelta}, lethal>={ThreatSkullPlate.LethalDelta}).");
-            Model.Target.Set(true, name, level, hp, maxHp, frac, ToHudRole(role), locked);
+                $"target classification resolved: badge='{badge}' from Enemy.Tier={en.Tier} " +
+                $"(authored EnemyDef boss/role, def='{en.EnemyDefId}') - NO numeric level is displayed " +
+                $"(WO-1232); for reference the retired HP-derived magnitude was {en.Level} " +
+                $"at runtime maxHp={maxHp}.");
+            Model.Target.Set(true, name, badge, hp, maxHp, frac, ToHudRole(role), locked);
         }
+
     }
 
     // ── TargetCycle ───────────────────────────────────────────────────────────

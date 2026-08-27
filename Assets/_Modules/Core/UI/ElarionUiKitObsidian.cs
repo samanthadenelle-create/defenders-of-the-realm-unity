@@ -1759,7 +1759,12 @@ namespace DeNelle.Core.UI
         {
             public GameObject root;
             public TMP_Text name;
-            public TMP_Text level;
+            /// <summary>
+            /// WO-1232 (owner ruling 2026-08-26): the AUTHORED classification word — "BOSS" /
+            /// "ELITE" / empty. This slot used to print "Lv N" from a maxHp/25 heuristic; the
+            /// number is REMOVED, the slot stays where the player already looks for it.
+            /// </summary>
+            public TMP_Text badge;
             /// <summary>Free-form extra line (threat / role).</summary>
             public TMP_Text extra;
             public BarHandle hp;
@@ -1768,10 +1773,16 @@ namespace DeNelle.Core.UI
             private TargetModel _bound;
             private Action _onChanged;
 
-            public void Set(string targetName, int targetLevel, float cur, float max, string extraText = "")
+            /// <summary>
+            /// WO-1232: <paramref name="targetBadge"/> is an AUTHORED classification WORD
+            /// ("BOSS" / "ELITE") or empty — an ordinary enemy shows NOTHING, not a blank
+            /// label with a hidden meaning. It replaced an int level that was really
+            /// <c>maxHp / 25</c>; do not restore a number here without a real authored stat.
+            /// </summary>
+            public void Set(string targetName, string targetBadge, float cur, float max, string extraText = "")
             {
                 if (name != null) name.text = targetName ?? "";
-                if (level != null) level.text = targetLevel > 0 ? "Lv " + targetLevel : "";
+                if (badge != null) badge.text = targetBadge ?? "";
                 if (extra != null) extra.text = extraText ?? "";
                 if (hp != null) hp.SetValue(cur, max);
                 if (plate != null) plate.color = ChromeTint;
@@ -1782,7 +1793,7 @@ namespace DeNelle.Core.UI
             public void Clear()
             {
                 if (name != null) name.text = "No Target";
-                if (level != null) level.text = "";
+                if (badge != null) badge.text = "";
                 if (extra != null) extra.text = "";
                 if (hp != null)
                 {
@@ -1811,7 +1822,7 @@ namespace DeNelle.Core.UI
                     if (_bound.HasTarget)
                     {
                         if (root != null && !root.activeSelf) root.SetActive(true);
-                        Set(_bound.Name, _bound.Level, _bound.Hp, _bound.MaxHp,
+                        Set(_bound.Name, _bound.Badge, _bound.Hp, _bound.MaxHp,
                             _bound.Locked ? "LOCKED" : "");
                     }
                     else
@@ -1856,7 +1867,9 @@ namespace DeNelle.Core.UI
                         FlowTrace.Warn("UI", "BuildTargetFrame: prefab has no *Name* text — overlaid a kit label");
                     }
                     h.name.raycastTarget = false;
-                    h.level = FindDeep<TMP_Text>(pf.transform, "level");
+                    // The prefab child is still NAMED "level" (a prefab GameObject name, not a
+                    // promise about its content); WO-1232 repurposes it to the classification word.
+                    h.badge = FindDeep<TMP_Text>(pf.transform, "level");
                     h.extra = null;
                     GuardSpriteNullImages(pf, h.plate);   // no-silent-white law (F8-31)
                     ComposeTargetPlate(pf, h, anchorMin, anchorMax);   // WO-867 — ONE composed unit
@@ -1890,7 +1903,7 @@ namespace DeNelle.Core.UI
             h.name = Label(go.transform, "", 0.60f, 0.95f, ElarionUi.Parchment,
                            ElarionUi.FontHead, TextAlignmentOptions.Center, 0.12f, 0.88f, bold: true);
             FitSingleLine(h.name);                                         // §1.14 — long target names ellipsize
-            h.level = Label(go.transform, "", 0.60f, 0.95f, ElarionUi.Gilt,
+            h.badge = Label(go.transform, "", 0.60f, 0.95f, ElarionUi.Gilt,
                             ElarionUi.FontLabel, TextAlignmentOptions.MidlineLeft, 0.03f, 0.20f, bold: true);
             h.extra = Label(go.transform, "", 0.02f, 0.24f, ElarionUi.ParchmentDim,
                             ElarionUi.FontMicro, TextAlignmentOptions.Center, 0.12f, 0.88f);

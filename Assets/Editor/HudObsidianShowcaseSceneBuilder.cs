@@ -196,7 +196,7 @@ namespace DeNelle.Editor
             var content = Section(canvasT, "Target nameplate  (BuildTargetFrame)",
                 new Vector2(0.05f, 0.62f), new Vector2(0.50f, 0.775f));
             var tf = ElarionUiKit.BuildTargetFrame(content, Vector2.zero, Vector2.one);
-            tf.Set("Grommash", 12, 360f, 600f, "ELITE");
+            tf.Set("Grommash", "ELITE", 360f, 600f, "LOCKED");   // WO-1232: badge slot = authored word
             Verdict("TargetFrame", content, "TargetNameplate.prefab");
 
             var bossContent = Section(canvasT, "Boss nameplate  (BuildNameplate.Boss)",

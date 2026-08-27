@@ -558,8 +558,9 @@ namespace DeNelle.HUD.Kit
             {
                 // WO-611 (mockup v8): gold "Lv N" right beside the enemy name. The Blink prefab path
                 // (MODE 1) has NO *level* text child (FindDeep "level" -> null), so TargetFrameHandle.
-                // Set()'s level write had nowhere to land — the 07-05 capture showed no Lv. Give the
+                // Set()'s write had nowhere to land — the 07-05 capture showed no slot. Give the
                 // handle a label; MODE 2 already has one, which is re-tinted to the ratified gold.
+                // WO-1232: the slot's CONTENT is now the authored BOSS/ELITE word, never a number.
                 var gold611 = new Color(0.831f, 0.686f, 0.353f, 1f);   // #d4af5a
 
                 // Capture 2026-07-06 (battle_hud.png): the enemy PORTRAIT circle overhung the
@@ -587,8 +588,10 @@ namespace DeNelle.HUD.Kit
                 // label was a FULL OVERLAY of that same box. Fix: one measured row — a container
                 // on fractional plate anchors (right of the portrait column); the name takes the
                 // LEFT ~72% with the §1.14 bounded auto-size/ellipsize (ElarionUiKit.FitSingleLine,
-                // the Forge-title law) and the gold Lv takes the RIGHT slice. The name therefore
-                // ellipsizes BEFORE it can touch the Lv text, and neither can reach the plate edge.
+                // the Forge-title law) and the gold slot takes the RIGHT slice. The name therefore
+                // ellipsizes BEFORE it can touch it, and neither can reach the plate edge.
+                // WO-1232: that gold slot now carries the AUTHORED classification WORD (BOSS /
+                // ELITE / nothing), not a "Lv N" number - the number was maxHp/25 and is removed.
                 if (_targetFrame.name != null)
                 {
                     var nameRt = (RectTransform)_targetFrame.name.transform;
@@ -607,36 +610,36 @@ namespace DeNelle.HUD.Kit
                     _targetFrame.name.alignment = TextAlignmentOptions.MidlineLeft;
                     ElarionUiKit.FitSingleLine(_targetFrame.name);
 
-                    if (_targetFrame.level == null)
+                    if (_targetFrame.badge == null)
                     {
-                        _targetFrame.level = ElarionUiKit.Label(rowRt, "", 0f, 1f, gold611,
+                        _targetFrame.badge = ElarionUiKit.Label(rowRt, "", 0f, 1f, gold611,
                             ElarionUi.FontLabel, TextAlignmentOptions.MidlineRight, 0.74f, 1f, bold: true);
                     }
                     else
                     {
-                        // MODE 2 built its own Lv at the plate's far left — move it into the row.
-                        var lvRt = (RectTransform)_targetFrame.level.transform;
+                        // MODE 2 built its own badge slot at the plate's far left — move it in.
+                        var lvRt = (RectTransform)_targetFrame.badge.transform;
                         lvRt.SetParent(rowRt, false);
                         lvRt.anchorMin = new Vector2(0.74f, 0f);
                         lvRt.anchorMax = Vector2.one;
                         lvRt.offsetMin = Vector2.zero; lvRt.offsetMax = Vector2.zero;
-                        _targetFrame.level.alignment = TextAlignmentOptions.MidlineRight;
+                        _targetFrame.badge.alignment = TextAlignmentOptions.MidlineRight;
                     }
-                    ElarionUiKit.FitSingleLine(_targetFrame.level);   // §1.14 — Lv never spills either
+                    ElarionUiKit.FitSingleLine(_targetFrame.badge);   // §1.14 — BOSS never spills either
                 }
-                else if (_targetFrame.level == null)
+                else if (_targetFrame.badge == null)
                 {
                     // Neither build mode should reach here (both guarantee a name label) —
-                    // fall back to a plate-anchored Lv clear of the bar rects.
-                    _targetFrame.level = ElarionUiKit.Label(_targetFrame.root.transform, "",
+                    // fall back to a plate-anchored badge slot clear of the bar rects.
+                    _targetFrame.badge = ElarionUiKit.Label(_targetFrame.root.transform, "",
                         0.72f, 0.97f, gold611, ElarionUi.FontLabel,
                         TextAlignmentOptions.MidlineRight, 0.60f, 0.88f, bold: true);
                 }
-                _targetFrame.level.color = gold611;
-                _targetFrame.level.raycastTarget = false;
+                _targetFrame.badge.color = gold611;
+                _targetFrame.badge.raycastTarget = false;
 
                 // 3-state LOCK BADGE chip (crosshair art + uppercase UNLOCKED/LOCKING/LOCKED word),
-                // top-right of the plate beside the Lv text; driven from TargetModel in Update().
+                // top-right of the plate beside the badge word; driven from TargetModel in Update().
                 _lockBadge = ElarionUiKit.BuildLockCrosshairBadge(_targetFrame.root.transform,
                     new Vector2(0.72f, 0.02f), new Vector2(0.99f, 0.34f));
             }

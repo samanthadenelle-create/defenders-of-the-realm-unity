@@ -1,6 +1,6 @@
 # WORK ORDER 1215 - A dropped shield attaches at IDENTITY and sits through the hero's body
 
-**Status:** READY TO IMPLEMENT
+**Status:** FIXED 2026-08-26 - gated `COMPILE_GATE_OK` + `REGRESSION_OK 294/294 suites` (Builds/g3-c, Builds/g3-r). AWAITING OWNER FELT-VERIFY to close.
 **Silo:** Gear seating / attachment orientation
 **Origin:** Owner felt-test, Seeker build `2026.08.26.341419`, 2026-08-26.
 Owner verbatim: *"and shield sits through the body not seated correctly"*.

@@ -3,13 +3,14 @@
 // -----------------------------------------------------------------------------
 // Assembly: DeNelle.Village   Namespace: DeNelle.Village
 //
-// A small world-space nameplate floated over a roaming region mob that shows a RED
-// SKULL when the mob's ThreatLevel out-paces the player's level — the "this one
-// will wreck you" signal, graded:
-//   delta < RiskyDelta            → no skull (a fair fight).
-//   RiskyDelta..LethalDelta       → one skull  (risky — fights uphill).
-//   delta >= LethalDelta           → two skulls (lethal — likely a one-sided loss).
-// where delta = mobThreatLevel − playerLevel.
+// ⛔ THE TELL IS OFF (owner ruling WO-1232, 2026-08-26) — this component now renders
+// NOTHING. It used to float a RISKY / LETHAL word over a mob whose "level" out-paced
+// the player's, where both numbers were round(HP / 25). Owner: "HP / 25 is not a level
+// system. Dressing it up as one just produces very confident nonsense." The grading, the
+// label copy and the billboard are DELETED; the delta computation and its FlowTrace stay
+// as instrumentation (CLAUDE.md §12 — never stripped as cleanup), gated by DisplayEnabled.
+// What the player reads instead is IDENTITY, not difficulty: the authored BOSS / ELITE
+// word on the HUD target frame (HudModelProducers.TargetProducer.BadgeFor).
 //
 // Built ENTIRELY in C# (uGUI world-space Canvas + Text) — NO UXML / UIDocument,
 // which do not render in player builds (CLAUDE.md memory, PIPELINE_STATE.md §8).
@@ -31,28 +32,51 @@ using UnityEngine.UI;
 namespace DeNelle.Village
 {
     /// <summary>
-    /// Code-built world-space red-skull threat tell over a roaming mob. Configure via
-    /// <see cref="Attach"/>; it polls the supplied ThreatLevel + the player's level each
-    /// <see cref="LateUpdate"/> and shows 0 / 1 / 2 skulls accordingly.
+    /// Code-built world-space threat tell over a roaming mob, DISPLAY-OFF since WO-1232:
+    /// <see cref="LateUpdate"/> still polls the supplied ThreatLevel + the player's level, but
+    /// only to TRACE them — the canvas is force-disabled and no word is ever shown.
     /// </summary>
     [DisallowMultipleComponent]
     public sealed class ThreatSkullPlate : MonoBehaviour
     {
-        // ── Grading thresholds (mob difficulty − player level) — OWNER-TUNABLE ────
-        // THE single tuning point for the whole difficulty-warning tell. Both the
-        // over-head plate (this component) AND the target frame (HudModelProducers.
-        // TargetProducer, via TierFor) read these, so bumping them here moves every
-        // surface at once. delta = enemyDifficulty − playerLevel.
-        /// <summary>Delta at/above which the CAUTION tell shows (one skull — a risky, uphill fight).</summary>
+        // =========================================================================
+        // THE RISKY / LETHAL BANDING IS OFF (owner ruling WO-1232, 2026-08-26).
+        // -------------------------------------------------------------------------
+        // Owner verbatim: "The Lv5 vs Lv36 comparison is downstream of the fake level.
+        // Retuning thresholds just polishes the wrong equation." The EQUATION - not the
+        // numbers - was the defect: delta = enemyLevel - playerLevel, where enemyLevel is
+        // round(HP / 25). hollow-brute (900 hp -> "Lv 36") therefore read LETHAL forever.
+        // The player-facing tell is REMOVED: this plate never enables its canvas, and the
+        // target frame's "!"/"!!" prefix is gone with it. The replacement the owner named -
+        // a real Combat Rating (HP, damage, cadence, armour, abilities, encounter role ->
+        // Low/Even/High/Deadly) - is a SEPARATE, UNBUILT spec. Do NOT stub it here, and do
+        // NOT "fix" this by picking better thresholds.
+        //
+        // What survives below is DIAGNOSTIC ONLY, kept per CLAUDE.md §12: instrumentation is
+        // PERMANENT and is never removed as cleanup - a stripped trace turns a logged failure
+        // back into a silent one. The DISPLAY is flagged off; the math and the traces stay so
+        // a future re-enable is one read instead of an archaeology dig.
+        // =========================================================================
+
+        /// <summary>
+        /// WO-1232: the player-facing threat tell is OFF and stays off until a real difficulty
+        /// model exists. Flipping this to <c>true</c> re-ships a warning graded on <c>HP/25</c>,
+        /// which is the defect the owner ruled out - it is a diagnostic switch, not a tuning dial.
+        /// </summary>
+        public const bool DisplayEnabled = false;
+
+        /// <summary>DIAGNOSTIC ONLY (see the block above): delta at/above which the retired
+        /// CAUTION band began. No player-facing surface reads it.</summary>
         public const int RiskyDelta = 3;
-        /// <summary>Delta at/above which the DANGER tell shows (two skulls — lethal, likely a loss).</summary>
+        /// <summary>DIAGNOSTIC ONLY (see the block above): delta at/above which the retired
+        /// DANGER band began. No player-facing surface reads it.</summary>
         public const int LethalDelta = 7;
 
         /// <summary>
-        /// Shared difficulty tier for a delta (enemyDifficulty − playerLevel):
-        /// 0 = fair fight (no tell), 1 = caution, 2 = danger. THE single owner-tunable
-        /// gate (<see cref="RiskyDelta"/> / <see cref="LethalDelta"/>) so the over-head
-        /// plate and the target frame always agree.
+        /// DIAGNOSTIC ONLY - the retired difficulty band for a delta (0 fair / 1 caution /
+        /// 2 danger). Kept so the trace below can state what the old equation WOULD have
+        /// claimed. Nothing player-facing may call it: it grades a fake level (HP/25) against
+        /// the hero's real one, which is exactly what WO-1232 removed.
         /// </summary>
         public static int TierFor(int enemyDifficulty, int playerLevel)
         {
@@ -61,10 +85,11 @@ namespace DeNelle.Village
         }
 
         /// <summary>
-        /// Enemy "difficulty" for the threat tell = the enemy's REAL <see cref="Enemy.Level"/>
-        /// (authored per-def in <c>Configure</c>, STABLE per archetype).
+        /// DIAGNOSTIC ONLY - the magnitude the retired tell graded, = <see cref="Enemy.Level"/>,
+        /// which is ITSELF <c>round(def.Hp / 25)</c>. There is no authored level field anywhere,
+        /// which is precisely why WO-1232 removed the display instead of re-tuning it.
         ///
-        /// WO-1232: this used to run the RETIRED HP/25 heuristic
+        /// Historic note: this used to run the RETIRED HP/25 heuristic
         /// (<c>round-to-int of the runtime maxHp over 25</c>) that WO-611 F3 replaced on the target frame
         /// but never removed here. Because it read the RUNTIME maxHp, wave scaling inflated it
         /// every wave: an ordinary wave-7 enemy at 1700 HP read as "level 68", so
@@ -78,8 +103,8 @@ namespace DeNelle.Village
             return Mathf.Max(1, e.Level);
         }
 
+        // Only the base label tint survives; LethalColor went with the deleted lethal pulse.
         private static readonly Color SkullColor   = new Color(0.92f, 0.16f, 0.13f, 1f);  // danger red
-        private static readonly Color LethalColor  = new Color(1f,    0.30f, 0.10f, 1f);  // hotter orange-red
 
         // ── Config ────────────────────────────────────────────────────────────────
         private Func<int> _threatLevel;     // the mob's ThreatLevel (tier × depth)
@@ -88,7 +113,7 @@ namespace DeNelle.Village
         // ── Runtime refs ──────────────────────────────────────────────────────────
         private Canvas _canvas;
         private Text   _label;
-        private Transform _cam;
+        // _cam went with the deleted billboard - nothing is drawn to face the camera now.
         private bool _built;
         private int _shownSkulls = -1;      // cache to avoid restyling every frame
 
@@ -147,8 +172,6 @@ namespace DeNelle.Village
         private void Start()
         {
             BuildUi();
-            var c = Camera.main;
-            _cam = c != null ? c.transform : null;
         }
 
         private void BuildUi()
@@ -196,40 +219,34 @@ namespace DeNelle.Village
             int playerLevel = ResolvePlayerLevel();
             int delta = threat - playerLevel;
 
-            int skulls = delta >= LethalDelta ? 2
-                       : delta >= RiskyDelta  ? 1
-                       :                         0;
-
-            bool show = skulls > 0;
-            if (_canvas.enabled != show) _canvas.enabled = show;
-            if (!show) return;
-
-            if (skulls != _shownSkulls)
+            // WO-1232: the DISPLAY is off. The canvas is force-disabled (never conditionally
+            // enabled), the RISKY / LETHAL words never reach the label, and nothing player-facing
+            // depends on the retired banding any more. The computation above and the trace below
+            // are INSTRUMENTATION and stay per CLAUDE.md §12 - if the old equation ever starts
+            // claiming something absurd again, the log says so instead of a felt-test.
+            if (!DisplayEnabled)
             {
-                _shownSkulls = skulls;
-                // "☠" U+2620 skull-and-crossbones; legacy font may fall back — pair with
-                // a "!!" so the tell still reads if the glyph is missing.
-                _label.text = skulls >= 2 ? "LETHAL" : "RISKY";
-                _label.color = skulls >= 2 ? LethalColor : SkullColor;
+                if (_canvas.enabled) _canvas.enabled = false;
+                if (_shownSkulls != 0)
+                {
+                    _shownSkulls = 0;
+                    _label.text = string.Empty;
+                }
+                DeNelle.Core.Diagnostics.FlowTrace.Throttle("ThreatTell", "display-off", 5f,
+                    "threat tell suppressed (WO-1232): the retired band would have said tier " +
+                    TierFor(threat, playerLevel) + " from delta=" + delta +
+                    " (HP-derived magnitude " + threat + " vs hero " + playerLevel +
+                    "); the player sees nothing. Identity is shown instead, as the authored " +
+                    "BOSS/ELITE word on the target frame.");
+                return;
             }
 
-            // Lethal pulse so a deadly mob reads at a glance.
-            if (skulls >= 2)
-            {
-                float pulse = 0.6f + 0.4f * Mathf.Abs(Mathf.Sin(Time.time * 5f));
-                var c = LethalColor; c.a = pulse;
-                _label.color = c;
-            }
-
-            // Billboard toward the camera.
-            if (_cam == null)
-            {
-                var cm = Camera.main;
-                _cam = cm != null ? cm.transform : null;
-            }
-            if (_cam != null)
-                _canvas.transform.rotation =
-                    Quaternion.LookRotation(_canvas.transform.position - _cam.position);
+            // NOTHING FOLLOWS. The skull grading, the RISKY / LETHAL label copy, the lethal pulse
+            // and the billboard that served them were DELETED by WO-1232, not commented out and not
+            // re-tuned: the owner ruled the equation itself out, so leaving a dormant copy of it
+            // here would be the same fake precision waiting to be switched back on. Re-enabling the
+            // tell means writing the Combat Rating model first (its own spec), and this component
+            // then renders THAT - never a delta of HP/25 levels.
         }
 
         // Player level via HeroProgression (the hero XP/level owner). Falls back to 1

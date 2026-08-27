@@ -213,7 +213,7 @@ namespace DeNelle.Core.UI
                 Caption("BuildTargetFrame - Set vs TOTAL Clear() (the No-Target law)");
                 var tgtRow = Row(150f);
                 var tf = ElarionUiKit.BuildTargetFrame(tgtRow, new Vector2(0.02f, 0.05f), new Vector2(0.45f, 0.95f));
-                tf.Set("Orc Warlord", 7, 62f, 180f, "LOCKED");
+                tf.Set("Orc Warlord", "BOSS", 62f, 180f, "LOCKED");   // WO-1232: an authored WORD, never "Lv N"
                 var tfClear = ElarionUiKit.BuildTargetFrame(tgtRow, new Vector2(0.50f, 0.05f), new Vector2(0.93f, 0.95f));
                 tfClear.Clear();   // screenshot: fully-empty frame, "No Target", blank value, 0 fill
 

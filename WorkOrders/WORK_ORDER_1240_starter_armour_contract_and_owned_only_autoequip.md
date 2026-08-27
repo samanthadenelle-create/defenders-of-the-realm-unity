@@ -1,6 +1,6 @@
 # WORK ORDER 1240 - The starter-armour contract: auto-equip may only choose what the player OWNS
 
-**Status:** READY TO IMPLEMENT
+**Status:** FIXED 2026-08-26 - gated `COMPILE_GATE_OK` + `REGRESSION_OK 294/294 suites` (Builds/g3-c, Builds/g3-r). AWAITING OWNER FELT-VERIFY to close.
 **Silo:** Gear / catalog / progression
 **Severity:** P1. The owner called it *"both a progression bug and an economy hole."*
 **Origin:** Owner ruling 2026-08-26, from the residual hole the WO-1214 lane surfaced.

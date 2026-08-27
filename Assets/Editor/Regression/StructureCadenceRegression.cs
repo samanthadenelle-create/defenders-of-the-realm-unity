@@ -67,17 +67,33 @@
 //     thing the player gets. Byte compare, not JSON compare — a re-serialization
 //     that reorders keys is still a divergence worth knowing about.
 //
-// C2  FOOTPRINT OUTLIER BAND (measured, family-relative, upper bound only).
+// C2  FOOTPRINT OUTLIER BAND (measured, BASE-HEIGHT-relative, upper bound only).
 //     Every row's base visual is replayed through the shipped pipeline and its
-//     widest horizontal extent max(x,z) is compared to the MEDIAN of the family.
-//     Fails above OutlierRatio x median. Family-relative on purpose: it holds if
-//     the owner re-scales the whole town (the _heightCadence model is "change the
-//     one base number and everything re-scales together"), and it needs no list of
-//     ids and no per-row thresholds.
+//     widest horizontal extent max(x,z) is compared to an ABSOLUTE ceiling:
+//     StructureFactory.YHeightVariable * CadenceWidthRatio = 4.0 * 2.6 = 10.4 m.
+//
+//     ⚠ UNTIL 2026-08-26 THIS COMPARED AGAINST THE FAMILY MEDIAN, AND THAT
+//     REFERENCE WAS ITSELF A DEFECT (WO-1239). The intent was right — "it holds if
+//     the owner re-scales the whole town" — but a median over the measured
+//     population silently RE-THRESHOLDS whenever ANY member changes size. WO-1224
+//     halved three GenericContainer rows; the median fell 4.32 -> 3.78 m, the band
+//     fell 8.64 -> 7.56 m, and 'barracks' (7.64 m in both runs, untouched) was
+//     reported as an outlier. The gate went red because three OTHER buildings got
+//     SMALLER. Measured, not theorised: Builds/wo1211-reg.log (green) vs
+//     Builds/gate-r3 (red), same 27 rows, same ids, three rows different.
+//
+//     YHeightVariable keeps the whole-town-re-scale property (it IS the one number
+//     the town scales from) with none of the population coupling, and it still
+//     needs no list of ids and no per-row thresholds. The family median is still
+//     COMPUTED AND PRINTED, as observability — never again as a threshold.
 //
 // C3  AN ARMED CAP IS OBEYED. A row authoring repo.maxFootprint must measure at or
 //     under it. This is the direct assert on the fix; C2 is the assert on the next
-//     model nobody has imported yet.
+//     model nobody has imported yet. NOTE the cap is a UNIFORM scale-down, so it
+//     shortens the building as well as narrowing it — it is the right tool for a
+//     model that is FLAT AT FIT TIME (where the height was inflated by a tiny
+//     divisor anyway) and the WRONG tool for a correctly-posed wide building, which
+//     it would simply shrink. See the WO-1239 note under C2.
 //
 // C4  THE PRODUCTION PATH CARRIES THE CAP. SkinOptions must expose a public float
 //     MaxFootprint and StructureFactory.OptsFor must populate it from the row.
@@ -140,14 +156,42 @@ namespace DeNelle.Editor
         private const string StreamingCopy   = "StreamingAssets/Data/Canonical/structures-catalog.json";
 
         /// <summary>
-        /// How many times the family MEDIAN widest-horizontal-extent a single row may reach
-        /// before it is called an outlier. NOT a taste value — bracketed by measurement, from
-        /// logs/device/2026-08-20-portal.log: the widest HONEST structure in the town is
-        /// GenericContainer at 5.83 m against a ~4.0 m median = 1.46x, and the defect the owner
-        /// reported measured 14.34 m = 3.58x. 2.0 sits between them with margin on both sides.
-        /// Widening this to make something pass defeats the file; the row's cap is the dial.
+        /// THE BAND, expressed as a multiple of <see cref="StructureFactory.YHeightVariable"/> —
+        /// the ONE global base fit height (4.0 m) that the whole town is scaled from. A row is an
+        /// outlier when its widest horizontal extent exceeds <c>YHeightVariable * this</c>.
+        /// <para>⚠ THIS USED TO BE "2.0x THE FAMILY MEDIAN" AND THAT REFERENCE WAS THE DEFECT
+        /// (WO-1239, 2026-08-26). A median over the measured population silently RE-THRESHOLDS
+        /// every time any member changes size, in either direction. The proof, measured not
+        /// theorised — Builds/wo1211-reg.log (green, 08-25 21:15) vs Builds/gate-r3 (red, 08-26
+        /// 17:23), same 27 rows, same ids:
+        /// WO-1224 halved three GenericContainer rows (lumberyard/foundry/silo, heightMul 0.5),
+        /// so their widest went 5.83 -> 2.91 m. That moved the MEDIAN 4.32 -> 3.78 m and the band
+        /// 8.64 -> 7.56 m, and 'barracks' — which measured 7.64 m in BOTH runs and was not edited
+        /// — became an "outlier" without changing by one millimetre. i.e. the gate went red
+        /// because three OTHER buildings got SMALLER, which is the town getting BETTER. A
+        /// threshold that inverts like that is not measuring the thing it names.</para>
+        /// <para>The base height is the right reference and keeps the original design intent:
+        /// the reason a family-relative band was chosen was "it holds if the owner re-scales the
+        /// whole town", and YHeightVariable IS that one number ("change THIS ONE number and the
+        /// entire town re-scales together" — StructureFactory). Only now it cannot be moved by an
+        /// unrelated row. Deliberately the FLAT base, NOT the row's own fit height
+        /// (YHeightVariable * heightMul): collector_farm authors heightMul 1.4, so a row-relative
+        /// ceiling would have been 5.6*2.6 = 14.56 m and the measured 14.34 m defect this suite
+        /// exists for would have walked straight through it.</para>
+        /// <para>2.6 IS NOT A TASTE VALUE — it is bracketed by the same two measurements the old
+        /// 2.0 was, re-expressed against the base: the widest HONEST structure in the town is
+        /// 'barracks' at 7.64 m = 1.91x base (with 'wall_stone' right behind at 7.42 = 1.86x),
+        /// and the collector_farm defect measured 14.34 m = 3.58x base. 2.6 is the GEOMETRIC
+        /// midpoint of 1.91 and 3.58 (sqrt(1.91*3.58) = 2.615), i.e. equal multiplicative margin
+        /// on both sides: 1.36x of headroom over the widest honest row, 1.38x of bite before the
+        /// known defect. Ceiling = 10.4 m. Raising this to make something pass defeats the file;
+        /// the row's repo.maxFootprint cap is the per-row dial.</para>
         /// </summary>
-        private const float OutlierRatio = 2.0f;
+        private const float CadenceWidthRatio = 2.6f;
+
+        /// <summary>The absolute ceiling in metres. One place, derived from the shipped base
+        /// height so a whole-town re-scale carries it — never a second hardcoded number.</summary>
+        private static float WidthBandM => StructureFactory.YHeightVariable * CadenceWidthRatio;
 
         /// <summary>
         /// Slack in metres when checking an ARMED cap (C3). The cap is one float multiply, so a
@@ -156,9 +200,11 @@ namespace DeNelle.Editor
         /// </summary>
         private const float CapToleranceM = 0.05f;
 
-        /// <summary>Below this many measured rows a median is not a statistic. Fails rather
-        /// than skips — a catalog that yields two measurable buildings is an art outage.</summary>
-        private const int MinFamilyForMedian = 6;
+        /// <summary>Below this many measured rows the catalog is not being read. The band no
+        /// longer depends on the population (see CadenceWidthRatio), so this is no longer a
+        /// statistical minimum — it is an ART-OUTAGE detector, and it still FAILS rather than
+        /// skips so "nothing resolved" can never read as "nothing wrong".</summary>
+        private const int MinMeasuredFamily = 6;
 
         [Serializable]
         private sealed class StructuresFile
@@ -277,21 +323,27 @@ namespace DeNelle.Editor
             CheckStorageContainerScale(entries, failures, log);
 
             // ---- C2: the outlier band ---------------------------------------
-            if (samples.Count < MinFamilyForMedian)
+            if (samples.Count < MinMeasuredFamily)
             {
-                failures.Add("only " + samples.Count + " structure model(s) measured (need at least " +
-                             MinFamilyForMedian + " for a median to mean anything). A 28-row catalog that " +
-                             "yields this few measurable buildings is an art outage, not a quiet day — " +
-                             "failing rather than skipping so it cannot read as a pass.");
+                failures.Add("only " + samples.Count + " structure model(s) measured (expected at least " +
+                             MinMeasuredFamily + "). A 28-row catalog that yields this few measurable " +
+                             "buildings is an art outage, not a quiet day — failing rather than skipping " +
+                             "so it cannot read as a pass.");
             }
             else
             {
+                // The band is FIXED against the town's base height and does NOT depend on this
+                // population (WO-1239). The median is still computed and PRINTED — as observability,
+                // never as a threshold — so a reader can see the family shift without the shift being
+                // able to move the line under anybody's feet.
                 float median = Median(samples);
-                log.AppendLine("family median widest-horizontal-extent = " + median.ToString("0.00") +
-                               " m over " + samples.Count + " measured base visual(s); band = " +
-                               (median * OutlierRatio).ToString("0.00") + " m (" +
-                               OutlierRatio.ToString("0.0") + "x median).");
-                EvaluateOutliers(samples, median, failures);
+                log.AppendLine("band = " + WidthBandM.ToString("0.00") + " m (" +
+                               CadenceWidthRatio.ToString("0.0") + "x the " +
+                               StructureFactory.YHeightVariable.ToString("0.0") +
+                               " m base fit height, population-independent). POPULATION (reported, not " +
+                               "used as a threshold): " + samples.Count + " measured base visual(s), " +
+                               "median widest-horizontal-extent " + median.ToString("0.00") + " m.");
+                EvaluateOutliers(samples, WidthBandM, failures);
 
                 foreach (var s in samples)
                     log.AppendLine("  " + s.Label.PadRight(24) + " widest " + s.WidestM.ToString("0.00") +
@@ -306,44 +358,61 @@ namespace DeNelle.Editor
         //  THE RULE — pure, so it can be shown to go red (C0)
         // =====================================================================
         /// <summary>
-        /// Flags every sample wider than <paramref name="median"/> * <see cref="OutlierRatio"/>.
+        /// Flags every sample wider than <paramref name="bandM"/> metres — an ABSOLUTE ceiling
+        /// derived once from the town's base fit height (see <see cref="CadenceWidthRatio"/>),
+        /// deliberately NOT from anything about this population.
         /// Pure over its inputs and free of Unity state on purpose: that is what lets
         /// <see cref="SelfTest"/> prove it fails on a known-bad family and passes a clean one.
         /// UPPER BOUND ONLY — see coverage note (1) in the header.
         /// </summary>
-        private static void EvaluateOutliers(List<Sample> samples, float median, List<string> failures)
+        private static void EvaluateOutliers(List<Sample> samples, float bandM, List<string> failures)
         {
-            if (samples == null || samples.Count == 0 || median <= 0.0001f) return;
-            float band = median * OutlierRatio;
+            if (samples == null || samples.Count == 0 || bandM <= 0.0001f) return;
+            float band = bandM;
 
             foreach (var s in samples)
             {
                 if (s.WidestM <= band) continue;
                 failures.Add("'" + s.Label + "' FOOTPRINT OUTLIER: the fitted model is " +
                              s.WidestM.ToString("0.00") + " m across — " +
-                             (s.WidestM / median).ToString("0.0") + "x the family median of " +
-                             median.ToString("0.00") + " m, over the " + OutlierRatio.ToString("0.0") +
-                             "x band. THE CAUSE IS ALMOST NEVER heightMul. Fit-to-height is a single-axis " +
+                             (s.WidestM / StructureFactory.YHeightVariable).ToString("0.0") +
+                             "x the " + StructureFactory.YHeightVariable.ToString("0.0") +
+                             " m base fit height, over the " + band.ToString("0.00") + " m band (" +
+                             CadenceWidthRatio.ToString("0.0") +
+                             "x base). THE CAUSE IS ALMOST NEVER heightMul. Fit-to-height is a single-axis " +
                              "promise run as a UNIFORM scale (VisualFactory.Fit: localScale *= target / " +
                              "bounds.size.y), so a model whose FIT-TIME pose is FLAT divides by a tiny " +
-                             "number and drags its footprint up with it — measured height " +
-                             s.HeightM.ToString("0.00") + " m. CHECK, IN THIS ORDER: (1) is the model " +
-                             "upright at FIT time? its catalog orientation.euler is applied PRE-fit via " +
-                             "SkinOptions.LocalRotation, so a wrong euler chooses which axis Fit divides " +
-                             "by; (2) if the art really is flat-and-wide and correctly posed, author " +
-                             "repo.maxFootprint on the row (a ceiling in metres, default 0 = disarmed) — " +
-                             "that is what collector_farm does. DO NOT lower heightMul to fix this: it " +
-                             "shrinks the BUILDING as well as the footprint, which is the 'shrunk farm' " +
-                             "the owner already rejected in commit 31b41d19.");
+                             "number and drags its footprint up with it. FITTED ASPECT (widest : height) = " +
+                             (s.WidestM / Mathf.Max(s.HeightM, 0.0001f)).ToString("0.00") + " : 1, at a " +
+                             "measured height of " + s.HeightM.ToString("0.00") + " m. \u26a0 THE HEIGHT " +
+                             "ALONE IS NOT DIAGNOSTIC and never was: Fit divides by whatever axis is up, " +
+                             "so a heightMul-1.0 row measures EXACTLY the base height whether it was " +
+                             "posed upright or flat. The ASPECT is the number that separates them — the " +
+                             "honest town runs 0.6 : 1 to 1.9 : 1 (wall_stone 1.86, barracks 1.91) and " +
+                             "the measured collector_farm pancake was 2.56 : 1. CHECK, IN THIS ORDER: " +
+                             "(1) is the model upright at FIT time? its catalog orientation.euler is " +
+                             "applied PRE-fit via SkinOptions.LocalRotation, so a wrong euler chooses " +
+                             "which axis Fit divides by; (2) if the art really is flat-and-wide and " +
+                             "correctly posed, author repo.maxFootprint on the row (a ceiling in metres, " +
+                             "default 0 = disarmed) — that is what collector_farm does. \u26a0 (2) IS FOR " +
+                             "A FLAT MODEL ONLY. The cap is a UNIFORM scale-down, so on a correctly-posed " +
+                             "wide building it just makes the building smaller — the same objection as " +
+                             "heightMul, on a different key (WO-1239). DO NOT lower heightMul to fix this " +
+                             "either: it shrinks the BUILDING as well as the footprint, which is the " +
+                             "'shrunk farm' the owner already rejected in commit 31b41d19.");
             }
         }
 
         /// <summary>
         /// C0 — the rule is exercised in BOTH directions against synthetic families before it is
         /// trusted on the real one. The clean numbers are the real measured town (forge 2.91,
-        /// workshop 2.84, store 4.02, lumbermill 5.09, pet-house 4.32, container 5.83); the bad
-        /// one is the actual defect (collector_farm 14.34). If either direction misbehaves this
-        /// suite fails LOUD rather than judging the catalog with a broken rule.
+        /// workshop 2.84, store 4.02, lumbermill 5.09, pet-house 4.32, container 5.83) PLUS the
+        /// two widest honest rows in the shipped catalog — wall_stone 7.42 and barracks 7.64
+        /// (both measured green in Builds/wo1211-reg.log). Those two are in here deliberately:
+        /// without them the clean family's widest row was 5.83 m, so the self-test could not have
+        /// noticed a band that reds a CORRECT building — which is exactly what WO-1239 was.
+        /// The bad one is the actual defect (collector_farm 14.34). If either direction
+        /// misbehaves this suite fails LOUD rather than judging the catalog with a broken rule.
         /// </summary>
         private static void SelfTest(List<string> failures, StringBuilder log)
         {
@@ -355,17 +424,21 @@ namespace DeNelle.Editor
                 new Sample { Label = "st_lumbermill", WidestM = 5.09f, HeightM = 4.00f },
                 new Sample { Label = "st_pethouse",   WidestM = 4.32f, HeightM = 4.00f },
                 new Sample { Label = "st_container",  WidestM = 5.83f, HeightM = 4.00f },
+                new Sample { Label = "st_wall_stone",  WidestM = 7.42f, HeightM = 4.00f },
+                new Sample { Label = "st_barracks",    WidestM = 7.64f, HeightM = 4.00f },
             };
 
             var cleanFailures = new List<string>();
-            EvaluateOutliers(clean, Median(clean), cleanFailures);
+            EvaluateOutliers(clean, WidthBandM, cleanFailures);
             if (cleanFailures.Count != 0)
             {
                 failures.Add("SELF-TEST (clean family) FAILED: the honest measured town — forge 2.91, " +
-                             "workshop 2.84, store 4.02, lumbermill 5.09, pet-house 4.32, container 5.83 m " +
-                             "— produced " + cleanFailures.Count + " outlier report(s). The band is too " +
-                             "tight and would red correct buildings; a gate that reds correct buildings " +
-                             "gets itself disabled. First report: " + cleanFailures[0]);
+                             "workshop 2.84, store 4.02, lumbermill 5.09, pet-house 4.32, container 5.83, " +
+                             "wall_stone 7.42, barracks 7.64 m — produced " + cleanFailures.Count +
+                             " outlier report(s) against the " + WidthBandM.ToString("0.00") + " m band. " +
+                             "The band is too tight and would red correct buildings; a gate that reds " +
+                             "correct buildings gets itself disabled (WO-1239 — it already did once). " +
+                             "First report: " + cleanFailures[0]);
             }
 
             var dirty = new List<Sample>(clean)
@@ -374,7 +447,7 @@ namespace DeNelle.Editor
                 new Sample { Label = "st_pancake", WidestM = 14.34f, HeightM = 5.60f },
             };
             var dirtyFailures = new List<string>();
-            EvaluateOutliers(dirty, Median(dirty), dirtyFailures);
+            EvaluateOutliers(dirty, WidthBandM, dirtyFailures);
             bool caught = dirtyFailures.Count == 1 && dirtyFailures[0].Contains("st_pancake");
             if (!caught)
             {
@@ -386,8 +459,10 @@ namespace DeNelle.Editor
             }
 
             if (failures.Count == 0)
-                log.AppendLine("C0 self-test: clean family passes, the measured 14.34 m pancake is caught " +
-                               "(1 report, correctly named) — the rule can go red.");
+                log.AppendLine("C0 self-test: the clean family (widest honest row 7.64 m) passes the " +
+                               WidthBandM.ToString("0.00") + " m band, and the measured 14.34 m pancake " +
+                               "is caught (1 report, correctly named) — the rule can go red, and it " +
+                               "does not go red on the town as shipped.");
         }
 
         // =====================================================================
@@ -727,9 +802,12 @@ namespace DeNelle.Editor
 
             var ok = new StringBuilder(MarkerOk);
             ok.Append(" — ").Append(measured)
-              .Append(" structure base visual(s) measured through the shipped fit pipeline; none is wider ")
-              .Append("than ").Append(OutlierRatio.ToString("0.0"))
-              .Append("x the family median, every armed repo.maxFootprint is obeyed to within ")
+              .Append(" structure base visual(s) measured through the shipped fit pipeline (the ")
+              .Append("population size is stated on purpose: this band no longer depends on it, and ")
+              .Append("the WO-1239 defect was a threshold that silently did); none is wider ")
+              .Append("than ").Append(WidthBandM.ToString("0.00")).Append(" m (")
+              .Append(CadenceWidthRatio.ToString("0.0"))
+              .Append("x the base fit height), every armed repo.maxFootprint is obeyed to within ")
               .Append(CapToleranceM.ToString("0.00"))
               .Append(" m, the rule was shown to catch the measured 14.34 m defect, and the two catalog ")
               .Append("copies are byte-identical. NOT COVERED: tier models, the HubStructureVisualInjector ")

@@ -190,8 +190,18 @@ namespace DeNelle.Core.HudModel
         public bool HasTarget { get; private set; }
         /// <summary>Target display name.</summary>
         public string Name { get; private set; }
-        /// <summary>Target level.</summary>
-        public int Level { get; private set; }
+        /// <summary>
+        /// WO-1232 (owner ruling 2026-08-26): the target's AUTHORED classification WORD — "BOSS",
+        /// "ELITE", or empty for an ordinary enemy (which shows NOTHING, not a blank label).
+        /// <para>
+        /// This REPLACES the old <c>Level</c> int. That number was <c>maxHp / 25</c> wearing a level
+        /// costume — a wave-scaled enemy read "Lv 68" beside a Lv 5 hero. Owner: <i>"HP / 25 is not a
+        /// level system."</i> A number is not re-addable here until a real authored stat exists; the
+        /// named replacement is a Combat Rating (Low/Even/High/Deadly), which is a separate spec.
+        /// A WORD, never a tint — the owner is red/green colourblind. ASCII only (TMP glyph safety).
+        /// </para>
+        /// </summary>
+        public string Badge { get; private set; }
         /// <summary>Target current HP.</summary>
         public int Hp { get; private set; }
         /// <summary>Target maximum HP.</summary>
@@ -207,18 +217,18 @@ namespace DeNelle.Core.HudModel
         public event Action Changed;
 
         /// <summary>Producer-only mutator: assign all fields, fire Changed, trace.</summary>
-        public void Set(bool has, string name, int level, int hp, int maxHp, float frac, HudRole role, bool locked)
+        public void Set(bool has, string name, string badge, int hp, int maxHp, float frac, HudRole role, bool locked)
         {
             HasTarget = has;
             Name = name;
-            Level = level;
+            Badge = badge ?? string.Empty;
             Hp = hp;
             MaxHp = maxHp;
             HpFraction = frac;
             Role = role;
             Locked = locked;
             Changed?.Invoke();
-            FlowTrace.Step("HUD", $"target changed: has={HasTarget} '{Name}' Lv{Level} {Hp}/{MaxHp} ({Role}) locked={Locked}");
+            FlowTrace.Step("HUD", $"target changed: has={HasTarget} '{Name}' badge='{Badge}' {Hp}/{MaxHp} ({Role}) locked={Locked}");
         }
 
         /// <summary>Producer-only mutator: clear the target, fire Changed, trace.</summary>
@@ -226,7 +236,7 @@ namespace DeNelle.Core.HudModel
         {
             HasTarget = false;
             Name = null;
-            Level = 0;
+            Badge = string.Empty;
             Hp = 0;
             MaxHp = 0;
             HpFraction = 0f;

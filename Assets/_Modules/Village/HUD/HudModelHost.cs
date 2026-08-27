@@ -221,9 +221,13 @@ namespace DeNelle.Village.Hud
         // WO-1232: EnemyLevelStub is DELETED, not repaired. It derived a "level" from the
         // RUNTIME maxHp (round-to-int of the runtime maxHp over 25) — the heuristic WO-611 F3 retired when
         // Enemy.Level landed — so it crept upward every wave as scaling inflated HP (a wave-7
-        // enemy at 1700 HP read as "Lv 68" beside a Lv 5 hero). There is exactly ONE authored
-        // level and it is Enemy.Level; read that. It had no callers left, so nothing replaces
-        // it here — a stub reintroduced in any form is the same defect returning.
-        // See HudModelProducers.TargetProducer (en.Level) and ThreatSkullPlate.EnemyThreatLevel.
+        // enemy at 1700 HP read as "Lv 68" beside a Lv 5 hero). It had no callers left, so nothing
+        // replaces it here — a stub reintroduced in any form is the same defect returning.
+        //
+        // ⚠ AND THE SECOND HALF, which the first pass got wrong: Enemy.Level is ITSELF round(def.Hp
+        // / 25) — there is NO authored level field anywhere. So the owner's FINAL ruling (2026-08-26)
+        // removed the number outright rather than re-pointing it: the target frame now shows the
+        // AUTHORED classification word (DeNelle.Village.Hud.EnemyBadge — BOSS / ELITE / nothing).
+        // Do not add a level accessor to this file, or to any producer, in any form.
     }
 }

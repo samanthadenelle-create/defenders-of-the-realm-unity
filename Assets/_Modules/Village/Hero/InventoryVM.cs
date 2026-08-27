@@ -596,7 +596,10 @@ namespace DeNelle.Village.Hero
         private static string DescribeGear(string job, string rarity)
         {
             string r = string.IsNullOrEmpty(rarity) ? "" : char.ToUpper(rarity[0]) + (rarity.Length > 1 ? rarity.Substring(1) : "");
-            string j = string.IsNullOrEmpty(job) || job == "any" ? "any class" : "the " + job;
+            // WO-1241: `job` may now be a comma-separated class LIST ("knight,cleric"), so the
+            // raw field can no longer be pasted into a sentence. GearCatalog.JobLabel is the ONE
+            // formatter all three DescribeGear copies share.
+            string j = GearCatalog.JobLabel(job);
             return (string.IsNullOrEmpty(r) ? "" : r + " gear. ") + "Suited to " + j + ".";
         }
 

@@ -92,6 +92,10 @@ namespace DeNelle.Editor.Regression
                      () => shieldSummary = Case6_ShieldSeatSubstantiation(failures));
                 Case(failures, "drawn-seat-verticality",
                      () => Case7_DrawnSeatVerticality(failures));
+                Case(failures, "hero-height-body-only",
+                     () => Case8_HeroHeightMeasuresBodyOnly(failures));
+                Case(failures, "align-long-axis-on-y",
+                     () => Case9_AlignSeatsLongAxisOnY(failures));
             }
             catch (Exception ex)
             {
@@ -722,6 +726,235 @@ namespace DeNelle.Editor.Regression
                              "tip is prop-local +Y (owner: 'the pointed object is Y top, flat is bottom'), " +
                              "so a negative dot means the archetype correction stood the shaft up the " +
                              "wrong way round - the X nudge sign is inverted (+90, not -90).");
+        }
+
+        // =====================================================================
+        //  Case 8 - WO-1209: THE HERO MUST NOT MEASURE HER OWN WEAPON AS BODY
+        // =====================================================================
+        //
+        // WHAT REDDENS THIS CASE. EquipmentController.MeasureHeroBodyHeightM decides the hero's
+        // standing height, and ProportionalHeldLength multiplies EVERY archetype length by
+        // height / RefHeroHeightM - so a wrong height is a wrong size on every prop in the game.
+        // The shipped test used to be `r.gameObject.name.StartsWith("EquipmentProp")`, which
+        // names a renderer-LESS grip root; the mesh lives on its FBX child and the trail on a
+        // sibling, so attached gear was measured as body.
+        //
+        // ⭐ THE CAPTURED NUMBERS THIS CASE STANDS ON (owner felt-test 2026-08-25):
+        //   tmp/felt2/logcat-auth.txt:276652  dungeon  hero standing height=3.976m -> held 2.871m
+        //   tmp/felt2/logcat-auth.txt:314023  town     hero standing height=1.75m  -> held 1.264m
+        //   rendered, from the two renderers=1 compensate lines: 2.973m vs 1.291m = 2.30x.
+        //   Logs/device/2026-08-20-portal.log:5335737 is the SAME line on the Knight (3.848m).
+        //
+        // ⛔ THIS IS NOT A CLAMP AND MUST NEVER BECOME ONE. WO-1209 forbids a per-scene scale
+        // constant by name. The case asserts the MEASUREMENT RULE, on a synthetic hierarchy, with
+        // no hero, no scene and no play session - the same construction Case 7 uses.
+        //
+        // ⚠ IT ASSERTS THE GOOD PATH TOO (WO-1138). A body mesh under the SAME rig must still be
+        // measured; an exclusion rule that excluded everything would report a 0 m hero and fall
+        // back to the reference height, which looks correct in town and is not the rule working.
+        private static void Case8_HeroHeightMeasuresBodyOnly(List<string> failures)
+        {
+            GameObject bodyGo = null;
+            try
+            {
+                // HeroBody -> CC_Base_R_Hand -> EquipmentProp_Weapon -> staff_B (the FBX mesh node)
+                //          -> Mage_Body_Mesh (the hero's own skin)
+                //          -> GearAuraRibbon (a LineRenderer bolted straight onto the rig)
+                bodyGo = new GameObject("HeroBody");
+                Transform body = bodyGo.transform;
+
+                var bodyMesh = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                bodyMesh.name = "Mage_Body_Mesh";
+                bodyMesh.transform.SetParent(body, false);
+
+                var hand = new GameObject("CC_Base_R_Hand");
+                hand.transform.SetParent(body, false);
+                var gripRoot = new GameObject("EquipmentProp_Weapon");   // renderer-LESS, by construction
+                gripRoot.transform.SetParent(hand.transform, false);
+                var propMesh = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                propMesh.name = "staff_B";                                // the FBX node name - NOT a prefix
+                propMesh.transform.SetParent(gripRoot.transform, false);
+
+                var trail = new GameObject("WeaponTrail");
+                trail.transform.SetParent(gripRoot.transform, false);
+                trail.AddComponent<TrailRenderer>();
+
+                var aura = new GameObject("GearAuraRibbon");
+                aura.transform.SetParent(body, false);
+                aura.AddComponent<LineRenderer>();
+
+                // GOOD PATH - the hero's own mesh is measured.
+                var bodyRend = bodyMesh.GetComponent<Renderer>();
+                if (!EquipmentController.IsBodyOwnRenderer(bodyRend, body, out string bodyWhy))
+                    failures.Add("[hero-height-body-only] the hero's OWN mesh 'Mage_Body_Mesh' was " +
+                                 "EXCLUDED from the height measurement (" + (bodyWhy ?? "<no reason>") +
+                                 "). An exclusion rule that excludes the body measures 0m, falls back " +
+                                 "to RefHeroHeightM and looks right in town - that is the rule broken, " +
+                                 "not the rule working.");
+
+                // THE DEFECT - the prop's mesh node hangs under a grip root whose NAME matches, but
+                // whose own name does not. This is the assertion the shipped own-name test failed.
+                if (EquipmentController.IsBodyOwnRenderer(propMesh.GetComponent<Renderer>(), body, out _))
+                    failures.Add("[hero-height-body-only] THE HERO IS MEASURING HER OWN WEAPON AS BODY: " +
+                                 "'staff_B', a child of the grip root 'EquipmentProp_Weapon', counted " +
+                                 "toward the standing height. ProportionalHeldLength scales every " +
+                                 "archetype by that height, so this is a feedback loop - a bigger " +
+                                 "measured hero makes a bigger prop makes a bigger measured hero. " +
+                                 "PROVING CAPTURE: tmp/felt2/logcat-auth.txt:276652 reads 'hero " +
+                                 "standing height=3.976m' in dg_starter_loop against :314023's 1.75m " +
+                                 "in town, and the prop rendered 2.973m vs 1.291m (2.30x) with an " +
+                                 "IDENTICAL bone lossyScale of 1.72 in both scenes. Exclude the whole " +
+                                 "SUBTREE under an attached-gear holder, not the node whose own name " +
+                                 "matches. Do NOT clamp the height (WO-1209 forbids a per-scene " +
+                                 "constant by name) and do NOT touch the compensation maths - WO-970 " +
+                                 "sec 6 already cleared it against capture.");
+
+                // WO-1226's rule, at this second site: effect renderers report the swing, not the body.
+                if (EquipmentController.IsBodyOwnRenderer(trail.GetComponent<Renderer>(), body, out _))
+                    failures.Add("[hero-height-body-only] a TrailRenderer counted toward the hero's " +
+                                 "height. Its bounds are the WORLD AABB of the ribbon the hero just " +
+                                 "swung through - WO-1226 already recorded this exact corruption at " +
+                                 "CompensateParentScale, where it reported a 1.3m rod as a 1.5m cube.");
+                if (EquipmentController.IsBodyOwnRenderer(aura.GetComponent<Renderer>(), body, out _))
+                    failures.Add("[hero-height-body-only] a LineRenderer bolted onto the rig counted " +
+                                 "toward the hero's height. Only a MeshFilter/SkinnedMeshRenderer owns " +
+                                 "geometry; everything else describes an effect.");
+
+                // The rule is only worth anything if the LIVE measurement calls it. A lint, because a
+                // headless suite cannot build a rigged hero - and because reverting the call site
+                // while leaving the helper in place is exactly how this would come back green.
+                string src = File.Exists(EquipSrc) ? File.ReadAllText(EquipSrc) : "";
+                if (src.Length > 0 && !src.Contains("IsBodyOwnRenderer(r, body, out string why)"))
+                    failures.Add("[hero-height-body-only] MeasureHeroBodyHeightM no longer routes " +
+                                 "through IsBodyOwnRenderer in " + EquipSrc + " - the helper this case " +
+                                 "proves is not the one the game runs.");
+            }
+            finally
+            {
+                if (bodyGo != null) UnityEngine.Object.DestroyImmediate(bodyGo);
+            }
+        }
+
+        // =====================================================================
+        //  Case 9 - WO-970: THE ALIGN MUST LAND THE LONG AXIS ON +Y, ANY MESH
+        // =====================================================================
+        //
+        // WO-970's verdict in one line: AlignAxesYLongXNarrowZWide built its result as
+        // Quaternion.LookRotation(Cross(xAxis, yAxis), yAxis) with yAxis = Vector3.up as a
+        // CONSTANT, so its output was a YAW BY CONSTRUCTION and a yaw can never lift a Z-long mesh
+        // onto +Y. Every downstream seat (hilt inference, grip, hand pose, back pose) is written
+        // against "prop-local +Y is the long axis", so all four were operating on a staff's 1 mm
+        // thickness axis. The repair solves the basis change directly:
+        //     Quaternion.Inverse(Quaternion.LookRotation(Axis(med), Axis(lng)))
+        // LookRotation(med, lng) is the rotation S mapping (+Z, +Y) -> (med, long); its inverse
+        // carries long onto +Y and med onto +Z by definition, leaving narrow on +X.
+        //
+        // ⭐ THE FIX IS ALREADY PROVEN ON THE DEVICE - this case is the headless pin for it, and
+        // it asserts the SAME LINE WO-970 nominated as its proof. From the owner's 2026-08-25
+        // capture, tmp/felt2/logcat-dungeon.txt:
+        //     AlignAxes 'EquipmentProp_Weapon': meshSize=(0.006, 0.003, 0.023) longAxis=Z
+        //                narrowAxis=Y wideAxis=X -> seated long on +Y
+        //     NormalizeInto 'EquipmentProp_Weapon': raw b0=(0.006, 0.003, 0.023)
+        //                aligned b1=(0.003, 0.023, 0.006)
+        // `aligned b1` is Y-longest. WO-970 sec 2 recorded the pre-fix signature as "the raw box
+        // with X and Z swapped, longest on X" - it is gone. THE AXIS HALF OF WO-970 IS CLOSED, and
+        // this case is what stops it re-opening silently.
+        //
+        // ⛔ NOT AN EULER TEST. It never asserts a rotation VALUE - only that the long axis of the
+        // measured result lands on +Y and keeps its solved length, for all six permutations of a
+        // three-distinct-extent mesh. A future derivation that reaches the same contract by a
+        // different construction passes, which is the point: the contract is the canon, the
+        // arithmetic is an implementation detail.
+        private static void Case9_AlignSeatsLongAxisOnY(List<string> failures)
+        {
+            // The captured staff_B permutation, in metres, with the three extents kept distinct so
+            // longest/middle/narrowest are unambiguous.
+            const float LongE = 0.023f, MedE = 0.006f, ShtE = 0.003f;
+            const float Target = 1.264f;   // the town heldLength from the same capture
+            var perms = new[]
+            {
+                new Vector3(LongE, MedE, ShtE), new Vector3(LongE, ShtE, MedE),
+                new Vector3(MedE, LongE, ShtE), new Vector3(ShtE, LongE, MedE),
+                new Vector3(MedE, ShtE, LongE), new Vector3(ShtE, MedE, LongE),
+            };
+
+            for (int i = 0; i < perms.Length; i++)
+            {
+                GameObject parent = null;
+                try
+                {
+                    parent = new GameObject("AlignProbeParent");
+                    var prop = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                    prop.name = "AlignProbe";
+                    // NormalizeInto resets localScale to one, so the shape MUST live in the mesh
+                    // itself - a scaled transform would be wiped before a single extent was read.
+                    var mf = prop.GetComponent<MeshFilter>();
+                    mf.sharedMesh = ScaledCubeMesh(perms[i]);
+
+                    // resolveBladeUpFromHilt:false - which END is up is decided downstream by
+                    // EnsureHandleAtShortYEnd and is deliberately not what this case measures.
+                    WeaponBoundsOrient.NormalizeInto(prop, parent.transform, Target,
+                        WeaponBoundsOrient.GripAnchor.Centre, false);
+
+                    if (!WeaponOrientHelper.TryMeasureAxes(prop, parent.transform, out var axes))
+                    {
+                        failures.Add("[align-long-axis-on-y] permutation " + perms[i].ToString("0.###") +
+                                     " produced no measurable bounds - the probe measures nothing.");
+                        continue;
+                    }
+                    if (axes.LongestAxis != 1)
+                        failures.Add("[align-long-axis-on-y] THE LONG AXIS NEVER REACHED Y for mesh " +
+                                     perms[i].ToString("0.###") + ": after NormalizeInto the seated " +
+                                     "bounds read " + axes.Describe() + ". Every downstream seat " +
+                                     "(SeatHiltLowerHalf, ComputeMeleeGripRotation, " +
+                                     "ComputeSheathRotation) assumes prop-local +Y is the long axis, " +
+                                     "so this hands all of them the wrong axis - WO-970's root. The " +
+                                     "shipped solve is Quaternion.Inverse(Quaternion.LookRotation(" +
+                                     "Axis(med), Axis(lng))); the retired one was LookRotation(Cross(" +
+                                     "xAxis, yAxis), Vector3.up), a YAW BY CONSTRUCTION whose " +
+                                     "fingerprint is the raw box with two axes swapped and the " +
+                                     "longest on X. PROVING CAPTURE (post-fix, device): " +
+                                     "tmp/felt2/logcat-dungeon.txt reads raw b0=(0.006, 0.003, 0.023) " +
+                                     "-> aligned b1=(0.003, 0.023, 0.006). Solve for the axis; do not " +
+                                     "hand-tune an Euler.");
+                    else if (Mathf.Abs(axes.LongestLen - Target) > Target * 0.05f)
+                        failures.Add("[align-long-axis-on-y] the long axis landed on Y for mesh " +
+                                     perms[i].ToString("0.###") + " but the solved length is " +
+                                     axes.LongestLen.ToString("0.####") + "m against a target of " +
+                                     Target.ToString("0.####") + "m. NormalizeInto scales by the " +
+                                     "LONGEST measured axis; a mismatch means the align and the scale " +
+                                     "disagree about which axis that is.");
+                }
+                finally
+                {
+                    if (parent != null) UnityEngine.Object.DestroyImmediate(parent);
+                }
+            }
+        }
+
+        /// <summary>A box mesh with the given full extents, centred on its own origin.</summary>
+        private static Mesh ScaledCubeMesh(Vector3 size)
+        {
+            Vector3 h = size * 0.5f;
+            var verts = new[]
+            {
+                new Vector3(-h.x, -h.y, -h.z), new Vector3( h.x, -h.y, -h.z),
+                new Vector3( h.x,  h.y, -h.z), new Vector3(-h.x,  h.y, -h.z),
+                new Vector3(-h.x, -h.y,  h.z), new Vector3( h.x, -h.y,  h.z),
+                new Vector3( h.x,  h.y,  h.z), new Vector3(-h.x,  h.y,  h.z),
+            };
+            var tris = new[]
+            {
+                0,2,1, 0,3,2,  4,5,6, 4,6,7,
+                0,1,5, 0,5,4,  2,3,7, 2,7,6,
+                1,2,6, 1,6,5,  0,4,7, 0,7,3,
+            };
+            var m = new Mesh { name = "AlignProbeBox" };
+            m.vertices = verts;
+            m.triangles = tris;
+            m.RecalculateNormals();
+            m.RecalculateBounds();
+            return m;
         }
 
         private static string MeshKeyFor(WeaponDef def)

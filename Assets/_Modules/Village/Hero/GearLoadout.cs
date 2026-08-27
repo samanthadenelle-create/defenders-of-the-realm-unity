@@ -39,17 +39,24 @@ namespace DeNelle.Village
         /// <summary>OFF-hand / shield id (weapons.json), or null when the class starts one-handed-empty.</summary>
         public readonly string OffHand;
         /// <summary>
+        /// WO-1240 — the authored STARTER ARMOR id (armor.json). Never null on an authored kit:
+        /// it is the row that makes the owned-only auto-equip gate SAFE, because without it the
+        /// gate resolves to null on a fresh save and the hero spawns at ArmorDefense 0.
+        /// </summary>
+        public readonly string Armor;
+        /// <summary>
         /// The highest hero level at which the STARTER main hand still wins over
         /// <see cref="GearCatalog.BestWeapon"/>. Above it the auto-best power curve resumes,
         /// so levelling still upgrades the hero's weapon exactly as before.
         /// </summary>
         public readonly int MainHandUpToLevel;
 
-        public StarterKit(string mainHand, string offHand, int mainHandUpToLevel = 1)
+        public StarterKit(string mainHand, string offHand, int mainHandUpToLevel = 1, string armor = null)
         {
             MainHand = mainHand;
             OffHand = offHand;
             MainHandUpToLevel = mainHandUpToLevel;
+            Armor = armor;
         }
     }
 
@@ -68,10 +75,47 @@ namespace DeNelle.Village
     /// never persisted an equip for that slot (see GearLoadout.Refresh); the moment they
     /// equip anything, their persisted pick wins forever after.
     ///
-    /// WO-861 TODO (deliberately NOT pre-seeded): Ranger and Mage rows go here once their
-    /// gear ids EXIST in weapons.json — `ranger_arrow_plain` + `tripo_dagger_a` for Sylas,
+    /// WO-861 TODO (deliberately NOT pre-seeded): Ranger and Mage MAIN-HAND ids go here once
+    /// they EXIST in weapons.json — `ranger_arrow_plain` + `tripo_dagger_a` for Sylas,
     /// a `mage_*` staff for Thrain (WO-861 Appendix A2/A1). Seeding ids that do not resolve
     /// would turn a hard failure into a silent Warn-and-no-weapon, so they land WITH the data.
+    /// (Their ARMOR rows are NOT in that TODO — see the STARTER EQUIPMENT CONTRACT below; those
+    /// ids exist today, which is precisely why the armour half could land now.)
+    ///
+    /// ── WO-1240: THE STARTER EQUIPMENT CONTRACT (owner ruling 2026-08-26) ──────────────────
+    /// **Every hero begins OWNING one authored starter ARMOUR item.** This is not a nicety: it
+    /// is the PRECONDITION for gating auto-equip to owned gear. GearLoadout.Refresh used to run
+    /// `EquippedArmor = GearCatalog.BestArmor(job, level)` catalog-wide, which auto-wore the best
+    /// armour the class qualified for INCLUDING shop rows the player had never bought — "both a
+    /// progression bug and an economy hole". The reason nobody closed it was written into the
+    /// line itself: with no authored starter armour, the ownership gate resolved to null on a
+    /// fresh save and dropped the hero to ArmorDefense 0. The previous seat correctly refused to
+    /// ship the gate alone. The contract below is the other half, and the two land together.
+    ///
+    /// EVERY id here is an EXISTING authored armor.json row — no stat, price or req.level was
+    /// invented for this WO. Each is its class's `common` rarity, req.level 1 tier, i.e. the row
+    /// the catalog already calls that class's floor:
+    ///   knight -> armor_knight_common  "Ironward Plate"    (heavy, def 0.06, hp 20)
+    ///   ranger -> armor_ranger_common  "Scout's Leather"   (light, def 0.05, hp 12)
+    ///   mage   -> armor_mage_common    "Apprentice Robes"  (light, def 0.03, hp  8)
+    ///   cleric -> armor_cloth          "Wanderer's Cloth"  (no weight, def 0.04, hp 10)
+    ///
+    /// ⚠ THE CLERIC ROW IS A STAND-IN AND IS FLAGGED AS ONE. armor.json has NO cleric-specific
+    /// rows at all (5 knight / 5 ranger / 5 mage, 0 cleric), so "basic vestments" does not exist
+    /// to point at. `armor_cloth` is the closest authored fit AND the only level-1 row a heavy
+    /// class may legally wear that is not knight-locked (it carries no `weight`, so
+    /// ArmorFitsClass admits it for everyone). Authoring a real `armor_cleric_common`
+    /// "Acolyte's Vestments" is a follow-up for the owner; when it lands, this one id changes and
+    /// nothing else does. Cleric is not in PlayableHeroes.Roster today, so the stand-in is
+    /// currently unreachable by a player — but the contract says the row must EXIST for every
+    /// class, and leaving her at null is exactly the ArmorDefense-0 trap for the day she ships.
+    ///
+    /// NOTE the ranger/mage/cleric entries carry a NULL MainHand. That is deliberate and inert:
+    /// every main-hand reader here (ResolveStarterMainHand, StarterOrCatalogFloor,
+    /// ResolveOwnedOneHandedRefill, OffHandFor) already tests
+    /// `!string.IsNullOrEmpty(kit.MainHand)` before using it, so an armour-only kit changes no
+    /// weapon behaviour. Seeding a weapon id that does not resolve is the thing WO-861 forbids;
+    /// seeding an armour id that DOES resolve is the thing WO-1240 requires.
     /// </summary>
     public static class StarterLoadout
     {
@@ -82,7 +126,13 @@ namespace DeNelle.Village
                 // "on start should be a sword and shield"). Both ids verified present in
                 // weapons.json; knight_starter is also the ONE weapon EquipmentController
                 // maps natively to the sword_A prop, so the mesh attach is the proven path.
-                { "knight", new StarterKit("knight_starter", "knight_shield_starter") },
+                { "knight", new StarterKit("knight_starter", "knight_shield_starter",
+                                           armor: "armor_knight_common") },
+
+                // WO-1240 armour-only kits. MainHand stays null until WO-861's weapon ids land.
+                { "ranger", new StarterKit(null, null, armor: "armor_ranger_common") },
+                { "mage",   new StarterKit(null, null, armor: "armor_mage_common") },
+                { "cleric", new StarterKit(null, null, armor: "armor_cloth") },
             };
 
         /// <summary>The authored starter kit for a class key ("knight"), or null when unauthored.</summary>
@@ -98,6 +148,18 @@ namespace DeNelle.Village
             var kit = For(job);
             return kit != null ? kit.OffHand : null;
         }
+
+        /// <summary>WO-1240 — the authored starter ARMOUR id for a class, or null when unauthored.
+        /// THE id the ownership gate falls to on a fresh save; see the contract note above.</summary>
+        public static string ArmorFor(string job)
+        {
+            var kit = For(job);
+            return kit != null ? kit.Armor : null;
+        }
+
+        /// <summary>Every class key that carries an authored kit. Used by the regressions so the
+        /// contract's coverage is read off the TABLE, never re-listed in a second place.</summary>
+        public static IEnumerable<string> AuthoredClasses => Kits.Keys;
     }
 
     [DisallowMultipleComponent]
@@ -333,18 +395,26 @@ namespace DeNelle.Village
                 EquippedWeapon = ResolveAutoBestMainHand(job, level, out mainHandSource);
             }
 
-            // ARMOR IS DELIBERATELY STILL CATALOG-WIDE. The same free-shop-item leak exists on
-            // this line (armor.json rows are Armorer stock too), but there is NO authored starter
-            // ARMOR in StarterLoadout to fall back to, so gating it would resolve to null on a
-            // fresh save and drop the hero to ArmorDefense 0 — trading an economy leak for a
-            // silent difficulty spike. Author a starter armor row in StarterKit FIRST, then this
-            // line takes the same treatment. Flagged rather than half-done on purpose.
-            EquippedArmor  = GearCatalog.BestArmor(job, level);
+            // WO-1240 — THE ARMOR HALF IS NOW GATED TOO. This line was
+            // `EquippedArmor = GearCatalog.BestArmor(job, level)`: catalog-wide, so every Refresh
+            // auto-wore the highest-defense row the class qualified for, INCLUDING Armorer stock
+            // the player had never bought (the owner: "both a progression bug and an economy
+            // hole"). It survived because gating it with no authored starter armour resolved to
+            // null on a fresh save and dropped the hero to ArmorDefense 0. The owner ruled both
+            // halves together: StarterLoadout now authors an armour row for EVERY class (see the
+            // STARTER EQUIPMENT CONTRACT above), so the gate has something real to land on and
+            // can no longer strand a fresh hero at zero.
+            string armorSource;
+            EquippedArmor  = ResolveAutoBestArmor(job, level, out armorSource);
+            var armorBeforePrefs = EquippedArmor;
 
             // A PERSISTED manual choice (from the equip UI) wins over auto-best, so gear
             // assigned to this member sticks across loads. Only applied when it still fits
             // the class (a light-armor wearer never restores a heavy piece).
             if (ApplyPersistedEquip(job)) mainHandSource = "persisted-playerprefs";
+            // §12: the armour PROVENANCE must survive the persisted-equip pass, or the capture
+            // line below would credit the ownership gate for a slot a PREVIOUS session chose.
+            if (!ReferenceEquals(EquippedArmor, armorBeforePrefs)) armorSource = "persisted-playerprefs";
 
             // Resolve the main-hand / off-hand pair to a legal state after the picks above
             // (auto-best may pick a 2H while a persisted off-hand restored, etc.). Mutually
@@ -357,7 +427,7 @@ namespace DeNelle.Village
             FlowTrace.Step("Gear", $"Refresh: job='{job}' level={level} " +
                 $"bestWeapon='{EquippedWeapon?.id ?? "<null>"}' source={mainHandSource} " +
                 $"offHand='{EquippedOffHand?.id ?? "<null>"}' " +
-                $"bestArmor='{EquippedArmor?.id ?? "<null>"}'");
+                $"bestArmor='{EquippedArmor?.id ?? "<null>"}' armorSource={armorSource}");
 
             ApplyStats(job);
             OnGearChanged?.Invoke();
@@ -559,6 +629,11 @@ namespace DeNelle.Village
             {
                 if (!string.IsNullOrEmpty(kit.MainHand) && ids.Add(kit.MainHand)) fromKit++;
                 if (!string.IsNullOrEmpty(kit.OffHand)  && ids.Add(kit.OffHand))  fromKit++;
+                // WO-1240: the starter ARMOUR is granted exactly like the two hand slots and is
+                // likewise never written to VillageInventory. Omitting it here would filter the
+                // starter out of its own fallback — which on the armour side means ArmorDefense 0
+                // on a brand-new save, the precise failure that kept this gate closed for weeks.
+                if (!string.IsNullOrEmpty(kit.Armor)    && ids.Add(kit.Armor))    fromKit++;
             }
 
             string key = (job ?? string.Empty).ToLowerInvariant();
@@ -568,6 +643,13 @@ namespace DeNelle.Village
             string equippedOffHand = PlayerPrefs.GetString(PrefOffHandKey + key, null);
             if (!string.IsNullOrEmpty(equippedOffHand) && equippedOffHand != PrefNoneSentinel &&
                 ids.Add(equippedOffHand)) fromEquipped++;
+            // WO-1240: an armour id only ever reaches this key through EquipArmorById, i.e. an
+            // EXPLICIT equip of something the player had (shop/EquipmentPanel) or was granted
+            // (arena/outpost drops, which call the seam directly and never touch VillageInventory).
+            // Auto-equip never writes it, so this cannot re-admit an unowned catalog row.
+            string equippedArmor = PlayerPrefs.GetString(PrefArmorKey + key, null);
+            if (!string.IsNullOrEmpty(equippedArmor) && equippedArmor != PrefNoneSentinel &&
+                ids.Add(equippedArmor)) fromEquipped++;
 
             return new OwnedGearSet(ids,
                 $"save={fromSave} runtime={fromRuntime} kit={fromKit} equipped={fromEquipped} total={ids.Count}");
@@ -659,6 +741,121 @@ namespace DeNelle.Village
                     "main hand. This is a CATALOG gap, not an ownership gap - weapons.json serves this class " +
                     "nothing at this level, and it would have been unarmed before the ownership gate existed too. " +
                     "ArmedHeroInvariantRegression [armed-hero-levels] pins exactly this.");
+            return any;
+        }
+
+        // =====================================================================
+        //  WO-1240 — OWNERSHIP-GATED AUTO-BEST **ARMOUR**  (owner ruling 2026-08-26)
+        // ---------------------------------------------------------------------
+        //  THE LAW: auto-equip may choose only from items the player OWNS. No shop preview, no
+        //  catalog entry, no locked gear, no unowned item may ever participate.
+        //
+        //  THE OWNERSHIP AUTHORITY is ResolveOwnedGear — the SAME four-source union the weapon
+        //  half has used since 2026-08-08 (persisted GameState.GearInventory, the VillageInventory
+        //  runtime cache over it, the granted starter kit, and the per-class explicit-equip prefs).
+        //  It is the authority because every one of those four is an EXISTING RECORD of something
+        //  the player bought, was granted, or explicitly equipped; nothing here invents a new
+        //  ownership concept, and using a second authority for armour is how the two slots would
+        //  drift into disagreeing about the same bag.
+        //
+        //  THE SAFETY REQUIREMENT, and why it is the whole reason this shipped late: the hero must
+        //  NEVER end up at ArmorDefense 0 because of this gate. Every path below returns a real,
+        //  class-legal ArmorDef or falls through to the SAME catalog-wide query that shipped
+        //  before — so the worst case is exactly today's behaviour, never a bare hero.
+        // =====================================================================
+
+        /// <summary>
+        /// The auto-best ARMOUR, restricted to owned gear, with a floor that can never be a naked
+        /// hero. <paramref name="branch"/> names which return path fired (§12).
+        ///
+        /// RETURN PATHS — none of them can be an unowned catalog row while the class has an
+        /// authored starter armour (which, post-WO-1240, every class does):
+        ///   A. ownership UNRESOLVED -> <see cref="StarterOrCatalogArmorFloor"/> (authored starter).
+        ///   B. owned pick found     -> that armour (job + weight + level gated by PickBestArmor).
+        ///   C. owned set had none   -> <see cref="StarterOrCatalogArmorFloor"/> (authored starter).
+        ///   D. inside the floor, ONLY if the authored starter id fails to resolve does it fall
+        ///      through to the catalog-wide GearCatalog.BestArmor — i.e. unchanged pre-fix
+        ///      behaviour. That path is unreachable while the contract holds, and
+        ///      StarterArmourOwnershipRegression [starter-armour-data] is what keeps it so.
+        /// </summary>
+        private static ArmorDef ResolveAutoBestArmor(string job, int level, out string branch)
+        {
+            var owned = ResolveOwnedGear(job);
+
+            if (!owned.Resolved)
+            {
+                var safe = StarterOrCatalogArmorFloor(job, level, out branch, "ownership-unresolved");
+                FlowTrace.Warn("Gear",
+                    $"AutoBestArmor: job='{job}' level={level} eligible=n/a owned=n/a ownershipFiltered=FALSE " +
+                    $"ownedSource=<unresolved> branch={branch} armor='{safe?.id ?? "<null>"}' - no ownership " +
+                    "authority was available (GameStateService.State is null AND VillageInventory is empty/absent), " +
+                    "so the owned set could not be told apart from a pre-load empty bag. Fell back to the AUTHORED " +
+                    "STARTER armour rather than the catalog-wide defense pick - auto-wearing Armorer stock the " +
+                    "player never bought is never the safe default. If this fires after the save is up, the boot " +
+                    "order changed.");
+                return safe;
+            }
+
+            var pick = GearCatalog.PickBestArmor(job, level, owned.Owns);
+            if (pick.Armor != null)
+            {
+                branch = "owned-auto-best";
+                FlowTrace.Step("Gear",
+                    $"AutoBestArmor: job='{job}' level={level} eligible={pick.Eligible} owned={pick.Owned} " +
+                    $"ownershipFiltered=TRUE ownedSource=({owned.Source}) branch={branch} armor='{pick.Armor.id}' " +
+                    $"(defense={pick.Armor.defense:0.00}) - the highest-defense armour the wearer OWNS. " +
+                    $"{pick.Eligible - pick.Owned} class-eligible catalog row(s) were excluded as unowned shop stock.");
+                return pick.Armor;
+            }
+
+            var floor = StarterOrCatalogArmorFloor(job, level, out branch, "owned-set-empty");
+            FlowTrace.Warn("Gear",
+                $"AutoBestArmor: job='{job}' level={level} eligible={pick.Eligible} owned=0 ownershipFiltered=TRUE " +
+                $"ownedSource=({owned.Source}) branch={branch} armor='{floor?.id ?? "<null>"}' - the wearer owns " +
+                "NONE of the class-eligible armour rows, so the authored starter floor dressed them. This should " +
+                "not be reachable on a healthy save: ResolveOwnedGear seeds the starter armour id itself, so an " +
+                "empty owned set here means StarterLoadout has no armour row for this class OR its id no longer " +
+                "resolves in armor.json.");
+            return floor;
+        }
+
+        /// <summary>
+        /// THE never-naked floor: the class's authored starter armour, else the pre-fix
+        /// catalog-wide pick.
+        ///
+        /// It deliberately IGNORES the wearer's LEVEL, exactly as the weapon floor ignores
+        /// MainHandUpToLevel: the question here is not "is this the intended opening kit", it is
+        /// "the hero must not be at ArmorDefense 0". It DOES still enforce the two class gates —
+        /// a floor that hands a Mage heavy plate would only be dropped again by the equip seam and
+        /// would report a piece the player is not wearing.
+        /// </summary>
+        private static ArmorDef StarterOrCatalogArmorFloor(string job, int level, out string branch, string why)
+        {
+            string starterId = StarterLoadout.ArmorFor(job);
+            if (!string.IsNullOrEmpty(starterId))
+            {
+                var a = GearCatalog.FindArmor(starterId);
+                if (a != null && GearCatalog.ArmorFitsClass(a, job) && GearCatalog.ArmorJobMatches(a, job))
+                {
+                    branch = "starter-floor:" + why;
+                    return a;
+                }
+                FlowTrace.Warn("Gear",
+                    $"StarterLoadout['{job}'].Armor = '{starterId}' " +
+                    (a == null ? "is NOT in armor.json" : "does not fit class '" + job + "' (job or weight gate)") +
+                    " - the STARTER EQUIPMENT CONTRACT (WO-1240) is broken for this class and the floor is " +
+                    "falling through to the catalog-wide pick, which can hand over unowned Armorer stock. " +
+                    "StarterArmourOwnershipRegression [starter-armour-data] pins exactly this.");
+            }
+
+            branch = "catalog-wide-floor:" + why;
+            var any = GearCatalog.BestArmor(job, level);
+            if (any == null)
+                FlowTrace.Fail("Gear",
+                    $"AutoBestArmor floor EXHAUSTED for class '{job}' at level {level} ({why}): the class has no " +
+                    "authored starter armour AND the catalog-wide armour query returned null, so the hero is at " +
+                    "ArmorDefense 0. This is a CATALOG gap, not an ownership gap - armor.json serves this class " +
+                    "nothing at this level.");
             return any;
         }
 

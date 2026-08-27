@@ -126,6 +126,9 @@ namespace DeNelle.Editor.Regression
         private static void LintSite(List<string> failures, string path, string armorMethod,
                                      string weaponMethod, string label)
         {
+            // ReadSource has ALREADY recorded a [roll-source] failure naming the path
+            // (fixture-absent -> FAIL), so this return leaves the suite RED. It is a bail, not a
+            // stand-down: the loot roll source is tracked code, never an optional fixture.
             string src = ReadSource(path, failures);
             if (src == null) return;
             string code = StripComments(src);
@@ -133,9 +136,10 @@ namespace DeNelle.Editor.Regression
             string armorBody = MethodBody(code, armorMethod);
             if (armorBody == null)
             {
-                failures.Add("[roll-source] " + label + ": method '" + armorMethod + "' not found in " + path +
-                             " - the armor roll was renamed or removed and this lint can no longer see whether " +
-                             "the class gate survived; re-point it deliberately");
+                failures.Add("[roll-source] " + label + ": method '" + armorMethod + "' could not be read from " +
+                             path + " - it was renamed, removed, or its body does not brace-balance, so this " +
+                             "lint can no longer see whether the class gate survived. Either way the armor roll " +
+                             "is unverified, which is a failure and never a pass; re-point it deliberately");
                 return;
             }
 
@@ -169,8 +173,9 @@ namespace DeNelle.Editor.Regression
             string weaponBody = MethodBody(code, weaponMethod);
             if (weaponBody == null)
             {
-                failures.Add("[roll-source] " + label + ": method '" + weaponMethod + "' not found in " + path +
-                             " - re-point this lint deliberately");
+                failures.Add("[roll-source] " + label + ": method '" + weaponMethod + "' could not be read from " +
+                             path + " - renamed, removed, or its body does not brace-balance. The weapon half is " +
+                             "therefore unverified; re-point this lint deliberately");
                 return;
             }
             if (weaponBody.IndexOf("CanEquipWeapon", StringComparison.Ordinal) < 0 &&
@@ -190,6 +195,10 @@ namespace DeNelle.Editor.Regression
         /// point of the case is that its OUTPUT is always equippable, for every class.</summary>
         private static ArmorDef RollArmor(string job, int level, string rarity)
         {
+            // The `a == null` skip below MIRRORS the shipped roll site line for line - that fidelity
+            // is the whole point of this helper, so it is not tightened here. It is also not a
+            // stand-down: a degenerate catalog makes every roll return null, which Case 2 fails on
+            // via its armorRows guard and Case 3 [not-vacuous] fails on independently.
             ArmorDef exact = null;
             foreach (var a in GearCatalog.AllArmors())
             {
@@ -203,6 +212,8 @@ namespace DeNelle.Editor.Regression
 
         private static WeaponDef RollWeapon(string job, int level, string rarity)
         {
+            // As in RollArmor: the null-row skip MIRRORS the shipped roll site and is not a
+            // stand-down - an empty catalog is caught by Case 2 and Case 3, not swallowed here.
             WeaponDef exact = null;
             foreach (var w in GearCatalog.AllWeapons())
             {
@@ -219,6 +230,25 @@ namespace DeNelle.Editor.Regression
             var classes = AllClasses(failures);
             var levels = AllLevels();
             var rarities = AllRarities();
+
+            // THE AXIS THAT CAN ACTUALLY GO EMPTY IS THE CATALOG, NOT THE CLASS LIST. classes is
+            // seeded from SeedClasses and levels/rarities carry hardcoded defaults, so all three
+            // Counts are non-zero even when GearCatalog loaded NOTHING - i.e. the guard below could
+            // never fire on the one condition that would make this simulation vacuous. Asked
+            // directly instead: with an empty catalog every roll returns null, every assertion below
+            // is skipped, and the case would report OK having proven nothing.
+            int armorRows = GearCatalog.AllArmors().Count;
+            int weaponRows = GearCatalog.AllWeapons().Count;
+            if (armorRows == 0 || weaponRows == 0)
+            {
+                failures.Add("[award-fits] GearCatalog served armorRows=" + armorRows + " weaponRows=" + weaponRows +
+                             " - with an empty catalog every simulated roll returns null, so this case would " +
+                             "assert nothing at all and still read green. The canonical armor.json / weapons.json " +
+                             "under Assets/Resources/Data/Canonical are TRACKED SOURCE, so an empty load is a " +
+                             "failure, never a stand-down");
+                return;
+            }
+
             if (classes.Count == 0 || levels.Count == 0 || rarities.Count == 0)
             {
                 failures.Add("[award-fits] the catalog yielded classes=" + classes.Count + " levels=" + levels.Count +
@@ -318,6 +348,9 @@ namespace DeNelle.Editor.Regression
                 {
                     foreach (string rarity in rarities)
                     {
+                        // These skips REPRODUCE the pre-fix filter on purpose (level + rarity, no
+                        // class gate). They are the defect under test, not guards - tightening them
+                        // would delete the very behaviour this case measures.
                         ArmorDef exact = null;
                         foreach (var a in GearCatalog.AllArmors())
                         {
@@ -335,10 +368,15 @@ namespace DeNelle.Editor.Regression
 
             if (caught.Count == 0)
             {
-                notes.Add("WARNING: the pre-fix level+rarity-only filter produces NO cross-class award in today's " +
-                          "armor.json, so Case 2 is currently proving the gate only by construction, not against " +
-                          "live data. If armor weights were flattened, restore weighted rows or this suite's " +
-                          "behavioural half is decorative");
+                // CONTENT-ABSENT -> a DECLARED stand-down, not prose. Failing would be wrong: the
+                // code is correct and the DATA stopped containing a cross-class award, which is not
+                // a product defect. But a plain note lands in the GREEN column exactly like a hollow
+                // pass - and this case then claims coverage it does not have, which this suite's own
+                // header promises it will never do. The token is what makes the hole countable.
+                notes.Add(RegressionOutcome.PartialSkip("[gate-is-load-bearing] live-data proof",
+                          "the pre-fix level+rarity-only filter produces NO cross-class award in today's " +
+                          "armor.json, so the behavioural half is proving the gate by construction only. If " +
+                          "armour weights were flattened, restore weighted rows or this case is decorative"));
                 return;
             }
             notes.Add("gate is load-bearing: the pre-fix filter would still mis-award " + caught.Count +
@@ -356,16 +394,14 @@ namespace DeNelle.Editor.Regression
 
             try
             {
+                // WO-1241: `job` may now be a comma-separated class LIST ("knight,cleric"), so the
+                // raw field is no longer a class key. Splitting it is not cosmetic - taking the
+                // whole string would seed a PSEUDO-CLASS ("knight,cleric") that matches no row,
+                // and every award assertion below would then be made about a hero who cannot exist.
                 foreach (var w in GearCatalog.AllWeapons())
-                {
-                    string j = Norm(w != null ? w.job : null);
-                    if (j.Length > 0 && j != "any" && !set.Contains(j)) set.Add(j);
-                }
+                    AddJobClasses(set, w != null ? w.job : null);
                 foreach (var a in GearCatalog.AllArmors())
-                {
-                    string j = Norm(a != null ? a.job : null);
-                    if (j.Length > 0 && j != "any" && !set.Contains(j)) set.Add(j);
-                }
+                    AddJobClasses(set, a != null ? a.job : null);
             }
             catch (Exception ex)
             {
@@ -421,6 +457,32 @@ namespace DeNelle.Editor.Regression
             return (s ?? string.Empty).Trim().ToLowerInvariant();
         }
 
+        /// <summary>Add every explicit class key an item's `job` field names (WO-1241 list form).
+        /// An EMPTY job and the literal "any" mean the same thing - the OPEN gate - and neither
+        /// names a class, so both simply contribute nothing.</summary>
+        private static void AddJobClasses(List<string> set, string job)
+        {
+            // NOT a dependency guard, and it no longer looks like one. This used to open with
+            // `if (raw.Length == 0) return;`, which reads as "a required input was missing, bail" -
+            // the hollow-pass shape - when the actual meaning is far narrower: GearCatalog.JobMatches
+            // treats an empty job EXACTLY as it treats "any" (both fit every class), so a blank field
+            // is legal authored data that names no class and must contribute no class key. That is
+            // the same verdict the loop predicate below already reaches, so the early return was pure
+            // redundancy wearing a guard's clothes. Splitting an empty string yields one empty part,
+            // which that predicate drops - identical behaviour, honest shape.
+            //
+            // There is deliberately nothing to assert here: whether an OPEN job gate is legitimate is
+            // ArmourCatalogJobRegression [no-open-job]'s verdict (WO-1241), and re-judging it here
+            // would be a second authority on the same rule. What THIS suite must not do is invent a
+            // pseudo-class, which is exactly what taking the raw comma-joined string would do.
+            foreach (var part in Norm(job).Split(','))
+            {
+                string j = part.Trim();
+                if (j.Length == 0 || j == "any") continue;   // the open gate: not a class
+                if (!set.Contains(j)) set.Add(j);
+            }
+        }
+
         // =====================================================================
         //  SOURCE HELPERS
         // =====================================================================
@@ -444,6 +506,9 @@ namespace DeNelle.Editor.Regression
         /// comments in both roll sites now NAME these very symbols.</summary>
         private static string StripComments(string src)
         {
+            // Pure function, and its empty return is not a bail: every caller has already turned a
+            // missing file into a [roll-source] failure, and an empty result cascades to
+            // MethodBody == null, which each call site reports. Nothing is swallowed.
             if (string.IsNullOrEmpty(src)) return string.Empty;
             string noBlock = Regex.Replace(src, @"/\*.*?\*/", " ", RegexOptions.Singleline);
             return Regex.Replace(noBlock, @"//[^\r\n]*", " ");

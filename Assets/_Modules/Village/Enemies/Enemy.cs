@@ -35,6 +35,24 @@ using DeNelle.Core.Combat;   // IDamageableStructure — moved to Core so all as
 namespace DeNelle.Village
 {
     /// <summary>
+    /// WO-1232 (owner ruling 2026-08-26): an enemy's AUTHORED classification — the only
+    /// thing the HUD is allowed to say about "what am I facing". IDENTITY, never DIFFICULTY:
+    /// a Necromancer being a boss is an authored fact (<c>enemies.json boss:true</c> /
+    /// <c>role:"elite"</c>); a level number was not. Deliberately THREE members — an APEX
+    /// tier is RESERVED until one is authored on purpose, because inventing a third badge
+    /// re-creates the fake precision this ruling removed.
+    /// </summary>
+    public enum EnemyTier
+    {
+        /// <summary>No authored classification. The HUD shows NOTHING — silence is the default.</summary>
+        Ordinary = 0,
+        /// <summary><c>role:"elite"</c> on the def. Shown as the word ELITE.</summary>
+        Elite = 1,
+        /// <summary><c>boss:true</c> on the def (necromancer, troll-overlord). Shown as the word BOSS.</summary>
+        Boss = 2,
+    }
+
+    /// <summary>
     /// One Hollow One in the village wave loop. Drives a <see cref="NavMeshAgent"/>
     /// toward the Heart, takes HP damage, attacks the structure in front of it on
     /// contact, and dies at zero HP. Configured by <see cref="WaveManager"/> from
@@ -481,12 +499,35 @@ namespace DeNelle.Village
         public float HpFraction => _maxHp > 0f ? Mathf.Clamp01(_hp / _maxHp) : 0f;
 
         /// <summary>
-        /// WO-611 F3: the truthful display level for the target frame ("Lv N"). Set in
-        /// <see cref="Configure"/> from the authored def (a STABLE per-archetype band), replacing the
-        /// old HUD-side EnemyLevelStub HP/25 heuristic that read the runtime maxHp and crept upward as
-        /// wave-scaling inflated it. 1 for a hand-placed enemy with no def.
+        /// ⚠ NOT A LEVEL SYSTEM, AND NO LONGER PLAYER-FACING (WO-1232, owner ruling 2026-08-26).
+        /// <para>
+        /// This is <c>round(def.Hp / 25)</c> — see <see cref="Configure"/>. There is NO authored level
+        /// field on <c>EnemyDef</c>; every "level" in the game was this one division. The doc comment
+        /// that used to sit here claimed an "authored per-archetype band", and that claim misled a
+        /// whole work order (CLAUDE.md §12: comments lie, read the code). Owner verbatim:
+        /// <i>"HP / 25 is not a level system. Dressing it up as one just produces very confident
+        /// nonsense."</i>
+        /// </para>
+        /// <para>
+        /// NO player-facing surface reads this any more — the HUD target frame shows the authored
+        /// <see cref="Tier"/> word instead (see <see cref="EnemyTier"/>). It survives only as a
+        /// diagnostic magnitude for <see cref="ThreatSkullPlate"/>'s display-off trace. Do not
+        /// re-surface it; a real replacement is a Combat Rating derived from HP, damage, cadence,
+        /// armour, abilities and encounter role, and that is a separate, unbuilt spec.
+        /// </para>
         /// </summary>
         public int Level => Mathf.Max(1, _level);
+
+        /// <summary>
+        /// WO-1232: the enemy's AUTHORED classification — the single accessor the HUD reads to decide
+        /// whether to print BOSS, ELITE, or nothing at all. Resolves off <c>_def</c> (the only species
+        /// signal every spawn path sets), so a def-less hand-placed enemy is <see cref="EnemyTier.Ordinary"/>
+        /// and silent. Boss OUTRANKS elite, matching <see cref="IsEliteTier"/>'s own exclusion.
+        /// </summary>
+        public EnemyTier Tier =>
+            IsBossTier() ? EnemyTier.Boss :
+            IsEliteTier() ? EnemyTier.Elite :
+                            EnemyTier.Ordinary;
 
         /// <summary>True once the enemy has died (HP hit zero).</summary>
         public bool IsDead => _dead;
@@ -616,10 +657,11 @@ namespace DeNelle.Village
                 _enemyDefId = def.Id;
                 _maxHp = Mathf.Max(1f, def.Hp);
                 _hp = _maxHp;
-                // WO-611 F3: truthful, STABLE display level from the AUTHORED HP band (def.Hp, pre
-                // wave-scaling) — read by the HUD target frame via Enemy.Level. Stable per archetype
-                // so "Lv N" doesn't creep as ApplyWaveScaling inflates maxHp. (EnemyDef carries no
-                // explicit level field yet; when one is added, source it here instead of the HP band.)
+                // ⚠ WO-1232: this is HP/25 and nothing more, and NOTHING PLAYER-FACING READS IT any
+                // more (owner ruling 2026-08-26 — the numeric enemy level is removed from the HUD;
+                // the target frame shows the authored Tier word). It stays off def.Hp (pre-scaling)
+                // rather than the runtime maxHp only so the diagnostic magnitude does not also creep
+                // with wave scaling. Do NOT re-point a display at it; see Enemy.Level's remarks.
                 _level = Mathf.Max(1, Mathf.RoundToInt(Mathf.Max(1f, def.Hp) / 25f));
                 // Owner 2026-06-02: global -5% enemy speed — early-game generosity so new
                 // players get the "winning while I learn" feel as they scale up + learn the

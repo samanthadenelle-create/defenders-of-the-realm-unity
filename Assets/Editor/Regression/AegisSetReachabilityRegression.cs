@@ -92,7 +92,7 @@ namespace DeNelle.Editor
                 foreach (var a in aegisArmors)
                 {
                     if (!GearCatalog.ArmorFitsClass(a, job)) continue;   // weight-class gate (light/heavy)
-                    if (!JobOk(a.job, job)) continue;                    // job gate ("any" fits all)
+                    if (!JobOk(a, job)) continue;                        // job gate ("any" fits all)
                     fit = a;
                     break;
                 }
@@ -135,12 +135,11 @@ namespace DeNelle.Editor
             return false;
         }
 
-        // Mirror GearCatalog's private JobMatches for the armor's job field ("any"/empty fits all).
-        private static bool JobOk(string itemJob, string heroJob)
-        {
-            if (string.IsNullOrEmpty(itemJob)) return true;
-            if (itemJob.Equals("any", StringComparison.OrdinalIgnoreCase)) return true;
-            return itemJob.Equals(heroJob ?? string.Empty, StringComparison.OrdinalIgnoreCase);
-        }
+        // The armor job gate. This USED to be a hand-copied mirror of GearCatalog's private
+        // JobMatches - and WO-1241 made `job` a possible comma-separated LIST ("knight,cleric"),
+        // which the mirror would have read as one opaque token and refused. A mirror of a rule is
+        // a second copy of the rule; it goes stale exactly when the rule changes, which is the one
+        // moment an oracle must not lie. It now asks the shipped helper.
+        private static bool JobOk(ArmorDef a, string heroJob) => GearCatalog.ArmorJobMatches(a, heroJob);
     }
 }

@@ -429,21 +429,85 @@ namespace DeNelle.Village
             return PickBestWeapon(job, level, null).Weapon;
         }
 
-        /// <summary>Highest-defense armor the given class+level can equip, or null.
-        /// Respects BOTH the legacy `job` gate and the new weight-class gate (light/heavy).</summary>
-        public static ArmorDef BestArmor(string job, int level)
+        /// <summary>
+        /// The outcome of ONE armor auto-best query with the counts that EXPLAIN it — the armor
+        /// twin of <see cref="WeaponPick"/>, and for the same §12 reason: "this class has no
+        /// eligible armor at this level" and "this class has nine eligible rows and the player
+        /// owns none of them" both read as a null, and they have two different fixes.
+        /// </summary>
+        public readonly struct ArmorPick
+        {
+            /// <summary>The winning armor, or null when nothing passed the gates.</summary>
+            public readonly ArmorDef Armor;
+            /// <summary>Rows that passed the job + weight + level gates (before any ownership filter).</summary>
+            public readonly int Eligible;
+            /// <summary>Of those, how many survived the ownership filter (== Eligible when unfiltered).</summary>
+            public readonly int Owned;
+            /// <summary>True when an ownership predicate was supplied and applied.</summary>
+            public readonly bool OwnershipApplied;
+
+            public ArmorPick(ArmorDef armor, int eligible, int owned, bool ownershipApplied)
+            {
+                Armor = armor;
+                Eligible = eligible;
+                Owned = owned;
+                OwnershipApplied = ownershipApplied;
+            }
+        }
+
+        /// <summary>
+        /// THE one armor ranking loop. Highest-defense armor the given class+level can equip,
+        /// optionally restricted to the ids the player actually OWNS.
+        ///
+        /// ── WO-1240: THE ARMOR HALF OF THE OWNERSHIP GATE ──────────────────────────────────
+        /// The weapon half was closed on 2026-08-08; the armor half was left open ON PURPOSE and
+        /// the reason was written into GearLoadout.Refresh: there was NO authored starter ARMOR,
+        /// so gating auto-equip to owned gear resolved to null on a fresh save and dropped the
+        /// hero to ArmorDefense 0 — trading an economy leak for a silent difficulty spike. The
+        /// owner ruled BOTH halves (2026-08-26): author a starter armor row for every class FIRST
+        /// (StarterLoadout.StarterKit.Armor), THEN gate. This overload is the second half; it is
+        /// only safe because the first half exists.
+        ///
+        /// Pass <paramref name="owns"/> = null for the legacy CATALOG-WIDE behaviour — correct and
+        /// deliberately kept for the callers that are NOT asking "what should the hero auto-equip":
+        /// the arena / outpost LOOT rolls (choosing a prize to GRANT, which the player by
+        /// definition does not own yet) and the never-zero floor in GearLoadout.
+        ///
+        /// BOTH class gates are asked, and they are NOT the same question: <see cref="JobMatches"/>
+        /// is the authored `job` field (WO-1241 may now list several classes) and
+        /// <see cref="ArmorFitsClass"/> is the light/heavy WEIGHT rule. A row can be legal by one
+        /// and illegal by the other — that mismatch is exactly what WO-1241 exists to stop.
+        /// </summary>
+        public static ArmorPick PickBestArmor(string job, int level, Func<string, bool> owns)
         {
             EnsureLoaded();
             ArmorDef best = null;
+            int eligible = 0;
+            int owned = 0;
+            bool applied = owns != null;
+
             if (_armor != null)
             {
                 foreach (var a in _armor)
                 {
                     if (a == null || !JobMatches(a.job, job) || !ArmorFitsClass(a, job) || !MeetsReq(a.req, level)) continue;
+                    eligible++;
+                    if (applied && !owns(a.id)) continue;
+                    owned++;
                     if (best == null || a.defense > best.defense) best = a;
                 }
             }
-            return best;
+
+            return new ArmorPick(best, eligible, owned, applied);
+        }
+
+        /// <summary>Highest-defense armor the given class+level can equip, or null.
+        /// Respects BOTH the legacy `job` gate and the new weight-class gate (light/heavy).
+        /// CATALOG-WIDE (no ownership gate) — see <see cref="PickBestArmor"/> for why that is
+        /// correct for loot rolls and WRONG for the hero's auto-equip.</summary>
+        public static ArmorDef BestArmor(string job, int level)
+        {
+            return PickBestArmor(job, level, null).Armor;
         }
 
         /// <summary>
@@ -483,6 +547,15 @@ namespace DeNelle.Village
             if (w.Length == 0 || w == "any") return true;
             return w == ClassWeight(job);
         }
+
+        /// <summary>
+        /// True when armour <paramref name="a"/>'s authored `job` admits <paramref name="job"/> —
+        /// the JOB half of armour eligibility ONLY, with the light/heavy weight half deliberately
+        /// NOT asked. Public because WO-1240's never-naked floor has to ask both gates separately
+        /// to report which one a broken starter row failed; re-implementing the job match in the
+        /// caller is how the floor and the equip seam end up disagreeing about the same row.
+        /// </summary>
+        public static bool ArmorJobMatches(ArmorDef a, string job) => a != null && JobMatches(a.job, job);
 
         /// <summary>True when <paramref name="job"/> may wield weapon <paramref name="w"/>
         /// (its `job` is "any" or matches the class). Public wrapper over the job-match rule
@@ -612,11 +685,77 @@ namespace DeNelle.Village
             return Mathf.Max(1, v);
         }
 
+        /// <summary>
+        /// THE job-gate authority for every catalog query (weapons, armor, accessories).
+        ///
+        /// WO-1241 — <paramref name="itemJob"/> may now be a COMMA-SEPARATED LIST of class keys
+        /// ("knight,cleric"). WHY: before this it was a single token, so the only way to author
+        /// "this piece is for the two LIGHT classes" was `job: "any"` — and `any` is not a
+        /// narrowing at all, it is the absence of one. That is exactly how `blink_armor_dragonic`
+        /// (job "any", weight "heavy") ended up OFFERED to a Mage that CanEquipArmorNow will
+        /// always refuse: the weight gate was doing the real eligibility work while the job gate
+        /// said "everyone". The list form lets the DATA say what the weight gate already enforces,
+        /// so a job-based loot/shop filter can no longer disagree with the equip seam.
+        ///
+        /// A single token behaves EXACTLY as before (no comma => the old ordinal-ignore-case
+        /// compare), so every existing weapon/armor/accessory row is byte-identical in effect.
+        /// "any" (alone or inside a list) still fits every class — that is the deliberate,
+        /// whitelisted universal, pinned by ArmourCatalogJobRegression.
+        /// </summary>
         private static bool JobMatches(string itemJob, string heroJob)
         {
             if (string.IsNullOrEmpty(itemJob)) return true;
-            if (itemJob.Equals("any", StringComparison.OrdinalIgnoreCase)) return true;
-            return itemJob.Equals(heroJob ?? string.Empty, StringComparison.OrdinalIgnoreCase);
+            string item = itemJob.Trim();
+            if (item.Length == 0) return true;
+            if (item.Equals("any", StringComparison.OrdinalIgnoreCase)) return true;
+
+            string hero = (heroJob ?? string.Empty).Trim();
+            if (item.IndexOf(',') < 0) return item.Equals(hero, StringComparison.OrdinalIgnoreCase);
+
+            var parts = item.Split(',');
+            for (int i = 0; i < parts.Length; i++)
+            {
+                string p = parts[i].Trim();
+                if (p.Length == 0) continue;
+                if (p.Equals("any", StringComparison.OrdinalIgnoreCase)) return true;
+                if (p.Equals(hero, StringComparison.OrdinalIgnoreCase)) return true;
+            }
+            return false;
+        }
+
+        /// <summary>
+        /// The `job` field as a player reads it, for the shop / inventory blurbs: "any class",
+        /// "the knight", "the knight or cleric", "the knight, ranger or mage".
+        ///
+        /// PUBLIC and shared because WO-1241 made `job` a possible LIST, and the three
+        /// DescribeGear copies (ShopVM / InventoryVM / PartyShopVM) each pasted the raw string
+        /// straight into a sentence — which would have shipped "Suited to the knight,cleric."
+        /// to the player. ASCII only (CLAUDE.md canon).
+        /// </summary>
+        public static string JobLabel(string itemJob)
+        {
+            string item = (itemJob ?? string.Empty).Trim();
+            if (item.Length == 0 || item.Equals("any", StringComparison.OrdinalIgnoreCase)) return "any class";
+
+            var names = new List<string>();
+            var parts = item.Split(',');
+            for (int i = 0; i < parts.Length; i++)
+            {
+                string p = parts[i].Trim();
+                if (p.Length == 0) continue;
+                if (p.Equals("any", StringComparison.OrdinalIgnoreCase)) return "any class";
+                names.Add(p.ToLowerInvariant());
+            }
+            if (names.Count == 0) return "any class";
+            if (names.Count == 1) return "the " + names[0];
+
+            var sb = new System.Text.StringBuilder("the ");
+            for (int i = 0; i < names.Count; i++)
+            {
+                if (i > 0) sb.Append(i == names.Count - 1 ? " or " : ", ");
+                sb.Append(names[i]);
+            }
+            return sb.ToString();
         }
 
         /// <summary>
