@@ -1193,10 +1193,11 @@ namespace DeNelle.Editor
         //  So this drives the REAL path end to end: a server-shaped payload goes
         //  in through MaintenanceCatalog.ApplyPayload -- the same seam the live
         //  /api/maintenance response goes through -- and the text on screen is
-        //  whatever MaintenanceCatalog.BannerText() decides to say about it. If
-        //  the catalog stops sealing, mis-names an area, or returns empty, the
-        //  shot changes or the capture fails. That is the difference between
-        //  evidence and decoration.
+        //  whatever the ONE producer -- MaintenanceCatalog.LineFor, reached
+        //  through BuildLines, which is the call MaintenanceBannerDriver makes --
+        //  decides to say about it. If the catalog stops sealing, mis-names an
+        //  area, or returns empty, the shot changes or the capture fails. That is
+        //  the difference between evidence and decoration.
         //
         //  Two areas are sealed on purpose (raiding + store) because the roll is
         //  a MULTI-line surface and a single-seal shot would hide a bug in the
@@ -1245,12 +1246,13 @@ namespace DeNelle.Editor
                     return 0;
                 }
 
-                // Take the line from MaintenanceBannerDriver, NOT from
-                // MaintenanceCatalog.BannerText(). They are two different producers
-                // with two different formats, and BannerText() has NO runtime caller
-                // -- the driver formats its own line privately. Shooting BannerText()
-                // would photograph a string no player ever sees. (That split is
-                // WO-1245; until it is collapsed, the driver is the truth.)
+                // Take the line from MaintenanceBannerDriver, which is the object that
+                // actually feeds ObjectiveBannerUi at runtime. WO-1245 collapsed the two
+                // producers this comment used to warn about: the driver no longer formats
+                // anything of its own, it calls MaintenanceCatalog.BuildLines, and that is
+                // also what MaintenanceTogglesRegression asserts. Driving the DRIVER (not
+                // BuildLines directly) keeps this shot end-to-end: if the driver ever
+                // stops calling the single producer, this capture changes with it.
                 var driverGo = new GameObject("~UICapMaintDriver");
                 string text;
                 try
@@ -1286,6 +1288,14 @@ namespace DeNelle.Editor
                 InvokePrivate(banner, "Build");
 
                 SetPrivateField(banner, "_visible", true);
+                // WO-1245 defect 2: the plate is NoWrap+Ellipsis by default (correct for
+                // the tutorial objectives it was built for), which cut the operator's
+                // message at about 40 characters -- "MAINTENANCE ON RAIDS - Raids are
+                // closed whil...". Show(..., wrap:true) is the opt-in the driver passes;
+                // Show() cannot be called here (DontDestroyOnLoad throws in edit mode) so
+                // the same field is set directly. WITHOUT THIS LINE the capture would keep
+                // photographing the truncation and calling it proof.
+                SetPrivateField(banner, "_wrap", true);
                 SetPrivateField(banner, "_baseText", text);
                 SetPrivateField(banner, "_count", 0);
                 SetPrivateField(banner, "_done", 0);

@@ -89,6 +89,20 @@
           "evidence": "api/admin/stats.js?view=ops -> HTTP 200, keys: view, generated_at, window_days, source, toggles, promos, reports, ops_history, errors. No wallet, email or name is selected - a test asserts it."
         }
       ]
+    },
+    {
+      "title": "Cycle 5 - the banner defect closes on its own evidence",
+      "meta": "2026-08-27. COMPILE_GATE_OK + REGRESSION_OK 309/309 suites + UI_CAPTURE_OK on fresh logs.",
+      "items": [
+        {
+          "wo": "WO-1245",
+          "title": "The operator message now reads in full",
+          "kind": "headless",
+          "image": "img/wo1245-banner-wrapped.png",
+          "why": "Same capture, same real wire payload through the real catalog. Before: MAINTENANCE ON RAIDS - Raids are closed whil... After: the whole sentence, wrapped to two lines.",
+          "evidence": "Line under the shot: MAINTENANCE ON RAIDS - Raids are closed while we fix the reward payout. Back shortly."
+        }
+      ]
     }
   ]
 }

@@ -126,36 +126,32 @@ namespace DeNelle.Core.Ops
                 {
                     _shown = line;
                     // No skip affordance: an outage is not dismissible.
-                    ObjectiveBannerUi.Show(line);
+                    // wrap:true (WO-1245) - the operator's message was being cut at about
+                    // 40 characters by the tutorial's NoWrap+Ellipsis default, so the
+                    // player read the headline and none of the WHY. Opt-in at the call
+                    // site: the tutorial's own banners are untouched.
+                    ObjectiveBannerUi.Show(line, wrap: true);
                 }
             }
         }
 
         /// <summary>
-        /// Rebuild the roll. One line per sealed area, or a single line for a full
-        /// `server` window (which outranks everything, so nothing else is listed -
-        /// naming five areas when the whole realm is down is noise, not information).
+        /// Rebuild the roll from the ONE producer, <see cref="MaintenanceCatalog.BuildLines"/>.
+        /// One line per sealed area, or a single line for a full `server` window.
+        /// This driver formats nothing itself - see WO-1245.
         /// </summary>
         private void RebuildLines()
         {
             int before = _lines.Count;
-            _lines.Clear();
 
-            var server = MaintenanceCatalog.For(MaintenanceArea.Server);
-            if (server.Closed)
-            {
-                _lines.Add(Line(MaintenanceArea.Server, server));
-            }
-            else
-            {
-                for (int i = 0; i < MaintenanceCatalog.AreaIds.Length; i++)
-                {
-                    var area = (MaintenanceArea)i;
-                    if (area == MaintenanceArea.Server) continue;
-                    var st = MaintenanceCatalog.For(area);
-                    if (st.Closed) _lines.Add(Line(area, st));
-                }
-            }
+            // WO-1245: ONE producer. This method used to format its own lines in a
+            // private Line() while MaintenanceCatalog exposed a differently-worded
+            // BannerText() that only the regression ever read. The formatting now
+            // lives in MaintenanceCatalog.LineFor / BuildLines, so the string the
+            // oracle asserts is byte-for-byte the string this driver shows.
+            // BuildLines clears the list itself and also applies the `server`
+            // outranks-everything rule.
+            MaintenanceCatalog.BuildLines(_lines);
 
             if (_lines.Count != before)
             {
@@ -166,14 +162,5 @@ namespace DeNelle.Core.Ops
             }
         }
 
-        /// <summary>One banner line. Leads with MAINTENANCE ON &lt;AREA&gt; every time,
-        /// then the operator's own sentence when she wrote one.</summary>
-        private static string Line(MaintenanceArea area, MaintenanceState state)
-        {
-            string head = "MAINTENANCE ON " +
-                          MaintenanceCatalog.DisplayName(state.ClosedBy ?? MaintenanceCatalog.IdOf(area));
-            if (string.IsNullOrWhiteSpace(state.Message)) return head;
-            return head + " - " + state.Message;
-        }
     }
 }

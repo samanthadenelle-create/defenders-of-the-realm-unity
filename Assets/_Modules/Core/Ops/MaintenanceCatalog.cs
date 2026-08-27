@@ -140,6 +140,17 @@ namespace DeNelle.Core.Ops
         public const string ProvenanceDefault = "default";
         public const string ProvenanceFlagOff = "flag-off";
 
+        /// <summary>
+        /// Shown when the toggle table cannot be read AND the area is the store, which
+        /// is the single fail-CLOSED area (owner ruling 2026-08-27). It says plainly that
+        /// nothing was charged, because a player who taps Buy and is refused will
+        /// otherwise assume the money left and open a ticket about it.
+        /// ASCII only - the UI font renders nothing else.
+        /// </summary>
+        public const string UnreadableStoreMessage =
+            "The store is closed because we cannot reach the server. " +
+            "Nothing has been charged. Please try again shortly.";
+
         /// <summary>The wire id of the whole-game toggle.</summary>
         public const string ServerAreaId = "server";
 
@@ -194,7 +205,28 @@ namespace DeNelle.Core.Ops
             //     tempted to "fix". Not traced per call: this is the resting state on
             //     every device that has not yet had a reply, and a throttled line per
             //     area per five seconds would drown the log for a non-event.
-            if (table == null) return MaintenanceState.Open;
+            //
+            //     ⭐ THE STORE IS THE ONE EXCEPTION, AND IT FAILS *CLOSED* (owner ruling
+            //     2026-08-27). WO-1243 raised this as an open question rather than
+            //     assuming it, and money went real the same day.
+            //
+            //     The asymmetry is genuinely different for money than for gameplay. A
+            //     wrongly-OPEN store can CHARGE real people during the exploit it was
+            //     sealed for, and that is irreversible - refunds, chargebacks, trust. A
+            //     wrongly-CLOSED store only defers a sale. For farming, raids, arena and
+            //     dungeons the cost of a blip is a denied session, so the owner's original
+            //     reasoning still governs them: "i cannot help if server is unreachable",
+            //     and closing the whole game buys nothing when she cannot act anyway.
+            //
+            //     ⛔ DO NOT "unify" this back into one rule for all six. The inconsistency
+            //     is the point, it was ruled deliberately, and MaintenanceTogglesRegression
+            //     pins both halves.
+            if (table == null)
+            {
+                return area == MaintenanceArea.Store
+                    ? new MaintenanceState(true, IdOf(MaintenanceArea.Store), UnreadableStoreMessage)
+                    : MaintenanceState.Open;
+            }
 
             // (b) SERVER FIRST, unconditionally. A full maintenance window outranks
             //     every per-area row, including one that says the area is fine.
@@ -210,6 +242,14 @@ namespace DeNelle.Core.Ops
             //     WO-1223: api/schema.sql seeds with ON CONFLICT DO NOTHING, which
             //     does not back-fill an already-provisioned database. Under fail-open
             //     a missing row costs nothing.
+            //
+            //     ⭐ THE STORE'S FAIL-CLOSED RULE DELIBERATELY DOES *NOT* REACH HERE.
+            //     Branch (a) is "we could not read the table at all"; this is "we read it
+            //     fine and it has no row for this area". Those are different facts. Closing
+            //     the store on a merely-absent row would hand the ON CONFLICT DO NOTHING
+            //     seed trap - the one that shut two dungeons in production this week - the
+            //     power to shut off revenue on a perfectly healthy server. The owner ruled
+            //     on UNREACHABILITY, not on incomplete seeding.
             return MaintenanceState.Open;
         }
 
@@ -256,49 +296,93 @@ namespace DeNelle.Core.Ops
             return true;
         }
 
+        // ---------------------------------------------------------------------
+        //  THE ONE PRODUCER OF A MAINTENANCE BANNER LINE (WO-1245)
+        // ---------------------------------------------------------------------
+        //  There used to be TWO. This file exposed BannerText(), and
+        //  MaintenanceBannerDriver formatted its own line privately in a method
+        //  called Line(). Same sealed state, two different sentences:
+        //      BannerText()  -> "MAINTENANCE ON RAIDS AND THE STORE - <message>"
+        //      driver.Line() -> "MAINTENANCE ON RAIDS - <message>"
+        //  The driver's is what reached the screen; BannerText() was read only by
+        //  MaintenanceTogglesRegression, so WO-1243's banner assertions proved a
+        //  string no player would ever be shown. Found by photographing the banner
+        //  after every marker had gone green.
+        //
+        //  BannerText() IS GONE. It is deliberately NOT kept "for the tests" -
+        //  a second entry point recreates the split on day one. LineFor is the
+        //  single formatter and BuildLines is the single roll; the driver, the
+        //  payload trace below and the regression all go through them.
+        // ---------------------------------------------------------------------
+
         /// <summary>
-        /// The banner line for the current state, or null when nothing is sealed.
+        /// THE banner line for ONE sealed area. The only place a maintenance line is
+        /// formatted anywhere in the game.
         /// <para>
-        /// When several areas are sealed at once every one of them is named, because a
-        /// player who can still farm but cannot raid needs to know which is which. The
-        /// word MAINTENANCE leads, so the line reads as maintenance from its WORDS with
-        /// no colour, icon or hue carrying any part of the meaning.
+        /// Leads with the literal word MAINTENANCE and NAMES the area every time, then
+        /// the operator's own sentence when she wrote one. Strip the colour, the plate
+        /// and the font and the line still says exactly what is happening - the owner is
+        /// red/green colourblind and no meaning here may live in hue (CLAUDE.md s7).
+        /// </para>
+        /// <para>
+        /// Attribution comes from <see cref="MaintenanceState.ClosedBy"/>, so an area
+        /// closed by a full `server` window reads MAINTENANCE ON THE REALM rather than
+        /// naming the area - which is the truth of what is happening to the player.
+        /// </para>
+        /// <para>Returns null when the state is not closed: nothing sealed, nothing announced.</para>
+        /// </summary>
+        public static string LineFor(MaintenanceArea area, MaintenanceState state)
+        {
+            if (!state.Closed) return null;
+            string head = "MAINTENANCE ON " + DisplayName(state.ClosedBy ?? IdOf(area));
+            if (string.IsNullOrWhiteSpace(state.Message)) return head;
+            return head + " - " + state.Message;
+        }
+
+        /// <summary>
+        /// Build the whole roll: one <see cref="LineFor"/> line per sealed area.
+        /// <para>
+        /// A full `server` window OUTRANKS everything, so it contributes its single line
+        /// and nothing else is listed - naming five areas when the whole realm is down is
+        /// noise, not information.
+        /// </para>
+        /// <para>
+        /// The caller supplies the list and it is CLEARED first, so the per-second driver
+        /// rebuild allocates nothing. Never throws; a null table yields zero lines, which
+        /// under fail-open is the correct resting answer.
         /// </para>
         /// </summary>
-        public static string BannerText()
+        public static void BuildLines(List<string> into)
         {
-            var table = s_table;
-            if (table == null) return null;
+            if (into == null) return;
+            into.Clear();
 
-            if (table.TryGetValue(ServerAreaId, out var srv) && srv.Closed)
+            var server = For(MaintenanceArea.Server);
+            if (server.Closed)
             {
-                // NAME THE REALM even when the operator wrote her own sentence. This
-                // read "MAINTENANCE: " + message until the WO-1243 oracle reded on it:
-                // her message says WHAT is happening and the head says WHERE, and a
-                // player who only sees the message cannot tell a full window from one
-                // area being down. MaintenanceBannerDriver.Line already did it this
-                // way, so the two surfaces disagreed - exactly the duplicated-state
-                // drift CLAUDE.md catalogues.
-                return !string.IsNullOrWhiteSpace(srv.Message)
-                    ? "MAINTENANCE ON " + DisplayName(ServerAreaId) + " - " + srv.Message
-                    : DefaultBannerFor(MaintenanceArea.Server, ServerAreaId);
+                into.Add(LineFor(MaintenanceArea.Server, server));
+                return;
             }
 
-            string authored = null;
-            var names = new List<string>(AreaIds.Length);
             for (int i = 0; i < AreaIds.Length; i++)
             {
-                string id = AreaIds[i];
-                if (string.Equals(id, ServerAreaId, StringComparison.Ordinal)) continue;
-                if (!table.TryGetValue(id, out var row) || !row.Closed) continue;
-                names.Add(DisplayName(id));
-                if (authored == null && !string.IsNullOrWhiteSpace(row.Message)) authored = row.Message;
+                var area = (MaintenanceArea)i;
+                if (area == MaintenanceArea.Server) continue;
+                var st = For(area);
+                if (st.Closed) into.Add(LineFor(area, st));
             }
+        }
 
-            if (names.Count == 0) return null;
-
-            string head = "MAINTENANCE ON " + string.Join(" AND ", names.ToArray());
-            return authored != null ? head + " - " + authored : head + " - this area is closed for now.";
+        /// <summary>
+        /// The whole roll on ONE line, for the log only. Built FROM <see cref="BuildLines"/>
+        /// so it can never drift from what the player is shown - it is the same sentences,
+        /// pipe-joined. Never call this to feed a UI surface.
+        /// </summary>
+        public static string JoinedLinesForLog()
+        {
+            var lines = new List<string>(AreaIds.Length);
+            BuildLines(lines);
+            return lines.Count == 0 ? "" : string.Join(" | ", lines.ToArray());
         }
 
         /// <summary>Upper-case display word for an area id. ASCII only.</summary>
@@ -432,7 +516,7 @@ namespace DeNelle.Core.Ops
             {
                 FlowTrace.Warn(Sys, "payload accepted (provenance=" + s_provenance + ") rows=" + next.Count +
                                     " SEALED=" + sealed_ + " unknown=" + unknown +
-                                    " banner=\"" + (BannerText() ?? "") + "\"");
+                                    " banner=\"" + JoinedLinesForLog() + "\"");
             }
             else
             {

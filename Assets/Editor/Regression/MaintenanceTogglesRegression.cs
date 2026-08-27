@@ -75,6 +75,18 @@
 //                    cannot be satisfied by refusing everything.
 //   5 [banner]       The banner names the area and leads with the literal word
 //                    MAINTENANCE, in ASCII, with no meaning carried by colour.
+//                    !! RE-AIMED BY WO-1245. Until 2026-08-27 this case asserted
+//                    MaintenanceCatalog.BannerText(), which had NO runtime caller:
+//                    the player's line came from a PRIVATE MaintenanceBannerDriver
+//                    .Line() with different wording ("MAINTENANCE ON RAIDS" vs
+//                    "MAINTENANCE ON RAIDS AND THE STORE"). So this suite went green
+//                    on a string no player could ever read, and it took a PHOTOGRAPH
+//                    of the banner to notice. BannerText() is now DELETED and the
+//                    single producer is MaintenanceCatalog.LineFor / BuildLines,
+//                    which is what the driver hands to ObjectiveBannerUi verbatim.
+//                    Case 5 also SOURCE-LINTS that the driver still formats nothing
+//                    of its own - a re-added private formatter is how the split
+//                    would come back, and it would come back silently.
 //   6 [area-domain]  The six ids are identical in MaintenanceCatalog.AreaIds,
 //                    api/_lib/maintenance.js and api/schema.sql's CHECK.
 //   7 [gate-sites]   Every Refuses() call site in Assets/_Modules is followed by
@@ -309,12 +321,51 @@ namespace DeNelle.Editor.Regression
             MaintenanceCatalog.Clear();
         }
 
+        /// <summary>
+        /// THE LINES THE PLAYER ACTUALLY RECEIVES. Every banner assertion in this suite
+        /// goes through here, which goes through MaintenanceCatalog.BuildLines - the same
+        /// call MaintenanceBannerDriver.RebuildLines makes before handing each string
+        /// straight to ObjectiveBannerUi.Show. There is no second formatter to drift from
+        /// (WO-1245); if one is ever re-added, case 5's source lint reds.
+        /// </summary>
+        private static List<string> PlayerLines()
+        {
+            var lines = new List<string>(ExpectedAreaIds.Length);
+            MaintenanceCatalog.BuildLines(lines);
+            return lines;
+        }
+
+        /// <summary>The roll joined for a failure message. Never used as an assertion
+        /// target - the assertions read the individual lines.</summary>
+        private static string Joined(List<string> lines)
+        {
+            return lines.Count == 0 ? "<no lines>" : string.Join(" || ", lines.ToArray());
+        }
+
         private static void AssertAllOpen(List<string> failures, string caseName, string what)
         {
+            // THE RULE IS SPLIT, ON PURPOSE (owner ruling 2026-08-27, on top of the
+            // 2026-08-27 fail-open ruling). Five areas fail OPEN; the STORE fails CLOSED.
+            // Money is real, so a wrongly-open store can CHARGE people during the exploit
+            // it was sealed for - irreversible - while a wrongly-closed store only defers
+            // a sale. For the other five the cost of a blip is a denied session, so
+            // "i cannot help if server is unreachable" still governs them.
             for (int i = 0; i < ExpectedAreaIds.Length; i++)
             {
                 var area = (MaintenanceArea)i;
-                if (MaintenanceCatalog.IsClosed(area))
+                bool closed = MaintenanceCatalog.IsClosed(area);
+
+                if (area == MaintenanceArea.Store)
+                {
+                    if (!closed)
+                        failures.Add("[" + caseName + "] the STORE resolved OPEN with " + what +
+                                     ". The store is the ONE fail-CLOSED area (owner ruling 2026-08-27): a " +
+                                     "wrongly-open store can charge real money during the incident it was " +
+                                     "sealed for, and that cannot be taken back.");
+                    continue;
+                }
+
+                if (closed)
                 {
                     failures.Add("[" + caseName + "] '" + ExpectedAreaIds[i] + "' resolved CLOSED with " +
                                  what + ". FAIL-OPEN is the owner ruling of 2026-08-27 (\"i cannot help if " +
@@ -322,9 +373,20 @@ namespace DeNelle.Editor.Regression
                                  "WO-1223 dungeon rule. Do not unify them.");
                 }
             }
-            if (MaintenanceCatalog.BannerText() != null)
-                failures.Add("[" + caseName + "] a banner was shown with " + what +
-                             " - nothing is sealed, so nothing may be announced");
+
+            // Exactly ONE line - the store's - and it must say nothing was charged, because
+            // a player refused at the Buy button otherwise assumes the money left.
+            var lines = PlayerLines();
+            if (lines.Count != 1)
+            {
+                failures.Add("[" + caseName + "] expected exactly ONE banner line (the store's) with " + what +
+                             " but got " + lines.Count + ": " + Joined(lines));
+            }
+            else if (lines[0].IndexOf("charged", System.StringComparison.OrdinalIgnoreCase) < 0)
+            {
+                failures.Add("[" + caseName + "] the store's unreachable-table banner does not tell the " +
+                             "player nothing was charged, which is the one thing they need to know: " + lines[0]);
+            }
         }
 
         // =====================================================================
@@ -420,12 +482,29 @@ namespace DeNelle.Editor.Regression
                 }
             }
 
-            string banner = MaintenanceCatalog.BannerText();
-            if (string.IsNullOrEmpty(banner))
-                failures.Add("[server-all] no banner during a full maintenance window");
-            else if (banner.IndexOf("MAINTENANCE", StringComparison.Ordinal) < 0)
-                failures.Add("[server-all] the server-window banner does not contain the word MAINTENANCE: \"" +
-                             banner + "\"");
+            // A full window collapses the roll to ONE line naming THE REALM. Asserting
+            // the COUNT matters: listing five areas while the whole realm is down is the
+            // regression this pins, and it can only be seen on the roll the player gets.
+            var window = PlayerLines();
+            if (window.Count != 1)
+            {
+                failures.Add("[server-all] a full maintenance window produced " + window.Count +
+                             " banner line(s), expected exactly 1 - `server` outranks every per-area " +
+                             "row, and naming five areas when the whole realm is down is noise: " +
+                             Joined(window));
+            }
+            else
+            {
+                string banner = window[0];
+                if (banner.IndexOf("MAINTENANCE", StringComparison.Ordinal) < 0)
+                    failures.Add("[server-all] the server-window banner does not contain the word " +
+                                 "MAINTENANCE: \"" + banner + "\"");
+                string realm = MaintenanceCatalog.DisplayName(MaintenanceCatalog.ServerAreaId);
+                if (banner.IndexOf(realm, StringComparison.Ordinal) < 0)
+                    failures.Add("[server-all] the server-window banner does not name \"" + realm +
+                                 "\": \"" + banner + "\" - a player cannot tell a full window from one " +
+                                 "area being down");
+            }
 
             notes.Add("server-all proved the whole-game toggle outranks " + (ExpectedAreaCount - 1) +
                       " rows that each say open");
@@ -441,7 +520,16 @@ namespace DeNelle.Editor.Regression
             // A failure-only oracle is not acceptance. This repo shipped a guard
             // that aborted every good run while exiting 0, so the open case is
             // asserted before the closed one.
+            //
+            // ⚠ THE SETUP IS A READABLE, ALL-OPEN TABLE - NOT Clear(). Those became
+            // two different states on 2026-08-27, when the owner ruled the store
+            // fails CLOSED: Clear() means "we could not read the table", which now
+            // legitimately seals the store, whereas this case is asserting the
+            // genuinely-nothing-sealed state, which is the server telling us every
+            // area is open. Using Clear() here made the store look like a regression
+            // when it was the new ruling working correctly.
             MaintenanceCatalog.Clear();
+            MaintenanceCatalog.ApplyPayload(Payload(false, false, null, allOpen: true), "test-good-path");
             for (int i = 0; i < ExpectedAreaIds.Length; i++)
             {
                 var area = (MaintenanceArea)i;
@@ -511,8 +599,10 @@ namespace DeNelle.Editor.Regression
             // be worse than none, because players learn to ignore it.
             MaintenanceCatalog.Clear();
             MaintenanceCatalog.ApplyPayload(Payload(false, false, null, allOpen: true), "test-banner-open");
-            if (MaintenanceCatalog.BannerText() != null)
-                failures.Add("[banner] a banner was produced with nothing sealed");
+            var quiet = PlayerLines();
+            if (quiet.Count != 0)
+                failures.Add("[banner] " + quiet.Count + " banner line(s) with nothing sealed: " +
+                             Joined(quiet));
 
             int checkedAreas = 0;
             for (int i = 0; i < ExpectedAreaIds.Length; i++)
@@ -520,13 +610,21 @@ namespace DeNelle.Editor.Regression
                 string id = ExpectedAreaIds[i];
                 MaintenanceCatalog.Clear();
                 MaintenanceCatalog.ApplyPayload(Payload(true, true, id), "test-banner");
-                string banner = MaintenanceCatalog.BannerText();
+                var lines = PlayerLines();
                 checkedAreas++;
+
+                if (lines.Count != 1)
+                {
+                    failures.Add("[banner] '" + id + "' is sealed but the roll carried " + lines.Count +
+                                 " line(s), expected 1 - the owner ruled a rolling banner tells EVERY " +
+                                 "player, and it must name exactly what is sealed: " + Joined(lines));
+                    continue;
+                }
+                string banner = lines[0];
 
                 if (string.IsNullOrWhiteSpace(banner))
                 {
-                    failures.Add("[banner] '" + id + "' is sealed but no banner text was produced - the " +
-                                 "owner ruled a rolling banner tells EVERY player");
+                    failures.Add("[banner] '" + id + "' produced an EMPTY line");
                     continue;
                 }
                 if (banner.IndexOf("MAINTENANCE", StringComparison.Ordinal) < 0)
@@ -539,25 +637,92 @@ namespace DeNelle.Editor.Regression
                                  "\"): \"" + banner + "\"");
                 if (!IsAscii(banner))
                     failures.Add("[banner] '" + id + "' banner is not ASCII: \"" + banner + "\"");
+
+                // THE OPERATOR'S MESSAGE MUST SURVIVE INTO THE LINE, WHOLE. WO-1245's
+                // second defect was the message being cut to ~40 characters on screen;
+                // the producer half of that is asserted here, and the pixels are proved
+                // by the UI capture (UICaptureLaunch.CaptureMaintenanceBanner). A
+                // headline with no WHY is exactly what the owner authored a message to
+                // avoid.
+                string authored = MessageFor(id);
+                if (banner.IndexOf(authored, StringComparison.Ordinal) < 0)
+                    failures.Add("[banner] '" + id + "' banner dropped or truncated the operator's " +
+                                 "message. Expected it to contain \"" + authored + "\", got \"" +
+                                 banner + "\"");
+
+                // And the line the PLAYER gets is the line LineFor makes - asserted
+                // rather than assumed, because the whole defect was two producers.
+                string direct = MaintenanceCatalog.LineFor((MaintenanceArea)i,
+                                                           MaintenanceCatalog.For((MaintenanceArea)i));
+                if (!string.Equals(direct, banner, StringComparison.Ordinal))
+                    failures.Add("[banner] '" + id + "' LineFor and BuildLines disagree - \"" +
+                                 (direct ?? "null") + "\" vs \"" + banner + "\". There must be exactly " +
+                                 "ONE producer (WO-1245).");
             }
 
             if (checkedAreas != ExpectedAreaCount)
                 failures.Add("[banner] checked " + checkedAreas + " areas, expected " + ExpectedAreaCount);
 
-            // Two at once: BOTH must be named. A player who can still farm but cannot
-            // raid needs both facts, not the first one the loop happened to find.
+            // An OPEN area has no line. LineFor is the single producer, so it must be
+            // the single place that refuses to announce a non-event too.
+            MaintenanceCatalog.Clear();
+            if (MaintenanceCatalog.LineFor(MaintenanceArea.Raiding, MaintenanceState.Open) != null)
+                failures.Add("[banner] LineFor produced a line for an OPEN area - a player would be " +
+                             "told about an outage that is not happening");
+
+            // Two at once: BOTH must be named, and as TWO ROLLED LINES rather than one
+            // joined sentence. The old BannerText() joined them ("RAIDS AND THE STORE")
+            // and carried only the FIRST authored message, so the second area's WHY was
+            // silently dropped. The roll carries both messages.
             MaintenanceCatalog.Clear();
             MaintenanceCatalog.ApplyPayload(Payload(true, true, "farming", second: "raiding"), "test-banner-two");
-            string two = MaintenanceCatalog.BannerText();
-            if (two == null ||
-                two.IndexOf(MaintenanceCatalog.DisplayName("farming"), StringComparison.Ordinal) < 0 ||
-                two.IndexOf(MaintenanceCatalog.DisplayName("raiding"), StringComparison.Ordinal) < 0)
+            var two = PlayerLines();
+            if (two.Count != 2)
             {
-                failures.Add("[banner] with two areas sealed the banner did not name both: \"" +
-                             (two ?? "null") + "\"");
+                failures.Add("[banner] with two areas sealed the roll carried " + two.Count +
+                             " line(s), expected 2: " + Joined(two));
+            }
+            else
+            {
+                string joined = Joined(two);
+                if (joined.IndexOf(MaintenanceCatalog.DisplayName("farming"), StringComparison.Ordinal) < 0 ||
+                    joined.IndexOf(MaintenanceCatalog.DisplayName("raiding"), StringComparison.Ordinal) < 0)
+                    failures.Add("[banner] with two areas sealed the roll did not name both: " + joined);
+                if (joined.IndexOf(MessageFor("farming"), StringComparison.Ordinal) < 0 ||
+                    joined.IndexOf(MessageFor("raiding"), StringComparison.Ordinal) < 0)
+                    failures.Add("[banner] with two areas sealed the roll carried only one operator " +
+                                 "message - each sealed area must state its OWN why: " + joined);
             }
 
-            notes.Add("banner checked " + checkedAreas + " single seals plus the two-at-once line");
+            // ---- SOURCE LINT: the driver must still format NOTHING ---------------
+            // Comments EXCLUDED (see the header): MaintenanceBannerDriver's header talks
+            // about the retired private Line() at length, and a comment-reading lint
+            // would red on the sentence documenting compliance.
+            string drv = ReadOrNull(BannerSrc);
+            if (drv == null)
+            {
+                failures.Add("[banner] " + BannerSrc + " is MISSING - the banner has no driver, so " +
+                             "nothing reaches the player no matter what this suite proves");
+            }
+            else
+            {
+                string drvCode = StripComments(drv);
+                if (drvCode.IndexOf("MaintenanceCatalog.BuildLines", StringComparison.Ordinal) < 0)
+                    failures.Add("[banner] " + BannerSrc + " no longer calls MaintenanceCatalog.BuildLines " +
+                                 "- the driver has stopped using the single producer, so this suite is " +
+                                 "once again asserting a string the player never sees (WO-1245)");
+                if (Regex.IsMatch(drvCode, "\"MAINTENANCE"))
+                    failures.Add("[banner] " + BannerSrc + " contains a literal \"MAINTENANCE\" string - " +
+                                 "the driver is formatting its own line again. That is the WO-1245 defect " +
+                                 "returning: two producers of the same sentence, one of them untested.");
+            }
+            if (Regex.IsMatch(StripComments(ReadOrNull(CatalogSrc) ?? ""), @"\bBannerText\s*\("))
+                failures.Add("[banner] MaintenanceCatalog.BannerText() has been re-added. It was deleted by " +
+                             "WO-1245 precisely so no second entry point can exist \"for the tests\" - " +
+                             "assert MaintenanceCatalog.LineFor / BuildLines, which is what the player reads.");
+
+            notes.Add("banner checked " + checkedAreas + " single seals plus the two-at-once roll, on the " +
+                      "SAME BuildLines call the driver makes, and source-linted the single producer");
             MaintenanceCatalog.Clear();
         }
 
@@ -878,6 +1043,18 @@ namespace DeNelle.Editor.Regression
 
         /// <summary>Build a test payload. Deliberately hand-written JSON rather than a
         /// serialiser, so the oracle exercises the same parse the wire does.</summary>
+        /// <summary>
+        /// The operator message this suite authors for one area. PER-AREA on purpose
+        /// (WO-1245): every seal used to carry the SAME sentence, so a two-area roll
+        /// could pass while silently dropping the second area's why - which is exactly
+        /// what the retired BannerText() did. Distinct strings make that a RED.
+        /// ASCII only.
+        /// </summary>
+        private static string MessageFor(string areaId)
+        {
+            return "The " + areaId + " area is closed while we fix a problem.";
+        }
+
         private static string Payload(bool anySealed, bool withMessage, string sealedId,
                                       bool allOpen = false, bool noMessage = false, string second = null,
                                       bool readOk = true)
@@ -899,7 +1076,7 @@ namespace DeNelle.Editor.Regression
                   .Append(",\"closedBy\":").Append(closed ? "\"" + id + "\"" : "null")
                   .Append(",\"message\":");
                 if (closed && withMessage && !noMessage)
-                    sb.Append("\"This area is closed while we fix a problem.\"");
+                    sb.Append('"').Append(MessageFor(id)).Append('"');
                 else
                     sb.Append("null");
                 sb.Append('}');

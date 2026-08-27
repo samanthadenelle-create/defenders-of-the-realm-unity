@@ -5,8 +5,12 @@
 // this class — the tutorial's objective surface is ObjectiveStripUi (thin
 // bottom-center strip + progress beads; kills the top-edge F8 collision class
 // for good), and the ONE skip is TutorialSkipUi (corner control + confirm).
-// This banner currently has ZERO callers; kept compiling for any non-tutorial
-// caller a future WO may add. Do not wire new tutorial chrome through it.
+// Kept compiling for any non-tutorial caller a future WO may add - and WO-1243
+// added the first one: MaintenanceBannerDriver shows the operator maintenance
+// notice through this surface. (The "ZERO callers" line that stood here until
+// 2026-08-27 was true when written and is not any more.) That caller passes
+// Show(..., wrap:true), which is OPT-IN and leaves tutorial behaviour untouched
+// - see the WO-1245 block below. Do not wire new tutorial chrome through it.
 // -----------------------------------------------------------------------------
 // Top-centre, non-blocking, code-built uGUI in the kit language (obsidian glass
 // plate + gold accent rule + parchment text — UiStyle/ElarionUi tokens). Replaces
@@ -47,6 +51,33 @@ namespace DeNelle.Core.UI
         private const float BannerWidth = 620f;
         private const float BannerHeight = 46f;
 
+        // -- WO-1245: OPT-IN WRAPPING, and the plate MEASURES itself ----------
+        // This banner was built NoWrap+Ellipsis for tutorial objectives ("Build a
+        // tower"), which is right for those and wrong for an operator maintenance
+        // message: the photographed banner read
+        //     "MAINTENANCE ON RAIDS - Raids are closed whil..."
+        // so the player got the headline and none of the WHY the message exists to
+        // give. Wrapping is therefore OPT-IN AT THE CALL SITE (Show(..., wrap:true))
+        // and every existing caller keeps byte-identical behaviour.
+        //
+        // The plate is a fixed-height single-line surface, so wrapping needs it to
+        // GROW. It is MEASURED, never eyeballed: TMP's own GetPreferredValues is
+        // asked how tall the real string is in the real font at the real width, and
+        // the plate is set to that plus the plate's own measured breathing room.
+        // A hardcoded "make it 92 tall" would be a guess that a longer message or a
+        // different font silently breaks.
+
+        /// <summary>The text box spans these fractions of the plate width (set in
+        /// <see cref="Build"/>); a wrap must be measured against that, not the plate.</summary>
+        private const float TextAnchorMinX = 0.02f;
+        private const float TextAnchorMaxX = 0.80f;
+
+        /// <summary>Ceiling on a wrapped plate, in measured LINES - not in pixels, so it
+        /// stays correct if the font or size changes. Beyond this the plate stops growing
+        /// and TMP ellipsizes, because a banner tall enough to be a paragraph has stopped
+        /// being a banner and is covering the game.</summary>
+        private const int MaxWrapLines = 3;
+
         private static ObjectiveBannerUi _instance;
 
         private CanvasGroup _group;
@@ -64,16 +95,27 @@ namespace DeNelle.Core.UI
         private Action _onSkipAll;
         private bool _visible;
         private float _fadeT;
+        private RectTransform _plate;   // WO-1245: a wrapped plate is resized, so it is held
+        private bool _wrap;             // WO-1245: opt-in per Show(); false = tutorial behaviour
 
         // ── Public API ────────────────────────────────────────────────────────
 
         /// <summary>Show (or update) the objective line. <paramref name="count"/> &gt; 0
         /// appends " (0/count)"-style progress via <see cref="SetProgress"/>.
-        /// <paramref name="onSkip"/> non-null ⇒ the Skip affordance shows and raises it.</summary>
-        public static void Show(string text, int count = 0, Action onSkip = null, Action onSkipAll = null)
+        /// <paramref name="onSkip"/> non-null ⇒ the Skip affordance shows and raises it.
+        /// <para>
+        /// <paramref name="wrap"/> (WO-1245) is OPT-IN and defaults to FALSE, which is the
+        /// original single-line NoWrap+Ellipsis behaviour every tutorial caller relies on.
+        /// Pass true only for a line whose whole sentence matters (the operator maintenance
+        /// notice): the label wraps and the plate GROWS to a MEASURED height, up to
+        /// <see cref="MaxWrapLines"/> lines.
+        /// </para></summary>
+        public static void Show(string text, int count = 0, Action onSkip = null, Action onSkipAll = null,
+                                bool wrap = false)
         {
             var b = Ensure();
             b._visible = true;
+            b._wrap = wrap;
             b._onSkip = onSkip;
             b._onSkipAll = onSkipAll;
             b._baseText = text ?? "";
@@ -112,6 +154,72 @@ namespace DeNelle.Core.UI
         {
             if (_label == null) return;
             _label.text = _count > 0 ? $"{_baseText}  <color=#C9A54A>({_done}/{_count})</color>" : _baseText;
+            ApplyWrapAndFit();
+        }
+
+        /// <summary>
+        /// WO-1245. Apply the current call's wrap choice and, when wrapping, MEASURE the
+        /// plate height the real string actually needs.
+        /// <para>
+        /// wrap == false restores the exact built state (NoWrap + the fixed
+        /// <see cref="BannerHeight"/>), so a maintenance line followed by a tutorial line
+        /// leaves the tutorial's surface byte-identical to what it has always been.
+        /// </para>
+        /// <para>
+        /// Guarded: TMP text metrics need a resolved font, and this runs in edit mode
+        /// under the UI capture as well as at runtime. If the measurement cannot be taken
+        /// we SAY SO and keep the fixed height rather than resizing on a guess - a silent
+        /// catch here would turn a layout bug into a mystery (CLAUDE.md section 12).
+        /// </para>
+        /// </summary>
+        private void ApplyWrapAndFit()
+        {
+            if (_label == null) return;
+
+            _label.textWrappingMode = _wrap ? TextWrappingModes.Normal : TextWrappingModes.NoWrap;
+
+            if (_plate == null) return;
+
+            if (!_wrap)
+            {
+                if (!Mathf.Approximately(_plate.sizeDelta.y, BannerHeight))
+                    _plate.sizeDelta = new Vector2(BannerWidth, BannerHeight);
+                return;
+            }
+
+            float textWidth = BannerWidth * (TextAnchorMaxX - TextAnchorMinX);
+            try
+            {
+                // The plate's built-in breathing room, DERIVED rather than assumed: the
+                // difference between the fixed plate and one measured line of this font.
+                float oneLine = _label.GetPreferredValues("Ay", textWidth, 0f).y;
+                if (oneLine <= 0f)
+                {
+                    DeNelle.Core.Diagnostics.FlowTrace.Warn("UI",
+                        "ObjectiveBanner wrap: TMP measured a single line as " + oneLine +
+                        " - no usable font metrics, keeping the fixed " + BannerHeight + "px plate.");
+                    return;
+                }
+                float padding = Mathf.Max(0f, BannerHeight - oneLine);
+                float needed = _label.GetPreferredValues(_label.text, textWidth, 0f).y;
+                float height = Mathf.Clamp(needed + padding, BannerHeight, oneLine * MaxWrapLines + padding);
+
+                if (!Mathf.Approximately(_plate.sizeDelta.y, height))
+                {
+                    _plate.sizeDelta = new Vector2(BannerWidth, height);
+                    DeNelle.Core.Diagnostics.FlowTrace.Step("UI",
+                        "ObjectiveBanner wrapped plate MEASURED: textWidth=" + textWidth.ToString("0.#") +
+                        " oneLine=" + oneLine.ToString("0.#") + " needed=" + needed.ToString("0.#") +
+                        " padding=" + padding.ToString("0.#") + " -> height=" + height.ToString("0.#") +
+                        " (cap " + MaxWrapLines + " lines).");
+                }
+            }
+            catch (Exception e)
+            {
+                DeNelle.Core.Diagnostics.FlowTrace.Warn("UI",
+                    "ObjectiveBanner wrap measurement threw (" + e.GetType().Name + ": " + e.Message +
+                    ") - keeping the fixed " + BannerHeight + "px plate rather than resizing on a guess.");
+            }
         }
 
         private static ObjectiveBannerUi Ensure()
@@ -149,6 +257,7 @@ namespace DeNelle.Core.UI
             prt.pivot = new Vector2(0.5f, 1f);
             prt.anchoredPosition = new Vector2(0f, -6f);
             prt.sizeDelta = new Vector2(BannerWidth, BannerHeight);
+            _plate = prt;   // WO-1245: held so a wrapped line can grow it to a measured height
             var pimg = plate.GetComponent<Image>();
             // Obsidian plate: the single ObsidianFill hue at a translucent alpha so the
             // strip reads as the kit's black-panel language (play area shows through).
@@ -172,10 +281,10 @@ namespace DeNelle.Core.UI
             var textGo = new GameObject("Text", typeof(RectTransform));
             textGo.transform.SetParent(prt, false);
             var trt = (RectTransform)textGo.transform;
-            trt.anchorMin = new Vector2(0.02f, 0f);
+            trt.anchorMin = new Vector2(TextAnchorMinX, 0f);
             // 0.80, not the old 0.86: the D16 skip control's visible face now reaches
             // ~0.83 of the plate, and an ellipsized objective must not run under it.
-            trt.anchorMax = new Vector2(0.80f, 1f);
+            trt.anchorMax = new Vector2(TextAnchorMaxX, 1f);
             trt.offsetMin = Vector2.zero;
             trt.offsetMax = Vector2.zero;
             _label = textGo.AddComponent<TextMeshProUGUI>();
@@ -183,6 +292,10 @@ namespace DeNelle.Core.UI
             _label.fontSize = 20f;
             _label.color = ElarionUi.Parchment;
             _label.alignment = TextAlignmentOptions.MidlineLeft;
+            // The BUILT default stays the tutorial's: NoWrap + Ellipsis. Show(wrap:true)
+            // flips wrapping on for that one line only (WO-1245). Ellipsis is kept even
+            // when wrapping - it is the graceful end of the MaxWrapLines clamp, so a
+            // pathological message truncates instead of swallowing the screen.
             _label.textWrappingMode = TextWrappingModes.NoWrap;
             _label.overflowMode = TextOverflowModes.Ellipsis;
             _label.raycastTarget = false;
