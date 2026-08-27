@@ -1,6 +1,6 @@
 # WORK ORDER 1159 — GO LIVE: real mainnet pack sales, on the full authored ladder
 
-**Status:** READY - ⭐ **§5 is now a specified policy** (owner ruling 2026-08-24, batch 2 ruling 10): **two-state** - cannot-query → **WARN** and continue with explicit acknowledgement; query-succeeds-and-config-is-wrong → **BLOCK**. ⛔ Always invoke with `--multisig`. The rest of the ticket remains gated-green and awaiting the owner's device felt-test; the PO closes, not the CLI. *(Prior line:)* FIXED 2026-08-23 — gated green (`COMPILE_GATE_OK`, `REGRESSION_OK 270/270 suites`, backend `node --test` 37/37), the new pin PROVEN red-then-green. ⚠ AWAITING OWNER FELT-TEST ON DEVICE. Not closed by the CLI — the PO closes. ⭐ **The §5 treasury red is RESOLVED 2026-08-24** (`3d17fc9e2`): the threshold was re-read from chain as **2-of-3** and the nine stale 1-of-1 copies in the repo were corrected — §5's body carries the proof. *(This line said "ONE TREASURY ITEM IS OPEN" until the 2026-08-24 board reconcile.)* The ship-chain `TREASURY_VERIFY_OK` call added in `45bd2df8e` is a **PROPOSAL awaiting an owner call**, deliberately not wired.
+**Status:** CLOSED 2026-08-27 - MOOT. Mainnet sales and SKR are LIVE (owner statement). The go-live decision this ticket existed to make has been overtaken by reality. The 1-of-1 treasury threshold is carried forward as an OWNER risk item, not a code blocker.
 
 **Owner ruling (explicit, 2026-08-23):** *"we test everything and make live"*, *"by owner explicitly"*.
 Scope ruled by the owner in the same exchange: **the full authored ladder, $1.99–$49.99.**
@@ -202,3 +202,22 @@ WARNING: this is the same failure class CLAUDE.md records over and over - the st
 the retired dependency table, the hardcoded repo root, the portrait path in eleven literals. Every
 copy is correct the day it is written and rots independently. **Point at the source; never copy the
 answer.**
+
+---
+
+## OWNER STATEMENT 2026-08-27 - THIS IS ANSWERED BY REALITY, NOT BY A DECISION
+
+Owner, verbatim: *"the SKR mainnet tests are live as well as monetization so this is moot."*
+
+**Mainnet sales are LIVE. SKR is LIVE.** The go-live question this ticket was built around no longer
+exists - it happened.
+
+⚠ **What this does NOT settle, and a seat must not assume it did:** section 5 recorded the ONLY red
+as the treasury being **1-of-1 multisig** - one key with total control of real customer money.
+Raising that threshold re-authors NO address and NO code, so it was never an engineering blocker;
+it is an owner action on the treasury. If it is still 1-of-1 while money flows, that is the live
+risk. ASK - do not infer from "sales are live" that the key was addressed.
+
+⛔ Also retired by this: every argument anywhere in the repo that leans on "no purchase has ever
+completed" as a safety justification for a migration, a reset, or an economy edit. Money is real
+from here. A balance change is no longer a clean purge.

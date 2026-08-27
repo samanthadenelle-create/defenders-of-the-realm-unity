@@ -137,7 +137,13 @@
 > fine as history. A copied number is the bug **even when it was right the day it was written** -
 > that is exactly how the retired 860-899 UI block kept re-seeding collisions from CLAUDE.md sec.2.
 
-> ## ⚠ RECONCILED 2026-08-26 (CLI): main line next free = **1243**.
+> ## ⚠ RECONCILED 2026-08-27 (CLI): main line next free = **1245**.
+> 1244 the Command Center CONSOLE - builds the surface WO-1169 specced (owner 2026-08-27).
+>
+> ### superseded: RECONCILED 2026-08-27 (CLI): main line next free = **1244**.
+> 1243 operator kill switches + maintenance banner (owner ruling 2026-08-27).
+>
+> ### superseded: RECONCILED 2026-08-26 (CLI): main line next free = **1243**.
 > 1240 starter-armour contract + owned-only auto-equip | 1241 catalog must not offer illegal gear
 > | 1242 Seeker VFX performance gate.
 >

@@ -1,6 +1,6 @@
 # WORK ORDER 1073 — The Patronage ladder: cumulative lifetime support, visible status, zero combat stats
 
-**Status:** READY - ARCHITECTURE SLICE LANDED 2026-08-25 (`cb57b1a41`), **TICKET STILL OPEN**. Architecture approved by the owner 2026-08-24; thresholds **TENTATIVE** at $50 / $150 / $500, and no tier above $500 may be designed until real $500 patrons exist. **What landed is a NAMED SLICE ONLY:** `api/_lib/patronage.js` (server-side lifetime-USD aggregate + data-driven three-tier table, thresholds as INTEGER CENTS 5000 / 15000 / 50000) and its oracle `test/patronage.test.js`, which pins the $500 ceiling, monotonic resolution at every exact boundary, and that the module exports status only and cannot flip an entitlement. The cosmetics-only invariant is structurally true, not merely asserted: the module contains zero references to crystals, coins, currency, resources or timers (verified by grep at HEAD). Evidence: 56/56 backend tests pass with `DATABASE_URL` explicitly unset. **STILL OUTSTANDING - do not read this ticket as takeable-in-full or as closed:** the entitlement FLIP and its migration, the endpoints, every client surface, and cosmetic rendering (the ticket's own rule - a tier whose cosmetic cannot render is not authored yet).
+**Status:** READY TO IMPLEMENT - the Benefactors of the Realm wall is RULED (owner 2026-08-27): global, cross-kingdom, $500 Founders only, player-chosen patron name, plus a custom monument. Architecture landed cb57b1a41; thresholds CONFIRMED at $50 / $150 / $500.
 **Minted:** 2026-08-24 (UI seat), banner header bumped with the 1069–1074 block.
 **Provenance:** the external review the owner ADOPTED 2026-08-24 (*"Create a Patronage system based
 on cumulative support, with zero combat stats … Whales generally don't need 900,000 stone. They want
@@ -109,3 +109,59 @@ patrons accumulate.
 - The unlock list above is the owner's sign-off for **v1**; §5's last acceptance box is satisfied for
   these three tiers and these three tiers only.
 - §3.2 still governs: a tier whose cosmetic cannot render yet is **not authored yet**.
+
+---
+
+## OWNER RULING 2026-08-27 - THE BENEFACTORS OF THE REALM WALL
+
+Owner, verbatim: *"we add a benefactors of the Realm wall and they get added to that, and every
+kingdom can see it. and a custom monumnet."*
+
+### Why this resolves the ticket's own weak point
+Section 4 surfaced the ladder on a profile screen and the player's own kingdom view. A status reward
+seen only by its owner is not status. WO-1175 stated the same law from the other side: *"a title is
+a SOCIAL reward: it is worth exactly as many people as [can see it]."* A GLOBAL wall gives it an
+audience, which is what makes the top rung worth reaching.
+
+### The wall
+- **A single, GLOBAL Benefactors of the Realm wall, visible from EVERY kingdom.** Not per-player,
+  not per-realm.
+- ⚠ **This makes it SERVER-BACKED, not a client cosmetic.** Cross-kingdom visibility cannot be
+  satisfied by local state - it needs a benefactors table and a read endpoint in `api/` (which is in
+  THIS repo). Do not attempt a local-only version; a wall only this player can see is the defect the
+  ruling exists to fix.
+
+### RULED: who is on it
+**$500 Founders ONLY.**
+
+| Tier | Threshold | Unlocks |
+|---|---|---|
+| Patron | $50 | crest, profile border, banner component |
+| High Patron | $150 | kingdom decoration, animated heraldry, premium Heart aura |
+| **Founder / Benefactor** | **$500** | **THE WALL** + a **CUSTOM MONUMENT** + inscription |
+
+⛔ Do NOT list $50 or $150 on the wall. Scarcity is what makes a public list read as an honour
+rather than a subscriber roster. Those tiers keep personal cosmetics; the wall is the top rung's
+whole point.
+
+### RULED: the name shown is a PLAYER-CHOSEN PATRON NAME
+Stored beside the entitlement, separate from any account identity.
+- ⛔ **NEVER the wallet address, NEVER an email, NEVER a real name.** The player is on a public list
+  as a consequence of PAYING; they choose how they appear.
+- Requires: a name field, a length cap, and a profanity/impersonation filter. It is **public and
+  permanent** - refunds cannot claw back (section 3.4: an SPL transfer cannot reverse, so lifetime
+  totals only ever grow), so a bad name is permanent too unless an edit path exists. Decide that
+  explicitly rather than by omission.
+
+### Still binding, unchanged
+- Cosmetic/status ONLY - no resources, no crystals, no tempo, no slots. Pinned by oracle (section 3.1).
+- Granted, never purchased - the server flips the entitlement and the client celebrates.
+- Not tradable in v1; keyed to `BoundWallet` so the attestation door stays open.
+- ⛔ NO tier above $500 until real $500 patrons exist in `purchase_entitlements`. Evidence gate.
+- The $500 monument and WO-1070 section 4.2 "named on the Heart" are THE SAME SURFACE - one
+  implementation, two tickets consume it.
+- ⚠ Section 3.2 still binds: **a threshold whose cosmetic cannot render is not authored yet.** The
+  wall and the monument must actually render before $500 is switched on.
+
+⭐ **Money is real now** (mainnet sales and SKR are live as of 2026-08-27), so `purchase_entitlements`
+will start carrying real lifetime totals. The evidence gate above is no longer hypothetical.

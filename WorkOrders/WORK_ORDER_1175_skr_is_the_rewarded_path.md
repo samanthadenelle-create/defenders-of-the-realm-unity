@@ -110,3 +110,17 @@ the two should be sequenced together rather than discovering it twice.
 - [ ] Redemption visible in ops (`promo_redemptions` already records it)
 - [ ] The granted cosmetic is VISIBLE on screen — proven by a screenshot, never a state flag
       (WO-992: equipping once changed a flag and nothing the player could see)
+
+---
+
+## OWNER STATEMENT 2026-08-27 - THE FUNNEL ARGUMENT IS OVERTAKEN
+
+Owner: *"the SKR mainnet tests are live as well as monetization so this is moot."*
+
+Section 0's ordering ruling (*"first we need players then a desire to buy, then a purchase"*) and
+section 1's *"the rail now has ONE user"* were both written when SKR was not live. **SKR mainnet is
+live now**, so Phase 1's deferral no longer rests on anything.
+
+⚠ Still true and NOT overtaken: the covenant still forbids the rewarded path granting **crystals,
+coins, or a pack** - a title is a SOCIAL reward. And WO-1165's hole stands: 9 of 13 non-incidental
+SKUs are hidden. A rewarded path pointing at a hidden SKU rewards nobody.
