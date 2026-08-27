@@ -46,6 +46,28 @@
           "evidence": "dd73e4569 block-commented the retired method; StripComments erased it wholesale,\nso the lint matched code that no longer existed.\nThe guarantee moved verbatim to BackendRequestSigner.TryAttachAsync and got STRICTER.\nRe-point verified by 8 mutations, ALL RED - including the block-comment shape."
         }
       ]
+    },
+    {
+      "title": "Cycle 4 - operator kill switches, patronage server half, gate repairs",
+      "meta": "2026-08-27. COMPILE_GATE_OK + REGRESSION_OK 308/308 suites + UI_CAPTURE_OK, all on fresh logs. Commits fa670277d, 65da3f7dc, f018cfa3f, 3fd130ec8.",
+      "items": [
+        {
+          "wo": "WO-1243",
+          "title": "Operator kill switches - the seal as the player reads it",
+          "kind": "headless",
+          "image": "img/wo1243-maintenance-banner.png",
+          "why": "A server-shaped payload goes in through MaintenanceCatalog.ApplyPayload - the same seam the live /api/maintenance response uses - and the text shot is whatever MaintenanceBannerDriver decides to say about it. Nothing here is hand-typed.",
+          "evidence": "UI_CAPTURE_OK on Builds/w10-cap3. Line under the shot: 'MAINTENANCE ON RAIDS - Raids are closed while we fix the reward payout. Back shortly.'"
+        },
+        {
+          "wo": "WO-1245",
+          "title": "The same screenshot found two defects the green gates could not",
+          "kind": "headless",
+          "image": "img/wo1243-maintenance-banner.png",
+          "why": "Read the image, not the marker: the operator message truncates to '...whil...', so the player learns an area is shut and never learns why. It also exposed that the regression asserts MaintenanceCatalog.BannerText(), which has NO runtime caller - the player sees a different producer entirely.",
+          "evidence": "Ticket minted as WO-1245 with both defects and a grep proving BannerText() is production-dead."
+        }
+      ]
     }
   ]
 }

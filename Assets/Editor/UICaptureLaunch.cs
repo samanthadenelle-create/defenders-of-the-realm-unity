@@ -582,6 +582,7 @@ namespace DeNelle.Editor
                 count += CaptureRaidSelection();     // the grid that was hard-refusing to open
                 count += CaptureRaidDeploy();        // the pre-raid deploy screen (never shot before)
                 count += CaptureRaidsFaceStates();   // WO-1008: the bar face live / 0-of-cap / partial
+                count += CaptureMaintenanceBanner(); // WO-1243: the operator seal, as the player reads it
 
                 Debug.Log("[UICap-HL] done -> " + Path.GetFullPath(OutDir));
             }
@@ -1180,6 +1181,156 @@ namespace DeNelle.Editor
         //  does NOT reference, so every touch is via reflection (type-load + private
         //  field/method access) -- no compile-time dependency, no asmdef change.
         // ---------------------------------------------------------------------
+        // ---------------------------------------------------------------------
+        //  Panel: WO-1243 the operator maintenance banner, as a player actually
+        //  reads it.
+        //
+        //  WHY THIS SHOT IS BUILT THE WAY IT IS: the tempting version hands
+        //  ObjectiveBannerUi a hand-typed "MAINTENANCE ON RAIDS" string and
+        //  photographs that. It would look identical and prove NOTHING -- it
+        //  would only prove that a banner can render a literal I just typed.
+        //
+        //  So this drives the REAL path end to end: a server-shaped payload goes
+        //  in through MaintenanceCatalog.ApplyPayload -- the same seam the live
+        //  /api/maintenance response goes through -- and the text on screen is
+        //  whatever MaintenanceCatalog.BannerText() decides to say about it. If
+        //  the catalog stops sealing, mis-names an area, or returns empty, the
+        //  shot changes or the capture fails. That is the difference between
+        //  evidence and decoration.
+        //
+        //  Two areas are sealed on purpose (raiding + store) because the roll is
+        //  a MULTI-line surface and a single-seal shot would hide a bug in the
+        //  joining. `server` is deliberately NOT sealed here: it outranks the
+        //  others and collapses the roll to one line, which is a different shot.
+        //
+        //  The catalog is a static singleton, so it is RESTORED in finally --
+        //  leaking a sealed state into later captures would seal panels shot
+        //  after this one and read as a mysterious unrelated failure.
+        // ---------------------------------------------------------------------
+        private static int CaptureMaintenanceBanner()
+        {
+            return ForEachTarget("MaintenanceBanner", CaptureMaintenanceBannerOnce);
+        }
+
+        private static int CaptureMaintenanceBannerOnce(CaptureTarget target)
+        {
+            int saved = 0;
+            GameObject canvasGo = null;
+            GameObject tempEventSystem = null;
+
+            try
+            {
+                if (UnityEngine.Object.FindAnyObjectByType<UnityEngine.EventSystems.EventSystem>() == null)
+                {
+                    tempEventSystem = new GameObject("~UICapEventSystem");
+                    tempEventSystem.AddComponent<UnityEngine.EventSystems.EventSystem>();
+                }
+
+                // A payload shaped exactly like the live GET /api/maintenance body.
+                const string payload =
+                    "{\"ok\":true,\"version\":1,\"readOk\":true,\"areas\":{" +
+                    "\"farming\":{\"closed\":false}," +
+                    "\"raiding\":{\"closed\":true,\"closedBy\":\"owner\"," +
+                        "\"message\":\"Raids are closed while we fix the reward payout. Back shortly.\"}," +
+                    "\"arena\":{\"closed\":false}," +
+                    "\"dungeons\":{\"closed\":false}," +
+                    "\"store\":{\"closed\":true,\"closedBy\":\"owner\"," +
+                        "\"message\":\"The store is closed. No purchase can be charged while it is.\"}," +
+                    "\"server\":{\"closed\":false}}}";
+
+                if (!DeNelle.Core.Ops.MaintenanceCatalog.ApplyPayload(payload, "ui-capture"))
+                {
+                    Debug.LogError("[UICap-HL] MaintenanceCatalog REFUSED a well-formed payload -- " +
+                                   "banner capture cannot proceed. This is a real defect, not a skip.");
+                    return 0;
+                }
+
+                // Take the line from MaintenanceBannerDriver, NOT from
+                // MaintenanceCatalog.BannerText(). They are two different producers
+                // with two different formats, and BannerText() has NO runtime caller
+                // -- the driver formats its own line privately. Shooting BannerText()
+                // would photograph a string no player ever sees. (That split is
+                // WO-1245; until it is collapsed, the driver is the truth.)
+                var driverGo = new GameObject("~UICapMaintDriver");
+                string text;
+                try
+                {
+                    var driver = driverGo.AddComponent<DeNelle.Core.Ops.MaintenanceBannerDriver>();
+                    InvokePrivate(driver, "RebuildLines");
+                    var lines = GetPrivateFieldValue(driver, "_lines") as System.Collections.Generic.List<string>;
+                    text = (lines != null && lines.Count > 0) ? lines[0] : null;
+                }
+                finally
+                {
+                    UnityEngine.Object.DestroyImmediate(driverGo);
+                }
+
+                // Assert the producer actually produced. A blank or unsealed string
+                // would still photograph fine as an empty plate, and an empty plate
+                // that nobody checks is exactly how a broken gate ships green.
+                if (string.IsNullOrWhiteSpace(text) || text.IndexOf("MAINTENANCE ON", StringComparison.Ordinal) < 0)
+                {
+                    Debug.LogError("[UICap-HL] the driver produced no maintenance line after two areas " +
+                                   "were sealed -- got: '" + (text ?? "<null>") + "'. Refusing to shoot a " +
+                                   "blank plate and call it proof.");
+                    return 0;
+                }
+
+                // ObjectiveBannerUi.Show() cannot be called here: its Ensure() calls
+                // DontDestroyOnLoad, which THROWS in edit mode. Same constraint the
+                // pause-menu capture works around. So build the same object Ensure
+                // builds, minus that one call, and drive the same private members
+                // Show drives -- the widget under the shot is still the real one.
+                canvasGo = new GameObject("ObjectiveBanner");
+                var banner = canvasGo.AddComponent<DeNelle.Core.UI.ObjectiveBannerUi>();
+                InvokePrivate(banner, "Build");
+
+                SetPrivateField(banner, "_visible", true);
+                SetPrivateField(banner, "_baseText", text);
+                SetPrivateField(banner, "_count", 0);
+                SetPrivateField(banner, "_done", 0);
+                InvokePrivate(banner, "RefreshLabel");
+
+                // Build() sets the CanvasGroup to alpha 0 and Update() eases it in.
+                // Update never ticks in edit mode, so without this the shot is a
+                // FULLY TRANSPARENT banner -- a blank plate that still writes a png
+                // and still counts. Force the alpha the fade would have reached, and
+                // assert it, because "the capture ran" is not "the capture showed
+                // something".
+                var group = canvasGo.GetComponent<CanvasGroup>();
+                if (group == null)
+                {
+                    Debug.LogError("[UICap-HL] ObjectiveBanner has no CanvasGroup after Build -- " +
+                                   "the banner did not construct; refusing to shoot.");
+                    return 0;
+                }
+                group.alpha = 1f;
+
+                canvasGo.SetActive(true);
+
+                if (RenderCanvasToPng(canvasGo, OutDir + "MaintenanceBanner_" + target.Tag + ".png",
+                    target.W, target.H)) saved++;
+
+                Debug.Log("[UICap-HL] maintenance banner line under shot: " + text);
+            }
+            catch (Exception e)
+            {
+                Debug.LogError("[UICap-HL] maintenance banner capture threw: " + e);
+            }
+            finally
+            {
+                // Restore FIRST -- a leaked seal would close areas for every panel
+                // shot after this one.
+                try { DeNelle.Core.Ops.MaintenanceCatalog.Clear(); }
+                catch (Exception ce) { Debug.LogError("[UICap-HL] could not clear MaintenanceCatalog: " + ce); }
+
+                if (canvasGo != null) UnityEngine.Object.DestroyImmediate(canvasGo);
+                if (tempEventSystem != null) UnityEngine.Object.DestroyImmediate(tempEventSystem);
+            }
+
+            return saved;
+        }
+
         private static int CapturePauseMenu()
         {
             return ForEachTarget("PauseMenu", CapturePauseMenuOnce);

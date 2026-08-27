@@ -137,7 +137,11 @@
 > fine as history. A copied number is the bug **even when it was right the day it was written** -
 > that is exactly how the retired 860-899 UI block kept re-seeding collisions from CLAUDE.md sec.2.
 
-> ## ⚠ RECONCILED 2026-08-27 (CLI): main line next free = **1245**.
+> ## ⚠ RECONCILED 2026-08-27 (CLI): main line next free = **1246**.
+> 1245 the maintenance banner has TWO producers and truncates the operator's message
+> (found by the WO-1243 proof screenshot, 2026-08-27).
+>
+> ### superseded: RECONCILED 2026-08-27 (CLI): main line next free = **1245**.
 > 1244 the Command Center CONSOLE - builds the surface WO-1169 specced (owner 2026-08-27).
 >
 > ### superseded: RECONCILED 2026-08-27 (CLI): main line next free = **1244**.

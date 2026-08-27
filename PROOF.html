@@ -21,7 +21,15 @@ border-radius:4px;padding:1px 6px;margin-left:6px;color:#aab}
 .warn{border:1px solid #a04b4b;background:#2a1c1c;border-radius:8px;padding:12px;margin:0 0 18px}
 </style></head><body>
 <h1>Proof</h1>
-<p class='sub'>5 item(s) across 2 run(s). Generated 2026-08-27 07:47. Click any image to open it full size.</p>
+<p class='sub'>7 item(s) across 3 run(s). Generated 2026-08-27 08:02. Click any image to open it full size.</p>
+<div class='warn'><b>2 item(s) claim proof but the image is not on disk.</b> They are marked MISSING below and must not be read as done.</div>
+<div class='run'>
+<h2>Cycle 4 - operator kill switches, patronage server half, gate repairs</h2>
+<p class='meta'>2026-08-27. COMPILE_GATE_OK + REGRESSION_OK 308/308 suites + UI_CAPTURE_OK, all on fresh logs. Commits fa670277d, 65da3f7dc, f018cfa3f, 3fd130ec8.</p>
+<div class='grid'>
+<div class='card missing'><div class='oracle'>PROOF MISSING - no image at img/wo1243-maintenance-banner.png</div><div class='cap'><span class='wo'>WO-1243</span><span class='kind' title='Captured by RunCaptureHeadless. Real UI, no device.'>HEADLESS</span><div>Operator kill switches - the seal as the player reads it</div><div class='why'>A server-shaped payload goes in through MaintenanceCatalog.ApplyPayload - the same seam the live /api/maintenance response uses - and the text shot is whatever MaintenanceBannerDriver decides to say about it. Nothing here is hand-typed.</div></div></div>
+<div class='card missing'><div class='oracle'>PROOF MISSING - no image at img/wo1243-maintenance-banner.png</div><div class='cap'><span class='wo'>WO-1245</span><span class='kind' title='Captured by RunCaptureHeadless. Real UI, no device.'>HEADLESS</span><div>The same screenshot found two defects the green gates could not</div><div class='why'>Read the image, not the marker: the operator message truncates to &#x27;...whil...&#x27;, so the player learns an area is shut and never learns why. It also exposed that the regression asserts MaintenanceCatalog.BannerText(), which has NO runtime caller - the player sees a different producer entirely.</div></div></div>
+</div></div>
 <div class='run'>
 <h2>Cycle 1-3 - READY 28 -&gt; 5</h2>
 <p class='meta'>COMPILE_GATE_OK + REGRESSION_OK 307/307 (Builds/w7-c, w7-r) - commits 3dfce4dbd, 090be8066, 9a66c22af</p>

@@ -5,6 +5,14 @@
 > **REMAINING: owner felt-verify by flipping a toggle** (the PO closes, section 13).
 >
 > **KNOWN LIMIT, stated rather than hidden:** only THREE of the six switches have server-side teeth - `store`, `arena` and `server`. `farming` / `raiding` / `dungeons` have no server seam of their own: they are client-simulated and reach the backend only inside the opaque save blob. For those three the seal is a CLIENT COURTESY GATE (defeatable by a modified client) and `server` is the real lever. This is a property of where those systems live, not a gap in this ticket - closing it means giving those pillars a server seam first.
+>
+> **FOLLOW-UP RAISED AGAINST THIS WORK: WO-1245.** The proof screenshot of the banner
+> (`proof/img/wo1243-maintenance-banner.png`) showed two things every green marker here missed - the
+> operator's message TRUNCATES to about 40 characters, and this ticket's own banner assertions test
+> `MaintenanceCatalog.BannerText()`, which has NO runtime caller. The seal, the refusal and the
+> fail-open ruling are all genuinely proven; the BANNER TEXT coverage specifically is aimed at a
+> producer the player never reads. Do not close 1245 as a duplicate of this - it is the part this
+> ticket got wrong.
 **Silo:** Backend (`api/`) + HUD banner + command centre tooling
 **Severity:** P1 for operations. The game is LIVE and takes real money; today there is no way to
 close a broken area without shipping a build.
