@@ -1,6 +1,6 @@
 # WORK ORDER 1248 - Hero select shows "Pr..." where it means "Previous", and the carousel needs a real rotate control
 
-**Status:** FIXED 2026-08-27 — implemented; awaiting owner felt-verify to CLOSE.
+**Status:** CLOSED 2026-08-27 — owner Pass (felt-validated).
 **Silo:** UI / HUD
 **Severity:** P2. Reachable on the hero select screen, which every player passes through.
 **Origin:** Owner, on device, 2026-08-27: *"the hero select screen has pr... instead of previous need

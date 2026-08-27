@@ -1,6 +1,6 @@
 # WORK ORDER 1189 - Accept overlaps the Rumor Board status line by 7.4px
 
-**Status:** FIXED - landed 2026-08-25 at `acff13c5b` (`Assets/_Modules/Village/Hero/RumorBoardPanel.cs`). Verified at source this session: the portrait status band is re-parented to the list column's own floor reading the same listMin/listMax the viewport uses, and portrait takes the 52px `ListBottomInsetPx` reservation. Proven `UI_TOUCH_OK 89/89`. NOTE: the panel as a whole went back to design as WO-1192; this ticket's own overlap scope is closed. Owner felt-close owed.
+**Status:** CLOSED 2026-08-27 — owner Pass (felt-validated).
 **Minted:** 2026-08-25 (CLI lead, main line; banner bumped 1189 -> 1190 in the same edit)
 **Silo:** UI / panels
 **Parent:** WO-1076 (different control pair - see below)

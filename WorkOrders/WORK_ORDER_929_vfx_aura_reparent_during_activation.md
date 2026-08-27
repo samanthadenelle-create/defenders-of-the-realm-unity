@@ -1,6 +1,6 @@
 # WO-929 — VFX aura reparented during activate/deactivate (real Unity error, 3x in one session)
 
-**Status:** FIXED 2026-08-10 (`23afdcbbe`) — awaiting owner felt-verify. *(Status audit 2026-08-24: BUCKET CORRECTION — the prior line predated the commit and still advertised gates/commit as owed; verified at source in `git log`, `23afdcbbe` (2026-08-10) landed this work. Body unchanged. Prior line: FIXED — implemented 2026-08-10 (CLI direct, same wave); pending gate + absence-proof + owner felt-verify)*
+**Status:** CLOSED 2026-08-27 — owner Pass (felt-validated).
 The §2c cited seam is fixed at `VFXManager.ReturnToPool`: a return arriving inside a host
 (de)activation window silences particles immediately and DEFERS the reparent+enqueue to the next
 Update sweep (`_pendingReturns`, duplicate-guarded; a host destroyed mid-defer drops its entry and

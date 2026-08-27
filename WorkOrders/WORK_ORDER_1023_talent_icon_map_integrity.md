@@ -1,6 +1,6 @@
 # WORK ORDER 1023 — Talent icon map: 2 duplicate icons, no coverage guard, 4 unused icon pools
 
-**Status:** FIXED 2026-08-15 (`f8b9ad32e`) — awaiting owner felt-verify. *(Status audit 2026-08-24: BUCKET CORRECTION — the prior line predated the commit and still advertised gates/commit as owed; verified at source in `git log`, `f8b9ad32e` (2026-08-15) landed this work. Body unchanged. Prior line: IMPLEMENTED — PENDING GATE)*
+**Status:** CLOSED 2026-08-27 — owner Pass (felt-validated).
 **Minted:** 2026-08-15 (UI seat) — provenance stack bumped 1023 → 1024 in the same edit
 **Lane:** Data + editor regression. File-disjoint from WO-1021 (presentation `.cs`) — run in parallel.
 **Provenance:** owner ask 2026-08-15 — *"check and confirm which is the strongest match for all trees"*

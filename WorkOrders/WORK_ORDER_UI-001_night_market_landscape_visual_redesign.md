@@ -1,7 +1,7 @@
 # WORK ORDER UI-001 — Night Market landscape visual redesign
 
 **Series:** UI (intentionally separate from numbered BOARD work)
-**Status:** FIXED 2026-08-27 — implemented; awaiting owner felt-verify to CLOSE.
+**Status:** CLOSED 2026-08-27 — owner Pass (felt-validated).
 **Owner lane:** UI / Store presentation
 **Date:** 2026-08-22
 **Tracking:** Not tracked on `BOARD.html`. Do not edit or rebuild the board for this document.

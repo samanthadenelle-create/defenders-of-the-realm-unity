@@ -1,4 +1,4 @@
-**Status:** FIXED — AWAITING OWNER FELT-TEST TO CLOSE. Prior status: DONE 2026-08-22 (CLI) - fixed BEFORE this triage was written. The RCA named FOUR call sites; the sweep found and fixed EIGHT. Zero AudioAssetLoader call sites now lack `optional:`. Gate-green, committed, pushed.
+**Status:** CLOSED 2026-08-27 — owner Pass (felt-validated).
 
 # WORK ORDER 1054 — An OPTIONAL sfx override miss raises a FALSE error and trips F8
 

@@ -1,6 +1,6 @@
 # WORK ORDER 969 — Opening Pause over the victory summary destroys the pending home return  — **OWNER CLOSED 2026-08-22** (felt-verified by the owner; PO closes, section 13).
 
-**Status:** FIXED — shipped `9e07db86` ("fix(arena): WO-969"); owner felt-verify owed (PO closes, §13). RESULT file still owed (not fabricated). *(Status corrected 2026-08-14: the line still read READY after the commit landed.)*
+**Status:** CLOSED 2026-08-27 — owner Pass (felt-validated).
 
 *(Board note 2026-08-24: bucket corrected DONE/IMPLEMENTED → **FIXED**. Nothing about the work changed — §13 reserves DONE/closing for the PO, and this line's own text says the owner's felt-verify is still owed, so the row belongs in the felt-test queue, not the closed pile.)*
 

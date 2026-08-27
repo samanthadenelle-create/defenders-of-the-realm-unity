@@ -1,6 +1,6 @@
 # WORK ORDER 1123 — The orient canon's central deliverable was never built, and its canon flag is read by nothing
 
-**Status:** FIXED — AWAITING OWNER FELT-TEST TO CLOSE. Prior status: DONE — audit-verified as shipped (2026-08-21 backlog audit).
+**Status:** CLOSED 2026-08-27 — owner Pass (felt-validated).
 **Minted:** 2026-08-19 (CLI seat) — banner bumped 1123 → 1124 in the SAME edit
 **Lane:** Hero gear orientation. `Assets/_Modules/Core/Geometry/` + `Assets/_Modules/Village/Hero/`.
 No scenes, no bake, no catalog *values* changed.

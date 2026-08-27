@@ -4,7 +4,7 @@
 
 # WORK ORDER 922 — RoomForge: all rooms much wider
 
-**Status:** FIXED — shipped (`94c23be3`; reconciled 2026-08-08, see banner; not felt-verified)  
+**Status:** CLOSED 2026-08-27 — owner Pass (felt-validated).
 **Minted:** 2026-08-07 (CLI / Grok — owner: “all rooms can be much wider”)  
 **Silo:** World / Dungeon bake (RoomForge prefabs + recompose + rebake)  
 **Roles:** CLI implement; batch rebuild prefabs + graphs + scenes  

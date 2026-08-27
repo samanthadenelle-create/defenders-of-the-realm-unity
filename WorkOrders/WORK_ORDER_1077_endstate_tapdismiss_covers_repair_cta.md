@@ -1,6 +1,6 @@
 # WORK ORDER 1077 — EndStateView: the full-panel dismiss catcher sits on top of the Repair All CTA
 
-**Status:** FIXED - proven by the 2026-08-25 capture (zero findings on EndStateView); owner felt-close owed.
+**Status:** CLOSED 2026-08-27 — owner Pass (felt-validated).
 
 **Minted:** 2026-08-24, UI seat, from the `CLI_LANES_WO_NUMBERS.md` UI-seat block (1077; banner bumped 1075 → 1079 in the same edit).
 **Parent:** WO-1060 (`WORK_ORDER_1060_touch_clamp_and_overlap_oracle.md`) — the touch/overlap oracle that found this.

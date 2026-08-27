@@ -1,6 +1,6 @@
 # WO-1179 - Roaming troops that attack the town, escalating in size and smarts
 
-**Status:** FIXED - landed 2026-08-25 at `4f4055043`, gated `COMPILE_GATE_OK` + `REGRESSION_OK 277/277`. Owner felt-close owed.
+**Status:** CLOSED 2026-08-27 — owner Pass (felt-validated).
 >  PRIOR: **Status:** BLOCKED - two owner questions. The implementation spec is written and every seam is verified at source (see the SPEC section); the design rulings are settled. ⛔ **Q1: does "offline towns can be attacked" mean the SHIPPED banked-pressure model, or a real absentia resolver (WO-430-F, explicitly unbuilt AND explicitly forbidden until stakes are ruled)? Q2: four spawn SIDES, or four damageable GATES?** ⚠ Those two answers change this ticket by an ORDER OF MAGNITUDE - it is not handable until they land.
 >  PRIOR: **Status:** READY - all three open design questions RULED by the owner 2026-08-24 (existing wave system; offline towns CAN be attacked; losses are REPAIRABLE and bounded). ⛔ Build WO-513 first so pack behaviour is inherited, per this ticket's own note.
 

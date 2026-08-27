@@ -1,6 +1,6 @@
 # WORK ORDER 943 — The docs get a HOME: wiki-style linked navigation over the doc lake
 
-**Status:** FIXED — awaiting owner felt-verify (PO closes, §13). *(Status audit 2026-08-24: bucket correction — the line led DONE while naming verification, and in WO-977's case engineering, still owed; DONE is reserved for a PO close. Body unchanged.)* Prior line: DONE (delivered + lead-verified 2026-08-09 same night — see the RESULT; owner click-through pending)
+**Status:** CLOSED 2026-08-27 — owner Pass (felt-validated).
 *(Prior: READY TO IMPLEMENT — overnight lane, owner-directed 2026-08-09)*
 **Minted:** 2026-08-09 (CLI session, WO-1010 pass) — number from the `CLI_LANES_WO_NUMBERS.md` header, bumped 943 -> 944 in the SAME edit.
 **Lane:** Docs/tooling. No gameplay code. Pairs with the overnight aged-vs-new due-diligence sweep.

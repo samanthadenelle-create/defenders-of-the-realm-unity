@@ -1,6 +1,6 @@
 # PROD-010 — First-run content signal ("registering build / creating profile") + opt-in OFFLINE download
 
-**Status:** FIXED — AWAITING OWNER FELT-TEST TO CLOSE. Prior status: RE-IMPLEMENTED, GATED, COMMITTED and SHIPPED 2026-08-20 (`fa411367d`) — **AWAITING THE ONE
+**Status:** CLOSED 2026-08-27 — owner Pass (felt-validated).
 THING ONLY THE OWNER CAN DO: AN AIRPLANE-MODE RUN ON DEVICE.**
 
 > The "UNGATED, UNCOMMITTED" line that used to sit here was written by the authoring lane BEFORE the

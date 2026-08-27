@@ -1,6 +1,6 @@
 # WORK ORDER 1106 — The "can't afford" reason is unreadable behind the red footprint
 
-**Status:** FIXED 2026-08-23 (51de6bd31, Codex lane) — the refusal now has its OWN opaque plate, independent of the ghost pill: `_blockReasonPlate` + `_blockReasonText` in `BuildHudController.cs` (+57 lines in that commit). Prior status: "READY TO IMPLEMENT (⚠ serialize behind the WO-1033/D10 Done-button lane — same file)" — the work landed and the line never moved. ⚠ NOT PROVEN: no device screenshot and no felt-test; that commit's own body lists the afford plate under "Not run: device/felt verification". AWAITING OWNER FELT-TEST TO CLOSE.
+**Status:** CLOSED 2026-08-27 — owner Pass (felt-validated).
 **Minted:** 2026-08-16 (CLI seat) — banner bumped 1106 -> 1107 in the same edit
 **Lane:** Build-mode presentation (`BuildHudController`). ⚠ **Touches the SAME file as the Done
 restyle lane** — do not run both at once.

@@ -1,6 +1,6 @@
 # WORK ORDER 1234 - Hero card art: re-point the UI, and put the resource path in ONE constant
 
-**Status:** FIXED 2026-08-26 - `COMPILE_GATE_OK` + `REGRESSION_OK 292/292`; post-fix APK screenshot/greyscale verification queued
+**Status:** CLOSED 2026-08-27 — owner Pass (felt-validated).
 **Silo:** Onboarding / UI
 **Origin:** Owner supplied new hero art 2026-08-26 and ruled: ***"the point you said is correct and i
 am ok if you repoint and use a constrant string for reference"*** -> ***"to start moving to

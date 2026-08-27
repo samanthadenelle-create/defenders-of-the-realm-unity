@@ -1,6 +1,6 @@
 # WORK ORDER 1220 - A NEW GAME keeps the old hero's level, XP and talents
 
-**Status:** FIXED 2026-08-26 - `COMPILE_GATE_OK` + `REGRESSION_OK 292/292`; post-fix owner device verification queued
+**Status:** CLOSED 2026-08-27 — owner Pass (felt-validated).
 **Silo:** Save / state reset
 **Severity:** P0 — a "new game" is not new. Silent, persisted, cross-class power carryover on a LIVE
 build that takes real money.

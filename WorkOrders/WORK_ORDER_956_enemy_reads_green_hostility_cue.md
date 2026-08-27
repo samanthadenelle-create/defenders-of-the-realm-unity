@@ -1,6 +1,6 @@
 # WORK ORDER 956 — An enemy reads GREEN: hostility must never sit on the red/green axis
 
-**Status:** FIXED (implemented + gated 2026-08-10; RESULT filed; owner look-pass owed - see the named deuteranopia risk on the BODY tint)
+**Status:** CLOSED 2026-08-27 — owner Pass (felt-validated).
 
 *(Board note 2026-08-24: bucket corrected DONE/IMPLEMENTED → **FIXED**. Nothing about the work changed — §13 reserves DONE/closing for the PO, and this line's own text says the owner's felt-verify is still owed, so the row belongs in the felt-test queue, not the closed pile.)*
 **Minted:** 2026-08-10 (CLI seat, main line — banner bumped 956 → 957 in the same edit)

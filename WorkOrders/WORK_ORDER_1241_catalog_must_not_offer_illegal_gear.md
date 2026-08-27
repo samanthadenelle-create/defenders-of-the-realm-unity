@@ -1,6 +1,6 @@
 # WORK ORDER 1241 - The catalog must stop OFFERING gear the seam will refuse
 
-**Status:** FIXED 2026-08-26 - gated `COMPILE_GATE_OK` + `REGRESSION_OK 294/294 suites` (Builds/g3-c, Builds/g3-r). AWAITING OWNER FELT-VERIFY to close.
+**Status:** CLOSED 2026-08-27 — owner Pass (felt-validated).
 **Silo:** Catalog / data validation
 **Severity:** P2. Nothing breaks, but the player is shown gear they can never use.
 **Origin:** Owner ruling 2026-08-26, following the `blink_armor_dragonic` finding.
