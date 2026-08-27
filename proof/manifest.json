@@ -68,6 +68,27 @@
           "evidence": "Ticket minted as WO-1245 with both defects and a grep proving BannerText() is production-dead."
         }
       ]
+    },
+    {
+      "title": "Cycle 4b - the Command Center console",
+      "meta": "2026-08-27. Commit 58eb608e3. JS suite 136/136, SCHEMA_PARITY_OK 19 tables, second-key mutation independently re-verified RED.",
+      "items": [
+        {
+          "wo": "WO-1244",
+          "title": "The console gate, served from api/admin/console.js",
+          "kind": "editor",
+          "image": "img/wo1244-console-gate.png",
+          "why": "One self-contained ASCII page, no framework and no build step, with the key held in memory only - never localStorage, never a cookie, never the URL. The gate says in WORDS that writes need a SECOND key, because the owner is red/green colourblind and a hue cannot carry that.",
+          "evidence": "Rendered from the real handler on 127.0.0.1:8791 and shot with headless Edge. LIMIT, stated rather than glossed: headless Edge on Windows enforces a ~500px minimum window, so this is NOT a true 390px phone viewport. A first attempt at 390 LOOKED like a responsive bug - the card clipped - but the card's left edge was identical at 360 and 390, proving the layout viewport never changed. .gate{max-width:440px} is correct. The genuine phone-width check is the owner's, per acceptance 5."
+        },
+        {
+          "wo": "WO-1244",
+          "title": "The ops data view answers from the LIVE database",
+          "kind": "oracle",
+          "why": "The page is a shell carrying zero data, so rendering it proves nothing about the data half. That half was called in-process against the live Neon database with the read key.",
+          "evidence": "api/admin/stats.js?view=ops -> HTTP 200, keys: view, generated_at, window_days, source, toggles, promos, reports, ops_history, errors. No wallet, email or name is selected - a test asserts it."
+        }
+      ]
     }
   ]
 }

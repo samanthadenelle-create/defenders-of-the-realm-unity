@@ -21,8 +21,15 @@ border-radius:4px;padding:1px 6px;margin-left:6px;color:#aab}
 .warn{border:1px solid #a04b4b;background:#2a1c1c;border-radius:8px;padding:12px;margin:0 0 18px}
 </style></head><body>
 <h1>Proof</h1>
-<p class='sub'>7 item(s) across 3 run(s). Generated 2026-08-27 08:02. Click any image to open it full size.</p>
-<div class='warn'><b>2 item(s) claim proof but the image is not on disk.</b> They are marked MISSING below and must not be read as done.</div>
+<p class='sub'>9 item(s) across 4 run(s). Generated 2026-08-27 08:18. Click any image to open it full size.</p>
+<div class='warn'><b>3 item(s) claim proof but the image is not on disk.</b> They are marked MISSING below and must not be read as done.</div>
+<div class='run'>
+<h2>Cycle 4b - the Command Center console</h2>
+<p class='meta'>2026-08-27. Commit 58eb608e3. JS suite 136/136, SCHEMA_PARITY_OK 19 tables, second-key mutation independently re-verified RED.</p>
+<div class='grid'>
+<div class='card missing'><div class='oracle'>PROOF MISSING - no image at img/wo1244-console-gate.png</div><div class='cap'><span class='wo'>WO-1244</span><span class='kind' title='Captured in a headed editor session. NOT device proof.'>EDITOR</span><div>The console gate, served from api/admin/console.js</div><div class='why'>One self-contained ASCII page, no framework and no build step, with the key held in memory only - never localStorage, never a cookie, never the URL. The gate says in WORDS that writes need a SECOND key, because the owner is red/green colourblind and a hue cannot carry that.</div></div></div>
+<div class='card'><div class='oracle'>api/admin/stats.js?view=ops -&gt; HTTP 200, keys: view, generated_at, window_days, source, toggles, promos, reports, ops_history, errors. No wallet, email or name is selected - a test asserts it.</div><div class='cap'><span class='wo'>WO-1244</span><span class='kind' title='No visual exists. Gate evidence stands in its place.'>ORACLE</span><div>The ops data view answers from the LIVE database</div><div class='why'>The page is a shell carrying zero data, so rendering it proves nothing about the data half. That half was called in-process against the live Neon database with the read key.</div></div></div>
+</div></div>
 <div class='run'>
 <h2>Cycle 4 - operator kill switches, patronage server half, gate repairs</h2>
 <p class='meta'>2026-08-27. COMPILE_GATE_OK + REGRESSION_OK 308/308 suites + UI_CAPTURE_OK, all on fresh logs. Commits fa670277d, 65da3f7dc, f018cfa3f, 3fd130ec8.</p>
