@@ -56,6 +56,8 @@
 //   GET /api/admin/stats?view=funnel[&days=N]
 //   GET /api/admin/stats?view=economy[&days=N]
 //   GET /api/admin/stats?view=purchases[&days=N]
+//   GET /api/admin/stats?view=ops[&days=N]      (WO-1244 Command Center: toggles,
+//                                                 promos, player issues - ALL READ)
 //   GET /api/admin/stats?view=players[&limit=N][&player=<id>|&ref=<12hex>]
 //
 // ── ⛔ TWO PURCHASE VIEWS, AND THEY ARE NOT INTERCHANGEABLE ──────────────────
@@ -85,6 +87,10 @@
 
 const { neon } = require('@neondatabase/serverless');
 const crypto = require('crypto');
+
+// The six kill-switch area ids, imported rather than re-typed. A seventh area
+// invented here would render a toggle the enforcement layer has never heard of.
+const { AREAS: MAINTENANCE_AREAS } = require('../_lib/maintenance');
 
 // Constant-time key check. Hashing both sides first makes timingSafeEqual
 // usable on unequal lengths without leaking length information.
@@ -977,6 +983,201 @@ module.exports = async (req, res) => {
             }));
         }
 
+        // ================================================================= ops
+        // WO-1244 - the READ half of the Command Center console's operations
+        // pillars: the six kill-switch toggles (WO-1243), the promo catalog with
+        // its redemption counts, and the player-issue queue.
+        //
+        // ⛔ IT IS A READ. Every statement below is a SELECT with a hard LIMIT,
+        // like every other statement in this file. Flipping a toggle and
+        // authoring a promo are WRITES and they live at api/admin/ops.js, behind
+        // a SECOND key. WO-1169 and WO-1244 both put that boundary at the
+        // ENDPOINT, not in the UI, and adding one INSERT here would erase it.
+        //
+        // ⛔ NO WALLET LEAVES THIS BLOCK. promo_codes.bound_wallet is reported as
+        // the BOOLEAN `is_bound` and the column itself is never selected - the
+        // console must be able to say "this code is private" without ever putting
+        // an address on a screen that gets screenshotted. bug_reports carries a
+        // wallet too (WO-1169, server-verified); it is likewise reduced to
+        // `wallet_verified`, because a BURST of unverified reports is the triage
+        // signal, and WHOSE wallet it is never was.
+        if (view === 'ops') {
+            const errors = [];
+            const probe = async (label, run) => {
+                try {
+                    return await run();
+                } catch (err) {
+                    console.error('[admin/stats] ops probe failed:', label, err);
+                    errors.push({ probe: label, error: String((err && err.message) || err) });
+                    return null;
+                }
+            };
+
+            // ---- the six kill switches --------------------------------------
+            // updated_by / updated_at are the whole point: WO-1244 pillar 5 asks
+            // for "current state, and WHEN each was last flipped". The public
+            // /api/maintenance endpoint deliberately does not carry them.
+            const toggles = await probe('maintenance_toggles', () => sql`
+                SELECT area_id, closed, message, updated_by, updated_at
+                FROM maintenance_toggles
+                ORDER BY area_id
+                LIMIT 20`);
+
+            // ---- the promo catalog ------------------------------------------
+            const promos = await probe('promo_codes', () => sql`
+                SELECT code, reward_crystals, reward_coins, reward_pack_sku, message,
+                       active, max_redemptions, per_player_limit, expires_at, created_at,
+                       (bound_wallet IS NOT NULL) AS is_bound
+                FROM promo_codes
+                ORDER BY created_at DESC
+                LIMIT 100`);
+
+            const redemptions = await probe('promo_redemptions', () => sql`
+                SELECT code,
+                       COUNT(*)::bigint               AS redemptions,
+                       COUNT(DISTINCT player_id)::bigint AS players,
+                       MAX(redeemed_at)               AS latest
+                FROM promo_redemptions
+                GROUP BY 1
+                ORDER BY 2 DESC
+                LIMIT 200`);
+
+            // ---- the player-issue queue -------------------------------------
+            // ⚠ DIFFERENT FROM BOARD.html AND DELIBERATELY NOT MERGED WITH IT.
+            // BOARD.html is DEV work, generated from WorkOrders/*.md - anything
+            // written there is overwritten on the next tools/board_build.py run
+            // (WO-1169 section 4). This is the PLAYER queue. Two boards, linked,
+            // never folded together.
+            const reports = await probe('bug_reports', () => sql`
+                SELECT report_id, created_at, description, route, app_version, player_id,
+                       (COALESCE(wallet, context->>'verifiedWallet') IS NOT NULL) AS wallet_verified,
+                       context->>'platform' AS platform,
+                       (context ? 'screenshotB64' AND context->>'screenshotB64' IS NOT NULL) AS has_screenshot
+                FROM bug_reports
+                ORDER BY report_id DESC
+                LIMIT 50`);
+
+            const reportsPerDay = await probe('bug_reports_per_day', () => sql`
+                SELECT date_trunc('day', created_at)::date::text AS day,
+                       COUNT(*)::bigint AS reports
+                FROM bug_reports
+                WHERE created_at > NOW() - (${days} * INTERVAL '1 day')
+                GROUP BY 1
+                ORDER BY 1 DESC
+                LIMIT 181`);
+
+            // ---- the ops write history --------------------------------------
+            // Every write api/admin/ops.js performs leaves one row here. Reading
+            // it back is how "who sealed raiding, and when" is answered after the
+            // fact from the console rather than from a psql prompt.
+            const opsHistory = await probe('admin_ops_write_history', () => sql`
+                SELECT received_at,
+                       properties->>'action'   AS action,
+                       properties->>'operator' AS operator,
+                       properties->>'target'   AS target,
+                       properties->>'outcome'  AS outcome
+                FROM analytics_events
+                WHERE event_name = 'admin_ops_write'
+                ORDER BY received_at DESC
+                LIMIT 50`);
+
+            const redemptionByCode = {};
+            for (const r of (redemptions || [])) {
+                redemptionByCode[r.code] = {
+                    redemptions: Number(r.redemptions || 0),
+                    players: Number(r.players || 0),
+                    latest: r.latest,
+                };
+            }
+
+            // A row missing from maintenance_toggles is NOT an error and NOT a
+            // seal: under the WO-1243 fail-open ruling an absent row means the
+            // area is OPEN. Reported as such, in words, rather than as a gap the
+            // console has to interpret.
+            const toggleById = {};
+            for (const r of (toggles || [])) toggleById[String(r.area_id)] = r;
+            const areaRows = MAINTENANCE_AREAS.map((id) => {
+                const r = toggleById[id];
+                const closed = !!(r && r.closed === true);
+                return {
+                    area: id,
+                    closed: closed,
+                    state: closed ? 'CLOSED' : 'open',
+                    message: (r && r.message) || null,
+                    updated_by: (r && r.updated_by) || null,
+                    updated_at: (r && r.updated_at) || null,
+                    row_present: !!r,
+                    note: r ? null : 'no row - fail-open means this area is OPEN',
+                };
+            });
+            const serverClosed = areaRows.some(a => a.area === 'server' && a.closed);
+
+            return res.status(200).json(Object.assign(meta, {
+                source: 'maintenance_toggles + promo_codes + promo_redemptions + bug_reports. '
+                    + 'READ ONLY. Writes live at POST /api/admin/ops behind a second key.',
+                toggles: {
+                    note: 'State is a WORD ("CLOSED" / "open"), never a colour. When `server` is '
+                        + 'CLOSED every area is closed whatever its own row says.',
+                    read_ok: toggles !== null,
+                    server_closed: serverClosed,
+                    sealed_count: areaRows.filter(a => a.closed).length,
+                    areas: areaRows,
+                },
+                promos: {
+                    note: 'bound_wallet is reported as is_bound only - the address itself is never '
+                        + 'selected, so no screenshot of this console can carry one.',
+                    rows: (promos || []).map(p => {
+                        const used = redemptionByCode[p.code] || { redemptions: 0, players: 0, latest: null };
+                        const expired = p.expires_at ? (new Date(p.expires_at).getTime() <= Date.now()) : false;
+                        const capped = p.max_redemptions != null && used.redemptions >= Number(p.max_redemptions);
+                        return {
+                            code: p.code,
+                            state: !p.active ? 'DISABLED' : expired ? 'EXPIRED' : capped ? 'FULLY REDEEMED' : 'ACTIVE',
+                            active: p.active === true,
+                            expired: expired,
+                            capped: capped,
+                            is_bound: p.is_bound === true,
+                            reward_pack_sku: p.reward_pack_sku,
+                            reward_crystals: Number(p.reward_crystals || 0),
+                            reward_coins: Number(p.reward_coins || 0),
+                            message: p.message,
+                            max_redemptions: p.max_redemptions == null ? null : Number(p.max_redemptions),
+                            per_player_limit: p.per_player_limit == null ? null : Number(p.per_player_limit),
+                            expires_at: p.expires_at,
+                            created_at: p.created_at,
+                            redemptions: used.redemptions,
+                            redeemed_by_players: used.players,
+                            last_redeemed_at: used.latest,
+                        };
+                    }),
+                },
+                reports: {
+                    note: 'The PLAYER issue queue. BOARD.html is the DEV board and is generated '
+                        + 'from WorkOrders/*.md - the two are linked, never merged.',
+                    per_day: reportsPerDay || [],
+                    rows: (reports || []).map(r => ({
+                        report_id: r.report_id == null ? null : Number(r.report_id),
+                        created_at: r.created_at,
+                        description: r.description,
+                        route: r.route,
+                        app_version: r.app_version,
+                        platform: r.platform,
+                        player_masked: maskId(r.player_id),
+                        identity: r.wallet_verified ? 'verified' : 'unverified',
+                        has_screenshot: r.has_screenshot === true,
+                    })),
+                },
+                ops_history: (opsHistory || []).map(r => ({
+                    at: r.received_at,
+                    action: r.action,
+                    operator: r.operator,
+                    target: r.target,
+                    outcome: r.outcome,
+                })),
+                errors: errors,
+            }));
+        }
+
         // ============================================================= players
         // Recent players. LIST = masked only. SINGLE = full id (see header).
         if (view === 'players') {
@@ -1095,7 +1296,7 @@ module.exports = async (req, res) => {
         }
 
         return res.status(400).json({
-            error: 'Unknown view. Use: overview | retention | funnel | economy | purchases | players',
+            error: 'Unknown view. Use: overview | retention | funnel | economy | purchases | ops | players',
         });
     } catch (err) {
         console.error('[admin/stats] error:', err);

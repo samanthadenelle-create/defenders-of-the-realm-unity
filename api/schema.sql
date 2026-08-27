@@ -395,6 +395,27 @@ CREATE TABLE IF NOT EXISTS promo_codes (
 -- column is nullable so every existing row stays a public code):
 --     ALTER TABLE promo_codes ADD COLUMN IF NOT EXISTS bound_wallet TEXT;
 
+-- created_by (added 2026-08-27, WO-1244 - the Command Center console) ----------
+-- The operator label that AUTHORED the code. NULL on every code written before
+-- the console existed, and on any code authored while this migration is unrun.
+--
+-- ⚠ ADDED BY ALTER, NOT IN THE CREATE TABLE BODY ABOVE, AND THAT IS DELIBERATE.
+-- tools/schema-parity.mjs parses only the CREATE TABLE bodies in this file, so a
+-- column declared there but not yet run reads as DRIFT and BLOCKS EVERY DEPLOY
+-- until a human runs the SQL. There is no migration runner in this repo. Putting
+-- it here keeps the gate honest about the money tables while an optional,
+-- attribution-only column catches up.
+--
+-- api/_lib/ops.js writes it through a TWO-SHAPE cascade: it names created_by,
+-- and on 42703 (undefined column) falls back to the shape without it and reports
+-- attribution_on_row:false in the response. The code is still authored; the
+-- durable history row in analytics_events (event_name = 'admin_ops_write')
+-- carries the operator either way. NEVER let a missing attribution column become
+-- a reason a promo could not be created during an incident.
+--
+-- MIGRATION (idempotent, nullable, safe on the live table):
+--     ALTER TABLE promo_codes ADD COLUMN IF NOT EXISTS created_by TEXT;
+
 
 -- =============================================================================
 -- 4. promo_redemptions  — one row each time a player redeems a code.

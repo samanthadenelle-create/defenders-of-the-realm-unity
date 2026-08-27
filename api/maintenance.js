@@ -23,6 +23,15 @@
 // machine) which tools/command-centre.ps1 drives. No write surface is minted
 // here - an endpoint that can seal the game is an endpoint worth attacking.
 //
+// UPDATE 2026-08-27 (WO-1244): a write surface now EXISTS, and it is deliberately
+// NOT here. api/admin/ops.js seals and opens these toggles from the owner's phone,
+// behind a SECOND secret (ADMIN_OPS_KEY, separate from ADMIN_DASH_KEY), POST-only,
+// no CORS, fail-closed when that key is unset. The sentence above still holds for
+// THIS file and must stay true of it - the point was never "no write may exist",
+// it was "the public read endpoint must not also be the write endpoint". Pointed
+// at from here so nobody reads this header, concludes no write path exists, and
+// mints a second one.
+//
 // ⭐ CACHE-CONTROL IS AN EXPOSURE WINDOW, NOT A PERFORMANCE KNOB.
 // Every second the edge serves a stale payload is a second an honest player is
 // still being shown an area the owner has already sealed. s-maxage is therefore

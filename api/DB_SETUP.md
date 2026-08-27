@@ -583,3 +583,87 @@ Not built. See `WorkOrders/WORK_ORDER_1116_admin_dashboard_and_grants.md`: POST-
 wallet-BOUND promo code** (`promo_codes.bound_wallet`, enforced at `api/promo/redeem.js:172`) rather
 than writing resources into a save row — a direct save write bypasses every ledger, cap and expiry
 the game has, and races the client's own delta-merge upsert.
+
+---
+
+## 18. 2026-08-27 - THE COMMAND CENTER CONSOLE (WO-1244), and the SECOND KEY
+
+`api/admin/console.js` serves one self-contained HTML page - no framework, no build step, no CDN.
+It is the surface WO-1169 specced and WO-1244 built, and it is a PHONE tool: the owner sees an
+exploit or a failed purchase on her phone, not at a desk.
+
+**Open it at** `https://defenders-of-the-realm-v2.vercel.app/api/admin/console` and type the admin
+key into the gate. No query string, no header - a browser navigation cannot send one, so the SHELL
+is public and carries no data at all; every byte of data arrives afterwards over `X-Admin-Key`.
+
+### ⛔ TWO KEYS, AND THE SECOND ONE IS THE POINT
+
+| Env var | Header | What it buys |
+|---|---|---|
+| `ADMIN_DASH_KEY` | `X-Admin-Key` | READS. `api/admin/db.js`, `api/admin/stats.js`. Already set. |
+| `ADMIN_OPS_KEY`  | `X-Admin-Ops-Key` | WRITES. `api/admin/ops.js` ONLY. **NEW - must be set on the `defenders-of-the-realm-v2` project or every write is refused.** |
+
+The read key gets typed into a phone in public and ends up in screenshots of the dashboard. That is
+an acceptable exposure for a read surface and NOT acceptable for one that can seal the whole game or
+mint free currency. A second secret means a leaked read key buys a reader exactly what it says on
+the tin: reading.
+
+⚠ **`api/admin/ops.js` FAILS CLOSED.** With `ADMIN_OPS_KEY` unset it answers
+`OPS_WRITE_NOT_CONFIGURED` and writes nothing. That is the deliberate OPPOSITE of
+`api/_lib/maintenance.js`, which fails OPEN: there an unreadable table must not cost a player their
+session; here "we could not check who you are" must never resolve to "go ahead and change the money
+tables". Availability there, correctness here. Do not unify them.
+
+### The read/write boundary is at the ENDPOINT, not in the UI
+
+```
+READ    GET  /api/admin/stats?view=purchases   money, SERVER-settled + the client disagreement
+        GET  /api/admin/stats?view=ops         toggles, promo catalog, player issues, write history
+WRITE   POST /api/admin/ops                    four actions, second key, attributable + timestamped
+```
+
+`db.js` and `stats.js` remain SELECT-only BY CONSTRUCTION and `test/command-center.test.js` lints
+them, with the lint itself proven able to see a real violation. The write endpoint knows exactly
+four actions - `maintenance.seal`, `maintenance.open`, `promo.create`, `promo.set_active` - and
+**names neither money table anywhere in its source.** There is no refund, no grant and no edit of
+`purchase_quotes` / `purchase_entitlements` from any admin surface.
+
+`POST /api/admin/ops` sets **no CORS header at all**, the same choice `api/admin/cleanup.js` makes:
+the console is served from this deployment, so it is same-origin. A write endpoint has no business
+being callable from a page we did not serve.
+
+### What it shows
+
+* **Toggles** - the six WO-1243 kill switches with state as a WORD (`CLOSED` / `open`), the banner
+  text, and WHO flipped it WHEN. Sealing requires a banner message; opening clears it.
+* **Money** - the client/server disagreement FIRST, as an ALERT with a count: a `purchase_completed`
+  event with no entitlement row for its `txSig` is a grant that may have been handed out with no
+  verified settlement behind it. Client-reported and server-settled are shown side by side and are
+  **never blended into one number** - the disagreement IS the signal (WO-1169 section 3).
+* **Player issues** - `bug_reports`, with identity as `verified` / `unverified` and never an address.
+  A burst of `unverified` means auth is broken, which is itself the triage signal.
+* **Promos** - the catalog with live redemption counts, plus an authoring form.
+* **Tickets** - a pointer, not a second board. `BOARD.html` is DEV work generated from
+  `WorkOrders/*.md`; player issues are the tab above. ⛔ Never fold one into the other: the board is
+  generated, so anything written there is overwritten on the next `tools/board_build.py` run.
+
+### Privacy, and it is absolute
+
+No wallet, no email, no real name is rendered or logged anywhere in this surface. `bound_wallet`
+is reduced to the boolean `is_bound` in SQL and the column is never selected; the bug-report wallet
+becomes `wallet_verified`; player ids arrive pre-masked. **Wallet-BOUND promo codes are deliberately
+NOT authorable from the console** - authoring one means typing an address into a page and reading it
+back out of a list. Use the SQL editor for those; the console can see THAT a code is private and
+never to whom.
+
+### One optional migration (idempotent, additive, safe on the live table)
+
+```sql
+ALTER TABLE promo_codes ADD COLUMN IF NOT EXISTS created_by TEXT;
+```
+
+Without it, promo authoring still works: the insert falls back one shape and says so in its
+response, and the durable history row in `analytics_events` (`event_name = 'admin_ops_write'`)
+carries the attribution regardless. With it, the operator label lands on the code's own row.
+⚠ This column is added by ALTER, not inside the `CREATE TABLE` body, so `tools/schema-parity.mjs`
+does not read it as declared-but-missing drift and no deploy is blocked while it is unrun.
