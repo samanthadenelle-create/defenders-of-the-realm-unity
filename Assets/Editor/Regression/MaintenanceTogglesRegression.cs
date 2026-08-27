@@ -318,6 +318,22 @@ namespace DeNelle.Editor.Regression
 
             notes.Add("absent-404: a 404 resolves all six OPEN (store included) and announces nothing, and a " +
                       "live payload still seals afterwards.");
+
+            // Device 2026-08-27 15:25: UniTask throws on 404, so the status check
+            // AFTER await never ran. The catch MUST call AcceptAbsent404 or the
+            // catalog path this case pins is unreachable from the live poll.
+            string svc = ReadSrc(ServiceSrc);
+            if (svc == null)
+            {
+                failures.Add("[absent-404] cannot read " + ServiceSrc);
+            }
+            else if (svc.IndexOf("AcceptAbsent404", StringComparison.Ordinal) < 0
+                     || svc.IndexOf("catch (Exception", StringComparison.Ordinal) < 0)
+            {
+                failures.Add("[absent-404] MaintenanceService no longer accepts a 404 inside the " +
+                             "UniTask throw catch. That is the path that sealed the live store: " +
+                             "fetch threw (404) then LogFetchFailure left the table null.");
+            }
         }
 
         private static void Case1_FailOpen(List<string> failures, List<string> notes)
