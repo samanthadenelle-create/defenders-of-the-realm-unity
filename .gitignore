@@ -19,6 +19,15 @@ logs/f8-inbox/*
 !/logs/seat-mail/
 logs/seat-mail/*
 !logs/seat-mail/README.md
+# WO-1175 Discord channel pins. MACHINE-LOCAL BY DEFINITION: the pin records
+# which webhook/channel THIS clone was set up against. Tracking one would make a
+# fresh clone with a different .env.local refuse its own channel, which is the
+# opposite of what the guard is for. It is a SHA-256 prefix, not a secret, and
+# it still must not travel.
+# and the directory is spelled BOTH ways on this case-insensitive filesystem
+# (Logs/ from Unity, logs/ from the tools), which is why line 9 already uses a
+# bracket class. A lowercase-only rule would miss the Unity spelling.
+[Ll]ogs/ops-channel/
 /[Uu]ser[Ss]ettings/
 
 # MemoryCaptures can get excessive in size.

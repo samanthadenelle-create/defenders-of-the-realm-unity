@@ -54,6 +54,9 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
+import { checkPin, refusalLine, writePin } from './lib/channel-pin.mjs';
+
+const PIN_NAME = 'status-webhook';
 
 const MAX = 1900; // Discord hard-caps at 2000; leave room for the code fence.
 
@@ -105,6 +108,17 @@ async function main() {
     return 0;
   }
 
+  // CHANNEL PIN - fail closed if the webhook has been repointed (WO-1175).
+  // The "do not repoint DISCORD_WEBHOOK_URL at a community channel" warning at
+  // the top of this file used to be a comment. It is a check now, because
+  // WO-1175 Phase 2 creates the community channel that makes the mistake
+  // possible, and this tool posts unattended from run-unity-method.ps1.
+  const pin = checkPin(PIN_NAME, url);
+  if (pin.state === 'mismatch') {
+    console.log(refusalLine('STATUS_POST_REFUSE', pin));
+    return 1;
+  }
+
   let content = '';
   if (args.title) content += `**${args.title}**\n`;
   if (args.body) content += args.fence ? '```\n' + args.body + '\n```' : args.body;
@@ -117,6 +131,12 @@ async function main() {
       body: JSON.stringify({ content }),
     });
     if (res.status === 204) {
+      // Pin only after the target is PROVEN to work, so a typo in .env.local
+      // cannot enshrine itself and then refuse the corrected value.
+      if (pin.state === 'unpinned') {
+        writePin(PIN_NAME, pin.fp);
+        console.log(`STATUS_POST_PINNED ${pin.fp} (${pin.path})`);
+      }
       console.log('STATUS_POST_OK 204');
       return 0;
     }

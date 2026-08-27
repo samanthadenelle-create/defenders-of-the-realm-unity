@@ -53,6 +53,9 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
+import { checkPin, refusalLine, writePin } from './lib/channel-pin.mjs';
+
+const PIN_NAME = 'inbox-channel';
 
 const INBOX_DIR = path.resolve('logs/discord-inbox');
 const QUEUE = path.join(INBOX_DIR, 'QUEUE.jsonl');
@@ -127,6 +130,27 @@ async function main() {
     // Silent no-op by design. See DESIGN NOTES.
     console.log('DISCORD_INBOX_SKIP no DISCORD_BOT_TOKEN / DISCORD_CHANNEL_ID (run --setup)');
     return 0;
+  }
+
+  // CHANNEL PIN - fail closed if DISCORD_CHANNEL_ID has been repointed
+  // (WO-1175). Two reasons, and the second one is a real bug, not a policy:
+  //   1. A community channel is written by anyone. Everything here is untrusted
+  //      input already, but a private channel bounds WHO can write it.
+  //   2. state.lastMessageId is a watermark FOR THE CHANNEL IT CAME FROM. With a
+  //      watermark already on disk the baseline branch below is skipped, so a
+  //      repointed channel's backlog would land in the queue as new traffic
+  //      instead of being baselined away.
+  const pin = checkPin(PIN_NAME, channel);
+  if (pin.state === 'mismatch') {
+    console.log(refusalLine('DISCORD_INBOX_REFUSE', pin));
+    return 1;
+  }
+  if (pin.state === 'unpinned') {
+    // Pinned before the first fetch, unlike status-post: there is nothing to
+    // prove here (a bad id returns 403/404 and writes nothing), and the
+    // watermark this run may set must not outlive an unrecorded channel.
+    writePin(PIN_NAME, pin.fp);
+    console.log(`DISCORD_INBOX_PINNED ${pin.fp} (${pin.path})`);
   }
 
   const state = loadState();
