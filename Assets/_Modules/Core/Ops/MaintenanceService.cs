@@ -185,6 +185,26 @@ namespace DeNelle.Core.Ops
                     return;
                 }
 
+                // A 404 IS NOT AN OUTAGE. The endpoint answered, and it said this feature
+                // is not deployed here - so no toggle row exists, nothing was ever sealed,
+                // and everything is OPEN including the store. Treating it as
+                // unreachable sealed a live store on 2026-08-27, permanently for that
+                // build, because a 404 never stops being a 404. See
+                // MaintenanceCatalog.MarkFeatureAbsent for the full reasoning and why this
+                // does not weaken the seal (the store's real enforcement is server-side in
+                // api/purchases/quote.js).
+                if (req.responseCode == 404)
+                {
+                    MaintenanceCatalog.MarkFeatureAbsent();
+                    FlowTrace.Warn(Sys, "GET " + EndpointPath + " -> 404. The toggle endpoint is NOT DEPLOYED. " +
+                                        "Every area resolves OPEN, the store included - a 404 is the server " +
+                                        "saying the feature is absent, not that it is unreachable, and an " +
+                                        "absent toggle table holds no seals. A TIMEOUT or 5xx is different " +
+                                        "and still fails the store CLOSED. Deploy api/maintenance.js to " +
+                                        "restore operator control.");
+                    return;
+                }
+
                 if (req.result != UnityWebRequest.Result.Success)
                 {
                     // Covers the TIMEOUT path: req.timeout expiring surfaces here as

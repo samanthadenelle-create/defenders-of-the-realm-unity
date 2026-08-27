@@ -215,6 +215,7 @@ namespace DeNelle.Editor.Regression
             try
             {
                 Case(failures, "fail-open", () => Case1_FailOpen(failures, notes));
+                Case(failures, "absent-404", () => Case1b_Absent404(failures, notes));
                 Case(failures, "isolation", () => Case2_Isolation(failures, notes));
                 Case(failures, "server-all", () => Case3_ServerClosesAll(failures, notes));
                 Case(failures, "refuses", () => Case4_Refuses(failures, notes));
@@ -260,6 +261,65 @@ namespace DeNelle.Editor.Regression
         // =====================================================================
         //  Case 1 - FAIL-OPEN. The ruling, driven failure mode by failure mode.
         // =====================================================================
+        /// <summary>
+        /// A 404 IS NOT AN OUTAGE. The endpoint answered and said the feature is not
+        /// deployed here, so no toggle row exists, nothing was ever sealed, and
+        /// EVERYTHING resolves open - the store INCLUDED, unlike the unreachable case.
+        ///
+        /// This case exists because the store's fail-CLOSED rule shipped on 2026-08-27
+        /// and, minutes later, sealed the store on the owner's device: api/maintenance.js
+        /// had not been deployed, every poll 404'd, and the client could not tell that
+        /// apart from a timeout. It was PERMANENT for that build - a 404 never stops
+        /// being a 404, so the store could never reopen.
+        /// </summary>
+        private static void Case1b_Absent404(List<string> failures, List<string> notes)
+        {
+            MaintenanceCatalog.Clear();
+            MaintenanceCatalog.MarkFeatureAbsent();
+
+            for (int i = 0; i < ExpectedAreaIds.Length; i++)
+            {
+                if (MaintenanceCatalog.IsClosed((MaintenanceArea)i))
+                {
+                    failures.Add("[absent-404] '" + ExpectedAreaIds[i] + "' resolved CLOSED when the toggle " +
+                                 "endpoint 404'd. A 404 means the feature is NOT DEPLOYED, so no seal exists. " +
+                                 "This is DIFFERENT from unreachable (timeout / 5xx), where the store " +
+                                 "deliberately fails closed.");
+                }
+            }
+
+            // The store specifically, called out because it is the one that regressed.
+            if (MaintenanceCatalog.Refuses(MaintenanceArea.Store, "oracle-absent", out string msg))
+            {
+                failures.Add("[absent-404] the STORE refused on a 404. That sealed a live store on the " +
+                             "owner's device and could never have reopened without a new build.");
+            }
+            if (msg != null)
+            {
+                failures.Add("[absent-404] the store handed back a player message ('" + msg + "') on a 404 - " +
+                             "an outage that is not happening.");
+            }
+
+            var lines = PlayerLines();
+            if (lines.Count != 0)
+            {
+                failures.Add("[absent-404] " + lines.Count + " banner line(s) were shown when the endpoint " +
+                             "404'd - nothing is sealed, so nothing may be announced: " + Joined(lines));
+            }
+
+            // And the SEAL still works once the endpoint comes back, so this is not a
+            // blanket "404 disables maintenance" hole.
+            MaintenanceCatalog.ApplyPayload(Payload(true, true, "store"), "test-absent-then-live");
+            if (!MaintenanceCatalog.IsClosed(MaintenanceArea.Store))
+            {
+                failures.Add("[absent-404] after a real payload arrived, the store did NOT seal - the " +
+                             "absent state must not be sticky.");
+            }
+
+            notes.Add("absent-404: a 404 resolves all six OPEN (store included) and announces nothing, and a " +
+                      "live payload still seals afterwards.");
+        }
+
         private static void Case1_FailOpen(List<string> failures, List<string> notes)
         {
             int modes = 0;

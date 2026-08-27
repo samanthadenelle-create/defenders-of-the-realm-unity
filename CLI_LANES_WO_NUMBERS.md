@@ -137,7 +137,11 @@
 > fine as history. A copied number is the bug **even when it was right the day it was written** -
 > that is exactly how the retired 860-899 UI block kept re-seeding collisions from CLAUDE.md sec.2.
 
-> ## ⚠ RECONCILED 2026-08-27 (CLI): main line next free = **1248**.
+> ## ⚠ RECONCILED 2026-08-27 (CLI): main line next free = **1250**.
+> 1248 hero select carousel button truncates ("Pr..." for "Previous") | 1249 boot still lands on the
+> validate-wallet screen. Both from the owner's device felt-test on the 11:47 tester APK.
+>
+> ### superseded: RECONCILED 2026-08-27 (CLI): main line next free = **1248**.
 > 1246 store SKU visibility (re-minted out of the CLOSED-AS-MOOT WO-1175) | 1247 the patron covenant
 > reward (same, and it needs one owner ruling before any code).
 >

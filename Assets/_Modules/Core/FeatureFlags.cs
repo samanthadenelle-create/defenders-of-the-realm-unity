@@ -1124,7 +1124,31 @@ namespace DeNelle.Core
         /// that reason). If the owner felt-tests it and wants it gone, PlayerPrefs
         /// "ff.foundersmonument" = 0 removes the model, its collider and its interaction in one
         /// word - and takes the wall's door with it, which is why it is not off by default.</summary>
-        public static bool FoundersMonument => Get("foundersmonument", defaultOn: true);
+        /// <summary>
+        /// The Benefactors wall's world door (WO-1073).
+        ///
+        /// ⭐ DEFAULT FLIPPED ON -> OFF, 2026-08-27, on device evidence. It shipped
+        /// default-ON because the reasoning was "a default-OFF flag would hold the $500
+        /// tier closed forever" - and that premise turned out to be false, because the
+        /// stand-in DOES NOT RENDER. Its Addressables address
+        /// (BenefactorsCatalog.StandInMonumentAssetKey) does not exist yet: the real
+        /// monument is a custom FBX the owner is authoring with an artist. So on the
+        /// owner's first tester build it fell back to grey primitive cubes she did not
+        /// recognise - reported as "some type of new pillar" - and logged an ERROR on
+        /// every hub load (F8 seq 3613-3616), burying her real findings in noise while
+        /// she was trying to validate 191 items.
+        ///
+        /// ⭐ FLIP THIS BACK TO true THE MOMENT THAT ADDRESS RESOLVES. Nothing else needs
+        /// to change - not the injector, not the door, not the panel, not the server. The
+        /// $500 tier is waiting on real art, not on this flag.
+        ///
+        /// ⛔ Do NOT instead silence the loader's error logging to quieten this. That
+        /// logging is shared with every other structure and is how a genuinely missing
+        /// piece of art gets found (section 16: a missing bundle fails SILENTLY, and this
+        /// log is one of the few things that does not). Turning off a feature whose art
+        /// does not exist is the honest fix; muting the detector is not.
+        /// </summary>
+        public static bool FoundersMonument => Get("foundersmonument", defaultOn: false);
 
         /// <summary>The build palette's walls category tab. When OFF,
         /// <see cref="DeNelle.Village.BuildPaletteUI"/> renders only the Town / Defense

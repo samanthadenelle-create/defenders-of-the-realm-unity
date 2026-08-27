@@ -140,6 +140,9 @@ namespace DeNelle.Core.Ops
         public const string ProvenanceDefault = "default";
         public const string ProvenanceFlagOff = "flag-off";
 
+        /// <summary>The endpoint 404'd: the toggle system is not deployed here. See <see cref="MarkFeatureAbsent"/>.</summary>
+        public const string ProvenanceAbsent = "absent";
+
         /// <summary>
         /// Shown when the toggle table cannot be read AND the area is the store, which
         /// is the single fail-CLOSED area (owner ruling 2026-08-27). It says plainly that
@@ -428,6 +431,42 @@ namespace DeNelle.Core.Ops
         {
             s_table = null;
             s_provenance = string.IsNullOrEmpty(provenance) ? ProvenanceDefault : provenance;
+        }
+
+        /// <summary>
+        /// The endpoint answered, and what it said is "this feature does not exist here"
+        /// (HTTP 404). Everything resolves OPEN, the store INCLUDED.
+        /// <para>
+        /// ⭐ A 404 IS NOT AN OUTAGE, AND CONFLATING THE TWO SEALED A LIVE STORE. The
+        /// owner's fail-closed ruling for the store is about UNREACHABILITY - "i cannot
+        /// help if server is unreachable". A 404 is a SUCCESSFUL HTTP conversation whose
+        /// content is "the toggle system is not deployed here". If it is not deployed,
+        /// no toggle row exists, nothing was ever sealed, and sealing the store is
+        /// inventing an outage rather than reporting one.
+        /// </para>
+        /// <para>
+        /// Found on device 2026-08-27, minutes after the fail-closed rule shipped: the
+        /// endpoint had not been deployed yet, every poll 404'd, and the owner's first
+        /// screen said the store was closed. Under the old code that state was
+        /// PERMANENT for that build - the store could never open, because a 404 never
+        /// stops being a 404.
+        /// </para>
+        /// <para>
+        /// ⛔ THIS IS NOT A WEAKENING OF THE SEAL, and the reason is that the client gate
+        /// was never the enforcement. `store` has SERVER-SIDE teeth in
+        /// api/purchases/quote.js, which refuses to issue a quote while the store is
+        /// sealed. So a client that wrongly believes the store is open still cannot
+        /// complete a purchase during a real seal. A TIMEOUT or a 5xx still means
+        /// unreachable, and the store still fails CLOSED on those.
+        /// </para>
+        /// </summary>
+        public static void MarkFeatureAbsent()
+        {
+            // An EMPTY but non-null table: readable, and holding no seals. That routes
+            // For() past the unreachable branch and into "no row for this area is open",
+            // which is exactly the truth here.
+            s_table = new Dictionary<string, MaintenanceState>(StringComparer.Ordinal);
+            s_provenance = ProvenanceAbsent;
         }
 
         /// <summary>
