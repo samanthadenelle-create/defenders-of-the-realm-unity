@@ -1,6 +1,6 @@
 # WORK ORDER 948 — Walls: build at level 1 ONLY; higher tiers come from the upgrade verb (CoC model)
 
-**Status:** FIXED — awaiting owner felt-verify (PO closes, §13). *(Status audit 2026-08-24: bucket correction — the line led DONE while naming verification, and in WO-977's case engineering, still owed; DONE is reserved for a PO close. Body unchanged.)* Prior line: DONE — implemented + `[wall-build-l1]` green 2026-08-10; owner felt-verify pending. See
+**Status:** CLOSED 2026-08-27 — owner felt-tested PASS on APK 2026.08.27.343739 (village review).
 the RESULT file.
 **Minted:** 2026-08-10 (CLI seat, main line — banner bumped 948 → 949 in the same edit)
 **Silo:** Village/BuildMode palette + Walls — coordinate with WO-1010's Castle Structures tab (shipped);

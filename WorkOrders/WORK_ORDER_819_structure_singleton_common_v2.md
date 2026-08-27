@@ -1,6 +1,6 @@
 # WORK ORDER 819 — StructureSingleton common v2 (catalog-driven, zero-code enforcement)
 
-**Status:** FIXED — SHIPPED 2026-08-01 (c9a1bd73), gates GREEN (SINGLETON_TWINS_OK); awaiting owner felt-verify.
+**Status:** CLOSED 2026-08-27 — owner felt-tested PASS on APK 2026.08.27.343739 (village review).
 **Owner ruling (verbatim):** "HOW MANY TIMES DO i NNEED TO SAY THERE SHOULD ONLY EVER BE ONE, CAN WE
 NOT CREATE A CLASS THAT CONFIRMS SINGLIETON CLASS TYPE" + "i wan an architect to implement as a common"
 + "that gets called on anything that should be a singleton type"

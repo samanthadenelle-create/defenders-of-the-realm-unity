@@ -1,6 +1,6 @@
 # PROD-015 — Arcane Spire costs 500 crystals and nothing in town produces crystals
 
-**Status:** FIXED 2026-08-24 (936da0c3b), awaiting owner felt-verify. **Silo:** Economy/balance.
+**Status:** CLOSED 2026-08-27 — owner felt-tested PASS on APK 2026.08.27.343739 (village review).
 BOTH acceptance boxes are satisfied and verified in the tree: `mine_crystal` is no longer in the Town `lockedIds` of `Assets/Resources/Data/Canonical/build-categories.json` (the town crystal faucet), and `tower_arcane_spire` in `structures-catalog.json` v37 now costs **crystals 200** (iron 160) with the upgrade curve **400 / 800** — the owner's own re-judgement of the 500. ⚠ The §"ruling needed" text below sequences this behind WO-1168 §4 (Cathedral as the crystal producer); that sequencing was **overturned the same day** — WO-1168 §4 was circular (the Cathedral costs 240 crystals), so the faucet was opened via `mine_crystal` instead.
 **Reported:** owner, 2026-08-24 — *"are arcane towers really 500 crystals?"* · *"it takes a long time to get 500 crystals"*.
 

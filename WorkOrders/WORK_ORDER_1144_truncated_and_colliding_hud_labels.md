@@ -1,4 +1,4 @@
-**Status:** FIXED — AWAITING OWNER FELT-TEST TO CLOSE. Prior status: DONE 2026-08-22 - four defects, four different causes, all measured from the captured frame. Also found a latent touch-floor violation: the old Start Wave button resolved ~66px UNDER MinTouchPx because ClampMinTouch no-ops pre-layout. Gate-green.
+**Status:** CLOSED 2026-08-27 — owner felt-tested PASS on APK 2026.08.27.343739 (village review).
 
 # WORK ORDER 1144 - Truncated and colliding HUD labels in the town
 

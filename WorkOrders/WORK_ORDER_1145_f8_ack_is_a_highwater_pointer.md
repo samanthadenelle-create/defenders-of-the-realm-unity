@@ -1,4 +1,4 @@
-**Status:** FIXED 2026-08-23 (57b2c4595) — the PRE-ACK hole is SEALED: a non-pending seq is now REFUSED, out-of-order acks print OUT OF ORDER. F8_SELFTEST_OK 39/39. FELT-TEST: press F8 twice quickly — BOTH must reach the seat. AWAITING OWNER CLOSE.
+**Status:** CLOSED 2026-08-27 — owner felt-tested PASS on APK 2026.08.27.343739 (village review).
 
 # WORK ORDER 1145 - f8-ack is a high-water pointer, so acking the newest swallows older captures
 

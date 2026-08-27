@@ -1,6 +1,6 @@
 # PROD-013 — The in-world repair marker renders as a giant opaque slab and pushes its own label off-screen
 
-**Status:** FIXED 2026-08-24, awaiting owner felt-verify. **Silo:** Village/world.
+**Status:** CLOSED 2026-08-27 — owner felt-tested PASS on APK 2026.08.27.343739 (village review).
 **Reported:** owner felt-test, Seeker — *"Purple shader says repair but no option to repair"*.
 
 ## ⛔ It was NOT a shader defect — refuted by measurement

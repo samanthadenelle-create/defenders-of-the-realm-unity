@@ -4,7 +4,7 @@
 
 # WORK ORDER 913 — Arcane Spire: element == visual regression (close the Flame-over-Aether gap)
 
-**Status:** FIXED — shipped (`7225d897`; reconciled 2026-08-08, see banner; not felt-verified)  
+**Status:** CLOSED 2026-08-27 — owner felt-tested PASS on APK 2026.08.27.343739 (village review).
 **Minted:** 2026-08-07 (CLI / Grok — residual of the work-order audit five-findings fix)  
 **Silo:** Combat / VFX / Regression (code only; no scene files)  
 **Roles:** CLI implement + gate  

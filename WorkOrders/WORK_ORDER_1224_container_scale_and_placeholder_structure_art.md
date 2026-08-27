@@ -1,6 +1,6 @@
 # WORK ORDER 1224 - The storage containers render at ~2x town scale, and five structures ship placeholder art
 
-**Status:** FIXED 2026-08-27 - gated `COMPILE_GATE_OK` + `REGRESSION_OK 303/303 suites` (Builds/w3-c, Builds/w3-r). AWAITING OWNER FELT-VERIFY to close.
+**Status:** CLOSED 2026-08-27 — owner felt-tested PASS on APK 2026.08.27.343739 (village review).
 **Silo:** Catalog data / art
 **Origin:** Owner felt-test in Build mode, Seeker build `2026.08.26.341419`, 2026-08-26.
 Owner verbatim: *"and crystal mine is a wrong image"* -> *"its the well"* -> *"the three are the

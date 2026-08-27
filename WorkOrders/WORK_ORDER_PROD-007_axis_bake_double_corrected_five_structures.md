@@ -1,6 +1,6 @@
 # PROD-007 — The axis-conversion pass corrected the WRONG FILE; five structures were double-corrected and lie down
 
-**Status:** FIXED — awaiting owner felt-verify. §§1-5 are fixed and measured, and **§6 was fixed by `7dcb83b75`** (*"remove archer tower L3 double rotation"*, touching `Assets/StructureContent/Tower_Wooden_Watchtower_L3.prefab` + `WoodenWatchtowerBuilder.cs`), then rebuilt/measured under WO-1152 (`f295971b6`). `preservePrefabRotation` remaining on `tower_ground_archer` is **NOT** evidence §6 is open: once the wrapper child became identity, preserving the prefab root no longer composes two rotations. *(Status audit 2026-08-24: this SUPERSEDES the earlier same-night correction that wrongly reopened §6. Body unchanged.)*
+**Status:** CLOSED 2026-08-27 — owner felt-tested PASS on APK 2026.08.27.343739 (village review).
 >  PRIOR: **Status:** FIXED — AWAITING OWNER FELT-TEST TO CLOSE. Prior status: DONE (catalog rows applied in the working tree) — AWAITING OWNER FELT-VERIFY after re-bake; the missing ORACLE is filed separately as **PROD-008**, and one tower remains OPEN (see §6).
 **Minted:** 2026-08-18 (docs seat) — PROD series, post-launch defect.
 **Priority:** HIGH — buildings lying on their sides in the LIVE build.

@@ -1,6 +1,6 @@
 # WORK ORDER 1167 — The build palette groups itself by ROLE, so a new building needs data and not code
 
-**Status:** FIXED 2026-08-24 (`a9134a567`, ruling `b1d0cf1b9`) — implemented and headless-verified; **owner felt-verify + close owed** (§13). See `WORK_ORDER_1167_build_palette_groups_by_role.RESULT.md`. *(Read `DONE` until the 2026-08-24 board reconcile.)*
+**Status:** CLOSED 2026-08-27 — owner felt-tested PASS on APK 2026.08.27.343739 (village review).
 Headless-verified (`COMPILE_GATE_OK` + `REGRESSION_OK 272/272` incl. the new `[palette-groups]`
 oracle); rendered as WO-1172 Option A (inline dividers); owner felt-verify closes it.
 

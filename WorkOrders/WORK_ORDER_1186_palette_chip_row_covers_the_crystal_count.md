@@ -1,6 +1,6 @@
 # WORK ORDER 1186 - the palette's Other chip sits on top of the crystal count
 
-**Status:** FIXED - landed 2026-08-25 at `22f59afde` (`Assets/_Modules/Village/BuildMode/BuildPaletteUI.cs`). Verified at source this session: bands re-cut with a real gutter, a fit-to-band pass against the `ElarionUiKit.MinTouchPx` floor, and RectMask2D containment. Cause was HorizontalLayoutGroup overflow (143px), not the authored anchors. Owner felt-close owed.
+**Status:** CLOSED 2026-08-27 — owner felt-tested PASS on APK 2026.08.27.343739 (village review).
 **Minted:** 2026-08-25 (CLI lead, main line; banner bumped 1186 -> 1187 in the same edit)
 **Parent:** none - this panel is covered by NO existing ticket. Found by the 2026-08-25 morning
 capture pass, not by a report.

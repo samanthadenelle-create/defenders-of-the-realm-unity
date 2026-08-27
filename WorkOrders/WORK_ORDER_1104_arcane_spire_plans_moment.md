@@ -1,6 +1,6 @@
 # WORK ORDER 1104 — The Arcane Spire plans MOMENT: wave 3, celebration, and the Echo's call to arms
 
-**Status:** FIXED — AWAITING OWNER FELT-TEST TO CLOSE. Prior status: DONE 2026-08-16 (`449dd9df1` + `ec247d4f1`) — RESULT filed; pending PO felt-verify (the PoiBeacon discoverability call is hers)
+**Status:** CLOSED 2026-08-27 — owner felt-tested PASS on APK 2026.08.27.343739 (village review).
 **Minted:** 2026-08-16 (CLI seat) — banner bumped 1104 -> 1105 in the same edit
 **Lane:** Progression / FTUE / celebration UI. Interacts with WO-1031 (guide despawn) — see §5.
 **Provenance:** owner, live playtest 2026-08-16, two statements:

@@ -6,7 +6,7 @@
 
 # WORK ORDER 903 — Storage pallet fill stacks (logs / sacks / ingots, QUARTER intervals)
 
-**Status:** FIXED 2026-08-23 (Codex implemented; CLI reviewed + gated) — AWAITING OWNER FELT-TEST TO CLOSE.
+**Status:** CLOSED 2026-08-27 — owner felt-tested PASS on APK 2026.08.27.343739 (village review).
 
 > Five-tier pallet fill for lumberyard / foundry / silo: exact empty and full, quarter / half / three-quarter
 > tiers, 2% hysteresis on the internal boundaries, pooled log/ingot/sack props with add-remove transitions,
