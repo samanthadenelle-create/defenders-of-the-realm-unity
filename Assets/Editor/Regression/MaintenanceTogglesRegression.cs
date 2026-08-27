@@ -322,7 +322,7 @@ namespace DeNelle.Editor.Regression
             // Device 2026-08-27 15:25: UniTask throws on 404, so the status check
             // AFTER await never ran. The catch MUST call AcceptAbsent404 or the
             // catalog path this case pins is unreachable from the live poll.
-            string svc = ReadSrc(ServiceSrc);
+            string svc = ReadOrNull(ServiceSrc);
             if (svc == null)
             {
                 failures.Add("[absent-404] cannot read " + ServiceSrc);
