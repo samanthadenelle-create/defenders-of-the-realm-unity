@@ -11,7 +11,7 @@
 > actively miscommunicates. Raises this from residual-polish to a readability defect. The blocking
 > owner art pick (dodge glyph) still stands — surface icon-key candidates to her rather than waiting.
 
-**Status:** FIXED 2026-08-27 - gated `COMPILE_GATE_OK` + `REGRESSION_OK 304/304 suites` (Builds/w5-c, Builds/w5-r). AWAITING OWNER FELT-VERIFY to close.
+**Status:** CLOSED 2026-08-27 — owner felt-tested PASS on APK 2026.08.27.343739.
 **Minted:** 2026-08-07 (CLI / Grok — residual of WO-899; explicitly **not** done in `a35163e1`)  
 **Silo:** HUD / UI  
 **Roles:** CLI implement; owner creative pick if no in-catalog dodge/roll icon  

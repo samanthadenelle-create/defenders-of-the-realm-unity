@@ -1,6 +1,6 @@
 # WORK ORDER 1245 - The maintenance banner has TWO producers, and it truncates the operator's message
 
-**Status:** FIXED 2026-08-27 - both defects closed, and the ticket closes on the same kind of screenshot that opened it (`proof/img/wo1245-banner-wrapped.png`: the whole operator message now reads, wrapped to two lines, plate grown). ONE producer: `BannerText()` is DELETED, `MaintenanceCatalog.LineFor` + `BuildLines` are the only source, the driver formats nothing, and source lints RE-RED if either the driver re-adds a formatter or `BannerText` returns. WRAP is opt-in at the call site (`Show(.., wrap)`, default false) and measured from TMP at the real width, capped at 3 LINES not pixels. Gated `COMPILE_GATE_OK` + `REGRESSION_OK 309/309 suites` + `UI_CAPTURE_OK`.
+**Status:** CLOSED 2026-08-27 — owner felt-tested PASS on APK 2026.08.27.343739.
 **Silo:** Core/Ops + Core/UI (client only - no server, no schema)
 **Severity:** P2. The banner's headline works, so the owner's core ask is met. What is broken is the
 *why*, and the proof that the *why* works.

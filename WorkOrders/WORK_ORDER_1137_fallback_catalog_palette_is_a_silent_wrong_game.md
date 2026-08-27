@@ -1,4 +1,4 @@
-**Status:** FIXED 2026-08-23 (84b9b987b) — fallback is codegenerated from the catalog (was 3 of 28 rows hand-written, ungated); freshness gate proven red-then-green. AWAITING OWNER CLOSE.
+**Status:** CLOSED 2026-08-27 — owner felt-tested PASS on APK 2026.08.27.343739.
 
 # WORK ORDER 1137 — The hardcoded fallback catalog is a silent wrong-game, not a safety net
 

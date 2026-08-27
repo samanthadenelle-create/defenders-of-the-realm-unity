@@ -1,6 +1,6 @@
 # WO-1181 - A status can lead with FIXED and say "not done" four words later
 
-**Status:** FIXED - landed f467b7e1c; the contradiction lint reports 0 on every run. Owner felt-close owed.
+**Status:** CLOSED 2026-08-27 — owner felt-tested PASS on APK 2026.08.27.343739.
 **Origin:** review of the Fixed bucket, 2026-08-24. **SEVEN rows** were green while their own status
 text admitted the work was unfinished.
 

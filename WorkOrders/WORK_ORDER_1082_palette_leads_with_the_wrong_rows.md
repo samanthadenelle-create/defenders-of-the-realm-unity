@@ -1,6 +1,6 @@
 # WORK ORDER 1082 — The build palette leads with the wrong rows, and "collectors" is not the group the owner's own two facts describe
 
-**Status:** FIXED 2026-08-27 - gated `COMPILE_GATE_OK` + `REGRESSION_OK 303/303 suites` (Builds/w3-c, Builds/w3-r). AWAITING OWNER FELT-VERIFY to close.
+**Status:** CLOSED 2026-08-27 — owner felt-tested PASS on APK 2026.08.27.343739.
 specified for both answers; the default is the one her stated facts prove.
 **Minted:** 2026-08-24 (UI seat), banner bumped 1081 → 1083 in the same edit (with WO-1081).
 **Silo:** Build palette ordering — canonical JSON only. **Zero code changes.** No economy change.

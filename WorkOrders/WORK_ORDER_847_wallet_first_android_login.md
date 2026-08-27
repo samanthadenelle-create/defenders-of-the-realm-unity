@@ -1,6 +1,6 @@
 # WORK ORDER 847 — Login: wallet-first surface on Android/Seeker (platform-conditional)
 
-**Status:** FIXED 2026-08-21 (`d6123fe3a`) — awaiting owner felt-verify. *(Status audit 2026-08-24: BUCKET CORRECTION — the prior line predated the commit and still advertised gates/commit as owed; verified at source in `git log`, `d6123fe3a` (2026-08-21) landed this work. Body unchanged. Prior line: IMPLEMENTED — pending gates (CompileGate + EditMode run by the CLI committer))*
+**Status:** CLOSED 2026-08-27 — owner felt-tested PASS on APK 2026.08.27.343739.
 **Author:** edit-only implementation agent (owner-ruled design supplied by orchestrator)
 **Lane:** Onboarding/Auth + Wallet — `LoginPanelController.cs` + `LoginViewModel.cs` + `WalletSkinBootstrap.cs` + new Core platform seam `LoginSurfacePlatform.cs` + new `LoginSurfacePlatformTests.cs`.
 **Origin:** owner ruling 2026-08-02 — on Android/Seeker the login page is **"connect wallet or play as guest"**. NO email form on that platform; desktop/web KEEP the current WO-787 email layout including the WO-845 additions (forgot-password + honest error mapping).

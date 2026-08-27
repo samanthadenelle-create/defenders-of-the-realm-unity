@@ -1,6 +1,6 @@
 # WORK ORDER 1212 - There are TWO Stone balances, and only one of them is the player's
 
-**Status:** FIXED 2026-08-27 - gated `COMPILE_GATE_OK` + `REGRESSION_OK 303/303 suites` (Builds/w3-c, Builds/w3-r). AWAITING OWNER FELT-VERIFY to close.
+**Status:** CLOSED 2026-08-27 — owner felt-tested PASS on APK 2026.08.27.343739.
 question is RULED (option A, 2026-08-25, lead): `Resources.Food` stays the Stone slot and
 `GameState.Stone` is retired into it. ⛔ **SEQUENCING: this edits `GameStateService.cs`, which WO-1211
 also edits. The two CANNOT run in parallel - WO-1211 lands first.**

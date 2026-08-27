@@ -1,6 +1,6 @@
 # WORK ORDER 1128 — Server-reconciled offline accrual: stop trying to verify the client, make it not matter
 
-**Status:** FIXED 2026-08-27 - gated `COMPILE_GATE_OK` + `REGRESSION_OK 303/303 suites` (Builds/w3-c, Builds/w3-r). AWAITING OWNER FELT-VERIFY to close.
+**Status:** CLOSED 2026-08-27 — owner felt-tested PASS on APK 2026.08.27.343739.
 >  PRIOR: **Status:** FIXED 2026-08-23 (567eb7edf + follow-ups; Codex audit 2026-08-23 confirms landed) — server-reconciled offline accrual is IMPLEMENTED. ⚠ THE OWNER’S OPEN QUESTION IS STILL OPEN: she asked whether it is correct that we only verify SERVER time. Answer it before closing — this is a money-adjacent path. AWAITING OWNER RULING + FELT-TEST.
 **Minted:** 2026-08-20 (CLI seat) — banner bumped 1128 → 1129 in the SAME edit
 **Lane:** Backend (`api/game/*`) + `GameStateService` sync + the offline opt-in panel copy.

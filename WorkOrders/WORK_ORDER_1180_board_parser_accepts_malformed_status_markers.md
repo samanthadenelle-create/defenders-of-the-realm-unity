@@ -1,6 +1,6 @@
 # WO-1180 - The board parser accepts a malformed `**Status:**` and hides the rows it rescues
 
-**Status:** FIXED - landed f467b7e1c; BOARD_CHECK_OK now prints on every run. Owner felt-close owed.
+**Status:** CLOSED 2026-08-27 — owner felt-tested PASS on APK 2026.08.27.343739.
 **Origin:** review of the 2026-08-24 board reflection - *"WO-932 exposed a parser-level weakness, not
 merely a one-file typo."* Correct, and the fix needs to be narrower than it first looks.
 

@@ -1,6 +1,6 @@
 # WORK ORDER 1239 - 'barracks' reads as a footprint outlier; the family median is the suspect
 
-**Status:** FIXED 2026-08-26 - gated `COMPILE_GATE_OK` + `REGRESSION_OK 294/294 suites` (Builds/g3-c, Builds/g3-r). AWAITING OWNER FELT-VERIFY to close.
+**Status:** CLOSED 2026-08-27 — owner felt-tested PASS on APK 2026.08.27.343739.
 **Silo:** Structure art / catalog
 **Severity:** P3. It blocks the regression marker and nothing else. No player-facing report.
 **Origin:** CLI batch gate, 2026-08-26 17:23 (`Builds/gate-r3`). The ONLY failure in

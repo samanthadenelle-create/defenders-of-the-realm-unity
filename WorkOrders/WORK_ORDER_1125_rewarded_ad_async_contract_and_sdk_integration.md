@@ -1,6 +1,6 @@
 # WORK ORDER 1125 — The rewarded-ad contract could not survive a real SDK, and now can
 
-**Status:** FIXED — AWAITING OWNER FELT-TEST TO CLOSE. Prior status: DONE — audit-verified as shipped (2026-08-21 backlog audit).
+**Status:** CLOSED 2026-08-27 — owner felt-tested PASS on APK 2026.08.27.343739.
 (the SDK itself, blocked on credentials + account approval)
 **Minted:** 2026-08-19 (CLI seat) — banner bumped 1125 → 1126 in the SAME edit
 **Lane:** Monetization / ads. `Core/Ads`, `Village/Monetization`, `Village/Buildings`, two UI sites.

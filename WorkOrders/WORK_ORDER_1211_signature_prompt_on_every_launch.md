@@ -1,6 +1,6 @@
 # WORK ORDER 1211 - The game asks the player to sign on EVERY launch
 
-**Status:** FIXED 2026-08-27 - gated `COMPILE_GATE_OK` + `REGRESSION_OK 303/303 suites` (Builds/w3-c, Builds/w3-r). AWAITING OWNER FELT-VERIFY to close.
+**Status:** CLOSED 2026-08-27 — owner felt-tested PASS on APK 2026.08.27.343739.
 **Minted:** 2026-08-25 (CLI lead, main line; banner bumped 1211 -> 1212 in the same edit)
 **Silo:** Core / backend auth + Wallet
 **Reported:** the owner, 2026-08-25, on build `2026.08.26.341323`: *"check why it asks for

@@ -1,6 +1,6 @@
 # WORK ORDER 823 — Post-review hardening pack (army readiness + founding card + oracles + RESULT hygiene)
 
-**Status:** FIXED 2026-08-27 - gated `COMPILE_GATE_OK` + `REGRESSION_OK 307/307 suites` (Builds/w7-c, Builds/w7-r). AWAITING OWNER FELT-VERIFY to close.
+**Status:** CLOSED 2026-08-27 — owner felt-tested PASS on APK 2026.08.27.343739.
 
 **Status: READY — Phases A-D SHIPPED 2026-08-01 (8560fced); Phase E is now RULED (owner 2026-08-24: **3 of 10**, first raid only, via `ArmyReadiness`) and buildable.**  
 **Minted:** 2026-08-01 (CLI / Grok — from PM code review of Claude Fable check-ins)  

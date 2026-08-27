@@ -1,6 +1,6 @@
 # WORK ORDER 1232 - "Lv 68" on a wave-7 enemy: two call sites still run the RETIRED HP/25 heuristic
 
-**Status:** FIXED 2026-08-26 - gated `COMPILE_GATE_OK` + `REGRESSION_OK 294/294 suites` (Builds/g3-c, Builds/g3-r). AWAITING OWNER FELT-VERIFY to close.
+**Status:** CLOSED 2026-08-27 — owner felt-tested PASS on APK 2026.08.27.343739.
 **Silo:** HUD / Combat presentation
 **Severity:** P1. It also drives the DANGER SKULL, so the threat warning is wrong by the same factor.
 **Origin:** Owner felt-test, Seeker build `2026.08.26.342290`, 2026-08-26. Owner verbatim:

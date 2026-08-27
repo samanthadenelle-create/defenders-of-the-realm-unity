@@ -1,6 +1,6 @@
 # WORK ORDER 1129 — The art tree reconciliation: one derived path, no typed literals, and a coverage oracle
 
-**Status:** FIXED 2026-08-27 - gated `COMPILE_GATE_OK` + `REGRESSION_OK 307/307 suites` (Builds/w7-c, Builds/w7-r). AWAITING OWNER FELT-VERIFY to close.
+**Status:** CLOSED 2026-08-27 — owner felt-tested PASS on APK 2026.08.27.343739.
 >  PRIOR: **Status:** FIXED — AWAITING OWNER FELT-TEST TO CLOSE. Prior status: IMPLEMENTED 2026-08-21 - convex Finish-Now curve (anchored at the 24h clamp, floor 3->10) + rescale parity restored across CatalogBootstrap, the cost-basket baseline and the jeweler sim. Gate-green.
 **Minted:** 2026-08-20 (CLI seat) — banner bumped 1129 → 1130 in the SAME edit
 **Lane:** Asset organisation + the path-resolution seam + a new coverage gate. Touches

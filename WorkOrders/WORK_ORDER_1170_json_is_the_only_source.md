@@ -1,6 +1,6 @@
 # WORK ORDER 1170 — JSON is the only source: retire every hand-mirrored C# fallback table
 
-**Status:** FIXED 2026-08-27 - gated `COMPILE_GATE_OK` + `REGRESSION_OK 303/303 suites` (Builds/w3-c, Builds/w3-r). AWAITING OWNER FELT-VERIFY to close.
+**Status:** CLOSED 2026-08-27 — owner felt-tested PASS on APK 2026.08.27.343739.
 
 **Minted:** 2026-08-24 (CLI), banner bumped 1170 → 1171 in the same edit.
 **Provenance:** owner, 2026-08-24, verbatim — *"We need to not have anything pulled other than from

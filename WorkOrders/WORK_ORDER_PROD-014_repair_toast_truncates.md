@@ -1,6 +1,6 @@
 # PROD-014 — The "NEED MORE TO REPAIR" toast truncates on both lines
 
-**Status:** FIXED 2026-08-27 - gated `COMPILE_GATE_OK` + `REGRESSION_OK 307/307 suites` (Builds/w7-c, Builds/w7-r). AWAITING OWNER FELT-VERIFY to close.
+**Status:** CLOSED 2026-08-27 — owner felt-tested PASS on APK 2026.08.27.343739.
 
 ## ⭐ OWNER RULING 2026-08-25 - the multi-shortfall question is ANSWERED. This unblocks the bounce.
 

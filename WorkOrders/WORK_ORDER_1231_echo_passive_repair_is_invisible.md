@@ -1,6 +1,6 @@
 # WORK ORDER 1231 - Echo passive repair is completely invisible, and it SPENDS the player's materials
 
-**Status:** FIXED 2026-08-27 - gated `COMPILE_GATE_OK` + `REGRESSION_OK 303/303 suites` (Builds/w3-c, Builds/w3-r). AWAITING OWNER FELT-VERIFY to close.
+**Status:** CLOSED 2026-08-27 — owner felt-tested PASS on APK 2026.08.27.343739.
 **Silo:** UI / Echoes
 **Severity:** P1. A system that debits the player's wallet with no notification is worse than a
 missing feature - the player experiences it as resources vanishing.

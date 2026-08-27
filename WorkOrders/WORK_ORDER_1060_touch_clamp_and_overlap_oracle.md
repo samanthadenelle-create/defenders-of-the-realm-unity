@@ -1,4 +1,4 @@
-**Status:** FIXED 2026-08-27 - gated `COMPILE_GATE_OK` + `REGRESSION_OK 307/307 suites` (Builds/w7-c, Builds/w7-r). AWAITING OWNER FELT-VERIFY to close.
+**Status:** CLOSED 2026-08-27 — owner felt-tested PASS on APK 2026.08.27.343739.
 >  PRIOR: **Status:** FIXED 2026-08-23 (57b2c4595) — rules moved out of the assembly cycle that made them unrunnable; registered as [ui-touch-oracle], 269->270 suites. ⚠ RED ON 43 REAL PANELS — that is the oracle working, and TWO OWNER CALLS are open (see the RESULT): baseline the 4 newly-red panels, and rule on the ~21 full-panel tap-catcher overlaps. AWAITING OWNER RULING.
 ⚠ Read the 2026-08-23 section: `UI_TOUCH_FAIL` is RED TODAY on 43 real findings across four panels
 that were NOT on anyone's list. Those are new tickets, not a reason to grow the allow-list.

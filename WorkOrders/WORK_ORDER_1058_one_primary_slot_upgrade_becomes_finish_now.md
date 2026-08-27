@@ -1,4 +1,4 @@
-**Status:** FIXED 2026-08-23 (Codex, 51de6bd31) — one consistent primary slot (Upgrade / Finish Now / Expand / Repair); destructive controls stay secondary. ⚠ NO DEVICE SCREENSHOTS YET. AWAITING OWNER FELT-TEST.
+**Status:** CLOSED 2026-08-27 — owner felt-tested PASS on APK 2026.08.27.343739.
 
 # WORK ORDER 1058 — One primary slot per row: "Upgrade" becomes "Finish Now" in place
 

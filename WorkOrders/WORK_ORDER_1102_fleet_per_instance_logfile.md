@@ -1,6 +1,6 @@
 # WORK ORDER 1102 - Fleet instances discard Step-level stdout (no per-instance -logFile)
 
-**Status:** FIXED — AWAITING OWNER FELT-TEST TO CLOSE. Prior status: IMPLEMENTED - pending committer gate
+**Status:** CLOSED 2026-08-27 — owner felt-tested PASS on APK 2026.08.27.343739.
 **Minted:** 2026-08-16 (orchestrator; banner bumped 1102 -> 1103 in the same edit)
 **Silo:** QA harness / autopilot fleet
 **Lane:** tools + DevTools only. Disjoint from Hero/Equipment, HUD, VFX lanes.
