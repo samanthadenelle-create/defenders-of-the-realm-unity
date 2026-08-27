@@ -1,6 +1,6 @@
 # WORK ORDER 1217 - Early economy: flatten the first upgrade step, seed starting Gold, gate crystals to tier 3
 
-**Status:** READY TO IMPLEMENT
+**Status:** FIXED 2026-08-27 - gated `COMPILE_GATE_OK` + `REGRESSION_OK 303/303 suites` (Builds/w3-c, Builds/w3-r). AWAITING OWNER FELT-VERIFY to close.
 **Silo:** Economy / balance data
 **Origin:** Owner felt-test + rulings, Seeker build `2026.08.26.341419`, 2026-08-26.
 Owner verbatim: *"would take hours just to level anything in the start"* · *"so start gold at 200"* ·

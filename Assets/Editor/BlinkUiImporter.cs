@@ -178,11 +178,24 @@ namespace DeNelle.Editor
             new Entry { Src = "Icons_Obsidian/Gold_Currency.png",  Role = "currency", Name = "currency_gold", Border = 0 },
             // Owner 2026-07-07: the Wood icon = the HudIcons log-pile art (already committed).
             new Entry { Src = "Assets/Resources/HudIcons/hud_wood.png", Role = "currency", Name = "currency_wood", Border = 0 },
-            // Owner 2026-07-07: food = HudIcons/food.png (her pick — NOT hud_food.png), crystal =
-            // HudIcons/hud_crystal.png, iron = HudIcons/hud_iron.png.
-            new Entry { Src = "Assets/Resources/HudIcons/food.png",        Role = "currency", Name = "currency_food",    Border = 0 },
+            // Owner 2026-07-07: crystal = HudIcons/hud_crystal.png, iron = HudIcons/hud_iron.png.
+            // ⛔ FOOD: the 2026-07-07 pick was HudIcons/food.png ("her pick - NOT hud_food.png").
+            // That is SUPERSEDED by the 2026-08-26 contact-sheet ruling (WO-1195), which chose
+            // hud_food.png off art shown at the real 96px chip size: food.png resolves to a
+            // 1200x1200 flat agribusiness LOGO that collapses to an unreadable blob on a chip, and
+            // it now has to carry identity ALONE because WO-1205 dropped the row's name label.
+            // ⚠ THIS LINE IS WHY THE RULING NEEDED AN EDIT HERE AT ALL: the importer REGENERATES
+            // currency_food from Src, so leaving the old path would have silently reverted the
+            // owner's choice on the next import run, with every marker green.
+            new Entry { Src = "Assets/Resources/HudIcons/hud_food.png",    Role = "currency", Name = "currency_food",    Border = 0 },
             new Entry { Src = "Assets/Resources/HudIcons/hud_crystal.png", Role = "currency", Name = "currency_crystal", Border = 0 },
             new Entry { Src = "Assets/Resources/HudIcons/hud_iron.png",    Role = "currency", Name = "currency_iron",    Border = 0 },
+            // WO-1195 owner rulings 2 + 3 (2026-08-26 contact sheet): magic = the Arcanist emblem
+            // (the aether shard was DISQUALIFIED - silhouette-identical to the crystal chip, so it
+            // fails the greyscale gate), wisdom = the spellbook tome. Both are reproducible from
+            // committed art, so the ruling survives a re-import instead of living only in a copy.
+            new Entry { Src = "Assets/Resources/RpgUi/emblem/Arcanist.png",            Role = "currency", Name = "currency_magic",  Border = 0 },
+            new Entry { Src = "Assets/Resources/ItemIcons/blink_spellbook1h_01.png",   Role = "currency", Name = "currency_wisdom", Border = 0 },
             // (icon_shield / icon_talk / icon_heart kept on the Tech-hud fallback — no clean Obsidian
             //  match in the sampled set.)
 

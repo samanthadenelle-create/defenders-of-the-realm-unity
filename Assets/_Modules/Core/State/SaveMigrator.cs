@@ -78,6 +78,7 @@ namespace DeNelle.Core.State
                 { 37, MigrateToV37 },
                 { 38, MigrateToV38 },
                 { 39, MigrateToV39 },
+                { 40, MigrateToV40 },
             };
 
         /// <summary>
@@ -685,6 +686,57 @@ namespace DeNelle.Core.State
 
         /// <summary>v38 to v39: paidCoins is additive and defaults to zero on legacy jobs.</summary>
         private static PersistedState MigrateToV39(PersistedState s) => s;
+
+        /// <summary>
+        /// v39 -> v40 (WO-1235) — THE ANTI-RETRO-LOCK GRANDFATHER, and the only reason the
+        /// schema was bumped at all.
+        ///
+        /// WO-1235 introduces the first recipe that must be TAUGHT before it can be crafted
+        /// (the Mana Draught brew the FTUE scroll unlocks). Before this change every recipe in
+        /// consumable-recipes.json was craftable by everybody. THE GAME IS LIVE. If the gate
+        /// simply started applying, every existing player would silently lose a recipe they
+        /// already had, on a save they cannot roll back — the unrecoverable failure.
+        ///
+        /// There is no other trustworthy signal for "this player existed before the gate":
+        /// SeenTutorials is written within seconds of a new game starting, and every other
+        /// progress field can legitimately read as empty on a save that has genuinely played.
+        /// The SAVE VERSION is the one fact that cannot be faked, which is what buys the bump.
+        /// A save arriving at v&lt;=39 predates the gate, so it is granted every gated recipe.
+        /// A new game is created AT CurrentVersion and never enters this migrator, so it is
+        /// correctly gated and must earn the scroll.
+        ///
+        /// Additive and idempotent: it only ever SETS keys to true, never clears one, so
+        /// re-running it (or running it over a save that already collected the scroll) cannot
+        /// take anything away. No wire field is added — the record rides the existing
+        /// seenTutorials map, whose shape is unchanged.
+        /// </summary>
+        private static PersistedState MigrateToV40(PersistedState s)
+        {
+            if (s == null) return null;
+            if (s.SeenTutorials == null) s.SeenTutorials = new Dictionary<string, bool>();
+
+            int granted = 0;
+            var ids = RecipeUnlockKeys.GatedRecipeIds;
+            for (int i = 0; i < ids.Length; i++)
+            {
+                string key = RecipeUnlockKeys.KeyFor(ids[i]);
+                if (s.SeenTutorials.TryGetValue(key, out bool already) && already) continue;
+                s.SeenTutorials[key] = true;
+                granted++;
+            }
+
+            // §12: no silent migration. State either way, so a future "my crafting vanished"
+            // report is triaged from this line instead of from a theory.
+            if (granted > 0)
+                FlowTrace.Warn("Save", $"v39->v40 (WO-1235): GRANDFATHERED {granted} gated recipe(s) onto a " +
+                    "pre-gate save. These were craftable by everyone before the recipe gate existed, so the " +
+                    "gate must not retro-lock them. A NEW game skips this migrator and must earn the scroll.");
+            else
+                FlowTrace.Step("Save", "v39->v40 (WO-1235): every gated recipe was already recorded as taught " +
+                    "on this save; nothing to grandfather.");
+
+            return s;
+        }
 
         private static PersistedState MigrateToV37(PersistedState s)
         {

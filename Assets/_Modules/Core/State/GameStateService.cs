@@ -516,7 +516,11 @@ namespace DeNelle.Core.State
                 Towers = ToDoubleList(s.Towers),
                 TowerAbilities = ToDoubleList(s.TowerAbilities),
                 WallLevel = s.WallLevel,
-                Stone = s.Stone,
+                // WO-1212: `Stone = s.Stone,` removed. The retired balance is no longer
+                // written to the wire, so a save this client produces carries no `stone`
+                // key at all - which is what makes the field GONE on the next load rather
+                // than merely ignored. The nullable wire field stays on PersistedState so
+                // an OLDER save (or an older client's row) can still be read and discarded.
                 Iron = s.Iron,
                 Wood = s.Wood,
                 BuildingCooldowns = new Dictionary<string, double>(s.BuildingCooldowns),
@@ -611,7 +615,32 @@ namespace DeNelle.Core.State
             if (p.Towers != null) s.Towers = ToIntList(p.Towers);
             if (p.TowerAbilities != null) s.TowerAbilities = ToIntList(p.TowerAbilities);
             if (p.WallLevel.HasValue) s.WallLevel = (int)p.WallLevel.Value;
-            if (p.Stone.HasValue) s.Stone = (int)p.Stone.Value;
+            // WO-1212 - the `stone` WIRE key is an INBOUND ALIAS onto the ONE live Stone
+            // balance (Resources.Food), never a second field. It lands only when the payload
+            // carries no `resources` block at all - a sender that speaks `stone` and nothing
+            // else - so nothing is silently dropped on the floor. When the live slot IS
+            // present (every save this client has ever written), the stored number is
+            // DISCARDED and said out loud: its only writers were the new-game seed and a dev
+            // top-up, so folding it in would credit value nobody earned. See GameState.cs.
+            if (p.Stone.HasValue && p.Stone.Value != 0d)
+            {
+                if (!p.Resources.HasValue)
+                {
+                    var aliased = s.Resources;
+                    aliased.Food = (int)p.Stone.Value;
+                    s.Resources = aliased;
+                    FlowTrace.Warn("Save",
+                        $"WO-1212: legacy `stone` wire key ALIASED onto the live Stone slot " +
+                        $"(Resources.Food={aliased.Food}); the payload carried no `resources` block.");
+                }
+                else
+                {
+                    FlowTrace.Step("Save",
+                        $"WO-1212: DISCARDED retired balance stone={p.Stone.Value:0}. Nothing read or " +
+                        $"spent it; the live Stone the player sees is Resources.Food={s.Resources.Food}, " +
+                        "left untouched. Discard by design - the field only ever held a seed or a dev top-up.");
+                }
+            }
             if (p.Iron.HasValue) s.Iron = (int)p.Iron.Value;
             if (p.Wood.HasValue) s.Wood = (int)p.Wood.Value;
             if (p.BuildingCooldowns != null) s.BuildingCooldowns = new SerializableDict<string, double>(p.BuildingCooldowns);
@@ -1066,7 +1095,12 @@ namespace DeNelle.Core.State
             s.Towers = GameState.NewZeroed(Constants.TowerSlots);
             s.TowerAbilities = GameState.NewZeroed(Constants.TowerSlots);
             s.WallLevel = 0;
-            s.Stone = 20;
+            // WO-1212: the invisible Stone seed is REMOVED. It seeded a balance no HUD read
+            // and no cost spent, so nothing player-visible changes. It is DROPPED, not folded
+            // into Resources.Food: the ticket's own later correction rules `discard, do not
+            // sum`, and folding would quietly raise a fresh town's VISIBLE Stone from 80 to
+            // 100 - a founding-economy change on the day WO-1217 ruled that ladder. One line
+            // (`s.Resources.Food += 20;`) restores it if the lead rules the other way.
             // Owner ruling 2026-07-13 evening — the founding seed is ZERO: the per-id
             // free-first-build flags (FreeBuildsUsed, below) REPLACE the resource seed.
             // Players earn everything beyond the one-free-each kit from production
@@ -1079,8 +1113,9 @@ namespace DeNelle.Core.State
             // AFTER `s.Resources = ResourceBalance.Starter` above, whose coins:15 it replaces.
             // Seeded through StartingBudget for the same reason wood/iron are: ONE authoritative
             // home for the founding budget, no literal scattered here.
-            // ⛔ The two lines ABOVE stay ZERO (owner ruling 2026-07-13) and the `s.Stone = 20`
-            // line further up is WO-1212's to retire — neither is touched by this ruling.
+            // ⛔ The two lines ABOVE stay ZERO (owner ruling 2026-07-13). The invisible
+            // Stone seed further up was WO-1212's to retire and IS now retired; neither is
+            // touched by this ruling.
             s.Resources.Coins = StartingBudget.StrategicGold;
             s.BuildingCooldowns = new SerializableDict<string, double>();
             s.PendingBuilds = new List<PendingTowerBuild>();
@@ -1098,13 +1133,21 @@ namespace DeNelle.Core.State
             // on the belt badge from turn one. Every New Game routes through here
             // (TitleController:359), which is the ONE founding grant seam; existing saves are
             // untouched (no read-migration grant). No schema bump: the dict shape is unchanged.
+            // WO-1235 adds the Mana Draughts to the SAME dictionary — deliberately not a second
+            // grant seam. The WO is explicit: "Do not invent a second grant path". The key is
+            // HudCommands.ManaPotionId ("cons_mana_draught"), which is the id the HUD's mana slot
+            // and ConsumableUseService.TryUse already consume — NOT HpPotionId, which is health.
             s.GearInventory = new System.Collections.Generic.Dictionary<string, int>
             {
                 { DeNelle.Core.HUD.HudCommands.HpPotionId, StartingBudget.FoundingHealPotions },
+                { DeNelle.Core.HUD.HudCommands.ManaPotionId, StartingBudget.FoundingManaPotions },
             };
             FlowTrace.Step("Founding",
                 "founding grant: " + StartingBudget.FoundingHealPotions + "x '" +
-                DeNelle.Core.HUD.HudCommands.HpPotionId + "' seeded into the larder (WO-949).");
+                DeNelle.Core.HUD.HudCommands.HpPotionId + "' + " +
+                StartingBudget.FoundingManaPotions + "x '" +
+                DeNelle.Core.HUD.HudCommands.ManaPotionId +
+                "' seeded into the larder (WO-949 / WO-1235).");
             s.AtbLossStreak = 0;
             s.BuildingDamage = new SerializableDict<string, double>();
             s.Dungeons = DungeonProgress.Empty();
@@ -1697,7 +1740,28 @@ namespace DeNelle.Core.State
                 cr.Crystals += (int)server.AetherCrystals.Value;
                 _state.Resources = cr;
             }
-            if (server.Stone.HasValue)      _state.Stone       = (int)server.Stone.Value;
+            // WO-1212: the server's `stone` column is the retired balance. Same rule as the
+            // local save path - alias it onto the live Stone slot ONLY when the row carried no
+            // resources block, otherwise discard it aloud. Never a second balance, and never a
+            // free top-up: the stored number is a seed/dev echo, not earned value.
+            if (server.Stone.HasValue && server.Stone.Value != 0d)
+            {
+                if (!server.Resources.HasValue)
+                {
+                    var aliasedCloud = _state.Resources;
+                    aliasedCloud.Food = (int)server.Stone.Value;
+                    _state.Resources = aliasedCloud;
+                    FlowTrace.Warn("Sync",
+                        $"WO-1212: cloud `stone` ALIASED onto the live Stone slot " +
+                        $"(Resources.Food={aliasedCloud.Food}); the row carried no resources block.");
+                }
+                else
+                {
+                    FlowTrace.Step("Sync",
+                        $"WO-1212: DISCARDED retired cloud balance stone={server.Stone.Value:0}; live " +
+                        $"Stone = Resources.Food={_state.Resources.Food}, untouched.");
+                }
+            }
             if (server.Iron.HasValue)       _state.Iron        = (int)server.Iron.Value;
             if (server.Wood.HasValue)       _state.Wood        = (int)server.Wood.Value;
 
@@ -2146,7 +2210,11 @@ namespace DeNelle.Core.State
             {
                 case "wood":  return _state.Wood;
                 case "iron":  return _state.Iron;
-                case "stone": return _state.Stone;
+                // WO-1212: the `stone` arm is GONE, and so is its mirror in
+                // api/game/save.js TIME_DERIVED_BALANCES. It pointed at a balance nothing
+                // displayed or spent, so a server clamp on it moved a number no player could
+                // ever have seen. The default arm below FAILS loudly if the two lists
+                // disagree again.
                 case "food":  return _state.Resources.Food;
                 default:
                     // Not silently skipped: a new TIME_DERIVED_BALANCES entry on the server
@@ -2167,7 +2235,7 @@ namespace DeNelle.Core.State
             {
                 case "wood":  _state.Wood  = value; break;
                 case "iron":  _state.Iron  = value; break;
-                case "stone": _state.Stone = value; break;
+                // WO-1212: `stone` retired - see ReadTimeDerivedBalance.
                 case "food":
                 {
                     // ResourceBalance is a STRUCT — mutate a copy and assign it back, or the
@@ -2202,7 +2270,7 @@ namespace DeNelle.Core.State
                 d.Food      = r.Food;
                 d.Coins     = r.Coins;
                 d.Voidshards = (int?)cur.Voidshards;
-                d.Stone      = (int?)cur.Stone;
+                // WO-1212: `stone` is no longer sent - one balance, one wire key (`food`).
                 d.Iron       = (int?)cur.Iron;
                 d.Wood       = (int?)cur.Wood;
                 any = true;
@@ -2245,7 +2313,6 @@ namespace DeNelle.Core.State
                 || ar?.Food     != br?.Food
                 || ar?.Coins    != br?.Coins
                 || a.Voidshards != b.Voidshards
-                || a.Stone      != b.Stone
                 || a.Iron       != b.Iron
                 || a.Wood       != b.Wood;
         }
@@ -2376,7 +2443,7 @@ namespace DeNelle.Core.State
             public int? Food      { get; set; }
             public int? Coins     { get; set; }
             public int? Voidshards { get; set; }
-            public int? Stone     { get; set; }
+            // WO-1212: `public int? Stone` removed - the retired balance is never sent.
             public int? Iron      { get; set; }
             public int? Wood      { get; set; }
 

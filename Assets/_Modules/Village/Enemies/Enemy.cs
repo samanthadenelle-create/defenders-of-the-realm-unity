@@ -3082,16 +3082,16 @@ namespace DeNelle.Village
                 // authority (EnemyDef.RollReward) with this enemy's own rewardVariance, so all
                 // four materials read as ONE drop rather than four systems.
                 //
-                // ⛔⛔ THE STONE TRAP (WO-1212, a filed P0): there are TWO Stone balances and
-                // only ONE of them is the player's. The HUD chip labelled "Stone"
+                // ⛔⛔ THE STONE TRAP (WO-1212, CLOSED 2026-08-26): there USED to be two Stone
+                // balances and only ONE of them was the player's. The HUD chip labelled "Stone"
                 // (HudKitController.cs:1596 pairs CurrencyKind.Food with the name "Stone") reads
                 // GameState.Resources.Food via EconomyService.Food — DEF-121 repurposed the
                 // retired Stone axis onto Food, and that is the balance every cost actually
-                // spends. GameState.Stone (GameState.cs:60) is a second persisted balance
-                // displayed NOWHERE and spent by NOTHING; granting there means the player is
-                // told they earned Stone and receives nothing, silently. Stone therefore rides
-                // EconomyService.Grant's `food` slot below, and GameState.Stone is not touched
-                // in either direction (its reconciliation is WO-1212's job, not this ticket's).
+                // spends. GameState.Stone WAS a second persisted balance displayed NOWHERE and
+                // spent by NOTHING; granting there meant the player was told they earned Stone
+                // and received nothing, silently. WO-1212 RETIRED that field (2026-08-26), so
+                // there is now exactly ONE Stone balance and this grant already rides it:
+                // EconomyService.Grant's `food` slot below.
                 //
                 // EconomyService.Grant(ResourceCost) is the EARNED-INCOME path: it is the single
                 // choke every income source flows through and it applies the town bank cap

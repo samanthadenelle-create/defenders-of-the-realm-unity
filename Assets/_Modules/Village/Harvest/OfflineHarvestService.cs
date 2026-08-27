@@ -124,11 +124,17 @@ namespace DeNelle.Village
             if (Instance != null && Instance != this) { Destroy(this); return; }
             Instance = this;
             OfflineClaimCoordinator.Register(this);
+            EnsureSubscribed();                       // WO-1231: the away summary's reveal seam
         }
 
         private void OnDestroy()
         {
             OfflineClaimCoordinator.Unregister(this);
+            if (_subscribedToCompletion)
+            {
+                OfflineClaimCoordinator.ClaimCompleted -= OnClaimCompleted;
+                _subscribedToCompletion = false;
+            }
             if (Instance == this) Instance = null;
         }
 
@@ -188,6 +194,7 @@ namespace DeNelle.Village
             FlowTrace.Step("Offline", "ClaimAccrual");
             // Idempotent: editmode/headless AddComponent never runs Awake, so register here too.
             OfflineClaimCoordinator.Register(this);
+            EnsureSubscribed();
             _lastResult = OfflineHarvestResult.None;
             OfflineClaimCoordinator.Claim("OfflineHarvestService.ClaimAccrual");
             return _lastResult ?? OfflineHarvestResult.None;
@@ -267,11 +274,76 @@ namespace DeNelle.Village
                 $"(cap {OfflineCapHours:0.##}h) -> total {result.Total}.");
 
             _lastResult = result;
-            if (result.Total > 0)
+            _lastResultSeq = window.Sequence;
+            // WO-1231: the reveal MOVED to OnClaimCompleted. It cannot fire from here any
+            // more, because from here the OTHER consumers' shares have not necessarily been
+            // applied yet -- fan-out order is registration order is bootstrap order, i.e.
+            // undefined -- and the summary now has to report what passive Echo mending
+            // SPENT out of the wallet over the same window. See OnClaimCompleted.
+        }
+
+        // =====================================================================
+        //  WO-1231 -- the reveal, raised once the WHOLE claim is known
+        // =====================================================================
+
+        // Subscription is idempotent and set up in BOTH Awake and ClaimAccrual: an
+        // editmode/headless oracle drives ClaimAccrual on a component AddComponent never
+        // ran Awake for, which is the same reason Register() is called in both places.
+        private bool _subscribedToCompletion;
+
+        // Claim sequence that produced _lastResult. THE FRESH-CLOCK PATH IS WHY THIS
+        // EXISTS: OfflineClaimCoordinator.Claim seeds a fresh clock and fans out to
+        // NOBODY, so ApplyOfflineWindow never runs and _lastResult still holds the
+        // PREVIOUS claim's haul. Without this check the completion handler would happily
+        // re-reveal an already-collected summary (and re-report an already-reported
+        // spend), which is a worse lie than the silence WO-1231 removed.
+        private int _lastResultSeq = -1;
+
+        private void EnsureSubscribed()
+        {
+            if (_subscribedToCompletion) return;
+            OfflineClaimCoordinator.ClaimCompleted += OnClaimCompleted;
+            _subscribedToCompletion = true;
+        }
+
+        /// <summary>
+        /// Every consumer has applied and the clock has advanced: attach passive mending's
+        /// share of the SAME window and reveal the summary.
+        /// <para>
+        /// THE GATE IS "haul OR mend", not "haul". A window in which the player gathered
+        /// nothing but mending spent 400 Wood used to show no summary at all -- which is
+        /// the exact case where they most need one, and is what made materials look like
+        /// they were simply vanishing (WO-1231 P1).
+        /// </para>
+        /// </summary>
+        private void OnClaimCompleted(OfflineClaimWindow window)
+        {
+            var result = _lastResult;
+            if (result == null) return;
+            if (_lastResultSeq != window.Sequence)
             {
-                Claimed?.Invoke(result);
-                TryShowPopup(result);
+                // This claim did not fan out to us (fresh clock, or no GameState) -- the
+                // result we are holding belongs to an older, already-revealed window.
+                FlowTrace.Step("Offline",
+                    $"claim #{window.Sequence}: no share applied to 'harvest-nodes' this claim " +
+                    $"(held result is from #{_lastResultSeq}) -- away summary NOT re-revealed.");
+                return;
             }
+
+            // Only THIS claim's mend report may be attached. A report from an older window
+            // (Echo repair unregistered, or bounced on a null GameState) must never be
+            // re-reported as if the wallet had just been charged again.
+            var mend = EchoRepairService.LastOfflineMendReport;
+            result.Mend = (mend != null && mend.ClaimSequence == window.Sequence) ? mend : EchoMendReport.None;
+
+            bool show = result.Total > 0 || result.HasMendNews;
+            FlowTrace.Step("Offline",
+                $"claim #{window.Sequence}: away summary gate -> haul={result.Total}, " +
+                $"mendNews={result.HasMendNews} => {(show ? "REVEAL" : "no reveal")}.");
+            if (!show) return;
+
+            Claimed?.Invoke(result);
+            TryShowPopup(result);
         }
 
         // ── Source 1: worker-collected mine nodes (WO-117 seam) ───────────────

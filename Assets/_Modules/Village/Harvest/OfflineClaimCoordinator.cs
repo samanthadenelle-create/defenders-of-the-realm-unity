@@ -135,6 +135,25 @@ namespace DeNelle.Village
         /// <summary>Registered consumer count (diagnostic / regression readout).</summary>
         public static int ConsumerCount => _consumers.Count;
 
+        /// <summary>
+        /// Raised ONCE per claim, AFTER every consumer has applied its share and the clock
+        /// has been advanced -- i.e. the first moment at which the whole away window is
+        /// known.
+        /// <para>
+        /// WO-1231 added this for a specific reason: the while-you-were-away summary has to
+        /// report what EVERY consumer did, including the Wood and Iron that passive Echo
+        /// mending spent. It used to be raised from inside ONE consumer's
+        /// <c>ApplyOfflineWindow</c>, so what it could see depended on <b>fan-out order</b>,
+        /// which is registration order, which is bootstrap order -- undefined. That is the
+        /// same class of ordering bug this whole file exists to kill (see the header), and
+        /// "register the popup's owner last" would have been the ordering hack, not the fix.
+        /// A completion event has no order to get wrong.
+        /// </para>
+        /// A subscriber must not accrue anything here: the clock has already advanced.
+        /// Reporting only.
+        /// </summary>
+        public static event Action<OfflineClaimWindow> ClaimCompleted;
+
         // =====================================================================
         //  Registration -- idempotent, callable from Awake/Start AND from a
         //  headless oracle (editmode AddComponent never runs Awake).
@@ -215,6 +234,9 @@ namespace DeNelle.Village
                 AdvanceAndSave(state, svc, nowMs, reason, seq);
                 ClaimCount = seq;
                 LastWindow = fresh;
+                // Raised here too so the invariant is "exactly one ClaimCompleted per
+                // completed claim" with no exceptions a subscriber has to remember.
+                RaiseCompleted(fresh);
                 return fresh;
             }
 
@@ -250,7 +272,18 @@ namespace DeNelle.Village
             AdvanceAndSave(state, svc, nowMs, reason, seq);
             ClaimCount = seq;
             LastWindow = window;
+            RaiseCompleted(window);
             return window;
+        }
+
+        /// <summary>Fires <see cref="ClaimCompleted"/> Guard-wrapped: a reporting subscriber
+        /// that throws must never look like a failed claim (the accrual is already banked
+        /// and the clock is already advanced by the time we get here).</summary>
+        private static void RaiseCompleted(OfflineClaimWindow window)
+        {
+            var handler = ClaimCompleted;
+            if (handler == null) return;
+            Guard.Try("Offline", $"claim #{window.Sequence} completion report", () => handler(window));
         }
 
         /// <summary>Hands the SAME window to each consumer, Guard-wrapped so one thrower

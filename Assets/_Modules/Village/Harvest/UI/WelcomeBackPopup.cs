@@ -45,7 +45,14 @@ namespace DeNelle.Village.UI
         /// </summary>
         public static void Show(OfflineHarvestResult result)
         {
-            if (result == null || result.Total <= 0) return;
+            // WO-1231: the gate is "haul OR mend news", not "haul". Passive Echo mending
+            // SPENDS Wood and Iron out of the same away window, so a player could return to
+            // materials already gone and get NO summary at all -- which is the exact case
+            // where a summary matters most, and is what made the spend read as resources
+            // simply vanishing. A stall counts as news too ("your walls stopped mending
+            // because you are out of Wood" is actionable).
+            if (result == null) return;
+            if (result.Total <= 0 && !result.HasMendNews) return;
             if (s_open) return;
 
             PanelSettings ps = null;
@@ -132,6 +139,19 @@ namespace DeNelle.Village.UI
             AddRowIf(card, _result.Iron, "Iron", new Color(0.85f, 0.7f, 0.6f));
             AddRowIf(card, _result.Wood, "Wood", new Color(0.7f, 0.85f, 0.55f));
 
+            // -- WO-1231: PASSIVE ECHO MENDING, on the same away window ---------
+            // THE SPEND-ATTRIBUTION HOME. Owner-approved surface: this summary, because it
+            // is the moment the player is ALREADY reading a "here is what happened" report.
+            // ⛔ Deliberately NOT a toast per repair -- WO-1231 rules that out by name; it
+            // would spam on every mend. All copy comes from EchoMendCopy (one home for the
+            // sentences, shared with the Echo card and pinned by the regression), and every
+            // number comes from the live claim -- nothing here is invented.
+            //
+            // The spend rows are indented and dimmer so the block reads as "what mending
+            // did" rather than as more haul, but the MINUS SIGN and the word "spent" carry
+            // that meaning on their own: greyscale-safe, no hue doing any work.
+            AddMendRows(card);
+
             if (_result.WasCapped)
             {
                 var nudge = MakeLabel(
@@ -168,6 +188,52 @@ namespace DeNelle.Village.UI
             return _result.WasCapped
                 ? $"Your realm gathered for {span} (capped)."
                 : $"Your realm gathered for {span}.";
+        }
+
+        /// <summary>
+        /// WO-1231: the mend block -- what the walls gained, what it COST, and whether it
+        /// stalled broke. No-op when mending did nothing worth saying, so a player with no
+        /// Echoes (or an undamaged town) sees exactly the summary they saw before.
+        /// </summary>
+        private void AddMendRows(VisualElement card)
+        {
+            var mend = _result != null ? _result.Mend : null;
+            if (mend == null || !mend.HasContent) return;
+
+            var rule = new VisualElement();
+            rule.style.height = 1f;
+            rule.style.marginTop = 12f;
+            rule.style.marginBottom = 8f;
+            rule.style.backgroundColor = new Color(0.831f, 0.686f, 0.216f, 0.45f);
+            card.Add(rule);
+
+            if (mend.Repairs > 0 || mend.HealthFraction > 0f)
+            {
+                var mended = MakeLabel(EchoMendCopy.AwayMendedLine(mend), 15f, FontStyle.Bold,
+                                       new Color(0.85f, 0.88f, 0.92f));
+                mended.style.whiteSpace = WhiteSpace.Normal;
+                card.Add(mended);
+            }
+
+            string spent = EchoMendCopy.AwaySpentLine(mend);
+            if (!string.IsNullOrEmpty(spent))
+            {
+                var spentLabel = MakeLabel(spent, 13f, FontStyle.Normal, new Color(0.78f, 0.78f, 0.82f));
+                spentLabel.style.whiteSpace = WhiteSpace.Normal;
+                spentLabel.style.marginTop = 2f;
+                card.Add(spentLabel);
+            }
+
+            string stall = EchoMendCopy.AwayStallLine(mend);
+            if (!string.IsNullOrEmpty(stall))
+            {
+                // The actionable one: mending stopped and the player can DO something about
+                // it. Word-carried ("paused", "ran out of <resource>"), never hue-carried.
+                var stallLabel = MakeLabel(stall, 13f, FontStyle.Bold, new Color(0.95f, 0.78f, 0.45f));
+                stallLabel.style.whiteSpace = WhiteSpace.Normal;
+                stallLabel.style.marginTop = 6f;
+                card.Add(stallLabel);
+            }
         }
 
         private void AddRowIf(VisualElement card, int amount, string label, Color accent)

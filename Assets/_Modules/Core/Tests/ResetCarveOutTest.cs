@@ -121,7 +121,6 @@ namespace DeNelle.Core.Tests
             _state.Towers = new List<int> { 3, 3, 3, 3, 3, 3, 3, 3, 3 };
             _state.TowerAbilities = new List<int> { 2, 2, 2, 2, 2, 2, 2, 2, 2 };
             _state.WallLevel = 3;
-            _state.Stone = 500;
             _state.Iron = 500;
             _state.Wood = 500;
             _state.BuildingCooldowns["crystal-mine"] = 123;
@@ -158,7 +157,9 @@ namespace DeNelle.Core.Tests
             Assert.That(_state.TowerAbilities,
                 Is.EqualTo(new List<int> { 0, 0, 0, 0, 0, 0, 0, 0, 0 }), "towerAbilities -> [0]x9");
             Assert.That(_state.WallLevel, Is.EqualTo(0), "wallLevel -> 0");
-            Assert.That(_state.Stone, Is.EqualTo(20), "stone -> 20");
+            // WO-1212: the retired GameState.Stone field is gone. The live Stone the player
+            // sees is Resources.Food, pinned at the STARTER 80 a few lines above - and it must
+            // stay 80: the invisible seed was DISCARDED, never folded in.
             // WO-682: strategic placement is always on — New Game seeds the core-kit
             // budget (StartingBudget constants), not the legacy 5 iron / 15 wood.
             Assert.That(_state.Iron, Is.EqualTo(StartingBudget.StrategicIron), "iron -> core-kit seed");

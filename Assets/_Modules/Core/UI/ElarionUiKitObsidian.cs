@@ -706,6 +706,41 @@ namespace DeNelle.Core.UI
         /// import both namespaces — a namespace-level twin would ambiguate every one of them).</summary>
         public enum CurrencyKind { Gold, Crystal, Wood, Iron, Food, Wisdom }
 
+        /// <summary>
+        /// ⭐ THE ONE TRANSLATOR from a chip's <see cref="CurrencyKind"/> to the concept id that
+        /// <c>concept-icons.json</c> is keyed by. ⛔ NEVER lower-case the enum name and call it a
+        /// concept id.
+        ///
+        /// WHY THIS EXISTS (WO-1195 / WO-1205, 2026-08-26): the enum member is
+        /// <c>Food</c> but canon §7 retired Food for **Stone**, and the town resource rail labels
+        /// that very slot "Stone" (<c>HudKitController</c> builds <c>names[] = { "Wood", "Iron",
+        /// "Stone", "Crystals" }</c> against <c>kinds[] = { Wood, Iron, Food, Crystal }</c>). The
+        /// icon was resolved as <c>kind.ToString().ToLowerInvariant()</c>, so the Stone row asked
+        /// for the concept <c>"food"</c> and got the agribusiness art. That was survivable while
+        /// the row still carried its NAME label; WO-1205 then dropped the name on the ruled path,
+        /// which makes the icon the row's ONLY identity - and the owner is red/green colourblind.
+        /// An unrecognisable silhouette is now an unidentifiable resource, not a cosmetic nit.
+        ///
+        /// ⛔ The concept id is DATA-facing: everything downstream (ConceptIconResolver ->
+        /// concept-icons.json -> RpgUiCatalog) keys off what this returns, so a second copy of
+        /// this switch is a second registry. There is exactly one, and
+        /// <c>CostFormatSourceRegression</c> asserts every kind resolves through it.
+        /// </summary>
+        public static string ConceptIdFor(CurrencyKind kind)
+        {
+            switch (kind)
+            {
+                case CurrencyKind.Gold:    return "gold";
+                case CurrencyKind.Crystal: return "crystal";
+                case CurrencyKind.Wood:    return "wood";
+                case CurrencyKind.Iron:    return "iron";
+                // ⛔ NOT "food". Canon §7: Food was retired for Stone; this enum slot IS Stone.
+                case CurrencyKind.Food:    return "stone";
+                case CurrencyKind.Wisdom:  return "wisdom";
+                default:                   return kind.ToString().ToLowerInvariant();
+            }
+        }
+
         /// <summary>Live handle of a built currency chip. SetAmount count-tweens the number —
         /// NEVER a red/green flash (owner rule).</summary>
         public sealed class CurrencyChipHandle
@@ -843,11 +878,24 @@ namespace DeNelle.Core.UI
             var icon = iconGo.GetComponent<Image>();
             icon.preserveAspect = true;
             icon.raycastTarget = false;
-            var iconSprite = UiStyle.Icon(kind.ToString().ToLowerInvariant());
+            // WO-1195: the concept id comes from ConceptIdFor, NEVER from the enum's own name -
+            // CurrencyKind.Food is the STONE slot (canon §7) and asking for "food" here is what
+            // put the agribusiness logo on the town rail's Stone row.
+            string conceptId = ConceptIdFor(kind);
+            var iconSprite = UiStyle.Icon(conceptId);
             // WO-697: mirrored currency art fallback (Resources/RpgUi/currency/currency_*,
             // the WO-675/676 chip grammar set) when the concept resolver comes up empty.
             if (iconSprite == null)
-                iconSprite = RpgUiCatalog.Get("currency", "currency_" + kind.ToString().ToLowerInvariant());
+            {
+                iconSprite = RpgUiCatalog.Get("currency", "currency_" + conceptId);
+                // ⛔ No silent absorption (CLAUDE.md §12): a missing concept row is why a chip
+                // falls back to a naked word, so it has to be visible in break-log.jsonl rather
+                // than only in the pixels the owner happens to look at.
+                if (iconSprite == null)
+                    FlowTrace.Once("UI", "currencyIcon:" + conceptId,
+                        "CurrencyChip: no icon for concept '" + conceptId + "' (kind " + kind +
+                        ") - falling back to the word tag.");
+            }
             if (iconSprite != null) icon.sprite = iconSprite;
             else iconGo.SetActive(false);
 

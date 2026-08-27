@@ -55,6 +55,11 @@ MonoBehaviour:
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 3c5d0584b7cd64649a972c3851bd1617
+    m_Address: Structures/CrystalMine
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 474ff7ec5c045c2469756fbb0be8d90d
     m_Address: Structures/Tower_Wooden_Watchtower
     m_ReadOnly: 0
@@ -127,6 +132,11 @@ MonoBehaviour:
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 9bd160f93232e2d4893a5592f5c66985
     m_Address: Structures/Ballista_L3
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: af1e28122bbdb04458702b7707fb4b6a
+    m_Address: Structures/HealingCaravan
     m_ReadOnly: 0
     m_SerializedLabels: []
     FlaggedDuringContentUpdateRestriction: 0

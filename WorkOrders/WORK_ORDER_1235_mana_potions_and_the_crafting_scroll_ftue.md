@@ -1,6 +1,6 @@
 # WORK ORDER 1235 - Three mana potions + a crafting scroll: the tutorial entrance to crafting
 
-**Status:** READY TO IMPLEMENT
+**Status:** FIXED 2026-08-27 - gated `COMPILE_GATE_OK` + `REGRESSION_OK 303/303 suites` (Builds/w3-c, Builds/w3-r). AWAITING OWNER FELT-VERIFY to close.
 **Silo:** Onboarding / Crafting / Economy
 **Type:** NEW FEATURE (per CLAUDE.md §13 this is a spec, not an RCA).
 **Origin:** Owner, 2026-08-26: ***"can we start with 3 mana potions and let the users get a crafting

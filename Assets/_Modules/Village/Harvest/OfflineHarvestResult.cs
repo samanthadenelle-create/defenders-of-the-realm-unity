@@ -75,6 +75,31 @@ namespace DeNelle.Village
         /// <summary>Total units banked across every resource (popup-trigger gate: show only when &gt; 0).</summary>
         public int Total => Iron + Wood + Food + AetherCrystals;
 
+        // =====================================================================
+        //  WO-1231 — WHAT PASSIVE ECHO MENDING DID WITH THE SAME WINDOW
+        // ---------------------------------------------------------------------
+        //  Offline mending is not a haul, it is a SPEND: EchoRepairService banks an
+        //  'echo-repair' share of the away window and completes real repairs, paying
+        //  Wood and Iron out of the wallet. So a player could return to materials
+        //  already gone with no report that it happened — the away summary was, by
+        //  construction, only ever telling them half the story.
+        //
+        //  ⚠ THIS FIELD IS WHY THE POPUP'S TRIGGER GATE MOVED. `Total > 0` alone means
+        //  a window in which mending spent 400 Wood and gathered nothing shows NO
+        //  summary at all — the exact case where the player most needs one. The gate is
+        //  now "haul OR mend", see WelcomeBackPopup.Show.
+        // =====================================================================
+
+        /// <summary>
+        /// Passive Echo mending's share of the SAME away window (never null in practice —
+        /// OfflineHarvestService attaches the live report once every consumer has applied).
+        /// </summary>
+        public EchoMendReport Mend;
+
+        /// <summary>True when mending did something the player must be told about — it
+        /// mended, it spent, or it stalled broke.</summary>
+        public bool HasMendNews => Mend != null && Mend.HasContent;
+
         /// <summary>A zero haul — nothing accrued, no popup.</summary>
         public static OfflineHarvestResult None => new OfflineHarvestResult();
 

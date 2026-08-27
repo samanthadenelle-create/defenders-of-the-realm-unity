@@ -1,6 +1,6 @@
 # WORK ORDER 1128 — Server-reconciled offline accrual: stop trying to verify the client, make it not matter
 
-**Status:** READY - ⭐ **the owner's question was ANSWERED 2026-08-24** (batch 2, ruling 6; posture elevated to `FOUNDATIONAL_RULINGS.md` §6 with a HARDENED trigger - material consequence, ⛔ not "while the leaderboard is cosmetic"). The remaining acceptance gate is lead work. *(Prior line:)* BLOCKED - owner question open. Server-reconciled offline accrual is IMPLEMENTED (`567eb7edf`), but ⚠ **the owner's open question is still open** and an acceptance gate is outstanding - that is more than felt-verification.  *(Bucket corrected 2026-08-24: the line led with FIXED while its own text said work remained. Prior line preserved below.)*
+**Status:** FIXED 2026-08-27 - gated `COMPILE_GATE_OK` + `REGRESSION_OK 303/303 suites` (Builds/w3-c, Builds/w3-r). AWAITING OWNER FELT-VERIFY to close.
 >  PRIOR: **Status:** FIXED 2026-08-23 (567eb7edf + follow-ups; Codex audit 2026-08-23 confirms landed) — server-reconciled offline accrual is IMPLEMENTED. ⚠ THE OWNER’S OPEN QUESTION IS STILL OPEN: she asked whether it is correct that we only verify SERVER time. Answer it before closing — this is a money-adjacent path. AWAITING OWNER RULING + FELT-TEST.
 **Minted:** 2026-08-20 (CLI seat) — banner bumped 1128 → 1129 in the SAME edit
 **Lane:** Backend (`api/game/*`) + `GameStateService` sync + the offline opt-in panel copy.

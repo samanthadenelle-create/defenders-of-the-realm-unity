@@ -564,3 +564,93 @@ or do not gate.
 ⚠ Also still open and NOT fixed by this ruling: **`Village2RaidController` never calls
 `ReconcileRaidEnd`**, so a first-ever Village2 stronghold raid would not clear
 `EverCompletedRaid` and that player gets the soft gate a second time. Its own change, its own capture.
+
+---
+
+## SLICE PLAN 2026-08-26
+
+Phases A–D shipped 2026-08-01 (`8560fced`). Phase E is the whole remainder, and the E-spec above is a
+**seven-part change across six files and a save-schema bump** — not one handable ticket. Sliced:
+
+### 🔴 CORRECTION TO E2 BEFORE ANY SEAT ACTS ON IT: **THE BUMP IS 39 → 40, NOT 38 → 39.**
+E2 was written 2026-08-24 against `CurrentVersion = 38`. Verified at source today
+(`Assets/_Modules/Core/State/SaveSchema.cs:41`): **`CurrentVersion` is now 39**, and
+`SaveMigrator.cs:80` already holds `{ 39, MigrateToV39 }` (`:687`, a documented no-op) — **v39 was
+taken by WO-1026's `defenseReports` / `lastSiegeUnixMs`.** So Phase E ships **v40** with
+`{ 40, MigrateToV40 }`. E2's own instruction is what catches this — *"⛔ never take it from a doc"* —
+and the doc that was wrong is E2 itself. **Re-read `SaveSchema.cs:41` at implementation time anyway;
+this note is a doc too.** The FOUNDATIONAL_RULINGS.md §5 latitude that E2 cites is unaffected: all
+four conditions still hold at v40, so this still needs **no owner ruling**.
+
+Also verified: `grep -rn "EverCompletedRaid|FirstRaidMinDeployableSlots|FirstRaidSoftGate" --include=*.cs Assets`
+returns **ZERO hits** — the E-spec's §6 "PHASE E IS NOT BUILT" is still true today.
+
+### Slice 823-E1 — The persisted signal (ATOMIC — do not sub-split a schema change)
+- **Files:** `Core/State/GameState.cs` (the `EverCompletedRaid` bool), `Core/State/SaveSchema.cs`
+  (wire field, append-only at the END of `PersistedState`; `CurrentVersion` 39 → **40**, changelog
+  prepended to that same comment), `Core/State/SaveMigrator.cs` (`{ 40, MigrateToV40 }` + the **E4
+  derivation**), `Core/State/GameStateService.cs` (capture / restore / `ResetToNewGame`).
+- **Acceptance:** E6's fixture rows — a v39 fixture with no key loads clean; a fixture with a troop at
+  `veterancyRank >= 1` migrates **true**; a fixture with non-empty `raidCooldowns` migrates **true**;
+  a genuinely fresh fixture migrates **false**. `CoreSaveContractRegression.cs:57-69` (version triple)
+  and `CoreSaveRegression.cs:230-247` (migrates every start version) both green.
+- **Blocked:** ⚠ `Assets/_Modules/Core/State/*` is held by another lane as of 2026-08-26 — check the
+  lane board before assigning. Otherwise unblocked; the number correction above is the only new input.
+
+### Slice 823-E2 — The stamp
+- **File:** `Village/Troops/RaidDeployController.cs` — `ReconcileRaidEnd`, immediately after the
+  `army == null` early-out (`:713-718`), **before** the reconcile work. One assignment + a
+  `FlowTrace.Step` on the **false→true transition only**.
+- **Acceptance:** all three exits covered — retreat (`starsEarned 0`), hero death
+  (`HeroHealth.cs:875`), victory (`RaidVictoryController.cs:493`). ⛔ The
+  `ReconcileRaidEnd(int starsEarned)` **signature is source-linted** by
+  `RaidCooldownRegression.cs:322-326`; `RaidExitParityRegression.cs:132-143` lints the exit routing.
+- **Blocked:** on E1 (nothing to stamp until the field exists).
+
+### Slice 823-E3 — The gate, inside `ArmyReadiness` and nowhere else
+- **File:** `Village/Troops/ArmyReadiness.cs` ONLY. `RequiredSlots` + `FirstRaidSoftGate` on
+  `Snapshot`; `Ready` becomes ONE comparison; `FirstRaidMinDeployableSlots = 3` as a named constant;
+  the `:73` test-seam overload takes an explicit `bool everCompletedRaid = true`.
+- **Acceptance:** `grep FirstRaidMinDeployableSlots` returns **exactly one definition and one read**,
+  both in this file. Null `st` still ⇒ `Ready = true, FirstRaidSoftGate = false` (headless never meets
+  the gate). `RaidsDiscoverabilityRegression.cs:205-206,233-234` still green.
+- **Blocked:** on E1 + E2.
+
+### Slice 823-E4 — Remove the two bypasses (this is a LIVE DEFECT, not new work)
+- **File:** `Village/Hero/RaidDeployScreen.cs:477` and `:526` — both read `_vm.DeployableCount`, a raw
+  **headcount**, while `ArmyReadiness` is **slot-weighted**. Per the 08-24 ruling that is the
+  grey-button-versus-open-gate bug in its original form, live today, before Phase E adds anything.
+- **Do:** route both through the `ArmyReadiness` snapshot. ⛔ Do not add a third opinion. Leave
+  `RaidDeployVM.cs:342-359` (`ComputeArmyCapText`) alone — copy text only — but the gate must not read it.
+- **Acceptance:** neither line references `_vm.DeployableCount`; the button's enabled state and the
+  DEPLOY handler agree with the snapshot by construction.
+- **Blocked:** on E3. ⚠ `Assets/_Modules/Village/Hero/*` is held by another lane as of 2026-08-26.
+
+### Slice 823-E5 — The SLOT METER (the real remaining work, per verified fact 5)
+- A bare "3 of 10" reads as *three troops*. The deploy budget must render as a meter that fills by each
+  unit's **own slot cost**, so a 2-slot shieldguard visibly eats two of the three.
+- **Acceptance:** picking a shieldguard visibly consumes two units of the meter; a catapult (4 slots)
+  visibly cannot fit in a 3-slot allowance. Greyscale-legible; state in TEXT.
+- **Blocked:** on E3, and it is a UI lane (reserved today).
+- ⛔ `FirstRaidSoftGate` may WORD the copy. It may never re-decide the gate.
+
+### Slice 823-E6 — Coverage
+- **File:** a new suite modelled on `StrategicPlacementRegression.cs` (migrator-seeds-the-right-default
+  `:209-212`, round-trip `:362-378`, absent-on-old-save `:393`), plus
+  `Assets/Tests/EditMode/ArmyReadinessTests.cs`. One `DataRegression.cs` registration line — the
+  committer's line, given verbatim in the RESULT, never registered by an agent.
+- **Blocked:** on E1/E3.
+
+### Slice 823-E7 — ⛔ OWNER PIN: the two documented gaps. Neither is a bug to be quietly patched.
+1. **The E4 residual:** a veteran save whose raids were all sub-3-star or lost (no veterancy) **and**
+   whose camp cooldowns have all expired and been pruned migrates to `false` and gets **one** extra
+   soft-gated raid before self-healing. E4 offers **(a) accept and document** or **(b) a one-time
+   manual set for saves she names**. ⛔ The ticket does not pick; **(a)** is the no-code default.
+2. **The Village2 gap:** `Village2RaidController.cs:205` never calls `ReconcileRaidEnd`, so a
+   first-ever **stronghold** raid does not clear the flag. ⛔ Do **NOT** fix it with a second stamp —
+   that forks the one-owner seam. Either Village2 is routed through `ReconcileRaidEnd` as its own
+   change, or it is accepted and documented. Her call, its own capture.
+
+**Ordering:** E1 → E2 → E3 → (E4 ‖ E6) → E5. E7 to the owner in parallel.
+**Do not mark WO-823 FIXED until E1–E4 and E6 are green.** Phases A–D landing was not this ticket
+landing, and E1 landing will not be either.

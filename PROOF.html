@@ -1,0 +1,37 @@
+<!doctype html><html><head><meta charset='utf-8'>
+<meta name='viewport' content='width=device-width,initial-scale=1'>
+<title>Proof - Echoes of Elarion</title><style>
+body{background:#15171c;color:#ddd;font:15px/1.5 system-ui,Segoe UI,sans-serif;margin:0;padding:22px}
+h1{color:#e0b341;font-size:22px;margin:0 0 4px}
+.sub{color:#8b8f99;margin:0 0 20px}
+.run{border:1px solid #3a3d48;border-radius:10px;background:#191b21;padding:16px;margin:0 0 18px}
+.run h2{margin:0 0 2px;font-size:17px;color:#e0b341}
+.meta{color:#8b8f99;font-size:13px;margin:0 0 14px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px}
+.card{border:1px solid #484c59;border-radius:8px;background:#20232b;overflow:hidden}
+.card a{display:block;color:inherit;text-decoration:none}
+.card img{width:100%;display:block;background:#000}
+.card .cap{padding:9px 11px}
+.wo{color:#e0b341;font-weight:600}
+.kind{display:inline-block;font-size:11px;letter-spacing:.06em;border:1px solid #5a5f6d;
+border-radius:4px;padding:1px 6px;margin-left:6px;color:#aab}
+.why{color:#9aa0ad;font-size:13px;margin-top:4px}
+.missing{border-color:#a04b4b}.missing .cap{background:#2a1c1c}
+.oracle{background:#000;color:#7fd18f;font:12px/1.45 Consolas,monospace;padding:12px;white-space:pre-wrap;word-break:break-word}
+.warn{border:1px solid #a04b4b;background:#2a1c1c;border-radius:8px;padding:12px;margin:0 0 18px}
+</style></head><body>
+<h1>Proof</h1>
+<p class='sub'>2 item(s) across 1 run(s). Generated 2026-08-27 02:48. Click any image to open it full size.</p>
+<div class='run'>
+<h2>Wave 1 - seven lanes gated GREEN</h2>
+<p class='meta'>COMPILE_GATE_OK + REGRESSION_OK 294/294 - Builds/g3-c, Builds/g3-r - commit c7268971d</p>
+<div class='grid'>
+<div class='card'><div class='oracle'>REGRESSION_OK 294/294 suites -- 294 green, 0 red, 0 skipped
+STRUCTURE_CADENCE_OK - band = 10.40 m (2.6x the 4.0 m base fit height,
+population-independent). POPULATION (reported, not used as a threshold):
+27 measured base visual(s), median widest 3.78 m.</div><div class='cap'><span class='wo'>1239</span><span class='kind' title='No visual exists. Gate evidence stands in its place.'>ORACLE</span><div>Barracks footprint band</div><div class='why'>No visual exists - the band is an oracle threshold.</div></div></div>
+<div class='card'><div class='oracle'>BATTLE_QUIESCENCE_SUITE_FAIL: 3 failure(s) --
+  [session-end/arena win] the battle ended and the lock is STILL HELD
+  ...with the fix restored: REGRESSION_OK 294/294</div><div class='cap'><span class='wo'>1233</span><span class='kind' title='No visual exists. Gate evidence stands in its place.'>ORACLE</span><div>Battle-lock released at session end</div><div class='why'>RED banked first: disabling the one ClearPursuits line failed 3 cases.</div></div></div>
+</div></div>
+</body></html>

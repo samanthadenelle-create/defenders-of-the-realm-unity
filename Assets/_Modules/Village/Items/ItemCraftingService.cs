@@ -29,6 +29,10 @@ namespace DeNelle.Village.Items
         public static bool CanCraft(string recipeId)
         {
             if (!ItemDropSystem.Enabled) return false;
+            // WO-1235: a gated recipe the player has not been taught is not craftable, even if
+            // the larder could cover it. Fail-open for every ungated id (see RecipeUnlocks
+            // .IsCraftable), so this changes nothing outside the FTUE mana brew.
+            if (!RecipeUnlocks.IsCraftable(recipeId)) return false;
             var recipe = ConsumableCraftingCatalog.Find(recipeId);
             if (recipe == null || recipe.Ingredients == null) return false;
 
@@ -52,6 +56,17 @@ namespace DeNelle.Village.Items
         public static bool TryCraft(string recipeId)
         {
             if (!ItemDropSystem.Enabled) return false;       // SHIPS DARK.
+
+            // WO-1235 defence in depth: the VM hides an untaught gated recipe, but hiding a row
+            // is presentation. This is the MECHANIC, and it must refuse independently - a panel
+            // is not a permission system, and CraftingPanelMvvm is not the only possible caller.
+            if (!RecipeUnlocks.IsCraftable(recipeId))
+            {
+                DeNelle.Core.Diagnostics.FlowTrace.Warn("Crafting",
+                    $"craft REFUSED: recipe '{recipeId}' is gated and has not been taught on this save " +
+                    "(WO-1235). Nothing was consumed.");
+                return false;
+            }
 
             var recipe = ConsumableCraftingCatalog.Find(recipeId);
             if (recipe == null || recipe.Ingredients == null || string.IsNullOrEmpty(recipe.Output))

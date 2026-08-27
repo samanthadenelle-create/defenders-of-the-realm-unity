@@ -656,6 +656,45 @@ namespace DeNelle.Village
                     else if (_hasCast)
                         _animator.SetTrigger(AnimCast);
                 }
+
+                // WO-935 Phase 3 (melee row) — THE BLOW LANDING WAS THE ONLY SILENT BEAT IN A
+                // TROOP MELEE EXCHANGE. The swing anim plays above and the damage lands, but
+                // nothing marked the CONTACT, so on a structure target — which has no health bar
+                // in view — the player could not tell a hit from a whiff. The mage row has had
+                // its cast presentation since 2026-08-15 (CombatCast, the branch above); this is
+                // the same beat for everyone who swings.
+                //
+                // Deliberately a VERBATIM MIRROR of the enemy-side melee connect
+                // (Enemies/Enemy.cs, "melee connect vfx"): the two sides of the same exchange must
+                // read the same way, and copying the shipped pattern is what keeps them paired.
+                //   • Impact_Physical is ALREADY cataloged (Editor/VFXCatalogGenerator.cs -> Lana
+                //     Slash_stone_once) and is a ONESHOT, so it cannot consume one of the 20
+                //     leak-prone loop slots — troop melee ticks fast and a loop row here would
+                //     saturate the cap in seconds.
+                //   • It is a stone-slash ARC: the read is silhouette and direction, not hue
+                //     (colourblind law, CLAUDE.md §7 / WO-935 §2 VFX rule 5).
+                //   • Placed at the TARGET's chest, not the troop's — that is where the blow
+                //     resolves and where the eye already is.
+                //   • playSound:false — the attack cue belongs to the animator; VFXManager must
+                //     not layer a second one.
+                // Guard.Try on both, so a VFX fault can never cost the damage that already landed.
+                var foeComp = foe as Component;
+                if (foeComp != null)
+                {
+                    Vector3 hitPos = foeComp.transform.position + Vector3.up * 1.0f;
+
+                    Guard.Try("TroopVisual", "melee connect vfx", () =>
+                        VFXManager.Play(VFXType.Impact_Physical, hitPos,
+                                        Quaternion.identity, playSound: false));
+
+                    // WHAT the blow landed on, layered ON TOP of the generic arc rather than
+                    // replacing it: the arc is the CONTACT read and always fires, the surface
+                    // burst is the MATERIAL read. Resolve returns None rather than guessing and
+                    // Play no-ops on None, so an unrecognised target degrades to exactly the
+                    // behaviour above this comment.
+                    Guard.Try("TroopVisual", "melee surface impact", () =>
+                        HitSurfaceVfx.ResolveAndPlay(foeComp, hitPos));
+                }
             }
         }
 

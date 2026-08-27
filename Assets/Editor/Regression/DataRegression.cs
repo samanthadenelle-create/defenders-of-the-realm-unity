@@ -1263,6 +1263,14 @@ namespace DeNelle.Editor
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "vfx-ambient-budget suite", () => { if (!DeNelle.Editor.Regression.VfxAmbientLoopBudgetRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[vfx-ambient-budget] " + r); });
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "starter-armour suite", () => { if (!DeNelle.Editor.Regression.StarterArmourOwnershipRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[starter-armour] " + r); });
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "armour-catalog-job suite", () => { if (!DeNelle.Editor.Regression.ArmourCatalogJobRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[armour-catalog-job] " + r); });
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "early-ladder suite", () => { if (!DeNelle.Editor.WO1217EarlyEconomyLadderRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[early-ladder] " + r); });
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "palette-storage-tail suite", () => { if (!DeNelle.Editor.Regression.PaletteStorageTailRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[palette-storage-tail] " + r); });
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "json-only-source suite", () => { if (!DeNelle.Editor.Regression.JsonMirrorLiteralRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[json-only-source] " + r); });
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "siege-untouchable suite", () => { if (!DeNelle.Editor.Regression.SiegeUntouchableRegression.Run(out var siegeUntouchableReason)) failures.Add(siegeUntouchableReason); else log.AppendLine("[siege-untouchable] " + siegeUntouchableReason); });
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "resource-authority suite", () => { if (!DeNelle.Editor.Regression.ResourceAuthorityRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[resource-authority] " + r); });
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "echo-passive-mend suite", () => { if (!DeNelle.Editor.Regression.EchoPassiveMendCommsRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[echo-passive-mend] " + r); });
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "tutorial-coach suite", () => { if (!DeNelle.Editor.Regression.TutorialCoachEscalationRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[tutorial-coach] " + r); });
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "mana-scroll suite", () => { if (!DeNelle.Editor.Regression.ManaScrollFtueRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[mana-scroll] " + r); });
 
             // =====================================================================
             //  >>> REGISTERED ORACLE SUITES — END FENCE <<<  (new lines go ABOVE)

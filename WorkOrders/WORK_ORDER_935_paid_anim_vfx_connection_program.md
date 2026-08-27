@@ -296,3 +296,77 @@ Enemy codex is the **checklist of who needs which pair**, not a suggestion list.
 ---
 
 _End WO-935. SME sources listed in §0; measured disk counts 2026-08-09; utilization narrative aligned with asset-inventory + creative registry + enemy codex._
+
+---
+
+## SLICE PLAN 2026-08-26
+
+**Why this section exists:** §4 already phases this program, but a phase is not a slice — Phase 3 alone
+is four unrelated troop classes in three different files. The board's warning applies literally here:
+**one slice landing (the 08-21 KayKit caster Cast state) is not Phase 4 landing, and Phase 4 landing is
+not the ticket landing.** Below, each slice is one implementable unit with its own acceptance.
+
+**State verified at HEAD 2026-08-26 (opened at source):**
+- `Assets/_Modules/Village/Combat/CombatCast.cs` EXISTS; `TroopController.cs:643` routes the **mage**
+  strike through `CombatCast.Play(CastSpellIdFor(_element), …)` — Phase 3's battlemage row is DONE.
+- `TroopController.Attack`'s **non-cast branch** (`:650-659`) does `foe.TakeDamage(...)` + an anim
+  trigger and **plays no VFX at all** — Phase 3's melee and archer rows are UNSTARTED.
+- `VFXType.Impact_Physical` is cataloged (`Editor/VFXCatalogGenerator.cs:108` → Lana
+  `Slash_stone_once`, a ONESHOT) and the exact call pattern to copy is `Enemy.cs:1871-1886`
+  (`Impact_Physical` + `HitSurfaceVfx.ResolveAndPlay`, both `Guard.Try`-wrapped, `playSound:false`).
+- `VFXType.Projectile_Arrow` EXISTS in the enum. `Cast_MuzzleFlash` exists.
+- **No `docs/vfx/UTILIZATION_SCORECARD_*.md` exists** — Phase 0 has never been done.
+
+### Slice 935-1 — Troop MELEE strike VFX (Phase 3, melee row)
+- **File:** `Assets/_Modules/Village/Troops/TroopController.cs` — the `else` branch of `Attack` only.
+- **Do:** mirror `Enemy.cs:1871-1886` exactly: `Impact_Physical` at the target's chest +
+  `HitSurfaceVfx.ResolveAndPlay`, both inside `Guard.Try`, `playSound:false` (the anim/audio beat is
+  already played). No new `VFXType`, no new prefab, no catalog row.
+- **Acceptance:** a source-lint suite asserts the melee branch calls `VFXManager.Play` and
+  `HitSurfaceVfx`; the cast branch is untouched; felt-check that a raid melee hit now marks contact.
+- **Blocked:** no. **Smallest slice in this program — start here.**
+
+### Slice 935-2 — Troop ARCHER shot (Phase 3, archer row)
+- **Files:** `TroopController.cs`, and whichever projectile helper the hero ranger already uses — find
+  it, do NOT write a second projectile mover (`HS_ProjectileMover` / `SpellVfxFactory` are the
+  incumbents).
+- **Do:** the archer's damage is instant today. Either (a) muzzle + `Projectile_Arrow` streak +
+  impact as pure presentation over the existing instant damage, or (b) a real travel time. **(a) only**
+  — (b) changes combat math and is a different ticket.
+- **Acceptance:** an archer strike shows a travelling arrow read and an impact; DPS is byte-identical
+  (assert the damage call site is unmoved).
+- **Blocked:** on 935-1 (same method, same file — serialize them, do not fan out).
+
+### Slice 935-3 — Catapult volley (Phase 3, siege row)
+- **Do:** rock/EarthShatter burst at the impact point.
+- **Acceptance:** distinct from 935-1's slash arc at a glance, in greyscale.
+- ⚠ **Blocked — needs an owner VFX tag.** Memory `vfx-map-owner-tags-no-creative-pick`: the owner tags
+  the VFX key, the CLI maps key → hook verbatim. There is no `Impact_Earth*` / `EarthShatter` value in
+  `VFXType` today, so this slice needs both a pick and an append-only enum value. **Do not pick one.**
+
+### Slice 935-4 — Phase 0, the utilization scorecard (read-only)
+- **File:** ONE new dated doc `docs/vfx/UTILIZATION_SCORECARD_2026-08-XX.md`. Dated, not eternal canon.
+- **Do:** the §4 Phase 0 table — pack prefab → Resources path → catalog key → call site (or EMPTY).
+- **Acceptance:** the doc exists and every row cites a file:line or the word EMPTY.
+- **Blocked:** no. Read-only, perfectly parallel with 935-1. **This is the slice that tells the owner
+  what her money bought**, and it has never been run.
+
+### Slice 935-5 — Phase 2, hero mocap ROI (bake, needs Unity)
+- Three separable sub-slices, each its own acceptance: (a) generic `Cast` off `atk_slashright`;
+  (b) skill1/skill2 → `atk_jump` / `atk_shieldcharge`; (c) a non-null R-ultimate cast VFX row.
+- **Blocked:** needs a Unity bake seat. (b) is a felt/creative change — ⚠ it re-points what the owner
+  sees when she presses a button; recommend she is shown it, not told about it.
+
+### Slice 935-6 — Phase 4 remainder: enemy codex parity
+- The 08-21 KayKit caster slice is one row of the §3.3 matrix. The rest — Necromancer summon
+  substitute + aura, per-role Attack×2 / sweep / slam — is unstarted.
+- **Acceptance:** §3.3's table ticked ROW BY ROW against `docs/enemy-codex.md`, not an
+  `enemies.json` count. ⛔ Wildlands / wolf stays deferred per §5 unless the owner un-defers.
+
+### Slice 935-7 — Phase 5 + 6
+- **Blocked** on 935-4 (Phase 6's scorecard target is meaningless before Phase 0's baseline) and on
+  the owner's §9 question 3 (HDR).
+
+**Ordering:** 935-4 ‖ (935-1 → 935-2). Then 935-6. 935-3 and 935-5 park on their pins.
+**Owner pins outstanding, named precisely:** §9 Q1 (mocap-first vs troop-VFX-first — the WO's own
+recommendation is 1→3→2→4), §9 Q2 (un-defer Wildlands wolf), §9 Q3 (HDR on), and the 935-3 VFX key tag.

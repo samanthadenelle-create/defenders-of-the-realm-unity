@@ -85,6 +85,7 @@ namespace DeNelle.Editor.Regression
         private const string WalletSrc    = "Assets/_Modules/Wallet/WalletService.cs";
         private const string SkinSrc      = "Assets/_Modules/Wallet/WalletSkinBootstrap.cs";
         private const string StateSrc     = "Assets/_Modules/Core/State/GameStateService.cs";
+        private const string SignerSrc    = "Assets/_Modules/Core/Web3/BackendRequestSigner.cs";
         private const string LoginVmSrc   = "Assets/_Modules/Onboarding/LoginViewModel.cs";
         private const string LoginViewSrc = "Assets/_Modules/Onboarding/LoginPanelController.cs";
         private const string BugVmSrc     = "Assets/_Modules/HUD/BugReportVM.cs";
@@ -392,9 +393,46 @@ namespace DeNelle.Editor.Regression
                              "shape - a buggy provider could attest an arbitrary string");
 
             // Signature verification must stay strictly enforced (no guest shortcut).
-            if (!Regex.IsMatch(state, @"signer\s*==\s*null\s*\|\|\s*!\s*signer\.CanSign[\s\S]{0,600}?return\s+false"))
-                failures.Add("[real-wallet-gate] TryAttachAuthHeaders no longer FAILS CLOSED when there is " +
-                             "no real signer - wallet-signature verification has been weakened");
+            //
+            // ⛔ RE-POINTED 2026-08-27, NOT RELAXED. The guarantee did not move an inch; the
+            // FILE it lives in did. WO-1211 (dd73e4569) block-commented
+            // GameStateService.TryAttachAuthHeaders as retired history - and StripComments
+            // erases a /* ... */ block wholesale, so this case went red against an UNCHANGED
+            // invariant while the dead method still sat in the file. The live authority is now
+            // BackendRequestSigner.TryAttachAsync, whose guard is byte-for-byte the one that
+            // used to be here (guest rail first - which PREDATES WO-1211 and was present and
+            // passing at dd73e4569^ - then fail closed on no signer).
+            //
+            // Pinned in TWO places on purpose. The guard alone is not the invariant: a caller
+            // that stopped consulting it, or ignored its false, would re-open exactly the hole
+            // this case exists to close. So we assert the guard AND that the save rail aborts on it.
+            string signerSrc = StripComments(ReadSource(SignerSrc, failures) ?? string.Empty);
+
+            // ⚠ ANCHORED to the GUEST RAIL on purpose. MintSessionAsync carries a
+            // character-identical `signer == null || !signer.CanSign` guard, so an
+            // unanchored match would have gone on passing with TryAttachAsync's own guard
+            // DELETED - proven by mutation before this was tightened. The guest rail exists
+            // only in TryAttachAsync, so requiring guest-rail -> X-Guest-Id -> fail-closed IN
+            // THAT ORDER pins both the guard AND the fact that the guest shortcut is the only
+            // thing permitted to precede it.
+            if (!Regex.IsMatch(signerSrc,
+                    @"IsGuestIdentity\s*\(\s*playerId\s*\)[\s\S]{0,200}?X-Guest-Id[\s\S]{0,300}?" +
+                    @"signer\s*==\s*null\s*\|\|\s*!\s*signer\.CanSign" +
+                    // ⚠ TEMPERED: the window may not contain a `return true`. A plain lazy
+                    // [\s\S]{0,N}? happily skips PAST a fail-OPEN body to the next unrelated
+                    // `return false` further down the method - which is how a guard rewritten
+                    // to `if (no signer) return true;` was still passing. Proven by mutation.
+                    @"(?:(?!return\s+true)[\s\S]){0,400}?return\s+false"))
+                failures.Add("[real-wallet-gate] BackendRequestSigner.TryAttachAsync no longer FAILS CLOSED " +
+                             "when there is no real signer - wallet-signature verification has been weakened");
+
+            // The `if (` immediately before the `!` is load-bearing: it is what makes
+            // `if (someEscapeHatch && !await ...)` fail this assertion instead of satisfying it.
+            if (!Regex.IsMatch(state, @"if\s*\(\s*!\s*await\s+[\w\.]*BackendRequestSigner\.TryAttachAsync\s*\(" +
+                                      @"(?:(?!return\s+true)[\s\S]){0,600}?return\s+false"))
+                failures.Add("[real-wallet-gate] the cloud SAVE rail no longer ABORTS on a false from " +
+                             "BackendRequestSigner.TryAttachAsync - a save could go out unauthed on the " +
+                             "real rail even though the shared authority refused to vouch for it");
         }
 
         // =====================================================================

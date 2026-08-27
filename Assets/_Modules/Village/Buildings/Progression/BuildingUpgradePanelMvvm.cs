@@ -83,8 +83,8 @@ namespace DeNelle.Village.Buildings.Progression
         private static readonly Color BorderGold   = new Color(0.831f, 0.686f, 0.216f, 1f);      // gold rim (selected)
         private static readonly Color BorderGoldDim= new Color(0.58f, 0.48f, 0.22f, 0.75f);      // gold rim (available)
 
-        // Committed currency-icon role folder (Resources/RpgUi/currency/currency_*).
-        private const string CurrencyRole = "currency";
+        // WO-1195: the currency-icon ROLE constant is gone with the switch it fed. Naming a role
+        // folder here is half a registry; the role now lives only in concept-icons.json.
 
         private BuildingUpgradeVM _vm;
 
@@ -647,7 +647,12 @@ namespace DeNelle.Village.Buildings.Progression
                 new Vector2(x0, 0.06f), new Vector2(x1, 0.94f), PillFill, BorderDim, 1.5f);
 
             float textX0 = 0.08f;
-            var icon = RpgUiCatalog.Get(CurrencyRole, CurrencyIconName(kind));
+            // WO-1195 criterion 5: the icon resolves through the ONE data path
+            // (ConceptIconResolver -> concept-icons.json), never a hardcoded sprite name.
+            // The switch that used to live here was a SECOND icon registry, and it carried the
+            // same bug the kit had: it returned "currency_food" for CurrencyKind.Food, which
+            // canon §7 retired for Stone.
+            var icon = UiStyle.Icon(ElarionUiKit.ConceptIdFor(kind));
             if (icon != null)
             {
                 var g = new GameObject("Icon", typeof(Image));
@@ -669,18 +674,8 @@ namespace DeNelle.Village.Buildings.Progression
             _pills.Add(new PillRef { Kind = kind, Value = val });
         }
 
-        private static string CurrencyIconName(ElarionUiKit.CurrencyKind kind)
-        {
-            switch (kind)
-            {
-                case ElarionUiKit.CurrencyKind.Gold:    return "currency_gold";
-                case ElarionUiKit.CurrencyKind.Wood:    return "currency_wood";
-                case ElarionUiKit.CurrencyKind.Food:    return "currency_food";
-                case ElarionUiKit.CurrencyKind.Iron:    return "currency_iron";
-                case ElarionUiKit.CurrencyKind.Crystal: return "currency_crystal";
-                default:                                return "currency_gold";
-            }
-        }
+        // WO-1195: CurrencyIconName is DELETED, not re-pointed. It was the repo's second
+        // currency icon registry; the one authority is ElarionUiKit.ConceptIdFor + UiStyle.Icon.
 
         // Scan the VM's per-tile cost strings for the currency keywords this building spends.
         // Fixed display order (Gold primary first). Falls back to all five when nothing parses.

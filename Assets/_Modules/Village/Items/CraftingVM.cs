@@ -146,9 +146,18 @@ namespace DeNelle.Village.Items
 
             var inv = VillageInventory.Instance;
 
+            int hidden = 0;
             foreach (var r in recipes)
             {
                 if (r == null || string.IsNullOrEmpty(r.Id)) continue;
+
+                // ⭐ WO-1235: the ONE recipe-visibility gate, and it lives here because this is
+                // the ONLY place consumable recipes are enumerated for display. RecipeUnlocks
+                // .IsCraftable is fail-open - it returns true for every id that is not on the
+                // RecipeUnlockKeys allow-list, so this line changes nothing for any recipe
+                // except the Mana Draught brew the FTUE scroll teaches. Owner ruling WO-1235 #2:
+                // the scroll opens crafting as a visible system and hands over exactly one key.
+                if (!RecipeUnlocks.IsCraftable(r.Id)) { hidden++; continue; }
 
                 var lines = new List<CraftIngredientVM>();
                 if (r.Ingredients != null)
@@ -180,6 +189,14 @@ namespace DeNelle.Village.Items
                     lines,
                     ItemCraftingService.CanCraft(r.Id)));
             }
+
+            // §12: a panel that renders fewer rows than the catalog holds must SAY so, or the
+            // next "my recipe disappeared" report starts from zero evidence. This is the one
+            // line that distinguishes "gated, as designed" from "the catalog failed to load".
+            if (hidden > 0)
+                DeNelle.Core.Diagnostics.FlowTrace.Step("Crafting",
+                    $"crafting list: {_recipes.Count} shown, {hidden} withheld pending an unlock " +
+                    "(WO-1235 recipe gate; ungated recipes are never withheld).");
         }
 
         private void Raise() { if (!_disposed) Changed?.Invoke(); }

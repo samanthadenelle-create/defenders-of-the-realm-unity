@@ -788,6 +788,7 @@ def build_html(rows):
  @media(max-width:850px){{.vitem{{grid-template-columns:82px 70px 1fr}}.verdict,.vnote{{grid-column:3}}}}
 </style></head><body>
 <h1>Echoes of Elarion — Work Order Board</h1>
+<p style=\"margin:6px 0 16px\"><a href=\"PROOF.html\" style=\"color:#e0b341;font-weight:600\">&#9654; PROOF &mdash; screenshots and gate evidence for every completed item</a></p>
 <div class="sub">Generated <b>{stamp}</b> from the repo (WorkOrders/*.md) — the repo is the source of
  truth, this page is a view. Regenerate: <b>python tools/board_build.py</b>
  &nbsp;|&nbsp; {mint_html}</div>

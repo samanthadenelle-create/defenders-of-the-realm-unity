@@ -1,5 +1,6 @@
 {
- "version": 39,
+ "version": 41,
+ "_wo1082PaletteTailNote": "WO-1082 SECTION 4a (OWNER RULING 2026-08-26; 4b REJECTED): the barracks row moved ABOVE lumberyard so the three storage containers (lumberyard, foundry, silo) are the LAST Resource rows in entries[]. Nothing else moved - no id, no cost, no buildCost, no upgradeCost, no displayOrder, no lock state. 4b (moving the three collector_* rows to the end) was REJECTED because it requires deleting collector_lumbermill's displayOrder 10, which reverses the shipped WO-963 tutorial ruling that BuildCarouselTutorialOrderRegression case 2 protects. ARRAY POSITION IS ONLY HALF THE LEVER: BuildPaletteVM.AggregateOfType concatenates the verb's catalogTypes TYPE-MAJOR, so every Collector row trails every Resource row regardless of this file. The matching half is the Town row catalogTypes order in build-categories.json (see _wo1082TownTypeOrderNote there). Neither edit alone puts the containers last.",
  "_containerScaleNote2026_08_26": "WO-1224 Slice A: lumberyard, foundry and silo share the wide GenericContainer art, which the owner measured on device as reading about twice town scale. All three author heightMul 0.5 as one family. Lowering the uniform fit shrinks both height and footprint and is save-overlap-safe; device felt-test owns the final visual dial. Slice B placeholder-art replacement remains blocked and is not part of this version.",
  "_rolePassNote2026_08_24": "WO-1167 grouped the Town palette by authored roles. mine_crystal is unlocked and its crystal_producer role belongs in the Producers group (WO-1081); mill and lumbermill remain locked legacy rows with unique roles. Role grouping remains data-authored, never a code map (WO-1161).",
  "_sinkPassNote": "v24 = ECONOMY SINK PASS 2026-08-21 (OWNER RULING): a committed daily player should need 8-12 WEEKS to exhaust current content, a casual ~6 months; it was ONE EVENING. THE LEVER IS THE SINKS, NOT THE FAUCET -- harvest stays exactly 5 per 5 seconds (EchoBonusCalculator CommonResourcePerHour 3600) because \" 5 wood every 5 seconds\" is legible and a player can feel it; nudging it to 3.7/tick buys nothing and costs comprehension. Scaling factors: build x4, upgrade->L2 x10, upgrade->L3 x14. The THREE STORAGE ROWS (lumberyard/foundry/silo) use their own DECREASING ladder (x16/x16/x10/x8/x6.5/x6) because a uniform multiplier on a ladder that already doubles per step walks the cost off the end of the cap ladder it is gated behind -- foundry and silo wood steps were then lowered again by hand to 2000/2700/4000/6800/12000 because they are paid in WOOD, capped by the LUMBERYARD, and must fit the MATCHED container level. HARD CONSTRAINT, pinned by DeNelle.Editor.Regression.EconomySinkCapRegression [sink-cap]: NO COST MAY EXCEED THE MAX BANKABLE AMOUNT OF THAT RESOURCE (base 2000 + one container at level 1..6 = 3k/4k/6k/10k/18k/34k). A 3000-wood cost under a 2000 cap is UNCOMPLETABLE and nothing in the game explains why. CRYSTALS AND COINS ARE UNCAPPED BY DESIGN (TownBankCapacity.UncappableResources) -- that is why the crystal-priced magical ladders run to five figures. Cost baskets are UNCHANGED in shape: scaling never moves a resource across the WO-947 regular/magical line. NOTE the knock-on: BuildTimerConfig.TierForCost derives build TIME from the authored basket, so this pass also lifts the time ladder -- which is the intended coupling (see that file: \"the whole ladder re-tunes itself for free when the JSON cost pass lands\").",
@@ -432,7 +433,7 @@
    "role": "crystal_producer",
    "type": "Resource",
    "kind": "Cell",
-   "visualPrefabPath": "Structures/Well",
+   "visualPrefabPath": "Structures/CrystalMine",
    "repo": {
     "_crystalFaucetNote": "⛔ UNLOCKED 2026-08-24 (owner ruling, PROD-015). This is the EARLY crystal faucet and it was locked out of the Town palette, so crystals had NO town source at all - they arrived only from raids and one-time drops. Owner, verbatim: \"the only crystal faucet is way past when you need them, by then you are onto dungeons and raids\". ⭐ AND IT IS THE RIGHT FAUCET BECAUSE OF ITS COST: wood 320 + iron 200 + ZERO CRYSTALS. WO-1168 section 4 had made the Cathedral of Magic the crystal producer, which is CIRCULAR - the Cathedral costs 240 CRYSTALS, so you would need crystals to build the thing that makes them. That ruling is revised: the Cathedral keeps SPELLS and magic research; this row is the producer. ⚠ Same defect as the iron producer unlocked the same morning - a real, working producer (behaviorId CrystalMine, maxLevel 3) sitting behind a palette lock while the game priced things in the resource it makes.",
     "behaviorId": "CrystalMine",
@@ -468,9 +469,9 @@
    },
    "orientation": {
     "corrected": false,
-    "manual": false,
+    "manual": true,
     "euler": [
-     0,
+     90,
      0,
      0
     ],
@@ -480,7 +481,7 @@
      0
     ],
     "scale": 1,
-    "note": "prefab 'polyperfect/House_Medieval_Small' not found — no correction computed"
+    "note": "WO-1224 Slice B, 2026-08-26 - the owner supplied the real Crystal Mine model and this row now points at it (Assets/StructureContent/CrystalMine.fbx, guid 3c5d0584b7cd64649a972c3851bd1617). IT RENDERED THE WELL until today: the row literally authored visualPrefabPath \"Structures/Well\", so the Crystal Mine and the Healing Caravan both drew a stone-and-timber well with an orange roof (owner felt-test on build 2026.08.27.342800, capture tmp/well-crystalmine.png - \"and crystal mine is a wrong image\" / \"its the well\"). ORIENTATION IS DERIVED FROM THE ASSET, NOT COPIED FROM A NEIGHBOUR. Read off the tree this session: among the 13 structure rows whose art is a raw Tripo .fbx registered straight into the Structure_Art group, the manual euler correlates PERFECTLY with the importer flag bakeAxisConversion in the .fbx.meta - bakeAxisConversion 0 authors -90 (GenericContainer, farm, lumbermill, PetHouse2, \"arcane tower\", store: 6 of 6) and bakeAxisConversion 1 authors +90 (barracks, armorer, jeweler, Forge, ShopAndCrafting, Ballista_L1: 6 of 6). CrystalMine.fbx and HealingCaravan.fbx both carry bakeAxisConversion 1, so they take +90. \u26a0 DO NOT USE collector_forge (\"Structures/IronMine\") AS THE PRECEDENT even though it is the nearest-looking sibling - it is the ONE outlier (bakeAxisConversion 1, euler 0) and the FBX header says why: IronMine.fbx was written by \"Blender (stable FBX IO) - 3.4.1 - 4.37.1\", while CrystalMine.fbx, HealingCaravan.fbx, barracks.fbx and farm.fbx all come from \"Blender (stable FBX IO) - 5.0.1 - 5.14.0\". Different exporter generation, different native root pose. All of them declare identical axis metadata (UpAxis 1 / FrontAxis 2 / CoordAxis 0), so the axis block is not the discriminator; the exporter version plus the import flag are. Owner, verbatim: \"its tripo so have to remember that it generally is off x 90\" and \"the pointed object is Y top flat is bottom\". The correction is applied PRE-fit, on top of the identity reset VisualFactory.Skin performs on the instantiated root, so a row authoring a non-zero manual euler is PERMANENTLY INELIGIBLE for repo.preservePrefabRotation (the two would compose to 180 - upside down); see RepoProps.preservePrefabRotation. manual:true so no orientation tool overwrites it. \u26d4 NO heightMul IS AUTHORED, DELIBERATELY. A footprint is never corrected with heightMul - that is the shrunk farm the owner rejected (commit 31b41d19). VisualFactory.Fit is a UNIFORM scale of target/boundsY, so a wrongly-posed model drags its footprint up with it and the fix is the POSE. If the WO-1239 structure cadence oracle (10.40 m band) reds on this row, the pose is wrong - do not touch the band. Still no upgradeVisualPath: all three levels share this one mesh until tier art exists. \u26d4 THE ADDRESS IS THE CONTRACT - \"Structures/CrystalMine\" must stay registered in the Structure_Art Addressables group AND its content-hashed bundle must be PUSHED TO R2 with tools/r2-ship.ps1, or this is an invisible building in a live build (CLAUDE.md section 16; ContentPackingRegression [addresses] reds if the address is unregistered)."
    }
   },
   {
@@ -488,7 +489,7 @@
    "displayName": "Healing Caravan",
    "type": "Support",
    "kind": "Cell",
-   "visualPrefabPath": "Structures/Well",
+   "visualPrefabPath": "Structures/HealingCaravan",
    "repo": {
     "behaviorId": "HealingFountain",
     "npcModel": "CraftPixPeople/NPC_Peasant_5",
@@ -516,9 +517,9 @@
    },
    "orientation": {
     "corrected": false,
-    "manual": false,
+    "manual": true,
     "euler": [
-     0,
+     90,
      0,
      0
     ],
@@ -528,7 +529,7 @@
      0
     ],
     "scale": 1,
-    "note": "Healing Caravan support heal fountain; visual reuses Structures/Well until fountain meshes exist"
+    "note": "WO-1224 Slice B, 2026-08-26 - the Healing Caravan shared the Crystal Mine defect verbatim: both rows authored visualPrefabPath \"Structures/Well\", so both drew the well. It now points at the owner-supplied medieval wagon (Assets/StructureContent/HealingCaravan.fbx, guid af1e28122bbdb04458702b7707fb4b6a), staged in the same session and by the same pipeline as the crystal mine - identical mechanism, so it is fixed in the same pass rather than left to be rediscovered. ORIENTATION IS DERIVED FROM THE ASSET, NOT COPIED FROM A NEIGHBOUR. Read off the tree this session: among the 13 structure rows whose art is a raw Tripo .fbx registered straight into the Structure_Art group, the manual euler correlates PERFECTLY with the importer flag bakeAxisConversion in the .fbx.meta - bakeAxisConversion 0 authors -90 (GenericContainer, farm, lumbermill, PetHouse2, \"arcane tower\", store: 6 of 6) and bakeAxisConversion 1 authors +90 (barracks, armorer, jeweler, Forge, ShopAndCrafting, Ballista_L1: 6 of 6). CrystalMine.fbx and HealingCaravan.fbx both carry bakeAxisConversion 1, so they take +90. \u26a0 DO NOT USE collector_forge (\"Structures/IronMine\") AS THE PRECEDENT even though it is the nearest-looking sibling - it is the ONE outlier (bakeAxisConversion 1, euler 0) and the FBX header says why: IronMine.fbx was written by \"Blender (stable FBX IO) - 3.4.1 - 4.37.1\", while CrystalMine.fbx, HealingCaravan.fbx, barracks.fbx and farm.fbx all come from \"Blender (stable FBX IO) - 5.0.1 - 5.14.0\". Different exporter generation, different native root pose. All of them declare identical axis metadata (UpAxis 1 / FrontAxis 2 / CoordAxis 0), so the axis block is not the discriminator; the exporter version plus the import flag are. Owner, verbatim: \"its tripo so have to remember that it generally is off x 90\" and \"the pointed object is Y top flat is bottom\". The correction is applied PRE-fit, on top of the identity reset VisualFactory.Skin performs on the instantiated root, so a row authoring a non-zero manual euler is PERMANENTLY INELIGIBLE for repo.preservePrefabRotation (the two would compose to 180 - upside down); see RepoProps.preservePrefabRotation. manual:true so no orientation tool overwrites it. \u26d4 NO heightMul IS AUTHORED, DELIBERATELY. A footprint is never corrected with heightMul - that is the shrunk farm the owner rejected (commit 31b41d19). VisualFactory.Fit is a UNIFORM scale of target/boundsY, so a wrongly-posed model drags its footprint up with it and the fix is the POSE. If the WO-1239 structure cadence oracle (10.40 m band) reds on this row, the pose is wrong - do not touch the band. upgradeVisualPath stays two empty strings: the three levels share this one mesh until tier art exists. \u26d4 Same address contract as mine_crystal - \"Structures/HealingCaravan\" must stay registered in the Structure_Art group and its bundle pushed to R2 (CLAUDE.md section 16)."
    }
   },
   {
@@ -1237,6 +1238,53 @@
    }
   },
   {
+   "id": "barracks",
+   "displayName": "Barracks",
+   "description": "Trains and houses your troops.",
+   "role": "barracks",
+   "type": "Resource",
+   "kind": "Cell",
+   "visualPrefabPath": "Structures/barracks",
+   "repo": {
+    "behaviorId": "GameplayBuilding",
+    "npcModel": "CraftPixPeople/NPC_RichCitizen_4",
+    "buildCost": 480,
+    "cost": {
+     "wood": 600,
+     "food": 0,
+     "iron": 320,
+     "crystals": 0
+    },
+    "navSurface": "Blocker",
+    "placement": {
+     "mustSitOn": "Ground",
+     "footprint": 5,
+     "noOverlap": true,
+     "checkAffordable": true
+    },
+    "singleton": true,
+    "bakedTwins": [
+     "CastleBarracks"
+    ]
+   },
+   "orientation": {
+    "corrected": true,
+    "manual": true,
+    "euler": [
+     90,
+     0,
+     0
+    ],
+    "offset": [
+     0,
+     0,
+     0
+    ],
+    "scale": 1,
+    "note": "owner 2026-08-19 upright X=90 flagged fixed — applied PRE-fit via StructureFactory.OptsFor LocalRotation (GROK_BRIEF). Was [0,0,0] after 2026-08-18 axis-bake pass that discarded the imported root rotation."
+   }
+  },
+  {
    "id": "lumberyard",
    "displayName": "Lumberyard",
    "description": "Raises how much Wood your town can hold.",
@@ -1471,53 +1519,6 @@
     ],
     "scale": 1,
     "note": "standard Tripo import pose (pitch -90; owner 2026-07-13 'most Tripo are similar'); GenericContainer real model landed same day -- owner Orient trim as needed"
-   }
-  },
-  {
-   "id": "barracks",
-   "displayName": "Barracks",
-   "description": "Trains and houses your troops.",
-   "role": "barracks",
-   "type": "Resource",
-   "kind": "Cell",
-   "visualPrefabPath": "Structures/barracks",
-   "repo": {
-    "behaviorId": "GameplayBuilding",
-    "npcModel": "CraftPixPeople/NPC_RichCitizen_4",
-    "buildCost": 480,
-    "cost": {
-     "wood": 600,
-     "food": 0,
-     "iron": 320,
-     "crystals": 0
-    },
-    "navSurface": "Blocker",
-    "placement": {
-     "mustSitOn": "Ground",
-     "footprint": 5,
-     "noOverlap": true,
-     "checkAffordable": true
-    },
-    "singleton": true,
-    "bakedTwins": [
-     "CastleBarracks"
-    ]
-   },
-   "orientation": {
-    "corrected": true,
-    "manual": true,
-    "euler": [
-     90,
-     0,
-     0
-    ],
-    "offset": [
-     0,
-     0,
-     0
-    ],
-    "scale": 1,
-    "note": "owner 2026-08-19 upright X=90 flagged fixed — applied PRE-fit via StructureFactory.OptsFor LocalRotation (GROK_BRIEF). Was [0,0,0] after 2026-08-18 axis-bake pass that discarded the imported root rotation."
    }
   },
   {

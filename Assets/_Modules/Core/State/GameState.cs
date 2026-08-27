@@ -56,8 +56,22 @@ namespace DeNelle.Core.State
         /// for save back-compat (the aetherCrystals JsonProperty still round-trips); no
         /// code writes a meaningful value here anymore. Use Resources.Crystals.</summary>
         public int AetherCrystals = 0;
-        /// <summary>#12 — gathered Stone. Fresh = 20. Clamped ≥0.</summary>
-        public int Stone = 20;
+        // WO-1212 (2026-08-26) - `public int Stone = 20;` LIVED HERE AND IS RETIRED.
+        // There were TWO Stone balances. The one the player sees, spends and is granted
+        // into is Resources.Food: WO-1163 reused the legacy Food slot for the Stone
+        // vocabulary, and EconomyService.Food (Assets/_Modules/Village/EconomyService.cs:162)
+        // is its only reader and spender. This field was the OTHER one - no HUD read it, no
+        // cost spent it, and nothing but the new-game seed and a dev top-up ever wrote it -
+        // yet it was guarded AND time-derived-reconciled on both client and server. The
+        // obvious `food -> stone` rename would therefore have routed real, purchasable value
+        // into a balance the player can never see, with no error and no red test.
+        //
+        // ONE authority now: Resources.Food. The `stone` WIRE key survives on
+        // SaveSchema.PersistedState as an INBOUND ALIAS ONLY (GameStateService.FromPersisted,
+        // BackendLoadResponse) so a sender that speaks only `stone` is not dropped on the
+        // floor - never as a second balance. A STORED value is DISCARDED, not migrated:
+        // every writer was the seed, a dev top-up or an echo of those two, so summing it
+        // would invent value nobody earned on a build that takes real money.
         /// <summary>#13 — gathered Iron. Fresh = 5. Clamped ≥0.</summary>
         public int Iron = 5;
         /// <summary>#14 — gathered Wood. Fresh = 15. Clamped ≥0.</summary>

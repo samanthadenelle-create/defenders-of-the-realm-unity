@@ -1,6 +1,6 @@
 # WORK ORDER 1219 - The top-left HUD corner is over-subscribed, two labels truncate, and the action bar is missing Talk
 
-**Status:** FIXED 2026-08-26 - `COMPILE_GATE_OK` + `REGRESSION_OK 292/292`; post-fix APK visual/felt verification queued
+**Status:** FIXED 2026-08-27 - gated `COMPILE_GATE_OK` + `REGRESSION_OK 303/303 suites` (Builds/w3-c, Builds/w3-r). AWAITING OWNER FELT-VERIFY to close.
 **Silo:** HUD layout
 **Origin:** CLI observation from owner felt-test device captures, 2026-08-26, Seeker build
 `2026.08.26.341419`. Three separate defects, one lane (all HUD layout), so one ticket and one seat.

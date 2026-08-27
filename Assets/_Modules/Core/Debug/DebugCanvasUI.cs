@@ -134,7 +134,10 @@ namespace DeNelle.Core.DevOverlay
                 $"  BoundWallet : {s.BoundWallet ?? "<none>"}\n" +
                 $"  BestWave    : {s.BestWave}\n" +
                 $"  Crystals    : {s.Resources.Crystals}  Food: {s.Resources.Food}  Coins: {s.Resources.Coins}\n" +
-                $"  Voidshards  : {s.Voidshards}  Stone: {s.Stone}  Iron: {s.Iron}  Wood: {s.Wood}\n" +
+                // WO-1212: the Stone readout now shows the LIVE Stone slot (Resources.Food),
+                // not the retired GameState.Stone field it used to print - the only place in
+                // the game that ever displayed the dead balance.
+                $"  Voidshards  : {s.Voidshards}  Stone: {s.Resources.Food}  Iron: {s.Iron}  Wood: {s.Wood}\n" +
                 $"  Towers      : [{string.Join(",", s.Towers)}]\n" +
                 $"  TowerAbil   : [{string.Join(",", s.TowerAbilities)}]\n" +
                 $"  Pets        : {s.Pets.Count} owned\n" +

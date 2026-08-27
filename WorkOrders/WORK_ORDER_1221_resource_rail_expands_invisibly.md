@@ -1,6 +1,6 @@
 # WORK ORDER 1221 - Tapping the resource chip logs "expanded" and renders NOTHING
 
-**Status:** FIXED 2026-08-26 - `COMPILE_GATE_OK` + `REGRESSION_OK 292/292`; post-fix APK visual/felt verification queued
+**Status:** FIXED 2026-08-27 - gated `COMPILE_GATE_OK` + `REGRESSION_OK 303/303 suites` (Builds/w3-c, Builds/w3-r). AWAITING OWNER FELT-VERIFY to close.
 **Silo:** HUD
 **Severity:** P1 — the player cannot see Wood / Iron / Stone / Crystals anywhere in town.
 **Origin:** Owner felt-test, Seeker build `2026.08.26.341419`, 2026-08-26.

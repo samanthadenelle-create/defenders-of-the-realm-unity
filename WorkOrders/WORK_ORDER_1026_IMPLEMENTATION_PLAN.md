@@ -644,3 +644,149 @@ The owner's reasoning is the acceptance test for the whole feature:
 WARNING: the game is LIVE and money is real. A bug that takes a purchased good is not a balance
 issue, it is a refund and a one-star review. **The untouchable list must be enforced by an ORACLE,
 not by care.**
+---
+
+## SLICE PLAN 2026-08-26
+
+**Read this first — the ruling above does NOT land on an empty tree.** State verified at HEAD today,
+opened at source:
+
+| Fact | Where |
+|---|---|
+| `SaveSchema.CurrentVersion == 39`; `SaveMigrator` top step `{ 39, MigrateToV39 }` | `SaveSchema.cs:41`, `SaveMigrator.cs:80` |
+| Siege cadence + persisted report **SHIPPED** | `Village/Waves/SiegeScheduler.cs`, `SiegeSession.cs`, `DefenseReportBuilder.cs`, `Core/Defense/DefenseReport*.cs` |
+| Stakes were already implemented once, under a **different ruling** | `Core/Defense/StakeRules.cs`, WO-1139, Status FIXED |
+| `FeatureFlags.Siege` is **ON** per WO-1139's own status line | `WORK_ORDER_1139_implement_ruled_loss_stakes.md:1` |
+| Four siege suites exist | `SiegeLossStakesRegression`, `SiegeCadenceRegression`, `SiegeSpawnAuthorityRegression`, `DefenseReportContractRegression` |
+
+### ⛔ SLICE 1026-S0 — THE RULING COLLISION. OWNER PIN. NOTHING BELOW MOVES UNTIL THIS IS ANSWERED.
+
+**The 2026-08-26 ruling and the 2026-08-22 ruling say opposite things about the same mechanic, and the
+2026-08-22 one is BUILT, SHIPPED and FLAG-ON.**
+
+- **2026-08-22 (WO-1139, live in the tree):** *"COLLECTOR LOOTING ONLY. NO BANK THEFT."* A siege takes
+  half of a **broken collector's uncollected pending** and touches the banked wallet by **zero**.
+  `StakeRules.cs` had `StealFraction`, `ProtectedFloorFraction`, `ProtectedFloor(int)`, `TakeFrom(int,int)`
+  and `Build(...)` **deleted on purpose**, and `SiegeLossStakesRegression` now **fails the gate if the
+  bank moves at all** (case A measures the wallet before/after and asserts NO MOVEMENT).
+  The reasons the owner gave were recorded in the file header: CoC parity is a trap without shields /
+  village guard / loot cart / matchmaking; agency is the retention variable; bank loot has no agency,
+  least of all offline.
+- **2026-08-26 (this file, above):** theft of *"a PERCENTAGE of UNPROTECTED wood/iron/stone/gold"*
+  under *"a PROTECTED FLOOR"* and *"a CAP on a SINGLE attack"* — which is, almost line for line, the
+  flat-bank-theft-with-floor system that 08-22 deleted and made unbuildable.
+
+⚠ Newer ruling wins by date, and the owner's word is ground truth — **so the default reading is that
+bank theft is BACK.** But implementing it silently would delete a shipped, gate-enforced design and
+re-introduce the exact double-charge the 08-22 header warns about (the collector has ALREADY removed
+the resources from its own pending; a wallet debit on top charges the player twice for one siege).
+**That is a reconciliation only she can make.** Put it to her as three questions, not one:
+
+1. **Does collector looting SURVIVE alongside bank theft, or is it REPLACED by it?** If both stay, the
+   two must be one ledger with one total, or a siege bills twice.
+2. **"stone / gold" — which buckets does she actually mean?** `BankResource` is
+   `Wood / Iron / Food / Crystals / Coins` (`Core/Economy/TownBankCapacity.cs:151-158`). There is
+   **no Stone bucket** (`GameState.Stone` is a raw int outside the bank) and **gold is `Resources.Coins`**
+   (`NestedTypes.cs:84` says so verbatim). Her list also **omits FOOD, which is lootable today.**
+   ⛔ Do not map her four words onto five buckets by inference — one wrong mapping here is a live
+   economy defect on a published title.
+3. **The two numbers:** the floor percentage and the per-attack cap. 08-21 said 15% steal / 20%-of-
+   capacity floor and she superseded it. ⛔ Do not reuse those numbers as defaults; they are the
+   numbers of a retired ruling.
+
+### Slice 1026-S1 — THE UNTOUCHABLE ORACLE. Build this FIRST, before any theft arithmetic.
+- **Files:** `Assets/Editor/Regression/SiegeUntouchableRegression.cs` (NEW) + one `DataRegression.cs`
+  registration line (the committer's, not an agent's).
+- **Do:** enforce the 08-26 untouchable list — **Crystals, SKR, purchased goods, equipped gear** — by
+  ORACLE, not by care. Two independent axes so neither relies on the other:
+  (a) **behavioural** — sweep every `BankResource` value through `StakeRules.IsLootable` / `Add` and
+  assert crystals and coins can neither be classified lootable nor written into a ledger, and that
+  `StakesLedger` has **no field at all** for them;
+  (b) **source-lint** — no file in the siege blast radius may so much as NAME `OwnedItemIds`,
+  `GearInventory`, `GearLevels`, `EquippedRingId`, `EquippedAmuletId`, `Arena`/`ArenaWallet`/SKR, or a
+  crystal/coin wallet write. A siege that cannot mention a purchased good cannot take one.
+- **Acceptance:** the suite's own detector is self-tested against a synthetic banned token (so a pass
+  proves the scanner works, not that the scan was empty); every scanned file that is MISSING is a FAIL,
+  never a skip.
+- **Blocked:** **NO.** It is correct under *either* ruling, so it does not wait on S0. This is the
+  slice the owner's warning demands: *"a bug that takes a purchased good is a refund and a one-star
+  review."*
+
+### Slice 1026-S2 — The floor + cap as pure functions, with an oracle, taking nothing
+- **Files:** `Assets/_Modules/Core/Defense/StakeRules.cs`, `Assets/Editor/Regression/SiegeLossStakesRegression.cs`.
+- **Do:** `ProtectedFloor(resource, banked, capacity)` and `CapPerAttack(...)` as pure arithmetic that
+  **no caller invokes yet**. Table-driven oracle with hand-computed expectations (the existing suite's
+  house style: *"an AUTHORED table, not re-derived"*).
+- **Blocked:** on **S0** for the two numbers and the bucket list. ⛔ Do not pick them.
+
+### Slice 1026-S3 — The single debit, at the single seam
+- **File:** the `SiegeSession.Close` call site — **one** guarded, traced debit through the existing
+  economy path. Never a second economy writer.
+- **Blocked:** on S0 (does collector loot survive?) and S2. ⚠ `SiegeLossStakesRegression` case A
+  currently **asserts the bank does NOT move** — this slice must UPDATE that case in the same change,
+  and updating it is a deliberate act that must be named in the RESULT, never a quiet edit.
+
+### Slice 1026-S4 — The repair bill
+- Already ruled twice and consistently (08-21 and 08-26 agree): only structures that actually took
+  damage, `ceil(buildCost x damageFraction)`, **crystals never charged**.
+- **Blocked:** verify against `WaveDamageReport.Entry.RepairCost`, which already prices repairs — this
+  may be DONE. Check before building; do not add a second pricer.
+
+### Slice 1026-S5 — Legibility: the report says WHY, in text
+- The 08-22 header's own conclusion: *"the lever with better returns is LEGIBILITY, not a bigger
+  number."* The panel must name the structure that let them in and what it cost, in words.
+- **Acceptance:** the owner's sentence — *"Damn, I should improve my defenses"* — and it must survive
+  a greyscale read (she is colourblind; state lives in TEXT, never in hue).
+- **Blocked:** on S3 for real numbers to render. ⚠ Panel files are held by other lanes as of today.
+
+### Slice 1026-S6 — Flag + felt-test + close
+- `FeatureFlags.Siege` is already ON. PO felt-verifies and closes (CLAUDE.md §13); CLI never closes.
+- **Blocked:** on everything above.
+
+**Ordering:** S1 now, alone. S0 to the owner today. Then S2 → S3 → S4/S5 → S6.
+⛔ **Do not mark this program FIXED on S1.** S1 is a guard rail, not the consequence loop.
+
+---
+
+## OWNER RULING 2026-08-27 - THE COLLISION IS RESOLVED. BANK THEFT REPLACES COLLECTOR LOOTING.
+
+The 2026-08-26 siege ruling reinstated a system the 2026-08-22 ruling (WO-1139) had deleted.
+Put to the owner as a direct collision; she ruled:
+
+### 1. BANK THEFT **REPLACES** COLLECTOR LOOTING
+A siege bills **ONCE** per attack, not twice. Collector looting is REMOVED.
+
+⛔ **WO-1139 is SUPERSEDED, not ignored.** `SiegeLossStakesRegression` currently FAILS THE GATE IF THE
+BANK MOVES AT ALL - it is the oracle for "COLLECTOR LOOTING ONLY. NO BANK THEFT." That oracle must be
+**RE-POINTED to the new rule, never deleted**, and WO-1139 gets a `SUPERSEDED 2026-08-27` banner
+rather than a rewrite (CLAUDE.md section 15). A green oracle turning red here is the ORACLE DOING ITS
+JOB; do not route around it.
+
+### 2. THE LOOTABLE SET
+```
+LOOTABLE      Wood, Iron, Stone, Coins
+UNTOUCHABLE   Crystals, SKR, purchased goods, equipped gear
+```
+
+### ⚠ 3. "STONE" IS THE BALANCE INTERNALLY NAMED `Food`. THIS IS THE TRAP.
+Owner verbatim: *"food was depreicated and is stone."*
+
+`BankResource` has **no Stone member** - it is `Wood, Iron, Food, Crystals, Coins`. The HUD labels
+`GameState.Resources.Food` as **"Stone"**, and WO-1212 confirmed that slot is the LIVE authority
+(the field literally *named* `Stone` was dead code and has been retired).
+
+So: **`BankResource.Food` IS Stone.** The enum member keeps the old name because it is a live
+SAVE AND WIRE KEY and renaming it would break existing saves. Do NOT rename it. Do NOT add a Stone
+member. Do NOT conclude from the name that Stone is unimplemented or that Food is a separate
+lootable resource - that misreading is exactly how a siege would either take the wrong balance or
+take one balance twice.
+
+"Gold" in the ruling is `Resources.Coins`.
+
+### 4. The floor and the cap are STILL UNRULED
+A protected floor and a per-attack cap are both REQUIRED by the 08-26 ruling, but no numbers were
+given. ⛔ Do NOT reuse the retired ruling's 15%/20% pair as defaults - they belong to the deleted
+system. Implement the mechanism with the numbers authored in data, surface what the seam needs, and
+ask. The acceptance test stays the owner's own sentence:
+
+> "Damn, I should improve my defenses" instead of "The game erased something I paid for. Delete."

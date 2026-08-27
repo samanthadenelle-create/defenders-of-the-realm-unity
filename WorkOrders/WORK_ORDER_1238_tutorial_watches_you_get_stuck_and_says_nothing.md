@@ -1,6 +1,6 @@
 # WORK ORDER 1238 - The tutorial watched the player get stuck for 120s and never said a word
 
-**Status:** READY TO IMPLEMENT
+**Status:** FIXED 2026-08-27 - gated `COMPILE_GATE_OK` + `REGRESSION_OK 303/303 suites` (Builds/w3-c, Builds/w3-r). AWAITING OWNER FELT-VERIFY to close.
 **Silo:** Onboarding / Tutorial
 **Severity:** P2 for the player, P1 for FTUE conversion. The watchdog contains the damage; the
 teaching failure is what costs the install.

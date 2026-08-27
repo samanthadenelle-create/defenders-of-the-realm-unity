@@ -741,19 +741,53 @@ namespace DeNelle.Editor
         // =====================================================================
         private static void CheckSaveRoundTrip(Action<string> Fail)
         {
-            // Canary on unreviewed schema bumps. WO-738 established the richer echoLanes token at
-            // v33; v34-v36 are additive + reviewed; WO-830 extended the TOKEN GRAMMAR ONLY
-            // (resource:level — same wire shape, NO bump). Update this pin in the SAME breath as
-            // any future reviewed bump (CLAUDE.md §15).
+            // Canary on unreviewed schema bumps -- RE-POINTED 2026-08-27 so it can never go stale.
             //
-            // v37 REVIEWED 2026-08-07 (WO-911): paid basket on BuildJobData — additive only.
-            // v38 REVIEWED 2026-08-09 (WO-934): army loadouts nested under Army — no echoLanes change.
-            // Update this pin in the SAME breath as any future reviewed bump (CLAUDE.md §15).
-            if (SaveSchema.CurrentVersion != 39)
-                Fail($"SaveSchema.CurrentVersion={SaveSchema.CurrentVersion} (expected 39; echoLanes token must survive the current schema)");
+            // It used to read `if (SaveSchema.CurrentVersion != 39) Fail(...)`: a RESTATED copy of a
+            // number that lives in exactly one place. WO-1235 bumped the schema to v40 (the recipe
+            // unlock gate, entirely unrelated to Echoes) and this suite reddened against CORRECT code
+            // -- the same duplicated-state drift CLAUDE.md records for the WO-number block and the
+            // retired dependency table. Pinning 40 would only move the staleness one version along.
+            //
+            // The GUARANTEE this pin ever protected is not "the schema is version N". It is:
+            //   the echoLanes token survives WHATEVER the current schema is.
+            // So assert THAT, against SaveSchema.CurrentVersion as READ, over the whole migration
+            // range. A future v41 that clobbers, blanks or re-grammars echoLanes reds here on the
+            // day it lands; a future v41 that leaves it alone passes with no edit to this file.
+            int currentSchema = SaveSchema.CurrentVersion;
+            if (currentSchema < 33)
+                Fail($"SaveSchema.CurrentVersion={currentSchema} is BELOW v33, the version at which " +
+                     "WO-738 established the rich echoLanes token -- the token cannot survive a schema " +
+                     "that predates it. This is a rollback, not a bump.");
+
+            // Every from-version in the live chain must carry a NON-NULL rich token through untouched.
+            // SaveMigrator only ever SEEDS echoLanes when it is null (SaveMigrator.cs:468); any step,
+            // present or future, that rewrites a populated token fails this loop.
+            // The one rich WO-830 token this whole group uses -- declared once, asserted twice
+            // (migration chain below, then the real serialize/deserialize/validate path).
+            const string richToken = "crystals:3,idle,wood:1,gold:2";
+            for (int fromVersion = 1; fromVersion <= currentSchema; fromVersion++)
+            {
+                try
+                {
+                    var chained = SaveMigrator.Migrate(
+                        new SaveSchema.PersistedState { EchoLanes = richToken, EchoCount = 6 }, fromVersion);
+                    if (chained == null)
+                        Fail($"SaveMigrator.Migrate(v{fromVersion} -> v{currentSchema}) returned null");
+                    else if (chained.EchoLanes != richToken)
+                        Fail($"echoLanes did NOT survive the migration chain from v{fromVersion} to the " +
+                             $"current schema v{currentSchema}: wrote '{richToken}', read back " +
+                             $"'{chained.EchoLanes ?? "<null>"}' -- a migration step is rewriting a " +
+                             "populated token (it may only SEED a null one).");
+                }
+                catch (Exception ex)
+                {
+                    Fail($"SaveMigrator.Migrate(v{fromVersion} -> v{currentSchema}) THREW: " +
+                         $"{ex.GetType().Name}: {ex.Message}");
+                }
+            }
 
             // A rich WO-830 resource token survives the REAL serialize → deserialize → validate path.
-            const string richToken = "crystals:3,idle,wood:1,gold:2";
             var ps = new SaveSchema.PersistedState { EchoLanes = richToken, EchoCount = 6 };
             try
             {

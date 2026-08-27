@@ -1,0 +1,24 @@
+{
+  "runs": [
+    {
+      "title": "Wave 1 - seven lanes gated GREEN",
+      "meta": "COMPILE_GATE_OK + REGRESSION_OK 294/294 - Builds/g3-c, Builds/g3-r - commit c7268971d",
+      "items": [
+        {
+          "wo": "1239",
+          "title": "Barracks footprint band",
+          "kind": "oracle",
+          "why": "No visual exists - the band is an oracle threshold.",
+          "evidence": "REGRESSION_OK 294/294 suites -- 294 green, 0 red, 0 skipped\nSTRUCTURE_CADENCE_OK - band = 10.40 m (2.6x the 4.0 m base fit height,\npopulation-independent). POPULATION (reported, not used as a threshold):\n27 measured base visual(s), median widest 3.78 m."
+        },
+        {
+          "wo": "1233",
+          "title": "Battle-lock released at session end",
+          "kind": "oracle",
+          "why": "RED banked first: disabling the one ClearPursuits line failed 3 cases.",
+          "evidence": "BATTLE_QUIESCENCE_SUITE_FAIL: 3 failure(s) --\n  [session-end/arena win] the battle ended and the lock is STILL HELD\n  ...with the fix restored: REGRESSION_OK 294/294"
+        }
+      ]
+    }
+  ]
+}

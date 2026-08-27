@@ -1,6 +1,6 @@
 # WORK ORDER 1211 - The game asks the player to sign on EVERY launch
 
-**Status:** READY - IMPLEMENTED 2026-08-26, FULL GATE + DEVICE PROOF OWED. Boot/connect no longer mints or signs: cloud load attaches only an already-usable in-memory session (or guest header) and otherwise keeps the local save. Save writes route unconditionally through shared `BackendRequestSigner.TryAttachAsync` and remain fail-closed. The preserved oracle was restored/registered; fresh deliberate RED `BACKEND_SAVE_AUTH_FAIL`, focused green `BACKEND_SAVE_AUTH_OK`, and fresh `COMPILE_GATE_OK`. Claude must run the full regression after resolving/acknowledging the unrelated pre-existing WO-1239 structure-cadence red, then device-prove two cold launches with zero wallet sheets and no boot-window `sign_messages`.
+**Status:** FIXED 2026-08-27 - gated `COMPILE_GATE_OK` + `REGRESSION_OK 303/303 suites` (Builds/w3-c, Builds/w3-r). AWAITING OWNER FELT-VERIFY to close.
 **Minted:** 2026-08-25 (CLI lead, main line; banner bumped 1211 -> 1212 in the same edit)
 **Silo:** Core / backend auth + Wallet
 **Reported:** the owner, 2026-08-25, on build `2026.08.26.341323`: *"check why it asks for

@@ -98,7 +98,8 @@ namespace DeNelle.Core.Tests
             Assert.That(reloaded.Resources.Food, Is.EqualTo(80));
             Assert.That(reloaded.Resources.Coins, Is.EqualTo(15));
             Assert.That(reloaded.Voidshards, Is.EqualTo(5));
-            Assert.That(reloaded.Stone, Is.EqualTo(20));
+            // WO-1212: GameState.Stone is retired. The live Stone slot (Resources.Food = 80)
+            // is asserted above and is deliberately UNCHANGED by the retirement.
             // WO-682: strategic placement is always on - New Game seeds the core-kit budget.
             Assert.That(reloaded.Iron, Is.EqualTo(StartingBudget.StrategicIron));
             Assert.That(reloaded.Wood, Is.EqualTo(StartingBudget.StrategicWood));
@@ -513,7 +514,8 @@ namespace DeNelle.Core.Tests
             Assert.That(a.WallLevel, Is.EqualTo((int)e.WallLevel.Value), "#11 wallLevel");
 
             // #12..#14
-            Assert.That(a.Stone, Is.EqualTo((int)e.Stone.Value), "#12 stone");
+            // WO-1212: #12 `stone` is a wire-only legacy key now - there is no GameState field
+            // to compare it against. Round-tripping of the live Stone slot is #5 resources.food.
             Assert.That(a.Iron, Is.EqualTo((int)e.Iron.Value), "#13 iron");
             Assert.That(a.Wood, Is.EqualTo((int)e.Wood.Value), "#14 wood");
 
@@ -696,7 +698,7 @@ namespace DeNelle.Core.Tests
             s.Towers = new List<int> { 2, 0, 1, 3, 0, 0, 0, 0, 0 };
             s.TowerAbilities = new List<int> { 1, 0, 2, 0, 0, 0, 0, 0, 0 };
             s.WallLevel = (int)p.WallLevel.Value;
-            s.Stone = (int)p.Stone.Value;
+            // WO-1212: no GameState.Stone to hydrate - the wire key is an inbound alias only.
             s.Iron = (int)p.Iron.Value;
             s.Wood = (int)p.Wood.Value;
             s.BuildingCooldowns = new SerializableDict<string, double>(p.BuildingCooldowns);

@@ -168,9 +168,11 @@
       "id": "craft-survival-mana-potion",
       "output": "cons_mana_draught",
       "displayName": "Brew Mana Draught",
+      "_comment": "OWNER RULING 2026-08-26 - THE RECIPE MOVED TO MATCH THE SCROLL ART (ItemIcons/scroll_mana_potion.jpg), which depicts THREE ingredients. This is the FTUE teaching recipe, so a mismatch between the scroll the player reads and the recipe the panel shows would actively mis-teach. Was: ManaCrystalShard x2 + ArcaneDust x1. Do NOT rename these materials or their ids - renaming was explicitly considered and REJECTED because the display names appear across loot, chests, the treasure panel and every other recipe; the art is accepted as a near-enough likeness (Moonleaf/Moonbloom, Pure/Spring Water, Crystal Dust/Arcane Dust). Do NOT change the 1/1/1 counts without a further ruling. All three drop from the live loot tables and two of them were in the owner's own treasure chest, so a new player usually holds most of the recipe before they ever read the scroll.",
       "ingredients": [
-        { "id": "ManaCrystalShard", "count": 2 },
-        { "id": "ArcaneDust", "count": 1 }
+        { "id": "ing_moonbloom", "count": 1 },
+        { "id": "ArcaneDust", "count": 1 },
+        { "id": "ing_spring_water", "count": 1 }
       ]
     }
   ]

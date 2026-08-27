@@ -150,6 +150,39 @@ namespace DeNelle.Village
         public double LastOfflineCountedSeconds { get; private set; }
 
         // =====================================================================
+        //  WO-1231 -- THE PLAYER-FACING HALF (communication only, no economy change)
+        // ---------------------------------------------------------------------
+        //  Passive mending was correct and completely silent: it debited Wood and Iron
+        //  with no cause shown, and stalled broke with no reason shown. Both facts lived
+        //  ONLY in the FlowTrace lines below, which no player ever reads. These two
+        //  members are the seam that carries them to the two approved surfaces --
+        //  the Echo card's PASSIVE MENDING block (live) and the while-you-were-away
+        //  summary (offline). Nothing here changes a rate, a cost or the count x level
+        //  math; the owner ruled 2026-08-26 that the SPEND STAYS.
+        //
+        //  ⛔ STATIC ON PURPOSE: the away summary is rendered by OfflineHarvestService /
+        //  WelcomeBackPopup, and a headless oracle drives ApplyOfflineWindow on a bare
+        //  component. Hanging the report off Instance would make both paths depend on a
+        //  singleton that editmode AddComponent never populates (Awake does not run).
+        // =====================================================================
+
+        /// <summary>
+        /// What passive mending DID over the most recent offline window -- the spend
+        /// attribution the while-you-were-away summary renders. Reset at the top of every
+        /// <see cref="ApplyOfflineWindow"/> so a later claim can never re-report an older
+        /// one's spend.
+        /// </summary>
+        public static EchoMendReport LastOfflineMendReport { get; private set; } = EchoMendReport.None;
+
+        /// <summary>
+        /// Player-facing name of the resource the ONLINE loop is currently short of, or ""
+        /// when mending is not stalled. Drives the Echo card's stall chip, which is the
+        /// only place a player can learn that their walls stopped mending because they are
+        /// broke. A WORD, never a hue (colourblind law).
+        /// </summary>
+        public string StalledResourceLabel { get; private set; } = "";
+
+        // =====================================================================
         //  Lifecycle
         // =====================================================================
 
@@ -198,6 +231,11 @@ namespace DeNelle.Village
 
             LastOfflineGain = 0f;
             LastOfflineCountedSeconds = 0.0;
+            // WO-1231: a fresh report per claim. Never carry a previous window's spend
+            // into this one -- an away summary that re-reports old debits is a worse lie
+            // than the silence it replaced.
+            var report = new EchoMendReport { ClaimSequence = window.Sequence };
+            LastOfflineMendReport = report;
 
             float rate = EchoBonusCalculator.RepairFractionsPerSecond();
             if (rate <= 0f)
@@ -219,16 +257,27 @@ namespace DeNelle.Village
                 (window.ExceedsCap(OfflineCapHours) ? $" (capped at {OfflineCapHours:0.##}h)" : "") +
                 $" at {rate * 3600f:0.###} fractions/h -> gained {gained:0.###}, banked {_workBudget:0.###}/{MaxBankedFractions:0.###}.");
 
-            int done = ApplyBankedWork("echo offline repair");
+            int done = ApplyBankedWork("echo offline repair", report);
             FlowTrace.Step("Echo",
                 $"claim #{window.Sequence}: 'echo-repair' applied {done} repair(s); {_workBudget:0.###} work banked for the online loop.");
+            // WO-1231: the ONE line that proves the away summary is reporting the same
+            // numbers the wallet was actually charged. Permanent (never strip, CLAUDE.md S12).
+            FlowTrace.Step("Echo",
+                $"claim #{window.Sequence}: 'echo-repair' REPORT -> {report.Repairs} repair(s), " +
+                $"+{report.HealthFraction:0.###} wall health, spent w{report.SpentWood}/i{report.SpentIron}/" +
+                $"s{report.SpentStone}/c{report.SpentCrystals}" +
+                (report.Stalled ? $", STALLED on {report.StalledResource}" : "") + ".");
             Changed?.Invoke();
         }
 
         /// <summary>Complete worst-first repairs while the banked budget AND the wallet
         /// cover the worst target. Honest stops: no targets, budget short, or broke
         /// (each traced). Returns the number of completed repairs.</summary>
-        private int ApplyBankedWork(string reason)
+        /// <param name="report">WO-1231: optional player-facing tally. Every completed
+        /// repair folds its ACTUAL spend in (the value TryRepairWorst reports, not the
+        /// quoted price), and a broke stop names the short resource -- so the away summary
+        /// reports what the wallet was really charged and never an estimate.</param>
+        private int ApplyBankedWork(string reason, EchoMendReport report = null)
         {
             var repair = EnsureRepair();
             if (repair == null) return 0;
@@ -254,9 +303,11 @@ namespace DeNelle.Village
 
                 if (!repair.CanAffordMaterials(cost))
                 {
+                    string shortLabel = ShortResourceLabel(repair, cost);
+                    if (report != null) report.StalledResource = shortLabel;
                     FlowTrace.Warn("Echo",
                         $"{reason}: cannot afford {WallRepairController.DescribeMaterials(cost)} for '{name}' " +
-                        "-- waiting for materials (repair SPENDS; never free hitpoints).");
+                        $"-- waiting for materials ({shortLabel}) (repair SPENDS; never free hitpoints).");
                     break;
                 }
 
@@ -265,6 +316,12 @@ namespace DeNelle.Village
 
                 _workBudget = Mathf.Max(0f, _workBudget - repairedFrac);
                 done++;
+                if (report != null)
+                {
+                    report.Repairs++;
+                    report.HealthFraction += Mathf.Max(0f, repairedFrac);
+                    report.AddSpend(spent);
+                }
                 FlowTrace.Step("Echo",
                     $"{reason}: repaired '{repairedName}' (dmg {repairedFrac:0.00}) for " +
                     $"{WallRepairController.DescribeMaterials(spent)}; {_workBudget:0.###} work remains.");
@@ -335,10 +392,15 @@ namespace DeNelle.Village
 
             if (!repair.CanAffordMaterials(worstCost))
             {
-                SetStatus(EchoRepairStatus.WaitingMaterials, true);
+                // WO-1231: name the SHORT resource, not just "materials". "Waiting for
+                // materials" is only actionable once the player knows WHICH one to go get,
+                // and this is the state that previously existed nowhere but a FlowTrace.
+                string shortLabel = ShortResourceLabel(repair, worstCost);
+                SetStatus(EchoRepairStatus.WaitingMaterials, true, shortLabel);
                 FlowTrace.Throttle("Echo", "repair-broke", 15f,
                     $"Echo repair: cannot afford {WallRepairController.DescribeMaterials(worstCost)} " +
-                    $"for '{worstName}' -- waiting for materials (repair SPENDS; never free hitpoints).");
+                    $"for '{worstName}' -- waiting for materials ({shortLabel}) " +
+                    "(repair SPENDS; never free hitpoints).");
                 return;
             }
 
@@ -353,13 +415,54 @@ namespace DeNelle.Village
             }
         }
 
-        private void SetStatus(EchoRepairStatus status, bool hasTargets)
+        /// <param name="stalledLabel">WO-1231: the short resource's player-facing name while
+        /// <paramref name="status"/> is <see cref="EchoRepairStatus.WaitingMaterials"/>.
+        /// Forced to "" for every other status so the card's stall chip cannot survive the
+        /// state that produced it -- a chip that outlives its cause is the same class of lie
+        /// as the silence this ticket removed.</param>
+        private void SetStatus(EchoRepairStatus status, bool hasTargets, string stalledLabel = "")
         {
-            if (Status == status && HasRepairTargets == hasTargets) return;
+            string label = status == EchoRepairStatus.WaitingMaterials ? (stalledLabel ?? "") : "";
+            if (Status == status && HasRepairTargets == hasTargets && StalledResourceLabel == label) return;
             Status = status;
             HasRepairTargets = hasTargets;
-            FlowTrace.Step("Echo", $"Echo repair status -> {status} (targets={hasTargets}).");
+            StalledResourceLabel = label;
+            FlowTrace.Step("Echo", $"Echo repair status -> {status} (targets={hasTargets}" +
+                (label.Length > 0 ? $", short of {label}" : "") + ").");
             Changed?.Invoke();
+        }
+
+        // =====================================================================
+        //  WO-1231 -- WHICH resource is short (the actionable half of the stall)
+        // =====================================================================
+
+        /// <summary>
+        /// Names the resource(s) the wallet cannot cover for <paramref name="cost"/>, in the
+        /// player's words ("Wood", "Wood and Iron").
+        /// <para>
+        /// It decides this by re-asking the SAME authority the stall itself used --
+        /// <see cref="WallRepairController.CanAffordMaterials"/>, once per slot in isolation
+        /// -- rather than reading the wallet fields directly. That matters: the affordability
+        /// gate runs through EconomyService and has its own rules, so a second, hand-rolled
+        /// wallet comparison here would be a duplicate authority that drifts, and would
+        /// eventually name a resource the player is NOT actually short of. Reusing the gate
+        /// means the chip can only ever say what the gate says.
+        /// </para>
+        /// Returns "" when every slot is individually affordable (a race, or an
+        /// EconomyService-absent refusal) -- the chip then falls back to the un-named
+        /// "waiting for materials", which is still true.
+        /// </summary>
+        private static string ShortResourceLabel(WallRepairController repair, CoreCost cost)
+        {
+            if (repair == null) return "";
+            var missing = new System.Collections.Generic.List<string>(4);
+            if (cost.wood > 0 && !repair.CanAffordMaterials(new CoreCost { wood = cost.wood })) missing.Add("Wood");
+            if (cost.iron > 0 && !repair.CanAffordMaterials(new CoreCost { iron = cost.iron })) missing.Add("Iron");
+            if (cost.food > 0 && !repair.CanAffordMaterials(new CoreCost { food = cost.food })) missing.Add("Stone");
+            if (cost.crystals > 0 && !repair.CanAffordMaterials(new CoreCost { crystals = cost.crystals })) missing.Add("Crystals");
+            if (missing.Count == 0) return "";
+            if (missing.Count == 1) return missing[0];
+            return string.Join(" and ", missing.ToArray());
         }
 
         // =====================================================================

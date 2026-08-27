@@ -342,3 +342,96 @@ about the *tool* (whether the oracle's existing graphic-less-hit-area exclusion 
 assert), not about the *game*. The lead takes it and reports which way, with the red count after.
 
 **Status → READY.**
+
+---
+
+## FINDINGS - 2026-08-26 (edit-only agent lane; NOT gated, NOT committed)
+
+**No allow-list entry was added.** The list is still `ArmyMuster` + `EquipDrawer`, exactly two.
+
+### The red set MOVED, and nobody wrote it down
+
+The RESULT above measured `UI_TOUCH_FAIL x43 over 89 panels` on 2026-08-23 across
+DialogueOptions 18 / RumorBoard 18 / RaidDeploy 4 / EndStateWaveClear 3. The **freshest capture
+log in the tree** - `Builds/ship-ui-capture.log`, **2026-08-25 20:47** - reads:
+
+```
+UI_TOUCH_FAIL x39 over 89 panels (84 clean)
+```
+
+and the 39 break down as **BuildPaletteDock 33** (11 x 3 aspects) + **RumorBoard 6** (3 x 2
+aspects). **DialogueOptions, RaidDeploy and EndStateWaveClear are GREEN** - three of the owner's
+four newly-red panels were conformed, not waived, and 76 clean panels became 84.
+
+So the owner's ruling has largely been carried out already. What is left is two panels, and
+**neither is this lane's to edit.**
+
+### 1. BuildPaletteDock (33 findings) - a REGRESSION, root cause proven from the log numbers
+
+Every finding is `BUTTON OVER TEXT`: a build card's Button covering a **neighbouring** card's
+`CostRow/CostText`. At 1920x1080 the cards themselves are pitched correctly (`Card_workshop`
+x -498..-238, `Card_forge` -228..32, `Card_mine_crystal` 42..302, `Card_pet-house` 312..572 -
+260 wide, 270 apart, no BUTTONS OVERLAP anywhere). It is the **cost text that escapes its own
+card**.
+
+**The proof is a single number in the log.** Three `CostText` children of one card sit at
+x -444.4, -136.4 and 171.6 - a pitch of exactly **308 px** inside a `CostRow` that is only
+228.8 px wide (0.06..0.94 of a 260 px card). 308 is not arbitrary:
+
+```
+308 = 100 (Image default sizeDelta) + 4 (spacing) + 200 (TextMeshProUGUI default sizeDelta) + 4
+```
+
+`ElarionUiKit.CostRow` sets `childControlWidth = false`, and `HorizontalLayoutGroup` then lays
+children out at their raw `sizeDelta`, **ignoring the `LayoutElement.preferredWidth` the same
+method carefully sets** (22 for the icon, `max(28, len*8)` for the text). The corroborating
+detail is that the measured **height is 24 px = `preferredHeight` exactly** - because
+`childControlHeight` IS true. One axis is controlled and honours its LayoutElement; the other is
+not and does not. A three-part row therefore measures ~920 px inside a 228.8 px band and spills
+onto both neighbours.
+
+**Introduced by `0c65af9b0` "WO-1195 centralize cost formatting (partial)" (2026-08-25
+14:58)**, which replaced BuildPaletteUI's single anchored `MakeText` cost label (0.06..0.94 -
+structurally unable to leave its card) with the new shared `CostRow`. The 08-23 capture predates
+it and shows no BuildPaletteDock findings; the 08-25 20:47 capture postdates it and shows 33.
+
+**The fix is one line** - `layout.childControlWidth = true;` in
+`Assets/_Modules/Core/UI/CostFormat.cs:105` - which makes the group honour the preferred widths
+already authored there (3 parts land at ~170 px, comfortably inside 228.8, centred by
+`MiddleCenter`).
+
+⛔ **NOT APPLIED HERE: `Assets/_Modules/Core/UI/*` is reserved by another lane this batch.**
+Handing it to the lead rather than editing across the fence.
+
+⚠ **Blast radius the owning lane must check:** `CostRow` is shared. Every other caller
+(`ElarionUiKitDetailCard`, `BuildStructureInfoPanel`, `BuildingUpgradePanelMvvm`, `JewelerPanel`,
+the shop/barracks VMs) inherits the same unmanaged widths; BuildPaletteDock is simply the only
+one of them in the capture enumeration, so it is the only one the oracle can currently see. The
+other surfaces are not proven clean - they are **unmeasured**, which is not the same thing.
+
+### 2. RumorBoard (6 findings) - owned by another lane
+
+```
+BUTTON OVER TEXT [RumorBoard_1080x2340] 'Zone_Body/Viewport/Content/Card_uicap_rumor_active1'
+  covers 'Zone_Body/TabBand/Chips/Chip_all/ObsBtn_* All/Label' ("* All") by 103.9x48 ref px
+  ... and 'DetailPane/DetailBody' by 42x124 ref px (x2 cards)
+```
+
+A rumour card overlapping the tab-band chip label above it and the detail pane beside it - the
+scroll content is not clipped to its viewport at these two portrait-tall aspects (it is clean at
+1920x1080). **A second agent is rewriting the rumour board in this same batch**, so this is
+reported, not edited: two seats in one file is the duplicate-work failure this batch already
+refused once.
+
+### The ~21 tap-catcher lead call
+
+**Moot as measured.** The 08-25 log carries **zero** `BUTTONS OVERLAP` findings - all 39 are
+`BUTTON OVER TEXT`, and that rule already excludes graphic-less buttons at
+`LayoutOracle.cs:141`. The DialogueOptions/EndState overlaps the ruling was about were **fixed
+at their source**, not excluded, so no rule needs narrowing. ⛔ The oracle was not weakened,
+narrowed or disabled in any respect.
+
+### Nothing was edited for this ticket
+
+The only two red panels resolve to `Assets/_Modules/Core/UI/CostFormat.cs` and the rumour board,
+both held by other lanes. No `.cs` touched, no allow-list entry added, no threshold moved.

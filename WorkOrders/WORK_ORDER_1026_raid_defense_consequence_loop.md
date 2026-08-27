@@ -349,3 +349,48 @@ bill, and holding this ticket open for them would misreport a shipped subsystem 
 ⛔ **`FeatureFlags.Siege` STAYS OFF until WO-1139 lands.** The cadence would otherwise open sieges
 that resolve and report but take nothing - the "safe interim" this ticket named, which is fine to
 sit in the tree and wrong to ship as the finished loop.
+
+---
+
+## OWNER RULING 2026-08-27 - THE COLLISION IS RESOLVED. BANK THEFT REPLACES COLLECTOR LOOTING.
+
+The 2026-08-26 siege ruling reinstated a system the 2026-08-22 ruling (WO-1139) had deleted.
+Put to the owner as a direct collision; she ruled:
+
+### 1. BANK THEFT **REPLACES** COLLECTOR LOOTING
+A siege bills **ONCE** per attack, not twice. Collector looting is REMOVED.
+
+⛔ **WO-1139 is SUPERSEDED, not ignored.** `SiegeLossStakesRegression` currently FAILS THE GATE IF THE
+BANK MOVES AT ALL - it is the oracle for "COLLECTOR LOOTING ONLY. NO BANK THEFT." That oracle must be
+**RE-POINTED to the new rule, never deleted**, and WO-1139 gets a `SUPERSEDED 2026-08-27` banner
+rather than a rewrite (CLAUDE.md section 15). A green oracle turning red here is the ORACLE DOING ITS
+JOB; do not route around it.
+
+### 2. THE LOOTABLE SET
+```
+LOOTABLE      Wood, Iron, Stone, Coins
+UNTOUCHABLE   Crystals, SKR, purchased goods, equipped gear
+```
+
+### ⚠ 3. "STONE" IS THE BALANCE INTERNALLY NAMED `Food`. THIS IS THE TRAP.
+Owner verbatim: *"food was depreicated and is stone."*
+
+`BankResource` has **no Stone member** - it is `Wood, Iron, Food, Crystals, Coins`. The HUD labels
+`GameState.Resources.Food` as **"Stone"**, and WO-1212 confirmed that slot is the LIVE authority
+(the field literally *named* `Stone` was dead code and has been retired).
+
+So: **`BankResource.Food` IS Stone.** The enum member keeps the old name because it is a live
+SAVE AND WIRE KEY and renaming it would break existing saves. Do NOT rename it. Do NOT add a Stone
+member. Do NOT conclude from the name that Stone is unimplemented or that Food is a separate
+lootable resource - that misreading is exactly how a siege would either take the wrong balance or
+take one balance twice.
+
+"Gold" in the ruling is `Resources.Coins`.
+
+### 4. The floor and the cap are STILL UNRULED
+A protected floor and a per-attack cap are both REQUIRED by the 08-26 ruling, but no numbers were
+given. ⛔ Do NOT reuse the retired ruling's 15%/20% pair as defaults - they belong to the deleted
+system. Implement the mechanism with the numbers authored in data, surface what the seam needs, and
+ask. The acceptance test stays the owner's own sentence:
+
+> "Damn, I should improve my defenses" instead of "The game erased something I paid for. Delete."

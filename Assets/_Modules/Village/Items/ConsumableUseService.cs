@@ -154,8 +154,16 @@ namespace DeNelle.Village.Items
         /// PanelId.ConsumableCrafting. Scans the Building collection rather than trusting a
         /// catalog/marker, because the station is injected at runtime and stands down on most
         /// saves. Cheap enough here: this runs once per EMPTY-slot tap, never in a loop.
+        ///
+        /// ⭐ MADE PUBLIC BY WO-1235. The owner's ruling #3 is a HARD PRECONDITION on the mana
+        /// recipe scroll - verbatim "Never teach a verb the player cannot immediately perform" -
+        /// so ManaRecipeScrollService has to ask the same question this method already answers.
+        /// It calls THIS one rather than growing a second scan: two copies of "is there a brewer"
+        /// is how the empty-larder line and the scroll gate would come to disagree, and the whole
+        /// point of the precondition is that they must not.
+        /// ⚠ The caller there scans at 1 Hz, not per tap - keep this allocation-light.
         /// </summary>
-        private static bool AlchemyBenchIsStanding()
+        public static bool AlchemyBenchIsStanding()
         {
             var buildings = Object.FindObjectsByType<Building>(FindObjectsSortMode.None);
             if (buildings == null) return false;

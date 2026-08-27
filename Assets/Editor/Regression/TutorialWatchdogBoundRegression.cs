@@ -36,7 +36,10 @@
 //       recorded as a discarded gap; builder-open and timeScale<=0 frames are excluded (a true
 //       pause, not a reset, so pre-builder idle survives); the placement bound (300s) and the
 //       default bound (120s) are both honoured; and the coach cadence, riding the SAME budget,
-//       delivers all 4 beats before the 120s bound expires instead of 2 in four wall minutes.
+//       delivers the SAME beats at the SAME played moments whether or not the OS suspended the
+//       app mid-beat. (WO-1238 re-pointed this case to READ the schedule from
+//       TutorialFlow.CoachBeatDueAt instead of mirroring "45s x 4" as literals; the ladder's
+//       absolute timings are owned by TutorialCoachEscalationRegression.)
 //
 //   (b) SOURCE INVARIANTS (comment-stripped lint) — the flow-side wiring needs a play session,
 //       so it is pinned at source: TickWatchdog must NOT compare a wall-clock stamp against the
@@ -109,8 +112,9 @@ namespace DeNelle.Editor.Regression
                          "captured " + CapturedSuspendSeconds.ToString("0") + "s app-suspend jump (F8 seq 2513) " +
                          "contributes one clamped frame and is recorded as a discarded gap instead of skipping the " +
                          "beat, builder-open and timeScale<=0 frames are excluded as a true pause, the 300s placement " +
-                         "bound holds, all 4 coach beats land inside the bound, and the flow-side wiring plus the " +
-                         "untouched 120s bound are pinned at source.";
+                         "bound holds, the coach ladder delivers the same beats at the same PLAYED moments with or " +
+                         "without a suspend, and the flow-side wiring plus the untouched 120s bound are pinned at " +
+                         "source.";
                 return true;
             }
             reason = "tutorial-watchdog-bound FAIL x" + failures.Count + ": " + string.Join(" | ", failures);
@@ -276,8 +280,8 @@ namespace DeNelle.Editor.Regression
         // =====================================================================
         //  Case 5 - the coach cadence rides the SAME budget as the watchdog
         // ---------------------------------------------------------------------
-        //  The invariant is NOT "all 4 beats land" (45s x 4 = 180s does not fit a 120s bound —
-        //  2 beats before a rescue is correct). It is that BACKGROUNDING THE APP CANNOT CHANGE
+        //  The invariant is NOT "every beat lands" (the ladder deliberately fits fewer beats than
+        //  the bound allows). It is that BACKGROUNDING THE APP CANNOT CHANGE
         //  THE COACHED EXPERIENCE: the player must get the same nudges, at the same played
         //  moments, whether or not the OS suspended the game in the middle of the beat. That is
         //  precisely what the capture violated — 'beat 2/4' delivered at an alleged 245s, with
@@ -286,15 +290,29 @@ namespace DeNelle.Editor.Regression
 
         private static void Case5_CoachCadenceFitsInsideTheBound(List<string> failures)
         {
-            const float coachEvery = 45f;   // TutorialFlow.CoachNudgeSeconds
-            const int   maxBeats   = 4;     // TutorialFlow.CoachNudgeMaxBeats
+            // ⚠ RE-POINTED BY WO-1238 (2026-08-26). This case used to mirror the shipped cadence
+            // as two literals (`coachEvery = 45f`, `maxBeats = 4`) and re-implement the schedule
+            // as "last beat + a flat interval". WO-1238 replaced that with a MEASURED ladder of
+            // bound-fractions, so those literals became a mirror asserting a cadence the game no
+            // longer has — the exact stale-duplicate shape this repo keeps paying for.
+            //
+            // The schedule is now READ FROM THE FLOW (TutorialFlow.CoachBeatDueAt is pure and
+            // public precisely so this replay cannot drift from it). What this case proves is
+            // UNCHANGED and is not a cadence assertion at all: backgrounding the app must not
+            // change the coached experience. The absolute timings are pinned by
+            // TutorialCoachEscalationRegression, which owns the ladder contract.
+            int maxBeats = 0;
+            while (maxBeats < 16 &&
+                   TutorialFlow.CoachBeatDueAt(maxBeats, DefaultBound) <
+                   TutorialFlow.CoachBeatDueAt(maxBeats + 1, DefaultBound))
+                maxBeats++;
+            maxBeats++;   // the loop stops one short: the last rung is where the clamp flattens.
 
             // suspendAtFrame < 0 = a clean session; otherwise the captured 196s jump lands there.
             Func<int, List<float>> replay = suspendAtFrame =>
             {
                 var clock = new TutorialFlow.StepClock();
                 int beats = 0;
-                float next = coachEvery;
                 var beatTimes = new List<float>();
 
                 for (int i = 0; i < 60 * 400; i++)
@@ -302,10 +320,9 @@ namespace DeNelle.Editor.Regression
                     if (i == suspendAtFrame) clock.Tick(CapturedSuspendSeconds, false);
                     else clock.Tick(Frame60, false);
 
-                    if (beats < maxBeats && clock.Charged >= next)
+                    if (beats < maxBeats && clock.Charged >= TutorialFlow.CoachBeatDueAt(beats, DefaultBound))
                     {
                         beats++;
-                        next = clock.Charged + coachEvery;
                         beatTimes.Add(clock.Charged);
                     }
                     if (clock.Expired(DefaultBound)) break;

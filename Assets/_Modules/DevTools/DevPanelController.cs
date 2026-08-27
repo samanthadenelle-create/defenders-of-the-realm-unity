@@ -614,7 +614,8 @@ namespace DeNelle.DevTools
                 SetMetric("crystals", r.Crystals.ToString("N0"));
                 SetMetric("food", r.Food.ToString("N0"));
                 SetMetric("coins", r.Coins.ToString("N0"));
-                SetMetric("materials", $"{st.Stone} / {st.Iron} / {st.Wood}");
+                // WO-1212: Stone reads the live slot (Resources.Food), not the retired field.
+                SetMetric("materials", $"{r.Food} / {st.Iron} / {st.Wood}");
             }
             else { SetMetric("crystals", "—"); SetMetric("food", "—"); SetMetric("coins", "—"); SetMetric("materials", "—"); }
 
@@ -1247,7 +1248,9 @@ namespace DeNelle.DevTools
                 state.Resources = bal0;
             }
 
-            state.Stone += 50000;   // legacy build material (BuildMenu costs) — generous one-click load for full-base testing
+            // WO-1212: the `state.Stone += 50000` dev top-up is REMOVED - it filled the
+            // retired balance nothing spends. Stone the player can actually spend is granted
+            // as `food` in both branches above (25000).
             state.Magic += 100;     // Magic tech axis (DEF-121) — building-upgrade gate
             SaveAndNotifyResources();
             PingHud();              // force the on-screen resource bar to populate immediately

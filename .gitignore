@@ -12,6 +12,13 @@
 !/logs/f8-inbox/
 logs/f8-inbox/*
 !logs/f8-inbox/README.md
+# WO-1200 seat mailbox (UI -> CLI return path). Same shape as the F8 inbox and for the same
+# reason: the CONTRACT is tracked, the TRAFFIC is not. Delivery does not need git -- the UI
+# seat writes into this same working tree (see the README) -- and untracked message bodies
+# keep a mailbox from becoming a publishing channel.
+!/logs/seat-mail/
+logs/seat-mail/*
+!logs/seat-mail/README.md
 /[Uu]ser[Ss]ettings/
 
 # MemoryCaptures can get excessive in size.

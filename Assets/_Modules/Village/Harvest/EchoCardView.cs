@@ -63,6 +63,12 @@
 // medallion do not exist, so those lines fall back into the body's fixed-pixel stack
 // and the picker well simply starts lower. Never a fraction, either way.
 //
+// WO-1231 (2026-08-26): the card also carries the PASSIVE MENDING block -- an
+// explainer, the LIVE mend rate, the spend disclosure, and a conditional stall plate.
+// It is appended to the BOTTOM of the picker's scroll column (see the constants below
+// for why), it is entirely non-interactive, and it EXPLAINS a passive system. It is
+// NOT a step back toward the retired repair assignment (owner ruling WO-1108).
+//
 // Reached via a TAP on an OWNED roster card (EchoRosterView) -> EchoCard.Open(echoIndex).
 // Singleton view host on a DDOL GameObject.
 // =============================================================================
@@ -124,6 +130,35 @@ namespace DeNelle.Village
         public const float ChipNotePx = FloorLinePx;                            // 39.5
         /// <summary>Gap between picker rows (kit scroll-zone spacing).</summary>
         public const float RowGapPx = 8f;
+
+        // -- WO-1231 PASSIVE MENDING BLOCK -------------------------------------
+        // The block is appended to the BOTTOM of the picker's scroll column rather than
+        // pinned as more fixed bands in the body well, and that is a deliberate layout
+        // decision, not a shortcut:
+        //   * the body well is already the card's binding constraint (WO-852: five chips
+        //     at MinTouchPx need 560 px and the well resolves to ~418 at 2340x1080).
+        //     Another four fixed bands would have to come out of the picker, and the
+        //     picker cannot give them -- it is already scrolling because it does not fit.
+        //   * every row here is a LABEL or a framed PLATE. Nothing in the block is
+        //     tappable, so ClampMinTouch never sees it and the block cannot grow a
+        //     control into a neighbour (the WO-852 failure mode). MinTouchPx is
+        //     untouched, and satisfying it creates no new overlap because no new touch
+        //     target is created at all.
+        //   * rows still carry their OWN pixel height (MakeScrollZone runs
+        //     childControlHeight:false), same law as a chip row.
+        // [STOP] Do not "promote" any of these rows to a Button. Repair is passive and
+        // count-driven (owner ruling WO-1108); there is nothing here to tap.
+
+        /// <summary>Separator + heading row for the passive-mending block.</summary>
+        public const float MendHeaderPx = FloorLinePx;
+        /// <summary>The explainer -- TWO floor line boxes, wrapped (FitBlock), because the
+        /// sentence is deliberately a sentence and not a truncated fragment.</summary>
+        public const float MendExplainerPx = FloorLinePx * 2f;
+        /// <summary>One informational line (rate / spend note).</summary>
+        public const float MendLinePx = FloorLinePx;
+        /// <summary>The framed stall plate. Taller than a line box so the frame reads as a
+        /// SHAPE -- the greyscale-safe half of "this state is different".</summary>
+        public const float MendStallPx = FloorLinePx + 16f;
         /// <summary>Gap between stacked fixed bands.</summary>
         public const float BandGapPx = 8f;
         /// <summary>Inset from the body well's top/bottom edge.</summary>
@@ -402,6 +437,13 @@ namespace DeNelle.Village
                 sig.Append(chips[i].Id).Append('|').Append(chips[i].Label).Append('|')
                    .Append(chips[i].Selected ? '1' : '0').Append('|')
                    .Append(chips[i].Note).Append(';');
+            // WO-1231: the mend block lives in the same column and therefore in the same
+            // signature. Leaving it out would freeze the stall chip on screen after the
+            // player earned enough Wood -- a stale "PAUSED" is worse than no chip.
+            string mendRate = _vm.MendRateText;
+            string mendStall = _vm.MendStallText;
+            sig.Append("MEND|").Append(mendRate).Append('|').Append(mendStall).Append(';');
+
             string chipSig = sig.ToString();
             if (_chips.Count > 0 && chipSig == _lastChipSig) return;
             _lastChipSig = chipSig;
@@ -471,6 +513,8 @@ namespace DeNelle.Village
                 }
             });
 
+            BuildMendBlock(mendRate, mendStall);
+
             // The kit column only measures after a layout pass; force it so the first
             // frame already scrolls correctly (the RaidDeployScreen FinalizeScroll idiom).
             if (_chipRow is RectTransform contentRt)
@@ -478,6 +522,88 @@ namespace DeNelle.Village
                 Canvas.ForceUpdateCanvases();
                 LayoutRebuilder.ForceRebuildLayoutImmediate(contentRt);
             }
+        }
+
+        // =====================================================================
+        //  WO-1231 -- the PASSIVE MENDING block (read-only; appended to the column)
+        // ---------------------------------------------------------------------
+        //  Owner felt-test 2026-08-26: "if its passive we should somehow let them know".
+        //  Four rows of TEXT plus one CONDITIONAL framed plate. No verb, no chip, no
+        //  assignment -- repair is passive and count-driven (owner ruling WO-1108) and
+        //  this block only SAYS SO. The strings come from EchoMendCopy via the VM; the
+        //  View invents nothing (MVVM strict).
+        //
+        //  COLOURBLIND: the stall plate is separated from the informational rows by a
+        //  FRAME (shape) and by the word "PAUSED", so a greyscale capture reads the same
+        //  as a colour one. The gilt tint is decoration on top of a cue that already works
+        //  without it.
+        // =====================================================================
+        private void BuildMendBlock(string rateText, string stallText)
+        {
+            if (_chipRow == null) return;
+
+            Guard.Try("Echo", "build passive-mending block", () =>
+            {
+                // Heading -- a quiet rule-line's worth of separation from the last chip,
+                // carried by the gap in the row's own height rather than a hairline Image
+                // (one fewer hand-rolled widget for the [ui-obsidian] ratchet to see).
+                MendRow("MendHeader", MendHeaderPx + BandGapPx, _vm.MendHeaderText,
+                        ElarionUi.Gilt, (int)ElarionUi.FontFloorMobile, bold: true, block: false);
+
+                // The explainer. FitBlock (wrapped), NOT FitSingleLine: this sentence must
+                // read as a sentence. A single-line fit would auto-size it toward the hard
+                // floor to squeeze ~110 characters onto one line, which is precisely the
+                // unreadable-fragment failure the rumor board is being redesigned for.
+                MendRow("MendExplainer", MendExplainerPx, _vm.MendExplainerText,
+                        ElarionUi.Parchment, (int)ElarionUi.FontFloorMobile, bold: false, block: true);
+
+                // The LIVE rate -- bound to EchoBonusCalculator.RepairFractionsPerSecond()
+                // through the VM. This is the line that tells the player, for the first
+                // time anywhere in the game, that waking another Echo mends faster.
+                MendRow("MendRate", MendLinePx, rateText,
+                        ElarionUi.Parchment, (int)ElarionUi.FontFloorMobile, bold: true, block: false);
+
+                // The SPEND disclosure. Owner ruled the spend stays (2026-08-26), so the
+                // fix is to say it out loud instead of letting Wood and Iron leave with no
+                // cause shown anywhere in the game.
+                MendRow("MendSpend", MendLinePx, _vm.MendSpendText,
+                        ElarionUi.ParchmentDim, (int)ElarionUi.FontFloorMobile, bold: false, block: false);
+
+                // The STALL plate -- rendered ONLY while stalled, and destroyed with the
+                // rest of the column when it clears (the signature above includes it).
+                if (!string.IsNullOrEmpty(stallText))
+                {
+                    var rowGo = MendRowHost("MendStall", MendStallPx);
+                    var plate = ElarionUiKit.PanelFramed(rowGo.transform,
+                        new Vector2(0.04f, 0.06f), new Vector2(0.96f, 0.94f));
+                    var stall = ElarionUiKit.Label(plate.transform, stallText, 0f, 1f,
+                        ElarionUi.Gilt, (int)ElarionUi.FontFloorMobile,
+                        TextAlignmentOptions.Center, 0.04f, 0.96f, bold: true);
+                    ElarionUiKit.FitSingleLine(stall);
+                    stall.raycastTarget = false;
+                }
+            });
+        }
+
+        /// <summary>A fixed-height, non-interactive row in the picker's scroll column
+        /// (the same row law the chips follow: the row owns its pixel height).</summary>
+        private GameObject MendRowHost(string name, float heightPx)
+        {
+            var rowGo = new GameObject(name, typeof(RectTransform));
+            rowGo.transform.SetParent(_chipRow, false);
+            rowGo.GetComponent<RectTransform>().sizeDelta = new Vector2(0f, heightPx);
+            _chips.Add(rowGo);   // torn down with the column on the next signature change
+            return rowGo;
+        }
+
+        private void MendRow(string name, float heightPx, string text, Color color,
+                             int size, bool bold, bool block)
+        {
+            var rowGo = MendRowHost(name, heightPx);
+            var label = ElarionUiKit.Label(rowGo.transform, text ?? "", 0f, 1f,
+                color, size, TextAlignmentOptions.Center, 0.03f, 0.97f, bold: bold);
+            if (block) ElarionUiKit.FitBlock(label); else ElarionUiKit.FitSingleLine(label);
+            label.raycastTarget = false;
         }
 
         private void OnChipTapped(string resourceId)

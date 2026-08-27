@@ -114,6 +114,25 @@ namespace DeNelle.Core.State
         /// Founding-only: existing saves gain nothing (no read-migration grant).
         /// </summary>
         public const int FoundingHealPotions = 3;
+
+        /// <summary>
+        /// WO-1235 (owner 2026-08-26, verbatim: "can we start with 3 mana potions and let the
+        /// users get a crafting scroll like the defensive plans"): the founding grant of Mana
+        /// Draughts, seeded into <c>GameState.GearInventory</c> beside the healing draughts by
+        /// the SAME dictionary in <c>GameStateService.ResetToNewGame</c>, under the canonical
+        /// <c>HudCommands.ManaPotionId</c> key.
+        ///
+        /// ⛔ THESE POTIONS ARE NOT A GIFT, THEY ARE THE SETUP. WO-1235's loop is
+        /// have -> use -> RUN OUT -> find the recipe -> craft more, and the scroll's trigger is
+        /// the player's mana stack falling to 0 or 1 for the first time. Raising this number
+        /// delays the teaching moment; lowering it to 0 destroys it, because the player never
+        /// feels the resource before the recipe is offered. Retune only with that in mind.
+        ///
+        /// Founding-only, exactly like the heal grant above: existing saves gain nothing (no
+        /// read-migration grant). Their access to the RECIPE is a separate concern and is
+        /// handled by SaveMigrator.MigrateToV40, not here.
+        /// </summary>
+        public const int FoundingManaPotions = 3;
     }
 
     /// <summary>An in-flight pet-assisted tower build (villageSlice PendingTowerBuild).</summary>

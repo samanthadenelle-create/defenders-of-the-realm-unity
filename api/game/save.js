@@ -59,6 +59,10 @@ const RESERVED_KEYS = new Set([
 // in the live payload — flat top-level (legacy) and nested under "resources"
 // (the live PersistedState shape) — and a guard that only checked one of them
 // would be trivially bypassed by writing the other.
+// WO-1212: 'stone' DELIBERATELY STAYS in this list even though the balance is retired.
+// These are CEILINGS (MAX_RESOURCE / non-negative), never grants - guarding a legacy key
+// that an old client may still send is strictly more conservative than dropping it, and the
+// client aliases an inbound `stone` onto the live slot when no `resources` block is present.
 const GUARDED_BALANCES = ['crystals', 'food', 'coins', 'voidshards', 'stone', 'iron', 'wood'];
 const NESTED_BALANCES  = ['crystals', 'food', 'coins'];   // the ResourceBalance struct's own fields
 
@@ -489,7 +493,12 @@ function applyGuards(delta, prior) {
 // Resources produced by TIME-DERIVED accrual (OfflineHarvestService: worker nodes,
 // settlements, pet-claimed nodes). These are the only balances a fabricated window
 // can mint, and therefore the only ones the ratio applies to.
-const TIME_DERIVED_BALANCES = ['iron', 'wood', 'food', 'stone'];
+// WO-1212: 'stone' is REMOVED from this list. It named the retired second Stone balance
+// (GameState.Stone), which no HUD read and no cost spent, so a clamp on it moved a number
+// no player could see - while the balance she calls Stone is 'food'. This list is MIRRORED
+// by GameStateService.ReadTimeDerivedBalance/WriteTimeDerivedBalance; the two must name the
+// same keys, and that switch's default arm FlowTrace.Fail's when they drift.
+const TIME_DERIVED_BALANCES = ['iron', 'wood', 'food'];
 
 // Balances watched and reported but never clamped — see the crystals note above.
 const OBSERVED_ONLY_BALANCES = ['crystals'];

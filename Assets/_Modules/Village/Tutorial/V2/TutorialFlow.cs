@@ -104,10 +104,52 @@ namespace DeNelle.Village
         private const float HighlightCycleSeconds = 4f;
 
         // F8 seq 632 ROOT CAUSE 4 (2026-08-02): five silent minutes must never be possible. While a
-        // step is stranded and the builder has NOT been opened, re-state the objective as a toast on
-        // this cadence (escalating coach beat), capped so it can never become spam.
-        private const float CoachNudgeSeconds = 45f;
-        private const int CoachNudgeMaxBeats = 4;
+        // step is stranded, re-state the objective as a toast on an escalating cadence, capped so it
+        // can never become spam.
+        //
+        // ── WO-1238 (F8 seq 3610, 2026-08-26) — THE CADENCE IS MEASURED, NOT CHOSEN ─────────────
+        // The ticket forbids guessing a cadence, so this ladder was derived from the durations the
+        // flow ALREADY prints. Every "STEP-COMPLETE :: <id> (<n>s)" line under logs/ and tmp/f8pull
+        // was counted — n=156 SUCCESSFUL completions, i.e. how long a player who gets there takes:
+        //
+        //     step              n     p50     p75     p90     max
+        //     founding_walk    25    12.9s   28.0s   89.6s  152.6s
+        //     founding_greet   36     4.0s    5.9s    6.2s   33.0s
+        //     founding_stores  16    23.8s  150.0s  150.0s  150.0s
+        //     ALL             156     6.2s   23.8s  120.0s  300.0s
+        //
+        //     71.2% of successful completions land under 15s
+        //     76.9% under 25s
+        //     84.0% under 45s   ... and STILL 84.0% under 60s
+        //
+        // ⭐ THE LOAD-BEARING NUMBER IS THAT FLAT STRETCH. Between 45s and 60s the curve does not
+        // move: in the captured data NOBODY who was going to succeed succeeded in that window. A
+        // player still awaiting at ~50s is LOST, not slow — that is the knee, and it is where the
+        // coaching must escalate rather than repeat.
+        //
+        // The OLD cadence was a flat 45s x 4 beats. Against the 120s bound that could only ever
+        // deliver TWO beats, and the first landed AFTER 84% of players had already finished — so it
+        // coached almost nobody, and it coached them by saying the same sentence twice.
+        //
+        // The ladder is expressed as FRACTIONS OF THE STEP'S OWN BOUND, so the 300s placement kind
+        // stretches with it and NEITHER BOUND IS TOUCHED (WO-962 §3 / WO-1238 "do not lengthen"):
+        //     0.21 -> 25s default / 63s placement    beat 1: restate the objective
+        //     0.42 -> 50s / 126s                     beat 2: escalate — say HOW, not just what
+        //     0.71 -> 85s / 213s                     beat 3: strongest channel, 35s of headroom
+        //                                                    before the 120s rescue
+        private static readonly float[] CoachNudgeLadder = { 0.21f, 0.42f, 0.71f };
+
+        /// <summary>Beat cap = the ladder's length. One authority, so a retune cannot leave the
+        /// cap and the schedule disagreeing.</summary>
+        private static int CoachNudgeMaxBeats => CoachNudgeLadder.Length;
+
+        /// <summary>
+        /// WO-1238: the toast sorting order for the BUILDER-CONFUSION redirect. The redirect is
+        /// raised while build mode owns the screen, so it must sit above the build UI or the one
+        /// message the player needs is the one they cannot see. Every other coach beat fires in
+        /// the open world and uses ElarionUiKit's default.
+        /// </summary>
+        private const int CoachRedirectSortingOrder = 5200;
 
         /// <summary>Persistence key prefixes (SeenTutorials — additive, no schema change:
         /// GameState.SeenTutorials is an existing SerializableDict, SaveSchema.cs:254).</summary>
@@ -427,6 +469,13 @@ namespace DeNelle.Village
         private int _coachBeats;
         private float _nextCoachAt;   // WO-1036: a CHARGED-seconds threshold on _stepClock, not a wall stamp
         private bool _builderOpenedThisStep;
+        // WO-1238: the builder-confusion redirect is ONE per step. Opening an unrelated menu is a
+        // confusion tell worth answering once; answering it every toggle would be nagging.
+        private bool _builderRedirectFired;
+        // WO-1238: set on the builder-open edge of a NON-placement step, cleared when the redirect
+        // is re-delivered on the CLOSE edge — the toast is best-effort over the build UI, the
+        // close-edge guide line is the guaranteed delivery.
+        private bool _builderRedirectPending;
 
         private HeroLocomotion _hero;
         private WaveManager _wave;
@@ -675,11 +724,25 @@ namespace DeNelle.Village
             _completionArmed = false;
             _awaitSignal = step.Completion != null ? step.Completion.Signal : null;
             _coachBeats = 0;
-            _nextCoachAt = CoachNudgeSeconds;      // WO-1036: CHARGED seconds, not a wall stamp
             _builderOpenedThisStep = false;
+            _builderRedirectFired = false;
+            _builderRedirectPending = false;
             _probeTraceAtCharged = 0f;
+            // WO-1036: CHARGED seconds, not a wall stamp. WO-1238: the schedule now comes off the
+            // ladder, which needs _awaitSignal (set above) to know which bound this step carries.
+            _nextCoachAt = CoachBeatDueAt(0);
 
             FlowTrace.Step("Tutorial", $"STEP-ENTER :: {step.Id} (order={step.Order}, completes on '{_awaitSignal}').");
+
+            // WO-1238 §1: PUBLISH THE SCHEDULE. The ticket's demand was to instrument rather than
+            // guess, and the STEP-STUCK line can only report beats ALREADY spent. This names, on
+            // entry, when each beat was due — so a future capture proves whether a beat was late,
+            // suppressed, or simply never reached, without re-deriving the ladder from source.
+            var due = new System.Text.StringBuilder();
+            for (int i = 0; i < CoachNudgeMaxBeats; i++)
+                due.Append(i > 0 ? " / " : "").Append(CoachBeatDueAt(i).ToString("0")).Append('s');
+            FlowTrace.Step("Tutorial", $"COACH-LADDER :: {step.Id} - bound {WatchdogSecondsForCurrentStep():0}s, " +
+                $"{CoachNudgeMaxBeats} beat(s) due at {due} of PLAYED time (WO-1238 measured ladder).");
 
             // WO-962 (owner F8 seq 2301): a hero.reached:<anchor> step LATCHES its anchor on
             // ENTER. "Nearest gate" is measured from the HERO, so a live per-frame resolve
@@ -1064,54 +1127,233 @@ namespace DeNelle.Village
         //  up, but nothing ever re-stated the ask and nothing noticed the builder had never
         //  been opened. A stranded player must be coached, not timed out: while the step is
         //  awaiting and the builder has NOT been opened even once, re-toast the objective
-        //  every CoachNudgeSeconds, escalating from the objective line to an explicit
-        //  "tap BUILD" instruction, capped at CoachNudgeMaxBeats so it can never be spam.
-        //  Opening the builder retires the nudge — at that point the player has found the
-        //  door and the watchdog is paused anyway.
+        //  on the measured ladder, escalating from the objective line to an explicit
+        //  instruction, capped at CoachNudgeMaxBeats so it can never be spam.
+        //
+        // ─────────────────────────────────────────────────────────────────────
+        //  ⭐ WO-1238 (F8 seq 3610, 2026-08-26) — WHY THE COACH SAID NOTHING
+        // ---------------------------------------------------------------------
+        //  CAPTURED, one line, not theorised:
+        //
+        //      [Flow:Tutorial] STEP-STUCK :: founding_walk - no 'hero.reached:guide_gate'
+        //      after 120s in-step (... builderOpenedThisStep=True, coachBeats=0)
+        //
+        //  ZERO beats in 120s. The cause was not the cadence and not the watchdog: it was
+        //  the line that used to read `if (_builderOpenedThisStep) return;` — an
+        //  UNCONDITIONAL, permanent stand-down for the rest of the step. The player opened
+        //  the BUILD menu during founding_walk, whose ask is "walk to the gate", and the
+        //  coach read that as "the player found the door" and shut its mouth forever.
+        //
+        //  ⛔ THAT INFERENCE IS ONLY TRUE ON A PLACEMENT STEP. On a placement beat the ask
+        //  IS the builder, so opening it is progress and standing down is correct. On every
+        //  OTHER step, opening an unrelated menu is the exact OPPOSITE signal — it is the
+        //  player telling you in behaviour that they do not know what the step wants. The
+        //  flow was already RECORDING that tell (`builderOpenedThisStep`) and using it to
+        //  suppress the one thing that would have helped.
+        //
+        //  So the stand-down is now conditioned on IsPlacementStep(), and on a non-placement
+        //  step the builder-open edge instead fires a REDIRECT beat — the cheapest real win
+        //  in the ticket, because the signal was already there.
+        //
+        //  ⛔ THE WATCHDOG IS NOT TOUCHED. Its rescue contract (step SKIPPED, outro
+        //  suppressed, grants still applied) and the WO-1036 played-time clock are correct
+        //  and are why this was a logged annoyance instead of a stuck player. This block
+        //  only fills the 120 seconds BEFORE it fires.
         // =====================================================================
+
+        /// <summary>
+        /// PLAYED seconds at which coach beat <paramref name="beatIndex"/> (0-based) is due, as
+        /// the ladder's fraction of THIS step's watchdog bound. Pure, so the regression can pin
+        /// the schedule without a play session, and stateless, so a retune cannot drift.
+        /// </summary>
+        public static float CoachBeatDueAt(int beatIndex, float bound)
+        {
+            if (CoachNudgeLadder.Length == 0) return float.MaxValue;
+            int i = Mathf.Clamp(beatIndex, 0, CoachNudgeLadder.Length - 1);
+            return CoachNudgeLadder[i] * bound;
+        }
+
+        private float CoachBeatDueAt(int beatIndex)
+            => CoachBeatDueAt(beatIndex, WatchdogSecondsForCurrentStep());
+
+        /// <summary>The number of coach beats the ladder delivers inside <paramref name="bound"/>.
+        /// Pinned by the regression: it must never be zero, or a stranded player is rescued
+        /// without ever having been coached.</summary>
+        public static int CoachBeatsInsideBound(float bound)
+        {
+            int n = 0;
+            for (int i = 0; i < CoachNudgeLadder.Length; i++)
+                if (CoachNudgeLadder[i] * bound < bound) n++;
+            return n;
+        }
+
+        /// <summary>
+        /// WO-1238 §3 — REACT TO THE BUILDER-OPEN SIGNAL. Called once per step, on the frame the
+        /// builder first opens. On a PLACEMENT beat this is progress (the ask IS the builder), so
+        /// the ladder stands down and the ghost finger takes over. On any other beat it is a
+        /// confusion tell, and it is answered instead of swallowed.
+        /// </summary>
+        private void OnBuilderOpenedDuringStep()
+        {
+            if (IsPlacementStep())
+            {
+                FlowTrace.Step("Tutorial", $"coach :: step '{_step.Id}' - builder opened on a PLACEMENT beat; " +
+                    "the escalating nudge stands down (the player has found the door).");
+                // WO-1012 §2b piece 2: a PLACEMENT step is a gesture beat — once the
+                // builder is open, the ghost finger replays the card->field drag arc
+                // on a 2s loop until the first real placement (NotifyGestureSuccess in
+                // CompleteCurrentStep fades it permanently).
+                string card = PlacementCardHighlightId();
+                if (card != null)
+                    GuidePointer.ShowDrag(card, new Vector2(0.5f, 0.45f));
+                return;
+            }
+
+            FlowTrace.Warn("Tutorial", $"coach :: step '{_step.Id}' - builder opened on a NON-placement beat " +
+                $"awaiting '{_awaitSignal}' at {_stepClock.Charged:0}s played. That is a CONFUSION TELL, not " +
+                "progress: the player opened an unrelated menu because they do not know what the step wants " +
+                "(WO-1238, captured as builderOpenedThisStep=True with coachBeats=0). Redirecting; the ladder " +
+                "does NOT stand down.");
+
+            if (_builderRedirectFired) return;
+            _builderRedirectFired = true;
+            DeliverBuilderRedirect(onCloseEdge: false);
+            // Guarantee a second delivery on the close edge, where nothing can occlude it.
+            _builderRedirectPending = true;
+        }
+
+        /// <summary>
+        /// The redirect itself. Fired twice at most for one step: best-effort over the build UI on
+        /// the open edge (high sorting order), then guaranteed on the guide's portrait line when
+        /// the builder closes and the player is back in the world.
+        /// </summary>
+        private void DeliverBuilderRedirect(bool onCloseEdge)
+        {
+            if (_step == null) return;
+
+            string objective = _step.Objective != null && !string.IsNullOrEmpty(_step.Objective.Text)
+                ? TutorialGuide.ResolveToken(_step.Objective.Text) : null;
+            if (string.IsNullOrEmpty(objective))
+            {
+                // §12: no silent failure. An unauthored objective is the one case where there is
+                // nothing honest to redirect TO, and it is a content defect worth naming.
+                FlowTrace.Warn("Tutorial", $"coach :: step '{_step.Id}' cannot redirect a builder-confusion open - " +
+                    "the step authors NO objective text, so there is nothing honest to say. The step teaches " +
+                    "nothing while stranded (tutorial-steps.json).");
+                return;
+            }
+
+            // ASCII only, and the meaning never rides on hue: "not this step" is carried by the
+            // words, and the cue words point at motion/luminance ("glowing"), never at a colour.
+            string msg = "Not this step yet - " + objective;
+
+            if (onCloseEdge)
+            {
+                Guard.Try("Tutorial", "builder redirect guide line",
+                    () => GuideLineUi.Show(TutorialGuide.DisplayName, msg, 5f));
+                ReassertSpotlight();
+                FlowTrace.Step("Tutorial", $"coach :: step '{_step.Id}' builder-confusion REDIRECT delivered on the " +
+                    "close edge (guide line + spotlight re-asserted) - WO-1238.");
+                return;
+            }
+
+            Guard.Try("Tutorial", "builder redirect toast", () =>
+                ElarionUiKit.ShowToast(msg, ElarionUiKit.ToastTone.Gold, 4.5f, CoachRedirectSortingOrder));
+            FlowTrace.Step("Tutorial", $"coach :: step '{_step.Id}' builder-confusion REDIRECT raised over the build " +
+                $"UI (sortingOrder {CoachRedirectSortingOrder}) - WO-1238.");
+        }
+
+        /// <summary>Re-show the first authored highlight from the top of its rotation. A glow the
+        /// player scrolled past is worth re-showing whenever we speak.</summary>
+        private void ReassertSpotlight()
+        {
+            if (_highlightIds.Count == 0) return;
+            _highlightIndex = 0;
+            _nextHighlightAt = Time.unscaledTime + HighlightCycleSeconds;
+            UiSpotlight.Show(_highlightIds[0], MaskStyleForCurrentStep());
+            GuidePointer.Show(_highlightIds[0]);
+        }
+
+        /// <summary>
+        /// WO-1238 §1 — the beat's WORDS escalate, not just its timing. Repeating one sentence
+        /// three times is not coaching; the measured data says a player still awaiting at the
+        /// second beat is lost, so the second and third beats say HOW, derived from the step's own
+        /// completion signal rather than from per-step authored copy (which does not exist and
+        /// would go stale the moment a step's signal changed).
+        /// ASCII only; every cue reads by motion or luminance, never by hue (owner is red/green
+        /// colour-blind).
+        /// </summary>
+        private string CoachMessageForBeat(int beat, string objective)
+        {
+            if (beat <= 1) return objective;   // beat 1 restates the ask, verbatim.
+
+            string how = HowHintForAwaitedSignal();
+            if (string.IsNullOrEmpty(how)) return objective;
+            return string.IsNullOrEmpty(objective) ? how : objective + " - " + how;
+        }
+
+        /// <summary>The concrete "how" for the step's completion signal kind. Public + static so
+        /// the regression pins every branch without a play session.</summary>
+        public static string HowHintForAwaitedSignal(string awaitSignal)
+        {
+            if (string.IsNullOrEmpty(awaitSignal)) return null;
+            if (awaitSignal.StartsWith(TutorialSignals.StructurePlacedPrefix, StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(awaitSignal, TutorialSignals.TowerPlaced, StringComparison.OrdinalIgnoreCase))
+                return "tap BUILD to open the builder.";
+            if (awaitSignal.StartsWith(TutorialSignals.HeroReachedPrefix, StringComparison.OrdinalIgnoreCase))
+                return "walk to the glowing marker on your compass.";
+            if (awaitSignal.StartsWith(TutorialSignals.DialogueEndedPrefix, StringComparison.OrdinalIgnoreCase))
+                return "tap the glowing prompt to continue.";
+            if (awaitSignal.StartsWith(TutorialSignals.PanelOpenedPrefix, StringComparison.OrdinalIgnoreCase))
+                return "tap the glowing button on the bar.";
+            return "follow the glowing marker.";
+        }
+
+        private string HowHintForAwaitedSignal() => HowHintForAwaitedSignal(_awaitSignal);
 
         private void TickCoachNudge()
         {
             if (_step == null) return;
 
-            // The builder being open at ANY point this step means the player found the door.
             if (DeNelle.Core.BuildModeState.IsActive)
             {
                 if (!_builderOpenedThisStep)
                 {
                     _builderOpenedThisStep = true;
-                    FlowTrace.Step("Tutorial", $"coach :: step '{_step.Id}' - builder opened; " +
-                        "the escalating nudge stands down (the player has found the door).");
-                    // WO-1012 §2b piece 2: a PLACEMENT step is a gesture beat — once the
-                    // builder is open, the ghost finger replays the card->field drag arc
-                    // on a 2s loop until the first real placement (NotifyGestureSuccess in
-                    // CompleteCurrentStep fades it permanently).
-                    string card = PlacementCardHighlightId();
-                    if (card != null)
-                        GuidePointer.ShowDrag(card, new Vector2(0.5f, 0.45f));
+                    OnBuilderOpenedDuringStep();
                 }
+                // While build mode owns the screen there is nothing more to say: the watchdog
+                // is paused and the step clock is excluding these frames either way.
                 return;
             }
-            if (_builderOpenedThisStep) return;
+
+            // WO-1238: the builder just CLOSED after a confusion-open. Deliver the redirect on
+            // the channel that cannot be occluded by the build UI, now that the player is back
+            // in the world and can actually act on it.
+            if (_builderRedirectPending)
+            {
+                _builderRedirectPending = false;
+                DeliverBuilderRedirect(onCloseEdge: true);
+            }
+
+            // ⭐ WO-1238: the stand-down is PLACEMENT-ONLY. See the block header.
+            if (_builderOpenedThisStep && IsPlacementStep()) return;
             if (_coachBeats >= CoachNudgeMaxBeats) return;
             // WO-1036: the coach cadence rides the SAME played-frame budget as the watchdog.
             // It used to be a wall stamp, so an app-background window burned beats the player
             // never saw — captured proof: "coach :: step 'founding_walk' idle 245s ... (beat 2/4)",
             // i.e. beat 2 of 4 delivered in what the wall clock called four minutes.
-            if (_stepClock.Charged < _nextCoachAt) return;
+            // WO-1238: the due time comes off the LADDER (a fraction of this step's bound), not
+            // from "last beat + a flat interval". Stateless, so a suspend or a builder session
+            // cannot slide the whole schedule past the rescue.
+            if (_stepClock.Charged < CoachBeatDueAt(_coachBeats)) return;
 
             _coachBeats++;
-            _nextCoachAt = _stepClock.Charged + CoachNudgeSeconds;
+            _nextCoachAt = CoachBeatDueAt(_coachBeats);
 
             string objective = _step.Objective != null && !string.IsNullOrEmpty(_step.Objective.Text)
                 ? TutorialGuide.ResolveToken(_step.Objective.Text) : null;   // WO-1012 P2 guide token
-            string msg;
-            if (IsPlacementStep())
-                msg = _coachBeats <= 1 && objective != null
-                    ? objective
-                    : (objective != null ? objective + " - tap BUILD to open the builder." : "Tap BUILD to open the builder.");
-            else
-                msg = objective;
+            string msg = CoachMessageForBeat(_coachBeats, objective);
 
             if (string.IsNullOrEmpty(msg))
             {
@@ -1125,19 +1367,28 @@ namespace DeNelle.Village
             }
 
             ElarionUiKit.ShowToast(msg, ElarionUiKit.ToastTone.Gold, 3.4f);
+
+            // WO-1238 §2 — MAKE THE ASK FINDABLE, NOT MERELY STATED.
+            // The device screenshot from this capture window (break_00_error.png, 14:22:18) shows
+            // the objective strip rendered as the SMALLEST, lowest-contrast text on the screen,
+            // tucked under an occluding dialogue card and directly above an action bar whose
+            // labels are five times its size. Restating the ask on that same channel a third time
+            // is not escalation. The FINAL beat therefore also speaks on the guide's own
+            // portrait line — an existing, non-blocking, auto-dismissing channel the flow already
+            // links against and has never used for coaching.
+            if (_coachBeats >= CoachNudgeMaxBeats)
+                Guard.Try("Tutorial", "coach final guide line",
+                    () => GuideLineUi.Show(TutorialGuide.DisplayName, msg, 5f));
+
             FlowTrace.Warn("Tutorial", $"coach :: step '{_step.Id}' idle " +
-                $"{_stepClock.Charged:0}s played (wall {Time.unscaledTime - _stepEnteredAt:0}s) awaiting '{_awaitSignal}' with the builder never opened - " +
-                $"re-stated the objective (beat {_coachBeats}/{CoachNudgeMaxBeats}).");
+                $"{_stepClock.Charged:0}s played (wall {Time.unscaledTime - _stepEnteredAt:0}s) awaiting '{_awaitSignal}' " +
+                $"(builderOpenedThisStep={_builderOpenedThisStep}) - " +
+                $"re-stated the objective (beat {_coachBeats}/{CoachNudgeMaxBeats}, due {CoachBeatDueAt(_coachBeats - 1):0}s, " +
+                $"next {(_coachBeats < CoachNudgeMaxBeats ? _nextCoachAt.ToString("0") + "s" : "none")}).");
 
             // Re-assert the spotlight from the top of the walk: a glow the player scrolled
             // past is worth re-showing with the toast.
-            if (_highlightIds.Count > 0)
-            {
-                _highlightIndex = 0;
-                _nextHighlightAt = Time.unscaledTime + HighlightCycleSeconds;
-                UiSpotlight.Show(_highlightIds[0], MaskStyleForCurrentStep());
-                GuidePointer.Show(_highlightIds[0]);
-            }
+            ReassertSpotlight();
         }
 
         // =====================================================================
@@ -1319,13 +1570,23 @@ namespace DeNelle.Village
 
             if (!skipped)
             {
+                // WO-1238 §1: the wall duration on this line IS the distribution the ladder was
+                // derived from (n=156 completions across logs/ + tmp/f8pull). It is now joined by
+                // the PLAYED duration and the beats spent, so the next derivation can ask the
+                // question this one could not: does coaching change whether a step completes?
+                // Without these two fields a coached success and an uncoached one are the same
+                // line, and the ladder can only ever be re-tuned by guessing again.
                 FlowTrace.Step("Tutorial", $"STEP-COMPLETE :: {step.Id} " +
-                    $"({Time.unscaledTime - _stepEnteredAt:0.0}s).");
+                    $"({Time.unscaledTime - _stepEnteredAt:0.0}s, played {_stepClock.Charged:0.0}s, " +
+                    $"coachBeats={_coachBeats}, builderOpened={_builderOpenedThisStep}).");
                 DeNelle.Core.Analytics.EventTracker.Track("tutorial_step_complete", new
                 {
                     stepId = step.Id,
                     order = step.Order,
                     seconds = Time.unscaledTime - _stepEnteredAt,
+                    secondsPlayed = _stepClock.Charged,
+                    coachBeats = _coachBeats,
+                    builderOpened = _builderOpenedThisStep,
                 });
             }
 

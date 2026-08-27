@@ -189,6 +189,58 @@ namespace DeNelle.Village
             }
         }
 
+        // =====================================================================
+        //  WO-1231 -- the PASSIVE MENDING block (communication only)
+        // ---------------------------------------------------------------------
+        //  Owner felt-test 2026-08-26: "where do i change them or is that something
+        //  passive" -> "if its passive we should somehow let them know". Repair had been
+        //  passive since WO-1108 and said so NOWHERE: the player was never told the walls
+        //  mend themselves, never told more Echoes mends faster, and -- the one that
+        //  matters -- never told it DEBITS WOOD AND IRON, or that it had stalled broke.
+        //
+        //  ⛔ THESE ARE READOUTS. There is no verb here and there must never be one: the
+        //  WO-811 "Repair structures" picker chip is RETIRED and EchoAssignments refuses
+        //  AssignRepair by name (owner ruling WO-1108). A block that EXPLAINS a passive
+        //  system is not a step back toward assigning it.
+        //
+        //  Every number is live off EchoBonusCalculator / EchoRepairService. Nothing here
+        //  hardcodes repairFractionPerHour, the count x level math, or a rate -- a balance
+        //  edit moves these sentences with it.
+        // =====================================================================
+
+        /// <summary>Heading of the card's passive-mending block.</summary>
+        public string MendHeaderText => EchoMendCopy.Header;
+
+        /// <summary>The explainer -- what mending is, and that MORE ECHOES MEND FASTER
+        /// (the monetisation-relevant fact that was a total secret until this ticket).</summary>
+        public string MendExplainerText => EchoMendCopy.Explainer;
+
+        /// <summary>The live rate line, bound to
+        /// <see cref="EchoBonusCalculator.RepairFractionsPerSecond"/> -- never a literal.</summary>
+        public string MendRateText => EchoMendCopy.RateLine(EchoBonusCalculator.RepairFractionsPerSecond());
+
+        /// <summary>The spend disclosure. Owner ruled 2026-08-26 that the spend STAYS, so
+        /// the fix is to SAY it -- materials leaving with no cause shown is what made the
+        /// system read as resources vanishing.</summary>
+        public string MendSpendText => EchoMendCopy.SpendNote;
+
+        /// <summary>
+        /// The stall chip's text while mending is blocked on an empty wallet, "" otherwise
+        /// (the View hides the chip on ""). WORDS + a frame, never hue -- greyscale-safe.
+        /// </summary>
+        public string MendStallText
+        {
+            get
+            {
+                var svc = EchoRepairService.Instance;
+                if (svc == null || svc.Status != EchoRepairStatus.WaitingMaterials) return "";
+                return EchoMendCopy.StallChip(svc.StalledResourceLabel);
+            }
+        }
+
+        /// <summary>True while the stall chip should be rendered (View convenience).</summary>
+        public bool MendStalled => MendStallText.Length > 0;
+
         /// <summary>WO-830: the DISCLOSED pair-synergy line. Active: names the pair + partner +
         /// bonus; inactive: the plain-text recipe to activate it. "" when no pair is defined.
         /// The hidden tri-synergy is NEVER mentioned here or anywhere (Sec.3d).</summary>

@@ -1,6 +1,6 @@
 # WORK ORDER 1082 — The build palette leads with the wrong rows, and "collectors" is not the group the owner's own two facts describe
 
-**Status:** READY TO IMPLEMENT — with ONE owner word needed on §3 (which group). The implementation is
+**Status:** FIXED 2026-08-27 - gated `COMPILE_GATE_OK` + `REGRESSION_OK 303/303 suites` (Builds/w3-c, Builds/w3-r). AWAITING OWNER FELT-VERIFY to close.
 specified for both answers; the default is the one her stated facts prove.
 **Minted:** 2026-08-24 (UI seat), banner bumped 1081 → 1083 in the same edit (with WO-1081).
 **Silo:** Build palette ordering — canonical JSON only. **Zero code changes.** No economy change.
@@ -290,3 +290,50 @@ carousel card. The regression gate explicitly protects that behavior."*
 STOP: do NOT implement 4b. Do NOT remove `displayOrder` from Lumber Mill. **Existing canon wins**,
 and the gate that protects it is doing its job - a green gate turning red here would be the ORACLE
 CATCHING YOU, not an obstacle to route around.
+
+---
+
+## IMPLEMENTATION NOTE 2026-08-26 - SECTION 2 WAS WRONG ABOUT WHERE THE ORDER COMES FROM
+
+⛔ **"Last in the array" was NOT enough, and section 2 could not see why.** The flat strip order is
+**TYPE-MAJOR**: `BuildPaletteVM.AggregateOfType` walks the verb's `catalogTypes` **in order** and
+concatenates `CatalogRegistry.OfType(type)` per type. While the Town row listed `Resource` before
+`Collector`, **every Collector row trailed every Resource row no matter where it sat in
+`entries[]`** - and the three containers are `Resource` rows, while `collector_farm` and
+`collector_forge` are `Collector`.
+
+Simulated over the real sort, four ways:
+
+| catalog `entries[]` | Town `catalogTypes` | last three tiles | 4a met? |
+|---|---|---|---|
+| HEAD (barracks after silo) | Resource, Collector | barracks, collector_farm, collector_forge | NO |
+| barracks moved above lumberyard | Resource, Collector | silo, collector_farm, collector_forge | NO |
+| HEAD | **Collector**, Resource | foundry, silo, barracks | NO |
+| **barracks moved** | **Collector**, Resource | **lumberyard, foundry, silo** | **YES** |
+
+So 4a needs **two** data edits, and neither alone does anything for the owner:
+
+1. `structures-catalog.json` (both copies) - `barracks` moved **above** `lumberyard`.
+2. `build-categories.json` (both copies) - the Town row's `catalogTypes` now reads
+   `["Collector","Resource"]`.
+
+⚠ **Edit 2 is a deliberate, flagged departure from section 7's "do not touch `catalogTypes`".** That
+ban's own stated reason is *"group membership is not the lever here"* - and **membership does not
+change**: same two types, same rows, same `lockedIds`, same `paletteGroups`. Only the concatenation
+order changes, and every other consumer reads `catalogTypes` as a SET
+(`BuildCategoryRegistry.Types`, `BuildPaletteGroupsRegression`, `TutorialStepReachabilityRegression`),
+so nothing else can see it. If the lead disagrees, reverting that one array puts a collector back on
+the tail - and the new suite goes red saying so.
+
+**Resulting Town strip (default All):** Lumber Mill, Crafting Station, Weaponsmith, Farm, Iron Mine,
+Crystal Mine, Echo Hollow, Store, Armorer, Cathedral of Magic, Barracks, **Lumberyard, Foundry,
+Silo**. Head unchanged (WO-963 tutorial ruling intact); no cost, build time, tier, id, lock state or
+existing `displayOrder` touched.
+
+**Pinned by `Assets/Editor/Regression/PaletteStorageTailRegression.cs` [palette-storage-tail]** -
+asserts the head AND the tail over the real `BuildPaletteVM`, that no container authors a
+`displayOrder` (the section-4 trap, which would sort it to the FRONT), that `AggregateOfType` is
+still type-major, and that both canonical copies of both files are byte-identical.
+
+⛔ **`CatalogFallbackData.g.cs` AND `BuildCategoryFallbackData.g.cs` must both be regenerated** -
+both canonical files changed and both are hash-gated.

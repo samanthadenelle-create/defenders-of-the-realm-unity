@@ -16,12 +16,27 @@
 // Keys are namespaced "recipe_unlocked:<recipeId>" so they can never collide with
 // a real tutorial key.
 //
-// SCOPE BOUNDARY (deliberate, do not "finish" this without an owner ruling):
-// this type only RECORDS unlocks. It gates NOTHING. No existing crafting catalog,
-// service, or UI consults IsUnlocked, and none should be retro-fitted to without
-// the owner saying so - the crafting pedestal (crafting-recipes.json "pedestal",
-// recipeId "torch") must keep working exactly as it does today. We are ADDING a
-// persisted record, not restricting existing behaviour.
+// SCOPE BOUNDARY (WO-850, deliberate): this type only RECORDS unlocks. It gates
+// NOTHING - and nothing may be retro-fitted to it without the owner saying so.
+//
+// ⭐ THE OWNER HAS NOW SAID SO, ONCE, NARROWLY (WO-1235 ruling #2, 2026-08-26).
+// The FTUE scroll teaches the Mana Draught brew, so exactly ONE recipe is gated:
+// RecipeUnlockKeys.ManaPotionRecipeId. The ruling is verbatim "Introduces the
+// mechanic without vomiting the whole crafting catalog onto a new player" and
+// "Do NOT unlock the recipe book" - so this is a one-entry allow-list, not a
+// policy change.
+//
+// ⛔ THE WO-850 BOUNDARY OTHERWISE STANDS, INCLUDING ITS EXAMPLE. The dungeon
+// crafting pedestal (crafting-recipes.json "pedestal", recipeId "torch") is a
+// DIFFERENT catalog and is NOT in the allow-list, so it keeps working exactly as
+// it does today. IsUnlocked() is unchanged and still gates nothing on its own;
+// the gate is the NEW IsCraftable(), which is fail-open for every ungated id.
+//
+// ⛔ AND THE LIVE-GAME HALF: a player who already had the mana recipe keeps it.
+// SaveMigrator.MigrateToV40 grandfathers every gated id onto any save at v<=39.
+// This file must never be the place that decides that - the migrator is, because
+// the save version is the only thing that can tell an existing player from a new
+// one. See RecipeUnlockKeys (Core) for why the strings live down there.
 // =============================================================================
 
 using DeNelle.Core.Diagnostics;
@@ -37,8 +52,14 @@ namespace DeNelle.Village.Crafting
     {
         private const string Sys = "Crafting";
 
-        /// <summary>SeenTutorials key namespace, so an unlock can never collide with a tutorial key.</summary>
-        private const string KeyPrefix = "recipe_unlocked:";
+        /// <summary>SeenTutorials key namespace, so an unlock can never collide with a tutorial
+        /// key. WO-1235 hoisted the literal to Core (RecipeUnlockKeys) because SaveMigrator has
+        /// to write the same key and cannot reference Village - one authority, two readers.</summary>
+        private const string KeyPrefix = RecipeUnlockKeys.KeyPrefix;
+
+        /// <summary>The recipe the WO-1235 FTUE scroll teaches. Re-exported here so callers in
+        /// this assembly need not reach into Core for it; the VALUE lives in RecipeUnlockKeys.</summary>
+        public const string ManaPotionRecipeId = RecipeUnlockKeys.ManaPotionRecipeId;
 
         /// <summary>
         /// The recipe the deepest-dungeon treasure cache teaches on first clear (owner
@@ -48,7 +69,28 @@ namespace DeNelle.Village.Crafting
         public const string DungeonCacheRecipeId = "torch";
 
         /// <summary>The SeenTutorials key that records <paramref name="recipeId"/> as taught.</summary>
-        public static string KeyFor(string recipeId) => KeyPrefix + (string.IsNullOrEmpty(recipeId) ? "unknown" : recipeId);
+        public static string KeyFor(string recipeId) => RecipeUnlockKeys.KeyFor(recipeId);
+
+        /// <summary>
+        /// ⭐ THE GATE (WO-1235). True when <paramref name="recipeId"/> may be crafted and shown.
+        ///
+        /// FAIL-OPEN BY CONSTRUCTION, and that direction is the whole point: a recipe that is
+        /// not on the RecipeUnlockKeys.GatedRecipeIds allow-list returns TRUE without consulting
+        /// any save state at all. The game is LIVE, so the failure mode of a wrong answer here
+        /// is asymmetric - wrongly-craftable is a cosmetic FTUE miss, wrongly-locked silently
+        /// removes content from a player who already had it and cannot be undone on their save.
+        /// Every ambiguity therefore resolves toward "craftable".
+        ///
+        /// Existing players are covered a second, independent way: SaveMigrator.MigrateToV40
+        /// grandfathers every gated id onto any save at v&lt;=39, so IsUnlocked already answers
+        /// true for them. The two defences are deliberately redundant.
+        /// </summary>
+        public static bool IsCraftable(string recipeId)
+        {
+            if (string.IsNullOrEmpty(recipeId)) return false;
+            if (!RecipeUnlockKeys.IsGated(recipeId)) return true;   // ungated = always craftable
+            return IsUnlocked(recipeId);
+        }
 
         /// <summary>
         /// True when <paramref name="recipeId"/> has been taught and persisted. False when
