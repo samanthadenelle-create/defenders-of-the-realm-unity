@@ -15,23 +15,32 @@ On the tester APK built 2026-08-27 11:47 (`TESTER_BUILD`, commit `fffa4ea9c`), b
 been addressed already, so **find the prior attempt before writing new code.** A second fix layered
 on an unexamined first one is how this comes back a third time.
 
-## ⚠ THE ONE THING TO SETTLE FIRST - DO NOT GUESS IT
+## ⛔ OWNER RULING 2026-08-27 - NO TESTER BYPASS. THE BUILD MUST BEHAVE LIKE PRODUCTION.
 
-**Is landing on wallet validation correct behaviour that should be SKIPPABLE, or is it a defect that
-should not happen at all?** Those need different fixes and the difference is not inferable:
+Her words: *"i dont know i need it to act as it would in prod as its the only way to really test
+it"*.
 
-- The wallet is **identity / cloud-save**, keyed by `BoundWallet` — so a wallet step on first run may
-  be intended product behaviour.
-- But the owner is reporting it as something she keeps hitting, which reads as unwanted.
+**This overrules the recommendation this ticket originally carried**, which was to skip wallet
+validation on a `TESTER_BUILD` boot so a tester could reach the game faster. That was the wrong
+trade and she named why: **a build that behaves differently from production cannot validate
+production.** A bypass would have made 191 felt-tests cheaper and every one of them less meaningful,
+and the wallet path is precisely the kind of first-run flow that only ever breaks for real players.
 
-⭐ **Recommended shape, offered so the owner can answer in one word:** wallet validation stays for a
-real player, and a `TESTER_BUILD` boot **skips or defers** it, because a tester needs to reach the
-game 191 times. `FeatureFlags.IsTesterBuild` already exists for exactly this - owner ruling
-2026-08-24: *"if it's a dev build then we can just leave the flag on because it's only going to the
-tester. It's not going to the Solana store."*
+⭐ **THE PRINCIPLE, WHICH IS BIGGER THAN THIS TICKET:** do not fix a testing inconvenience by making
+the tester build diverge in BEHAVIOUR. `TESTER_BUILD` is for **tooling the owner deliberately
+invokes** - the AdminOverlay, the resource grant, the F8 flag chip. It is **not** a licence to change
+what the game does on its own. Apply that distinction to every future "just skip it for testers"
+idea.
 
-⛔ **The define is OPT-IN and that direction must never be inverted.** Its ABSENCE means store-safe,
-so a store build cannot skip wallet validation by forgetting a flag - only by explicitly adding one.
+**So the question this ticket must answer is no longer "how do we skip it" - it is "is this screen
+correct?"**
+- If landing on wallet validation is **correct** product behaviour, this ticket closes as
+  works-as-intended and the owner walks through it like a player would.
+- If it is a **defect** (it appears when it should not, or it reappears after being satisfied), fix
+  it **for everyone**, in the real flow.
+
+The word **"still"** in her report leans toward defect - she expected it addressed already. Find the
+prior attempt before writing anything new.
 
 ## Instrument before editing (CLAUDE.md section 12)
 
@@ -55,9 +64,8 @@ Device: `SM02G4061955851`. Package: `com.denellestudios.echoesofelarion`.
 ## Acceptance
 
 1. `COMPILE_GATE_OK` + `REGRESSION_OK <n>/<n> suites` on fresh logs, counts read off the marker.
-2. A regression pinning the boot route for both cases: a tester build reaches the game, and a
-   NON-tester build still validates the wallet. Prove RED first (WO-1138) - the store-safe direction
-   is the one that must not silently regress.
+2. A regression pinning the boot route **as production behaves it** - there is no tester variant to
+   assert, per the ruling above. Prove RED first (WO-1138).
 3. ⛔ Never render or log a wallet address. Player id is enough.
 4. Owner felt-verifies on device by booting straight into the game.
 

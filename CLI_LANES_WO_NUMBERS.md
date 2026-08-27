@@ -137,7 +137,10 @@
 > fine as history. A copied number is the bug **even when it was right the day it was written** -
 > that is exactly how the retired 860-899 UI block kept re-seeding collisions from CLAUDE.md sec.2.
 
-> ## ⚠ RECONCILED 2026-08-27 (CLI): main line next free = **1253**.
+> ## ⚠ RECONCILED 2026-08-27 (CLI): main line next free = **1254**.
+> 1253 permanent builder becomes a store SKU (supersedes WO-911 Q6 as the Manage affordance).
+>
+> ### superseded: RECONCILED 2026-08-27 (CLI): main line next free = **1253**.
 > 1250 weaponsmith + armorer pre-built on a new load | 1251 Crystal Mine NULL material slot (cause
 > already named by F8 seq 3618/3619) | 1252 "all builders busy" offers no next step. All from the
 > owner's device felt-test on the 11:47 tester APK.

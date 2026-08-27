@@ -25,10 +25,23 @@ blocked; they are given nothing to do about it.
 - **`BuildTimerConfig.freeBuildSlots` = 2.** That is CONCURRENCY - how many jobs run at once.
 - **`BuildTimerConfig.queueDepthPerLine` = 5.** A different axis: how deep the queue goes per line.
   ⛔ **Never implement a depth cap by raising concurrency, or vice versa.**
-- **`BuildTimerService.TryBuySlot`** - an EXTRA slot is Echo-gated and crystal-priced: each Echo above
-  2 unlocks the RIGHT to buy one, and crystals complete the purchase (owner ruling Q6). So for some
+- **`BuildTimerService.TryBuySlot`** - an EXTRA QUEUE SLOT is Echo-gated and crystal-priced: each Echo
+  above 2 unlocks the RIGHT to buy one, and crystals complete the purchase (WO-911 Q6). So for some
   players a third real option exists and the message should offer it **only when they actually
   qualify** - dangling an unavailable purchase is worse than not mentioning it.
+
+  > ⚠ **SUPERSEDED IN PART, 2026-08-27, WHILE THIS TICKET WAS BEING WRITTEN.** The owner ruled that
+  > the Manage screen's buy-slot affordance becomes a **store SKU for a PERMANENT BUILDER** -
+  > **WO-1253**. That is CONCURRENCY (a builder), not DEPTH (a queue slot), and it is real money, not
+  > crystals. Whether the crystal queue-slot sink survives alongside it is an open owner ruling in
+  > that ticket.
+  >
+  > **So do not hardcode "buy a slot with crystals" into this message.** Ask the service what the
+  > player's actual options are and name those. If WO-1253 lands first, the third option is "get
+  > another builder in the store" for everyone, not "buy a slot" for the Echo-qualified few.
+  >
+  > This is exactly the drift CLAUDE.md keeps naming: a ruling recorded in one ticket while a second
+  > ticket quietly carries the old one. Both now point at each other.
 - **The single Queues entry is the `Upgrade` bar face, re-pointed to `PanelId.Manage`**
   (`ManageScreenPanel`), always applicable in town. The right-column Builders chip is a **status
   glance only** - its double-tap door is retired. ⛔ So "under Manage" means that bar face; do not

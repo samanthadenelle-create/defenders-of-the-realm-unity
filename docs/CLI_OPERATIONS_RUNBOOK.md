@@ -191,6 +191,22 @@ character, no smart quotes.
 | WebGL serve locally | `.\serve-webgl.ps1` |
 | Morning ship chain | `.\morning-ship-chain.ps1` (**blocks** on R2) |
 
+### ⛔ THE TESTER BUILD MUST BEHAVE LIKE PRODUCTION (owner ruling 2026-08-27)
+
+> *"i need it to act as it would in prod as its the only way to really test it"*
+
+`TESTER_BUILD` is for **tooling the owner deliberately invokes** — the AdminOverlay, the resource
+grant, the F8 flag chip. It is **NOT** a licence to change what the game does on its own.
+
+Never fix a testing inconvenience by making the tester build diverge in BEHAVIOUR. A build that
+behaves differently from production cannot validate production — a bypass makes each felt-test
+cheaper and every one of them less meaningful, and first-run flows are exactly what only ever break
+for real players. If a flow is painful, either it is correct and you walk through it, or it is a
+defect and you fix it **for everyone**.
+
+(This ruling overturned a recommendation on WO-1249 to skip wallet validation for testers. The
+distinction that survives: a tool you press ≠ the app acting differently.)
+
 **⚠ After an Android build the active target stays Android**, which breaks SBP/Addressables for a
 desktop build. Pass `-buildTarget Win64` for the next desktop build. Licensing-error lines in that
 log are benign noise.
