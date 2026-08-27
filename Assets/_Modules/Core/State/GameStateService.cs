@@ -1340,7 +1340,6 @@ namespace DeNelle.Core.State
 #endif
         private const string SaveUrl       = BackendBase + "/api/game/save";
         private const string LoadUrl       = BackendBase + "/api/game/load";
-        private const string NonceUrl      = BackendBase + "/api/auth/nonce";
         private const string SyncQueueKey  = "dotr-sync-queue";
         private const float  MinSyncDelay  = 8f;   // seconds between background syncs
 
@@ -1605,16 +1604,15 @@ namespace DeNelle.Core.State
             req.timeout = RequestTimeoutSeconds;   // never hang the boot-time cloud load
             req.SetRequestHeader("Accept", "application/json");
 
-            // WO-121: attach wallet-signed auth headers when enforcement is on and
-            // a real signer is connected. A load has no body, so the payload tag is
-            // the literal "load" (matches api/_lib/wallet-auth.buildSignedMessage).
-            // When the flag is off or no real signer exists, this is a no-op and the
-            // request goes out exactly as before (offline-safe).
-            // LB-4: fail closed — if auth is enforced and we can't sign, do NOT
-            // issue an unauthed cloud load on the real rail.
-            if (!await TryAttachAuthHeaders(req, payloadHashOrLoadTag: "load"))
+            // WO-1211: boot reads may use existing proof but may never mint or sign.
+            // With no cached wallet session, keep the durable local save and defer proof
+            // until the first authenticated action. Guest reads retain their guest header.
+            bool guestLoad = DeNelle.Core.Web3.BackendRequestSigner.IsGuestIdentity(_state.BoundWallet);
+            if (!DeNelle.Core.Web3.BackendRequestSigner.TryAttachCachedSession(req, _state.BoundWallet))
             {
-                Debug.LogError("[Sync] Cloud LOAD aborted — backend auth enforced but request could not be signed (fail-closed).");
+                Debug.Log(guestLoad
+                    ? "[Sync] Guest cloud LOAD had no usable proof - keeping local save."
+                    : "[Sync] Wallet cloud LOAD has no cached session - keeping local save; boot will not ask for authorization.");
                 return;
             }
 
@@ -1741,6 +1739,8 @@ namespace DeNelle.Core.State
         /// <paramref name="payloadHashOrLoadTag"/> is the sha256-hex of the raw POST
         /// body, or the literal "load" for a GET.
         /// </summary>
+        /* WO-1211 retired duplicate auth authority. Kept temporarily as block-commented
+         * history for review; BackendRequestSigner is now the only live authority.
         private async UniTask<bool> TryAttachAuthHeaders(UnityWebRequest req, string payloadHashOrLoadTag)
         {
             // GUEST RAIL — no signature, no nonce. The id IS the credential (an unguessable 256-bit
@@ -1848,6 +1848,7 @@ namespace DeNelle.Core.State
                 return null;
             }
         }
+        */
 
         /// <summary>
         /// LB-4: salted SHA-256 of the device id → a stable opaque guest token.
@@ -1986,17 +1987,14 @@ namespace DeNelle.Core.State
             req.timeout = RequestTimeoutSeconds;   // a stalled upload used to park _isSyncing for the session
             req.SetRequestHeader("Content-Type", "application/json");
 
-            // WO-121: attach wallet-signed auth headers when enforcement is on and a
-            // real signer is connected. The signed payload tag is the sha256-hex of
-            // the EXACT raw body bytes we upload (binds the signature to this body,
-            // matches api/_lib/wallet-auth.buildSignedMessage). No-op (skips headers)
-            // when the flag is off or no real signer is available — offline-safe.
-            // LB-4: fail closed — if auth is enforced and we can't sign, do NOT
-            // upload the save unauthed on the real rail. Returning false re-queues
-            // the delta offline (caller's EnqueueOffline path) for a later retry.
-            if (!await TryAttachAuthHeaders(req, payloadHashOrLoadTag: Sha256Hex(body)))
+            // WO-1211: writes use the one shared auth authority and always fail closed.
+            // Guests retain their shaped device proof; wallets may reuse or mint a session.
+            bool guestSave = DeNelle.Core.Web3.BackendRequestSigner.IsGuestIdentity(_state.BoundWallet);
+            if (!await DeNelle.Core.Web3.BackendRequestSigner.TryAttachAsync(req, _state.BoundWallet, body))
             {
-                Debug.LogError("[Sync] Cloud SAVE aborted — backend auth enforced but request could not be signed (fail-closed). Delta re-queued offline.");
+                Debug.LogError(guestSave
+                    ? "[Sync] Guest cloud SAVE aborted - guest proof unavailable. Delta re-queued offline."
+                    : "[Sync] Wallet cloud SAVE aborted - shared authentication unavailable (fail-closed). Delta re-queued offline.");
                 return false;
             }
 

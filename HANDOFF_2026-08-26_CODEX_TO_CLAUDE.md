@@ -85,6 +85,24 @@ Several READY entries are not ordinary implementation tickets: PROD-008 is verif
 WO-1199 is a production/rollback exercise; WO-1175 and WO-1195 have owner/art blockers; WO-1129 and
 WO-935 are programs that need numbered slices. Do not mark these FIXED merely because one slice ran.
 
+## Late WO-1211 implementation (after initial handoff)
+
+WO-1211 is implemented and intentionally remains READY until Claude completes the full gate and the
+owner performs device proof.
+
+- Boot load is cached-only: guest header or an already-usable in-memory wallet session; otherwise
+  it keeps the local save and never signs.
+- Connect/auto-resume no longer mints a backend session. The first authenticated action mints.
+- Save writes use shared `BackendRequestSigner.TryAttachAsync` and refuse/requeue without proof.
+- The duplicate live nonce/sign authority in `GameStateService` is retired.
+- RED: `Builds/wo1211-red.log` contains `BACKEND_SAVE_AUTH_FAIL` on the pre-fix tree.
+- Focused green: `Builds/wo1211-green2.log` contains `BACKEND_SAVE_AUTH_OK`.
+- Compile: `Builds/wo1211-compile.log` contains `COMPILE_GATE_OK`.
+
+Claude must run full `DataRegression.RunAll` with `-ExpectMarker REGRESSION_OK`. The known WO-1239
+structure-cadence red is unrelated but currently prevents global green. Device acceptance is two
+cold launches with zero wallet sheets, town continuity visible, and no boot-window `sign_messages`.
+
 ## Working tree ownership
 
 The following tracked modifications predate this handoff work and were deliberately not staged:

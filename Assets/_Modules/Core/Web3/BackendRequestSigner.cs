@@ -242,19 +242,28 @@ namespace DeNelle.Core.Web3
         /// never thrown, and never blocks the connect.
         /// </para>
         /// </summary>
-        public static async UniTask<bool> WarmUpSessionAsync(string wallet)
+        public static UniTask<bool> WarmUpSessionAsync(string wallet)
         {
-            if (string.IsNullOrEmpty(wallet)) return false;
-            if (SessionUsable(wallet))
+            bool held = !string.IsNullOrEmpty(wallet) && SessionUsable(wallet);
+            FlowTrace.Step("Wallet", held
+                ? "session warm-up found an existing usable in-memory session; no wallet action needed."
+                : "session warm-up deferred - first authenticated action will mint; boot/connect never signs.");
+            return UniTask.FromResult(held);
+        }
+
+        /// <summary>Attach proof already available in memory without minting or signing.</summary>
+        public static bool TryAttachCachedSession(UnityWebRequest req, string playerId)
+        {
+            if (req == null || string.IsNullOrWhiteSpace(playerId)) return false;
+            if (IsGuestIdentity(playerId))
             {
-                FlowTrace.Step("Wallet", "session warm-up skipped - a usable session is already held.");
+                req.SetRequestHeader("X-Guest-Id", playerId);
                 return true;
             }
-            bool ok = await MintSessionAsync(wallet);
-            FlowTrace.Step("Wallet", ok
-                ? "session minted AT CONNECT - the next purchase needs one prompt (payment), not two."
-                : "session warm-up did not complete - harmless, the first authed call will mint on demand.");
-            return ok;
+            if (!SessionUsable(playerId)) return false;
+            req.SetRequestHeader("X-Session", _sessionToken);
+            req.SetRequestHeader("X-Wallet", playerId);
+            return true;
         }
 
         /// <summary>
