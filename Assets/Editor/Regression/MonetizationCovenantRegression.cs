@@ -46,6 +46,7 @@ namespace DeNelle.Editor
             "lantern_oil_2x_expedition", "lantern_oil_3x_expedition",
             "harvest_boost", "instant_fill_storage", "workforce_slot",
             "storage_tier_jump", "offline_window_extension",
+            "permanent_builder",
         };
 
         // --- documented GRANT/PERK wrapper kinds ---------------------------------

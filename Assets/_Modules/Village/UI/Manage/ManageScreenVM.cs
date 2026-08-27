@@ -44,6 +44,7 @@ using DeNelle.Core.Diagnostics;
 using DeNelle.Core.Jobs;
 using DeNelle.Core.State;
 using DeNelle.Core.UI;
+using DeNelle.Wallet;
 using UnityEngine;
 using CoreCost = DeNelle.Core.Catalog.ResourceCost;
 
@@ -224,10 +225,20 @@ namespace DeNelle.Village.UI
         /// <summary>True when <see cref="Notice"/> is the broke case and the View should offer the store.</summary>
         public bool NoticeIsBrokeCase { get; private set; }
 
-        /// <summary>Extra-slot purchase price for the active tab's channel (0 = not for sale).</summary>
+        /// <summary>WO-1253 Manage button copy. Measured: 11 chars, shorter than the old
+        /// "Buy slot 250c" (14) that already fit the 0.33-width slot button.</summary>
+        public const string BuyBuilderButtonCopy = "Buy builder";
+
+        /// <summary>WO-1253 Manage label. 20 chars. Words carry the product (concurrency), not hue.</summary>
+        public const string BuyBuilderLabelCopy = "Permanent builder +1";
+
+        /// <summary>WO-1253 Manage label when the SKU is already owned. 20 chars.</summary>
+        public const string BuyBuilderOwnedLabelCopy = "You own this builder";
+
+        /// <summary>Retired crystal-price field. Always 0 after WO-1253: Manage no longer sells a crystal slot.</summary>
         public int SlotPrice { get; private set; }
 
-        /// <summary>ASCII sentence describing the extra-slot offer or why it is locked.</summary>
+        /// <summary>ASCII sentence describing the permanent-builder store offer.</summary>
         public string SlotOfferText { get; private set; } = "";
 
         /// <summary>WO-911 (Q2) — crystal-free instant repair cost, or null when nothing is damaged.</summary>
@@ -494,25 +505,17 @@ namespace DeNelle.Village.UI
 
         private void BuildSlotOffer(ChannelId channel)
         {
+            // WO-1253: Manage sells a PERMANENT BUILDER in the store, not a crystal extra slot.
+            // Crystal extra-queue DEPTH is KEEP BOTH and still lives on the upgrade-queue-full
+            // surface and ObsidianQueueHud. Channel is the visible tab's line; the SKU is always
+            // the Builder crew.
+            _ = channel;
             SlotPrice = 0;
-            SlotOfferText = "";
-            var svc = BuildTimerService.Instance;
-            if (svc == null) return;
-
-            int entitled = svc.EchoEntitledSlots();
-            int bought = svc.BoughtSlotsOf(channel);
-            if (bought >= entitled)
-            {
-                // Two-step gate (ruling Q6): say which step is missing, in words.
-                SlotOfferText = entitled <= 0
-                    ? "Extra slot: locked - awaken a 3rd Echo"
-                    : "Extra slot: locked - all " + entitled + " Echo slot(s) used";
-                return;
-            }
-            SlotPrice = svc.NextSlotPrice(channel);
-            SlotOfferText = SlotPrice > 0
-                ? "Extra slot: " + SlotPrice + " crystals"
-                : "Extra slot: unavailable";
+            var ownedIds = GameStateService.Instance != null
+                ? GameStateService.Instance.State?.OwnedItemIds
+                : null;
+            bool owned = PackCatalog.OwnsPermanentBuilder(ownedIds);
+            SlotOfferText = owned ? BuyBuilderOwnedLabelCopy : BuyBuilderLabelCopy;
         }
 
         private void BuildRepairOffer()
@@ -1163,22 +1166,24 @@ namespace DeNelle.Village.UI
             Rebuild();
         }
 
-        /// <summary>Ruling Q6 — the two-step Echo-gated, crystal-priced extra slot.</summary>
+        /// <summary>
+        /// WO-1253 — Manage "Buy builder" drops to the store focused on the permanent-builder SKU.
+        /// Does NOT spend crystals. Crystal extra-slot (DEPTH) remains on the queue-full surface.
+        /// </summary>
         public void BuySlot(ChannelId channel)
         {
-            var svc = BuildTimerService.Instance;
-            if (svc == null) return;
-            if (svc.TryBuySlot(channel, out string failure))
+            PackStore.RequestFocusSku(PackCatalog.PermanentBuilderSku);
+            if (!PanelRouter.Open(PanelId.RealmStore))
             {
-                Notice = "Extra slot unlocked.";
-                NoticeIsBrokeCase = false;
+                Notice = "Store is not open right now.";
+                FlowTrace.Warn("Manage", "RealmStore opener not registered - builder SKU route dead-ends.");
             }
             else
             {
-                Notice = failure ?? "Could not buy a slot.";
-                NoticeIsBrokeCase = failure != null &&
-                                    failure.StartsWith(BuildTimerService.InsufficientCrystalsPrefix, StringComparison.Ordinal);
+                Notice = null;
+                FlowTrace.Step("Manage", "buy builder from " + channel + " -> store sku=" + PackCatalog.PermanentBuilderSku);
             }
+            NoticeIsBrokeCase = false;
             Rebuild();
         }
 

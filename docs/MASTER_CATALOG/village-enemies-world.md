@@ -432,7 +432,7 @@ The village wave loop owner. `[DisallowMultipleComponent]`.
 - **WaveFeedbackDirector.cs** (326, WO-38/40 wave juice), **WaveCelebrationManager.cs** (214,
   WO-83 clear burst), **KillComboTracker.cs** (207, WO-83), **SkyProgressionController.cs** (165,
   DEF-66 darkening sky), **WaveDamageReport.cs** (194, F8-45 post-wave structure/economy damage
-  report), **AlertIntelSystem.cs** (199, DEF-199 watchtower early-warning),
+  report), **AlertIntelSystem.cs** (WO-1184 friendly uGUI lookout notice chip; DEF-199),
   **DailyQuestCombatBridge.cs** (41, OnWaveCleared → DailyQuestService), **WaveAccessLock.cs** (34,
   RequireComponent gate helper). **LIVE support.**
 

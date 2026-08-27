@@ -32,6 +32,7 @@ using DeNelle.Core.Progression;
 using DeNelle.Core.Diagnostics;
 using DeNelle.Core.State;
 using DeNelle.Village.Talents;
+using DeNelle.Village.Monetization;
 using UnityEngine;
 
 namespace DeNelle.Village
@@ -303,7 +304,13 @@ namespace DeNelle.Village
         public int AddXp(float amount)
         {
             if (amount <= 0f) return 0;
-            FlowTrace.Step("HeroXp", $"AddXp amount={amount:0.#} (level={_level} xp={_xp:0.#}/{XpToNextFor(_level):0.#})");
+            // WO-1246: an xp-weekend charge doubles hero XP for 24h. The multiplier is
+            // TIME, never a combat stat — it does not change damage, only the rate this
+            // method banks. Capped at 2x; a second token extends the window.
+            float xpMult = ConvenienceRedeemer.XpMultiplier();
+            if (xpMult > 1f) amount *= xpMult;
+            FlowTrace.Step("HeroXp", $"AddXp amount={amount:0.#} (level={_level} xp={_xp:0.#}/{XpToNextFor(_level):0.#}" +
+                                     (xpMult > 1f ? $", xp-weekend {xpMult:0.##}x" : "") + ")");
             _xp += amount;
             _lifetimeXp += amount;
 

@@ -1074,6 +1074,11 @@ namespace DeNelle.Village
 
             bool valid = IsValidPlacement(hit, snapped, _armed, out Vector2Int cell, out Vector2Int footprint,
                 out BuildRejectReason reason, out float seatY, out bool wallMounted);
+            // WO-1252: a DEPTH-full Builder line is a place-time block, shown as the busy
+            // next-step sentence (not LineFullMessage — that one must never say "busy").
+            string queueBlock = null;
+            if (valid && BuilderLineBlocks(out queueBlock))
+                valid = false;
             // Preview at the SEAT height (wall-top for a wall-walk mount, else the surface Y) so the
             // ghost shows exactly where the piece lands.
             Vector3 seatSnapped = new Vector3(snapped.x, seatY, snapped.z);
@@ -1082,7 +1087,7 @@ namespace DeNelle.Village
             // Owner 2026-07-24 "tell me why it's red": surface the already-computed reason on
             // the ghost's silent floating label while blocked (no buzz, no toast spam); clear
             // it when valid. The drop/place taps still pop the buzzing toast (ShowRejectToast).
-            _ghost.SetReason(valid ? null : ReasonLabelText(reason));
+            _ghost.SetReason(valid ? null : (queueBlock ?? ReasonLabelText(reason)));
 
             // §12 heartbeat — EVERY gate above passed this frame: the PlaceConfirm latch IS
             // polled below. If the owner clicks and still nothing happens while these LIVE
@@ -1107,7 +1112,7 @@ namespace DeNelle.Village
                 _dropWorldPoint = hit.point;
                 FlowTrace.Step("Build", $"Two-step DROP: '{_armed?.id}' pending at cell ({cell.x},{cell.y}), " +
                     $"valid={valid}, yaw={ArmedYawDegrees:F0} — rotate/nudge free; PLACE commits.");
-                if (!valid) ShowRejectToast(reason);
+                if (!valid) SurfacePlacementBlock(reason, queueBlock);
             }
             else if (confirm == ConfirmKind.UiPlace)
             {
@@ -1129,7 +1134,7 @@ namespace DeNelle.Village
                 }
                 else
                 {
-                    ShowRejectToast(reason);
+                    SurfacePlacementBlock(reason, queueBlock);
                 }
             }
         }
@@ -1141,6 +1146,33 @@ namespace DeNelle.Village
         /// </summary>
         private void ShowRejectToast(BuildRejectReason reason)
             => BuildFeedbackToast.Show(ReasonLabelText(reason));
+
+        /// <summary>
+        /// WO-1252 — DEPTH-full Builder line at place-time. The ghost and the toast quote
+        /// <see cref="BuildTimerService.BusyCrewMessage"/> (wait / Manage + any option the
+        /// service says the player has). Never recomposes LineFullMessage: that sentence
+        /// is DEPTH and must not say "busy".
+        /// </summary>
+        private bool BuilderLineBlocks(out string why)
+        {
+            why = null;
+            var timer = BuildTimerService.Instance;
+            if (timer == null || !timer.IsLineFull(DeNelle.Core.Jobs.ChannelId.Builder))
+                return false;
+            why = timer.BusyCrewMessage();
+            if (string.IsNullOrEmpty(why))
+                why = timer.LineFullMessage(DeNelle.Core.Jobs.ChannelId.Builder);
+            return true;
+        }
+
+        /// <summary>WO-1252 — toast the busy next-step copy when the line blocked, else the footprint reason.</summary>
+        private void SurfacePlacementBlock(BuildRejectReason reason, string queueBlock)
+        {
+            if (!string.IsNullOrEmpty(queueBlock))
+                BuildFeedbackToast.Show(queueBlock);
+            else
+                ShowRejectToast(reason);
+        }
 
         /// <summary>
         /// The player-facing text for a reject reason -- the specialized "Not enough
@@ -1225,10 +1257,13 @@ namespace DeNelle.Village
 
             bool valid = IsValidPlacement(hit, snapped, _armed, out Vector2Int cell, out Vector2Int footprint,
                 out BuildRejectReason reason, out float seatY, out bool wallMounted);
+            string queueBlock = null;
+            if (valid && BuilderLineBlocks(out queueBlock))
+                valid = false;
             Vector3 seatSnapped = new Vector3(snapped.x, seatY, snapped.z);
             _ghost.MoveTo(seatSnapped, ArmedYawDegrees);
             _ghost.SetValid(valid);
-            _ghost.SetReason(valid ? null : ReasonLabelText(reason));   // silent "why it's red" label
+            _ghost.SetReason(valid ? null : (queueBlock ?? ReasonLabelText(reason)));   // silent "why it's red" label
 
             // §12 heartbeat for the dropped state — mirrors the hover placeloop-live line.
             FlowTrace.Throttle("Build", "placeloop-pending", 1f,
@@ -1248,7 +1283,7 @@ namespace DeNelle.Village
                 }
                 else
                 {
-                    ShowRejectToast(reason);
+                    SurfacePlacementBlock(reason, queueBlock);
                 }
             }
         }
@@ -1898,10 +1933,11 @@ namespace DeNelle.Village
                 var timerForCap = BuildTimerService.Instance;
                 if (timerForCap != null && timerForCap.IsLineFull(DeNelle.Core.Jobs.ChannelId.Builder))
                 {
-                    // Player-readable, colour-independent (owner is red/green colourblind).
-                    string why = $"Builders queue is full ({timerForCap.QueueDepth(DeNelle.Core.Jobs.ChannelId.Builder)}/" +
-                                 $"{timerForCap.QueueDepthLimit(DeNelle.Core.Jobs.ChannelId.Builder)}). " +
-                                 "Cancel or finish an item first.";
+                    // WO-1252: quote the service's busy next-step copy. Do NOT recompose
+                    // LineFullMessage here — that sentence is DEPTH and must never say "busy".
+                    string why = timerForCap.BusyCrewMessage();
+                    if (string.IsNullOrEmpty(why))
+                        why = timerForCap.LineFullMessage(DeNelle.Core.Jobs.ChannelId.Builder);
                     BuildFeedbackToast.Show(why);
                     FlowTrace.Warn("BuildMode", $"Place refused for '{_armed.id}' — {why}");
                     CancelArmed();

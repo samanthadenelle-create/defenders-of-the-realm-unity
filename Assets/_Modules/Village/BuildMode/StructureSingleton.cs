@@ -88,11 +88,17 @@ namespace DeNelle.Village
         private static readonly Dictionary<string, (int frame, bool built)> s_playerBuiltMemo =
             new Dictionary<string, (int frame, bool built)>();
 
+        // WO-1250: one-shot per domain load. Pre-straightening Default Town saves were
+        // granted the pair workshop+forge, which (wrongly) owned the Weaponsmith and
+        // Armorer visuals. After the census remap those saves must keep the Armorer.
+        private static bool s_legacyArmorerGranted;
+
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
         private static void ResetStatics()
         {
             s_builtMemo.Clear();
             s_playerBuiltMemo.Clear();
+            s_legacyArmorerGranted = false;
             SingletonResolved = null;
             SingletonReleased = null;
         }
@@ -224,13 +230,23 @@ namespace DeNelle.Village
 
         /// <summary>
         /// <see cref="MayBakedTwinSurface(string, IReadOnlyList{string}, bool)"/> against the
-        /// LIVE save. No save service (raw scene open / editor tools) → TRUE, preserving
-        /// pre-WO-834 behaviour where no gate can be evaluated.
+        /// LIVE save. No save service (raw scene open / editor tools) → FALSE (WO-1250:
+        /// fail CLOSED — a missing save is a blank founding, not Default Town).
         /// </summary>
         public static bool MayBakedTwinSurface(string itemId)
         {
             var st = GameStateService.Instance != null ? GameStateService.Instance.State : null;
-            if (st == null) return true;
+            if (st == null)
+            {
+                // WO-1250: a missing save service used to fail-OPEN (return true), which
+                // resurfaced every baked storefront — including the Weaponsmith and
+                // Armorer visuals — before GameStateService appeared. Fail CLOSED: a
+                // brand-new / not-yet-loaded save must look blank, not like Default Town.
+                FlowTrace.Once("Singleton", "may-surface-no-state",
+                    "MayBakedTwinSurface: GameStateService/State is null — FAIL CLOSED (no surface). " +
+                    "WO-1250: fail-open here handed the player Weaponsmith+Armorer on a new load.");
+                return false;
+            }
             return MayBakedTwinSurface(itemId, st.EverBuiltStructureIds, st.StrategicPlacementMigrated);
         }
 
@@ -305,6 +321,7 @@ namespace DeNelle.Village
                         : EnforceOutcome.None;                                 // no twin of this id in this scene bake
             }
 
+            TraceBlankTownDecision(itemId, outcome);
             s_builtMemo.Remove(itemId);         // world changed - drop this frame's memo for the id
             s_playerBuiltMemo.Remove(itemId);   // WO-843 - the card-gate memo too
             return outcome;
@@ -317,6 +334,7 @@ namespace DeNelle.Village
         /// </summary>
         public static void EnforceAll()
         {
+            TryGrantLegacyArmorerVisual();
             int rows = 0, twinRows = 0, surfaced = 0, suppressed = 0, alreadyDown = 0;
             foreach (var entry in CatalogRegistry.All())
             {
@@ -383,7 +401,14 @@ namespace DeNelle.Village
         private static (int stood, int alreadyDown) StandDownBakedTwins(string itemId, string reason)
         {
             int stood = 0, alreadyDown = 0;
-            foreach (var bakedName in BakedTwinsOf(itemId))
+            var twins = BakedTwinsOf(itemId);
+            if (twins.Count == 0)
+            {
+                FlowTrace.Step("Singleton",
+                    $"StandDownBakedTwins('{itemId}'): catalog authors NO bakedTwins — nothing to hide. {reason}");
+                return (0, 0);
+            }
+            foreach (var bakedName in twins)
             {
                 var baked = GameObject.Find(bakedName);   // active-only lookup
                 if (baked == null)
@@ -395,6 +420,8 @@ namespace DeNelle.Village
                     if (down != null)
                     {
                         alreadyDown++;
+                        FlowTrace.Step("Singleton",
+                            $"StandDownBakedTwins('{itemId}'): twin '{bakedName}' already inactive. {reason}");
                         // WO-950 phantom-footprint discipline: SetActive(false) leaves every
                         // collider's enabled-FLAG true, so a twin some earlier path stood down
                         // can still resurrect an invisible wall on any reactivation. Enforce
@@ -403,6 +430,11 @@ namespace DeNelle.Village
                         var downGo = down.gameObject;
                         Guard.Try("Singleton", $"suppress physics on '{bakedName}'",
                             () => HubStructureVisualInjector.SuppressBakedTwinPhysics(downGo, reason));
+                    }
+                    else
+                    {
+                        FlowTrace.Step("Singleton",
+                            $"StandDownBakedTwins('{itemId}'): twin '{bakedName}' ABSENT from this scene bake. {reason}");
                     }
                     continue;
                 }
@@ -418,6 +450,46 @@ namespace DeNelle.Village
                     $"baked twin '{bakedName}' stood down - {reason}.");
             }
             return (stood, alreadyDown);
+        }
+
+        /// <summary>
+        /// WO-1250 — one line per singleton per hub-load Enforce, naming the blank-town
+        /// inputs so a capture can pin why Weaponsmith (forge) / Armorer (armorer) stood.
+        /// </summary>
+        private static void TraceBlankTownDecision(string itemId, EnforceOutcome outcome)
+        {
+            var st = GameStateService.Instance != null ? GameStateService.Instance.State : null;
+            bool migrated = st != null && st.StrategicPlacementMigrated;
+            bool ever = st != null && st.HasEverBuilt(itemId);
+            bool may = MayBakedTwinSurface(itemId);
+            var twins = BakedTwinsOf(itemId);
+            string twinList = twins.Count == 0 ? "<none>" : string.Join(",", twins);
+            FlowTrace.Step("Singleton",
+                $"blank-town '{itemId}': migrated={migrated} everBuilt={ever} maySurface={may} " +
+                $"twins=[{twinList}] → {outcome}");
+        }
+
+        /// <summary>
+        /// WO-1250: pre-straightening Default Town / v36 template saves were granted
+        /// <c>workshop</c> + <c>forge</c>, which owned the Weaponsmith and Armorer
+        /// visuals. After the census remap those two ids no longer cover Armorer
+        /// (<c>armorer</c> now owns <c>Forge_Armor_Storefront</c>). Copy the Armorer
+        /// surface right onto any save that still carries that pair and has not
+        /// itself built an Armorer — no schema bump, monotonic ledger.
+        /// </summary>
+        private static void TryGrantLegacyArmorerVisual()
+        {
+            if (s_legacyArmorerGranted) return;
+            s_legacyArmorerGranted = true;
+            var st = GameStateService.Instance != null ? GameStateService.Instance.State : null;
+            if (st == null) return;
+            if (st.HasEverBuilt("armorer")) return;
+            if (!st.HasEverBuilt("forge") || !st.HasEverBuilt("workshop")) return;
+            st.MarkEverBuilt("armorer");
+            FlowTrace.Step("Singleton",
+                "WO-1250: granted 'armorer' onto a save that carried the pre-straightening " +
+                "template pair (workshop+forge) so the Armorer visual at Forge_Armor_Storefront " +
+                "keeps standing for Default-Town/legacy towns.");
         }
 
         /// <summary>

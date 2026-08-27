@@ -1,6 +1,6 @@
 # WORK ORDER 1250 - Weaponsmith and Armorer show as ALREADY BUILT on a new load
 
-**Status:** READY TO IMPLEMENT
+**Status:** FIXED 2026-08-27 — implemented; awaiting owner felt-verify to CLOSE.
 **Silo:** Village / Buildings + save state
 **Severity:** P1. A new player is handed two buildings they never built, which breaks the founding
 sequence and the economy that the first hour is balanced around.

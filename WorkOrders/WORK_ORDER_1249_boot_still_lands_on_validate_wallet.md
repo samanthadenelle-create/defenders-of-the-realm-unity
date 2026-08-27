@@ -1,6 +1,6 @@
 # WORK ORDER 1249 - Boot still lands on the "validate wallet" screen
 
-**Status:** READY TO IMPLEMENT - ⚠ one owner line needed on intended behaviour (see below)
+**Status:** FIXED 2026-08-27 — implemented; awaiting owner felt-verify to CLOSE.
 **Silo:** Wallet / boot flow
 **Severity:** P1 for testing throughput. It is the first thing between the owner and 191 validation
 items, and it is on the boot path for every player.

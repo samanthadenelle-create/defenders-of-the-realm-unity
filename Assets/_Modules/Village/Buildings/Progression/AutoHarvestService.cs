@@ -15,6 +15,7 @@
 using UnityEngine;
 using DeNelle.Core.Diagnostics;
 using DeNelle.Core.State;
+using DeNelle.Village.Monetization;
 
 namespace DeNelle.Village.Buildings.Progression
 {
@@ -41,7 +42,11 @@ namespace DeNelle.Village.Buildings.Progression
         private void Update()
         {
             var mods = ModifierService.Active;              // static, never null (Compute() returns fresh)
-            if (mods == null || !mods.AutoCollect) { _timer = 0f; return; }   // no-op when perk unowned
+            bool perk = mods != null && mods.AutoCollect;
+            // WO-1246: a harvest-auto-collect pack token opens a 24h CollectAll window.
+            // The perk remains the permanent capstone; the token is the paid-for timed twin.
+            if (!ConvenienceRedeemer.HarvestAutoCollectShouldTick(perk))
+            { _timer = 0f; return; }
 
             _timer += Time.deltaTime;
             if (_timer < TickInterval) return;

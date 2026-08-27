@@ -343,6 +343,7 @@ namespace DeNelle.Editor
             if (!DefenseReportContractRegression.Run(out var defReportReason)) failures.Add(defReportReason); else log.AppendLine("[defense-report] " + defReportReason);
             if (!SiegeCadenceRegression.Run(out var siegeCadenceReason)) failures.Add(siegeCadenceReason); else log.AppendLine("[siege-cadence] " + siegeCadenceReason);
             if (!SiegeSpawnAuthorityRegression.Run(out var siegeAuthorityReason)) failures.Add(siegeAuthorityReason); else log.AppendLine("[siege-spawn-authority] " + siegeAuthorityReason);
+            if (!LookoutAlertRegression.Run(out var lookoutAlertReason)) failures.Add(lookoutAlertReason); else log.AppendLine("[lookout-alert] " + lookoutAlertReason);
             if (!SiegeLossStakesRegression.Run(out var siegeStakesReason)) failures.Add(siegeStakesReason); else log.AppendLine("[siege-loss-stakes] " + siegeStakesReason);
             // --- WO-1128: every offline window must DECLARE which clock produced it and its own
             //     endpoints, so api/game/save.js can reconcile it against the server's elapsed
@@ -492,6 +493,7 @@ namespace DeNelle.Editor
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "enemy-rewards suite", () => { if (!EnemyRewardRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[enemy-rewards] " + r); });
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "wall-mitigation suite", () => { if (!WallHeartMitigationRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[wall-mitigation] " + r); });
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "pack-grant suite", () => { if (!PackGrantRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[pack-grant] " + r); });
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "builder-sku suite", () => { if (!DeNelle.Editor.Regression.BuilderSkuRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[builder-sku] " + r); });
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "upgrade-authority suite", () => { if (!BuildingUpgradeAuthorityRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[upgrade-authority] " + r); });
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "queue-full-surface suite", () => { if (!UpgradeQueueFullSurfaceRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[queue-full-surface] " + r); });
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "upgrade-family suite", () => { if (!UpgradeFamilyPrecedenceRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[upgrade-family] " + r); });
@@ -561,6 +563,11 @@ namespace DeNelle.Editor
             // tree, so git had no record to conflict on. Copy HUNKS from another lane, never
             // a whole shared file.
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "hud-label-fit suite", () => { if (!DeNelle.Editor.Regression.HudLabelFitRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[hud-label-fit] " + r); });
+            // WO-1248: hero-select carousel rotate control. "Previous" rendered "Pr..." because
+            // a 0.068-well kit word-button armed FitSingleLine (NoWrap+Ellipsis). This suite
+            // MEASURES the designed ICON+word against its plate at four surfaces and proves
+            // the pre-fix box still goes RED on "Previous" (WO-1138).
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "hero-select-carousel suite", () => { if (!DeNelle.Editor.Regression.HeroSelectCarouselRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[hero-select-carousel] " + r); });
             // --- WO-1008 raids discoverability: a built Barracks ALWAYS shows the Raids face. She played a save with a Barracks and an empty army, the face was absent entirely, and she reported "I do not see a way to start a raid" - a feature that hides itself is indistinguishable from a broken one. Zero troops is now a greyed face with a WORDED reason (she is red/green colourblind, so hue carries nothing), and the full-army gate underneath is untouched. ---
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "raids-discoverability suite", () => { if (!RaidsDiscoverabilityRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[raids-discoverability] " + r); });
             // --- WO-830 echo resource picker: picker/token/affinity contract (sibling to the echo-spec suite) ---
@@ -1192,6 +1199,10 @@ namespace DeNelle.Editor
             //     enforced on the CHARGE PATH and not in the UI alone. Also pins the vapor rule on
             //     the browsable shelf and the same-day "no glimmer in any pack" ruling. ---
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "buy-gate suite", () => { if (!DeNelle.Editor.Regression.BuyGateAndPriceLadderRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[buy-gate] " + r); });
+            // --- WO-1246: a VISIBLE SKU cannot sell nothing. Unreadable packs.json / battle_monthly.json
+            //     is a FAIL, never a quiet green (WO-1138). Live grant drives ApplyPackContents for
+            //     every PackCatalog.IsOnBrowsableShelf row (the same helper PackStore uses). ---
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "store-sku-grant suite", () => { if (!DeNelle.Editor.Regression.StoreSkuGrantRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[store-sku-grant] " + r); });
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "monetization-activation suite", () => { if (!DeNelle.Editor.Regression.MonetizationActivationRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[monetization-activation] " + r); });
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "mainnet-canary suite", () => { if (!DeNelle.Editor.Regression.MainnetCanaryRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[mainnet-canary] " + r); });
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "store-commerce-state suite", () => { if (!DeNelle.Editor.Regression.StoreCommerceStateRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[store-commerce-state] " + r); });
@@ -1281,6 +1292,10 @@ namespace DeNelle.Editor
             // against api/_lib/benefactors.js, the per-patron (never global) monument state, the
             // near-the-Heart siting ruling, and the single-door ruling.
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "founders-wall suite", () => { if (!DeNelle.Editor.Regression.FoundersMonumentWallRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[founders-wall] " + r); });
+            // WO-1251: no MeshRenderer/SkinnedMeshRenderer on a catalogued / Structure_Art
+            // structure may carry a NULL material slot (F8 seq 3618 CrystalMine engine-default).
+            // Stands down via Skip if the set cannot be enumerated -- never quiet green.
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "structure-null-slot suite", () => { if (!DeNelle.Editor.Regression.StructureNullMaterialSlotRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[structure-null-slot] " + r); });
 
             // =====================================================================
             //  >>> REGISTERED ORACLE SUITES — END FENCE <<<  (new lines go ABOVE)
@@ -2328,10 +2343,154 @@ namespace DeNelle.Editor
                 "EnsureBarracksSurfaced must respect the blank-town gate");
             Lint("_Modules/Village/BuildMode/BuildModeController.cs", "MarkEverBuilt",
                 "the placement commit seam must grow the ever-built ledger");
+            Lint("_Modules/Core/State/GameStateService.cs", "SeedBlankFoundingOnMissingSave",
+                "a missing save must seed blank founding (WO-1250: else the bake grants Weaponsmith+Armorer)");
+
+            // (d) WO-1250 — Weaponsmith (catalog id "forge") and Armorer (catalog id
+            //     "armorer") must NOT be owned or surfaceable on a brand-new save, and
+            //     the bake hosts that wear their art must map to those ids (not the
+            //     retired workshop/forge crossing). If the catalog rows cannot be
+            //     resolved this MUST NOT read green — PartialSkip, never a quiet pass.
+            CheckBlankTownWeaponsmithArmorer(failures, log);
 
             log.AppendLine(failures.Count == before
                 ? "  BLANK_TOWN_GATE_OK"
                 : $"  BLANK_TOWN_GATE_FAIL ({failures.Count - before} failure(s))");
+        }
+
+        /// <summary>
+        /// WO-1250: a brand-new save owns the empty founding set (tree/well/walls in
+        /// the scene bake; zero BaseLayout; zero everBuilt). Weaponsmith and Armorer
+        /// are player-placed, never granted. The RED shape: if either id is in the
+        /// new-game ledger, or if the bake hosts still map to the retired ids, this
+        /// fails — that is the bug (those two remaining standing on a new load).
+        /// </summary>
+        private static void CheckBlankTownWeaponsmithArmorer(List<string> failures, StringBuilder log)
+        {
+            const string WeaponsmithId = "forge";
+            const string ArmorerId = "armorer";
+            const string WeaponsmithHost = "Blacksmith_Weapons_Storefront";
+            const string ArmorerHost = "Forge_Armor_Storefront";
+
+            // Founding owned set: a brand-new save (ResetToNewGame / missing-save seed)
+            // is migrated + empty everBuilt. If forge or armorer were seeded there,
+            // MayBakedTwinSurface would OPEN and those two would remain standing.
+            // These asserts do not need the catalog — they pin the pure gate.
+            var empty = new List<string>();
+            if (StructureSingleton.MayBakedTwinSurface(WeaponsmithId, empty, true))
+                failures.Add("[blankTown] WO-1250 RED: a brand-new save surfaces 'forge' (Weaponsmith) — " +
+                             "that is the bug (weaponsmith already built on a new load)");
+            if (StructureSingleton.MayBakedTwinSurface(ArmorerId, empty, true))
+                failures.Add("[blankTown] WO-1250 RED: a brand-new save surfaces 'armorer' (Armorer) — " +
+                             "that is the bug (armorer already built on a new load)");
+
+            // Prove the assertion is live: seeding those ids into everBuilt WOULD fail
+            // the surface check (WO-1138: a hollow gate that cannot go red is worse than none).
+            var wouldStand = new List<string> { WeaponsmithId, ArmorerId };
+            if (!StructureSingleton.MayBakedTwinSurface(WeaponsmithId, wouldStand, true) ||
+                !StructureSingleton.MayBakedTwinSurface(ArmorerId, wouldStand, true))
+                failures.Add("[blankTown] WO-1250: MayBakedTwinSurface does not honour forge/armorer in everBuilt — " +
+                             "the RED proof (adding them to the founding set) is dead");
+
+            string srcPath = System.IO.Path.Combine(Application.dataPath,
+                "StreamingAssets/Data/Canonical/structures-catalog.json");
+            StructuresCatalogFile src = null;
+            var srcById = new Dictionary<string, CatalogEntry>();
+            if (!System.IO.File.Exists(srcPath))
+            {
+                log.AppendLine("  " + DeNelle.Editor.Regression.RegressionOutcome.PartialSkip(
+                    "[blankTown] WO-1250 weaponsmith/armorer founding set",
+                    "structures-catalog.json missing — cannot pin bake hosts or the founding set"));
+            }
+            else
+            {
+                try
+                {
+                    src = JsonConvert.DeserializeObject<StructuresCatalogFile>(
+                        System.IO.File.ReadAllText(srcPath),
+                        new JsonSerializerSettings
+                        {
+                            Converters = { new StringEnumConverter() },
+                            NullValueHandling = NullValueHandling.Ignore,
+                            MissingMemberHandling = MissingMemberHandling.Ignore,
+                        });
+                }
+                catch (System.Exception ex)
+                {
+                    log.AppendLine("  " + DeNelle.Editor.Regression.RegressionOutcome.PartialSkip(
+                        "[blankTown] WO-1250 weaponsmith/armorer founding set",
+                        "structures-catalog.json failed to parse (" + ex.Message + ") — cannot pin bake hosts"));
+                }
+            }
+            if (src != null && src.Entries != null)
+                foreach (var e in src.Entries)
+                    if (e != null && !string.IsNullOrEmpty(e.id)) srcById[e.id] = e;
+
+            if (srcById.Count == 0)
+            {
+                // Parse failed or file empty: the PartialSkip above already named it.
+                // Do NOT continue into mapping asserts that would invent a pass.
+                return;
+            }
+
+            bool HasTwin(string id, string host)
+            {
+                if (!srcById.TryGetValue(id, out var row) || row.repo == null) return false;
+                return row.repo.bakedTwins != null && System.Array.IndexOf(row.repo.bakedTwins, host) >= 0;
+            }
+
+            if (!srcById.ContainsKey(WeaponsmithId))
+            {
+                log.AppendLine("  " + DeNelle.Editor.Regression.RegressionOutcome.PartialSkip(
+                    "[blankTown] WO-1250 weaponsmith row",
+                    "catalog has no 'forge' row — cannot pin the Weaponsmith bake host"));
+            }
+            else if (!HasTwin(WeaponsmithId, WeaponsmithHost))
+                failures.Add("[blankTown] WO-1250: 'forge' (Weaponsmith) must author baked twin '" +
+                             WeaponsmithHost + "' — the bake host wearing Structures/Forge. " +
+                             "A missing/wrong twin is the owner's 'weaponsmith already built' bug");
+
+            if (!srcById.ContainsKey(ArmorerId))
+            {
+                log.AppendLine("  " + DeNelle.Editor.Regression.RegressionOutcome.PartialSkip(
+                    "[blankTown] WO-1250 armorer row",
+                    "catalog has no 'armorer' row — cannot pin the Armorer bake host"));
+            }
+            else if (!HasTwin(ArmorerId, ArmorerHost))
+                failures.Add("[blankTown] WO-1250: 'armorer' (Armorer) must author baked twin '" +
+                             ArmorerHost + "' — the bake host wearing Structures/armorer. " +
+                             "A missing/wrong twin is the owner's 'armorer already built' bug");
+
+            // Census mapping (the standdown allow-list). RED if the retired
+            // workshop→Blacksmith / forge→Forge_Armor crossing is restored.
+            bool sawWeaponsmithHost = false, sawArmorerHost = false;
+            foreach (var (bakedName, itemId) in StrategicPlacementMigration.BakedStorefronts())
+            {
+                if (bakedName == WeaponsmithHost)
+                {
+                    sawWeaponsmithHost = true;
+                    if (itemId != WeaponsmithId)
+                        failures.Add($"[blankTown] WO-1250: bake host '{WeaponsmithHost}' maps to '{itemId}' " +
+                                     $"(must be '{WeaponsmithId}' = Weaponsmith). Retired mapping workshop/forge " +
+                                     "is what left those two standing on a new load");
+                }
+                if (bakedName == ArmorerHost)
+                {
+                    sawArmorerHost = true;
+                    if (itemId != ArmorerId)
+                        failures.Add($"[blankTown] WO-1250: bake host '{ArmorerHost}' maps to '{itemId}' " +
+                                     $"(must be '{ArmorerId}' = Armorer). Retired mapping is the pre-built Armorer");
+                }
+            }
+            if (!sawWeaponsmithHost)
+                failures.Add($"[blankTown] WO-1250: BakedRows no longer lists '{WeaponsmithHost}' — " +
+                             "standdown cannot cover the Weaponsmith visual");
+            if (!sawArmorerHost)
+                failures.Add($"[blankTown] WO-1250: BakedRows no longer lists '{ArmorerHost}' — " +
+                             "standdown cannot cover the Armorer visual");
+
+            log.AppendLine("  WO-1250: brand-new save does not own/surface forge (Weaponsmith) or armorer; " +
+                           "bake hosts map to those ids (not the retired workshop/forge crossing).");
         }
 
         // =====================================================================

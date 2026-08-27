@@ -10,6 +10,19 @@ namespace DeNelle.Village
         public const string NearAuraKey = "store.beacon.near";
         public const float NearRadius = 20f;
 
+        // WO-1052 Layer A: an 18 m gold cylinder along world +Y (Unity cylinder scale.y=9
+        // at local Y=9). Owner bounce UI-001 2026-08-27: "there is a VFX exiting about town
+        // along Y and it needs removed or turned off". Device proof is F8
+        // flag_20260827-164913_06.png -- a single gold vertical shaft in the plaza from
+        // build-mode bird's-eye, color-matched to MastColor below. The tree-aura column
+        // (HubAmbientVfxInjector.EnableTreeAura) is already OFF; this mast is the remaining
+        // town Y-column. Near-field Marker8 ring is a ground loop (startSpeed 0), not Y-travel.
+        public const string VerticalMastEmitterId = "StoreBeacon_AlwaysOn/LightMast";
+        // static readonly, not const: the ON branch must stay compilable (same reason as
+        // AmbientAuraPolicy.HeartTreeFirefliesExempt -- a const false would CS0162 the mast builder).
+        private static readonly bool EnableVerticalMast = false;
+        private static readonly Color MastColor = new Color(1f, 0.72f, 0.18f, 1f);
+
         private VFXHandle _nearAura;
         private Transform _hero;
         private Light _light;
@@ -24,7 +37,7 @@ namespace DeNelle.Village
         private void OnEnable()
         {
             SceneManager.sceneUnloaded += OnSceneUnloaded;
-            if (_mast == null) BuildAlwaysOnLayer();
+            if (transform.Find("StoreBeacon_AlwaysOn") == null) BuildAlwaysOnLayer();
         }
 
         private void Update()
@@ -45,34 +58,68 @@ namespace DeNelle.Village
 
         private void BuildAlwaysOnLayer()
         {
-            var existing = transform.Find("StoreBeacon_AlwaysOn");
-            if (existing != null)
+            Transform root = transform.Find("StoreBeacon_AlwaysOn");
+            if (root == null)
             {
-                _mast = existing.Find("LightMast");
-                _light = existing.GetComponentInChildren<Light>(true);
+                var go = new GameObject("StoreBeacon_AlwaysOn");
+                root = go.transform;
+                root.SetParent(transform, false);
+            }
+
+            _mast = root.Find("LightMast");
+            _light = root.GetComponentInChildren<Light>(true);
+
+            if (!EnableVerticalMast)
+            {
+                StripVerticalMast(root);
+                EnsurePointLight(root);
+                FlowTrace.Step("RealmStoreBeacon",
+                    "Y-column emitter id='" + VerticalMastEmitterId +
+                    "' DISABLED (UI-001 owner bounce 2026-08-27: VFX exiting town along world Y). " +
+                    "Not spawned; zero VFX loop slots. Point light + proximity Marker8 ring remain.");
                 return;
             }
 
-            var root = new GameObject("StoreBeacon_AlwaysOn").transform;
-            root.SetParent(transform, false);
-            var mast = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
-            mast.name = "LightMast";
-            mast.transform.SetParent(root, false);
-            mast.transform.localPosition = new Vector3(0f, 9f, 0f);
-            mast.transform.localScale = new Vector3(0.18f, 9f, 0.18f);
-            var collider = mast.GetComponent<Collider>(); if (collider != null) Destroy(collider);
-            var renderer = mast.GetComponent<Renderer>();
-            if (renderer != null)
+            if (_mast == null)
             {
-                var shader = Shader.Find("Universal Render Pipeline/Unlit") ?? Shader.Find("Unlit/Color");
-                var material = new Material(shader) { name = "RealmStoreBeacon_Emissive_Runtime" };
-                var color = new Color(1f, 0.72f, 0.18f, 1f);
-                material.color = color;
-                if (material.HasProperty("_EmissionColor")) material.SetColor("_EmissionColor", color * 3.5f);
-                renderer.sharedMaterial = material;
+                var mast = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+                mast.name = "LightMast";
+                mast.transform.SetParent(root, false);
+                mast.transform.localPosition = new Vector3(0f, 9f, 0f);
+                mast.transform.localScale = new Vector3(0.18f, 9f, 0.18f);
+                var collider = mast.GetComponent<Collider>(); if (collider != null) Destroy(collider);
+                var renderer = mast.GetComponent<Renderer>();
+                if (renderer != null)
+                {
+                    var shader = Shader.Find("Universal Render Pipeline/Unlit") ?? Shader.Find("Unlit/Color");
+                    var material = new Material(shader) { name = "RealmStoreBeacon_Emissive_Runtime" };
+                    material.color = MastColor;
+                    if (material.HasProperty("_EmissionColor")) material.SetColor("_EmissionColor", MastColor * 3.5f);
+                    renderer.sharedMaterial = material;
+                }
+                _mast = mast.transform;
             }
-            _mast = mast.transform;
 
+            EnsurePointLight(root);
+            FlowTrace.Step("RealmStoreBeacon", "always-on mast + real light built (zero VFX loop slots).");
+        }
+
+        private void StripVerticalMast(Transform root)
+        {
+            if (_mast == null) _mast = root.Find("LightMast");
+            if (_mast == null) { _mast = null; return; }
+            var doomed = _mast.gameObject;
+            _mast = null;
+            doomed.SetActive(false);
+            Destroy(doomed);
+            FlowTrace.Step("RealmStoreBeacon",
+                "Y-column emitter id='" + VerticalMastEmitterId +
+                "' found live and stripped (renderer off, GameObject destroyed).");
+        }
+
+        private void EnsurePointLight(Transform root)
+        {
+            if (_light != null) return;
             var lamp = new GameObject("StoreBeacon_Light");
             lamp.transform.SetParent(root, false);
             lamp.transform.localPosition = new Vector3(0f, 2.5f, 0f);
@@ -82,7 +129,6 @@ namespace DeNelle.Village
             _light.intensity = 2.6f;
             _light.color = new Color(1f, 0.68f, 0.22f);
             _light.shadows = LightShadows.None;
-            FlowTrace.Step("RealmStoreBeacon", "always-on mast + real light built (zero VFX loop slots).");
         }
 
         private void StartNearAura()
@@ -92,7 +138,7 @@ namespace DeNelle.Village
                 Quaternion.identity, transform, null, 2.4f);
             if (_nearAura == null)
                 FlowTrace.Throttle("RealmStoreBeacon", "near-missing", 5f,
-                    "near aura key '" + NearAuraKey + "' did not acquire; the zero-slot mast remains visible.");
+                    "near aura key '" + NearAuraKey + "' did not acquire; point light remains (Y-column mast is OFF).");
             else
                 FlowTrace.Step("RealmStoreBeacon", "near aura started: Marker8 safe-zone ring + shockwave.");
         }

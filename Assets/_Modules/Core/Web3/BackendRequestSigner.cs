@@ -38,6 +38,7 @@ using DeNelle.Core.State;
 using Newtonsoft.Json;
 using UnityEngine;
 using UnityEngine.Networking;
+using UnityEngine.SceneManagement;
 
 namespace DeNelle.Core.Web3
 {
@@ -79,6 +80,18 @@ namespace DeNelle.Core.Web3
             => !string.IsNullOrEmpty(_sessionToken)
             && string.Equals(_sessionWallet, wallet, StringComparison.Ordinal)
             && DateTime.UtcNow + SessionSkew < _sessionExpiresUtc;
+
+        /// <summary>
+        /// Why a live session cannot be reused. Values are only <c>missing</c> or
+        /// <c>expired</c> — never a wallet address (WO-1157: do not log wallets).
+        /// </summary>
+        private static string SessionGapWhy(string wallet)
+        {
+            if (string.IsNullOrEmpty(_sessionToken)) return "missing";
+            if (!string.Equals(_sessionWallet, wallet, StringComparison.Ordinal)) return "missing";
+            if (DateTime.UtcNow + SessionSkew >= _sessionExpiresUtc) return "expired";
+            return "missing";
+        }
 
         /// <summary>Drop the cached session. Call on wallet change, sign-out, or a 401.</summary>
         public static void ClearSession()
@@ -173,16 +186,23 @@ namespace DeNelle.Core.Web3
                 return false;
             }
 
-            // ── WO-1157: try the cached session FIRST ────────────────────────────────────
-            // A usable session is the same proof, established minutes ago from a burned nonce,
-            // and it costs the player NO prompt. This is the line that turns three wallet
-            // prompts per purchase into one (the transfer, which we keep on purpose).
+            // ── WO-1157 Fail bounce 2026-08-27 ───────────────────────────────────────────
+            // Device: every extra sheet was MintSessionAsync (MWA SignMessage) on Title
+            // after CONTINUE, and again ~15 min later walking into a dungeon (TTL). Those
+            // callers are cloud SAVE, not a purchase. Authed calls that are not a purchase
+            // reuse a live session or WAIT — they must not pop SignMessage while walking.
             //
-            // ⛔ FALLBACK, NOT REPLACEMENT. If a session cannot be obtained - offline, server
-            // older than this client, signing refused - we fall straight through to the
-            // per-request signature below, which still fails CLOSED. No request is ever sent
-            // unauthenticated, and nothing is forced to migrate.
-            if (await TryAttachSession(req, wallet)) return true;
+            // Purchase keeps the till prompt: if a live session exists, attach it and the
+            // only wallet sheet is the transfer. If not, mint then transfer (first purchase
+            // of a cold session). Per-request signature stays as a purchase-only fallback
+            // when the session endpoint is down — never for Title CONTINUE / dungeon-enter.
+            bool allowMint = IsPurchaseRoute(req);
+            if (await TryAttachSession(req, wallet, allowMint)) return true;
+            if (!allowMint) return false;
+
+            FlowTrace.Warn("Wallet",
+                $"purchase session mint failed; falling back to per-request signature. " +
+                $"scene={CurrentSceneName()} caller={DescribeCaller(req)}");
 
             // 1. Fresh single-use nonce bound to this wallet.
             var nonce = await FetchNonceAsync(wallet);
@@ -220,8 +240,8 @@ namespace DeNelle.Core.Web3
         }
 
         /// <summary>
-        /// Mint the backend session NOW, at connect time, instead of on the first authed call.
-        /// Returns true when a usable session is held afterwards.
+        /// Connect/auto-resume hook. Returns true when a usable in-memory session is already held.
+        /// Does not mint — boot/auto-resume must stay silent (WO-1211).
         /// <para>
         /// ⛔ WHY (owner, 2026-08-24): <i>"normally on a new game ... I see a Wallet connect, which
         /// gives it the account, but another one which is the handshake for the authentication. Then
@@ -232,14 +252,10 @@ namespace DeNelle.Core.Web3
         /// precisely where a player is least willing to be surprised by an extra prompt.
         /// </para>
         /// <para>
-        /// KEY_FACTS.md had already recorded the remedy and left it undone: <i>"Minting at connect
-        /// would make it one throughout - small, contained, NOT done."</i> This is that.
-        /// </para>
-        /// <para>
-        /// ⚠ BEST-EFFORT BY DESIGN. A failure here changes NOTHING about correctness - the lazy path
-        /// in <see cref="TryAttachSession"/> is untouched and still mints on demand. So a declined or
-        /// failed warm-up costs the player one later prompt, never a broken purchase. It is logged,
-        /// never thrown, and never blocks the connect.
+        /// ⚠ WO-1211: auto-resume AND boot share this entry, so this method MUST NOT mint.
+        /// A SignMessage here is the "every launch" sheet. Non-purchase authed calls wait.
+        /// Purchase mints if no live session. Explicit connect uses
+        /// <see cref="MintSessionForExplicitConnectAsync"/>.
         /// </para>
         /// </summary>
         public static UniTask<bool> WarmUpSessionAsync(string wallet)
@@ -249,6 +265,22 @@ namespace DeNelle.Core.Web3
                 ? "session warm-up found an existing usable in-memory session; no wallet action needed."
                 : "session warm-up deferred - first authenticated action will mint; boot/connect never signs.");
             return UniTask.FromResult(held);
+        }
+
+        /// <summary>
+        /// Mint now because the player explicitly connected. Auto-resume/boot must keep
+        /// calling <see cref="WarmUpSessionAsync"/> (deferred). A live session is a no-op.
+        /// </summary>
+        public static UniTask<bool> MintSessionForExplicitConnectAsync(string wallet)
+        {
+            if (string.IsNullOrEmpty(wallet)) return UniTask.FromResult(false);
+            if (SessionUsable(wallet))
+            {
+                FlowTrace.Step("Wallet",
+                    $"MintSessionAsync why=explicit-connect scene={CurrentSceneName()} caller=explicit-connect (already live)");
+                return UniTask.FromResult(true);
+            }
+            return MintSessionAsync(wallet, "explicit-connect", "explicit-connect");
         }
 
         /// <summary>Attach proof already available in memory without minting or signing.</summary>
@@ -267,36 +299,71 @@ namespace DeNelle.Core.Web3
         }
 
         /// <summary>
-        /// WO-1157. Attach a cached session if we hold a usable one, otherwise mint one from a
-        /// SINGLE signature and attach that. Returns false only when no proof could be obtained,
-        /// and the caller then falls back to the per-request signature path.
+        /// WO-1157. Attach a cached session if we hold a usable one. Minting is opt-in
+        /// (<paramref name="allowMint"/>) and reserved for purchase / explicit-connect —
+        /// Title CONTINUE and dungeon-enter saves pass false so they never raise SignMessage.
         /// </summary>
-        private static async UniTask<bool> TryAttachSession(UnityWebRequest req, string wallet)
+        private static async UniTask<bool> TryAttachSession(UnityWebRequest req, string wallet, bool allowMint)
         {
-            if (!SessionUsable(wallet))
+            if (SessionUsable(wallet))
             {
-                var minted = await MintSessionAsync(wallet);
-                if (!minted) return false;
+                AttachSessionHeaders(req, wallet);
+                return true;
             }
+
+            string why = SessionGapWhy(wallet);
+            string scene = CurrentSceneName();
+            string caller = DescribeCaller(req);
+            if (!allowMint)
+            {
+                FlowTrace.Step("Wallet",
+                    $"authed call has no live session; waiting without SignMessage. " +
+                    $"why={why} scene={scene} caller={caller}");
+                return false;
+            }
+
+            var minted = await MintSessionAsync(wallet, why, caller);
+            if (!minted) return false;
+            AttachSessionHeaders(req, wallet);
+            return true;
+        }
+
+        private static void AttachSessionHeaders(UnityWebRequest req, string wallet)
+        {
             req.SetRequestHeader("X-Session", _sessionToken);
             // ⛔ X-Wallet travels alongside so the server can still bind the session to the player
             // being acted on. The session names the wallet; this lets the server CHECK that claim
             // rather than take it. Never send a session without it.
             req.SetRequestHeader("X-Wallet", wallet);
-            return true;
         }
 
         /// <summary>
         /// POST /api/auth/session with one nonce+signature, cache the returned bearer token.
         /// This is the ONLY place a wallet-signature prompt happens for backend auth.
+        /// <paramref name="why"/> is missing / expired / explicit-connect.
+        /// ⛔ Never logs a wallet address.
         /// </summary>
-        private static async UniTask<bool> MintSessionAsync(string wallet)
+        private static async UniTask<bool> MintSessionAsync(string wallet, string why, string caller)
         {
+            string scene = CurrentSceneName();
+            FlowTrace.Step("Wallet",
+                $"MintSessionAsync why={why} scene={scene} caller={caller}");
+
             var signer = CoreServices.WalletSigner;
-            if (signer == null || !signer.CanSign) return false;
+            if (signer == null || !signer.CanSign)
+            {
+                FlowTrace.Warn("Wallet",
+                    $"MintSessionAsync aborted (no signer) why={why} scene={scene} caller={caller}");
+                return false;
+            }
 
             var nonce = await FetchNonceAsync(wallet);
-            if (string.IsNullOrEmpty(nonce)) return false;
+            if (string.IsNullOrEmpty(nonce))
+            {
+                FlowTrace.Warn("Wallet",
+                    $"MintSessionAsync aborted (no nonce) why={why} scene={scene} caller={caller}");
+                return false;
+            }
 
             // Bodyless request, so the canonical message uses the 'load' payload tag - exactly
             // the shape the server rebuilds for a null payload. These two must not drift.
@@ -306,10 +373,17 @@ namespace DeNelle.Core.Web3
             try { signature = await signer.SignMessageBase58(message); }
             catch (Exception ex)
             {
+                FlowTrace.Warn("Wallet",
+                    $"MintSessionAsync signing failed ({ex.GetType().Name}) why={why} scene={scene} caller={caller}");
                 Debug.LogWarning($"[BackendAuth] Session signing failed ({ex.GetType().Name}) - falling back to per-request signing.");
                 return false;
             }
-            if (string.IsNullOrEmpty(signature)) return false;
+            if (string.IsNullOrEmpty(signature))
+            {
+                FlowTrace.Warn("Wallet",
+                    $"MintSessionAsync empty signature why={why} scene={scene} caller={caller}");
+                return false;
+            }
 
             using var req = new UnityWebRequest(SessionUrl, UnityWebRequest.kHttpVerbPOST);
             req.downloadHandler = new DownloadHandlerBuffer();
@@ -322,11 +396,15 @@ namespace DeNelle.Core.Web3
             try { await req.SendWebRequest(); }
             catch (Exception e)
             {
+                FlowTrace.Warn("Wallet",
+                    $"MintSessionAsync threw ({req.responseCode}/{e.GetType().Name}) why={why} scene={scene} caller={caller}");
                 Debug.LogWarning($"[BackendAuth] Session mint threw ({req.responseCode}): {e.GetType().Name}");
                 return false;
             }
             if (req.result != UnityWebRequest.Result.Success)
             {
+                FlowTrace.Warn("Wallet",
+                    $"MintSessionAsync http {req.responseCode} why={why} scene={scene} caller={caller}");
                 Debug.LogWarning($"[BackendAuth] Session mint failed ({req.responseCode}).");
                 return false;
             }
@@ -334,7 +412,12 @@ namespace DeNelle.Core.Web3
             try
             {
                 var res = JsonConvert.DeserializeObject<SessionResponse>(req.downloadHandler.text);
-                if (res == null || !res.Ok || string.IsNullOrEmpty(res.Token)) return false;
+                if (res == null || !res.Ok || string.IsNullOrEmpty(res.Token))
+                {
+                    FlowTrace.Warn("Wallet",
+                        $"MintSessionAsync empty token why={why} scene={scene} caller={caller}");
+                    return false;
+                }
 
                 _sessionToken = res.Token;
                 _sessionWallet = wallet;
@@ -346,13 +429,76 @@ namespace DeNelle.Core.Web3
                         out var parsed)
                     ? parsed
                     : DateTime.UtcNow.AddSeconds(res.TtlSeconds > 0 ? res.TtlSeconds : 60);
+                FlowTrace.Step("Wallet",
+                    $"MintSessionAsync held why={why} scene={scene} caller={caller}");
                 return true;
             }
             catch (Exception ex)
             {
+                FlowTrace.Warn("Wallet",
+                    $"MintSessionAsync parse {ex.GetType().Name} why={why} scene={scene} caller={caller}");
                 Debug.LogWarning($"[BackendAuth] Session parse error: {ex.GetType().Name}");
                 return false;
             }
+        }
+
+        private static bool IsPurchaseRoute(UnityWebRequest req)
+        {
+            string path = RequestPath(req);
+            return path.IndexOf("/api/purchases/", StringComparison.OrdinalIgnoreCase) >= 0;
+        }
+
+        private static string CurrentSceneName()
+        {
+            try
+            {
+                string n = SceneManager.GetActiveScene().name;
+                return string.IsNullOrEmpty(n) ? "none" : n;
+            }
+            catch
+            {
+                return "none";
+            }
+        }
+
+        /// <summary>Path-only request id. Query is stripped so a wallet never lands in a log.</summary>
+        private static string RequestPath(UnityWebRequest req)
+        {
+            if (req == null || string.IsNullOrEmpty(req.url)) return "no-url";
+            string url = req.url;
+            int q = url.IndexOf('?');
+            if (q >= 0) url = url.Substring(0, q);
+            int scheme = url.IndexOf("://", StringComparison.Ordinal);
+            if (scheme >= 0)
+            {
+                int pathStart = url.IndexOf('/', scheme + 3);
+                if (pathStart >= 0) url = url.Substring(pathStart);
+            }
+            return string.IsNullOrEmpty(url) ? "no-url" : url;
+        }
+
+        private static string DescribeCaller(UnityWebRequest req)
+        {
+            string path = RequestPath(req);
+            string frame = FirstExternalFrame();
+            return string.IsNullOrEmpty(frame) ? path : frame + " " + path;
+        }
+
+        private static string FirstExternalFrame()
+        {
+            try
+            {
+                var st = new System.Diagnostics.StackTrace(2, false);
+                for (int i = 0; i < st.FrameCount; i++)
+                {
+                    var m = st.GetFrame(i)?.GetMethod();
+                    var t = m?.DeclaringType;
+                    if (t == null || t == typeof(BackendRequestSigner)) continue;
+                    return t.Name + "." + m.Name;
+                }
+            }
+            catch { /* IL2CPP may omit frames */ }
+            return string.Empty;
         }
 
         private sealed class SessionResponse

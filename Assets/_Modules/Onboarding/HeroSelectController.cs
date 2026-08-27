@@ -20,12 +20,16 @@
 //     five overlaps and left the bottom third of the frame empty. It is now BANDED
 //     top-to-bottom inside ONE stage well. The band table is the const block at the
 //     top of the class; read THAT, not the call sites.
-//   TOP BAND   : the ROTATING CAROUSEL — PREV | side card | FOCAL card | side card |
-//                NEXT. The focal card is larger AND gold-framed; the two side cards
-//                are smaller, lower and dimmed (that size difference IS the rotation
-//                cue, and it survives greyscale). A locked hero's side card carries a
-//                SOON word-ribbon. All four heroes are in the ring; wrap-around.
-//                Three inputs rotate one step: swipe, PREV/NEXT tap, side-card tap.
+//   TOP BAND   : the ROTATING CAROUSEL — rotate-prev | side card | FOCAL card |
+//                side card | rotate-next. The focal card is larger AND gold-framed;
+//                the two side cards are smaller, lower and dimmed (that size
+//                difference IS the rotation cue, and it survives greyscale). A locked
+//                hero's side card carries a SOON word-ribbon. All four heroes are in
+//                the ring; wrap-around. Three inputs rotate one step: swipe, the
+//                outboard rotate control, side-card tap.
+//                WO-1248: the rotate control is a designed ICON+word (large ASCII
+//                chevron over PREV / NEXT), NEVER a kit word-button in a 0.068 lane
+//                — that is what truncated "Previous" to "Pr...".
 //   MID BAND   : role label under the focal card, then the page-dot rail (DISPLAY
 //                ONLY — never tappable, so nothing here is under MinTouchPx), then
 //                a divider rule.
@@ -154,11 +158,17 @@ namespace DeNelle.Onboarding
         private const float CarouselYMin   = 0.500f;   // -> 1.000 (the top band)
 
         // Horizontal lanes of the carousel band (fractions of the well's width).
-        private const float PrevXMin = 0.148f, PrevXMax = 0.216f;
+        // WO-1248: the rotate lanes used to be 0.068 of the well (Prev 0.148-0.216 /
+        // Next 0.784-0.852). At portrait 1080x1920 that is a ~63 px plate; the kit
+        // button's 0.92 label inset leaves ~58 px, which is how "Previous" became
+        // "Pr..." (NoWrap + Ellipsis). The new lanes are sized so BOTH axes clear
+        // MinTouchPx(112) at portrait 1080x1920 AND landscape 2670x1200, and stay
+        // disjoint from the side cards (SideLXMin / SideRXMax) by construction.
+        private const float PrevXMin = 0.012f, PrevXMax = 0.148f;
         private const float SideLXMin = 0.2591f, SideLXMax = 0.3505f;
         private const float FocalXMin = 0.4353f, FocalXMax = 0.5650f;
         private const float SideRXMin = 0.6494f, SideRXMax = 0.7409f;
-        private const float NextXMin = 0.784f, NextXMax = 0.852f;
+        private const float NextXMin = 0.852f, NextXMax = 0.988f;
 
         // ── WO-1234 — WHAT THE DELIVERED ART IS, declared once ───────────────────────
         // The owner's 2026-08-26 delivery is a FULL CARD, not a bare portrait: it bakes
@@ -182,7 +192,22 @@ namespace DeNelle.Onboarding
 
         // Vertical lanes INSIDE the carousel band (0 = band bottom, 1 = band top).
         private const float CarSideYMin = 0.42f, CarSideYMax = 0.92f;   // side cards: smaller + lower
-        private const float CarArrowYMin = 0.53f, CarArrowYMax = 0.86f; // arrows: outboard, card-centred
+        // WO-1248: taller than the old 0.53-0.86 strip so the rotate plate's SHORTEST
+        // side stays >= MinTouchPx on landscape (where height is the scarce axis).
+        private const float CarArrowYMin = 0.42f, CarArrowYMax = 0.90f;
+
+        // WO-1248 — designed rotate copy. ICON+word, not a truncated "Previous".
+        // PREV / NEXT is the designed word (full "Previous" is wider than a
+        // MinTouchPx-wide portrait plate at FontFloor, so stuffing it in the old
+        // recipe is what produced "Pr..."). Chevron is the rotate affordance;
+        // the word is confirmation. Size + shape carry the state, never hue.
+        private const string RotatePrevWord = "PREV";
+        private const string RotateNextWord = "NEXT";
+        private const string RotatePrevChevron = "<<";
+        private const string RotateNextChevron = ">>";
+        private const float RotateWordX0 = 0.06f, RotateWordX1 = 0.94f;
+        private const float RotateChevronYMin = 0.34f, RotateChevronYMax = 0.96f;
+        private const float RotateWordYMin = 0.04f, RotateWordYMax = 0.32f;
 
         // The four details columns (fractions of the well's width).
         private static readonly Vector2[] DetailColumns =
@@ -285,7 +310,7 @@ namespace DeNelle.Onboarding
         ///     └─ Obsidian FrameCore chrome (title in the header zone; Close hidden)
         ///          ├─ subtitle eyebrow (sub-header band)
         ///          └─ HeroStageWell (WO-1083 — the frame-measured body rect), banded:
-        ///               ├─ TOP     HeroCarousel — PREV | side card | FOCAL card | side card | NEXT
+        ///               ├─ TOP     HeroCarousel — rotate | side card | FOCAL card | side card | rotate
         ///               ├─         (inside the focal column: portrait well, hero name, role label)
         ///               ├─ MID     page-dot rail, then the divider rule
         ///               ├─ LOWER   DetailsStrip — LORE | STATS | SIGNATURE | PRIMARY SKILLS
@@ -448,10 +473,10 @@ namespace DeNelle.Onboarding
         /// <summary>
         /// Builds the TOP BAND: a full-band swipe surface, the two POOLED side cards
         /// (the heroes either side of the focal one, repainted per rotation by
-        /// <see cref="RefreshCarouselChrome"/>), the outboard PREV/NEXT buttons, and
+        /// <see cref="RefreshCarouselChrome"/>), the outboard rotate controls, and
         /// the display-only page-dot rail in its own band beneath. All three rotation
-        /// inputs are wired here: swipe (this surface + the focal well), the arrow
-        /// buttons, and a side-card tap. Every card is tappable (a locked hero previews
+        /// inputs are wired here: swipe (this surface + the focal well), the rotate
+        /// plates, and a side-card tap. Every card is tappable (a locked hero previews
         /// into the stage); only a playable hero can be confirmed.
         /// </summary>
         private void BuildCarousel()
@@ -470,17 +495,15 @@ namespace DeNelle.Onboarding
             BuildPreviewCard(0, new Vector2(SideLXMin, CarSideYMin), new Vector2(SideLXMax, CarSideYMax));
             BuildPreviewCard(1, new Vector2(SideRXMin, CarSideYMin), new Vector2(SideRXMax, CarSideYMax));
 
-            // PREV/NEXT — OUTBOARD of the side cards (defects #3/#4: they used to sit in a
-            // bottom strip UNDER the cards and the MinTouch floor grew them into the card
-            // rects). The x lanes are disjoint from the card lanes by ~0.043 of the well
-            // (~99 px at 2670x1200), and both buttons are authored ABOVE MinTouchPx on
-            // both axes so ClampMinTouch has nothing to grow. ASCII arrow glyphs.
-            ElarionUiKit.BuildObsidianButton(_classColumn, "< PREV",
-                ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Gray,
-                new Vector2(PrevXMin, CarArrowYMin), new Vector2(PrevXMax, CarArrowYMax), () => StepCarousel(-1));
-            ElarionUiKit.BuildObsidianButton(_classColumn, "NEXT >",
-                ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Gray,
-                new Vector2(NextXMin, CarArrowYMin), new Vector2(NextXMax, CarArrowYMax), () => StepCarousel(1));
+            // Rotate controls — OUTBOARD of the side cards (WO-1083 defects #3/#4: they
+            // used to sit in a bottom strip UNDER the cards and ClampMinTouch grew them
+            // into the card rects). WO-1248: they are no longer kit word-buttons labelled
+            // "< PREV" / "NEXT >". That recipe (BuildObsidianButton + FitSingleLine
+            // NoWrap+Ellipsis) is what truncated "Previous" to "Pr..." in a 0.068-wide
+            // lane. Designed ICON+word, authored above MinTouchPx on both axes so the
+            // clamp has nothing to grow. ASCII chevrons, richText OFF.
+            BuildRotateControl(-1);
+            BuildRotateControl(1);
 
             // Page dots — DISPLAY ONLY by design (rotation is swipe / arrow / side-card
             // tap), so they are raycast-off and deliberately below the touch floor; making
@@ -502,7 +525,60 @@ namespace DeNelle.Onboarding
                 if (_pageDots[i] != null) _pageDots[i].raycastTarget = false;
             }
             FlowTrace.Step("Onboarding",
-                $"BuildCarousel: top band built - 2 side cards + PREV/NEXT outboard + {n} display-only page dots.");
+                $"BuildCarousel: top band built - 2 side cards + rotate ICON+word outboard + {n} display-only page dots.");
+        }
+
+        /// <summary>
+        /// WO-1248 — one carousel rotate plate. Obsidian gray face (same family as the
+        /// rest of the screen) carrying a large ASCII chevron over the word PREV / NEXT.
+        /// The kit's own label is suppressed: BuildObsidianButton always arms
+        /// FitSingleLine (ellipsis), which is the truncation recipe this control must
+        /// not use. The chevron and the word are sized to FIT their bands at the
+        /// authored font; Overflow rather than Ellipsis so a too-long string is a
+        /// visible miss, not a silent "Pr...".
+        /// </summary>
+        private void BuildRotateControl(int delta)
+        {
+            if (_classColumn == null) return;
+            bool prev = delta < 0;
+            var min = new Vector2(prev ? PrevXMin : NextXMin, CarArrowYMin);
+            var max = new Vector2(prev ? PrevXMax : NextXMax, CarArrowYMax);
+            var btn = ElarionUiKit.BuildObsidianButton(_classColumn, "",
+                ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Gray,
+                min, max, () => StepCarousel(delta));
+            if (btn == null) return;
+            btn.gameObject.name = prev ? "CarouselPrev" : "CarouselNext";
+
+            // Hide every label the kit/prefab already placed — including the empty
+            // FitSingleLine one — so a later string cannot be ellipsised into "Pr...".
+            var kitLabels = btn.GetComponentsInChildren<TextMeshProUGUI>(true);
+            for (int i = 0; i < kitLabels.Length; i++)
+                kitLabels[i].gameObject.SetActive(false);
+
+            var chevron = ElarionUiKit.Label(btn.transform, prev ? RotatePrevChevron : RotateNextChevron,
+                RotateChevronYMin, RotateChevronYMax, ElarionUi.Parchment, ElarionUi.FontHead,
+                TextAlignmentOptions.Center, RotateWordX0, RotateWordX1, bold: true);
+            ArmRotateGlyph(chevron);
+
+            var word = ElarionUiKit.Label(btn.transform, prev ? RotatePrevWord : RotateNextWord,
+                RotateWordYMin, RotateWordYMax, ElarionUi.Parchment, ElarionUi.FontMicro,
+                TextAlignmentOptions.Center, RotateWordX0, RotateWordX1, spacing: 1f, bold: true);
+            ArmRotateGlyph(word);
+        }
+
+        /// <summary>
+        /// Rotate-control text is a designed glyph, not a fitted line. richText OFF so
+        /// a chevron is never a TMP tag; Overflow so a miss is visible; no autosize, so
+        /// the geometry oracle measures the same size the player sees.
+        /// </summary>
+        private static void ArmRotateGlyph(TextMeshProUGUI t)
+        {
+            if (t == null) return;
+            t.raycastTarget = false;
+            t.richText = false;
+            t.textWrappingMode = TextWrappingModes.NoWrap;
+            t.overflowMode = TextOverflowModes.Overflow;
+            t.enableAutoSizing = false;
         }
 
         // Page-dot geometry. The ACTIVE dot is larger AND gilt (size + colour), never

@@ -1,5 +1,5 @@
 // =============================================================================
-// UpgradeQueueFullSurfaceRegression [queue-full-surface] — WO-1045.
+// UpgradeQueueFullSurfaceRegression [queue-full-surface] — WO-1045 + WO-1252.
 // Marker: QUEUE_FULL_SURFACE_OK / QUEUE_FULL_SURFACE_FAIL. Expected: GREEN.
 // -----------------------------------------------------------------------------
 // Assembly: DeNelle.EditorRegression (references DeNelle.Village + DeNelle.Core).
@@ -34,6 +34,11 @@
 //                  crystal faucet); a non-entitled player is told what unlocks it.
 //   8. CANON     — the new player-facing words live in canon-strings.json, in BOTH
 //                  copies (Resources + StreamingAssets), ASCII, with their placeholders.
+//   9. WO-1252   — BusyCrewMessage is a DISTINCT sentence from LineFullMessage. Place-time
+//                  quotes it (never recomposes the depth sentence). Qualifies-to-buy vs
+//                  does-not: slot/store named only when the composer is told those options
+//                  are live. Every line fits the toast inner budget. LineFullMessage still
+//                  fails if it says "busy".
 //
 // Wire (DataRegression.RunAll):
 //   if (!UpgradeQueueFullSurfaceRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[queue-full-surface] " + r);
@@ -75,6 +80,7 @@ namespace DeNelle.Editor
                 CheckOneVoiceForTheRefusal(failures, log);
                 CheckPurchaseRoutesThroughTryBuySlot(failures, log);
                 CheckCanonStrings(failures, log);
+                CheckBusyCrewNextStep(failures, log);
                 CheckLiveServiceBehaviour(failures, log);
             }
             catch (Exception ex)
@@ -219,6 +225,131 @@ namespace DeNelle.Editor
                                  "outcome may have lost its message entirely (a silent refusal)");
                 else log.AppendLine("  placed-structure path quotes LineFullMessage (duplicate sentence retired)");
             }
+
+            // WO-1252: the PLACE-time toast used to recompose LineFullMessage. That copy is
+            // DEPTH and a dead end (no Manage). It must now quote BusyCrewMessage.
+            string mode = ReadRepoFile("Assets/_Modules/Village/BuildMode/BuildModeController.cs");
+            if (mode != null)
+            {
+                if (mode.Contains("\"Builders queue is full ("))
+                    failures.Add("BuildModeController still re-composes the 'Builders queue is full (...)' " +
+                                 "sentence at place-time. Quote BuildTimerService.BusyCrewMessage so the " +
+                                 "player gets a next step (wait / Manage), not a wall.");
+                else if (!mode.Contains("BusyCrewMessage"))
+                    failures.Add("BuildModeController no longer names BusyCrewMessage — the place-time " +
+                                 "refusal may have lost its next-step copy (WO-1252 dead end).");
+                else log.AppendLine("  place-time path quotes BusyCrewMessage (LineFullMessage duplicate retired)");
+            }
+        }
+
+        // ── WO-1252. the busy next-step copy: qualifies-to-buy vs does-not ────
+        // RED-first: before BusyCrewMessage existed this method-lookup failed. An empty
+        // or Manage-less sentence fails the content checks. LineFullMessage still fails
+        // the existing 'busy' check above — that axis must not be rewritten.
+        private static void CheckBusyCrewNextStep(List<string> failures, StringBuilder log)
+        {
+            var svc = typeof(BuildTimerService);
+            var inst = svc.GetMethod("BusyCrewMessage", BindingFlags.Public | BindingFlags.Instance);
+            if (inst == null)
+            {
+                failures.Add("BuildTimerService.BusyCrewMessage() missing — the place-time toast has no " +
+                             "next-step sentence (WO-1252: the refusal was a dead end).");
+                return;
+            }
+            var compose = svc.GetMethod("ComposeBusyCrewMessage", BindingFlags.Public | BindingFlags.Static);
+            if (compose == null)
+            {
+                failures.Add("BuildTimerService.ComposeBusyCrewMessage(bool,bool) missing — the oracle " +
+                             "cannot drive qualifies-to-buy vs does-not without a live wallet.");
+                return;
+            }
+            if (svc.GetMethod("OffersPermanentBuilder", BindingFlags.Public | BindingFlags.Instance) == null)
+                failures.Add("BuildTimerService.OffersPermanentBuilder() missing — the toast cannot ask " +
+                             "the service whether the store builder SKU is actually offered.");
+
+            // Branch A: does-not qualify for TryBuySlot, no store offer.
+            string noBuy = compose.Invoke(null, new object[] { false, false }) as string ?? "";
+            AssertBusyCopy(noBuy, "does-not", expectSlot: false, expectStore: false, failures, log);
+
+            // Branch B: qualifies for TryBuySlot, store builder offered.
+            string yesBuy = compose.Invoke(null, new object[] { true, true }) as string ?? "";
+            AssertBusyCopy(yesBuy, "qualifies-to-buy", expectSlot: true, expectStore: true, failures, log);
+
+            // Store offered, no slot (Echo-gated).
+            string storeOnly = compose.Invoke(null, new object[] { false, true }) as string ?? "";
+            AssertBusyCopy(storeOnly, "store-only", expectSlot: false, expectStore: true, failures, log);
+
+            // Slot offered, store NOT (already owned / SKU not on shelf).
+            string slotOnly = compose.Invoke(null, new object[] { true, false }) as string ?? "";
+            AssertBusyCopy(slotOnly, "slot-only", expectSlot: true, expectStore: false, failures, log);
+
+            if (yesBuy == noBuy)
+                failures.Add("ComposeBusyCrewMessage(true,*) equals the does-not sentence — the " +
+                             "qualifies-to-buy branch is decorative (WO-1252 both-branches ruling).");
+
+            log.AppendLine("  BusyCrewMessage composer covers qualifies-to-buy and does-not");
+        }
+
+        private static void AssertBusyCopy(string msg, string tag, bool expectSlot, bool expectStore,
+                                           List<string> failures, StringBuilder log)
+        {
+            if (string.IsNullOrWhiteSpace(msg))
+            {
+                failures.Add("BusyCrewMessage [" + tag + "] is empty — a silent place-time refusal " +
+                             "is the dead end WO-1252 retires.");
+                return;
+            }
+
+            foreach (char ch in msg)
+            {
+                if (ch >= 128)
+                {
+                    failures.Add("BusyCrewMessage [" + tag + "] is not ASCII ('" + ch +
+                                 "') — TMP renders non-ASCII as tofu.");
+                    break;
+                }
+            }
+
+            string lower = msg.ToLowerInvariant();
+            if (!(lower.Contains("manage") || lower.Contains("wait")))
+                failures.Add("BusyCrewMessage [" + tag + "] '" + msg.Replace('\n', '/') +
+                             "' names no next step (must mention Manage or wait).");
+
+            if (expectSlot)
+            {
+                if (!lower.Contains("slot"))
+                    failures.Add("BusyCrewMessage [" + tag + "] qualifies for TryBuySlot but does not " +
+                                 "mention a slot — dangling the gated option as a dead end.");
+            }
+            else if (lower.Contains("slot"))
+                failures.Add("BusyCrewMessage [" + tag + "] mentions a slot while CanBuySlot is false — " +
+                             "dangling an unavailable purchase.");
+
+            if (expectStore)
+            {
+                if (!lower.Contains("store"))
+                    failures.Add("BusyCrewMessage [" + tag + "] store SKU is offered but the sentence " +
+                                 "does not name the store.");
+            }
+            else if (lower.Contains("store"))
+                failures.Add("BusyCrewMessage [" + tag + "] names the store while OffersPermanentBuilder " +
+                             "is false — dangling an unavailable SKU.");
+
+            // Width: each explicit line must fit the toast inner budget. Wrap is
+            // deliberate (newlines), never a mid-word cut.
+            string[] lines = msg.Split('\n');
+            int budget = BuildTimerService.BusyCrewToastInnerPx;
+            int glyph = BuildTimerService.BusyCrewGlyphPx;
+            for (int i = 0; i < lines.Length; i++)
+            {
+                int px = lines[i].Length * glyph;
+                if (px > budget)
+                    failures.Add("BusyCrewMessage [" + tag + "] line " + (i + 1) + " '" + lines[i] +
+                                 "' measures " + px + " px at " + glyph + "px/glyph against the " +
+                                 budget + " px toast inner — truncation class.");
+            }
+
+            log.AppendLine("  [" + tag + "] \"" + msg.Replace('\n', '/') + "\"");
         }
 
         // ── 6. the purchase can only be the gated one ─────────────────────────
@@ -358,6 +489,31 @@ namespace DeNelle.Editor
                                  "only a full LINE refuses. Naming the wrong axis sends the player to the wrong remedy.");
                 log.AppendLine($"  full line ({svc.QueueDepth(ChannelId.Builder)}/{depthCap}, crews {crewSlots}) says: \"{msg}\"");
 
+                // WO-1252 live BusyCrewMessage: same full line, two Echo branches.
+                throwaway.EchoCount = 0;
+                if (throwaway.OwnedItemIds == null) throwaway.OwnedItemIds = new List<string>();
+                throwaway.OwnedItemIds.Clear();
+                string busyGated = svc.BusyCrewMessage() ?? "";
+                if (string.IsNullOrWhiteSpace(busyGated))
+                    failures.Add("BusyCrewMessage returned blank on a live full line — silent place-time refusal");
+                if (!(busyGated.ToLowerInvariant().Contains("manage") || busyGated.ToLowerInvariant().Contains("wait")))
+                    failures.Add("live BusyCrewMessage (0 Echoes) '" + busyGated.Replace('\n', '/') +
+                                 "' names no Manage/wait next step");
+                if (busyGated.ToLowerInvariant().Contains("slot"))
+                    failures.Add("live BusyCrewMessage (0 Echoes) mentions a slot — CanBuySlot is false");
+                log.AppendLine("  live busy (0 Echoes, no SKU): \"" + busyGated.Replace('\n', '/') + "\"");
+
+                throwaway.EchoCount = 5;
+                string busyEntitled = svc.BusyCrewMessage() ?? "";
+                if (!busyEntitled.ToLowerInvariant().Contains("slot"))
+                    failures.Add("live BusyCrewMessage (5 Echoes) does not mention a slot — CanBuySlot should be true");
+                if (busyEntitled == busyGated)
+                    failures.Add("live BusyCrewMessage is identical at 0 Echoes and 5 Echoes — qualifies-to-buy is dead");
+                log.AppendLine("  live busy (5 Echoes): \"" + busyEntitled.Replace('\n', '/') + "\"");
+
+                // Restore the Echo-gate case below to the 0-Echo start it expects.
+                throwaway.EchoCount = 0;
+
                 // Concurrency is NOT the blocker here — prove the axes are genuinely different numbers.
                 if (depthCap == crewSlots)
                     failures.Add($"the live depth cap ({depthCap}) equals the crew count ({crewSlots}) — the player " +
@@ -450,7 +606,8 @@ namespace DeNelle.Editor
             {
                 Debug.Log(log.ToString() + "QUEUE_FULL_SURFACE_OK");
                 reason = "QUEUE-FULL SURFACE OK -- a depth-capped Builders line disables the upgrade button, " +
-                         "states the service's own reason naming the DEPTH limit, and offers the TryBuySlot remedy";
+                         "states the service's own reason naming the DEPTH limit, offers TryBuySlot, and " +
+                         "place-time BusyCrewMessage names wait/Manage (slot/store only when offered)";
                 return true;
             }
             reason = "queue-full-surface: " + string.Join("; ", failures);

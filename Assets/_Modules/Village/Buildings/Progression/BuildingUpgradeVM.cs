@@ -640,7 +640,7 @@ namespace DeNelle.Village.Buildings.Progression
 
             bool ok = t.TryBuySlot(ChannelId.Builder, out string failure);
             Status = ok
-                ? "Extra builder slot bought - the queue can take " + t.QueueDepthLimit(ChannelId.Builder) + " items."
+                ? "Extra queue slot bought - the queue can take " + t.QueueDepthLimit(ChannelId.Builder) + " items."
                 : Ascii(failure ?? "Could not buy a slot right now.");
 
             // §12 — the outcome AND the numbers that decided it, so a capture proves which of the

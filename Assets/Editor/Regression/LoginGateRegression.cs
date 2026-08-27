@@ -27,6 +27,11 @@
 //      emits the decision trace with its inputs (INSTRUMENTATION_STANDARD 1.4b) -- a
 //      later "tidy" that drops either one puts the SIGN IN wall back in front of the
 //      owner with no line saying why.
+//   5. WO-1249 PRODUCTION BOOT ROUTE (owner 2026-08-27: tester APK must behave like
+//      production; no tester skip). The gate file has no tester-define branch, never
+//      logs a wallet address, and the founding chokepoint still calls PresentOrContinue.
+//      RED-first: the unpatched gate logged ConnectedWalletShortAddress in the decision
+//      Step and titled the panel "SIGN IN"; both needles fail the pins below.
 //
 // LoginPanelController lives in DeNelle.Onboarding, which this asmdef does not
 // reference; the seam is driven by reflection, exactly like FoundingReachabilityRegression.
@@ -119,6 +124,9 @@ namespace DeNelle.Editor.Regression
 
             // -- 4. The wiring + the decision trace ---------------------------
             CheckSource(failures, log);
+
+            // -- 5. WO-1249: production boot route, no tester variant ---------
+            CheckProductionBootRoute(failures, log);
 
             reason = Finish(failures, log);
             return failures.Count == 0;
@@ -245,12 +253,79 @@ namespace DeNelle.Editor.Regression
                 "(INSTRUMENTATION_STANDARD 1.4b: report the decision AND its inputs)");
         }
 
+        /// <summary>
+        /// WO-1249. The Unity login panel is the production one-time connect. A tester
+        /// APK that skipped it could not validate production, so there is no tester
+        /// variant to assert -- the same seam, the same copy, no address in the log.
+        /// </summary>
+        private static void CheckProductionBootRoute(List<string> failures, StringBuilder log)
+        {
+            log.AppendLine("--- LOGIN GATE production boot route (WO-1249; no tester variant) ---");
+
+            string loginPath = Path.Combine(Application.dataPath, "_Modules/Onboarding/LoginPanelController.cs");
+            if (!File.Exists(loginPath))
+            {
+                failures.Add("[login-gate] LoginPanelController.cs not found (production boot-route pin)");
+                return;
+            }
+            string login;
+            try { login = File.ReadAllText(loginPath); }
+            catch (Exception ex)
+            {
+                failures.Add("[login-gate] LoginPanelController.cs unreadable for boot-route pin (" + ex.Message + ")");
+                return;
+            }
+
+            // RED-first (WO-1138): the unpatched gate logged ConnectedWalletShortAddress in
+            // the decision Step. A later "helpful" log of the pubkey puts a wallet address
+            // back into Player.log -- forbidden (WO-1249 acceptance: never log a wallet
+            // address; player id is enough, and here the booleans are enough).
+            Forbid(login, "ConnectedWalletShortAddress", failures, log,
+                "the login-gate decision logs a wallet address -- WO-1249 forbids rendering or logging one");
+
+            Forbid(login, "#if TESTER_BUILD", failures, log,
+                "the login gate branches on a tester define -- owner ruling 2026-08-27: tester APK must behave like production");
+            Forbid(login, "IsTesterBuild", failures, log,
+                "the login gate reads FeatureFlags.IsTesterBuild -- that is the tester skip the owner ruled out");
+
+            // RED-first: the unpatched panel title was the email-era "SIGN IN" wall. The
+            // production first-run surface is the one-time wallet connect, labelled as such.
+            Require(login, "\"YOUR WALLET\"", failures, log,
+                "the first-run panel title is no longer YOUR WALLET -- a SIGN IN wall reads as a bug, not the one-time connect");
+            Require(login, "one-time on this device", failures, log,
+                "the first-run copy no longer says this is the one-time connect -- the owner reported it as a validate-wallet defect");
+
+            string foundingPath = Path.Combine(Application.dataPath, "_Modules/Onboarding/FoundingChoiceController.cs");
+            if (!File.Exists(foundingPath))
+            {
+                failures.Add("[login-gate] FoundingChoiceController.cs not found -- the production boot chokepoint is unreadable");
+                return;
+            }
+            string founding;
+            try { founding = File.ReadAllText(foundingPath); }
+            catch (Exception ex)
+            {
+                failures.Add("[login-gate] FoundingChoiceController.cs unreadable (" + ex.Message + ")");
+                return;
+            }
+            Require(founding, "LoginPanelController.PresentOrContinue", failures, log,
+                "the founding chokepoint no longer routes through the login gate -- first-run players would skip the production connect, or a later caller would re-prompt returning players");
+        }
+
         private static void Require(string text, string needle, List<string> failures, StringBuilder log, string why)
         {
             if (text.IndexOf(needle, StringComparison.Ordinal) < 0)
-                failures.Add($"[login-gate] LoginPanelController no longer contains '{needle}' -- {why}");
+                failures.Add($"[login-gate] source no longer contains '{needle}' -- {why}");
             else
                 log.AppendLine($"  source references '{needle}' OK");
+        }
+
+        private static void Forbid(string text, string needle, List<string> failures, StringBuilder log, string why)
+        {
+            if (text.IndexOf(needle, StringComparison.Ordinal) >= 0)
+                failures.Add($"[login-gate] source contains '{needle}' -- {why}");
+            else
+                log.AppendLine($"  source does not contain '{needle}' OK");
         }
 
         private static Type FindType(string full)

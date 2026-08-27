@@ -56,6 +56,10 @@
 //      root sprite GUID is dangling and paints a WHITE quad unguarded; and the
 //      right-edge touch sizes are RECOMPUTED from HudAreasHost/HudKitController's
 //      own numbers at 2340x1080 rather than from a copied figure.
+//   7. TOWN RESOURCE RAIL (WO-1221) — expanded Wood/Iron/Stone/Crystals must be
+//      children of the occupancy-live gold chip, raised by SetActive from the tap,
+//      measured through UiSurfaceProbe AFTER layout settles. Hollow "handler ran" /
+//      "opener live=True" is a FAIL. Inactive or zero-size stack is a FAIL.
 //
 // SOURCE-LINT family (same as UiObsidianConformanceRegression / CompileGate's
 // NUL scan): reads .cs text + asset folders, runs no PlayMode, never throws.
@@ -1178,36 +1182,45 @@ namespace DeNelle.Editor
         // CHECK 7 — THE TOWN RESOURCE RAIL IS ACTUALLY RAISED (WO-1221)
         // ---------------------------------------------------------------------
         // WHAT SHIPPED, AND WHY A SOURCE PIN CATCHES IT: WO-1205 built the expanded
-        // rail inert (`_resExpandedRow.SetActive(false)`) and left a comment saying the
-        // LateTick tap window would raise it. Nothing did — the tick toggles the widget
-        // WRAPPER around the full-screen dock, whose only meaningful child is that
-        // inert row. Tapping the gold chip therefore activated an empty container and
-        // logged "resource panel expanded (opener live=True)". Compile-green, marker-
-        // green, zero pixels.
+        // rail inert (`_resExpandedRow.SetActive(false)`) on a SECOND occupancy widget
+        // (`resourceChips` / `_resDock`) that hud-areas.json never occupies. Register()
+        // deactivates every widget; occupancy is the only thing that turns one on.
+        // LateTick SetActive'd that WRAPPER (an empty full-ActionRail dock) and logged
+        // "resource panel expanded (opener live=True)". Device capture inside the window
+        // (tmp/resources-expanded-105803.png, 2670x1200) showed only gold 1034.
         //
-        // Two invariants, both of which were RED on the pre-fix tree:
-        //   7a  the OWNER of the open state must actually raise the row — the string
-        //       `_resExpandedRow.SetActive` must appear inside SetResourcePanelOpen.
-        //   7b  the expand trace must not be the hollow token again. `openerLive` is
-        //       true by construction on the expand branch, so a line whose only claim
-        //       is `opener live=` cannot fail; the file must instead measure through
-        //       UiSurfaceProbe (docs/reference/HOLLOW_ASSERTIONS_REGISTRY.md).
+        // A later pass added `_resExpandedRow.SetActive` inside SetResourcePanelOpen and
+        // a UiSurfaceProbe poll. Owner felt-test 2026-08-27 still FAIL: the pixels were
+        // still not children of the gold chip occupancy actually shows, so ApplyPosture
+        // (PostureEvaluator.Update, same GameObject, AFTER HudKitController.Update) could
+        // deactivate the unoccupied widget before render while the probe reported painted.
         //
-        // SOURCE-LINT, like checks 1/2/4: reads .cs text, runs no PlayMode. A rename of
-        // the field or the method degrades to a NOTE, never a false FAIL.
+        // Invariants, all of which were RED on the tree that logged "expanded" and painted
+        // nothing. A test that only asserts "the handler ran" / "the string SetActive
+        // appears" is the hollow token this check exists to replace:
+        //   7a  SetResourcePanelOpen actually SetActive's the row.
+        //   7b  post-expand verify measures through UiSurfaceProbe (rect/opacity/coverage)
+        //       and emits VERIFIED PAINTED; the hollow `opener live=` success is gone.
+        //   7c  the expanded stack is parented to the GOLD CHIP (tapGo), not a second
+        //       `resourceChips` occupancy widget. Split-widget is the defect.
+        //   7d  the tap handler calls SetResourcePanelOpen directly (not only a bool).
+        //   7e  TickResourceExpandVerify FAILS on INACTIVE (does not skip it as unmeasurable).
+        //   7f  occupancy json lists resourceChipsCollapsed on calm(town) actionRail.
+        //   7g  hanging the stack below the gold chip at 2670x1200 intersects the viewport
+        //       with height above UiSurfaceProbe.MinEdgePx — a zero-size / offscreen row
+        //       fails here without PlayMode.
+        //
+        // SOURCE-LINT + pure layout math: reads .cs/.json text, runs no PlayMode.
         // =====================================================================
         private static void CheckResourceRailRaise(string modulesDir, List<string> failures, List<string> notes)
         {
             string path = Path.Combine(modulesDir, "HUD", "Kit", "HudKitController.cs");
             if (!File.Exists(path))
             {
-                // FIXTURE-ABSENT, NOT A CAPABILITY GAP: HudKitController.cs is tracked source that
-                // this check exists to lint. If it is gone, 7a and 7b assert NOTHING and WO-1221
-                // regresses unseen — so this is red, and it names the path it looked at.
                 failures.Add("RESOURCE RAIL — the source this check lints is MISSING at " + path +
                              ". HudKitController.cs is tracked source, not an optional fixture: without it " +
-                             "neither 7a (SetResourcePanelOpen raises _resExpandedRow) nor 7b (the expand " +
-                             "verify measures through UiSurfaceProbe) is checked at all.");
+                             "WO-1221 (expanded row parented to the gold chip, SetActive, UiSurfaceProbe) " +
+                             "is not checked at all.");
                 return;
             }
 
@@ -1223,31 +1236,174 @@ namespace DeNelle.Editor
             int idx = src.IndexOf("private void SetResourcePanelOpen", StringComparison.Ordinal);
             if (idx < 0)
             {
-                notes.Add("resource-rail raise: SetResourcePanelOpen not found (renamed?) — 7a skipped");
+                failures.Add("RESOURCE RAIL — SetResourcePanelOpen is gone. The tap has no owner for " +
+                             "_resExpandedRow.SetActive, which is how WO-1221 painted zero pixels.");
             }
             else
             {
-                // Terminate at the next class-indent member declaration, NOT at a closing brace:
-                // CLAUDE.md §1's gate counts RAW '{' / '}' characters, so a brace inside a string
-                // literal here would fail the brace check on a perfectly correct file.
                 int end = src.IndexOf("\n        private ", idx + 1, StringComparison.Ordinal);
                 string body = end > idx ? src.Substring(idx, end - idx) : src.Substring(idx);
                 if (body.IndexOf("_resExpandedRow.SetActive", StringComparison.Ordinal) < 0)
                     failures.Add("RESOURCE RAIL — SetResourcePanelOpen records the open flag but never calls " +
-                                 "_resExpandedRow.SetActive. The row is built inert (WO-1205), so the tap window " +
-                                 "raises an EMPTY dock: the player taps the gold chip and sees nothing, while the " +
-                                 "trace reports the panel expanded. This is WO-1221 regressing.");
+                                 "_resExpandedRow.SetActive. The row is built inert (WO-1205), so the tap " +
+                                 "raises nothing: the player taps the gold chip and sees only gold, while a " +
+                                 "handler-ran trace reports expanded. This is WO-1221 regressing.");
             }
 
-            // 7b — the expand trace must stay falsifiable.
+            // 7b — the expand trace must stay falsifiable. The hollow success
+            // "resource panel expanded (opener live=True)" is forbidden: openerLive is true
+            // by construction on the expand branch and cannot report a blank rail.
             if (src.IndexOf("UiSurfaceProbe", StringComparison.Ordinal) < 0 ||
                 src.IndexOf("expand VERIFIED PAINTED", StringComparison.Ordinal) < 0)
                 failures.Add("RESOURCE RAIL — the post-expand MEASURED verify is gone (no UiSurfaceProbe / no " +
                              "'expand VERIFIED PAINTED' emit). The expand trace is back to asserting only that " +
                              "the handler ran, which is true by construction and cannot report a blank rail. " +
                              "See docs/reference/HOLLOW_ASSERTIONS_REGISTRY.md (WO-1221).");
+            if (src.IndexOf("resource panel expanded (opener live=", StringComparison.Ordinal) >= 0)
+                failures.Add("RESOURCE RAIL — the hollow success 'resource panel expanded (opener live=' is " +
+                             "back. That line printed on tmp/resources-expanded-105803.png over a gold-only " +
+                             "HUD. Split REQUESTED vs VERIFIED PAINTED; never claim painted from openerLive.");
 
-            notes.Add("resource-rail raise: SetResourcePanelOpen raise + measured expand verify pinned (WO-1221)");
+            // 7c — expanded stack is a CHILD of the gold chip, not a second occupancy widget.
+            // Register("resourceChips", WrapAsWidget(..., _resDock)) + RailBand on _resDock is
+            // the split-widget defect: occupancy never lists resourceChips, so ApplyPosture
+            // deactivates it.
+            if (src.IndexOf("Register(\"resourceChips\"", StringComparison.Ordinal) >= 0)
+                failures.Add("RESOURCE RAIL — Register(\"resourceChips\") is back. That widget is not in " +
+                             "hud-areas.json; occupancy never turns it on and ApplyPosture turns it off. The " +
+                             "expanded Wood/Iron/Stone/Crystals pixels must live on the gold chip " +
+                             "(resourceChipsCollapsed), not on a second dock. This is the WO-1221 bounce.");
+            if (src.IndexOf("_resExpandedRow.transform.SetParent(tapGo.transform", StringComparison.Ordinal) < 0)
+                failures.Add("RESOURCE RAIL — _resExpandedRow is not parented to tapGo (the gold chip). " +
+                             "A stack that is not a child of the occupancy-live chip cannot appear below it: " +
+                             "tmp/resources-expanded-105803.png showed only gold 1034 after a tap that " +
+                             "logged expanded. Parent the four rows to the gold chip.");
+
+            // 7d — tap must raise directly. A bool flip that waits for LateTick to SetActive a
+            // second widget is how "handler ran, nothing painted" shipped.
+            if (src.IndexOf("SetResourcePanelOpen(!_resChipsExpanded)", StringComparison.Ordinal) < 0)
+                failures.Add("RESOURCE RAIL — the gold-chip tap no longer calls SetResourcePanelOpen. A " +
+                             "bool flip without a SetActive is the original WO-1221 consumer: the log says " +
+                             "EXPAND and the screen stays gold-only.");
+
+            // 7e — INACTIVE is a Fail, never a MEASURE_SKIPPED pass. MeasureRect reports
+            // inactive as a skip (same bucket as batchmode); the consumer must promote it.
+            if (src.IndexOf("resource panel expand INACTIVE", StringComparison.Ordinal) < 0)
+                failures.Add("RESOURCE RAIL — TickResourceExpandVerify no longer FAILS when the expanded " +
+                             "row is inactive in hierarchy. Inactive is the captured defect " +
+                             "(tmp/resources-expanded-105803.png); treating it as a named skip makes the " +
+                             "verify green over a gold-only HUD.");
+
+            // 7f — occupancy lists the opener, not a phantom expanded widget.
+            CheckResourceRailOccupancy(failures, notes);
+
+            // 7g — hanging-below-gold layout at the captured 2670x1200 must intersect the
+            // viewport with non-zero height. Zero-size / offscreen fails here without PlayMode.
+            CheckResourceRailLayout2670(src, failures, notes);
+
+            notes.Add("resource-rail raise: gold-chip child + SetActive + UiSurfaceProbe INACTIVE-fail " +
+                      "+ occupancy + 2670x1200 hang-below-gold layout pinned (WO-1221)");
+        }
+
+        /// <summary>7f — calm(town) actionRail occupies resourceChipsCollapsed (the gold chip
+        /// the player taps). A copy that drops it hides the opener itself.</summary>
+        private static void CheckResourceRailOccupancy(List<string> failures, List<string> notes)
+        {
+            string[] copies =
+            {
+                Path.Combine(Application.dataPath, "Resources", "Data", "Canonical", "hud-areas.json"),
+                Path.Combine(Application.dataPath, "StreamingAssets", "Data", "Canonical", "hud-areas.json"),
+            };
+
+            int found = 0;
+            for (int i = 0; i < copies.Length; i++)
+            {
+                if (!File.Exists(copies[i]))
+                {
+                    notes.Add("resource-rail occupancy: " + copies[i] + " missing — copy skipped");
+                    continue;
+                }
+                string json;
+                try { json = File.ReadAllText(copies[i]); }
+                catch (Exception ex)
+                {
+                    notes.Add("resource-rail occupancy: unreadable " + Path.GetFileName(copies[i]) +
+                              " (" + ex.GetType().Name + ")");
+                    continue;
+                }
+                found++;
+                if (json.IndexOf("resourceChipsCollapsed", StringComparison.Ordinal) < 0)
+                    failures.Add("RESOURCE RAIL — " + copies[i] + " no longer lists resourceChipsCollapsed. " +
+                                 "That is the occupancy-live gold chip; without it there is no opener and no " +
+                                 "expanded child. WO-1221.");
+            }
+            if (found == 0)
+                failures.Add("RESOURCE RAIL — neither hud-areas.json copy was readable, so occupancy of " +
+                             "resourceChipsCollapsed is unchecked.");
+        }
+
+        /// <summary>7g — pure canvas math at the captured Seeker resolution. The expanded
+        /// stack hangs below the gold chip (ActionRail y 0.82..1.0). If that hang is zero
+        /// height or fully below y=0, the player sees only gold — the captured defect.</summary>
+        private static void CheckResourceRailLayout2670(string src, List<string> failures, List<string> notes)
+        {
+            float rowH = ReadConstFloat(src, "ResRowHeightPx", 56f, notes);
+            float rowGap = ReadConstFloat(src, "ResRowGapPx", 5f, notes);
+            float railGap = ReadConstFloat(src, "RailGapPx", 6f, notes);
+            const int rowCount = 4;
+            float stackH = rowCount * rowH + (rowCount - 1) * rowGap;
+            if (stackH < DeNelle.Core.Diagnostics.UiSurfaceProbe.MinEdgePx)
+            {
+                failures.Add("RESOURCE RAIL — expanded stack authored height is " + stackH.ToString("0.#") +
+                             " ref px, below UiSurfaceProbe.MinEdgePx. Four Wood/Iron/Stone/Crystals rows " +
+                             "would measure SURFACE_ZERO_SIZE on device (WO-1221).");
+                return;
+            }
+
+            // CanvasScaler 1080x1920 match 0.5, screen 2670x1200 — same numbers as
+            // HudAreasHost + the proving capture tmp/resources-expanded-105803.png.
+            const float screenW = 2670f, screenH = 1200f;
+            const float refW = 1080f, refH = 1920f;
+            float scale = Mathf.Lerp(screenW / refW, screenH / refH, 0.5f);
+            float canvasH = screenH / scale;
+            const float actionRailY0 = 0.040f, actionRailY1 = 0.420f;
+            const float goldAnchorY0 = 0.82f;   // CurrencyChip min.y on ActionRail
+            float actionRailH = (actionRailY1 - actionRailY0) * canvasH;
+            float goldH = (1f - goldAnchorY0) * actionRailH;
+            float actionRailTopFromBottom = actionRailY1 * canvasH;
+            float goldBottomFromBottom = actionRailTopFromBottom - goldH;
+            float stackTopFromBottom = goldBottomFromBottom - railGap;
+            float stackBottomFromBottom = stackTopFromBottom - stackH;
+
+            // Screen-space y from the TOP (capture convention).
+            float stackTopScreen = screenH - (stackTopFromBottom * scale);
+            float stackBottomScreen = screenH - (stackBottomFromBottom * scale);
+            var stack = Rect.MinMaxRect(0f, Mathf.Min(stackTopScreen, stackBottomScreen),
+                                        screenW, Mathf.Max(stackTopScreen, stackBottomScreen));
+            var viewport = new Rect(0f, 0f, screenW, screenH);
+            if (stack.height < DeNelle.Core.Diagnostics.UiSurfaceProbe.MinEdgePx)
+                failures.Add("RESOURCE RAIL — hanging-below-gold stack at 2670x1200 resolves to " +
+                             stack.height.ToString("0") + " px tall (below MinEdgePx). Zero-size rail: " +
+                             "the player taps gold and sees nothing (WO-1221).");
+            else if (!stack.Overlaps(viewport))
+                failures.Add("RESOURCE RAIL — hanging-below-gold stack at 2670x1200 is OFFSCREEN " +
+                             "(rect y " + stack.y.ToString("0") + ".." + (stack.y + stack.height).ToString("0") +
+                             " px). Wood/Iron/Stone/Crystals would paint outside the Seeker capture, " +
+                             "which is how tmp/resources-expanded-105803.png showed only gold.");
+        }
+
+        private static float ReadConstFloat(string src, string name, float fallback, List<string> notes)
+        {
+            var m = Regex.Match(src, @"\b" + Regex.Escape(name) + @"\s*=\s*([0-9]+(?:\.[0-9]+)?)f");
+            if (!m.Success)
+            {
+                notes.Add("resource-rail layout: " + name + " not parsed — using " + fallback.ToString("0.#"));
+                return fallback;
+            }
+            float v;
+            if (!float.TryParse(m.Groups[1].Value, NumberStyles.Float, CultureInfo.InvariantCulture, out v))
+                return fallback;
+            return v;
         }
 
     }

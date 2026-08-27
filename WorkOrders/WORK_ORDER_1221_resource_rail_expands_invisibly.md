@@ -1,6 +1,6 @@
 # WORK ORDER 1221 - Tapping the resource chip logs "expanded" and renders NOTHING
 
-**Status:** READY TO IMPLEMENT — owner felt-test 2026-08-27 Fail (no comment). Bounced from Fixed.
+**Status:** FIXED 2026-08-27 — implemented; awaiting owner felt-verify to CLOSE.
 **Silo:** HUD
 **Severity:** P1 — the player cannot see Wood / Iron / Stone / Crystals anywhere in town.
 **Origin:** Owner felt-test, Seeker build `2026.08.26.341419`, 2026-08-26.

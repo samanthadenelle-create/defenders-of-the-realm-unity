@@ -119,6 +119,9 @@ namespace DeNelle.Wallet
             }
 
             // Ownership — the pack SKU + every cosmetic SKU it grants.
+            // WO-1253: capture already-had BEFORE RecordOwned so a re-settle of the
+            // permanent-builder SKU logs already-had and cannot grant a second crew.
+            bool alreadyHadBuilder = PackCatalog.IsPermanentBuilderSku(pack.Sku) && IsOwned(pack.Sku);
             RecordOwned(state.OwnedItemIds, pack.Sku);
             int cosmeticCount = 0;
             if (pack.Contents != null && pack.Contents.Cosmetics != null)
@@ -134,9 +137,10 @@ namespace DeNelle.Wallet
                     if (!string.IsNullOrEmpty(sku)) { TryGrantCosmeticOwnership(sku, pack.Sku); cosmeticCount++; }
                 }
 
-            // Convenience tokens are consumable items — the v2 foundation has no
-            // token tray yet; they are flagged for the Week-8 inventory pass.
-            // (Recording the pack SKU above is enough for the entitlement check.)
+            // Convenience tokens land in GearInventory under "convenience:<kind>".
+            // Redeemers (Lantern oil; WO-1246 ConvenienceRedeemer for instant-build /
+            // instant-repair / harvest-auto-collect / xp-weekend) spend those keys.
+            // Permanent-builder is SKU ownership, not a stacked token (WO-1253).
 
             // VERIFY the entitlement actually landed before persisting — the SKU must now be owned, or
             // the paid-for grant silently failed. This is the proof the entitlement took.
@@ -144,11 +148,24 @@ namespace DeNelle.Wallet
                 foreach (var item in pack.Contents.Convenience)
                 {
                     if (item == null || string.IsNullOrWhiteSpace(item.Kind) || item.Count <= 0) continue;
+                    // Permanent-builder concurrency is SKU ownership, not a stacked token.
+                    // Skip the GearInventory increment on a re-settle so even the unread
+                    // tray stays idempotent.
+                    if (alreadyHadBuilder && PackCatalog.IsPermanentBuilderKind(item.Kind)) continue;
                     string key = "convenience:" + item.Kind.Trim().ToLowerInvariant();
                     if (state.GearInventory == null) state.GearInventory = new Dictionary<string, int>();
                     state.GearInventory.TryGetValue(key, out int prior);
                     state.GearInventory[key] = Mathf.Max(0, prior) + item.Count;
                 }
+
+            if (PackCatalog.IsPermanentBuilderSku(pack.Sku))
+            {
+                FlowTrace.Step("Store", "player bought builder");
+                FlowTrace.Step("Store", alreadyHadBuilder
+                    ? "player bought builder already-had"
+                    : "player bought builder applied");
+                TryNotifyPermanentBuilderGrant(alreadyHadBuilder);
+            }
 
             bool owned = state.OwnedItemIds != null && state.OwnedItemIds.Contains(pack.Sku);
             if (!owned)
@@ -180,6 +197,9 @@ namespace DeNelle.Wallet
             var state = State;
             if (state == null || pack == null) return;
             if (state.OwnedItemIds == null) state.OwnedItemIds = new List<string>();
+            bool alreadyHadBuilder = PackCatalog.IsPermanentBuilderSku(pack.Sku) &&
+                                     state.OwnedItemIds != null &&
+                                     PackCatalog.OwnsPermanentBuilder(state.OwnedItemIds);
             RecordOwned(state.OwnedItemIds, pack.Sku);
             if (pack.Contents != null && pack.Contents.Cosmetics != null)
                 foreach (var sku in pack.Contents.Cosmetics)
@@ -187,6 +207,13 @@ namespace DeNelle.Wallet
                     RecordOwned(state.OwnedItemIds, sku);
                     if (!string.IsNullOrEmpty(sku)) TryGrantCosmeticOwnership(sku, pack.Sku);
                 }
+            if (PackCatalog.IsPermanentBuilderSku(pack.Sku))
+            {
+                FlowTrace.Step("Store", alreadyHadBuilder
+                    ? "player bought builder already-had"
+                    : "player bought builder applied");
+                TryNotifyPermanentBuilderGrant(alreadyHadBuilder);
+            }
             FlowTrace.Try("Store", $"save restored fulfilled ownership '{pack.Sku}'", () =>
             {
                 var svc = GameStateService.Instance;
@@ -299,6 +326,37 @@ namespace DeNelle.Wallet
             }
             try { m.Invoke(svc, new object[] { wood, food, iron, crystals }); }
             catch (Exception ex) { FlowTrace.Fail("Pack", $"grant resources for '{packSku}' THREW: {ex.GetType().Name}: {ex.Message} - paid-for resources LOST."); }
+        }
+
+        /// <summary>
+        /// WO-1253 — tell BuildTimerService a permanent-builder entitlement landed so a pending
+        /// job can pull into the new crew slot. Wallet cannot reference Village; same reflection
+        /// bridge as the resource/cosmetic grants. A miss is logged, never silent: the SKU is
+        /// already owned, so concurrency still derives on the next SlotCount read.
+        /// </summary>
+        private static void TryNotifyPermanentBuilderGrant(bool alreadyHad)
+        {
+            var svc = ResolveServiceInstance("DeNelle.Village.BuildTimerService", out var t);
+            if (svc == null || t == null)
+            {
+                FlowTrace.Step("Store", alreadyHad
+                    ? "player bought builder already-had (timer service not live)"
+                    : "player bought builder applied (timer service not live; entitlement recorded)");
+                return;
+            }
+            var m = t.GetMethod("OnPermanentBuilderEntitlement", new[] { typeof(bool) });
+            if (m == null)
+            {
+                FlowTrace.Fail("Store",
+                    "OnPermanentBuilderEntitlement(bool) not found - builder SKU is owned but the new crew was not pulled.");
+                return;
+            }
+            try { m.Invoke(svc, new object[] { alreadyHad }); }
+            catch (Exception ex)
+            {
+                FlowTrace.Fail("Store",
+                    "OnPermanentBuilderEntitlement THREW: " + ex.GetType().Name + ": " + ex.Message);
+            }
         }
 
         /// <summary>Coins (Gold) -> EconomyService.AddCoins(int) (ECON-01). Persists + raises ResourcesChanged.</summary>

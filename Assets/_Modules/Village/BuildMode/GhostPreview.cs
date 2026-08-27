@@ -245,7 +245,16 @@ namespace DeNelle.Village
                 if (_reasonGo == null) return;
                 if (_reasonGo.activeSelf != show) _reasonGo.SetActive(show);
                 if (show && _reasonText != null && _reasonText.text != message)
+                {
                     _reasonText.text = message;
+                    // WO-1252: grow the pill to the explicit line count so a next-step
+                    // sentence is never half-cut. Width matches the place toast (500 px).
+                    int lines = 1;
+                    for (int i = 0; i < message.Length; i++)
+                        if (message[i] == '\n') lines++;
+                    var crt = (RectTransform)_reasonGo.transform;
+                    crt.sizeDelta = new Vector2(500f, Mathf.Max(64f, 16f + lines * 32f));
+                }
             }
             catch (System.Exception e)
             {
@@ -322,8 +331,8 @@ namespace DeNelle.Village
             canvas.renderMode = RenderMode.WorldSpace;
 
             var crt = (RectTransform)_reasonGo.transform;
-            crt.sizeDelta = new Vector2(360f, 64f);
-            crt.localScale = Vector3.one * 0.012f;   // 360px * 0.012 ~= 4.3 world units wide
+            crt.sizeDelta = new Vector2(500f, 64f);
+            crt.localScale = Vector3.one * 0.012f;   // 500px * 0.012 ~= 6.0 world units wide (WO-1252 wrap)
 
             // Dark pill so the text reads over any terrain colour.
             var bg = new GameObject("bg");

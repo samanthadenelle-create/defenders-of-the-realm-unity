@@ -10,13 +10,13 @@
     "packDef": "Each entry mirrors React's PackDef: sku, tier, name, tagline, pricing { usd, usdc, sol, skr }, contents { cosmetics, economy, convenience }, founderOnly?, packExclusiveCosmetic. The Unity loader deserializes each entry straight into a PackDef record.",
     "pricing": "usd is the Stripe/USD reference price; usdc/sol/skr are the per-currency wallet-rail amounts. The Unity wallet module reads sol/usdc/skr only. Starter bundles reuse the three ladder price points: $4.99 -> {usdc 4.99, sol 0.045, skr 60}; $9.99 -> {usdc 9.99, sol 0.09, skr 120}; $19.99 -> {usdc 19.99, sol 0.18, skr 240}.",
     "tier": "Unique 1..N lookup key (PackCatalog.FindByTier). NOT the price band — multiple bundles share a price point but each has a unique tier.",
-    "convenience": "TIME-SAVING only, never combat-power (the bent covenant, §5.3). instant-build / instant-repair / harvest-auto-collect / xp-weekend / lantern-oil-2x-expedition / lantern-oil-3x-expedition. Lantern blessings are consumed per expedition. No permanent passives.",
+    "convenience": "TIME-SAVING only, never combat-power (the bent covenant, §5.3). instant-build / instant-repair / harvest-auto-collect / xp-weekend / lantern-oil-2x-expedition / lantern-oil-3x-expedition / permanent-builder. Lantern blessings are consumed per expedition. permanent-builder is CONCURRENCY (+1 crew at once), not combat power and not queue depth.",
     "economy": "PackStoreVM routes wood/iron/stone/crystals through EconomyService.GrantSpendablePurchased and coins through AddCoins.",
     "impulsePacks": "Packs 14-25 (tiers 14-25) are the WO-1037 SINGLE-RESOURCE IMPULSE PACKS, authored 2026-08-17 under the owner ruling of 2026-08-16 (option (b), verbatim: \"we should have small instant packs\" / \"small wood only\") and legalised by the WO-947 s12 amendment (the PURCHASE boundary is not the COST boundary). ONE family per harvestable resource (wood, iron, stone, crystals) x small/medium/large. THE LOAD-BEARING RULE: each of these SKUs carries EXACTLY ONE economy key and an EMPTY cosmetics + convenience list. A multi-resource impulse bundle would re-mix the WO-947 cost baskets through the back door and is FORBIDDEN (WO-947 s12c guardrail 1) - asserted headlessly by DeNelle.Editor.Regression.ImpulsePackRegression [impulse-pack], which also pins the $5 PRICE CEILING (owner standing ruling, memory solana-store-early-access-pack-pricing) and the no-structures/no-levels/no-queue-completions rule. AMOUNTS ARE PENDING OWNER RATIFICATION - they were sized against the REAL demand curve read out of building-tiers.json (tier costWood 500..16000, costFood 300..13000, costCrystal 100..4800) and structures-catalog.json (repo.upgradeCost iron 20..1440): small closes the cheapest tier upgrade (the Lumber Mill T1 900-wood shortfall in the screenshot that prompted this WO), medium closes a mid-ladder step, large closes a late step but deliberately NOT the Barracks T6 16000-wood ceiling, so the top pack does not trivialise the game. The optional impulse/impulseResource/impulseSize fields are the machine-readable family tag ShortfallPackOffer resolves on; older packs omit them (absent = false/null, no migration break).",
     "cosmeticGrant": "Every cosmetics SKU is recorded in OwnedItemIds and CosmeticOwnershipService.",
     "shelf": "storeVisible is the SINGLE shelf flag (PackStore.Render line ~327 filters on it). WO-1118 proposed a separate `shelf: live|hidden|legacy` string; that was NOT added, because a second flag over the same decision is duplicated state and the two would drift (see CLAUDE.md S2/S5). storeVisible:false HIDES the row from browse/Buy but KEEPS it loadable, so an existing owner's entitlement still resolves via PackCatalog.Find. Every hidden row carries _hiddenReason.",
     "skrPeg": "ONE peg, no second SKR table: skrPerUsd ~= 12.5. $1.99 -> 25 SKR, $2.99 -> 36 SKR, $4.99 -> 60 SKR, $9.99 -> 120 SKR, $19.99 -> 240 SKR, $49.99 -> 600 SKR (authored figures; 2.99*12.5=37.4 is authored down to 36 to keep the rung spacing even). ⚠ THE '$4.99 CEILING' SENTENCE THAT USED TO END THIS NOTE IS RETIRED (WO-1121, owner 2026-08-21): it was an EARLY-ACCESS constraint that WO-1118 applied as though permanent. The ceiling is $49.99 - the full monetization-v2-spec §4 ladder. What did NOT change: the covenant (convenience and beauty, never combat power) and the $5 ceiling on the IMPULSE family specifically, which ImpulsePackRegression still pins.",
-    "convenienceRedeemers": "LEGAL != REDEEMABLE. PackCatalog.ConvenienceAllowList says a kind is covenant-legal; PackCatalog.IsRedeemableConvenience says something in THIS build actually spends it. Today only lantern-oil-2x/3x-expedition have a redeemer (Lantern.cs). instant-build / instant-repair / harvest-auto-collect / xp-weekend / harvest_boost / instant_fill_storage / workforce_slot / storage_tier_jump / offline_window_extension are granted into GearInventory and read by NOTHING. They are stripped from every storeVisible pack and must not be re-added before their redeemer.",
+    "convenienceRedeemers": "LEGAL != REDEEMABLE. PackCatalog.ConvenienceAllowList says a kind is covenant-legal; PackCatalog.IsRedeemableConvenience says something in THIS build actually spends it. Live redeemers: lantern-oil-2x/3x-expedition (Lantern.cs); permanent-builder (WO-1253, BuildTimerService.SlotCount reads SKU ownership in OwnedItemIds - NOT a GearInventory count, so re-settle is idempotent); instant-build / instant-repair / harvest-auto-collect / xp-weekend (WO-1246, Village/Monetization/ConvenienceRedeemer.cs). Still vapor as PACK TOKENS: harvest_boost (HarvestBoostService is crystal/ad, not GearInventory), instant_fill_storage, workforce_slot, storage_tier_jump, offline_window_extension. A storeVisible pack may not advertise a kind that is not on the redeemable list.",
     "shelfCurated": "Impulse SKUs are shortfall-only by default (WO-947 s12c.4). shelfCurated:true opts ONE row per resource onto the browsable shelf - owner ruling 2026-08-21, 'Middle - one impulse tier per resource'. Exactly three carry it today: impulse-{wood,iron,stone}-medium. The flag lives here rather than as a SKU list in PackStore.cs so the merchandising choice is re-ruled by editing data. Promoting a fourth row is an OWNER decision, not a code cleanup.",
     "legacySkus": "Retired SKU ids that must keep resolving to this pack. `sku` is a LIVE SAVE KEY (GameState.OwnedItemIds, ordinal List.Contains, never rewritten), so renaming one without an alias silently orphans a paid entitlement and re-offers the pack for sale. PackCatalog.Find matches current ids across the WHOLE catalogue first, then legacy ids, so a live SKU can never be shadowed. NEVER delete an entry - a retired id stays redeemable as long as any save can carry it.",
     "nightMarketPresentation": "WO-1050 (2026-08-21) THE NIGHT MARKET. Four ADDITIVE presentation keys: band (free|gap|basket|patronage - the shelf grouping key, superseding storeSection's mood names; storeSection is NOT deleted because it is the documented FALLBACK PackCatalog.BandOf resolves an un-migrated row through), orbTint (hex gem tint, DECORATION ONLY - the owner is red/green colourblind so band identity is carried by the mark + the text eyebrow + the step in greyscale value, never by a hue), compareTo (the SKU the spotlight comparison line is drawn against - the line is PURE ARITHMETIC over two real SKUs or it is ABSENT) and anchorOnly (renders fully priced with NO Buy control ever built). **NO ROW CARRIES anchorOnly TODAY** and that is deliberate: WO-1121 is the SAME-DAY owner ruling that un-hid the $9.99/$19.99/$49.99 ladder and made those rows buyable behind PurchaseGate's wallet rule, so flagging one anchorOnly by an authoring edit would walk that ruling back. Setting it is an OWNER call. ALL FOUR KEYS DECIDE WHERE OR HOW A PACK IS SHOWN AND NONE CAN CHANGE WHAT IT GRANTS - that is why ImpulsePackRegression.AllowedPackKeys admits them, and it is the line to hold if the block ever grows.",
@@ -818,6 +818,34 @@
         },
         "convenience": []
       }
+    },
+    {
+      "sku": "permanent-builder",
+      "band": "patronage",
+      "tier": 26,
+      "storeVisible": true,
+      "name": "Permanent Builder",
+      "tagline": "One more crew working at once. Queue length stays the same.",
+      "theme": "WO-1253: real-money CONCURRENCY. Grants +1 concurrent Builder. Does NOT raise queue depth. Crystal TryBuySlot still buys DEPTH (KEEP BOTH).",
+      "pricing": {
+        "usd": 9.99,
+        "usdc": 9.99,
+        "sol": 0.09,
+        "skr": 120
+      },
+      "contents": {
+        "cosmetics": [],
+        "economy": {},
+        "convenience": [
+          {
+            "kind": "permanent-builder",
+            "count": 1,
+            "description": "One extra concurrent builder. Does not lengthen the queue."
+          }
+        ]
+      },
+      "storeSection": "essentials",
+      "_shelfNote": "WO-1253. Permanent builder is CONCURRENCY (+1 crew on ChannelId.Builder), never queue depth. Redeemed by BuildTimerService.SlotCount reading OwnedItemIds for this SKU. Grant is idempotent under re-settle. Crystal extra-slot sink (TryBuySlot) is KEEP BOTH and still buys DEPTH. Priced at $9.99 so PurchaseGate requires an attested wallet - a reinstall-safe entitlement must not live on a guest-local key."
     }
   ]
 }

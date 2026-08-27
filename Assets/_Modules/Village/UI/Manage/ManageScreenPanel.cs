@@ -516,7 +516,7 @@ namespace DeNelle.Village.UI
             _slotLabel = ElarionUiKit.Label(band, "", 0f, 1f, ElarionUi.ParchmentDim,
                                             (int)ElarionUi.FontLabel, TextAlignmentOptions.Left, 0.01f, 0.62f);
             ElarionUiKit.FitSingleLine(_slotLabel);
-            _slotButton = ElarionUiKit.BuildObsidianButton(band, "Buy slot",
+            _slotButton = ElarionUiKit.BuildObsidianButton(band, ManageScreenVM.BuyBuilderButtonCopy,
                 ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Yellow,
                 new Vector2(0.66f, 0.02f), new Vector2(0.99f, 0.98f),
                 () => { _vm?.BuySlot(ManageScreenVM.ChannelOf(_vm.Tab)); FlushNotice(); });
@@ -665,15 +665,21 @@ namespace DeNelle.Village.UI
 
         private void RenderSlotOffer()
         {
-            if (_slotLabel != null) _slotLabel.text = ManageScreenVM.Ascii(_vm.SlotOfferText ?? "");
+            if (_slotLabel != null)
+            {
+                _slotLabel.text = ManageScreenVM.Ascii(_vm.SlotOfferText ?? "");
+                ElarionUiKit.FitSingleLine(_slotLabel);
+            }
             if (_slotButton != null)
             {
-                // The button stays VISIBLE and tappable even when locked or unaffordable — the tap
-                // explains itself (and routes to the crystal store when broke). Hiding it is what
-                // the owner's rule forbids.
+                // Always the store SKU, never a crystal price. Button stays VISIBLE so the
+                // route is reachable even after the SKU is owned (store shows Owned).
                 var label = _slotButton.GetComponentInChildren<TMP_Text>();
                 if (label != null)
-                    label.text = _vm.SlotPrice > 0 ? "Buy slot " + _vm.SlotPrice + "c" : "Buy slot";
+                {
+                    label.text = ManageScreenVM.BuyBuilderButtonCopy;
+                    ElarionUiKit.FitSingleLine(label);
+                }
             }
         }
 

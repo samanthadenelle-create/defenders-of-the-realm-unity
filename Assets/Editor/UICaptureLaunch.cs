@@ -583,6 +583,7 @@ namespace DeNelle.Editor
                 count += CaptureRaidDeploy();        // the pre-raid deploy screen (never shot before)
                 count += CaptureRaidsFaceStates();   // WO-1008: the bar face live / 0-of-cap / partial
                 count += CaptureMaintenanceBanner(); // WO-1243: the operator seal, as the player reads it
+                count += CaptureHeroSelect();        // WO-1248: carousel rotate control, words fully readable
 
                 Debug.Log("[UICap-HL] done -> " + Path.GetFullPath(OutDir));
             }
@@ -1335,6 +1336,85 @@ namespace DeNelle.Editor
                 catch (Exception ce) { Debug.LogError("[UICap-HL] could not clear MaintenanceCatalog: " + ce); }
 
                 if (canvasGo != null) UnityEngine.Object.DestroyImmediate(canvasGo);
+                if (tempEventSystem != null) UnityEngine.Object.DestroyImmediate(tempEventSystem);
+            }
+
+            return saved;
+        }
+
+        // ---------------------------------------------------------------------
+        //  Panel: the hero-select carousel (WO-1248). The owner saw "Pr..." where
+        //  the rotate control meant "Previous". Screenshots are primary evidence
+        //  for visual defects (WO-1245 passed every marker while still truncating).
+        //  No capture existed; this one builds the REAL HeroSelectController tree
+        //  in edit mode at Seeker landscape AND portrait.
+        // ---------------------------------------------------------------------
+        private static readonly CaptureTarget[] HeroSelectTargets =
+        {
+            new CaptureTarget(1920, 1080),
+            new CaptureTarget(2670, 1200),   // Seeker landscape - the owner's device
+            new CaptureTarget(1080, 1920),   // portrait - the 0.068-lane smoking gun
+        };
+
+        private static int CaptureHeroSelect()
+        {
+            return ForEachTarget("HeroSelect", HeroSelectTargets, CaptureHeroSelectOnce);
+        }
+
+        private static int CaptureHeroSelectOnce(CaptureTarget target)
+        {
+            int saved = 0;
+            GameObject tempEventSystem = null;
+            GameObject hostGo = null;
+            GameObject canvasGo = null;
+            object ctrl = null;
+
+            try
+            {
+                Type heroSelectType = ResolveType("DeNelle.Onboarding.HeroSelectController");
+                if (heroSelectType == null)
+                {
+                    Debug.LogWarning("[UICap-HL] HeroSelectController type not found -- hero-select capture skipped.");
+                    return 0;
+                }
+
+                if (UnityEngine.Object.FindAnyObjectByType<UnityEngine.EventSystems.EventSystem>() == null)
+                {
+                    tempEventSystem = new GameObject("~UICapEventSystem");
+                    tempEventSystem.AddComponent<UnityEngine.EventSystems.EventSystem>();
+                }
+
+                // Inactive so OnEnable (which may SceneRouter.GoCastle on a save that
+                // already has a hero) never runs. We drive BuildScreen directly.
+                hostGo = new GameObject("~UICapHeroSelect");
+                hostGo.SetActive(false);
+                ctrl = hostGo.AddComponent(heroSelectType);
+                SetPrivateField(ctrl, "_skipWhenIntroComplete", false);
+                InvokePrivate(ctrl, "BuildScreen");
+
+                canvasGo = GetPrivateFieldValue(ctrl, "_canvas") as GameObject;
+                if (canvasGo == null)
+                {
+                    Debug.LogWarning("[UICap-HL] HeroSelectController._canvas null after BuildScreen -- skipped.");
+                    return 0;
+                }
+
+                canvasGo.SetActive(true);
+
+                if (RenderCanvasToPng(canvasGo, OutDir + "HeroSelect_" + target.Tag + ".png",
+                    target.W, target.H)) saved++;
+            }
+            catch (Exception e)
+            {
+                Debug.LogError("[UICap-HL] hero-select capture threw: " + e);
+            }
+            finally
+            {
+                // Null the field FIRST so OnDisable does not call runtime Destroy()
+                // on the canvas (illegal in edit mode -- same contract as pause-menu).
+                if (ctrl != null) SetPrivateField(ctrl, "_canvas", null);
+                if (canvasGo != null) UnityEngine.Object.DestroyImmediate(canvasGo);
+                if (hostGo != null) UnityEngine.Object.DestroyImmediate(hostGo);
                 if (tempEventSystem != null) UnityEngine.Object.DestroyImmediate(tempEventSystem);
             }
 

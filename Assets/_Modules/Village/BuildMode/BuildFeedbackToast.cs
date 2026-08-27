@@ -64,7 +64,10 @@ namespace DeNelle.Village
     [DisallowMultipleComponent]
     public sealed class BuildFeedbackToast : MonoBehaviour
     {
+        // WO-1252: a two-line next-step toast needs more than 2.2s to be read. Multiline
+        // messages get the longer life in ShowRaw.
         private const float DefaultLifeSeconds = 2.2f;
+        private const float MultilineLifeSeconds = 3.6f;
         private float _lifeSeconds = DefaultLifeSeconds;
         private const float FadeSeconds = 0.45f;
 
@@ -119,6 +122,8 @@ namespace DeNelle.Village
 
             var go = new GameObject("BuildFeedbackToast");
             var ui = go.AddComponent<BuildFeedbackToast>();
+            if (lifeSeconds <= DefaultLifeSeconds + 0.01f && message != null && message.IndexOf('\n') >= 0)
+                lifeSeconds = MultilineLifeSeconds;
             ui._lifeSeconds = Mathf.Max(1f, lifeSeconds);
             ui.Build(message);
             s_active = ui;
@@ -169,8 +174,22 @@ namespace DeNelle.Village
             crt.anchorMax = new Vector2(0.5f, 0f);
             crt.pivot = new Vector2(0.5f, 0f);
             crt.anchoredPosition = new Vector2(0f, 200f);   // above the 128px palette tray
-            crt.sizeDelta = new Vector2(440f, 72f);
-            if (parts.label != null) parts.label.text = message;
+            // WO-1252: wrap is deliberate. Count explicit newlines and grow the card so a
+            // next-step sentence is never half-cut (the truncation class of the last seven days).
+            int lines = 1;
+            if (!string.IsNullOrEmpty(message))
+            {
+                for (int i = 0; i < message.Length; i++)
+                    if (message[i] == '\n') lines++;
+            }
+            float height = Mathf.Max(72f, 24f + lines * 28f);
+            crt.sizeDelta = new Vector2(500f, height);
+            if (parts.label != null)
+            {
+                parts.label.text = message;
+                parts.label.horizontalOverflow = HorizontalWrapMode.Wrap;
+                parts.label.verticalOverflow = VerticalWrapMode.Overflow;
+            }
 
             _shownAt = Time.unscaledTime;
         }

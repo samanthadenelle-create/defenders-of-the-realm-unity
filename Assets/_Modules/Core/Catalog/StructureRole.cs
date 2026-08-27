@@ -91,5 +91,13 @@ namespace DeNelle.Core.Catalog
         public const string IronStore = "iron_store";
         /// <summary>Stores food/grain.</summary>
         public const string FoodStore = "food_store";
+
+        /// <summary>
+        /// Watchtower lookout — earned early-warning intel (WO-1184). Code branches
+        /// on this because a lookout buys information, not just damage. Catalog rows
+        /// may author <c>role: "lookout"</c>; until they do, the live key is the
+        /// catalog id <c>tower_ground_archer</c> (the wooden watchtower).
+        /// </summary>
+        public const string Lookout = "lookout";
     }
 }

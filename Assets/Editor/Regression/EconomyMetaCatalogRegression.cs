@@ -61,7 +61,8 @@ namespace DeNelle.Editor
         // The suite is now STRONGER, not weaker: a gap or a duplicate in the tier sequence fails,
         // where before a duplicate at tier 7 would have passed while a perfectly valid tier 14 failed.
         /// <summary>How many BROWSABLE packs the shelf carries: 5 price-ladder (Hearth Spark →
-        /// Founder's Vow) + 8 themed bundles. Impulse SKUs are excluded by design — they are a
+        /// Founder's Vow) + 8 themed bundles + 1 permanent-builder (WO-1253, patronage band,
+        /// CONCURRENCY SKU). Impulse SKUs are excluded by design — they are a
         /// shortfall remedy, not a storefront (WO-947 §12c.4), and PackStore skips them in its card
         /// loop. Re-rule this number only when a genuinely browsable pack is added.
         /// <para>⚠ DELIBERATELY UNCHANGED BY WO-1050 (The Night Market, 2026-08-21) — this is a
@@ -75,7 +76,7 @@ namespace DeNelle.Editor
         /// shelf. The redesign is presentation-only and added no browsable pack, so 13 still holds.
         /// The owner may overrule and mint the SKU; this constant is then the one to re-rule.</para>
         /// </summary>
-        private const int CanonShelfPackCount = 13;
+        private const int CanonShelfPackCount = 14;
 
         private static readonly string[] SecretFragments =
         {
@@ -215,7 +216,7 @@ namespace DeNelle.Editor
 
             if (shelfCount != CanonShelfPackCount)
                 failures.Add($"packs.json: {shelfCount} SHELF packs (canon is {CanonShelfPackCount} — 5 price-ladder " +
-                             $"Hearth Spark→Founder's Vow + 8 themed bundles). Impulse SKUs are excluded from this " +
+                             $"Hearth Spark→Founder's Vow + 8 themed bundles + permanent-builder). Impulse SKUs are excluded from this " +
                              $"count by design; if you added a browsable pack, this number is the one to re-rule.");
 
             // Tiers must be UNIQUE and DENSE over 1..N — the property PackCatalog.FindByTier

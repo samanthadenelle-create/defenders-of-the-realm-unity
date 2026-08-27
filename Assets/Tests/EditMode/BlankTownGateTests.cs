@@ -203,5 +203,49 @@ namespace DeNelle.Tests.EditMode
                 Object.DestroyImmediate(state);
             }
         }
+
+        // ── 4. WO-1250 Weaponsmith + Armorer are NOT in the founding set ─────
+
+        [Test]
+        public void brand_new_save_does_not_surface_weaponsmith_or_armorer()
+        {
+            // ResetToNewGame / missing-save seed: marker true, everBuilt empty.
+            // If either id surfaces here, those two buildings "show as built" on a new load.
+            var none = new List<string>();
+            Assert.That(StructureSingleton.MayBakedTwinSurface("forge", none, true), Is.False,
+                "WO-1250: Weaponsmith (forge) must NOT stand on a brand-new save");
+            Assert.That(StructureSingleton.MayBakedTwinSurface("armorer", none, true), Is.False,
+                "WO-1250: Armorer (armorer) must NOT stand on a brand-new save");
+        }
+
+        [Test]
+        public void seeding_forge_or_armorer_into_ever_built_would_fail_the_founding_assert()
+        {
+            // WO-1138 RED proof: the founding-set pin is live. If those two remain
+            // in everBuilt (the bug), MayBakedTwinSurface opens and this test's
+            // inverse would fail.
+            var planted = new List<string> { "forge", "armorer" };
+            Assert.That(StructureSingleton.MayBakedTwinSurface("forge", planted, true), Is.True);
+            Assert.That(StructureSingleton.MayBakedTwinSurface("armorer", planted, true), Is.True);
+        }
+
+        [Test]
+        public void bake_hosts_map_to_weaponsmith_and_armorer_not_the_retired_crossing()
+        {
+            // The 2026-08-19 upright bake skins Blacksmith_Weapons_Storefront with
+            // Structures/Forge (Weaponsmith) and Forge_Armor_Storefront with
+            // Structures/armorer (Armorer). The retired census (workshop / forge)
+            // is what left those two standing when the template granted those ids.
+            string weaponsmithHost = null, armorerHost = null;
+            foreach (var (bakedName, itemId) in StrategicPlacementMigration.BakedStorefronts())
+            {
+                if (bakedName == "Blacksmith_Weapons_Storefront") weaponsmithHost = itemId;
+                if (bakedName == "Forge_Armor_Storefront") armorerHost = itemId;
+            }
+            Assert.That(weaponsmithHost, Is.EqualTo("forge"),
+                "Blacksmith_Weapons_Storefront must map to forge (Weaponsmith), not the retired 'workshop'");
+            Assert.That(armorerHost, Is.EqualTo("armorer"),
+                "Forge_Armor_Storefront must map to armorer, not the retired 'forge'");
+        }
     }
 }

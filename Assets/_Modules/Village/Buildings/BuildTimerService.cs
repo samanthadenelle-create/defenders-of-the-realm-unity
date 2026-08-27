@@ -43,6 +43,7 @@ using DeNelle.Core.Catalog;
 using DeNelle.Core.Jobs;
 using DeNelle.Core.State;
 using DeNelle.Village.Monetization;   // WO-1120 — AdGateService, the ad-placements.json interpreter
+using DeNelle.Wallet;                 // WO-1253 — PackCatalog.PermanentBuilderSku ownership
 
 // WO-911 refund plumbing refers to the resource ledger as `Ledger.*` (ResourceCost,
 // HarvestResource, ResourceLedger). There is no namespace by that name - those types
@@ -201,7 +202,74 @@ namespace DeNelle.Village
             int free = Mathf.Max(1, Config.freeBuildSlots);
             var ch = GetChannel(id);
             int bought = ch != null ? Mathf.Max(0, ch.BoughtSlots) : 0;
-            return free + bought;
+            // WO-1253: the permanent-builder SKU is CONCURRENCY on the Builder channel only.
+            // It never widens Train/Research and never raises queue depth.
+            bool extraBuilder = id == ChannelId.Builder && OwnsPermanentBuilder();
+            return ConcurrencyOf(free, bought, extraBuilder);
+        }
+
+        /// <summary>
+        /// WO-1253 — concurrency math in one place so the oracle and the live service cannot drift.
+        /// <paramref name="ownsPermanentBuilder"/> adds +1 crew; it must NEVER be fed into
+        /// <see cref="DepthOf"/>.
+        /// </summary>
+        public static int ConcurrencyOf(int freeBuildSlots, int boughtSlots, bool ownsPermanentBuilder)
+        {
+            return Mathf.Max(1, freeBuildSlots) + Mathf.Max(0, boughtSlots) + (ownsPermanentBuilder ? 1 : 0);
+        }
+
+        /// <summary>
+        /// WO-1253 — depth math in one place. Crystal <see cref="TryBuySlot"/> still widens the
+        /// line via <paramref name="boughtSlots"/>; the permanent-builder SKU is not an input.
+        /// 0 authored = uncapped.
+        /// </summary>
+        public static int DepthOf(int queueDepthPerLine, int boughtSlots)
+        {
+            if (queueDepthPerLine <= 0) return 0;
+            return queueDepthPerLine + Mathf.Max(0, boughtSlots);
+        }
+
+        /// <summary>
+        /// True when <c>GameState.OwnedItemIds</c> carries the permanent-builder store SKU.
+        /// Derived from the entitlement, never a save flag, so a reinstall restore of ownership
+        /// is enough.
+        /// </summary>
+        public bool OwnsPermanentBuilder()
+        {
+            var state = GameStateService.Instance != null ? GameStateService.Instance.State : null;
+            return PackCatalog.OwnsPermanentBuilder(state != null ? state.OwnedItemIds : null);
+        }
+
+        /// <summary>
+        /// WO-1252 — true when the permanent-builder SKU is actually on the browsable shelf
+        /// AND this player does not already own it. The placement toast may name the store
+        /// builder only when this is true; dangling an unavailable purchase is the defect.
+        /// </summary>
+        public bool OffersPermanentBuilder()
+        {
+            if (OwnsPermanentBuilder()) return false;
+            var pack = PackCatalog.Find(PackCatalog.PermanentBuilderSku);
+            return PackCatalog.IsOnBrowsableShelf(pack);
+        }
+
+        /// <summary>
+        /// WO-1253 grant hook. PackStoreVM calls this after recording the SKU. Idempotent:
+        /// <paramref name="alreadyHad"/> true means a re-settle, so concurrency does not bump
+        /// again (SlotCount is derived from ownership).
+        /// </summary>
+        public void OnPermanentBuilderEntitlement(bool alreadyHad)
+        {
+            if (alreadyHad)
+            {
+                DeNelle.Core.Diagnostics.FlowTrace.Step("BuilderSku", "player bought builder already-had");
+                return;
+            }
+            DeNelle.Core.Diagnostics.FlowTrace.Step("BuilderSku", "player bought builder applied");
+            var ch = GetChannel(ChannelId.Builder);
+            if (ch == null) return;
+            ObsidianQueueEngine.PullIntoFreeSlots(ch, SlotCount(ChannelId.Builder), TimeSource.NowUnixMs());
+            Persist();
+            RaiseQueueChanged();
         }
 
         /// <summary>WO-911 — extra slots PURCHASED on <paramref name="id"/> (0 for an untouched channel).</summary>
@@ -556,6 +624,12 @@ namespace DeNelle.Village
                     $"buildTime -{haste:P0} applied to build/upgrade timer duration (WO-676 Foreman's Pace).");
             }
 
+            // WO-1246: an instant-build charge skips the remaining timer. Consume only when
+            // there is still time to skip — a already-zero job (or a queued one that will
+            // complete on pull) must not burn a paid token for nothing.
+            if (durationMs > 0.0 && ConvenienceRedeemer.TrySkipBuildTimer())
+                durationMs = 0.0;
+
             var job = new BuildJobData
             {
                 StructureId = structureId,
@@ -638,6 +712,10 @@ namespace DeNelle.Village
                 return null;
             }
 
+            double duration = durationSeconds;
+            if (kind == JobKind.Repair && duration > 0.0 && ConvenienceRedeemer.TrySkipRepairTimer())
+                duration = 0.0;
+
             var job = new BuildJobData
             {
                 StructureId = targetId,
@@ -645,7 +723,7 @@ namespace DeNelle.Village
                     ? (int)BuildJobType.Upgrade : (int)BuildJobType.Build,
                 Kind = (int)kind,
                 Channel = (int)channel,
-                DurationMs = Math.Max(0.0, durationSeconds) * 1000.0,
+                DurationMs = Math.Max(0.0, duration) * 1000.0,
                 TargetTier = targetTier,
                 Paid = paid,                      // WO-911 M2 — the refund basket rides the job
             };
@@ -663,7 +741,7 @@ namespace DeNelle.Village
             _lastEnqueueFailure = null;
             Persist();
             DeNelle.Core.Diagnostics.FlowTrace.Step("Obsidian",
-                $"job '{kind}' -> '{targetId}' {(started ? "started" : "QUEUED")} on {channel} ({durationSeconds:0}s).");
+                $"job '{kind}' -> '{targetId}' {(started ? "started" : "QUEUED")} on {channel} ({duration:0}s).");
             if (started) JobStarted?.Invoke(job);
             RaiseQueueChanged();
             if (started && job.DurationMs <= 0) CompleteChannelJob(channel, targetId);
@@ -696,10 +774,11 @@ namespace DeNelle.Village
         public int QueueDepthLimit(ChannelId id)
         {
             int authored = Config != null ? Config.queueDepthPerLine : 0;
-            if (authored <= 0) return 0;                      // uncapped by config
             var ch = GetChannel(id);
             int bought = ch != null ? Mathf.Max(0, ch.BoughtSlots) : 0;
-            return authored + bought;
+            // WO-1253: depth stays authored + crystal-bought slots. The permanent-builder
+            // SKU is CONCURRENCY and is deliberately not an input here.
+            return DepthOf(authored, bought);
         }
 
         /// <summary>WO-911 — true when <paramref name="id"/> can accept no more work right now.</summary>
@@ -732,6 +811,54 @@ namespace DeNelle.Village
         /// </summary>
         public string LineFullMessage(ChannelId id)
             => $"{ChannelWord(id)} queue is full ({QueueDepth(id)}/{QueueDepthLimit(id)}). Cancel or finish an item first.";
+
+        // =====================================================================
+        //  WO-1252 — PLACE-TIME BUSY COPY (CONCURRENCY next-step, not DEPTH)
+        //  -------------------------------------------------------------------
+        //  LineFullMessage above is DEPTH and must never say "busy" (WO-1045
+        //  oracle). This sentence is the placement toast: the owner is blocked
+        //  and needs a next step, not a restatement of the wall.
+        // =====================================================================
+
+        /// <summary>
+        /// WO-1252. Toast inner width in reference px (card 500 minus left accent + padding).
+        /// Each composed line must fit this at <see cref="BusyCrewGlyphPx"/>.
+        /// </summary>
+        public const int BusyCrewToastInnerPx = 462;
+
+        /// <summary>
+        /// WO-1252. Conservative glyph advance for 24 px LegacyRuntime on the place toast.
+        /// Matches the in-repo truncation budget used by BuilderSkuRegression (14 is tighter
+        /// than that suite's 16 because this is body copy, not a CTA).
+        /// </summary>
+        public const int BusyCrewGlyphPx = 14;
+
+        /// <summary>
+        /// WO-1252. ASCII next-step copy when a place is blocked because Builder crews are
+        /// saturated. Distinct from <see cref="LineFullMessage"/> (DEPTH). Always names
+        /// wait-or-Manage; names TryBuySlot / the store builder only when the player
+        /// actually has those options. Explicit newlines — wrap is deliberate, never
+        /// a mid-word ellipsis.
+        /// </summary>
+        public string BusyCrewMessage()
+            => ComposeBusyCrewMessage(CanBuySlot(ChannelId.Builder, out _), OffersPermanentBuilder());
+
+        /// <summary>
+        /// WO-1252. Pure composer so the oracle can drive both branches (qualifies-to-buy
+        /// vs does-not) without a live wallet. Instance method <see cref="BusyCrewMessage"/>
+        /// asks the service what options the player actually has and quotes this.
+        /// </summary>
+        public static string ComposeBusyCrewMessage(bool canBuySlot, bool offersPermanentBuilder)
+        {
+            // Measured at BusyCrewGlyphPx against BusyCrewToastInnerPx. Longest line
+            // ("Wait, or complete under Manage.") is 31 glyphs * 14 = 434 px <= 462.
+            string msg = "Builders are busy.\nWait, or complete under Manage.";
+            if (canBuySlot)
+                msg += "\nOr buy an extra queue slot.";
+            if (offersPermanentBuilder)
+                msg += "\nOr get a store builder.";
+            return msg;
+        }
 
         // =====================================================================
         //  WO-911 (M2) — COST ADAPTERS

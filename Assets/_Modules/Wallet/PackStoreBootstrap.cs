@@ -89,7 +89,10 @@ namespace DeNelle.Wallet
             }
             else
             {
-                FlowTrace.Step("Store", "PackStoreBootstrap: PackStore already open — no-op.");
+                // Already showing: OnEnable will not fire, so Render again to consume a
+                // RequestFocusSku from Manage's Buy builder route (WO-1253).
+                store.Render();
+                FlowTrace.Step("Store", "PackStoreBootstrap: PackStore already open — re-rendered for pending focus.");
             }
         }
 

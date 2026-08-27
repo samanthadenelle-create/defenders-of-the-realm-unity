@@ -1,7 +1,7 @@
 # WORK ORDER UI-001 — Night Market landscape visual redesign
 
 **Series:** UI (intentionally separate from numbered BOARD work)
-**Status:** READY TO IMPLEMENT — owner felt-test 2026-08-27 Needs Work: "there is a VFX exiting about town along Y and it needs removed or turned off". Bounced from Fixed.
+**Status:** FIXED 2026-08-27 — implemented; awaiting owner felt-verify to CLOSE.
 **Owner lane:** UI / Store presentation
 **Date:** 2026-08-22
 **Tracking:** Not tracked on `BOARD.html`. Do not edit or rebuild the board for this document.

@@ -3,7 +3,17 @@ guid: 3c5d0584b7cd64649a972c3851bd1617
 ModelImporter:
   serializedVersion: 24200
   internalIDToNameTable: []
-  externalObjects: {}
+  externalObjects:
+  - first:
+      type: UnityEngine:Material
+      assembly: UnityEngine.CoreModule
+      name: gem_mine_3d_model_basecolor
+    second: {fileID: 2100000, guid: 9e4c1b7a2d8f4503b6c91e0a5d4f72b8, type: 2}
+  - first:
+      type: UnityEngine:Material
+      assembly: UnityEngine.CoreModule
+      name: tripo_mat_429c9bff
+    second: {fileID: 2100000, guid: 9e4c1b7a2d8f4503b6c91e0a5d4f72b8, type: 2}
   materials:
     materialImportMode: 2
     materialName: 0

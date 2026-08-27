@@ -32,14 +32,18 @@
 //                     between the title / Next / Close of the head row, and not
 //                     between the posters and the status band. Computed per aspect
 //                     from the same constants the View lays out with.
-//   3 [head-row]      Next and the shared Close are both at/above the touch floor
-//                     and both resolve INSIDE the panel, with the Close keeping the
+//   3 [head-row]      Previous, Next and the shared Close are all at/above the touch
+//                     floor and resolve INSIDE the panel, with the Close keeping the
 //                     kit's canonical box (owner F8 x3).
 //   4 [source-laws]   The retired surfaces stay retired (no tabs, no detail pane,
 //                     no In-Progress, no Track, no selection step), the View routes
 //                     through ElarionUiKit, strict MVVM holds, there is NO allow-list
 //                     entry, the file is ASCII and NUL-free, and the reward row is
 //                     still fed by QuestRewardMath with no fixed chip count.
+//   5 [previous]      Owner felt-test 2026-08-27: "A previous button would be nice".
+//                     Previous exists, is wired to PrevPage (wraps), is >= MinTouchPx
+//                     on both axes, and its MEASURED label fits the host so the face
+//                     cannot render as "Pr...". Portrait and landscape.
 //
 // HOW EACH CASE WAS PROVEN RED (WO-1138). The pre-rebuild tree at HEAD is the
 // negative fixture, and every case fails against it by construction:
@@ -74,6 +78,7 @@ using System.IO;
 using System.Reflection;
 using System.Text.RegularExpressions;
 using UnityEngine;
+using DeNelle.Core.UI;
 
 namespace DeNelle.Editor.Regression
 {
@@ -117,6 +122,7 @@ namespace DeNelle.Editor.Regression
                 Case(failures, "zero-overlap", () => Case2_ZeroOverlap(failures, notes));
                 Case(failures, "head-row", () => Case3_HeadRow(failures, notes));
                 Case(failures, "source-laws", () => Case4_SourceLaws(failures, notes));
+                Case(failures, "previous", () => Case5_Previous(failures, notes));
             }
             catch (Exception ex)
             {
@@ -129,9 +135,10 @@ namespace DeNelle.Editor.Regression
                 reason = "RUMOR BOARD LAYOUT OK - the v3 poster stack is a whole TMP line box in FIXED " +
                          "reference pixels at every band, every tap target is authored at/above the kit " +
                          "touch floor, NO TWO authored rects share a pixel at any of the " +
-                         Aspects.GetLength(0) + " landscape capture aspects, the shared Close keeps its " +
-                         "canonical box inside the panel, and the retired surfaces (tabs / detail pane / " +
-                         "In-Progress / Track / selection) stay retired" + noteStr;
+                         Aspects.GetLength(0) + " landscape capture aspects, Previous is a real paging " +
+                         "control whose MEASURED label fits (>= MinTouchPx, never 'Pr...'), the shared " +
+                         "Close keeps its canonical box inside the panel, and the retired surfaces " +
+                         "(tabs / detail pane / In-Progress / Track / selection) stay retired" + noteStr;
                 return true;
             }
             reason = "rumor-board-layout FAIL x" + failures.Count + ": " + string.Join(" | ", failures) + noteStr;
@@ -299,6 +306,7 @@ namespace DeNelle.Editor.Regression
                 "TitleTopPx", "TitleBandPx", "HookTopPx", "HookBandPx", "ReadTopPx", "ReadBandPx",
                 "AcceptBottomPx", "AcceptBandPx", "RewardBottomPx", "RewardBandPx",
                 "RuleBottomPx", "RulePx", "HeadBandPx", "StatusBandPx", "StatusBottomPx",
+                "HeadGapPx",
             };
             var px = new Dictionary<string, float>();
             foreach (var n in needed)
@@ -307,6 +315,12 @@ namespace DeNelle.Editor.Regression
                 if (v <= 0f && n != "StatusBottomPx") return;   // ConstFloat already recorded WHY
                 px[n] = v;
             }
+
+            string prevLabel = ConstString(view, "PreviousLabel", failures, "[zero-overlap]");
+            if (string.IsNullOrEmpty(prevLabel)) return;
+            float prevW = InvokePageButtonWidth(view, prevLabel, failures, "[zero-overlap]");
+            if (prevW <= 0f) return;
+            float headGap = px["HeadGapPx"];
 
             for (int a = 0; a < Aspects.GetLength(0); a++)
             {
@@ -349,11 +363,15 @@ namespace DeNelle.Editor.Regression
                 float nextX0 = Frac(view, "NextXMin", panelMin, span) * b.PanelW;
                 float nextX1 = Frac(view, "NextXMax", panelMin, span) * b.PanelW;
                 float titleX0 = Frac(view, "TitleXMin", panelMin, span) * b.PanelW;
-                float titleX1 = Frac(view, "TitleXMax", panelMin, span) * b.PanelW;
                 float titleY0 = Frac(view, "TitleYMin", panelMin, span) * b.PanelH;
                 float titleY1 = Frac(view, "TitleYMax", panelMin, span) * b.PanelH;
                 if (float.IsNaN(closeCx) || float.IsNaN(nextX0) || float.IsNaN(titleX0))
                 { failures.Add("[zero-overlap] head-row constants missing at " + b.W + "x" + b.H); continue; }
+
+                float prevX1 = nextX0 - headGap;
+                float prevX0 = prevX1 - prevW;
+                // Live title ends at Previous's left minus the head gap (BuildTitle's inset).
+                float titleX1 = prevX0 - headGap;
 
                 var panel = new List<Band>
                 {
@@ -361,6 +379,7 @@ namespace DeNelle.Editor.Regression
                     new Band("Poster2", x2Min, x2Max, b.CardBottomPx, posterTop),
                     new Band("Poster3", x3Min, x3Max, b.CardBottomPx, posterTop),
                     new Band("Title",   titleX0, titleX1, titleY0, titleY1),
+                    new Band("Previous", prevX0, prevX1, b.HeadTopPx - px["HeadBandPx"], b.HeadTopPx),
                     new Band("Next",    nextX0, nextX1, b.HeadTopPx - px["HeadBandPx"], b.HeadTopPx),
                     new Band("Close",   closeCx - ctaW * 0.5f, closeCx + ctaW * 0.5f, b.HeadTopPx - ctaH, b.HeadTopPx),
                     new Band("Status",  x1Min, x3Max, px["StatusBottomPx"], px["StatusBottomPx"] + px["StatusBandPx"]),
@@ -390,7 +409,7 @@ namespace DeNelle.Editor.Regression
         }
 
         // =====================================================================
-        //  CASE 3 - the head row: Next and the ONE shared Close
+        //  CASE 3 - the head row: Previous, Next and the ONE shared Close
         // =====================================================================
         private static void Case3_HeadRow(List<string> failures, List<string> notes)
         {
@@ -407,6 +426,14 @@ namespace DeNelle.Editor.Regression
             float headBand = ConstFloat(view, "HeadBandPx", failures, "[head-row]");
             if (minTouch <= 0f || ctaW <= 0f || ctaH <= 0f || panelMax <= panelMin || headBand <= 0f) return;
             float span = panelMax - panelMin;
+
+            string prevLabel = ConstString(view, "PreviousLabel", failures, "[head-row]");
+            float prevW = string.IsNullOrEmpty(prevLabel) ? 0f
+                : InvokePageButtonWidth(view, prevLabel, failures, "[head-row]");
+            if (prevW > 0f && prevW < minTouch)
+                failures.Add("[head-row] Previous host is " + prevW.ToString("F0") +
+                             " ref px wide, under the kit touch floor " + minTouch +
+                             " - owner bounce 2026-08-27; a paging face is a real tap target");
 
             for (int a = 0; a < Aspects.GetLength(0); a++)
             {
@@ -446,7 +473,8 @@ namespace DeNelle.Editor.Regression
                                      "lands inside the shared Close's canonical box");
                 }
 
-                notes.Add(b.W + "x" + b.H + ": Next " + nextW.ToString("F0") + " px wide, Close " +
+                notes.Add(b.W + "x" + b.H + ": Previous " + prevW.ToString("F0") + " px, Next " +
+                          nextW.ToString("F0") + " px wide, Close " +
                           (closeCx - ctaW * 0.5f).ToString("F0") + "-" + (closeCx + ctaW * 0.5f).ToString("F0") +
                           " in a " + b.PanelW.ToString("F0") + " px panel");
             }
@@ -509,13 +537,26 @@ namespace DeNelle.Editor.Regression
                              "an unpaged board grows past three posters and the fixed columns collide");
             if (view.IndexOf("NextPage", StringComparison.Ordinal) < 0)
                 failures.Add("[source-laws] the Next > paging command is gone from the View");
+            if (view.IndexOf("PrevPage", StringComparison.Ordinal) < 0)
+                failures.Add("[source-laws] the Previous paging command is gone from the View - owner " +
+                             "felt-test 2026-08-27 asked for a previous button, and a dead face is not one");
+            if (vm.IndexOf("PrevPage", StringComparison.Ordinal) < 0)
+                failures.Add("[source-laws] RumorBoardVM.PrevPage is gone - Previous must actually navigate");
             if (vm.IndexOf("% pages", StringComparison.Ordinal) < 0 &&
                 vm.IndexOf("% pages;", StringComparison.Ordinal) < 0)
                 failures.Add("[source-laws] RumorBoardVM.NextPage no longer WRAPS (the modulo is gone) - the " +
                              "owner chose the keep-going form, so the last page must roll back to the first");
+            if (view.IndexOf("PreviousHost", StringComparison.Ordinal) < 0)
+                failures.Add("[source-laws] PreviousHost is gone from the View - the Previous control was removed");
+            if (view.IndexOf("MeasureLineWidthPx", StringComparison.Ordinal) < 0)
+                failures.Add("[source-laws] the View no longer MEASURES the Previous label " +
+                             "(MeasureLineWidthPx) - a character-count host is how 'Previous' becomes 'Pr...'");
             if (!Regex.IsMatch(view, "BuildObsidianButton\\s*\\([^;]*\"Accept\""))
                 failures.Add("[source-laws] a poster no longer carries its OWN Accept - the whole point of v3 " +
                              "is that there is no selection step between reading a rumor and taking it");
+            if (Regex.IsMatch(view, "BuildObsidianButton\\s*\\([^;]*\"Prev\""))
+                failures.Add("[source-laws] the Previous face is labelled 'Prev' - that is the truncated form " +
+                             "the owner bounce forbids. The word is Previous");
 
             // -- fixed pixels, never a fraction of the card -----------------------
             if (view.IndexOf("HangTop", StringComparison.Ordinal) < 0)
@@ -592,12 +633,157 @@ namespace DeNelle.Editor.Regression
         }
 
         // =====================================================================
+        //  CASE 5 - Previous exists, is tappable, and its MEASURED label fits
+        // =====================================================================
+        // Owner felt-test 2026-08-27: "A previous button would be nice". The v3 mockup
+        // only drew Next >; this case is the bounce. A face labelled "Prev" or sized
+        // so FitSingleLine ellipsises to "Pr..." is a fail, even if a button exists.
+        private static readonly int[,] PreviousAspects =
+        {
+            { 1920, 1080 }, { 2340, 1080 }, { 2670, 1200 },
+            { 1080, 2340 }, { 1200, 2670 },
+        };
+
+        private static void Case5_Previous(List<string> failures, List<string> notes)
+        {
+            Type view = FindType(ViewType);
+            Type vm = FindType(VmType);
+            Type kit = FindType(KitType);
+            if (view == null || vm == null || kit == null)
+            { failures.Add("[previous] view/vm/kit type not found - Previous cannot be evaluated"); return; }
+
+            string label = ConstString(view, "PreviousLabel", failures, "[previous]");
+            if (label == null) return;
+            if (label != "Previous")
+                failures.Add("[previous] PreviousLabel is '" + label + "', not 'Previous' - a shortened " +
+                             "face ('Prev', 'Pr...') is the truncation the bounce forbids");
+
+            float minTouch = ConstFloat(kit, "MinTouchPx", failures, "[previous]");
+            float inset = ConstFloat(view, "PageButtonLabelInset", failures, "[previous]");
+            float headBand = ConstFloat(view, "HeadBandPx", failures, "[previous]");
+            float headGap = ConstFloat(view, "HeadGapPx", failures, "[previous]");
+            float panelMin = ConstFloat(view, "PanelAnchorMin", failures, "[previous]");
+            float panelMax = ConstFloat(view, "PanelAnchorMax", failures, "[previous]");
+            if (minTouch <= 0f || inset <= 0f || headBand <= 0f || headGap <= 0f || panelMax <= panelMin) return;
+
+            float host = InvokePageButtonWidth(view, label, failures, "[previous]");
+            if (host <= 0f) return;
+            if (host < minTouch)
+                failures.Add("[previous] PageButtonWidthPx('" + label + "')=" + host.ToString("F0") +
+                             " is below MinTouchPx " + minTouch);
+            if (headBand < minTouch)
+                failures.Add("[previous] HeadBandPx=" + headBand + " is below MinTouchPx " + minTouch +
+                             " - Previous shares this band with Next");
+
+            string detail;
+            float measured = ElarionUiKit.MeasureLineWidthPx(
+                ElarionUiKit.FontRole.Body, "Previous", ElarionUi.FontBody, out detail);
+            if (measured < 0f)
+            {
+                failures.Add("[previous] cannot MEASURE 'Previous': " + detail +
+                             " - a host that is not measured is how the face becomes 'Pr...'");
+            }
+            else
+            {
+                float inner = host * inset;
+                if (measured > inner)
+                    failures.Add("[previous] 'Previous' MEASURES " + measured.ToString("0.0") +
+                                 " ref px at FontBody but the host inner width is only " +
+                                 inner.ToString("0.0") + " px (" + detail +
+                                 "). FitSingleLine will ellipsis it to 'Pr...'. Grow the host; do not " +
+                                 "shorten the word");
+                notes.Add("Previous label " + measured.ToString("0.0") + " px in a " +
+                          host.ToString("0.0") + " px host (inner " + inner.ToString("0.0") + ")");
+            }
+
+            string viewRaw = ReadSource(ViewSrc, failures, "[previous]");
+            string vmRaw = ReadSource(VmSrc, failures, "[previous]");
+            if (viewRaw == null || vmRaw == null) return;
+            string viewSrc = StripComments(viewRaw);
+            string vmSrc = StripComments(vmRaw);
+
+            if (viewSrc.IndexOf("BuildPreviousButton", StringComparison.Ordinal) < 0)
+                failures.Add("[previous] BuildPreviousButton is gone - the control was not built");
+            if (!Regex.IsMatch(viewSrc, "BuildObsidianButton\\s*\\([^;]*PreviousLabel"))
+                failures.Add("[previous] the View no longer builds an ElarionUiKit button with PreviousLabel");
+            if (viewSrc.IndexOf("PrevPage", StringComparison.Ordinal) < 0)
+                failures.Add("[previous] the View does not route Previous to PrevPage - a dead button");
+            if (!Regex.IsMatch(vmSrc, @"public\s+void\s+PrevPage\s*\("))
+                failures.Add("[previous] RumorBoardVM.PrevPage is missing - Previous has nowhere to navigate");
+            if (vmSrc.IndexOf("_pageIndex - 1", StringComparison.Ordinal) < 0 &&
+                vmSrc.IndexOf("_pageIndex-1", StringComparison.Ordinal) < 0)
+                failures.Add("[previous] PrevPage no longer steps the page index backward");
+            if (vmSrc.IndexOf("% pages", StringComparison.Ordinal) < 0)
+                failures.Add("[previous] PrevPage no longer WRAPS (the modulo is gone) - Previous on page 0 " +
+                             "must roll to the last page, the keep-going pair of Next");
+
+            float span = panelMax - panelMin;
+            for (int a = 0; a < PreviousAspects.GetLength(0); a++)
+            {
+                var b = Measure(view, PreviousAspects[a, 0], PreviousAspects[a, 1], panelMin, panelMax);
+                float nextX0 = Frac(view, "NextXMin", panelMin, span) * b.PanelW;
+                if (float.IsNaN(nextX0) || b.PanelW <= 0f)
+                {
+                    failures.Add("[previous] NextXMin did not resolve at " + b.W + "x" + b.H);
+                    continue;
+                }
+                float prevX1 = nextX0 - headGap;
+                float prevX0 = prevX1 - host;
+                if (prevX0 < -0.01f)
+                    failures.Add("[previous] at " + b.W + "x" + b.H + " Previous's left edge is " +
+                                 prevX0.ToString("F0") + " px - it runs past the panel's LEFT edge");
+                if (prevX1 > b.PanelW)
+                    failures.Add("[previous] at " + b.W + "x" + b.H + " Previous's right edge is past the panel");
+                notes.Add(b.W + "x" + b.H + ": Previous " + prevX0.ToString("F0") + "-" +
+                          prevX1.ToString("F0") + " in a " + b.PanelW.ToString("F0") + " px panel");
+            }
+        }
+
+        // =====================================================================
         //  helpers
         // =====================================================================
 
         /// <summary>Read a public const float by reflection (no asmdef reference needed). A
         /// MISSING constant is a FAILURE, never a silent zero: this oracle pins a budget, and a
         /// budget that quietly evaluates to nothing is a hollow pass.</summary>
+        /// <summary>Public const string, same failure mode as ConstFloat: missing is a FAIL.</summary>
+        private static string ConstString(Type t, string name, List<string> failures, string tag)
+        {
+            var f = t.GetField(name, BindingFlags.Public | BindingFlags.Static | BindingFlags.FlattenHierarchy);
+            if (f == null)
+            {
+                failures.Add(tag + " " + t.Name + "." + name + " does not exist - the Previous label this " +
+                             "oracle pins was renamed or removed; re-point it rather than deleting the guard");
+                return null;
+            }
+            return f.GetValue(null) as string;
+        }
+
+        /// <summary>Call RumorBoardPanel.PageButtonWidthPx so the oracle and the View cannot
+        /// drift onto two different host-width formulae.</summary>
+        private static float InvokePageButtonWidth(Type view, string label, List<string> failures, string tag)
+        {
+            var m = view.GetMethod("PageButtonWidthPx", BindingFlags.Public | BindingFlags.Static);
+            if (m == null)
+            {
+                failures.Add(tag + " RumorBoardPanel.PageButtonWidthPx does not exist - the Previous host " +
+                             "is no longer MEASURED from its label");
+                return 0f;
+            }
+            try
+            {
+                object v = m.Invoke(null, new object[] { label });
+                if (v is float fv) return fv;
+                failures.Add(tag + " PageButtonWidthPx did not return a float");
+                return 0f;
+            }
+            catch (Exception ex)
+            {
+                failures.Add(tag + " PageButtonWidthPx threw " + ex.GetType().Name + ": " + ex.Message);
+                return 0f;
+            }
+        }
+
         private static float ConstFloat(Type t, string name, List<string> failures, string tag)
         {
             var f = t.GetField(name, BindingFlags.Public | BindingFlags.Static | BindingFlags.FlattenHierarchy);

@@ -157,8 +157,6 @@ namespace DeNelle.HUD.Kit
         private ElarionUiKit.CurrencyChipHandle _resGoldOnly;     // collapsed variant
         private GameObject _resExpandedRow;
         private TMP_Text _resHintLabel;   // WO-1221: the collapsed chip's "+N more" hint
-        private GameObject _resDock;        // WO-440: right-edge tab + collapsible chips container
-        private bool _resPanelOpen;         // WO-440: town collapse state (collapsed by default)
         private Button _fleeButton, _startWaveButton;
         // ── WO-835 action bar (owner architecture law 2026-08-02): the bottom bar renders
         // ONLY the applicable buttons, packed + centered. Every predicate (Talk in range,
@@ -1124,19 +1122,15 @@ namespace DeNelle.HUD.Kit
         /// chip and every expanded panel. == the Echoes chip's authored inset, so the one
         /// rail element this class cannot edit lands on the same edge.</summary>
         internal const float RailGutterPx = ElarionUi.PadPanel * 3f;   // 54
-        // Resource panel interior, in fixed reference px. Sized so the whole section
-        // (chip 112 + gap 6 + panel 240 = 358) stays inside the ActionRail band, which
-        // resolves to ~367 ref px on the 2670x1200 Seeker (HudAreasHost 0.040..0.420).
-        private const float ResRowHeightPx = 40f;
+        // Expanded resource rows hang BELOW the gold chip (owner mockup WO-1221). They are
+        // display-only — the gold chip is the one tap target and stays >= MinTouchPx via
+        // ClampMinTouch. 4×MinTouchPx cannot physically fit under ActionRail top (0.42) on
+        // the captured 2670x1200 Seeker (~326 ref px to the screen bottom), so the rows
+        // match the gold chip's WIDTH and use a compact readable height. 56×4 + 5×3 = 239
+        // ref px, which seats under a clamped 112 px gold chip without dropping Wood/Iron
+        // off the bottom.
+        private const float ResRowHeightPx = 56f;
         private const float ResRowGapPx = 5f;
-        private const float ResPanelPadPx = 10f;
-        /// <summary>WO-1221: the expanded rail hangs BELOW the collapsed gold chip, which is the
-        /// approved shape ("the gold chip stays seated, four chips slide in below it"). The panel
-        /// used to hang from yFromTopPx 0 - the very top of the dock - so once the dock was
-        /// reparented into the ActionRail mount the rail was drawn straight over the chip that
-        /// opened it. The offset is the chip's touch height plus the section gap, exactly the
-        /// "chip 112 + gap 6 + panel" arithmetic the comment above already assumed.</summary>
-        private const float ResPanelTopOffsetPx = ElarionUiKit.MinTouchPx + 6f;   // 118
         /// <summary>WO-1221: height of the collapsed chip's "+N more" hint tag, reference px.</summary>
         private const float ResHintHeightPx = 26f;
 
@@ -1644,39 +1638,6 @@ namespace DeNelle.HUD.Kit
 
         private void BuildResourceChips(Transform pool)
         {
-            // WO-431: Gold + Wood/Iron/Food/Crystal chips live in an OBSIDIAN dark frame
-            // (near-black ObsidianFill + gold inner rim, never the olive Panel()).
-            // Each chip draws OUR resource icon through the CurrencyChip concept resolver
-            // (concept-icons.json gold/wood/iron/food/crystal -> Icons_Obsidian) — the icon
-            // choice is DATA, never hard-coded here. Count-tween only, NO flash.
-            // WO-440: the always-visible resources panel lives in a DOCK — a chip + the
-            // collapsible panel the chip toggles. Collapsed by default. SetResources (OnEconomy)
-            // updates the chip values whether the panel is open or closed (labels persist).
-            //
-            // 2026-08-05 REBUILD (device review findings 11 + 13, and the P2 "three different
-            // right edges"). What was measured on the Seeker, and what each line below fixes:
-            //   * the word "Resources" rendered TWICE — once on the collapsed tab, once as a
-            //     gold panel header in a different size and colour, with the panel's top edge
-            //     OVERLAPPING the tab. The header is GONE; the chip owns the word, once.
-            //   * the tab was a Style1/YELLOW fraction-anchored box with an icon stacked over
-            //     the word; its two neighbours were Style1/Gray text chips. It is now the SAME
-            //     BuildRailChip as Builders and the same as Echoes: Style1/Gray, 220x112 fixed.
-            //   * the panel was a ContentSizeFitter frame pinned -6 px off the AREA's right
-            //     edge (the area itself ends only 0.005 of the screen from the edge), so the
-            //     numbers ran into the screen edge with no padding. It is now a fixed-width
-            //     RailBand on the SHARED rail gutter (HudRailGutter), like every other element.
-            //   * rows were ICON-ONLY. CurrencyChip DROPS its text tag whenever the currency
-            //     icon resolves (ElarionUiKitObsidian.cs:846-857), so on a device with the art
-            //     present the five rows were distinguishable mainly by HUE at ~30 px — a
-            //     straight breach of the colourblind rule. Each row now carries its NAME as a
-            //     sibling label the chip cannot suppress, in its own sub-rect so it can never
-            //     collide with the amount.
-            _resDock = new GameObject("ResourceDock", typeof(RectTransform));
-            _resDock.transform.SetParent(pool, false);
-            var drt = (RectTransform)_resDock.transform;
-            drt.anchorMin = Vector2.zero; drt.anchorMax = Vector2.one;
-            drt.offsetMin = Vector2.zero; drt.offsetMax = Vector2.zero;
-
             // WO-1221: Crystals joins the town rail. The severity line of the ticket is "the player
             // cannot see Wood / Iron / Stone / Crystals anywhere in town", and Crystals is the one
             // resource with no other town readout at all. Note Crystals is UNCAPPABLE by design
@@ -1690,76 +1651,8 @@ namespace DeNelle.HUD.Kit
             };
             var names = new[] { "Wood", "Iron", "Stone", "Crystals" };
 
-            // The collapsed chip — THE shared rail chip, identical to Builders and Echoes.
-
-            // The expanded section: a fixed-pixel panel on the shared gutter, hanging under
-            // the chip. Fixed rows, never a fraction of the band (WO-841).
-            float panelH = ResPanelPadPx * 2f + kinds.Length * ResRowHeightPx +
-                           (kinds.Length - 1) * ResRowGapPx;
-            var rrt = RailBand(drt, "ResourceChips", ResPanelTopOffsetPx,
-                               panelH, RailPanelWidthPx);
-            _resExpandedRow = rrt.gameObject;
-
-            // Obsidian dark frame + gold inner rim (reused kit chrome, near-black ObsidianFill
-            // — NOT the olive Panel()).
-            var frame = ElarionUiKit.AddImage(_resExpandedRow.transform, "ResFrame",
-                Vector2.zero, Vector2.one, ElarionUiKit.ObsidianFill, rounded: true);
-            ElarionUiKit.AddInnerRim(frame, ElarionUiKit.ObsidianTrim);
-            var frameImg = frame.GetComponent<Image>();
-            if (frameImg != null) frameImg.raycastTarget = false;
-
-            _resChips = new ElarionUiKit.CurrencyChipHandle[kinds.Length];
-            _cappedResourceValues = new TMP_Text[kinds.Length];   // WO-1221: was a hardcoded 3
-            for (int i = 0; i < kinds.Length; i++)
-            {
-                // One row = a fixed-pixel band inside a fixed-pixel panel. Display only (no
-                // tap target), so the MinTouchPx floor does not apply to it and nothing grows.
-                var row = new GameObject("ResRow_" + names[i], typeof(RectTransform));
-                row.transform.SetParent(_resExpandedRow.transform, false);
-                var rowRt = (RectTransform)row.transform;
-                rowRt.anchorMin = new Vector2(0f, 1f);
-                rowRt.anchorMax = new Vector2(1f, 1f);
-                rowRt.pivot = new Vector2(0.5f, 1f);
-                rowRt.sizeDelta = new Vector2(-ResPanelPadPx * 2f, ResRowHeightPx);
-                rowRt.anchoredPosition =
-                    new Vector2(0f, -(ResPanelPadPx + i * (ResRowHeightPx + ResRowGapPx)));
-
-                // WO-1205 — OWNER RULING 2026-08-25: "just the count and not the wood name
-                // just the chip". The row is [icon] <count>. The sibling NAME label that used
-                // to sit in the 0.02->0.44 sub-rect is GONE from the ruled path.
-                //
-                // ⛔ THE COLOURBLIND GUARD IS RE-POINTED, NOT DELETED. The name was the
-                // identity carrier for the no-art case (owner is red/green colourblind; an
-                // icon-only row whose icon fails to resolve is unidentifiable). That duty now
-                // rides CurrencyChip's OWN icon-first fallback: `tag: names[i]` below renders
-                // the word ONLY when the icon sprite comes up null (ElarionUiKitObsidian
-                // CurrencyChip: `bool hasTag = iconSprite == null`). Icon resolves -> [icon] 80.
-                // Icon missing -> "Wood 80". A naked number never ships either way.
-                //
-                // OWNER 2026-07-15 (colorblind): in THIS resource strip Gold must read the SAME
-                // size + color as Wood/Iron/Food/Crystal — the earlier primary:Gold gave it gilt
-                // digits + FontHead (bigger) + bold (ElarionUiKitObsidian CurrencyChip:859-867),
-                // so it stood out. All five chips are peers here; the icon carries identity, never
-                // color/size. primary:false makes every chip uniform (Parchment, FontLabel, normal).
-                // WO-1205: the chip now owns the WHOLE row — nothing sits to its left any more.
-                _resChips[i] = ElarionUiKit.CurrencyChip(row.transform, kinds[i],
-                    new Vector2(0f, 0f), new Vector2(1f, 1f), primary: false,
-                    tag: names[i]);
-                SplitResourceRowChip(_resChips[i]);
-                _cappedResourceValues[i] = _resChips[i].amount;
-            }
-
-            // WO-1205 (owner 2026-08-25: "only should gold till clicked then showed all",
-            // "that was much more astetic"): COLLAPSED is the resting state everywhere. The
-            // panel is built inert and only the tap window (see the LateTick block that polls
-            // _resChipsExpanded toggle) raises it. This used to be an unconditional open, which is
-            // what made the three rows permanent furniture on the town rail.
-            _resPanelOpen = false;
-            _resExpandedRow.SetActive(false);
-            Register("resourceChips", WrapAsWidget("resourceChips", _resDock));
-
-            // Collapsed variant: gold chip + a "+N" hint; TAP TOGGLES the row open/shut
-            // (WO-1221 owner ruling 2026-08-26 - the old 6-second peek is retired).
+            // Collapsed chip: gold + a "+N" hint. TAP TOGGLES the stack open/shut
+            // (WO-1221 owner ruling 2026-08-26 — the old 6-second peek is retired).
             // WO-697 icon-first: the coin icon carries identity; "Gold" is the no-art
             // fallback tag only (builder-enforced — the chip is never a naked number).
             _resGoldOnly = ElarionUiKit.CurrencyChip(pool, ElarionUiKit.CurrencyKind.Gold,
@@ -1769,14 +1662,75 @@ namespace DeNelle.HUD.Kit
             tapBtn.transition = Selectable.Transition.None;
             tapBtn.onClick.AddListener(() =>
             {
-                // WO-1221 owner ruling: TOGGLE. Open stays open until tapped again.
-                _resChipsExpanded = !_resChipsExpanded;
-                FlowTrace.Step("HudKit", "resource chips tapped -> " +
-                               (_resChipsExpanded ? "EXPAND" : "COLLAPSE") +
-                               " (toggle; the WO-440 six-second window is retired by owner ruling " +
-                               "2026-08-26 - the rail no longer closes itself on a clock).");
+                // Direct raise. The previous consumer only flipped `_resChipsExpanded` and
+                // waited for LateTick to SetActive a SECOND occupancy widget that hud-areas.json
+                // never occupies — tap logged EXPAND, tmp/resources-expanded-105803.png showed
+                // only the gold chip (built-but-invisible).
+                SetResourcePanelOpen(!_resChipsExpanded);
             });
             _resGoldOnly.plate.raycastTarget = true;   // the chip is the tap target here
+            ElarionUiKit.ClampMinTouch(tapBtn);
+
+            // ⭐ WO-1221 bounce 2026-08-27 — THE EXPANDED PIXELS LIVE ON THE GOLD CHIP.
+            // Occupancy (hud-areas.json calm(town)/calm(explore) actionRail) lists ONLY
+            // resourceChipsCollapsed. Register() deactivates every widget; occupancy is the
+            // only thing that turns one on (docs/MASTER_CATALOG/hud.md). The Wood/Iron/Stone/
+            // Crystals row used to live on a SECOND widget (`resourceChips` / `_resDock`) that
+            // no posture occupies. LateTick raised that WRAPPER — a full-ActionRail empty
+            // dock — and logged "expanded (opener live=True)" while the capture inside the
+            // window showed only gold 1034. ApplyPosture then deactivates any unoccupied
+            // widget; HudKitController is AddComponent'd BEFORE PostureEvaluator on the same
+            // GameObject, so Update can probe-report painted and occupancy can still kill
+            // the surface before render.
+            //
+            // Fix: four chips are CHILDREN of tapGo, hanging BELOW it (owner mockup). Same
+            // width as gold, silhouette identity via CurrencyChip (icon; word tag only when
+            // the icon is missing — never colour alone). Occupancy already shows the parent.
+            // Toggle is SetActive on this child. Hiding the opener hides the stack.
+            float panelH = kinds.Length * ResRowHeightPx + (kinds.Length - 1) * ResRowGapPx;
+            _resExpandedRow = new GameObject("ResourceExpandedStack", typeof(RectTransform));
+            _resExpandedRow.transform.SetParent(tapGo.transform, false);
+            var ert = (RectTransform)_resExpandedRow.transform;
+            ert.anchorMin = new Vector2(0f, 0f);
+            ert.anchorMax = new Vector2(1f, 0f);
+            ert.pivot = new Vector2(0.5f, 1f);
+            ert.sizeDelta = new Vector2(0f, panelH);
+            ert.anchoredPosition = new Vector2(0f, -RailGapPx);
+
+            _resChips = new ElarionUiKit.CurrencyChipHandle[kinds.Length];
+            _cappedResourceValues = new TMP_Text[kinds.Length];
+            for (int i = 0; i < kinds.Length; i++)
+            {
+                var row = new GameObject("ResRow_" + names[i], typeof(RectTransform));
+                row.transform.SetParent(_resExpandedRow.transform, false);
+                var rowRt = (RectTransform)row.transform;
+                rowRt.anchorMin = new Vector2(0f, 1f);
+                rowRt.anchorMax = new Vector2(1f, 1f);
+                rowRt.pivot = new Vector2(0.5f, 1f);
+                rowRt.sizeDelta = new Vector2(0f, ResRowHeightPx);
+                rowRt.anchoredPosition = new Vector2(0f, -(i * (ResRowHeightPx + ResRowGapPx)));
+
+                // WO-1205 — OWNER RULING 2026-08-25: "just the count and not the wood name
+                // just the chip". The row is [icon] <count>.
+                //
+                // ⛔ THE COLOURBLIND GUARD IS RE-POINTED, NOT DELETED. The name was the
+                // identity carrier for the no-art case (owner is red/green colourblind; an
+                // icon-only row whose icon fails to resolve is unidentifiable). That duty now
+                // rides CurrencyChip's OWN icon-first fallback: `tag: names[i]` below renders
+                // the word ONLY when the icon sprite comes up null (ElarionUiKitObsidian
+                // CurrencyChip: `bool hasTag = iconSprite == null`). Icon resolves -> [icon] 80.
+                // Icon missing -> "Wood 80". A naked number never ships either way.
+                _resChips[i] = ElarionUiKit.CurrencyChip(row.transform, kinds[i],
+                    new Vector2(0f, 0f), new Vector2(1f, 1f), primary: false,
+                    tag: names[i]);
+                SplitResourceRowChip(_resChips[i]);
+                _cappedResourceValues[i] = _resChips[i].amount;
+            }
+
+            // COLLAPSED is the resting state (owner 2026-08-25). The stack is built inert;
+            // SetResourcePanelOpen is the ONE owner of the SetActive.
+            _resChipsExpanded = false;
+            _resExpandedRow.SetActive(false);
 
             // ⭐ WO-1221 - THE "+N" HINT (owner ruling 2026-08-26): the collapsed chip is the ONLY
             // resource UI on screen by default, so Gold alone gives the player no reason to believe
@@ -2552,30 +2506,42 @@ namespace DeNelle.HUD.Kit
             FlowTrace.Step("HudKit", "flee armed (tap again within 2s to confirm)");
         }
 
-        // WO-440: resource chip toggle — expand/collapse the resource panel. Values are
-        // still updated by OnEconomy regardless of this state (labels persist while hidden).
-        // 2026-08-05: both entry points now route through the ONE rail arbiter, so opening
-        // Resources collapses Builders and vice versa — the right column can never stack two
-        // expanded panels (the state that produced the overlapping chip + panel in the review).
-        private void ToggleResourcePanel() { }
-
         private void SetResourcePanelOpen(bool open)
         {
-            // ⭐ WO-1221 — THE DEFECT, AND WHY THIS SEAM NOW OWNS THE SetActive.
-            // WO-1205 made COLLAPSED the resting state by calling _resExpandedRow.SetActive(false)
-            // at build time, and left a comment saying "the tap window (see the LateTick block that
-            // polls the expand toggle) raises it". THE LATETICK BLOCK NEVER TOUCHED IT. It toggles
-            // _widgets["resourceChips"] — the Widget_resourceChips WRAPPER around _resDock, a
-            // full-screen stretch container whose only meaningful child is _resExpandedRow. So a
-            // tap activated an EMPTY dock: zero pixels, no Fail, and a cheerful "expanded" line.
-            // Nothing anywhere else in the tree re-activated _resExpandedRow, which is why the town
-            // rail has painted nothing since WO-1205 while the Build-mode strip
-            // (Village/BuildMode/BuildHudController.BuildResourceStrip — a DIFFERENT widget in a
-            // DIFFERENT module) kept rendering fine and made the data look healthy.
-            // ONE OWNER: this method raises/lowers the panel; LateTick decides only WHETHER.
-            _resPanelOpen = open;
+            // ⭐ WO-1221 — ONE OWNER of the expanded stack's SetActive.
+            // The stack is a CHILD of the gold chip (occupancy-live resourceChipsCollapsed).
+            // Raising a second unoccupied widget (`resourceChips` / `_resDock`) is the
+            // defect: occupancy never turns it on, ApplyPosture turns it off, and the
+            // capture tmp/resources-expanded-105803.png showed only gold 1034 after a tap
+            // that logged "expanded (opener live=True)".
+            bool stateChanged = _resChipsExpanded != open;
+            _resChipsExpanded = open;
             if (_resExpandedRow != null && _resExpandedRow.activeSelf != open)
+            {
                 _resExpandedRow.SetActive(open);
+                stateChanged = true;
+            }
+            if (_resHintLabel != null && _resHintLabel.gameObject.activeSelf == open)
+                _resHintLabel.gameObject.SetActive(!open);
+
+            if (!stateChanged) return;
+
+            if (open)
+            {
+                if (_resExpandedRow != null)
+                    LayoutRebuilder.ForceRebuildLayoutImmediate((RectTransform)_resExpandedRow.transform);
+                _resExpandVerifyFrames = ResExpandVerifyMaxFrames;
+                FlowTrace.Step("HudKit",
+                    "resource panel expand REQUESTED (toggle=ON, child of gold chip, no timer - " +
+                    "WO-1221 owner ruling) — NOT yet a claim that anything painted; measuring for " +
+                    "up to " + ResExpandVerifyMaxFrames + " frames.");
+            }
+            else
+            {
+                _resExpandVerifyFrames = 0;
+                FlowTrace.Step("HudKit",
+                    "resource panel collapsed (toggle=OFF, cause=player or opener left this posture).");
+            }
         }
 
         /// <summary>
@@ -2613,10 +2579,25 @@ namespace DeNelle.HUD.Kit
                 return;
             }
 
+            // Inactive is THE original defect, not an unmeasurable environment. MeasureRect
+            // reports it as a named skip (same bucket as batchmode); promoting that skip to a
+            // pass is how "opener live=True" came back. Fail it by name, do not poll it away.
+            if (!_resExpandedRow.activeInHierarchy)
+            {
+                _resExpandVerifyFrames = 0;
+                FlowTrace.Fail("HudKit",
+                    "resource panel expand INACTIVE — _resExpandedRow.activeInHierarchy=false " +
+                    "(activeSelf=" + _resExpandedRow.activeSelf + "). The tap requested expand " +
+                    "and the stack is off; the player sees only the gold chip. This is the " +
+                    "tmp/resources-expanded-105803.png failure class.");
+                return;
+            }
+
             var m = UiSurfaceProbe.MeasureRect((RectTransform)_resExpandedRow.transform);
 
             // Keep polling while the answer could still change: not measurable yet, or measurable
             // but still pre-settle at 0x0. Only the LAST frame is allowed to conclude.
+            // INACTIVE was already failed above. Batchmode / no-viewport stays a named skip.
             if (!lastFrame && (!m.Measurable || m.ZeroSize)) return;
             _resExpandVerifyFrames = 0;   // one verdict per expand, never a per-frame repeat
 
@@ -2651,7 +2632,8 @@ namespace DeNelle.HUD.Kit
             if (surfaceOk)
                 FlowTrace.Step("HudKit",
                     "resource panel expand VERIFIED PAINTED — " + rowsMeasured + "/" + rowsExpected +
-                    " rows measured on screen, panel " + m.Describe() +
+                    " rows measured on screen, childCount=" + t.childCount +
+                    ", panel " + m.Describe() +
                     " (settled after " + settleFrames + " frame(s)).");
         }
 
@@ -2983,6 +2965,7 @@ namespace DeNelle.HUD.Kit
             // the rail, so it re-presents it minimized — the player never returns to town and
             // finds a panel she left open in another posture already occupying the column.
             SetRailSection(RailSection.None);
+            if (_resChipsExpanded) SetResourcePanelOpen(false);
 
             var occupancy = _config.Occupancy(posture);
             int shown = 0;
@@ -3269,65 +3252,16 @@ namespace DeNelle.HUD.Kit
             // need not move the posture, so the ApplyPosture call alone can be missed.
             // Self-throttled (cached hub test, log only on a flip) — see ApplyHeartSceneGate.
             if (_evaluator != null) ApplyHeartSceneGate(_evaluator.Posture);
-            // Collapsed chips: the tap-expand window temporarily shows the full row.
-            // WO-1205 — THE PANEL CAN NEVER OUTLIVE ITS OPENER. This used to run only while
-            // the collapsed chip was live, so a panel raised by some other caller stayed up
-            // in a posture that does not carry it (owner 2026-08-25: "the resource stayed
-            // active during build screen which it shouldnt"). The gate is now evaluated every
-            // frame in BOTH directions: no live opener (build / modal / battle occupancy) or
-            // an expired window => the panel closes itself, whoever opened it.
-            if (_widgets.TryGetValue("resourceChips", out var row))
-            {
-                bool openerLive = _widgets.TryGetValue("resourceChipsCollapsed", out var col) &&
-                                  col.activeSelf;
-                // WO-1221: the OPENER gate survives (a panel can never outlive its opener - it
-                // must not still be up in build/modal/battle occupancy); the CLOCK is gone. If the
-                // opener disappears, the toggle is reset too, so returning to town does not
-                // silently re-open a rail the player never asked for again.
-                if (!openerLive && _resChipsExpanded) _resChipsExpanded = false;
-                bool expand = openerLive && _resChipsExpanded;
-                // The hint reads "+4" only while the rail is shut - once it is open the four rows
-                // ARE the answer, and a hint pointing at visible content is noise.
-                if (_resHintLabel != null && _resHintLabel.gameObject.activeSelf == expand)
-                    _resHintLabel.gameObject.SetActive(!expand);
-                if (row.activeSelf != expand)
-                {
-                    if (expand)
-                    {
-                        var mount = _host.Mount(HudArea.ActionRail);
-                        if (mount != null && row.transform.parent != mount) row.transform.SetParent(mount, false);
-                    }
-                    row.SetActive(expand);
-                    // WO-440: the explore tap-window shows the full chips panel (not just the tab).
-                    SetResourcePanelOpen(expand);
-
-                    // ⭐ WO-1221 — THE HOLLOW LINE, MADE FALSIFIABLE (registry shape H5+H4).
-                    // What used to print here was
-                    //     "resource panel expanded (opener live=" + openerLive + ")"
-                    // and `openerLive` is the predicate that got us INTO this branch: on the expand
-                    // path it is True by construction, so the line printed the same cheerful token
-                    // whether the rail painted or, as it did for the whole of WO-1205's life, painted
-                    // NOTHING. There is no broken state that makes it read differently — the exact
-                    // definition of a hollow assertion. The intent is kept; the CLAIM now waits for a
-                    // MEASUREMENT (TickResourceExpandVerify) taken after layout settles.
-                    if (expand)
-                    {
-                        _resExpandVerifyFrames = ResExpandVerifyMaxFrames;
-                        FlowTrace.Step("HudKit",
-                            "resource panel expand REQUESTED (opener live=" + openerLive +
-                            ", toggle=ON, no timer - WO-1221 owner ruling) — NOT yet a claim " +
-                            "that anything painted; measuring for up to " +
-                            ResExpandVerifyMaxFrames + " frames.");
-                    }
-                    else
-                    {
-                        _resExpandVerifyFrames = 0;
-                        FlowTrace.Step("HudKit",
-                            "resource panel collapsed (opener live=" + openerLive + ", cause=" +
-                            (openerLive ? "player toggled it shut" : "opener left this posture") + ").");
-                    }
-                }
-            }
+            // WO-1205 — THE PANEL CAN NEVER OUTLIVE ITS OPENER. The expanded stack is a
+            // child of resourceChipsCollapsed, so occupancy hiding the opener hides the
+            // stack visually. Reset the toggle so returning to town does not silently
+            // re-open a rail the player never asked for again (build / modal / battle).
+            // ⛔ Do NOT SetActive a second `resourceChips` occupancy widget here — that
+            // widget is not in hud-areas.json, ApplyPosture kills it, and it is the
+            // empty-dock path that painted zero pixels on device.
+            bool openerLive = _widgets.TryGetValue("resourceChipsCollapsed", out var col) &&
+                              col != null && col.activeSelf;
+            if (!openerLive && _resChipsExpanded) SetResourcePanelOpen(false);
             TickResourceExpandVerify();
 
             // WO-778: Builders chip repaint — poll the Core static (the HudBuildingFocus

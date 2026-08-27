@@ -14,18 +14,16 @@
 // grace-default "forge" record — GameStateService.ResetToNewGame:839-847/864),
 // then walks the full WO-703 spawner census and asserts every non-allowlisted
 // structure visual / NPC source STANDS DOWN on that state:
-//   - LEVER 1 RECONCILIATION (owner 2026-07-24, WWCD — SUPERSEDES the WO-703
-//     "nothing else" for baked STOREFRONTS only): on a fresh hub the baked stores
-//     must PRE-STAND, VISIBLE + STAFFED (CoC), NOT be hidden. The old gate hid all
-//     8 stores on a blank save (catalog-row present, no record) → empty grass under
-//     floating vendor NPCs (the captured on-device screenshot). So section 2 now
-//     asserts the INVERSE: each baked storefront with NO replacement record STAYS
-//     VISIBLE (StanddownActiveForBaked == false), and a storefront that DOES gain a
-//     record STANDS DOWN (its live Building replaces it — no double). The tree/well/
-//     walls/gates + runtime-station standdown + Colosseum flag-gate are unchanged.
-//   - the 8 baked storefronts (StrategicPlacementMigration.BakedRows): each STAYS
-//     VISIBLE with no record (Lever-1), and stands down only once a record replaces
-//     it — StanddownActiveForBaked (HubStructureVisualInjector.TrySwap);
+//   - WO-834 (owner F8 seq 592, SUPERSEDES Lever-1 pre-stand for blank founding):
+//     a fresh save (marker true, empty everBuilt, empty BaseLayout) must STAND
+//     DOWN every baked storefront. Lever-1 "stores pre-stand" remains for Default
+//     Town / ever-built ids only. WO-1250: Weaponsmith (forge) and Armorer
+//     (armorer) are the two the owner saw standing on a new load — they are in
+//     BakedRows and MUST stand down here. If a bake host is absent from this
+//     scene, PartialSkip that row (never quiet green).
+//   - a storefront that DOES gain a record STILL stands down (placed wins — no
+//     double). The tree/well/walls/gates + runtime-station standdown + Colosseum
+//     flag-gate are unchanged.
 //   - the baked CastleBarracks hides via ff.barracks OFF;
 //   - the runtime stations (apothecary / jewelers-bench) skip spawn via
 //     StanddownActiveForStation (WO-703 supersedes the "never lost" carve-out);
@@ -53,6 +51,7 @@ using UnityEngine.SceneManagement;
 using DeNelle.Core;
 using DeNelle.Core.State;
 using DeNelle.Village;
+using DeNelle.Editor.Regression;
 
 namespace DeNelle.Editor
 {
@@ -91,6 +90,7 @@ namespace DeNelle.Editor
                 // the vista is the tree, the well and the walls (WO-971 removed the Sylas
                 // steward body that WO-702 used to add to that list).
                 state.BaseLayout = new List<PlacedStructureData>();
+                state.EverBuiltStructureIds = new List<string>();   // WO-1250: blank founding owns nothing
                 var svcGo = new GameObject("BlankStartCensus_GameStateService");
                 svcGo.SetActive(false);   // Awake must never run (no Load over the fixture)
                 created.Add(svcGo);
@@ -121,30 +121,41 @@ namespace DeNelle.Editor
                 }
                 log.AppendLine($"[fixture] catalog bootstrapped: {catalogCount} registry entrie(s)");
 
-                // ── 2. Baked storefronts (LEVER 1, owner 2026-07-24): each present bake must
-                //       PRE-STAND VISIBLE on a fresh (recordless) save, and must STAND DOWN once
-                //       a record replaces it. Two directions, both asserted below. ──
-                foreach (var (bakedName, itemId) in ReadBakedRows(failures))
+                // ── 2. Baked storefronts (WO-834 blank founding + WO-1250): each present
+                //       bake must STAND DOWN on a fresh (recordless, never-built) save, and
+                //       must ALSO stand down once a record replaces it. ──
+                var bakedRows = ReadBakedRows(failures);
+                if (bakedRows.Count == 0)
                 {
+                    log.AppendLine("  " + RegressionOutcome.PartialSkip(
+                        "[baked] census", "BakedRows unreadable — cannot pin Weaponsmith/Armorer standdown"));
+                }
+                bool sawForgeHost = false, sawArmorerHost = false;
+                foreach (var (bakedName, itemId) in bakedRows)
+                {
+                    if (bakedName == "Blacksmith_Weapons_Storefront") sawForgeHost = true;
+                    if (bakedName == "Forge_Armor_Storefront") sawArmorerHost = true;
                     var t = FindInScene(bakedName);
                     if (t == null)
                     {
-                        log.AppendLine($"[baked] {bakedName} -> not in scene (nothing to census)");
+                        log.AppendLine("  " + RegressionOutcome.PartialSkip(
+                            "[baked] " + bakedName,
+                            "not in this scene bake — cannot observe standdown (never quiet-green as 'stood down')"));
                         continue;
                     }
 
-                    // 2a. NO record on the fresh save => the store MUST stay visible (pre-stand).
+                    // 2a. NO record + empty everBuilt => the store MUST stand down (WO-834).
                     bool downNoRecord = StrategicPlacementMigration.StanddownActiveForBaked(bakedName, out string id);
-                    if (downNoRecord)
-                        failures.Add($"LEVER-1 VIOLATION: baked '{bakedName}' (itemId '{itemId}') STANDS DOWN on a fresh " +
-                                     "save with NO replacement record — it must PRE-STAND VISIBLE + STAFFED " +
-                                     "(HubStructureVisualInjector.TrySwap hides it → empty grass under a floating vendor).");
+                    if (!downNoRecord)
+                        failures.Add($"WO-834/WO-1250: baked '{bakedName}' (itemId '{itemId}') STAYS UP on a fresh " +
+                                     "save with NO replacement record and empty everBuilt — blank founding must hide it. " +
+                                     "This is the owner's 'weaponsmith and armorer show as built on new load' if the " +
+                                     "host is Blacksmith_Weapons_Storefront or Forge_Armor_Storefront.");
                     else
-                        log.AppendLine($"[baked] {bakedName} -> STAYS VISIBLE on fresh save (no record; Lever-1 pre-stand; itemId '{id}')");
+                        log.AppendLine($"[baked] {bakedName} -> STANDS DOWN on fresh save (WO-834 blank-town; itemId '{id}')");
 
-                    // 2b. Add a record for this itemId => the store MUST now stand down (the live
-                    //     Building/replayed record replaces it — player-built replacement hides the
-                    //     baked original, no double). Restore the empty layout after the probe.
+                    // 2b. Add a record for this itemId => the store MUST still stand down (placed
+                    //     wins — the live Building replaces the bake, no double).
                     if (!string.IsNullOrEmpty(itemId))
                     {
                         state.BaseLayout.Add(new PlacedStructureData(itemId, 0, 0, 0, level: 1,
@@ -159,6 +170,10 @@ namespace DeNelle.Editor
                             log.AppendLine($"[baked] {bakedName} -> STANDS DOWN when itemId '{itemId}' has a record (replacement replaces bake — no double)");
                     }
                 }
+                if (bakedRows.Count > 0 && !sawForgeHost)
+                    failures.Add("WO-1250: BakedRows dropped 'Blacksmith_Weapons_Storefront' — Weaponsmith visual is uncovered");
+                if (bakedRows.Count > 0 && !sawArmorerHost)
+                    failures.Add("WO-1250: BakedRows dropped 'Forge_Armor_Storefront' — Armorer visual is uncovered");
 
                 // ── 3. Baked CastleBarracks: hidden while ff.barracks is OFF ──
                 if (FindInScene("CastleBarracks") != null)

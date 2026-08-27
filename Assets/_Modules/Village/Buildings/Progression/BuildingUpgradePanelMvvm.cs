@@ -1300,7 +1300,7 @@ namespace DeNelle.Village.Buildings.Progression
             // -- RIGHT: the OFFER. Buying a slot raises the DEPTH limit as well as the crew
             //    count (QueueDepthLimit = authored + bought), so it genuinely unblocks THIS
             //    refusal — it is not an upsell aimed at the wrong axis.
-            string offer = string.Format(Copy(CopyKeyQueueSlotOffer, "Buy a builder slot - {0} Crystals"),
+            string offer = string.Format(Copy(CopyKeyQueueSlotOffer, "Buy a queue slot - {0} Crystals"),
                                          ElarionUi.CompactNumber(price));
             var offerRoot = BuildGoldButton(card, offer, true, deadX1 + 0.015f, x1, 0f, 1f,
                                             OnBuyQueueSlotTapped);

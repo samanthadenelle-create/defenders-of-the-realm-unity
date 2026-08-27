@@ -1,6 +1,6 @@
 # WORK ORDER 1192 - Brom's Rumor Board: full layout redesign
 
-**Status:** READY TO IMPLEMENT — owner felt-test 2026-08-27 Needs Work: "A previous button would be nice". Bounced from Fixed.
+**Status:** FIXED 2026-08-27 — implemented; awaiting owner felt-verify to CLOSE.
 **Minted:** 2026-08-25 (CLI lead, main line; banner bumped 1192 -> 1193 in the same edit)
 **Silo:** UI / panels
 **ROUTED TO: the UI seat.** Owner directive, 2026-08-25: *"That needs handed back to UI to redo

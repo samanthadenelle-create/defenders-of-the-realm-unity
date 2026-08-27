@@ -96,6 +96,8 @@ namespace DeNelle.Editor.Regression
                      () => Case8_HeroHeightMeasuresBodyOnly(failures));
                 Case(failures, "align-long-axis-on-y",
                      () => Case9_AlignSeatsLongAxisOnY(failures));
+                Case(failures, "staff-loadout-shows-renderers",
+                     () => Case10_StaffLoadoutShowsRenderers(failures));
             }
             catch (Exception ex)
             {
@@ -969,6 +971,122 @@ namespace DeNelle.Editor.Regression
         {
             if (!src.Contains(token))
                 failures.Add("[tripwire-wiring] token '" + token + "' absent from " + EquipSrc + " - " + why + ".");
+        }
+
+        // =====================================================================
+        //  Case 10 - WO-1226 bounce: A STAFF IN THE LOADOUT MUST SHOW RENDERERS
+        // =====================================================================
+        //
+        // Owner felt-test 2026-08-27 Needs Work, verbatim: "With the Thrain character, says i
+        // have staff from load (shows in inventory) but nothing is displayed".
+        //
+        // The previous oracle ([drawn-seat-verticality]) asserted seated tiltFromVertical. The
+        // broken build already prints tiltFromVertical=0deg, so that number cannot catch an
+        // INVISIBLE staff. This case asks the player's question: after the shipped visibility
+        // pass, does the staff have >=1 mesh renderer that is enabled AND activeInHierarchy?
+        //
+        // WHAT REDDENS THIS CASE (WO-1138 - every assertion here can fail):
+        //   (a) staff_A no longer loads from Resources - the mage's held mesh is gone.
+        //   (b) CountActiveMeshRenderers returns >0 on a tombstone whose renderers are all
+        //       disabled/inactive - the predicate went blind (it used r.enabled without
+        //       activeInHierarchy, which is how VerifyWeaponRendersNow passed an invisible prop).
+        //   (c) EnsureWeaponRenderersVisible does not restore the tombstone to >0 - the seat
+        //       visibility pass that the bounce required is gone or no-ops.
+        //   (d) the live attach path no longer calls EnsureWeaponRenderersVisible, or
+        //       VerifyWeaponRendersNow no longer requires activeInHierarchy - source lint, because
+        //       reverting the call site while leaving the helper is how this would come back green.
+        //
+        // ⛔ NOT A TILT TEST. Do not replace this with another derived angle. The bounce is
+        // DISPLAY MISSING.
+        private static void Case10_StaffLoadoutShowsRenderers(List<string> failures)
+        {
+            const string StaffPath = "Heroes/Props/Weapons/staff_A";
+            GameObject prefab = Resources.Load<GameObject>(StaffPath);
+            if (prefab == null)
+            {
+                failures.Add("[staff-loadout-shows-renderers] Resources.Load('" + StaffPath +
+                             "') returned null - Thrain's held staff mesh is gone from Resources, so " +
+                             "EquipmentController falls back to a cube MagentaGuard can hide. The " +
+                             "inventory can still name tripo_staff_a / mage_oak.");
+                return;
+            }
+
+            GameObject hand = null;
+            GameObject live = null;
+            GameObject tomb = null;
+            try
+            {
+                hand = new GameObject("CC_Base_R_Hand");
+
+                // LIVE PATH - instantiate the shipped staff the same way AttachLoadedProp does
+                // (Resources.Load + Instantiate), then run the shipped visibility pass.
+                live = UnityEngine.Object.Instantiate(prefab);
+                live.name = "staff_A";
+                live.transform.SetParent(hand.transform, false);
+                int liveShown = EquipmentController.EnsureWeaponRenderersVisible(live, hand.transform, "tripo_staff_a");
+                if (liveShown <= 0)
+                    failures.Add("[staff-loadout-shows-renderers] THE SHIPPED staff_A HAS ZERO ACTIVE " +
+                                 "MESH RENDERERS after EnsureWeaponRenderersVisible (count=" + liveShown +
+                                 "). This is the owner's Thrain bounce: inventory lists the staff, the " +
+                                 "world/preview hand is empty. CountActiveMeshRenderers requires " +
+                                 "enabled + activeInHierarchy + a non-null mesh.");
+
+                // TOMBSTONE - the known-invisible state (inactive GO + disabled renderer). The
+                // predicate MUST read 0 here, otherwise it is the old VerifyWeaponRendersNow
+                // (`r.enabled` only) and would have gone green on the bounce.
+                tomb = UnityEngine.Object.Instantiate(prefab);
+                tomb.name = "staff_A_tombstone";
+                tomb.transform.SetParent(hand.transform, false);
+                foreach (var r in tomb.GetComponentsInChildren<Renderer>(true))
+                {
+                    if (r == null) continue;
+                    r.enabled = false;
+                    r.gameObject.SetActive(false);
+                }
+                int tombBefore = EquipmentController.CountActiveMeshRenderers(tomb);
+                if (tombBefore != 0)
+                    failures.Add("[staff-loadout-shows-renderers] CountActiveMeshRenderers returned " +
+                                 tombBefore + " on a tombstone whose mesh renderers are disabled AND " +
+                                 "whose GameObjects are inactive. The predicate is blind the same way " +
+                                 "VerifyWeaponRendersNow was (r.enabled is true on an inactive GO). " +
+                                 "A hero with a staff in loadout and zero visible renderers would pass.");
+
+                int tombAfter = EquipmentController.EnsureWeaponRenderersVisible(tomb, hand.transform, "mage_oak");
+                if (tombAfter <= 0)
+                    failures.Add("[staff-loadout-shows-renderers] EnsureWeaponRenderersVisible did not " +
+                                 "restore the tombstone (activeMeshRenderers=" + tombAfter +
+                                 "). The seat visibility pass is the bounce fix; if it no-ops, Thrain " +
+                                 "again lists a staff and shows an empty hand.");
+            }
+            finally
+            {
+                if (live != null) UnityEngine.Object.DestroyImmediate(live);
+                if (tomb != null) UnityEngine.Object.DestroyImmediate(tomb);
+                if (hand != null) UnityEngine.Object.DestroyImmediate(hand);
+            }
+
+            // Source lint: the live attach path must call the helper, and verify must require
+            // activeInHierarchy. A helper that is never reached is how the last tilt oracle
+            // asserted a rotation the game never applied.
+            if (!File.Exists(EquipSrc))
+            {
+                failures.Add("[staff-loadout-shows-renderers] source not found: " + EquipSrc);
+                return;
+            }
+            string src = File.ReadAllText(EquipSrc);
+            if (!src.Contains("EnsureWeaponRenderersVisible(prop, hand, weaponId)"))
+                failures.Add("[staff-loadout-shows-renderers] AttachLoadedProp no longer calls " +
+                             "EnsureWeaponRenderersVisible(prop, hand, weaponId) BEFORE seating - " +
+                             "KayKit staff_A would again normalize off empty bounds and stay 2cm.");
+            if (!src.Contains("EnsureWeaponRenderersVisible(gripRoot, shownOn, weaponId)"))
+                failures.Add("[staff-loadout-shows-renderers] the post-ApplyHoldPose SHOW pass " +
+                             "is gone from AttachLoadedProp - drawn vs sheathed reparent would " +
+                             "drop the layer match (preview camera) and MagentaGuard could hide " +
+                             "a fallback cube after verify.");
+            if (!src.Contains("if (!r.gameObject.activeInHierarchy)"))
+                failures.Add("[staff-loadout-shows-renderers] VerifyWeaponRendersNow no longer " +
+                             "skips inactive GameObjects - r.enabled is true on a hidden GO, so " +
+                             "the verify would again pass an invisible staff.");
         }
     }
 }

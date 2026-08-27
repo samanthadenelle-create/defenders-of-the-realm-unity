@@ -1,6 +1,6 @@
 # WORK ORDER 1252 - "All builders busy" tells the player they are blocked, not what to do about it
 
-**Status:** READY TO IMPLEMENT
+**Status:** FIXED 2026-08-27 — implemented; awaiting owner felt-verify to CLOSE.
 **Silo:** UI / HUD (build placement) + Manage/Queues
 **Severity:** P2. Hit constantly in normal play - two free builder slots means saturation is the
 common case, not the edge case.

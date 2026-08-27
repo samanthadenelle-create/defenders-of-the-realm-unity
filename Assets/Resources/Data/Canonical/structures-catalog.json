@@ -649,10 +649,7 @@
      "noOverlap": true,
      "checkAffordable": true
     },
-    "singleton": true,
-    "bakedTwins": [
-     "Blacksmith_Weapons_Storefront"
-    ]
+    "singleton": true
    },
    "orientation": {
     "corrected": true,
@@ -668,7 +665,7 @@
      0
     ],
     "scale": 1,
-    "note": "owner 2026-08-19 upright X=90 flagged fixed — applied PRE-fit via StructureFactory.OptsFor LocalRotation (GROK_BRIEF). Was [0,0,0] after 2026-08-18 axis-bake pass that discarded the imported root rotation."
+    "note": "owner 2026-08-19 upright X=90 flagged fixed — applied PRE-fit via StructureFactory.OptsFor LocalRotation (GROK_BRIEF). Was [0,0,0] after 2026-08-18 axis-bake pass that discarded the imported root rotation. WO-1250: bakedTwins Blacksmith_Weapons_Storefront MOVED to row 'forge' (Weaponsmith) — this row is the Crafting Station and has no bake."
    }
   },
   {
@@ -819,7 +816,7 @@
     "npcModel": "CraftPixPeople/NPC_CityDweller_1",
     "singleton": true,
     "bakedTwins": [
-     "Forge_Armor_Storefront"
+     "Blacksmith_Weapons_Storefront"
     ],
     "buildCost": 520,
     "cost": {
@@ -866,6 +863,9 @@
     "behaviorId": "GameplayBuilding",
     "npcModel": "CraftPixPeople/NPC_CityDweller_2",
     "singleton": true,
+    "bakedTwins": [
+     "Forge_Armor_Storefront"
+    ],
     "buildCost": 520,
     "cost": {
      "wood": 240,

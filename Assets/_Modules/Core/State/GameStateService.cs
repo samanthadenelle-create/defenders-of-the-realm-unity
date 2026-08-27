@@ -325,9 +325,9 @@ namespace DeNelle.Core.State
 
             if (!Provider.Exists(SaveSchema.PlayerPrefsKey))
             {
-                FlowTrace.Step("Save", "no save key present — brand-new game, fresh SO defaults stand.");
+                SeedBlankFoundingOnMissingSave("no save key present");
                 StateReplaced.Invoke();
-                return false; // brand-new game — fresh SO defaults stand.
+                return false; // brand-new game — blank founding, not a legacy pre-v30 town.
             }
 
             // §12: delegate the raw read to the swappable provider, Guarded so an IO
@@ -338,7 +338,8 @@ namespace DeNelle.Core.State
             FlowTrace.Step("Save", $"read save via {Provider.GetType().Name} (len={(stored?.Length ?? 0)}).");
             if (string.IsNullOrEmpty(stored))
             {
-                FlowTrace.Warn("Save", "save key present but value is EMPTY — keeping fresh state.");
+                FlowTrace.Warn("Save", "save key present but value is EMPTY — seeding blank founding (WO-1250).");
+                SeedBlankFoundingOnMissingSave("save key present but value is EMPTY");
                 StateReplaced.Invoke();
                 return false;
             }
@@ -420,6 +421,28 @@ namespace DeNelle.Core.State
             }
             StateReplaced.Invoke();
             return true;
+        }
+
+        /// <summary>
+        /// WO-1250 — a missing/empty save is a brand-new game, not a legacy pre-v30
+        /// town. The ScriptableObject default <c>StrategicPlacementMigrated = false</c>
+        /// is the UNMIGRATED shape (bake owns the town; the WO-673 writer then grants
+        /// every BakedRows id, which after the 2026-08-19 upright bake is the
+        /// Weaponsmith and Armorer visuals). ResetToNewGame already sets the marker
+        /// true; this path is the one a first APK launch takes when Title "Start New"
+        /// has not yet run (or the hub is reached from a boot that skipped it).
+        /// Does NOT fire <see cref="NewGameStarted"/> — that event is ResetToNewGame's.
+        /// </summary>
+        private void SeedBlankFoundingOnMissingSave(string why)
+        {
+            if (_state == null) _state = ScriptableObject.CreateInstance<GameState>();
+            _state.StrategicPlacementMigrated = true;
+            _state.EverBuiltStructureIds = new List<string>();
+            _state.BaseLayout = new List<PlacedStructureData>();
+            FlowTrace.Step("Save",
+                $"brand-new game ({why}) — WO-1250 blank founding seeded: " +
+                "StrategicPlacementMigrated=true everBuilt=[] BaseLayout=[] " +
+                "(Weaponsmith/Armorer baked twins stay down).");
         }
 
         // =====================================================================

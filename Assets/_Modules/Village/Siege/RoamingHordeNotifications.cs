@@ -8,6 +8,7 @@
 
 using System;
 using System.Collections;
+using DeNelle.Core.Catalog;
 using DeNelle.Core.Diagnostics;
 using DeNelle.Core.State;
 #if UNITY_EDITOR || UNITY_ANDROID || UNITY_IOS
@@ -23,8 +24,17 @@ namespace DeNelle.Village
         private const int NotificationId = 1179001;
         private const string ChannelId = "lookout_reports";
         private const string PermissionAskedKey = "eoa.lookout.notifications.permission-asked.v1";
-        private const string ArcherName = "archer";
-        private const string WatchtowerName = "watchtower";
+
+        /// <summary>
+        /// Live lookout catalog id — the wooden watchtower / archer tower. Display
+        /// names are not keys (WO-1184). A catalog row that authors
+        /// <see cref="StructureRole.Lookout"/> also counts.
+        /// </summary>
+        public const string LookoutCatalogId = "tower_ground_archer";
+
+        private static int s_cachedLevel;
+        private static float s_cachedAt = -999f;
+        private const float CacheSeconds = 1f;
 
 #if UNITY_EDITOR || UNITY_ANDROID || UNITY_IOS
         private NotificationsPermissionRequest _permission;
@@ -44,7 +54,7 @@ namespace DeNelle.Village
             var args = NotificationCenterArgs.Default;
             args.AndroidChannelId = ChannelId;
             args.AndroidChannelName = "Lookout reports";
-            args.AndroidChannelDescription = "Warnings about hordes approaching your town.";
+            args.AndroidChannelDescription = "Lookout notices about hordes approaching your town.";
             args.PresentationOptions = NotificationPresentation.Alert |
                                        NotificationPresentation.Sound |
                                        NotificationPresentation.Vibrate;
@@ -153,18 +163,60 @@ namespace DeNelle.Village
             return hours == 1 ? "about an hour" : $"about {hours} hours";
         }
 
+        /// <summary>
+        /// True when <paramref name="catalogId"/> is a lookout: the stable
+        /// <see cref="LookoutCatalogId"/>, or a catalog row whose role is
+        /// <see cref="StructureRole.Lookout"/>. Never matches a display-name
+        /// substring.
+        /// </summary>
+        public static bool IsLookoutCatalogId(string catalogId)
+        {
+            if (string.IsNullOrEmpty(catalogId)) return false;
+            if (string.Equals(catalogId, LookoutCatalogId, StringComparison.OrdinalIgnoreCase))
+                return true;
+            string role = StructureRoles.RoleOf(catalogId);
+            return !string.IsNullOrEmpty(role) &&
+                   string.Equals(role, StructureRole.Lookout, StringComparison.OrdinalIgnoreCase);
+        }
+
         public static int BestLookoutLevel()
         {
+            if (Time.unscaledTime - s_cachedAt < CacheSeconds) return s_cachedLevel;
+            s_cachedLevel = ComputeBestLookoutLevel();
+            s_cachedAt = Time.unscaledTime;
+            return s_cachedLevel;
+        }
+
+        private static int ComputeBestLookoutLevel()
+        {
             int best = 0;
-            Tower[] towers = FindObjectsByType<Tower>();
-            foreach (Tower tower in towers)
+
+            // Persisted player layout — the pause/phone path still has this when
+            // the player backgrounds the app. Enemy garrison turrets are not in it.
+            var layout = GameStateService.Instance?.State?.BaseLayout;
+            if (layout != null)
             {
-                string name = tower?.Data?.towerName;
-                if (string.IsNullOrEmpty(name)) continue;
-                if (name.IndexOf(ArcherName, StringComparison.OrdinalIgnoreCase) < 0 &&
-                    name.IndexOf(WatchtowerName, StringComparison.OrdinalIgnoreCase) < 0) continue;
-                best = Mathf.Max(best, tower.CurrentLevel);
+                for (int i = 0; i < layout.Count; i++)
+                {
+                    var rec = layout[i];
+                    if (!IsLookoutCatalogId(rec.itemId)) continue;
+                    best = Mathf.Max(best, rec.level);
+                }
             }
+
+            // Live placed markers cover an upgrade this session that is not yet
+            // committed to BaseLayout.
+            PlacedStructure[] placed = FindObjectsByType<PlacedStructure>();
+            if (placed != null)
+            {
+                for (int i = 0; i < placed.Length; i++)
+                {
+                    PlacedStructure p = placed[i];
+                    if (p == null || !IsLookoutCatalogId(p.itemId)) continue;
+                    best = Mathf.Max(best, p.level);
+                }
+            }
+
             return best;
         }
     }

@@ -71,11 +71,16 @@ namespace DeNelle.Village
         // ── THE MIGRATION ID TABLE (census: CastleHubBuilder.cs:288-301 + the
         //    HubStructureVisualInjector Swaps rows). bakedName = the scene object
         //    the bake/injector owns today; itemId = the structures-catalog row the
-        //    BaseLayout record replays through (trade convention, catalog-verified:
-        //    'workshop' displayName "Forge" = the WEAPONS Blacksmith; 'forge'
-        //    displayName "Armorer" = the ARMOR storefront). Jeweler_Gems_Storefront
-        //    was removed from the current bake but legacy scenes may still carry
-        //    it — the row is tolerated-missing-in-scene like every other row. ─────
+        //    BaseLayout record replays through.
+        //    WO-1250 (2026-08-27): the WO-1161 identity straightening left this
+        //    table one rename behind. The bake skins:
+        //      Blacksmith_Weapons_Storefront ← Structures/Forge  = Weaponsmith = id "forge"
+        //      Forge_Armor_Storefront        ← Structures/armorer = Armorer     = id "armorer"
+        //    The retired mapping (workshop→Blacksmith / forge→Forge_Armor) is what
+        //    handed a new player those two buildings: Default-Town template grant of
+        //    "workshop"+"forge" surfaced the Weaponsmith and Armorer visuals.
+        //    Jeweler_Gems_Storefront was removed from the current bake but legacy
+        //    scenes may still carry it — tolerated-missing-in-scene like every other row. ─────
         private struct BakedRow
         {
             public string bakedName;
@@ -84,11 +89,11 @@ namespace DeNelle.Village
 
         private static readonly BakedRow[] BakedRows =
         {
-            new BakedRow { bakedName = "Blacksmith_Weapons_Storefront", itemId = "workshop" },
+            new BakedRow { bakedName = "Blacksmith_Weapons_Storefront", itemId = "forge" },
             new BakedRow { bakedName = "Lumbermill_Wood_Storefront",    itemId = "collector_lumbermill" },
             new BakedRow { bakedName = "Windmill_Food_Storefront",      itemId = "collector_farm" },
             new BakedRow { bakedName = "EchoHollow_Pets_RoamingArea",   itemId = "pet-house" },
-            new BakedRow { bakedName = "Forge_Armor_Storefront",        itemId = "forge" },
+            new BakedRow { bakedName = "Forge_Armor_Storefront",        itemId = "armorer" },
             new BakedRow { bakedName = "ArcaneTower_MagicUpgrades",     itemId = "arcane-tower" },
             new BakedRow { bakedName = "Marketplace_Monetization",      itemId = "market" },
             new BakedRow { bakedName = "Jeweler_Gems_Storefront",       itemId = "jeweler" },

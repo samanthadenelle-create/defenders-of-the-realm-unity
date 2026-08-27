@@ -254,6 +254,10 @@ namespace DeNelle.Wallet
         private string _focusSku;
         private string _pendingShortfallLabel;
         private int _pendingShortfallMissing;
+        /// <summary>WO-1253 — Manage "Buy builder" sets this before opening the store so the
+        /// spotlight lands on the permanent-builder SKU even when the host is spawned in the
+        /// same call (OnEnable -> Render runs before an instance method could).</summary>
+        private static string _pendingFocusSku;
 
         // Selection marks, so a focus change repaints two cards instead of the whole shelf.
         // ⛔ ONE HANDLE PER CARD, HANDED BACK BY THE ONE TEMPLATE. The two parallel dictionaries
@@ -555,6 +559,17 @@ namespace DeNelle.Wallet
             _pendingShortfallLabel = resourceLabel;
             _pendingShortfallMissing = missing;
             FlowTrace.Step("Store", $"FocusShortfall requested: {missing} {resourceLabel}.");
+        }
+
+        /// <summary>
+        /// WO-1253 — open the store pre-focused on a named SKU (the permanent-builder Manage
+        /// route). Static because the host may not exist yet; <see cref="ResolveFocusSku"/>
+        /// consumes it on the next Render.
+        /// </summary>
+        public static void RequestFocusSku(string sku)
+        {
+            _pendingFocusSku = sku;
+            FlowTrace.Step("Store", "RequestFocusSku '" + (sku ?? "<null>") + "'.");
         }
 
         // =====================================================================
@@ -981,25 +996,11 @@ namespace DeNelle.Wallet
             var list = new List<PackDef>();
             foreach (var pack in PackCatalog.Packs)
             {
-                if (pack == null || !pack.StoreVisible) continue;
-
-                // ── Impulse SKUs on the shelf: THREE curated, the rest contextual ──────────────
-                // OWNER RULING 2026-08-21 ("Middle — one impulse tier per resource"). The twelve
-                // single-resource impulse SKUs split into two populations:
-                //   * shelfCurated == true  -> a browsable shelf row. Exactly THREE: the MEDIUM
-                //     rung of wood, iron and food.
-                //   * shelfCurated == false -> contextual only, reachable ONLY through
-                //     ShortfallPackOffer, exactly as before. Nine SKUs, unchanged.
-                //
-                // ⚠ THIS NARROWS THE WO-947 §12c.4 GUARDRAIL; IT DOES NOT REPEAL IT. What that
-                // ruling refused was a WALL of twelve resource-for-cash listings. Three curated
-                // tiers is not that wall, and the wall is still structurally prevented: the other
-                // nine cannot reach this loop. Re-tagging more rows shelfCurated walks back toward
-                // the thing WO-947 refused, so that is an OWNER call, not a code call.
-                //
-                // The decision lives in packs.json (`shelfCurated`), not in a SKU list here. Do not
-                // reintroduce a hardcoded list in this file.
-                if (pack.Impulse && !pack.ShelfCurated) continue;
+                // Shelf membership lives on PackCatalog.IsOnBrowsableShelf (storeVisible + the
+                // WO-947 impulse/shelfCurated split). Do not re-derive it here — WO-1246's
+                // grant-path oracle asks the same helper, so a SKU cannot be visible here and
+                // invisible to the oracle (or the reverse).
+                if (!PackCatalog.IsOnBrowsableShelf(pack)) continue;
 
                 if (PackCatalog.BandOf(pack) != band) continue;
                 list.Add(pack);
@@ -1392,6 +1393,18 @@ namespace DeNelle.Wallet
         /// </summary>
         private string ResolveFocusSku()
         {
+            if (!string.IsNullOrEmpty(_pendingFocusSku))
+            {
+                string requested = _pendingFocusSku;
+                _pendingFocusSku = null;
+                if (PackCatalog.Find(requested) != null)
+                {
+                    FlowTrace.Step("Store", "spotlight opens on requested SKU '" + requested + "'.");
+                    return requested;
+                }
+                FlowTrace.Warn("Store", "RequestFocusSku '" + requested + "' is not in the catalogue — falling through.");
+            }
+
             if (!string.IsNullOrEmpty(_pendingShortfallLabel) && _pendingShortfallMissing > 0)
             {
                 // The ONE new caller of the resolver. It returns a PackDef and nothing else.
@@ -2098,7 +2111,9 @@ namespace DeNelle.Wallet
                         if (item == null || item.Count <= 0 || string.IsNullOrEmpty(item.Kind)) continue;
                         if (!PackCatalog.IsRedeemableConvenience(item.Kind)) continue;
                         if (sb.Length > 0) sb.Append(", ");
-                        if (item.Kind.IndexOf("lantern", StringComparison.OrdinalIgnoreCase) >= 0)
+                        if (PackCatalog.IsPermanentBuilderKind(item.Kind))
+                            sb.Append("Permanent builder (+1 crew)");
+                        else if (item.Kind.IndexOf("lantern", StringComparison.OrdinalIgnoreCase) >= 0)
                             sb.Append(item.Kind.Contains("3x") ? "3x" : "2x")
                               .Append(" lantern x").Append(item.Count).Append(" runs");
                         else

@@ -4,7 +4,7 @@
 // Assembly: DeNelle.Village   Namespace: DeNelle.Village.Hero
 //
 // READ-ONLY consumer of RumorBoardVM (strict MVVM): the View renders VM
-// projections and routes taps to Accept / NextPage; it never touches
+// projections and routes taps to Accept / NextPage / PrevPage; it never touches
 // QuestService / QuestCatalog / DailyQuestService.
 //
 // =============================================================================
@@ -27,8 +27,8 @@
 //  THE v3 CONCEPT (owner: "i like it" + "go"): THREE SELF-CONTAINED RUMOR
 //  POSTERS. No tabs, no detail pane, no In-Progress, no selection step. Each
 //  poster carries its own type tag, title, one-line hook, rewards and its OWN
-//  Accept. One Next > up top pages by three and WRAPS. Dense copy lives behind a
-//  "Read the letter >" full-card overlay.
+//  Accept. Next > and Previous up top page by three and WRAP. Dense copy lives
+//  behind a "Read the letter >" full-card overlay.
 //
 //  [STOP] THERE IS NO ALLOW-LIST ENTRY FOR THIS PANEL, AND THERE MUST NEVER BE ONE
 //  (owner ruling 2026-08-24: no waivers; LayoutOracle's TouchBaseline allow-list
@@ -97,10 +97,27 @@ namespace DeNelle.Village.Hero
         public const float TitleYMin = 0.860f;
         public const float TitleYMax = 0.935f;
 
-        /// <summary>Top of the head row (Next / Close), as a screen fraction.</summary>
+        /// <summary>Top of the head row (Previous / Next / Close), as a screen fraction.</summary>
         public const float HeadTopY = 0.935f;
         public const float NextXMin = 0.640f;
         public const float NextXMax = 0.755f;
+
+        /// <summary>The Previous face. Full word, never "Prev" / "Pr..." - FitSingleLine
+        /// ellipsises past the floor, which is exactly the truncation the owner bounce
+        /// (2026-08-27) must not ship.</summary>
+        public const string PreviousLabel = "Previous";
+        /// <summary>The Next face. Kept as a named constant so both paging labels live
+        /// in one place and the layout oracle can lint them without a string hunt.</summary>
+        public const string NextLabel = "Next >";
+        /// <summary>Pixel gap between Previous and Next (and between the title and
+        /// Previous). Above the overlap oracle's 6 px clearance.</summary>
+        public const float HeadGapPx = 16f;
+        /// <summary>BuildObsidianButton insets its label to x 0.04..0.96 of the host.
+        /// The host width is the MEASURED label divided by this, never a character guess.</summary>
+        public const float PageButtonLabelInset = 0.92f;
+        /// <summary>MeasureLineWidthPx sums regular-weight advances; the button is bold.
+        /// 10% slack so the bold face cannot push a glyph into ellipsis.</summary>
+        public const float PageButtonBoldSlack = 1.10f;
         /// <summary>Horizontal CENTRE of the shared Close box. The Close keeps its canonical
         /// <see cref="ElarionUiKit.CanonCtaWidth"/> x <see cref="ElarionUiKit.CanonCtaHeight"/>
         /// pixel size (owner F8 x3: every Close is the same box on every screen), so only its
@@ -123,9 +140,9 @@ namespace DeNelle.Village.Hero
         // =====================================================================
 
         /// <summary>Head row band height. At/above the touch floor with margin, and FIXED so
-        /// Next and Close are tappable at every aspect (the mockup's 0.823-0.917 band resolves
-        /// to 91 ref px at 2670x1200 - 21 px UNDER the floor - which is why the head row is a
-        /// pixel band here and not the table's fraction).</summary>
+        /// Previous, Next and Close are tappable at every aspect (the mockup's 0.823-0.917 band
+        /// resolves to 91 ref px at 2670x1200 - 21 px UNDER the floor - which is why the head
+        /// row is a pixel band here and not the table's fraction).</summary>
         public const float HeadBandPx = 120f;
 
         /// <summary>Overhanging TYPE TAG plate height.</summary>
@@ -265,8 +282,9 @@ namespace DeNelle.Village.Hero
             }
 
             BuildSwipeSurface();
-            BuildTitle();
+            BuildPreviousButton();
             BuildNextButton();
+            BuildTitle();
             BuildStatusBand();
 
             var hostGo = new GameObject("PosterRow", typeof(RectTransform));
@@ -281,7 +299,7 @@ namespace DeNelle.Village.Hero
 
             if (!PanelManager.NotifyOpened(_handle)) return;
 
-            Debug.Log("[RumorBoardPanel] Opened (WO-1192 v3: three posters, paged by three, wrapping).");
+            Debug.Log("[RumorBoardPanel] Opened (WO-1192 v3: three posters, Previous/Next wrap).");
         }
 
         public void Close()
@@ -368,20 +386,65 @@ namespace DeNelle.Village.Hero
             _trackingSwipe = false;
             float dx = e.position.x - _swipeStart.x;
             if (Mathf.Abs(dx) < SwipeThresholdPx) return;
-            // One direction, one page, wrapping - the same trip Next > makes. A "previous"
-            // page would need a second control the owner explicitly did not want, and a wrap
-            // reaches every page anyway.
-            NextPage();
+            // Same gesture family as hero-select: swipe left advances, swipe right goes
+            // back. Both wrap. Owner felt-test 2026-08-27 asked for Previous; the swipe
+            // must make the same trip the new face does, or the board has two paging
+            // idioms.
+            if (dx < 0f) NextPage();
+            else PrevPage();
+        }
+
+        /// <summary>Host width for a head-row paging button, in reference px. MEASURED
+        /// from the live font's glyph advances at FontBody, then divided by the kit's
+        /// label inset so FitSingleLine never has to ellipsis ("Pr..."). Floored at
+        /// MinTouchPx. Public so RumorBoardLayoutRegression pins the same number.</summary>
+        public static float PageButtonWidthPx(string label)
+        {
+            if (string.IsNullOrEmpty(label)) return ElarionUiKit.MinTouchPx;
+            float measured = ElarionUiKit.MeasureLineWidthPx(
+                ElarionUiKit.FontRole.Body, label, ElarionUi.FontBody, out _);
+            if (measured < 0f)
+                measured = label.Length * ElarionUi.FontBody * 0.70f;
+            float host = (measured * PageButtonBoldSlack) / PageButtonLabelInset;
+            return Mathf.Max(ElarionUiKit.MinTouchPx, host);
         }
 
         private void BuildTitle()
         {
+            // Right edge is Next's left, then inset by Previous's measured host plus two
+            // head gaps, so the title never paints through Previous at any aspect (the
+            // mockup TitleXMax of 0.600 overlaps a measured Previous at 1920x1080).
+            float titleRightInset = PageButtonWidthPx(PreviousLabel) + 2f * HeadGapPx;
             var t = ElarionUiKit.Label(_content, "Brom's Rumor Board",
                 PanelFrac(TitleYMin), PanelFrac(TitleYMax),
                 ElarionUi.Gilt, ElarionUi.FontTitle, TMPro.TextAlignmentOptions.Left,
-                PanelFrac(TitleXMin), PanelFrac(TitleXMax), bold: true);
+                PanelFrac(TitleXMin), PanelFrac(NextXMin), bold: true);
             t.gameObject.name = "BoardTitle";
+            var titleRt = t.rectTransform;
+            titleRt.offsetMax = new Vector2(-titleRightInset, titleRt.offsetMax.y);
             ElarionUiKit.FitSingleLine(t, ElarionUi.FontFloorMobile, ElarionUi.FontTitle);
+        }
+
+        /// <summary>Previous in a FIXED-PIXEL host sized from the MEASURED label, hung off
+        /// Next's left edge. Steps one page of three BACKWARD and WRAPS (the pair of Next;
+        /// owner felt-test 2026-08-27: "A previous button would be nice").</summary>
+        private void BuildPreviousButton()
+        {
+            float width = PageButtonWidthPx(PreviousLabel);
+            var host = new GameObject("PreviousHost", typeof(RectTransform));
+            host.transform.SetParent(_content, false);
+            var rt = host.GetComponent<RectTransform>();
+            rt.anchorMin = new Vector2(PanelFrac(NextXMin), PanelFrac(HeadTopY));
+            rt.anchorMax = new Vector2(PanelFrac(NextXMin), PanelFrac(HeadTopY));
+            rt.pivot = new Vector2(1f, 1f);
+            rt.offsetMin = Vector2.zero;
+            rt.offsetMax = Vector2.zero;
+            rt.sizeDelta = new Vector2(width, HeadBandPx);
+            rt.anchoredPosition = new Vector2(-HeadGapPx, 0f);
+
+            ElarionUiKit.BuildObsidianButton(host.transform, PreviousLabel,
+                ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Yellow,
+                Vector2.zero, Vector2.one, PrevPage);
         }
 
         /// <summary>Next &gt; in a FIXED-PIXEL head band. Advances one page of three and WRAPS
@@ -399,7 +462,7 @@ namespace DeNelle.Village.Hero
             rt.sizeDelta = new Vector2(0f, HeadBandPx);
             rt.anchoredPosition = Vector2.zero;
 
-            ElarionUiKit.BuildObsidianButton(host.transform, "Next >",
+            ElarionUiKit.BuildObsidianButton(host.transform, NextLabel,
                 ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Yellow,
                 Vector2.zero, Vector2.one, NextPage);
         }
@@ -433,6 +496,11 @@ namespace DeNelle.Village.Hero
         private void NextPage()
         {
             if (_vm != null) _vm.NextPage();
+        }
+
+        private void PrevPage()
+        {
+            if (_vm != null) _vm.PrevPage();
         }
 
         private void Repaint()

@@ -276,7 +276,7 @@ namespace DeNelle.Village
 
             // Buy-slot: BuildTimerService.BuySlot does not spend crystals (caller handles
             // premium). V1 wires the button + warns that economy hook is stub.
-            ElarionUiKit.BuildObsidianButton(row.transform, "+slot",
+            ElarionUiKit.BuildObsidianButton(row.transform, "+queue",
                 ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Gray,
                 new Vector2(0.74f, 0.10f), new Vector2(0.98f, 0.90f),
                 () => OnBuySlot(channel));

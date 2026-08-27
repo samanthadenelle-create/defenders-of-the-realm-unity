@@ -411,6 +411,20 @@ namespace DeNelle.Wallet
         /// <summary>StreamingAssets-relative path to the canonical pack data.</summary>
         private const string StreamingRelativePath = "Data/Canonical/packs.json";
 
+        /// <summary>
+        /// WO-1253. Store SKU that grants +1 concurrent Builder. Ownership of this id in
+        /// <c>GameState.OwnedItemIds</c> IS the entitlement; it is not a save flag and it does
+        /// not raise queue depth.
+        /// </summary>
+        public const string PermanentBuilderSku = "permanent-builder";
+
+        /// <summary>
+        /// Convenience kind advertised on <see cref="PermanentBuilderSku"/>. Redeemed by
+        /// <c>BuildTimerService.SlotCount</c> reading SKU ownership, never a GearInventory count
+        /// (re-settle must stay idempotent).
+        /// </summary>
+        public const string PermanentBuilderKind = "permanent-builder";
+
         private static PackCatalogData _data;
 
         /// <summary>All five packs, ordered by tier (Hearth Spark → Founder's Vow).</summary>
@@ -470,6 +484,37 @@ namespace DeNelle.Wallet
                 if (!string.IsNullOrEmpty(legacy)) yield return legacy;
         }
 
+        /// <summary>True when <paramref name="sku"/> is the permanent-builder pack or a retired alias of it.</summary>
+        public static bool IsPermanentBuilderSku(string sku)
+        {
+            if (string.IsNullOrEmpty(sku)) return false;
+            foreach (var key in OwnershipKeysFor(PermanentBuilderSku))
+                if (string.Equals(key, sku, StringComparison.Ordinal)) return true;
+            return false;
+        }
+
+        /// <summary>True when <paramref name="kind"/> is the permanent-builder convenience kind (hyphen/underscore spellings compare equal).</summary>
+        public static bool IsPermanentBuilderKind(string kind)
+        {
+            return NormalizeKind(kind) == "permanent_builder";
+        }
+
+        /// <summary>
+        /// True when the owned-id list carries the permanent-builder entitlement.
+        /// Derived from SKU ownership, never from a GearInventory stack, so a repeated settle
+        /// cannot grant a second crew.
+        /// </summary>
+        public static bool OwnsPermanentBuilder(IList<string> ownedItemIds)
+        {
+            if (ownedItemIds == null) return false;
+            foreach (var key in OwnershipKeysFor(PermanentBuilderSku))
+            {
+                if (string.IsNullOrEmpty(key)) continue;
+                if (ownedItemIds.Contains(key)) return true;
+            }
+            return false;
+        }
+
         // =====================================================================
         //  WO-1050 — band resolution + the ledger key list
         // =====================================================================
@@ -510,6 +555,20 @@ namespace DeNelle.Wallet
             return string.Equals(pack.StoreSection, "support", StringComparison.OrdinalIgnoreCase)
                 ? StoreBand.Patronage
                 : StoreBand.Basket;
+        }
+
+        /// <summary>
+        /// True when the Night Market shelf will actually BUILD a card for this pack.
+        /// <para>This is the PackStore.PacksInBand filter, lifted here so the grant-path
+        /// oracle (WO-1246) and the render loop cannot disagree about what "visible" means.
+        /// Impulse SKUs that are not <see cref="PackDef.ShelfCurated"/> stay shortfall-only
+        /// even when <see cref="PackDef.StoreVisible"/> defaults true (JSON-omitted).</para>
+        /// </summary>
+        public static bool IsOnBrowsableShelf(PackDef pack)
+        {
+            if (pack == null || !pack.StoreVisible) return false;
+            if (pack.Impulse && !pack.ShelfCurated) return false;
+            return true;
         }
 
         /// <summary>True when the row carries an explicitly authored, recognised band.</summary>
@@ -563,6 +622,8 @@ namespace DeNelle.Wallet
             // economy-pack extension set (WO economy_store_packs _schemaExtensions)
             "harvest_boost", "instant_fill_storage", "workforce_slot",
             "storage_tier_jump", "offline_window_extension",
+            // WO-1253: +1 concurrent Builder. Time-saving (crew at once), never combat power.
+            "permanent_builder",
             // skr_staking.json convenienceAllowList (loyalty convenience bumps)
             "echo_storage_slot", "passive_accrual_hours",
         };
@@ -581,19 +642,25 @@ namespace DeNelle.Wallet
         //      pay-to-win firewall, and every sanctioned kind belongs in it forever.
         //    * This set answers "does anything in the shipped game actually SPEND this token?" —
         //      it is a statement about the CURRENT build, and it shrinks/grows as redeemers land.
-        //  A kind can be perfectly legal and still be vapor. Today exactly TWO kinds have a
-        //  redeemer: Lantern.cs:405-406 reads GearInventory["convenience:lantern-oil-3x-expedition"]
-        //  and ".../-2x-...". Every other kind (instant-build, instant-repair, harvest-auto-collect,
-        //  xp-weekend, harvest_boost, instant_fill_storage, workforce_slot, storage_tier_jump,
-        //  offline_window_extension) accumulates in GearInventory via PackStoreVM.ApplyPackContents
-        //  and is read by NOTHING — advertising it on a card the player can pay for is a refund
-        //  problem on a live store, which is the whole of WO-1118.
+        //  A kind can be perfectly legal and still be vapor. Live redeemers:
+        //    * lantern-oil-2x/3x-expedition — Lantern.cs GearInventory consume per expedition
+        //    * permanent-builder -- WO-1253, BuildTimerService.SlotCount reads SKU ownership in OwnedItemIds
+        //    * instant-build / instant-repair / harvest-auto-collect / xp-weekend — WO-1246,
+        //      ConvenienceRedeemer.cs (Village/Monetization)
+        //  Still vapor (no GearInventory consumer): harvest_boost as a PACK TOKEN
+        //  (HarvestBoostService is crystal/ad), instant_fill_storage, workforce_slot,
+        //  storage_tier_jump, offline_window_extension, echo_storage_slot, passive_accrual_hours.
         //  ⛔ WHEN YOU SHIP A REDEEMER, ADD ITS KIND HERE IN THE SAME COMMIT. Adding the kind here
         //  without a consumer re-creates the exact lie this set exists to stop.
         private static readonly HashSet<string> RedeemableConvenienceKinds = new HashSet<string>
         {
-            // Lantern.cs (Dungeons) — consumed per expedition. The ONLY redeemers in the build.
+            // Lantern.cs (Dungeons) — consumed per expedition.
             "lantern_oil_2x_expedition", "lantern_oil_3x_expedition",
+            // WO-1253 — BuildTimerService.SlotCount reads SKU ownership (OwnedItemIds),
+            // not a GearInventory count. Re-settle is therefore idempotent.
+            "permanent_builder",
+            // WO-1246 — ConvenienceRedeemer.cs (Village/Monetization).
+            "instant_build", "instant_repair", "harvest_auto_collect", "xp_weekend",
         };
 
         /// <summary>

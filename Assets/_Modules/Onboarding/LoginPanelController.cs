@@ -83,7 +83,8 @@ namespace DeNelle.Onboarding
             var ctrl = host.AddComponent<LoginPanelController>();
             ctrl._onContinue = onContinue;
             ctrl.Build();
-            FlowTrace.Step("Auth", "login panel presented (wallet-connect + guest; the only surface).");
+            FlowTrace.Step("Auth",
+                "login panel presented (first-run connect or guest; production path, same on every build).");
         }
 
         /// <summary>
@@ -149,14 +150,21 @@ namespace DeNelle.Onboarding
 
             // Third input is permanently false in a wallet-only build (WO-837-B) — see the
             // legacySignedIn note on ShouldContinueWithoutLogin.
+            //
+            // WO-1249 (owner 2026-08-27): this is the PRODUCTION gate. A first run with
+            // every input false PRESENTS -- that is the one-time connect, not a bug, and
+            // it is the same on a tester APK as on the store build. Do not branch this
+            // decision on a tester define: a build that skips the connect cannot validate
+            // production. Extra native wallet sheets AFTER CONTINUE are session minting
+            // (WO-1157), not this panel.
             bool continueIn = ShouldContinueWithoutLogin(walletConnected, walletIdentityBound, false);
 
             // §1.4b: the decision AND every input it was made from, so the next reader never has to
             // guess WHY the panel appeared. A trace that cannot report the wrong outcome is decoration.
+            // WO-1249: never log a wallet address; the booleans are enough.
             FlowTrace.Step("Auth",
                 "login gate decision=" + (continueIn ? "CONTINUE" : "PRESENT") +
                 " (walletConnected=" + walletConnected +
-                " wallet=" + (walletConnected ? CurrencySkinResolver.ConnectedWalletShortAddress : "none") +
                 ", walletIdentityBound=" + walletIdentityBound +
                 ", legacySignedIn=false [wallet-only build, WO-837-B]).");
 
@@ -188,7 +196,7 @@ namespace DeNelle.Onboarding
             // MinTouchPx-floored controls; on the shortest live canvas (post-scale height ~970,
             // landscape web / Seeker) the old rect cannot hold them without the touch floor
             // forcing overlap ("stacked", owner screenshot 2026-07-30).
-            var chrome = ElarionUiKit.BuildObsidianPanel(_canvas.transform, "SIGN IN",
+            var chrome = ElarionUiKit.BuildObsidianPanel(_canvas.transform, "YOUR WALLET",
                 new Vector2(0.10f, 0.06f), new Vector2(0.90f, 0.94f), onClose: null,
                 withBackdrop: false);
             if (chrome.close != null) chrome.close.gameObject.SetActive(false);
@@ -222,7 +230,7 @@ namespace DeNelle.Onboarding
             // MinTouch clamp floor from the WO-787 geometry analysis, so ClampMinTouch
             // can grow both rows collision-free on every live canvas.
             var intro = ElarionUiKit.Label(body,
-                "Your wallet is your save. Guest progress stays on this device until you connect.",
+                "Your wallet is your save. Connect now (one-time on this device). Guest progress stays here until you connect.",
                 0.78f, 0.92f, ElarionUi.Parchment, ElarionUi.FontLabel,
                 TextAlignmentOptions.Center, 0.06f, 0.94f);
             intro.textWrappingMode = TextWrappingModes.Normal;

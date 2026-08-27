@@ -822,7 +822,18 @@ namespace DeNelle.Village
         private int _attachRetries;
         private void LateAttachRetry()
         {
-            if (PackageBakedGear) return;                // baked-gear hero has no props to attach — nothing to retry
+            // Paladin bake skips sword attach; a staff on that marker is the Thrain bounce
+            // (inventory has it, world does not) and MUST still retry until the rig is Humanoid.
+            if (PackageBakedGear)
+            {
+                string pendingId = _loadout != null && _loadout.EquippedWeapon != null
+                    ? _loadout.EquippedWeapon.id : _currentWeaponId;
+                bool pendingStaff = !string.IsNullOrEmpty(pendingId) &&
+                    (pendingId.IndexOf("staff", System.StringComparison.OrdinalIgnoreCase) >= 0
+                     || pendingId.IndexOf("wand", System.StringComparison.OrdinalIgnoreCase) >= 0
+                     || pendingId.StartsWith("mage", System.StringComparison.OrdinalIgnoreCase));
+                if (!pendingStaff) return;
+            }
             if (_attachRetries > 180) return;            // ~3s @60fps then give up quietly
             bool nowSubscribed = EnsureLoadoutSubscribed();
             CacheRig();
@@ -932,10 +943,29 @@ namespace DeNelle.Village
             // prop is suppressed. Legacy Tripo Knight (no marker) is unaffected.
             if (PackageBakedGear)
             {
-                FlowTrace.Step("Equip",
-                    $"PACKAGE baked-gear hero '{ownerName}' — SKIP weapon-mesh attach for '{weaponId ?? "<null>"}' " +
-                    "(baked Paladin sword wins; de-dupes the second sword).");
-                return;
+                // Paladin-package bake is a SWORD. Skipping a staff here is how Thrain (Mage)
+                // can list the item in inventory while the world hand is empty — the baked
+                // Paladin sword is not a staff, and a Mage body should never carry this marker.
+                // WO-1226 bounce: do NOT skip staff/wand/mage ids; attach them. Sword/shield
+                // still skip so the Paladin does not grow a second blade.
+                bool looksLikeStaff = !string.IsNullOrEmpty(weaponId) &&
+                    (weaponId.IndexOf("staff", System.StringComparison.OrdinalIgnoreCase) >= 0
+                     || weaponId.IndexOf("wand", System.StringComparison.OrdinalIgnoreCase) >= 0
+                     || weaponId.StartsWith("mage", System.StringComparison.OrdinalIgnoreCase));
+                if (looksLikeStaff)
+                {
+                    FlowTrace.Warn("Equip",
+                        $"PACKAGE baked-gear hero '{ownerName}' would have SKIPPED staff '{weaponId}' " +
+                        "(baked Paladin sword is not a staff). ATTACHING anyway so Thrain is not " +
+                        "left with inventory-has-staff / world-empty-hand.");
+                }
+                else
+                {
+                    FlowTrace.Step("Equip",
+                        $"PACKAGE baked-gear hero '{ownerName}' — SKIP weapon-mesh attach for '{weaponId ?? "<null>"}' " +
+                        "(baked Paladin sword wins; de-dupes the second sword).");
+                    return;
+                }
             }
 
             // Idempotent: same weapon already shown -> nothing to do.
@@ -1162,6 +1192,12 @@ namespace DeNelle.Village
             // renderer pattern — a fresh instance assigned into sharedMaterials STICKS in the build; an in-place
             // shader mutation of the shared asset does not). Idempotent: an already-URP prop is left untouched.
             RecoverWeaponMaterialsToUrp(prop, weaponId);
+            // WO-1226 bounce (owner 2026-08-27, Thrain): inventory lists the staff, world shows
+            // nothing. Activate + layer-match BEFORE NormalizeInto. KayKit staff_A is a ~2 cm Bits
+            // mesh; if its renderer is inactive at instantiate, Renderer.bounds is empty,
+            // NormalizeInto no-ops the scale, and a 2 cm shaft is what "nothing is displayed"
+            // looks like. MagentaGuard's deferred sweep can also hide a fallback cube 1s later.
+            EnsureWeaponRenderersVisible(prop, hand, weaponId);
 
             // Seat via a grip root.
             //  • WO-478 (default): NATIVE props (Blink grip-at-origin, e.g. knight_starter/sword_A)
@@ -1245,6 +1281,7 @@ namespace DeNelle.Village
             }
 
             gripRoot.transform.SetParent(hand, false);
+            EnsureWeaponRenderersVisible(gripRoot, hand, weaponId);
             _weaponParentCompensate = true;
             _weaponAuthoredScale = 1f;   // no offset yet — reset; the offset branches below record fo.scale
             CompensateParentScale(gripRoot.transform, 1f,
@@ -1451,6 +1488,15 @@ namespace DeNelle.Village
             _bowSeatDerived = bowDerivedSeat;
             _lastBowSeatValid = false;   // a fresh attach always re-reports, never dedupes away
             ApplyHoldPose();
+            // Re-assert AFTER the carry-state reparent (drawn hand vs sheathed hip). SetParent
+            // does not copy layer, and MagentaGuard can hide a fallback cube between attach and
+            // the first deferred sweep. Drawn and sheathed are different parents — both must show.
+            Transform shownOn = _gripRoot != null ? _gripRoot.parent : hand;
+            int shown = EnsureWeaponRenderersVisible(gripRoot, shownOn, weaponId);
+            FlowTrace.Step("Equip",
+                $"attached-and-shown '{weaponId}' on '{name}': activeMeshRenderers={shown} " +
+                $"parent='{(shownOn != null ? shownOn.name : "<null>")}' " +
+                $"kind={vis.kind} (0 = inventory can list this staff while the world hand is empty)");
 
         }
 
@@ -1537,6 +1583,9 @@ namespace DeNelle.Village
         // have >=1 ENABLED Renderer carrying a sharedMesh AND its grip root MUST be parented under
         // the resolved hand bone. Traces the exact counts so a capture splits "no visible mesh" vs
         // "wrong/unparented seat" with zero guessing. Returns false => caller rolls back + unequips.
+        //
+        // ⚠ WO-1226 bounce: `r.enabled` on an INACTIVE GameObject is typically still true, so the
+        // old check passed while the player saw an empty hand. Require activeInHierarchy too.
         private bool VerifyWeaponRendersNow(GameObject prop, Transform handBone, string weaponId)
         {
             if (prop == null)
@@ -1545,11 +1594,12 @@ namespace DeNelle.Village
                 return false;
             }
 
-            int total = 0, enabledRen = 0, withMesh = 0;
+            int total = 0, enabledRen = 0, withMesh = 0, inactiveGo = 0;
             foreach (var r in prop.GetComponentsInChildren<Renderer>(true))
             {
                 if (r == null) continue;
                 total++;
+                if (!r.gameObject.activeInHierarchy) { inactiveGo++; continue; }
                 if (r.enabled) enabledRen++;
                 // A SkinnedMeshRenderer exposes sharedMesh; MeshRenderer's mesh lives on a sibling
                 // MeshFilter. Treat either source as "has a mesh".
@@ -1564,18 +1614,101 @@ namespace DeNelle.Village
 
             FlowTrace.Step("Equip",
                 $"VerifyWeaponRenders weapon='{weaponId}' on '{name}': renderers total={total} enabled={enabledRen} " +
-                $"withMesh={withMesh}; gripParent='{(prop.transform.parent != null ? prop.transform.parent.name : "<null>")}' " +
+                $"withMesh={withMesh} inactiveGo={inactiveGo}; gripParent='{(prop.transform.parent != null ? prop.transform.parent.name : "<null>")}' " +
                 $"expectedHand='{handBone.name}' => renders={renders} seated={seated}");
 
             if (!renders || !seated)
             {
                 FlowTrace.Fail("Equip",
                     $"VerifyWeaponRenders FAILED weapon='{weaponId}' on '{name}': renders={renders} " +
-                    $"(enabled={enabledRen}, withMesh={withMesh}) seated={seated} " +
+                    $"(enabled={enabledRen}, withMesh={withMesh}, inactiveGo={inactiveGo}) seated={seated} " +
                     $"(gripParent='{(prop.transform.parent != null ? prop.transform.parent.name : "<null>")}', expected='{handBone.name}').");
                 return false;
             }
             return true;
+        }
+
+        /// <summary>
+        /// WO-1226 bounce: count mesh-owning renderers that are actually ON SCREEN — enabled AND
+        /// activeInHierarchy, carrying a non-null mesh. Public so the headless regression can ask
+        /// the same question the player does ("is there a staff") instead of a derived tilt.
+        /// TrailRenderer / LineRenderer / ParticleSystemRenderer do not count: they are effects.
+        /// </summary>
+        public static int CountActiveMeshRenderers(GameObject root)
+        {
+            int n = 0;
+            if (root == null) return 0;
+            foreach (var r in root.GetComponentsInChildren<Renderer>(true))
+            {
+                if (r == null) continue;
+                if (!r.enabled || !r.gameObject.activeInHierarchy) continue;
+                if (MeshOf(r) != null) n++;
+            }
+            return n;
+        }
+
+        private static Mesh MeshOf(Renderer r)
+        {
+            if (r is SkinnedMeshRenderer smr) return smr.sharedMesh;
+            var mf = r.GetComponent<MeshFilter>();
+            return mf != null ? mf.sharedMesh : null;
+        }
+
+        /// <summary>
+        /// WO-1226 bounce — the SEAT's visibility pass, not a deriver tweak. Closes three ways a
+        /// staff can be in the loadout while the world (or the inventory preview camera) shows an
+        /// empty hand:
+        ///   1. inactive GameObject (FBX importVisibility / a hidden mesh node) — Renderer.bounds
+        ///      then measure empty, NormalizeInto leaves KayKit staff_A at ~2 cm.
+        ///   2. renderer.enabled=false — MagentaGuard's deferred scene sweep hides a fallback cube.
+        ///   3. layer != seat layer — HeroPreviewViewer's camera culls HeroPreview only;
+        ///      Instantiate leaves the prop on Default, so the paper-doll is empty-handed.
+        /// TrailRenderer / LineRenderer are NOT re-enabled (preview NeutralizeEffectRenderers).
+        /// Returns the post-pass <see cref="CountActiveMeshRenderers"/> so a capture can split
+        /// "attached but invisible" from "never attached".
+        /// </summary>
+        public static int EnsureWeaponRenderersVisible(GameObject root, Transform seat, string weaponId)
+        {
+            if (root == null) return 0;
+            int activated = 0, reenabled = 0, layered = 0;
+            int seatLayer = seat != null ? seat.gameObject.layer : root.layer;
+            foreach (var t in root.GetComponentsInChildren<Transform>(true))
+            {
+                if (t == null) continue;
+                if (!t.gameObject.activeSelf)
+                {
+                    t.gameObject.SetActive(true);
+                    activated++;
+                }
+                if (t.gameObject.layer != seatLayer)
+                {
+                    t.gameObject.layer = seatLayer;
+                    layered++;
+                }
+            }
+            foreach (var r in root.GetComponentsInChildren<Renderer>(true))
+            {
+                if (r == null) continue;
+                if (MeshOf(r) == null) continue;   // leave neutralized trails/lines off
+                if (!r.enabled)
+                {
+                    r.enabled = true;
+                    reenabled++;
+                }
+            }
+            MagentaGuard.ProtectPrimitiveArt(root, "EquipmentController.EnsureWeaponRenderersVisible");
+            int shown = CountActiveMeshRenderers(root);
+            FlowTrace.Step("Equip",
+                $"SHOW weapon='{(string.IsNullOrEmpty(weaponId) ? "<null>" : weaponId)}' on '{root.name}': " +
+                $"activatedGos={activated} reenabledMeshRenderers={reenabled} layerCopied={layered} " +
+                $"seatLayer={seatLayer} activeMeshRenderers={shown} " +
+                "(0 = inventory can list this item while the world/preview shows an empty hand)");
+            if (shown == 0)
+                FlowTrace.Fail("Equip",
+                    $"SHOW FAILED weapon='{(string.IsNullOrEmpty(weaponId) ? "<null>" : weaponId)}': " +
+                    $"zero active mesh renderers under '{root.name}'. The loadout/inventory can still " +
+                    "name this staff; the player sees nothing.");
+            return shown;
         }
 
         // ROLL BACK a half-attached weapon: destroy the grip root (and its loaded prop child) and
@@ -2099,6 +2232,7 @@ namespace DeNelle.Village
             prop.name = OffHandPropName;
             foreach (var c in prop.GetComponentsInChildren<Collider>(true)) if (c != null) Destroy(c);
             foreach (var rb in prop.GetComponentsInChildren<Rigidbody>(true)) if (rb != null) Destroy(rb);
+            EnsureWeaponRenderersVisible(prop, hand, id);
 
             // OFFSET RESOLUTION (WO-577): an off-hand can carry an authored VERTICAL-baseline
             // offset (fullOverride) from the in-game Seating Editor — keyed by mesh name then id.
@@ -2166,6 +2300,7 @@ namespace DeNelle.Village
                 gripRoot.transform.localPosition = vis.gripPos;
                 gripRoot.transform.localRotation = Quaternion.Euler(vis.gripEuler);
             }
+            EnsureWeaponRenderersVisible(gripRoot, hand, id);
 
             // ── WO-1123: DERIVED SHIELD SEAT (owner spec 2026-08-19) ─────────────────────────
             // WHAT THIS REPLACES: the drawn shield above is the preset euler on a hand bone —
@@ -3182,6 +3317,7 @@ namespace DeNelle.Village
             // the real bone.
             var go = new GameObject(offHand ? "SheatheSocket_ArmOff" : "SheatheSocket_HipMain");
             go.transform.SetParent(anchor, false);
+            go.layer = anchor.gameObject.layer;   // SetParent does not copy layer (WO-1226 preview/world show)
             go.transform.localPosition = Vector3.zero;
             go.transform.localRotation = Quaternion.identity;
             if (offHand) { _sheatheSocketOff = go.transform; _sheatheSocketOffIsArm = onArm; }

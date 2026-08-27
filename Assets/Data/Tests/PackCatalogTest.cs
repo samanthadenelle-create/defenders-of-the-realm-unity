@@ -38,8 +38,8 @@ namespace DeNelle.Data.Tests
             // owns the one-economy-key + $5-ceiling + resources-only rules. Update this count if the
             // set changes.
             Assert.That(PackCatalog.Packs, Is.Not.Null);
-            Assert.That(PackCatalog.Packs.Count, Is.EqualTo(25),
-                "packs.json must hydrate the full pack catalogue (5-tier ladder + bundle offers + impulse packs).");
+            Assert.That(PackCatalog.Packs.Count, Is.EqualTo(26),
+                "packs.json must hydrate the full pack catalogue (5-tier ladder + bundle offers + impulse packs + permanent-builder).");
         }
 
         [Test]

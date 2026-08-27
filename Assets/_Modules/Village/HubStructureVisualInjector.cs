@@ -66,7 +66,9 @@ namespace DeNelle.Village
             // CONVENTION (owner 2026-06-17): these are Tripo FBX exports — they import facing +X, so
             // ALL need yawDeg=90 to face the plaza, and their embedded materials are URP-fixed
             // automatically by SkinOptions.Structure (FixTripoMaterials). Keep new Tripo rows at yaw 90.
-            // Trade convention: forge = WEAPONS (Blacksmith), armorer = ARMOR (Forge_Armor), store = Market.
+            // Trade convention (WO-1250): Blacksmith_Weapons_Storefront wears Structures/Forge
+            // (catalog id "forge" = Weaponsmith); Forge_Armor_Storefront wears Structures/armorer
+            // (catalog id "armorer" = Armorer). Store = Market.
             // WO-764: NO sizeM — every landmark is fit-to-HEIGHT (YHeightVariable × heightMul). All
             // buildings inherit the uniform 1.0 base (heightMul unset). THERE IS NO LONGER AN
             // EXCEPTION. The arcane tower / Cathedral of Magic sat at 1.25 as a deliberate

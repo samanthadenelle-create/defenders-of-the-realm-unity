@@ -9,8 +9,9 @@
 //
 //   "The board is for ACCEPTING new quests." Tracking is the HUD tracker's job.
 //   The approved v3 concept is THREE SELF-CONTAINED RUMOR POSTERS, no tabs, no
-//   detail pane, no In-Progress section, and a single Next > that pages by three
-//   and WRAPS. So the following are RETIRED, not merely unused:
+//   detail pane, no In-Progress section. NextPage / PrevPage page by three and
+//   WRAP (owner felt-test 2026-08-27 asked for Previous). So the following are
+//   RETIRED, not merely unused:
 //
 //     TabKeys / TabLabels / ActiveTab / SetTab / IsDailyTab   - there are no tabs.
 //     ActiveQuests / Track / DailyQuests / DailyRow           - the board only OFFERS.
@@ -21,8 +22,9 @@
 //
 // WHAT REPLACED THEM:
 //   * PAGING. Available rumors are windowed PageSize (3) at a time. NextPage()
-//     advances and WRAPS at the end - the owner chose the keep-going form, so the
-//     board never dead-ends on a short page.
+//     advances and WRAPS at the end; PrevPage() steps back and WRAPS at the
+//     start - the owner chose the keep-going form, so the board never dead-ends
+//     on a short page.
 //   * HookFor is now a ONE-LINE hook derived at a SENTENCE boundary from the full
 //     letter, and LetterFor carries the whole prose for the "Read the letter >"
 //     overlay. Both captures of the 2026-08-25/26 shots clipped this text MID-WORD
@@ -163,7 +165,7 @@ namespace DeNelle.Village.Hero
         /// <summary>Zero-based index of the shown page.</summary>
         public int PageIndex => _pageIndex;
 
-        /// <summary>True when there is more than one page, i.e. Next > actually goes somewhere.</summary>
+        /// <summary>True when there is more than one page, i.e. Next / Previous actually go somewhere.</summary>
         public bool HasMultiplePages => PageCount > 1;
 
         /// <summary>Status line (the board's transient message).</summary>
@@ -333,6 +335,17 @@ namespace DeNelle.Village.Hero
         {
             int pages = PageCount;
             _pageIndex = pages <= 1 ? 0 : (_pageIndex + 1) % pages;
+            BuildPage();
+            Raise();
+        }
+
+        /// <summary>Step one page of three BACKWARD and WRAP at the start (the pair of
+        /// <see cref="NextPage"/>; owner felt-test 2026-08-27: "A previous button would
+        /// be nice"). Raises Changed.</summary>
+        public void PrevPage()
+        {
+            int pages = PageCount;
+            _pageIndex = pages <= 1 ? 0 : (_pageIndex - 1 + pages) % pages;
             BuildPage();
             Raise();
         }
