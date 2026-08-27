@@ -299,23 +299,23 @@ namespace DeNelle.Village
 
             var record = session.Close(outcome);
 
-            // ⭐ THE RULED LOSS (WO-1139, ruling 2026-08-22): COLLECTOR LOOTING ONLY, NO BANK
-            //    THEFT. Close SUMMED the broken collectors' own LastLootStolen into
-            //    record.ResourcesLost; this SEALS that ledger (rule id, crystal backstop, the
-            //    idempotence latch) so a re-filed report cannot re-count it.
+            // * THE RULED LOSS (WO-1026, owner ruling 2026-08-27): BANK THEFT REPLACES
+            //   COLLECTOR LOOTING. Close COMPUTED the ledger from the bank's standing; this is
+            //   THE SINGLE DEBIT -- one guarded, traced spend through the existing EconomyService
+            //   path, of exactly the buckets the player will read on the report.
             //
-            //    ⛔ IT DEBITS NOTHING. The collector removed the resources from its own pending
-            //    when it broke; a wallet debit here would charge the player twice for one siege.
+            //   ! A SIEGE BILLS ONCE PER ATTACK. Collector looting was REMOVED in the same ruling,
+            //     so there is no second pool; and StakesLedger.Applied latches here, so a re-filed
+            //     or re-opened report can never bill again.
             //
-            //    ⛔ ORDER IS STILL LOAD-BEARING: seal BEFORE Append, so the persisted record is
-            //    the sealed one and a crash cannot leave an unsealed report to be re-counted.
+            //   ! ORDER IS LOAD-BEARING: debit + seal BEFORE Append, so the persisted record is the
+            //     settled one and a crash cannot leave an unsettled report to be billed twice.
             //
-            //    ⛔ OFFLINE SIEGES LOOT TOO, and they arrive HERE — an away window becomes siege
-            //    PRESSURE (ApplyOfflineWindow), the siege then fires LIVE at the gate, and it
-            //    settles through this exact path. There is no second, silent theft path that could
-            //    shrink a number while the player was away: every theft in the game is attached to
-            //    a report the player can open, which is the WO-1139 legibility constraint met by
-            //    construction rather than by a notification.
+            //   ! OFFLINE SIEGES BILL TOO, and they arrive HERE -- an away window becomes siege
+            //     PRESSURE (ApplyOfflineWindow), the siege fires LIVE at the gate, and it settles
+            //     through this exact path. There is no silent theft path that could shrink a number
+            //     while the player was away: every theft in the game is attached to a report she can
+            //     open, which is the legibility constraint met by construction, not by a toast.
             DefenseReportBuilder.ApplyStakes(record);
 
             DefenseReportLedger.Append(record);   // Read=false -> the unread badge is the tell

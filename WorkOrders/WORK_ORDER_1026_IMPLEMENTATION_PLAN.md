@@ -3,7 +3,7 @@
 **Parent WO:** `WorkOrders/WORK_ORDER_1026_raid_defense_consequence_loop.md`
 **Ruling being implemented:** owner 2026-08-17 — **model (a) PvE siege**, built so **(c) ghost-PvP is a source swap**.
 **Plan authored:** 2026-08-17 (research seat, read-only — no code touched; an APK build was in flight).
-**Status:** READY TO IMPLEMENT (status of this document). Everything below is verified at source this session with
+**Status:** FIXED 2026-08-27 - gated `COMPILE_GATE_OK` + `REGRESSION_OK 307/307 suites` (Builds/w8-c, Builds/w8-r). Slices S2-S5 landed; the floor/cap KNOBS are provisional and OWNER-PENDING. AWAITING OWNER FELT-VERIFY to close.
 file:line citations. Nothing here is inferred from comments alone.
 
 > ⛔ **THE STAKES ARE STILL UNRULED.** This plan ships attacks that **resolve and REPORT but take nothing**.
@@ -789,4 +789,72 @@ given. ⛔ Do NOT reuse the retired ruling's 15%/20% pair as defaults - they bel
 system. Implement the mechanism with the numbers authored in data, surface what the seam needs, and
 ask. The acceptance test stays the owner's own sentence:
 
+> "Damn, I should improve my defenses" instead of "The game erased something I paid for. Delete."
+
+---
+
+## IMPLEMENTED 2026-08-27 - SLICES S2-S5 (edit-only; the lead batch-gates)
+
+**S1 was already shipped** (`SiegeUntouchableRegression`) and this work builds ON it.
+
+| Slice | State |
+|---|---|
+| S1 untouchable oracle | DONE (pre-existing). Updated NARROWLY: coins moved to the lootable list per the 08-27 ruling; the untouchable half (crystals / SKR / purchased goods / equipped gear) is unchanged on both axes. |
+| S2 floor + cap as pure functions + oracle | **DONE.** `StakeRules.ProtectedFloor` / `CapPerAttack` / `StealFractionFor` / `TakeFrom` / `Build`. |
+| S3 the single debit at the single seam | **DONE.** `DefenseReportBuilder.ApplyStakes` -> one `EconomyService.TrySpend`. Collector looting REMOVED from `ResourceCollector`, so a siege bills ONCE. |
+| S4 the repair bill | **ALREADY DONE - verified, not rebuilt.** `WallRepairController` is the single pricer (`CostForFraction`, crystals never charged, only what took damage). No second pricer added. |
+| S5 legibility | **DONE** for the stakes copy: `DefenseReportPanel.StakesLine` names what was taken, that a reserve and a cap held, and that crystals/purchases/gear are never at risk. All in TEXT (greyscale-safe). |
+| S6 flag + felt-test + close | PO. `FeatureFlags.Siege` is already ON. CLI never closes. |
+
+### OWNER-PENDING: the floor and the cap
+Authored in **`Data/Canonical/siege-stakes.json`** (Resources + StreamingAssets dual-copy) behind
+**`DeNelle.Core.Defense.SiegeStakesBalance`**. Every number is a PROVISIONAL placeholder - the
+retired 15%/20% pair was deliberately NOT reused. Changing them is a JSON edit, not a recompile.
+
+| Knob | Provisional | Means |
+|---|---|---|
+| `breachedStealFraction` | 0.05 | a BREACH takes 5% of the unprotected balance |
+| `overrunStealFraction` | 0.10 | an OVERRUN takes 10% |
+| `protectedFloorFractionOfCapacity` | 0.25 | wood/iron/stone below 25% of capacity are untouchable |
+| `perAttackCapFractionOfCapacity` | 0.05 | one attack can never take more than 5% of capacity |
+| `coinsProtectedFloor` | 500 flat | gold is UNCAPPED, so its floor cannot be a fraction of capacity |
+| `coinsPerAttackCap` | 2000 flat | same reason |
+
+A HELD defence takes nothing. That is structural (`StealFractionFor`), not a knob, and has no field.
+
+### WO-1139's oracle was RE-POINTED, not deleted
+`SiegeLossStakesRegression` case A used to fail the gate if the bank moved AT ALL. It now fails if
+the bank does not move by **exactly** the ledger the player reads - same strength, inverted
+direction - and it gained the structural + behavioural proof that collector looting is gone.
+WO-1139 carries a `SUPERSEDED 2026-08-27` banner over a frozen body.
+
+---
+
+## OWNER RULING 2026-08-27 (b) - LOOTABILITY IS NOT ABOUT ORIGIN
+
+Raised because the implementing lane spotted it and would not decide it alone: **every real-money
+pack in `packs.json` sells `stone`, `coins`, `wood` and `iron`** - the exact four resources the
+08-27 ruling made lootable. Crystals are protected; those four are not. And `BankGrantKind` is a
+GRANT-TIME TAG ONLY (it exempts paid grants from the capacity clamp) - it is **not persisted**, so
+once purchased wood lands in the wallet it is indistinguishable from mined wood.
+
+**RULED: accept it. The PROTECTED FLOOR and the PER-ATTACK CAP are the protection - not origin.**
+
+"Purchased goods are untouchable" means the DURABLE things: **crystals, SKR, equipped gear, and the
+packs themselves.** It does NOT mean spendable materials. A siege may take a bounded slice of
+wood / iron / stone / coins no matter how the player came by them.
+
+### Why this is written this hard
+A future seat WILL find a player losing wood they paid for and read it as a violation of the
+untouchable list. It is not. Origin is deliberately NOT tracked, and adding tracking was considered
+and REJECTED: it would need new persisted balances (`purchasedWood` etc.), a migration on every live
+save, a correct tag on every grant path, and a spend-order rule - real migration risk on a live game
+for a distinction the floor and cap already bound.
+
+⛔ Do NOT add purchased-resource tracking to "fix" this.
+⛔ Do NOT quietly move wood/iron/stone/coins to the untouchable list.
+⛔ Do NOT weaken the floor or the cap - THEY are the protection this ruling rests on. If a loss ever
+feels unfair, the lever is those two numbers, not the lootable set.
+
+The acceptance test is unchanged and it is the test for the KNOBS:
 > "Damn, I should improve my defenses" instead of "The game erased something I paid for. Delete."

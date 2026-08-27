@@ -1,63 +1,59 @@
 // =============================================================================
-// SiegeLossStakesRegression — [siege-loss-stakes] (WO-1139, ruling 2026-08-22).
+// SiegeLossStakesRegression -- [siege-loss-stakes]
 // -----------------------------------------------------------------------------
 // Assembly: DeNelle.Editor   Registered ONCE in DataRegression.RunAll.
 //
-// THE ORACLE FOR "COLLECTOR LOOTING ONLY. NO BANK THEFT."
-//   Player-facing rule: what you have COLLECTED is safe; what is still sitting in
-//   the building is at risk.
+// THE ORACLE FOR THE LIVE STAKES RULING (owner, 2026-08-27):
 //
-// It pins the six things that would each turn this mechanic from "real risk" into a
-// support ticket:
+//        BANK THEFT REPLACES COLLECTOR LOOTING.
+//        A SIEGE BILLS ONCE PER ATTACK, NOT TWICE.
 //
-//   A. ⛔⛔ NOTHING DEBITS THE WALLET FOR A SIEGE. THIS IS THE HEADLINE CASE and the
-//      reason the suite was rewritten. `ResourceCollector.OnSiegeDestroyed` has ALREADY
-//      removed the resources from its own pending when the collector broke, so a bank
-//      debit on top of it charges the player TWICE FOR ONE SIEGE. An earlier pass on
-//      this WO shipped exactly that (a flat 15%-of-banked take through
-//      EconomyService.TrySpend). The case MEASURES the bank across a real
-//      BuildStakes + ApplyStakes, with a live EconomyService installed and ready to
-//      spend, and fails on a single point of movement.
+//        A siege takes exactly three things: structural damage, a repair bill,
+//        and theft of a PERCENTAGE of UNPROTECTED bank resources under a
+//        PROTECTED FLOOR and a PER-ATTACK CAP.
 //
-//   B. ⛔ CRYSTAL COLLECTORS ARE NEVER ROBBED. A crystal collector breaks like any
-//      other and keeps every point of its pending. A player cannot tell a HARVESTED
-//      crystal from a PURCHASED one -- same wallet -- so a crystal loss reads as losing
-//      bought currency, which turns a gameplay loss into a refund request on a live
-//      published title. Enforced twice, independently (nothing is taken at the steal;
-//      nothing could be recorded at the ledger), and both halves are asserted.
+//        LOOTABLE      Wood, Iron, Stone, Coins
+//        UNTOUCHABLE   Crystals, SKR, purchased goods, equipped gear
 //
-//   C. ⭐ THE REPORT FIGURE AND THE COLLECTOR'S LOSS ARE ONE NUMBER. Not "two
-//      calculations that agree" -- the ledger is the collector's own LastLootStolen,
-//      summed. The suite measures both ends and the per-bucket sum.
+// ============================================================================
+//  ! THIS SUITE WAS RE-POINTED, NOT REWRITTEN FROM NOTHING, AND THAT IS THE POINT
+// ----------------------------------------------------------------------------
+//  Until 2026-08-27 this file was the oracle for the OPPOSITE rule -- WO-1139's
+//  "COLLECTOR LOOTING ONLY. NO BANK THEFT." Its headline case measured the wallet
+//  across a full BuildStakes + ApplyStakes and FAILED THE GATE ON A SINGLE POINT OF
+//  MOVEMENT. The owner superseded that ruling, so that case necessarily went RED --
+//  and a green oracle going red on a ruling change is THE ORACLE DOING ITS JOB. It
+//  was re-pointed rather than deleted or routed around, and it is re-pointed AT THE
+//  SAME STRENGTH: the direction of case A is inverted (the bank must now move, and
+//  by EXACTLY the ledger), and every other guard it carried is kept.
 //
-//   D. NOTHING PERMANENT IS DESTROYED. No structure loses a level, no ever-built id is
-//      forgotten, no cleared-camp / best-wave progress moves.
+//  ! WO-1139 IS SUPERSEDED, NOT WRONG-IN-HINDSIGHT. The failure mode it named --
+//    two theft authorities charging the player twice for one siege -- is REAL, and
+//    it is now closed BY REMOVAL rather than by abstinence: collector looting is
+//    gone (case B proves it, structurally and behaviourally), so there is exactly
+//    ONE theft in the game and case A is what proves it happens exactly once.
+// ============================================================================
 //
-//   E. A DEFENCE IN WHICH NOTHING BROKE REPORTS NOTHING -- and a break from an EARLIER
-//      siege is not re-reported. A destroyed collector is never repairable (WO-753), so
-//      it stands as a shell carrying its loot figure all session; without the break
-//      stamp every later report would re-announce the same robbery.
-//
-//   F. THE SEAL IS IDEMPOTENT. A re-filed or re-opened report cannot re-count.
-//
-// =============================================================================
-// ⚠⚠ WHY THE LOOT CASES USE HAND-COMPUTED LITERALS — READ BEFORE "TIDYING" ⚠⚠
-//
-//   Every expected number in LootTableCases is an AUTHORED CONSTANT, worked out by
-//   hand from the ruling and written down. It is NOT computed from RaidLootFraction.
-//
-//   That is the entire point. An oracle that says
-//       expected = pending * RaidLootFraction
-//   is a restatement of the implementation in test clothing: it passes for EVERY value
-//   that constant could ever hold, so it can never fail, and it would sail straight past
-//   someone "tuning" 0.5 to 0.9. This repo shipped that exact defect twice inside 24
-//   hours. If a future tuning pass changes the ruling, these literals are SUPPOSED to go
-//   red -- that red is the oracle telling you a player-money rule moved, which is
-//   precisely what you want it to say. RaidLootFraction is explicitly OUT OF SCOPE for
-//   tuning (owner ruling 2026-08-22): it stays 0.5.
-//
-//   The wallet case (A) does not restate anything either: it MEASURES a before/after
-//   bank on a real GameState with a real EconomyService and asserts NO MOVEMENT.
+//  THE CASES
+//    A. THE BANK MOVES BY EXACTLY THE LEDGER -- and by nothing else. The headline.
+//       Measured across a real ApplyStakes with a live EconomyService installed.
+//    B. COLLECTOR LOOTING IS REMOVED. Structurally (the theft members are gone from
+//       ResourceCollector) and behaviourally (a collector holding 800 breaks and
+//       keeps all 800). This is the NO-DOUBLE-BILL proof.
+//    C. ! CRYSTALS ARE NEVER TAKEN. Asserted at the classification, at the writer,
+//       and at the live wallet, three times independently -- a player cannot tell a
+//       harvested crystal from a PURCHASED one, so a crystal loss is a refund and a
+//       one-star review on a live published title.
+//    D. THE FLOOR AND THE CAP, against an AUTHORED table of hand-worked literals.
+//       Never re-derived from the production constants: an expectation computed from
+//       the code under test asserts nothing. The table's rows were each proved to go
+//       RED against a mutated implementation before this suite was written.
+//    E. THE REPORT FIGURE AND THE WALLET MOVEMENT ARE ONE NUMBER, by identity.
+//    F. IDEMPOTENCE -- a re-filed or re-opened report cannot bill a second time.
+//    G. NOTHING PERMANENT MOVES: no downgrade, no lost layout, no BestWave, no
+//       ever-built id, no camp cooldown.
+//    H. THE RULE IDS STAY DISTINCT, so an old report keeps describing the ruling
+//       that actually wrote it.
 // =============================================================================
 
 using System.Collections.Generic;
@@ -71,7 +67,7 @@ using UnityEngine;
 
 namespace DeNelle.Editor
 {
-    /// <summary>Oracle for the WO-1139 loss stakes: collector looting only, no bank theft.</summary>
+    /// <summary>Oracle for the WO-1026 loss stakes: bounded bank theft, billed once.</summary>
     public static class SiegeLossStakesRegression
     {
         public static bool Run(out string reason)
@@ -80,12 +76,14 @@ namespace DeNelle.Editor
 
             try
             {
-                LootTableCases(failures);
-                CrystalExemptionShapeCases(failures);
-                LedgerWriterCases(failures);
-                NoBankArithmeticCases(failures);
+                RuleIdCases(failures);                 // H
+                LootableSetCases(failures);            // C (classification half)
+                RequiredArithmeticCases(failures);     // D (shape half)
+                ArithmeticTableCases(failures);        // D (the authored table)
+                LedgerWriterCases(failures);           // C (writer half)
+                CollectorLootingRemovedCases(failures);// B (structural half)
 
-                LiveCollectorCases(failures, out bool skipped, out string skipWhy);
+                LiveCases(failures, out bool skipped, out string skipWhy);
                 if (skipped)
                 {
                     // The GameStateService / EconomyService install seam moved -- genuinely
@@ -101,200 +99,348 @@ namespace DeNelle.Editor
 
             if (failures.Count == 0)
             {
-                reason = "SIEGE LOSS STAKES OK -- collector looting only: a broken collector's loot " +
-                         "matches an AUTHORED table (not re-derived from RaidLootFraction); CRYSTAL " +
-                         "COLLECTORS ARE NEVER ROBBED and no crystal bucket can be written; the report " +
-                         "figure IS the collector's own LastLootStolen, summed; ⛔ THE BANK DOES NOT MOVE " +
-                         "(no double-charge -- the collector already paid); a break from an earlier siege " +
-                         "is never re-reported; the seal is idempotent; and no structure level, ever-built " +
-                         "id, camp cooldown or best-wave moved";
+                reason = "SIEGE LOSS STAKES OK -- bounded BANK THEFT, billed ONCE: the wallet moves by " +
+                         "EXACTLY the ledger the player reads and by nothing else; COLLECTOR LOOTING IS " +
+                         "REMOVED (a broken collector keeps every point of its pending, and the theft " +
+                         "members are gone from the class) so no double-bill is expressible; the protected " +
+                         "floor and the per-attack cap match an AUTHORED table of hand-worked literals " +
+                         "(not re-derived from the production constants); a HELD defence takes nothing; " +
+                         "CRYSTALS ARE NEVER TAKEN at the classification, at the writer AND at the live " +
+                         "wallet; the seal is idempotent so a re-filed report cannot bill twice; and no " +
+                         "structure level, layout entry, ever-built id, camp cooldown or best-wave moved";
                 return true;
             }
+
             reason = $"SIEGE LOSS STAKES FAIL x{failures.Count}: " + string.Join(" | ", failures);
             return false;
         }
 
         // =====================================================================
-        //  THE AUTHORED LOOT TABLE — hand-computed, never re-derived
+        //  H -- the rule ids stay distinct and self-describing
         // =====================================================================
 
-        /// <summary>One hand-worked row of the ruling. <see cref="Expected"/> is a LITERAL.</summary>
+        private static void RuleIdCases(List<string> f)
+        {
+            if (string.IsNullOrEmpty(StakeRules.RuleId))
+                f.Add("StakeRules.RuleId is empty -- a report could not name the ruling that wrote it");
+
+            if (StakeRules.RuleId == StakesLedger.InterimRuleId)
+                f.Add("[HARD-RULE]the live rule id collapsed into the INTERIM id -- every pre-stakes " +
+                      "report would start claiming it was written under a ruling that did not exist yet");
+
+            if (StakeRules.RuleId == StakeRules.CollectorLootRuleId)
+                f.Add("[HARD-RULE]the live rule id collapsed into the SUPERSEDED collector-loot id " +
+                      "(WO-1139). A report written under the old ruling would then be indistinguishable " +
+                      "from one written under this one, and the two took from different pools");
+
+            var empty = StakeRules.Empty();
+            if (empty == null || empty.StakesRuleId != StakeRules.RuleId)
+                f.Add("StakeRules.Empty() is not self-describing: it must carry the live rule id");
+            if (empty != null && empty.Applied)
+                f.Add("StakeRules.Empty() came back APPLIED -- an unsettled ledger must not look settled");
+            if (empty != null && !empty.IsEmpty)
+                f.Add("StakeRules.Empty() is not empty");
+        }
+
+        // =====================================================================
+        //  C -- classification. THE WHOLE ENUM, not the buckets we remembered.
+        // =====================================================================
+
+        /// <summary>
+        /// The lootable set, HAND-AUTHORED from the owner's ruling of 2026-08-27 (verbatim:
+        /// "LOOTABLE Wood, Iron, Stone, Coins"). "Stone" is the balance internally NAMED Food --
+        /// BankResource has no Stone member and must never grow one, because the name is a live
+        /// save and wire key.
+        /// </summary>
+        private static readonly BankResource[] Lootable =
+        {
+            BankResource.Wood,
+            BankResource.Iron,
+            BankResource.Food,    // "STONE"
+            BankResource.Coins,   // "GOLD"
+        };
+
+        private static void LootableSetCases(List<string> f)
+        {
+            var all = (BankResource[])System.Enum.GetValues(typeof(BankResource));
+            if (all == null || all.Length == 0)
+            {
+                f.Add("classification: BankResource enumerated to NOTHING -- the reflection seam moved");
+                return;
+            }
+
+            foreach (var r in all)
+            {
+                bool expected = System.Array.IndexOf(Lootable, r) >= 0;
+                bool actual = StakeRules.IsLootable(r);
+                if (actual == expected) continue;
+
+                f.Add(expected
+                    ? $"classification: {r} SHOULD be lootable and is not -- the ruling's stake has a " +
+                      "hole in it and the consequence loop silently loses a consequence"
+                    : $"[HARD-RULE]classification: {r} IS CLASSIFIED LOOTABLE AND MUST NOT BE. Crystals " +
+                      "are indistinguishable from PURCHASED crystals -- the same wallet -- so taking one " +
+                      "turns a gameplay loss into a refund request and a one-star review on a LIVE " +
+                      "published title. Hard exemption, not a balance knob.");
+            }
+        }
+
+        // =====================================================================
+        //  D -- the arithmetic MUST EXIST. (The inverse of the retired guard.)
+        // =====================================================================
+
+        /// <summary>
+        /// Until 2026-08-27 this case asserted that <c>Build</c> / <c>TakeFrom</c> /
+        /// <c>ProtectedFloor</c> were ABSENT -- the WO-1139 ruling had deleted them and a re-add was
+        /// the defect. The ruling reversed, so the guard reverses with it: the ruling REQUIRES a
+        /// floor and a cap, and a build that silently lost them would take an unbounded percentage
+        /// of an unprotected balance. Their absence is now the defect.
+        /// </summary>
+        private static void RequiredArithmeticCases(List<string> f)
+        {
+            foreach (string required in new[] { "ProtectedFloor", "CapPerAttack", "TakeFrom", "Build", "StealFractionFor" })
+                if (typeof(StakeRules).GetMethod(required, BindingFlags.Public | BindingFlags.Static) == null)
+                    f.Add($"[HARD-RULE]StakeRules.{required} is GONE. The 2026-08-27 ruling requires a " +
+                          "PROTECTED FLOOR and a PER-ATTACK CAP; without them a siege takes an unbounded " +
+                          "share of an unprotected balance, which is the mechanic the owner explicitly " +
+                          "bounded.");
+
+            // The numbers must be AUTHORED IN DATA, not re-hardcoded in the arithmetic.
+            foreach (string knob in new[]
+                     {
+                         "BreachedStealFraction", "OverrunStealFraction",
+                         "ProtectedFloorFractionOfCapacity", "PerAttackCapFractionOfCapacity",
+                         "CoinsProtectedFloor", "CoinsPerAttackCap",
+                     })
+                if (typeof(SiegeStakesBalance).GetProperty(knob, BindingFlags.Public | BindingFlags.Static) == null)
+                    f.Add($"[HARD-RULE]SiegeStakesBalance.{knob} is gone -- the floor/cap numbers are " +
+                          "OWNER-PENDING and must stay authored in data so a ruling is a JSON edit, " +
+                          "never a recompile.");
+        }
+
+        // =====================================================================
+        //  D -- THE AUTHORED TABLE. Hand-worked literals, never re-derived.
+        // =====================================================================
+
+        /// <summary>
+        /// One hand-worked row of the ruling. <see cref="Expected"/> is a LITERAL, computed by hand
+        /// from the authored bounds -- NEVER an expression over SiegeStakesBalance. An oracle that
+        /// re-derives its expectation from the code under test asserts nothing, and these numbers
+        /// are player money.
+        /// <para>! WHEN THE OWNER RULES THE FLOOR AND THE CAP, THIS TABLE IS RE-WORKED BY HAND in
+        /// the same change as the json. Do not "fix" it with a formula.</para>
+        /// </summary>
         private struct Fixture
         {
             public string Note;
-            public HarvestResource Resource;
-            public double Pending;
+            public BankResource Resource;
+            public int Banked;
+            public int Capacity;
+            public DefenseOutcome Outcome;
             public int Expected;
         }
 
-        private static void LootTableCases(List<string> f)
+        /// <summary>
+        /// Worked BY HAND against the PROVISIONAL authored bounds (siege-stakes.json):
+        /// floor = 25% of capacity, cap = 5% of capacity, steal = 5% breached / 10% overrun,
+        /// coins floor 500 / coins cap 2000 flat. Every row below was proved to go RED against a
+        /// mutated implementation (floor removed, cap removed, coins de-listed, crystals listed,
+        /// held stealing, unknown-capacity failing closed) before this suite was written.
+        /// </summary>
+        private static Fixture[] Table()
         {
-            // Worked BY HAND from the ruling: half of what is still UNCOLLECTED, rounded down;
-            // a crystal collector loses nothing. The brief's worked example is row 1.
-            var table = new[]
+            return new[]
             {
-                new Fixture { Note = "the worked example: a wood collector holding 800",
-                              Resource = HarvestResource.Wood, Pending = 800, Expected = 400 },
+                new Fixture { Note = "the worked example: floor 5000, unprotected 7000, 10% = 700",
+                              Resource = BankResource.Wood, Banked = 12000, Capacity = 20000,
+                              Outcome = DefenseOutcome.Overrun, Expected = 700 },
 
-                new Fixture { Note = "iron, odd pending -- rounds DOWN, in the player's favour",
-                              Resource = HarvestResource.Iron, Pending = 801, Expected = 400 },
+                new Fixture { Note = "a BREACH costs half of an overrun -- partial success is worth something",
+                              Resource = BankResource.Wood, Banked = 12000, Capacity = 20000,
+                              Outcome = DefenseOutcome.Breached, Expected = 350 },
 
-                new Fixture { Note = "food, a big haul",
-                              Resource = HarvestResource.Food, Pending = 5000, Expected = 2500 },
+                new Fixture { Note = "a HELD defence takes NOTHING -- structural, never a knob",
+                              Resource = BankResource.Wood, Banked = 12000, Capacity = 20000,
+                              Outcome = DefenseOutcome.Held, Expected = 0 },
 
-                new Fixture { Note = "a single unit is not worth half a unit -- rounds to nothing",
-                              Resource = HarvestResource.Wood, Pending = 1, Expected = 0 },
+                new Fixture { Note = "exactly AT the protected floor: untouchable",
+                              Resource = BankResource.Iron, Banked = 5000, Capacity = 20000,
+                              Outcome = DefenseOutcome.Overrun, Expected = 0 },
 
-                new Fixture { Note = "three units",
-                              Resource = HarvestResource.Wood, Pending = 3, Expected = 1 },
+                new Fixture { Note = "UNDER the floor: a player already down is never kicked",
+                              Resource = BankResource.Iron, Banked = 4000, Capacity = 20000,
+                              Outcome = DefenseOutcome.Overrun, Expected = 0 },
 
-                new Fixture { Note = "an empty collector",
-                              Resource = HarvestResource.Food, Pending = 0, Expected = 0 },
+                new Fixture { Note = "STONE, a maxed L6 store: raw 2550 CLIPPED BY THE PER-ATTACK CAP to 1700",
+                              Resource = BankResource.Food, Banked = 34000, Capacity = 34000,
+                              Outcome = DefenseOutcome.Overrun, Expected = 1700 },
 
-                new Fixture { Note = "a negative pending cannot produce a loot",
-                              Resource = HarvestResource.Iron, Pending = -500, Expected = 0 },
+                new Fixture { Note = "STONE, a grandfathered OVER-cap save: still clipped to 1700",
+                              Resource = BankResource.Food, Banked = 40000, Capacity = 34000,
+                              Outcome = DefenseOutcome.Overrun, Expected = 1700 },
 
-                // ⛔ THE EXEMPTION ROWS. A crystal collector BREAKS -- it is simply never robbed.
-                new Fixture { Note = "CRYSTALS: a full crystal collector loses NOTHING",
-                              Resource = HarvestResource.Crystals, Pending = 800, Expected = 0 },
+                new Fixture { Note = "GOLD is uncapped: flat floor 500, 10% of the 4500 above it",
+                              Resource = BankResource.Coins, Banked = 5000, Capacity = StakeRules.UncappedCapacity,
+                              Outcome = DefenseOutcome.Overrun, Expected = 450 },
 
-                new Fixture { Note = "CRYSTALS: however much it holds",
-                              Resource = HarvestResource.Crystals, Pending = 999999, Expected = 0 },
+                new Fixture { Note = "GOLD, a rich player: CLIPPED BY THE FLAT COIN CAP",
+                              Resource = BankResource.Coins, Banked = 100000, Capacity = StakeRules.UncappedCapacity,
+                              Outcome = DefenseOutcome.Overrun, Expected = 2000 },
+
+                new Fixture { Note = "GOLD under the flat coin floor",
+                              Resource = BankResource.Coins, Banked = 400, Capacity = StakeRules.UncappedCapacity,
+                              Outcome = DefenseOutcome.Overrun, Expected = 0 },
+
+                new Fixture { Note = "! CRYSTALS ARE UNTOUCHABLE at any amount, under any cap",
+                              Resource = BankResource.Crystals, Banked = 999999, Capacity = StakeRules.UncappedCapacity,
+                              Outcome = DefenseOutcome.Overrun, Expected = 0 },
+
+                new Fixture { Note = "UNKNOWN capacity -> take NOTHING (fail open, in the player's favour)",
+                              Resource = BankResource.Wood, Banked = 12000, Capacity = 0,
+                              Outcome = DefenseOutcome.Overrun, Expected = 0 },
+
+                new Fixture { Note = "just above the floor: 10% of the 100 that is unprotected",
+                              Resource = BankResource.Wood, Banked = 5100, Capacity = 20000,
+                              Outcome = DefenseOutcome.Overrun, Expected = 10 },
+
+                new Fixture { Note = "one point above the floor rounds DOWN to nothing",
+                              Resource = BankResource.Wood, Banked = 5001, Capacity = 20000,
+                              Outcome = DefenseOutcome.Breached, Expected = 0 },
+
+                new Fixture { Note = "an empty store",
+                              Resource = BankResource.Wood, Banked = 0, Capacity = 20000,
+                              Outcome = DefenseOutcome.Overrun, Expected = 0 },
+
+                new Fixture { Note = "a negative balance cannot produce a take",
+                              Resource = BankResource.Wood, Banked = -500, Capacity = 20000,
+                              Outcome = DefenseOutcome.Overrun, Expected = 0 },
             };
+        }
+
+        private static void ArithmeticTableCases(List<string> f)
+        {
+            var table = Table();
 
             for (int i = 0; i < table.Length; i++)
             {
                 var t = table[i];
-                int actual = ResourceCollector.LootTakenFrom(t.Resource, t.Pending);
+                var standing = new BankStanding { Resource = t.Resource, Banked = t.Banked, Capacity = t.Capacity };
+
+                int actual = StakeRules.TakeFrom(standing, t.Outcome);
                 if (actual != t.Expected)
-                    f.Add($"loot[{i}] ({t.Note}): {t.Resource} pending={t.Pending} lost {actual}, the ruling " +
-                          $"says {t.Expected}. THIS NUMBER IS PLAYER MONEY -- RaidLootFraction is out of " +
-                          "scope for tuning (owner ruling 2026-08-22); if the ruling really moved, update " +
-                          "this AUTHORED table with a new hand-worked value and never replace it with an " +
+                    f.Add($"[HARD-RULE]take[{i}] ({t.Note}): {t.Resource} banked={t.Banked} cap={t.Capacity} " +
+                          $"{t.Outcome} took {actual}, the hand-worked answer is {t.Expected}. THIS NUMBER IS " +
+                          "PLAYER MONEY. If the owner has re-ruled the floor or the cap, re-work this table BY " +
+                          "HAND in the same change as siege-stakes.json -- never replace a literal with an " +
                           "expression over the production constant.");
 
-                if (t.Pending > 0 && actual > t.Pending)
-                    f.Add($"loot[{i}]: carried off {actual} from a collector holding {t.Pending} -- more than exists");
+                if (t.Banked > 0 && actual > t.Banked)
+                    f.Add($"[HARD-RULE]take[{i}]: carried off {actual} from a balance of {t.Banked} -- more " +
+                          "than exists");
             }
+
+            // The same table through Build(), so the aggregator and the per-bucket rule agree.
+            var standings = new List<BankStanding>();
+            foreach (var t in table)
+                if (t.Outcome == DefenseOutcome.Overrun)
+                    standings.Add(new BankStanding { Resource = t.Resource, Banked = t.Banked, Capacity = t.Capacity });
+
+            var built = StakeRules.Build(DefenseOutcome.Overrun, standings);
+            if (built == null) { f.Add("Build() returned null"); return; }
+            if (built.Crystals != 0 || built.Magic != 0)
+                f.Add($"[HARD-RULE]Build() filled an UNTOUCHABLE bucket (c{built.Crystals} m{built.Magic}) " +
+                      "from a standings list that included crystals");
+            if (built.StakesRuleId != StakeRules.RuleId)
+                f.Add($"Build() stamped rule id '{built.StakesRuleId}', expected '{StakeRules.RuleId}'");
+
+            // A HELD defence, through the aggregator, takes nothing at all.
+            var heldLedger = StakeRules.Build(DefenseOutcome.Held, standings);
+            if (heldLedger == null || !heldLedger.IsEmpty)
+                f.Add("[HARD-RULE]Build(Held) produced a NON-EMPTY ledger. A held defence takes nothing -- " +
+                      "if holding still cost resources the report would have nothing riding on it.");
         }
 
         // =====================================================================
-        //  ⛔ THE CRYSTAL EXEMPTION — asserted on BOTH independent halves
-        // =====================================================================
-
-        private static void CrystalExemptionShapeCases(List<string> f)
-        {
-            // (1) THE STEAL SIDE. Every harvest type, so adding one cannot slip through untested.
-            foreach (HarvestResource r in System.Enum.GetValues(typeof(HarvestResource)))
-            {
-                bool lootable = ResourceCollector.IsResourceLootable(r);
-                bool shouldBe = r != HarvestResource.Crystals;
-                if (lootable != shouldBe)
-                    f.Add($"[HARD-RULE]exemption: ResourceCollector.IsResourceLootable({r}) is {lootable}. " +
-                          "Crystals are indistinguishable from PURCHASED crystals -- the same wallet -- so " +
-                          "looting one reads as taking bought currency and turns a gameplay loss into a " +
-                          "refund request on a live published title. Hard exemption, not a balance knob.");
-            }
-
-            // (2) THE LEDGER SIDE, INDEPENDENTLY. Even if the steal side were wrong, no crystal
-            //     (or coin) bucket can be written into a report the player reads.
-            foreach (BankResource r in System.Enum.GetValues(typeof(BankResource)))
-            {
-                bool lootable = StakeRules.IsLootable(r);
-                bool shouldBe = r == BankResource.Wood || r == BankResource.Iron || r == BankResource.Food;
-                if (lootable != shouldBe)
-                    f.Add($"[HARD-RULE]exemption: StakeRules.IsLootable({r}) is {lootable}. Only earned " +
-                          "wood/iron/food may ever appear on a loss report.");
-            }
-
-            // (3) The paranoid half: ASK for a crystal loss and prove the ledger refuses it.
-            var poisoned = StakeRules.Empty();
-            if (StakeRules.Add(poisoned, BankResource.Crystals, 5000))
-                f.Add("[HARD-RULE]StakeRules.Add accepted a CRYSTAL bucket -- the exemption must hold " +
-                      "against a caller that gets it wrong, or it is not a rule");
-            if (StakeRules.Add(poisoned, BankResource.Coins, 5000))
-                f.Add("[HARD-RULE]StakeRules.Add accepted a COINS bucket -- coins are not a harvest");
-            if (poisoned.Crystals != 0 || poisoned.Magic != 0 || !poisoned.IsEmpty)
-                f.Add($"[HARD-RULE]a refused bucket still landed on the ledger (c{poisoned.Crystals} " +
-                      $"m{poisoned.Magic} w{poisoned.Wood} i{poisoned.Iron} f{poisoned.Food})");
-        }
-
-        // =====================================================================
-        //  THE ONE WRITER — StakeRules.Add routes and accumulates correctly
+        //  C -- the one writer
         // =====================================================================
 
         private static void LedgerWriterCases(List<string> f)
         {
+            var all = (BankResource[])System.Enum.GetValues(typeof(BankResource));
+
+            // The refusal, at an absurd amount so no cap or floor could excuse a partial take.
+            foreach (var r in all)
+            {
+                if (System.Array.IndexOf(Lootable, r) >= 0) continue;
+                var ledger = StakeRules.Empty();
+                if (StakeRules.Add(ledger, r, 999999))
+                    f.Add($"[HARD-RULE]writer: StakeRules.Add accepted {r} -- the untouchable list is not " +
+                          "enforced at the one writer");
+                if (!ledger.IsEmpty)
+                    f.Add($"[HARD-RULE]writer: a refused {r} still landed on the ledger");
+            }
+
+            // The SUCCESS path, so this cannot pass on a writer that refuses everything.
             var l = StakeRules.Empty();
-
-            if (l.StakesRuleId != StakeRules.RuleId)
-                f.Add($"StakeRules.Empty() is not self-describing: rule id '{l.StakesRuleId}'");
-            if (StakesLedger.InterimRuleId == StakeRules.RuleId)
-                f.Add("the interim rule id was collapsed into the live one -- old reports would start " +
-                      "claiming they were written under a ruling that did not exist yet");
-            if (l.Applied)
-                f.Add("StakeRules.Empty() came back APPLIED -- an unsealed ledger must not look sealed");
-            if (!l.IsEmpty)
-                f.Add("StakeRules.Empty() is not empty");
-
-            // Accumulation: two wood collectors on one report add up rather than overwrite.
             StakeRules.Add(l, BankResource.Wood, 400);
             StakeRules.Add(l, BankResource.Wood, 150);
             StakeRules.Add(l, BankResource.Iron, 25);
-            if (l.Wood != 550) f.Add($"two broken wood collectors summed to {l.Wood}, hand-worked answer 550 " +
-                                     "-- a second collector must ADD, not overwrite");
-            if (l.Iron != 25) f.Add($"iron bucket is {l.Iron}, expected 25");
-            if (l.Food != 0) f.Add($"food bucket is {l.Food} with no food collector broken -- expected 0");
+            StakeRules.Add(l, BankResource.Food, 60);
+            StakeRules.Add(l, BankResource.Coins, 30);
 
-            // Zero / negative are not stakes.
+            if (l.Wood != 550) f.Add($"writer [GOOD PATH]: two wood adds summed to {l.Wood}, hand-worked 550 " +
+                                     "-- a second add must ADD, not overwrite");
+            if (l.Iron != 25) f.Add($"writer [GOOD PATH]: iron bucket is {l.Iron}, expected 25");
+            if (l.Food != 60) f.Add($"writer [GOOD PATH]: stone bucket is {l.Food}, expected 60");
+            if (l.Coins != 30) f.Add($"writer [GOOD PATH]: gold bucket is {l.Coins}, expected 30");
+            if (l.Crystals != 0 || l.Magic != 0)
+                f.Add($"[HARD-RULE]writer: an untouchable bucket moved (c{l.Crystals} m{l.Magic})");
+
+            // Zero and negative are not stakes.
             if (StakeRules.Add(l, BankResource.Wood, 0) || StakeRules.Add(l, BankResource.Wood, -300))
-                f.Add("StakeRules.Add accepted a zero/negative amount -- a 'loss' that hands resources " +
-                      "back is a bug, and it must never reach a ledger the player reads");
+                f.Add("writer: StakeRules.Add accepted a zero/negative amount -- a 'loss' that hands " +
+                      "resources back is a bug, and it must never reach a ledger the player reads");
             if (l.Wood != 550)
-                f.Add($"a zero/negative Add moved the wood bucket to {l.Wood}");
+                f.Add($"writer: a zero/negative Add moved the wood bucket to {l.Wood}");
         }
 
         // =====================================================================
-        //  ⛔ THE RIVAL SYSTEM MUST NOT COME BACK — structural
+        //  B -- COLLECTOR LOOTING IS REMOVED (structural half)
         // =====================================================================
 
         /// <summary>
-        /// The superseded flat 15%-of-banked take is DELETED. This asserts it structurally, so a
-        /// re-add fails the gate the moment it is written rather than the day a player is charged
-        /// twice for one siege.
+        /// The owner ruled that bank theft REPLACES collector looting: a siege bills ONCE. The
+        /// structural half asserts the collector's theft members are GONE, so a second take cannot
+        /// be re-introduced by a one-line edit -- there is nothing left for it to hang off.
         /// </summary>
-        private static void NoBankArithmeticCases(List<string> f)
+        private static void CollectorLootingRemovedCases(List<string> f)
         {
-            foreach (string gone in new[] { "Build", "TakeFrom", "ProtectedFloor" })
-                if (typeof(StakeRules).GetMethod(gone, BindingFlags.Public | BindingFlags.Static) != null)
-                    f.Add($"[HARD-RULE]StakeRules.{gone} is back. That is the RETIRED bank-theft " +
-                          "arithmetic (owner ruling 2026-08-22: collector looting only, NO bank theft). " +
-                          "The collector already removed the resources when it broke -- a second, " +
-                          "bank-side take charges the player twice for one siege.");
+            var t = typeof(ResourceCollector);
 
-            foreach (string gone in new[] { "StealFraction", "ProtectedFloorFraction" })
-                if (typeof(StakeRules).GetField(gone, BindingFlags.Public | BindingFlags.Static) != null)
-                    f.Add($"[HARD-RULE]StakeRules.{gone} is back -- see above; there must be no bank-take " +
-                          "constant for a future edit to hang arithmetic off.");
+            foreach (string gone in new[] { "LootTakenFrom", "IsResourceLootable" })
+                if (t.GetMethod(gone, BindingFlags.Public | BindingFlags.Static) != null)
+                    f.Add($"[HARD-RULE]ResourceCollector.{gone} is BACK. Collector looting was REMOVED by " +
+                          "the owner's 2026-08-27 ruling because BANK THEFT REPLACES IT. The two together " +
+                          "charge the player TWICE for one siege -- once out of the collector's pending, " +
+                          "once out of the wallet -- which is precisely what the superseded WO-1139 ruling " +
+                          "was written to prevent.");
 
-            // No surviving method may even ACCEPT a bank/capacity input.
-            foreach (var m in typeof(StakeRules).GetMethods(BindingFlags.Public | BindingFlags.Static))
-            {
-                foreach (var p in m.GetParameters())
-                {
-                    string n = p.Name != null ? p.Name.ToLowerInvariant() : string.Empty;
-                    if (n.Contains("bank") || n.Contains("capacity") || n.Contains("wallet"))
-                        f.Add($"[HARD-RULE]StakeRules.{m.Name} gained a '{p.Name}' parameter. This file must " +
-                              "not know what the town bank holds: knowing is the first half of taking.");
-                }
-            }
+            if (t.GetField("RaidLootFraction", BindingFlags.NonPublic | BindingFlags.Static) != null
+                || t.GetField("RaidLootFraction", BindingFlags.Public | BindingFlags.Static) != null)
+                f.Add("[HARD-RULE]ResourceCollector.RaidLootFraction is BACK -- there must be no collector " +
+                      "steal constant for a future edit to hang a second theft off.");
+
+            if (t.GetProperty("IsLootable", BindingFlags.Public | BindingFlags.Instance) != null)
+                f.Add("[HARD-RULE]ResourceCollector.IsLootable is BACK. It existed only to bound the " +
+                      "collector steal that the ruling removed; its return is the first half of that steal " +
+                      "coming back.");
         }
 
         // =====================================================================
-        //  ⭐ THE LIVE CASE — a real collector, a real bank, a real report
+        //  A / B / C / E / F / G -- the LIVE cases
         // =====================================================================
 
-        private static void LiveCollectorCases(List<string> f, out bool skipped, out string skipWhy)
+        private static void LiveCases(List<string> f, out bool skipped, out string skipWhy)
         {
             skipped = false; skipWhy = null;
 
@@ -313,8 +459,8 @@ namespace DeNelle.Editor
             var parked = new List<ResourceCollector>(ResourceCollectorRegistry.All);
             foreach (var c in parked) ResourceCollectorRegistry.Unregister(c);
 
-            // The collector persists pending/hp/stamp in PlayerPrefs keyed by building id, so the
-            // fixture would otherwise dirty a real save's lumbermill. Snapshot and restore.
+            // The collector persists pending/hp in PlayerPrefs keyed by building id, so the fixture
+            // would otherwise dirty a real save's lumbermill. Snapshot and restore.
             const string FixtureId = ResourceBuildingProgression.LumbermillId;   // yields Wood
             string[] prefKeys =
             {
@@ -339,9 +485,8 @@ namespace DeNelle.Editor
                 installed = true;
                 var s = throwaway;
 
-                // ⛔ A LIVE ECONOMY SERVICE IS INSTALLED ON PURPOSE. The point of case A is not
-                //    "nothing could be debited"; it is "everything needed to debit was present and
-                //    NOTHING WAS".
+                // A LIVE ECONOMY SERVICE. Case A is not "nothing could be debited" -- it is
+                // "everything needed to debit was present, and it debited EXACTLY the ledger".
                 ecoGo = new GameObject("EconomyService (loss-stakes-oracle)");
                 var eco = ecoGo.AddComponent<EconomyService>();
                 if (!TrySetEconomyInstance(eco, out string ecoWhy))
@@ -354,15 +499,17 @@ namespace DeNelle.Editor
                 s.BestWave = 17;
                 s.MarkEverBuilt("tower_ground_archer");
 
-                // A bank with plenty in it -- if anything were ever going to be taken from the
-                // wallet, a full bank is where it would show.
                 s.Wood = 12000;
                 s.Iron = 9000;
-                var r = s.Resources; r.Food = 7000; r.Crystals = 4242; s.Resources = r;
+                var r = s.Resources; r.Food = 7000; r.Crystals = 4242; r.Coins = 5000; s.Resources = r;
 
-                // Clear the fixture's persisted pending/hp/stamp BEFORE Configure loads them: a
-                // real save's lumbermill could be sitting at hp 0, which would hand the oracle an
-                // ALREADY-BROKEN collector and quietly invalidate the not-broken case.
+                HeldTakesNothingCase(f, s);
+                TheSingleDebitCase(f, s);
+                BuildStakesInvariantCase(f, s);
+
+                // Clear the fixture's persisted pending/hp BEFORE Configure loads them: a real
+                // save's lumbermill could be sitting at hp 0, which would hand the oracle an
+                // ALREADY-BROKEN collector and quietly invalidate the case.
                 for (int i = 0; i < prefKeys.Length; i++) PlayerPrefs.DeleteKey(prefKeys[i]);
 
                 collectorGo = new GameObject("ResourceCollector (loss-stakes-oracle)");
@@ -377,9 +524,7 @@ namespace DeNelle.Editor
                 if (!SetPrivate(collector, "_pending", 800.0, out string pendWhy))
                 { skipped = true; skipWhy = pendWhy; return; }
 
-                NotBrokenReportsNothingCase(f, s, collector);
-                BrokenCollectorCase(f, s, collector);
-                StaleBreakCase(f, s, collector);
+                CollectorKeepsItsPendingCase(f, s, collector);
             }
             finally
             {
@@ -408,174 +553,194 @@ namespace DeNelle.Editor
             }
         }
 
-        /// <summary>E, first half. A collector that never broke costs nothing, however full it is.</summary>
-        private static void NotBrokenReportsNothingCase(List<string> f, GameState s, ResourceCollector collector)
+        /// <summary>A defence that HELD costs the player nothing, through the whole real path.</summary>
+        private static void HeldTakesNothingCase(List<string> f, GameState s)
         {
-            if (collector.IsBroken)
-            { f.Add("not-broken case: the fixture was already broken before the case ran"); return; }
+            var before = Bank.Of(s);
 
-            var bank = Bank.Of(s);
-            var record = Overrun(TimeSource.NowUnixMs() - 1000.0);
+            var record = Record(DefenseOutcome.Held);
             record.ResourcesLost = DefenseReportBuilder.BuildStakes(record);
-            bool sealed_ = DefenseReportBuilder.ApplyStakes(record);
+            bool billed = DefenseReportBuilder.ApplyStakes(record);
 
-            if (sealed_ || record.ResourcesLost == null || !record.ResourcesLost.IsEmpty)
-                f.Add("[HARD-RULE]not-broken: a report claimed a loot from a collector that never broke. " +
-                      "The stake is the break, not the defeat -- a report that invents a loss is worse " +
-                      "than no report.");
-            Bank.AssertUnchanged(f, "not-broken", bank, s);
+            if (billed || record.ResourcesLost == null || !record.ResourcesLost.IsEmpty)
+                f.Add("[HARD-RULE]held: a defence that HELD produced a bill. Holding the line must cost " +
+                      "nothing, or the report's 'your east wall fell first' story has nothing riding on it.");
+
+            Bank.AssertUnchanged(f, "held", before, s);
         }
 
         /// <summary>
-        /// ⭐⭐ THE HEADLINE CASE. Break a wood collector holding 800:
-        /// it loses exactly 400, the report says exactly 400, and ⛔ THE BANK DOES NOT MOVE.
+        /// ** THE HEADLINE CASE (A + C + E + F + G). A hand-built ledger goes through the REAL
+        /// ApplyStakes with a live EconomyService, and the wallet must move by EXACTLY those
+        /// buckets -- no more, no less, and NOT ONE CRYSTAL.
+        ///
+        /// <para>The ledger is hand-built rather than taken from BuildStakes on purpose: BuildStakes
+        /// reads TownBankCapacity, which needs the structures catalog, and a case whose expectation
+        /// depends on catalog state headlessly is a case that will one day pass by accident. The
+        /// arithmetic is proved separately, against the authored table.</para>
         /// </summary>
-        private static void BrokenCollectorCase(List<string> f, GameState s, ResourceCollector collector)
+        private static void TheSingleDebitCase(List<string> f, GameState s)
         {
-            double pendingBefore = collector.PendingAmount;
-            if (Mathf.RoundToInt((float)pendingBefore) != 800)
-            { f.Add($"broken case: fixture pending is {pendingBefore}, expected the authored 800"); return; }
-
-            var bank = Bank.Of(s);
-            int campCooldowns = s.RaidCooldowns != null ? s.RaidCooldowns.Count : 0;
+            var before = Bank.Of(s);
             int levelsBefore = LevelsOf(s);
             int bestWaveBefore = s.BestWave;
             int everBuiltBefore = s.EverBuiltStructureIds != null ? s.EverBuiltStructureIds.Count : 0;
+            int campCooldowns = s.RaidCooldowns != null ? s.RaidCooldowns.Count : 0;
+            int layoutBefore = s.BaseLayout.Count;
 
-            double siegeStart = TimeSource.NowUnixMs();
+            var record = Record(DefenseOutcome.Overrun);
+            var ledger = StakeRules.Empty();
+            StakeRules.Add(ledger, BankResource.Wood, 700);
+            StakeRules.Add(ledger, BankResource.Food, 250);
+            StakeRules.Add(ledger, BankResource.Coins, 450);
+            record.ResourcesLost = ledger;
 
-            // BREAK IT through the real damage surface -- no reflection on the theft itself.
-            collector.ApplyContactDamage(10000f);
+            bool billed = DefenseReportBuilder.ApplyStakes(record);
 
-            if (!collector.IsBroken)
-            { f.Add("broken case: the collector survived 10,000 damage -- the fixture never broke"); return; }
+            if (!billed)
+            {
+                f.Add("[HARD-RULE]debit: ApplyStakes did NOT bill a non-zero ledger against a wallet that " +
+                      "could plainly afford it (w12000 i9000 stone7000 gold5000). A siege that takes " +
+                      "nothing is the hollow loop this whole ticket exists to close.");
+                return;
+            }
 
-            // ── The collector's own account of what it lost. AUTHORED literal: 800 -> 400.
-            int lost = Mathf.RoundToInt(collector.LastLootStolen);
-            if (lost != 400)
-                f.Add($"[HARD-RULE]broken case: a wood collector holding 800 lost {lost}; the ruling says 400 " +
-                      "(half of what was still uncollected). RaidLootFraction stays 0.5 -- this literal is " +
-                      "hand-worked on purpose so re-tuning it goes RED.");
-            int pendingDrop = Mathf.RoundToInt((float)(pendingBefore - collector.PendingAmount));
-            if (pendingDrop != 400)
-                f.Add($"[HARD-RULE]broken case: the collector's pending fell by {pendingDrop}, not 400 -- the " +
-                      "loot figure and the pending it came out of must be the same event");
+            if (!ledger.Applied)
+                f.Add("[HARD-RULE]debit: the ledger billed but did not latch Applied -- a re-file could bill again");
+            if (ledger.StakesRuleId != StakeRules.RuleId)
+                f.Add($"debit: StakesRuleId is '{ledger.StakesRuleId}', expected '{StakeRules.RuleId}'");
 
-            // ── The report.
-            var record = Overrun(siegeStart);
-            record.ResourcesLost = DefenseReportBuilder.BuildStakes(record);
-            bool sealed_ = DefenseReportBuilder.ApplyStakes(record);
-            var l = record.ResourcesLost;
-            if (l == null) { f.Add("broken case: ApplyStakes left a null ledger"); return; }
+            var after = Bank.Of(s);
 
-            if (!sealed_ || l.IsEmpty)
-                f.Add("broken case: a broken collector full of wood produced an EMPTY report -- the " +
-                      "consequence loop has no consequence, which is the whole reason WO-1139 exists");
-            if (!l.Applied)
-                f.Add("broken case: the ledger is non-empty but not sealed -- a re-file could re-count it");
-            if (l.StakesRuleId != StakeRules.RuleId)
-                f.Add($"broken case: StakesRuleId is '{l.StakesRuleId}', expected '{StakeRules.RuleId}' -- " +
-                      "every report must stay self-describing about which ruling produced it");
+            // ** A + E. THE WALLET MOVED BY EXACTLY THE LEDGER, AND BY EXACTLY NOTHING ELSE.
+            AssertMoved(f, "wood", before.Wood, after.Wood, ledger.Wood);
+            AssertMoved(f, "iron", before.Iron, after.Iron, ledger.Iron);
+            AssertMoved(f, "stone", before.Food, after.Food, ledger.Food);
+            AssertMoved(f, "gold", before.Coins, after.Coins, ledger.Coins);
 
-            // ⭐ C. ONE NUMBER. The report figure IS the collector's figure.
-            if (l.Wood != lost)
-                f.Add($"[ONE-NUMBER]broken case: the REPORT says {l.Wood} wood, the COLLECTOR lost {lost}. " +
-                      "These are supposed to be the same value read from the same field, not two " +
-                      "computations that agree.");
-            if (l.Wood != 400)
-                f.Add($"[HARD-RULE]broken case: the report says {l.Wood} wood, hand-worked answer 400");
-            if (l.Iron != 0 || l.Food != 0)
-                f.Add($"broken case: a wood collector's break filled other buckets (i{l.Iron} f{l.Food}) -- " +
-                      "the loot must be bucketed by the COLLECTOR'S OWN harvest resource");
+            // ! C. CRYSTALS. Not "moved by the ledger" -- NOT MOVED AT ALL, at any amount.
+            if (after.Crystals != before.Crystals)
+                f.Add($"[HARD-RULE]debit: CRYSTALS MOVED across a siege ({before.Crystals} -> " +
+                      $"{after.Crystals}). Crystals are purchasable with real money and a player cannot " +
+                      "tell a harvested one from a bought one. This is not a balance defect, it is a " +
+                      "refund and a one-star review on a LIVE published title.");
+            if (ledger.Crystals != 0 || ledger.Magic != 0)
+                f.Add($"[HARD-RULE]debit: the report CLAIMS c{ledger.Crystals} m{ledger.Magic} were taken");
 
-            // The per-bucket sum must equal what the collectors say they lost. Mismatch = drift.
-            int collectorSum = 0;
-            foreach (var c in ResourceCollectorRegistry.All)
-                if (c != null && c.IsBroken && c.IsLootable && c.LastLootStolenAtUnixMs >= siegeStart)
-                    collectorSum += Mathf.RoundToInt(c.LastLootStolen);
-            if (l.Wood + l.Iron + l.Food != collectorSum)
-                f.Add($"[ONE-NUMBER]broken case: the ledger sums to {l.Wood + l.Iron + l.Food} but the broken " +
-                      $"collectors lost {collectorSum} between them");
-
-            // ⛔ B. Crystals, both halves.
-            if (l.Crystals != 0 || l.Magic != 0)
-                f.Add($"[HARD-RULE]broken case: the report CLAIMS c{l.Crystals} m{l.Magic} were taken");
-
-            // ⛔⛔ A. THE POINT OF THE WHOLE REWRITE. Nothing debited the bank.
-            Bank.AssertUnchanged(f, "broken case [DOUBLE-CHARGE]", bank, s);
-
-            // ⛔ D. Nothing permanent moved.
+            // ! G. Nothing permanent moved.
             if (LevelsOf(s) != levelsBefore)
-                f.Add($"[HARD-RULE]broken case: a structure DOWNGRADED across the loss ({levelsBefore} -> " +
+                f.Add($"[HARD-RULE]debit: a structure DOWNGRADED across the loss ({levelsBefore} -> " +
                       $"{LevelsOf(s)}). The ruling: no building downgrade, ever.");
-            if (s.BaseLayout.Count != 2)
-                f.Add($"[HARD-RULE]broken case: the base layout lost a structure ({s.BaseLayout.Count} of 2 " +
-                      "left) -- no permanent progress is ever destroyed");
+            if (s.BaseLayout.Count != layoutBefore)
+                f.Add($"[HARD-RULE]debit: the base layout lost a structure ({s.BaseLayout.Count} of " +
+                      $"{layoutBefore} left) -- no permanent progress is ever destroyed");
             if (s.BestWave != bestWaveBefore)
-                f.Add($"[HARD-RULE]broken case: BestWave moved {bestWaveBefore} -> {s.BestWave}");
+                f.Add($"[HARD-RULE]debit: BestWave moved {bestWaveBefore} -> {s.BestWave}");
             int everBuiltAfter = s.EverBuiltStructureIds != null ? s.EverBuiltStructureIds.Count : 0;
             if (everBuiltAfter != everBuiltBefore)
-                f.Add("[HARD-RULE]broken case: the ever-built set changed across a loss");
+                f.Add("[HARD-RULE]debit: the ever-built set changed across a loss");
             int campsAfter = s.RaidCooldowns != null ? s.RaidCooldowns.Count : 0;
             if (campsAfter != campCooldowns)
-                f.Add("[HARD-RULE]broken case: camp cooldown state changed -- a cleared camp stays cleared");
+                f.Add("[HARD-RULE]debit: camp cooldown state changed -- a cleared camp stays cleared");
 
-            // ⛔ F. Idempotence.
-            int ledgerWood = l.Wood;
-            var bankAfterFirst = Bank.Of(s);
+            // ! F. IDEMPOTENCE -- "a siege bills ONCE per attack" is exactly this assertion.
+            var beforeSecond = Bank.Of(s);
+            int woodClaimed = ledger.Wood;
             if (DefenseReportBuilder.ApplyStakes(record))
-                f.Add("[HARD-RULE]idempotence: ApplyStakes sealed the SAME report a second time");
-            if (l.Wood != ledgerWood)
+                f.Add("[HARD-RULE]idempotence: ApplyStakes billed the SAME report a second time. The " +
+                      "owner's ruling is 'a siege bills ONCE per attack, not twice'.");
+            if (ledger.Wood != woodClaimed)
                 f.Add("[HARD-RULE]idempotence: the second call rewrote the ledger the player already read");
-            Bank.AssertUnchanged(f, "idempotence", bankAfterFirst, s);
+            Bank.AssertUnchanged(f, "idempotence", beforeSecond, s);
         }
 
         /// <summary>
-        /// E, second half. The SAME still-broken collector must not be re-reported by the NEXT
-        /// siege. A destroyed collector is never repairable (WO-753), so it stands as a shell
-        /// carrying its loot figure all session -- without the break stamp every later report
-        /// would re-announce the same robbery and the player would think they were robbed twice.
+        /// BuildStakes against the LIVE bank. Its exact figures depend on TownBankCapacity (and so on
+        /// the structures catalog), which is not stable headlessly -- so this case asserts the
+        /// INVARIANTS that must hold whatever the capacity reads: nothing untouchable is ever
+        /// claimed, no bucket exceeds what the bank holds, and the ledger names the live ruling.
+        /// It also proves BuildStakes TAKES NOTHING on its own: only ApplyStakes bills.
         /// </summary>
-        private static void StaleBreakCase(List<string> f, GameState s, ResourceCollector collector)
+        private static void BuildStakesInvariantCase(List<string> f, GameState s)
         {
-            if (!collector.IsBroken)
-            { f.Add("stale-break case: the fixture is not broken, so there is nothing stale to skip"); return; }
-            if (collector.LastLootStolen <= 0f)
-            { f.Add("stale-break case: the fixture carries no loot figure to re-report"); return; }
+            var before = Bank.Of(s);
+
+            var record = Record(DefenseOutcome.Breached);
+            var built = DefenseReportBuilder.BuildStakes(record);
+
+            if (built == null) { f.Add("BuildStakes returned null"); return; }
+
+            if (built.Crystals != 0 || built.Magic != 0)
+                f.Add($"[HARD-RULE]build: an UNTOUCHABLE bucket was claimed (c{built.Crystals} " +
+                      $"m{built.Magic}) against a live bank holding {before.Crystals} crystals");
+            if (built.StakesRuleId != StakeRules.RuleId)
+                f.Add($"build: StakesRuleId is '{built.StakesRuleId}', expected '{StakeRules.RuleId}'");
+            if (built.Applied)
+                f.Add("[HARD-RULE]build: BuildStakes returned an ALREADY-APPLIED ledger -- ApplyStakes " +
+                      "would then refuse to bill it and the siege would silently cost nothing");
+
+            if (built.Wood > before.Wood || built.Iron > before.Iron
+                || built.Food > before.Food || built.Coins > before.Coins)
+                f.Add($"[HARD-RULE]build: a bucket claims more than the bank holds (w{built.Wood}/{before.Wood} " +
+                      $"i{built.Iron}/{before.Iron} s{built.Food}/{before.Food} g{built.Coins}/{before.Coins})");
+
+            // BuildStakes is a READ plus arithmetic. It must not move a single point on its own.
+            Bank.AssertUnchanged(f, "build (compute must not take)", before, s);
+        }
+
+        /// <summary>
+        /// ** B, behavioural. A collector holding 800 BREAKS and KEEPS ALL 800.
+        /// This is the no-double-bill proof: the bank is the only pool a siege bills.
+        /// </summary>
+        private static void CollectorKeepsItsPendingCase(List<string> f, GameState s, ResourceCollector collector)
+        {
+            double pendingBefore = collector.PendingAmount;
+            if (Mathf.RoundToInt((float)pendingBefore) != 800)
+            { f.Add($"collector case: fixture pending is {pendingBefore}, expected the authored 800"); return; }
 
             var bank = Bank.Of(s);
 
-            // A LATER siege: it started after the break stamp.
-            var later = Overrun(collector.LastLootStolenAtUnixMs + 1.0);
-            later.ResourcesLost = DefenseReportBuilder.BuildStakes(later);
-            bool sealed_ = DefenseReportBuilder.ApplyStakes(later);
+            // BREAK IT through the real damage surface -- no reflection on the behaviour under test.
+            collector.ApplyContactDamage(10000f);
 
-            if (sealed_ || later.ResourcesLost == null || !later.ResourcesLost.IsEmpty)
-                f.Add($"[HARD-RULE]stale-break: the NEXT siege re-reported an EARLIER siege's loot " +
-                      $"(w{later.ResourcesLost?.Wood}). A broken collector is never repairable, so it " +
-                      "keeps its loot figure all session -- only breaks at or after the record's " +
-                      "StartedAtUnixMs may count, or the player is told they were robbed again.");
-            Bank.AssertUnchanged(f, "stale-break", bank, s);
+            if (!collector.IsBroken)
+            { f.Add("collector case: the collector survived 10,000 damage -- the fixture never broke"); return; }
 
-            // And a HELD defence over the same shell reports nothing either.
-            var held = DefenseOutcomeRecord.NewEmpty();
-            held.Outcome = DefenseOutcome.Held;
-            held.StartedAtUnixMs = collector.LastLootStolenAtUnixMs + 1.0;
-            held.ResourcesLost = DefenseReportBuilder.BuildStakes(held);
-            DefenseReportBuilder.ApplyStakes(held);
-            if (held.ResourcesLost == null || !held.ResourcesLost.IsEmpty)
-                f.Add("[HARD-RULE]held: a cleared defence in which nothing broke produced a non-empty ledger");
-            Bank.AssertUnchanged(f, "held", bank, s);
+            int pendingAfter = Mathf.RoundToInt((float)collector.PendingAmount);
+            if (pendingAfter != 800)
+                f.Add($"[HARD-RULE]collector case: a broken collector's pending fell 800 -> {pendingAfter}. " +
+                      "COLLECTOR LOOTING IS REMOVED (owner ruling 2026-08-27: bank theft REPLACES it, and a " +
+                      "siege bills ONCE per attack). A collector steal on top of the bank debit charges the " +
+                      "player TWICE for one siege.");
+
+            if (Mathf.RoundToInt(collector.LastLootStolen) != 0)
+                f.Add($"[HARD-RULE]collector case: LastLootStolen is {collector.LastLootStolen}, and it must " +
+                      "be 0 forever -- the report would otherwise announce a second, phantom loss beside " +
+                      "the bank debit the player was actually charged.");
+
+            // Breaking a structure is stake (1) -- the STRUCTURE. It bills no resources by itself.
+            Bank.AssertUnchanged(f, "collector break (structure loss is not a bill)", bank, s);
         }
 
         // =====================================================================
         //  Helpers
         // =====================================================================
 
-        /// <summary>Every wallet number that a siege could conceivably move, snapshotted.</summary>
+        private static void AssertMoved(List<string> f, string word, int before, int after, int claimed)
+        {
+            int moved = before - after;
+            if (moved == claimed) return;
+
+            f.Add($"[ONE-NUMBER]debit: the report says {claimed} {word} was taken, the WALLET moved by " +
+                  $"{moved} ({before} -> {after}). These are supposed to be ONE value -- the report renders " +
+                  "the very buckets ApplyStakes spends. A report that lies about a loss is worse than no " +
+                  "report, and an unexplained shrinking number is the resented version of this mechanic.");
+        }
+
+        /// <summary>Every wallet number a siege could conceivably move, snapshotted.</summary>
         private struct Bank
         {
-            public int Wood, Iron, Food, Crystals;
+            public int Wood, Iron, Food, Crystals, Coins;
 
             public static Bank Of(GameState s) => new Bank
             {
@@ -583,34 +748,31 @@ namespace DeNelle.Editor
                 Iron = s.Iron,
                 Food = s.Resources.Food,
                 Crystals = s.Resources.Crystals,
+                Coins = s.Resources.Coins,
             };
 
-            /// <summary>
-            /// ⛔⛔ THE DOUBLE-CHARGE GUARD. The collector already removed the resources from its
-            /// own pending when it broke; a bank debit on top of that charges the player TWICE for
-            /// one siege. Nothing in the siege path may move a single point of the wallet.
-            /// </summary>
+            /// <summary>Asserts NOT ONE POINT moved -- for the paths that must cost nothing at all.</summary>
             public static void AssertUnchanged(List<string> f, string tag, Bank before, GameState s)
             {
                 var now = Of(s);
-                if (now.Wood == before.Wood && now.Iron == before.Iron &&
-                    now.Food == before.Food && now.Crystals == before.Crystals) return;
+                if (now.Wood == before.Wood && now.Iron == before.Iron && now.Food == before.Food
+                    && now.Crystals == before.Crystals && now.Coins == before.Coins) return;
 
-                f.Add($"[HARD-RULE]{tag}: THE BANK MOVED across a siege report " +
+                f.Add($"[HARD-RULE]{tag}: THE WALLET MOVED on a path that must cost nothing " +
                       $"(w{before.Wood}->{now.Wood} i{before.Iron}->{now.Iron} " +
-                      $"f{before.Food}->{now.Food} c{before.Crystals}->{now.Crystals}). " +
-                      "Owner ruling 2026-08-22: COLLECTOR LOOTING ONLY, NO BANK THEFT. The collector " +
-                      "ALREADY subtracted the loot from its own pending -- a wallet debit here charges " +
-                      "the player twice for one siege. Nothing in the siege path may debit the wallet.");
+                      $"s{before.Food}->{now.Food} c{before.Crystals}->{now.Crystals} " +
+                      $"g{before.Coins}->{now.Coins}). Every point a siege takes must be attached to the " +
+                      "ledger on a report the player can open -- a silent debit is the resented version " +
+                      "of this mechanic.");
             }
         }
 
-        private static DefenseOutcomeRecord Overrun(double startedAtUnixMs)
+        private static DefenseOutcomeRecord Record(DefenseOutcome outcome)
         {
             var r = DefenseOutcomeRecord.NewEmpty();
-            r.Outcome = DefenseOutcome.Overrun;
+            r.Outcome = outcome;
             r.WaveId = 9;
-            r.StartedAtUnixMs = startedAtUnixMs;
+            r.StartedAtUnixMs = TimeSource.NowUnixMs() - 1000.0;
             return r;
         }
 
@@ -621,7 +783,7 @@ namespace DeNelle.Editor
             return p;
         }
 
-        /// <summary>Sum of every placed structure's level — the cheapest proof that nothing downgraded.</summary>
+        /// <summary>Sum of every placed structure's level -- the cheapest proof nothing downgraded.</summary>
         private static int LevelsOf(GameState s)
         {
             int total = 0;
@@ -632,8 +794,8 @@ namespace DeNelle.Editor
 
         /// <summary>
         /// Seeds a private field on the fixture collector. Reflection is confined to SEEDING the
-        /// fixture — never to the behaviour under test: the break goes through the real
-        /// <c>ApplyContactDamage</c> surface and the loot is read off the real public property.
+        /// fixture -- never to the behaviour under test: the break goes through the real
+        /// <c>ApplyContactDamage</c> surface and the pending is read off the real public property.
         /// </summary>
         private static bool SetPrivate(object target, string field, object value, out string err)
         {

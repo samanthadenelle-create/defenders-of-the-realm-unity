@@ -39,7 +39,6 @@ namespace DeNelle.Village.Buildings.Progression
         private const double MaxAwaySeconds = 30.0 * 24.0 * 3600.0;
 
         private const float DefaultMaxHp = 120f;
-        private const float RaidLootFraction = 0.5f;
 
         [SerializeField] private string _buildingId = ResourceBuildingProgression.FarmId;
         [SerializeField] private float _maxHp = DefaultMaxHp;
@@ -89,79 +88,33 @@ namespace DeNelle.Village.Buildings.Progression
         /// (data-driven — no per-type hardcode).</summary>
         public float HpFraction => _maxHp > 0f ? Mathf.Clamp01(_hp / _maxHp) : 0f;
 
-        /// <summary>Pending resources stolen when the collector last broke under siege
-        /// (session-scoped; cleared on <see cref="Repair"/>). The wave damage report
-        /// reads it to show the "looted" line.
-        /// <para>⭐ Since WO-1139 (ruling 2026-08-22) this is ALSO the whole loss-stakes ledger:
-        /// <c>DefenseReportBuilder.BuildStakes</c> SUMS this field across the collectors that
-        /// broke during a siege. The number the player is TOLD they lost is therefore the same
-        /// object the collector actually lost — not a second computation that agrees today.</para></summary>
+        /// <summary>
+        /// RETIRED, AND PINNED AT ZERO -- COLLECTOR LOOTING IS REMOVED (owner ruling 2026-08-27).
+        ///
+        /// <para>The property survives because <c>WaveDamageReport</c> reads it to build the row's
+        /// "looted N" line; it is now always 0, so that line never appears. It is NOT deleted
+        /// outright because a report row that silently loses a field is harder to reason about
+        /// than one whose field is provably zero.</para>
+        ///
+        /// <para>THE RULING: "BANK THEFT REPLACES COLLECTOR LOOTING. A siege bills ONCE per
+        /// attack." A siege now takes a bounded percentage of the UNPROTECTED BANK
+        /// (<c>DeNelle.Core.Defense.StakeRules</c>) and nothing at all from a collector's pending.
+        /// If a collector ever starts taking again while bank theft is live, the player is charged
+        /// TWICE for one siege -- which is precisely the defect the superseded WO-1139 ruling
+        /// existed to prevent, and the reason its oracle was re-pointed rather than deleted.</para>
+        /// </summary>
         public float LastLootStolen { get; private set; }
 
         /// <summary>
-        /// House-clock stamp (unix ms) of the break that produced <see cref="LastLootStolen"/>;
-        /// 0 = this collector has not been looted this session.
+        /// House-clock stamp (unix ms) of the last break; 0 = this collector has not broken this
+        /// session. Session-scoped, not persisted, cleared by <see cref="Repair"/>.
         ///
-        /// <para>⛔ IT EXISTS TO SCOPE A LOOT TO ONE SIEGE. A destroyed collector is NOT
-        /// repairable (WO-753: it returns only via a full-cost rebuild), so it stands in the scene
-        /// as a broken shell carrying its <see cref="LastLootStolen"/> indefinitely. Without a
-        /// stamp, the NEXT siege's defence report would re-count that same loot and tell the
-        /// player they were robbed again — a report that invents a loss is exactly the failure the
-        /// whole one-number design exists to prevent. <c>BuildStakes</c> counts only breaks at or
-        /// after the record's <c>StartedAtUnixMs</c>.</para>
-        ///
-        /// <para>Session-scoped like the amount it stamps: not persisted, cleared by
-        /// <see cref="Repair"/>.</para>
+        /// <para>It was the scope key that stopped a still-broken shell being re-reported by every
+        /// later siege. With collector looting removed there is no loot to re-report, but the stamp
+        /// is kept: it is the only record that a given collector broke during a given siege, and
+        /// deleting it would discard evidence rather than a mechanic (CLAUDE.md section 12).</para>
         /// </summary>
         public double LastLootStolenAtUnixMs { get; private set; }
-
-        /// <summary>
-        /// ⛔ FALSE FOR A CRYSTAL COLLECTOR — it may break, but it is never robbed.
-        ///
-        /// <para>A player cannot tell a HARVESTED crystal from a PURCHASED one; they are the same
-        /// wallet. So a crystal loot reads as losing bought currency, which turns a gameplay loss
-        /// into a refund request on a live published title. Same reasoning as the ledger-side
-        /// exemption in <see cref="DeNelle.Core.Defense.StakeRules.IsLootable"/> — enforced in BOTH
-        /// places on purpose: here nothing is taken, there nothing could be reported, and neither
-        /// depends on the other being remembered.</para>
-        ///
-        /// <para>Reversible by ruling, not by tuning: flipping this is a design decision about
-        /// real money, and SiegeLossStakesRegression will go red the moment it moves.</para>
-        /// </summary>
-        public bool IsLootable => IsResourceLootable(Resource);
-
-        /// <summary>
-        /// ⛔ WHICH HARVEST TYPES A RAIDER MAY EVER CARRY OFF. Everything but crystals.
-        /// <para>Static and public so the oracle can drive it for EVERY enum value with no scene,
-        /// no catalog and no collector — the exemption is a rule about real money, and a rule that
-        /// can only be checked by getting a crystal collector to exist in a test is a rule nobody
-        /// checks. There is no crystal COLLECTOR authored today (the three resource buildings are
-        /// farm/lumbermill/forge), which is exactly why this must be pinned NOW rather than on the
-        /// day one is added.</para>
-        /// </summary>
-        public static bool IsResourceLootable(HarvestResource resource)
-            => resource != HarvestResource.Crystals;
-
-        /// <summary>
-        /// ⭐ THE ONE THEFT IN THE GAME, as a pure function: how much of a collector's
-        /// <paramref name="pending"/> a raider carries off when it breaks.
-        ///
-        /// <para>Half of what is still UNCOLLECTED, rounded DOWN so every rounding error favours
-        /// the player — and ZERO for a crystal collector, which breaks like any other but is never
-        /// robbed (see <see cref="IsResourceLootable"/>).</para>
-        ///
-        /// <para>⛔ <c>RaidLootFraction</c> stays 0.5 (owner ruling 2026-08-22, explicitly out of
-        /// scope for tuning). The oracle asserts hand-worked LITERALS against this — 800 wood
-        /// pending loots 400 — deliberately NOT an expression over the constant, so re-tuning it
-        /// turns the suite RED. That red is the alarm you want on a rule about player money.</para>
-        /// </summary>
-        public static int LootTakenFrom(HarvestResource resource, double pending)
-        {
-            if (!IsResourceLootable(resource)) return 0;
-            if (pending <= 0.0) return 0;
-            int taken = Mathf.FloorToInt((float)(pending * RaidLootFraction));
-            return taken > 0 ? taken : 0;
-        }
 
         public double Capacity => ComputeCapacity();
 
@@ -561,28 +514,36 @@ namespace DeNelle.Village.Buildings.Progression
             StepChanged?.Invoke(this);
         }
 
+        /// <summary>
+        /// The collector BREAKS -- and, since the owner ruling of 2026-08-27, IT LOSES NOTHING.
+        ///
+        /// <para>! COLLECTOR LOOTING IS REMOVED. BANK THEFT REPLACES IT, and a siege bills ONCE
+        /// per attack (StakeRules / DefenseReportBuilder.ApplyStakes take a bounded percentage of
+        /// the UNPROTECTED BANK). The take that used to live here -- half of the uncollected
+        /// pending -- is DELETED, along with RaidLootFraction, LootTakenFrom and the crystal
+        /// carve-out that only existed to bound it.</para>
+        ///
+        /// <para>! DO NOT RE-ADD A TAKE HERE while bank theft is live. The two together charge the
+        /// player twice for one siege, which is exactly the defect the superseded WO-1139 ruling
+        /// was written to prevent; its oracle (SiegeLossStakesRegression) now fails the gate if a
+        /// break moves a collector's pending at all.</para>
+        ///
+        /// <para>The pending stays in the broken shell. A destroyed collector is not repairable
+        /// (WO-753) so it is not recoverable either -- but that is the STRUCTURE being lost, which
+        /// is stake (1) of the ruling, not a second theft.</para>
+        /// </summary>
         private void OnSiegeDestroyed()
         {
             int stepsBefore = FilledSteps;
             _broken = true;
 
-            // ⛔ THE CRYSTAL EXEMPTION LIVES INSIDE LootTakenFrom, AT THE ONLY PLACE A THEFT
-            //    HAPPENS. A crystal collector BREAKS like any other — it just is not robbed, so
-            //    it keeps every point of its pending for the player to collect after a rebuild.
-            //    ⛔ RaidLootFraction is NOT the knob here and must stay 0.5 (owner ruling
-            //    2026-08-22): the exemption is a WHO, never a HOW MUCH.
-            float stolen = LootTakenFrom(Resource, _pending);
-
-            _pending = System.Math.Max(0, _pending - stolen);
-            LastLootStolen = stolen;   // F8-45: surfaced by the wave damage report ("looted N")
-            // Stamped even when nothing was taken: "broke this siege, lost nothing" is a real
-            // state, and BuildStakes must be able to tell it from "broke three sieges ago".
-            LastLootStolenAtUnixMs = TimeSource.NowUnixMs();
+            LastLootStolen = 0f;                            // removed by ruling -- never non-zero again
+            LastLootStolenAtUnixMs = TimeSource.NowUnixMs();  // the break stamp survives as evidence
             SaveState();
             FlowTrace.Warn("Harvest",
                 $"collector-destroyed building={_buildingId} resource={Resource} " +
-                $"lootable={IsLootable} loot-stolen={stolen} pending-left={_pending:F0}" +
-                (IsLootable ? string.Empty : " (CRYSTAL COLLECTOR -- never robbed; it keeps its pending)"));
+                $"pending-kept={_pending:F0} (COLLECTOR LOOTING IS REMOVED, owner ruling 2026-08-27 -- " +
+                "the siege bills the BANK once, through StakeRules; nothing is taken from this collector).");
             // Fire even if the raw step count is unchanged: IsBroken flipped, and the view
             // must switch to its scatter/hidden state. StepChanged is the collector's single
             // "re-render your visual" signal, so raise it on the break edge too.

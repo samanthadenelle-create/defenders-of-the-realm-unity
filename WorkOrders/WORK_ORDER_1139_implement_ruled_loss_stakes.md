@@ -1,4 +1,45 @@
-**Status:** FIXED — AWAITING OWNER FELT-TEST TO CLOSE. Prior status: IMPLEMENTED 2026-08-22 - COLLECTOR LOOTING ONLY. The bank-theft rival was deleted and made unbuildable (reflection fails the gate if its methods return). Crystal collectors exempt in two independent places. FeatureFlags.Siege is now ON and PROVEN - all four siege suites green on a fresh log.
+**Status:** SUPERSEDED 2026-08-27 - see the banner directly below. Prior status: FIXED - AWAITING OWNER FELT-TEST TO CLOSE.
+
+> # SUPERSEDED 2026-08-27 - BANK THEFT REPLACES COLLECTOR LOOTING
+>
+> **The ruling this ticket implemented is no longer the ruling.** The owner was shown that her
+> 2026-08-26 siege ruling reinstated the system this ticket's 2026-08-22 ruling had deleted, and she
+> resolved the collision:
+>
+> > **BANK THEFT REPLACES COLLECTOR LOOTING. A siege bills ONCE per attack, not twice.
+> > Collector looting is REMOVED.**
+> >
+> > A siege takes exactly three things: structural damage, a repair bill, and theft of a PERCENTAGE
+> > of UNPROTECTED bank resources under a PROTECTED FLOOR and a PER-ATTACK CAP.
+> >
+> > ```
+> > LOOTABLE      Wood, Iron, Stone, Coins
+> > UNTOUCHABLE   Crystals, SKR, purchased goods, equipped gear
+> > ```
+>
+> **THE BODY BELOW IS FROZEN AND IS NOT REWRITTEN** (CLAUDE.md section 15: a dated point-in-time
+> record gets a banner, never a rewrite). Everything it says about "collector looting only, no bank
+> theft" was true when written and describes a system that no longer exists.
+>
+> **What actually changed in the tree, 2026-08-27 (WO-1026):**
+> - `ResourceCollector` no longer takes anything when it breaks. `RaidLootFraction`,
+>   `LootTakenFrom`, `IsResourceLootable` and `IsLootable` are DELETED -- that removal is what makes
+>   the double-charge this ticket feared *inexpressible* rather than merely forbidden.
+> - `StakeRules` regained a protected floor, a per-attack cap and the take arithmetic, now covering
+>   **coins** as well as wood/iron/stone. The numbers are authored in
+>   `Data/Canonical/siege-stakes.json` behind `SiegeStakesBalance` and are **OWNER-PENDING**.
+> - `DefenseReportBuilder.ApplyStakes` performs **the single debit** through the existing
+>   `EconomyService.TrySpend` path, of exactly the buckets the report renders.
+> - `SiegeLossStakesRegression` was **RE-POINTED, NOT DELETED**. Its headline case used to fail the
+>   gate if the bank moved at all; it now fails if the bank does not move by *exactly* the ledger,
+>   and it gained the structural + behavioural proof that collector looting is gone. A green oracle
+>   going red on a ruling change is the oracle doing its job.
+> - The crystal exemption is **unchanged and unweakened**, and `SiegeUntouchableRegression` still
+>   guards crystals / SKR / purchased goods / equipped gear on both of its axes.
+
+
+<!-- The original status line, preserved verbatim: -->
+<!-- **Status:** FIXED — AWAITING OWNER FELT-TEST TO CLOSE. Prior status: IMPLEMENTED 2026-08-22 - COLLECTOR LOOTING ONLY. The bank-theft rival was deleted and made unbuildable (reflection fails the gate if its methods return). Crystal collectors exempt in two independent places. FeatureFlags.Siege is now ON and PROVEN - all four siege suites green on a fresh log. -->
 
 # WORK ORDER 1139 — Implement the ruled loss stakes: theft, the repair bill, and turning the siege on
 

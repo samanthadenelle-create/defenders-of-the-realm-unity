@@ -1,6 +1,6 @@
 # WORK ORDER 1026 — The base is never attacked: close the CoC consequence loop
 
-**Status:** DONE 2026-08-21 - the ticket's OWN deliverable (PvE siege cadence + the persisted, data-shaped Defense Report) SHIPPED and is gate-green. The loss-stakes IMPLEMENTATION is split out to WO-1139; the RULING for it is recorded in this file and is the input to that ticket.
+**Status:** FIXED 2026-08-27 - gated `COMPILE_GATE_OK` + `REGRESSION_OK 307/307 suites` (Builds/w8-c, Builds/w8-r). Slices S2-S5 landed; the floor/cap KNOBS are provisional and OWNER-PENDING. AWAITING OWNER FELT-VERIFY to close.
 
 > Owner ruling 2026-08-17 (*"open ones follow your recommendations"*): **model (a)** — scripted/generated
 > attackers assault the base on a cadence, reusing `WaveManager`, no backend.
@@ -393,4 +393,35 @@ given. ⛔ Do NOT reuse the retired ruling's 15%/20% pair as defaults - they bel
 system. Implement the mechanism with the numbers authored in data, surface what the seam needs, and
 ask. The acceptance test stays the owner's own sentence:
 
+> "Damn, I should improve my defenses" instead of "The game erased something I paid for. Delete."
+
+---
+
+## OWNER RULING 2026-08-27 (b) - LOOTABILITY IS NOT ABOUT ORIGIN
+
+Raised because the implementing lane spotted it and would not decide it alone: **every real-money
+pack in `packs.json` sells `stone`, `coins`, `wood` and `iron`** - the exact four resources the
+08-27 ruling made lootable. Crystals are protected; those four are not. And `BankGrantKind` is a
+GRANT-TIME TAG ONLY (it exempts paid grants from the capacity clamp) - it is **not persisted**, so
+once purchased wood lands in the wallet it is indistinguishable from mined wood.
+
+**RULED: accept it. The PROTECTED FLOOR and the PER-ATTACK CAP are the protection - not origin.**
+
+"Purchased goods are untouchable" means the DURABLE things: **crystals, SKR, equipped gear, and the
+packs themselves.** It does NOT mean spendable materials. A siege may take a bounded slice of
+wood / iron / stone / coins no matter how the player came by them.
+
+### Why this is written this hard
+A future seat WILL find a player losing wood they paid for and read it as a violation of the
+untouchable list. It is not. Origin is deliberately NOT tracked, and adding tracking was considered
+and REJECTED: it would need new persisted balances (`purchasedWood` etc.), a migration on every live
+save, a correct tag on every grant path, and a spend-order rule - real migration risk on a live game
+for a distinction the floor and cap already bound.
+
+⛔ Do NOT add purchased-resource tracking to "fix" this.
+⛔ Do NOT quietly move wood/iron/stone/coins to the untouchable list.
+⛔ Do NOT weaken the floor or the cap - THEY are the protection this ruling rests on. If a loss ever
+feels unfair, the lever is those two numbers, not the lootable set.
+
+The acceptance test is unchanged and it is the test for the KNOBS:
 > "Damn, I should improve my defenses" instead of "The game erased something I paid for. Delete."

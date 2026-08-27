@@ -27,21 +27,25 @@
 //   DefenseReportContractRegression pins that a GhostSnapshot-sourced record
 //   round-trips identically today, so (c) needs no schema change.
 //
-// ⛔ THE STAKES ARE RULED (owner 2026-08-22, WO-1139): COLLECTOR LOOTING ONLY, NO BANK
-//   THEFT. "What you have COLLECTED is safe; what is still sitting in the building is at
-//   risk." A broken collector already loses half its UNCOLLECTED pending
-//   (ResourceCollector.OnSiegeDestroyed, RaidLootFraction 0.5, shipped as WO-664) — the
-//   report REPORTS that, it does not compute a second loss. DefenseReportBuilder.BuildStakes
-//   sums the collectors' own LastLootStolen into StakesLedger; ApplyStakes only SEALS it.
-//   ⛔ NOTHING DEBITS THE WALLET FOR A SIEGE, and nothing may: the collector already removed
-//   the resources, so a bank debit charges the player twice for one siege. The superseded
-//   2026-08-21 flat 15%-of-banked take (with a 20%-of-capacity floor) was deleted before it
-//   ever reached a player.
-//   ⛔ CRYSTAL COLLECTORS ARE NEVER ROBBED — enforced twice and independently, at the steal
-//   (ResourceCollector.IsLootable) and at the ledger (StakeRules.IsLootable).
+// ! THE STAKES ARE RULED (owner 2026-08-27, WO-1026): BANK THEFT REPLACES COLLECTOR
+//   LOOTING. A siege bills ONCE per attack: structural damage, a repair bill, and theft
+//   of a PERCENTAGE of UNPROTECTED bank resources under a PROTECTED FLOOR and a
+//   PER-ATTACK CAP.
+//       LOOTABLE      Wood, Iron, Stone (the balance internally NAMED Food), Coins
+//       UNTOUCHABLE   Crystals, SKR, purchased goods, equipped gear
+//   DefenseReportBuilder.BuildStakes computes the ledger from the bank's standing;
+//   ApplyStakes performs THE SINGLE DEBIT, of exactly those numbers, and seals it. What
+//   the player is TOLD they lost and what the wallet ACTUALLY lost are one value read from
+//   one place -- never two computations that agree today.
+//   ! COLLECTOR LOOTING IS REMOVED (same ruling). ResourceCollector.OnSiegeDestroyed no
+//   longer takes anything from its own pending, so there is exactly ONE theft in the game
+//   and no double-charge is expressible. The WO-1139 ruling that made bank theft
+//   unbuildable is SUPERSEDED, not ignored -- its oracle was RE-POINTED to this rule.
+//   ! CRYSTALS ARE NEVER TAKEN -- StakeRules.IsLootable is the single gate, and
+//   SiegeUntouchableRegression fails the gate on any path that could reach one.
 //   StakesRuleId makes an old report self-describing (pre-stakes records keep
-//   "none.interim.wo1026"), so a stakes-carrying build can never mis-read an interim
-//   report as "they took nothing that day".
+//   "none.interim.wo1026"; WO-1139 records keep "stakes.collectorloot.wo1139"), so a
+//   newer build can never mis-read an older report as "they took nothing that day".
 // =============================================================================
 
 using System;
@@ -359,56 +363,64 @@ namespace DeNelle.Core.Defense
     }
 
     /// <summary>
-    /// ⛔ WHAT THE ATTACK CARRIED OFF — the COLLECTORS' OWN LOOT FIGURES, SUMMED.
+    /// WHAT THE ATTACK TOOK -- the ONE account of the loss (owner ruling 2026-08-27).
     ///
-    /// <para>These numbers are NOT a second account of the loss. <c>DefenseReportBuilder.BuildStakes</c>
-    /// sums <c>ResourceCollector.LastLootStolen</c> across the collectors that broke during the
-    /// siege — the very field each collector wrote when it lost the resources — so the figure the
-    /// player reads and the figure that was actually lost are ONE VALUE, not two calculations that
-    /// agree today. A report that lies about a loss is worse than no report.</para>
+    /// <para>These numbers are not a report ABOUT a debit that happened elsewhere; they ARE the
+    /// debit. <c>DefenseReportBuilder.BuildStakes</c> computes them from the bank's standing at
+    /// settle time, and <c>ApplyStakes</c> spends exactly these buckets, once. So the figure the
+    /// player reads and the figure the wallet lost are ONE VALUE, not two calculations that agree
+    /// today. A report that lies about a loss is worse than no report.</para>
     ///
-    /// <para>⛔ <b>THE BANK IS NOT PART OF THIS.</b> Owner ruling 2026-08-22: collector looting
-    /// only, no bank theft — <i>"what you have COLLECTED is safe; what is still sitting in the
-    /// building is at risk"</i>. Nothing debits the wallet for a siege, and nothing may: the
-    /// collector already removed the resources from its own pending when it broke, so a wallet
-    /// debit would charge the player twice for one siege.</para>
+    /// <para><b>The bank IS the stake now</b>, bounded by a PROTECTED FLOOR and a PER-ATTACK CAP
+    /// (<see cref="StakeRules"/>, numbers in <see cref="SiegeStakesBalance"/>). Collector looting
+    /// was REMOVED in the same ruling, so a siege bills once. The WO-1139 "no bank theft" position
+    /// is superseded; its oracle was re-pointed, not deleted.</para>
     ///
-    /// <para>The buckets are shaped per the WO-947 basket ruling. ⛔ <b>Crystals stay 0 forever</b>
-    /// — the field exists only so the wire shape is complete. A crystal collector is never robbed
-    /// (<c>ResourceCollector.IsLootable</c>) and a crystal bucket can never be written
-    /// (<see cref="StakeRules.IsLootable"/>); a player cannot tell a harvested crystal from a
-    /// purchased one, so a crystal loss reads as losing bought currency.</para>
+    /// <para><b>Crystals and Magic stay 0 forever</b> -- the fields exist only so the wire shape is
+    /// complete and so a value that should be impossible is VISIBLE rather than hidden. A crystal
+    /// bucket can never be written (<see cref="StakeRules.IsLootable"/>): a player cannot tell a
+    /// harvested crystal from a purchased one, so a crystal loss reads as losing bought currency,
+    /// which is a refund and a one-star review on a live published title.</para>
     /// </summary>
     [Serializable]
     public sealed class StakesLedger
     {
-        /// <summary>Wood looted out of broken collectors. 0 when no wood collector broke.</summary>
+        /// <summary>Wood taken from the bank. 0 on a held defence or a balance under the floor.</summary>
         [JsonProperty("w")] public int Wood;
-        /// <summary>Iron looted out of broken collectors. 0 when no iron collector broke.</summary>
+        /// <summary>Iron taken from the bank. 0 on a held defence or a balance under the floor.</summary>
         [JsonProperty("i")] public int Iron;
-        /// <summary>Food looted out of broken collectors. 0 when no food collector broke.</summary>
+        /// <summary>STONE taken from the bank -- the balance internally NAMED Food (owner ruling
+        /// 2026-08-27: "food was depreicated and is stone"). The wire key stays "f" because it is a
+        /// live save key; the player-facing word is "stone".</summary>
         [JsonProperty("f")] public int Food;
-        /// <summary>⛔ ALWAYS 0. A crystal collector is never robbed and a crystal bucket can
-        /// never be written (see <see cref="StakeRules.IsLootable"/>). Pinned by
-        /// SiegeLossStakesRegression.</summary>
+        /// <summary>GOLD taken from the bank -- <c>GameState.Resources.Coins</c>. Additive on the
+        /// wire (owner ruling 2026-08-27 added coins to the lootable set): an older record with no
+        /// "g" key deserialises to 0, which is correct -- no coin was ever taken under the earlier
+        /// rulings -- so this needs NO SaveSchema bump.</summary>
+        [JsonProperty("g")] public int Coins;
+        /// <summary>! ALWAYS 0. Crystals are UNTOUCHABLE under every ruling and a crystal bucket
+        /// can never be written (see <see cref="StakeRules.IsLootable"/>). It exists so that a
+        /// value which should be impossible is VISIBLE rather than silently dropped. Pinned by
+        /// SiegeLossStakesRegression and SiegeUntouchableRegression.</summary>
         [JsonProperty("c")] public int Crystals;
         /// <summary>⛔ ALWAYS 0. No ruling takes magic; the bucket exists for wire completeness.</summary>
         [JsonProperty("m")] public int Magic;
-        /// <summary>Which ruling produced these numbers — <see cref="InterimRuleId"/> on a
-        /// pre-WO-1139 record, <see cref="StakeRules.RuleId"/> since. This is what stops a
-        /// stakes-carrying build from mis-reading an interim report as "the player lost nothing
-        /// that day".</summary>
+        /// <summary>Which ruling produced these numbers -- <see cref="InterimRuleId"/> on a
+        /// pre-stakes record, <see cref="StakeRules.CollectorLootRuleId"/> on a WO-1139 one, and
+        /// <see cref="StakeRules.RuleId"/> since 2026-08-27. This is what stops a newer build from
+        /// mis-reading an older report as "the player lost nothing that day".</summary>
         [JsonProperty("rule")] public string StakesRuleId;
 
         /// <summary>
-        /// TRUE once this record's loot has been SEALED onto the report. Additive, default-on-read
+        /// TRUE once this record's loss has been DEBITED AND SEALED. Additive, default-on-read
         /// (an older record deserialises to <c>false</c>, which is correct: nothing was ever
-        /// recorded under the interim), so it needs NO SaveSchema bump — v38 stands.
+        /// taken under the interim), so it needs NO SaveSchema bump.
         ///
-        /// <para>⚠ It does NOT mean "the wallet was debited": nothing debits the wallet for a
-        /// siege (the collector already removed the resources when it broke). It is the
-        /// IDEMPOTENCE latch — <c>ApplyStakes</c> refuses to seal the same record twice, so a
-        /// re-filed or re-opened report cannot re-count a loss.</para>
+        /// <para>Since the 2026-08-27 ruling it means BOTH "the wallet was debited" and "this
+        /// record is settled". It is the IDEMPOTENCE latch: <c>ApplyStakes</c> refuses to act on
+        /// the same record twice, so a re-filed or re-opened report cannot bill the player a second
+        /// time for one siege. That latch is the whole "a siege bills ONCE per attack" guarantee,
+        /// and it is asserted by SiegeLossStakesRegression.</para>
         /// </summary>
         [JsonProperty("ap")] public bool Applied;
 
@@ -417,7 +429,8 @@ namespace DeNelle.Core.Defense
 
         /// <summary>True when every bucket is zero — a held defence, or a pre-ruling record.</summary>
         [JsonIgnore]
-        public bool IsEmpty => Wood == 0 && Iron == 0 && Food == 0 && Crystals == 0 && Magic == 0;
+        public bool IsEmpty => Wood == 0 && Iron == 0 && Food == 0 && Coins == 0
+                               && Crystals == 0 && Magic == 0;
 
         /// <summary>The interim ledger: nothing taken, stamped with the interim rule id. Still the
         /// default for a record with no stakes on the wire (see <c>DefenseOutcomeRecord.Normalize</c>) —

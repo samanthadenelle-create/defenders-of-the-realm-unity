@@ -16,6 +16,20 @@
 //         not a balance issue, it is a refund and a one-star review. THE UNTOUCHABLE
 //         LIST MUST BE ENFORCED BY AN ORACLE, NOT BY CARE."
 //
+// ! UPDATED 2026-08-27 -- NARROWLY, AND ONLY ON THE LOOTABLE HALF.
+//    The owner's ruling of that date states the sets verbatim:
+//        LOOTABLE      Wood, Iron, Stone, Coins
+//        UNTOUCHABLE   Crystals, SKR, purchased goods, equipped gear
+//    COINS therefore moved OUT of this suite's untouchable expectation and into the
+//    lootable list, and the "coin"/"gold" fragments were dropped from the ledger-shape
+//    ban because StakesLedger now legitimately carries a Coins bucket. Coins were never
+//    on the owner's untouchable list in EITHER the 08-26 or the 08-27 ruling -- they sat
+//    here only because the superseded 08-22 collector-loot ruling had no coin harvest to
+//    loot.
+//    ! THE UNTOUCHABLE HALF IS UNCHANGED AND UNWEAKENED. Crystals, SKR, purchased goods
+//    and equipped gear are asserted exactly as hard as before, on both axes, and the
+//    scanner self-test still proves the lint is not hollow.
+//
 // ⛔ WHY THIS SUITE EXISTS SEPARATELY FROM SiegeLossStakesRegression.
 //    That suite proves the CURRENT stakes ruling is implemented correctly — it will
 //    be rewritten every time the ruling changes, and it has been rewritten once
@@ -65,16 +79,29 @@ namespace DeNelle.Editor.Regression
         // =====================================================================
 
         /// <summary>
-        /// The ONLY bank buckets a siege may ever report a loss in. Wood, iron and food are
-        /// EARNED. Everything else is bought, or indistinguishable from bought, and is out of
-        /// reach. Hand-authored here rather than read from <c>StakeRules</c> on purpose: an
-        /// oracle that derives its expectation from the code under test asserts nothing.
+        /// The ONLY bank buckets a siege may ever take from. Hand-authored here rather than read
+        /// from <c>StakeRules</c> on purpose: an oracle that derives its expectation from the code
+        /// under test asserts nothing.
+        ///
+        /// <para>! UPDATED 2026-08-27, DELIBERATELY AND NARROWLY. The owner's ruling of that date
+        /// states the lootable set verbatim -- <c>LOOTABLE Wood, Iron, Stone, Coins</c> /
+        /// <c>UNTOUCHABLE Crystals, SKR, purchased goods, equipped gear</c> -- so COINS moved into
+        /// this list. Coins were never on the owner's untouchable list in the 08-26 or 08-27
+        /// ruling; they sat here because the superseded 08-22 collector-loot ruling had no coin
+        /// harvest to loot. THE UNTOUCHABLE HALF IS UNCHANGED AND UNWEAKENED: crystals, SKR,
+        /// purchased goods and equipped gear are asserted exactly as hard as before, on both axes.
+        /// If a future ruling moves this list again, move it HERE, in the same change, and say why
+        /// -- never by relaxing an assertion elsewhere.</para>
+        ///
+        /// <para>! "Food" IS "Stone" (owner: "food was depreicated and is stone"). BankResource has
+        /// no Stone member and must never grow one -- it is a live save and wire key.</para>
         /// </summary>
         private static readonly BankResource[] Lootable =
         {
             BankResource.Wood,
             BankResource.Iron,
-            BankResource.Food,
+            BankResource.Food,    // "STONE" player-facing -- BankResource has no Stone member
+            BankResource.Coins,   // "GOLD" player-facing
         };
 
         /// <summary>
@@ -85,6 +112,7 @@ namespace DeNelle.Editor.Regression
         private static readonly string[] SiegeBlastRadius =
         {
             "Assets/_Modules/Core/Defense/StakeRules.cs",
+            "Assets/_Modules/Core/Defense/SiegeStakesBalance.cs",
             "Assets/_Modules/Core/Defense/DefenseReport.cs",
             "Assets/_Modules/Core/Defense/DefenseReportLedger.cs",
             "Assets/_Modules/Village/Waves/DefenseReportBuilder.cs",
@@ -138,8 +166,9 @@ namespace DeNelle.Editor.Regression
             if (failures.Count == 0)
             {
                 reason = "SIEGE UNTOUCHABLE OK -- every BankResource is classified exactly as the " +
-                         "ruling says (wood/iron/food lootable; CRYSTALS AND COINS NEVER, at any " +
-                         "amount); StakeRules.Add refuses every non-lootable bucket and still writes " +
+                         "2026-08-27 ruling says (wood/iron/stone(=Food)/coins lootable; CRYSTALS " +
+                         "NEVER, at any amount, under any cap); StakeRules.Add refuses every " +
+                         "non-lootable bucket and still writes " +
                          "the lootable ones; StakesLedger carries NO purchased-goods, equipped-gear " +
                          "or SKR bucket for a future rule to hang off; no file in the siege blast " +
                          "radius NAMES a purchased/equipped/SKR symbol in code; and the scanner that " +
@@ -256,9 +285,14 @@ namespace DeNelle.Editor.Regression
         /// </summary>
         private static void LedgerShapeCases(List<string> f)
         {
+            // ! "coin"/"gold" were removed from this list on 2026-08-27: the owner's ruling makes
+            //   COINS LOOTABLE, so StakesLedger legitimately carries a Coins bucket. Nothing else
+            //   moved -- gear, items, SKR, equipped and purchased anything are still forbidden to
+            //   have a field at all, because the cheapest way for a future ruling to take a
+            //   purchased good is to find a bucket already waiting for it.
             string[] forbiddenFragments =
             {
-                "coin", "gold", "gear", "item", "skr", "equip", "purchase", "pack", "wallet",
+                "gear", "item", "skr", "equip", "purchase", "pack", "wallet",
             };
 
             var t = typeof(StakesLedger);
@@ -424,6 +458,7 @@ namespace DeNelle.Editor.Regression
             if (ledger.Wood != 0) { nonZero = $"Wood={ledger.Wood}"; return false; }
             if (ledger.Iron != 0) { nonZero = $"Iron={ledger.Iron}"; return false; }
             if (ledger.Food != 0) { nonZero = $"Food={ledger.Food}"; return false; }
+            if (ledger.Coins != 0) { nonZero = $"Coins={ledger.Coins}"; return false; }
             if (ledger.Crystals != 0) { nonZero = $"Crystals={ledger.Crystals}"; return false; }
             if (ledger.Magic != 0) { nonZero = $"Magic={ledger.Magic}"; return false; }
             return true;
@@ -437,6 +472,7 @@ namespace DeNelle.Editor.Regression
                 case BankResource.Wood: return ledger.Wood;
                 case BankResource.Iron: return ledger.Iron;
                 case BankResource.Food: return ledger.Food;
+                case BankResource.Coins: return ledger.Coins;
                 case BankResource.Crystals: return ledger.Crystals;
                 default: return -1;
             }

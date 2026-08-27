@@ -145,6 +145,16 @@ namespace DeNelle.Editor
                 IsCollector = true, LootStolen = 120, HasCost = true,
                 RepairWood = 80, RepairIron = 40, RepairFood = 0, RepairCrystals = 0,
             });
+
+            // A POPULATED stakes basket, so the round-trip actually exercises every bucket's wire
+            // key -- including "g" (COINS), which the owner's 2026-08-27 ruling added to the
+            // lootable set. An additive key that is never populated is a key that is never proved.
+            // Crystals/Magic stay 0: they are UNTOUCHABLE and no ruling may fill them.
+            r.ResourcesLost = StakeRules.Empty();
+            StakeRules.Add(r.ResourcesLost, DeNelle.Core.Economy.BankResource.Wood, 700);
+            StakeRules.Add(r.ResourcesLost, DeNelle.Core.Economy.BankResource.Iron, 40);
+            StakeRules.Add(r.ResourcesLost, DeNelle.Core.Economy.BankResource.Food, 250);
+            StakeRules.Add(r.ResourcesLost, DeNelle.Core.Economy.BankResource.Coins, 450);
             return r;
         }
 
@@ -212,8 +222,13 @@ namespace DeNelle.Editor
 
             if (a.ResourcesLost.StakesRuleId != b.ResourcesLost.StakesRuleId) f.Add($"{tag}: ResourcesLost.StakesRuleId drifted");
             if (a.ResourcesLost.Wood != b.ResourcesLost.Wood || a.ResourcesLost.Iron != b.ResourcesLost.Iron
-                || a.ResourcesLost.Food != b.ResourcesLost.Food || a.ResourcesLost.Crystals != b.ResourcesLost.Crystals
+                || a.ResourcesLost.Food != b.ResourcesLost.Food || a.ResourcesLost.Coins != b.ResourcesLost.Coins
+                || a.ResourcesLost.Crystals != b.ResourcesLost.Crystals
                 || a.ResourcesLost.Magic != b.ResourcesLost.Magic) f.Add($"{tag}: ResourcesLost basket drifted");
+            if (b.ResourcesLost.Wood == 0 && b.ResourcesLost.Iron == 0 && b.ResourcesLost.Food == 0
+                && b.ResourcesLost.Coins == 0)
+                f.Add($"{tag}: the stakes basket came back ALL ZERO -- the fixture populates four " +
+                      "buckets, so this comparison would be asserting nothing");
             if (a.Read != b.Read) f.Add($"{tag}: Read drifted");
         }
 

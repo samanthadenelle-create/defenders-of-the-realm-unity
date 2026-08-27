@@ -1,0 +1,17 @@
+{
+  "_comment": "SIEGE LOSS STAKES - the bank-theft bounds (owner ruling 2026-08-27, WO-1026). LOOTABLE: wood, iron, stone(=the balance internally named Food), coins. UNTOUCHABLE: crystals, SKR, purchased goods, equipped gear.",
+  "_ownerPending": "THE FLOOR AND THE CAP ARE PROVISIONAL AND AWAIT AN OWNER RULING. The 2026-08-26 ruling REQUIRES a protected floor and a per-attack cap but gave no numbers, and the retired 2026-08-21 pair (15% steal / 20%-of-capacity floor) belongs to a DELETED system and must not be reused as a default. Every number below is a placeholder chosen to be conservative (a siege stings, it never empties a store); changing them needs NO recompile.",
+  "_authoringNotes": {
+    "cappedResources": "wood / iron / stone read their ceiling from TownBankCapacity.MaxOf, so their floor and cap are FRACTIONS OF CAPACITY - which keeps the sting proportional across the six container levels (2000 -> 34000) instead of 17x-ing on a late player.",
+    "coins": "Coins are UNCAPPED BY DESIGN (TownBankCapacity.UncappableResources, owner ruling 2026-08-04), so a fraction-of-capacity floor is undefined for them. They use the two FLAT numbers below instead.",
+    "outcome": "A HELD defence takes NOTHING - that is structural, not a knob, and there is deliberately no field for it here. Only a breach or an overrun bills.",
+    "unknownCapacity": "A capped resource whose capacity reads <= 0 is treated as UNKNOWN and takes NOTHING. Fail-open in the player's favour: a capacity read that broke must never be able to empty a store."
+  },
+  "version": 1,
+  "breachedStealFraction": 0.05,
+  "overrunStealFraction": 0.10,
+  "protectedFloorFractionOfCapacity": 0.25,
+  "perAttackCapFractionOfCapacity": 0.05,
+  "coinsProtectedFloor": 500,
+  "coinsPerAttackCap": 2000
+}

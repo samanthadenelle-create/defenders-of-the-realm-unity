@@ -372,11 +372,12 @@ namespace DeNelle.Village
                 // one held 40s". Merge only: no row is added, removed or re-priced here.
                 DefenseReportBuilder.StampLegibility(_record, Vitals);
 
-                // THE RULED LOSS (WO-1139, ruling 2026-08-22): COLLECTOR LOOTING ONLY, NO BANK
-                // THEFT. This REPORTS what the broken collectors already lost (their own
-                // LastLootStolen, summed) -- it computes nothing and takes nothing. It must run
-                // AFTER AdaptRows above, so the ledger total and the per-collector "looted N" rows
-                // describe the same set of breaks. SiegeScheduler.Settle then SEALS it.
+                // THE RULED LOSS (WO-1026, owner ruling 2026-08-27): BANK THEFT REPLACES
+                // COLLECTOR LOOTING, and a siege bills ONCE per attack. This COMPUTES what the
+                // attack will take from the UNPROTECTED bank -- under the protected floor and the
+                // per-attack cap -- and takes nothing yet. It must run AFTER AdaptRows above so the
+                // ledger and the damage rows describe the same settled attack.
+                // SiegeScheduler.Settle then performs THE SINGLE DEBIT (ApplyStakes).
                 _record.ResourcesLost = DefenseReportBuilder.BuildStakes(_record);
 
                 FlowTrace.Step("Siege",

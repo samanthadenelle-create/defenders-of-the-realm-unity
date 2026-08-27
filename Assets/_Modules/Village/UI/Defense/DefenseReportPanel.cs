@@ -542,45 +542,50 @@ namespace DeNelle.Village.UI
         }
 
         /// <summary>
-        /// WHAT THEY CARRIED OFF — an EXPLICIT statement either way, never a blank the player
+        /// WHAT THE ATTACK TOOK -- an EXPLICIT statement either way, never a blank the player
         /// reads as a bug.
         ///
-        /// <para>⭐ THIS IS THE ONLY PLACE A THEFT IS EVER ANNOUNCED, and it renders the ledger
-        /// VERBATIM. The ledger holds the collectors' OWN loot figures, summed
-        /// (DefenseReportBuilder.BuildStakes), so this screen cannot tell the player a different
-        /// number than their collectors lost — there is nothing to re-derive here. An unexplained
-        /// shrinking number is the resented version of this mechanic; a report that names it is
-        /// the loop working.</para>
+        /// <para>* THIS IS THE ONLY PLACE A THEFT IS EVER ANNOUNCED, and it renders the ledger
+        /// VERBATIM. The ledger IS the debit (DefenseReportBuilder.ApplyStakes spends exactly these
+        /// buckets), so this screen cannot tell the player a different number than the wallet lost
+        /// -- there is nothing to re-derive here. An unexplained shrinking number is the resented
+        /// version of this mechanic; a report that names it is the loop working.</para>
         ///
-        /// <para>⛔ THE COPY MUST TEACH THE RULE, because the rule is the whole design:
-        /// <b>what you have COLLECTED is safe; what is still sitting in the building is at
-        /// risk</b>. That sentence is the reason this mechanic reads as the player's own fault and
-        /// converts into return visits instead of resentment — the bank is never touched, so the
-        /// loss is always preventable by collecting. Crystals are never listed because a crystal
-        /// collector is never robbed.</para>
+        /// <para>! THE COPY MUST TEACH THE RULE, because the rule is what turns the loss into
+        /// "damn, I should improve my defenses" instead of "the game erased something I paid for".
+        /// It has three jobs: name what was taken, name that a RESERVE was protected and a CAP
+        /// held, and name what can NEVER be touched. Crystals and purchases are called out BY NAME
+        /// -- a player who is told her crystals are safe does not go looking to see whether they
+        /// are.</para>
         ///
-        /// <para>⚠ The retired copy here promised a "storage floor" and that raiders "cannot dig
-        /// below a full fifth of what your storage can hold". That described the superseded
-        /// bank-theft ruling and is now a promise about a mechanic that does not exist — worse
-        /// than no copy, because it teaches the player to fear the wrong thing.</para>
+        /// <para>Owner ruling 2026-08-27: LOOTABLE = wood, iron, stone, gold. UNTOUCHABLE =
+        /// crystals, SKR, purchased goods, equipped gear. "Stone" is the balance internally named
+        /// Food, and it is rendered with the player-facing word.</para>
+        ///
+        /// <para>Every state is carried by TEXT. The owner is colourblind: this must read the same
+        /// in greyscale, so nothing here depends on a tint.</para>
         /// </summary>
         private static string StakesLine(StakesLedger s)
         {
             if (s == null || s.IsEmpty)
-                return "Nothing was carried off.\n(Your stores are never touched -- only what is still " +
-                       "waiting in a collector can be looted, and none of it was.)";
+                return "Nothing was taken.\n(Your reserve held -- raiders can never dig below it, " +
+                       "and crystals, purchases and equipped gear are never at risk.)";
 
             var parts = new List<string>();
             if (s.Wood > 0) parts.Add(s.Wood + " wood");
             if (s.Iron > 0) parts.Add(s.Iron + " iron");
             if (s.Food > 0) parts.Add(s.Food + " stone");
-            // Crystals/Magic are NEVER looted -- they are listed only so that if one ever appeared
+            if (s.Coins > 0) parts.Add(s.Coins + " gold");
+            // Crystals/Magic can NEVER be taken. They are listed only so that if one ever appeared
             // it would be VISIBLE on screen rather than silently hidden by a renderer that "knows"
             // it cannot happen.
             if (s.Crystals > 0) parts.Add(s.Crystals + " crystals");
             if (s.Magic > 0) parts.Add(s.Magic + " magic");
-            return "They looted your collectors for " + string.Join(", ", parts) +
-                   ".\n(Your stores were never touched -- collect more often and there is less to take.)";
+
+            return "They carried off " + string.Join(", ", parts) +
+                   ".\n(A protected reserve was left untouched and one attack can never take more " +
+                   "than its cap. Crystals, purchases and equipped gear are never at risk -- " +
+                   "stronger defences are what keep the rest.)";
         }
 
         private static string RelativeTime(double whenUnixMs)

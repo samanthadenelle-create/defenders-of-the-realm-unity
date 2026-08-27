@@ -8,7 +8,7 @@
 //   WaveDamageReport.Entry[]  -> StructureOutcome[]
 //   GameState.BaseLayout      -> DefenderSnapshot + LayoutHash
 //   a wave ordinal            -> AttackerIdentity        (model (a))
-//   a settled record          -> StakesLedger            (THE RULED LOSS, §BuildStakes/§ApplyStakes)
+//   the town bank standing     -> StakesLedger            (THE RULED LOSS, BuildStakes/ApplyStakes)
 //
 // ⛔ THIS IS THE ONLY FILE THAT WRITES AttackerSource.GeneratedPve.
 //    That is the "do not hardcode that the attacker is generated" ruling made concrete:
@@ -28,7 +28,6 @@ using DeNelle.Core.Defense;
 using DeNelle.Core.Diagnostics;
 using DeNelle.Core.Economy;
 using DeNelle.Core.State;
-using DeNelle.Village.Buildings.Progression;   // ResourceCollector(+Registry) — the ONE theft in the game
 using UnityEngine;
 
 namespace DeNelle.Village
@@ -362,94 +361,83 @@ namespace DeNelle.Village
         }
 
         // =====================================================================
-        //  ★★★ THE SEAM — the loss consequence (WO-1139, ruling 2026-08-22) ★★★
+        //  *** THE SEAM -- the loss consequence (WO-1026, owner ruling 2026-08-27) ***
         // =====================================================================
         //
-        // ⭐ THE RULING: COLLECTOR LOOTING ONLY. NO BANK THEFT.
-        //    "What you have COLLECTED is safe. What is still sitting in the building is at risk."
+        //  THE RULING: BANK THEFT REPLACES COLLECTOR LOOTING. A SIEGE BILLS ONCE PER ATTACK.
+        //      A siege takes exactly three things: structural damage, a repair bill, and theft of
+        //      a PERCENTAGE of UNPROTECTED bank resources under a PROTECTED FLOOR and a
+        //      PER-ATTACK CAP.
+        //          LOOTABLE      Wood, Iron, Stone (the balance NAMED Food), Coins
+        //          UNTOUCHABLE   Crystals, SKR, purchased goods, equipped gear
         //
-        // ⛔⛔ NOTHING IN THIS FILE MAY EVER DEBIT THE WALLET FOR A SIEGE. Read that twice.
-        //    `ResourceCollector.OnSiegeDestroyed` ALREADY removed the resources — it subtracted
-        //    them from its own `_pending` at the moment it broke (WO-664, `RaidLootFraction 0.5`).
-        //    A wallet debit here would charge the player a SECOND time for one siege: once in the
-        //    collector, once in the bank. That is not a balance question, it is a double-charge.
-        //    An earlier pass on this WO did exactly that (a flat 15%-of-banked take through
-        //    EconomyService.TrySpend); it is DELETED, along with every `using` and capacity read
-        //    that existed only to feed it. SiegeLossStakesRegression measures the bank across a
-        //    full BuildStakes + ApplyStakes and fails if a single point moves.
+        //  ! ONE BILL, BY CONSTRUCTION -- NOT BY CARE. Collector looting was REMOVED in the same
+        //    ruling (ResourceCollector.OnSiegeDestroyed no longer takes anything from its pending),
+        //    so the double-charge the superseded WO-1139 ruling feared is closed BY REMOVAL. There
+        //    is exactly ONE theft in the game and it is the debit below. If anyone re-adds a second
+        //    pool, this one must be removed in the same change.
         //
-        // ⭐ ONE NUMBER, BY IDENTITY RATHER THAN BY AGREEMENT. BuildStakes does not compute a
-        //    loss; it SUMS `ResourceCollector.LastLootStolen` — the very field the collector wrote
-        //    when it lost the resources. The figure the player READS and the figure the collector
-        //    LOST are the same value read from the same place, so there is no second computation
+        //  * ONE NUMBER, BY IDENTITY RATHER THAN BY AGREEMENT. BuildStakes computes the ledger;
+        //    ApplyStakes spends EXACTLY THOSE BUCKETS. The figure the player READS on the report
+        //    and the figure the wallet LOST are the same object -- there is no second computation
         //    available to drift. A report that lies about a loss is worse than no report.
         //
-        // ⛔ CRYSTAL COLLECTORS ARE NOT LOOTABLE, and it is enforced on BOTH sides independently:
-        //    `ResourceCollector.IsLootable` means nothing is ever taken, and `StakeRules.IsLootable`
-        //    means nothing could be reported even if it were. Neither relies on the other.
+        //  ! CRYSTALS ARE NEVER TAKEN. StakeRules.IsLootable refuses the bucket, the debit basket
+        //    below never sets a crystal field, and ApplyStakes carries a backstop that zeroes a
+        //    crystal bucket if anything else ever writes one. Three independent refusals, because
+        //    a player cannot tell a harvested crystal from a purchased one and a crystal on a loss
+        //    screen is a refund request on a live published title.
 
         /// <summary>
-        /// WHAT THE ATTACK CARRIED OFF — REPORTED, never computed.
+        /// WHAT THE ATTACK WILL TAKE -- computed once, from the bank's standing at settle time.
         ///
-        /// <para>Sums <see cref="ResourceCollector.LastLootStolen"/> across every collector that
-        /// BROKE during this siege, bucketed by that collector's harvest resource. Crystals are
-        /// absent because a crystal collector is never robbed in the first place.</para>
+        /// <para>Reads the CURRENT balance and the CAPACITY of each lootable bucket
+        /// (<c>TownBankCapacity</c> is the one authority on both) and hands them to
+        /// <see cref="StakeRules.Build"/>, which applies the protected floor, the steal fraction
+        /// for the outcome, and the per-attack cap. A HELD defence takes nothing.</para>
         ///
-        /// <para><b>Scoped to THIS siege by the break stamp.</b> A destroyed collector is not
-        /// repairable (WO-753) and stands as a broken shell carrying its loot figure for the rest
-        /// of the session, so "every broken collector" would re-report an old robbery on every
-        /// future siege. Only breaks at or after <c>settled.StartedAtUnixMs</c> count.</para>
-        ///
-        /// <para><b>It takes nothing.</b> No wallet, no economy service, no capacity read — the
-        /// theft already happened inside the collector. This method is a READ.</para>
+        /// <para><b>It takes nothing yet.</b> This method is a READ plus arithmetic;
+        /// <see cref="ApplyStakes"/> performs the single debit of exactly these numbers.</para>
         ///
         /// <para>Guard-wrapped: if the scan throws, the fallback is an ALL-ZERO ledger. Failing
-        /// towards "nothing was carried off" is the only safe direction — an exception must never
-        /// be able to invent a loss.</para>
+        /// towards "nothing was taken" is the only safe direction -- an exception must never be
+        /// able to invent a loss on a live published game.</para>
         /// </summary>
         public static StakesLedger BuildStakes(DefenseOutcomeRecord settled)
         {
-            var ledger = Guard.Try<StakesLedger>("Siege", "report collector loot stakes", () =>
+            var ledger = Guard.Try<StakesLedger>("Siege", "compute bank-theft stakes", () =>
             {
-                var built = StakeRules.Empty();
+                var outcome = settled != null ? settled.Outcome : DefenseOutcome.Held;
 
-                // 0 = a record with no start stamp (hand-built, or an older shape). We then cannot
-                // scope the loot to ONE siege, and an unscoped count would re-announce every break
-                // still standing in the town. Report NOTHING and say so — the same failure
-                // direction as the Guard fallback below: nothing here may invent a loss.
-                // (SiegeSession stamps this at Arm, so the live path never lands here.)
-                double since = settled != null ? settled.StartedAtUnixMs : 0.0;
-                if (since <= 0.0)
+                if (outcome == DefenseOutcome.Held)
                 {
-                    FlowTrace.Warn("Siege",
-                        "stakes: the record carries no StartedAtUnixMs, so the loot cannot be scoped to " +
-                        "this siege. Filing an all-zero ledger rather than re-reporting older breaks.");
-                    return built;
+                    FlowTrace.Step("Siege",
+                        "stakes: the defence HELD -- nothing is taken. That is structural, not a knob: " +
+                        "if holding still cost resources the report would have nothing riding on it.");
+                    return StakeRules.Empty();
                 }
 
-                int counted = 0, skippedStale = 0, skippedExempt = 0;
-
-                foreach (var c in ResourceCollectorRegistry.All)
+                var standings = new List<BankStanding>();
+                foreach (var resource in LootableBuckets)
                 {
-                    if (c == null || !c.IsBroken) continue;
-
-                    if (c.LastLootStolenAtUnixMs < since) { skippedStale++; continue; }
-
-                    if (!c.IsLootable) { skippedExempt++; continue; }   // crystal collector
-
-                    int stolen = Mathf.RoundToInt(c.LastLootStolen);
-                    if (stolen <= 0) continue;
-
-                    // StakeRules.Add is the ONLY writer, and it drops any bucket that is not
-                    // lootable -- so an unmapped or exempt resource cannot land in the ledger.
-                    if (StakeRules.Add(built, ToBankResource(c.Resource), stolen)) counted++;
+                    if (!StakeRules.IsLootable(resource)) continue;   // belt and braces: the gate is StakeRules'
+                    standings.Add(new BankStanding
+                    {
+                        Resource = resource,
+                        Banked = TownBankCapacity.CurrentOf(resource),
+                        Capacity = TownBankCapacity.IsCapped(resource)
+                            ? TownBankCapacity.MaxOf(resource)
+                            : StakeRules.UncappedCapacity,
+                    });
                 }
+
+                var built = StakeRules.Build(outcome, standings);
 
                 FlowTrace.Step("Siege",
-                    $"stakes REPORTED rule={built.StakesRuleId} outcome={(settled != null ? settled.Outcome : DefenseOutcome.Held)} " +
-                    $"from {counted} broken collector(s) -> -W{built.Wood} -I{built.Iron} -F{built.Food}; " +
-                    $"{skippedStale} stale (broke before this siege), {skippedExempt} crystal (never robbed); " +
-                    "THE BANK WAS NOT TOUCHED -- what is collected is safe.");
+                    $"stakes COMPUTED rule={built.StakesRuleId} outcome={outcome} " +
+                    $"-W{built.Wood} -I{built.Iron} -S{built.Food} -G{built.Coins} " +
+                    "(stone is the balance named Food; gold is Coins). CRYSTALS/SKR/PURCHASED GOODS/" +
+                    "EQUIPPED GEAR ARE UNTOUCHABLE and have no expression here.");
 
                 return built;
             }, fallback: null);
@@ -457,49 +445,46 @@ namespace DeNelle.Village
             if (ledger != null) return ledger;
 
             FlowTrace.Warn("Siege",
-                "stakes report FAILED -- filing an all-zero ledger. A throw must never be " +
-                "able to invent a loss, so the failure direction is 'nothing was carried off'.");
+                "stakes computation FAILED -- filing an all-zero ledger. A throw must never be " +
+                "able to invent a loss, so the failure direction is 'nothing was taken'.");
             return StakeRules.Empty();
         }
 
         /// <summary>
-        /// Maps a collector's harvest type onto the ledger's bank bucket. Crystals map to
-        /// <see cref="BankResource.Crystals"/>, which <see cref="StakeRules.IsLootable"/> refuses —
-        /// so even a caller that forgets the exemption cannot write one.
+        /// The buckets a siege may read. Authored here as the DEBIT BASKET so the crystal exemption
+        /// is visible at the call site as well as inside <see cref="StakeRules.IsLootable"/> --
+        /// two independent refusals, neither relying on the other being remembered.
         /// </summary>
-        private static BankResource ToBankResource(HarvestResource resource)
+        private static readonly BankResource[] LootableBuckets =
         {
-            switch (resource)
-            {
-                case HarvestResource.Wood: return BankResource.Wood;
-                case HarvestResource.Iron: return BankResource.Iron;
-                case HarvestResource.Food: return BankResource.Food;
-                default: return BankResource.Crystals;   // never lootable — see StakeRules.IsLootable
-            }
-        }
+            BankResource.Wood,
+            BankResource.Iron,
+            BankResource.Food,    // "Stone" player-facing -- live save/wire key, never renamed
+            BankResource.Coins,   // "Gold" player-facing
+        };
 
         /// <summary>
-        /// SEALS the stakes ledger onto the settled record. Called ONCE, from
-        /// <c>SiegeScheduler.Settle</c>, between <c>SiegeSession.Close</c> and
-        /// <c>DefenseReportLedger.Append</c>.
+        /// THE SINGLE DEBIT, AT THE SINGLE SEAM. Called ONCE, from <c>SiegeScheduler.Settle</c>,
+        /// between <c>SiegeSession.Close</c> and <c>DefenseReportLedger.Append</c>.
         ///
-        /// <para>⛔⛔ <b>IT DEBITS NOTHING, AND IT NEVER MAY.</b> The name is historical: under the
-        /// superseded 2026-08-21 ruling this method took 15% of the banked wallet through
-        /// <c>EconomyService.TrySpend</c>. That debit is DELETED. Under the live ruling the
-        /// resources were ALREADY removed by <c>ResourceCollector.OnSiegeDestroyed</c> when the
-        /// collector broke, so any debit here would charge the player twice for one siege — once
-        /// in the collector, once in the bank. There is deliberately no economy reference left in
-        /// this method for a future edit to reach for.</para>
+        /// <para>Spends exactly the buckets <see cref="BuildStakes"/> computed, through the
+        /// EXISTING economy path (<c>EconomyService.TrySpend</c> -- the same atomic wallet writer
+        /// every shop and build cost uses). There is no second economy writer, and no bespoke
+        /// subtraction anywhere in the siege lane.</para>
         ///
-        /// <para>What it still does, all of which is bookkeeping:
-        /// stamps the rule id so the record names the ruling that wrote it; enforces the crystal /
-        /// magic backstop; and latches <see cref="StakesLedger.Applied"/> so a re-filed or
-        /// re-opened record cannot be re-counted.</para>
+        /// <para><b>The ledger is re-clamped to what the wallet could actually pay before the
+        /// debit</b>, so the number the player READS is the number that ACTUALLY left the wallet
+        /// even if the balance moved between compute and settle. Report and reality cannot diverge.</para>
         ///
-        /// <para>⛔ Nothing here downgrades a building, destroys permanent progress, or touches
-        /// stars / cleared-camp state. There is no code path in this file that could.</para>
+        /// <para><b>Idempotent.</b> <see cref="StakesLedger.Applied"/> latches on the first call and
+        /// every later call refuses -- that latch IS the "a siege bills ONCE per attack" guarantee,
+        /// so a re-filed or re-opened report can never bill twice.</para>
+        ///
+        /// <para>! Nothing here downgrades a building, destroys permanent progress, or touches
+        /// stars / cleared-camp state / gear / items / SKR. There is no code path in this file that
+        /// could, and SiegeUntouchableRegression fails the gate if one is ever written.</para>
         /// </summary>
-        /// <returns>True when the record carries a real, non-zero loot loss.</returns>
+        /// <returns>True when the record carries a real, non-zero loss that was debited.</returns>
         public static bool ApplyStakes(DefenseOutcomeRecord settled)
         {
             if (settled == null) return false;
@@ -511,45 +496,105 @@ namespace DeNelle.Village
             if (ledger.Applied)
             {
                 FlowTrace.Warn("Siege",
-                    $"ApplyStakes called AGAIN on report {settled.Id} -- already sealed " +
-                    $"(-W{ledger.Wood} -I{ledger.Iron} -F{ledger.Food}). Refusing to re-count.");
+                    $"ApplyStakes called AGAIN on report {settled.Id} -- already settled " +
+                    $"(-W{ledger.Wood} -I{ledger.Iron} -S{ledger.Food} -G{ledger.Coins}). " +
+                    "Refusing: a siege bills ONCE per attack.");
                 return false;
             }
 
-            // ⛔ THE CRYSTAL BACKSTOP. StakeRules.Add cannot write a crystal bucket, so a non-zero
-            //    one here means something else wrote the ledger (a bad migration, a hand-edited
-            //    save, a future caller). Zero it: a player cannot tell a harvested crystal from a
-            //    purchased one, so a crystal on a loss screen reads as losing bought currency.
+            // ! THE UNTOUCHABLE BACKSTOP. StakeRules.Add cannot write these buckets, so a non-zero
+            //   one here means something else wrote the ledger (a bad migration, a hand-edited save,
+            //   a future caller). Zero it BEFORE the debit basket is built, so an impossible value
+            //   can never become a real charge.
             if (ledger.Crystals != 0 || ledger.Magic != 0)
             {
                 FlowTrace.Fail("Siege",
-                    $"stakes ledger carried crystals={ledger.Crystals} magic={ledger.Magic} -- " +
-                    "NEITHER IS EVER LOOTABLE (owner ruling; crystal collectors are exempt at the " +
-                    "steal AND at the ledger). Zeroed before the report is sealed.");
+                    $"stakes ledger carried crystals={ledger.Crystals} magic={ledger.Magic} -- NEITHER IS " +
+                    "EVER TAKEABLE (owner ruling: crystals/SKR/purchased goods/equipped gear are untouchable " +
+                    "absolutely). Zeroed before the debit.");
                 ledger.Crystals = 0;
                 ledger.Magic = 0;
             }
 
             ledger.StakesRuleId = StakeRules.RuleId;
 
-            if (ledger.Wood <= 0 && ledger.Iron <= 0 && ledger.Food <= 0)
+            if (ledger.Wood <= 0 && ledger.Iron <= 0 && ledger.Food <= 0 && ledger.Coins <= 0)
             {
                 FlowTrace.Step("Siege",
-                    $"stakes: nothing was carried off (outcome={settled.Outcome}) -- no collector broke " +
-                    "with pending in it. The bank is not part of this mechanic.");
+                    $"stakes: nothing was taken (outcome={settled.Outcome}) -- the defence held, or every " +
+                    "balance sat at or under its protected floor. The floor is what stops the mechanic " +
+                    "kicking a player who is already down.");
                 return false;
             }
 
-            // ⭐ THE ONE NUMBER, UNTOUCHED. These buckets ARE the collectors' own LastLootStolen
-            //    figures, summed. Rewriting them here from any other source would recreate the two
-            //    -accounts-of-one-loss defect this design exists to prevent.
+            // Re-clamp to what the wallet holds RIGHT NOW, so the report cannot claim more than left.
+            ledger.Wood = ClampToBalance(ledger.Wood, BankResource.Wood);
+            ledger.Iron = ClampToBalance(ledger.Iron, BankResource.Iron);
+            ledger.Food = ClampToBalance(ledger.Food, BankResource.Food);
+            ledger.Coins = ClampToBalance(ledger.Coins, BankResource.Coins);
+
+            if (ledger.Wood <= 0 && ledger.Iron <= 0 && ledger.Food <= 0 && ledger.Coins <= 0)
+            {
+                FlowTrace.Warn("Siege",
+                    "stakes: every bucket clamped to nothing against the live wallet -- the balance moved " +
+                    "between compute and settle. Filing a zero loss rather than a figure the player " +
+                    "cannot see in their own wallet.");
+                ledger.Applied = true;   // settled, and it cost nothing -- never re-bill it
+                return false;
+            }
+
+            var economy = EconomyService.Instance;
+            if (economy == null)
+            {
+                // No silent failure (CLAUDE.md section 12): a report that CLAIMS a loss the wallet
+                // never took is the divergence this whole design exists to prevent. Zero the ledger
+                // so the report tells the truth, and say loudly why.
+                FlowTrace.Fail("Siege",
+                    $"stakes: NO EconomyService -- the debit could not run for report {settled.Id}. " +
+                    "Zeroing the ledger so the report cannot claim a loss the wallet never took.");
+                ledger.Wood = ledger.Iron = ledger.Food = ledger.Coins = 0;
+                ledger.Applied = true;
+                return false;
+            }
+
+            // *** THE ONE DEBIT. Crystals are deliberately absent from the basket -- not zero, ABSENT.
+            var basket = new DeNelle.Village.ResourceCost(
+                wood: ledger.Wood,
+                food: ledger.Food,      // "Stone"
+                iron: ledger.Iron,
+                crystals: 0,            // UNTOUCHABLE, absolutely
+                coins: ledger.Coins);   // "Gold"
+
+            bool spent = Guard.Try("Siege", "debit the siege stakes", () => economy.TrySpend(basket), fallback: false);
+
+            if (!spent)
+            {
+                FlowTrace.Fail("Siege",
+                    $"stakes: TrySpend REFUSED the basket for report {settled.Id} " +
+                    $"(-W{ledger.Wood} -I{ledger.Iron} -S{ledger.Food} -G{ledger.Coins}). Zeroing the " +
+                    "ledger: the report must never claim a loss the wallet did not take.");
+                ledger.Wood = ledger.Iron = ledger.Food = ledger.Coins = 0;
+                ledger.Applied = true;
+                return false;
+            }
+
             ledger.Applied = true;
 
             FlowTrace.Step("Siege",
-                $"stakes SEALED rule={ledger.StakesRuleId} -W{ledger.Wood} -I{ledger.Iron} -F{ledger.Food} " +
-                "(carried off from broken collectors; THE BANK WAS NOT DEBITED -- what is collected is safe).");
+                $"stakes DEBITED rule={ledger.StakesRuleId} -W{ledger.Wood} -I{ledger.Iron} " +
+                $"-S{ledger.Food} -G{ledger.Coins} (ONE bill for this siege; the floor and the cap held; " +
+                "crystals/SKR/purchased goods/equipped gear untouched).");
 
             return true;
+        }
+
+        /// <summary>Clamps a ledger bucket to the wallet's live balance. Never negative.</summary>
+        private static int ClampToBalance(int amount, BankResource resource)
+        {
+            if (amount <= 0) return 0;
+            int held = TownBankCapacity.CurrentOf(resource);
+            if (held <= 0) return 0;
+            return amount < held ? amount : held;
         }
     }
 }

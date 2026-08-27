@@ -847,17 +847,24 @@ namespace DeNelle.Core
         /// WO-1026 — the PvE SIEGE loop: scheduled attacks on the player's own town, plus the
         /// persisted, re-openable Defence Report they produce.
         ///
-        /// <para><b>Default ON since WO-1139.</b> It was OFF for a DESIGN reason, not a code one:
-        /// what a failed defence COST the player was unruled, so the loop would have felt-tested
-        /// as an attack with no stake — hollow, and correctly reported as "the feature is bad"
-        /// when the truth was "the stake is missing". <b>The owner ruled it on 2026-08-22:
-        /// COLLECTOR LOOTING ONLY, NO BANK THEFT</b> — <i>"what you have COLLECTED is safe; what
-        /// is still sitting in the building is at risk"</i>. The stake was ALREADY SHIPPED (a
-        /// broken collector loses half its uncollected pending, WO-664); what WO-1139 added is the
-        /// REPORT of it (<c>DefenseReportBuilder.BuildStakes</c> sums the collectors' own
-        /// <c>LastLootStolen</c>, <c>DeNelle.Core.Defense.StakeRules</c> holds the buckets and the
-        /// crystal exemption), pinned by SiegeLossStakesRegression. The design gate that held this
-        /// flag down is closed, so it is on.</para>
+        /// <para><b>Default ON.</b> It was OFF for a DESIGN reason, not a code one: what a failed
+        /// defence COST the player was unruled, so the loop would have felt-tested as an attack
+        /// with no stake -- hollow, and correctly reported as "the feature is bad" when the truth
+        /// was "the stake is missing". That gate is closed.</para>
+        ///
+        /// <para><b>THE LIVE STAKES RULING is the owner's of 2026-08-27: BANK THEFT REPLACES
+        /// COLLECTOR LOOTING.</b> A siege bills ONCE per attack and takes exactly three things:
+        /// structural damage, a repair bill, and a bounded percentage of the UNPROTECTED bank --
+        /// under a PROTECTED FLOOR and a PER-ATTACK CAP. LOOTABLE: wood, iron, stone (the balance
+        /// internally named Food) and coins. UNTOUCHABLE, absolutely: crystals, SKR, purchased
+        /// goods, equipped gear. <c>DeNelle.Core.Defense.StakeRules</c> holds the arithmetic,
+        /// <c>SiegeStakesBalance</c> holds the (OWNER-PENDING) numbers, and
+        /// <c>DefenseReportBuilder.ApplyStakes</c> is the single debit -- pinned by
+        /// SiegeLossStakesRegression and SiegeUntouchableRegression.</para>
+        ///
+        /// <para>The superseded WO-1139 position ("collector looting only, no bank theft",
+        /// 2026-08-22) is recorded in StakeRules' header so nobody mistakes its prose for the
+        /// ruling. Collector looting is REMOVED, so no double-bill is expressible.</para>
         ///
         /// <para>⚠ The flag's DEFAULT was flipped to ON by an edit-only pass and has not been
         /// gate-verified here — the CLI seat owns that proof.</para>
