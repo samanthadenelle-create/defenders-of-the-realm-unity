@@ -633,6 +633,18 @@ test('the page is built for a phone: one column, big targets, no framework', () 
     assert.doesNotMatch(page, /https?:\/\//);
 });
 
+test('the default command-center view shows real daily active-player telemetry', () => {
+    const page = consoleEndpoint.PAGE;
+    // The metric already has one authority: stats.js overview. The console must
+    // consume it rather than counting rows or inventing a second definition.
+    assert.match(page, /state = \{ tab:'players'/);
+    assert.match(page, /stats\?view=overview&days=/);
+    assert.match(page, /Active players in the last 24 hours/);
+    assert.match(page, /Daily active players/);
+    assert.match(page, /Identified coverage/);
+    assert.match(page, /Anonymous sessions/);
+});
+
 test('the page script PARSES -- a syntax error here is a blank screen, silently', () => {
     // The page is one string in a .js file, so nothing else in this repo ever
     // parses it. A stray bracket ships as a completely blank console and the

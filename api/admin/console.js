@@ -22,7 +22,8 @@
 // Reloading asks again, by design.
 //
 // ⛔ TWO HALVES, KEPT APART AT THE ENDPOINT, NOT IN THIS UI.
-//   READ  -> GET  /api/admin/stats?view=purchases   (money, server-settled)
+//   READ  -> GET  /api/admin/stats?view=overview    (players and telemetry)
+//            GET  /api/admin/stats?view=purchases   (money, server-settled)
 //            GET  /api/admin/stats?view=ops         (toggles, promos, issues)
 //   WRITE -> POST /api/admin/ops                    (second key, four actions)
 // The read endpoints cannot write. Nothing this page does can change that,
@@ -87,6 +88,21 @@ const PAGE = `<!DOCTYPE html>
   .tile .k{color:var(--dim);font-size:11px;text-transform:uppercase;letter-spacing:.08em}
   .tile .v{font-size:26px;font-weight:700;line-height:1.15;margin-top:2px}
   .tile .s{color:var(--dim);font-size:12px;margin-top:2px}
+  .hero{background:linear-gradient(145deg,#211a12 0%,var(--panel) 52%);border-color:#5d4923;
+    padding:18px;overflow:hidden;position:relative}
+  .hero:after{content:"";position:absolute;width:190px;height:190px;border:1px solid #5d4923;
+    border-radius:50%;right:-90px;top:-110px;opacity:.55}
+  .eyebrow{color:var(--accent);font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.12em}
+  .hero-number{font-size:52px;font-weight:800;line-height:1;margin:8px 0 4px;letter-spacing:-.04em}
+  .metric-grid{display:grid;grid-template-columns:1.3fr 1fr 1fr;gap:10px;margin-top:14px}
+  .metric-grid .tile:first-child{border-color:#5d4923}
+  .chart{display:flex;align-items:flex-end;gap:5px;height:150px;padding:18px 2px 0;border-bottom:1px solid var(--line)}
+  .bar-wrap{height:100%;flex:1;min-width:8px;display:flex;align-items:flex-end;position:relative}
+  .bar{width:100%;min-height:2px;background:var(--accent);border-radius:4px 4px 0 0;opacity:.82}
+  .bar-wrap:hover .bar,.bar-wrap:focus .bar{opacity:1}
+  .chart-key{display:flex;justify-content:space-between;color:var(--dim);font-size:11px;margin-top:6px}
+  .coverage{height:8px;background:var(--panel2);border-radius:10px;overflow:hidden;margin:10px 0 5px}
+  .coverage span{display:block;height:100%;background:var(--accent)}
   .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
   .grow{flex:1 1 180px}
   .scroll{overflow-x:auto;-webkit-overflow-scrolling:touch}
@@ -109,7 +125,8 @@ const PAGE = `<!DOCTYPE html>
   .gate{max-width:440px;margin:8vh auto}
   code{background:var(--panel2);border:1px solid var(--line);border-radius:5px;padding:1px 5px;font-size:12px}
   .none{color:var(--dim);font-style:italic}
-  @media (max-width:520px){ .wrap{padding:8px} .tile .v{font-size:22px} }
+  @media (max-width:520px){ .wrap{padding:8px} .tile .v{font-size:22px} .hero-number{font-size:44px}
+    .metric-grid{grid-template-columns:1fr 1fr}.metric-grid .tile:first-child{grid-column:1/-1} }
 </style>
 </head>
 <body>
@@ -143,7 +160,8 @@ const PAGE = `<!DOCTYPE html>
     </div>
   </header>
   <nav id="tabs">
-    <button data-tab="toggles" aria-pressed="true">Toggles</button>
+    <button data-tab="players" aria-pressed="true">Players</button>
+    <button data-tab="toggles" aria-pressed="false">Toggles</button>
     <button data-tab="money" aria-pressed="false">Money</button>
     <button data-tab="issues" aria-pressed="false">Player issues</button>
     <button data-tab="promos" aria-pressed="false">Promos</button>
@@ -160,7 +178,7 @@ const PAGE = `<!DOCTYPE html>
   var READ_KEY = null;
   var OPS_KEY = null;
 
-  var state = { tab:'toggles', days:30, ops:null, money:null, err:null };
+  var state = { tab:'players', days:30, overview:null, ops:null, money:null, err:null };
 
   var $ = function(id){ return document.getElementById(id); };
 
@@ -212,19 +230,68 @@ const PAGE = `<!DOCTYPE html>
     $('stamp').textContent = 'loading';
     var d = state.days;
     return Promise.all([
+      getJson('/api/admin/stats?view=overview&days=' + d),
       getJson('/api/admin/stats?view=ops&days=' + d),
       getJson('/api/admin/stats?view=purchases&days=' + d)
     ]).then(function(res){
       state.err = null;
-      state.ops = res[0].status === 200 ? res[0].body : null;
-      state.money = res[1].status === 200 ? res[1].body : null;
-      if (!state.ops) state.err = 'ops read failed: ' + esc((res[0].body && res[0].body.error) || res[0].status);
+      state.overview = res[0].status === 200 ? res[0].body : null;
+      state.ops = res[1].status === 200 ? res[1].body : null;
+      state.money = res[2].status === 200 ? res[2].body : null;
+      if (!state.overview) state.err = 'player metrics failed: ' + esc((res[0].body && res[0].body.error) || res[0].status);
+      else if (!state.ops) state.err = 'ops read failed: ' + esc((res[1].body && res[1].body.error) || res[1].status);
       $('stamp').textContent = 'read ' + new Date().toISOString().replace('T',' ').slice(0,16);
       render();
     }).catch(function(e){
       state.err = 'network: ' + String(e);
       render();
     });
+  }
+
+  // ---- players and telemetry --------------------------------------------
+  function renderPlayers(){
+    var o = state.overview;
+    if (!o) return '<div class="card"><p class="none">Player telemetry is unavailable.</p></div>';
+    var a = o.active || {};
+    var rows = (o.per_day || []).slice().reverse();
+    var newest = rows.length ? rows[rows.length - 1] : null;
+    var max = rows.reduce(function(m,r){ return Math.max(m,Number(r.active_players)||0); },1);
+    var knownSessions = Number(a.sessions_30d || 0);
+    var anonSessions = Number((o.anonymous || {}).sessions || 0);
+    var coverage = knownSessions + anonSessions ? Math.round(knownSessions * 100 / (knownSessions + anonSessions)) : 0;
+    var chart = rows.map(function(r){
+      var value = Number(r.active_players)||0;
+      var height = Math.max(2,Math.round(value * 100 / max));
+      return '<div class="bar-wrap" tabindex="0" title="' + esc(r.day) + ': ' + value +
+        ' active players, ' + n(r.sessions) + ' sessions"><div class="bar" style="height:' + height + '%"></div></div>';
+    }).join('');
+    var h = '<div class="card hero"><div class="eyebrow">Live player pulse</div>' +
+      '<div class="hero-number">' + n(a.today) + '</div><h2>Active players in the last 24 hours</h2>' +
+      '<p class="note">Unique identified players who opened the game. Refreshed ' + when(o.generated_at) + '.</p>' +
+      '<div class="metric-grid">' +
+      '<div class="tile"><div class="k">7-day active</div><div class="v">' + n(a.d7) + '</div><div class="s">unique players</div></div>' +
+      '<div class="tile"><div class="k">30-day active</div><div class="v">' + n(a.d30) + '</div><div class="s">unique players</div></div>' +
+      '<div class="tile"><div class="k">Sessions today</div><div class="v">' + n(a.sessions_today) + '</div><div class="s">game opens</div></div>' +
+      '</div></div>';
+    h += '<div class="card"><h2>Daily active players</h2><p class="note">One bar per UTC day. Focus a bar for its exact count.</p>' +
+      (rows.length ? '<div class="chart" aria-label="Daily active-player chart">' + chart + '</div><div class="chart-key"><span>' +
+        esc(rows[0].day) + '</span><span>Peak ' + max + '</span><span>' + esc(newest.day) + '</span></div>'
+        : '<p class="none">No identified-player sessions in this window.</p>') + '</div>';
+    h += '<div class="card"><h2>Telemetry health</h2><div class="tiles">' +
+      '<div class="tile"><div class="k">Identified coverage</div><div class="v">' + coverage + '%</div><div class="s">known sessions vs all sessions</div></div>' +
+      '<div class="tile"><div class="k">Anonymous sessions</div><div class="v">' + anonSessions + '</div><div class="s">cannot be counted as people</div></div>' +
+      '<div class="tile"><div class="k">Events received</div><div class="v">' + n((o.totals||{}).total_events) + '</div><div class="s">all time</div></div></div>' +
+      '<div class="coverage" aria-label="Identified telemetry coverage ' + coverage + ' percent"><span style="width:' + coverage + '%"></span></div>' +
+      '<p class="note">' + esc((o.anonymous||{}).note || '') + '</p></div>';
+    var fresh = (o.new_players_per_day || []).slice(0,7);
+    h += '<div class="card"><h2>New players</h2><p class="note">First-ever identified event, grouped by UTC day.</p>' +
+      '<div class="scroll"><table><tr><th>Day</th><th>New players</th><th>Active players</th><th>Sessions</th></tr>';
+    if (!fresh.length) h += '<tr><td colspan="4" class="none">No new identified players in this window.</td></tr>';
+    fresh.forEach(function(r){
+      var day = (o.per_day || []).filter(function(x){ return x.day === r.day; })[0] || {};
+      h += '<tr><td>' + esc(r.day) + '</td><td>' + n(r.new_players) + '</td><td>' + n(day.active_players) + '</td><td>' + n(day.sessions) + '</td></tr>';
+    });
+    return h + '</table></div></div>';
   }
 
   // ---- toggles ------------------------------------------------------------
@@ -454,7 +521,8 @@ const PAGE = `<!DOCTYPE html>
     var h = '';
     if (state.err) h += '<div class="msg bad">' + esc(state.err) + '</div>';
     if (state.flash) h += '<div class="msg' + (state.flashBad ? ' bad' : '') + '">' + esc(state.flash) + '</div>';
-    h += state.tab === 'toggles' ? renderToggles()
+    h += state.tab === 'players' ? renderPlayers()
+       : state.tab === 'toggles' ? renderToggles()
        : state.tab === 'money' ? renderMoney()
        : state.tab === 'issues' ? renderIssues()
        : state.tab === 'promos' ? renderPromos()

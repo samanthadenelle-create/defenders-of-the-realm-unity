@@ -339,6 +339,10 @@ Full checklist: `api/DEPLOY.md`. Table/migration detail: `api/DB_SETUP.md`.
 - `https://<app>.vercel.app/api/admin/console` — phone-first operator console. Type `ADMIN_DASH_KEY`
   into the gate; writes prompt for `ADMIN_OPS_KEY` once per tab. Keys are held **in memory only** —
   never localStorage, never a cookie, never the URL.
+- **Players is the default view:** 24-hour, 7-day and 30-day active players, UTC daily trend,
+  sessions, new players and telemetry identity coverage. Active means a distinct non-anonymous
+  player that emitted `session_start`; anonymous volume is shown separately and never miscounted
+  as one player.
 - **The read/write boundary is at the ENDPOINT, not in the UI.** `api/admin/db.js` and
   `api/admin/stats.js` are **SELECT-only by construction**. Never add a write path to them.
 - `tools/command-centre.ps1` is a **different thing that shares the name** — it is the guarded deploy
