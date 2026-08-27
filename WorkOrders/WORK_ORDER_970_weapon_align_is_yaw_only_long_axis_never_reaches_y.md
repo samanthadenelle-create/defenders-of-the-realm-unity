@@ -1,6 +1,6 @@
 # WORK ORDER 970 — The bounds align can only YAW, so a weapon whose mesh is not authored Y-long never stands up
 
-**Status:** FIXED 2026-08-26 - gated `COMPILE_GATE_OK` + `REGRESSION_OK 294/294 suites` (Builds/g3-c, Builds/g3-r). AWAITING OWNER FELT-VERIFY to close.
+**Status:** CLOSED 2026-08-27 — owner Pass (felt-validated, APK 2026.08.27.343878).
 >  PRIOR: **Status:** DONE — shipped `af5e2e7d` ("fix(gear): WO-970"). Still open: the owner's re-dial of the two authored nudges, plus owner felt-verify. RESULT file still owed (not fabricated). *(Status corrected 2026-08-14: the line still said "awaiting batch-gate + commit", and was written `**Status: …**` rather than the canonical `**Status:** …` the sibling files use.)*
 **Silo:** Hero / Equipment / Geometry — `WeaponBoundsOrient.cs` (orchestrator holds `EquipmentController.cs`)
 **Owner report (2026-08-10, felt-test, playing the Mage):** the Emberglass Staff (`tripo_staff_a`)

@@ -1,6 +1,6 @@
 # WORK ORDER 992 — Six classes ship in every build, compile clean, and are NEVER instantiated
 
-**Status:** FIXED 2026-08-23 (Codex audit) — the leading status was STALE. Later work REMOVED BattlePassManager, CryptoPaymentManager, TorchFireController and AuraController, and wired the ruled classes. Nothing unwired remains. AWAITING OWNER CLOSE.
+**Status:** CLOSED 2026-08-27 — owner Pass (felt-validated, APK 2026.08.27.343878).
 **Minted:** 2026-08-14 (CLI)
 **Silo:** Codebase hygiene / dead code
 **Source:** the 2026-08-14 phantom sweep, plus owner dispositions the same day

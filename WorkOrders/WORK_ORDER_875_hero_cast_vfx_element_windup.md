@@ -4,7 +4,7 @@
 
 # WORK ORDER 875 — Hero cast VFX: element-coded flash + windup telegraph (cast-on-magic)
 
-**Status:** FIXED 2026-08-25 - source acceptance landed at `1772be8af`; awaiting owner device visual/capture approval.
+**Status:** CLOSED 2026-08-27 — owner Pass (felt-validated, APK 2026.08.27.343878).
 **Origin:** owner 2026-08-04 — *"cast on magic."* Audit-backed (WO-872 §2, H1/H3/H7). **Layer:** B/D.
 **Ties:** feeds WO-861 (Thrain/Sylas kits) — their cast VFX ride this.
 

@@ -1,6 +1,6 @@
 # WORK ORDER 1066 — Weapon effects, Elarion names, and semantic VFX verbs
 
-**Status:** FIXED — AWAITING OWNER FELT-TEST TO CLOSE. Prior status: IMPLEMENTED — AWAITING COMBINED OWNER GATE
+**Status:** CLOSED 2026-08-27 — owner Pass (felt-validated, APK 2026.08.27.343878).
 **Parent:** WO-1063 · **Requires:** WO-1065 vocabulary
 
 ## Effect budget

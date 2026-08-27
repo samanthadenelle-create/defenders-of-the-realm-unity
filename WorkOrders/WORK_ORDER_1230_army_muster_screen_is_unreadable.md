@@ -1,6 +1,6 @@
 # WORK ORDER 1230 - The Army Muster screen is unreadable: six collisions, and the edited number wraps
 
-**Status:** FIXED 2026-08-26 - `COMPILE_GATE_OK` + `REGRESSION_OK 292/292`; post-fix APK visual/greyscale verification queued
+**Status:** CLOSED 2026-08-27 — owner Pass (felt-validated, APK 2026.08.27.343878).
 **Silo:** UI layout  --  **routed to the UI SEAT** for the layout spec/mockup, per owner ("send this to ui")
 **Severity:** P1. This is the screen that spends the player's gold, and the quantity field cannot be read.
 **Origin:** Owner felt-test, Seeker build `2026.08.26.342290`, 2026-08-26. Owner verbatim:

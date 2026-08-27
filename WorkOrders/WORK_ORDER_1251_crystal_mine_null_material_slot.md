@@ -1,6 +1,6 @@
 # WORK ORDER 1251 - Crystal Mine renders colourless: a NULL material slot on its renderer
 
-**Status:** FIXED 2026-08-27 — implemented; awaiting owner felt-verify to CLOSE.
+**Status:** CLOSED 2026-08-27 — owner Pass (felt-validated).
 **Silo:** Art pipeline / structure assets
 **Severity:** P2. A built structure in the player's town renders wrong.
 **Origin:** Owner, on device, 2026-08-27: *"crystal mine lost colors - flagged"*. Tester APK built
