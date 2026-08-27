@@ -1,6 +1,6 @@
 # WORK ORDER 1199 - the command centre: ship the whole chain programmatically
 
-**Status:** READY - PARTIAL. The guarded steps 1-8 development slice landed in `6a343fbde`; both returned one-line blockers are fixed and the local native-output capture harness is green. The ticket remains open because no credentialed production run has yet proven full success, pre-promotion rollback capture, induced gate refusal, or induced post-deploy failure with verified rollback. See the matching RESULT for the exact landed slice and remaining ops gates.
+**Status:** FIXED 2026-08-27 (owner ruling) - the guarded deploy chain steps 1-8 are LANDED and gated (`6a343fbde`). The LIVE production promotion and rollback proof are DELIBERATELY DEFERRED to a joint owner session, to be run LAST. FIXED means BUILT, not proven against real production.
 **Minted:** 2026-08-25 (CLI lead, main line; banner bumped 1199 -> 1200 in the same edit)
 **Silo:** Tooling / ops
 **Ruling:** owner, 2026-08-25 - *"That should all be handled programmatically from command center or
@@ -472,3 +472,26 @@ fetch's exit code.**
 ⛔ The success path remains ENTIRELY UNEXECUTED - ⭐ and FIX 1 is precisely the argument for why
 acceptance items 1/2/3/6 still require the live ops run: a defect that only appears at runtime, on a step
 that costs 25 minutes to reach, is exactly what a static audit cannot promise to catch twice.
+
+---
+
+## OWNER RULING 2026-08-27 - MOVED TO FIXED, LIVE PROOF DEFERRED BY DESIGN
+
+Owner: *"move 1199 to fixed as we will test that last and we will do that together"*.
+
+**The code is landed and gated** - steps 1-8 in `6a343fbde`: a PowerShell 5.1 production chain that
+judges fresh compile / regression / R2 / schema markers before deploying, captures the rollback
+target BEFORE promotion, previews, byte-verifies the protected candidate index, and promotes the
+SAME deployment id it inspected.
+
+⚠ **WHAT IS NOT DONE, AND IS NOT CLAIMED:** the LIVE production promotion and the rollback proof.
+Those are deliberately deferred to a JOINT SESSION with the owner, to be run LAST. This ticket
+reading FIXED means the chain is BUILT, not that it has been proven against real production.
+
+⛔ **Do NOT run the live promotion or the rollback unattended.** The game is LIVE and takes real
+money as of 2026-08-27. The guard rails in this chain are real, but an unproven deploy chain is one
+you find out about during an incident - so the first real run happens with the owner watching, on a
+window she picks.
+
+⛔ Do NOT re-open this ticket to "finish" it. The remaining work is a scheduled joint exercise, not
+outstanding engineering.

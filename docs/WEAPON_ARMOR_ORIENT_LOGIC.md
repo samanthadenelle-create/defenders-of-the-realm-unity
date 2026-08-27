@@ -175,6 +175,59 @@ measurable terms (the bin/profile-curve primitive and the per-family **disambigu
 the two ends of an axis, which a bounding box can never answer). This doc is the *canon*; that one is
 the *dictionary* the helper classifies against.
 
+## ⚠ ADDED 2026-08-26 (WO-1226) — INSTRUMENT THE SEAT, AND WHAT IT ALREADY PROVED
+
+Three facts, sourced from the code, that a future session must not re-derive:
+
+**1. The `tiltFromVertical` trace is NOT a seat measurement, and never was.** The line
+`sheathed long axis on '<hero>': tiltFromVertical=0deg` is computed inside
+`EquipmentController.ComputeSheathRotation` as `(socket.rotation * result) * Vector3.up`, where
+`result` is the quaternion that method is *about to return*. It (a) asks `Vector3.up` instead of the
+mesh, so a prop whose long axis landed on grip-local X or Z reads a perfect 0 while hanging
+sideways; (b) is composed *before* `ApplySheathedOffset` writes more rotation onto the same
+transform; and (c) **has no counterpart at all on the DRAWN branch**. It is a true statement about
+the deriver's output. The owner's broken build prints `0deg`. **Never accept it as proof a prop is
+standing.**
+
+**2. The real instrument is `EquipmentController.TraceSeatChain`** (`[Flow:Equip] SEAT CHAIN
+[DRAWN|SHEATHED] …`), called at the END of both `ApplyHoldPose` main-weapon branches, after the last
+rotation write. It measures the prop's own long axis (`WeaponOrientHelper.TryMeasureAxes`, from
+`mesh.bounds` — shipped props may import with Read/Write OFF, which makes vertex approaches silently
+inert on device) and pushes it through the chain step by step: **step1** prop→grip-root (is the long
+axis even grip-local +Y?), **step2** the grip root's own localRotation, **step3** the parent bone /
+socket world rotation, **step4** the seated world direction and its tilt off the body's vertical —
+plus an ATTRIBUTION line naming *which step turned it how far*. The pure half
+(`MeasureSeatedLongAxis`, `ComposeMeleeGripRotation`, `ComposeDrawnMeleeLocalRotation`) is
+`public static` so `AttachmentOffsetRegression` case `drawn-seat-verticality` asserts the SHIPPED
+composition instead of re-typing it.
+
+**3. `renderers=2` on a staff is a TrailRenderer, and the "staff measures as a cube" was a
+DIAGNOSTIC lie.** `WeaponTrailController.EnsureTrail` parents a code-built `TrailRenderer`
+("WeaponTrail") onto `EquipmentController.GripRoot`; its `bounds` is the world AABB of the swing
+ribbon, which the `parent-scale compensate` line was encapsulating with the prop's, inflating a
+1.3 m shaft into a ~1.5 m box. **No deriver ever read it** — every orient path measures the *prop*
+(the grip root's child), and `WeaponOrientHelper.TryLocalBounds` reads mesh-local bounds off a
+MeshFilter/SkinnedMeshRenderer, which a TrailRenderer has neither of. The compensate line now
+measures geometry-owning renderers only and names the excluded ones.
+
+### The open ruling this instrument surfaced — the DRAWN staff
+With the shipped serialized defaults `_handBladeAxis (0,1,0)` and `_handGripUpAxis (0,0,1)`,
+`ComposeMeleeGripRotation` is `Quaternion.LookRotation((0,0,1),(0,1,0))` — **exactly the identity**.
+`_staffGripEuler` ships as `(0,0,0)` and neither `staff_A` nor `tripo_staff_a` has an `offsets.json`
+row, so the entire drawn staff seat is `Euler(0,180,0)` and the shaft lands on the hand bone's raw
+local +Y: **the sword rule, applied to a staff**. Nothing is 90° "wrong"; there is simply no staff
+archetype in the drawn seat. The owner's rule (*"the pointed object is Y top, flat is bottom"*, and
+the STAFF entry above) says a held staff stands. **Fixing it means an owner-ruled staff drawn
+correction plus a device screenshot — and it collides head-on with
+`AttachmentOffsetRegression.Case5_StaffNeutralDefault`, which PINS `_staffGripEuler` to neutral as a
+WO-970 residual.** The two cases now disagree deliberately. Do not silence either; do not flip
+`_sheatheLongAxisSign` (WO-1136 — that only moves the defect onto the other heroes).
+
+**The SHEATHED main-hand path is not the fault here.** `ComputeSheathRotation` is genuinely
+body-derived (`LookRotation(worldFlat, worldBlade)` off the body's own axes, long axis on
+`body.up * sign`), so the hip carry does stand upright. The owner's report is about combat, i.e.
+DRAWN — the one state that had no trace.
+
 ## Existing groundwork (extend, do NOT rebuild)
 - `Assets/Editor/CatalogOrientationBaker.cs` — bounds-orient for the structures catalog (longest→+Y,
   base-to-origin, `{euler,offset,scale,note}`, `manual=true` preserved). The template.
