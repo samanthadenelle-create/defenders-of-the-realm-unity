@@ -1,6 +1,10 @@
 # WORK ORDER 1244 - The Command Center CONSOLE: build the surface WO-1169 specced
 
-**Status:** READY TO IMPLEMENT
+**Status:** FIXED 2026-08-27 - the console is built and gated. READ half: `api/admin/stats.js?view=ops` (additive, SELECT-only) returning toggles, promos, player reports and ops history; proven HTTP 200 against the LIVE database. WRITE half: `api/admin/ops.js`, a DIFFERENT file behind a SECOND secret (`ADMIN_OPS_KEY`), POST-only, no CORS, fail-CLOSED when that key is unset. No refund, grant or edit of `purchase_quotes`/`purchase_entitlements` exists anywhere in it, and a test asserts the table names never appear. Phone-first ASCII page, no framework, no build step, key held in memory only. 41 tests, 25 mutations proven RED; the lead independently re-verified the second-key mutation (1 fail, restored 41/41). Whole JS suite 136/136, SCHEMA_PARITY_OK 19 tables.
+
+> ⛔ **ONE OWNER ACTION BLOCKS THE FELT-VERIFY: `ADMIN_OPS_KEY` IS NOT SET ON THE DEPLOYMENT.** Until it is, every write answers `OPS_WRITE_NOT_CONFIGURED` and says so with the remedy on screen. Reads work now; flipping a toggle from the phone (acceptance 5) cannot work until that env var exists. It must be a DIFFERENT value from `ADMIN_DASH_KEY` - a second key that equals the first is one key.
+>
+> **Acceptance 2 (phone-width screenshot) is the owner's.** Headless Edge on Windows enforces a ~500px minimum window, so no shot taken here is a true 390px viewport. The gate page is proven to render (`proof/img/wo1244-console-gate.png`) and `.gate{max-width:440px}` is correct, but a real phone is the only honest check.
 **Silo:** Backend (`api/`) + admin console surface
 **Severity:** P1 for operations. The game is LIVE and takes REAL MONEY as of 2026-08-27, and there is
 still no console. Every pillar has working backend and no way to look at it.
