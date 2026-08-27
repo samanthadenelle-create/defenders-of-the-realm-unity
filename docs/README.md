@@ -16,6 +16,8 @@ separately in `../PROJECT_INDEX.md`.
 ## Start here / canon
 
 - `../HOME.html` — **the generated wiki-style home page over the doc lake** (rules / architecture / north star / board / catalogs / VFX+sound organization registries) — regenerate `python tools/home_build.py`, never hand-edit; dead links fail the build (WO-943)
+- `CLI_OPERATIONS_RUNBOOK.md` — ⭐ **everything a CLI seat needs to RUN the machine, in one file**: session startup + the SME facts that cost days when assumed wrong, the seat model, the board, every gate command and its marker, builds, the R2 content trap, Firebase distribution, Vercel deploys, the database, F8 triage, commit/push discipline. `CLAUDE.md` is the LAW; this is the PROCEDURE.
+- `ACCESS_AND_SECRETS.md` — ⭐ **what is public vs secret, and how to share the secret half safely.** Read this before telling anyone you "cannot access prod" — the API base, the endpoints and the project ids are NOT secrets and are listed there. Also: the `.env.local` resolution pattern every tool uses, and the rule that secrets are referred to by name and length, never by value.
 - `HANDOVER.md` — **the single operator's manual a new session reads first** (how we work, the binding rules, this-session's new canon, the build/gate/bake cycle, resume points)
 - `NORTH_STAR.md`, `NORTH_STAR_PROGRESS.md` — vision + progress against it
 - `DESIGN-DECISIONS.md` — **binding creative decisions** (Elarion naming, no Keep, etc.)
