@@ -1,21 +1,48 @@
 // =============================================================================
-// RumorBoardVM — the pure ViewModel behind RumorBoardPanel (Brom's rumor board).
-// Strict-MVVM migration Silo D.
+// RumorBoardVM - the pure ViewModel behind RumorBoardPanel (Brom's rumor board).
+// Strict-MVVM migration Silo D.  WO-1192 v3 REBUILD (owner-approved concept).
 // -----------------------------------------------------------------------------
 // Assembly: DeNelle.Village   Namespace: DeNelle.Village.Hero
 //
-// Owns ALL the quest state + logic the board used to read inline: the QuestCatalog
-// browse list, the active/available bucketing, the per-tab (All/Story/Daily/Gear/
-// Endgame) filtering, the DailyQuestService projection, the tracked-quest flag, and
-// the StartQuest / SetTracked writes. The View (RumorBoardPanel) binds this,
-// re-renders on Changed, and routes taps to Accept/Track/SetTab — it never reads
-// QuestService / QuestCatalog / DailyQuestService itself.
+// WHAT THIS VM IS NOW, AND WHAT IT DELIBERATELY STOPPED BEING (WO-1192, owner
+// rulings 2026-08-26):
 //
-// Also owns the PREREQUISITE gate: a quest whose QuestDef.RequiresQuestId names a quest the
-// player has not completed is kept out of Available and refused by Accept, which is what makes
-// the Forgemasters act chain (act1 -> act2 -> act3 -> act4) an order instead of a suggestion.
+//   "The board is for ACCEPTING new quests." Tracking is the HUD tracker's job.
+//   The approved v3 concept is THREE SELF-CONTAINED RUMOR POSTERS, no tabs, no
+//   detail pane, no In-Progress section, and a single Next > that pages by three
+//   and WRAPS. So the following are RETIRED, not merely unused:
 //
-// PURE C#: no UnityEngine UI types; unit-testable over a fake IRumorBoardBackend (§2c).
+//     TabKeys / TabLabels / ActiveTab / SetTab / IsDailyTab   - there are no tabs.
+//     ActiveQuests / Track / DailyQuests / DailyRow           - the board only OFFERS.
+//
+//   They are deleted rather than left dormant because a dormant projection is how
+//   a retired surface quietly grows back (CLAUDE.md sec.15: a state change with no
+//   canon update is an incomplete change; the same is true of a dead API).
+//
+// WHAT REPLACED THEM:
+//   * PAGING. Available rumors are windowed PageSize (3) at a time. NextPage()
+//     advances and WRAPS at the end - the owner chose the keep-going form, so the
+//     board never dead-ends on a short page.
+//   * HookFor is now a ONE-LINE hook derived at a SENTENCE boundary from the full
+//     letter, and LetterFor carries the whole prose for the "Read the letter >"
+//     overlay. Both captures of the 2026-08-25/26 shots clipped this text MID-WORD
+//     ("begun to sin", "wakes the lantern eels. Sh"); a hook cut at a sentence and
+//     a letter that scrolls is what makes that unreachable rather than tuned away.
+//   * RewardChipsFor projects READY-TO-DRAW reward chips carrying the reward KIND
+//     and AMOUNT, so the View can render the WO-1195 icon+number chip. It still
+//     sums through QuestRewardMath over QuestRewardLine (WO-1201/1202 stay the
+//     reward authority) and there is NO fixed chip count anywhere.
+//   * IsNew(id) reads a SEEN flag off the backend seam, so the NEW chip means
+//     something instead of decorating every card forever.
+//
+// Also owns the PREREQUISITE gate: a quest whose QuestDef.RequiresQuestId names a
+// quest the player has not completed is kept out of Available and refused by Accept,
+// which is what makes the Forgemasters act chain (act1 -> act2 -> act3 -> act4) an
+// order instead of a suggestion.
+//
+// PURE C#: no UnityEngine UI types; unit-testable over a fake IRumorBoardBackend.
+// ASCII-ONLY (including comments) - the shipped LiberationSans SDF has no non-Latin
+// glyphs and RumorBoardLayoutRegression asserts the whole file is ASCII.
 // =============================================================================
 
 using System;
@@ -29,8 +56,8 @@ namespace DeNelle.Village.Hero
 {
     /// <summary>
     /// The seam the RumorBoardVM resolves quest state through. The live implementation
-    /// (<see cref="RumorBoardLiveBackend"/>) wires QuestService / QuestCatalog /
-    /// DailyQuestService; tests supply a fake.
+    /// (<see cref="RumorBoardLiveBackend"/>) wires QuestService / QuestCatalog;
+    /// tests supply a fake.
     /// </summary>
     public interface IRumorBoardBackend
     {
@@ -38,51 +65,63 @@ namespace DeNelle.Village.Hero
         bool Ready { get; }
         bool IsActive(string id);
         bool IsCompleted(string id);
-        /// <summary>The current active stage's objective text, or null.</summary>
-        string ObjectiveFor(string id);
-        string TrackedId { get; }
         void StartQuest(string id);
-        void SetTracked(string id);
-        IReadOnlyList<RumorBoardVM.DailyRow> DailyToday { get; }
+        /// <summary>True once this rumor has been PUT IN FRONT OF the player. Drives the
+        /// NEW chip; without it "NEW" decorates every card forever and stops meaning
+        /// anything (the WO-1192 law: a badge that is always on is chrome, not state).</summary>
+        bool HasSeen(string id);
+        /// <summary>Record that this rumor has been shown. Called by the View once per
+        /// page paint, AFTER the page's NEW flags were read.</summary>
+        void MarkSeen(string id);
         event Action Changed;
     }
 
     /// <summary>Pure ViewModel for the rumor board.</summary>
     public sealed class RumorBoardVM : IPanelViewModel, IDisposable
     {
-        /// <summary>One projected daily-quest row (View-agnostic — no DailyQuestInstance leak).</summary>
-        public readonly struct DailyRow
+        /// <summary>What a reward chip IS, so the View can pick the WO-1195 icon+number
+        /// chip for a currency and a WORD chip for XP / a granted item. Deliberately a
+        /// VM-local enum: mapping it to the kit's CurrencyKind (and from there to the ONE
+        /// concept-id translator, ElarionUiKit.ConceptIdFor) is the View's job. A second
+        /// copy of that translator here would be a second registry.</summary>
+        public enum RewardKind { Xp, Crystals, Wood, Iron, Stone, Magic, Item }
+
+        /// <summary>One READY-TO-DRAW reward chip. <see cref="Text"/> is the full word form
+        /// ("Crystals 220", "Relic Drowned Ledger") and is what a no-icon fallback renders;
+        /// <see cref="Amount"/> is what an icon chip renders beside its icon.</summary>
+        public readonly struct RewardChipVM
         {
-            public readonly string Id;
-            public readonly string Title;
-            public readonly int Progress;
-            public readonly int Target;
-            public readonly bool Completed;
-            public DailyRow(string id, string title, int progress, int target, bool completed)
+            public readonly RewardKind Kind;
+            public readonly int Amount;
+            public readonly string Text;
+            public RewardChipVM(RewardKind kind, int amount, string text)
             {
-                Id = id;
-                Title = title;
-                Progress = progress;
-                Target = target;
-                Completed = completed;
+                Kind = kind;
+                Amount = amount;
+                Text = text;
             }
+            /// <summary>True for the resource kinds that own a currency icon.</summary>
+            public bool IsCurrency => Kind != RewardKind.Xp && Kind != RewardKind.Item;
         }
 
-        /// <summary>Board tab keys (drive the filter). "all" = the ungrouped catalog view.</summary>
-        public static readonly string[] TabKeys = { "all", "story", "daily", "gear", "endgame" };
-        /// <summary>Board tab labels (View chrome).</summary>
-        public static readonly string[] TabLabels = { "All", "Story", "Daily", "Gear", "Endgame" };
+        /// <summary>Rumors shown per page. The owner-approved v3 board is three posters.</summary>
+        public const int PageSize = 3;
+
+        /// <summary>Longest one-line hook before it is cut at a WORD boundary. A hook that
+        /// ends mid-word reads as a bug; one that ends on a word reads as a summary.</summary>
+        public const int HookMaxChars = 72;
 
         private readonly IRumorBoardBackend _backend;
         private readonly Action _onClose;
         private readonly Action _changedHandler;
 
-        private readonly List<ItemVM> _active = new List<ItemVM>();
         private readonly List<ItemVM> _available = new List<ItemVM>();
+        private readonly List<ItemVM> _page = new List<ItemVM>();
         private readonly Dictionary<string, QuestDef> _byId = new Dictionary<string, QuestDef>();
+        private int _pageIndex;
         private bool _disposed;
 
-        // ── IPanelViewModel ───────────────────────────────────────────────────
+        // -- IPanelViewModel ---------------------------------------------------
 
         public event Action Changed;
 
@@ -98,62 +137,130 @@ namespace DeNelle.Village.Hero
             Changed = null;
         }
 
-        // ── Read-only data the View renders ─────────────────────────────────────
+        // -- Read-only data the View renders -----------------------------------
 
-        public string ActiveTab { get; private set; } = "all";
-        public bool IsDailyTab => ActiveTab == "daily";
-
-        /// <summary>Active quests under the current tab (Equipped = tracked/pinned). Never null.</summary>
-        public IReadOnlyList<ItemVM> ActiveQuests => _active;
-
-        /// <summary>Available quests under the current tab (not active, not completed). Never null.</summary>
+        /// <summary>Every available quest (not active, not completed, prerequisite met).
+        /// Never null. The View renders <see cref="PageQuests"/>, not this.</summary>
         public IReadOnlyList<ItemVM> AvailableQuests => _available;
 
-        /// <summary>Today's daily quests (only meaningful under the Daily tab). Never null.</summary>
-        public IReadOnlyList<DailyRow> DailyQuests =>
-            _backend != null ? _backend.DailyToday : System.Array.Empty<DailyRow>();
+        /// <summary>The current window of at most <see cref="PageSize"/> rumors. Never null,
+        /// and never longer than PageSize - a page with fewer is a real short page, not an
+        /// error, and the View renders only the posters it is given.</summary>
+        public IReadOnlyList<ItemVM> PageQuests => _page;
+
+        /// <summary>How many pages of three the available rumors make. 1 when the board is
+        /// empty, so "page 1 of 1" is always a truthful sentence.</summary>
+        public int PageCount
+        {
+            get
+            {
+                int n = _available.Count;
+                if (n <= 0) return 1;
+                return (n + PageSize - 1) / PageSize;
+            }
+        }
+
+        /// <summary>Zero-based index of the shown page.</summary>
+        public int PageIndex => _pageIndex;
+
+        /// <summary>True when there is more than one page, i.e. Next > actually goes somewhere.</summary>
+        public bool HasMultiplePages => PageCount > 1;
 
         /// <summary>Status line (the board's transient message).</summary>
         public string Status { get; private set; } = "The talk of Elarion. Accept what calls to you.";
 
-        /// <summary>The active stage objective for an active quest ("…" when unknown).</summary>
-        public string ObjectiveFor(string id)
+        /// <summary>The FULL letter for a rumor - the paragraph the "Read the letter &gt;"
+        /// overlay scrolls. Never null; an unauthored quest gets an honest short line rather
+        /// than an empty well.</summary>
+        public string LetterFor(string id)
         {
-            string o = _backend != null ? _backend.ObjectiveFor(id) : null;
-            return string.IsNullOrEmpty(o) ? "..." : o;
-        }
-
-        /// <summary>The hook line for an available quest (its stage-1 objective, else a default).</summary>
-        public string HookFor(string id)
-        {
-            if (id != null && _byId.TryGetValue(id, out var def) && def != null
-                && def.Stages != null && def.Stages.Count > 0 && def.Stages[0] != null
+            var def = FindDef(id);
+            if (def != null && def.Stages != null && def.Stages.Count > 0 && def.Stages[0] != null
                 && !string.IsNullOrEmpty(def.Stages[0].ObjectiveText))
                 return def.Stages[0].ObjectiveText;
             return "A new thread waits to be picked up.";
         }
 
-        /// <summary>WO-810 detail tag: the quest's display type ("Story" / "Gear" / "Endgame").
-        /// Same normalization as the tab filter, capitalized for the tag row.</summary>
+        /// <summary>The ONE-LINE hook: the letter's first sentence, cut at a WORD boundary if
+        /// that sentence is itself long. It can never end mid-word, which is the defect both
+        /// the 2026-08-25 and 2026-08-26 captures showed ("begun to sin" / "lantern eels. Sh").</summary>
+        public string HookFor(string id) => OneLineHook(LetterFor(id));
+
+        /// <summary>Pure, testable hook derivation (see <see cref="HookFor"/>).</summary>
+        public static string OneLineHook(string letter)
+        {
+            if (string.IsNullOrEmpty(letter)) return "";
+            string s = letter.Replace('\n', ' ').Replace('\r', ' ').Trim();
+            if (s.Length == 0) return "";
+
+            // First sentence, when there is one and it is not itself the whole paragraph.
+            int cut = -1;
+            for (int i = 0; i < s.Length; i++)
+            {
+                char c = s[i];
+                if (c != '.' && c != '!' && c != '?') continue;
+                // A period that is not followed by whitespace is an abbreviation or a
+                // decimal, not a sentence end.
+                if (i + 1 < s.Length && s[i + 1] != ' ') continue;
+                cut = i + 1;
+                break;
+            }
+            if (cut > 0 && cut <= HookMaxChars) return s.Substring(0, cut).Trim();
+
+            if (s.Length <= HookMaxChars) return s;
+
+            // Otherwise cut at the last word boundary that fits, and SAY it is cut.
+            int space = s.LastIndexOf(' ', Math.Min(HookMaxChars, s.Length - 1));
+            if (space <= 0) space = Math.Min(HookMaxChars, s.Length);
+            return s.Substring(0, space).TrimEnd(' ', ',', ';', ':') + "...";
+        }
+
+        /// <summary>The quest's display TYPE for the poster's overhanging tag. The label
+        /// wording is a display concern; this returns the canonical bucket in title case.</summary>
         public string TypeFor(string id)
         {
             var def = FindDef(id);
             string ty = NormalizedType(def);
             if (ty == "gear") return "Gear";
             if (ty == "endgame") return "Endgame";
-            return "Story";
+            if (ty == "daily") return "Daily";
+            if (ty == "side") return "Side";
+            return "Main";
         }
 
-        /// <summary>WO-810 detail rewards row: the quest's TOTAL authored rewards across all
-        /// stages as READY-TO-DRAW parts, one per chip ("Crystals 20", "Food 10", "Iron
-        /// Longsword"). Empty when unrewarded — the View hides the row rather than rendering
-        /// an empty line. The View NEVER parses this back out of a joined string, and an item
-        /// part is ALWAYS a resolved display name (see <see cref="ItemDisplayName"/>).</summary>
-        public IReadOnlyList<string> RewardPartsFor(string id)
+        /// <summary>True while this rumor has never been shown to the player. Drives the NEW
+        /// chip. False the moment the backend has recorded it as seen.</summary>
+        public bool IsNew(string id)
         {
-            var parts = new List<string>();
+            if (string.IsNullOrEmpty(id) || _backend == null) return false;
+            return !_backend.HasSeen(id);
+        }
+
+        /// <summary>Record every rumor on the CURRENT page as seen. The View calls this AFTER
+        /// it has read the page's NEW flags, so a card is NEW exactly once.</summary>
+        public void MarkPageSeen()
+        {
+            if (_backend == null) return;
+            for (int i = 0; i < _page.Count; i++)
+            {
+                string id = _page[i].Id;
+                if (!string.IsNullOrEmpty(id)) _backend.MarkSeen(id);
+            }
+        }
+
+        /// <summary>
+        /// The quest's TOTAL authored rewards across all stages, as READY-TO-DRAW chips.
+        /// Empty when unrewarded - the View hides the row rather than drawing an empty rule.
+        /// Sums through <see cref="QuestRewardMath"/> over <see cref="QuestRewardLine"/>
+        /// (WO-1201/1202 remain the reward authority) and emits ONE chip per authored
+        /// reward - there is no fixed chip count and no second reward schema.
+        /// </summary>
+        public IReadOnlyList<RewardChipVM> RewardChipsFor(string id)
+        {
+            var chips = new List<RewardChipVM>();
             var def = FindDef(id);
-            if (def == null || def.Stages == null) return parts;
+            if (def == null || def.Stages == null) return chips;
+
             int xp = 0, crystals = 0, wood = 0, iron = 0, food = 0, magic = 0;
             var items = new List<string>();
             foreach (var st in def.Stages)
@@ -164,32 +271,42 @@ namespace DeNelle.Village.Hero
                 xp += sXp; crystals += sC; wood += sW; iron += sIr; food += sF; magic += sM;
                 if (sItems != null) items.AddRange(sItems);
             }
-            // XP first — owner ruling WO-1202: primary reward on the board slab.
-            if (xp > 0) parts.Add("XP " + xp);
-            if (crystals > 0) parts.Add("Crystals " + crystals);
-            if (wood > 0) parts.Add("Wood " + wood);
-            if (iron > 0) parts.Add("Iron " + iron);
-            if (food > 0) parts.Add("Stone " + food);
-            if (magic > 0) parts.Add("Magic " + magic);
-            // NAME the item, never key it. The "Item: " prefix is deliberately gone: it cost
-            // six glyphs of a row that already cannot seat four chips at FontMicro, and the
-            // chip sits in the rewards row under a named quest — the name IS the reward.
-            foreach (var it in items) parts.Add(ItemDisplayName(it));
+
+            // XP first - owner ruling WO-1202: primary reward on the board slab.
+            if (xp > 0) chips.Add(new RewardChipVM(RewardKind.Xp, xp, "XP " + xp));
+            if (crystals > 0) chips.Add(new RewardChipVM(RewardKind.Crystals, crystals, "Crystals " + crystals));
+            if (wood > 0) chips.Add(new RewardChipVM(RewardKind.Wood, wood, "Wood " + wood));
+            if (iron > 0) chips.Add(new RewardChipVM(RewardKind.Iron, iron, "Iron " + iron));
+            // Canon sec.7: the authored `food` slot IS Stone. Never label it Food.
+            if (food > 0) chips.Add(new RewardChipVM(RewardKind.Stone, food, "Stone " + food));
+            if (magic > 0) chips.Add(new RewardChipVM(RewardKind.Magic, magic, "Magic " + magic));
+            // NAME the item, never key it - the chip sits in a rewards row under a named
+            // quest, so the name IS the reward.
+            foreach (var it in items)
+                chips.Add(new RewardChipVM(RewardKind.Item, 0, ItemDisplayName(it)));
+            return chips;
+        }
+
+        /// <summary>The same rewards as word-form parts, one per chip ("Crystals 20",
+        /// "Iron Longsword"). Kept as the single source for any consumer that wants text.</summary>
+        public IReadOnlyList<string> RewardPartsFor(string id)
+        {
+            var chips = RewardChipsFor(id);
+            var parts = new List<string>(chips.Count);
+            foreach (var c in chips) parts.Add(c.Text);
             return parts;
         }
 
-        /// <summary>The same rewards as <see cref="RewardPartsFor"/> joined ASCII for a single
-        /// line ("Crystals 20 | Food 10 | Iron Longsword"). "" when unrewarded.</summary>
+        /// <summary>The same rewards joined ASCII for a single line. "" when unrewarded.</summary>
         public string RewardFor(string id) => string.Join(" | ", RewardPartsFor(id));
 
         /// <summary>
         /// Player-facing name for a granted item id, read off the SAME row the item resolves to:
-        /// gear first (weapons/armor/accessories.json — the only shipped grant today is
-        /// `knight_iron` -> "Iron Longsword"), then the non-gear identity catalogs (consumables /
-        /// materials). An id NO shipped catalog owns is a CONTENT gap, not a code one, so the last
-        /// resort is the kit's P10 formatter (`relic_drowned_ledger` -> "Relic Drowned Ledger") —
-        /// a raw snake_case key is never player-visible, and the row is never hidden either: a
-        /// reward the player earns is always named.
+        /// gear first (weapons/armor/accessories.json), then the non-gear identity catalogs
+        /// (consumables / materials). An id NO shipped catalog owns is a CONTENT gap, not a code
+        /// one, so the last resort is the kit's formatter (`relic_drowned_ledger` -> "Relic
+        /// Drowned Ledger") - a raw snake_case key is never player-visible, and the row is never
+        /// hidden either: a reward the player earns is always named.
         /// </summary>
         public static string ItemDisplayName(string itemId)
         {
@@ -208,24 +325,27 @@ namespace DeNelle.Village.Hero
             return ElarionUiKit.SpacedDisplayName(itemId);
         }
 
-        // ── Commands ────────────────────────────────────────────────────────────
+        // -- Commands ----------------------------------------------------------
 
-        public void SetTab(string tab)
+        /// <summary>Advance one page of three and WRAP at the end (owner ruling: the
+        /// keep-going form, no dead end, no page dots). Raises Changed.</summary>
+        public void NextPage()
         {
-            if (string.IsNullOrEmpty(tab) || ActiveTab == tab) return;
-            ActiveTab = tab;
-            Rebuild();
+            int pages = PageCount;
+            _pageIndex = pages <= 1 ? 0 : (_pageIndex + 1) % pages;
+            BuildPage();
             Raise();
         }
 
-        /// <summary>Accept an available quest (StartQuest). Moves it Available -> Active.</summary>
+        /// <summary>Accept an available quest (StartQuest). It leaves the board - the board
+        /// only OFFERS work, so an accepted rumor is not shown here again.</summary>
         public void Accept(string id)
         {
             if (string.IsNullOrEmpty(id)) return;
             if (_backend == null || !_backend.Ready) { Status = "Quests aren't ready yet."; Raise(); return; }
             var def = FindDef(id);
             // The Available list already hides a gated quest, but the refusal lives here too so
-            // no caller (a stale row, a test, a future view) can start an act out of order.
+            // no caller (a stale poster, a test, a future view) can start an act out of order.
             if (def != null && !PrerequisiteMet(def))
             {
                 Status = "Not yet: finish " + CatalogTitle(def.RequiresQuestId) + " first.";
@@ -241,16 +361,7 @@ namespace DeNelle.Village.Hero
             Raise();
         }
 
-        /// <summary>Pin an active quest to the HUD tracker, then close the board.</summary>
-        public void Track(string id)
-        {
-            if (string.IsNullOrEmpty(id)) return;
-            if (_backend == null || !_backend.Ready) { Status = "Quests aren't ready yet."; Raise(); return; }
-            _backend.SetTracked(id);
-            Close();
-        }
-
-        // ── Construction / resolution ───────────────────────────────────────────
+        // -- Construction / resolution -----------------------------------------
 
         /// <summary>The ONLY resolution site: wires the live quest services/catalog.</summary>
         public static RumorBoardVM CreateDefault(Action onClose = null) =>
@@ -286,9 +397,9 @@ namespace DeNelle.Village.Hero
             return _backend != null && _backend.IsCompleted(prereq);
         }
 
-        /// <summary>Display title for any catalog quest id (not just the tab-filtered ones the
-        /// board indexed), so a refusal names the quest the player has to finish rather than a
-        /// raw id. Falls back to the id when the catalog cannot answer.</summary>
+        /// <summary>Display title for any catalog quest id (not just the ones the board
+        /// indexed), so a refusal names the quest the player has to finish rather than a raw
+        /// id. Falls back to the id when the catalog cannot answer.</summary>
         private string CatalogTitle(string id)
         {
             if (string.IsNullOrEmpty(id)) return "the quest before it";
@@ -301,39 +412,43 @@ namespace DeNelle.Village.Hero
 
         private void Rebuild()
         {
-            _active.Clear();
             _available.Clear();
             _byId.Clear();
 
-            if (IsDailyTab) return;   // the Daily tab renders from DailyQuests, not the catalog
-
             var catalog = _backend != null ? _backend.Catalog : null;
-            if (catalog == null) return;
-
-            string tracked = _backend != null ? _backend.TrackedId : null;
-            foreach (var def in catalog)
+            if (catalog != null)
             {
-                if (def == null || string.IsNullOrEmpty(def.Id)) continue;
-                if (!MatchesTab(def, ActiveTab)) continue;
-                _byId[def.Id] = def;
-
-                string title = !string.IsNullOrEmpty(def.Title) ? def.Title : def.Id;
-                if (_backend.IsActive(def.Id))
+                foreach (var def in catalog)
                 {
-                    bool isTracked = tracked == def.Id;
-                    _active.Add(new ItemVM(def.Id, title, "quest", def.Id, 0, "", true,
-                                           rarity: null, equipped: isTracked, locked: false));
-                    continue;
+                    if (def == null || string.IsNullOrEmpty(def.Id)) continue;
+                    _byId[def.Id] = def;
+
+                    if (_backend.IsActive(def.Id)) continue;      // underway - the HUD tracker's job
+                    if (_backend.IsCompleted(def.Id)) continue;   // done - off the board
+                    // A quest whose requiresQuestId names an unfinished quest stays off the board
+                    // entirely (see PrerequisiteMet). Hidden rather than shown locked: a v3 poster
+                    // has no lock affordance, so a locked poster would look acceptable.
+                    if (!PrerequisiteMet(def)) continue;
+
+                    string title = !string.IsNullOrEmpty(def.Title) ? def.Title : def.Id;
+                    _available.Add(new ItemVM(def.Id, title, "quest", def.Id, 0, "", true));
                 }
-                if (_backend.IsCompleted(def.Id)) continue;   // done — off the board
-                // A quest whose requiresQuestId names an unfinished quest stays off the board
-                // entirely (see PrerequisiteMet). Hidden rather than shown locked: the rumor
-                // board's card has no lock affordance: RumorBoardPanel renders an available row
-                // from (id, title, hook, "[New]") and never reads ItemVM.Locked/LockReason, so a
-                // locked row would look exactly like an acceptable one.
-                if (!PrerequisiteMet(def)) continue;
-                _available.Add(new ItemVM(def.Id, title, "quest", def.Id, 0, "", true));
             }
+
+            // A page that no longer exists (the last rumor on it was accepted) walks back to
+            // the last real page rather than showing an empty board with rumors still on it.
+            int pages = PageCount;
+            if (_pageIndex >= pages) _pageIndex = pages - 1;
+            if (_pageIndex < 0) _pageIndex = 0;
+            BuildPage();
+        }
+
+        private void BuildPage()
+        {
+            _page.Clear();
+            int start = _pageIndex * PageSize;
+            for (int i = start; i < _available.Count && i < start + PageSize; i++)
+                _page.Add(_available[i]);
         }
 
         // Normalize a quest's free-string Type -> a lowercase bucket; empty/null = "story".
@@ -343,68 +458,36 @@ namespace DeNelle.Village.Hero
             return def.Type.Trim().ToLowerInvariant();
         }
 
-        // Does this quest belong under the given tab? "all" shows everything; "story" also
-        // catches main/side/unknown; gear/endgame are exact.
-        private static bool MatchesTab(QuestDef def, string tab)
-        {
-            if (tab == "all") return true;
-            string ty = NormalizedType(def);
-            switch (tab)
-            {
-                case "gear": return ty == "gear";
-                case "endgame": return ty == "endgame";
-                case "story": return ty != "gear" && ty != "endgame";
-                default: return true;
-            }
-        }
-
         private void Raise() { if (!_disposed) Changed?.Invoke(); }
     }
 
     /// <summary>
-    /// Live <see cref="IRumorBoardBackend"/> — the sole binding to QuestService /
-    /// QuestCatalog / DailyQuestService. Kept out of the View so RumorBoardPanel stays
-    /// a dumb skin.
+    /// Live <see cref="IRumorBoardBackend"/> - the sole binding to QuestService /
+    /// QuestCatalog. Kept out of the View so RumorBoardPanel stays a dumb skin.
     /// </summary>
     public sealed class RumorBoardLiveBackend : IRumorBoardBackend
     {
+        /// <summary>PlayerPrefs key prefix for the NEW-chip seen flag. Deliberately NOT a save
+        /// schema field: this is a cosmetic per-device badge, and adding a schema version for a
+        /// chip would be a migration the player never sees.</summary>
+        private const string SeenPrefix = "rumor.seen.";
+
         public IReadOnlyList<QuestDef> Catalog => QuestCatalog.Quests;
         public bool Ready => QuestService.Instance != null;
 
         public bool IsActive(string id) => QuestService.Instance != null && QuestService.Instance.IsActive(id);
         public bool IsCompleted(string id) => QuestService.Instance != null && QuestService.Instance.IsCompleted(id);
 
-        public string ObjectiveFor(string id)
-        {
-            var svc = QuestService.Instance;
-            var stage = svc != null ? svc.GetStage(id) : null;
-            return stage != null ? stage.ObjectiveText : null;
-        }
-
-        public string TrackedId => QuestService.Instance != null ? QuestService.Instance.TrackedId : null;
-
         public void StartQuest(string id) { if (QuestService.Instance != null) QuestService.Instance.StartQuest(id); }
-        public void SetTracked(string id) { if (QuestService.Instance != null) QuestService.Instance.SetTracked(id); }
 
-        public IReadOnlyList<RumorBoardVM.DailyRow> DailyToday
+        public bool HasSeen(string id) =>
+            !string.IsNullOrEmpty(id) && UnityEngine.PlayerPrefs.GetInt(SeenPrefix + id, 0) == 1;
+
+        public void MarkSeen(string id)
         {
-            get
-            {
-                var rows = new List<RumorBoardVM.DailyRow>();
-                var dq = DailyQuestService.Instance;
-                var set = dq != null ? dq.Today : null;
-                if (set == null || set.Quests == null) return rows;
-                foreach (var q in set.Quests)
-                {
-                    if (q == null) continue;
-                    // WO-810 follow-up (owner F8 "board does not look like mock up"): route
-                    // through the shared resolver so "{target}" is substituted — the raw
-                    // "Clear {target} waves" titles were this exact skipped call.
-                    string title = DailyQuestCatalog.ResolveLabel(q);
-                    rows.Add(new RumorBoardVM.DailyRow(q.Id, title, q.Progress, q.Target, q.Completed));
-                }
-                return rows;
-            }
+            if (string.IsNullOrEmpty(id)) return;
+            if (UnityEngine.PlayerPrefs.GetInt(SeenPrefix + id, 0) == 1) return;
+            UnityEngine.PlayerPrefs.SetInt(SeenPrefix + id, 1);
         }
 
         public event Action Changed

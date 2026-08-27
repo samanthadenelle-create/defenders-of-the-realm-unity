@@ -61,6 +61,10 @@ namespace DeNelle.Editor.Regression
     {
         private const string BuilderSrc = "Assets/Editor/ExteriorTerrainBuilder.cs";
         private const string RuntimeSrc = "Assets/_Modules/Village/World/WorldSceneLoader.cs";
+        // WO-1218: the import authority for the ground textures, and the file that decides
+        // whether a per-texture aniso level is honoured at all on the phone.
+        private const string ImporterSrc = "Assets/Editor/TerrainLayerTextureImporter.cs";
+        private const string QualitySrc  = "ProjectSettings/QualitySettings.asset";
 
         public static bool Run(out string reason)
         {
@@ -78,6 +82,7 @@ namespace DeNelle.Editor.Regression
                 Case4_AdjacentMarchesSeparateInGreyscale(failures, notes, log);
                 Case5_AshwoodGroundIsPaleNotDark(failures, notes, log);
                 Case6_OneLayerIndexAuthority(failures, notes, log);
+                Case7_GroundSamplingIsAliasSafe(failures, notes, log);
             }
             catch (Exception ex)
             {
@@ -89,7 +94,7 @@ namespace DeNelle.Editor.Regression
             string noteStr = notes.Count > 0 ? " | " + string.Join("; ", notes) : "";
             if (failures.Count == 0)
             {
-                reason = "terrain-layer: 6 cases green" + noteStr;
+                reason = "terrain-layer: 7 cases green" + noteStr;
                 Debug.Log(log.ToString() + "TERRAIN_LAYER_OK");
                 return true;
             }
@@ -305,6 +310,210 @@ namespace DeNelle.Editor.Regression
                              "TerrainLayerSet.Count alone.");
 
             log.AppendLine("  case6: both splat authorities read the shared TerrainLayerSet contract");
+        }
+
+        // -- Case 7: the ground can be SAMPLED without aliasing (WO-1218). --
+        //
+        // ## THE CAPTURED DEFECT
+        //
+        // Owner's device, Seeker build 2026.08.26.341419, tmp/screen-103219.png at the
+        // Seeker's real 2670x1200: the whole meadow renders as a dense near-white
+        // sparkle that gets WORSE with distance. Measured off that capture as the std
+        // of luminance minus a 3x3 box blur - contrast at the ONE-PIXEL scale, which a
+        // working mip chain must drive toward zero at range:
+        //
+        //     near ground (rows 1020-1180):  hp1 =  9.1
+        //     mid  ground (rows  460- 620):  hp1 = 29.4     <- 3.2x WORSE further away
+        //
+        // Mipmaps were on the whole time. The hole was the ANISOTROPY RATIO: aniso 4
+        // on a ground plane at grazing pitch selects the sharper 4:1 mip and then
+        // undersamples the rest.
+        //
+        // ## WHY THIS CASE IS TWO ASSERTIONS AND NOT ONE
+        //
+        // Pinning the per-texture aniso alone would be a fix that can ship as a NO-OP.
+        // Per-texture aniso is only honoured when the running quality tier's
+        // anisotropicTextures is not Disable(0) - and this project ships a tier
+        // (Seeker_Low) where it IS 0. So the tier Android defaults to is asserted too.
+        // The desktop tier is ForceEnable(2), which is exactly why every editor and
+        // desktop run rendered this ground at 16x and hid the defect for months.
+        //
+        // ## PROVING IT RED (WO-1138)
+        //   * Put `aniso: 4` back into any one of the 16 .meta files -> this case fails
+        //     naming that file and the value, while the other 15 still report 8.
+        //   * Set anisotropicTextures back to 0 on the Android default tier in
+        //     ProjectSettings/QualitySettings.asset -> this case fails with the no-op
+        //     warning, even with all 16 textures at aniso 8.
+        //   * Set anisoLevel back to 4 in TerrainLayerTextureImporter.cs -> this case
+        //     fails, because a reimport would silently undo every meta above.
+        //   * Delete a .meta -> this case FAILS. It does not skip. A guard that returned
+        //     here on a missing file would land green having asserted nothing.
+        private static void Case7_GroundSamplingIsAliasSafe(
+            List<string> failures, List<string> notes, StringBuilder log)
+        {
+            // Ground is sampled at grazing angles across most of the frame. 4 was measured
+            // to alias; 8 is the affordable step on a fill-rate-bound phone that already
+            // takes 8 layers x 2 maps of fetches per pixel. If a fresh device capture at
+            // the same pitch still shows mid-field hp1 far above the near-field value,
+            // raise BOTH this number and the importer's - never one alone.
+            const int MinAniso = 8;
+
+            int checkedMetas = 0;
+            for (int i = 0; i < TerrainLayerSet.Count; i++)
+            {
+                CheckOneMeta(TerrainLayerSet.BaseColorPath(i) + ".meta", MinAniso, failures, ref checkedMetas);
+                CheckOneMeta(TerrainLayerSet.NormalPath(i) + ".meta", MinAniso, failures, ref checkedMetas);
+            }
+
+            int expectedMetas = TerrainLayerSet.Count * 2;
+            if (checkedMetas != expectedMetas)
+                failures.Add("case7 read " + checkedMetas + " of " + expectedMetas +
+                             " terrain layer .meta files - every layer's BaseColor AND Normal must be " +
+                             "alias-safe, and a meta that could not be read is a FAILURE, not a skip");
+
+            // The importer is the authority on a REIMPORT. Metas alone would be silently
+            // reverted the next time these PNGs are touched.
+            if (!File.Exists(ImporterSrc))
+            {
+                failures.Add("missing " + ImporterSrc + " - the import authority for the ground " +
+                             "textures is gone, so nothing keeps a reimport from restoring the " +
+                             "aliasing aniso level");
+            }
+            else
+            {
+                string imp = File.ReadAllText(ImporterSrc);
+                bool ok = false;
+                for (int lvl = MinAniso; lvl <= 16; lvl++)
+                    if (imp.IndexOf("anisoLevel = " + lvl + ";", StringComparison.Ordinal) >= 0) ok = true;
+                if (!ok)
+                    failures.Add(ImporterSrc + " does not set anisoLevel to at least " + MinAniso +
+                                 " - a reimport would restore the grazing-angle aliasing captured in " +
+                                 "tmp/screen-103219.png, and the .meta fix would ship as a no-op");
+            }
+
+            // THE ASSERTION THAT MAKES THE FIX NON-VACUOUS: the tier Android actually runs
+            // must honour per-texture aniso at all.
+            if (!File.Exists(QualitySrc))
+            {
+                failures.Add("missing " + QualitySrc + " - cannot prove the Android quality tier " +
+                             "honours per-texture anisotropy, so the whole ground fix is unproven");
+            }
+            else
+            {
+                string[] qs = File.ReadAllLines(QualitySrc);
+                int androidLevel = -1;
+                for (int i = 0; i < qs.Length; i++)
+                {
+                    string t = qs[i].Trim();
+                    if (!t.StartsWith("Android:", StringComparison.Ordinal)) continue;
+                    if (int.TryParse(t.Substring("Android:".Length).Trim(), out int lv)) androidLevel = lv;
+                    break;
+                }
+
+                if (androidLevel < 0)
+                {
+                    failures.Add(QualitySrc + " has no m_PerPlatformDefaultQuality Android entry - the " +
+                                 "tier the phone boots into is unknown, so the aniso fix cannot be " +
+                                 "proved to reach it");
+                }
+                else
+                {
+                    // Walk the quality level blocks in order and read the Nth
+                    // anisotropicTextures. A level index past the end is itself a defect.
+                    var aniso = new List<int>();
+                    for (int i = 0; i < qs.Length; i++)
+                    {
+                        string t = qs[i].Trim();
+                        if (!t.StartsWith("anisotropicTextures:", StringComparison.Ordinal)) continue;
+                        if (int.TryParse(t.Substring("anisotropicTextures:".Length).Trim(), out int v))
+                            aniso.Add(v);
+                    }
+
+                    if (androidLevel >= aniso.Count)
+                    {
+                        failures.Add(QualitySrc + ": Android defaults to quality level " + androidLevel +
+                                     " but only " + aniso.Count + " level(s) exist - the phone falls back " +
+                                     "to an unknown tier and no texture setting can be relied on");
+                    }
+                    else if (aniso[androidLevel] == 0)
+                    {
+                        failures.Add(QualitySrc + ": the Android default quality level " + androidLevel +
+                                     " has anisotropicTextures: 0 (Disable) - per-texture anisotropy is " +
+                                     "IGNORED there, so aniso " + MinAniso + " on the ground textures is a " +
+                                     "NO-OP and the WO-1218 shimmer returns in full");
+                    }
+                    else
+                    {
+                        log.AppendLine("  case7: Android default quality level " + androidLevel +
+                                       " has anisotropicTextures: " + aniso[androidLevel] +
+                                       " (non-zero) - per-texture aniso is honoured on device");
+                    }
+
+                    // Not a failure: a tier that disables aniso entirely is a latent version
+                    // of the same defect for any device that lands on it. Surfaced, not hidden.
+                    for (int i = 0; i < aniso.Count; i++)
+                        if (aniso[i] == 0)
+                            notes.Add("quality level " + i + " has anisotropicTextures: 0 - any device " +
+                                      "that boots into it renders the ground with NO anisotropy and will " +
+                                      "shimmer exactly as WO-1218 captured");
+                }
+            }
+
+            log.AppendLine("  case7: " + checkedMetas + " ground textures sampled alias-safe (mipmaps on, " +
+                           "aniso >= " + MinAniso + ", no negative mip bias)");
+        }
+
+        /// <summary>
+        /// Assert one terrain-layer texture .meta is sampled alias-safely. A meta that
+        /// cannot be read is a FAILURE - never a silent skip.
+        /// </summary>
+        private static void CheckOneMeta(string metaPath, int minAniso, List<string> failures, ref int checkedMetas)
+        {
+            if (!File.Exists(metaPath))
+            {
+                failures.Add("missing import settings " + metaPath +
+                             " - the ground sampling for this texture is unknown and therefore unproven");
+                return;
+            }
+
+            string[] lines;
+            try { lines = File.ReadAllLines(metaPath); }
+            catch (Exception ex)
+            {
+                failures.Add("could not read " + metaPath + ": " + ex.Message);
+                return;
+            }
+
+            checkedMetas++;
+            int aniso = -1, mip = -1;
+            float mipBias = 0f;
+            bool sawMipBias = false;
+
+            for (int i = 0; i < lines.Length; i++)
+            {
+                string t = lines[i].Trim();
+                if (t.StartsWith("aniso:", StringComparison.Ordinal))
+                    int.TryParse(t.Substring("aniso:".Length).Trim(), out aniso);
+                else if (t.StartsWith("enableMipMap:", StringComparison.Ordinal))
+                    int.TryParse(t.Substring("enableMipMap:".Length).Trim(), out mip);
+                else if (t.StartsWith("mipBias:", StringComparison.Ordinal))
+                    sawMipBias = float.TryParse(t.Substring("mipBias:".Length).Trim(),
+                                                System.Globalization.NumberStyles.Float,
+                                                System.Globalization.CultureInfo.InvariantCulture, out mipBias);
+            }
+
+            if (mip != 1)
+                failures.Add(metaPath + ": enableMipMap is " + (mip < 0 ? "ABSENT" : mip.ToString()) +
+                             " - without a mip chain the ground aliases at every distance");
+            if (aniso < minAniso)
+                failures.Add(metaPath + ": aniso is " + (aniso < 0 ? "ABSENT" : aniso.ToString()) +
+                             ", below the " + minAniso + " the grazing-angle ground needs. This IS the " +
+                             "WO-1218 shimmer: measured mid-field one-pixel contrast 29.4 vs 9.1 near " +
+                             "field on tmp/screen-103219.png at aniso 4");
+            if (sawMipBias && mipBias < 0f)
+                failures.Add(metaPath + ": mipBias is " + mipBias.ToString("F2") +
+                             " - a negative bias forces a sharper mip than the footprint warrants and " +
+                             "re-creates the aliasing the aniso level was raised to remove");
         }
 
         // ── Luminance measurement ───────────────────────────────────────────────

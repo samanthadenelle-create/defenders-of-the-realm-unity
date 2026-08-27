@@ -293,7 +293,13 @@ namespace DeNelle.Village
                 _sqrDistances.Add((t.position - origin).sqrMagnitude);
             }
 
-            int budget = Mathf.Max(0, VfxLoopBudget.NearestAuraRing);
+            // WO-1242: the AUTHORED ring is VfxLoopBudget.NearestAuraRing and it is not
+            // changed here. VfxPerformanceGate returns exactly that value unless the
+            // measured frame-time gate has already shed ALL ambient dress and is still
+            // over the device's budget - combat auras are the LAST thing shed, and only
+            // ever halved with a floor of 2, never switched off.
+            int authoredAuraRing = Mathf.Max(0, VfxLoopBudget.NearestAuraRing);
+            int budget = Mathf.Clamp(VfxPerformanceGate.AuraRingNow, 0, authoredAuraRing);
             int total  = _candidates.Count;
 
             // Only sort when the budget actually bites. Under the ring everyone is
@@ -326,7 +332,13 @@ namespace DeNelle.Village
                 FlowTrace.Throttle("VfxAuraCuller", "cull", 1f,
                     "nearest-N ring: " + budget + " of " + total + " enemy/pet aura candidate(s) " +
                     "hold a loop; " + (total - budget) + " beyond the ring are REVOKED (" + culled +
-                    " changed state this tick). Ranking origin=" + origin.ToString("F1") +
+                    " changed state this tick)." +
+                    (budget < authoredAuraRing
+                        ? " NOTE: the ring is TRIMMED from its authored " + authoredAuraRing +
+                          " by the frame-time gate at shed level " + VfxPerformanceGate.Level +
+                          " (WO-1242) - a measured, traced quality drop, not a bug."
+                        : "") +
+                    " Ranking origin=" + origin.ToString("F1") +
                     ", scene tier=" + VfxLoopBudget.TierName + " (loop cap " + VfxLoopBudget.CurrentCap +
                     "). This is the budget guard working, NOT a missing effect - the revoked auras " +
                     "return automatically as their hosts close on the view. Towers, the Heart, boss " +
@@ -397,7 +409,15 @@ namespace DeNelle.Village
             var mgr = VFXManager.Instance;
             if (mgr != null) { live = mgr.ActiveLoopCount; cap = mgr.MaxActiveLoops; }
 
-            int budget = VfxLoopBudget.AmbientEnvBudget(live, _grantedAmbient.Count, cap);
+            // WO-1229 budget, then the WO-1242 frame-time shed on top of it. The two are
+            // deliberately layered rather than merged: AmbientEnvBudget answers "how much
+            // room is there in the pool", which is a CORRECTNESS question and is authored;
+            // AmbientRingNow answers "how much can this device afford right now", which is
+            // a MEASURED one. Min() of the two means the shed can only ever take dress
+            // away, never hand out a slot the reserve was holding.
+            int poolBudget  = VfxLoopBudget.AmbientEnvBudget(live, _grantedAmbient.Count, cap);
+            int shedRing    = Mathf.Max(0, VfxPerformanceGate.AmbientRingNow);
+            int budget      = Mathf.Min(poolBudget, shedRing);
             int total  = _candidates.Count;
 
             if (total > budget) SortCandidatesByDistance();
@@ -430,6 +450,13 @@ namespace DeNelle.Village
                     VfxLoopBudget.AmbientEnvRing + "; +" + granted + " granted / -" + revoked +
                     " RELEASED this tick). Pool " + live + "/" + cap + ", reserve " +
                     VfxLoopBudget.AccessibilityReserve + " slot(s) held open for the low-HP tell. " +
+                    (shedRing < poolBudget
+                        ? "THE FRAME-TIME GATE IS SHEDDING: ambient ring trimmed to " + shedRing +
+                          " (the pool would have allowed " + poolBudget + ") at shed level " +
+                          VfxPerformanceGate.Level + " - WO-1242, a measured and traced quality drop, " +
+                          "NOT a bug. See [Flow:VfxPerfGate] for the frame times that caused it. The " +
+                          "low-HP tell is EXEMPT and is unaffected. "
+                        : "") +
                     "Beyond-ring dress is dark BY BUDGET, not missing - it relights as the hero closes.");
             }
         }

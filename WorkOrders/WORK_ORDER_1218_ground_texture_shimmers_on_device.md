@@ -1,6 +1,6 @@
 # WORK ORDER 1218 - The ground shimmers and blows out on device (tiling/mip aliasing at 2670x1200)
 
-**Status:** READY TO IMPLEMENT
+**Status:** FIXED 2026-08-27 - gated `COMPILE_GATE_OK` + `REGRESSION_OK 304/304 suites` (Builds/w5-c, Builds/w5-r). AWAITING OWNER FELT-VERIFY to close.
 **Silo:** Art / texture import
 **Origin:** CLI observation from an owner felt-test device capture, 2026-08-26, Seeker build
 `2026.08.26.341419`. Owner confirmed on being asked: **it has ALWAYS looked like this** - so there is

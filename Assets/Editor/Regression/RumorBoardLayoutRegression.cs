@@ -1,64 +1,68 @@
 // =============================================================================
-// RumorBoardLayoutRegression [rumor-board-layout] (WO-866) - Brom's rumor board
-// can never clip a filter tab or cull the detail body again.
+// RumorBoardLayoutRegression [rumor-board-layout] - Brom's rumor board (WO-1192 v3)
+// can never re-grow a second region, shrink a band under its line box, or place
+// two authored rects in the same place.
 // -----------------------------------------------------------------------------
 // Assembly: DeNelle.EditorRegression. Namespace: DeNelle.Editor.Regression.
 //
-// WHAT BROKE (Seeker capture 2026-08-04, docs/ui-review/2026-08-04-seeker/
-// 04-rumor-board.png). Two defects, one class - a band sized against something
-// other than a fixed pixel budget - and BOTH are reproducible on paper:
+// WHAT BROKE, TWICE, ON FRESH CAPTURES (2026-08-25 and 2026-08-26):
+//   portrait  - the detail pane overlaid the whole list; the "* All" tab chip
+//               floated over the "In Progress" heading; reward chips truncated to
+//               "X... / Crys... / St... / Ma...".
+//   landscape - the status line bisected the second In-Progress card; the
+//               objective ended MID-WORD ("begun to sin"); two card titles
+//               truncated to the IDENTICAL string; the lower third was dead black.
+// The oracle reported the panel at TWO findings while it looked like that, which
+// is the honest boundary of what a headless marker proves. So this file pins the
+// BUDGET (decidable headlessly, at gate speed) and RunCaptureHeadless + eyes-on
+// keep proving the pixels.
 //
-//   THE CAPTURE GEOMETRY (derived once, here, so every number below is checkable):
-//     CanvasScaler = 1080x1920, MatchWidthOrHeight 0.5, so at 2340x1080 the scale
-//     is 2^((log2(2340/1080) + log2(1080/1920))/2) = 1.104 and the canvas resolves
-//     to 2120x978 REFERENCE px. The modal is anchored (0.08,0.1)-(0.92,0.9), so the
-//     panel is 1780x783 ref px. ElarionUiKit's close-band reservation raises the
-//     FrameQuest body zones' floor to y=0.3137 (close band top 0.050 + 132/783 =
-//     0.2187, footer re-seated to 0.2337-0.2987, body floor 0.2987+0.015). With the
-//     measured FrameQuest zones - bodyLeft x 0.035-0.495 / top 0.858 and bodyRight
-//     x 0.505-0.966 / top 0.760 - that gives:
-//         LIST well   819 x 426 ref px      DETAIL well  821 x 349 ref px
-//     At 1920x1080 the same math gives 742 x 484 and 744 x 399.
+// WO-1192 v3 replaced five competing regions (tabs / list / detail / status /
+// footer) with ONE: three self-contained rumor posters, paged three at a time.
+// The cases below are the properties that make the old failures unreachable:
 //
-//   1 [tab-band]  The tab strip parented into chrome.layout.body, which on FrameQuest
-//                 is the LIST WELL ONLY, and each of the five chips carried a
-//                 HARDCODED preferredWidth of 220. 5*220 + 4*10 = 1140 ref px of
-//                 chips inside a 0.03-0.97 strip that is 770 ref px wide, so the
-//                 strip's RectMask2D cut chip 4 at 770 - 80 px into a 220 px chip,
-//                 i.e. ~36% of "Gear". That is EXACTLY the lone "G" in the capture.
-//                 (The detail pane never touched it: the mask edge is at frame x
-//                 0.481, the detail pane starts at 0.505.)
-//   2 [detail]    The detail stack reserved 148 px of top bands + 212 px of bottom
-//                 bands = 360 px inside a 349 px well, so the body label's rect
-//                 resolved to -11 px and TMP culled the quest text WHOLE - which is
-//                 why the capture shows chips, a title and CTAs but no tale. At
-//                 1920x1080 the same stack computes to +39 px and squeaks out one
-//                 line, which is why RunCaptureHeadless never caught it.
+//   1 [poster-stack]  Every band inside a poster is a FIXED reference-pixel budget
+//                     that is at least one TMP line box at the font it renders,
+//                     every tap target is authored AT/above the kit touch floor,
+//                     and the whole stack FITS the card the poster band really
+//                     resolves to at all three LANDSCAPE capture aspects.
+//   2 [zero-overlap]  The arithmetic assertion the two failing captures would have
+//                     failed: NO TWO authored rects on this board share a pixel -
+//                     not inside a poster, not between the three columns, not
+//                     between the title / Next / Close of the head row, and not
+//                     between the posters and the status band. Computed per aspect
+//                     from the same constants the View lays out with.
+//   3 [head-row]      Next and the shared Close are both at/above the touch floor
+//                     and both resolve INSIDE the panel, with the Close keeping the
+//                     kit's canonical box (owner F8 x3).
+//   4 [source-laws]   The retired surfaces stay retired (no tabs, no detail pane,
+//                     no In-Progress, no Track, no selection step), the View routes
+//                     through ElarionUiKit, strict MVVM holds, there is NO allow-list
+//                     entry, the file is ASCII and NUL-free, and the reward row is
+//                     still fed by QuestRewardMath with no fixed chip count.
 //
-// This oracle is a CHEAP structural guard, not a pixel test - it pins the properties
-// that make both bugs impossible, all headlessly decidable:
+// HOW EACH CASE WAS PROVEN RED (WO-1138). The pre-rebuild tree at HEAD is the
+// negative fixture, and every case fails against it by construction:
+//   [poster-stack] reads PosterMinHeightPx / ReadBandPx / AcceptBandPx / HookBandPx -
+//     none of those constants existed before this change, so ConstFloat records a
+//     failure ("... does not exist") for each on the old file.
+//   [zero-overlap] is computed from Poster1XMax / Poster2XMin / HeadTopY / CloseCentreX,
+//     which likewise did not exist; and against the OLD geometry the same routine
+//     reports a real collision - the old landscape status band spanned x 0.03-0.97 of
+//     the body zone across the list column's floor, which is the "status line bisects
+//     the second card" finding verbatim.
+//   [head-row] fails on the old tree because the shared Close was seated in the
+//     kit's DEFAULT bottom-centre band while the panel's own footer band was drawn
+//     at the same place - two surfaces, one band.
+//   [source-laws] fails on the old tree on EVERY forbidden token: RumorBoardVM.cs
+//     shipped TabKeys / TabLabels / ActiveQuests / Track / DailyRow and
+//     RumorBoardPanel.cs shipped BuildTabStrip / RenderDetail / _selectedId.
+// Re-prove any case by restoring the token it forbids; each fails alone.
 //
-//   1 [tab-band]  RumorBoardPanel's public layout constants (read by REFLECTION so
-//                 this file needs no UnityEngine.UI / TMP asmdef reference): the band
-//                 is at/above the kit touch floor, a chip's FLOOR width is the touch
-//                 floor, TabCount matches RumorBoardVM.TabKeys.Length, and the whole
-//                 row at its floor width FITS the measured list well at BOTH capture
-//                 aspects. That is the "every tab fully visible" assertion.
-//   2 [detail]    Every band is at least one TMP line box at the font it renders, and
-//                 DetailFixedStackPx + DetailBodyMinPx FITS the measured pane height.
-//                 That is the assertion the -11 px body would have failed.
-//   3 [no-overlap] Source law on RumorBoardPanel.cs: the tab band takes its X bounds
-//                 from the LIST zone and the detail pane parents to the RIGHT zone, so
-//                 they are horizontally disjoint rects in different columns - the
-//                 detail pane cannot cross the tab band by construction. Plus: no
-//                 hardcoded chip width, chips flex-fill at a touch-floor minWidth, and
-//                 the KEEP (selected tab = a leading "*" AND an underline bar, never a
-//                 colour highlight - the owner is red/green colourblind) still exists.
-//
-// A live "no two rects overlap" assertion needs a canvas at both capture aspects;
-// that stays the job of RunCaptureHeadless + eyes-on. This oracle catches the
-// REGRESSION (someone re-hardcodes a chip width, shortens a band, or moves the tab
-// band back into the shared body zone), which is the failure mode that recurs.
+// NO HOLLOW PASSES: every early return in this file is preceded by a recorded
+// FAILURE. A missing type, a missing constant or an unreadable source file is a
+// FAILURE here, never a note - a guard that returns quietly lands green and hides
+// the very drift the oracle exists to catch.
 //
 // Markers: RUMOR_BOARD_LAYOUT_OK / RUMOR_BOARD_LAYOUT_FAIL.
 // Standalone: run-unity-method DeNelle.Editor.Regression.RumorBoardLayoutRegression.RunAll
@@ -76,6 +80,7 @@ namespace DeNelle.Editor.Regression
     public static class RumorBoardLayoutRegression
     {
         private const string ViewSrc = "Assets/_Modules/Village/Hero/RumorBoardPanel.cs";
+        private const string VmSrc = "Assets/_Modules/Village/Hero/RumorBoardVM.cs";
 
         private const string ViewType = "DeNelle.Village.Hero.RumorBoardPanel";
         private const string VmType = "DeNelle.Village.Hero.RumorBoardVM";
@@ -85,14 +90,15 @@ namespace DeNelle.Editor.Regression
         /// <summary>The TMP line box multiplier the bands are budgeted from (~1.25em).</summary>
         private const float LineBoxMul = 1.25f;
 
-        // The MEASURED FrameQuest wells at the two capture aspects (derivation in the
-        // header). The list well width is what the tab row has to fit inside; the list
-        // well HEIGHT is also the detail pane's height, because WO-866 top-aligns the
-        // detail pane to the list well's top line.
-        private const float ListWellW_2340 = 819f;
-        private const float ListWellH_2340 = 426f;
-        private const float ListWellW_1920 = 742f;
-        private const float ListWellH_1920 = 484f;
+        /// <summary>Pixels two authored rects must clear each other by. The layout oracle's own
+        /// tolerance is 2 px; this budget asks for more so a rounding difference between the
+        /// budget and the live layout pass can never turn into a finding.</summary>
+        private const float ClearancePx = 6f;
+
+        /// <summary>The LANDSCAPE capture aspects. Portrait is deliberately absent: the game is
+        /// landscape-only (owner ruling 2026-08-26) and the v3 board has exactly ONE layout, so
+        /// a portrait budget here would assert a composition nobody designed.</summary>
+        private static readonly int[,] Aspects = { { 1920, 1080 }, { 2340, 1080 }, { 2670, 1200 } };
 
         public static void RunAll()
         {
@@ -107,11 +113,10 @@ namespace DeNelle.Editor.Regression
             var notes = new List<string>();
             try
             {
-                Case(failures, "tab-band", () => Case1_TabBandFitsTheWell(failures, notes));
-                Case(failures, "detail", () => Case2_DetailStackFitsThePane(failures, notes));
-                Case(failures, "no-overlap", () => Case3_SourceLaws(failures, notes));
-                Case(failures, "close-band", () => Case4_PortraitCloseBand(failures, notes));
-                Case(failures, "portrait-map", () => Case5_PortraitMap(failures, notes));
+                Case(failures, "poster-stack", () => Case1_PosterStack(failures, notes));
+                Case(failures, "zero-overlap", () => Case2_ZeroOverlap(failures, notes));
+                Case(failures, "head-row", () => Case3_HeadRow(failures, notes));
+                Case(failures, "source-laws", () => Case4_SourceLaws(failures, notes));
             }
             catch (Exception ex)
             {
@@ -121,11 +126,12 @@ namespace DeNelle.Editor.Regression
             string noteStr = notes.Count > 0 ? " [notes: " + string.Join("; ", notes) + "]" : "";
             if (failures.Count == 0)
             {
-                reason = "RUMOR BOARD LAYOUT OK - all " + TabCountExpected() + " filter tabs fit the " +
-                         "measured list well at their touch-floor width on both capture aspects, the tab band " +
-                         "is X-bounded by the list column (the detail pane cannot cross it), every band is a " +
-                         "whole TMP line box in FIXED reference pixels, the detail stack + a two-line body fits " +
-                         "the pane, and the selected tab still marks itself with '*' + underline (not colour)" + noteStr;
+                reason = "RUMOR BOARD LAYOUT OK - the v3 poster stack is a whole TMP line box in FIXED " +
+                         "reference pixels at every band, every tap target is authored at/above the kit " +
+                         "touch floor, NO TWO authored rects share a pixel at any of the " +
+                         Aspects.GetLength(0) + " landscape capture aspects, the shared Close keeps its " +
+                         "canonical box inside the panel, and the retired surfaces (tabs / detail pane / " +
+                         "In-Progress / Track / selection) stay retired" + noteStr;
                 return true;
             }
             reason = "rumor-board-layout FAIL x" + failures.Count + ": " + string.Join(" | ", failures) + noteStr;
@@ -138,373 +144,460 @@ namespace DeNelle.Editor.Regression
             catch (Exception ex) { failures.Add("[" + name + "] THREW " + ex.GetType().Name + ": " + ex.Message); }
         }
 
-        private static int TabCountExpected()
+        // =====================================================================
+        //  The measured board, derived ONCE from the same constants the View uses.
+        // =====================================================================
+
+        private sealed class Board
         {
-            Type view = FindType(ViewType);
-            if (view == null) return 0;
-            var f = view.GetField("TabCount", BindingFlags.Public | BindingFlags.Static | BindingFlags.FlattenHierarchy);
-            object v = f != null ? f.GetValue(null) : null;
-            return v is int i ? i : 0;
+            public int W, H;
+            public float PanelW, PanelH;
+            public float CardW, CardH;
+            public float CardBottomPx;     // poster floor above the panel floor
+            public float HeadTopPx;        // head row top, above the panel floor
+        }
+
+        private static Board Measure(Type view, int w, int h, float panelMin, float panelMax)
+        {
+            // CanvasScaler ScaleWithScreenSize, reference 1080x1920, match 0.5 (BuildModalCanvas).
+            float scale = Mathf.Sqrt(w / 1080f) * Mathf.Sqrt(h / 1920f);
+            float span = panelMax - panelMin;
+            var b = new Board { W = w, H = h };
+            b.PanelW = span * (w / scale);
+            b.PanelH = span * (h / scale);
+            float yMin = Frac(view, "PosterYMin", panelMin, span);
+            float yMax = Frac(view, "PosterYMax", panelMin, span);
+            b.CardH = (yMax - yMin) * b.PanelH;
+            b.CardBottomPx = yMin * b.PanelH;
+            b.CardW = (Frac(view, "Poster1XMax", panelMin, span) - Frac(view, "Poster1XMin", panelMin, span)) * b.PanelW;
+            b.HeadTopPx = Frac(view, "HeadTopY", panelMin, span) * b.PanelH;
+            return b;
+        }
+
+        /// <summary>Screen fraction -> panel fraction, the same conversion RumorBoardPanel.PanelFrac
+        /// performs. Read from the View's own constants so the two cannot drift.</summary>
+        private static float Frac(Type view, string constName, float panelMin, float span)
+        {
+            var f = view.GetField(constName, BindingFlags.Public | BindingFlags.Static | BindingFlags.FlattenHierarchy);
+            if (f == null) return float.NaN;
+            object v = f.GetValue(null);
+            float sf = v is float fv ? fv : (v is int iv ? iv : float.NaN);
+            return (sf - panelMin) / span;
         }
 
         // =====================================================================
-        //  CASE 1 - the tab row fits the well it lives in (the clipped "G")
+        //  CASE 1 - the poster's fixed-pixel stack is honest and it FITS
         // =====================================================================
-        private static void Case1_TabBandFitsTheWell(List<string> failures, List<string> notes)
-        {
-            Type view = FindType(ViewType);
-            Type kit = FindType(KitType);
-            if (view == null)
-            {
-                failures.Add("[tab-band] " + ViewType + " not found - the rumor board view was renamed or " +
-                             "removed; re-point this oracle (it is the only guard on the tab band budget)");
-                return;
-            }
-            if (kit == null) { failures.Add("[tab-band] " + KitType + " not found - cannot read the kit touch floor"); return; }
-
-            float minTouch = ConstFloat(kit, "MinTouchPx", failures, "[tab-band]");
-            if (minTouch <= 0f) return;
-
-            float bandPx = ConstFloat(view, "TabBandPx", failures, "[tab-band]");
-            float bandGap = ConstFloat(view, "TabBandGapPx", failures, "[tab-band]");
-            float chipMin = ConstFloat(view, "TabChipMinPx", failures, "[tab-band]");
-            float rowMin = ConstFloat(view, "TabRowMinWidthPx", failures, "[tab-band]");
-            float listTop = ConstFloat(view, "ListTopInsetPx", failures, "[tab-band]");
-            int tabCount = ConstInt(view, "TabCount", failures, "[tab-band]");
-            if (bandPx <= 0f || chipMin <= 0f || rowMin <= 0f || listTop <= 0f || tabCount <= 0) return;
-
-            if (bandPx < minTouch)
-                failures.Add("[tab-band] RumorBoardPanel.TabBandPx=" + bandPx + " is BELOW the kit touch floor " +
-                             minTouch + " - the filter tabs would be untappable on a phone");
-
-            if (chipMin < minTouch)
-                failures.Add("[tab-band] RumorBoardPanel.TabChipMinPx=" + chipMin + " is BELOW the kit touch floor " +
-                             minTouch + " - shrinking chips is never how five tabs are made to 'fit' (WO-852 ruling)");
-
-            if (listTop < bandPx + bandGap)
-                failures.Add("[tab-band] ListTopInsetPx=" + listTop + " is less than the band it has to clear (" +
-                             bandPx + " + " + bandGap + ") - the list would render UNDER the tab band");
-
-            // THE assertion the shipped bug would have failed: the whole row, at its FLOOR
-            // width, inside the MEASURED list well - at both aspects RunCaptureHeadless and
-            // the Seeker actually render.
-            if (rowMin > ListWellW_2340)
-                failures.Add("[tab-band] TabRowMinWidthPx=" + rowMin + " does not fit the measured list well at " +
-                             "2340x1080 (" + ListWellW_2340 + " ref px) - a chip would be clipped by the band's " +
-                             "RectMask2D, which is the WO-866 bug verbatim (the lone 'G' of 'Gear')");
-            if (rowMin > ListWellW_1920)
-                failures.Add("[tab-band] TabRowMinWidthPx=" + rowMin + " does not fit the measured list well at " +
-                             "1920x1080 (" + ListWellW_1920 + " ref px - the headless capture aspect)");
-
-            // The tab count the width budget was derived for must be the tab count the VM ships.
-            Type vm = FindType(VmType);
-            if (vm != null)
-            {
-                var keys = vm.GetField("TabKeys", BindingFlags.Public | BindingFlags.Static | BindingFlags.FlattenHierarchy);
-                var arr = keys != null ? keys.GetValue(null) as Array : null;
-                if (arr != null && arr.Length != tabCount)
-                    failures.Add("[tab-band] RumorBoardVM.TabKeys has " + arr.Length + " tabs but " +
-                                 "RumorBoardPanel.TabCount=" + tabCount + " - TabRowMinWidthPx was derived for " +
-                                 tabCount + " and no longer proves the row fits");
-                else if (arr != null)
-                    notes.Add(arr.Length + " tabs, row floor " + rowMin + "px in a " + ListWellW_2340 + "px well");
-            }
-            else
-            {
-                notes.Add("RumorBoardVM not loaded - tab count cross-check skipped");
-            }
-        }
-
-        // =====================================================================
-        //  CASE 2 - every band is a whole line box, and the stack fits the pane
-        // =====================================================================
-        private static void Case2_DetailStackFitsThePane(List<string> failures, List<string> notes)
+        private static void Case1_PosterStack(List<string> failures, List<string> notes)
         {
             Type view = FindType(ViewType);
             Type kit = FindType(KitType);
             Type ui = FindType(UiType);
-            if (view == null || kit == null) { failures.Add("[detail] view/kit type not found"); return; }
+            if (view == null) { failures.Add("[poster-stack] " + ViewType + " not found - the rumor board view was renamed or removed; re-point this oracle rather than deleting the guard"); return; }
+            if (kit == null) { failures.Add("[poster-stack] " + KitType + " not found - cannot read the kit touch floor"); return; }
+            if (ui == null) { failures.Add("[poster-stack] " + UiType + " not found - cannot read the font ladder the bands are budgeted from"); return; }
 
-            float minTouch = ConstFloat(kit, "MinTouchPx", failures, "[detail]");
-            float fontBody = ui != null ? ConstFloat(ui, "FontBody", failures, "[detail]") : 50f;
-            float fontLabel = ui != null ? ConstFloat(ui, "FontLabel", failures, "[detail]") : 40f;
-            float fontMicro = ui != null ? ConstFloat(ui, "FontMicro", failures, "[detail]") : 32f;
-            if (minTouch <= 0f || fontBody <= 0f || fontLabel <= 0f || fontMicro <= 0f) return;
+            float minTouch = ConstFloat(kit, "MinTouchPx", failures, "[poster-stack]");
+            float fontBody = ConstFloat(ui, "FontBody", failures, "[poster-stack]");
+            float fontMicro = ConstFloat(ui, "FontMicro", failures, "[poster-stack]");
+            float fontFloor = ConstFloat(ui, "FontFloorMobile", failures, "[poster-stack]");
+            if (minTouch <= 0f || fontBody <= 0f || fontMicro <= 0f || fontFloor <= 0f) return;
 
-            float bodyLine = fontBody * LineBoxMul;    // 62.5
-            float labelLine = fontLabel * LineBoxMul;  // 50
-            float microLine = fontMicro * LineBoxMul;  // 40
+            float bodyLine = fontBody * LineBoxMul;
+            float microLine = fontMicro * LineBoxMul;
 
-            float fixedStack = ConstFloat(view, "DetailFixedStackPx", failures, "[detail]");
-            float bodyMin = ConstFloat(view, "DetailBodyMinPx", failures, "[detail]");
-            float titlePx = ConstFloat(view, "DetailTitlePx", failures, "[detail]");
-            float chipRowPx = ConstFloat(view, "DetailChipRowPx", failures, "[detail]");
-            float ctaPx = ConstFloat(view, "DetailCtaPx", failures, "[detail]");
-            float cardPx = ConstFloat(view, "CardHeightPx", failures, "[detail]");
-            float statusPx = ConstFloat(view, "StatusBandPx", failures, "[detail]");
-            float sectionPx = ConstFloat(view, "SectionBandPx", failures, "[detail]");
-            float flavorPx = ConstFloat(view, "FlavorBandPx", failures, "[detail]");
-            float listBottom = ConstFloat(view, "ListBottomInsetPx", failures, "[detail]");
-            if (fixedStack <= 0f || bodyMin <= 0f || titlePx <= 0f || chipRowPx <= 0f || ctaPx <= 0f) return;
+            float titleBand = ConstFloat(view, "TitleBandPx", failures, "[poster-stack]");
+            float hookBand = ConstFloat(view, "HookBandPx", failures, "[poster-stack]");
+            float readBand = ConstFloat(view, "ReadBandPx", failures, "[poster-stack]");
+            float acceptBand = ConstFloat(view, "AcceptBandPx", failures, "[poster-stack]");
+            float rewardBand = ConstFloat(view, "RewardBandPx", failures, "[poster-stack]");
+            float headBand = ConstFloat(view, "HeadBandPx", failures, "[poster-stack]");
+            float statusBand = ConstFloat(view, "StatusBandPx", failures, "[poster-stack]");
+            float posterMin = ConstFloat(view, "PosterMinHeightPx", failures, "[poster-stack]");
+            float panelMin = ConstFloat(view, "PanelAnchorMin", failures, "[poster-stack]");
+            float panelMax = ConstFloat(view, "PanelAnchorMax", failures, "[poster-stack]");
+            if (titleBand <= 0f || hookBand <= 0f || readBand <= 0f || acceptBand <= 0f ||
+                rewardBand <= 0f || headBand <= 0f || statusBand <= 0f || posterMin <= 0f ||
+                panelMax <= panelMin) return;
 
-            // THE assertion the -11px body would have failed, at both capture aspects.
-            if (fixedStack + bodyMin > ListWellH_2340)
-                failures.Add("[detail] DetailFixedStackPx(" + fixedStack + ") + DetailBodyMinPx(" + bodyMin +
-                             ") = " + (fixedStack + bodyMin) + " exceeds the detail pane at 2340x1080 (" +
-                             ListWellH_2340 + " ref px) - the body band goes NEGATIVE and TMP culls the quest " +
-                             "text whole (the WO-866 bug: the shipped stack asked 360 of a 349px well)");
-            if (fixedStack + bodyMin > ListWellH_1920)
-                failures.Add("[detail] the detail stack does not fit at 1920x1080 (" + ListWellH_1920 + " ref px)");
+            // Every band is a whole TMP line box at the font it renders.
+            if (titleBand < 2f * bodyLine)
+                failures.Add("[poster-stack] TitleBandPx=" + titleBand + " cannot seat TWO FontBody line boxes (" +
+                             (2f * bodyLine) + ") - the v3 title is a TWO-LINE block and the second line is culled whole");
+            if (hookBand < microLine)
+                failures.Add("[poster-stack] HookBandPx=" + hookBand + " is under one FontMicro line box (" +
+                             microLine + ") - TMP culls the hook whole, which is the -11px body class of bug (WO-866)");
+            if (rewardBand < microLine)
+                failures.Add("[poster-stack] RewardBandPx=" + rewardBand + " is under one FontMicro line box (" +
+                             microLine + ") - the reward chips render as empty outlines (the 2026-08-02 symptom)");
 
-            if (titlePx < bodyLine)
-                failures.Add("[detail] DetailTitlePx=" + titlePx + " is shorter than one FontBody line box (" +
-                             bodyLine + ") - the quest title would be culled");
-            if (chipRowPx < microLine)
-                failures.Add("[detail] DetailChipRowPx=" + chipRowPx + " is shorter than one FontMicro line box (" +
-                             microLine + ") - the tag/reward chips would render as empty outlines (the exact " +
-                             "'empty gold chip' symptom from the 2026-08-02 capture)");
-            if (ctaPx < minTouch)
-                failures.Add("[detail] DetailCtaPx=" + ctaPx + " is below the kit touch floor " + minTouch);
-            if (bodyMin < 2f * labelLine)
-                failures.Add("[detail] DetailBodyMinPx=" + bodyMin + " is under two FontLabel line boxes (" +
-                             (2f * labelLine) + ") - a one-line minimum is not a body, it is a caption");
+            // Every tap target is AUTHORED at the floor - never grown into it by ClampMinTouch,
+            // which would spill it symmetrically into both neighbours.
+            if (readBand < minTouch)
+                failures.Add("[poster-stack] ReadBandPx=" + readBand + " is below the kit touch floor " + minTouch +
+                             " - 'Read the letter >' is a real tap target, not a decorative line");
+            if (acceptBand < minTouch)
+                failures.Add("[poster-stack] AcceptBandPx=" + acceptBand + " is below the kit touch floor " + minTouch +
+                             " - Accept is the hero action of this board");
+            if (headBand < minTouch)
+                failures.Add("[poster-stack] HeadBandPx=" + headBand + " is below the kit touch floor " + minTouch +
+                             " - the mockup's 0.823-0.917 fraction resolves to 91 ref px at 2670x1200, which is " +
+                             "exactly why this band is authored in PIXELS and not as that fraction");
 
-            // The list column's own bands.
-            if (cardPx < minTouch)
-                failures.Add("[detail] CardHeightPx=" + cardPx + " is below the kit touch floor " + minTouch +
-                             " - a card IS the select target");
-            if (cardPx < bodyLine + microLine)
-                failures.Add("[detail] CardHeightPx=" + cardPx + " cannot seat its two lines (title " + bodyLine +
-                             " + hook " + microLine + " = " + (bodyLine + microLine) + ") - one of them clips");
-            if (statusPx < microLine)
-                failures.Add("[detail] StatusBandPx=" + statusPx + " is under one FontMicro line box (" + microLine + ")");
-            if (sectionPx < labelLine)
-                failures.Add("[detail] SectionBandPx=" + sectionPx + " is under one FontLabel line box (" + labelLine + ")");
-            if (flavorPx < microLine)
-                failures.Add("[detail] FlavorBandPx=" + flavorPx + " is under one FontMicro line box (" + microLine + ")");
-            if (listBottom < statusPx)
-                failures.Add("[detail] ListBottomInsetPx=" + listBottom + " does not clear the status band (" +
-                             statusPx + ") - the last card would render over the status line");
-
-            notes.Add("detail stack " + fixedStack + "px + body >= " + bodyMin + " in a " + ListWellH_2340 +
-                      "px pane (body resolves to " + (ListWellH_2340 - fixedStack) + "px @2340x1080)");
-        }
-
-        // =====================================================================
-        //  CASE 3 - the source laws that keep the two rects in different columns
-        // =====================================================================
-        private static void Case3_SourceLaws(List<string> failures, List<string> notes)
-        {
-            string raw = ReadSource(ViewSrc, failures);
-            if (raw == null) return;
-            string src = StripComments(raw);
-
-            // THE regression: a hardcoded chip width. 5 x 220 + spacing = 1140 px asked of a
-            // 770 px strip, and the mask ate chip 4. Chips must FLEX-FILL the band.
-            if (Regex.IsMatch(src, @"preferredWidth\s*=\s*\d+(\.\d+)?f\s*;\s*(//)?.{0,40}(chip|tab)", RegexOptions.IgnoreCase)
-                || Regex.IsMatch(src, @"Chip_\"".{0,200}?preferredWidth\s*=\s*[1-9]", RegexOptions.Singleline))
-                failures.Add("[no-overlap] a tab chip carries a HARDCODED preferredWidth again - that is what " +
-                             "asked 1140 px of a 770 px strip and let the RectMask2D clip 'Gear' to 'G'. " +
-                             "Chips flex-fill the band (flexibleWidth 1 + minWidth = the touch floor).");
-
-            if (src.IndexOf("flexibleWidth = 1f", StringComparison.Ordinal) < 0)
-                failures.Add("[no-overlap] the tab chips no longer flex-fill the band (flexibleWidth = 1f) - " +
-                             "without it the row cannot size itself to the well and clips again");
-            if (src.IndexOf("le.minWidth = TabChipMinPx", StringComparison.Ordinal) < 0)
-                failures.Add("[no-overlap] the tab chips lost their touch-floor minWidth (TabChipMinPx) - a chip " +
-                             "may never be squeezed below the kit touch floor to make the row fit");
-
-            // The two rects must live in DIFFERENT columns. The band takes its X bounds from
-            // the LIST zone; the detail pane parents to the RIGHT zone. That disjointness is
-            // the whole fix - if either half moves, the overlap is reachable again.
-            if (!Regex.IsMatch(src, @"xMin\s*=\s*_zoneLeft\.anchorMin\.x") ||
-                !Regex.IsMatch(src, @"xMax\s*=\s*_zoneLeft\.anchorMax\.x"))
-                failures.Add("[no-overlap] the tab band no longer takes its X bounds from the LIST zone " +
-                             "(_zoneLeft.anchorMin.x / .anchorMax.x) - it can extend across the detail column " +
-                             "again, which is the overlap WO-866 fixed");
-            if (src.IndexOf("detailHost = zoneRight", StringComparison.Ordinal) < 0)
-                failures.Add("[no-overlap] the detail pane no longer parents to the RIGHT well (zoneRight) - " +
-                             "the tab band and the detail pane are only guaranteed disjoint while they are in " +
-                             "different columns");
-            if (Regex.IsMatch(src, @"x(Min|Max)\s*=\s*_zoneRight\."))
-                failures.Add("[no-overlap] the tab band takes an X bound from the DETAIL zone (_zoneRight) - the " +
-                             "band must be bounded by the LIST column only, or the two rects can overlap again");
-
-            // Fixed-pixel band, never a fraction of parent (WO-841 / WO-852 law).
-            if (!Regex.IsMatch(src, @"sizeDelta\s*=\s*new\s+Vector2\s*\(\s*-2f\s*\*\s*TabBandInsetPx\s*,\s*TabBandPx\s*\)"))
-                failures.Add("[no-overlap] the tab band is no longer a FIXED-PIXEL band (sizeDelta ... TabBandPx) - " +
-                             "a fraction band scales with the well and culls/clips the moment the aspect changes");
-
-            // THE KEEP (owner ruling): the selected tab is marked by a leading "*" AND an
-            // underline bar. Text/shape-encoded, never colour alone - the owner is red/green
-            // colourblind and this was the one thing on the screen already correct.
-            if (src.IndexOf("isActive ? \"* \" : \"\"", StringComparison.Ordinal) < 0)
-                failures.Add("[no-overlap] the selected tab lost its leading '*' marker - selection may NEVER be " +
-                             "carried by colour alone (the owner is red/green colourblind; this marker is the " +
-                             "pattern the rest of the board follows)");
-            if (src.IndexOf("\"Underline\"", StringComparison.Ordinal) < 0)
-                failures.Add("[no-overlap] the selected tab lost its underline bar - the '*' and the underline are " +
-                             "BOTH the KEEP from the WO-866 review");
-
-            // Style-everything-obsidian: the board must route through the kit.
-            if (src.IndexOf("ElarionUiKit", StringComparison.Ordinal) < 0)
-                failures.Add("[no-overlap] RumorBoardPanel does not go through ElarionUiKit - the " +
-                             "UiObsidianConformanceRegression hand-rolled-uGUI law");
-
-            // Strict MVVM: the View reads the VM, never the quest services.
-            foreach (string forbidden in new[] { "QuestService", "QuestCatalog", "DailyQuestService" })
-                if (Regex.IsMatch(src, @"\b" + forbidden + @"\s*\."))
-                    failures.Add("[no-overlap] RumorBoardPanel touches " + forbidden + " directly - the View is a " +
-                                 "read-only consumer of RumorBoardVM (strict MVVM, [ui-mvvm] ratchet armed)");
-
-            // ASCII-only: a non-ASCII glyph renders as tofu on the shipped TMP font.
-            for (int i = 0; i < raw.Length; i++)
+            // ...and the whole stack FITS the card at every landscape capture aspect.
+            for (int i = 0; i < Aspects.GetLength(0); i++)
             {
-                if (raw[i] > 127)
+                var b = Measure(view, Aspects[i, 0], Aspects[i, 1], panelMin, panelMax);
+                if (float.IsNaN(b.CardH) || b.CardH <= 0f)
                 {
-                    int line = 1;
-                    for (int j = 0; j < i; j++) if (raw[j] == '\n') line++;
-                    failures.Add("[no-overlap] RumorBoardPanel.cs carries a NON-ASCII character (U+" +
-                                 ((int)raw[i]).ToString("X4") + ") at line " + line +
-                                 " - it renders as tofu on the shipped TMP font");
-                    break;
+                    failures.Add("[poster-stack] the poster band constants did not resolve at " +
+                                 Aspects[i, 0] + "x" + Aspects[i, 1] + " - a missing PosterY/PosterX constant " +
+                                 "cannot be treated as 'nothing to check'");
+                    continue;
                 }
+                if (b.CardH < posterMin)
+                    failures.Add("[poster-stack] at " + b.W + "x" + b.H + " a poster resolves " +
+                                 b.CardH.ToString("F0") + " ref px tall, under PosterMinHeightPx(" + posterMin +
+                                 ") - the top-hung and bottom-hung halves of the stack meet and something is culled");
+                if (b.CardBottomPx < statusBand + ClearancePx)
+                    failures.Add("[poster-stack] at " + b.W + "x" + b.H + " the poster floor is only " +
+                                 b.CardBottomPx.ToString("F0") + " ref px above the panel floor, which does not " +
+                                 "clear the status band (" + statusBand + ") - the status line lands on Accept, " +
+                                 "which is the landscape finding from the 2026-08-26 capture verbatim");
+                notes.Add(b.W + "x" + b.H + ": poster " + b.CardW.ToString("F0") + "x" + b.CardH.ToString("F0") +
+                          " ref px (min " + posterMin + ")");
             }
-
-            if (raw.IndexOf('\0') >= 0)
-                failures.Add("[no-overlap] RumorBoardPanel.cs contains an embedded NUL byte (mount-garble, " +
-                             "CLAUDE.md Sec.0) - the compile gate rejects this");
-
-            notes.Add("source laws checked on " + ViewSrc);
         }
 
         // =====================================================================
-        //  CASE 4 - WO-941: the PORTRAIT detail pane clears the shared Close band
+        //  CASE 2 - NO TWO AUTHORED RECTS SHARE A PIXEL
         // =====================================================================
-        /// <summary>
-        /// THE DEFECT THIS PINS (UICap-GEO, both portrait sizes, 14 assertions):
-        ///   CloseButton (y -763..-631) covers DetailRewardRow's "Food 90" / "Magic 45" /
-        ///   "Relic Drowned Ledger" AND the Accept/Track labels -- and Accept/Track cover
-        ///   "Close" right back.
-        /// Landscape gives the shared Close a home (BuildFooterBand). PORTRAIT did not: the
-        /// detail pane claimed a hardcoded 0.05 floor on the SAME chrome.content the kit seats
-        /// the fixed CanonCtaHeight Close box on, growing UPWARD from y = 0.050. Two surfaces,
-        /// one band -- UI_PLAYBOOK sec.8 verbatim.
-        ///
-        /// The View now MEASURES the Close's top (CloseReserveTopFraction) instead of hoping a
-        /// literal clears it. This case pins the arithmetic behind that: at both portrait capture
-        /// sizes, the floor the View computes must sit ABOVE the Close box's top, and the pane
-        /// left over must still seat the declared fixed detail stack plus a two-line body.
-        /// The capture oracle proves the shipped layout; this proves the budget, at gate speed.
-        /// </summary>
-        private static void Case4_PortraitCloseBand(List<string> failures, List<string> notes)
+        private struct Band
+        {
+            public string Name;
+            public float X0, X1, Y0, Y1;   // reference px, panel-local, y up
+            public Band(string n, float x0, float x1, float y0, float y1)
+            { Name = n; X0 = x0; X1 = x1; Y0 = y0; Y1 = y1; }
+        }
+
+        private static void Case2_ZeroOverlap(List<string> failures, List<string> notes)
         {
             Type view = FindType(ViewType);
             Type kit = FindType(KitType);
-            if (view == null || kit == null) { failures.Add("[close-band] view/kit type not found"); return; }
+            if (view == null || kit == null)
+            { failures.Add("[zero-overlap] view/kit type not found - the geometry budget cannot be evaluated"); return; }
 
-            float ctaH = ConstFloat(kit, "CanonCtaHeight", failures, "[close-band]");
-            float panelMinY = ConstFloat(view, "PanelAnchorMinY", failures, "[close-band]");
-            float panelMaxY = ConstFloat(view, "PanelAnchorMaxY", failures, "[close-band]");
-            float gap = ConstFloat(view, "CloseReserveGapFrac", failures, "[close-band]");
-            float floorY = ConstFloat(view, "PortraitDetailFloorY", failures, "[close-band]");
-            float topY = ConstFloat(view, "PortraitDetailTopY", failures, "[close-band]");
-            float fixedStack = ConstFloat(view, "DetailFixedStackPx", failures, "[close-band]");
-            float bodyMin = ConstFloat(view, "DetailBodyMinPx", failures, "[close-band]");
-            if (ctaH <= 0f || panelMaxY <= panelMinY || topY <= 0f || fixedStack <= 0f) return;
+            float panelMin = ConstFloat(view, "PanelAnchorMin", failures, "[zero-overlap]");
+            float panelMax = ConstFloat(view, "PanelAnchorMax", failures, "[zero-overlap]");
+            float ctaW = ConstFloat(kit, "CanonCtaWidth", failures, "[zero-overlap]");
+            float ctaH = ConstFloat(kit, "CanonCtaHeight", failures, "[zero-overlap]");
+            if (panelMax <= panelMin || ctaW <= 0f || ctaH <= 0f) return;
+            float span = panelMax - panelMin;
 
-            // The kit's DefaultCloseZone lower edge. It is private to ElarionUiKit, so it is
-            // asserted here as the value SeatSharedCloseInside is documented to seat at -- if the
-            // kit ever moves the band, this case's numbers stop matching the capture and the
-            // capture is the tie-breaker.
-            const float CloseBandLowerEdge = 0.050f;
-
-            // The two PORTRAIT capture sizes the oracle failed on.
-            int[,] sizes = { { 1080, 2340 }, { 1200, 2670 } };
-            for (int s = 0; s < sizes.GetLength(0); s++)
+            string[] needed =
             {
-                int w = sizes[s, 0], h = sizes[s, 1];
-                // CanvasScaler ScaleWithScreenSize, reference 1080x1920, match 0.5 (BuildModalCanvas).
-                float scale = Mathf.Sqrt(w / 1080f) * Mathf.Sqrt(h / 1920f);
-                float canvasH = h / scale;
-                float panelH = (panelMaxY - panelMinY) * canvasH;
-                float closeTop = CloseBandLowerEdge + ctaH / panelH;
-                float paneFloor = Mathf.Max(floorY, closeTop + gap);
-
-                if (paneFloor <= closeTop)
-                    failures.Add("[close-band] at " + w + "x" + h + " the portrait detail pane floor (" +
-                                 paneFloor.ToString("F3") + ") does not clear the shared Close box top (" +
-                                 closeTop.ToString("F3") + ") - the reward chips and the Accept/Track CTAs " +
-                                 "land inside the Close again (the 14 WO-941 assertions verbatim)");
-
-                float panePx = (topY - paneFloor) * panelH;
-                if (panePx < fixedStack + bodyMin)
-                    failures.Add("[close-band] at " + w + "x" + h + " the portrait detail pane is " +
-                                 panePx.ToString("F0") + " ref px after the Close reserve, under " +
-                                 "DetailFixedStackPx(" + fixedStack + ") + DetailBodyMinPx(" + bodyMin +
-                                 ") = " + (fixedStack + bodyMin) + " - the body band goes negative and TMP " +
-                                 "culls the tale whole (the WO-866 failure, re-reachable through the reserve)");
-
-                notes.Add("portrait " + w + "x" + h + ": close top " + closeTop.ToString("F3") +
-                          ", pane " + paneFloor.ToString("F3") + ".." + topY.ToString("F2") +
-                          " = " + panePx.ToString("F0") + "px");
+                "TitleTopPx", "TitleBandPx", "HookTopPx", "HookBandPx", "ReadTopPx", "ReadBandPx",
+                "AcceptBottomPx", "AcceptBandPx", "RewardBottomPx", "RewardBandPx",
+                "RuleBottomPx", "RulePx", "HeadBandPx", "StatusBandPx", "StatusBottomPx",
+            };
+            var px = new Dictionary<string, float>();
+            foreach (var n in needed)
+            {
+                float v = ConstFloat(view, n, failures, "[zero-overlap]");
+                if (v <= 0f && n != "StatusBottomPx") return;   // ConstFloat already recorded WHY
+                px[n] = v;
             }
 
-            // The View must MEASURE the band, not re-hardcode a literal floor.
-            string raw = ReadSource(ViewSrc, failures);
-            if (raw != null)
+            for (int a = 0; a < Aspects.GetLength(0); a++)
             {
-                string src = StripComments(raw);
-                if (src.IndexOf("CloseReserveTopFraction", StringComparison.Ordinal) < 0)
-                    failures.Add("[close-band] RumorBoardPanel no longer measures the shared Close band " +
-                                 "(CloseReserveTopFraction) - a hardcoded portrait floor is exactly what put " +
-                                 "the reward row and the CTAs inside the Close box (WO-941)");
-                if (Regex.IsMatch(src, @"detailMin\s*=\s*new\s+Vector2\s*\(\s*0\.05f\s*,\s*0\.05f\s*\)"))
-                    failures.Add("[close-band] the portrait detail pane is back on the literal 0.05 floor - " +
-                                 "that literal IS the WO-941 defect");
+                var b = Measure(view, Aspects[a, 0], Aspects[a, 1], panelMin, panelMax);
+                if (float.IsNaN(b.CardH) || b.CardH <= 0f)
+                { failures.Add("[zero-overlap] poster band constants missing at " + b.W + "x" + b.H); continue; }
+
+                // ---- inside ONE poster (card-local, y measured up from the card floor) ----
+                var poster = new List<Band>
+                {
+                    new Band("Title",   0f, b.CardW, b.CardH - px["TitleTopPx"] - px["TitleBandPx"], b.CardH - px["TitleTopPx"]),
+                    new Band("Hook",    0f, b.CardW, b.CardH - px["HookTopPx"] - px["HookBandPx"],   b.CardH - px["HookTopPx"]),
+                    new Band("Read",    0f, b.CardW, b.CardH - px["ReadTopPx"] - px["ReadBandPx"],   b.CardH - px["ReadTopPx"]),
+                    new Band("Rule",    0f, b.CardW, px["RuleBottomPx"],   px["RuleBottomPx"] + px["RulePx"]),
+                    new Band("Rewards", 0f, b.CardW, px["RewardBottomPx"], px["RewardBottomPx"] + px["RewardBandPx"]),
+                    new Band("Accept",  0f, b.CardW, px["AcceptBottomPx"], px["AcceptBottomPx"] + px["AcceptBandPx"]),
+                };
+                AssertDisjoint(failures, poster, "poster @" + b.W + "x" + b.H,
+                    "two bands inside one poster occupy the same pixels - one of them is drawn over the other, " +
+                    "which is the 'button over text' finding the fresh captures reported");
+
+                foreach (var band in poster)
+                {
+                    if (band.Y0 < -0.01f || band.Y1 > b.CardH + 0.01f)
+                        failures.Add("[zero-overlap] at " + b.W + "x" + b.H + " the poster band '" + band.Name +
+                                     "' resolves outside its card (" + band.Y0.ToString("F0") + ".." +
+                                     band.Y1.ToString("F0") + " in a " + b.CardH.ToString("F0") + " px card)");
+                }
+
+                // ---- the three columns, the head row and the status band (panel-local) ----
+                float x1Min = Frac(view, "Poster1XMin", panelMin, span) * b.PanelW;
+                float x1Max = Frac(view, "Poster1XMax", panelMin, span) * b.PanelW;
+                float x2Min = Frac(view, "Poster2XMin", panelMin, span) * b.PanelW;
+                float x2Max = Frac(view, "Poster2XMax", panelMin, span) * b.PanelW;
+                float x3Min = Frac(view, "Poster3XMin", panelMin, span) * b.PanelW;
+                float x3Max = Frac(view, "Poster3XMax", panelMin, span) * b.PanelW;
+                float posterTop = b.CardBottomPx + b.CardH;
+
+                float closeCx = Frac(view, "CloseCentreX", panelMin, span) * b.PanelW;
+                float nextX0 = Frac(view, "NextXMin", panelMin, span) * b.PanelW;
+                float nextX1 = Frac(view, "NextXMax", panelMin, span) * b.PanelW;
+                float titleX0 = Frac(view, "TitleXMin", panelMin, span) * b.PanelW;
+                float titleX1 = Frac(view, "TitleXMax", panelMin, span) * b.PanelW;
+                float titleY0 = Frac(view, "TitleYMin", panelMin, span) * b.PanelH;
+                float titleY1 = Frac(view, "TitleYMax", panelMin, span) * b.PanelH;
+                if (float.IsNaN(closeCx) || float.IsNaN(nextX0) || float.IsNaN(titleX0))
+                { failures.Add("[zero-overlap] head-row constants missing at " + b.W + "x" + b.H); continue; }
+
+                var panel = new List<Band>
+                {
+                    new Band("Poster1", x1Min, x1Max, b.CardBottomPx, posterTop),
+                    new Band("Poster2", x2Min, x2Max, b.CardBottomPx, posterTop),
+                    new Band("Poster3", x3Min, x3Max, b.CardBottomPx, posterTop),
+                    new Band("Title",   titleX0, titleX1, titleY0, titleY1),
+                    new Band("Next",    nextX0, nextX1, b.HeadTopPx - px["HeadBandPx"], b.HeadTopPx),
+                    new Band("Close",   closeCx - ctaW * 0.5f, closeCx + ctaW * 0.5f, b.HeadTopPx - ctaH, b.HeadTopPx),
+                    new Band("Status",  x1Min, x3Max, px["StatusBottomPx"], px["StatusBottomPx"] + px["StatusBandPx"]),
+                };
+                AssertDisjoint(failures, panel, "board @" + b.W + "x" + b.H,
+                    "two authored surfaces on the board occupy the same pixels - this is the class of defect " +
+                    "the whole v3 rebuild exists to make unreachable (five regions fighting for one screen)");
+
+                notes.Add(b.W + "x" + b.H + ": columns " + x1Min.ToString("F0") + "-" + x1Max.ToString("F0") +
+                          " / " + x2Min.ToString("F0") + "-" + x2Max.ToString("F0") +
+                          " / " + x3Min.ToString("F0") + "-" + x3Max.ToString("F0") +
+                          ", head " + (b.HeadTopPx - ctaH).ToString("F0") + "-" + b.HeadTopPx.ToString("F0"));
             }
         }
 
+        private static void AssertDisjoint(List<string> failures, List<Band> bands, string where, string why)
+        {
+            for (int i = 0; i < bands.Count; i++)
+                for (int j = i + 1; j < bands.Count; j++)
+                {
+                    float ow = Mathf.Min(bands[i].X1, bands[j].X1) - Mathf.Max(bands[i].X0, bands[j].X0);
+                    float oh = Mathf.Min(bands[i].Y1, bands[j].Y1) - Mathf.Max(bands[i].Y0, bands[j].Y0);
+                    if (ow <= ClearancePx || oh <= ClearancePx) continue;
+                    failures.Add("[zero-overlap] " + where + " '" + bands[i].Name + "' and '" + bands[j].Name +
+                                 "' share " + ow.ToString("F0") + "x" + oh.ToString("F0") + " ref px - " + why);
+                }
+        }
+
         // =====================================================================
-        //  CASE 5 - WO-1192: portrait is a narrow list rail plus authored detail
+        //  CASE 3 - the head row: Next and the ONE shared Close
         // =====================================================================
-        private static void Case5_PortraitMap(List<string> failures, List<string> notes)
+        private static void Case3_HeadRow(List<string> failures, List<string> notes)
         {
             Type view = FindType(ViewType);
-            if (view == null) { failures.Add("[portrait-map] view type not found"); return; }
+            Type kit = FindType(KitType);
+            if (view == null || kit == null)
+            { failures.Add("[head-row] view/kit type not found - the head row budget cannot be evaluated"); return; }
 
-            float listMin = ConstFloat(view, "PortraitListMinX", failures, "[portrait-map]");
-            float listMax = ConstFloat(view, "PortraitListMaxX", failures, "[portrait-map]");
-            float gap = ConstFloat(view, "PortraitContentGapX", failures, "[portrait-map]");
-            float contentMax = ConstFloat(view, "PortraitContentMaxX", failures, "[portrait-map]");
-            if (listMin < 0f || listMax <= listMin || gap <= 0f || contentMax <= listMax + gap)
-                failures.Add("[portrait-map] portrait columns are invalid - list must be a narrow left rail " +
-                             "with a positive gap and non-empty detail region");
-            if (listMax - listMin >= contentMax - (listMax + gap))
-                failures.Add("[portrait-map] the portrait quest rail is not narrower than the detail region");
+            float minTouch = ConstFloat(kit, "MinTouchPx", failures, "[head-row]");
+            float ctaW = ConstFloat(kit, "CanonCtaWidth", failures, "[head-row]");
+            float ctaH = ConstFloat(kit, "CanonCtaHeight", failures, "[head-row]");
+            float panelMin = ConstFloat(view, "PanelAnchorMin", failures, "[head-row]");
+            float panelMax = ConstFloat(view, "PanelAnchorMax", failures, "[head-row]");
+            float headBand = ConstFloat(view, "HeadBandPx", failures, "[head-row]");
+            if (minTouch <= 0f || ctaW <= 0f || ctaH <= 0f || panelMax <= panelMin || headBand <= 0f) return;
+            float span = panelMax - panelMin;
 
-            string raw = ReadSource(ViewSrc, failures);
+            for (int a = 0; a < Aspects.GetLength(0); a++)
+            {
+                var b = Measure(view, Aspects[a, 0], Aspects[a, 1], panelMin, panelMax);
+                float nextW = (Frac(view, "NextXMax", panelMin, span) - Frac(view, "NextXMin", panelMin, span)) * b.PanelW;
+                float closeCx = Frac(view, "CloseCentreX", panelMin, span) * b.PanelW;
+                if (float.IsNaN(nextW) || float.IsNaN(closeCx))
+                { failures.Add("[head-row] Next/Close constants missing at " + b.W + "x" + b.H); continue; }
+
+                if (nextW < minTouch)
+                    failures.Add("[head-row] at " + b.W + "x" + b.H + " Next resolves " + nextW.ToString("F0") +
+                                 " ref px wide, under the kit touch floor " + minTouch);
+                if (closeCx + ctaW * 0.5f > b.PanelW)
+                    failures.Add("[head-row] at " + b.W + "x" + b.H + " the shared Close's canonical " + ctaW +
+                                 " px box runs " + (closeCx + ctaW * 0.5f - b.PanelW).ToString("F0") +
+                                 " px past the panel's right edge - owner F8 2026-07-04: everything must be " +
+                                 "INSIDE the panel, and the Close's SIZE is canonical, so only CloseCentreX may move");
+                if (closeCx - ctaW * 0.5f < 0f)
+                    failures.Add("[head-row] at " + b.W + "x" + b.H + " the shared Close runs past the panel's LEFT edge");
+                if (b.HeadTopPx - ctaH < 0f || b.HeadTopPx > b.PanelH)
+                    failures.Add("[head-row] at " + b.W + "x" + b.H + " the head row falls outside the panel");
+
+                // THE GUTTER. The type tag and the NEW chip poke ABOVE their card on purpose, and
+                // the head row's LOWEST edge is the shared Close's bottom. At 2670x1200 that
+                // gutter is only ~30 ref px, so a tag that straddled its card edge at half its
+                // own height (38) would put the right-hand poster's NEW chip INSIDE the Close's
+                // box. The overhang is a declared number for exactly this reason; this is the
+                // assertion that keeps it declared.
+                float overhang = ConstFloat(view, "TypeTagOverhangPx", failures, "[head-row]");
+                if (overhang > 0f)
+                {
+                    float gutter = (b.HeadTopPx - ctaH) - (b.CardBottomPx + b.CardH);
+                    if (overhang + ClearancePx > gutter)
+                        failures.Add("[head-row] at " + b.W + "x" + b.H + " the poster's " + overhang +
+                                     " px tag/NEW overhang does not clear the " + gutter.ToString("F0") +
+                                     " ref px gutter under the head row - the right-hand poster's NEW chip " +
+                                     "lands inside the shared Close's canonical box");
+                }
+
+                notes.Add(b.W + "x" + b.H + ": Next " + nextW.ToString("F0") + " px wide, Close " +
+                          (closeCx - ctaW * 0.5f).ToString("F0") + "-" + (closeCx + ctaW * 0.5f).ToString("F0") +
+                          " in a " + b.PanelW.ToString("F0") + " px panel");
+            }
+
+            // The Close must still be the KIT's shared Close, re-seated by the KIT's own seater -
+            // never a second Close hand-rolled into the head row.
+            string raw = ReadSource(ViewSrc, failures, "[head-row]");
             if (raw == null) return;
             string src = StripComments(raw);
-            if (src.IndexOf("typeof(ScrollRect)", StringComparison.Ordinal) < 0 ||
-                src.IndexOf("tabScroll.horizontal = portrait", StringComparison.Ordinal) < 0)
-                failures.Add("[portrait-map] portrait tabs are not explicitly horizontally scrollable");
-            if (src.IndexOf("detailMin = new Vector2(PortraitListMaxX + PortraitContentGapX, 0f)",
-                    StringComparison.Ordinal) < 0 ||
-                src.IndexOf("detailMax = new Vector2(PortraitContentMaxX, PortraitContentTopY)",
-                    StringComparison.Ordinal) < 0)
-                failures.Add("[portrait-map] absent art no longer collapses into the selected-detail region");
+            if (src.IndexOf("SeatSharedCloseInside", StringComparison.Ordinal) < 0)
+                failures.Add("[head-row] RumorBoardPanel no longer seats the shared Close through the kit's " +
+                             "SeatSharedCloseInside - a hand-placed Close is a SECOND close convention, and the " +
+                             "owner ruled there is exactly one (a labeled button, never an X)");
+            if (Regex.IsMatch(src, "BuildObsidianButton\\s*\\([^;]*\"Close\""))
+                failures.Add("[head-row] the board builds its OWN 'Close' button - it must re-seat the kit's " +
+                             "shared Close instead, or the game has two Closes that look and size differently");
+        }
 
-            notes.Add("portrait map: list " + listMin.ToString("F2") + ".." + listMax.ToString("F2") +
-                      ", detail " + (listMax + gap).ToString("F2") + ".." + contentMax.ToString("F2") +
-                      ", tabs scroll");
+        // =====================================================================
+        //  CASE 4 - the source laws: what stays retired, and what stays routed
+        // =====================================================================
+        private static void Case4_SourceLaws(List<string> failures, List<string> notes)
+        {
+            string viewRaw = ReadSource(ViewSrc, failures, "[source-laws]");
+            string vmRaw = ReadSource(VmSrc, failures, "[source-laws]");
+            if (viewRaw == null || vmRaw == null) return;
+            string view = StripComments(viewRaw);
+            string vm = StripComments(vmRaw);
+
+            // -- the retired surfaces stay retired -------------------------------
+            // Each of these was a REGION of the old board. Every one of the six WO-1060
+            // findings against this panel was a card overlapping the tab band's chip label or
+            // the detail pane; with neither region in existence, none of them is reachable.
+            var retired = new Dictionary<string, string>
+            {
+                { "TabKeys",        "the filter tab strip (its chip label is what the cards overlapped)" },
+                { "TabLabels",      "the filter tab strip" },
+                { "BuildTabStrip",  "the filter tab band" },
+                { "RenderDetail",   "the master-detail pane (it overlaid the whole list in portrait)" },
+                { "_selectedId",    "the selection step (v3 has none - the card you read is the card you accept)" },
+                { "ActiveQuests",   "the In-Progress section (tracking is the HUD tracker's job)" },
+                { "DailyRow",       "the Daily tab" },
+            };
+            foreach (var kv in retired)
+            {
+                if (Regex.IsMatch(view, "\\b" + kv.Key + "\\b"))
+                    failures.Add("[source-laws] RumorBoardPanel has re-grown " + kv.Key + " - " + kv.Value +
+                                 ". The v3 board is THREE POSTERS and nothing else (owner-approved concept); " +
+                                 "a second region is how five surfaces ended up fighting for one screen");
+                if (Regex.IsMatch(vm, "\\b" + kv.Key + "\\b"))
+                    failures.Add("[source-laws] RumorBoardVM has re-grown " + kv.Key + " - " + kv.Value);
+            }
+            if (Regex.IsMatch(vm, "\\bpublic\\s+void\\s+Track\\s*\\("))
+                failures.Add("[source-laws] RumorBoardVM.Track is back - the rumor board only OFFERS work; " +
+                             "pinning a quest belongs to the HUD tracker (owner ruling 2026-08-26)");
+
+            // -- the v3 shape is actually built ----------------------------------
+            if (view.IndexOf("PageQuests", StringComparison.Ordinal) < 0)
+                failures.Add("[source-laws] the View no longer renders the VM's paged window (PageQuests) - " +
+                             "an unpaged board grows past three posters and the fixed columns collide");
+            if (view.IndexOf("NextPage", StringComparison.Ordinal) < 0)
+                failures.Add("[source-laws] the Next > paging command is gone from the View");
+            if (vm.IndexOf("% pages", StringComparison.Ordinal) < 0 &&
+                vm.IndexOf("% pages;", StringComparison.Ordinal) < 0)
+                failures.Add("[source-laws] RumorBoardVM.NextPage no longer WRAPS (the modulo is gone) - the " +
+                             "owner chose the keep-going form, so the last page must roll back to the first");
+            if (!Regex.IsMatch(view, "BuildObsidianButton\\s*\\([^;]*\"Accept\""))
+                failures.Add("[source-laws] a poster no longer carries its OWN Accept - the whole point of v3 " +
+                             "is that there is no selection step between reading a rumor and taking it");
+
+            // -- fixed pixels, never a fraction of the card -----------------------
+            if (view.IndexOf("HangTop", StringComparison.Ordinal) < 0)
+                failures.Add("[source-laws] the poster's fixed-pixel band helper (HangTop) is gone - a band " +
+                             "expressed as a FRACTION of the card scales with the aspect and TMP culls its " +
+                             "line box whole the moment it dips under one line (the WO-866 -11px body)");
+
+            // -- the reward row still goes through the ONE reward authority --------
+            if (vm.IndexOf("QuestRewardMath.Sum", StringComparison.Ordinal) < 0)
+                failures.Add("[source-laws] the reward row no longer sums through QuestRewardMath over " +
+                             "QuestRewardLine - WO-1201/1202 are the reward authority and a second reward " +
+                             "schema is exactly what this board must not author");
+            // NOTE the [2-9]: `chips.Count == 0` is the legitimate "no rewards, draw no row"
+            // guard. What is forbidden is a layout that ASSUMES a count (the old row read
+            // "Crystals 220 / Food 90 / Magic 45 / Relic ..." and a four-chip assumption breaks
+            // the moment WO-1163's Stone lands).
+            if (Regex.IsMatch(view, "chips\\.Count\\s*[=!<>]=\\s*[2-9]") ||
+                Regex.IsMatch(view, "for\\s*\\([^;]*;\\s*[a-zA-Z_]+\\s*<\\s*4\\s*;[^;]*Chip"))
+                failures.Add("[source-laws] the reward row assumes a FIXED chip count - WO-1163 retires Food " +
+                             "for Stone and a layout hardcoding four chips breaks on a data change");
+            if (view.IndexOf("ConceptIdFor", StringComparison.Ordinal) >= 0)
+                failures.Add("[source-laws] the View resolves a concept id itself - ElarionUiKit.ConceptIdFor is " +
+                             "the ONE translator and the kit's CurrencyChip already calls it; a second copy is a " +
+                             "second registry (canon sec.7: that is how the Stone row wore the Food art)");
+
+            // -- kit routing + strict MVVM ----------------------------------------
+            if (view.IndexOf("ElarionUiKit", StringComparison.Ordinal) < 0)
+                failures.Add("[source-laws] RumorBoardPanel does not go through ElarionUiKit - the " +
+                             "UiObsidianConformanceRegression hand-rolled-uGUI law");
+            foreach (string forbidden in new[] { "QuestService", "QuestCatalog", "DailyQuestService" })
+                if (Regex.IsMatch(view, "\\b" + forbidden + "\\s*\\."))
+                    failures.Add("[source-laws] RumorBoardPanel touches " + forbidden + " directly - the View is a " +
+                                 "read-only consumer of RumorBoardVM (strict MVVM, [ui-mvvm] ratchet armed)");
+
+            // -- NO ALLOW-LIST ENTRY (owner ruling 2026-08-24: no waivers) ---------
+            AssertNotAllowListed(failures);
+
+            // -- ASCII + NUL, both files ------------------------------------------
+            AssertAsciiAndNulFree(failures, ViewSrc, viewRaw);
+            AssertAsciiAndNulFree(failures, VmSrc, vmRaw);
+
+            notes.Add("source laws checked on " + ViewSrc + " + " + VmSrc);
+        }
+
+        /// <summary>The panel must CONFORM, not be waived. The owner ruled 2026-08-24 that the
+        /// LayoutOracle touch/geometry allow-list may only ever SHRINK, so an entry naming this
+        /// board is a failure of THIS oracle regardless of what the capture run reports.</summary>
+        private static void AssertNotAllowListed(List<string> failures)
+        {
+            const string oracleSrc = "Assets/_Modules/Core/UI/LayoutOracle.cs";
+            string raw = ReadSource(oracleSrc, failures, "[source-laws]");
+            if (raw == null) return;
+            if (raw.IndexOf("RumorBoard", StringComparison.OrdinalIgnoreCase) >= 0)
+                failures.Add("[source-laws] LayoutOracle names RumorBoard - the rumor board must CONFORM, never " +
+                             "be waived (owner ruling 2026-08-24: no waivers, and the allow-list may only SHRINK)");
+        }
+
+        private static void AssertAsciiAndNulFree(List<string> failures, string path, string raw)
+        {
+            for (int i = 0; i < raw.Length; i++)
+            {
+                if (raw[i] <= 127) continue;
+                int line = 1;
+                for (int j = 0; j < i; j++) if (raw[j] == '\n') line++;
+                failures.Add("[source-laws] " + path + " carries a NON-ASCII character (U+" +
+                             ((int)raw[i]).ToString("X4") + ") at line " + line +
+                             " - it renders as tofu on the shipped TMP font, and a tofu oracle scans this file " +
+                             "including its COMMENTS");
+                break;
+            }
+            if (raw.IndexOf('\0') >= 0)
+                failures.Add("[source-laws] " + path + " contains an embedded NUL byte (mount-garble, " +
+                             "CLAUDE.md sec.0) - the compile gate rejects this");
         }
 
         // =====================================================================
         //  helpers
         // =====================================================================
 
-        /// <summary>Read a public const float by reflection (no asmdef reference needed).</summary>
+        /// <summary>Read a public const float by reflection (no asmdef reference needed). A
+        /// MISSING constant is a FAILURE, never a silent zero: this oracle pins a budget, and a
+        /// budget that quietly evaluates to nothing is a hollow pass.</summary>
         private static float ConstFloat(Type t, string name, List<string> failures, string tag)
         {
             var f = t.GetField(name, BindingFlags.Public | BindingFlags.Static | BindingFlags.FlattenHierarchy);
@@ -522,37 +615,27 @@ namespace DeNelle.Editor.Regression
             return 0f;
         }
 
-        private static int ConstInt(Type t, string name, List<string> failures, string tag)
-        {
-            var f = t.GetField(name, BindingFlags.Public | BindingFlags.Static | BindingFlags.FlattenHierarchy);
-            if (f == null) { failures.Add(tag + " " + t.Name + "." + name + " does not exist"); return 0; }
-            object v = f.GetValue(null);
-            if (v is int iv) return iv;
-            if (v is float fv) return (int)fv;
-            failures.Add(tag + " " + t.Name + "." + name + " is not an integer constant");
-            return 0;
-        }
-
-        private static string ReadSource(string path, List<string> failures)
+        private static string ReadSource(string path, List<string> failures, string tag)
         {
             try
             {
                 if (!File.Exists(path))
                 {
-                    failures.Add("[no-overlap] source not found: " + path);
+                    failures.Add(tag + " source not found: " + path + " - the file this oracle lints was moved " +
+                                 "or renamed; a missing source is a FAILURE, not a skip");
                     return null;
                 }
                 return File.ReadAllText(path);
             }
             catch (Exception ex)
             {
-                failures.Add("[no-overlap] could not read " + path + ": " + ex.Message);
+                failures.Add(tag + " could not read " + path + ": " + ex.Message);
                 return null;
             }
         }
 
-        /// <summary>Blank out // and block comments so a lesson written in prose (which quotes
-        /// the old hardcoded width) can never fail a source law.</summary>
+        /// <summary>Blank out // and block comments so a lesson written in prose (which names the
+        /// retired tokens on purpose) can never fail a source law.</summary>
         private static string StripComments(string src)
         {
             string noBlock = Regex.Replace(src, @"/\*.*?\*/", " ", RegexOptions.Singleline);

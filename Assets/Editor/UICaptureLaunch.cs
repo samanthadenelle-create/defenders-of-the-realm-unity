@@ -1850,41 +1850,39 @@ namespace DeNelle.Editor
 
         // ---------------------------------------------------------------------
         //  Panel: Brom's Rumor Board (RumorBoardPanel, DeNelle.Village.Hero --
-        //  referenced, so direct types + private-field reflection only). WO-810
-        //  rebuilt it as a master-detail board (chip strip / card list / detail
-        //  pane + pinned CTA); this shot covers the review's stacked-layout risk.
+        //  referenced, so direct types + private-field reflection only).
         //
-        //  Open() is the panel's ONLY build entry: it registers the arbiter
-        //  handle, creates the LIVE VM (RumorBoardVM.CreateDefault) and paints
-        //  once. For a DETERMINISTIC worst case we then swap in a VM built over
-        //  the panel's own injectable backend seam (IRumorBoardBackend): 15
-        //  rumors (3 in progress, one tracked; 12 available) and one rumor whose
-        //  hook -- the detail body's variable text -- is the longest prose the
-        //  pane must carry, plus a full multi-part rewards row. That rumor is
-        //  pre-selected so the detail pane renders the worst body + Accept CTA.
+        //  WO-1192 v3 rebuilt it as THREE SELF-CONTAINED RUMOR POSTERS paged three
+        //  at a time (no tabs, no detail pane, no In-Progress, no selection step),
+        //  so this shot covers what the two failing 2026-08-25/26 captures could
+        //  not survive: three columns of fixed-pixel bands at every landscape
+        //  aspect, with the widest possible reward row on poster one.
         //
-        //  EDIT-SAFE REPAINT: Repaint()'s ClearContent and RenderDetail call
-        //  runtime Destroy on the FIRST paint's children (edit-illegal), so we
-        //  DestroyImmediate the list children + the CTA ourselves (and null the
-        //  CTA field) before invoking Repaint -- the repaint then runs
+        //  Open() is the panel's ONLY build entry: it registers the arbiter handle,
+        //  creates the LIVE VM (RumorBoardVM.CreateDefault) and paints once. For a
+        //  DETERMINISTIC worst case we then swap in a VM built over the panel's own
+        //  injectable backend seam (IRumorBoardBackend).
+        //
+        //  EDIT-SAFE REPAINT: Repaint()'s clear calls runtime Destroy on the FIRST
+        //  paint's children (edit-illegal), so we DestroyImmediate the poster row's
+        //  children ourselves before invoking Repaint -- the repaint then runs
         //  Destroy-free (tower-manager parking recipe, applied as a pre-clear).
         //
-        //  PORTRAIT: Open() picks the stacked-vs-split geometry at BUILD time from
-        //  the KIT SURFACE (ElarionUiKit.SurfaceHeight > SurfaceWidth -- it used to
-        //  read Screen.* directly, which batchmode can never move). The portrait
-        //  targets below are BUILT under a portrait CaptureSurfaceScope, so Open()
-        //  takes that branch ITSELF. The authored portrait anchors are still
-        //  re-applied after the paint: they are the same values Open writes (so a
-        //  no-op when the scope worked), and they keep the shot honest if the
-        //  surface ever refused to move (UI_CAPTURE_FIDELITY_DEGRADED).
+        //  ⛔ A HARNESS PHOTOGRAPHS THE PANEL; IT NEVER RE-AUTHORS IT. The old
+        //  portrait anchor re-assert is gone for good: it carried a private copy of
+        //  a retired literal, wrote it back after Open() and before AuditGeometry,
+        //  and manufactured 18 phantom findings while concealing 2 real ones.
         // ---------------------------------------------------------------------
+        //  ⛔ LANDSCAPE ONLY (owner ruling 2026-08-26, recorded in WO-1192): the game is
+        //  landscape and portrait work is out of scope. The two PORTRAIT targets are DELETED
+        //  rather than left in: the v3 board has exactly one layout, so a portrait shot would
+        //  photograph a composition nobody designed and then report its findings as defects -
+        //  which is how a finished ticket gets re-opened by its own harness.
         private static readonly CaptureTarget[] RumorBoardTargets =
         {
             new CaptureTarget(1920, 1080),
             new CaptureTarget(2340, 1080),
             new CaptureTarget(2670, 1200),   // Seeker landscape
-            new CaptureTarget(1080, 2340),
-            new CaptureTarget(1200, 2670),   // Seeker portrait
         };
 
         private static int CaptureRumorBoard()
@@ -1912,7 +1910,7 @@ namespace DeNelle.Editor
                 hostGo = new GameObject("~UICapRumorBoard");
                 panel = hostGo.AddComponent<RumorBoardPanel>();
 
-                // The real build path (chrome + chips + list + detail + status).
+                // The real build path (chrome + head row + three posters + status).
                 panel.Open();
 
                 canvasGo = GetPrivateGameObject(panel, "_ui");
@@ -1927,83 +1925,33 @@ namespace DeNelle.Editor
                 if (liveVm != null) liveVm.Dispose();   // also detaches the panel's Changed -> Repaint hook
                 worstVm = new RumorBoardVM(new WorstCaseRumorBackend(), null);
                 SetPrivateField(panel, "_vm", worstVm);
-                SetPrivateField(panel, "_selectedId", WorstCaseRumorBackend.LongestBodyId);
 
-                // Pre-clear the first paint with DestroyImmediate so the repaint below
-                // makes zero runtime-Destroy calls (edit-mode contract).
-                var contentRoot = GetPrivateGameObject(panel, "_contentRoot");
-                if (contentRoot != null)
+                // Pre-clear the first paint with DestroyImmediate so the repaint below makes
+                // zero runtime-Destroy calls (edit-mode contract). WO-1192 v3: the ONE rebuilt
+                // container is the poster row - there is no list content root and no detail CTA
+                // any more, because there is no list and no detail pane.
+                var posterHost = GetPrivateFieldValue(panel, "_posterHost") as RectTransform;
+                if (posterHost != null)
                 {
-                    for (int i = contentRoot.transform.childCount - 1; i >= 0; i--)
+                    for (int i = posterHost.childCount - 1; i >= 0; i--)
                     {
-                        var ch = contentRoot.transform.GetChild(i);
+                        var ch = posterHost.GetChild(i);
                         if (ch != null) UnityEngine.Object.DestroyImmediate(ch.gameObject);
                     }
                 }
-                var ctaGo = GetPrivateGameObject(panel, "_detailCtaGo");
-                if (ctaGo != null)
-                {
-                    UnityEngine.Object.DestroyImmediate(ctaGo);
-                    SetPrivateField(panel, "_detailCtaGo", null);
-                }
 
-                InvokePrivate(panel, "Repaint");   // worst-case list + longest detail body + Accept CTA
-
-                if (target.H > target.W)
-                {
-                    // PORTRAIT: re-assert the authored portrait anchors (the ONLY delta of the
-                    // portrait branch in Open). A no-op when the portrait scope worked and Open
-                    // already took that branch; the honest correction when it did not.
-                    RectTransform listViewport = null;
-                    foreach (var srScroll in canvasGo.GetComponentsInChildren<ScrollRect>(true))
-                    {
-                        if (srScroll != null && srScroll.vertical && !srScroll.horizontal
-                            && srScroll.gameObject.name == "Viewport")
-                        {
-                            listViewport = (RectTransform)srScroll.transform;
-                            break;
-                        }
-                    }
-                    var detailPane = GetPrivateFieldValue(panel, "_detailPane") as RectTransform;
-                    if (listViewport != null && detailPane != null)
-                    {
-                        listViewport.anchorMin = new Vector2(0.03f, 0.48f);
-                        listViewport.anchorMax = new Vector2(0.97f, 0.855f);
-                        // WO-1076 (2026-08-25): the detailPane anchor re-assert is DELETED, not
-                        // updated. It carried a PRIVATE COPY of the retired 0.05 portrait floor and
-                        // wrote it back AFTER Open() and BEFORE RenderCanvasToPng -> AuditGeometry,
-                        // so the oracle measured THIS number instead of the panel's. a2162f17d had
-                        // already replaced 0.05 with RumorBoardPanel.CloseReserveTopFraction, which
-                        // reads the Close's own seated anchor -- its commit says "instead of hoping
-                        // a hardcoded 0.05 clears it". The panel was correct on device the whole
-                        // time; only the captured frame was wrong, and it produced 18 phantom
-                        // findings that reopened a finished ticket.
-                        // A harness must PHOTOGRAPH the panel, never RE-AUTHOR it. Re-adding any
-                        // literal here re-creates the duplicated constant this deletion removes.
-                    }
-                    else
-                    {
-                        Debug.LogWarning("[UICap-HL] rumor board portrait anchors not re-applied -- list "
-                                         + "viewport or detail pane not found (listViewport="
-                                         + (listViewport != null) + ", detailPane="
-                                         + (detailPane != null) + ").");
-                    }
-                    if (RenderCanvasToPng(canvasGo, OutDir + "RumorBoard_" + target.Tag + ".png",
-                        target.W, target.H)) saved++;
-                    return saved;
-                }
+                InvokePrivate(panel, "Repaint");   // page one: three posters at their widest
 
                 if (RenderCanvasToPng(canvasGo, OutDir + "RumorBoard_" + target.Tag + ".png",
                     target.W, target.H)) saved++;
 
-                // WO-810 follow-up: the DAILY tab — its rows carry raw "{target}" authored
-                // labels resolved via DailyQuestCatalog.ResolveLabel, so this shot pixel-
-                // proves the substitution the F8 flagged. Repaint is edit-safe now
-                // (RumorBoardPanel.SafeDestroy picks DestroyImmediate outside Play), so no
-                // extra pre-clear pass is needed for these repaints.
-                worstVm.SetTab("daily");
+                // WO-1192 acceptance 4: Next > WRAPS. Page two is captured so the wrap is
+                // photographed rather than asserted - the fixture's 14 rumors make five pages
+                // with a deliberately SHORT last one, which is the page a fixed 3-up layout
+                // would break on.
+                worstVm.NextPage();
                 InvokePrivate(panel, "Repaint");
-                if (RenderCanvasToPng(canvasGo, OutDir + "RumorBoard_daily_" + target.Tag + ".png",
+                if (RenderCanvasToPng(canvasGo, OutDir + "RumorBoard_page2_" + target.Tag + ".png",
                     target.W, target.H)) saved++;
             }
             catch (Exception e)
@@ -2320,19 +2268,10 @@ namespace DeNelle.Editor
 
             public WorstCaseRumorBackend()
             {
-                // Three in progress (the first tracked) -- the In Progress section renders populated.
-                for (int i = 1; i <= 3; i++)
-                {
-                    string id = "uicap_rumor_active" + i;
-                    _defs.Add(MakeRumor(id, "Standing Watch Over the Western Fields " + i, "story",
-                        "Hold the western fields until the lantern wardens return from the ridge.",
-                        40, 20, 0, null));
-                    _activeIds.Add(id);
-                }
-
-                // The longest-body rumor: the detail pane's worst case. Its hook is the
-                // variable prose RenderDetail folds into the body, so make it long, and give
-                // it every reward part so the rewards row is at its widest.
+                // WO-1192 v3: the board OFFERS work, so the worst case is the widest PAGE OF
+                // THREE, not a master-detail selection. Poster 1 carries the longest title AND
+                // the longest letter AND every reward part, so the page is at its widest and its
+                // tallest at once.
                 _defs.Add(MakeRumor(LongestBodyId,
                     "The Long Letter from the Drowned Archive of Old Elarion", "endgame",
                     "Brom unfolds a letter soaked through and dried twice over. The archivist of the "
@@ -2345,7 +2284,26 @@ namespace DeNelle.Editor
                     + "never on any drawing of the village.",
                     220, 90, 45, "relic_drowned_ledger"));
 
-                // Eleven more available rumors -> 15 total on the All tab (list-well overflow).
+                // Two more on page one, so the shot is a full three-poster board.
+                for (int i = 1; i <= 2; i++)
+                {
+                    _defs.Add(MakeRumor("uicap_rumor_watch" + i,
+                        "Standing Watch Over the Western Fields " + i, i == 1 ? "story" : "gear",
+                        "Hold the western fields until the lantern wardens return from the ridge.",
+                        40, 20, 0, null));
+                }
+
+                // ONE quest already underway. It must NOT appear on the board: the v3 board
+                // only OFFERS, and In-Progress is the HUD tracker's job (owner ruling). This
+                // fixture is what makes that exclusion visible in the capture.
+                const string activeId = "uicap_rumor_underway";
+                _defs.Add(MakeRumor(activeId, "Already Underway - must not be posted", "story",
+                    "This one is accepted and belongs to the HUD tracker, not to Brom's board.",
+                    10, 0, 0, null));
+                _activeIds.Add(activeId);
+
+                // Eleven more available rumors -> 14 offered, i.e. FIVE pages of three with a
+                // deliberately SHORT last page, so Next > has to wrap off a two-poster page.
                 for (int i = 1; i <= 11; i++)
                 {
                     _defs.Add(MakeRumor("uicap_rumor_avail" + i,
@@ -2368,7 +2326,7 @@ namespace DeNelle.Editor
             {
                 var def = new QuestDef { Id = id, Title = title, Type = type };
                 var lines = new List<QuestRewardLine>();
-                // Capture fixture: worst-case reward slab — include XP so the chip is exercised.
+                // Capture fixture: worst-case reward slab - include XP so the chip is exercised.
                 lines.Add(new QuestRewardLine { Kind = QuestRewardLine.KindXp, Amount = 400 });
                 if (crystals > 0) lines.Add(new QuestRewardLine { Kind = QuestRewardLine.KindCrystals, Amount = crystals });
                 if (food > 0) lines.Add(new QuestRewardLine { Kind = QuestRewardLine.KindFood, Amount = food });
@@ -2389,41 +2347,12 @@ namespace DeNelle.Editor
             public bool Ready => true;
             public bool IsActive(string id) => id != null && _activeIds.Contains(id);
             public bool IsCompleted(string id) => false;
-            public string ObjectiveFor(string id) =>
-                "Hold the western fields until the lantern wardens return from the ridge.";
-            public string TrackedId => "uicap_rumor_active1";
             public void StartQuest(string id) { }
-            public void SetTracked(string id) { }
-
-            // WO-810 follow-up (2026-08-02): three daily rows whose AUTHORED labels carry the
-            // raw "{target}" token, resolved through the SAME DailyQuestCatalog.ResolveLabel
-            // path the live backend now uses — the daily shot pixel-proves the substitution
-            // (the F8 defect was raw "Clear {target} waves" titles on the Daily tab).
-            private static readonly IReadOnlyList<RumorBoardVM.DailyRow> DailyRows = BuildDailyRows();
-
-            private static IReadOnlyList<RumorBoardVM.DailyRow> BuildDailyRows()
-            {
-                var instances = new[]
-                {
-                    new DeNelle.Core.Quests.DailyQuestInstance
-                    { Id = "uicap_daily1", TemplateId = "combat.clear-waves", Slot = "combat",
-                      Target = 5, Progress = 2, Completed = false, Label = "Clear {target} waves" },
-                    new DeNelle.Core.Quests.DailyQuestInstance
-                    { Id = "uicap_daily2", TemplateId = "exploration.visit-regions", Slot = "exploration",
-                      Target = 3, Progress = 3, Completed = true, Label = "Visit {target} regions beyond the walls" },
-                    new DeNelle.Core.Quests.DailyQuestInstance
-                    { Id = "uicap_daily3", TemplateId = "wildcard.raise-towers", Slot = "wildcard",
-                      Target = 4, Progress = 0, Completed = false, Label = null },   // fallback: TemplateId
-                };
-                var rows = new List<RumorBoardVM.DailyRow>(instances.Length);
-                foreach (var q in instances)
-                    rows.Add(new RumorBoardVM.DailyRow(q.Id,
-                        DeNelle.Core.Quests.DailyQuestCatalog.ResolveLabel(q),
-                        q.Progress, q.Target, q.Completed));
-                return rows;
-            }
-
-            public IReadOnlyList<RumorBoardVM.DailyRow> DailyToday => DailyRows;
+            // The capture fixture is deliberately ALL-NEW: every poster wears its NEW chip, so
+            // the shot proves the chip's geometry rather than depending on this machine's
+            // PlayerPrefs (which is what the live backend reads).
+            public bool HasSeen(string id) => false;
+            public void MarkSeen(string id) { }
             public event Action Changed { add { } remove { } }
         }
 
