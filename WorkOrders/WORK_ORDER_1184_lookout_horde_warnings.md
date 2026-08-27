@@ -1,6 +1,6 @@
 # WO-1184 — Earned lookout warnings: phone alerts + a LOOKOUT REPORT HUD surface
 
-**Status:** READY TO IMPLEMENT — owner felt-test 2026-08-27 Needs Work (no comment). Bounced from Fixed.
+**Status:** READY TO IMPLEMENT — owner felt-test 2026-08-27 Needs Work: "red dot on screen should be a friendly way to let you know". Bounced from Fixed.
 **Silo:** HUD / notifications.
 **Origin:** owner, ad hoc alongside batch 4 — *"i added that adhoc"*. ⚠ Minted **after** the code
 landed, as a **ticket of record**: work with no work order is how a fix becomes invisible (two
