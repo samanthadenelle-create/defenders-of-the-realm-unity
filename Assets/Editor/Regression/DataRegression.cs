@@ -1276,6 +1276,11 @@ namespace DeNelle.Editor
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "echo-passive-mend suite", () => { if (!DeNelle.Editor.Regression.EchoPassiveMendCommsRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[echo-passive-mend] " + r); });
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "tutorial-coach suite", () => { if (!DeNelle.Editor.Regression.TutorialCoachEscalationRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[tutorial-coach] " + r); });
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "mana-scroll suite", () => { if (!DeNelle.Editor.Regression.ManaScrollFtueRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[mana-scroll] " + r); });
+            // WO-1073 - the Founders Monument stand-in beside the Heart and the global
+            // Benefactors of the Realm wall it is the ONE door onto. Pins the stand-in address
+            // against api/_lib/benefactors.js, the per-patron (never global) monument state, the
+            // near-the-Heart siting ruling, and the single-door ruling.
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "founders-wall suite", () => { if (!DeNelle.Editor.Regression.FoundersMonumentWallRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[founders-wall] " + r); });
 
             // =====================================================================
             //  >>> REGISTERED ORACLE SUITES — END FENCE <<<  (new lines go ABOVE)

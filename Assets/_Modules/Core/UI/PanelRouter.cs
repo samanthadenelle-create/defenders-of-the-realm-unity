@@ -123,6 +123,18 @@ namespace DeNelle.Core.UI
         BattlePass = 19,
         /// <summary>Non-expiring pool-model Monthly Ledger. Append-only route.</summary>
         MonthlyLedger = 20,
+        /// <summary>WO-1073 - the BENEFACTORS OF THE REALM wall: the single GLOBAL honour
+        /// roll of $500 Founders, identical in every kingdom, read from the public
+        /// GET /api/patronage/benefactors seam.
+        ///
+        /// Registered scene-independently by BenefactorsWallPanel (spawned by
+        /// BenefactorsWallPanelBootstrap). Its ONE door in the world is the Founders
+        /// Monument standing near the Heart (DeNelle.Village.FoundersMonument) - owner
+        /// ruling 2026-08-27(c): "walking up to the monument and reading the names is the
+        /// moment; a menu item is not". Deliberately NOT an action-bar face; CLAUDE.md
+        /// section 7 caps the calm(town) bar and spends paragraphs on why.
+        /// Append-only: values are load-bearing.</summary>
+        Benefactors = 21,
     }
 
     /// <summary>

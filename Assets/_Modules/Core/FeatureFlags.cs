@@ -1110,6 +1110,22 @@ namespace DeNelle.Core
         /// interaction path (ArenaHeraldSpawner) stays independently gated by "ff.arena".</summary>
         public static bool Colosseum => Get("colosseum", defaultOn: false);
 
+        /// <summary>WO-1073 - the FOUNDERS MONUMENT stand-in near the Heart of Elarion, and
+        /// with it the ONLY world door onto the Benefactors of the Realm wall
+        /// (<see cref="DeNelle.Core.UI.PanelId"/>.Benefactors).
+        ///
+        /// DEFAULT ON, and that is the point: owner ruling 2026-08-27 leaves the $500 tier
+        /// switched OFF until the stand-in actually RENDERS (WO-1073 section 3.2 - "a threshold
+        /// whose cosmetic cannot render is not authored yet"), so a default-OFF flag here would
+        /// hold the tier closed forever.
+        ///
+        /// It exists as a flag anyway because the monument is new furniture in a hub whose
+        /// blank-start look is owner-ruled (WO-703/BLANK-1 turned the Colosseum off for exactly
+        /// that reason). If the owner felt-tests it and wants it gone, PlayerPrefs
+        /// "ff.foundersmonument" = 0 removes the model, its collider and its interaction in one
+        /// word - and takes the wall's door with it, which is why it is not off by default.</summary>
+        public static bool FoundersMonument => Get("foundersmonument", defaultOn: true);
+
         /// <summary>The build palette's walls category tab. When OFF,
         /// <see cref="DeNelle.Village.BuildPaletteUI"/> renders only the Town / Defense
         /// quick-tabs and <c>BuildPaletteVM.ConfigureGroup</c> filters Wall rows out of the
