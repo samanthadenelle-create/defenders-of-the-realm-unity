@@ -1,6 +1,6 @@
 # WORK ORDER 844 — Bag "Use" actually applies the potion effect
 
-**Status:** FIXED 2026-08-02 (`a7e4acb20`) — awaiting owner felt-verify. *(Status audit 2026-08-24: BUCKET CORRECTION — the prior line predated the commit and still advertised gates/commit as owed; verified at source in `git log`, `a7e4acb20` (2026-08-02) landed this work. Body unchanged. Prior line: IMPLEMENTED — pending gates (CompileGate + EditMode run by the CLI committer))*
+**Status:** CLOSED 2026-08-27 — owner Pass (felt-validated, APK 2026.08.27.343878).
 **Author:** edit-only implementation agent (proven RCA supplied by orchestrator)
 **Lane:** Hero/Inventory — `InventoryVM.cs` + new `BagConsumableUseEffect.cs` + `InventoryVMTests.cs`.
 **Origin:** owner felt-test — *"using potions does nothing should restore HP."*

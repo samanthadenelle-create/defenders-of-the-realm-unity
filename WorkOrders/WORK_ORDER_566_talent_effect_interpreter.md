@@ -1,6 +1,6 @@
 # WORK ORDER 566 — Knight Talent Effect Interpreter (V1 behavioural handlers)
 
-**Status:** FIXED 2026-06-28 (`9db82d68f`) — awaiting owner felt-verify. *(Status audit 2026-08-24: BUCKET CORRECTION — the prior line predated the commit and still advertised gates/commit as owed; verified at source in `git log`, `9db82d68f` (2026-06-28) landed this work. Body unchanged. Prior line: IMPLEMENTED (headless-verify + felt-verify pending))*
+**Status:** CLOSED 2026-08-27 — owner Pass (felt-validated, APK 2026.08.27.343878).
 **Date:** 2026-06-28
 **Lane:** Combat/AI (code only — §9). No scene files touched.
 **Branch base:** `wip/village2-and-f8-tickets` @ 9797ff3b

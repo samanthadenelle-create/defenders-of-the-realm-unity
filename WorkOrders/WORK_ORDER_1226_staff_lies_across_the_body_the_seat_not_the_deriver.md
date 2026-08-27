@@ -1,6 +1,6 @@
 # WORK ORDER 1226 - The staff lies across the body. Fix the SEAT, not the deriver - six attempts fixed the wrong half.
 
-**Status:** FIXED 2026-08-27 — implemented; awaiting owner felt-verify to CLOSE.
+**Status:** CLOSED 2026-08-27 — owner Pass (felt-validated, APK 2026.08.27.343878).
 **Silo:** Gear seating / attachment orientation
 **Origin:** Owner felt-test, 2026-08-26, across TWO builds (`2026.08.26.341419` and `.342290`).
 Owner verbatim: *"why is the staff still horizontal during fights?"* -> *"thought we fixed that many

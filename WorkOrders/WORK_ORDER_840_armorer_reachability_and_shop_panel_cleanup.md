@@ -1,6 +1,6 @@
 # WORK ORDER 840 — Armorer (armor-only) reachability + Shop panel UI cleanup
 
-**Status:** FIXED 2026-08-02 (`6f22a5fe4`) — awaiting owner felt-verify. *(Status audit 2026-08-24: BUCKET CORRECTION — the prior line predated the commit and still advertised gates/commit as owed; verified at source in `git log`, `6f22a5fe4` (2026-08-02) landed this work. Body unchanged. Prior line: IMPLEMENTED (pending gates) — Part B complete; Part A verified from code: filter correct,)*
+**Status:** CLOSED 2026-08-27 — owner Pass (felt-validated, APK 2026.08.27.343878).
 reachability gap is REAL but its one-line fix lives in `CastleVendorNpcInjector.AnchorRoles` (fenced to
 another agent this wave — exact fix documented in the implementation note at the bottom).
 **Author:** UI/QA triage (read-only RCA, §13) — Claude UI

@@ -1,6 +1,6 @@
 # WORK ORDER 951 — Echo Hollow repurposed: tap it → the Echoes popup opens. Simple and easy.
 
-**Status:** FIXED (implemented + gated 2026-08-10; RESULT filed; owner felt-verify owed)
+**Status:** CLOSED 2026-08-27 — owner Pass (felt-validated, APK 2026.08.27.343878).
 
 *(Board note 2026-08-24: bucket corrected DONE/IMPLEMENTED → **FIXED**. Nothing about the work changed — §13 reserves DONE/closing for the PO, and this line's own text says the owner's felt-verify is still owed, so the row belongs in the felt-test queue, not the closed pile.)*
 **Minted:** 2026-08-10 (CLI seat, main line — banner bumped 951 → 952 in the same edit)

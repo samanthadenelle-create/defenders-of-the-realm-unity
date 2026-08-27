@@ -1,6 +1,6 @@
 # WORK ORDER 845 — Login: honest sign-in errors on desktop + password recovery
 
-**Status:** FIXED 2026-08-02 (`731840e78`) — awaiting owner felt-verify. *(Status audit 2026-08-24: BUCKET CORRECTION — the prior line predated the commit and still advertised gates/commit as owed; verified at source in `git log`, `731840e78` (2026-08-02) landed this work. Body unchanged. Prior line: IMPLEMENTED — pending gates (CompileGate + EditMode run by the CLI committer))*
+**Status:** CLOSED 2026-08-27 — owner Pass (felt-validated, APK 2026.08.27.343878).
 **Author:** edit-only implementation agent (proven RCA supplied by orchestrator)
 **Lane:** Onboarding/Auth — `FirebaseAuthService.cs` + `LoginViewModel.cs` + `LoginPanelController.cs` + new `AuthErrorMessagesTests.cs`.
 **Origin:** owner F8 seq 623 (desktop build) — *SignIn on an EXISTING account fails as "An internal error has occurred"*; no password-recovery path anywhere on the login panel.

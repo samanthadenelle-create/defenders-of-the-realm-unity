@@ -1,6 +1,6 @@
 # WORK ORDER 814 — Gear ability unlock at max level (Lv 5)
 
-**Status:** FIXED - landed 2026-08-25 at `3362daf6e`, gated `COMPILE_GATE_OK` + `REGRESSION_OK 277/277`. Owner felt-close owed.
+**Status:** CLOSED 2026-08-27 — owner Pass (felt-validated, APK 2026.08.27.343878).
 **Lane:** Gear / hero progression (rides WO-808 Option A, shipped 2026-07-30)
 
 ## The idea

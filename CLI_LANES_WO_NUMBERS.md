@@ -137,7 +137,7 @@
 > fine as history. A copied number is the bug **even when it was right the day it was written** -
 > that is exactly how the retired 860-899 UI block kept re-seeding collisions from CLAUDE.md sec.2.
 
-> ## ⚠ RECONCILED 2026-08-27 (CLI): main line next free = **1254**.
+> ## ⚠ RECONCILED 2026-08-27 (CLI): main line next free = **1255**.
 > 1253 permanent builder becomes a store SKU (supersedes WO-911 Q6 as the Manage affordance).
 >
 > ### superseded: RECONCILED 2026-08-27 (CLI): main line next free = **1253**.

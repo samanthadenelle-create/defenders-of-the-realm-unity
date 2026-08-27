@@ -437,6 +437,8 @@
    "visualPrefabPath": "Structures/CrystalMine",
    "repo": {
     "_crystalFaucetNote": "⛔ UNLOCKED 2026-08-24 (owner ruling, PROD-015). This is the EARLY crystal faucet and it was locked out of the Town palette, so crystals had NO town source at all - they arrived only from raids and one-time drops. Owner, verbatim: \"the only crystal faucet is way past when you need them, by then you are onto dungeons and raids\". ⭐ AND IT IS THE RIGHT FAUCET BECAUSE OF ITS COST: wood 320 + iron 200 + ZERO CRYSTALS. WO-1168 section 4 had made the Cathedral of Magic the crystal producer, which is CIRCULAR - the Cathedral costs 240 CRYSTALS, so you would need crystals to build the thing that makes them. That ruling is revised: the Cathedral keeps SPELLS and magic research; this row is the producer. ⚠ Same defect as the iron producer unlocked the same morning - a real, working producer (behaviorId CrystalMine, maxLevel 3) sitting behind a palette lock while the game priced things in the resource it makes.",
+    "_singletonNote": "ADDED 2026-08-27. Same miss as collector_forge (Iron Mine) on 2026-08-24: every other producer is a singleton and this row was not, so the palette offered a second Crystal Mine at full cost with one already standing. Owner felt-test: trade/civic/storage were correct; this was the one that still offered another. Default repo.singleton is false.",
+    "singleton": true,
     "behaviorId": "CrystalMine",
     "buildCost": 800,
     "cost": {

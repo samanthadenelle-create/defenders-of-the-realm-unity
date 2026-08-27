@@ -1,4 +1,4 @@
-**Status:** FIXED 2026-08-23 (Codex, 51de6bd31) — horizontal command deck replaces the seven-control vertical stack. ⚠ NO DEVICE SCREENSHOTS YET. AWAITING OWNER FELT-TEST.
+**Status:** CLOSED 2026-08-27 — owner Pass (felt-validated, APK 2026.08.27.343878).
 
 # WORK ORDER 1056 — Armies / Loadouts: seven controls stacked into a well that holds two
 

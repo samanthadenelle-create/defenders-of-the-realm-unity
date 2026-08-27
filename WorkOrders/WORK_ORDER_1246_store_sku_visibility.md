@@ -1,6 +1,6 @@
 # WORK ORDER 1246 - The live store sells three copies of one product, and hides SKUs for four different reasons
 
-**Status:** FIXED 2026-08-27 — implemented; awaiting owner felt-verify to CLOSE.
+**Status:** CLOSED 2026-08-27 — owner Pass (felt-validated, APK 2026.08.27.343878).
 **Silo:** Backend (`api/`) + store catalog
 **Severity:** P1 for revenue. The store is LIVE and takes REAL MONEY.
 **Origin:** Owner ruling 2026-08-27 - re-minted out of WO-1175, which was CLOSED AS MOOT. This was

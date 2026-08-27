@@ -1,6 +1,6 @@
 # WORK ORDER 1083 — Hero Select: top rotating carousel, details below (layout rebuild)
 
-**Status:** FIXED 2026-08-26 - `COMPILE_GATE_OK` + `REGRESSION_OK 292/292`; post-fix APK visual/felt verification queued
+**Status:** CLOSED 2026-08-27 — owner Pass (felt-validated, APK 2026.08.27.343878).
 **Minted:** 2026-08-26, UI-seat banner block (bumped 1083 -> 1084 in the same edit)
 **Silo:** Onboarding / UI layout
 **Owner rulings (2026-08-26, this session):** *"redo it and make it clear, it should be a rotaing

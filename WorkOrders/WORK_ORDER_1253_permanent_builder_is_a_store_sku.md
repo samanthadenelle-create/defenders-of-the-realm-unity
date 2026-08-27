@@ -1,6 +1,6 @@
 # WORK ORDER 1253 - The Manage screen's "buy slot" becomes a store SKU for a PERMANENT BUILDER
 
-**Status:** FIXED 2026-08-27 — implemented; awaiting owner felt-verify to CLOSE.
+**Status:** CLOSED 2026-08-27 — owner Pass (felt-validated, APK 2026.08.27.343878).
 **Silo:** Monetization (store / SKU) + Manage/Queues UI + build timers
 **Severity:** P1. It is a live money surface, and the current button sells the wrong thing.
 **Origin:** Owner, on device, 2026-08-27: *"on manage screen still says buy slot. that should drop to

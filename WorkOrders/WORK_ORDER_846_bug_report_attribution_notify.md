@@ -1,6 +1,6 @@
 # WO-846 — Bug Report Attribution + Review Notify (tester program)
 
-**Status:** FIXED 2026-08-02 (`731840e78`) — awaiting owner felt-verify. *(Status audit 2026-08-24: BUCKET CORRECTION — the prior line predated the commit and still advertised gates/commit as owed; verified at source in `git log`, `731840e78` (2026-08-02) landed this work. Body unchanged. Prior line: IMPLEMENTED — pending gates (CompileGate + EditMode `BugReportPayloadTest` + PO felt-verify))*
+**Status:** CLOSED 2026-08-27 — owner Pass (felt-validated, APK 2026.08.27.343878).
 **Lane:** 4 (UI/HUD, edit-only) + tooling (`.claude/skills/run-defenders/`, new scripts only)
 **Origin:** owner ruling 2026-08-02 (tester program), verbatim:
 > "when they submit a bug from settings it calls something to save stack trace to the db and lets us know to review it"
