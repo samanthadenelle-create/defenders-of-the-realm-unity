@@ -61,6 +61,37 @@ param(
     [string]$ExtraScriptingDefines = ''
 )
 
+# --- ops-channel verdict publisher (owner ruling 2026-08-26) -----------------
+# Every VERDICT line in this file goes through Write-Verdict so the PRIVATE
+# development channel sees pass AND fail. Wired HERE, in the one runner every
+# gate goes through, and NOT copy-pasted into morning-ship-chain /
+# overnight-apk-build: section 16 records what happens when a push+verify pair
+# is inlined into two chains - they drift, and one of them silently stops
+# checking. One file, one seam.
+#
+# STOP - A FAILED POST MUST NEVER CHANGE THE GATE VERDICT. The channel is
+# observability, not authority. Judge the gate by the MARKER on a fresh log,
+# exactly as before; this only mirrors that judgement outward. Hence the
+# try/catch that swallows everything and the Out-Null on the tool's own output.
+# status-post.mjs is already a silent no-op when the webhook is absent.
+function Write-Verdict {
+    param([string]$Line)
+    Write-Host $Line
+    try {
+        $poster = Join-Path $PSScriptRoot 'tools\status-post.mjs'
+        if (Test-Path $poster) {
+            if (Get-Command node -ErrorAction SilentlyContinue) {
+                $tag = if ($Line -match 'VERDICT=PASS(?!-UNASSERTED)') { 'GATE PASS' }
+                       elseif ($Line -match 'VERDICT=PASS-UNASSERTED') { 'GATE PASS (unasserted)' }
+                       else { 'GATE FAIL' }
+                $subject = if ($Method) { $Method } else { 'unity' }
+                & node $poster --title "$tag  -  $subject" --fence --body $Line 2>&1 | Out-Null
+            }
+        }
+    } catch { }
+}
+
+
 $ErrorActionPreference = 'Stop'
 $proj       = $PSScriptRoot
 $hubEditors = 'C:\Program Files\Unity\Hub\Editor'
@@ -76,7 +107,7 @@ $timedOut = $false
 
 if ($judgeOnly) {
     try { $runStart = [datetime]::Parse($JudgeExistingLog) }
-    catch { Write-Host "[run] VERDICT=FAIL reason=BAD_JUDGE_TIME value='$JudgeExistingLog' (not a parseable date/time)"; exit 8 }
+    catch { Write-Verdict "[run] VERDICT=FAIL reason=BAD_JUDGE_TIME value='$JudgeExistingLog' (not a parseable date/time)"; exit 8 }
     Write-Host "[run] JUDGE-ONLY MODE - no Unity launched. Judging existing log as if the run started at $($runStart.ToString('s'))."
     Write-Host "[run] log=$log"
 } else {
@@ -184,13 +215,13 @@ if ($ExpectMarker -eq '') {
         if ($license) {
             # Keep the license-specific signal (exit 7) - it tells the caller to refresh
             # the Hub, not to go hunting for a code defect.
-            Write-Host "[run] VERDICT=FAIL reason=LICENSE_ERROR (and $reason) - this run is NOT PROVEN. $evidence"
+            Write-Verdict "[run] VERDICT=FAIL reason=LICENSE_ERROR (and $reason) - this run is NOT PROVEN. $evidence"
             Write-Host "[run] *** LICENSE ERROR (run did not complete). FIRST: RETRY ONCE - this is often transient. ***"
             Write-Host "[run] *** STILL FAILING? CLOSE UNITY HUB (owner remedy, 2026-08-25: 'i close the hub ... seems to help'). ***"
             Write-Host "[run] *** The Hub is NOT needed for batchmode. Reboot only if closing the Hub does not clear it, and do NOT kill processes. ***"
             exit 7
         }
-        Write-Host "[run] VERDICT=FAIL reason=$reason - this run is NOT PROVEN. $evidence"
+        Write-Verdict "[run] VERDICT=FAIL reason=$reason - this run is NOT PROVEN. $evidence"
         exit 8
     }
     Write-Host "[run] evidence OK: marker '$ExpectMarker' FOUND in a fresh log. $evidence"
@@ -201,18 +232,18 @@ if ($ExpectMarker -eq '') {
 # license error as fatal when the run did NOT reach a clean exit.
 if ($succeeded -and -not $compileErr) {
     if ($ExpectMarker -eq '') {
-        Write-Host "[run] VERDICT=PASS-UNASSERTED (log text only, NO marker was checked) log=$log mtime=$logMtimeS sizeBytes=$logSize"
+        Write-Verdict "[run] VERDICT=PASS-UNASSERTED (log text only, NO marker was checked) log=$log mtime=$logMtimeS sizeBytes=$logSize"
     } else {
-        Write-Host "[run] VERDICT=PASS marker='$ExpectMarker' FOUND log=$log mtime=$logMtimeS sizeBytes=$logSize"
+        Write-Verdict "[run] VERDICT=PASS marker='$ExpectMarker' FOUND log=$log mtime=$logMtimeS sizeBytes=$logSize"
     }
     exit 0
 }
 if ($license) {
-    Write-Host "[run] VERDICT=FAIL reason=LICENSE_ERROR (run did not complete) $evidence"
+    Write-Verdict "[run] VERDICT=FAIL reason=LICENSE_ERROR (run did not complete) $evidence"
     Write-Host "[run] *** LICENSE ERROR (run did not complete). FIRST: RETRY ONCE - this is often transient. ***"
             Write-Host "[run] *** STILL FAILING? CLOSE UNITY HUB (owner remedy, 2026-08-25: 'i close the hub ... seems to help'). ***"
             Write-Host "[run] *** The Hub is NOT needed for batchmode. Reboot only if closing the Hub does not clear it, and do NOT kill processes. ***"
     exit 7
 }
-Write-Host "[run] VERDICT=FAIL reason=LOG_SCAN (no clean-exit line, or compile errors present) $evidence"
+Write-Verdict "[run] VERDICT=FAIL reason=LOG_SCAN (no clean-exit line, or compile errors present) $evidence"
 exit 1
