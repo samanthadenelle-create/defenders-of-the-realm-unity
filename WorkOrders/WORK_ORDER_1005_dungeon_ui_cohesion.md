@@ -6,7 +6,7 @@
 
 # WORK ORDER 1005 — Dungeon UI cohesion: Descend button + EXIT label to the Obsidian kit
 
-**Status:** FIXED 2026-08-16 - awaiting owner felt-verify. ⭐ The crafting-panel UXML rebuild that this line used to carry as a trailing "remains as follow-up" is now **WO-1182**, because a slice buried inside a Done-bucketed status is invisible and unhandable (the WO-1181 class).
+**Status:** CLOSED 2026-08-27 — owner felt-tested PASS on APK 2026.08.27.343739 (dungeon review).
 >  PRIOR: **Status:** IMPLEMENTED - PENDING GATE (2026-08-16; fixes 1+2 had already landed via other WOs, fix 3's last live gap - the UXML oil HUD - rebuilt on the Obsidian kit this pass; crafting panel UXML rebuild remains as follow-up) · **Silo:** Dungeons/UI · **For:** CLAUDE CLI · **Date:** 2026-08-07
 
 > ## RECONCILED 2026-08-16 - state of the three breaks at implementation time

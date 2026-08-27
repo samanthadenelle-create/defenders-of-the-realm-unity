@@ -1,6 +1,6 @@
 # WORK ORDER 1041 — Dungeon-exclusive gem drops: the stone loop is ALREADY BUILT and has no source
 
-**Status:** FIXED — AWAITING OWNER FELT-TEST TO CLOSE. Prior status: DONE 2026-08-16 (`eff761fcc`, shipped with WO-1042) — RESULT filed; pending PO felt-verify
+**Status:** CLOSED 2026-08-27 — owner felt-tested PASS on APK 2026.08.27.343739 (dungeon review).
 **Minted:** 2026-08-16 (UI seat) — provenance stack bumped 1041 → 1042 in the same edit
 **Lane:** Dungeon reward economy. Small. ⚠ Was scoped pillar-sized until §2 was measured.
 **Provenance:** owner 2026-08-16: *"a stone or a weapon or a ring"* · *"rings exist"* · *"**but magic

@@ -1,6 +1,6 @@
 # WORK ORDER 1222 - Entering the composed Healer's Cottage leaves the hero 7km away at ArenaCentre (black screen)
 
-**Status:** FIXED 2026-08-26 - `COMPILE_GATE_OK` + `REGRESSION_OK 292/292`; post-fix APK visual/felt verification queued
+**Status:** CLOSED 2026-08-27 — owner felt-tested PASS on APK 2026.08.27.343739 (dungeon review).
 **Silo:** Dungeons / scene routing
 **Severity:** P0 — an unplayable black screen on a reachable dungeon, on a LIVE build that takes
 real money. The player has a working joystick and nothing to see.

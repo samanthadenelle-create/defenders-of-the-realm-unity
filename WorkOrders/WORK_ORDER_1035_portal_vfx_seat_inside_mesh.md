@@ -1,6 +1,6 @@
 # WORK ORDER 1035 — Portal VFX is huge and free-floating: seat it INSIDE the portal mesh, derived from bounds  — **OWNER CLOSED 2026-08-22** (felt-verified by the owner; PO closes, section 13).
 
-**Status:** FIXED (shipped 2026-08-16; status flipped 2026-08-17 by the READY-staleness audit) - re-confirmed 2026-08-22 by the status/evidence audit. Owner felt-verify still owed (PO closes, CLAUDE.md §13).
+**Status:** CLOSED 2026-08-27 — owner felt-tested PASS on APK 2026.08.27.343739 (dungeon review).
 
 *(Board note 2026-08-24: bucket corrected DONE/IMPLEMENTED → **FIXED**. Nothing about the work changed — §13 reserves DONE/closing for the PO, and this line's own text says the owner's felt-verify is still owed, so the row belongs in the felt-test queue, not the closed pile.)*
 

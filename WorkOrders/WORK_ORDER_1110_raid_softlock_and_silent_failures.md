@@ -1,6 +1,6 @@
 # WORK ORDER 1110 — The raid's one softlock hatch, its silent catches, and the death-exit loot inversion
 
-**Status:** FIXED — AWAITING OWNER FELT-TEST TO CLOSE. Prior status: DONE 2026-08-16 (`64092d611`) — RESULT filed; pending PO felt-verify (death-pays-what-retreat-pays is a stated default she may overrule)
+**Status:** CLOSED 2026-08-27 — owner felt-tested PASS on APK 2026.08.27.343739 (dungeon review).
 **Minted:** 2026-08-16 (CLI seat) — banner bumped 1109 -> 1112 in the SAME edit (1109, 1111 minted alongside)
 **Lane:** Raid runtime (`RaidDeployController`, `RaidScoring`, `RaidSelectionScreen`, `RaidDeployVM`,
 `RaidDeployScreen`, `HeroHealth`). Disjoint from WO-1109's hero-lifecycle files.

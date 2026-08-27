@@ -4,7 +4,7 @@
 
 # WORK ORDER 920 — Dungeon camera: stationary exploration (stop the bounce)
 
-**Status:** FIXED — shipped (`3b344919`; reconciled 2026-08-08, see banner; not felt-verified)  
+**Status:** CLOSED 2026-08-27 — owner felt-tested PASS on APK 2026.08.27.343739 (dungeon review).
 **Minted:** 2026-08-07 (CLI / Grok — owner: “stationary camera view for in dungeons” + bounce)  
 **Silo:** Dungeons / Camera (runtime code; no scene hand-edit)  
 **Roles:** CLI implement; PO felt-closes motion sickness / stability  

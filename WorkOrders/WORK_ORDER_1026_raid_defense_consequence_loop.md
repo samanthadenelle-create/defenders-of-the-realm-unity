@@ -1,6 +1,6 @@
 # WORK ORDER 1026 — The base is never attacked: close the CoC consequence loop
 
-**Status:** FIXED 2026-08-27 - gated `COMPILE_GATE_OK` + `REGRESSION_OK 307/307 suites` (Builds/w8-c, Builds/w8-r). Slices S2-S5 landed; the floor/cap KNOBS are provisional and OWNER-PENDING. AWAITING OWNER FELT-VERIFY to close.
+**Status:** CLOSED 2026-08-27 — owner felt-tested PASS on APK 2026.08.27.343739 (dungeon review).
 
 > Owner ruling 2026-08-17 (*"open ones follow your recommendations"*): **model (a)** — scripted/generated
 > attackers assault the base on a cadence, reusing `WaveManager`, no backend.

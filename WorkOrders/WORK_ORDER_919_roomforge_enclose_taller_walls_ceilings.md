@@ -4,7 +4,7 @@
 
 # WORK ORDER 919 — RoomForge dungeons: taller walls + ceilings + kill blue sky
 
-**Status:** FIXED — shipped (`94c23be3`; reconciled 2026-08-08, see banner; not felt-verified)  
+**Status:** CLOSED 2026-08-27 — owner felt-tested PASS on APK 2026.08.27.343739 (dungeon review).
 **Minted:** 2026-08-07 (CLI / Grok — owner screenshots 12:29 / 12:30 + review)  
 **Silo:** World / Dungeon bake (RoomForge — no hand-edit of `.unity`)  
 **Roles:** CLI implement + batch re-bake; PO felt-closes “reads as interior”  

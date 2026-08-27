@@ -1,6 +1,6 @@
 # WORK ORDER 1242 - A Seeker performance gate, so the 48-loop dungeon tier cannot cost frame time
 
-**Status:** FIXED 2026-08-27 - gated `COMPILE_GATE_OK` + `REGRESSION_OK 304/304 suites` (Builds/w5-c, Builds/w5-r). AWAITING OWNER FELT-VERIFY to close.
+**Status:** CLOSED 2026-08-27 — owner felt-tested PASS on APK 2026.08.27.343739 (dungeon review).
 **Silo:** VFX / performance
 **Severity:** P2 - preventative. Nothing is broken today; this protects a ruling that raised a ceiling.
 **Origin:** Owner ruling 2026-08-26, attached to the WO-1229 dungeon-tier decision.

@@ -1,6 +1,6 @@
 # WORK ORDER 995 - Booting into a dungeon self-evicts to town: the hero spawns INSIDE the exit trigger
 
-**Status:** FIXED — 2026-08-15 (code; PO 10× boot verify owed)
+**Status:** CLOSED 2026-08-27 — owner felt-tested PASS on APK 2026.08.27.343739 (dungeon review).
 
 *(Board note 2026-08-24: bucket corrected DONE/IMPLEMENTED → **FIXED**. Nothing about the work changed — §13 reserves DONE/closing for the PO, and this line's own text says the owner's felt-verify is still owed, so the row belongs in the felt-test queue, not the closed pile.)*
 **Minted:** 2026-08-14 (CLI)

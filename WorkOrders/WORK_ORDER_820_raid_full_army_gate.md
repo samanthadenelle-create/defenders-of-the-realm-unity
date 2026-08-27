@@ -1,6 +1,6 @@
 # WORK ORDER 820 — Raids gated on full army (grey + drillmaster redirect) + over-queue fix
 
-**Status:** FIXED — SHIPPED 2026-08-01 (db963472), gates GREEN; rewired onto ArmyReadiness.Compute by WO-823 phase A (8560fced); awaiting owner felt-verify.
+**Status:** CLOSED 2026-08-27 — owner felt-tested PASS on APK 2026.08.27.343739 (dungeon review).
 **Owner ruling (verbatim):** "Raid should be greyed out unless a full army is ready queued otherwise
 they should go to drillmaster to queue troops"
 **Silo:** HUD/Raid/Troops

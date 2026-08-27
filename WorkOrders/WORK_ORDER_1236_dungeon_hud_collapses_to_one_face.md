@@ -1,6 +1,6 @@
 # WORK ORDER 1236 - In a dungeon the action bar collapses to ONE floating face, and the flag overlay eats the minimap
 
-**Status:** FIXED 2026-08-27 - gated `COMPILE_GATE_OK` + `REGRESSION_OK 304/304 suites` (Builds/w5-c, Builds/w5-r). AWAITING OWNER FELT-VERIFY to close.
+**Status:** CLOSED 2026-08-27 — owner felt-tested PASS on APK 2026.08.27.343739 (dungeon review).
 **Silo:** HUD / dungeon presentation
 **Origin:** Owner FLAG on device, Seeker build `2026.08.26.342290`, scene `dg_ember_deep`, 2026-08-26.
 **First capture ever delivered by the WO-1227 device bridge** (seq 3608) - the owner pressed FLAG and

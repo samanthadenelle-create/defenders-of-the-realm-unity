@@ -1,6 +1,6 @@
 # WORK ORDER 835 — HUD action bar: show only APPLICABLE buttons, re-packed
 
-**Status:** FIXED 2026-08-02 (`6f22a5fe4`) — awaiting owner felt-verify. *(Status audit 2026-08-24: BUCKET CORRECTION — the prior line predated the commit and still advertised gates/commit as owed; verified at source in `git log`, `6f22a5fe4` (2026-08-02) landed this work. Body unchanged. Prior line: IMPLEMENTED (pending gates) — 2026-08-02. Core `HudActionBarModel` + `PostureSignals.RaidCapable`)*
+**Status:** CLOSED 2026-08-27 — owner felt-tested PASS on APK 2026.08.27.343739 (dungeon review).
 + Village `RaidCapabilityHudBridge` + HudKit render-from-array repack + `upgradeButton` face/rows +
 `HudActionBarModelTests` + `HudActionBarRegression` (orchestrator registers). Both §7 defaults applied
 (Raids fully hidden when uncapable; constant width + centered group). ActionBar zone widened

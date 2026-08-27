@@ -1,6 +1,6 @@
 # WORK ORDER 1075 — RaidDeployScreen: the assault footer falls under the touch floor on tall landscape
 
-**Status:** FIXED - proven by the 2026-08-25 capture (zero findings on RaidDeployScreen); owner felt-close owed.
+**Status:** CLOSED 2026-08-27 — owner felt-tested PASS on APK 2026.08.27.343739 (dungeon review).
 
 **Minted:** 2026-08-24, UI seat, from the `CLI_LANES_WO_NUMBERS.md` UI-seat block (1075; banner bumped 1075 → 1079 in the same edit).
 **Parent:** WO-1060 (`WORK_ORDER_1060_touch_clamp_and_overlap_oracle.md`) — the touch/overlap oracle that found this.

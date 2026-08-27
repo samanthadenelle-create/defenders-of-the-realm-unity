@@ -1,6 +1,6 @@
 # WORK ORDER 1223 - The portal gate's COVERAGE is never asserted: a reachable dungeon with no row is silently open
 
-**Status:** FIXED 2026-08-26 - backend manifest gate landed in `4efbbfde`; Unity/Node gate-green
+**Status:** CLOSED 2026-08-27 — owner felt-tested PASS on APK 2026.08.27.343739 (dungeon review).
 **Silo:** Gates / oracles (+ one server-side row)
 **Origin:** Owner, 2026-08-26, on being shown that the dungeon she had just black-screened in was
 absent from the door table. Owner verbatim: ***"so the regression needs to confirm that table has

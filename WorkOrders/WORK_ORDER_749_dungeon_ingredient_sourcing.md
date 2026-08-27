@@ -1,6 +1,6 @@
 # WORK ORDER 749 — Dungeons as the crafting-ingredient source (80%+ gatherable from delving)
 
-**Status:** FIXED — awaiting owner felt-verify (PO closes, §13). *(Status audit 2026-08-24: bucket correction — the line led DONE while naming verification, and in WO-977's case engineering, still owed; DONE is reserved for a PO close. Body unchanged.)* Prior line: DONE — committed `0c64daaa` 2026-07-19; RESULT: `WORK_ORDER_749_dungeon_ingredient_sourcing.RESULT.md`. Owner felt-verify pending.
+**Status:** CLOSED 2026-08-27 — owner felt-tested PASS on APK 2026.08.27.343739 (dungeon review).
 **Classification:** NEW FEATURE (composed from ~70% existing parts — wiring + content, not greenfield).
 **Owner (PO):** Sam — dungeons should yield 80%+ (ideally more) of crafting ingredients -> replay value.
 **Pillar:** dungeon expansion ([[dungeon-pillar-roadmap]]); ties the Echo Exploration lane to real loot.

@@ -1,4 +1,4 @@
-**Status:** FIXED 2026-08-23 — shipped in `51de6bd31` (the catapult `FitHeight` split), capture-verified. AWAITING OWNER FELT-TEST TO CLOSE.
+**Status:** CLOSED 2026-08-27 — owner felt-tested PASS on APK 2026.08.27.343739 (dungeon review).
 
 # WORK ORDER 1143 - The siege catapult renders oversized and vertical in raids
 
