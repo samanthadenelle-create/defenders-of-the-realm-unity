@@ -135,6 +135,24 @@ namespace DeNelle.Wallet
         /// </summary>
         public static bool CanBuy(out string reason)
         {
+            // WO-1243 OPERATOR KILL SWITCH: store.
+            // FIRST, before every other check, because a sealed store is the owner's
+            // deliberate act and outranks a flag or a rail readiness question. Placed on
+            // the BUILD-WIDE overload so it closes BOTH the CTA builder and the charge
+            // path in one edit - CanBuy(pack, out reason) calls straight through here.
+            // !! COURTESY HALF. The real seal is api/purchases/quote.js, which refuses to
+            // ISSUE A QUOTE while `store` is closed - that is the pre-payment gate and it
+            // binds a modified client too. (DO NOT: It is deliberately NOT on verify/fulfill/
+            // reconcile: those run after the chain has settled, and sealing them would
+            // take real money and then refuse to record it.)
+            // Fail-OPEN when the toggle table is unreachable (owner ruling 2026-08-27).
+            if (DeNelle.Core.Ops.MaintenanceCatalog.Refuses(
+                    DeNelle.Core.Ops.MaintenanceArea.Store, "purchase-gate", out string storeSealedMsg))
+            {
+                reason = storeSealedMsg;
+                return false;
+            }
+
             if (!FeatureFlags.RealmStorePurchase)
             {
                 reason = StoreStrings.Get(StoreStrings.KeyBuyClosed);

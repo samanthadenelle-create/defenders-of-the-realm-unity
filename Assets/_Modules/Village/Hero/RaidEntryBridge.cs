@@ -149,6 +149,23 @@ namespace DeNelle.Village.Hero
                 return;
             }
 
+            // WO-1243 OPERATOR KILL SWITCH: raiding.
+            // Placed here rather than at the raid CARD tap because both raid doors
+            // (continuous-walk ping and the legacy RaidSelectionScreen path) funnel
+            // through this one method - one gate, both doors. It refuses; it does not
+            // merely warn.
+            // !! COURTESY HALF ONLY. Raid results reach the backend inside the save
+            // blob, so the server-side lever for raiding is the `server` toggle in
+            // api/game/save.js; a raid seal is recorded there as sealed activity.
+            // Fail-OPEN when the table is unreachable (owner ruling 2026-08-27).
+            if (DeNelle.Core.Ops.MaintenanceCatalog.Refuses(
+                    DeNelle.Core.Ops.MaintenanceArea.Raiding, "raid-icon", out string raidSealedMsg))
+            {
+                DeNelle.Core.UI.ElarionUiKit.ShowToast(
+                    raidSealedMsg, DeNelle.Core.UI.ElarionUiKit.ToastTone.Info);
+                return;
+            }
+
             // WO-449 — continuous-walk loop: the raid target is a LIVE outpost out in the OuterWorld
             // (RaidOutpostSystem spawns it ~70m past each gate). There is NO selection/deploy screen
             // and NO teleport — the player just walks out a gate to it and combat starts on approach.

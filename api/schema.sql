@@ -1062,5 +1062,161 @@ CREATE INDEX IF NOT EXISTS idx_purchase_quotes_discount
     ON purchase_quotes (wallet, issued_at DESC) WHERE discount_bps IS NOT NULL;
 
 -- =============================================================================
+-- 17. patronage_benefactors - WO-1073. THE BENEFACTORS OF THE REALM WALL.
+-- -----------------------------------------------------------------------------
+-- Owner ruling 2026-08-27, verbatim: "we add a benefactors of the Realm wall and
+-- they get added to that, and every kingdom can see it. and a custom monumnet."
+--
+-- ONE GLOBAL ROW SET, read by every kingdom. That is why it is a table and not a
+-- client cosmetic: a wall only its owner can see is not status, it is a receipt.
+--
+-- WHAT THIS TABLE IS NOT. It is NOT the entitlement and it is NOT the money.
+-- Lifetime spend lives in purchase_entitlements and is SUMMED on read
+-- (api/_lib/patronage.js); nothing is copied here, so this table can never
+-- disagree with what was actually paid. A row here says only: this wallet has
+-- crossed the founder threshold AND has chosen how it wishes to be named.
+--
+-- MEMBERSHIP IS OPT-IN BY CONSTRUCTION. A row exists only once the player sets a
+-- patron name, so a founder who never chooses one is never published. That is
+-- deliberate: they land on a public list as a consequence of PAYING, so the act
+-- of choosing a name is the consent.
+--
+-- COLUMNS
+--   wallet          - base58 address (PK). NEVER selected by the public read.
+--   tier_id         - CHECK pins it to the single ruled tier. $50 Patron and
+--                     $150 High Patron are ruled OFF the wall ("Do NOT list $50
+--                     or $150"); this constraint means the database refuses them
+--                     even if application code one day tried.
+--   patron_name     - the PLAYER-CHOSEN public alias. Never a wallet, never an
+--                     email, never a real name (api/_lib/patron-name.js gates
+--                     format, length, profanity and impersonation).
+--   patron_name_ci  - lower(patron_name), UNIQUE, so two founders cannot appear
+--                     under the same name. A generated column, so it can never
+--                     drift from patron_name.
+--   name_edits_used - the bounded edit allowance (MAX_PATRON_NAME_EDITS = 3 in
+--                     api/_lib/patron-name.js). Wall entry is permanent because
+--                     an SPL transfer cannot reverse, so a regretted name would
+--                     be permanent too with no edit path - and unlimited edits
+--                     would turn an honour roll into a broadcast channel.
+--   monument_asset_id
+--                   - THE BESPOKE MONUMENT, PER PATRON. Owner ruling 2026-08-27,
+--                     verbatim: "being it will be a custom fbx i will work with
+--                     them one on to create and then add in game". The $500 rung
+--                     is a COLLABORATION, not a catalog row, so this is a
+--                     per-wallet asset key and NOT one shared mesh.
+--                     NULL = this patron is still on the shared stand-in. That
+--                     is the ONLY representation of "placeholder" -- the CHECK
+--                     forbids storing the stand-in id itself, so "placeholder"
+--                     can never be spelled two ways and drift.
+--                     PER-PATRON, NOT A GLOBAL PHASE: Founder A can carry their
+--                     real monument while Founder B is still on the stand-in.
+--   monument_assigned_at
+--                   - when the operator assigned it (Command Center, WO-1244).
+--   monument_verified_at
+--                   - WHEN THE ASSET WAS PROVEN PRESENT IN THE SHIPPED CATALOG.
+--                     Section 16: bundle names are CONTENT-HASHED, so every
+--                     content build invalidates every earlier proof, and a
+--                     monument that was never pushed renders as NOTHING with no
+--                     error on screen. This column is what lets the ship chain
+--                     ask "which proofs predate the newest content build?"
+--                     instead of trusting that somebody remembered.
+--   granted_at      - founding order. The public ordinal is derived from this,
+--                     so an early founder never loses their place.
+--   name_updated_at - last rename (NULL = never renamed).
+--
+-- There is deliberately NO amount, NO currency and NO expiry column here: the
+-- wall is cosmetic/status only (WO-1073 section 3.1) and lifetime totals only
+-- ever grow (section 3.4), so there is nothing to clock and nothing to claw back.
+--
+-- The monument columns are STATUS too: an asset KEY, and two timestamps about
+-- proof. No quantity, no currency, no expiry -- a bespoke mesh is the honour, and
+-- it can never become something to spend.
+-- =============================================================================
+CREATE TABLE IF NOT EXISTS patronage_benefactors (
+    wallet          TEXT        PRIMARY KEY,
+    tier_id         TEXT        NOT NULL CHECK (tier_id IN ('founder_benefactor')),
+    patron_name     TEXT        NOT NULL,
+    patron_name_ci  TEXT        GENERATED ALWAYS AS (lower(patron_name)) STORED,
+    name_edits_used INTEGER     NOT NULL DEFAULT 0 CHECK (name_edits_used >= 0),
+    monument_asset_id    TEXT   CHECK (monument_asset_id <> 'monument_founder_standin'),
+    monument_assigned_at TIMESTAMPTZ,
+    monument_verified_at TIMESTAMPTZ,
+    granted_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    name_updated_at TIMESTAMPTZ,
+    updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- Case-insensitive uniqueness of the public name (23505 -> PATRON_NAME_TAKEN).
+CREATE UNIQUE INDEX IF NOT EXISTS uq_patronage_benefactors_name_ci
+    ON patronage_benefactors (patron_name_ci);
+
+-- The wall read: tier filter + founding order, in one index.
+CREATE INDEX IF NOT EXISTS idx_patronage_benefactors_wall
+    ON patronage_benefactors (tier_id, granted_at ASC);
+
+
+-- =============================================================================
+-- 18. maintenance_toggles - WO-1243. THE OPERATOR KILL SWITCHES.
+--
+--   Six rows, one per area, and there is no seventh:
+--     farming | raiding | arena | dungeons | store | server
+--   `server` is the whole game. When it is closed EVERY area is closed, whatever
+--   its own row says.
+--
+-- ⛔ WHAT THIS IS FOR, IN THE OWNER'S WORDS (2026-08-27):
+--     "mine allows if we see someone finds a hack, we seal that area and patch"
+--   It is EXPLOIT CONTAINMENT, not a maintenance-window nicety. That is why the
+--   seal is enforced server-side (api/_lib/maintenance.js, called from
+--   api/purchases/quote.js, api/game/save.js, api/leaderboard/submit.js) and not
+--   only in the client: someone exploiting the game runs whatever client they
+--   like, and a toggle only the client reads clears the area of honest players
+--   while the attacker carries on.
+--
+-- ⛔ FAIL-OPEN, AND IT IS THE OPPOSITE OF dungeon_status ABOVE, ON PURPOSE.
+--   An unreachable table, a timeout or a malformed row leaves EVERY area ON.
+--   Owner-confirmed, verbatim: "correct cause i cannot help if server is
+--   unreachable". There, absence must not GRANT access to content; here, absence
+--   must not DENY access to the whole game. Do not unify the two.
+--
+-- ⚠ SO A MISSING ROW COSTS NOTHING HERE - which is the one mercy in the
+--   ON CONFLICT DO NOTHING trap that shut two dungeons in production this week
+--   (WO-1223). An un-back-filled database simply has nothing sealed, which is
+--   the correct resting state. The rows below still SHOULD exist so the operator
+--   surface (tools/command-centre.ps1 -Maintenance) can list and flip them;
+--   tools/maintenance-toggle.mjs UPSERTs, so it creates a row it cannot find.
+--
+--   message is AUTHORED PROSE shown to every player in a rolling banner. Keep it
+--   ASCII and keep it readable as maintenance from its WORDS - the owner is
+--   red/green colourblind and no meaning may live in colour alone.
+--
+--   updated_by / updated_at are the AUDIT TRAIL: "when did we seal it, and who
+--   flipped it" must be answerable after an incident. updated_by is an operator
+--   label (a machine or role name), never a player identity.
+--
+-- Written by : tools/maintenance-toggle.mjs (DATABASE_URL) or the Neon SQL editor.
+-- Read by    : api/maintenance.js (public GET) + api/_lib/maintenance.js (enforcement).
+-- =============================================================================
+CREATE TABLE IF NOT EXISTS maintenance_toggles (
+    area_id    TEXT        PRIMARY KEY
+                           CHECK (area_id IN ('farming','raiding','arena','dungeons','store','server')),
+    closed     BOOLEAN     NOT NULL DEFAULT FALSE,
+    message    TEXT,
+    updated_by TEXT,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- Every seed is OPEN (closed = FALSE) on purpose. Seeding a seal would close a
+-- working area on the next provision, and a kill switch that arrives pre-pulled
+-- is worse than no kill switch.
+INSERT INTO maintenance_toggles (area_id, closed, message, updated_by) VALUES
+    ('farming',  FALSE, NULL, 'schema-seed'),
+    ('raiding',  FALSE, NULL, 'schema-seed'),
+    ('arena',    FALSE, NULL, 'schema-seed'),
+    ('dungeons', FALSE, NULL, 'schema-seed'),
+    ('store',    FALSE, NULL, 'schema-seed'),
+    ('server',   FALSE, NULL, 'schema-seed')
+ON CONFLICT (area_id) DO NOTHING;
+
+-- =============================================================================
 -- END OF SCHEMA
 -- =============================================================================

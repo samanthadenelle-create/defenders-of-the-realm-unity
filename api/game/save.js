@@ -39,6 +39,13 @@ const {
 } = require('../_lib/wallet-auth');
 const { applyCors, newRef, quietFail, readBodyExact } = require('../_lib/http');
 const { logAuthReject, logApiEvent } = require('../_lib/audit');
+// WO-1243 operator kill switches. Fail-OPEN by ruling — see _lib/maintenance.js.
+const {
+    enforce: maintenanceEnforce,
+    isClosed: maintenanceIsClosed,
+    noteSealedActivity,
+    AREA_SERVER, AREA_FARMING, AREA_RAIDING, AREA_DUNGEONS, AREA_ARENA,
+} = require('../_lib/maintenance');
 
 // ── Sanity-check bounds (WO-120 §2 — soft currency stays client-owned, with
 //    server guards). Anti-grief / anti-corruption ceilings, NOT a server-
@@ -186,6 +193,46 @@ async function handler(req, res) {
                         auth.code === AuthCode.PLAYER_ID_MISSING ||
                         auth.code === AuthCode.WALLET_MALFORMED) ? 400 : 401;
         return quietFail(res, status, auth.code, ref);
+    }
+
+    // ── OPERATOR KILL SWITCH: the FULL maintenance window (WO-1243) ────────
+    //
+    // Only the `server` toggle refuses here, and it refuses everything. This is
+    // the one server-side seal that reaches farming, raiding and dungeons at all
+    // (see the note below) and it is deliberately blunt: a full maintenance
+    // window means no client state lands, so nothing an exploit fabricated can
+    // be written down while she patches.
+    //
+    // ⚠ THE COST, STATED: a sealed save is progress the player made and cannot
+    // persist. That is the trade a maintenance window IS. The client is told the
+    // reason (code AREA_UNDER_MAINTENANCE + the operator's message) so it can
+    // hold the payload and show the banner rather than silently dropping it.
+    if (await maintenanceEnforce(sql, req, res, AREA_SERVER, playerId, ref)) return;
+
+    // ── AND THE HONEST GAP, RECORDED RATHER THAN PAPERED OVER ──────────────
+    //
+    // ⛔ farming / raiding / dungeons / arena have NO per-action endpoint. They
+    // are simulated entirely on the client and reach this backend only inside the
+    // opaque save blob, so there is nothing here to refuse that is not the whole
+    // save. Sealing the save for a single sealed AREA would punish every unrelated
+    // thing the player did in the same session, so we do not.
+    //
+    // What we CAN do is stop the gap being invisible: if a save arrives while one
+    // of those areas is sealed, stamp a row. That is the evidence that answers
+    // "did the client gate actually hold, or is someone still farming a sealed
+    // area?" after the fact — which is the whole reason containment keeps a record.
+    // It is a RECORD, NOT A CONTROL. Do not mistake it for enforcement.
+    try {
+        const sealed = [];
+        for (const area of [AREA_FARMING, AREA_RAIDING, AREA_DUNGEONS, AREA_ARENA]) {
+            const v = await maintenanceIsClosed(sql, area);
+            if (v.closed) sealed.push(area);
+        }
+        if (sealed.length) await noteSealedActivity(sql, req, sealed, playerId, ref);
+    } catch (err) {
+        // Never let the audit path fail a save. One console line and carry on.
+        try { console.warn('[maintenance] sealed-activity note failed:', err && err.message); }
+        catch (_) { /* noop */ }
     }
 
     // ── Build the state to persist ─────────────────────────────────────────

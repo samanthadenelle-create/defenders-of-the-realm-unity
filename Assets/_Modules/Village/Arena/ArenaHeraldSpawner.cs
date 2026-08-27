@@ -218,6 +218,22 @@ namespace DeNelle.Village.Arena
         // =====================================================================
         private void OpenArena()
         {
+            // WO-1243 OPERATOR KILL SWITCH: arena.
+            // The herald is the live arena door (Path A), so this is where an arena
+            // seal has to bite - before RaidSelectionScreen opens, not after.
+            // !! COURTESY HALF. The arena's only server-authoritative result is the
+            // `arena` leaderboard metric, and THAT is sealed for real in
+            // api/leaderboard/submit.js - which is what stops a modified client from
+            // banking an arena exploit. Fail-OPEN (owner ruling 2026-08-27).
+            if (DeNelle.Core.Ops.MaintenanceCatalog.Refuses(
+                    DeNelle.Core.Ops.MaintenanceArea.Arena, "arena-herald", out string arenaSealedMsg))
+            {
+                DeNelle.Core.UI.ElarionUiKit.ShowToast(
+                    arenaSealedMsg, DeNelle.Core.UI.ElarionUiKit.ToastTone.Info);
+                MobileInteractButton.Release(this);
+                return;
+            }
+
             FlowTrace.Step("Arena", "herald interacted -> opening Path A camp-select (RaidSelectionScreen)");
             DeNelle.Village.Hero.RaidSelectionScreen.Open();
             // Dismiss the world "Enter Arena" prompt the instant the list opens so it can't

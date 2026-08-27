@@ -16,7 +16,16 @@ param(
     [int]$UnityTimeoutMin = 45,
     [int]$AliasTimeoutSec = 180,
     [switch]$AcknowledgeTreasuryRpcFailure,
-    [switch]$LibraryOnly
+    [switch]$LibraryOnly,
+    # WO-1243 operator kill switches. -Maintenance runs the toggle surface and
+    # EXITS; it never touches the ship chain below. Sealing an area must be
+    # seconds of work under fire, not a release.
+    [switch]$Maintenance,
+    [ValidateSet('farming', 'raiding', 'arena', 'dungeons', 'store', 'server')]
+    [string]$Area,
+    [switch]$Seal,
+    [switch]$Open,
+    [string]$Message
 )
 
 $ErrorActionPreference = 'Stop'
@@ -130,6 +139,61 @@ function Assert-FreshMarker {
 }
 
 if ($LibraryOnly) { return }
+
+# =============================================================================
+# WO-1243 - THE OPERATOR KILL SWITCHES. Runs and EXITS; the ship chain below is
+# never reached from here.
+#
+# Owner ruling 2026-08-27, verbatim: "mine allows if we see someone finds a hack,
+# we seal that area and patch". So this path deliberately gates on NOTHING but
+# DATABASE_URL - no compile, no regression, no R2, no deploy. Requiring a green
+# release train to close an area under active exploitation would make the control
+# useless at exactly the moment it is needed.
+#
+#   tools\command-centre.ps1 -Maintenance
+#   tools\command-centre.ps1 -Maintenance -Area raiding -Seal -Message "Raids are closed while we fix an exploit."
+#   tools\command-centre.ps1 -Maintenance -Area raiding -Open
+#
+# Judge by the MARKER on a fresh log, never the exit code (CLAUDE.md section 8).
+# =============================================================================
+if ($Maintenance) {
+    if ([string]::IsNullOrWhiteSpace($env:DATABASE_URL)) {
+        Refuse 3 'DATABASE_URL_SET' 'environment' 'DATABASE_URL_MISSING'
+    }
+    if ($Seal -and $Open) {
+        Refuse 9 'MAINTENANCE_TOGGLE_OK' 'arguments' 'SEAL_AND_OPEN_BOTH_GIVEN'
+    }
+    if (($Seal -or $Open) -and [string]::IsNullOrWhiteSpace($Area)) {
+        Refuse 9 'MAINTENANCE_TOGGLE_OK' 'arguments' 'AREA_REQUIRED'
+    }
+
+    $toggleScript = Join-Path $root 'tools\maintenance-toggle.mjs'
+    $toggleLog = Join-Path $builds 'maintenance-toggle.log'
+    $started = Get-Date
+
+    if ($Seal) {
+        if ([string]::IsNullOrWhiteSpace($Message)) {
+            # A seal with no message puts an unexplained wall in front of a paying
+            # player. The banner has nothing to say without it.
+            Refuse 9 'MAINTENANCE_TOGGLE_OK' 'arguments' 'MESSAGE_REQUIRED_TO_SEAL'
+        }
+        Write-Run "MAINTENANCE_INTENT action=seal area=$Area"
+        Invoke-Captured { node $toggleScript seal $Area $Message } $toggleLog | Out-Null
+        Assert-FreshMarker 9 'MAINTENANCE_TOGGLE_OK' $toggleLog $started
+    }
+    elseif ($Open) {
+        Write-Run "MAINTENANCE_INTENT action=open area=$Area"
+        Invoke-Captured { node $toggleScript open $Area } $toggleLog | Out-Null
+        Assert-FreshMarker 9 'MAINTENANCE_TOGGLE_OK' $toggleLog $started
+    }
+    else {
+        Invoke-Captured { node $toggleScript list } $toggleLog | Out-Null
+        Assert-FreshMarker 9 'MAINTENANCE_LIST_OK' $toggleLog $started
+    }
+
+    Write-Run "COMMAND_CENTRE_MAINTENANCE_OK log=$toggleLog"
+    exit 0
+}
 
 $activeStep = 0
 $activeMarker = 'COMMAND_CENTRE_STEP_OK'

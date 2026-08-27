@@ -1,8 +1,10 @@
 // =============================================================================
-// ResourceCollectorService — Collect All at Heart (pipe home, WO-663).
+// ResourceCollectorService - Collect All at Heart (pipe home, WO-663).
 // =============================================================================
 
 using DeNelle.Core.Diagnostics;
+using DeNelle.Core.Ops;
+using DeNelle.Core.UI;
 using DeNelle.Village;
 
 namespace DeNelle.Village.Buildings.Progression
@@ -17,6 +19,21 @@ namespace DeNelle.Village.Buildings.Progression
         public static int CollectAll()
         {
             using var _ = FlowTrace.Enter("Harvest", "CollectAll");
+
+            // WO-1243 OPERATOR KILL SWITCH: farming.
+            // Gated HERE and not at the chip tap because CollectAll has more than one
+            // caller (the collectors chip AND AutoHarvestService), and a gate only the
+            // button honours is no gate at all. Refuses BEFORE the first c.Collect(),
+            // so nothing is banked and no pending is consumed.
+            // !! This is the COURTESY half. The seal itself is enforced server side -
+            // see api/_lib/maintenance.js. Fail-OPEN: with the table unreachable this
+            // returns false and farming carries on (owner ruling 2026-08-27).
+            if (MaintenanceCatalog.Refuses(MaintenanceArea.Farming, "collect-all", out string sealedMsg))
+            {
+                ElarionUiKit.ShowToast(sealedMsg, ElarionUiKit.ToastTone.Info);
+                return 0;
+            }
+
             int total = 0;
             foreach (var c in ResourceCollectorRegistry.All)
             {

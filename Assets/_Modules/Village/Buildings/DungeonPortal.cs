@@ -221,7 +221,7 @@ namespace DeNelle.Village
             // which is outside the UiObsidianConformance StrongSmells regex. Rewriting it
             // would hard-fail [ui-obsidian]. The prose dialogue is the Obsidian surface.
             string label = _door.IsOpen
-                ? "〔 Tap / F 〕 " + _displayName
+                ? "[ Tap / F ] " + _displayName
                 : DoorHeadline();
 
             _promptGo = BuildBubble(
@@ -261,6 +261,30 @@ namespace DeNelle.Village
         private void EnterDungeon()
         {
             if (_loading) return;
+
+            // WO-1243 OPERATOR KILL SWITCH: dungeons.
+            //
+            // DO NOT: A SECOND, INDEPENDENT CHECK THAT SITS NEXT TO THE WO-1114/1223 ONE AND
+            // IS NOT THE SAME SYSTEM. Read this before merging them:
+            //   * DungeonStatusCatalog (below) is PER-DUNGEON content state and fails
+            //     CLOSED - absence must not GRANT access to unfinished content.
+            //   * MaintenanceCatalog (here) is an OPERATOR SEAL over the whole dungeon
+            //     PILLAR and fails OPEN - absence must not DENY access to the game.
+            // The two defaults are opposite on purpose (owner rulings 2026-08-26 and
+            // 2026-08-27). Unifying them would break one of the two live games.
+            //
+            // !! COURTESY HALF. Dungeon results reach the backend only inside the save
+            // blob, so the server-side lever for dungeons is the `server` toggle in
+            // api/game/save.js; a dungeon seal is recorded there as sealed activity.
+            if (DeNelle.Core.Ops.MaintenanceCatalog.Refuses(
+                    DeNelle.Core.Ops.MaintenanceArea.Dungeons, "enter-dungeon:" + _dungeonId,
+                    out string dungeonSealedMsg))
+            {
+                _loading = false;   // same dead-latch discipline as the backstop below
+                DeNelle.Core.UI.ElarionUiKit.ShowToast(
+                    dungeonSealedMsg, DeNelle.Core.UI.ElarionUiKit.ToastTone.Info);
+                return;
+            }
 
             // WO-1114 BACKSTOP. The registration branch above is the player experience;
             // THIS is the invariant. It runs before the scene-name resolution and long

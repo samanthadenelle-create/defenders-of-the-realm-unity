@@ -493,6 +493,27 @@ namespace DeNelle.Core
         /// </para></summary>
         public static bool DungeonStatus => Get("dungeonstatus", defaultOn: true);
 
+        /// <summary>WO-1243 OPERATOR KILL SWITCHES. Default ON. When ON,
+        /// <c>DeNelle.Core.Ops.MaintenanceService</c> polls /api/maintenance and a sealed area
+        /// refuses entry with a rolling banner naming it.
+        /// <para>
+        /// !! THIS FLAG DISABLES THE COURTESY GATE ONLY, AND THAT IS THE POINT OF SAYING SO HERE.
+        /// The seal itself is enforced SERVER SIDE (api/_lib/maintenance.js, called from
+        /// purchases/quote.js, game/save.js and leaderboard/submit.js) precisely because a client
+        /// check cannot bind someone running a modified client. Turning this off stops the banner
+        /// and the client refusal; it does NOT reopen a sealed area's server-side seam, and it is
+        /// not a way to bypass one.
+        /// </para>
+        /// <para>
+        /// DO NOT: KILL SWITCH: PlayerPrefs "ff.maintenance" = 0 suppresses the poll entirely and leaves
+        /// every area open on the client. It exists for the case where the endpoint itself
+        /// misbehaves - the system already fails OPEN on every other path (owner ruling 2026-08-27),
+        /// so this is the last line, not the first.
+        /// </para>
+        /// DO NOT: Do NOT add "maintenance" to the URL-activatable allow-list. A URL-flippable
+        /// containment gate is a security regression.</summary>
+        public static bool Maintenance => Get("maintenance", defaultOn: true);
+
         /// <summary>WORLD FEEL (owner felt-test 2026-07-01: "world feels empty / very flat / not polished").
         /// When ON (default), <c>DeNelle.Village.World.WorldFeelInjector</c> applies the world-aesthetics
         /// pass at runtime on the outdoor scenes (MainCastle_Hall / Main_Castle_Overworld / Village2), WITHOUT

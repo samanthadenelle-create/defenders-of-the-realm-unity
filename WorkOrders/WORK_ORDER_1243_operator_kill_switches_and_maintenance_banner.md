@@ -1,6 +1,10 @@
 # WORK ORDER 1243 - Operator kill switches: toggle a broken area off, and TELL the players
 
-**Status:** READY TO IMPLEMENT
+**Status:** FIXED 2026-08-27 - six DB-driven operator kill switches, end to end. SERVER: `maintenance_toggles` (5 columns, 6 rows seeded in the LIVE DB), `api/_lib/maintenance.js`, `GET /api/maintenance`, enforced server-side in `purchases/quote.js` (store), `leaderboard/submit.js` (arena) and `game/save.js` (server). CLIENT: `DeNelle.Core.Ops` (MaintenanceService / MaintenanceCatalog / MaintenanceBannerDriver) with a real REFUSAL at all five area seams - arena, dungeons, farming, raids, store - plus the rolling `MAINTENANCE ON <AREA>` banner. Fail-OPEN on every failure path per the owner ruling, proven by `MaintenanceTogglesRegression` (registered in DataRegression). Operator control via `tools/maintenance-toggle.mjs` + `tools/command-centre.ps1`. Gated `COMPILE_GATE_OK` + `REGRESSION_OK 308/308 suites`.
+
+> **REMAINING: owner felt-verify by flipping a toggle** (the PO closes, section 13).
+>
+> **KNOWN LIMIT, stated rather than hidden:** only THREE of the six switches have server-side teeth - `store`, `arena` and `server`. `farming` / `raiding` / `dungeons` have no server seam of their own: they are client-simulated and reach the backend only inside the opaque save blob. For those three the seal is a CLIENT COURTESY GATE (defeatable by a modified client) and `server` is the real lever. This is a property of where those systems live, not a gap in this ticket - closing it means giving those pillars a server seam first.
 **Silo:** Backend (`api/`) + HUD banner + command centre tooling
 **Severity:** P1 for operations. The game is LIVE and takes real money; today there is no way to
 close a broken area without shipping a build.

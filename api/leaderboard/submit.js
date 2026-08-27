@@ -34,6 +34,8 @@
 
 const { neon } = require('@neondatabase/serverless');
 const { verifyAndConsume } = require('../_lib/wallet-auth');
+// WO-1243 operator kill switches. Fail-OPEN by ruling — see _lib/maintenance.js.
+const { enforce: maintenanceEnforce, AREA_ARENA, AREA_SERVER } = require('../_lib/maintenance');
 
 // The signature is over the EXACT raw body bytes, so we must read the unparsed
 // Buffer — disable Vercel's body parser (same requirement as api/game/save.js).
@@ -107,6 +109,20 @@ module.exports = async (req, res) => {
     if (!auth.ok) {
         return res.status(401).json({ error: 'Unauthorized', reason: auth.reason });
     }
+
+    // ── OPERATOR KILL SWITCH: the arena seal (WO-1243) ─────────────────────
+    //
+    // The `arena` metric is the ONLY arena result that ever becomes
+    // server-authoritative, so this row is the one place an arena exploit can
+    // actually bank anything. Sealing `arena` therefore stops the exploit's
+    // PAYOFF even against a modified client that ignores the client-side gate.
+    // The other four metrics are untouched by an arena seal; `server` closes all
+    // five, because it closes everything.
+    //
+    // ⚠ `wallet` is the identity here. It is passed only so the refusal record
+    // can carry a SALTED FINGERPRINT of it (_lib/maintenance.fingerprint). The
+    // raw address is never written to the audit row.
+    if (await maintenanceEnforce(sql, req, res, metric === 'arena' ? AREA_ARENA : AREA_SERVER, wallet, null)) return;
 
     // ── Monotonic MAX-MERGE upsert ─────────────────────────────────────────
     // On conflict, only RAISE the score (GREATEST). updated_at + meta move only
