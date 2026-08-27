@@ -137,7 +137,11 @@
 > fine as history. A copied number is the bug **even when it was right the day it was written** -
 > that is exactly how the retired 860-899 UI block kept re-seeding collisions from CLAUDE.md sec.2.
 
-> ## ⚠ RECONCILED 2026-08-26 (CLI): main line next free = **1240**.
+> ## ⚠ RECONCILED 2026-08-26 (CLI): main line next free = **1243**.
+> 1240 starter-armour contract + owned-only auto-equip | 1241 catalog must not offer illegal gear
+> | 1242 Seeker VFX performance gate.
+>
+> ### superseded: RECONCILED 2026-08-26 (CLI): main line next free = **1240**.
 > 1239 barracks footprint outlier - the family median is the suspect, not the model.
 >
 > ### superseded: RECONCILED 2026-08-26 (CLI): main line next free = **1239**.

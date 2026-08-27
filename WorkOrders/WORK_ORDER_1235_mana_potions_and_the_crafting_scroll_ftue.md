@@ -121,3 +121,30 @@ flavour rendering of the same recipe.
 
 ⛔ Do NOT change the ingredient COUNTS beyond the 1/1/1 above without a further ruling, and do not
 touch `cons_mana_draught`'s own balance.
+
+---
+
+## OWNER RULING 2026-08-26 (FINAL) - all three open questions answered
+
+### 1. TRIGGER: consumption-based, and gated on reachability
+The scroll becomes discoverable when **Mana Potions fall to 0 or 1 for the FIRST time**.
+Owner verbatim: *"That creates the exact 'I need this -> I discover the solution' teaching moment."*
+
+### 2. SCOPE: opens the door, hands over one key
+The scroll **unlocks Crafting as a VISIBLE SYSTEM**, but grants **only the Mana Potion recipe**.
+Owner verbatim: *"Introduces the mechanic without vomiting the whole crafting catalog onto a new
+player."* Do NOT unlock the recipe book.
+
+### 3. LOCATION: no station, no scroll
+**Guarantee the crafting station/surface exists and is reachable BEFORE the scroll can trigger.**
+Owner verbatim: *"Never teach a verb the player cannot immediately perform."*
+This is a HARD PRECONDITION on the drop, not a follow-up polish item. No station means the scroll
+does not drop yet.
+
+### The shipped sequence, in the owner's own words
+> start with a few Mana Potions -> use them naturally -> reach 0/1 -> recipe scroll becomes
+> discoverable -> player obtains it -> Crafting becomes visible -> Mana Potion recipe unlocks ->
+> UI directs them to the ALREADY-ACCESSIBLE crafting station -> first potion is crafted.
+
+The player learns crafting **at the exact moment crafting solves a problem they personally
+experienced**. Every implementation choice serves that ordering.

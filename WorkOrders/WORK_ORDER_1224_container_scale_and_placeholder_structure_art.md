@@ -114,3 +114,20 @@ art exists, this slice belongs in the art queue, not the code queue.
   **pathable gaps** in already-placed runs.
 - ⛔ `repo.visualHeight` — dead for runtime placement since WO-764, authored zero times.
 - ⛔ Any prefab path, pending Slice B's owner input.
+
+---
+
+## OWNER RULING 2026-08-26 - Slice B stays art-blocked; it does NOT hold Slice A hostage
+
+Owner verbatim: *"Keep it art-blocked, but do not block Slice A or functional work behind it. Art
+dependency should not drag finished implementation back into limbo."*
+
+**Slice A (`heightMul: 0.5` on the three storage containers) is LANDED and STAYS.** It is the fix for
+the owner's own felt-test report that containers rendered at twice the size of neighbouring houses.
+
+STOP: do NOT revert Slice A because Slice B lacks art, and do NOT hold this ticket's functional work
+behind the art dependency.
+
+WARNING: Slice A moved the structure family median 4.32 m -> 3.78 m, which moved the cadence oracle's
+2x band to 7.56 m and made `barracks` (unchanged at 7.64 m) read as an outlier. Tracked in
+**WO-1239** - that is a CONSEQUENCE of this ruling, not a defect in it.

@@ -74,3 +74,21 @@ screen is the divergence WO-1228 and WO-1230 were written to prevent.
 - The FLAG button itself or `BreakCaptureHarness`. Both work; this is presentation.
 - The dungeon's darkness / torch design. Owner-ruled risk-reward.
 - `HudActionBarModel.ButtonCount` (7) or `MaxVisibleFaces`. Read CLAUDE.md section 7 first.
+
+---
+
+## OWNER RULING 2026-08-26 - THE ONE-FACE MASK IS CORRECT. KEEP IT.
+
+Codex confirmed the `calm(explore)` mask is intentionally `0x04` (Bag only). The owner ruled it
+STAYS: *"Dungeon HUD should stay quiet. Manage belongs in menus; exit should remain
+contextual/world-based."*
+
+STOP: do NOT permanently add Quests / Manage / Exit to the dungeon bar. **Defect 1 in this ticket is
+CLOSED AS WORKING AS DESIGNED** - the bar is not broken, it is quiet on purpose.
+
+**What REMAINS open is Defect 2 only:** the FLAG acknowledgement covering the minimap. Codex reports
+the duplicate acknowledgement is removed and the shared toast zone is in use - verify that and close,
+or state what is left.
+
+WARNING: if the single face renders CENTRED OVER THE HERO rather than in a bar, that is still worth
+answering even with one face - a lone floating button reads as breakage. Report the slot geometry.

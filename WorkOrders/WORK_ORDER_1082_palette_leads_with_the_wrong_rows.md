@@ -261,3 +261,32 @@ and captured frames.
 > and they are the only rows that take **7.68 minutes**. The three rows literally named `collector_*` —
 > Farm, Lumber Mill, Iron Mine — build in **15 seconds** and are **free** on first placement. **Which
 > three do you want last?** Everything else about the change is identical.
+
+---
+
+## OWNER RULING 2026-08-26 (FINAL) - IMPLEMENT SECTION 4a. REJECT 4b.
+
+**Ruled: 4a. Lumberyard, Foundry and Silo move to the END of the Town build palette. The
+collectors and the tutorial order are UNCHANGED.**
+
+### Why 4a is the correct read of the original complaint
+The owner's two stated reasons - *"they don't get free"* and *"about 7 minutes"* - **describe the
+three STORAGE CONTAINERS, not the three `collector_*` buildings**:
+- `lumberyard`, `foundry` and `silo` are **the only rows carved out of the free 15-second
+  first-build grace**;
+- all three run **~7.68 minutes**.
+
+So the rows the owner wanted moved were always the containers. 4a simply appends
+**Lumberyard -> Foundry -> Silo** to the end of the normal Town strip.
+
+### Why 4a is also the SAFE path
+It changes **no cost, no build time, no tutorial behaviour, and no existing `displayOrder`.**
+
+### Why 4b is REJECTED
+Owner verbatim: *"Moving the literal collectors to the end means removing Lumber Mill's
+displayOrder, which directly reverses the existing tutorial ruling that the Lumber Mill is the first
+carousel card. The regression gate explicitly protects that behavior."*
+
+STOP: do NOT implement 4b. Do NOT remove `displayOrder` from Lumber Mill. **Existing canon wins**,
+and the gate that protects it is doing its job - a green gate turning red here would be the ORACLE
+CATCHING YOU, not an obstacle to route around.

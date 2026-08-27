@@ -616,3 +616,31 @@ any interaction with storage caps or the WO-947 basket split.
 - **Nothing was compiled or run.** An APK build held the Unity lock for the whole of this session, so no
   gate, bake, or headless run was executed. Every claim above is from source reading with citations; none
   is from a test run.
+
+---
+
+## OWNER RULING 2026-08-26 - SIEGE STAKES ARE NOW RULED
+
+Owner verbatim: *"An attack that cannot hurt anything becomes weather."* The plan's
+resolve-and-REPORT-but-take-nothing state is closed.
+
+### Sieges take THREE things, and nothing else
+1. **Structural damage**
+2. **A repair bill**
+3. **Theft of a PERCENTAGE of UNPROTECTED Wood / Iron / Stone / Gold**
+
+### Two hard bounds, both required
+- **A PROTECTED FLOOR under resources** - a reserve that can never be taken.
+- **A CAP on how much a SINGLE attack can steal.**
+
+### UNTOUCHABLE, absolutely
+**Crystals. SKR. Purchased goods. Equipped gear.** None of these may ever be damaged, taken, or put
+at risk by a siege - not at any percentage, not under any cap.
+
+The owner's reasoning is the acceptance test for the whole feature:
+> That creates "Damn, I should improve my defenses" instead of "The game erased something I paid
+> for. Delete."
+
+WARNING: the game is LIVE and money is real. A bug that takes a purchased good is not a balance
+issue, it is a refund and a one-star review. **The untouchable list must be enforced by an ORACLE,
+not by care.**

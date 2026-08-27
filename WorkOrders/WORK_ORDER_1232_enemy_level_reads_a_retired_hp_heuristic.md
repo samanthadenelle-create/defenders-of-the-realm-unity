@@ -183,3 +183,38 @@ The two retired HP-derived display sites were removed in `b303c4fbf`. Fresh evid
 `Enemy.Level`, remain invariant through x1..x9.7 HP scaling, and finds no remaining `maxHp/25`
 derivation across 2208 C# files; `:83814` is `REGRESSION_OK 291/291`. **Post-FIXED APK checklist:** the specified
 2670x1200 wave-enemy target-frame screenshot and owner felt-close.
+
+---
+
+## OWNER RULING 2026-08-26 (FINAL) - REMOVE THE NUMBER, AND REMOVE THE THREAT MATH TOO
+
+Owner verbatim: *"HP / 25 is not a level system. Dressing it up as one just produces very confident
+nonsense."*
+
+### 1. Numeric enemy levels are REMOVED
+Display **authored classification badges only**: **ELITE** and **BOSS**.
+- **APEX is RESERVED** for a future explicitly-authored tier. Do NOT ship it now. `apexBoss` exists
+  in `waves.json`, but until a tier is authored deliberately, adding a third badge invents the very
+  precision this ruling removes.
+- **Ordinary enemies get NO badge.** Silence is the default, not a blank label.
+
+### 2. The LETHAL / RISKY calculation is REMOVED, not retuned
+Owner verbatim: *"The Lv5 vs Lv36 comparison is downstream of the fake level. Retuning thresholds
+just polishes the wrong equation."*
+
+Delete the `RiskyDelta` / `LethalDelta` banding from the player-facing path. **Do NOT retune the
+numbers** - the equation itself is the defect. `hollow-brute` reading LETHAL forever is a SYMPTOM.
+
+WARNING: keep `ThreatSkullPlate`'s instrumentation per CLAUDE.md section 12 - instrumentation is
+PERMANENT and is never removed as cleanup. Flag the display off; leave the traces in the code.
+
+### 3. What a proper replacement looks like - NOT this ticket, do not build it
+The owner named the shape for later: a real **Combat Rating** derived from things that actually
+affect the fight - HP, damage, attack cadence, armour, abilities, encounter role - surfaced as
+**Low / Even / High / Deadly**. Until that model exists, silence beats fake precision.
+
+STOP: do NOT implement Combat Rating under this ticket. It needs its own spec and its own ruling.
+
+### The principle to carry forward
+**Separate IDENTITY from DIFFICULTY.** A Necromancer being a BOSS is an authored fact.
+`Lv 68 - LETHAL` is two invented numbers wearing a costume.

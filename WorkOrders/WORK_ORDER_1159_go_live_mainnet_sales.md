@@ -184,3 +184,21 @@ two-state policy is meaningless if the "success" state can be reached without re
 
 **Status → READY** — the §5 proposal is now a specified, buildable policy rather than an unwired
 proposal.
+
+---
+
+## OWNER RULING 2026-08-26 - COMPUTE the threshold; never carry it
+
+Owner verbatim: *"Compute it from canonical inputs during the ship chain. Do not carry a derived
+threshold forward. Log the calculated value in the ship report. Derived values rot. Source inputs
+should be canonical."*
+
+The PROPOSED-NOT-DONE section is **APPROVED**:
+- The ship chain COMPUTES the go-live threshold from canonical inputs at run time.
+- No derived threshold is stored, copied into a doc, or carried between runs.
+- The **calculated value is LOGGED in the ship report**, so a reader sees what it resolved to.
+
+WARNING: this is the same failure class CLAUDE.md records over and over - the stale WO-number block,
+the retired dependency table, the hardcoded repo root, the portrait path in eleven literals. Every
+copy is correct the day it is written and rots independently. **Point at the source; never copy the
+answer.**

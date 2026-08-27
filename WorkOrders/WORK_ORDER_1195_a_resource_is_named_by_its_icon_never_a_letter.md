@@ -380,3 +380,34 @@ Implementation notes for CLI (mechanics, not creative):
   (`raycastTarget=false`), never inflated to MinTouchPx.
 - The letter-suffix oracle allowlist stays ZERO; greyscale check of the acceptance capture must
   show coin/log/ingot/rock/crystal/food/emblem/tome all separable by silhouette.
+
+---
+
+## OWNER RULING 2026-08-26 (FINAL) - Section 8: KEEP THE IMAGE, as a THUMBNAIL
+
+**Ruled: build-palette cards use `thumbnail + building name + resource-icon cost row`. NOT a
+text-only card.**
+
+Owner verbatim: *"The image should become an identifier, not the star of the card. Think postage
+stamp, not movie poster."*
+
+### The hierarchy, in order
+1. small building **thumbnail**
+2. building **name**
+3. **icon + quantity** cost row
+
+### Why, in the owner's words
+- players recognise buildings **far faster from an image than from names alone**;
+- the icon-based cost system this ticket establishes **stays visually dominant**;
+- locked and upgradable buildings **stay distinguishable without reading every card**.
+
+### STOP - this ticket does NOT perform that redesign
+Owner verbatim: *"I would not make WO-1195 itself perform that redesign, because its implementation
+spec explicitly says no relayout and no change to the card art band."*
+
+The thumbnail decision is **BINDING but is executed as a SEPARATE palette-card visual ticket**.
+WO-1195's own scope is unchanged: **no relayout, no change to the card art band.**
+
+### The cost treatment is unchanged and confirmed
+**Resource ICON first, quantity second**, with a **full-word fallback** when an icon is unavailable.
+NEVER bare letters like `W`, `I` or `C` - that is this ticket's whole rule and the ruling reaffirms it.
