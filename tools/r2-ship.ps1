@@ -3,6 +3,7 @@
 # -----------------------------------------------------------------------------
 # Usage (from repo root or anywhere - it resolves the root itself):
 #   powershell -File tools\r2-ship.ps1                 # push + verify, BLOCKS on failure
+#   powershell -File tools\r2-ship.ps1 -Target WebGL   # Pi/WebGL push + verify
 #   powershell -File tools\r2-ship.ps1 -WarnOnly       # push + verify, warns instead of failing
 #   powershell -File tools\r2-ship.ps1 -VerifyOnly     # prove only, upload nothing
 #
@@ -61,6 +62,8 @@
 
 [CmdletBinding()]
 param(
+    [ValidateSet('Android', 'WebGL')]
+    [string]$Target = 'Android',
     # Warn and continue instead of failing. For deliberately-offline or experimental
     # sideloads, where a mismatched bucket is a known and accepted state.
     [switch]$WarnOnly,
@@ -86,6 +89,7 @@ if (-not (Test-Path $logDir)) { New-Item -ItemType Directory -Path $logDir | Out
 
 # ---- 1. PUSH (the parent - see the header) -----------------------------------
 if (-not $VerifyOnly) {
+    & python $sync --ensure-cors
     Write-Host "[r2-ship] pushing ServerData (the PARENT - never ServerData/Android) ..." -ForegroundColor Cyan
     try {
         & python $sync --push ServerData *>&1 | Tee-Object -FilePath $pushLog
@@ -106,7 +110,7 @@ if (-not $VerifyOnly) {
 Write-Host "[r2-ship] verifying every remote object this build's catalog names ..." -ForegroundColor Cyan
 if (Test-Path $verLog) { Remove-Item $verLog -Force }   # a STALE log must never read as a pass
 try {
-    & python $sync --verify-catalog ServerData/Android *>&1 | Tee-Object -FilePath $verLog
+    & python $sync --verify-catalog "ServerData/$Target" *>&1 | Tee-Object -FilePath $verLog
 } catch {
     "R2_PARITY_THREW $($_.Exception.Message)" | Out-File -Encoding ascii -Append $verLog
 }

@@ -164,6 +164,21 @@ def cmd_check(cfg):
     print("R2_CHECK_OK")
 
 
+def cmd_ensure_cors(cfg):
+    """Allow public WebGL assets to be fetched from a different web origin."""
+    client(cfg).put_bucket_cors(
+        Bucket=cfg["R2_BUCKET"],
+        CORSConfiguration={"CORSRules": [{
+            "AllowedHeaders": ["*"],
+            "AllowedMethods": ["GET", "HEAD"],
+            "AllowedOrigins": ["*"],
+            "ExposeHeaders": ["Content-Length", "ETag"],
+            "MaxAgeSeconds": 86400,
+        }]},
+    )
+    print("R2_CORS_OK public GET/HEAD enabled for WebGL CDN assets")
+
+
 def cmd_push(cfg, folder):
     """
     Uploads a directory tree, skipping objects whose CONTENT already matches.
@@ -420,6 +435,8 @@ def main():
     ap.add_argument("--push", metavar="FOLDER",
                     help="upload a folder tree; pass ServerData, NOT ServerData/Android (it flattens)")
     ap.add_argument("--list", action="store_true", help="list bucket contents")
+    ap.add_argument("--ensure-cors", action="store_true",
+                    help="apply the public GET/HEAD CORS policy required by WebGL")
     ap.add_argument("--verify-catalog", metavar="FOLDER", nargs="?", const="ServerData",
                     dest="verify_catalog",
                     help="THE CONTENT GATE: prove every remote object the built catalog names is "
@@ -429,6 +446,8 @@ def main():
     cfg = load_env()
     if args.check:
         cmd_check(cfg)
+    elif args.ensure_cors:
+        cmd_ensure_cors(cfg)
     elif args.push:
         cmd_push(cfg, args.push)
     elif args.verify_catalog:

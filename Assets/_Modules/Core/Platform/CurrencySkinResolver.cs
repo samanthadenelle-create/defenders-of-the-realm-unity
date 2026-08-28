@@ -255,20 +255,21 @@ namespace DeNelle.Core.Platform
             JObject table = LoadSkinTable();                   // skin.json (may be null)
 
             // WO-787 Part C (owner 2026-07-30): "if not Pi-facing should always be SKR."
-            // A WebGL runtime OUTSIDE the real Pi Browser must never present the Pi surface,
-            // so it resolves the SKR/Solana skin BEFORE skin.json's 'active' is consulted;
-            // only an explicit ?skin= URL override outranks it. Inside Pi Browser (jslib UA
-            // check; the extern stubs to false off-WebGL) resolution is unchanged, and
-            // non-WebGL players (APK, editor) keep today's behaviour byte-identical.
+            // Resolve WebGL currency from the HOST before skin.json's generic `active: wallet`
+            // can erase the distinction: real Pi Browser = Pi; every other browser = SKR/Solana.
+            // Only an explicit ?skin= URL override outranks host routing. The jslib UA check
+            // externs to false off-WebGL, while non-Web players are handled separately below.
             // NOTE: the original WO's fix ("flip the hardcoded default") would have been a
             // NO-OP -- skin.json ships an explicit active:'wallet' that wins at step 2, and
             // the wallet skin's authMode is PiSdk; this gate must sit ABOVE step 2.
             if (string.IsNullOrEmpty(requested)
-                && Application.platform == RuntimePlatform.WebGLPlayer
-                && !WebGLPiPlatform.IsPiBrowserEnvironment)
+                && Application.platform == RuntimePlatform.WebGLPlayer)
             {
-                requested = "skr";
-                FlowTrace.Step("Skin", "WebGL host is not Pi Browser — resolving the SKR skin (WO-787).");
+                bool piBrowser = WebGLPiPlatform.IsPiBrowserEnvironment;
+                requested = piBrowser ? "pi" : "skr";
+                FlowTrace.Step("Skin", piBrowser
+                    ? "Pi Browser host detected - resolving the Pi skin."
+                    : "WebGL host is not Pi Browser - resolving the SKR skin (WO-787).");
             }
 
             // OWNER 2026-07-30 ("flag off the Pi ... for SDK and EXE ... only live for vercel"):
