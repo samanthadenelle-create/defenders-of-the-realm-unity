@@ -131,6 +131,12 @@ namespace DeNelle.Core
 
             T result = null;
 
+            Guard.Try("VfxAssets", $"Resources.Load {key} ({typeof(T).Name})", () =>
+            {
+                result = Resources.Load<T>(key);
+            });
+            if (result != null) return result;
+
             // ── Addressables-first (only when the address is actually registered) ──
             Guard.Try("VfxAssets", $"Addressables resolve '{key}' ({typeof(T).Name})", () =>
             {
@@ -159,10 +165,6 @@ namespace DeNelle.Core
                 FlowTrace.Step("VfxAssets",
                     $"no Addressables entry for '{key}' (expected pre-migration) — using Resources.Load(\"{key}\").");
 
-            Guard.Try("VfxAssets", $"Resources.Load {key} ({typeof(T).Name})", () =>
-            {
-                result = Resources.Load<T>(key);
-            });
             if (result == null)
                 FlowTrace.Fail("VfxAssets",
                     $"VFX asset '{key}' ({typeof(T).Name}) not found via Addressables OR Resources — caller falls back.");
@@ -176,23 +178,19 @@ namespace DeNelle.Core
         /// </summary>
         private static bool AddressableRegistered<T>(string address) where T : Object
         {
-            AsyncOperationHandle<IList<IResourceLocation>> locHandle = default;
-            bool found = false;
             try
             {
-                locHandle = Addressables.LoadResourceLocationsAsync(address, typeof(T));
-                IList<IResourceLocation> locs = locHandle.WaitForCompletion();
-                found = locs != null && locs.Count > 0;
+                foreach (var locator in Addressables.ResourceLocators)
+                {
+                    if (locator.Locate(address, typeof(T), out IList<IResourceLocation> locations) &&
+                        locations != null && locations.Count > 0)
+                        return true;
+                }
             }
             catch
             {
-                found = false; // no catalog / not initialised / bad key — treat as unregistered
             }
-            finally
-            {
-                if (locHandle.IsValid()) Addressables.Release(locHandle);
-            }
-            return found;
+            return false;
         }
     }
 }

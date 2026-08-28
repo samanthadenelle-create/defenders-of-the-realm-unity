@@ -65,6 +65,12 @@ namespace DeNelle.Core
             string address = resourcesRelativePath;
             Texture2D result = null;
 
+            Guard.Try("HeroAssets", $"Resources.Load texture {address}", () =>
+            {
+                result = Resources.Load<Texture2D>(address);
+            });
+            if (result != null) return result;
+
             // ── Addressables-first (only when the address is actually registered) ──
             Guard.Try("HeroAssets", $"Addressables resolve texture '{address}'", () =>
             {
@@ -89,10 +95,6 @@ namespace DeNelle.Core
                 FlowTrace.Step("HeroAssets",
                     $"no Addressables entry for texture '{address}' (expected pre-migration / non-hero path) — using Resources.Load.");
 
-            Guard.Try("HeroAssets", $"Resources.Load texture {address}", () =>
-            {
-                result = Resources.Load<Texture2D>(address);
-            });
             if (result == null)
             {
                 if (optional)
@@ -114,23 +116,19 @@ namespace DeNelle.Core
         /// </summary>
         private static bool AddressableRegistered(string address)
         {
-            AsyncOperationHandle<IList<IResourceLocation>> locHandle = default;
-            bool found = false;
             try
             {
-                locHandle = Addressables.LoadResourceLocationsAsync(address, typeof(Texture2D));
-                IList<IResourceLocation> locs = locHandle.WaitForCompletion();
-                found = locs != null && locs.Count > 0;
+                foreach (var locator in Addressables.ResourceLocators)
+                {
+                    if (locator.Locate(address, typeof(Texture2D), out IList<IResourceLocation> locations) &&
+                        locations != null && locations.Count > 0)
+                        return true;
+                }
             }
             catch
             {
-                found = false; // no catalog / not initialised / bad key — treat as unregistered
             }
-            finally
-            {
-                if (locHandle.IsValid()) Addressables.Release(locHandle);
-            }
-            return found;
+            return false;
         }
     }
 }
