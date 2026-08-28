@@ -361,11 +361,12 @@ const PAGE = `<!DOCTYPE html>
          '<p class="note">' + esc(d.note || '') + '</p>';
     if (orphans.length){
       h += '<div class="scroll"><table><tr><th>Tx signature</th><th>Pack</th><th>Player</th>' +
-           '<th>Events</th><th>Latest</th></tr>';
+           '<th>Events</th><th>Latest</th><th>Review</th></tr>';
       orphans.forEach(function(r){
         h += '<tr><td class="wrapcell">' + esc(r.tx_signature) + '</td><td>' + esc(r.pack_id) +
              '</td><td>' + esc(r.player_masked) + '</td><td>' + n(r.events) + '</td><td>' +
-             when(r.latest) + '</td></tr>';
+             when(r.latest) + '</td><td><button class="purchase-ack" data-tx="' +
+             esc(r.tx_signature) + '">Acknowledge - no action</button></td></tr>';
       });
       h += '</table></div>';
     }
@@ -615,6 +616,16 @@ const PAGE = `<!DOCTYPE html>
       flip.disabled = true;
       postOps({ action:'promo.set_active', code:code, active:makeActive })
         .then(function(r){ opsResult(r, (makeActive ? 'Enabled ' : 'Disabled ') + code + '.'); });
+      return;
+    }
+    var ack = e.target.closest('.purchase-ack');
+    if (ack){
+      var tx = ack.getAttribute('data-tx');
+      if (!window.confirm('Acknowledge this mismatch as reviewed with no refund or grant? The source event stays in history.')) return;
+      ack.disabled = true;
+      postOps({ action:'purchase.alert_acknowledge', txSignature:tx,
+                reason:'Reviewed false positive; no payment or entitlement action required.' })
+        .then(function(r){ opsResult(r, 'Acknowledged purchase alert. Source telemetry preserved.'); });
       return;
     }
     if (e.target.id === 'pcreate'){

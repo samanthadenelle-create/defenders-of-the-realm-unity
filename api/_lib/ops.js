@@ -9,13 +9,13 @@
 //     SELECT with a hard LIMIT. Writes live somewhere else, separately gated,
 //     and every one of them is attributable and timestamped.
 //
-// So: this is the ONLY place in the admin surface that writes, and it writes
-// exactly four things. There is no fifth.
+// So: this is the ONLY place in the admin surface that writes.
 //
 //     maintenance.seal   - close one area (WO-1243 kill switch)
 //     maintenance.open   - re-open one area
 //     promo.create       - author a promo code
 //     promo.set_active   - disable (or re-enable) an existing promo code
+//     purchase.alert_acknowledge - mark one reviewed mismatch as no-action
 //
 // ⛔ WHAT IS DELIBERATELY NOT HERE, AND WHY
 // -----------------------------------------------------------------------------
@@ -68,12 +68,13 @@ const crypto = require('crypto');
 const { AREAS, isKnownArea } = require('./maintenance');
 const { logApiEvent } = require('./audit');
 
-/** The four things this file may do. There is no fifth. */
+/** The allowlisted things this file may do. */
 const OPS_ACTIONS = [
     'maintenance.seal',
     'maintenance.open',
     'promo.create',
     'promo.set_active',
+    'purchase.alert_acknowledge',
 ];
 
 /** Event name for the durable history row. */
@@ -88,6 +89,7 @@ const PROMO_MESSAGE_MAX_LEN = 200;
 const OPERATOR_MAX_LEN = 64;
 const PROMO_CODE_MIN_LEN = 3;
 const PROMO_CODE_MAX_LEN = 32;
+const ALERT_REASON_MAX_LEN = 120;
 
 /** A reward figure the owner could plausibly mean. Above this it is a typo. */
 const REWARD_MAX = 1000000;
@@ -133,6 +135,23 @@ function normalizeOperator(raw) {
     if (!s) return 'console';
     if (!isAscii(s)) throw new OpsError('OPERATOR_NOT_ASCII', 'operator label must be ASCII');
     return s.slice(0, OPERATOR_MAX_LEN);
+}
+
+/**
+ * Acknowledgements are keyed by the exact client-reported signature, including
+ * malformed legacy stub values. Requiring a valid 64-byte Solana signature here
+ * would make the false positives this action exists for impossible to clear.
+ */
+function validatePurchaseAlertAcknowledgement(body) {
+    const signature = String(body && body.txSignature || '').trim();
+    if (!/^[1-9A-HJ-NP-Za-km-z]{32,128}$/.test(signature))
+        throw new OpsError('ALERT_SIGNATURE_INVALID', 'expected a bounded base58-like transaction signature');
+    const reason = String(body && body.reason || '').trim();
+    if (!reason) throw new OpsError('ALERT_REASON_REQUIRED', 'state why no action is required');
+    if (!isAscii(reason)) throw new OpsError('ALERT_REASON_NOT_ASCII', 'reason must be ASCII');
+    if (reason.length > ALERT_REASON_MAX_LEN)
+        throw new OpsError('ALERT_REASON_TOO_LONG', `max ${ALERT_REASON_MAX_LEN} chars`);
+    return { signature, reason };
 }
 
 /**
@@ -309,6 +328,33 @@ async function recordOpsWrite(sql, entry) {
 }
 
 /**
+ * Persist the acknowledgement as an ordinary admin_ops_write audit row. Unlike
+ * best-effort operational history, this insert is the state that suppresses the
+ * warning, so it MUST throw on failure and the endpoint must fail closed.
+ */
+async function acknowledgePurchaseAlert(sql, signature, reason, operator) {
+    const properties = JSON.stringify({
+        action: 'purchase.alert_acknowledge',
+        operator,
+        target: signature,
+        outcome: 'acknowledged_no_action',
+        detail: { reason },
+    });
+    const rows = await sql`
+        INSERT INTO analytics_events (player_id, event_name, properties, client_ts)
+        SELECT 'anonymous', ${OPS_AUDIT_EVENT}, ${properties}::jsonb, ${Date.now()}
+        WHERE NOT EXISTS (
+            SELECT 1 FROM analytics_events
+            WHERE event_name = ${OPS_AUDIT_EVENT}
+              AND properties->>'action' = 'purchase.alert_acknowledge'
+              AND properties->>'target' = ${signature}
+              AND properties->>'outcome' = 'acknowledged_no_action'
+        )
+        RETURNING received_at`;
+    return { acknowledgedAt: rows && rows.length ? rows[0].received_at : null, alreadyAcknowledged: !rows || !rows.length };
+}
+
+/**
  * Seal or open one area.
  *
  * ⚠ UPSERT, NOT "INSERT ... ON CONFLICT DO NOTHING" - the same reasoning
@@ -401,6 +447,7 @@ async function setPromoActive(sql, code, active) {
 }
 
 module.exports = {
+    ALERT_REASON_MAX_LEN,
     MESSAGE_MAX_LEN,
     OPERATOR_MAX_LEN,
     OPS_ACTIONS,
@@ -409,6 +456,7 @@ module.exports = {
     PROMO_CODE_MAX_LEN,
     PROMO_CODE_MIN_LEN,
     createPromo,
+    acknowledgePurchaseAlert,
     isAscii,
     keyOk,
     normalizeOperator,
@@ -421,4 +469,5 @@ module.exports = {
     validateOpen,
     validatePromoDraft,
     validateSeal,
+    validatePurchaseAlertAcknowledgement,
 };

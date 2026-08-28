@@ -12,6 +12,7 @@
 //            | "maintenance.open"   { area }
 //            | "promo.create"       { code, rewardCrystals|rewardPackSku, ... }
 //            | "promo.set_active"   { code, active }
+//            | "purchase.alert_acknowledge" { txSignature, reason }
 //
 // ⛔ SEPARATELY GATED - TWO KEYS, AND THE SECOND ONE IS THE POINT.
 // -----------------------------------------------------------------------------
@@ -52,6 +53,7 @@ const {
     OPS_ACTIONS,
     OpsError,
     createPromo,
+    acknowledgePurchaseAlert,
     keyOk,
     normalizeOperator,
     normalizePromoCode,
@@ -61,6 +63,7 @@ const {
     validateOpen,
     validatePromoDraft,
     validateSeal,
+    validatePurchaseAlertAcknowledgement,
 } = require('../_lib/ops');
 
 /** Bodies here are a handful of short fields. Anything larger is not our client. */
@@ -226,6 +229,20 @@ module.exports = async (req, res) => {
                 ok: true, action: action, at: at, by: operator,
                 code: row.code,
                 state: row.active ? 'ACTIVE' : 'DISABLED',
+            });
+        }
+
+        if (action === 'purchase.alert_acknowledge') {
+            const v = validatePurchaseAlertAcknowledgement(body);
+            const result = await acknowledgePurchaseAlert(
+                sql, v.signature, v.reason, operator);
+            return res.status(200).json({
+                ok: true, action: action, at: at, by: operator,
+                state: 'ACKNOWLEDGED - NO ACTION',
+                tx_signature: v.signature,
+                acknowledged_at: result.acknowledgedAt,
+                already_acknowledged: result.alreadyAcknowledged,
+                note: 'Source telemetry was preserved. No refund, grant, SKU, quote, or entitlement was changed.',
             });
         }
 

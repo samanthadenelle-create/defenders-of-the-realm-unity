@@ -32,6 +32,7 @@ const {
     OPS_ACTIONS,
     OpsError,
     createPromo,
+    acknowledgePurchaseAlert,
     keyOk,
     normalizeOperator,
     normalizePromoCode,
@@ -42,6 +43,7 @@ const {
     validateOpen,
     validatePromoDraft,
     validateSeal,
+    validatePurchaseAlertAcknowledgement,
 } = require('../api/_lib/ops');
 const { AREAS } = require('../api/_lib/maintenance');
 const consoleEndpoint = require('../api/admin/console');
@@ -218,14 +220,35 @@ test('the WRITE half is a DIFFERENT FILE, and the read files never reach it', ()
     }
 });
 
-test('the write endpoint writes exactly four things, and money is not one of them', () => {
+test('the write endpoint allowlists acknowledgement, and money tables remain read-only', () => {
     assert.deepEqual(OPS_ACTIONS, [
         'maintenance.seal', 'maintenance.open', 'promo.create', 'promo.set_active',
+        'purchase.alert_acknowledge',
     ]);
     // ⛔ The load-bearing one: no admin surface may write the money tables.
     const src = stripComments(readSrc('api/_lib/ops.js')) + stripComments(readSrc('api/admin/ops.js'));
     assert.doesNotMatch(src, /purchase_entitlements/);
     assert.doesNotMatch(src, /purchase_quotes/);
+});
+
+test('purchase alert acknowledgement is bounded, durable, and never edits money', async () => {
+    const signature = 'sdzojr4B1892k1ZGZf5F1EDuDR39xM9uhMDNmpSJqvPZGNkMyoEcVVceR5bKovEfyELQnBVjEmR5redqghA97YRC';
+    const v = validatePurchaseAlertAcknowledgement({
+        txSignature: signature,
+        reason: 'Legacy stub signature; no payment occurred.',
+    });
+    assert.equal(v.signature, signature);
+    assert.throws(() => validatePurchaseAlertAcknowledgement({ txSignature: '', reason: 'x' }),
+        err => err instanceof OpsError && err.code === 'ALERT_SIGNATURE_INVALID');
+    assert.throws(() => validatePurchaseAlertAcknowledgement({ txSignature: signature, reason: '' }),
+        err => err instanceof OpsError && err.code === 'ALERT_REASON_REQUIRED');
+
+    const sql = mockSql([{ rows: [{ received_at: '2026-08-28T12:00:00.000Z' }] }]);
+    const out = await acknowledgePurchaseAlert(sql, v.signature, v.reason, 'Samantha');
+    assert.equal(out.alreadyAcknowledged, false);
+    assert.match(sql.calls[0].text, /INSERT INTO analytics_events/);
+    assert.match(sql.calls[0].text, /NOT EXISTS/);
+    assert.doesNotMatch(sql.calls[0].text, /purchase_entitlements|purchase_quotes/);
 });
 
 // -- 2. SEPARATE GATING ------------------------------------------------------
@@ -689,8 +712,7 @@ test('the page shows client-reported and server-settled SIDE BY SIDE, never blen
     assert.match(page, /d\.server_settled_window/);
     // The orphan list is rendered as an ALERT with a count, not a footnote.
     assert.match(page, /ALERT: ' \+ orphans\.length \+ ' client purchase\(s\) with NO server entitlement/);
-    // ⛔ And the console offers no way to reconcile it. Re-granting is a write on
-    // the money tables and it exists nowhere in this surface.
+    // The only action is acknowledgement; re-grant/refund remains absent.
     //
     // ⚠ ASSERTED ON THE ACTIONS THE PAGE CAN POST, NEVER ON ITS PROSE. The page
     // says the words "cannot re-grant" out loud - which is the OPPOSITE of a
@@ -699,6 +721,7 @@ test('the page shows client-reported and server-settled SIDE BY SIDE, never blen
     const posted = allMatches(page, /action:\s*'[a-z._]+'/g)
         .map(s => s.replace(/.*'([a-z._]+)'.*/, '$1'));
     assert.deepEqual(posted.slice().sort(), OPS_ACTIONS.slice().sort());
+    assert.match(page, /Acknowledge - no action/);
 });
 
 test('the two ticket systems are named and kept apart', () => {

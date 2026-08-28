@@ -869,6 +869,12 @@ module.exports = async (req, res) => {
                   AND NOT EXISTS (
                       SELECT 1 FROM purchase_entitlements p
                       WHERE p.tx_signature = e.properties->>'txSig')
+                  AND NOT EXISTS (
+                      SELECT 1 FROM analytics_events a
+                      WHERE a.event_name = 'admin_ops_write'
+                        AND a.properties->>'action' = 'purchase.alert_acknowledge'
+                        AND a.properties->>'target' = e.properties->>'txSig'
+                        AND a.properties->>'outcome' = 'acknowledged_no_action')
                 GROUP BY 1, 2, 3
                 ORDER BY 5 DESC
                 LIMIT 100`);
