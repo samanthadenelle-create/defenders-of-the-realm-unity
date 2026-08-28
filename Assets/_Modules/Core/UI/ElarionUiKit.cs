@@ -778,8 +778,11 @@ namespace DeNelle.Core.UI
                 // + ellipsis — a panel title can never clip again.
                 FitSingleLine(chrome.title);
 
-                // Close sits in the frame's MEASURED close zone (Stats_Panel's top-right notch etc.).
-                chrome.close = ObsidianCloseButton(chrome.content.transform, onClose, z.close);
+                // A null handler means this is a forced-choice/progression surface: do not draw
+                // a dead Close control over its actions. Non-null handlers use the frame's
+                // measured close zone (Stats_Panel's top-right notch etc.).
+                if (onClose != null)
+                    chrome.close = ObsidianCloseButton(chrome.content.transform, onClose, z.close);
                 return chrome;
             }
 
@@ -814,8 +817,10 @@ namespace DeNelle.Core.UI
             // a second FitSingleLine would re-read the title's fontSize as its new maxSize and
             // could ratchet the title below the shadow it is supposed to sit on top of.
 
-            // The single standard Close button (top-right corner).
-            chrome.close = ObsidianCloseButton(chrome.content.transform, onClose);
+            // A null handler means this is a forced-choice/progression surface: do not draw
+            // a dead Close control over its actions.
+            if (onClose != null)
+                chrome.close = ObsidianCloseButton(chrome.content.transform, onClose);
 
             // ── WO-714 P6: DEFAULT DROP-ZONES + CLOSE-BAND RESERVATION on the PROCEDURAL
             // path too. Same math as the frame path above (PostScaleCanvasHeight so the
