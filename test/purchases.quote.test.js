@@ -105,8 +105,14 @@ function canonicalSellableSkus() {
         assert.equal(resourceText, streamText, `${source.file}: canonical mirrors differ`);
         const list = source.list(JSON.parse(streamText));
         assert.ok(Array.isArray(list) && list.length, `${source.file}: no sellable rows found`);
-        for (const row of list)
+        for (const row of list) {
+            // Promo-only packs intentionally live in the same canonical file so
+            // ApplyPackContents can grant them. Pricing, not current presentation
+            // visibility, distinguishes the paid catalog: several paid bundles
+            // are deliberately hidden pending their release window.
+            if (!row.pricing || typeof row.pricing.usd !== 'number') continue;
             rows.push({ sku: row.sku, usd: row.pricing && row.pricing.usd, file: source.file });
+        }
     }
     return rows;
 }
@@ -121,6 +127,19 @@ test('server USD anchors mirror EVERY canonical client price file exactly', () =
         assert.equal(typeof row.usd, 'number', `${row.sku} (${row.file}) has no canonical USD price`);
         assert.equal(catalog.USD_ANCHORS[row.sku], row.usd,
             `${row.sku} (${row.file}): server USD anchor differs from the client's`);
+    }
+});
+
+test('hidden Welcome Pack SKUs can be granted but can never be priced or quoted', () => {
+    const packs = JSON.parse(fs.readFileSync(
+        path.join(canonicalDir('StreamingAssets'), 'packs.json'), 'utf8')).packs;
+    for (const sku of ['welcome-500', 'welcome-100']) {
+        const pack = packs.find(row => row.sku === sku);
+        assert.ok(pack, `${sku} is missing`);
+        assert.equal(pack.storeVisible, false);
+        assert.equal(pack.pricing, undefined);
+        assert.equal(catalog.usdAnchor(sku), null);
+        assert.equal(catalog.quotableSkus().includes(sku), false);
     }
 });
 
