@@ -48,5 +48,7 @@ namespace DeNelle.Core.UI
         private void Update() => WorldHold.WatchdogTick();
 
         private void LateUpdate() => WorldHold.ReassertTick();
+
+        private void OnApplicationPause(bool paused) => WorldHold.NotifyApplicationPause(paused);
     }
 }

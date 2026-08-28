@@ -87,7 +87,7 @@ namespace DeNelle.Core.UI
         public sealed class Handle : IDisposable
         {
             internal readonly string Reason;
-            internal readonly float AcquiredUnscaled;
+            internal float AcquiredUnscaled;
             private bool _released;
 
             internal Handle(string reason, float acquiredUnscaled)
@@ -113,6 +113,8 @@ namespace DeNelle.Core.UI
         // release restores. Never assumed to be 1 (see the header).
         private static float s_scaleBeforeHold = 1f;
         private static bool s_frozen;
+        private static bool s_applicationBackgrounded;
+        private static float s_backgroundedAtUnscaled;
 
         /// <summary>True while at least one hold is outstanding (i.e. the world is frozen).</summary>
         public static bool IsHeld => s_holds.Count > 0;
@@ -210,6 +212,8 @@ namespace DeNelle.Core.UI
             s_holds.Clear();
             s_scaleBeforeHold = 1f;
             s_frozen = false;
+            s_applicationBackgrounded = false;
+            s_backgroundedAtUnscaled = 0f;
             Time.timeScale = 1f;
         }
 
@@ -298,6 +302,43 @@ namespace DeNelle.Core.UI
             if (s_holds.Count == 0) RestoreScale();
         }
 
+        /// <summary>
+        /// Excludes OS-suspended time from watchdog age. Android resumes Unity after an arbitrary
+        /// wall-clock gap; counting that gap made a legitimate open pause menu look 300-500 seconds
+        /// abandoned on the first foreground frame (WO-1260). Real foreground leaks still reach the
+        /// unchanged 180-second watchdog ceiling.
+        /// </summary>
+        internal static void NotifyApplicationPause(bool paused)
+        {
+            NotifyApplicationPause(paused, Time.unscaledTime);
+        }
+
+        // Explicit clock overload is the deterministic regression seam; production always uses the
+        // Time.unscaledTime wrapper above.
+        internal static void NotifyApplicationPause(bool paused, float nowUnscaled)
+        {
+            if (paused)
+            {
+                if (!s_applicationBackgrounded)
+                {
+                    s_applicationBackgrounded = true;
+                    s_backgroundedAtUnscaled = nowUnscaled;
+                }
+                return;
+            }
+            if (!s_applicationBackgrounded) return;
+
+            float suspendedSeconds = Mathf.Max(0f, nowUnscaled - s_backgroundedAtUnscaled);
+            s_applicationBackgrounded = false;
+            s_backgroundedAtUnscaled = 0f;
+            if (suspendedSeconds <= 0f || s_holds.Count == 0) return;
+            for (int i = 0; i < s_holds.Count; i++)
+                s_holds[i].AcquiredUnscaled += suspendedSeconds;
+            FlowTrace.Step("Pause",
+                $"WorldHold watchdog excluded {suspendedSeconds:F0}s of OS-suspended time from " +
+                $"{s_holds.Count} hold(s) [{Describe()}]. Foreground leak detection remains armed.");
+        }
+
         // Static state survives nothing but a domain reload; re-arm a clean slate on play so a
         // stale hold from a previous session can never start the next one frozen.
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
@@ -307,6 +348,8 @@ namespace DeNelle.Core.UI
             s_scaleBeforeHold = 1f;
             s_frozen = false;
             s_watchdog = null;
+            s_applicationBackgrounded = false;
+            s_backgroundedAtUnscaled = 0f;
         }
     }
 }

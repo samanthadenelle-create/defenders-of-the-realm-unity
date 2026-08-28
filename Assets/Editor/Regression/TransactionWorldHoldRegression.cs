@@ -84,6 +84,7 @@ namespace DeNelle.Editor.Regression
                 CaseRestoresTheCapturedScale(failures, log);
                 CaseRefCountedAcrossOverlappingHolds(failures, log);
                 CaseForceReleaseAlwaysUnfreezes(failures, log);
+                CaseBackgroundTimeDoesNotAgeHolds(failures, log);
                 CaseAcquireIsTheFirstStatementOfPurchase(failures, log);
                 CaseDrivePurchaseBranches(failures, log);
                 CaseSingleTimeScaleOwner(failures, log);
@@ -285,6 +286,43 @@ namespace DeNelle.Editor.Regression
                              Time.timeScale.ToString("0.00") + ".");
 
             log.AppendLine("  [force] ForceReleaseAll drops every outstanding hold and restores the clock; idempotent.");
+        }
+
+        // WO-1260: Android suspension is not foreground leak time. Drive the real private clock
+        // overload through reflection so a 300-second OS gap rebases every outstanding handle,
+        // while keeping the watchdog itself and its 180-second foreground ceiling unchanged.
+        private static void CaseBackgroundTimeDoesNotAgeHolds(List<string> failures, StringBuilder log)
+        {
+            WorldHold.ResetForTests();
+            var handle = WorldHold.Acquire(WorldHold.ReasonPauseMenu);
+            var acquired = typeof(WorldHold.Handle).GetField("AcquiredUnscaled",
+                System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+            var notify = typeof(WorldHold).GetMethod("NotifyApplicationPause",
+                System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic,
+                null, new[] { typeof(bool), typeof(float) }, null);
+            if (acquired == null || notify == null)
+            {
+                failures.Add("[background-age] deterministic WorldHold pause-clock seam is missing");
+                handle.Dispose();
+                return;
+            }
+
+            float before = (float)acquired.GetValue(handle);
+            notify.Invoke(null, new object[] { true, 10f });
+            notify.Invoke(null, new object[] { false, 310f });
+            float after = (float)acquired.GetValue(handle);
+            if (!Mathf.Approximately(after - before, 300f))
+                failures.Add("[background-age] a 300s OS suspension shifted hold age by " +
+                             (after - before).ToString("0.0") + "s instead of 300s");
+
+            string watchdogPath = Application.dataPath + "/_Modules/Core/UI/WorldHoldWatchdog.cs";
+            string watchdog = File.Exists(watchdogPath) ? File.ReadAllText(watchdogPath) : string.Empty;
+            if (watchdog.IndexOf("OnApplicationPause(bool paused)", StringComparison.Ordinal) < 0 ||
+                watchdog.IndexOf("WorldHold.NotifyApplicationPause(paused)", StringComparison.Ordinal) < 0)
+                failures.Add("[background-age] WorldHoldWatchdog does not forward the real application pause callback");
+
+            handle.Dispose();
+            log.AppendLine("  [background-age] 300s OS suspension excluded; foreground watchdog remains armed.");
         }
 
         // =====================================================================
