@@ -151,7 +151,11 @@
 > fine as history. A copied number is the bug **even when it was right the day it was written** -
 > that is exactly how the retired 860-899 UI block kept re-seeding collisions from CLAUDE.md sec.2.
 
-> ## ⚠ RECONCILED 2026-08-28 (CLI): main line next free = **1266**.
+> ## ⚠ RECONCILED 2026-08-28 (CLI): main line next free = **1267**.
+> 1266 post-load live Top 3 players, sourced from production highest-wave leaderboard with quiet
+> offline/empty fallback. Banner bumped 1266 -> 1267 in this SAME edit.
+>
+> ### superseded: RECONCILED 2026-08-28 (CLI): main line next free = **1266**.
 > 1265 gate the local-only Clan Chat until a real signed-wallet backend, moderation, two-wallet proof,
 > Command Center readiness surface, and server-owned clan leaderboard exist. Banner bumped 1265 ->
 > 1266 in this SAME edit.

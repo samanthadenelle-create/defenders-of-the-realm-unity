@@ -28,9 +28,12 @@
 // =============================================================================
 
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using DeNelle.Core.State;
+using Newtonsoft.Json;
 using UnityEngine;
+using UnityEngine.Networking;
 
 namespace DeNelle.Core.Services
 {
@@ -236,6 +239,91 @@ namespace DeNelle.Core.Services
         }
     }
 
+    /// <summary>Public, read-only production leaderboard source. Failures return an empty board.</summary>
+    public sealed class RemoteLeaderboardSource : ILeaderboardSource
+    {
+        private const string TopUrl =
+            "https://defenders-of-the-realm-v2.vercel.app/api/leaderboard/get" +
+            "?metric=highest_wave&period=alltime&limit=";
+        private readonly MonoBehaviour _host;
+
+        public RemoteLeaderboardSource(MonoBehaviour host) => _host = host;
+        public bool IsLocalStub => false;
+        public string SourceLabel => "Live - all-time";
+
+        public void FetchTopAsync(LeaderboardMetric metric, int limit,
+                                  Action<IReadOnlyList<LeaderboardEntry>> onResult)
+        {
+            if (_host == null || metric != LeaderboardMetric.BestWave)
+            {
+                onResult?.Invoke(Array.Empty<LeaderboardEntry>());
+                return;
+            }
+            _host.StartCoroutine(Fetch(Mathf.Clamp(limit, 1, 100), onResult));
+        }
+
+        public PlayerProfile GetLocalProfile() => new LocalStubLeaderboardSource().GetLocalProfile();
+        public void SubmitLocalAsync(Action<bool> onDone) => onDone?.Invoke(false);
+
+        private IEnumerator Fetch(int limit, Action<IReadOnlyList<LeaderboardEntry>> onResult)
+        {
+            using var req = UnityWebRequest.Get(TopUrl + limit);
+            req.timeout = 8;
+            yield return req.SendWebRequest();
+            if (req.result != UnityWebRequest.Result.Success)
+            {
+                onResult?.Invoke(Array.Empty<LeaderboardEntry>());
+                yield break;
+            }
+            try
+            {
+                var reply = JsonConvert.DeserializeObject<RemoteReply>(req.downloadHandler.text);
+                var rows = new List<LeaderboardEntry>();
+                if (reply?.success == true && reply.top != null)
+                {
+                    foreach (var row in reply.top)
+                    {
+                        if (row == null || row.rank <= 0) continue;
+                        rows.Add(new LeaderboardEntry
+                        {
+                            Rank = row.rank,
+                            Name = DisplayName(row.username, row.wallet),
+                            Score = Math.Max(0L, row.score),
+                            IsLocalPlayer = false,
+                        });
+                    }
+                }
+                onResult?.Invoke(rows);
+            }
+            catch
+            {
+                onResult?.Invoke(Array.Empty<LeaderboardEntry>());
+            }
+        }
+
+        private static string DisplayName(string username, string wallet)
+        {
+            if (!string.IsNullOrWhiteSpace(username)) return username.Trim();
+            if (string.IsNullOrWhiteSpace(wallet)) return "Watchkeeper";
+            wallet = wallet.Trim();
+            return wallet.Length <= 10 ? wallet : wallet.Substring(0, 4) + "..." + wallet.Substring(wallet.Length - 4);
+        }
+
+        private sealed class RemoteReply
+        {
+            public bool success;
+            public List<RemoteRow> top;
+        }
+
+        private sealed class RemoteRow
+        {
+            public int rank;
+            public string wallet;
+            public string username;
+            public long score;
+        }
+    }
+
     // =========================================================================
     // LeaderboardService — singleton front door over the active source.
     // =========================================================================
@@ -260,7 +348,7 @@ namespace DeNelle.Core.Services
         {
             get
             {
-                if (_source == null) _source = new LocalStubLeaderboardSource();
+                if (_source == null) _source = new RemoteLeaderboardSource(this);
                 return _source;
             }
         }
@@ -281,7 +369,7 @@ namespace DeNelle.Core.Services
         {
             if (Instance != null && Instance != this) { Destroy(this); return; }
             Instance = this;
-            if (_source == null) _source = new LocalStubLeaderboardSource();
+            if (_source == null) _source = new RemoteLeaderboardSource(this);
         }
 
         /// <summary>
