@@ -41,6 +41,7 @@ namespace DeNelle.Editor
     {
         private const string OutputDir = "Builds/Android";
         private const string ApkName = "DefendersOfTheRealm.apk";
+        private const string PlayAabName = "EchoesOfElarion-GooglePlay.aab";
         // Must MATCH the installed app so testers UPDATE IN PLACE (verified on the Seeker
         // 2026-07-16: the live package is com.denellestudios.echoesofelarion). The old
         // com.denelle.defenders would install as a SEPARATE app.
@@ -72,6 +73,29 @@ namespace DeNelle.Editor
         [MenuItem("Defenders/Build/Android APK (Seeker)")]
         public static void BuildSeekerApk()
         {
+            BuildAndroidArtifact(isGooglePlay: false);
+        }
+
+        /// <summary>
+        /// Produces the Play artifact only after the source/package isolation gate can prove
+        /// that Wallet, Web3, Solana SDK and MWA cannot enter it.  The gate currently fails
+        /// closed while the runtime Village assembly directly references Wallet; this menu
+        /// item must never be weakened to "hide the UI and hope stripping removes the SDK".
+        /// </summary>
+        [MenuItem("Defenders/Build/Google Play AAB (compliance gated)")]
+        public static void BuildGooglePlayAab()
+        {
+            if (!GooglePlayPackagingGate.AssertSourceIsolation())
+            {
+                EditorApplication.Exit(1);
+                return;
+            }
+
+            BuildAndroidArtifact(isGooglePlay: true);
+        }
+
+        private static void BuildAndroidArtifact(bool isGooglePlay)
+        {
             string[] scenes = EditorBuildSettings.scenes
                 .Where(s => s.enabled)
                 .Select(s => s.path)
@@ -86,25 +110,30 @@ namespace DeNelle.Editor
 
             ApplyAndroidPlayerSettings();
 
+            // This setting is sticky editor state, so assert it for BOTH artifacts. A Seeker
+            // invocation after a Play invocation must go back to APK rather than silently emit
+            // an app bundle with the wrong store signature expectations.
+            EditorUserBuildSettings.buildAppBundle = isGooglePlay;
+
             string dir = Path.GetFullPath(OutputDir);
             Directory.CreateDirectory(dir);
-            string apkPath = Path.Combine(dir, ApkName);
+            string artifactPath = Path.Combine(dir, isGooglePlay ? PlayAabName : ApkName);
 
-            Debug.Log($"[AndroidBuild] Building {scenes.Length} scene(s) -> {apkPath}");
+            Debug.Log($"[AndroidBuild] Building {scenes.Length} scene(s) -> {artifactPath}");
             foreach (string s in scenes)
                 Debug.Log($"[AndroidBuild]   scene: {s}");
 
             var options = new BuildPlayerOptions
             {
                 scenes = scenes,
-                locationPathName = apkPath,
+                locationPathName = artifactPath,
                 target = BuildTarget.Android,
                 targetGroup = BuildTargetGroup.Android,
                 options = BuildOptions.None,
                 // A custom -executeMethod build owns BuildPlayerOptions, so Unity's command-line
                 // symbols do not automatically reach the player compilation. Forward them
                 // explicitly; with no -extraScriptingDefines argument this remains an empty array.
-                extraScriptingDefines = CommandLineScriptingDefines(),
+                extraScriptingDefines = ArtifactScriptingDefines(isGooglePlay),
             };
 
             if (options.extraScriptingDefines.Length > 0)
@@ -154,7 +183,15 @@ namespace DeNelle.Editor
 
             if (summary.result == BuildResult.Succeeded)
             {
-                Debug.Log($"[AndroidBuild] SUCCEEDED — {summary.totalSize / (1024 * 1024)} MB in {summary.totalTime}. APK: {apkPath}");
+                if (isGooglePlay && !GooglePlayPackagingGate.AssertBuiltArtifact(artifactPath))
+                {
+                    Debug.LogError("[AndroidBuild] PLAY_ARTIFACT_REJECTED — the AAB contains a forbidden crypto/wallet surface.");
+                    EditorApplication.Exit(1);
+                    return;
+                }
+
+                Debug.Log($"[AndroidBuild] SUCCEEDED — {summary.totalSize / (1024 * 1024)} MB in {summary.totalTime}. " +
+                          $"{(isGooglePlay ? "AAB" : "APK")}: {artifactPath}");
             }
             else
             {
@@ -162,6 +199,21 @@ namespace DeNelle.Editor
                                $"errors={summary.totalErrors}. See log for Gradle output.");
                 EditorApplication.Exit(1);
             }
+        }
+
+        private static string[] ArtifactScriptingDefines(bool isGooglePlay)
+        {
+            string wanted = isGooglePlay ? "GOOGLE_PLAY" : "DAPP_STORE";
+            string forbidden = isGooglePlay ? "DAPP_STORE" : "GOOGLE_PLAY";
+
+            return CommandLineScriptingDefines()
+                .Where(value => !string.Equals(value, forbidden, StringComparison.Ordinal))
+                // SOLANA_SDK is package-generated, not a valid Play artifact stamp. Explicitly
+                // forwarding it would defeat the isolation gate even if supplied by a caller.
+                .Where(value => !isGooglePlay || !string.Equals(value, "SOLANA_SDK", StringComparison.Ordinal))
+                .Append(wanted)
+                .Distinct(StringComparer.Ordinal)
+                .ToArray();
         }
 
         private static string[] CommandLineScriptingDefines()

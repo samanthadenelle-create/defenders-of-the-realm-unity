@@ -548,6 +548,9 @@ namespace DeNelle.Editor
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "raid-deploy-ui suite", () => { if (!RaidDeployUiRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[raid-deploy-ui] " + r); });
             // --- WO-766 wallet provider: Android-only SOLANA_SDK define + real-provider selection + transfer confinement ---
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "wallet-provider suite", () => { if (!WalletProviderSelectionRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[wallet-provider] " + r); });
+            // WO-1255: a Play AAB is impossible to emit until source isolation is proven, then
+            // the produced archive is inspected for physical Solana/MWA/crypto material.
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "play-packaging suite", () => { if (!GooglePlayPackagingRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[play-packaging] " + r); });
             // --- wallet session (2026-08-17): the MWA grant survives a relaunch (she force-quit and was asked to connect again), is SEALED not plaintext, is BOUND to its wallet, is cleared on disconnect, and is never logged ---
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "wallet-session suite", () => { if (!DeNelle.Editor.Regression.WalletSessionPersistenceRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[wallet-session] " + r); });
             // --- WO-1211: boot reads are cached-only (never sign); writes retain fail-closed shared auth ---
