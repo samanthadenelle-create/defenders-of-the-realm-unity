@@ -1,6 +1,6 @@
 # WORK ORDER 1258 - DB-driven promo packs (Neon packs table + one APK for inline contents)
 
-**Status:** FIXED — CODE + NODE + UNITY REGRESSION PASS; NEON/VERCEL ROLLOUT OWED
+**Status:** FIXED — CODE + NODE + UNITY + LIVE NEON PARITY PASS; VERCEL/APK SOFT-OPEN OWED
 **Minted:** 2026-08-28 (Grok/docs seat). Consumes banner **1258**; this mint bumps the main line to **1259**.
 **Lane:** Monetization / live-ops. Neon `packs` + `api/promo/redeem.js` + **ONE APK** so the client applies server `contents` without `PackCatalog.Find`.
 **Priority:** Follow-up to **WO-1256** (weekend crystals/coins two-tier). Do not block 1256. Do not ship welcome-500/welcome-100 until this APK is live.
@@ -47,6 +47,17 @@ Weekend 1256 stays crystals/coins. This ticket is the resource pack path (wood/i
 | schema comment | `api/schema.sql` reward_pack_sku | "Name a PACK; do not add reward_wood columns." Binding. This ticket keeps that law and moves the named pack into Neon. |
 
 ## 4. What to CREATE
+
+### Implementation evidence — 2026-08-28
+
+- Node contract regression: `node --test test/db-promo-packs.test.js` — 3/3 PASS.
+- Unity integrated gates: `COMPILE_GATE_OK` (`Builds/ready-integrated-compile.log`) and
+  `REGRESSION_OK` 316/316 (`Builds/ready-integrated-regression-retry.log`).
+- Additive production migration ran through `tools/run-promo-pack-migration.mjs`: 28 canonical rows
+  seeded, three restrictive foreign keys installed, and **promo rows unchanged**.
+- Independent live shape proof: `SCHEMA_PARITY_OK 20 table(s)`.
+- Activation boundary remains binding: no live promo was switched to a pack SKU, and the new endpoint
+  is not deployed until the compatible tester APK completes soft-open validation.
 
 ### 4a. Neon `packs`
 
