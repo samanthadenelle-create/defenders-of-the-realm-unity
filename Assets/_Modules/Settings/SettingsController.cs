@@ -334,12 +334,17 @@ namespace DeNelle.Settings
             // opening minutes is the wrong trade, and the owner's spec is "opt IN", not "opt out".
             // The button's LABEL carries the state, not a colour - the owner is red/green
             // colourblind, so "Downloaded" vs "Download for Offline" must read in greyscale.
+            // WebGL already runs from the web-hosted Addressables catalog and browser-managed
+            // cache. Offering an app-style offline pull there is misleading and can strand the
+            // player on a prompt asking an online web instance to get online before downloading.
+#if !UNITY_WEBGL
             y = Caption(body, "Offline", y);
             ElarionUiKit.BuildObsidianButton(body,
                 DeNelle.Core.OfflineContentService.PulledForThisBuild ? "Offline Ready" : "Play Offline",
                 ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Gray,
                 new Vector2(0.06f, y - Frac(120f)), new Vector2(0.48f, y), OnOfflineClicked);
             y -= Frac(120f);
+#endif
 
             // ── Developer (owner ruling 2026-08-08) ──────────────────────────
             // "remove the dev flag on the left side, and let's hide the dev panel ... let's stick it

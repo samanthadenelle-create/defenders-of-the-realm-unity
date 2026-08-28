@@ -83,6 +83,16 @@ namespace DeNelle.Core.UI
         {
             if (s_active != null) return;
 
+            // Browser builds already stream their content from the web host and rely on the
+            // browser's cache policy. The mobile/desktop offline pull is not a meaningful WebGL
+            // operation. Keep this runtime guard even though Settings compiles its button out,
+            // so a future caller cannot reopen the misleading download flow.
+            if (Application.platform == RuntimePlatform.WebGLPlayer)
+            {
+                FlowTrace.Warn("OfflineContent", "opt-in prompt skipped - offline pull is not available in WebGL");
+                return;
+            }
+
             if (OfflineContentService.PulledForThisBuild)
             {
                 FlowTrace.Step("OfflineContent", "opt-in prompt skipped - already pulled for this build");
