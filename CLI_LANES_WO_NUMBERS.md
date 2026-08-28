@@ -151,11 +151,7 @@
 > fine as history. A copied number is the bug **even when it was right the day it was written** -
 > that is exactly how the retired 860-899 UI block kept re-seeding collisions from CLAUDE.md sec.2.
 
-> ## ⚠ RECONCILED 2026-08-28 (CLI): main line next free = **1270**.
-> 1269 multi-tender pack pricing: channel-safe USD/local fiat, SKR and optional Pi display/payment
-> seams without SKR fallback across stores. Banner bumped 1269 -> 1270 in this SAME edit.
->
-> ### superseded: RECONCILED 2026-08-28 (CLI): main line next free = **1269**.
+> ## ⚠ RECONCILED 2026-08-28 (CLI): main line next free = **1269**.
 > 1268 Welcome Pack tester APK + authoritative full regression, schema/R2 parity, and Seeker
 > sideload safety verdict. Banner bumped 1268 -> 1269 in this SAME edit.
 >

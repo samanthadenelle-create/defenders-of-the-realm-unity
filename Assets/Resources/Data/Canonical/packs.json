@@ -7,7 +7,7 @@
     "starterBundles": "WorkOrders/WORK_ORDER_store_packs_content.md (packs 6-13, authored 2026-06-28)"
   },
   "_schemaNotes": {
-    "packDef": "Each entry mirrors React's PackDef: sku, tier, name, tagline, pricing { usd, usdc, sol, skr, pi? }, contents { cosmetics, economy, convenience }, founderOnly?, packExclusiveCosmetic. pi is optional and must be economy-approved; absent means Pi price unavailable, never client-converted. The Unity loader deserializes each entry straight into a PackDef record.",
+    "packDef": "Each entry mirrors React's PackDef: sku, tier, name, tagline, pricing { usd, usdc, sol, skr }, contents { cosmetics, economy, convenience }, founderOnly?, packExclusiveCosmetic. The Unity loader deserializes each entry straight into a PackDef record.",
     "pricing": "usd is the Stripe/USD reference price; usdc/sol/skr are the per-currency wallet-rail amounts. The Unity wallet module reads sol/usdc/skr only. Starter bundles reuse the three ladder price points: $4.99 -> {usdc 4.99, sol 0.045, skr 60}; $9.99 -> {usdc 9.99, sol 0.09, skr 120}; $19.99 -> {usdc 19.99, sol 0.18, skr 240}.",
     "tier": "Unique 1..N lookup key (PackCatalog.FindByTier). NOT the price band — multiple bundles share a price point but each has a unique tier.",
     "convenience": "TIME-SAVING only, never combat-power (the bent covenant, §5.3). instant-build / instant-repair / harvest-auto-collect / xp-weekend / lantern-oil-2x-expedition / lantern-oil-3x-expedition / permanent-builder. Lantern blessings are consumed per expedition. permanent-builder is CONCURRENCY (+1 crew at once), not combat power and not queue depth.",
