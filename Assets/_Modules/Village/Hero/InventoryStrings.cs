@@ -177,6 +177,7 @@ namespace DeNelle.Village
             switch (tab)
             {
                 case InventoryTabKind.Weapons:     return Get(KeyEmptyWeapons);
+                case InventoryTabKind.OffHand:     return "Nothing here yet. The Forge sells heaters and bucklers.";
                 case InventoryTabKind.Armor:       return Get(KeyEmptyArmor);
                 case InventoryTabKind.Outfits:     return Get(KeyEmptyTrinkets);
                 case InventoryTabKind.Consumables: return Get(KeyEmptyPotions);

@@ -178,6 +178,12 @@ namespace DeNelle.Village
                 return;
             }
 
+            BuildPeekStrip(stage);
+        }
+
+        private void BuildLegacyItemGrid(Transform stage)
+        {
+
             var viewport = AddImage(stage, "Viewport",
                                     new Vector2(0f, 0f), new Vector2(1f, 1f),
                                     new Color(0, 0, 0, 0));
@@ -245,6 +251,72 @@ namespace DeNelle.Village
 
             FlowTrace.Step("Inventory",
                 $"BuildItemGrid: built, content children={content.transform.childCount} (slots={_vm?.Slots?.Count ?? -1}).");
+        }
+
+        private void BuildPeekStrip(Transform stage)
+        {
+            const float card = 240f;
+            var viewport = AddImage(stage, "PeekViewport", new Vector2(0f, 0.12f), Vector2.one,
+                new Color(0f, 0f, 0f, 0.001f));
+            viewport.AddComponent<RectMask2D>();
+            var scroll = viewport.AddComponent<ScrollRect>();
+            scroll.horizontal = true;
+            scroll.vertical = false;
+            scroll.movementType = ScrollRect.MovementType.Clamped;
+
+            var content = new GameObject("PeekContent", typeof(RectTransform));
+            content.transform.SetParent(viewport.transform, false);
+            var crt = content.GetComponent<RectTransform>();
+            crt.anchorMin = new Vector2(0f, 0f);
+            crt.anchorMax = new Vector2(0f, 1f);
+            crt.pivot = new Vector2(0f, 0.5f);
+            crt.anchoredPosition = Vector2.zero;
+            crt.sizeDelta = Vector2.zero;
+            scroll.viewport = viewport.GetComponent<RectTransform>();
+            scroll.content = crt;
+
+            var row = content.AddComponent<HorizontalLayoutGroup>();
+            row.spacing = GridGapPx;
+            row.padding = new RectOffset((int)GridPadPx, (int)(card * 0.40f), (int)GridPadPx, (int)GridPadPx);
+            row.childAlignment = TextAnchor.MiddleLeft;
+            row.childControlWidth = false;
+            row.childControlHeight = false;
+            row.childForceExpandWidth = false;
+            row.childForceExpandHeight = false;
+            var fitter = content.AddComponent<ContentSizeFitter>();
+            fitter.horizontalFit = ContentSizeFitter.FitMode.PreferredSize;
+
+            BuildCellsFromVM(content.transform);
+            for (int i = 0; i < content.transform.childCount; i++)
+            {
+                var child = content.transform.GetChild(i) as RectTransform;
+                if (child != null) child.sizeDelta = new Vector2(card, card);
+            }
+
+            Canvas.ForceUpdateCanvases();
+            var stageRt = stage as RectTransform ?? stage.GetComponent<RectTransform>();
+            float stageW = stageRt != null ? stageRt.rect.width : card * 3.5f;
+            int visible = Mathf.Max(1, Mathf.FloorToInt((stageW - GridPadPx * 2f) / (card + GridGapPx)));
+            int overflow = Mathf.Max(0, _vm.Slots.Count - visible);
+            if (overflow > 0)
+            {
+                var more = AddLabel(stage, overflow + " more", 0.06f, 0.12f, Ink,
+                    ElarionUi.FontMicro, TMPro.TextAlignmentOptions.MidlineLeft, 0.02f, 0.98f, bold: true);
+                more.raycastTarget = false;
+                var track = AddImage(stage, "ScrollbarH", new Vector2(0.02f, 0.01f), new Vector2(0.98f, 0.055f),
+                    new Color(0f, 0f, 0f, 0.45f));
+                var area = AddImage(track.transform, "SlidingArea", Vector2.zero, Vector2.one,
+                    new Color(0f, 0f, 0f, 0f));
+                var handle = AddImage(area.transform, "Handle", Vector2.zero, Vector2.one,
+                    new Color(ElarionUi.Gilt.r, ElarionUi.Gilt.g, ElarionUi.Gilt.b, 0.9f));
+                var sb = track.AddComponent<Scrollbar>();
+                sb.handleRect = handle.GetComponent<RectTransform>();
+                sb.targetGraphic = handle.GetComponent<Image>();
+                sb.direction = Scrollbar.Direction.LeftToRight;
+                scroll.horizontalScrollbar = sb;
+                scroll.horizontalScrollbarVisibility = ScrollRect.ScrollbarVisibility.Permanent;
+            }
+            FlowTrace.Step("Inventory", $"Peek strip: cards={_vm.Slots.Count}, visible={visible}, overflow={overflow}, peek=40%, scrollbar={(overflow > 0 ? "Permanent" : "none")}");
         }
 
         // The grid is a pure projection of vm.Slots (OWNED items in the active section). Every

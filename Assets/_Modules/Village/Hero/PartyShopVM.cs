@@ -52,7 +52,7 @@ namespace DeNelle.Village.Hero
     /// armor-then-weapons combined list (armor/weapons-first, STORE_EQUIP_SPEC); WEAPONS / ARMOR
     /// narrow to one kind. Applies to BOTH the BUY and SELL lists.
     /// </summary>
-    public enum PartyShopCategory { All, Weapons, Armor }
+    public enum PartyShopCategory { All, Weapons, OffHand, Armor }
 
     /// <summary>
     /// The finer weapon/armor TYPE sub-filter (WO-501 owner point 1 - narrow ON TOP of the
@@ -355,7 +355,7 @@ namespace DeNelle.Village.Hero
         /// layouts (goods/jeweler, WO-598) never show the weapons/armor selector at all.</summary>
         public bool CategorySelectorVisible =>
             Layout == VendorLayout.Gear &&
-            (_storeKinds & GearKind.Weapon) != 0 && (_storeKinds & GearKind.Armor) != 0;
+            (_storeKinds & GearKind.Weapon) != 0;
 
         /// <summary>The party-member chips (one per member; the selected one flagged). Never null.</summary>
         public IReadOnlyList<PartyMemberVM> Party
@@ -785,10 +785,18 @@ namespace DeNelle.Village.Hero
             // weapons-first, STORE_EQUIP_SPEC); WEAPONS / ARMOR narrow to one kind. Craftables
             // always pass (a crafting vendor's only stock). Reorder so armor leads in ALL.
             var ordered = new List<VendorWare>(shoppable.Count);
-            if (_category != PartyShopCategory.Weapons)
+            if (_category == PartyShopCategory.All || _category == PartyShopCategory.Armor)
                 foreach (var e in shoppable) if (e.Kind == VendorWareKind.Armor) ordered.Add(e);
             if (_category != PartyShopCategory.Armor)
-                foreach (var e in shoppable) if (e.Kind == VendorWareKind.Weapon) ordered.Add(e);
+                foreach (var e in shoppable)
+                {
+                    if (e.Kind != VendorWareKind.Weapon) continue;
+                    var def = GearCatalog.FindWeapon(e.Id);
+                    bool offHand = def != null && def.IsOffHandItem;
+                    if (_category == PartyShopCategory.Weapons && offHand) continue;
+                    if (_category == PartyShopCategory.OffHand && !offHand) continue;
+                    ordered.Add(e);
+                }
             foreach (var e in shoppable) if (e.Kind == VendorWareKind.Craftable) ordered.Add(e);
 
             // ?12 INSTRUMENT (affordability live-RCA, no logic change): ONCE per rebuild, capture the
@@ -811,8 +819,9 @@ namespace DeNelle.Village.Hero
                         if (w == null) continue;
                         if (!WeaponPassesType(w)) continue;   // WO-501 TYPE narrow (registers availability)
                         bool owned = _store.OwnedQuantity(w.id) > 0;
-                        bool equipped = member != null && member.EquippedWeapon != null &&
-                                        string.Equals(member.EquippedWeapon.id, w.id, StringComparison.OrdinalIgnoreCase);
+                        var equippedDef = w.IsOffHandItem ? member?.EquippedOffHand : member?.EquippedWeapon;
+                        bool equipped = equippedDef != null &&
+                                        string.Equals(equippedDef.id, w.id, StringComparison.OrdinalIgnoreCase);
                         var cost = GearCatalog.GetBuyCost(w);
                         bool affordable = owned || _economy == null || _economy.CanAfford(cost);
 
@@ -1267,7 +1276,7 @@ namespace DeNelle.Village.Hero
                 // gear (a real VillageInventory count) is sellable — skip equipped-only pieces so the
                 // SELL list never shows a phantom row that SellGear would reject as "you don't own that".
                 if (_store.OwnedQuantity(a.id) <= 0) continue;
-                if (_category == PartyShopCategory.Weapons) continue;
+                if (_category == PartyShopCategory.Weapons || _category == PartyShopCategory.OffHand) continue;
                 if (!ArmorPassesType(a)) continue;   // WO-501 TYPE narrow (registers availability)
                 bool equipped = member != null && member.EquippedArmor != null &&
                                 string.Equals(member.EquippedArmor.id, a.id, StringComparison.OrdinalIgnoreCase);
@@ -1287,9 +1296,12 @@ namespace DeNelle.Village.Hero
                 // WO-578: SELL only LEDGER gear (see the armor loop above) — skip equipped-only pieces.
                 if (_store.OwnedQuantity(w.id) <= 0) continue;
                 if (_category == PartyShopCategory.Armor) continue;
+                if (_category == PartyShopCategory.Weapons && w.IsOffHandItem) continue;
+                if (_category == PartyShopCategory.OffHand && !w.IsOffHandItem) continue;
                 if (!WeaponPassesType(w)) continue;   // WO-501 TYPE narrow (registers availability)
-                bool equipped = member != null && member.EquippedWeapon != null &&
-                                string.Equals(member.EquippedWeapon.id, w.id, StringComparison.OrdinalIgnoreCase);
+                var equippedDef = w.IsOffHandItem ? member?.EquippedOffHand : member?.EquippedWeapon;
+                bool equipped = equippedDef != null &&
+                                string.Equals(equippedDef.id, w.id, StringComparison.OrdinalIgnoreCase);
                 var refund = ScaleCost(GearCatalog.GetBuyCost(w), 0.50f);
                 string id = w.id;
                 string name = (string.IsNullOrEmpty(w.name) ? w.id : w.name) + " x" + qty;
@@ -1391,7 +1403,8 @@ namespace DeNelle.Village.Hero
                 return;
             }
 
-            member.EquipWeaponById(w.id);   // GearLoadout auto-routes shields to off-hand + enforces hand rules
+            if (w.IsOffHandItem) member.EquipOffHandById(w.id);
+            else member.EquipWeaponById(w.id);
             Status = "Equipped " + Display(w.name, w.id) + " to " + MemberName() + ".";
             Rebuild();
         }

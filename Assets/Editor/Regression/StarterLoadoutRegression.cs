@@ -435,15 +435,24 @@ namespace DeNelle.Editor.Regression
                 return string.CompareOrdinal(a.id, b.id);
             });
 
+            // WO-1254 changes the capped Forge contract deliberately: each level bucket
+            // reserves one main-hand and one off-hand when both exist. Derive that answer
+            // independently from catalog flags and the documented power/id ordering.
             var expected = new List<string>();
-            var perLevel = new Dictionary<int, int>();
-            foreach (var w in candidates)
+            var levels = new SortedSet<int>();
+            foreach (var w in candidates) levels.Add(w.req != null ? w.req.level : 1);
+            foreach (int req in levels)
             {
-                int req = w.req != null ? w.req.level : 1;
-                perLevel.TryGetValue(req, out int n);
-                if (n >= vendor.PerLevelCap) continue;
-                perLevel[req] = n + 1;
-                expected.Add(w.id);
+                WeaponDef main = null, offHand = null;
+                foreach (var w in candidates)
+                {
+                    int rowReq = w.req != null ? w.req.level : 1;
+                    if (rowReq != req) continue;
+                    if (w.IsOffHandItem) { if (offHand == null) offHand = w; }
+                    else if (main == null) main = w;
+                }
+                if (main != null) expected.Add(main.id);
+                if (offHand != null && expected.Count < levels.Count * vendor.PerLevelCap) expected.Add(offHand.id);
             }
 
             var actual = new List<string>();
@@ -452,7 +461,7 @@ namespace DeNelle.Editor.Regression
             if (string.Join(",", expected) != string.Join(",", actual))
                 failures.Add($"[shelf-oracle] Forge Lv1 shelf is [{string.Join(",", actual)}] but the independent " +
                              $"sort oracle says [{string.Join(",", expected)}] - the implementation drifted from the " +
-                             "documented rule 'bucket by req.level, power DESC, id ordinal ASC'");
+                             "documented rule 'per level: strongest main-hand + strongest off-hand, power DESC/id ordinal'");
         }
 
         // =====================================================================

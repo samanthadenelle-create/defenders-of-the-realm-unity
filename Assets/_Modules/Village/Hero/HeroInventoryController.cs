@@ -51,7 +51,7 @@ namespace DeNelle.Village
     {
         public static HeroInventoryController Instance { get; private set; }
 
-        private enum Tab { Weapons, Armor, Outfits, Consumables }
+        private enum Tab { Weapons, OffHand, Armor, Outfits, Consumables }
 
         private GameObject _ui;
         private GameObject _stageRoot;    // the selected section's contents (re-built per section)
@@ -69,19 +69,20 @@ namespace DeNelle.Village
         private const int RailGear     = 0;
         /// <summary>Rail — loose weapons.</summary>
         private const int RailWeapons  = 1;
+        private const int RailOffHand  = 2;
         /// <summary>Rail — loose armor.</summary>
-        private const int RailArmor    = 2;
+        private const int RailArmor    = 3;
         /// <summary>Rail — trinkets (InventoryTabKind.Outfits under the hood).</summary>
-        private const int RailTrinkets = 3;
+        private const int RailTrinkets = 4;
         /// <summary>Rail — potions (InventoryTabKind.Consumables under the hood).</summary>
-        private const int RailPotions  = 4;
+        private const int RailPotions  = 5;
         /// <summary>Rail — the talent tree. A PSEUDO-section: it routes out via PanelRouter.</summary>
-        private const int RailSkills   = 5;
+        private const int RailSkills   = 6;
         /// <summary>Rail — realm travel. DORMANT behind FeatureFlags.MapTab (WO-827 stub).</summary>
-        private const int RailMap      = 6;
+        private const int RailMap      = 7;
 
         /// <summary>The selected rail entry. Weapons is the landing section, as before.</summary>
-        private int _railIndex = RailWeapons;
+        private int _railIndex = RailGear;
         // _profileFrameSprite removed in heavy Tech cleanup — W/A medallion now uses direct pack Profile tabs P1/fill.png (no Rpg legacy).
 
         // WO-434 Phase C — the bound ViewModel + the model seams injected at the open-site.
@@ -227,7 +228,7 @@ namespace DeNelle.Village
             //    state. Render() isolates each section (paperdoll / tabs / grid) so a failure in
             //    one leaves the rest of the modal rendered, not blank.
             _tab = _vm != null ? (Tab)_vm.ActiveTabIndex : Tab.Weapons;
-            _railIndex = RailIndexForTab(_tab);
+            _railIndex = RailGear;
             SafeRun(() => Bind(_vm), "Bind");
 
             // A loud, single success line so the next playtest console PROVES the modal
@@ -404,6 +405,7 @@ namespace DeNelle.Village
             switch (railIndex)
             {
                 case RailArmor:    return InventoryTabKind.Armor;
+                case RailOffHand:  return InventoryTabKind.OffHand;
                 case RailTrinkets: return InventoryTabKind.Outfits;
                 case RailPotions:  return InventoryTabKind.Consumables;
                 default:           return InventoryTabKind.Weapons;
@@ -416,6 +418,7 @@ namespace DeNelle.Village
             switch (tab)
             {
                 case Tab.Armor:       return RailArmor;
+                case Tab.OffHand:     return RailOffHand;
                 case Tab.Outfits:     return RailTrinkets;
                 case Tab.Consumables: return RailPotions;
                 default:              return RailWeapons;

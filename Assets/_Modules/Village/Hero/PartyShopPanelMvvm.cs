@@ -442,9 +442,10 @@ namespace DeNelle.Village.Hero
             cb.anchorMin = new Vector2(0.04f, 0.703f); cb.anchorMax = new Vector2(0.96f, 0.744f);
             cb.offsetMin = Vector2.zero; cb.offsetMax = Vector2.zero;
             _categoryTabs.Clear();
-            CreateCategory("All",     new Vector2(0.01f, 0.32f),  PartyShopCategory.All);
-            CreateCategory("Armor",   new Vector2(0.34f, 0.65f),  PartyShopCategory.Armor);
-            CreateCategory("Weapons", new Vector2(0.67f, 0.99f),  PartyShopCategory.Weapons);
+            CreateCategory("All",      new Vector2(0.01f, 0.24f), PartyShopCategory.All);
+            CreateCategory("Weapons",  new Vector2(0.26f, 0.49f), PartyShopCategory.Weapons);
+            CreateCategory("Off Hand", new Vector2(0.51f, 0.74f), PartyShopCategory.OffHand);
+            CreateCategory("Armor",    new Vector2(0.76f, 0.99f), PartyShopCategory.Armor);
 
             // Finer weapon/armor TYPE chip row (WO-501 owner point 1) - sits just under the category
             // bar. Rebuilt per Render from _vm.AvailableTypes so it only shows live chips (>0 rows).

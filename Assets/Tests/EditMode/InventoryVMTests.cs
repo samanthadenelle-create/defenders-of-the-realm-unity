@@ -101,12 +101,13 @@ namespace DeNelle.Tests.EditMode
             public float CurrentMana { get; set; }
             public float MaxMana { get; set; }
             public int EquipWeaponCalls;
+            public int EquipOffHandCalls;
             public event Action EquipChanged;
             public void EquipWeaponById(string id) { EquipWeaponCalls++; EquippedWeapon = new WeaponDef { id = id, name = id, damageMult = 2f }; EquipChanged?.Invoke(); }
             public void EquipArmorById(string id) { EquippedArmor = new ArmorDef { id = id, name = id, defense = 0.3f }; EquipChanged?.Invoke(); }
             public void UnequipWeapon() { EquippedWeapon = null; EquipChanged?.Invoke(); }
             public void UnequipArmor() { EquippedArmor = null; EquipChanged?.Invoke(); }
-            public void EquipOffHandById(string id) { EquippedOffHand = new WeaponDef { id = id, name = id, category = "shield" }; EquipChanged?.Invoke(); }
+            public void EquipOffHandById(string id) { EquipOffHandCalls++; EquippedOffHand = new WeaponDef { id = id, name = id, category = "shield" }; EquipChanged?.Invoke(); }
             public void UnequipOffHand() { EquippedOffHand = null; EquipChanged?.Invoke(); }
             public void EquipAccessoryById(string id) { EquippedRing = new AccessoryDef { id = id, name = id, slot = "ring" }; EquipChanged?.Invoke(); }
             public void UnequipAccessory(string slot) { if (slot == "amulet") EquippedAmulet = null; else EquippedRing = null; EquipChanged?.Invoke(); }
@@ -169,7 +170,7 @@ namespace DeNelle.Tests.EditMode
         {
             var store = SeedStore();
             using var vm = new InventoryVM(store);
-            Assert.That(vm.Tabs.Count, Is.EqualTo(4));
+            Assert.That(vm.Tabs.Count, Is.EqualTo(5));
             Assert.That(vm.Tabs[(int)InventoryTabKind.Weapons].Count, Is.EqualTo(2));
             Assert.That(vm.Tabs[(int)InventoryTabKind.Armor].Count, Is.EqualTo(1));
             Assert.That(vm.Tabs[(int)InventoryTabKind.Consumables].Count, Is.EqualTo(1));
@@ -335,6 +336,28 @@ namespace DeNelle.Tests.EditMode
         }
 
         [Test]
+        public void off_hand_is_separate_marks_worn_and_routes_directly()
+        {
+            var store = SeedStore();
+            store.Weapons["heater"] = new WeaponDef { id = "heater", name = "Heater", job = "knight", category = "shield", defense = 0.12f };
+            store.Counts["heater"] = 1;
+            var equip = new FakeEquip { EquippedOffHand = store.Weapons["heater"] };
+            using var vm = new InventoryVM(store, equip);
+
+            for (int i = 0; i < vm.Slots.Count; i++)
+                Assert.That(vm.Slots[i].Id, Is.Not.EqualTo("heater"), "Weapons must exclude off-hand rows");
+            vm.SelectTab((int)InventoryTabKind.OffHand);
+            Assert.That(vm.Slots.Count, Is.EqualTo(1));
+            Assert.That(vm.Slots[0].Id, Is.EqualTo("heater"));
+            Assert.That(vm.Slots[0].Equipped, Is.True);
+
+            vm.Select(0);
+            vm.Equip();
+            Assert.That(equip.EquipOffHandCalls, Is.EqualTo(1));
+            Assert.That(equip.EquipWeaponCalls, Is.Zero);
+        }
+
+        [Test]
         public void store_changed_event_rebuilds_and_raises()
         {
             var store = SeedStore();
@@ -374,7 +397,7 @@ namespace DeNelle.Tests.EditMode
             Assert.That(store, Is.Not.Null, "CreateDefault must return the built store for the View to dispose");
             Assert.That(vm.Coins, Is.EqualTo(0), "null economy -> 0 gold");
             Assert.That(vm.Crystals, Is.EqualTo(0), "null economy -> 0 crystals");
-            Assert.That(vm.Tabs.Count, Is.EqualTo(4), "the four tabs still project from the (empty) store");
+            Assert.That(vm.Tabs.Count, Is.EqualTo(5), "the five item piles still project from the (empty) store");
             store.Dispose();
         }
 

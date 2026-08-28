@@ -60,7 +60,7 @@ namespace DeNelle.Village.Hero
     }
 
     /// <summary>The four inventory tabs (mirrors HeroInventoryController.Tab).</summary>
-    public enum InventoryTabKind { Weapons, Armor, Outfits, Consumables }
+    public enum InventoryTabKind { Weapons, OffHand, Armor, Outfits, Consumables }
 
     /// <summary>One tab's header chip: a label and the live owned-count in that category.</summary>
     public readonly struct InventoryTab
@@ -402,10 +402,12 @@ namespace DeNelle.Village.Hero
                 return;
             }
 
-            if (_slotKind.TryGetValue(SelectedId, out var kind) && kind == InventoryTabKind.Weapons)
-                _equip.EquipWeaponById(SelectedId);
-            else
-                _equip.EquipArmorById(SelectedId);
+            if (_slotKind.TryGetValue(SelectedId, out var kind))
+            {
+                if (kind == InventoryTabKind.OffHand) _equip.EquipOffHandById(SelectedId);
+                else if (kind == InventoryTabKind.Weapons) _equip.EquipWeaponById(SelectedId);
+                else _equip.EquipArmorById(SelectedId);
+            }
 
             Status = "Equipped " + sel.Value.Name + ".";
             Rebuild();   // re-mark equipped; equip target may also raise via INotifyEquipChanged
@@ -470,6 +472,7 @@ namespace DeNelle.Village.Hero
             switch (_activeTab)
             {
                 case InventoryTabKind.Weapons:     BuildWeapons();     break;
+                case InventoryTabKind.OffHand:     BuildOffHands();    break;
                 case InventoryTabKind.Armor:       BuildArmor();       break;
                 case InventoryTabKind.Outfits:     BuildOutfits();     break;
                 case InventoryTabKind.Consumables: BuildConsumables(); break;
@@ -484,11 +487,20 @@ namespace DeNelle.Village.Hero
         private void BuildTabs()
         {
             _tabs.Clear();
-            int weapons = _store != null ? _store.OwnedWeapons().Count : 0;
+            int weapons = 0;
+            int offHands = 0;
+            if (_store != null)
+                foreach (var pair in _store.OwnedWeapons())
+                {
+                    if (pair.def == null) continue;
+                    if (pair.def.IsOffHandItem) offHands += pair.qty;
+                    else weapons += pair.qty;
+                }
             int armor   = _store != null ? _store.OwnedArmor().Count   : 0;
             int outfits = 0; // no per-player outfit model yet (cosmetics later) — mirror the empty tab.
             int cons    = _store != null ? _store.OwnedConsumables().Count : 0;
             _tabs.Add(new InventoryTab(InventoryTabKind.Weapons, "Weapons", weapons));
+            _tabs.Add(new InventoryTab(InventoryTabKind.OffHand, "Off Hand", offHands));
             _tabs.Add(new InventoryTab(InventoryTabKind.Armor, "Armor", armor));
             _tabs.Add(new InventoryTab(InventoryTabKind.Outfits, "Outfits", outfits));
             _tabs.Add(new InventoryTab(InventoryTabKind.Consumables, "Consumables", cons));
@@ -499,7 +511,7 @@ namespace DeNelle.Village.Hero
             string equippedId = _equip?.EquippedWeapon != null ? _equip.EquippedWeapon.id : null;
             foreach (var (w, qty) in _store.OwnedWeapons())
             {
-                if (w == null) continue;
+                if (w == null || w.IsOffHandItem) continue;
                 bool equipped = !string.IsNullOrEmpty(equippedId) &&
                                 string.Equals(equippedId, w.id, StringComparison.OrdinalIgnoreCase);
                 // WO-808: stats read the LIVE leveled power (level 1 == authored, unchanged).
@@ -520,6 +532,26 @@ namespace DeNelle.Village.Hero
                 _details[w.id] = new InventoryDetail(name, DescribeGear(w.job, w.rarity), stats, qty,
                     IconRoleWeapon, w.id, w.rarity, canUse: false, canEquip: true);
                 _slotKind[w.id] = InventoryTabKind.Weapons;
+                _slots.Add(new ItemVM(w.id, name + (qty > 1 ? " x" + qty : ""), IconRoleWeapon, w.id,
+                    0, "gold", true, w.rarity, equipped: equipped, level: lvl));
+            }
+        }
+
+        private void BuildOffHands()
+        {
+            string equippedId = _equip?.EquippedOffHand != null ? _equip.EquippedOffHand.id : null;
+            foreach (var (w, qty) in _store.OwnedWeapons())
+            {
+                if (w == null || !w.IsOffHandItem) continue;
+                bool equipped = !string.IsNullOrEmpty(equippedId) &&
+                                string.Equals(equippedId, w.id, StringComparison.OrdinalIgnoreCase);
+                int lvl = GearLevel(w.id);
+                int defPct = RoundToInt(GearStatResolver.EffectiveDefense(w, lvl) * 100f);
+                string stats = (lvl > 1 ? "Lv " + lvl + "   " : "") + "+" + defPct + "% def";
+                string name = string.IsNullOrEmpty(w.name) ? w.id : w.name;
+                _details[w.id] = new InventoryDetail(name, DescribeGear(w.job, w.rarity), stats, qty,
+                    IconRoleWeapon, w.id, w.rarity, canUse: false, canEquip: true);
+                _slotKind[w.id] = InventoryTabKind.OffHand;
                 _slots.Add(new ItemVM(w.id, name + (qty > 1 ? " x" + qty : ""), IconRoleWeapon, w.id,
                     0, "gold", true, w.rarity, equipped: equipped, level: lvl));
             }

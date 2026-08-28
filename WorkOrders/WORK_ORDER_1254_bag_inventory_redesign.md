@@ -1,6 +1,15 @@
-**Status:** READY TO IMPLEMENT
+**Status:** FIXED — IMPLEMENTED + FULL REGRESSION PASS; SHIELD BODY DEVICE PROOF OWED
 **Minted:** 2026-08-27 (UI/UX design seat). Number = CLI main-line next free **1254** (read off `CLI_LANES_WO_NUMBERS.md` banner: `RECONCILED 2026-08-27 (CLI): main line next free = 1254`).
 **BANNER:** this seat cannot bump `CLI_LANES_WO_NUMBERS.md` (read-only). **Orchestrator must bump the CLI main-line row 1254 -> 1255 in the SAME edit that records this mint.** A mint on disk without the banner bump is the collision.
+
+**Implementation evidence (2026-08-28):** the runtime Bag now uses six full-width kit tabs, lands
+on Gear, separates Off Hand from Weapons, renders horizontal 240px cards with 40% next-card peek,
+an explicit remaining count, and a permanent overflow scrollbar. Forge has a true Off Hand category;
+its capped shelf independently reserves the strongest main-hand and off-hand. WORN and replacement
+comparison use `EquippedOffHand`, and equip routes through `EquipOffHandById`.
+`COMPILE_GATE_OK` (`Builds/ready-integrated-compile.log`) and `REGRESSION_OK` 316/316
+(`Builds/ready-integrated-regression-retry.log`). The town/battle/cave rendered-shield capture is
+still owed, so this is not a felt-device claim.
 **Assigned:** CLI implements from this ratified design. UI writes no `.cs` (CLAUDE.md section 2).
 **Silo:** HUD/UI presentation (Bag) + two named sibling defects (shield seat, shield shelf). Do not bury either sibling inside the layout work.
 **Class:** REDESIGN. The screen works. It does not serve. Successor to **WO-1133** (CLOSED 2026-08-23, Armory Rail shipped). This is not a restyle of that rail.

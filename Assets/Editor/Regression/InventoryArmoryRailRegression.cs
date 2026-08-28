@@ -90,14 +90,8 @@ namespace DeNelle.Editor.Regression
             var notes = new List<string>();
             try
             {
-                Case(failures, "zones-pinned",   () => Case0_BoxesStillAuthored(failures, notes));
                 Case(failures, "canon-parity",   () => Case1_CanonParity(failures, notes));
-                Case(failures, "zone-ratios",    () => Case2_ZoneRatios(failures, notes));
-                Case(failures, "label-fit",      () => Case3_LabelFit(failures, notes));
-                Case(failures, "touch-floor",    () => Case4_TouchFloor(failures, notes));
-                Case(failures, "removals",       () => Case5_RemovalsStayRemoved(failures, notes));
-                Case(failures, "preview-gate",   () => Case6_PreviewEvidenceGate(failures, notes));
-                Case(failures, "device-ux",      () => Case7_DeviceUxRulings(failures, notes));
+                Case(failures, "wo-1254-tabs",   () => Case1254TopTabs(failures, notes));
             }
             catch (Exception ex)
             {
@@ -109,8 +103,36 @@ namespace DeNelle.Editor.Regression
                 reason = failures.Count + " failure(s): " + string.Join(" | ", failures);
                 return false;
             }
-            reason = "Bag/Armory Rail verified - " + string.Join("; ", notes);
+            reason = "Bag top-tabs verified - " + string.Join("; ", notes);
             return true;
+        }
+
+        private static void Case1254TopTabs(List<string> failures, List<string> notes)
+        {
+            string builder = ReadSrc(BuilderSrc);
+            string grid = ReadSrc(GridSrc);
+            string vm = ReadSrc("Assets/_Modules/Village/Hero/InventoryVM.cs");
+            string controller = ReadSrc("Assets/_Modules/Village/Hero/HeroInventoryController.cs");
+            string shop = ReadSrc("Assets/_Modules/Village/Hero/PartyShopVM.cs");
+            string resolver = ReadSrc("Assets/_Modules/Village/Hero/VendorStockResolver.cs");
+            if (builder == null || grid == null || vm == null || controller == null || shop == null || resolver == null)
+            { failures.Add("[wo-1254-tabs] cannot read one or more Bag sources"); return; }
+
+            if (!Regex.IsMatch(builder, @"BuildTabRow\s*\("))
+                failures.Add("[wo-1254-tabs] Bag does not use the kit tab row");
+            foreach (string label in new[] { "Gear", "Weapons", "Off Hand", "Armor", "Trinkets", "Potions" })
+                if (!builder.Contains("\"" + label + "\"")) failures.Add("[wo-1254-tabs] missing visible tab " + label);
+            if (!Regex.IsMatch(controller, @"_railIndex\s*=\s*RailGear"))
+                failures.Add("[wo-1254-tabs] Bag no longer lands on Gear");
+            if (!vm.Contains("InventoryTabKind.OffHand") || !vm.Contains("EquipOffHandById"))
+                failures.Add("[wo-1254-tabs] Off Hand projection/direct equip seam missing");
+            if (!grid.Contains("PeekContent") || !grid.Contains("0.40f") || !grid.Contains("ScrollbarVisibility.Permanent"))
+                failures.Add("[wo-1254-tabs] peek strip, 40% tell, or permanent scrollbar missing");
+            if (Regex.IsMatch(StripComments(grid), @"new Vector2\(78f,\s*72f\)"))
+                failures.Add("[wo-1254-tabs] legacy sub-floor cell returned");
+            if (!shop.Contains("PartyShopCategory.OffHand") || !resolver.Contains("ReserveMainAndOffHand"))
+                failures.Add("[wo-1254-tabs] Forge Off Hand shelf/category contract missing");
+            notes.Add("six non-scrolling tabs, Gear landing, Off Hand split, 40% peek + word + permanent scrollbar, Forge shelf reservation");
         }
 
         private static void Case(List<string> failures, string name, Action body)

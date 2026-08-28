@@ -243,7 +243,7 @@ namespace DeNelle.Village
         private bool CanOfferComparisonGuidance(bool isWorn)
         {
             if (isWorn || _vm == null || _vm.Slots == null) return false;
-            if (_railIndex != RailWeapons && _railIndex != RailArmor) return false;
+            if (_railIndex != RailWeapons && _railIndex != RailOffHand && _railIndex != RailArmor) return false;
             return _vm.Slots.Count > 1;
         }
 
@@ -272,7 +272,10 @@ namespace DeNelle.Village
             if (_loadout == null || !d.CanEquip || SelectedIsEquipped()) return null;
             switch (d.IconRole)
             {
-                case InventoryVM.IconRoleWeapon: return WornName(_loadout.EquippedWeapon);
+                case InventoryVM.IconRoleWeapon:
+                    return _railIndex == RailOffHand
+                        ? WornName(_loadout.EquippedOffHand)
+                        : WornName(_loadout.EquippedWeapon);
                 case InventoryVM.IconRoleArmor:  return WornArmorName(_loadout.EquippedArmor);
             }
             return null;

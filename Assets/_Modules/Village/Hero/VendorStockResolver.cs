@@ -662,7 +662,10 @@ namespace DeNelle.Village.Hero
                 var bucket = byLevel[lvl];
                 bucket.Sort(ComparePicks);
                 int keep = Math.Min(perLevelCap, bucket.Count);
-                ReserveKindSlot(bucket, keep, preferredKind, lvl, label);
+                if (string.Equals(label, "weapon", StringComparison.OrdinalIgnoreCase) && keep >= 2)
+                    ReserveMainAndOffHand(bucket, keep, preferredKind, lvl);
+                else
+                    ReserveKindSlot(bucket, keep, preferredKind, lvl, label);
                 dropped += bucket.Count - keep;
                 for (int i = 0; i < keep; i++)
                     result.Add(new VendorWare(kind, bucket[i].Id, bucket[i].Eligible, bucket[i].LockReason));
@@ -674,6 +677,34 @@ namespace DeNelle.Village.Hero
                     $"row(s) across {levels.Count} level bucket(s) (power desc, id ordinal asc).");
 
             return dropped;
+        }
+
+        private static void ReserveMainAndOffHand(List<ShelfPick> bucket, int keep,
+                                                   string preferredKind, int level)
+        {
+            int main = -1;
+            int offHand = -1;
+            for (int i = 0; i < bucket.Count; i++)
+            {
+                bool isOffHand = string.Equals(bucket[i].Kind, "shield", StringComparison.OrdinalIgnoreCase)
+                              || string.Equals(bucket[i].Kind, "offhand", StringComparison.OrdinalIgnoreCase);
+                if (isOffHand && offHand < 0) offHand = i;
+                if (!isOffHand && main < 0 && (string.IsNullOrEmpty(preferredKind)
+                    || string.Equals(bucket[i].Kind, preferredKind, StringComparison.OrdinalIgnoreCase))) main = i;
+            }
+            if (main < 0)
+                for (int i = 0; i < bucket.Count; i++)
+                    if (!string.Equals(bucket[i].Kind, "shield", StringComparison.OrdinalIgnoreCase)) { main = i; break; }
+            if (main < 0 || offHand < 0) { ReserveKindSlot(bucket, keep, preferredKind, level, "weapon"); return; }
+
+            if (main != 0) (bucket[0], bucket[main]) = (bucket[main], bucket[0]);
+            // The first swap can move the shield; find it again before reserving slot two.
+            offHand = -1;
+            for (int i = 1; i < bucket.Count; i++)
+                if (string.Equals(bucket[i].Kind, "shield", StringComparison.OrdinalIgnoreCase)
+                    || string.Equals(bucket[i].Kind, "offhand", StringComparison.OrdinalIgnoreCase)) { offHand = i; break; }
+            if (offHand > 1) (bucket[1], bucket[offHand]) = (bucket[offHand], bucket[1]);
+            FlowTrace.Step("Vendor", $"level {level} weapon shelf reserves main-hand + Off Hand rows.");
         }
 
         /// <summary>The rank comparison of rule 2+3 above (power DESC, then id ORDINAL ASC).</summary>

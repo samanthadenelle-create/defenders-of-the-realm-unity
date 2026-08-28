@@ -60,9 +60,9 @@ namespace DeNelle.Village
         /// <summary>Panel interior, right edge.</summary>
         private const float ZoneX1 = 0.965f;
         /// <summary>Rail | Stage seam. ZoneX0 + 0.930 * (374/2670).</summary>
-        private const float RailX1 = 0.165270f;
+        private const float RailX1 = 0.035f;
         /// <summary>Stage | Pane seam. RailX1 + 0.930 * (1496/2670).</summary>
-        private const float StageX1 = 0.686349f;
+        private const float StageX1 = 0.620f;
 
         /// <summary>Header band (hero identity + vitals) - D3's full-width x 120 strip.</summary>
         private const float HeaderY0 = 0.885f, HeaderY1 = 0.985f;
@@ -74,10 +74,10 @@ namespace DeNelle.Village
         /// horizontally (it is far left of the centred Close), which is why RailY0 is
         /// lower - exactly the dodge the previous layout's left column already used.
         /// </summary>
-        private const float BodyY0 = 0.300f, BodyY1 = 0.875f;
+        private const float BodyY0 = 0.300f, BodyY1 = 0.750f;
 
         /// <summary>The rail column's band. Lower than the body because it clears the Close in X.</summary>
-        private const float RailY0 = 0.155f, RailY1 = 0.875f;
+        private const float RailY0 = 0.760f, RailY1 = 0.875f;
 
         /// <summary>Purse strip - above the reserved Close band, below the stage.</summary>
         private const float PurseY0 = 0.222f, PurseY1 = 0.288f;
@@ -89,7 +89,7 @@ namespace DeNelle.Village
         /// Rail entries, in order. Seven today; the count is a constant so the touch-floor
         /// arithmetic below and the regression both read the SAME number.
         /// </summary>
-        private const int RailEntryCount = 7;
+        private const int RailEntryCount = 8;
 
         /// <summary>Rail entry height, in canvas REFERENCE px, authored AT the kit touch floor.</summary>
         private const float RailEntryHeightPx = ElarionUiKit.MinTouchPx;
@@ -162,13 +162,14 @@ namespace DeNelle.Village
             NoRaycast(_headerRoot);
 
             // ── RAIL: the navigation. A carved niche column (D4: Well / panel_grid).
-            _railRoot = ElarionUiKit.Well(panel.transform,
-                                          new Vector2(ZoneX0, RailY0), new Vector2(RailX1, RailY1));
-            _railRoot.name = "RailColumn";
+            _railRoot = AddImage(panel.transform, "InventoryTabs",
+                                 new Vector2(ZoneX0, RailY0), new Vector2(ZoneX1, RailY1),
+                                 new Color(0f, 0f, 0f, 0f));
+            NoRaycast(_railRoot);
 
             // ── STAGE: the selected section.
             _stageRoot = AddImage(panel.transform, "Stage",
-                                  new Vector2(RailX1, BodyY0), new Vector2(StageX1, BodyY1),
+                                  new Vector2(ZoneX0, BodyY0), new Vector2(StageX1, BodyY1),
                                   new Color(0f, 0f, 0f, 0f));
             NoRaycast(_stageRoot);
 
@@ -229,6 +230,13 @@ namespace DeNelle.Village
         private void BuildRail(Transform host)
         {
             if (host == null) return;
+            BuildTopTabs(host);
+        }
+
+        // Kept temporarily as a non-runtime reference while the WO-1133 regression is
+        // rewritten; BuildRail no longer calls this legacy presentation.
+        private void BuildLegacyRail(Transform host)
+        {
 
             // Caption: the column says what it is (D9 invRailHeader).
             var caption = ElarionUiKit.Label(host, InventoryStrings.Get(InventoryStrings.KeyRailHeader),
@@ -282,6 +290,8 @@ namespace DeNelle.Village
             AddRailSeparator(content.transform);
             BuildRailEntry(content.transform, RailWeapons,  InventoryStrings.KeyRailWeapons,
                            CountOf(counts, InventoryTabKind.Weapons), false);
+            BuildRailEntry(content.transform, RailOffHand, InventoryStrings.KeySlotOffHand,
+                           CountOf(counts, InventoryTabKind.OffHand), false);
             BuildRailEntry(content.transform, RailArmor,    InventoryStrings.KeyRailArmor,
                            CountOf(counts, InventoryTabKind.Armor), false);
             BuildRailEntry(content.transform, RailTrinkets, InventoryStrings.KeyRailTrinkets,
@@ -307,6 +317,30 @@ namespace DeNelle.Village
 
             Canvas.ForceUpdateCanvases();
             LayoutRebuilder.ForceRebuildLayoutImmediate(crt);
+        }
+
+        private void BuildTopTabs(Transform host)
+        {
+            var counts = new Dictionary<InventoryTabKind, int>();
+            if (_vm != null && _vm.Tabs != null)
+                foreach (var t in _vm.Tabs) counts[t.Kind] = t.Count;
+            string WithCount(string label, InventoryTabKind kind)
+            {
+                int n = CountOf(counts, kind);
+                return n > 0 ? label + " " + n : label;
+            }
+            var labels = new[]
+            {
+                "Gear",
+                WithCount("Weapons", InventoryTabKind.Weapons),
+                WithCount("Off Hand", InventoryTabKind.OffHand),
+                WithCount("Armor", InventoryTabKind.Armor),
+                WithCount("Trinkets", InventoryTabKind.Outfits),
+                WithCount("Potions", InventoryTabKind.Consumables)
+            };
+            ElarionUiKit.BuildTabRow(host, labels, index => SelectRail(index),
+                initial: Mathf.Clamp(_railIndex, RailGear, RailPotions));
+            FlowTrace.Step("Inventory", "Bag tabs: 6 visible, non-scrolling; selected=" + _railIndex);
         }
 
         private static int CountOf(Dictionary<InventoryTabKind, int> counts, InventoryTabKind kind)
