@@ -402,6 +402,21 @@ namespace DeNelle.Core
         {
             using var _ = FlowTrace.Enter(Sys, "ResolveContentSource");
 
+            // A WebGL player has already reached its web host and downloaded the shipped
+            // catalog before this coroutine can run. Browser cache lifetime is controlled by
+            // the browser, not by the native opt-in/offline contract below. Re-probing the
+            // remote catalog here can fail independently (CORS, cache policy, or an optional
+            // catalog URL) and used to turn a running web game into the impossible modal
+            // "An internet connection is required". Use the shipped catalog and let each
+            // Addressables request stream/cache normally.
+            if (Application.platform == RuntimePlatform.WebGLPlayer)
+            {
+                Source = ContentSource.Online;
+                FlowTrace.Step(Sys, "WebGL player -> ONLINE via shipped catalog (native offline gate skipped)");
+                onDone?.Invoke(Source);
+                yield break;
+            }
+
             bool reachable = Application.internetReachability != NetworkReachability.NotReachable;
             FlowTrace.Step(Sys, $"reachability={Application.internetReachability} optedIn={OptedIn} " +
                                 $"pulledForThisBuild={PulledForThisBuild} build={Application.version}");
