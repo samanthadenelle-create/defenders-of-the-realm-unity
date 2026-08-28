@@ -301,6 +301,22 @@ CREATE INDEX IF NOT EXISTS idx_analytics_events_name_time
 
 
 -- =============================================================================
+-- 2c. packs — DB authority for promo pack grants (WO-1258).
+-- -----------------------------------------------------------------------------
+-- `contents` is the PackContents JSON object consumed by the APK. Night Market
+-- browsing still uses packs.json; promo redeem never does after the inline-pack
+-- client ships. Existing packs.json rows are seeded once by tools/seed-promo-packs.mjs.
+-- =============================================================================
+CREATE TABLE IF NOT EXISTS packs (
+    sku           TEXT        PRIMARY KEY,
+    name          TEXT        NOT NULL,
+    contents      JSONB       NOT NULL,
+    active        BOOLEAN     NOT NULL DEFAULT TRUE,
+    store_visible BOOLEAN     NOT NULL DEFAULT FALSE,
+    created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- =============================================================================
 -- 3. promo_codes  — operator-issued promo codes (the catalog of valid codes).
 -- -----------------------------------------------------------------------------
 -- Endpoint : POST /api/promo/redeem   (FUNCTION NOT YET IN api/ — client-only)
@@ -444,6 +460,7 @@ CREATE TABLE IF NOT EXISTS promo_redemptions (
     crystals      INTEGER     NOT NULL DEFAULT 0,   -- snapshot of reward granted (audit; code reward may change later)
     coins         INTEGER     NOT NULL DEFAULT 0,   -- snapshot of reward granted
     pack_sku      TEXT,                                -- exact pack granted (tier-safe audit snapshot)
+    contents      JSONB,                               -- immutable DB pack snapshot applied by the client
     redemption_ordinal INTEGER,                        -- atomic campaign ordinal for cohort/audit
     redeemed_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     UNIQUE (code, player_id)                        -- one redemption per code per player

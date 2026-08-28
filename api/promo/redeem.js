@@ -39,8 +39,8 @@
 //                             over the EXACT bytes, same as save.js)
 //   Headers: X-Wallet + X-Nonce + X-Signature   (WALLET RAIL ONLY as of 2026-08-18;
 //            X-Guest-Id is no longer accepted here — see the correction above)
-//   Body  : { playerId, code, supportsPackRewards }
-//   Success: { success: true, reward: { crystals, coins, packSku }, message }
+//   Body  : { playerId, code, supportsInlinePackRewards }
+//   Success: { success: true, reward: { crystals, coins, packSku, contents }, message }
 //   Failure: { success: false, error: "INVALID_CODE" | "ALREADY_REDEEMED"
 //                                    | "EXPIRED" | "PLAYER_LIMIT_REACHED"
 //                                    | "REWARD_UNAVAILABLE" }
@@ -107,7 +107,9 @@ async function handler(req, res) {
     // hole this gate closes, and authenticate() would reject it anyway.
     const playerId = body.playerId != null ? String(body.playerId).trim() : '';
     const code = body.code != null ? String(body.code).trim().toUpperCase() : '';
-    const supportsPackRewards = body.supportsPackRewards === true;
+    // Legacy supportsPackRewards meant "this APK can PackCatalog.Find(sku)" and is
+    // deliberately ignored: only the explicit inline capability prevents a burn.
+    const supportsInlinePackRewards = body.supportsInlinePackRewards === true;
 
     if (!playerId) {
         return quietFail(res, 400, AuthCode.PLAYER_ID_MISSING, ref);
@@ -256,10 +258,10 @@ async function handler(req, res) {
         const hasTieredPack = tier1PackSku !== '' || tier2PackSku !== '';
         const hasTieredCurrency = !hasTieredPack && promo.tier1_limit != null &&
             promo.tier2_reward_crystals != null && promo.tier2_reward_coins != null;
-        if ((packSku !== '' || hasTieredPack) && !supportsPackRewards) {
+        if ((packSku !== '' || hasTieredPack) && !supportsInlinePackRewards) {
             console.error(
                 '[promo/redeem] REFUSED-UNBURNED pack reward: client did not advertise ' +
-                'supportsPackRewards=true. The code was NOT consumed; update the client and retry.'
+                'supportsInlinePackRewards=true. The code was NOT consumed; update the client and retry.'
             );
             return res.status(200).json({ success: false, error: 'REWARD_UNAVAILABLE' });
         }
@@ -318,7 +320,7 @@ async function handler(req, res) {
         // a refusal can be undone by authoring a reward while a burn cannot.
         if (crystals <= 0 && coins <= 0 && packSku === '' && !hasTieredPack && !hasTieredCurrency) {
             console.error(
-                `[promo/redeem] REFUSED-UNBURNED code=${code} — resolves to zero crystals AND zero coins ` +
+                '[promo/redeem] REFUSED-UNBURNED reward resolves to zero crystals AND zero coins ' +
                 `(reward_crystals=${JSON.stringify(promo.reward_crystals)}, reward_coins=${JSON.stringify(promo.reward_coins)}). ` +
                 'A code must never burn for nothing. The code was NOT consumed — fix the row, the player can retry.'
             );
@@ -326,6 +328,7 @@ async function handler(req, res) {
         }
 
         let grantedPackSku = packSku;
+        let grantedContents = null;
         try {
             if (hasTieredPack) {
                 if (tier1PackSku === '' || tier2PackSku === '' ||
@@ -339,27 +342,39 @@ async function handler(req, res) {
                 // including redemption_count, so tier 500 cannot be skipped or double-issued.
                 const tierRows = await sql`
                     WITH claimed AS (
-                        UPDATE promo_codes
-                           SET redemption_count = redemption_count + 1
-                         WHERE code = ${code}
-                         RETURNING redemption_count, tier1_limit,
-                                   tier1_pack_sku, tier2_pack_sku
+                        UPDATE promo_codes AS pc
+                           SET redemption_count = pc.redemption_count + 1
+                          FROM packs AS p
+                         WHERE pc.code = ${code}
+                           AND p.sku = CASE WHEN pc.redemption_count + 1 <= pc.tier1_limit
+                                            THEN pc.tier1_pack_sku ELSE pc.tier2_pack_sku END
+                           AND p.active = TRUE
+                           AND (
+                               jsonb_path_exists(p.contents, '$.economy.* ? (@ > 0)') OR
+                               jsonb_array_length(COALESCE(p.contents->'cosmetics', '[]'::jsonb)) > 0 OR
+                               jsonb_array_length(COALESCE(p.contents->'convenience', '[]'::jsonb)) > 0
+                           )
+                         RETURNING pc.redemption_count, p.sku AS pack_sku, p.contents
                     ), recorded AS (
                         INSERT INTO promo_redemptions
-                            (code, player_id, crystals, coins, pack_sku, redemption_ordinal)
-                        SELECT ${code}, ${playerId}, 0, 0,
-                               CASE WHEN redemption_count <= tier1_limit
-                                    THEN tier1_pack_sku ELSE tier2_pack_sku END,
-                               redemption_count
+                            (code, player_id, crystals, coins, pack_sku, contents, redemption_ordinal)
+                        SELECT ${code}, ${playerId},
+                               COALESCE((contents#>>'{economy,crystals}')::int, 0),
+                               COALESCE((contents#>>'{economy,coins}')::int, 0),
+                               pack_sku, contents, redemption_count
                           FROM claimed
-                        RETURNING pack_sku
+                        RETURNING crystals, coins, pack_sku, contents
                     )
-                    SELECT pack_sku FROM recorded
+                    SELECT crystals, coins, pack_sku, contents FROM recorded
                 `;
                 if (tierRows.length !== 1 || !tierRows[0].pack_sku) {
-                    throw new Error('tiered redemption produced no reward snapshot');
+                    console.error('[promo/redeem] REFUSED-UNBURNED tiered pack missing, inactive, or empty.');
+                    return res.status(200).json({ success: false, error: 'REWARD_UNAVAILABLE' });
                 }
                 grantedPackSku = String(tierRows[0].pack_sku);
+                grantedContents = tierRows[0].contents;
+                crystals = Number(tierRows[0].crystals) || 0;
+                coins = Number(tierRows[0].coins) || 0;
             } else if (hasTieredCurrency) {
                 if (!Number.isInteger(Number(promo.tier1_limit)) || Number(promo.tier1_limit) <= 0 ||
                     Number(promo.tier2_reward_crystals) < 0 || Number(promo.tier2_reward_coins) < 0) {
@@ -393,10 +408,41 @@ async function handler(req, res) {
                 }
                 crystals = Number(tierRows[0].crystals);
                 coins = Number(tierRows[0].coins);
+            } else if (packSku !== '') {
+                const packRows = await sql`
+                    WITH selected AS (
+                        SELECT sku, contents
+                          FROM packs
+                         WHERE sku = ${packSku} AND active = TRUE
+                           AND (
+                               jsonb_path_exists(contents, '$.economy.* ? (@ > 0)') OR
+                               jsonb_array_length(COALESCE(contents->'cosmetics', '[]'::jsonb)) > 0 OR
+                               jsonb_array_length(COALESCE(contents->'convenience', '[]'::jsonb)) > 0
+                           )
+                    ), recorded AS (
+                        INSERT INTO promo_redemptions
+                            (code, player_id, crystals, coins, pack_sku, contents)
+                        SELECT ${code}, ${playerId},
+                               COALESCE((contents#>>'{economy,crystals}')::int, 0),
+                               COALESCE((contents#>>'{economy,coins}')::int, 0),
+                               sku, contents
+                          FROM selected
+                        RETURNING crystals, coins, pack_sku, contents
+                    )
+                    SELECT crystals, coins, pack_sku, contents FROM recorded
+                `;
+                if (packRows.length !== 1) {
+                    console.error('[promo/redeem] REFUSED-UNBURNED pack missing, inactive, or empty.');
+                    return res.status(200).json({ success: false, error: 'REWARD_UNAVAILABLE' });
+                }
+                grantedPackSku = String(packRows[0].pack_sku);
+                grantedContents = packRows[0].contents;
+                crystals = Number(packRows[0].crystals) || 0;
+                coins = Number(packRows[0].coins) || 0;
             } else {
                 await sql`
-                    INSERT INTO promo_redemptions (code, player_id, crystals, coins, pack_sku)
-                    VALUES (${code}, ${playerId}, ${crystals}, ${coins}, ${packSku || null})
+                    INSERT INTO promo_redemptions (code, player_id, crystals, coins, pack_sku, contents)
+                    VALUES (${code}, ${playerId}, ${crystals}, ${coins}, NULL, NULL)
                 `;
             }
         } catch (insertErr) {
@@ -411,7 +457,7 @@ async function handler(req, res) {
         // ── 7. Success ────────────────────────────────────────────────────────
         return res.status(200).json({
             success: true,
-            reward: { crystals, coins, packSku: grantedPackSku || null },
+            reward: { crystals, coins, packSku: grantedPackSku || null, contents: grantedContents },
             message: promo.message ?? null,
         });
     } catch (err) {

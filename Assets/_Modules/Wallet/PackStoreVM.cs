@@ -190,6 +190,29 @@ namespace DeNelle.Wallet
             });
         }
 
+        /// <summary>
+        /// Applies a server-snapshotted promo pack without consulting <see cref="PackCatalog"/>.
+        /// The SKU is still recorded as the durable entitlement key, but the contents delivered by
+        /// the redeem response are the sole grant authority. This is intentionally a tiny adapter
+        /// over the purchased-pack seam so promo grants cannot drift into a second economy path.
+        /// </summary>
+        public void ApplyPackContents(string sku, PackContents contents)
+        {
+            if (string.IsNullOrWhiteSpace(sku) || contents == null)
+            {
+                FlowTrace.Fail("Promo", "inline pack reward refused: missing SKU or contents; no catalog fallback attempted.");
+                return;
+            }
+
+            ApplyPackContents(new PackDef
+            {
+                Sku = sku.Trim(),
+                Name = sku.Trim(),
+                StoreVisible = false,
+                Contents = contents,
+            });
+        }
+
         /// <summary>Restores only durable ownership for an already-fulfilled server entitlement.
         /// Economy and convenience consumables are deliberately never replayed.</summary>
         public void RestoreFulfilledOwnership(PackDef pack)

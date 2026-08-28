@@ -53,6 +53,7 @@ using DeNelle.Core.Diagnostics;
 using DeNelle.Core.State;
 using DeNelle.Core.Web3;
 using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 using UnityEngine;
 using UnityEngine.Networking;
 
@@ -148,7 +149,10 @@ namespace DeNelle.Core.Promo
                 return;
             }
 
-            var payload = JsonConvert.SerializeObject(new { playerId, code, supportsPackRewards = true });
+            // Keep the legacy flag during the transition for older server surfaces, but only the
+            // explicitly named inline flag authorizes a DB contents response in the new endpoint.
+            var payload = JsonConvert.SerializeObject(new
+                { playerId, code, supportsPackRewards = true, supportsInlinePackRewards = true });
             var bodyRaw = Encoding.UTF8.GetBytes(payload);
 
             using var req = new UnityWebRequest(BackendRedeemUrl, "POST");
@@ -269,13 +273,21 @@ namespace DeNelle.Core.Promo
             int crystals = Mathf.Max(0, reward != null ? reward.Crystals : 0);
             int coins    = Mathf.Max(0, reward != null ? reward.Coins    : 0);
             string packSku = reward != null ? reward.PackSku?.Trim() : null;
+            bool hasInlineContents = reward?.Contents != null && reward.Contents.Type == JTokenType.Object;
             if (crystals <= 0 && coins <= 0 && string.IsNullOrEmpty(packSku))
             {
                 FlowTrace.Warn("Promo", "reward carried no crystals and no coins — nothing to grant.");
                 return false;
             }
 
-            if (!string.IsNullOrEmpty(packSku) && !TryApplyPack(packSku)) return false;
+            if (!string.IsNullOrEmpty(packSku))
+            {
+                // Pack responses are all-or-nothing. Top-level crystals/coins are audit mirrors of
+                // contents.economy, so applying both would double-grant. Missing contents fails closed;
+                // never fall back to the APK's baked PackCatalog.
+                if (!hasInlineContents || !TryApplyInlinePack(packSku, reward.Contents)) return false;
+                return true;
+            }
             if (crystals <= 0 && coins <= 0) return true;
 
             var econ = ResolveEconomyService(out var type);
@@ -314,38 +326,34 @@ namespace DeNelle.Core.Promo
             return true;
         }
 
-        private static bool TryApplyPack(string packSku)
+        private static bool TryApplyInlinePack(string packSku, JObject contents)
         {
-            Type catalog = null, vmType = null;
+            Type contentsType = null, vmType = null;
             foreach (var asm in AppDomain.CurrentDomain.GetAssemblies())
             {
-                if (catalog == null) catalog = asm.GetType("DeNelle.Wallet.PackCatalog");
+                if (contentsType == null) contentsType = asm.GetType("DeNelle.Wallet.PackContents");
                 if (vmType == null) vmType = asm.GetType("DeNelle.Wallet.PackStoreVM");
-                if (catalog != null && vmType != null) break;
+                if (contentsType != null && vmType != null) break;
             }
-            if (catalog == null || vmType == null)
+            if (contentsType == null || vmType == null)
             {
-                FlowTrace.Fail("Promo", "pack reward FAILED: Wallet pack types are not loaded; redemption already burned.");
+                FlowTrace.Fail("Promo", "inline pack reward FAILED: Wallet pack types are not loaded; redemption already burned.");
                 return false;
             }
             try
             {
-                var pack = catalog.GetMethod("Find", new[] { typeof(string) })?.Invoke(null, new object[] { packSku });
-                if (pack == null)
-                {
-                    FlowTrace.Fail("Promo", $"pack reward FAILED: catalog has no SKU '{packSku}'; redemption already burned.");
-                    return false;
-                }
+                var hydrated = contents.ToObject(contentsType, JsonSerializer.CreateDefault());
+                if (hydrated == null) return false;
                 var vm = vmType.GetMethod("CreateDefault", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static)?.Invoke(null, null);
-                var apply = vmType.GetMethod("ApplyPackContents", new[] { pack.GetType() });
+                var apply = vmType.GetMethod("ApplyPackContents", new[] { typeof(string), contentsType });
                 if (vm == null || apply == null) return false;
-                apply.Invoke(vm, new[] { pack });
+                apply.Invoke(vm, new[] { (object)packSku, hydrated });
                 var isOwned = vmType.GetMethod("IsOwned", new[] { typeof(string) });
                 return isOwned != null && (bool)isOwned.Invoke(vm, new object[] { packSku });
             }
             catch (Exception ex)
             {
-                FlowTrace.Fail("Promo", $"pack reward THREW: {ex.GetType().Name}: {ex.Message} - redemption already burned.");
+                FlowTrace.Fail("Promo", $"inline pack reward THREW: {ex.GetType().Name}: {ex.Message} - redemption already burned.");
                 return false;
             }
         }
@@ -425,6 +433,7 @@ namespace DeNelle.Core.Promo
         [JsonProperty("crystals")] public int Crystals { get; set; }
         [JsonProperty("coins")]    public int Coins    { get; set; }
         [JsonProperty("packSku")]  public string PackSku { get; set; }
+        [JsonProperty("contents")] public JObject Contents { get; set; }
         [JsonProperty("message")]  public string Message { get; set; }
     }
 }
