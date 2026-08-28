@@ -135,6 +135,8 @@ namespace DeNelle.Village
         // driver (Dead bool latch + DeathDir). Guarded internally — a controller without
         // a Death state is a silent no-op, never the per-frame param-spam pitfall.
         private ActorAnimator _actor;
+        private Animator _deathAnimator;
+        private AnimatorUpdateMode _deathAnimatorPriorUpdateMode;
 
         // Cached siblings for death-stop + haptics. All optional — resolved in
         // Awake and only used through null-safe calls, so a hero missing any of
@@ -1061,6 +1063,16 @@ namespace DeNelle.Village
             // declares Dead + a Death state, so this should log WILL-play on the next capture.
             var anim = _actor.Animator;
             bool hasDead = AnimatorHasParam(anim, "Dead");
+            if (anim != null && hasDead)
+            {
+                // Lethal impact and arena presentation deliberately manipulate Time.timeScale.
+                // The death body must still complete its authored clip while those effects run;
+                // otherwise the only visible motion is camera shake. Scope unscaled animation to
+                // the dead hero and restore the controller's prior mode on revive.
+                _deathAnimator = anim;
+                _deathAnimatorPriorUpdateMode = anim.updateMode;
+                anim.updateMode = AnimatorUpdateMode.UnscaledTime;
+            }
             DeNelle.Core.Diagnostics.FlowTrace.Step("HeroDeath",
                 "PlayDeathAnim: DeathDir=" + (int)dir +
                 " animator=" + (anim != null ? anim.name : "NONE") +
@@ -1086,6 +1098,9 @@ namespace DeNelle.Village
         {
             _lastDamageSourceWorld = null;
             _actor?.Revive();
+            if (_deathAnimator != null)
+                _deathAnimator.updateMode = _deathAnimatorPriorUpdateMode;
+            _deathAnimator = null;
         }
 
         // ── Death freeze (F8 on-device "hero dies -> stands in place and shakes") ──

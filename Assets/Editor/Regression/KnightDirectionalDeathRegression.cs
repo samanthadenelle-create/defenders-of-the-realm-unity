@@ -30,15 +30,31 @@ namespace DeNelle.Editor
                     else
                     {
                         if (transitions[index].destinationState.motion == null) failures.Add(name + " has no clip");
+                        else if (transitions[index].destinationState.motion.averageDuration < 0.5f)
+                            failures.Add(name + " clip is shorter than 0.5s and reads as a shake, not a death");
                         if (fallback >= 0 && index > fallback)
                             failures.Add(name + " is ordered after unconditional Death and can never win");
                     }
                 }
                 if (fallback < 0) failures.Add("generic Death fallback is missing");
+                else if (transitions[fallback].destinationState.motion == null)
+                    failures.Add("generic Death fallback has no clip");
+                else if (transitions[fallback].destinationState.motion.averageDuration < 0.5f)
+                    failures.Add("generic Death fallback clip is shorter than 0.5s and reads as a shake, not a death");
             }
 
+            string heroHealthPath = System.IO.Path.Combine(
+                System.IO.Directory.GetParent(Application.dataPath).FullName,
+                "Assets/_Modules/Village/Hero/HeroHealth.cs");
+            string heroHealth = System.IO.File.Exists(heroHealthPath)
+                ? System.IO.File.ReadAllText(heroHealthPath)
+                : string.Empty;
+            if (!heroHealth.Contains("anim.updateMode = AnimatorUpdateMode.UnscaledTime") ||
+                !heroHealth.Contains("_deathAnimator.updateMode = _deathAnimatorPriorUpdateMode"))
+                failures.Add("hero death animation is not scoped to unscaled time and restored on revive; lethal hit-stop can reduce a real death clip to a visible shake");
+
             reason = failures.Count == 0
-                ? "KNIGHT_DIRECTIONAL_DEATH_OK -- four directional transitions precede the generic fallback and own clips"
+                ? "KNIGHT_DIRECTIONAL_DEATH_OK -- four directional transitions precede the generic fallback, own full death clips, and hero death keeps animating through lethal hit-stop"
                 : "KNIGHT_DIRECTIONAL_DEATH_FAIL: " + string.Join("; ", failures);
             if (failures.Count == 0) Debug.Log(reason); else Debug.LogError(reason);
             return failures.Count == 0;

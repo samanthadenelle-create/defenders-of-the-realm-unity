@@ -146,7 +146,22 @@ namespace DeNelle.Editor
                 panel.IndexOf("-= HandleFailed", StringComparison.Ordinal) < 0)
                 failures.Add("RedeemCodePanel never unsubscribes from the service events — a closed panel keeps handling redeem callbacks");
 
-            log.AppendLine("  panel: drives PromoCodeService, no direct HTTP, no UIDocument, subscribes + unsubscribes");
+            // A successful redeem can open the Welcome Letter over this panel. Closing that letter
+            // must reveal a receipt, not another live Redeem button (which also overlaps the longer
+            // success copy on Seeker). Reopening the panel later restores entry for another code.
+            string redeemed = ExtractMethodBody(panel, "private void HandleRedeemed(PromoReward reward)");
+            string opened = ExtractMethodBody(panel, "public void Open()");
+            string visibility = ExtractMethodBody(panel, "private void SetEntryVisible(bool visible)");
+            if (redeemed == null || redeemed.IndexOf("SetEntryVisible(false)", StringComparison.Ordinal) < 0)
+                failures.Add("RedeemCodePanel leaves its input/Redeem button visible after success; closing the Welcome Letter returns the player to an overlapping, reusable redeem form");
+            if (opened == null || opened.IndexOf("SetEntryVisible(true)", StringComparison.Ordinal) < 0)
+                failures.Add("RedeemCodePanel does not restore its entry controls on Open; hiding them after one success would permanently remove the door for other promo codes");
+            if (visibility == null ||
+                visibility.IndexOf("_input.gameObject.SetActive(visible)", StringComparison.Ordinal) < 0 ||
+                visibility.IndexOf("_submit.gameObject.SetActive(visible)", StringComparison.Ordinal) < 0)
+                failures.Add("RedeemCodePanel's success-state toggle does not control both the input and Redeem button");
+
+            log.AppendLine("  panel: drives PromoCodeService, no direct HTTP, no UIDocument, subscribes + unsubscribes; success leaves receipt + Close only");
         }
 
         // ── 2. ⛔ the code string never reaches a log / trace / analytics call ─

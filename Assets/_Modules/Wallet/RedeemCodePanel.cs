@@ -98,6 +98,7 @@ namespace DeNelle.Wallet
 
             _root.SetActive(true);
             _root.transform.SetAsLastSibling();        // draw above the store content
+            SetEntryVisible(true);
             if (_input != null) { _input.text = string.Empty; _input.ActivateInputField(); }
             SetStatus(string.Empty);
             SetBusy(false);
@@ -302,6 +303,12 @@ namespace DeNelle.Wallet
 
         private void HandleRedeemed(PromoReward reward)
         {
+            // Redemption is now a confirmation state, not another invitation to submit the
+            // same one-per-wallet code. The welcome letter may temporarily cover this panel;
+            // when the player closes it they should return to the receipt + Close, never to a
+            // live Redeem button. Open() restores the controls for a later visit/other code.
+            SetEntryVisible(false);
+
             int crystals = reward != null ? Mathf.Max(0, reward.Crystals) : 0;
             int coins    = reward != null ? Mathf.Max(0, reward.Coins)    : 0;
             string packSku = reward != null ? reward.PackSku : null;
@@ -352,6 +359,12 @@ namespace DeNelle.Wallet
             _busy = busy;
             if (_submit != null) _submit.interactable = !busy;
             if (_input != null) _input.interactable = !busy;
+        }
+
+        private void SetEntryVisible(bool visible)
+        {
+            if (_input != null) _input.gameObject.SetActive(visible);
+            if (_submit != null) _submit.gameObject.SetActive(visible);
         }
 
         // =====================================================================
