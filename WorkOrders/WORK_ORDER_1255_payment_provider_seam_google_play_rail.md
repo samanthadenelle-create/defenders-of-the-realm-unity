@@ -1,6 +1,6 @@
 # WORK ORDER 1255 — Payment-Provider Seam + Google Play Fiat Rail (one build, three channels)
 
-**Status:** READY TO IMPLEMENT
+**Status:** IN PROGRESS
 **Minted:** 2026-08-28 (CLI seat; banner bumped 1255 → 1256 in the same edit)
 **Owner directive (2026-08-28, BINDING):** *"I would prefer one build that ships all three ways and
 the data pulled is only from that respective source."* — ONE project/build chain serving all three
@@ -15,7 +15,8 @@ zero crypto surface** (owner, same session: *"with google we don't use crypto on
 ## 1. Goal
 
 List Echoes of Elarion on Google Play with the SAME codebase that ships to the Solana dApp Store
-and (later) Pi. On Play, all 27 pack SKUs sell in USD through **Google Play Billing** (Unity IAP);
+and (later) Pi. On Play, all 26 currently canonical pack SKUs sell through **Google Play Billing**
+(Unity IAP) in each player's Play-localized fiat currency;
 on Seeker they keep the live Solana/SKR rail; on Pi the existing Pi rail. The channel is resolved
 once at boot, and from then on *only that channel's* payment provider, price source, and identity
 rail are consulted — no cross-bleed, no dead crypto UI on Play, no Play Billing calls on Seeker.
@@ -123,7 +124,7 @@ per-channel defines:
 ## 5. Acceptance criteria
 1. One project, one build chain; three artifacts (Seeker APK, Play AAB, Pi WebGL) produced by the
    existing scripts extended, not forked.
-2. Play AAB: contains no Solana/MWA SDK, no wallet UI reachable, all 27 packs purchasable via
+2. Play AAB: contains no Solana/MWA SDK, no wallet UI reachable, all 26 currently canonical packs purchasable via
    Play Billing in USD, entitlements restore on reinstall via Google account, verify.js validates
    the purchase token server-side before any grant.
 3. Seeker APK: behaviorally unchanged (canary purchase settles, quote flow intact, wallet
@@ -181,7 +182,7 @@ per-channel defines:
    internal-test-track AAB installed by Google Play. A sideloaded APK is not billing proof. Cover
    purchase success, user cancel, pending completion while closed, duplicate callback, network
    loss after charge, reinstall/account relink, refund/void, unavailable regional SKU, and all
-   27 mapping rows.
+   all canonical mapping rows (26 at implementation start; parity is data-derived, never hardcoded as an acceptance count).
 10. **Play compliance is artifact inspection, not UI hiding.** Gate the final AAB/Gradle dependency
     report and extracted files for Solana/MWA libraries, crypto deep links, wallet strings, token
     mints, Jupiter endpoints, and crypto-only remote/catalog data. A runtime-hidden SDK or string

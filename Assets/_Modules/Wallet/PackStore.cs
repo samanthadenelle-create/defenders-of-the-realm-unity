@@ -56,6 +56,7 @@ using DeNelle.Core.State;
 using DeNelle.Core.UI;
 using DeNelle.Core.Diagnostics;
 using DeNelle.Core.Platform;      // CurrencySkinResolver.WalletConnectionChanged - the connect seam
+using DeNelle.Core.Payments;
 using DeNelle.Core.Promo;
 using DeNelle.Core.Web3;
 // WO-1188 - the confirmation screen reports what ARRIVED, so it reads the ONE authoritative
@@ -1248,8 +1249,8 @@ namespace DeNelle.Wallet
                 // pins it to the base unit. The DOLLARS float, because the rate moves. A card
                 // showing only "396 SKR" tells a player nothing about what they are spending, and a
                 // store that obscures real-money cost reads as a store with something to hide.
-                PriceMajor   = pack.AmountLabel(_defaultCurrency),
-                PriceMinor   = pack.UsdApprox,
+                PriceMajor   = StorePriceMajor(pack),
+                PriceMinor   = StorePriceMinor(pack),
                 Badge        = pack.StoreBadge,
                 StateWord    = CardStateWord(pack),
                 // ⛔ RESOLVED HERE, RENDERED THERE. The card is handed a finished string; it never
@@ -1850,7 +1851,10 @@ namespace DeNelle.Wallet
             // this network; paraphrasing it here would put a second opinion on the screen, and
             // SellableReasonFor already substitutes a worded fallback when the row carried none —
             // so this is never blank and never a bare code.
-            if (!PurchaseQuoteService.IsSellable(pack.Sku))
+            var paymentProvider = PaymentProviders.Current;
+            bool usesProviderRail = paymentProvider != null &&
+                                    paymentProvider.Channel == PaymentChannel.GooglePlay;
+            if (!usesProviderRail && !PurchaseQuoteService.IsSellable(pack.Sku))
             {
                 string notSellable = PurchaseQuoteService.SellableReasonFor(pack.Sku);
                 if (string.IsNullOrEmpty(notSellable))
@@ -1870,7 +1874,14 @@ namespace DeNelle.Wallet
             // A refusal is a PLATE, never a button (UI-002): nothing here invites a tap that nothing
             // answers, and the reason is WORDS - the owner is red/green colourblind and a greyed
             // button carries no meaning in greyscale.
-            if (rail == CurrencyKind.Skr && pack.AmountFor(rail) <= 0d)
+            if (usesProviderRail && !paymentProvider.CanBuy(pack.Sku, out string providerReason))
+            {
+                FitInto(MakeText(host, providerReason, 30, ElarionUi.ParchmentDim, FontStyles.Italic,
+                    TextAlignmentOptions.Center, ctaMin, ctaMax), 30);
+                return;
+            }
+
+            if (!usesProviderRail && rail == CurrencyKind.Skr && pack.AmountFor(rail) <= 0d)
             {
                 FitInto(MakeText(host,
                     "Price unavailable right now. Nothing has been charged; reopen the store to retry.",
@@ -1890,7 +1901,7 @@ namespace DeNelle.Wallet
                                         "marker in this composition (" + NightMarketComposition.Describe(_plan) +
                                         ") - the network label is DROPPED rather than drawn over the button.");
             var buy = ElarionUiKit.BuildObsidianButton(host,
-                $"Buy - {pack.AmountLabel(rail)}",
+                $"Buy - {StorePriceMajor(pack)}",
                 ElarionUiKit.ObsidianButtonStyle.Style1,
                 _purchaseInFlight ? ElarionUiKit.ObsidianButtonColor.Gray
                                   : ElarionUiKit.ObsidianButtonColor.Yellow,
@@ -1911,6 +1922,25 @@ namespace DeNelle.Wallet
         private CurrencyKind SelectedCurrency(string sku)
         {
             return _selectedCurrency.TryGetValue(sku, out var c) ? c : _defaultCurrency;
+        }
+
+        private string StorePriceMajor(PackDef pack)
+        {
+            var provider = PaymentProviders.Current;
+            if (provider != null && provider.Channel == PaymentChannel.GooglePlay)
+            {
+                var price = provider.GetDisplayPrice(pack != null ? pack.Sku : string.Empty);
+                return price.Available ? price.LocalizedText : "Price unavailable";
+            }
+            return pack != null ? pack.AmountLabel(_defaultCurrency) : string.Empty;
+        }
+
+        private string StorePriceMinor(PackDef pack)
+        {
+            var provider = PaymentProviders.Current;
+            return provider != null && provider.Channel == PaymentChannel.GooglePlay
+                ? string.Empty
+                : pack != null ? pack.UsdApprox : string.Empty;
         }
 
         // =====================================================================
@@ -2208,6 +2238,10 @@ namespace DeNelle.Wallet
                 return PaymentResult.Failure(string.Empty, currency, "Pack is null.");
             }
 
+            if (PaymentProviders.Current != null &&
+                PaymentProviders.Current.Channel == PaymentChannel.GooglePlay)
+                return await PurchaseThroughProvider(pack, currency);
+
 #if MAINNET_CANARY_TEST
             bool isMainnetCanary = string.Equals(pack.Sku, PurchaseGate.MainnetCanarySku,
                 StringComparison.Ordinal);
@@ -2498,6 +2532,60 @@ namespace DeNelle.Wallet
                 _purchaseInFlight = false;
                 Render();
                 RefreshWalletMirror().Forget();
+            }
+        }
+
+        private async UniTask<PaymentResult> PurchaseThroughProvider(PackDef pack, CurrencyKind legacyCurrency)
+        {
+            var provider = PaymentProviders.Current;
+            if (provider == null || provider.Channel != PaymentChannel.GooglePlay)
+                return PaymentResult.Failure(pack.Sku, legacyCurrency, "Google Play payment provider unavailable.");
+            if (_purchaseInFlight)
+                return PaymentResult.Failure(pack.Sku, legacyCurrency, "Purchase already in progress.");
+            if (_vm.IsOwned(pack.Sku))
+                return PaymentResult.Failure(pack.Sku, legacyCurrency, "Already owned.");
+            if (!provider.CanBuy(pack.Sku, out string reason))
+            {
+                SetCommerceState(CommerceState.Failed, reason);
+                return PaymentResult.Failure(pack.Sku, legacyCurrency, reason);
+            }
+
+            _purchaseInFlight = true;
+            Render();
+            try
+            {
+                var completion = new UniTaskCompletionSource<ProviderPurchaseResult>();
+                provider.Purchase(pack.Sku, result => completion.TrySetResult(result));
+                var result = await completion.Task;
+                if (result.Pending)
+                {
+                    const string pending = "Google Play is processing this purchase. Do not buy it again.";
+                    SetCommerceState(CommerceState.Delayed, pending);
+                    return PaymentResult.Indeterminate(pack.Sku, legacyCurrency, 0d,
+                        result.ProviderTransactionId, pending);
+                }
+                if (!result.Succeeded)
+                {
+                    SetCommerceState(CommerceState.Failed, result.Error);
+                    return PaymentResult.Failure(pack.Sku, legacyCurrency, result.Error);
+                }
+
+                // Success is emitted only after authenticated server verification and durable
+                // transaction recording. The local grant remains exactly-once by SKU ownership.
+                _vm.ApplyPackContents(pack);
+                if (!_vm.IsOwned(pack.Sku))
+                    return PaymentResult.Failure(pack.Sku, legacyCurrency,
+                        "Purchase verified, but local delivery is still pending.");
+                var payment = PaymentResult.Success(pack.Sku, legacyCurrency, 0d,
+                    result.ProviderTransactionId);
+                PackPurchased?.Invoke(pack, payment);
+                SetCommerceState(CommerceState.Fulfilled, $"{pack.Name} received.");
+                return payment;
+            }
+            finally
+            {
+                _purchaseInFlight = false;
+                Render();
             }
         }
 

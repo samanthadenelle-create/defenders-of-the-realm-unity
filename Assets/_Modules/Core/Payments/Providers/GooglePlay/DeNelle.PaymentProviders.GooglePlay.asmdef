@@ -1,0 +1,25 @@
+{
+    "name": "DeNelle.PaymentProviders.GooglePlay",
+    "rootNamespace": "DeNelle.Core.Payments.Providers",
+    "references": [
+        "DeNelle.Core",
+        "Unity.Purchasing"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [
+        "IAP_PRESENT"
+    ],
+    "versionDefines": [
+        {
+            "name": "com.unity.purchasing",
+            "expression": "5.0.4",
+            "define": "IAP_PRESENT"
+        }
+    ],
+    "noEngineReferences": false
+}
