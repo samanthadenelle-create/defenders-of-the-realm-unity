@@ -820,6 +820,51 @@
       }
     },
     {
+      "sku": "welcome-500",
+      "tier": 27,
+      "storeVisible": false,
+      "promoGrantOnly": true,
+      "name": "First Watch Welcome Pack",
+      "tagline": "Provision for the first defenders answering Elarion's call.",
+      "theme": "WO-1256 launch gift. Hidden from the paid shelf and grantable only through the FIRSTWATCH promo rail.",
+      "founderOnly": false,
+      "contents": {
+        "cosmetics": [],
+        "economy": {
+          "wood": 500,
+          "iron": 500,
+          "stone": 500,
+          "crystals": 500,
+          "coins": 500
+        },
+        "convenience": []
+      },
+      "_hiddenReason": "WO-1256 promo-only tier 1; never offered for sale."
+    },
+    {
+      "sku": "welcome-100",
+      "tier": 28,
+      "storeVisible": false,
+      "promoGrantOnly": true,
+      "name": "First Watch Welcome Pack",
+      "tagline": "Provision for every defender joining the Watch.",
+      "theme": "WO-1256 launch gift. Hidden from the paid shelf and grantable only through the FIRSTWATCH promo rail.",
+      "founderOnly": false,
+      "contents": {
+        "cosmetics": [],
+        "economy": {
+          "wood": 100,
+          "iron": 100,
+          "stone": 100,
+          "crystals": 100,
+          "coins": 100
+        },
+        "convenience": []
+      },
+      "_hiddenReason": "WO-1256 promo-only tier 2; never offered for sale."
+    },
+
+    {
       "sku": "permanent-builder",
       "band": "patronage",
       "tier": 26,

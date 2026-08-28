@@ -193,7 +193,15 @@ namespace DeNelle.Editor
 
                 var pricing = o["pricing"] as JObject;
                 double usd = pricing != null ? (double?)pricing["usd"] ?? 0d : 0d;
-                if (usd <= 0d) failures.Add($"packs.json: '{sku}' has no positive USD reference price");
+                bool promoGrantOnly = o["promoGrantOnly"] != null &&
+                                      o["promoGrantOnly"].Type == JTokenType.Boolean &&
+                                      (bool)o["promoGrantOnly"];
+                if (!promoGrantOnly && usd <= 0d)
+                    failures.Add($"packs.json: '{sku}' has no positive USD reference price");
+                if (promoGrantOnly &&
+                    (o["storeVisible"] == null || o["storeVisible"].Type != JTokenType.Boolean ||
+                     (bool)o["storeVisible"]))
+                    failures.Add($"packs.json: promo-only '{sku}' must be storeVisible:false");
                 if (o["founderOnly"] != null && o["founderOnly"].Type == JTokenType.Boolean && (bool)o["founderOnly"])
                     founderCount++;
             }
@@ -211,7 +219,9 @@ namespace DeNelle.Editor
             // add rows without adding shelf entries. Asserting (b) was asserting the accident.
             int shelfCount = 0;
             foreach (var tok in packs)
-                if (tok is JObject po && !(po["impulse"] != null && po["impulse"].Type == JTokenType.Boolean && (bool)po["impulse"]))
+                if (tok is JObject po &&
+                    !(po["impulse"] != null && po["impulse"].Type == JTokenType.Boolean && (bool)po["impulse"]) &&
+                    !(po["promoGrantOnly"] != null && po["promoGrantOnly"].Type == JTokenType.Boolean && (bool)po["promoGrantOnly"]))
                     shelfCount++;
 
             if (shelfCount != CanonShelfPackCount)

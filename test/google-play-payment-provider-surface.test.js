@@ -12,7 +12,8 @@ test('Google Play catalog maps every canonical pack exactly once', () => {
   const arrayBody = catalog.match(/private static readonly string\[\] s_skus =\s*\{([\s\S]*?)\};/)[1];
   const mapped = [...arrayBody.matchAll(/"([a-z0-9-]+)"/g)].map((match) => match[1]);
 
-  assert.deepEqual(mapped.sort(), packs.map((pack) => pack.sku).sort());
+  const saleProducts = packs.filter((pack) => pack.pricing).map((pack) => pack.sku);
+  assert.deepEqual(mapped.sort(), saleProducts.sort());
   assert.equal(new Set(mapped).size, mapped.length);
   assert.match(catalog, /ProductType\.Consumable/);
 });

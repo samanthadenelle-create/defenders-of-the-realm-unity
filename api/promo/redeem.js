@@ -172,7 +172,8 @@ async function handler(req, res) {
         const codeRows = await sql`
             SELECT code, reward_crystals, reward_coins, message,
                    active, max_redemptions, per_player_limit, expires_at,
-                   bound_wallet, reward_pack_sku
+                   bound_wallet, reward_pack_sku,
+                   tier1_pack_sku, tier1_limit, tier2_pack_sku, redemption_count
             FROM promo_codes
             WHERE code = ${code}
             LIMIT 1
@@ -249,7 +250,10 @@ async function handler(req, res) {
         // PackStoreVM.ApplyPackContents client-side, THEN replace this refusal with a
         // pass-through of promo.reward_pack_sku. Not before — the burn is one-way.
         const packSku = promo.reward_pack_sku != null ? String(promo.reward_pack_sku).trim() : '';
-        if (packSku !== '' && !supportsPackRewards) {
+        const tier1PackSku = promo.tier1_pack_sku != null ? String(promo.tier1_pack_sku).trim() : '';
+        const tier2PackSku = promo.tier2_pack_sku != null ? String(promo.tier2_pack_sku).trim() : '';
+        const hasTieredPack = tier1PackSku !== '' || tier2PackSku !== '';
+        if ((packSku !== '' || hasTieredPack) && !supportsPackRewards) {
             console.error(
                 '[promo/redeem] REFUSED-UNBURNED pack reward: client did not advertise ' +
                 'supportsPackRewards=true. The code was NOT consumed; update the client and retry.'
@@ -309,7 +313,7 @@ async function handler(req, res) {
         // A message-only "thanks for playing" code is also refused, deliberately:
         // spending a player's one-shot code on a sentence is still spending it, and
         // a refusal can be undone by authoring a reward while a burn cannot.
-        if (crystals <= 0 && coins <= 0 && packSku === '') {
+        if (crystals <= 0 && coins <= 0 && packSku === '' && !hasTieredPack) {
             console.error(
                 `[promo/redeem] REFUSED-UNBURNED code=${code} — resolves to zero crystals AND zero coins ` +
                 `(reward_crystals=${JSON.stringify(promo.reward_crystals)}, reward_coins=${JSON.stringify(promo.reward_coins)}). ` +
@@ -318,11 +322,45 @@ async function handler(req, res) {
             return res.status(200).json({ success: false, error: 'REWARD_UNAVAILABLE' });
         }
 
+        let grantedPackSku = packSku;
         try {
-            await sql`
-                INSERT INTO promo_redemptions (code, player_id, crystals, coins)
-                VALUES (${code}, ${playerId}, ${crystals}, ${coins})
-            `;
+            if (hasTieredPack) {
+                if (tier1PackSku === '' || tier2PackSku === '' ||
+                    !Number.isInteger(Number(promo.tier1_limit)) || Number(promo.tier1_limit) <= 0) {
+                    console.error('[promo/redeem] REFUSED-UNBURNED malformed tiered pack configuration.');
+                    return res.status(200).json({ success: false, error: 'REWARD_UNAVAILABLE' });
+                }
+
+                // One statement owns ordinal selection AND the redemption insert. The row update
+                // serializes concurrent claims; a duplicate insert rolls the whole statement back,
+                // including redemption_count, so tier 500 cannot be skipped or double-issued.
+                const tierRows = await sql`
+                    WITH claimed AS (
+                        UPDATE promo_codes
+                           SET redemption_count = redemption_count + 1
+                         WHERE code = ${code}
+                         RETURNING redemption_count, tier1_limit,
+                                   tier1_pack_sku, tier2_pack_sku
+                    ), recorded AS (
+                        INSERT INTO promo_redemptions (code, player_id, crystals, coins, pack_sku)
+                        SELECT ${code}, ${playerId}, 0, 0,
+                               CASE WHEN redemption_count <= tier1_limit
+                                    THEN tier1_pack_sku ELSE tier2_pack_sku END
+                          FROM claimed
+                        RETURNING pack_sku
+                    )
+                    SELECT pack_sku FROM recorded
+                `;
+                if (tierRows.length !== 1 || !tierRows[0].pack_sku) {
+                    throw new Error('tiered redemption produced no reward snapshot');
+                }
+                grantedPackSku = String(tierRows[0].pack_sku);
+            } else {
+                await sql`
+                    INSERT INTO promo_redemptions (code, player_id, crystals, coins, pack_sku)
+                    VALUES (${code}, ${playerId}, ${crystals}, ${coins}, ${packSku || null})
+                `;
+            }
         } catch (insertErr) {
             // UNIQUE(code, player_id) — lost the race against a concurrent redeem.
             // Treat as already redeemed (idempotent, no double-grant).
@@ -335,7 +373,7 @@ async function handler(req, res) {
         // ── 7. Success ────────────────────────────────────────────────────────
         return res.status(200).json({
             success: true,
-            reward: { crystals, coins, packSku: packSku || null },
+            reward: { crystals, coins, packSku: grantedPackSku || null },
             message: promo.message ?? null,
         });
     } catch (err) {

@@ -338,6 +338,10 @@ CREATE TABLE IF NOT EXISTS promo_codes (
     expires_at       TIMESTAMPTZ,                       -- NULL = never expires
     bound_wallet     TEXT,                              -- NULL = public code; SET = only this player_id may redeem
     reward_pack_sku  TEXT,                              -- NULL = use reward_crystals/coins; SET = grant this pack's whole contents
+    tier1_pack_sku   TEXT,                              -- optional first-N pack reward (WO-1256)
+    tier1_limit      INTEGER CHECK (tier1_limit IS NULL OR tier1_limit > 0),
+    tier2_pack_sku   TEXT,                              -- reward after tier1_limit
+    redemption_count INTEGER NOT NULL DEFAULT 0,        -- atomic ordinal for tier selection
     created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
@@ -437,6 +441,7 @@ CREATE TABLE IF NOT EXISTS promo_redemptions (
     player_id     TEXT        NOT NULL,             -- "playerId" (BoundWallet | "anonymous")
     crystals      INTEGER     NOT NULL DEFAULT 0,   -- snapshot of reward granted (audit; code reward may change later)
     coins         INTEGER     NOT NULL DEFAULT 0,   -- snapshot of reward granted
+    pack_sku      TEXT,                                -- exact pack granted (tier-safe audit snapshot)
     redeemed_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     UNIQUE (code, player_id)                        -- one redemption per code per player
 );

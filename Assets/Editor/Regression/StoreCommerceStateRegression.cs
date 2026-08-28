@@ -45,7 +45,7 @@ namespace DeNelle.Editor.Regression
                     else foreach (char c in value) if (c > 127) { fail.Add(key + " is not ASCII-clean"); break; }
                 }
 
-                Require(code, "Buy - {pack.AmountLabel(rail)}", "CTA lacks verb + exact price", fail);
+                Require(code, "Buy - {StorePriceMajor(pack)}", "CTA lacks verb + provider-resolved exact price", fail);
                 Require(code, "DEVNET - TEST TOKEN", "Devnet marker missing", fail);
                 Require(code, "PurchaseEntitlementVerifier.HasPending(pack.Sku)", "pending payment does not suppress Buy", fail);
                 Require(code, "Reconcile - no new payment", "pending receipt has no explicit recovery CTA", fail);
