@@ -1,6 +1,6 @@
 # WORK ORDER 1256 - First Watch two-tier Welcome Pack and letter
 
-**Status:** SPLIT RELEASE - 4pm live promo uses pack-free currency tiers; next APK contains the
+**Status:** SUPERSEDED BY WO-1264 (implementation history retained) - 4pm live promo uses pack-free currency tiers; next APK contains the
 hidden resource packs and letter. Store propagation, not APK creation, gates switching the live row
 to pack SKUs.
 **Lane:** Monetization/live ops plus the next Seeker APK. **NOT PROD.** This same WO owns the server tier, two hidden baked pack SKUs, the text-only launch letter, Vercel api deploy, and APK smoke. This ruling supersedes the earlier server-only/no-APK draft. Full Neon DB-driven packs catalog remains a follow-up.

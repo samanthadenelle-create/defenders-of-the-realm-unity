@@ -1,6 +1,20 @@
 # Lanes â€” Work-Order Numbers Only (for CLI)  Â·  reconciled 2026-06-12 (nightly refill)
 
 > ## PROD SERIES (post-launch): next free = **PROD-018**.
+> *(2026-08-28 process fix, COS: **PROD-018 vacated**. Docs/COS had minted Enemy_Models
+> family packing as PROD-018; that is feature work matching Enemy_Art, not an emergency
+> critical live defect. Retargeted to **WO-1257**. Slot 018 restored unused so PROD
+> numbering is not burned on a feature. Owner rule: NEW FUNCTIONALITY → WO; PRO/PROD →
+> emergency critical fixes only.)*
+>
+> ### superseded: PROD SERIES next free = **PROD-019**.
+> *(Docs/COS seat minted **PROD-018** and bumped 018 -> 019 in this SAME edit. **VACATED
+> 2026-08-28** — feature work, retargeted to WO-1257. **Was:** Enemy_Models + Controllers
+> + Textures still PackTogether + Local as one blob; labels enemyfam-* exist but unused.
+> Match Enemy_Art: PackTogetherByLabel + Remote/R2 so Lens pulls one family. Not a
+> re-open of PROD-009 first-run streaming.)*
+>
+> ### superseded: PROD SERIES next free = **PROD-018**.
 > *(CLI seat minted **PROD-013 through PROD-017** and bumped 013 -> 018 in this SAME edit.
 > Owner felt-test on the Seeker, 2026-08-24: 013 = the repair marker (oversized/opaque, label
 > pushed off-screen) · 014 = the NEED MORE TO REPAIR toast truncates · 015 = Arcane Spire costs
@@ -137,7 +151,43 @@
 > fine as history. A copied number is the bug **even when it was right the day it was written** -
 > that is exactly how the retired 860-899 UI block kept re-seeding collisions from CLAUDE.md sec.2.
 
-> ## ⚠ RECONCILED 2026-08-27 (CLI): main line next free = **1255**.
+> ## ⚠ RECONCILED 2026-08-28 (CLI): main line next free = **1265**.
+> 1264 Launch Welcome Pack: 4pm-safe live currency promo + next-build hidden packs and letter.
+> Minted from Samantha's unnumbered work order; supersedes WO-1256 for release tracking. Banner
+> bumped 1264 -> 1265 in this SAME edit.
+>
+> ### superseded: RECONCILED 2026-08-28 (CLI): main line next free = **1264**.
+> 1263 Night Market mobile store redesign (Grok draft refined; owner-approved phone mockup;
+> single-column card flow, sticky buy CTA). Banner bumped 1263 -> 1264 in this SAME edit.
+>
+> ### superseded: RECONCILED 2026-08-28 (CLI, F8 device-triage wave seq3623-3631): main line next free = **1263**.
+> 1259 resource-panel expand buried under CombatTextLayer (seq 3623, instrumented proof) | 1260
+> pause-menu WorldHold leaks on app background (seq 3627+3631, watchdog force-released 506s/302s) |
+> 1261 pursuit-arena warp-in fail + battle-lock held after retreat (seq 3629+3630, holder
+> PursuitBattleProbe.Probe) | 1262 dungeon scenes have NO repair surface while structures burn
+> (seq 3628, dg_sunken_vault). Banner bumped 1259 -> 1263 in this SAME edit.
+>
+> ### superseded: RECONCILED 2026-08-28 (docs/Grok): main line next free = **1259**.
+> 1258 DB-driven promo packs (Neon packs table + one APK for inline contents). Follow-up to
+> 1256 weekend two-tier crystals/coins. Welcome-500 / welcome-100 INSERTed after that APK;
+> packs.json is not promo authority after cutover. Banner bumped 1258 -> 1259 in this SAME edit.
+>
+> ### superseded: RECONCILED 2026-08-28 (COS process fix): main line next free = **1258**.
+> 1257 Enemy_Models family packing (retargeted from vacated PROD-018 — feature work matching
+> Enemy_Art, not a PROD emergency). 1256 was already the launch-day Welcome Pack / FIRSTWATCH
+> (Grok/docs seat, on disk). Collision resolved: Welcome Pack keeps 1256; this ticket takes 1257.
+> Banner bumped 1257 -> 1258 in this SAME edit.
+>
+> ### superseded: RECONCILED 2026-08-28 (COS process fix): main line next free = **1257**.
+> 1256 Enemy_Models family packing — SUPERSEDED NUMBER. File moved to WO-1257 after WO-1256
+> launch-day Welcome Pack landed on disk ~1 min later. First-on-disk was Enemy_Models; Welcome
+> Pack kept 1256 because it is the in-flight launch campaign and already self-identified as 1256.
+>
+> ### superseded: RECONCILED 2026-08-28 (CLI): main line next free = **1256**.
+> 1255 payment-provider seam + Google Play fiat rail (one build, three channels; owner directive
+> "one build that ships all three ways and the data pulled is only from that respective source").
+>
+> ### superseded: RECONCILED 2026-08-27 (CLI): main line next free = **1255**.
 > 1253 permanent builder becomes a store SKU (supersedes WO-911 Q6 as the Manage affordance).
 >
 > ### superseded: RECONCILED 2026-08-27 (CLI): main line next free = **1253**.
@@ -3103,4 +3153,3 @@ the old 414 file is marked SUPERSEDED. Notion's 414 stands.
 **Hard rules:** ONE agent in Lane 1. `GameState.cs`/`SaveSchema` field-adds (Lanes 5/6/7/11/301/339) additive,
 one-at-a-time. **Do early:** 164 (zone), wallet/economy merge, 290 (QuestService), 339 (SaveSchema anchor) â€” many lanes depend on them.
 Overlaps: 108 (5/11), 282 (10/11), 80 (7/8), 111 (0/9), 295 (3/6), 340 (7/301).
-
