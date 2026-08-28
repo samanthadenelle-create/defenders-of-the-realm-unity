@@ -7,7 +7,7 @@
 
 # WORK ORDER 586 — Battle Animation Posture, Directional Death, Orc Cadence
 
-**Status:** READY TO IMPLEMENT — owner felt-test 2026-08-27 Needs Work: "Knight death sequence broken". Bounced from Fixed.
+**Status:** FIXED — CONTROLLER REBUILT + REGRESSION PASS; DEVICE DEATH FELT-VERIFY OWED
 **Lane:** Combat/Animation (code + editor controller bake) — no scene files
 **Serves:** Senior animation assessment (2026-07-04/05) — high-ROI battle feel before WO-585 ability expansion
 **Related:** WO-491 (orc locomotion base), WO-585 (animation-driven actives — separate, design-only)
@@ -148,3 +148,17 @@ Assets/Resources/Enemies/OrcHumanoid*.controller             (after bake)
 ---
 
 🤖 Implemented from battle-animation assessment ROI list. Attach this WO to the check-in; PO closes after felt-verify.
+
+## 2026-08-28 bounce RCA + validation
+
+The generated controller authored the unconditional AnyState -> `Death` fallback before all four
+directional transitions. Unity evaluates eligible AnyState transitions in order, so `Dead=true`
+always selected the generic state before `DeathDir` could matter. The factory now authors the four
+directional transitions first and the safe generic fallback last; `KnightMocap.controller` was
+rebuilt. `KnightDirectionalDeathRegression` loads the real built controller and proves all four
+states own clips and precede the fallback.
+
+- `COMPILE_GATE_OK`: `Builds/ready-integrated-compile.log`
+- `KNIGHT_DIRECTIONAL_DEATH_OK` and `REGRESSION_OK` (316/316):
+  `Builds/ready-integrated-regression-retry.log`
+- Device front/back/left/right felt verification remains owed; no device claim is made here.

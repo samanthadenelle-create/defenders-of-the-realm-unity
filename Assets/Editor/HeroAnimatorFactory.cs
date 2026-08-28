@@ -613,10 +613,20 @@ namespace DeNelle.Editor
             // Death → Locomotion so a respawned hero animates normally again.
             if (death != null)
             {
-                // Centre/fall death (DeathDir 0). When directional clips are present the
-                // generic transition stays UNCONDITIONED on DeathDir so it covers dir 0
-                // (and any value with no dedicated state); the Left/Right states below add
-                // their own DeathDir gate. Revive (Dead=false) returns every death state.
+                // Directional deaths (DeathDirection.Left=1 / Right=2) — topple the right way.
+                // These MUST be authored before the unconditional fallback below: Unity evaluates
+                // AnyState transitions in order, so the old fallback-first order swallowed every
+                // directional request and always played generic Death (WO-586 felt regression).
+                BuildDirectionalDeath(sm, locoState, "DeathLeft",  deathL, 1);
+                BuildDirectionalDeath(sm, locoState, "DeathRight", deathR, 2);
+                // Extended buckets (AnimParams.DeathDirection Front=3 / Back=4) — KnightMocap package clips.
+                var deathFront = LoadAnimAsset(spec.deathFrontAnimPath);
+                var deathBack  = LoadAnimAsset(spec.deathBackAnimPath);
+                BuildDirectionalDeath(sm, locoState, "DeathFront", deathFront, 3);
+                BuildDirectionalDeath(sm, locoState, "DeathBack",  deathBack,  4);
+
+                // Unconditioned fallback comes LAST so DeathDir 0 and a direction whose optional
+                // clip is absent still die, while a present directional transition wins first.
                 var deathState = sm.AddState("Death");
                 deathState.motion = death;
                 var toDeath = sm.AddAnyStateTransition(deathState);
@@ -626,15 +636,6 @@ namespace DeNelle.Editor
                 var deathRevive = deathState.AddTransition(locoState);
                 deathRevive.hasExitTime = false; deathRevive.duration = 0.12f;
                 deathRevive.AddCondition(AnimatorConditionMode.IfNot, 0f, "Dead");
-
-                // Directional deaths (DeathDirection.Left=1 / Right=2) — topple the right way.
-                BuildDirectionalDeath(sm, locoState, "DeathLeft",  deathL, 1);
-                BuildDirectionalDeath(sm, locoState, "DeathRight", deathR, 2);
-                // Extended buckets (AnimParams.DeathDirection Front=3 / Back=4) — KnightMocap package clips.
-                var deathFront = LoadAnimAsset(spec.deathFrontAnimPath);
-                var deathBack  = LoadAnimAsset(spec.deathBackAnimPath);
-                BuildDirectionalDeath(sm, locoState, "DeathFront", deathFront, 3);
-                BuildDirectionalDeath(sm, locoState, "DeathBack",  deathBack,  4);
             }
 
             // ── WO-285: Block — Locomotion ⇄ Block on the Block bool ───────────────
