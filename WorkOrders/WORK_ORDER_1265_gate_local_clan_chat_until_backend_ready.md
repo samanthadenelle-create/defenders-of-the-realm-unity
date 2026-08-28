@@ -1,6 +1,6 @@
 # WORK ORDER 1265 — Gate local Clan Chat until multiplayer backend is real
 
-**Status:** IN PROGRESS — player-build gate now; backend/social implementation deferred.
+**Status:** FIXED 2026-08-28 — player-build gate compiled and regression-proven; backend/social implementation remains separately deferred.
 **Minted:** 2026-08-28 by Codex CLI from the owner's unnumbered direction; banner bumped 1265 → 1266 in the same edit.
 **Lane:** Social/backend readiness. Not PROD.
 
@@ -35,3 +35,13 @@ rate limits, moderation, reporting, or takedown. No clan/chat production API or 
 - Existing leaderboard remains independent and untouched.
 - Existing local clan data is not deleted.
 
+## Result — 2026-08-28
+
+- `ClanFeatureGate.PlayerFacingEnabled` remains a hard `false` release gate.
+- The HUD Chat door and direct `ClanChatPanelBootstrap` both consult it before exposing or
+  constructing the local prototype.
+- Added registered `[clan-feature-gate]` regression; it fails if the constant opens, either entry
+  point bypasses the gate, or either check moves after construction.
+- `COMPILE_GATE_OK`.
+- `CLAN_FEATURE_GATE_OK` inside authoritative `REGRESSION_OK 315/315 suites`.
+- No local `ClanService`/PlayerPrefs data was removed; no leaderboard code changed.

@@ -695,6 +695,11 @@ namespace DeNelle.Editor
             // Registered by the COMMITTER; the lane that wrote it is fenced out of this file.
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "retired-vocabulary suite", () => { if (!DeNelle.Editor.Regression.RetiredVocabularyRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[retired-vocabulary] " + r); });
 
+            // WO-1265: ClanService/ClanChatPanel remain a local PlayerPrefs prototype. Both the
+            // dock door and direct bootstrap stay gated until the signed-wallet backend,
+            // moderation, operator readiness and two-wallet acceptance exist.
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "clan-feature-gate suite", () => { if (!DeNelle.Editor.Regression.ClanFeatureGateRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[clan-feature-gate] " + r); });
+
             // WO-1207 (owner rulings 2026-08-25): a trimmed HARVEST is TOLD, a trimmed BATTLE REWARD
             // is SILENT. "they get a warn on harvest but no warn on battle rewards cause one is
             // choice" - collecting is timed by the player, a reward is not. Both halves are pinned
