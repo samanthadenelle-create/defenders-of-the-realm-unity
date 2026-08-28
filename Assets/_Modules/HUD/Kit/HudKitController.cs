@@ -2819,15 +2819,17 @@ namespace DeNelle.HUD.Kit
                 FlowTrace.Fail("RealmStore", "dedicated HUD Store button failed to build.");
             }
 
-            AddDockTab(_slideDock.panel, 0, "Chat",        OpenClanChat);
-            AddDockTab(_slideDock.panel, 1, "Leaderboard", OpenLeaderboard);
-            AddDockTab(_slideDock.panel, 2, "Music",       OpenJukebox);
-            AddDockTab(_slideDock.panel, 3, "Settings",    OpenSettings);
+            int dockRow = 0;
+            if (DeNelle.Core.Services.ClanFeatureGate.PlayerFacingEnabled)
+                AddDockTab(_slideDock.panel, dockRow++, "Chat", OpenClanChat);
+            AddDockTab(_slideDock.panel, dockRow++, "Leaderboard", OpenLeaderboard);
+            AddDockTab(_slideDock.panel, dockRow++, "Music", OpenJukebox);
+            AddDockTab(_slideDock.panel, dockRow++, "Settings", OpenSettings);
             // Pause folded into the LEFT gear (cosmetic flag A, 2026-07-24): the standalone
             // top-right pause chip (PauseHudBootstrap.PauseHudButton) was culled to leave ONE
             // door. PauseController/SettingsController stay installed by PauseHudBootstrap; this
             // tab is the caller that opens Pause/Quit-to-Title via PauseGate.RequestBack().
-            AddDockTab(_slideDock.panel, 4, "Pause",       () => PauseGate.RequestBack());
+            AddDockTab(_slideDock.panel, dockRow, "Pause", () => PauseGate.RequestBack());
             // Owner, 2026-08-22: "the only entrance to the Realm shop is from an interaction
             // with a person in town" - so the store was unreachable without walking to the
             // vendor, and unreachable at all outside town. This is a SECOND CALLER of the

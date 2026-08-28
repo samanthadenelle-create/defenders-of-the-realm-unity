@@ -12,6 +12,7 @@
 using UnityEngine;
 using UnityEngine.SceneManagement;
 using DeNelle.Core.Diagnostics;
+using DeNelle.Core.Services;
 
 namespace DeNelle.HUD
 {
@@ -30,6 +31,7 @@ namespace DeNelle.HUD
 
         private static void SpawnInScene(Scene scene)
         {
+            if (!ClanFeatureGate.PlayerFacingEnabled) return;
             if (!scene.IsValid()) return;
 
             // WO-550: social panels do NOT bootstrap in enemy-owned RAID scenes (Village2); the
