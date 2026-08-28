@@ -25,16 +25,17 @@ test('First Watch packs are hidden and carry the owner-ruled baskets', () => {
   }
 });
 
-test('FIRSTWATCH tier selection is atomic, pack-based, and unbounded after tier 1', () => {
+test('FIRSTWATCH live tier is pack-free while pack tiers remain supported for the next APK', () => {
   const api = read('api/promo/redeem.js');
   const migration = read('api/migrations/20260828_0004_promo_reward_tiers.sql');
   assert.match(api, /SET redemption_count = redemption_count \+ 1/);
   assert.match(api, /CASE WHEN redemption_count <= tier1_limit/);
   assert.match(api, /INSERT INTO promo_redemptions[\s\S]*pack_sku/);
   assert.match(api, /supportsPackRewards/);
-  assert.match(migration, /'welcome-500', 500, 'welcome-100'/);
+  assert.match(api, /tier2_reward_crystals/);
   assert.match(migration, /'2026-08-31T04:59:00Z'/);
-  assert.match(migration, /'FIRSTWATCH', 0, 0/);
+  assert.match(migration, /'FIRSTWATCH', 500, 500/);
+  assert.match(migration, /NULL, 500, NULL, 100, 100/);
   assert.match(migration, /max_redemptions,[\s\S]*NULL,/);
   assert.match(migration, /SET active = FALSE[\s\S]*code = 'TEST10'/);
 });

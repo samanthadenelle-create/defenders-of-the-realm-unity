@@ -173,7 +173,8 @@ async function handler(req, res) {
             SELECT code, reward_crystals, reward_coins, message,
                    active, max_redemptions, per_player_limit, expires_at,
                    bound_wallet, reward_pack_sku,
-                   tier1_pack_sku, tier1_limit, tier2_pack_sku, redemption_count
+                   tier1_pack_sku, tier1_limit, tier2_pack_sku,
+                   tier2_reward_crystals, tier2_reward_coins, redemption_count
             FROM promo_codes
             WHERE code = ${code}
             LIMIT 1
@@ -253,6 +254,8 @@ async function handler(req, res) {
         const tier1PackSku = promo.tier1_pack_sku != null ? String(promo.tier1_pack_sku).trim() : '';
         const tier2PackSku = promo.tier2_pack_sku != null ? String(promo.tier2_pack_sku).trim() : '';
         const hasTieredPack = tier1PackSku !== '' || tier2PackSku !== '';
+        const hasTieredCurrency = !hasTieredPack && promo.tier1_limit != null &&
+            promo.tier2_reward_crystals != null && promo.tier2_reward_coins != null;
         if ((packSku !== '' || hasTieredPack) && !supportsPackRewards) {
             console.error(
                 '[promo/redeem] REFUSED-UNBURNED pack reward: client did not advertise ' +
@@ -299,8 +302,8 @@ async function handler(req, res) {
         }
 
         // ── 6. Record the redemption (snapshot the reward for audit) ─────────
-        const crystals = promo.reward_crystals || 0;
-        const coins    = promo.reward_coins    || 0;
+        let crystals = promo.reward_crystals || 0;
+        let coins    = promo.reward_coins    || 0;
 
         // STRUCTURAL BACKSTOP (added 2026-08-18) — the last line before the burn.
         // The pack-sku refusal at 1c closes the one KNOWN way a code reached this
@@ -313,7 +316,7 @@ async function handler(req, res) {
         // A message-only "thanks for playing" code is also refused, deliberately:
         // spending a player's one-shot code on a sentence is still spending it, and
         // a refusal can be undone by authoring a reward while a burn cannot.
-        if (crystals <= 0 && coins <= 0 && packSku === '' && !hasTieredPack) {
+        if (crystals <= 0 && coins <= 0 && packSku === '' && !hasTieredPack && !hasTieredCurrency) {
             console.error(
                 `[promo/redeem] REFUSED-UNBURNED code=${code} — resolves to zero crystals AND zero coins ` +
                 `(reward_crystals=${JSON.stringify(promo.reward_crystals)}, reward_coins=${JSON.stringify(promo.reward_coins)}). ` +
@@ -355,6 +358,38 @@ async function handler(req, res) {
                     throw new Error('tiered redemption produced no reward snapshot');
                 }
                 grantedPackSku = String(tierRows[0].pack_sku);
+            } else if (hasTieredCurrency) {
+                if (!Number.isInteger(Number(promo.tier1_limit)) || Number(promo.tier1_limit) <= 0 ||
+                    Number(promo.tier2_reward_crystals) < 0 || Number(promo.tier2_reward_coins) < 0) {
+                    console.error('[promo/redeem] REFUSED-UNBURNED malformed tiered currency configuration.');
+                    return res.status(200).json({ success: false, error: 'REWARD_UNAVAILABLE' });
+                }
+                const tierRows = await sql`
+                    WITH claimed AS (
+                        UPDATE promo_codes
+                           SET redemption_count = redemption_count + 1
+                         WHERE code = ${code}
+                         RETURNING redemption_count, tier1_limit, reward_crystals, reward_coins,
+                                   tier2_reward_crystals, tier2_reward_coins
+                    ), recorded AS (
+                        INSERT INTO promo_redemptions (code, player_id, crystals, coins, pack_sku)
+                        SELECT ${code}, ${playerId},
+                               CASE WHEN redemption_count <= tier1_limit
+                                    THEN reward_crystals ELSE tier2_reward_crystals END,
+                               CASE WHEN redemption_count <= tier1_limit
+                                    THEN reward_coins ELSE tier2_reward_coins END,
+                               NULL
+                          FROM claimed
+                        RETURNING crystals, coins
+                    )
+                    SELECT crystals, coins FROM recorded
+                `;
+                if (tierRows.length !== 1 ||
+                    (Number(tierRows[0].crystals) <= 0 && Number(tierRows[0].coins) <= 0)) {
+                    throw new Error('tiered currency redemption produced no reward snapshot');
+                }
+                crystals = Number(tierRows[0].crystals);
+                coins = Number(tierRows[0].coins);
             } else {
                 await sql`
                     INSERT INTO promo_redemptions (code, player_id, crystals, coins, pack_sku)

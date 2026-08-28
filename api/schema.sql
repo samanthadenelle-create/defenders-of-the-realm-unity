@@ -341,6 +341,8 @@ CREATE TABLE IF NOT EXISTS promo_codes (
     tier1_pack_sku   TEXT,                              -- optional first-N pack reward (WO-1256)
     tier1_limit      INTEGER CHECK (tier1_limit IS NULL OR tier1_limit > 0),
     tier2_pack_sku   TEXT,                              -- reward after tier1_limit
+    tier2_reward_crystals INTEGER,                      -- optional pack-free second tier
+    tier2_reward_coins INTEGER,                         -- optional pack-free second tier
     redemption_count INTEGER NOT NULL DEFAULT 0,        -- atomic ordinal for tier selection
     created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );

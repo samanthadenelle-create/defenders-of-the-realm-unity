@@ -3,6 +3,8 @@ ALTER TABLE promo_codes
     ADD COLUMN IF NOT EXISTS tier1_pack_sku TEXT,
     ADD COLUMN IF NOT EXISTS tier1_limit INTEGER,
     ADD COLUMN IF NOT EXISTS tier2_pack_sku TEXT,
+    ADD COLUMN IF NOT EXISTS tier2_reward_crystals INTEGER,
+    ADD COLUMN IF NOT EXISTS tier2_reward_coins INTEGER,
     ADD COLUMN IF NOT EXISTS redemption_count INTEGER NOT NULL DEFAULT 0;
 
 ALTER TABLE promo_redemptions
@@ -39,9 +41,10 @@ UPDATE promo_codes
 INSERT INTO promo_codes (
     code, reward_crystals, reward_coins, message, active, max_redemptions,
     per_player_limit, expires_at, bound_wallet, reward_pack_sku,
-    tier1_pack_sku, tier1_limit, tier2_pack_sku
+    tier1_pack_sku, tier1_limit, tier2_pack_sku,
+    tier2_reward_crystals, tier2_reward_coins
 ) VALUES (
-    'FIRSTWATCH', 0, 0, 'Welcome to the Watch.', FALSE, NULL,
+    'FIRSTWATCH', 500, 500, 'Welcome to the Watch.', TRUE, NULL,
     NULL, '2026-08-31T04:59:00Z', NULL, NULL,
-    'welcome-500', 500, 'welcome-100'
+    NULL, 500, NULL, 100, 100
 );

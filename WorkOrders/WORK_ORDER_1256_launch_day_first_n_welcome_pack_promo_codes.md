@@ -1,11 +1,20 @@
 # WORK ORDER 1256 - First Watch two-tier Welcome Pack and letter
 
-**Status:** READY FOR DEVICE SMOKE / RELEASE - implemented, production schema + API deployed,
-store-shaped APK built, and Android R2 parity proved on 2026-08-28. `FIRSTWATCH` remains sealed
-(`active=FALSE`) until this APK reaches Seeker; final acceptance is a real non-owner wallet redeem.
+**Status:** SPLIT RELEASE - 4pm live promo uses pack-free currency tiers; next APK contains the
+hidden resource packs and letter. Store propagation, not APK creation, gates switching the live row
+to pack SKUs.
 **Lane:** Monetization/live ops plus the next Seeker APK. **NOT PROD.** This same WO owns the server tier, two hidden baked pack SKUs, the text-only launch letter, Vercel api deploy, and APK smoke. This ruling supersedes the earlier server-only/no-APK draft. Full Neon DB-driven packs catalog remains a follow-up.
 
 ## Binding product ruling (Samantha GO 2026-08-28)
+
+### Critical 4pm safety split (Monetization correction, binding)
+
+- Today's published Seeker APK does not contain the new SKUs. For the 4pm campaign, `FIRSTWATCH`
+  must have `reward_pack_sku`, `tier1_pack_sku`, and `tier2_pack_sku` all NULL.
+- Live rewards are crystals/coins only: redemptions 1-500 receive 500/500; later redemptions receive
+  100/100. The same atomic ordinal and one-wallet rule apply.
+- The hidden five-resource packs and welcome letter remain in the next APK. Do not point the live
+  promo at those packs until dApp Store propagation proves that APK is what Seekers actually run.
 
 1. **packs.json SKUs** `storeVisible=false` (both StreamingAssets and Resources mirrors; byte-identical):
    - `welcome-500`: 500 wood, 500 iron, 500 stone + crystals/coins. **PRIMARY (author this):** 500 crystals + 500 coins. **SAFER OVERRIDE (Monetization note only; do NOT author unless Sam changes the ask):** 250 crystals + 100 coins; wood/iron/stone stay 500.
