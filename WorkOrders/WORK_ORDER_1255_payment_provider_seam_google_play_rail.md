@@ -1,6 +1,10 @@
 # WORK ORDER 1255 — Payment-Provider Seam + Google Play Fiat Rail (one build, three channels)
 
-**Status:** IN PROGRESS
+**Status:** BLOCKED 2026-08-28 — TESTED FAIL-CLOSED. Dormant server verification/ledger, client settlement, authenticated account binding, and a deep AAB packaging gate are implemented and regression-tested, but a distributable Play artifact is correctly refused: Wallet/Web3 lack a `!GOOGLE_PLAY` boundary, Village directly references Wallet, and the MWA Android plugin is unconditional. Store UI is also held by the owner design gate below; Play Console/service credentials remain external. Nothing is deployed or enabled.
+**⛔ DESIGN GATE (owner, 2026-08-28): "i want designs first before oking it."** The Play-channel
+store SCREEN (fiat pricing, no wallet UI) ships to the owner as design mockups for approval BEFORE
+any store-facing UI work lands. Lanes A/C (seam + server) may proceed; the Play storefront
+presentation is blocked on the approved design.
 **Minted:** 2026-08-28 (CLI seat; banner bumped 1255 → 1256 in the same edit)
 **Owner directive (2026-08-28, BINDING):** *"I would prefer one build that ships all three ways and
 the data pulled is only from that respective source."* — ONE project/build chain serving all three

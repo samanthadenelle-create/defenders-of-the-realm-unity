@@ -1,6 +1,6 @@
 # WORK ORDER 1257 — Enemy_Models (and Controllers/Textures) still one PackTogether Local blob: match Enemy_Art per-family packing so Lens pulls one family
 
-**Status:** READY TO IMPLEMENT
+**Status:** FIXED 2026-08-28 — DEVICE-TESTED on Seeker APK `2026.08.28.345445`; hollow-only pull measured 27,637,049 bytes and resolved to hollow bundles plus the intentional shared-art bundle, with no orc/troll/boss payload. Full regression `318/318`. Awaiting owner felt-test to close.
 **Minted:** 2026-08-28 (retargeted from incorrectly-minted PROD-018; COS process fix). CLI main line. Banner bumped 1257 → 1258 in the same edit. Number is 1257 because WO-1256 was already the launch-day Welcome Pack (FIRSTWATCH) on disk. **PROD-018 slot restored unused** — this is feature work matching Enemy_Art, not an emergency critical live defect. Owner rule: NEW FUNCTIONALITY → WO; PRO/PROD → emergency critical fixes only.
 **Priority:** HIGH — a hollow wave still pays for every family; the packing law already shipped for Enemy_Art and was never applied to the groups that actually hold the meshes.
 **Silo:** Addressables / content delivery. **Lane:** `Assets/Editor/ContentPackingSetup.cs` + `AddressableAssetsData` Enemy_Models / Enemy_Controllers / Enemy_Textures + `EnemyContentWarmer` / `UpcomingWaveWarmPlanner`. No scenes.

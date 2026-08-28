@@ -1,0 +1,10 @@
+﻿
+> 08-28 16:32:27.767  3786  3820 I Unity   : WO1257_HOLLOW_PULL_OK beforeBytes=27637049 afterBytes=0 bundles=[enemy_art_assets_enemyfam-hollow_a0f90790cb845d17bd1cf3cc2d06bc3b.bundle,ene
+my_art_assets_enemyfam-shared_b9772cdf0b5da0c0f914a65d51d6ea0c.bundle,enemy_controllers_assets_enemyfam-hollow_e070d2b6dd29bc8500d4c8bd8cb71d6f.bundle,enemy_models_assets_enemyfam-hollow
+_5fa9d35d355d4d397698fae955573809.bundle,enemy_textures_assets_enemyfam-hollow_0e79ddbc813a1a4200d0b00d8035c964.bundle]
+  08-28 16:32:27.767  3786  3820 I Unity   : UnityEngine.DebugLogHandler:Internal_Log(LogType, LogOption, String, Object)
+  08-28 16:32:27.767  3786  3820 I Unity   : DeNelle.Core.<Start>d__0:MoveNext()
+  08-28 16:32:27.767  3786  3820 I Unity   : UnityEngine.SetupCoroutine:InvokeMoveNext(IEnumerator, IntPtr)
+  08-28 16:32:27.767  3786  3820 I Unity   : 
+
+
