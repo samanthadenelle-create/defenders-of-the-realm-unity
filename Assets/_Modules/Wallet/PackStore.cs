@@ -219,6 +219,8 @@ namespace DeNelle.Wallet
         private RectTransform _ctaHost;                 // cleared per focus; the CTA lives here
         private Transform _shelfContent;                // band strips + card rows
         private int _persistentShelfChildren;           // the FREE band, built once, never re-rendered
+        private Transform _utilityContent;              // landscape right rail: actions + close-the-gap offers
+        private int _persistentUtilityChildren;         // action rows survive catalogue renders
         private Transform _spotlightHost;               // rebuilt whole on each focus change
         private TextMeshProUGUI _statusBanner;          // purchase status surface
         private TextMeshProUGUI _balanceLabel;          // the read-only wallet mirror
@@ -600,6 +602,13 @@ namespace DeNelle.Wallet
             _legalFooter = null;
             _aurora = null;
             _cardHandles.Clear();
+
+            if (_utilityContent != null)
+            {
+                for (int i = _utilityContent.childCount - 1; i >= _persistentUtilityChildren; i--)
+                    Destroy(_utilityContent.GetChild(i).gameObject);
+                BuildLandscapeGapOffers();
+            }
             _persistentShelfChildren = 0;
         }
 
@@ -706,18 +715,36 @@ namespace DeNelle.Wallet
             // In the stacked two-column composition the commerce rail is ~254 units tall, where
             // "35% of the column" is 89 px — under two line boxes, i.e. a status message that
             // silently loses its second line. The plan states the band's height; the band takes it.
+            bool landscapeRail = _plan.Mode == NightMarketMode.WideThreeColumn ||
+                                 _plan.Mode == NightMarketMode.CompactThreeColumn;
+            float utilityFloor = landscapeRail ? 0.14f : 1f;
             var statusBand = Region(_commerceHost, "CommerceStatus",
-                new Vector2(0f, 1f), new Vector2(1f, 1f),
-                new Vector2(NightMarketComposition.CommerceGutterPx, -_plan.StatusBandPx),
-                new Vector2(-NightMarketComposition.CommerceGutterPx, 0f));
+                landscapeRail ? Vector2.zero : new Vector2(0f, 1f),
+                landscapeRail ? new Vector2(1f, 0.14f) : new Vector2(1f, 1f),
+                landscapeRail ? new Vector2(NightMarketComposition.CommerceGutterPx, 0f)
+                              : new Vector2(NightMarketComposition.CommerceGutterPx, -_plan.StatusBandPx),
+                landscapeRail ? new Vector2(-NightMarketComposition.CommerceGutterPx, 0f)
+                              : new Vector2(-NightMarketComposition.CommerceGutterPx, 0f));
             _statusBanner = MakeText(statusBand, string.Empty, 30, ElarionUi.Gold,
                 FontStyles.Normal, TextAlignmentOptions.TopLeft,
                 Vector2.zero, Vector2.one);
 
             // The CTA sub-host. Cleared and rebuilt per focus so the spotlight column never has to be
             // torn down to repaint a button — and so the status surface above it SURVIVES a rebuild.
-            _ctaHost = Region(_commerceHost, "CommerceCta", Vector2.zero, new Vector2(1f, 0f),
-                Vector2.zero, new Vector2(0f, _plan.CtaHostPx));
+            _ctaHost = landscapeRail
+                ? Region(_bottomBand, "CommerceCta", new Vector2(0.18f, 0f), new Vector2(0.42f, 1f),
+                    Vector2.zero, Vector2.zero)
+                : Region(_commerceHost, "CommerceCta", Vector2.zero, new Vector2(1f, 0f),
+                    Vector2.zero, new Vector2(0f, _plan.CtaHostPx));
+
+            if (landscapeRail)
+            {
+                var utilityHost = Region(_commerceHost, "LandscapeUtility",
+                    new Vector2(0f, utilityFloor), Vector2.one, Vector2.zero, Vector2.zero);
+                _utilityContent = BuildScrollColumn(utilityHost);
+                BuildLandscapeActions(PromoStrings.Get(PromoStrings.KeyEntry));
+                _persistentUtilityChildren = _utilityContent != null ? _utilityContent.childCount : 0;
+            }
 
             _shelfContent = BuildScrollColumn(_marketHost);
 
@@ -734,10 +761,12 @@ namespace DeNelle.Wallet
             // Render() protects it by clearing only the children ABOVE _persistentShelfChildren, so
             // Free also stays FIRST in the fixed band order for free — nothing is asked for before
             // something is given.
-            BuildFreeBand(PromoStrings.Get(PromoStrings.KeyEntry));
+            if (!landscapeRail)
+                BuildFreeBand(PromoStrings.Get(PromoStrings.KeyEntry));
             _persistentShelfChildren = _shelfContent != null ? _shelfContent.childCount : 0;
 
-            BuildTrustStrip(_bottomBand);
+            if (landscapeRail) BuildLandscapeBottomNotice(_bottomBand);
+            else BuildTrustStrip(_bottomBand);
             SeatCloseInBottomBand();
 
             _modal.canvas.SetActive(false);   // built hidden; OnEnable shows it
@@ -837,13 +866,27 @@ namespace DeNelle.Wallet
             var rt = close.transform as RectTransform;
             if (rt == null) return;
             close.transform.SetParent(_bottomBand, false);
-            rt.anchorMin = new Vector2(0.5f, 0.5f);
-            rt.anchorMax = new Vector2(0.5f, 0.5f);
+            bool landscapeRail = _plan.Mode == NightMarketMode.WideThreeColumn ||
+                                 _plan.Mode == NightMarketMode.CompactThreeColumn;
+            float closeX = landscapeRail ? 0.085f : 0.5f;
+            rt.anchorMin = new Vector2(closeX, 0.5f);
+            rt.anchorMax = new Vector2(closeX, 0.5f);
             rt.pivot = new Vector2(0.5f, 0.5f);
             rt.anchoredPosition = Vector2.zero;
             rt.sizeDelta = new Vector2(ElarionUiKit.CanonCtaWidth, ElarionUiKit.CanonCtaHeight);
             close.transform.SetAsLastSibling();
             FlowTrace.Step("Store", "SeatCloseInBottomBand: canon Close seated INSIDE the single 132-unit bottom band.");
+        }
+
+        private void BuildLandscapeBottomNotice(Transform host)
+        {
+            if (host == null) return;
+            MakeText(host, PackCatalog.CurrencyDisclaimer, 30,
+                ElarionUi.ParchmentDim, FontStyles.Normal, TextAlignmentOptions.Left,
+                new Vector2(0.45f, 0f), new Vector2(0.69f, 1f));
+            MakeText(host, StoreStrings.Get(StoreStrings.KeyCovenant), 30,
+                ElarionUi.Gold, FontStyles.Bold, TextAlignmentOptions.Right,
+                new Vector2(0.70f, 0f), new Vector2(1f, 1f));
         }
 
         /// <summary>
@@ -943,6 +986,10 @@ namespace DeNelle.Wallet
             // Patronage because Free occupies the first children and these append after them.
             foreach (StoreBand band in new[] { StoreBand.Gap, StoreBand.Basket, StoreBand.Patronage })
             {
+                // In the reference landscape, single-resource catch-up offers live in the right
+                // utility rail. They remain the same PackDef rows and use the same focus/purchase
+                // path; only their presentation changes.
+                if (_utilityContent != null && band == StoreBand.Gap) continue;
                 var rows = PacksInBand(band);
                 if (rows.Count == 0) continue;
 
@@ -1107,6 +1154,61 @@ namespace DeNelle.Wallet
             BuildUtilityTab(tabs, entryLabel, OpenRedeemPanel, true);
             BuildUtilityTab(tabs, "SEASON TRACK", () => PanelRouter.Open(PanelId.BattlePass), false);
             BuildUtilityTab(tabs, "MONTHLY LEDGER", () => PanelRouter.Open(PanelId.MonthlyLedger), false);
+        }
+
+        /// <summary>
+        /// The landscape reference's right rail. These are navigation doors, not merchandise, so
+        /// they stay visible even when purchasing is disabled or the catalogue fails to load.
+        /// </summary>
+        private void BuildLandscapeActions(string entryLabel)
+        {
+            if (_utilityContent == null) return;
+            BuildUtilityHeading(_utilityContent, "ACTIONS", NightMarketPalette.For(StoreBand.Free));
+            BuildUtilityRow(_utilityContent, entryLabel, OpenRedeemPanel, true);
+            BuildUtilityRow(_utilityContent, "SEASON TRACK", () => PanelRouter.Open(PanelId.BattlePass), false);
+            BuildUtilityRow(_utilityContent, "MONTHLY LEDGER", () => PanelRouter.Open(PanelId.MonthlyLedger), false);
+        }
+
+        private void BuildLandscapeGapOffers()
+        {
+            if (_utilityContent == null) return;
+            var rows = PacksInBand(StoreBand.Gap);
+            if (rows.Count == 0) return;
+
+            BuildUtilityHeading(_utilityContent, "CLOSE THE GAP", NightMarketPalette.For(StoreBand.Gap));
+            foreach (var pack in rows)
+            {
+                if (pack == null) continue;
+                string label = pack.Name + "   " + StorePriceMajor(pack);
+                var captured = pack;
+                BuildUtilityRow(_utilityContent, label,
+                    () => FocusPack(captured.Sku, BuildLedgerScale(), animate: true), false);
+            }
+        }
+
+        private static void BuildUtilityHeading(Transform parent, string label, Color light)
+        {
+            var go = new GameObject("utility-heading-" + label, typeof(RectTransform), typeof(LayoutElement));
+            go.transform.SetParent(parent, false);
+            go.GetComponent<LayoutElement>().preferredHeight = 64f;
+            Plate(go.transform, new Color(light.r, light.g, light.b, 0.16f));
+            MakeText(go.transform, label, 31, ElarionUi.Parchment, FontStyles.Bold,
+                TextAlignmentOptions.Left, new Vector2(0.06f, 0f), new Vector2(0.96f, 1f));
+        }
+
+        private static void BuildUtilityRow(Transform parent, string label, Action action, bool accent)
+        {
+            var slot = new GameObject("utility-row-" + label, typeof(RectTransform), typeof(LayoutElement));
+            slot.transform.SetParent(parent, false);
+            var le = slot.GetComponent<LayoutElement>();
+            le.preferredHeight = ElarionUiKit.MinTouchPx + 8f;
+            le.minHeight = ElarionUiKit.MinTouchPx;
+            var button = ElarionUiKit.BuildObsidianButton(slot.transform, label,
+                ElarionUiKit.ObsidianButtonStyle.Style1,
+                accent ? ElarionUiKit.ObsidianButtonColor.Yellow : ElarionUiKit.ObsidianButtonColor.Gray,
+                new Vector2(0.01f, 0.03f), new Vector2(0.99f, 0.97f), action);
+            var text = button != null ? button.GetComponentInChildren<TMP_Text>(true) : null;
+            if (text != null) ElarionUiKit.FitSingleLine(text, ElarionUi.FontFloorMobile, 31f);
         }
 
         /// <summary>
@@ -1576,33 +1678,18 @@ namespace DeNelle.Wallet
             rt.anchorMin = new Vector2(0.06f, y0); rt.anchorMax = new Vector2(0.94f, y1);
             rt.offsetMin = Vector2.zero; rt.offsetMax = Vector2.zero;
 
+            // Receipt-style rows match the landscape reference: resource marker + exact grant.
+            // A resource quantity is not progress, so no comparative progress bar is drawn here.
+            Orb(go.transform, light, new Vector2(0f, 0.16f), new Vector2(0.10f, 0.84f));
             MakeText(go.transform, key, 30, ElarionUi.Parchment, FontStyles.Normal,
-                TextAlignmentOptions.Left, new Vector2(0f, 0f), new Vector2(0.26f, 1f));
+                TextAlignmentOptions.Left, new Vector2(0.13f, 0f), new Vector2(0.66f, 1f));
             // ⛔ THE PRINTED NUMBER IS THE TRUTH AND IT MUST NEVER CLIP (§5). The bar is only the
             // comparison; if a figure ever had to shrink, it shrinks toward the floor — it is never
             // truncated, because a truncated quantity on a money screen is a wrong quantity.
             ElarionUiKit.FitSingleLine(
                 MakeText(go.transform, amount.ToString("N0"), 32, ElarionUi.Parchment, FontStyles.Bold,
-                    TextAlignmentOptions.Right, new Vector2(0.70f, 0f), new Vector2(1f, 1f)),
+                    TextAlignmentOptions.Right, new Vector2(0.66f, 0f), new Vector2(1f, 1f)),
                 ElarionUi.FontFloorMobile, 32f);
-
-            var track = Plate(go.transform, new Color(1f, 1f, 1f, 0.10f));
-            if (track != null)
-            {
-                var trt = track.rectTransform;
-                trt.anchorMin = new Vector2(0.28f, 0.22f); trt.anchorMax = new Vector2(0.70f, 0.72f);
-                trt.offsetMin = Vector2.zero; trt.offsetMax = Vector2.zero;
-            }
-            float frac = max > 0 ? Mathf.Clamp01(amount / (float)max) : 0f;
-            frac = Mathf.Max(frac, 0.05f);
-            var fill = Plate(go.transform, new Color(light.r, light.g, light.b, 0.85f));
-            if (fill != null)
-            {
-                var frt = fill.rectTransform;
-                frt.anchorMin = new Vector2(0.28f, 0.22f);
-                frt.anchorMax = new Vector2(0.28f + 0.42f * frac, 0.72f);
-                frt.offsetMin = Vector2.zero; frt.offsetMax = Vector2.zero;
-            }
         }
 
         /// <summary>

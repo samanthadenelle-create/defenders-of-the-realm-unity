@@ -1,6 +1,6 @@
 # WORK ORDER 1263 — Night Market Mobile Store Redesign
 
-**Status:** FIXED — PORTRAIT COMPOSITION + FULL REGRESSION PASS; DEVICE CAPTURES OWED
+**Status:** IMPLEMENTED — LANDSCAPE REFERENCE CAPTURED; TESTER APK + DEVICE FELT-PASS OWED
 **Minted:** 2026-08-28 (CLI; banner bumped 1263 → 1264 in the same edit)
 **Provenance:** Grok-authored draft, hand-delivered by the owner 2026-08-28, refined by CLI (canon
 addendum below). The owner APPROVED the reference phone mockup this same day — the §2 design gate
@@ -14,6 +14,13 @@ card-based mobile storefront matching the approved visual mockup.
 Starter's Hand card, sectioned card rails, footer badges, sticky gold Buy CTA). A side-by-side
 recreation (Seeker/SKR vs the future Google Play fiat variant) lives on the design canvas
 "Night Market Play Mockups".
+
+**Landscape addendum (owner, 2026-08-28):** `NIGHT_MARKET_LANDSCAPE_REFERENCE.png` and
+`WORK_ORDER_NIGHT_MARKET_LANDSCAPE_REDESIGN (1).md` are now the binding landscape target. In
+landscape the selected offer owns the left rail, Basket/Patronage offers own the centre shelf,
+Actions plus curated Gap offers own the right rail, and the single purchase CTA shares the bottom
+action band with Close. Prices remain live provider text; currency lettering is never baked into
+reusable art. The existing PackDef, PurchaseGate and PaymentProvider seams remain authoritative.
 
 ---
 

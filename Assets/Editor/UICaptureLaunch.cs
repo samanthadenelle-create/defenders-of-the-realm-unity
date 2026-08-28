@@ -195,6 +195,16 @@ namespace DeNelle.Editor
             new CaptureTarget(2670, 1200),   // THE SEEKER'S REAL SURFACE
         };
 
+        // The Night Market redesign is reviewed at the supplied composition sizes as well as the
+        // real Seeker surface. Each size still receives a fresh build; these are not rescaled shots.
+        private static readonly CaptureTarget[] NightMarketTargets =
+        {
+            new CaptureTarget(800, 360),
+            new CaptureTarget(915, 412),
+            new CaptureTarget(1280, 720),
+            new CaptureTarget(2670, 1200),
+        };
+
         // Fidelity bookkeeping (reported as UI_CAPTURE_FIDELITY_OK / _DEGRADED).
         private static int _fidelityOk;
         private static int _fidelityDegraded;
@@ -605,6 +615,22 @@ namespace DeNelle.Editor
             // WO-1080: LAST, because it carries every Report*'s totals. This is the line a
             // reviewer diffs a ticket's quoted baseline against.
             ReportCaptureStamp(head, count);
+        }
+
+        /// <summary>Focused visual-review entry point for the landscape Night Market work order.</summary>
+        public static void RunNightMarketCapture()
+        {
+            Directory.CreateDirectory(OutDir);
+            _fidelityOk = 0;
+            _fidelityDegraded = 0;
+            _fidelityReasons.Clear();
+            _geoFailures.Clear();
+            _geoCanvasesChecked = 0;
+            _touchFailures.Clear();
+            _touchPanelsChecked = 0;
+            _touchPanelsClean = 0;
+            int count = CaptureNightMarketStore();
+            Debug.Log("NIGHT_MARKET_CAPTURE_OK " + count + "/" + NightMarketTargets.Length + " frames");
         }
 
         // ---------------------------------------------------------------------
@@ -2261,7 +2287,7 @@ namespace DeNelle.Editor
         // =====================================================================
         private static int CaptureNightMarketStore()
         {
-            return ForEachTarget("NightMarket", CaptureNightMarketStoreOnce);
+            return ForEachTarget("NightMarket", NightMarketTargets, CaptureNightMarketStoreOnce);
         }
 
         private static int CaptureNightMarketStoreOnce(CaptureTarget target)
