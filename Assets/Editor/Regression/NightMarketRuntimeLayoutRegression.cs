@@ -105,6 +105,11 @@ namespace DeNelle.Editor.Regression
             // Notch left + gesture bar bottom, the shape a real cutout device hands us.
             new Surface { Name = "2340x1080 notched",      W = 2340, H = 1080,
                           SafeInset = new Vector4(132f, 44f, 48f, 0f) },
+            new Surface { Name = "360x800 portrait",       W = 360, H = 800, SafeInset = Vector4.zero },
+            new Surface { Name = "393x873 portrait",       W = 393, H = 873, SafeInset = Vector4.zero },
+            new Surface { Name = "412x915 portrait",       W = 412, H = 915, SafeInset = Vector4.zero },
+            new Surface { Name = "412x915 portrait cutout", W = 412, H = 915,
+                          SafeInset = new Vector4(0f, 0f, 24f, 36f) },
         };
 
         public static void RunAll()
@@ -294,6 +299,14 @@ namespace DeNelle.Editor.Regression
                 // ⛔ THE SAME TWO CALLS THE PLAYER GETS. Not a re-implementation.
                 var plan = NightMarketComposition.Resolve(bodyW, bodyH);
                 var cols = NightMarketComposition.Compose(body, plan);
+
+                bool portrait = s.H > s.W;
+                if (portrait && plan.Mode != NightMarketMode.PortraitSingleColumn)
+                    failures.Add(tag + " portrait surface did not select PortraitSingleColumn: " +
+                                 NightMarketComposition.Describe(plan));
+                if (!portrait && plan.Mode == NightMarketMode.PortraitSingleColumn)
+                    failures.Add(tag + " landscape surface incorrectly selected PortraitSingleColumn: " +
+                                 NightMarketComposition.Describe(plan));
 
                 if (plan.Deficit)
                     failures.Add(tag + " composition resolved to a DEFICIT (" + plan.DeficitPx.ToString("0") +

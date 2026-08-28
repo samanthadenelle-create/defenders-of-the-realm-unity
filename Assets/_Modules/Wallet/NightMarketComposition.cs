@@ -58,6 +58,8 @@ namespace DeNelle.Wallet
     /// <summary>How the Night Market body is composed at the current surface width.</summary>
     public enum NightMarketMode
     {
+        /// <summary>Phone portrait: one vertical flow (spotlight, shelf, sticky commerce).</summary>
+        PortraitSingleColumn,
         /// <summary>Three columns, both rails at their comfort width. The abundant-width case.</summary>
         WideThreeColumn,
         /// <summary>Three columns, rails interpolated between their minimum and comfort widths.</summary>
@@ -80,6 +82,9 @@ namespace DeNelle.Wallet
         public float SpotlightWidthPx;
         public float MarketWidthPx;
         public float CommerceWidthPx;
+
+        /// <summary>Height of the merchandise shelf. In landscape it owns the full body height.</summary>
+        public float MarketHeightPx;
 
         /// <summary>Spotlight height. Full body height except in <see cref="NightMarketMode.StackedTwoColumn"/>.</summary>
         public float SpotlightHeightPx;
@@ -267,6 +272,12 @@ namespace DeNelle.Wallet
         /// <summary>Vertical gap between the spotlight and a stacked commerce rail.</summary>
         public const float StackGapPx = 20f;
 
+        /// <summary>Portrait phone vertical flow. The featured offer remains readable without
+        /// consuming the shelf, while commerce stays a full-width sticky action at the bottom.</summary>
+        public const float PortraitSpotlightMinPx = 430f;
+        public const float PortraitSpotlightMaxPx = 620f;
+        public const float PortraitMarketMinPx = 440f;
+
         /// <summary>
         /// ⭐ THE FORMULA. The narrowest body that can carry three columns without shrinking a card,
         /// a glyph or a tap target below its floor.
@@ -309,7 +320,32 @@ namespace DeNelle.Wallet
             float threeMin = ThreeColumnMinBodyPx;
             float threeWide = ThreeColumnWideBodyPx;
 
-            if (w >= threeMin)
+            if (h > w)
+            {
+                // ── PORTRAIT: ONE VERTICAL MOBILE FLOW ───────────────────────
+                // This is intentionally selected by orientation before any landscape width
+                // breakpoint. Previously a portrait phone fell into StackedTwoColumn and kept a
+                // desktop left/right split; on a 360dp-class screen that also hit the deficit clamp.
+                plan.Mode = NightMarketMode.PortraitSingleColumn;
+                plan.SpotlightWidthPx = w;
+                plan.MarketWidthPx = w;
+                plan.CommerceWidthPx = w;
+
+                plan.CommerceHeightPx = Mathf.Min(CommerceStackedHeightPx, h);
+                float remaining = Mathf.Max(0f, h - plan.CommerceHeightPx - 2f * StackGapPx);
+                plan.SpotlightHeightPx = Mathf.Round(Mathf.Clamp(
+                    remaining * 0.40f, PortraitSpotlightMinPx, PortraitSpotlightMaxPx));
+                plan.MarketHeightPx = Mathf.Round(Mathf.Max(0f, remaining - plan.SpotlightHeightPx));
+
+                if (w < ShelfMinForTwoCardsPx || plan.MarketHeightPx < PortraitMarketMinPx)
+                {
+                    plan.Deficit = true;
+                    plan.DeficitPx = Mathf.Ceil(Mathf.Max(
+                        ShelfMinForTwoCardsPx - w,
+                        PortraitMarketMinPx - plan.MarketHeightPx));
+                }
+            }
+            else if (w >= threeMin)
             {
                 // ── THREE COLUMNS ────────────────────────────────────────────
                 // t walks the rails from their minimum to their comfort width. Above the wide
@@ -325,6 +361,7 @@ namespace DeNelle.Wallet
 
                 plan.SpotlightHeightPx = h;
                 plan.CommerceHeightPx  = h;
+                plan.MarketHeightPx = h;
             }
             else
             {
@@ -362,6 +399,7 @@ namespace DeNelle.Wallet
                 float commerceH = Mathf.Min(CommerceStackedHeightPx, Mathf.Max(0f, h - StackGapPx));
                 plan.CommerceHeightPx  = Mathf.Round(commerceH);
                 plan.SpotlightHeightPx = Mathf.Round(Mathf.Max(0f, h - commerceH - StackGapPx));
+                plan.MarketHeightPx = h;
             }
 
             // ── The commerce rail's internal vertical budget ─────────────────
@@ -386,11 +424,11 @@ namespace DeNelle.Wallet
         public static string Describe(NightMarketPlan p)
         {
             return string.Format(
-                "mode={0} body={1:0}x{2:0} spotlight={3:0} market={4:0} commerce={5:0} card={6:0} " +
-                "cta-host={7:0} status={8:0} thresholds[3col-min={9:0} wide={10:0}]{11}",
-                p.Mode, p.BodyWidthPx, p.BodyHeightPx, p.SpotlightWidthPx, p.MarketWidthPx,
-                p.CommerceWidthPx, p.CardWidthPx, p.CtaHostPx, p.StatusBandPx,
-                ThreeColumnMinBodyPx, ThreeColumnWideBodyPx,
+                "mode={0} body={1:0}x{2:0} spotlight={3:0}x{4:0} market={5:0}x{6:0} commerce={7:0}x{8:0} card={9:0} " +
+                "cta-host={10:0} status={11:0} thresholds[3col-min={12:0} wide={13:0}]{14}",
+                p.Mode, p.BodyWidthPx, p.BodyHeightPx, p.SpotlightWidthPx, p.SpotlightHeightPx,
+                p.MarketWidthPx, p.MarketHeightPx, p.CommerceWidthPx, p.CommerceHeightPx,
+                p.CardWidthPx, p.CtaHostPx, p.StatusBandPx, ThreeColumnMinBodyPx, ThreeColumnWideBodyPx,
                 p.Deficit ? " DEFICIT=" + p.DeficitPx.ToString("0") + "px" : string.Empty);
         }
 
@@ -435,6 +473,20 @@ namespace DeNelle.Wallet
 
             switch (plan.Mode)
             {
+                case NightMarketMode.PortraitSingleColumn:
+                    // Reading order, top to bottom: selected offer, product shelf, sticky purchase.
+                    cols.Commerce = Region(bodyHost, "Commerce",
+                        Vector2.zero, new Vector2(1f, 0f),
+                        Vector2.zero, new Vector2(0f, plan.CommerceHeightPx));
+                    cols.Market = Region(bodyHost, "Market",
+                        Vector2.zero, new Vector2(1f, 0f),
+                        new Vector2(0f, plan.CommerceHeightPx + StackGapPx),
+                        new Vector2(0f, plan.CommerceHeightPx + StackGapPx + plan.MarketHeightPx));
+                    cols.Spotlight = Region(bodyHost, "Spotlight",
+                        new Vector2(0f, 1f), Vector2.one,
+                        new Vector2(0f, -plan.SpotlightHeightPx), Vector2.zero);
+                    break;
+
                 case NightMarketMode.StackedTwoColumn:
                     // Left rail: spotlight on top, commerce pinned to the bottom of the body.
                     cols.Commerce = Region(bodyHost, "Commerce",
