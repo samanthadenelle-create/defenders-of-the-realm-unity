@@ -33,9 +33,11 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Reflection;
 using System.Text;
 using UnityEngine;
 using DeNelle.Core.Diagnostics;
+using DeNelle.Core.UI;
 
 namespace DeNelle.Editor
 {
@@ -53,6 +55,7 @@ namespace DeNelle.Editor
             log.AppendLine("--- UI SURFACE PROBE FALSIFIABILITY (WO-976) ---");
 
             RunBehavioural(failures, log);
+            RunCombatTextIdleSurface(failures, log);
             RunSourceLint(failures, log);
 
             if (failures.Count == 0)
@@ -65,6 +68,45 @@ namespace DeNelle.Editor
             reason = "ui-surface-probe: " + string.Join("; ", failures);
             Debug.LogError(log + "UI_SURFACE_PROBE_FAIL: " + reason);
             return false;
+        }
+
+        // WO-1259: a full-screen decorative combat-text canvas must advertise zero opacity
+        // while its pool is idle, then become visible only while it has an actual stamp.
+        private static void RunCombatTextIdleSurface(List<string> failures, StringBuilder log)
+        {
+            GameObject go = null;
+            try
+            {
+                go = new GameObject("CombatTextLayerRegression");
+                var layer = go.AddComponent<CombatTextLayer>();
+                // Edit-mode AddComponent does not invoke a non-ExecuteAlways Awake. Drive the
+                // same construction method explicitly so this remains a behavioural test.
+                typeof(CombatTextLayer).GetMethod("Awake", BindingFlags.Instance | BindingFlags.NonPublic)
+                    ?.Invoke(layer, null);
+                var canvas = go.GetComponent<Canvas>();
+                var group = go.GetComponent<CanvasGroup>();
+
+                if (canvas == null || canvas.sortingOrder != 30500)
+                    failures.Add("combat-text layer no longer owns its expected sortingOrder-30500 overlay");
+                if (group == null || group.alpha != 0f)
+                    failures.Add("idle combat-text layer is not explicitly transparent - it can bury the resource HUD in surface probes");
+                if (group != null && (group.interactable || group.blocksRaycasts))
+                    failures.Add("decorative combat-text layer can intercept input");
+
+                layer.Push(CombatTextKind.Parry, "PARRY!", Vector3.zero);
+                if (group == null || group.alpha != 1f)
+                    failures.Add("combat-text layer does not become visible when a real stamp is pushed");
+                else
+                    log.AppendLine("  [combat-text-overlay] idle alpha=0; live stamp alpha=1; raycasts disabled");
+            }
+            catch (Exception ex)
+            {
+                failures.Add("combat-text idle-surface regression threw: " + ex.GetType().Name + ": " + ex.Message);
+            }
+            finally
+            {
+                if (go != null) UnityEngine.Object.DestroyImmediate(go);
+            }
         }
 
         // ── HALF A: the four classes must each be able to FIRE ──────────────────────────

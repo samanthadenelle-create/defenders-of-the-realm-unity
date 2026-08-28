@@ -78,6 +78,7 @@ namespace DeNelle.Core.UI
         private readonly Entry[] _pool = new Entry[PoolSize];
         private RectTransform _canvasRect;
         private Canvas _canvas;
+        private CanvasGroup _group;
 
         /// <summary>The lazily-built singleton layer (null only when construction failed).</summary>
         public static CombatTextLayer Instance
@@ -110,6 +111,13 @@ namespace DeNelle.Core.UI
             scaler.matchWidthOrHeight = 0.5f;
             // NO GraphicRaycaster — the layer is purely decorative and must never eat taps.
             _canvasRect = (RectTransform)transform;
+            // This canvas spans the whole screen, but it is not a surface while every pooled
+            // stamp is idle. Keep the root's explicit opacity truthful so visibility probes do
+            // not mistake an empty decorative overlay for an opaque HUD coverer (WO-1259).
+            _group = gameObject.AddComponent<CanvasGroup>();
+            _group.alpha = 0f;
+            _group.interactable = false;
+            _group.blocksRaycasts = false;
 
             for (int i = 0; i < PoolSize; i++)
             {
@@ -157,6 +165,7 @@ namespace DeNelle.Core.UI
                 e.label.text = e.baseText + " x" + e.count;          // "PARRY! x3"
                 FlowTrace.Throttle("UI", "combattext-dedupe", 1f,
                     "CombatText dedupe: " + kind + " x" + e.count);
+                SetLayerVisible(true);
                 return;
             }
 
@@ -182,6 +191,7 @@ namespace DeNelle.Core.UI
             take.rect.anchoredPosition = take.basePos;
             take.rect.localScale = Vector3.one;
             take.go.SetActive(true);
+            SetLayerVisible(true);
         }
 
         /// <summary>World position → canvas-local anchored position (centre-anchored), with a fallback
@@ -203,6 +213,7 @@ namespace DeNelle.Core.UI
         private void Update()
         {
             float dt = Time.unscaledDeltaTime;
+            bool anyLive = false;
             for (int i = 0; i < PoolSize; i++)
             {
                 var e = _pool[i];
@@ -219,7 +230,14 @@ namespace DeNelle.Core.UI
                     e.live = false;
                     e.go.SetActive(false);
                 }
+                else anyLive = true;
             }
+            SetLayerVisible(anyLive);
+        }
+
+        private void SetLayerVisible(bool visible)
+        {
+            if (_group != null) _group.alpha = visible ? 1f : 0f;
         }
     }
 }
