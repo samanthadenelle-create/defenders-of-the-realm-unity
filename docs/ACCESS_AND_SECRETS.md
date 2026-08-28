@@ -142,11 +142,10 @@ not investigate before rotating.
 
 ## 5. THE ONE OWNER ACTION CURRENTLY OUTSTANDING
 
-`ADMIN_OPS_KEY` is **not yet set on the Vercel deployment.** Until it is, every write through
-`api/admin/ops.js` answers `OPS_WRITE_NOT_CONFIGURED` (with the remedy on screen) and the operator
-console is read-only. Reads work today.
-
-Set it in **Vercel → Settings → Environment Variables**, then redeploy.
+`ADMIN_OPS_KEY` is set on the production Vercel deployment as of 2026-08-28. It is sensitive,
+write-only configuration: Vercel does not reveal it after creation, it is never committed, and the
+console still holds a supplied value in memory only for one tab. If it must be replaced, rotate it
+in **Vercel → Settings → Environment Variables**, then redeploy.
 
 > ⚠ **It must be a DIFFERENT value from `ADMIN_DASH_KEY`.** A second key that equals the first is one
 > key, and the whole point of the second key is that reading the money tables and writing to them are

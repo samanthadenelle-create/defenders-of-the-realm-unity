@@ -3,7 +3,7 @@
 **Minted:** 2026-08-28 by Codex CLI from Samantha's unnumbered request; banner bumped 1269 → 1270 in the same edit.
 **Lane:** Work Order, not PROD. **Seat:** Codex CLI.
 
-**Status:** READY TO IMPLEMENT
+**Status:** FIXED — production deployed and live-smoked 2026-08-28
 
 ## Problem
 
@@ -33,3 +33,14 @@ there is no payment to refund and no entitlement to issue.
 - Refresh removes the signature from the active alert while the original event remains intact.
 - The action is visible in operator history and tests pin the read/write and no-money-write rules.
 - Command Center tests and board build pass before deployment.
+
+## Result — 2026-08-28
+
+- Focused regression: `node --test test/command-center.test.js` → **43/43 PASS**.
+- Syntax gates: all four changed API/console modules pass `node --check`.
+- Board: `BOARD_CHECK_OK`, next main-line mint 1270.
+- Production deployment: `dpl_CBbkUZynVSx181kYZzWy1v19BCKR`, aliased to
+  `https://defenders-of-the-realm-v2.vercel.app`.
+- Live write smoke: `ACKNOWLEDGED - NO ACTION` at `2026-08-28T19:54:55.118Z`.
+- Live read-after-write: active client/server mismatch alerts **1 → 0**; server-settled count
+  remained **3**. Source telemetry, quotes, entitlements, grants, SKUs, and refunds were untouched.
