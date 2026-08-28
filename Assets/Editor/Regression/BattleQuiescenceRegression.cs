@@ -446,6 +446,17 @@ namespace DeNelle.Editor
                                  "must be announced from BOTH lifecycle ends (Resolve and ResolveAbandoned) and " +
                                  "from NEITHER individual outcome - an abandoned fight opened the same pursuit " +
                                  "window a resolved one did.");
+
+                foreach (var token in new[]
+                         {
+                             "ArenaEntryLanded(heroStance",
+                             "ARENA ENTRY HANDSHAKE failed after warp",
+                             "ARENA ENTRY HANDSHAKE failed after retry",
+                             "Resolve(false)"
+                         })
+                    if (!arena.Contains(token))
+                        failures.Add($"[session-wiring] arena entry handshake lost '{token}' - a WarpHero request " +
+                                     "can again spawn enemies before proving the hero arrived.");
             }
 
             string hitStop = ReadCode("Assets/_Modules/Village/Vfx/HitStopManager.cs");

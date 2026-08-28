@@ -592,6 +592,30 @@ namespace DeNelle.Village.Arena
             Vector3 heroStance = ArenaCentre + new Vector3(0f, 0f, -ArenaHalfDepth + 9f);
             WarpHero(heroStance, Quaternion.LookRotation(Vector3.forward));
 
+            // WO-1261: a warp request is not an arrival. A device capture showed WarpHero return
+            // while the hero remained ~150m from the stage; enemies were then spawned into an
+            // unwinnable arena and only the 2.5s watchdog unwound it. Confirm on the NEXT frame so
+            // competing mover/clamp writers have had their say. Retry once with the same mover-safe
+            // chokepoint; if it still does not stick, abort before spawning or presenting combat.
+            yield return null;
+            if (!ArenaEntryLanded(heroStance, out string firstEntryState))
+            {
+                FlowTrace.Fail("BattleArena",
+                    $"ARENA ENTRY HANDSHAKE failed after warp: {firstEntryState}. Retrying once before any enemies spawn.");
+                WarpHero(heroStance, Quaternion.LookRotation(Vector3.forward));
+                yield return null;
+                if (!ArenaEntryLanded(heroStance, out string retryEntryState))
+                {
+                    FlowTrace.Fail("BattleArena",
+                        $"ARENA ENTRY HANDSHAKE failed after retry: {retryEntryState}. ABORTING cleanly before spawn; " +
+                        "the existing encounter return will restore the pre-stage pose and release BattleLock.");
+                    Resolve(false);
+                    yield break;
+                }
+                FlowTrace.Step("BattleArena", "ARENA ENTRY HANDSHAKE recovered on retry: " + retryEntryState);
+            }
+            else FlowTrace.Step("BattleArena", "ARENA ENTRY HANDSHAKE confirmed: " + firstEntryState);
+
             // FACING FIX (owner on-device 2026-07-15: "loading into the arena, the hero ALWAYS faces
             // the wrong direction / away from the fight"). The hero IS warped to face NORTH (+Z) into the
             // enemy line above — that part is correct. The wrong-facing is the CAMERA: the orbit camera
@@ -1838,6 +1862,26 @@ namespace DeNelle.Village.Arena
                 if (agent != null && agent.enabled != agentWasEnabled) agent.enabled = agentWasEnabled;
                 if (ccWasEnabled && cc != null) cc.enabled = true;
             }
+        }
+
+        private static bool ArenaEntryLanded(Vector3 wanted, out string state)
+        {
+            var hero = GameObject.FindWithTag("Player");
+            if (hero == null)
+            {
+                state = $"hero=<missing> wanted={wanted} scene='{UnityEngine.SceneManagement.SceneManager.GetActiveScene().name}'";
+                return false;
+            }
+
+            Vector3 got = hero.transform.position;
+            float drift = Vector3.Distance(got, wanted);
+            var agent = hero.GetComponent<NavMeshAgent>();
+            var cc = hero.GetComponent<CharacterController>();
+            state = $"wanted={wanted} got={got} drift={drift:F2}m inArena={IsArenaPosition(got)} " +
+                    $"agent={(agent == null ? "none" : agent.enabled ? (agent.isOnNavMesh ? "enabled/on-mesh" : "enabled/OFF-MESH") : "disabled")} " +
+                    $"cc={(cc == null ? "none" : cc.enabled ? "enabled" : "disabled")} " +
+                    $"scene='{UnityEngine.SceneManagement.SceneManager.GetActiveScene().name}'";
+            return IsArenaPosition(got) && drift <= ReturnPoseDriftMeters;
         }
 
         // How far the hero may end up from the pose the arena asked for before we call it a
