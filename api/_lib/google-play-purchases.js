@@ -204,7 +204,22 @@ function persistedRowMatches(row, input) {
  */
 async function persistVerifiedProof(sql, input, proof, expectedBinding) {
     const decision = proofDecision(proof, expectedBinding);
-    if (!decision.grant) return { ok: false, state: decision.state, reason: decision.reason || null };
+    if (!decision.grant) {
+        // Crash boundary: fulfill may have consumed the product server-side and
+        // the app may die before Unity ConfirmPurchase. Google then reports the
+        // token consumed on the retry. It is safe only when OUR durable ledger
+        // already owns that exact token/player/product in a terminal success state.
+        if (decision.reason !== 'already_consumed')
+            return { ok: false, state: decision.state, reason: decision.reason || null };
+        const existing = await sql`
+            SELECT player_id, package_name, product_id, sku, product_type, state
+              FROM google_play_purchases WHERE purchase_token = ${input.purchaseToken} LIMIT 1`;
+        const row = existing && existing[0];
+        if (persistedRowMatches(row, input) &&
+            [PurchaseState.GRANTED, PurchaseState.CONSUMED, PurchaseState.ACKNOWLEDGED].includes(row.state))
+            return { ok: true, state: row.state, sku: input.sku };
+        return { ok: false, state: 'conflict', reason: 'already_consumed' };
+    }
     const snapshot = JSON.stringify(safeProofSnapshot(proof));
     const purchaseTime = proof.purchaseTimeMillis ? new Date(proof.purchaseTimeMillis).toISOString() : null;
     const rows = await sql`

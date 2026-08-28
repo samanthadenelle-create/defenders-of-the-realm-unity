@@ -19,11 +19,19 @@ namespace DeNelle.Core.Payments.Providers
         private readonly Dictionary<string, Action<ProviderPurchaseResult>> _callbacks =
             new Dictionary<string, Action<ProviderPurchaseResult>>(StringComparer.Ordinal);
         private StoreController _store;
+        private IGooglePlayAccountBindingSource _bindingSource;
         private bool _connected;
         private string _failure = "Google Play Billing is still initializing.";
 
         /// <summary>Set by the authenticated backend composition root. Null deliberately fails closed.</summary>
         public ReceiptVerifier VerifyAndGrantAsync { get; set; }
+
+        public void ConfigureSettlement(GooglePlayReceiptSettlement settlement,
+            IGooglePlayAccountBindingSource bindingSource)
+        {
+            VerifyAndGrantAsync = settlement == null ? null : settlement.SettleAsync;
+            _bindingSource = bindingSource;
+        }
 
         public PaymentChannel Channel => PaymentChannel.GooglePlay;
 
@@ -75,7 +83,7 @@ namespace DeNelle.Core.Payments.Providers
 
         public bool CanBuy(string sku, out string reason)
         {
-            if (VerifyAndGrantAsync == null)
+            if (VerifyAndGrantAsync == null || _bindingSource == null)
             {
                 reason = "Secure Google Play receipt verification is unavailable.";
                 return false;
@@ -97,7 +105,37 @@ namespace DeNelle.Core.Payments.Providers
                 return;
             }
             _callbacks.Add(productId, onComplete);
-            _store.PurchaseProduct(productId);
+            BeginPurchaseAsync(sku, productId);
+        }
+
+        private async void BeginPurchaseAsync(string sku, string productId)
+        {
+            try
+            {
+                var binding = await _bindingSource.FetchAccountBindingAsync();
+                if (string.IsNullOrWhiteSpace(binding) || binding.Length != 64 ||
+                    _store.GooglePlayStoreExtendedService == null)
+                {
+                    CompleteBeforeOrder(productId, sku,
+                        "Secure Google Play account binding is unavailable.");
+                    return;
+                }
+                _store.GooglePlayStoreExtendedService.SetObfuscatedAccountId(binding);
+                _store.PurchaseProduct(productId);
+            }
+            catch (Exception ex)
+            {
+                Debug.LogError("Google Play account binding failed: " + ex.GetType().Name);
+                CompleteBeforeOrder(productId, sku,
+                    "Secure Google Play account binding is unavailable.");
+            }
+        }
+
+        private void CompleteBeforeOrder(string productId, string sku, string error)
+        {
+            if (_callbacks.TryGetValue(productId, out var callback))
+                callback(ProviderPurchaseResult.Failure(sku, error));
+            _callbacks.Remove(productId);
         }
 
         public void RestorePurchases(Action<bool, string> onComplete)
@@ -167,7 +205,9 @@ namespace DeNelle.Core.Payments.Providers
                 return;
             }
 
-            // Confirmation consumes the catalog's consumable only after server grant succeeds.
+            // The settlement adapter has now completed server verify, exact-once local apply,
+            // server fulfill, and server-side consume/acknowledge. Never move this confirmation
+            // above that sequence: Unity must retain Pending so a crash safely retries.
             _store.ConfirmPurchase(order);
             _callbacks.Remove(productId);
             callback?.Invoke(ProviderPurchaseResult.Success(sku, order.Info.TransactionID));

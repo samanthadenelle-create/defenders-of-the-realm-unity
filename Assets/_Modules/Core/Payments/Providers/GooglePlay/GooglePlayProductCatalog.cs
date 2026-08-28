@@ -24,6 +24,17 @@ namespace DeNelle.Core.Payments.Providers
             "permanent-builder"
         };
 
+        // Must remain byte-for-byte equivalent in meaning to
+        // api/_lib/google-play-purchases.js PRODUCT_TYPES. Mixed bundles that
+        // contain permanent cosmetics are durable products even when they also
+        // carry one-time currency.
+        private static readonly HashSet<string> s_nonConsumable = new HashSet<string>(StringComparer.Ordinal)
+        {
+            "frostfall-bundle", "embergrove-bundle", "bloomtide-bundle",
+            "echo-patron-pack", "hero-wardrobe-pack", "realm-defender-bundle",
+            "builders-cache", "permanent-builder"
+        };
+
         private static readonly Dictionary<string, string> s_productBySku = BuildProductMap();
         private static readonly Dictionary<string, string> s_skuByProduct = BuildSkuMap();
 
@@ -35,11 +46,27 @@ namespace DeNelle.Core.Payments.Providers
         public static bool TryGetSku(string productId, out string sku) =>
             s_skuByProduct.TryGetValue(productId ?? string.Empty, out sku);
 
+        public static bool TryGetProductType(string sku, out ProductType productType)
+        {
+            if (!s_productBySku.ContainsKey(sku ?? string.Empty))
+            {
+                productType = ProductType.Consumable;
+                return false;
+            }
+            productType = s_nonConsumable.Contains(sku)
+                ? ProductType.NonConsumable : ProductType.Consumable;
+            return true;
+        }
+
         public static List<ProductDefinition> ProductDefinitions()
         {
             var definitions = new List<ProductDefinition>(s_skus.Length);
             foreach (var sku in s_skus)
-                definitions.Add(new ProductDefinition(s_productBySku[sku], ProductType.Consumable));
+            {
+                if (!TryGetProductType(sku, out var productType))
+                    throw new InvalidOperationException("Google Play product type missing for " + sku);
+                definitions.Add(new ProductDefinition(s_productBySku[sku], productType));
+            }
             return definitions;
         }
 

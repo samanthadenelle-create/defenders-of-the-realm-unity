@@ -7,6 +7,7 @@ const path = require('node:path');
 const play = require('../api/_lib/google-play-purchases');
 const verifyRoute = require('../api/purchases/google-play-verify');
 const fulfillRoute = require('../api/purchases/google-play-fulfill');
+const bindingRoute = require('../api/purchases/google-play-binding');
 
 function fakeSql(rows) {
     const calls = [];
@@ -159,7 +160,8 @@ test('pending, cancelled, binding mismatch and API failure never create grant au
             credential: {}, serviceAccountAccessToken: async () => 'access',
             fetchProductPurchase: async () => proof });
         assert.equal(result.ok, false);
-        assert.equal(sql.calls.length, 0);
+        assert.equal(sql.calls.some(call => /INSERT INTO|UPDATE google_play_purchases/.test(call.text)),
+            false, 'a rejected proof may inspect an existing terminal token but must never grant');
     }
     const failedSql = fakeSql([]);
     await assert.rejects(() => verifyRoute._test.processPurchase(failedSql, input, env, {
@@ -179,6 +181,23 @@ test('duplicate token owned by another player or SKU never grants', async () => 
     assert.deepEqual(result, { ok: false, state: 'conflict', reason: 'token_reused' });
 });
 
+test('consumed proof retries only its matching durable terminal ledger owner', async () => {
+    const input = inputFor();
+    const binding = play.accountBinding(input.playerId, 'binding-key');
+    const proof = { state: 'purchased', consumptionState: 1,
+        obfuscatedExternalAccountId: binding };
+    const terminal = fakeSql([{ player_id: input.playerId, package_name: input.packageName,
+        product_id: input.productId, sku: input.sku, product_type: input.productType,
+        state: 'consumed' }]);
+    assert.deepEqual(await play.persistVerifiedProof(terminal, input, proof, binding),
+        { ok: true, state: 'consumed', sku: input.sku });
+    const stolen = fakeSql([{ player_id: 'other-player', package_name: input.packageName,
+        product_id: input.productId, sku: input.sku, product_type: input.productType,
+        state: 'consumed' }]);
+    assert.deepEqual(await play.persistVerifiedProof(stolen, input, proof, binding),
+        { ok: false, state: 'conflict', reason: 'already_consumed' });
+});
+
 test('fulfill transitions verified to granted before server finalization and is retryable', async () => {
     const input = inputFor();
     let call = 0;
@@ -194,6 +213,20 @@ test('fulfill transitions verified to granted before server finalization and is 
     assert.match(sql.calls[1].text, /state =/);
 });
 
+test('fulfill retry after terminal state does not call Google finalization twice', async () => {
+    const input = inputFor();
+    const sql = fakeSql([{ player_id: input.playerId, package_name: input.packageName,
+        product_id: input.productId, sku: input.sku, product_type: input.productType,
+        state: 'consumed' }]);
+    let finalized = false;
+    const result = await fulfillRoute._test.fulfillPurchase(sql, input, { credential: {} }, {
+        serviceAccountAccessToken: async () => { throw new Error('must not mint token'); },
+        finalizeGrantedPurchase: async () => { finalized = true; } });
+    assert.deepEqual(result, { ok: true, state: 'consumed' });
+    assert.equal(finalized, false);
+    assert.equal(sql.calls.length, 1);
+});
+
 test('production route checks disabled flag before reading or calling Google', async () => {
     const old = process.env.GOOGLE_PLAY_BILLING_ENABLED;
     delete process.env.GOOGLE_PLAY_BILLING_ENABLED;
@@ -206,4 +239,18 @@ test('production route checks disabled flag before reading or calling Google', a
         else process.env.GOOGLE_PLAY_BILLING_ENABLED = old; }
     assert.equal(out.status, 503);
     assert.equal(out.body.code, 'PLAY_BILLING_UNAVAILABLE');
+});
+
+test('account binding endpoint is independently default-off and never exposes its key', () => {
+    assert.equal(bindingRoute._test.bindingConfiguration({}).ok, false);
+    assert.equal(bindingRoute._test.bindingConfiguration({ GOOGLE_PLAY_BILLING_ENABLED: 'true' }).ok,
+        false);
+    const configured = bindingRoute._test.bindingConfiguration({ GOOGLE_PLAY_BILLING_ENABLED: 'true',
+        GOOGLE_PLAY_ACCOUNT_BINDING_KEY: 'server-only-key' });
+    assert.deepEqual(configured, { ok: true });
+    const source = fs.readFileSync(path.join(__dirname, '..', 'api', 'purchases',
+        'google-play-binding.js'), 'utf8');
+    assert.match(source, /verifySession/);
+    assert.match(source, /accountBinding: play\.accountBinding/);
+    assert.doesNotMatch(source, /(bindingKey|accountBindingKey|secret)\s*:/i);
 });
