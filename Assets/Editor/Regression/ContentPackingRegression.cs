@@ -58,6 +58,10 @@ namespace DeNelle.Editor
         public const string FailMarker = "CONTENT_PACKING_FAIL";
 
         private const string EnemyGroupName     = "Enemy_Art";
+        private static readonly string[] EnemyPayloadGroups =
+            { "Enemy_Models", "Enemy_Controllers", "Enemy_Textures" };
+        private const string RemoteBuildPathId = "ad0e68328bd7fd54ea79f0a9ab1dd9b1";
+        private const string RemoteLoadPathId  = "cf151d4962873af43b9302d323a9d707";
         private const string StructureGroupName = "Structure_Art";
         private const string FamilyLabelPrefix  = "enemyfam-";
 
@@ -110,12 +114,44 @@ namespace DeNelle.Editor
 
             CheckStructuresPackedPerAsset(settings, failures, notes);
             CheckEnemiesPackedPerFamily(settings, failures, notes);
+            foreach (string groupName in EnemyPayloadGroups)
+                CheckEnemyPayloadPackedPerFamily(settings, groupName, failures, notes);
             CheckCatalogArtPathsResolve(settings, failures, notes);
 
             reason = failures.Count == 0
                    ? string.Join("; ", notes)
                    : string.Join(" | ", failures);
             return failures.Count == 0;
+        }
+
+        private static void CheckEnemyPayloadPackedPerFamily(AddressableAssetSettings settings,
+            string groupName, List<string> failures, List<string> notes)
+        {
+            var group = settings.FindGroup(groupName);
+            if (group == null) { failures.Add($"[enemy payload] group '{groupName}' is missing."); return; }
+            var schema = group.GetSchema<BundledAssetGroupSchema>();
+            if (schema == null) { failures.Add($"[enemy payload] '{groupName}' has no bundled schema."); return; }
+            if (!AcceptsEnemyMode(schema.BundleMode))
+                failures.Add($"[enemy payload] '{groupName}' is {schema.BundleMode}, not PackTogetherByLabel.");
+            if (schema.BuildPath.Id != RemoteBuildPathId || schema.LoadPath.Id != RemoteLoadPathId)
+                failures.Add($"[enemy payload] '{groupName}' is not on Remote.BuildPath/Remote.LoadPath; " +
+                             "local groups remain baked into the APK.");
+            if (schema.RetryCount != 2)
+                failures.Add($"[enemy payload] '{groupName}' retry={schema.RetryCount}, expected 2.");
+
+            var buckets = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var entry in group.entries)
+            {
+                if (entry == null) continue;
+                var labels = entry.labels.Where(l => l != null &&
+                    l.StartsWith(FamilyLabelPrefix, StringComparison.Ordinal)).ToList();
+                if (labels.Count != 1)
+                    failures.Add($"[enemy payload] '{groupName}/{entry.address}' has {labels.Count} family labels; expected exactly one.");
+                else buckets.Add(labels[0]);
+            }
+            if (groupName != "Enemy_Textures" && !AcceptsFamilyBucketCount(buckets.Count))
+                failures.Add($"[enemy payload] '{groupName}' has only {buckets.Count} family bucket(s).");
+            notes.Add($"[enemy payload] {groupName}: Remote PackTogetherByLabel, retry=2, buckets={buckets.Count}");
         }
 
         // =====================================================================

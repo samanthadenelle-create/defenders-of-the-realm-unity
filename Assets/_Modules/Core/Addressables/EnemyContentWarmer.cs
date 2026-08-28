@@ -284,8 +284,8 @@ namespace DeNelle.Core
         /// Ask for <paramref name="address"/> as <typeparamref name="T"/> without waiting for it.
         /// Idempotent while in flight. The asset lands in the resident cache when it arrives and
         /// the caller finds it on a later attempt. Nothing here can block the calling frame.
-        /// <para>Also kicks the FAMILY fetch, which is what makes this on-demand rather than a
-        /// 64 MB pull: Addressables downloads only the bundle(s) the family lives in.</para>
+        /// <para>The exact address pulls only its labelled family bundle. Ahead-of-wave family
+        /// prefetch is issued separately from the canonical EnemyDef.Family.</para>
         /// </summary>
         public static void Request<T>(string address) where T : Object
         {
@@ -297,7 +297,9 @@ namespace DeNelle.Core
             if (!s_inFlight.Add(key)) return;
 
             EnsureHost();
-            WarmFamily(FamilyOf(address));
+            // Do not infer a bundle label from the model spelling here. The address load below
+            // already pulls its exact bundle; encounter lookahead calls WarmFamily with the
+            // canonical EnemyDef.Family from enemies.json.
 
             bool started = Guard.Try(System, $"async request '{address}' ({typeof(T).Name})", () =>
             {
@@ -358,18 +360,13 @@ namespace DeNelle.Core
         public static void WarmFamily(string family)
         {
             if (string.IsNullOrWhiteSpace(family)) return;
+            family = family.Trim().ToLowerInvariant();
             if (!s_familiesRequested.Add(family)) return;
 
             EnsureHost();
 
-            var keys = new List<string>();
-            for (int i = 0; i < s_enemyKeys.Count; i++)
-            {
-                if (string.Equals(FamilyOf(s_enemyKeys[i]), family, StringComparison.OrdinalIgnoreCase))
-                    keys.Add(s_enemyKeys[i]);
-            }
-
-            if (keys.Count == 0)
+            string label = "enemyfam-" + family;
+            if (State != EnemyContentState.Ready)
             {
                 // Not a defect on its own: discovery may not have run yet (a spawn in the first
                 // frames), or this family may live entirely in a non-Addressable source. The
@@ -377,20 +374,21 @@ namespace DeNelle.Core
                 // later retry rather than pinning the family as asked-for.
                 s_familiesRequested.Remove(family);
                 FlowTrace.Throttle(System, "fam-empty-" + family, 5f,
-                    $"family '{family}' matched NO discovered enemy address (discovered={s_enemyKeys.Count}, " +
+                    $"family '{family}' cannot be prefetched before catalog discovery settles " +
+                    $"(label='{label}', discovered={s_enemyKeys.Count}, " +
                     $"state={State}) — no family pre-fetch, falling back to per-address requests. " +
                     "Expected before discovery settles; a DEFECT afterwards.");
                 return;
             }
 
-            bool started = Guard.Try(System, $"download family '{family}' ({keys.Count} address(es))", () =>
+            bool started = Guard.Try(System, $"download family '{family}' by label '{label}'", () =>
             {
-                var dl = Addressables.DownloadDependenciesAsync(keys, Addressables.MergeMode.Union, false);
+                var dl = Addressables.DownloadDependenciesAsync(label, false);
                 dl.Completed += h =>
                 {
                     s_familiesLocal.Add(family);
                     FlowTrace.Step(System,
-                        $"family '{family}' bundles {h.Status} — {keys.Count} address(es) now local. " +
+                        $"family '{family}' bundles {h.Status} via '{label}'. " +
                         "Only this family was fetched; the rest of the enemy payload was NOT downloaded.");
                     Guard.Try(System, $"release family download '{family}'", () => Addressables.Release(h));
                     MaybeNotifySettled();

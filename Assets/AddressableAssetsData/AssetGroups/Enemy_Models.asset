@@ -24,7 +24,8 @@ MonoBehaviour:
   - m_GUID: 1a2a9e4e32a85554a9438c0c0af4998a
     m_Address: Enemies/Hollow_Walker
     m_ReadOnly: 0
-    m_SerializedLabels: []
+    m_SerializedLabels:
+    - enemyfam-hollow
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 2a45637b34ffcfd4abfc88766e4d0f66
     m_Address: Enemies/Orc_Shaman
@@ -59,7 +60,8 @@ MonoBehaviour:
   - m_GUID: 60384d5ea652ff742b2c93053df827a7
     m_Address: Enemies/Cellar_Hollow
     m_ReadOnly: 0
-    m_SerializedLabels: []
+    m_SerializedLabels:
+    - enemyfam-hollow
     FlaggedDuringContentUpdateRestriction: 0
   - m_GUID: 6066d47ca793874439884eacffdf1165
     m_Address: Enemies/Skeleton_Minion

@@ -75,7 +75,11 @@ namespace DeNelle.Editor
         // hero group, localization) is explicitly OUT OF SCOPE and must not be read
         // for modification — those lanes belong to other work. ────────────────────
         public const string EnemyGroupName     = "Enemy_Art";
+        public static readonly string[] EnemyFamilyGroupNames =
+            { "Enemy_Models", "Enemy_Controllers", "Enemy_Textures" };
         public const string StructureGroupName = "Structure_Art";
+        private const string RemoteBuildPathId = "ad0e68328bd7fd54ea79f0a9ab1dd9b1";
+        private const string RemoteLoadPathId  = "cf151d4962873af43b9302d323a9d707";
 
         /// <summary>Prefix every family label carries, so the labels this tool owns are
         /// distinguishable from any hand-authored label at a glance and in the catalog.</summary>
@@ -317,6 +321,13 @@ namespace DeNelle.Editor
                 }
             }
 
+            // The meshes/controllers/textures are the payload the runtime actually fetches.
+            // Keeping these Local+PackTogether made Enemy_Art's family split cosmetic.
+            var payloadFamilyMap = FamilyMap(out string payloadMapSource);
+            foreach (string groupName in EnemyFamilyGroupNames)
+                ConfigureEnemyFamilyGroup(settings, groupName, payloadFamilyMap, payloadMapSource,
+                    report, failures);
+
             EditorUtility.SetDirty(settings);
             AssetDatabase.SaveAssets();
             AssetDatabase.Refresh();
@@ -331,6 +342,40 @@ namespace DeNelle.Editor
             }
             Debug.Log(MarkerApplied);
             return true;
+        }
+
+        private static void ConfigureEnemyFamilyGroup(AddressableAssetSettings settings, string groupName,
+            Dictionary<string, string> familyMap, string mapSource, StringBuilder report, List<string> failures)
+        {
+            var group = settings.FindGroup(groupName);
+            if (group == null) { failures.Add($"group '{groupName}' not found."); return; }
+            var schema = group.GetSchema<BundledAssetGroupSchema>();
+            if (schema == null) { failures.Add($"group '{groupName}' carries no BundledAssetGroupSchema."); return; }
+
+            var counts = new SortedDictionary<string, int>(StringComparer.Ordinal);
+            foreach (var entry in group.entries.ToList())
+            {
+                if (entry == null) continue;
+                string family = FamilyForAddress(entry.address, familyMap);
+                string label = FamilyLabelPrefix + family;
+                settings.AddLabel(label, false);
+                foreach (string old in entry.labels.Where(l => l != null &&
+                             l.StartsWith(FamilyLabelPrefix, StringComparison.Ordinal)).ToList())
+                    if (old != label) entry.SetLabel(old, false, false, false);
+                entry.SetLabel(label, true, false, false);
+                counts.TryGetValue(family, out int n);
+                counts[family] = n + 1;
+            }
+
+            schema.BundleMode = BundledAssetGroupSchema.BundlePackingMode.PackTogetherByLabel;
+            schema.BuildPath.SetVariableById(settings, RemoteBuildPathId);
+            schema.LoadPath.SetVariableById(settings, RemoteLoadPathId);
+            schema.RetryCount = 2;
+            EditorUtility.SetDirty(schema);
+            EditorUtility.SetDirty(group);
+            report.AppendLine($"[enemies] {groupName}: Remote PackTogetherByLabel, retry=2, " +
+                              $"map={mapSource}, buckets=" +
+                              string.Join(", ", counts.Select(kv => kv.Key + ":" + kv.Value)));
         }
 
         // =====================================================================
@@ -611,6 +656,9 @@ namespace DeNelle.Editor
             if (string.IsNullOrEmpty(name)) return "?";
             if (name.StartsWith("catalog", StringComparison.OrdinalIgnoreCase)) return "catalog";
             if (name.StartsWith("enemy_art", StringComparison.OrdinalIgnoreCase)) return "enemy_art";
+            if (name.StartsWith("enemy_models", StringComparison.OrdinalIgnoreCase)) return "enemy_models";
+            if (name.StartsWith("enemy_controllers", StringComparison.OrdinalIgnoreCase)) return "enemy_controllers";
+            if (name.StartsWith("enemy_textures", StringComparison.OrdinalIgnoreCase)) return "enemy_textures";
             if (name.StartsWith("structure_art", StringComparison.OrdinalIgnoreCase)) return "structure_art";
             if (name.StartsWith("gear", StringComparison.OrdinalIgnoreCase)) return "gear";
             if (name.StartsWith("dungeon", StringComparison.OrdinalIgnoreCase)) return "dungeon";

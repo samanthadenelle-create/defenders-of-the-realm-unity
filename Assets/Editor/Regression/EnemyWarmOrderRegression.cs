@@ -61,6 +61,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Text;
+using Newtonsoft.Json;
 using UnityEngine;
 using DeNelle.Core;
 using DeNelle.Village;
@@ -124,13 +125,13 @@ namespace DeNelle.Editor.Regression
         // =====================================================================
         private static void Case1_PlanIsEncounterOrder(List<string> failures, List<string> notes)
         {
+            EnemyCatalog catalog = LoadCatalog(failures);
+            if (catalog == null) return;
             int wavesChecked = 0;
-            int wavesWhereOrderIsNotSorted = 0;
-            string sample = null;
 
             for (int waveId = 1; waveId <= WavesSwept; waveId++)
             {
-                EnemyWaveComposition comp = WaveCompositionBuilder.Build(waveId, false, null);
+                EnemyWaveComposition comp = WaveCompositionBuilder.Build(waveId, false, catalog);
                 if (comp == null || comp.Entries.Count == 0)
                 {
                     failures.Add("[case1] WaveCompositionBuilder.Build(" + waveId + ") produced an EMPTY " +
@@ -145,10 +146,8 @@ namespace DeNelle.Editor.Regression
                 var expected = new List<string>();
                 for (int i = 0; i < comp.Entries.Count; i++)
                 {
-                    string model = EnemyFactory.ModelForEnemy(
-                        new EnemyDef { Id = comp.Entries[i].EnemyId });
-                    if (string.IsNullOrEmpty(model)) continue;
-                    string fam = EnemyContentWarmer.FamilyOf(model);
+                    EnemyDef def = catalog.Find(comp.Entries[i].EnemyId);
+                    string fam = (def?.Family ?? string.Empty).Trim().ToLowerInvariant();
                     if (string.IsNullOrEmpty(fam)) continue;
                     if (!ContainsIgnoreCase(expected, fam)) expected.Add(fam);
                 }
@@ -161,7 +160,7 @@ namespace DeNelle.Editor.Regression
                     return;
                 }
 
-                List<string> actual = UpcomingWaveWarmPlanner.PlanFamiliesForWave(waveId, false, null);
+                List<string> actual = UpcomingWaveWarmPlanner.PlanFamiliesForWave(waveId, false, catalog);
 
                 if (!SameSequence(expected, actual))
                 {
@@ -173,35 +172,34 @@ namespace DeNelle.Editor.Regression
                     return;
                 }
 
-                var sorted = new List<string>(expected);
-                sorted.Sort(StringComparer.OrdinalIgnoreCase);
-                if (!SameSequence(sorted, expected))
-                {
-                    wavesWhereOrderIsNotSorted++;
-                    if (sample == null)
-                        sample = "wave " + waveId + " order [" + string.Join(" -> ", expected) +
-                                 "] != sorted [" + string.Join(" -> ", sorted) + "]";
-                }
-
                 wavesChecked++;
             }
 
-            // PROOF OF TEETH: if every wave's true order happened to equal its alphabetical
-            // order, case 1 would pass against a planner that simply sorted the families, and
-            // would therefore be proving nothing about order at all.
-            if (wavesWhereOrderIsNotSorted == 0)
+            // DETERMINISTIC PROOF OF TEETH. Generated waves are allowed to change their family
+            // mix, so they cannot be trusted to happen to produce a non-alphabetical order.
+            // This authored roster deliberately starts troll -> hollow -> orc (and repeats
+            // troll): any implementation that sorts, groups from a dictionary, or fails to
+            // preserve first appearance returns a different sequence.
+            var synthetic = new EnemyWaveComposition { WaveId = 999 };
+            synthetic.Entries.Add(new WaveCompositionEntry("troll", 1, SpawnRole.FrontTank, EnemyRole.Tank));
+            synthetic.Entries.Add(new WaveCompositionEntry("hollow-walker", 1, SpawnRole.Weak, EnemyRole.DPS));
+            synthetic.Entries.Add(new WaveCompositionEntry("orc-berserker", 1, SpawnRole.Melee, EnemyRole.DPS));
+            synthetic.Entries.Add(new WaveCompositionEntry("troll-mage", 1, SpawnRole.Archer, EnemyRole.Healer));
+            var authoredOrder = new List<string> { "troll", "hollow", "orc" };
+            List<string> syntheticActual = UpcomingWaveWarmPlanner.PlanFamilies(synthetic, catalog);
+            if (!SameSequence(authoredOrder, syntheticActual))
             {
-                failures.Add("[case1] across all " + wavesChecked + " waves, the encounter order was ALWAYS " +
-                             "identical to the alphabetically sorted order - so this case cannot distinguish " +
-                             "a real first-appearance ordering from a sort, and is not evidence. Widen the " +
-                             "sweep or pick a wave band that mixes families.");
+                failures.Add("[case1] deterministic mixed-family roster expected first-appearance order [" +
+                             string.Join(" -> ", authoredOrder) + "] but planner returned [" +
+                             string.Join(" -> ", syntheticActual) + "]. This fixture is deliberately " +
+                             "non-alphabetical and repeats troll, so sorting or failing to dedupe is caught.");
                 return;
             }
 
             // The FTUE roster comes from a DIFFERENT source (TutorialWaveSpawner bypasses the
             // wave loop entirely) and is the encounter the owner actually reported. Assert it
             // resolves to exactly one family, or the "first two enemies" warm nothing.
-            List<string> tutorial = UpcomingWaveWarmPlanner.PlanTutorialFamilies(null);
+            List<string> tutorial = UpcomingWaveWarmPlanner.PlanTutorialFamilies(catalog);
             if (tutorial.Count != 1)
             {
                 failures.Add("[case1] the FTUE teaching-wave plan resolved to " + tutorial.Count +
@@ -215,7 +213,7 @@ namespace DeNelle.Editor.Regression
             // And the FTUE family must LEAD the plan while the tutorial is unfinished: those
             // bodies are met before any composed wave, so anything ahead of them is bandwidth
             // spent on art the player has not reached.
-            List<string> ftuePlan = UpcomingWaveWarmPlanner.PlanEncounterFamilies(true, 1, false, null);
+            List<string> ftuePlan = UpcomingWaveWarmPlanner.PlanEncounterFamilies(true, 1, false, catalog);
             if (ftuePlan.Count == 0 || !string.Equals(ftuePlan[0], tutorial[0], StringComparison.OrdinalIgnoreCase))
             {
                 failures.Add("[case1] with the FTUE pending, the plan is [" + string.Join(" -> ", ftuePlan) +
@@ -225,9 +223,9 @@ namespace DeNelle.Editor.Regression
                 return;
             }
 
-            notes.Add("[case1] " + wavesChecked + " wave(s) matched first-appearance order exactly (" +
-                      wavesWhereOrderIsNotSorted + " of them non-alphabetical, e.g. " + sample +
-                      "); FTUE plan leads with '" + tutorial[0] + "'");
+            notes.Add("[case1] " + wavesChecked + " generated wave(s) matched first-appearance order; " +
+                      "deterministic mixed roster preserved [troll -> hollow -> orc]; FTUE plan leads with '" +
+                      tutorial[0] + "'");
         }
 
         // =====================================================================
@@ -287,24 +285,24 @@ namespace DeNelle.Editor.Regression
         // =====================================================================
         private static void Case3_OnlyTheFamiliesTheWaveContains(List<string> failures, List<string> notes)
         {
+            EnemyCatalog catalog = LoadCatalog(failures);
+            if (catalog == null) return;
             int checkedWaves = 0;
 
             for (int waveId = 1; waveId <= WavesSwept; waveId++)
             {
-                EnemyWaveComposition comp = WaveCompositionBuilder.Build(waveId, false, null);
+                EnemyWaveComposition comp = WaveCompositionBuilder.Build(waveId, false, catalog);
                 if (comp == null || comp.Entries.Count == 0) continue;
 
                 var contained = new List<string>();
                 for (int i = 0; i < comp.Entries.Count; i++)
                 {
-                    string model = EnemyFactory.ModelForEnemy(
-                        new EnemyDef { Id = comp.Entries[i].EnemyId });
-                    if (string.IsNullOrEmpty(model)) continue;
-                    string fam = EnemyContentWarmer.FamilyOf(model);
+                    EnemyDef def = catalog.Find(comp.Entries[i].EnemyId);
+                    string fam = (def?.Family ?? string.Empty).Trim().ToLowerInvariant();
                     if (!string.IsNullOrEmpty(fam) && !ContainsIgnoreCase(contained, fam)) contained.Add(fam);
                 }
 
-                List<string> plan = UpcomingWaveWarmPlanner.PlanFamiliesForWave(waveId, false, null);
+                List<string> plan = UpcomingWaveWarmPlanner.PlanFamiliesForWave(waveId, false, catalog);
 
                 foreach (string fam in plan)
                 {
@@ -325,7 +323,7 @@ namespace DeNelle.Editor.Regression
             // The teeth: wave 1 is hollow-only by the builder's own band schedule, and the Orc /
             // Troll families demonstrably EXIST in the game (they enter at waves 3+ / 6+). A
             // planner that warmed everything would drag them into wave 1's plan.
-            List<string> wave1 = UpcomingWaveWarmPlanner.PlanFamiliesForWave(1, false, null);
+            List<string> wave1 = UpcomingWaveWarmPlanner.PlanFamiliesForWave(1, false, catalog);
             foreach (string banned in FamiliesAbsentFromWave1)
             {
                 if (ContainsIgnoreCase(wave1, banned))
@@ -339,7 +337,7 @@ namespace DeNelle.Editor.Regression
             }
 
             // ...and prove those families are reachable at all, so the check above is not vacuous.
-            List<string> lateWave = UpcomingWaveWarmPlanner.PlanFamiliesForWave(8, false, null);
+            List<string> lateWave = UpcomingWaveWarmPlanner.PlanFamiliesForWave(8, false, catalog);
             bool sawALaterFamily = false;
             foreach (string banned in FamiliesAbsentFromWave1)
                 if (ContainsIgnoreCase(lateWave, banned)) sawALaterFamily = true;
@@ -429,6 +427,22 @@ namespace DeNelle.Editor.Regression
         // =====================================================================
         //  Helpers
         // =====================================================================
+
+        private static EnemyCatalog LoadCatalog(List<string> failures)
+        {
+            const string path = "Assets/Resources/Data/Canonical/enemies.json";
+            try
+            {
+                EnemyCatalog catalog = JsonConvert.DeserializeObject<EnemyCatalog>(File.ReadAllText(path));
+                if (catalog?.Enemies != null && catalog.Enemies.Count > 0) return catalog;
+                failures.Add("[catalog] enemies.json deserialized with no enemy rows.");
+            }
+            catch (Exception e)
+            {
+                failures.Add("[catalog] could not load enemies.json: " + e.GetType().Name + ": " + e.Message);
+            }
+            return null;
+        }
 
         private static bool ContainsIgnoreCase(List<string> list, string value)
         {

@@ -141,10 +141,9 @@ namespace DeNelle.Village
         /// a `deferred` list that is also drained in entry order. So the first entry is the first
         /// body built, every time. If that release order ever changes, THIS is the comment that
         /// is now wrong.</para>
-        /// <para>⛔ The family is taken from the MODEL, never from the enemy id: FamilyOf splits
-        /// on the first underscore, so the id "hollow-walker" would yield the nonsense family
-        /// "hollow-walker" while its model "Hollow_Walker" yields the real family "Hollow" — the
-        /// token the enemy addresses are actually grouped by.</para>
+        /// <para>⛔ The family is taken from EnemyDef.Family, the same enemies.json authority
+        /// used to label the bundles. Model-name heuristics are diagnostics only: Cellar_Hollow
+        /// and Skeleton_Warrior both belong to the data family "hollow".</para>
         /// </summary>
         public static List<string> PlanFamilies(EnemyWaveComposition composition, EnemyCatalog catalog = null)
         {
@@ -226,10 +225,9 @@ namespace DeNelle.Village
             EnemyDef def = catalog != null ? catalog.Find(enemyId) : null;
             if (def == null) def = new EnemyDef { Id = enemyId };
 
-            string model = EnemyFactory.ModelForEnemy(def);
-            if (string.IsNullOrWhiteSpace(model)) return;
-
-            AddUnique(ordered, EnemyContentWarmer.FamilyOf(model));
+            string family = (def.Family ?? string.Empty).Trim().ToLowerInvariant();
+            if (string.IsNullOrWhiteSpace(family)) return;
+            AddUnique(ordered, family);
         }
 
         private static void AddUnique(List<string> ordered, string family)
