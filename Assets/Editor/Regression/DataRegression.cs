@@ -551,6 +551,7 @@ namespace DeNelle.Editor
             // WO-1255: a Play AAB is impossible to emit until source isolation is proven, then
             // the produced archive is inspected for physical Solana/MWA/crypto material.
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "play-packaging suite", () => { if (!GooglePlayPackagingRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[play-packaging] " + r); });
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "audio-startup-bounded suite", () => { if (!AudioStartupBoundedRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[audio-startup-bounded] " + r); });
             // --- wallet session (2026-08-17): the MWA grant survives a relaunch (she force-quit and was asked to connect again), is SEALED not plaintext, is BOUND to its wallet, is cleared on disconnect, and is never logged ---
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "wallet-session suite", () => { if (!DeNelle.Editor.Regression.WalletSessionPersistenceRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[wallet-session] " + r); });
             // --- WO-1211: boot reads are cached-only (never sign); writes retain fail-closed shared auth ---

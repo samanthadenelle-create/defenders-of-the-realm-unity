@@ -139,6 +139,16 @@ namespace DeNelle.Core
 
             T result = null;
 
+            // The shipping audio still lives in Resources. Resolve that resident copy before
+            // touching Addressables: an AfterSceneLoad bootstrap must never synchronously wait
+            // for Addressables catalog initialization. On Android that wait can spin the Unity
+            // thread forever (tester build 345316, black screen at AudioBootstrap).
+            Guard.Try(System, $"Resources.Load {key} ({typeof(T).Name})", () =>
+            {
+                result = Resources.Load<T>(key);
+            });
+            if (result != null) return result;
+
             // ── Addressables-first (only when the address is actually registered) ──
             Guard.Try(System, $"Addressables resolve '{key}' ({typeof(T).Name})", () =>
             {
@@ -166,11 +176,6 @@ namespace DeNelle.Core
             else
                 FlowTrace.Step(System,
                     $"no Addressables entry for '{key}' (expected pre-migration) — using Resources.Load(\"{key}\").");
-
-            Guard.Try(System, $"Resources.Load {key} ({typeof(T).Name})", () =>
-            {
-                result = Resources.Load<T>(key);
-            });
 
             // ⛔ SEVERITY IS THE CALLER'S TO DECLARE, NOT THIS SEAM'S TO ASSUME.
             // This used to Fail on EVERY miss. Fail is error-level, so it trips the F8 harness and
@@ -210,23 +215,23 @@ namespace DeNelle.Core
         /// </summary>
         private static bool AddressableRegistered<T>(string address) where T : Object
         {
-            AsyncOperationHandle<IList<IResourceLocation>> locHandle = default;
-            bool found = false;
+            // ResourceLocators is an in-memory lookup. Do not call
+            // LoadResourceLocationsAsync(...).WaitForCompletion() here: this method runs from
+            // AudioBootstrap.AfterSceneLoad, while catalog initialization may still be in flight.
+            // The old async-then-block probe caused a full-core black-screen loop on Seeker.
             try
             {
-                locHandle = Addressables.LoadResourceLocationsAsync(address, typeof(T));
-                IList<IResourceLocation> locs = locHandle.WaitForCompletion();
-                found = locs != null && locs.Count > 0;
+                foreach (var locator in Addressables.ResourceLocators)
+                    if (locator.Locate(address, typeof(T), out var locations) &&
+                        locations != null && locations.Count > 0)
+                        return true;
             }
             catch
             {
-                found = false; // no catalog / not initialised / bad key — treat as unregistered
+                // No initialized locator / bad key — treat as unregistered and keep the caller's
+                // existing missing-audio fallback. Startup must remain bounded.
             }
-            finally
-            {
-                if (locHandle.IsValid()) Addressables.Release(locHandle);
-            }
-            return found;
+            return false;
         }
     }
 }
