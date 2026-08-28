@@ -4,13 +4,13 @@ using DeNelle.Core.Combat;
 using DeNelle.Core.Diagnostics;
 using DeNelle.Core.State;
 using DeNelle.Core.UI;
-using TMPro;
 using UnityEngine;
 using UnityEngine.SceneManagement;
+using UnityEngine.UI;
 
 namespace DeNelle.Onboarding
 {
-    /// <summary>WO-1256 launch letter, shown once at the first safe gameplay moment.</summary>
+    /// <summary>WO-1264 launch letter, shown once at the first safe gameplay moment.</summary>
     public sealed class FirstWatchWelcomeLetter : MonoBehaviour
     {
         private const string SeenKey = "eoa.first-watch-letter.2026-08";
@@ -77,28 +77,34 @@ namespace DeNelle.Onboarding
             }
 
             var content = _modal.chrome.content.transform;
-            var body = ElarionUiKit.Label(content,
-                "Commander,\n\n" +
-                "The Heart has called, and you answered. Elarion is wounded, but it is not lost. " +
-                "Every wall raised, every flame guarded, and every defender who stands beside us " +
-                "gives the realm another dawn.\n\n" +
-                "Take your place among the First Watch. Your welcome provisions await through the " +
-                "Realm Store's Redeem a Code door.\n\n" +
-                "Hold fast. Build wisely. Welcome to the Watch.",
-                0.24f, 0.88f, ElarionUi.Parchment, 34,
-                TextAlignmentOptions.TopLeft, 0.08f, 0.92f);
-            if (body != null)
+            var letterTexture = Resources.Load<Texture2D>("UI/Onboarding/welcome-letter-complete-v1");
+            if (letterTexture == null)
             {
-                body.textWrappingMode = TextWrappingModes.Normal;
-                body.enableAutoSizing = true;
-                body.fontSizeMin = 20f;
-                body.fontSizeMax = 34f;
+                FlowTrace.Fail("FirstWatch", "welcome letter art missing; refusing blank modal");
+                Close();
+                return;
             }
 
-            ElarionUiKit.BuildObsidianButton(content, "Answer the Watch",
+            var artGo = new GameObject("WelcomeLetterArt", typeof(RectTransform),
+                typeof(CanvasRenderer), typeof(RawImage), typeof(AspectRatioFitter));
+            artGo.transform.SetParent(content, false);
+            var artRect = (RectTransform)artGo.transform;
+            artRect.anchorMin = new Vector2(0.04f, 0.22f);
+            artRect.anchorMax = new Vector2(0.96f, 0.98f);
+            artRect.offsetMin = Vector2.zero;
+            artRect.offsetMax = Vector2.zero;
+            var art = artGo.GetComponent<RawImage>();
+            art.texture = letterTexture;
+            art.color = Color.white;
+            art.raycastTarget = false;
+            var fitter = artGo.GetComponent<AspectRatioFitter>();
+            fitter.aspectMode = AspectRatioFitter.AspectMode.FitInParent;
+            fitter.aspectRatio = (float)letterTexture.width / letterTexture.height;
+
+            ElarionUiKit.BuildObsidianButton(content, "Hold the Line",
                 ElarionUiKit.ObsidianButtonStyle.Style1,
                 ElarionUiKit.ObsidianButtonColor.Yellow,
-                new Vector2(0.28f, 0.04f), new Vector2(0.72f, 0.20f), Close);
+                new Vector2(0.28f, 0.03f), new Vector2(0.72f, 0.19f), Close);
 
             PlayerPrefs.SetInt(SeenKey, 1);
             PlayerPrefs.Save();

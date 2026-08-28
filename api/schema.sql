@@ -444,6 +444,7 @@ CREATE TABLE IF NOT EXISTS promo_redemptions (
     crystals      INTEGER     NOT NULL DEFAULT 0,   -- snapshot of reward granted (audit; code reward may change later)
     coins         INTEGER     NOT NULL DEFAULT 0,   -- snapshot of reward granted
     pack_sku      TEXT,                                -- exact pack granted (tier-safe audit snapshot)
+    redemption_ordinal INTEGER,                        -- atomic campaign ordinal for cohort/audit
     redeemed_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     UNIQUE (code, player_id)                        -- one redemption per code per player
 );

@@ -8,6 +8,7 @@
 
 - Public code `FIRSTWATCH`; one redemption per signed wallet.
 - Atomic two-tier currency grant: ordinals 1–500 receive 500 crystals + 500 coins; later ordinals receive 100 + 100.
+- Every success snapshots the signed wallet ID and exact `redemption_ordinal`, preserving the first-500 cohort for future rewards.
 - Expires `2026-08-31T04:59:00Z` (Sun 11:59pm Chicago/CDT).
 - Production row must keep `reward_pack_sku`, `tier1_pack_sku`, and `tier2_pack_sku` NULL while today's published APK is in use.
 - `TEST10` inactive. Code is for Discord only, never X, logs, traces, analytics, or the welcome letter.
@@ -26,7 +27,9 @@
 - Both canonical `packs.json` mirrors contain hidden `welcome-500` and `welcome-100` SKUs (`storeVisible=false`, `promoGrantOnly=true`).
 - `welcome-500`: 500 wood, iron, stone, crystals, and coins.
 - `welcome-100`: 100 wood, iron, stone, crystals, and coins.
-- First-session code-built letter: “WELCOME TO THE WATCH”; no promo code shown.
+- First-session letter uses Creative's `welcome-letter-complete-v1.png`, with the approved
+  “Welcome to the Watch” copy and native “Hold the Line” button; no promo code shown. The empty
+  `welcome-letter-scroll-frame.png` and source copy are retained with the WO/build assets.
 - Generic `redeem.js` pack-tier support remains available for the later operator cutover.
 - Do not set live pack fields until dApp Store propagation proves Seekers are running this catalog.
 - Fresh store-shaped APK: `Builds/Android/DefendersOfTheRealm.apk`; Android R2 parity verified for all 45 referenced objects.
@@ -43,4 +46,3 @@
 
 - `b32856648` — next-build hidden packs, welcome letter, generic pack-tier support, APK.
 - `c2f8e1d08` — production-safe currency-tier split and live deployment.
-

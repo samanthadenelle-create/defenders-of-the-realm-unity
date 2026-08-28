@@ -345,10 +345,12 @@ async function handler(req, res) {
                          RETURNING redemption_count, tier1_limit,
                                    tier1_pack_sku, tier2_pack_sku
                     ), recorded AS (
-                        INSERT INTO promo_redemptions (code, player_id, crystals, coins, pack_sku)
+                        INSERT INTO promo_redemptions
+                            (code, player_id, crystals, coins, pack_sku, redemption_ordinal)
                         SELECT ${code}, ${playerId}, 0, 0,
                                CASE WHEN redemption_count <= tier1_limit
-                                    THEN tier1_pack_sku ELSE tier2_pack_sku END
+                                    THEN tier1_pack_sku ELSE tier2_pack_sku END,
+                               redemption_count
                           FROM claimed
                         RETURNING pack_sku
                     )
@@ -372,13 +374,14 @@ async function handler(req, res) {
                          RETURNING redemption_count, tier1_limit, reward_crystals, reward_coins,
                                    tier2_reward_crystals, tier2_reward_coins
                     ), recorded AS (
-                        INSERT INTO promo_redemptions (code, player_id, crystals, coins, pack_sku)
+                        INSERT INTO promo_redemptions
+                            (code, player_id, crystals, coins, pack_sku, redemption_ordinal)
                         SELECT ${code}, ${playerId},
                                CASE WHEN redemption_count <= tier1_limit
                                     THEN reward_crystals ELSE tier2_reward_crystals END,
                                CASE WHEN redemption_count <= tier1_limit
                                     THEN reward_coins ELSE tier2_reward_coins END,
-                               NULL
+                               NULL, redemption_count
                           FROM claimed
                         RETURNING crystals, coins
                     )

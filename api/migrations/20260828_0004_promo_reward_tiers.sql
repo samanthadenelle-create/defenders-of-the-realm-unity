@@ -8,7 +8,8 @@ ALTER TABLE promo_codes
     ADD COLUMN IF NOT EXISTS redemption_count INTEGER NOT NULL DEFAULT 0;
 
 ALTER TABLE promo_redemptions
-    ADD COLUMN IF NOT EXISTS pack_sku TEXT;
+    ADD COLUMN IF NOT EXISTS pack_sku TEXT,
+    ADD COLUMN IF NOT EXISTS redemption_ordinal INTEGER;
 
 DO $$
 BEGIN

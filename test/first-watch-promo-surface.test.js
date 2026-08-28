@@ -33,6 +33,8 @@ test('FIRSTWATCH live tier is pack-free while pack tiers remain supported for th
   assert.match(api, /INSERT INTO promo_redemptions[\s\S]*pack_sku/);
   assert.match(api, /supportsPackRewards/);
   assert.match(api, /tier2_reward_crystals/);
+  assert.match(api, /pack_sku, redemption_ordinal/);
+  assert.match(api, /NULL, redemption_count/);
   assert.match(migration, /'2026-08-31T04:59:00Z'/);
   assert.match(migration, /'FIRSTWATCH', 500, 500/);
   assert.match(migration, /NULL, 500, NULL, 100, 100/);
