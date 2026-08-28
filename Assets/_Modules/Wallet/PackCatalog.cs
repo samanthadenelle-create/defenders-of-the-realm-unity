@@ -52,6 +52,11 @@ namespace DeNelle.Wallet
         [JsonProperty("sol")] public double Sol;
         /// <summary>SKR (Solana Seeker token) wallet-rail amount.</summary>
         [JsonProperty("skr")] public double Skr;
+        /// <summary>
+        /// Optional Pi Browser amount. Null means the economy owner has not approved a Pi price;
+        /// never derive it from USD/SKR on the client because Pi is its own tender and settlement rail.
+        /// </summary>
+        [JsonProperty("pi")] public double? Pi;
     }
 
     /// <summary>One in-game currency top-up — mirrors PackDef.contents.economy (§5.2).</summary>
@@ -141,6 +146,8 @@ namespace DeNelle.Wallet
         [JsonProperty("founderOnly")] public bool FounderOnly;
         /// <summary>Whether this SKU appears on the browsable Realm Store shelf.</summary>
         [JsonProperty("storeVisible")] public bool StoreVisible = true;
+        /// <summary>True for free operator grants that may resolve by SKU but can never be purchased.</summary>
+        [JsonProperty("promoGrantOnly")] public bool PromoGrantOnly;
 
         /// <summary>
         /// Owner ruling 2026-08-21 ("Middle — one impulse tier per resource"): opts a SINGLE
@@ -390,6 +397,11 @@ namespace DeNelle.Wallet
                 default: return amount.ToString("0.##");
             }
         }
+
+        /// <summary>Pi Browser price, or words when no approved Pi amount is authored.</summary>
+        public string PiAmountLabel => Pricing != null && Pricing.Pi.HasValue && Pricing.Pi.Value > 0d
+            ? $"{Pricing.Pi.Value:0.######} Pi"
+            : "Price unavailable";
     }
 
     /// <summary>The parsed packs.json root.</summary>

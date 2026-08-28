@@ -1852,8 +1852,8 @@ namespace DeNelle.Wallet
             // SellableReasonFor already substitutes a worded fallback when the row carried none —
             // so this is never blank and never a bare code.
             var paymentProvider = PaymentProviders.Current;
-            bool usesProviderRail = paymentProvider != null &&
-                                    paymentProvider.Channel == PaymentChannel.GooglePlay;
+            var paymentChannel = PaymentChannelResolver.Current;
+            bool usesProviderRail = IsExternalProviderChannel(paymentChannel);
             if (!usesProviderRail && !PurchaseQuoteService.IsSellable(pack.Sku))
             {
                 string notSellable = PurchaseQuoteService.SellableReasonFor(pack.Sku);
@@ -1874,6 +1874,17 @@ namespace DeNelle.Wallet
             // A refusal is a PLATE, never a button (UI-002): nothing here invites a tap that nothing
             // answers, and the reason is WORDS - the owner is red/green colourblind and a greyed
             // button carries no meaning in greyscale.
+            if (usesProviderRail && (paymentProvider == null || paymentProvider.Channel != paymentChannel))
+            {
+                FitInto(MakeText(host,
+                    paymentChannel == PaymentChannel.PiBrowser
+                        ? "Pi payments are unavailable right now. Nothing has been charged."
+                        : "Store payment service is unavailable right now. Nothing has been charged.",
+                    30, ElarionUi.ParchmentDim, FontStyles.Italic,
+                    TextAlignmentOptions.Center, ctaMin, ctaMax), 30);
+                return;
+            }
+
             if (usesProviderRail && !paymentProvider.CanBuy(pack.Sku, out string providerReason))
             {
                 FitInto(MakeText(host, providerReason, 30, ElarionUi.ParchmentDim, FontStyles.Italic,
@@ -1927,21 +1938,27 @@ namespace DeNelle.Wallet
         private string StorePriceMajor(PackDef pack)
         {
             var provider = PaymentProviders.Current;
-            if (provider != null && provider.Channel == PaymentChannel.GooglePlay)
+            var channel = PaymentChannelResolver.Current;
+            if (provider != null && provider.Channel == channel && IsExternalProviderChannel(channel))
             {
                 var price = provider.GetDisplayPrice(pack != null ? pack.Sku : string.Empty);
                 return price.Available ? price.LocalizedText : "Price unavailable";
             }
+            if (channel == PaymentChannel.PiBrowser)
+                return pack != null ? pack.PiAmountLabel : "Price unavailable";
+            if (channel == PaymentChannel.GooglePlay) return "Price unavailable";
             return pack != null ? pack.AmountLabel(_defaultCurrency) : string.Empty;
         }
 
         private string StorePriceMinor(PackDef pack)
         {
-            var provider = PaymentProviders.Current;
-            return provider != null && provider.Channel == PaymentChannel.GooglePlay
-                ? string.Empty
-                : pack != null ? pack.UsdApprox : string.Empty;
+            var channel = PaymentChannelResolver.Current;
+            return IsExternalProviderChannel(channel) ? string.Empty
+                                                      : pack != null ? pack.UsdApprox : string.Empty;
         }
+
+        private static bool IsExternalProviderChannel(PaymentChannel channel) =>
+            channel == PaymentChannel.GooglePlay || channel == PaymentChannel.PiBrowser;
 
         // =====================================================================
         //  The wallet mirror — READ-ONLY, ASYNC, and never a laundered zero
@@ -2238,8 +2255,16 @@ namespace DeNelle.Wallet
                 return PaymentResult.Failure(string.Empty, currency, "Pack is null.");
             }
 
-            if (PaymentProviders.Current != null &&
-                PaymentProviders.Current.Channel == PaymentChannel.GooglePlay)
+            if (pack.PromoGrantOnly)
+            {
+                const string grantOnly = "This Welcome Pack is a free promo reward and cannot be purchased.";
+                FlowTrace.Warn("Store", $"Purchase '{pack.Sku}' REFUSED: promoGrantOnly (nothing charged).");
+                SetStatus(grantOnly);
+                return PaymentResult.Failure(pack.Sku, currency, grantOnly);
+            }
+
+            var resolvedChannel = PaymentChannelResolver.Current;
+            if (IsExternalProviderChannel(resolvedChannel))
                 return await PurchaseThroughProvider(pack, currency);
 
 #if MAINNET_CANARY_TEST
@@ -2538,8 +2563,12 @@ namespace DeNelle.Wallet
         private async UniTask<PaymentResult> PurchaseThroughProvider(PackDef pack, CurrencyKind legacyCurrency)
         {
             var provider = PaymentProviders.Current;
-            if (provider == null || provider.Channel != PaymentChannel.GooglePlay)
-                return PaymentResult.Failure(pack.Sku, legacyCurrency, "Google Play payment provider unavailable.");
+            var channel = PaymentChannelResolver.Current;
+            if (!IsExternalProviderChannel(channel) || provider == null || provider.Channel != channel)
+                return PaymentResult.Failure(pack.Sku, legacyCurrency,
+                    channel == PaymentChannel.PiBrowser
+                        ? "Pi payment provider unavailable."
+                        : "Store payment provider unavailable.");
             if (_purchaseInFlight)
                 return PaymentResult.Failure(pack.Sku, legacyCurrency, "Purchase already in progress.");
             if (_vm.IsOwned(pack.Sku))
@@ -2559,7 +2588,7 @@ namespace DeNelle.Wallet
                 var result = await completion.Task;
                 if (result.Pending)
                 {
-                    const string pending = "Google Play is processing this purchase. Do not buy it again.";
+                    const string pending = "The store is processing this purchase. Do not buy it again.";
                     SetCommerceState(CommerceState.Delayed, pending);
                     return PaymentResult.Indeterminate(pack.Sku, legacyCurrency, 0d,
                         result.ProviderTransactionId, pending);
