@@ -101,6 +101,12 @@ namespace DeNelle.Core.Promo
         /// <summary>Fired when a code is successfully redeemed. Carries the reward.</summary>
         public event Action<PromoReward> OnRedeemed;
 
+        /// <summary>
+        /// Fired only after a confirmed server success and local grant. The code is kept in memory
+        /// for code-specific UI such as the First Watch thank-you letter; subscribers must never log it.
+        /// </summary>
+        public event Action<string, PromoReward> OnCodeRedeemed;
+
         /// <summary>Fired when redemption fails. Carries a human-readable reason.</summary>
         public event Action<string>      OnRedeemFailed;
 
@@ -152,7 +158,11 @@ namespace DeNelle.Core.Promo
 
             // Identity proof over the EXACT bytes above. Fail-closed: on refusal we
             // abort rather than send a request the server will (rightly) 401.
-            if (!await BackendRequestSigner.TryAttachAsync(req, playerId, bodyRaw))
+            // Redeem is an explicit player press, so a cold/expired auth session may open the
+            // wallet handshake once. Passive/background callers keep the default false and remain
+            // silent; the code is not sent or consumed unless the handshake succeeds.
+            if (!await BackendRequestSigner.TryAttachAsync(req, playerId, bodyRaw,
+                    allowInteractiveSessionMint: true))
             {
                 Refuse("identity-proof-refused (signer)", PromoStrings.KeyErrIdentity);
                 return;
@@ -223,6 +233,7 @@ namespace DeNelle.Core.Promo
 
             FlowTrace.Step("Promo", $"redeem OUTCOME=redeemed — crystals:{reward.Crystals} coins:{reward.Coins} (entry withheld by design).");
             OnRedeemed?.Invoke(reward);
+            OnCodeRedeemed?.Invoke(code, reward);
         }
 
         /// <summary>

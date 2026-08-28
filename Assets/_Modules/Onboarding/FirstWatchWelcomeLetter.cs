@@ -1,28 +1,30 @@
 using System.Collections;
 using DeNelle.Core;
-using DeNelle.Core.Combat;
 using DeNelle.Core.Diagnostics;
-using DeNelle.Core.State;
+using DeNelle.Core.Promo;
 using DeNelle.Core.UI;
 using UnityEngine;
-using UnityEngine.SceneManagement;
 using UnityEngine.UI;
 
 namespace DeNelle.Onboarding
 {
-    /// <summary>WO-1264 launch letter, shown once at the first safe gameplay moment.</summary>
+    /// <summary>WO-1264 launch thank-you letter, shown once after FIRSTWATCH succeeds.</summary>
     public sealed class FirstWatchWelcomeLetter : MonoBehaviour
     {
-        private const string SeenKey = "eoa.first-watch-letter.2026-08";
+        private const string SeenKey = "eoa.first-watch-thanks.2026-08";
+        private const string CampaignCode = "FIRSTWATCH";
+        private static FirstWatchWelcomeLetter _instance;
         private ElarionUiKit.ObsidianModal _modal;
         private PanelHandle _panelHandle;
+        private PromoCodeService _promo;
         private bool _open;
+        private bool _queued;
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void Bootstrap()
         {
             if (Application.isBatchMode || PlayerPrefs.GetInt(SeenKey, 0) == 1) return;
-            if (FindAnyObjectByType<FirstWatchWelcomeLetter>() != null) return;
+            if (_instance != null) return;
             var go = new GameObject("[FirstWatchWelcomeLetter]");
             DontDestroyOnLoad(go);
             go.AddComponent<FirstWatchWelcomeLetter>();
@@ -30,27 +32,30 @@ namespace DeNelle.Onboarding
 
         private void Awake()
         {
+            if (_instance != null && _instance != this) { Destroy(gameObject); return; }
+            _instance = this;
             _panelHandle = PanelManager.Register("First Watch Letter", Close, () => _open);
-            StartCoroutine(WaitForSafeMoment());
         }
 
-        private IEnumerator WaitForSafeMoment()
+        private void Update()
         {
-            while (PlayerPrefs.GetInt(SeenKey, 0) != 1)
-            {
-                var state = GameStateService.Instance != null ? GameStateService.Instance.State : null;
-                string scene = SceneManager.GetActiveScene().name;
-                bool gameplayScene = scene != SceneRouter.Title && scene != SceneRouter.HeroSelect &&
-                                     scene != SceneRouter.PetSelect;
-                if (state != null && state.Onboarded && gameplayScene &&
-                    !PanelManager.AnyOpen && !BattleLock.IsInBattle())
-                {
-                    Show();
-                    yield break;
-                }
-                yield return new WaitForSecondsRealtime(1f);
-            }
-            Destroy(gameObject);
+            if (_promo != null) return;
+            _promo = PromoCodeService.Instance;
+            if (_promo != null) _promo.OnCodeRedeemed += HandleCodeRedeemed;
+        }
+
+        private void HandleCodeRedeemed(string code, PromoReward reward)
+        {
+            if (_queued || PlayerPrefs.GetInt(SeenKey, 0) == 1 ||
+                !string.Equals(code, CampaignCode, System.StringComparison.OrdinalIgnoreCase)) return;
+            _queued = true;
+            StartCoroutine(WaitForRedeemPanelToClose());
+        }
+
+        private IEnumerator WaitForRedeemPanelToClose()
+        {
+            while (PanelManager.AnyOpen) yield return null;
+            Show();
         }
 
         private void Show()
@@ -72,7 +77,7 @@ namespace DeNelle.Onboarding
                 _open = false;
                 Destroy(_modal.canvas);
                 _modal = null;
-                StartCoroutine(WaitForSafeMoment());
+                StartCoroutine(WaitForRedeemPanelToClose());
                 return;
             }
 
@@ -101,14 +106,20 @@ namespace DeNelle.Onboarding
             fitter.aspectMode = AspectRatioFitter.AspectMode.FitInParent;
             fitter.aspectRatio = (float)letterTexture.width / letterTexture.height;
 
-            ElarionUiKit.BuildObsidianButton(content, "Hold the Line",
+            ElarionUiKit.BuildObsidianButton(content, "Close",
                 ElarionUiKit.ObsidianButtonStyle.Style1,
                 ElarionUiKit.ObsidianButtonColor.Yellow,
-                new Vector2(0.28f, 0.03f), new Vector2(0.72f, 0.19f), Close);
+                new Vector2(0.28f, 0.02f), new Vector2(0.72f, 0.20f), Close);
 
             PlayerPrefs.SetInt(SeenKey, 1);
             PlayerPrefs.Save();
             FlowTrace.Step("FirstWatch", "welcome letter shown (campaign code withheld)");
+        }
+
+        private void OnDestroy()
+        {
+            if (_promo != null) _promo.OnCodeRedeemed -= HandleCodeRedeemed;
+            if (_instance == this) _instance = null;
         }
 
         private void Close()

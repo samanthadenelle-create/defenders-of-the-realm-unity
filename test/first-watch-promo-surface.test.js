@@ -42,11 +42,11 @@ test('FIRSTWATCH live tier is pack-free while pack tiers remain supported for th
   assert.match(migration, /SET active = FALSE[\s\S]*code = 'TEST10'/);
 });
 
-test('welcome letter is one-shot, waits for a safe gameplay moment, and never exposes the code', () => {
+test('welcome letter is one-shot after confirmed redeem, has Close, and never logs the code', () => {
   const letter = read('Assets/_Modules/Onboarding/FirstWatchWelcomeLetter.cs');
-  assert.match(letter, /state\.Onboarded/);
-  assert.match(letter, /!PanelManager\.AnyOpen/);
-  assert.match(letter, /!BattleLock\.IsInBattle\(\)/);
+  assert.match(letter, /while \(PanelManager\.AnyOpen\)/);
   assert.match(letter, /PlayerPrefs\.SetInt\(SeenKey, 1\)/);
-  assert.doesNotMatch(letter, /FIRSTWATCH/);
+  assert.match(letter, /OnCodeRedeemed/);
+  assert.match(letter, /"Close"/);
+  assert.doesNotMatch(letter, /GameStateService|FindAnyObjectByType/);
 });

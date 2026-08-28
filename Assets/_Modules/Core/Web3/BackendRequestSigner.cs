@@ -145,8 +145,12 @@ namespace DeNelle.Core.Web3
         /// <param name="req">the request being prepared (headers set in place)</param>
         /// <param name="playerId">the id the request acts on — must match the rail</param>
         /// <param name="bodyRaw">the EXACT bytes that will be uploaded (the signature covers them)</param>
+        /// <param name="allowInteractiveSessionMint">True only for an explicit player action that may
+        /// open the wallet's SignMessage sheet (for example, pressing Redeem). Background save/load
+        /// and passive service calls must leave this false.</param>
         /// <returns>true when it is safe to send; false means ABORT the request.</returns>
-        public static async UniTask<bool> TryAttachAsync(UnityWebRequest req, string playerId, byte[] bodyRaw)
+        public static async UniTask<bool> TryAttachAsync(UnityWebRequest req, string playerId, byte[] bodyRaw,
+            bool allowInteractiveSessionMint = false)
         {
             if (req == null) return false;
 
@@ -196,9 +200,10 @@ namespace DeNelle.Core.Web3
             // only wallet sheet is the transfer. If not, mint then transfer (first purchase
             // of a cold session). Per-request signature stays as a purchase-only fallback
             // when the session endpoint is down — never for Title CONTINUE / dungeon-enter.
-            bool allowMint = IsPurchaseRoute(req);
+            bool purchaseRoute = IsPurchaseRoute(req);
+            bool allowMint = purchaseRoute || allowInteractiveSessionMint;
             if (await TryAttachSession(req, wallet, allowMint)) return true;
-            if (!allowMint) return false;
+            if (!purchaseRoute) return false;
 
             FlowTrace.Warn("Wallet",
                 $"purchase session mint failed; falling back to per-request signature. " +
