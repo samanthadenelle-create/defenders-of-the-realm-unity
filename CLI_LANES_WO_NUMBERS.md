@@ -1,6 +1,13 @@
 # Lanes â€” Work-Order Numbers Only (for CLI)  Â·  reconciled 2026-06-12 (nightly refill)
 
-> ## PROD SERIES (post-launch): next free = **PROD-018**.
+> ## PROD SERIES (post-launch): next free = **PROD-021**.
+> *(CLI seat minted **PROD-018 through PROD-020** and bumped 018 -> 021 in this SAME edit.
+> Owner felt 2026-08-29: **018** = Build confirm-place does not restore category cards (WO-1273
+> BM-1 still Expand()s the dormant carousel). **019** = Knight shield equipped in bag but missing
+> on body at load (1254 D-SEAT; instrument seat-proof first). **020** = Build Trade collection
+> shows Store only — Weaponsmith+Armorer wrongly sit under Crafting (`card-collections.json`).)*
+>
+> ### superseded: PROD SERIES next free = **PROD-018**.
 > *(2026-08-28 process fix, COS: **PROD-018 vacated**. Docs/COS had minted Enemy_Models
 > family packing as PROD-018; that is feature work matching Enemy_Art, not an emergency
 > critical live defect. Retargeted to **WO-1257**. Slot 018 restored unused so PROD
@@ -151,7 +158,31 @@
 > fine as history. A copied number is the bug **even when it was right the day it was written** -
 > that is exactly how the retired 860-899 UI block kept re-seeding collisions from CLAUDE.md sec.2.
 
-> ## ⚠ RECONCILED 2026-08-28 (CLI): main line next free = **1270**.
+> ## ⚠ RECONCILED 2026-08-29 (CLI): main line next free = **1282**.
+> **1281** = Command Center decision dashboard: minimized sections, authoritative sales/SKU
+> performance, D1/D7/D30 retention, progression activity, and honest one-session churn-risk cohorts.
+> Banner bumped 1281 -> 1282 in this SAME edit.
+>
+> ### superseded: RECONCILED 2026-08-29 (CLI): main line next free = **1281**.
+> **1280** = Repair prompt full-copy/readability pass: complete structure name, health/damage,
+> material cost/shortfall and action copy; wrapping responsive phone card; ellipsis forbidden.
+> **1278** = post-wave victory result modal. **1279** = harvest overflow notice becomes one
+> authoritative, phone-safe Obsidian result modal (collected/requested/uncollected + capacity
+> reason; no claim that loss was saved). Concurrent collision reconciled before handoff; banner
+> bumped 1279 -> 1280 in that edit; WO-1280 bumped 1280 -> 1281 in its SAME edit.
+>
+> ### superseded: RECONCILED 2026-08-28 (CLI): main line next free = **1278**.
+> 1271-1277 = database-driven card collections program: program map; generic card/collection/modal
+> foundation; Build collection UX; Night Market reuse; rewarded SKU entitlements plus Stone Gate and
+> Healing Caravan unlocks; animated Town Showcase/Top 10 visits; community voting and competitive
+> cosmetic rewards. Banner bumped 1271 -> 1278 in this SAME edit.
+>
+> ### superseded: RECONCILED 2026-08-28 (CLI): main line next free = **1271**.
+> 1270 Google Play account/data deletion public URL: dedicated store-listing-safe page with
+> prominent request steps, deletion/retention scope, and verified production route. Banner bumped
+> 1270 -> 1271 in this SAME edit.
+>
+> ### superseded: RECONCILED 2026-08-28 (CLI): main line next free = **1270**.
 > 1269 Command Center purchase-mismatch acknowledgement: suppress a reviewed false-positive
 > alert without deleting telemetry or touching money/entitlement rows. Banner bumped 1269 -> 1270
 > in this SAME edit.

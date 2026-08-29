@@ -238,7 +238,7 @@ namespace DeNelle.Village
         // PackageBakedGearMarker), the KayKit weapon-mesh + shield-mesh prop attach is SKIPPED so the
         // baked gear is the only gear visible. Cheap GetComponent on the root — equip is event-driven,
         // not a hot loop (and LateAttachRetry early-outs on it). Loadout/stat/armor-tint stay fully active.
-        private bool PackageBakedGear => GetComponent<PackageBakedGearMarker>() != null;
+        private bool PackageBakedGear => TryGetComponent(out PackageBakedGearMarker marker) && marker.enabled;
         private GameObject _currentWeaponProp;
         private string _currentWeaponId;
         private int _armorTier;
@@ -364,6 +364,13 @@ namespace DeNelle.Village
         private AsyncOperationHandle<GameObject> _offHandHandle;
         private bool _offHandHandleOpen;
         private int _offHandGeneration;
+        // Addressables owns the prefab dependency graph.  The live Seeker build proved that an
+        // instantiated shield can keep its MeshRenderer while its sharedMesh later becomes null
+        // (healthy at attach, <no renderer> when combat draws it).  Keep runtime-owned copies of
+        // mesh/material dependencies for the lifetime of this slot so a handle/ref-count churn or
+        // bundle eviction cannot hollow out an otherwise-live prop.
+        private readonly List<Mesh> _offHandRuntimeMeshes = new List<Mesh>();
+        private readonly List<Material> _offHandRuntimeMaterials = new List<Material>();
 
         // Addressables equip (WO-Item, Blink gear): when the equipped WeaponDef loads its
         // prefab via Addressables (loadVia=="addressable" or a "gear/" address in prefabPath),
@@ -2195,6 +2202,7 @@ namespace DeNelle.Village
                     FallbackResourcesOffHand(vis, hand, id);
                     return;
                 }
+                PreserveOffHandRenderAssets(prop, id);
                 AttachOffHandProp(prop, nativeVis, hand, id);
                 FlowTrace.Step("Gear", $"Addressable off-hand attached: id='{id}' address='{address}'");
             };
@@ -2539,6 +2547,59 @@ namespace DeNelle.Village
             _currentOffHandDerivable = false;
             _currentOffHandSheathDerivable = false;
             _currentOffHandManual = false;
+            for (int i = 0; i < _offHandRuntimeMeshes.Count; i++)
+                if (_offHandRuntimeMeshes[i] != null) Destroy(_offHandRuntimeMeshes[i]);
+            for (int i = 0; i < _offHandRuntimeMaterials.Count; i++)
+                if (_offHandRuntimeMaterials[i] != null) Destroy(_offHandRuntimeMaterials[i]);
+            _offHandRuntimeMeshes.Clear();
+            _offHandRuntimeMaterials.Clear();
+        }
+
+        /// <summary>Detach an instantiated Addressable shield from bundle-owned render assets.</summary>
+        private int PreserveOffHandRenderAssets(GameObject prop, string id)
+        {
+            if (prop == null) return 0;
+            int meshes = 0, materials = 0;
+            foreach (var mf in prop.GetComponentsInChildren<MeshFilter>(true))
+            {
+                if (mf == null || mf.sharedMesh == null) continue;
+                Mesh owned = Instantiate(mf.sharedMesh);
+                owned.name = mf.sharedMesh.name + "_RuntimeOffHand";
+                mf.sharedMesh = owned;
+                _offHandRuntimeMeshes.Add(owned);
+                meshes++;
+            }
+            foreach (var smr in prop.GetComponentsInChildren<SkinnedMeshRenderer>(true))
+            {
+                if (smr == null || smr.sharedMesh == null) continue;
+                Mesh owned = Instantiate(smr.sharedMesh);
+                owned.name = smr.sharedMesh.name + "_RuntimeOffHand";
+                smr.sharedMesh = owned;
+                _offHandRuntimeMeshes.Add(owned);
+                meshes++;
+            }
+            foreach (var renderer in prop.GetComponentsInChildren<Renderer>(true))
+            {
+                if (renderer == null) continue;
+                Material[] source = renderer.sharedMaterials;
+                if (source == null || source.Length == 0) continue;
+                var owned = new Material[source.Length];
+                bool changed = false;
+                for (int i = 0; i < source.Length; i++)
+                {
+                    if (source[i] == null) continue; // MagentaGuard owns null-slot recovery.
+                    owned[i] = Instantiate(source[i]);
+                    owned[i].name = source[i].name + "_RuntimeOffHand";
+                    _offHandRuntimeMaterials.Add(owned[i]);
+                    materials++;
+                    changed = true;
+                }
+                if (changed) renderer.sharedMaterials = owned;
+            }
+            FlowTrace.Step("Equip", $"off-hand render assets PRESERVED for '{id}': " +
+                $"runtimeMeshes={meshes} runtimeMaterials={materials}. Addressables release/bundle " +
+                "eviction can no longer leave an enabled renderer with sharedMesh=null.");
+            return meshes;
         }
 
         // ── Hold state: idle (lowered) ↔ combat (drawn/raised) ───────────────────────
@@ -2912,7 +2973,22 @@ namespace DeNelle.Village
                     // rig from the live mesh every time, never a typed constant — a differently
                     // pivoted shield self-corrects instead of needing a new magic number.
                     ApplyOffHandCentreOnSocket(offT, sheatheOff, offBaseLocal);
+                    // A centre seat is necessary for a grip-at-the-rim prefab, but it is not
+                    // sufficient on an ARM socket: the socket lies inside the skinned arm.  The
+                    // live Seeker trace proved the renderer was enabled and 0.78 m tall while the
+                    // owner still saw no shield; its rendered centre had been placed exactly on
+                    // SheatheSocket_ArmOff, so the plate was buried through the hero.  Put the
+                    // plate's INNER FACE (not its centre) just outside the arm, using the shield's
+                    // measured thickness.  Hip fallback keeps the established centre seat.
+                    if (_sheatheSocketOffIsArm)
+                        ApplyOffHandArmSurfaceSeat(offT, sheatheOff);
                     ApplySheathedOffset(offT, _currentOffHandMeshKey);
+                    // PROD-019: parity with main-hand attach — sheathe reparent must leave
+                    // active mesh renderers on. Bag can list Off Hand while the world plate
+                    // is invisible if MagentaGuard / layer / disabled renderer sticks.
+                    if (_currentOffHandProp != null)
+                        EnsureWeaponRenderersVisible(_currentOffHandProp, sheatheOff,
+                            _currentOffHandId ?? _currentOffHandMeshKey ?? "off-hand");
                     RecordOffHandSeatWrite("ApplyHoldPose.sheathed");   // WO-994 tripwire
                 }
                 else if (_offHandHand != null)
@@ -3354,6 +3430,29 @@ namespace DeNelle.Village
             _sheatheSocketOffIsArm ? SheatheSideArmOff : SheatheSideOff;
 
         /// <summary>
+        /// Player-visible face direction for the town shield. A purely lateral normal
+        /// (<c>body.right * side</c>) makes the whole plate edge-on to the normal
+        /// third-person camera behind the hero: its world bounds remain nonzero while
+        /// its projected shield area effectively disappears. Keep the arm-side term
+        /// dominant, but cant the face rearward so the plate produces a recognizable
+        /// silhouette during ordinary town play. Hip fallback retains its historical
+        /// lateral pose because it is not the owner-approved forearm mount.
+        /// </summary>
+        private Vector3 OffHandShieldOutwardWorld()
+        {
+            Transform body = _animator != null ? _animator.transform : transform;
+            Vector3 lateral = body.right * OffHandSheatheSide();
+            // PROD-019: arm sheathe needs a stronger rearward cant so the plate faces the
+            // ordinary town / follow camera (behind the hero). 0.65 left the face nearly
+            // edge-on in the owner's Seeker capture; 1.15 keeps lateral strap-on-arm read
+            // while opening a clear silhouette from the rear.
+            Vector3 outward = _sheatheSocketOffIsArm
+                ? lateral - body.forward * 1.15f
+                : lateral;
+            return outward.sqrMagnitude > 1e-8f ? outward.normalized : lateral;
+        }
+
+        /// <summary>
         /// Slide the SHEATHED off-hand so its RENDERED CENTRE — not its grip origin — sits where
         /// <see cref="ComputeSheathLocalPosition"/> just put it. See the call site for why the
         /// off-hand needs this and the main hand must never get it.
@@ -3390,6 +3489,37 @@ namespace DeNelle.Village
                 "plate UPWARD from the anchor. NOTE: this shift is re-derived from a WORLD AABB, so " +
                 "it moves a few mm as the hero turns — that drift is why the seat tripwire is " +
                 "throttled, and it is the seam to fix if the plate ever visibly swims.");
+        }
+
+        /// <summary>
+        /// Moves a centred shield far enough outward that its inner face clears an arm-bone
+        /// socket.  The shield frame and current transform supply the actual world thickness;
+        /// no asset-specific position is guessed.  Assignment is relative to the already
+        /// reconstructed centre seat, so ApplyHoldPose can call this every frame without drift.
+        /// </summary>
+        private void ApplyOffHandArmSurfaceSeat(Transform grip, Transform socket)
+        {
+            if (grip == null || socket == null || !_currentOffHandShieldFrame.Valid) return;
+
+            Vector3 outwardWorld = OffHandShieldOutwardWorld();
+            if (outwardWorld.sqrMagnitude < 1e-8f) return;
+            outwardWorld.Normalize();
+
+            Vector3 thicknessWorld = grip.TransformVector(_currentOffHandShieldFrame.ThicknessAxis);
+            float halfThicknessWorld = 0.5f * _currentOffHandShieldFrame.Axes.NarrowestLen *
+                                       thicknessWorld.magnitude;
+            // Four centimetres clears the CC arm/armour skin while keeping the plate visibly
+            // strapped to it.  Unlike the retired 0.26 m centre offset, this is only skin clearance;
+            // the measured half-thickness does the asset-dependent part.
+            const float skinClearanceWorld = 0.04f;
+            float outwardDistance = halfThicknessWorld + skinClearanceWorld;
+            grip.localPosition += socket.InverseTransformVector(outwardWorld * outwardDistance);
+
+            FlowTrace.Throttle("Equip", "offhand-arm-surface-" + (_currentOffHandMeshKey ?? "?"), 5f,
+                $"sheathed off-hand SURFACE-SEATED outside arm: '{_currentOffHandMeshKey}' " +
+                $"halfThickness={halfThicknessWorld:0.###}m clearance={skinClearanceWorld:0.###}m " +
+                $"outward={outwardWorld} total={outwardDistance:0.###}m socket='{socket.name}'. " +
+                "The plate's inner face now clears the body instead of its centre occupying the arm bone.");
         }
 
         /// <summary>
@@ -3698,7 +3828,7 @@ namespace DeNelle.Village
             // prop is on the hero's LEFT, so "away from the player" is -body.right; on the hip
             // fallback it is the right hip and +body.right. OffHandSheatheSide() is the same call the
             // POSITION above uses, so the plate cannot be pushed out one side while facing the other.
-            Vector3 outward = body.right * OffHandSheatheSide();
+            Vector3 outward = OffHandShieldOutwardWorld();
             // longUp stays plain body.up even on the forearm. A standing hero's forearm hangs
             // roughly vertical, so this reads as a shield standing the way a shield stands, and it
             // keeps the felt-approved WO-1123 rule intact rather than opening a second creative
@@ -3708,13 +3838,12 @@ namespace DeNelle.Village
             Vector3 longUp  = body.up;
             Quaternion derived = WeaponOrientHelper.ComputeShieldMountRotation(
                 _currentOffHandShieldFrame, socket, outward, longUp);
-            // This asset's handle-side heuristic selects the opposite signed face from its visible
-            // crest. Flip about the long axis: upright stays upright, while the crest turns outward
-            // and the handle turns inward toward the hero. Other shield assets remain derived.
-            if (string.Equals(_currentOffHandMeshKey, "ShieldWithItemLogic",
-                              System.StringComparison.OrdinalIgnoreCase))
-                derived *= Quaternion.AngleAxis(180f, _currentOffHandShieldFrame.LongAxis);
-
+            // ⛔ PROD-019 / Seeker 2026-08-29 live logcat: a permanent +180° LongAxis flip on
+            // ShieldWithItemLogic produced faceOffOutward≈180 while SURFACE-SEATED — the pose
+            // code believed it was healthy and the owner saw NO readable plate (sword only).
+            // Thickness must face ALONG outward (away from the player / toward the camera rear
+            // cant). Do NOT re-introduce an asset-specific 180 flip without a new seat-proof
+            // line that shows faceOff≈0 AND a gameplay-camera silhouette.
 
             // THROTTLED (1/5s): this runs every frame and an unthrottled Step here is exactly the
             // spam that swallowed three F8 captures (see ApplySheathedOffset's note).
