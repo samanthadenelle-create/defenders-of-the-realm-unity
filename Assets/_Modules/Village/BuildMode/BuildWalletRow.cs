@@ -1,24 +1,19 @@
 // =============================================================================
-// BuildWalletRow — the Build HUD resource strip (Grok slice 3).
+// BuildWalletRow — the Build HUD resource strip (Grok slice 3 / icon chips 2026-08-29).
 // -----------------------------------------------------------------------------
 // Assembly: DeNelle.Village   Namespace: DeNelle.Village
 //
-// A left-aligned row of resource chips for the Build HUD top bar — Wood / Iron /
-// Food / Crystals (+ Gold), each an ASCII letter badge + the compact amount
-// (ElarionUi.CompactNumber). Replaces the crystals-only header the palette used
-// to show (Grok reuse ledger: "Resource strip -> BuildWalletRow all pools").
+// A left-aligned row of kit CurrencyChips for the Build HUD — Wood / Iron / Stone /
+// Crystals / Gold — the SAME icon-first chips as the town HUD right-rail resource
+// stack (HudKitController.BuildResourceChips). Letter badges (W/I/S/C/G) are retired:
+// the owner asked for icon chips like the HUD resource bar; Food was depreciated and
+// this slot is Stone (EconomyService.Food save field, canon §7 / WO-1163).
 //
-// Amounts come from the shared WalletVM DTO produced by LiveWalletSource (MVVM
-// Silo C) — this View no longer reads the economy/state services directly. The
-// source owns the live subscriptions (the in-session Wood/Iron pools + the
-// GameState-backed Food/Crystals/Coins) and raises Changed; the row rebinds its
-// chips off the DTO.
-// Meaning is carried by the LETTER badge + number, never colour alone (owner is
-// red/green colourblind). ASCII-only TMP; code-built uGUI on the kit; ZERO UXML.
+// Amounts come from LiveWalletSource's WalletVM; this View binds Changed and never
+// names EconomyService. Meaning is icon-first with a word tag ONLY when the icon
+// sprite fails (CurrencyChip colourblind law). ASCII CompactNumber; code-built uGUI.
 // =============================================================================
 
-using System.Collections.Generic;
-using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
 using DeNelle.Core.UI;
@@ -26,22 +21,34 @@ using DeNelle.Core.UI;
 namespace DeNelle.Village
 {
     /// <summary>
-    /// Build HUD resource chips (Wood/Iron/Food/Crystals/Gold). <see cref="Build"/>
-    /// populates a parent band; <see cref="Refresh"/> re-reads the live wallet.
+    /// Build HUD resource chips (Wood/Iron/Stone/Crystals/Gold) as kit CurrencyChips.
     /// </summary>
     public sealed class BuildWalletRow : MonoBehaviour
     {
-        // Chip geometry (NAMED, not the kit MinTouchPx floor — read-outs, not buttons).
-        private const float ChipWidthPx = 150f;
-        private const float ChipHeightPx = 64f;
+        // Chip geometry — slightly wider than the old letter-badge chips so the
+        // currency icon + CompactNumber seat like the HUD rail chips.
+        private const float ChipWidthPx = 188f;
+        private const float ChipHeightPx = 72f;
         private const float ChipSpacingPx = 10f;
 
-        private readonly Dictionary<string, TextMeshProUGUI> _amountLabels =
-            new Dictionary<string, TextMeshProUGUI>();
+        private static readonly ElarionUiKit.CurrencyKind[] Kinds =
+        {
+            ElarionUiKit.CurrencyKind.Wood,
+            ElarionUiKit.CurrencyKind.Iron,
+            ElarionUiKit.CurrencyKind.Food,     // Stone (concept id via ConceptIdFor)
+            ElarionUiKit.CurrencyKind.Crystal,
+            ElarionUiKit.CurrencyKind.Gold,
+        };
+
+        // Word tags only paint when the icon sprite is missing (CurrencyChip rule).
+        private static readonly string[] Tags =
+        {
+            "Wood", "Iron", "Stone", "Crystals", "Gold",
+        };
+
+        private ElarionUiKit.CurrencyChipHandle[] _chips;
         private bool _built;
 
-        // MVVM Silo C — the live wallet DTO producer (owns the service subscriptions).
-        // This View binds its Changed event and reads Wallet; it never names a service.
         private LiveWalletSource _wallet;
 
         /// <summary>Build the chip row into <paramref name="parent"/> (a left-anchored band).</summary>
@@ -50,7 +57,6 @@ namespace DeNelle.Village
             if (_built) return;
             _built = true;
 
-            // Resolve the live wallet source (the sole resolution site) + bind its updates.
             if (_wallet == null) _wallet = LiveWalletSource.CreateDefault();
             _wallet.Changed -= Refresh;
             _wallet.Changed += Refresh;
@@ -72,60 +78,48 @@ namespace DeNelle.Village
             layout.childForceExpandHeight = false;
             layout.childAlignment = TextAnchor.MiddleLeft;
 
-            // Order + letter badges come from the DTO (Wood, Iron, Food, Crystals, Gold).
-            // The badge is the colour-free tell (owner is red/green colourblind).
-            foreach (var entry in _wallet.Wallet.Entries)
-                Chip(rowGo.transform, entry.CurrencyId, entry.IconName);
+            _chips = new ElarionUiKit.CurrencyChipHandle[Kinds.Length];
+            for (int i = 0; i < Kinds.Length; i++)
+            {
+                var host = new GameObject("Chip_" + Tags[i],
+                    typeof(RectTransform), typeof(LayoutElement));
+                host.transform.SetParent(rowGo.transform, false);
+                var hrt = (RectTransform)host.transform;
+                hrt.sizeDelta = new Vector2(ChipWidthPx, ChipHeightPx);
+                var le = host.GetComponent<LayoutElement>();
+                le.preferredWidth = ChipWidthPx;
+                le.preferredHeight = ChipHeightPx;
+                le.minWidth = ChipWidthPx;
+                le.minHeight = ChipHeightPx;
 
+                // Kit CurrencyChip — same builder as the town HUD resource rail.
+                _chips[i] = ElarionUiKit.CurrencyChip(
+                    host.transform, Kinds[i],
+                    Vector2.zero, Vector2.one,
+                    primary: Kinds[i] == ElarionUiKit.CurrencyKind.Gold,
+                    tag: Tags[i]);
+            }
+
+            FlowTraceSafe("Build wallet strip: " + Kinds.Length +
+                " CurrencyChip(s) Wood/Iron/Stone/Crystals/Gold (HUD icon parity)");
             Refresh();
         }
 
-        private void Chip(Transform parent, string key, string badge)
-        {
-            var chipGo = new GameObject("Chip_" + key,
-                typeof(RectTransform), typeof(Image), typeof(LayoutElement));
-            chipGo.transform.SetParent(parent, false);
-            var crt = (RectTransform)chipGo.transform;
-            crt.sizeDelta = new Vector2(ChipWidthPx, ChipHeightPx);
-            var le = chipGo.GetComponent<LayoutElement>();
-            le.preferredWidth = ChipWidthPx;
-            le.preferredHeight = ChipHeightPx;
-
-            var bg = chipGo.GetComponent<Image>();
-            bg.color = ElarionUiKit.ObsidianFill;   // near-black (WO-562 — do not lighten)
-            bg.raycastTarget = false;
-            ElarionUiKit.ApplyRounded(bg);
-
-            // Letter badge (the colour-free identity of the pool) left, amount right.
-            var badgeLabel = MakeText(chipGo.transform, badge, 22, ElarionUi.Gilt,
-                FontStyles.Bold, TextAlignmentOptions.Center,
-                new Vector2(0.04f, 0.1f), new Vector2(0.34f, 0.9f));
-            badgeLabel.raycastTarget = false;
-
-            var amount = MakeText(chipGo.transform, "0", 20, ElarionUi.Parchment,
-                FontStyles.Bold, TextAlignmentOptions.Right,
-                new Vector2(0.36f, 0.1f), new Vector2(0.94f, 0.9f));
-            amount.raycastTarget = false;
-            _amountLabels[key] = amount;
-        }
-
-        /// <summary>Re-read the live wallet DTO and update every chip's amount (compact >= 10k).</summary>
+        /// <summary>Re-read the live wallet DTO and update every chip's amount.</summary>
         public void Refresh()
         {
-            if (_wallet == null) return;
-            foreach (var entry in _wallet.Wallet.Entries)
-                Set(entry.CurrencyId, entry.Amount);
-        }
-
-        private void Set(string key, int value)
-        {
-            if (_amountLabels.TryGetValue(key, out var label) && label != null)
-                label.text = ElarionUi.CompactNumber(value);
+            if (_wallet == null || _chips == null) return;
+            var entries = _wallet.Wallet.Entries;
+            // LiveWalletSource order is wood/iron/stone/crystals/gold — match Kinds[].
+            for (int i = 0; i < _chips.Length && i < entries.Count; i++)
+            {
+                if (_chips[i] != null)
+                    _chips[i].SetAmount(entries[i].Amount, animate: false);
+            }
         }
 
         private void OnEnable()
         {
-            // Rebind the live source (idempotent) so a re-enabled row stays live.
             if (_wallet != null)
             {
                 _wallet.Changed -= Refresh;
@@ -144,25 +138,9 @@ namespace DeNelle.Village
             if (_wallet != null) { _wallet.Changed -= Refresh; _wallet.Dispose(); _wallet = null; }
         }
 
-        // ── uGUI helper (BuildPaletteUI/BuildSelectionUI shape) ────────────────
-        private static TextMeshProUGUI MakeText(Transform parent, string text, float size,
-            Color color, FontStyles style, TextAlignmentOptions align, Vector2 min, Vector2 max)
+        private static void FlowTraceSafe(string msg)
         {
-            var go = new GameObject("Text", typeof(RectTransform));
-            go.transform.SetParent(parent, false);
-            var rt = go.GetComponent<RectTransform>();
-            rt.anchorMin = min; rt.anchorMax = max;
-            rt.offsetMin = Vector2.zero; rt.offsetMax = Vector2.zero;
-            var t = go.AddComponent<TextMeshProUGUI>();
-            t.text = text;
-            t.fontSize = size;
-            t.color = color;
-            t.fontStyle = style;
-            t.alignment = align;
-            t.raycastTarget = false;
-            t.textWrappingMode = TextWrappingModes.Normal;
-            ElarionUiKit.EnsureFont(t);
-            return t;
+            DeNelle.Core.Diagnostics.FlowTrace.Step("BuildHud", msg);
         }
     }
 }

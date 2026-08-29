@@ -28,8 +28,8 @@ namespace DeNelle.Village
     /// </summary>
     public sealed class LiveWalletSource : IDisposable
     {
-        /// <summary>Colour-free letter badges — the pool identity BuildWalletRow renders (owner is
-        /// red/green colourblind: meaning is the LETTER, never colour alone).</summary>
+        /// <summary>Legacy IconRole marker on WalletVM entries. BuildWalletRow now renders kit
+        /// CurrencyChips (icon-first); this field remains for DTO shape / tests.</summary>
         public const string IconRoleLetter = "letter";
 
         private readonly IEconomy _economy;

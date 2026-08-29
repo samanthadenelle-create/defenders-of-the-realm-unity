@@ -183,12 +183,11 @@ namespace DeNelle.Village
         private const float DoneStackGapPx = 9f;
 
         // ── D19: the thin bottom-centre resource strip ─────────────────────────
-        // BuildWalletRow authors 150x64 chips at 10px spacing and seats its row 24px in
-        // from its parent's left edge; the band is sized to that content so the row reads
-        // as ONE slim frame rather than a panel with a row parked in it. Display-only, so
-        // MinTouch does not apply (WO-1010 D19 states this explicitly).
-        private const float StripChipW    = 150f;
-        private const float StripChipH    = 64f;
+        // BuildWalletRow authors kit CurrencyChips (HUD icon parity) at 188x72, 10px
+        // spacing, row 24px in from the parent's left edge. Band sized to that content.
+        // Display-only — MinTouch does not apply (WO-1010 D19).
+        private const float StripChipW    = 188f;
+        private const float StripChipH    = 72f;
         private const float StripChipGap  = 10f;
         private const float StripSideInset = 24f;   // BuildWalletRow's own left offset
         private const float StripPadPx     = 8f;
@@ -212,8 +211,7 @@ namespace DeNelle.Village
         private const float HintLineW = 860f;
         private const float HintLineH = 40f;
         private const float HintGapPx = 8f;     // breathing room above the strip band
-        private const string HintText =
-            "tap a card, then drag the ghost - chips confirm / rotate / cancel";
+        private const string HintText = "Drag to place the ghost. Pinch in or out to zoom.";
         private const string HintSessionsKey   = "build.hint.sessions";
         private const string HintPlacementsKey = "build.hint.placements";
         private const int HintSessionLimit   = 2;
@@ -245,6 +243,7 @@ namespace DeNelle.Village
         private Image _okChipIcon;           // D17 sprite path (null when the ASCII fallback is live)
         private GameObject _dpadHost;        // the nudge stick — shown by STATE while Placing (D12), never a toggle
         private GameObject _hintLine;        // WO-1010 P3: the one first-run hint line (PLACE phase, gated)
+        private TextMeshProUGUI _hintText;
 
         private bool _hasGhostAnchor;
         private Vector2 _ghostScreenPoint;
@@ -779,9 +778,10 @@ namespace DeNelle.Village
             var t = MakeText(fill.transform, HintText, 18, ElarionUi.Parchment,
                 FontStyles.Normal, TextAlignmentOptions.Center,
                 new Vector2(0.02f, 0f), new Vector2(0.98f, 1f));
+            _hintText = t;
             t.raycastTarget = false;
             // One line, always: the hint shrinks to fit rather than escaping its backing.
-            t.textWrappingMode = TextWrappingModes.NoWrap;
+            t.textWrappingMode = TextWrappingModes.Normal;
             t.enableAutoSizing = true;
             t.fontSizeMin = 12f;
             t.fontSizeMax = 18f;
@@ -986,8 +986,15 @@ namespace DeNelle.Village
         /// <see cref="HintPlacementLimit"/> successful placements.</summary>
         private static bool HintEligible()
         {
-            return PlayerPrefs.GetInt(HintSessionsKey, 0) <= HintSessionLimit
-                && PlayerPrefs.GetInt(HintPlacementsKey, 0) < HintPlacementLimit;
+            return !BuildFirstUseGuide.IsComplete;
+        }
+
+        /// <summary>Refresh the first-use instruction after a real Build action advances it.</summary>
+        public void RefreshFirstUseGuide()
+        {
+            if (_hintText != null) _hintText.text = BuildFirstUseGuide.Copy;
+            if (_hintLine != null)
+                _hintLine.SetActive(_state == BuildHudState.Placing && HintEligible());
         }
 
         private void OnEnable()
@@ -1050,6 +1057,7 @@ namespace DeNelle.Village
             if (_hintLine != null)
             {
                 bool showHint = placing && HintEligible();
+                if (_hintText != null) _hintText.text = BuildFirstUseGuide.Copy;
                 if (_hintLine.activeSelf != showHint)
                 {
                     _hintLine.SetActive(showHint);
