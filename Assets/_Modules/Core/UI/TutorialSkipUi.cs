@@ -73,6 +73,10 @@ namespace DeNelle.Core.UI
         private ElarionUiKit.ConfirmModal _confirm;   // live confirm sheet (null when closed)
         private bool _confirmTouchFloorApplied;
         private bool _visible;
+        /// <summary>Owner 2026-08-29: hide the Skip words while Build is open so they
+        /// do not sit on the category / place chrome; restore when Build exits. Does NOT
+        /// disarm the tutorial skip intent — only the chrome.</summary>
+        private bool _suppressed;
         private float _fadeT;
 
         // ── Public API ────────────────────────────────────────────────────────
@@ -95,9 +99,27 @@ namespace DeNelle.Core.UI
         {
             if (_instance == null || !_instance._visible) return;
             _instance._visible = false;
+            _instance._suppressed = false;
             _instance._onConfirmedSkipAll = null;
             _instance.CloseConfirm();
             Diagnostics.FlowTrace.Step("Tutorial", "SkipControl HIDE");
+        }
+
+        /// <summary>
+        /// Temporarily hide the Skip chrome without clearing the armed skip-all callback.
+        /// Build Mode calls this on Enter/Exit so "Skip Tutorial" does not overlap the
+        /// build category / place UI, then restores when Build closes.
+        /// </summary>
+        public static void SetSuppressed(bool suppressed)
+        {
+            if (_instance == null) return;
+            if (_instance._suppressed == suppressed) return;
+            _instance._suppressed = suppressed;
+            if (suppressed) _instance.CloseConfirm();
+            Diagnostics.FlowTrace.Step("Tutorial",
+                suppressed
+                    ? "SkipControl SUPPRESSED (build screen active)"
+                    : "SkipControl RESTORED (build screen closed)");
         }
 
         // ── Internals ─────────────────────────────────────────────────────────
@@ -196,10 +218,11 @@ namespace DeNelle.Core.UI
 
         private void Update()
         {
-            float dir = _visible ? 1f : -1f;
+            bool chromeOn = _visible && !_suppressed;
+            float dir = chromeOn ? 1f : -1f;
             _fadeT = Mathf.Clamp01(_fadeT + dir * (Time.unscaledDeltaTime / FadeSeconds));
             _group.alpha = _fadeT * _fadeT * (3f - 2f * _fadeT);
-            _group.blocksRaycasts = _visible && _onConfirmedSkipAll != null;
+            _group.blocksRaycasts = chromeOn && _onConfirmedSkipAll != null;
             _group.interactable = _group.blocksRaycasts;
 
             // MinTouchPx on the CONFIRM sheet's buttons: the kit modal lays its buttons

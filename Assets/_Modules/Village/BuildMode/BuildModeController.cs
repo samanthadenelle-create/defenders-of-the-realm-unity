@@ -166,6 +166,8 @@ namespace DeNelle.Village
             _uiRotateEighthsLatch = 0;
             if (eighths == 0) return;
             _armedYawEighths = (_armedYawEighths + eighths) & 7;
+            BuildFirstUseGuide.Rotated();
+            _hud?.RefreshFirstUseGuide();
             FlowTrace.Throttle("Build", "ghost-rotate", 0.25f,
                 $"ghost rotate -> {_armedYawEighths * 45}°");
         }
@@ -563,6 +565,10 @@ namespace DeNelle.Village
             _hud.SetState(BuildHudState.Browse);
             _hud.RefreshResources();
 
+            // Owner 2026-08-29: "Skip Tutorial" must not sit on the build category / place
+            // chrome. Suppress chrome only — TutorialFlow keeps its skip-all arm; Exit restores.
+            DeNelle.Core.UI.TutorialSkipUi.SetSuppressed(true);
+
             FlowTrace.Step("Build", "BuildMode.Enter — palette shown, EnsureTouchInput next");
             EnsureTouchInput();   // install the Lean.Touch driver on a touch device (S6)
 
@@ -592,6 +598,7 @@ namespace DeNelle.Village
             _selectionUi?.Hide();
             _hud?.Hide();
             _grid?.SetGridVisible(false);
+            DeNelle.Core.UI.TutorialSkipUi.SetSuppressed(false);
 
             // Stop the Lean.Touch driver + hide its button bar; revert to the desktop
             // input source so a re-entry on desktop is unaffected (S6).
@@ -1110,6 +1117,8 @@ namespace DeNelle.Village
                 // still surfaces immediately (WO-394 spirit).
                 _dropPending = true;
                 _dropWorldPoint = hit.point;
+                BuildFirstUseGuide.GhostMoved();
+                _hud?.RefreshFirstUseGuide();
                 FlowTrace.Step("Build", $"Two-step DROP: '{_armed?.id}' pending at cell ({cell.x},{cell.y}), " +
                     $"valid={valid}, yaw={ArmedYawDegrees:F0} — rotate/nudge free; PLACE commits.");
                 if (!valid) SurfacePlacementBlock(reason, queueBlock);
@@ -2074,6 +2083,8 @@ namespace DeNelle.Village
             // Committed placement — announce it (tutorial build.tower_placed rides this; guarded so
             // a throwing subscriber can never abort the placement it is observing).
             Guard.Try("BuildMode", "StructurePlaced event", () => StructurePlaced?.Invoke(_armed.id));
+            BuildFirstUseGuide.PlacementConfirmed();
+            _hud?.RefreshFirstUseGuide();
 
             // SHOW-STOPPER (owner device felt-test 2026-07-16): a player-PLACED storefront had NO
             // vendor NPC to Talk/trade with. The CastleVendorNpcInjector anchor poll covers only a
@@ -2259,6 +2270,7 @@ namespace DeNelle.Village
             _palette?.Collapse(armedLabel);
             _hud?.SetPlacingLabel(armedLabel);   // fold "Placing: <name>" into the HUD intent bar
             _hud?.SetState(BuildHudState.Placing);
+            _hud?.RefreshFirstUseGuide();
             _hud?.RefreshResources();
         }
 
@@ -2543,6 +2555,10 @@ namespace DeNelle.Village
 
             // Persist the new level in the live BaseLayout (so Exit()'s Save() round-trips it).
             UpdateLayoutLevel(ps.itemId, ps.gridCell, newLevel);
+
+            // WO-1275: wall_wood L2 is the Wooden Palisade -> Stone Wall transition.
+            // Award at this persisted upgrade-commit seam, never from scene art.
+            RewardedProgression.TryUnlockStoneGate(ps.itemId, newLevel);
 
             // ── Upgrade-success TELL (shared by BOTH paths) ── the stats change but were near-
             // silent, and the TIMER-completion path had NO feedback at all ("looks like nothing
