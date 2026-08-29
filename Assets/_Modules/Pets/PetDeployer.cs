@@ -664,6 +664,12 @@ namespace DeNelle.Pets
                     var petFixer = visual.AddComponent<DeNelle.Core.TripoMaterialFixer>();
                     if (petFixer != null && def != null)
                     {
+                        // The shipped ice wolf is already a textured URP asset. Pin its authored
+                        // albedo before the generic runtime rebuild: Android can expose different
+                        // shader aliases on the source material, and losing that lookup produced
+                        // a solid pale-white Aldwin even though wolf_color.png was in the build.
+                        if (string.Equals(def.Species, "ice-wolf", StringComparison.Ordinal))
+                            petFixer.SetForcedSourceTexture(FindFirstAlbedo(visual));
                         // OPTIONAL (owner F8 2026-07-02): the Resources/Textures/<species>.png
                         // basecolors were purged for size in 2774fb50 (flame-pup.png alone was a
                         // 16.4MB LFS asset; the 208MB->3.4MB WebGL win). The pets' real look comes
@@ -743,6 +749,23 @@ namespace DeNelle.Pets
 
             pet.name = $"Pet_{def.Species}";
             return pet;
+        }
+
+        private static Texture FindFirstAlbedo(GameObject visual)
+        {
+            if (visual == null) return null;
+            foreach (var renderer in visual.GetComponentsInChildren<Renderer>(true))
+            {
+                if (renderer == null) continue;
+                foreach (var material in renderer.sharedMaterials)
+                {
+                    if (material == null) continue;
+                    Texture texture = material.HasProperty("_BaseMap") ? material.GetTexture("_BaseMap") : null;
+                    if (texture == null && material.HasProperty("_MainTex")) texture = material.GetTexture("_MainTex");
+                    if (texture != null) return texture;
+                }
+            }
+            return null;
         }
 
         // Affinity glow colour for a pet's minimal aura (owner 2026-05-25:

@@ -59,6 +59,7 @@ using DeNelle.Core.Diagnostics;
 using DeNelle.Core.State;
 using DeNelle.Pets;
 using UnityEngine;
+using UnityEngine.AI;
 
 namespace DeNelle.Village.World.Camps
 {
@@ -256,11 +257,12 @@ namespace DeNelle.Village.World.Camps
                 return false;
             }
 
-            Pet body = Guard.Try("Echo", "summon the escort body", () => deployer.SummonAt(at), null);
+            Vector3 safeAt = ResolveSafeEscortSpawn(at);
+            Pet body = Guard.Try("Echo", "summon the escort body", () => deployer.SummonAt(safeAt), null);
             if (body == null)
             {
                 FlowTrace.Warn("Echo",
-                    $"echo ESCORT SUMMON produced no body ({reason}) at {at} -- PetDeployer.SummonAt returned " +
+                    $"echo ESCORT SUMMON produced no body ({reason}) at {safeAt} -- PetDeployer.SummonAt returned " +
                     "null (no pet owned/chosen, or the catalog is empty). The escort beat will fall through " +
                     "to the steward stand-in.");
                 return false;
@@ -270,9 +272,53 @@ namespace DeNelle.Village.World.Camps
             string echoName = EchoAutoDeployTrigger.ResolveEchoName();
             if (!string.IsNullOrEmpty(echoName)) body.name = echoName;
             FlowTrace.Step("Echo",
-                $"echo APPEAR (escort): body '{body.name}' summoned at {at} ({reason}). bodies={LiveBodyCount}. " +
+                $"echo APPEAR (escort): body '{body.name}' summoned at {safeAt} ({reason}). bodies={LiveBodyCount}. " +
                 "It leads the gate beat and then VANISHES at that beat's completion (WO-1108).");
             return true;
+        }
+
+        internal const float EscortHeroSeparation = 3.25f;
+
+        /// <summary>Keep the founding guide visibly separate from the hero while remaining on
+        /// the town navmesh. The requested guide anchor is still authoritative; this only adds a
+        /// small deterministic staging offset when that anchor coincides with the hero spawn.</summary>
+        private static Vector3 ResolveSafeEscortSpawn(Vector3 requested)
+        {
+            GameObject hero = null;
+            Guard.Try("Echo", "resolve hero for escort separation", () => hero = GameObject.FindGameObjectWithTag("Player"));
+            if (hero == null) return requested;
+
+            Vector3 heroPos = hero.transform.position;
+            Vector3 flatDelta = requested - heroPos;
+            flatDelta.y = 0f;
+            if (flatDelta.sqrMagnitude >= EscortHeroSeparation * EscortHeroSeparation)
+                return requested;
+
+            Vector3 forward = hero.transform.forward;
+            forward.y = 0f;
+            if (forward.sqrMagnitude < 0.01f) forward = Vector3.forward;
+            forward.Normalize();
+
+            // Try in front, then either side, then behind. All candidates remain only 3.25m
+            // from the opening anchor—well inside the town rather than on the enemy ring.
+            Vector3[] directions = { forward, Vector3.Cross(Vector3.up, forward),
+                                     Vector3.Cross(forward, Vector3.up), -forward };
+            foreach (Vector3 direction in directions)
+            {
+                Vector3 candidate = heroPos + direction * EscortHeroSeparation;
+                candidate.y = requested.y;
+                if (!NavMesh.SamplePosition(candidate, out NavMeshHit hit, 1.5f, NavMesh.AllAreas)) continue;
+                Vector3 separation = hit.position - heroPos;
+                separation.y = 0f;
+                if (separation.sqrMagnitude >= 2.75f * 2.75f)
+                {
+                    FlowTrace.Step("Echo", $"escort staging moved from overlapping anchor {requested} to navmesh-safe {hit.position}; hero={heroPos}.");
+                    return hit.position;
+                }
+            }
+
+            FlowTrace.Warn("Echo", $"escort staging found no separated navmesh point near {requested}; using the authoritative guide anchor.");
+            return requested;
         }
 
         /// <summary>

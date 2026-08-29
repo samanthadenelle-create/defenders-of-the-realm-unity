@@ -102,6 +102,7 @@ namespace DeNelle.Editor.Regression
                 Case(failures, "no-magenta", () => Case3_NoMagentaClassMaterial(failures));
                 Case(failures, "clips",      () => Case4_ClipsExist(failures));
                 Case(failures, "guide-body", () => Case5_GuideBodyNotStewardFallback(failures));
+                Case(failures, "device-spawn-look", () => Case6_DeviceSpawnAndLook(failures));
             }
             catch (Exception ex)
             {
@@ -502,6 +503,35 @@ namespace DeNelle.Editor.Regression
                 failures.Add("[guide-body] " + AnchorsSrc + " probes the Sylas steward BEFORE the live Pet body, " +
                              "so the guide highlight would land on the steward NPC even once the wolf exists " +
                              "(owner F8 seq 2304). The live body must win.");
+        }
+
+        // Device regressions reported 2026-08-29: Aldwin spawned on top of the hero and
+        // rebuilt as a flat white wolf. Pin the two player-only safeguards at their live sites.
+        private static void Case6_DeviceSpawnAndLook(List<string> failures)
+        {
+            string presence = StripComments(File.ReadAllText(PresenceSrc));
+            string deployer = StripComments(File.ReadAllText(PetDeployerSrc));
+
+            if (!presence.Contains("ResolveSafeEscortSpawn(at)"))
+                failures.Add("[device-spawn-look] escort summon no longer resolves a separated staging point before SummonAt; Aldwin can spawn on the hero again.");
+            if (!presence.Contains("NavMesh.SamplePosition") ||
+                !presence.Contains("EscortHeroSeparation") ||
+                !presence.Contains("GameObject.FindGameObjectWithTag(\"Player\")"))
+                failures.Add("[device-spawn-look] safe escort staging lost its Player-distance or NavMesh validity check.");
+
+            if (!deployer.Contains("SetForcedSourceTexture(FindFirstAlbedo(visual))"))
+                failures.Add("[device-spawn-look] ice-wolf no longer pins its authored source albedo before the Android material rebuild; it can degrade to flat white again.");
+
+            var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(BodyPrefab);
+            var renderer = prefab != null ? prefab.GetComponentInChildren<Renderer>(true) : null;
+            bool hasAlbedo = false;
+            if (renderer != null)
+                foreach (var mat in renderer.sharedMaterials)
+                    if (mat != null && ((mat.HasProperty("_BaseMap") && mat.GetTexture("_BaseMap") != null) ||
+                                        (mat.HasProperty("_MainTex") && mat.GetTexture("_MainTex") != null)))
+                        { hasAlbedo = true; break; }
+            if (!hasAlbedo)
+                failures.Add("[device-spawn-look] shipped ice-wolf prefab has no authored albedo for SetForcedSourceTexture to preserve.");
         }
 
         /// <summary>Strip // line and /* */ block comments so a lint never matches doc text.</summary>
