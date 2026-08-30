@@ -30,10 +30,17 @@
 // WHAT IT IS NOT. It is not a repair mechanism and it is not an eighth owner of
 // Time.timeScale (there are already seven: HitStopManager, CombatFeedbackManager,
 // ArenaDeathCam, WaveCelebrationManager, PauseController, HeroHitReaction,
-// GameOverScreen). It OBSERVES and REPORTS. The single exception is timeScale,
-// where the safe value is unambiguous and a wrong one is unsurvivable — and even
-// there it FAILS LOUDLY FIRST and says it restored. A gate that quietly fixes
-// things trains everyone to stop reading it and hides the real owner of the bug.
+// GameOverScreen). It OBSERVES and REPORTS. A gate that quietly fixes things trains
+// everyone to stop reading it and hides the real owner of the bug.
+//
+// ⚠ AMENDED 2026-08-30 (WO-1233b) — IT NOW SELF-HEALS, AND THE ORDER IS THE POINT.
+// "Reports and does not repair" left the player at 4% speed with a stuck lock while
+// the log said so perfectly, which is a diagnosis, not a fix. On a FAIL the gate now
+// (1) reports, loudly, first — always; (2) re-drives the ONE authoritative exit,
+// BattleSessionEnd.Release, so the recovery runs each owner's OWN unwind by name
+// rather than stamping globals from here; (3) only then falls back to writing
+// timeScale = 1 itself. It still adds no release call and forces no lock false. The
+// discipline the paragraph above protects is intact: nothing is healed silently.
 //
 // TIMING. Some invariants legitimately settle over a frame or two (posture
 // transitions, the reward modal's own open), so a one-shot check on the resolve
@@ -76,6 +83,13 @@ namespace DeNelle.Core.Combat
 
         public const string MarkerOk   = "BATTLE_QUIESCENCE_OK";
         public const string MarkerFail = "BATTLE_QUIESCENCE_FAIL";
+
+        /// <summary>
+        /// Emitted instead of a verdict when a NEW battle session began while this gate was still
+        /// settling on the previous one. Not a failure and not a pass — the observer withdraws,
+        /// because the state in front of it belongs to a fight that is still happening.
+        /// </summary>
+        public const string MarkerSuperseded = "BATTLE_QUIESCENCE_SUPERSEDED";
 
         /// <summary>timeScale tolerance. Wide enough that a legitimate 1.0 never trips it.</summary>
         private const float ScaleEpsilon = 0.01f;
@@ -224,11 +238,22 @@ namespace DeNelle.Core.Combat
         {
             float waitStarted = Time.unscaledTime;
 
+            // WO-1233b — WHICH BATTLE AM I TALKING ABOUT? Captured at arm time, i.e. AFTER the
+            // resolving battle's own BattleSessionEnd.Release. Any later bump is a battle that
+            // started while this gate was settling, and its live state is not ours to judge.
+            // See BattleSessionEnd's SESSION EPOCH block for the 2026-08-30 device proof.
+            int armedEpoch = BattleSessionEnd.Epoch;
+
             // Wait out the reward screen — but never forever. A reward screen that never closes is
             // its own defect and must be REPORTED, not waited on in silence.
             bool cappedOut = false;
             while (isRewardScreenOpen != null && SafeIsOpen(isRewardScreenOpen))
             {
+                if (BattleSessionEnd.Epoch != armedEpoch)
+                {
+                    ReportSuperseded(context, armedEpoch, "while waiting out the reward screen");
+                    yield break;
+                }
                 if (Time.unscaledTime - waitStarted > ModalWaitCapSeconds)
                 {
                     cappedOut = true;
@@ -243,6 +268,15 @@ namespace DeNelle.Core.Combat
 
             float settleStarted = Time.unscaledTime;
             while (Time.unscaledTime - settleStarted < SettleSeconds) yield return null;
+
+            // The settle window is exactly where the 2026-08-30 capture was lost: the masked home
+            // return lands the hero next to a chaser, contact stages the NEXT fight, and every
+            // invariant below reads that fight's CORRECT state as this fight's leak.
+            if (BattleSessionEnd.Epoch != armedEpoch)
+            {
+                ReportSuperseded(context, armedEpoch, "during the settle window");
+                yield break;
+            }
 
             var failures = Evaluate(rewardScreenOpen: false);
 
@@ -262,11 +296,51 @@ namespace DeNelle.Core.Combat
 
             FlowTrace.Fail(Sys, sb.ToString());
 
+            // =================================================================
+            //  SELF-HEAL (WO-1233b). A player must never be left holding a stuck lock or a 4%
+            //  world clock because a coroutine died — reporting alone leaves the softlock in
+            //  place. Note what this deliberately does NOT do: it does not force BattleLock
+            //  false and it does not add an Nth release call. It re-drives the ONE authoritative
+            //  exit seam (BattleSessionEnd.Release), which clears the stale pursuit window and
+            //  re-runs every registered owner's own unwind (HitStopManager.EndStopNow included),
+            //  so the recovery goes through the same door the fight was supposed to leave by.
+            //  Safe by construction: pursuit is PULSE-based, so a chaser that is genuinely still
+            //  chasing re-raises the lock on its next aggro tick and is reported below.
+            // =================================================================
+            if (BattleLock.IsInBattle())
+            {
+                string stuckHolders = BattleLock.DescribeHolders();
+                Guard.Try(Sys, "self-heal: re-drive the battle-session exit",
+                    () => BattleSessionEnd.Release($"quiescence self-heal: {context}"));
+
+                // One frame, on the unscaled clock's terms: long enough for a live chaser to
+                // re-pulse and re-raise the lock legitimately, short enough that a real stuck
+                // holder is still named in the same breath as the failure.
+                yield return null;
+
+                if (!BattleLock.IsInBattle())
+                    FlowTrace.Warn(Sys,
+                        $"battle-lock SELF-HEALED after {MarkerFail} ({context}): holders were " +
+                        $"[{stuckHolders}] and re-driving BattleSessionEnd.Release cleared them. " +
+                        "This is a SAFETY NET, not a fix — the FAIL above names the state that " +
+                        "reached it, and something still failed to leave by the front door.");
+                else
+                    FlowTrace.Fail(Sys,
+                        $"battle-lock STILL HELD after the self-heal ({context}): [{BattleLock.DescribeHolders()}] " +
+                        $"(was [{stuckHolders}]). A holder that survives a full session release is either a " +
+                        "LIVE chase re-pulsing every aggro tick, or an owner whose probe is latched true with " +
+                        "no battle behind it. Read the holder name: it is the owner to fix.");
+            }
+
             // THE ONE RESTORE. Unsurvivable and unambiguous: there is no legitimate reason for the
             // world clock to sit at anything but 1 once every battle system has finished. Reported
             // FIRST (above) and announced here, so the leaking owner is still named rather than
             // masked — the whole reason the 2026-08-20 defect went three minutes unexplained is
             // that something silently tolerated it.
+            //
+            // ⚠ Runs AFTER the self-heal on purpose. HitStopManager.EndStopNow unwinds the clock
+            // by NAME and refuses to stamp over a scale it does not own; this blunt write is the
+            // last resort behind it, so the attributable restore always gets first refusal.
             if (Mathf.Abs(Time.timeScale - 1f) > ScaleEpsilon)
             {
                 float leaked = Time.timeScale;
@@ -276,6 +350,21 @@ namespace DeNelle.Core.Combat
                     "SAFETY NET, not a fix: something above still leaked the world clock and the " +
                     "FAIL line above names when. Fix the owner, do not rely on this.");
             }
+        }
+
+        /// <summary>
+        /// A newer battle session began while this gate was settling. Withdraw loudly enough to be
+        /// findable, quietly enough that it is never mistaken for a defect: the state in front of
+        /// the gate is a LIVE fight's, and judging it produced the 2026-08-30 false failure.
+        /// </summary>
+        private static void ReportSuperseded(string context, int armedEpoch, string when)
+        {
+            FlowTrace.Step(Sys,
+                $"{MarkerSuperseded} ({context}) - a NEW battle session began {when} " +
+                $"(epoch {armedEpoch} -> {BattleSessionEnd.Epoch}), so this gate is judging a fight that " +
+                $"is still happening. Withdrawing without a verdict. Observed now: timeScale=" +
+                $"{Time.timeScale:F2}, battle-lock holders=[{BattleLock.DescribeHolders()}] - all of which " +
+                "belong to the LIVE battle, not to the one that ended.");
         }
 
         private static bool SafeIsOpen(Func<bool> probe)

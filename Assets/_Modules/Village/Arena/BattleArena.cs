@@ -478,6 +478,16 @@ namespace DeNelle.Village.Arena
             _killStreamGold = 0;
             BattleInProgress = true;
 
+            // WO-1233b: THE SESSION START, ANNOUNCED ONCE — the mirror of the Release in Resolve /
+            // ResolveAbandoned, and from the same single lifecycle seam. It bumps the session epoch
+            // so a quiescence gate still settling on the PREVIOUS battle knows it has been
+            // superseded and withdraws instead of reporting this fight's live hit-stop and live
+            // battle-lock as that fight's leak. That false failure is exactly what the owner's
+            // 2026-08-30 device capture is (see BattleSessionEnd's SESSION EPOCH block: the hero was
+            // proven inside the arena, fighting, 8.3s after the "arena win" gate failed).
+            Guard.Try("BattleArena", "announce battle session start",
+                () => BattleSessionEnd.Begin($"encounter staged ({p.EnemyIds.Length} enemy id(s))"));
+
             DeNelle.Village.GameSfx.PlayWeaponDraw(); // #51: hero unsheathes as the fight begins
 
             // BATTLE ISOLATION: freeze EVERY home-scene rep for the duration of the fight. The

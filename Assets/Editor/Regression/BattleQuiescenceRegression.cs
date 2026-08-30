@@ -75,6 +75,12 @@ namespace DeNelle.Editor
                 BattleEndedDuringHitStopRestoresTheClock(failures, log);
 
                 SessionEndWiringIsPresent(failures, log);
+
+                // WO-1233b — the observer must know WHICH battle it is judging, and a FAIL must
+                // self-heal rather than leave the player holding it.
+                SessionEpochAdvancesOnEachBattle(failures, log);
+                SupersedeGuardIsWired(failures, log);
+                SelfHealIsWired(failures, log);
             }
             finally
             {
@@ -473,6 +479,130 @@ namespace DeNelle.Editor
                              "thing proving the clock case above is the suite's own stub. The 2026-08-20 fix had " +
                              "three unwind paths and the defect still returned, because all three were keyed to " +
                              "the manager's lifetime and none to the battle's.");
+        }
+
+        // =====================================================================
+        //  WO-1233b — the gate must not report a LIVE battle's state as the last
+        //  battle's leak, and a FAIL must self-heal.
+        // ---------------------------------------------------------------------
+        //  CAPTURED DEFECT (2026-08-30, Seeker 2026.08.30.348233, device break-log):
+        //    t=342.5  BATTLE_QUIESCENCE_FAIL (arena win) - timeScale 0.04 +
+        //             battle-lock held by PursuitBattleProbe.Probe AND
+        //             BattleArena.<Awake>b__84_0
+        //    t=350.8  [HeroDeath] death freeze armed ... pinPos=(4997.93,0.08,5004.65)
+        //  ArenaCentre is (5000,0,5000): the hero was IN the arena, fighting, and died
+        //  there 8.3s after the gate declared the previous battle unclean. Resolve
+        //  clears BattleInProgress BEFORE it arms the gate, so that probe reading true
+        //  inside the gate's own coroutine can only mean a SECOND battle had begun.
+        // =====================================================================
+
+        /// <summary>
+        /// The epoch is what tells an armed observer that the world in front of it belongs to a
+        /// different fight. Behavioural, over the real static.
+        /// </summary>
+        private static void SessionEpochAdvancesOnEachBattle(List<string> failures, StringBuilder log)
+        {
+            int before = BattleSessionEnd.Epoch;
+            BattleSessionEnd.Begin("wo1233b-suite: first battle");
+            int afterFirst = BattleSessionEnd.Epoch;
+            BattleSessionEnd.Release("wo1233b-suite: first battle ends");
+            int afterRelease = BattleSessionEnd.Epoch;
+            BattleSessionEnd.Begin("wo1233b-suite: second battle");
+            int afterSecond = BattleSessionEnd.Epoch;
+
+            if (afterFirst == before)
+            {
+                failures.Add("[epoch] BattleSessionEnd.Begin did not advance the session epoch. Every " +
+                             "quiescence gate then judges whatever battle happens to be running when it " +
+                             "settles, which is the 2026-08-30 false failure verbatim.");
+                return;
+            }
+
+            if (afterRelease != afterFirst)
+            {
+                failures.Add("[epoch] BattleSessionEnd.Release advanced the epoch. It MUST NOT: the gate " +
+                             "is armed immediately after Release, so a bump there would make every gate " +
+                             "consider itself superseded by its own battle and never report anything.");
+                return;
+            }
+
+            if (afterSecond <= afterFirst)
+            {
+                failures.Add("[epoch] a SECOND Begin did not advance the epoch past the first, so two " +
+                             "back-to-back battles are indistinguishable to an armed observer.");
+                return;
+            }
+
+            log.AppendLine("  [epoch] each battle start advances the session epoch; a session END does not");
+        }
+
+        /// <summary>
+        /// Source-lint. The settle window cannot be driven in an editor batch (it waits on
+        /// Time.unscaledTime, which does not advance inside a synchronous suite), so the WIRING is
+        /// what is asserted — the same discipline as groups 4 and 6.
+        /// </summary>
+        private static void SupersedeGuardIsWired(List<string> failures, StringBuilder log)
+        {
+            string gate = ReadCode("Assets/_Modules/Core/Combat/BattleQuiescenceGate.cs");
+            if (gate == null)
+            {
+                failures.Add("[supersede] BattleQuiescenceGate.cs is MISSING - the guard cannot be verified.");
+            }
+            else if (CountOf(gate, "BattleSessionEnd.Epoch") < 2)
+            {
+                failures.Add("[supersede] BattleQuiescenceGate no longer captures AND compares " +
+                             "BattleSessionEnd.Epoch. Without both, the gate reports the live state of " +
+                             "whatever battle started while it was settling as the previous battle's leak " +
+                             "- 2026-08-30, timeScale 0.04 plus two 'stuck' holders, all of them correct.");
+            }
+            else if (!gate.Contains("BATTLE_QUIESCENCE_SUPERSEDED"))
+            {
+                failures.Add("[supersede] the superseded case no longer has its own marker. A withdrawal " +
+                             "that looks like a pass is a gate that silently stops covering the real leak.");
+            }
+            else
+            {
+                log.AppendLine("  [supersede] the gate captures the epoch at arm time and withdraws under its own marker");
+            }
+
+            string arena = ReadCode("Assets/_Modules/Village/Arena/BattleArena.cs");
+            if (arena == null)
+                failures.Add("[supersede] BattleArena.cs is MISSING - the session-start wiring cannot be verified.");
+            else if (!arena.Contains("BattleSessionEnd.Begin"))
+                failures.Add("[supersede] BattleArena no longer announces the session START, so the epoch " +
+                             "never advances and the supersede guard in the gate is dead code.");
+            else
+                log.AppendLine("  [supersede] BattleArena announces the session start from BeginEncounter");
+        }
+
+        /// <summary>
+        /// A FAIL must leave the player better off, not merely documented. Asserts the recovery goes
+        /// through the ONE authoritative exit rather than force-clearing the lock from the observer.
+        /// </summary>
+        private static void SelfHealIsWired(List<string> failures, StringBuilder log)
+        {
+            string gate = ReadCode("Assets/_Modules/Core/Combat/BattleQuiescenceGate.cs");
+            if (gate == null)
+            {
+                failures.Add("[self-heal] BattleQuiescenceGate.cs is MISSING - the self-heal cannot be verified.");
+                return;
+            }
+
+            if (!gate.Contains("quiescence self-heal"))
+                failures.Add("[self-heal] a BATTLE_QUIESCENCE_FAIL no longer re-drives " +
+                             "BattleSessionEnd.Release. Reporting alone leaves the player holding the " +
+                             "stuck lock and the 4% clock the report describes.");
+            else
+                log.AppendLine("  [self-heal] a FAIL re-drives the one authoritative exit seam");
+
+            // The recovery must NOT become a new writer of the lock. BattleLock is an OR over N
+            // owners; forcing it false from here would mask a live fight instead of ending one.
+            if (gate.Contains("BattleLock.UnregisterProbe") || gate.Contains("BattleLock.RegisterProbe"))
+                failures.Add("[self-heal] BattleQuiescenceGate now mutates BattleLock's probe list. The " +
+                             "observer must never own the lock: a live chase would be silently unlocked, " +
+                             "and the holder attribution the 2026-08-26 tickets bought would be lost.");
+            else
+                log.AppendLine("  [self-heal] the gate still owns no lock state - it re-drives the owners' own unwinds");
         }
 
         private static int CountOf(string haystack, string needle)

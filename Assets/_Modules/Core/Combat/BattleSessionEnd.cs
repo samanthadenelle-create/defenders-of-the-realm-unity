@@ -65,6 +65,7 @@
 
 using System;
 using System.Collections.Generic;
+using UnityEngine;
 using DeNelle.Core.Diagnostics;
 using DeNelle.Core.HudModel;
 
@@ -84,6 +85,67 @@ namespace DeNelle.Core.Combat
 
         /// <summary>Registered unwind owners, in registration order (diagnostics + regression).</summary>
         public static IReadOnlyList<string> Owners => s_owners;
+
+        // =====================================================================
+        //  SESSION EPOCH (WO-1233b) — which battle is the observer talking about?
+        // ---------------------------------------------------------------------
+        //  CAPTURED DEFECT (2026-08-30, Seeker build 2026.08.30.348233, device
+        //  SM02G4061955851, break-log t=342.526):
+        //
+        //    [Flow:Quiescence] BATTLE_QUIESCENCE_FAIL (arena win) - 2 invariant(s)…
+        //      - timeScale: the world clock is 0.04 (4% speed), not 1.00.
+        //      - battle-lock: still HELD … HOLDER(S): PursuitBattleProbe.Probe,
+        //        BattleArena.<Awake>b__84_0
+        //
+        //  THE PROOF THAT THIS IS A SECOND BATTLE AND NOT A LEAK, from the same
+        //  device break-log, 8.3 seconds later:
+        //
+        //    t=350.8  [HeroDeath] death freeze armed … pinPos=(4997.93, 0.08, 5004.65)
+        //
+        //  ArenaCentre is (5000,0,5000) (BattleArena.cs:90) — the hero was INSIDE the
+        //  arena, fighting, and died there. Meanwhile BattleArena.<Awake>b__84_0 is
+        //  literally `() => BattleInProgress` (BattleArena.cs:333), and Resolve sets
+        //  `BattleInProgress = false` at BattleArena.cs:2706 — BEFORE it announces the
+        //  session end (:2720) and BEFORE it arms the gate (:2745). There is exactly one
+        //  way for that probe to read TRUE inside the armed gate's own coroutine: a NEW
+        //  BeginEncounter (BattleArena.cs:479) ran while the previous battle's gate was
+        //  still settling. The 0.04 is that new fight's live HitTier.Medium stop, and the
+        //  pursuit holder is its live chasers re-pulsing — both CORRECT state, reported as
+        //  a leak, and then the gate's "one restore" STAMPED 1.00 over a live hit-stop.
+        //
+        //  WHY AN EPOCH AND NOT A FLAG. The gate lives in Core and cannot see BattleArena;
+        //  a bool would also lose the case where a second battle starts AND ends inside the
+        //  first gate's settle window (a fast retreat), which a monotonic counter catches.
+        //  BattleArena's own `arena-actors` probe already carries this exact guard inline
+        //  ("a new battle started; not our business", BattleArena.cs:355) — the author knew
+        //  the race existed and guarded ONE probe out of four. This lifts the guard to the
+        //  observer, where it covers all of them at once.
+        // =====================================================================
+
+        private static int s_epoch;
+
+        /// <summary>
+        /// Monotonic battle-session counter. An observer that must judge the world AFTER a battle
+        /// captures this when it arms and compares before it judges: a different value means it is
+        /// looking at a DIFFERENT battle's state and must not report on it.
+        /// </summary>
+        public static int Epoch => s_epoch;
+
+        /// <summary>
+        /// A battle session has BEGUN. Announce from the battle's ONE lifecycle start, the same way
+        /// <see cref="Release"/> is announced from its ends. Bumps <see cref="Epoch"/> so any gate
+        /// still settling on the previous battle knows it has been superseded.
+        /// <para>Also the permanent record of the world state a fight STARTS from — holders and the
+        /// clock — so a leak that predates the fight is attributable without a second capture.</para>
+        /// </summary>
+        public static void Begin(string context)
+        {
+            s_epoch++;
+            FlowTrace.Step(Sys,
+                $"BATTLE_SESSION_BEGAN (#{s_epoch}, {context}) - timeScale={Time.timeScale:F2}, " +
+                $"battle-lock holders=[{BattleLock.DescribeHolders()}]. Any quiescence gate still " +
+                "settling on an earlier session is now superseded and will not judge this one's state.");
+        }
 
         /// <summary>
         /// Register a named unwind that runs when a battle session ends. The argument is the
@@ -141,8 +203,9 @@ namespace DeNelle.Core.Combat
 
             string after = BattleLock.DescribeHolders();
             FlowTrace.Step(Sys,
-                $"BATTLE_SESSION_RELEASED ({context}) - pursuit window cleared, {s_unwinds.Count} owner " +
-                $"unwind(s) run. battle-lock holders before=[{before}] after=[{after}]. " +
+                $"BATTLE_SESSION_RELEASED (#{s_epoch}, {context}) - pursuit window cleared, {s_unwinds.Count} owner " +
+                $"unwind(s) run. battle-lock holders before=[{before}] after=[{after}], " +
+                $"timeScale={Time.timeScale:F2}. " +
                 "An 'after' that is not 'none' is a LIVE holder, not a leak: pursuit re-reports every " +
                 "aggro tick, so a chaser that is still chasing legitimately re-raises the lock here.");
         }
