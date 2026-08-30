@@ -1,6 +1,6 @@
 # WORK ORDER 1284 — every Asset-Store mesh the orientation code measures must be Read/Write
 
-**Status:** READY TO IMPLEMENT
+**Status:** DONE 2026-08-30 — suite landed + all 405 MWP1 metas flipped. `checked=417 passed=417 offenders=0`, proven in BOTH directions. `COMPILE_GATE_OK`. Committed 9aa57546.
 **Minted:** 2026-08-30 (CLI seat, main line; banner bumped 1284 -> 1285 in the same edit)
 **Lane:** Editor regression / asset import (no gameplay code)
 **Provenance:** owner, 2026-08-30: *"we need to add as test for all store assets"* — raised

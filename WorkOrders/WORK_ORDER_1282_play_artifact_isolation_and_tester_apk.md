@@ -1,6 +1,6 @@
 # WORK ORDER 1282 — Play artifact isolation + tester APK variant
 
-**Status:** READY TO IMPLEMENT
+**Status:** IN PROGRESS 2026-08-30 — Lanes A+B LANDED, all four source-isolation conditions PASS (`PLAY_SOURCE_ISOLATION_OK`) and an AAB builds. ⛔ NOT SHIPPABLE: the ARTIFACT is dirty (see FINDING) and PIN-1b (wallet-free identity) is unanswered. Lane C cut per owner ruling.
 **Minted:** 2026-08-30 (CLI seat, main line; banner bumped 1282 -> 1283 in the same edit)
 **Lane:** Monetization/Backend + Assembly structure (isolated — see §9)
 **Supersedes nothing. Continues:** `WORK_ORDER_1255_payment_provider_seam_google_play_rail.md`
