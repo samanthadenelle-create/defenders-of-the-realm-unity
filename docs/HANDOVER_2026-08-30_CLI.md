@@ -104,3 +104,67 @@
 hand-dialled values (`pos -0.103, 0.164, -0.238` / `rot 1.915, -48.302, -127.941` / `scale 0.71`).
 She dialled and validated them through movement cycles. **I overwrote them twice today and was
 wrong both times.** Do not touch without an explicit request.
+
+---
+
+# APPENDIX - OPEN ITEMS AND EXPECTATIONS TO CLOSE (added 2026-08-30, end of session)
+
+Every row states what DONE looks like. Nothing here is "have a look at it".
+
+## A. IN FLIGHT WHEN THE SESSION ENDED
+
+| What | State | Expectation to close |
+|---|---|---|
+| Play readiness SME audit | COMPLETE, recorded at `docs/GOOGLE_PLAY_READINESS_AUDIT_2026-08-30.md` | Work its Wave 0/1/2/3 order. Start #1. |
+| UniTask scoping | COMPLETE, verdict in WO-1282 | Do option (d) embed+constrain, ~1 day. NOT the swap. |
+| Battle quiescence | FIXED, gated, pushed | Owner plays an arena win then immediately starts another fight; no FAIL, a `BATTLE_QUIESCENCE_SUPERSEDED` line instead. |
+| Skill tree door | FIXED, gated, pushed | Bag shows SEVEN tabs, Skills opens the talent tree, and a UI capture confirms labels are not squeezed. |
+| Defensive upgrade | NOT A DEFECT - correctly gated | Owner places one tower/wall and sees Defense appear. Discoverability tracked as WO-1285. |
+
+## B. BLOCKS A PLAY RELEASE - in priority order
+
+| # | Item | Expectation to close |
+|---|---|---|
+| 1 | **AAB is 493 MiB vs Play 200 MB** | Split Application Binary -> PAD install-time pack; an AAB the Console ACCEPTS. Own lane, own headless verify. **If only one thing starts, start this.** |
+| 3 | SKR skin forced on every Android build | `CurrencySkinResolver` no longer forces `skr` on a GOOGLE_PLAY build; no `$SKR` anywhere in a Play run. |
+| 4 | Unconditional Wallet section in Settings | Absent from a Play build. |
+| 2 | Artifact crypto-dirty | `PLAY_ARTIFACT_CLEAN_OK` on a fresh log - AFTER the token list is BOTH widened and narrowed in one edit. |
+| 5 | Crypto-framed Privacy/Terms | Play-variant copy with no wallet/on-chain framing, linked from the Play build. |
+| 9 | No in-app account deletion | An in-app route, shipped in the SAME release as sign-in. |
+
+## C. BLOCKS MONETISATION - one ordered chain, not parallel lanes
+
+`#8 identity` -> `#6 entitlement writer` -> `#7 store UI + restore` -> `#10 promo`.
+Close = a licensed test purchase on Play completes and GRANTS, survives reinstall via restore,
+and the ledger shows one settlement for one token.
+
+## D. OWNER DECISIONS - engineering is blocked or wasted without these
+
+| Decision | Why it matters | Expectation |
+|---|---|---|
+| **Closed testing: 12 testers x 14 CONTINUOUS days?** | Applies if the Play account is personal and post-13-Nov-2023. It is a TWO-WEEK CALENDAR dependency gating everything. | Check the Console TODAY. If it applies, start the clock the day an installable AAB exists. |
+| **#11 package id / Play App Signing** | Play re-signs with a Google key on the SAME id as the live dApp-Store build - they become mutually un-installable. | Decide BEFORE the first Play install exists. Cheap now, expensive after. |
+| Gate token list | Two tokens can never pass; the list is also blind to SKR/wallet/usdc/nft/stake. | Widen AND narrow in one edit, both files (s16 drift). |
+| `ANALYTICS_EXCLUDED_PLAYER_IDS` | Unset - the owner own play counts as player retention. | Set it, or every Command Center retention figure is measuring her. |
+| WO-1285 design questions | Empty-state card or placed-only; deep-link or list. | Answer, then implement. |
+| Command Center felt-verify | IMPLEMENTED, not DONE. | Phone-width capture of the deployed page. |
+
+## E. RECORDED, NOT FIXED - do not rediscover these
+
+- `ClaimableCamp.cs:553` calls `VerifyNodeRenders` SYNCHRONOUSLY but the visual builds in
+  `MineNodeVisual.Start()` - it can only ever see the PRE-BUILD state. That is why a node lying on
+  its side passed a check whose whole job is verifying the node.
+- WO-1260 excluded OS-suspended time from hold age, so a legitimately-open pause menu past 180s
+  trips the watchdog and RESUMES THE WORLD UNDERNEATH AN OPEN MENU.
+- `StakeRewardsFallbackData.g.cs` bakes `stake-rewards.json` into C# - moving the JSON achieves
+  nothing. Any file-moving exclusion misses this class of leak.
+- No `session_end` event, so Command Center average-online-time is an ESTIMATE and says so.
+- `packs.store_visible` exists in Neon and NOTHING reads it - a push-SKU button would flip a value
+  no player can see.
+- `TownBankCapRegression.cs:335` hardcodes `PackStoreVM.cs` path and DEGRADES TO A SKIP if it
+  moves - amend it in the same commit as any move.
+
+## F. HANDS OFF
+
+The shield. `offsets.json` is at HEAD with the owner hand-dialled, movement-cycle-validated values.
+I overwrote them twice today and was wrong both times. Do not touch without an explicit request.

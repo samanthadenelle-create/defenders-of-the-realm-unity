@@ -158,7 +158,10 @@
 > fine as history. A copied number is the bug **even when it was right the day it was written** -
 > that is exactly how the retired 860-899 UI block kept re-seeding collisions from CLAUDE.md sec.2.
 
-> ## ⚠ RECONCILED 2026-08-30 (CLI): main line next free = **1285**.
+> ## ⚠ RECONCILED 2026-08-30 (CLI): main line next free = **1286**.
+> **1285** = Defense upgrade needs its own card / second entrance (owner: discoverability, not routing - the screen is correctly gated on placed structures). Banner bumped 1285 -> 1286 in this SAME edit.
+>
+> ### superseded: RECONCILED 2026-08-30 (CLI): main line next free = **1285**.
 > **1284** = store-asset mesh readability sweep. `isReadable: 0` on a gear FBX is INVISIBLE in the
 > Editor (Unity keeps mesh data CPU-side there) and returns ZERO vertices in a player build, so
 > `ShieldHandleSide` / `SheatheSign` silently skip their flip and the prop is worn edge/strap-inward.
