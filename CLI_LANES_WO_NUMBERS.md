@@ -158,7 +158,15 @@
 > fine as history. A copied number is the bug **even when it was right the day it was written** -
 > that is exactly how the retired 860-899 UI block kept re-seeding collisions from CLAUDE.md sec.2.
 
-> ## ⚠ RECONCILED 2026-08-30 (CLI): main line next free = **1284**.
+> ## ⚠ RECONCILED 2026-08-30 (CLI): main line next free = **1285**.
+> **1284** = store-asset mesh readability sweep. `isReadable: 0` on a gear FBX is INVISIBLE in the
+> Editor (Unity keeps mesh data CPU-side there) and returns ZERO vertices in a player build, so
+> `ShieldHandleSide` / `SheatheSign` silently skip their flip and the prop is worn edge/strap-inward.
+> The trace calls Read/Write-OFF "the SHIPPED state of the live weapons" — this is the catalogue
+> default, not one bad asset. Cost PROD-019 an evening and three commits against a seat that was
+> never wrong. Banner bumped 1284 -> 1285 in this SAME edit.
+>
+> ### superseded: RECONCILED 2026-08-30 (CLI): main line next free = **1284**.
 > **1283** = the overnight APK build is judged UNASSERTED: `overnight-apk-build.ps1:72` calls
 > `run-unity-method.ps1` with no `-ExpectMarker`, so the prod ship chain prints
 > `VERDICT=PASS-UNASSERTED` while `install-apk-to-seeker.ps1` asserts

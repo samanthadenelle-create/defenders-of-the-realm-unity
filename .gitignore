@@ -331,8 +331,27 @@ Thumbs.db
 # tracked Resources/ path. On a fresh clone: re-import the pack from the Asset
 # Store, then run Defenders/Art/Fix Supercyan URP Materials (converts Built-in
 # shaders -> URP so it isn't magenta). See docs/SUPERCYAN_REIMPORT.md.
-/Assets/Supercyan/
+/Assets/Supercyan/*
 /Assets/Supercyan.meta
+
+# EXCEPTION (PROD-019, 2026-08-30): track the IMPORT SETTINGS of the gear meshes,
+# never the art. `isReadable: 0` on Fantasy_Shield.FBX is invisible in the Editor
+# — Unity keeps mesh data CPU-side there, so mesh.vertices reads fine — but in a
+# PLAYER BUILD a non-readable mesh returns ZERO vertices. EquipmentController's
+# ShieldHandleSide measures the mesh to decide which face points outward; with no
+# vertices it skips the flip entirely and the plate lands strap/edge-inward, flush
+# to the arm. That is the "shield renders but is unreadable on device" defect that
+# cost an evening: it CANNOT be seen in Play mode, only on a device.
+# Tracking just the .meta (a ~2 KB text file) makes `isReadable: 1` survive a
+# clone while no paid-pack binary ever enters git history.
+# ⚠ ON A FRESH CLONE, RE-IMPORT THE PACK BEFORE OPENING UNITY. A tracked .meta
+# with no asset beside it is an orphan, and Unity deletes orphan .meta files —
+# which would silently restore the defect with no diff to explain it.
+!/Assets/Supercyan/Models/
+/Assets/Supercyan/Models/*
+!/Assets/Supercyan/Models/Fantasy/
+/Assets/Supercyan/Models/Fantasy/*
+!/Assets/Supercyan/Models/Fantasy/Fantasy_Shield.FBX.meta
 
 # === Session-noise / dev workflow (added 2026-05-20) ===
 # Stale build logs left behind by batch Unity invocations.
@@ -490,8 +509,34 @@ yarn.lock
 /Assets/Quaternius.meta
 # Blink RPG Art ULTIMATE Bundle (Spark Framework) — big pack, restored to disk 2026-06-16;
 # kept gitignored (owner policy: packs stay out of git until an explicit used-closure commit).
-/Assets/Blink/
+/Assets/Blink/*
 /Assets/Blink.meta
+
+# EXCEPTION (WO-1284, 2026-08-30): track the IMPORT SETTINGS of the weapon meshes,
+# never the art. 400 of the 417 gear meshes shipped with `isReadable: 0`, i.e. the
+# ENTIRE equippable weapon catalogue. That flag is invisible in the Editor — Unity
+# keeps mesh data CPU-side there — but a player build gets ZERO vertices, so
+# EquipmentController's SheatheSign / ShieldHandleSide silently skip their flip and
+# the prop is worn edge/strap-inward. The device trace called Read/Write-OFF "the
+# SHIPPED state of the live weapons"; it was the catalogue default, not one asset.
+# Cost PROD-019 an evening against a seat that was never wrong.
+# A directory rule, deliberately, NOT a list of 400 names: a copied list goes stale
+# the first time someone adds a weapon, which is the exact drift CLAUDE.md §2/§5
+# were written about. ~2 KB of text each, no paid-pack binary enters git history.
+# ⚠ ON A FRESH CLONE, RE-IMPORT THE PACK BEFORE OPENING UNITY. A tracked .meta with
+# no asset beside it is an orphan, and Unity deletes orphan .meta files — silently
+# restoring the defect with no diff to explain it.
+!/Assets/Blink/Art/
+/Assets/Blink/Art/*
+!/Assets/Blink/Art/Weapons/
+/Assets/Blink/Art/Weapons/*
+!/Assets/Blink/Art/Weapons/LowPoly/
+/Assets/Blink/Art/Weapons/LowPoly/*
+!/Assets/Blink/Art/Weapons/LowPoly/MegaWeaponPack1/
+/Assets/Blink/Art/Weapons/LowPoly/MegaWeaponPack1/*
+!/Assets/Blink/Art/Weapons/LowPoly/MegaWeaponPack1/Meshes_MWP1/
+/Assets/Blink/Art/Weapons/LowPoly/MegaWeaponPack1/Meshes_MWP1/*
+!/Assets/Blink/Art/Weapons/LowPoly/MegaWeaponPack1/Meshes_MWP1/*.fbx.meta
 # Black Dragon boss pack — orphaned per usage audit (live boss uses the Tripo Dragon.fbx; dragon
 # rebrand-cut). Un-tracked 2026-06-16; kept on disk, out of git.
 /Assets/Black Dragon/

@@ -67,6 +67,12 @@ namespace DeNelle.Editor.Regression
     {
         private const string EquipSrc = "Assets/_Modules/Village/Hero/EquipmentController.cs";
 
+        /// <summary>PROD-019. The shield mesh's import settings. The FBX itself is a paid
+        /// gitignored pack asset; this .meta is tracked BY EXCEPTION (.gitignore) precisely
+        /// so the readability flag below survives a clone.</summary>
+        private const string ShieldFbxMeta =
+            "Assets/Supercyan/Models/Fantasy/Fantasy_Shield.FBX.meta";
+
         /// <summary>Standalone batch entry - prints the marker.</summary>
         public static void RunAll()
         {
@@ -98,6 +104,8 @@ namespace DeNelle.Editor.Regression
                      () => Case9_AlignSeatsLongAxisOnY(failures));
                 Case(failures, "staff-loadout-shows-renderers",
                      () => Case10_StaffLoadoutShowsRenderers(failures));
+                Case(failures, "shield-mesh-readable",
+                     () => Case11_ShieldMeshIsReadable(failures));
             }
             catch (Exception ex)
             {
@@ -125,6 +133,62 @@ namespace DeNelle.Editor.Regression
         // =====================================================================
         //  Case 1 - the owner-dialed shield rows load through the REAL registry
         // =====================================================================
+
+        /// <summary>
+        /// PROD-019 (2026-08-30). The shield mesh MUST import with Read/Write enabled.
+        ///
+        /// WHY THIS CANNOT BE CAUGHT IN PLAY MODE, WHICH IS WHY IT COSTS AN EVENING EVERY TIME:
+        /// the Editor keeps mesh data CPU-side regardless of the flag, so `mesh.vertices`
+        /// reads fine and the shield looks CORRECT in Play mode. In a PLAYER BUILD a
+        /// non-readable mesh returns ZERO vertices. EquipmentController's ShieldHandleSide
+        /// measures the mesh to decide which of the plate's two faces points outward; with
+        /// no vertices it applies NO flip, and the shield lands strap/edge-inward, flush to
+        /// the arm — present, lit, seated at the authored Offset Forge row, and unreadable.
+        /// Device trace 2026-08-30: "only 0 readable vertices - 1 of 1 mesh(es) have
+        /// Read/Write DISABLED ... so NO flip is applied ... it may be worn strap-outward."
+        ///
+        /// The trace also names the ONLY correct fix and forbids the tempting one:
+        /// "enable Read/Write on that FBX. Do NOT invent a second face heuristic - a
+        /// single-renderer plate has no bounds-only signal that separates its two faces,
+        /// so any such rule would be a coin-flip." Three commits on 2026-08-29 added
+        /// exactly such heuristics (a +180 flip removal, an outward cant, a skin-clearance
+        /// bias) and none of them could land, because the seat was never the defect.
+        ///
+        /// SKIPS (does not fail) when the .meta is absent: the pack is gitignored, so a
+        /// clone that has not re-imported it legitimately has no file here. Only a PRESENT
+        /// file with the flag OFF is a failure.
+        /// </summary>
+        private static void Case11_ShieldMeshIsReadable(List<string> failures)
+        {
+            if (!File.Exists(ShieldFbxMeta))
+            {
+                Debug.LogWarning("[shield-mesh-readable] SKIPPED - " + ShieldFbxMeta +
+                    " not present. The Supercyan pack is gitignored; re-import it before " +
+                    "trusting this case. This is a WARNING, not a pass.");
+                return;
+            }
+
+            string meta = File.ReadAllText(ShieldFbxMeta);
+            Match m = Regex.Match(meta, @"^\s*isReadable:\s*(\d+)\s*$", RegexOptions.Multiline);
+
+            if (!m.Success)
+            {
+                failures.Add("[shield-mesh-readable] no 'isReadable:' key in " + ShieldFbxMeta +
+                    " - the importer format changed; this guard is no longer reading the flag " +
+                    "it claims to read. Fix the guard, do not delete it.");
+                return;
+            }
+
+            if (m.Groups[1].Value != "1")
+            {
+                failures.Add("[shield-mesh-readable] isReadable=" + m.Groups[1].Value + " in " +
+                    ShieldFbxMeta + " - MUST be 1. With Read/Write OFF the shield still looks " +
+                    "correct in Play mode and seats correctly on device, but ShieldHandleSide " +
+                    "gets 0 vertices in a player build, skips the face flip, and the plate is " +
+                    "worn edge/strap-inward. This is invisible to every editor-only proof " +
+                    "(PROD-019). Re-enable Read/Write on the FBX; do NOT add a face heuristic.");
+            }
+        }
 
         private static string Case1_RegistryRows(List<string> failures)
         {
