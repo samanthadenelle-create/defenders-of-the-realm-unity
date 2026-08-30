@@ -1,6 +1,22 @@
 # WORK ORDER 1169 — The Command Center: the parts are built, there is no console — and the MONEY is the part nobody can see
 
-**Status:** SPEC — ⭐ **§3 IS DONE 2026-08-24** (`4f8c2f23d` + `ecbd5047a`): `purchase_quotes` / `purchase_entitlements` are in the `api/admin/db.js` probe list, and `api/admin/stats.js` serves `?view=purchases` from `purchase_entitlements` with the quote→settle funnel, the analytics view kept and relabelled, and `client_events_without_entitlement` as the alert. ⭐ **§5 Q4 IS RULED 2026-08-24** (batch 2, ruling 7): *"push promos"* means **promo-code AUTHORING ONLY** — ⛔ notifications are a separate ticket, never a line item here. ⚠ **§§5–7 otherwise still need scoping by the ticket's own text** and the joined triage view is unbuilt — so this is a spec pass, not implementable work. *(Status audit 2026-08-24: lead-verified bucket correction; body unchanged.)*
+**Status:** SPEC — consolidated 2026-08-29. The original console and money-observability gaps are delivered by WO-1244, WO-1243, WO-1269, and PROD-017. The remaining umbrella work is the richer identified support/promo/money drill-down program tracked by WO-1267. F8 egress remains explicitly deferred by owner ruling. Do not duplicate delivered descendants.
+
+## Consolidated implementation truth — 2026-08-29
+
+| Original requirement | Current truth | Authority |
+|---|---|---|
+| Server-authoritative transaction log and quote→settle funnel | **Delivered.** `api/admin/stats.js?view=purchases` reads `purchase_entitlements` and `purchase_quotes`; client and server figures remain separate. | WO-1169 §3 / WO-1244 |
+| Surface client-completed/server-missing disagreement | **Delivered.** Active mismatches are shown; reviewed false positives can be acknowledged without changing telemetry or money tables. | WO-1269 (FIXED, live-smoked) |
+| Phone-first Command Center surface | **Delivered in code and deployed.** Read and write endpoints remain separate; writes require the second admin key and are audited. Owner phone felt-test remains the closure step for WO-1244. | WO-1244 (FIXED) |
+| Emergency operator gates | **Delivered.** Six maintenance areas are surfaced with explicit word states and audited seal/open actions. | WO-1243 / WO-1244 |
+| Player-report channel and report list | **Delivered foundation.** The schema repair was owner-proven from Seeker and the ops view lists bounded, masked reports. | PROD-017 (CLOSED) / WO-1244 |
+| Promo-code authoring | **Delivered.** Authoring and activation controls use the separately gated write endpoint; notifications remain out of scope. | WO-1244 |
+| Reviewed purchase-alert removal | **Delivered.** Append-only acknowledgement suppresses only the matching active alert. | WO-1269 (FIXED) |
+| Identified gate/promo/player/money drill-downs | **Partial and still open.** Gate count → matching bounded refusal rows is present in the current implementation; richer promo health, wallet-bound support relationships, pagination, and scoped operator-session access remain WO-1267 work. | WO-1267 (SPEC) |
+| Upload local F8 captures to the console | **Not authorized.** Owner ruled "not yet"; captures remain local. | Owner ruling below |
+
+This umbrella stays **SPEC**, not Fixed: WO-1267 still contains material undelivered acceptance and its wallet-bound operator-auth design requires product/security validation. Delivered descendant work must be tested and closed in those tickets rather than reimplemented here.
 
 **Minted:** 2026-08-24 (CLI), banner bumped 1169 → 1170 in the same edit.
 **Provenance:** owner, 2026-08-24 — *"I wanna really start thinking about how we set up a command
@@ -17,16 +33,16 @@ data source that is wrong.
 
 | Pillar | Backend today | Surface today |
 |---|---|---|
-| Transaction log | `purchase_quotes`, `purchase_entitlements`, `/purchases/{quote,verify,fulfill,reconcile}` | ⛔ **NONE** |
+| Transaction log | `purchase_quotes`, `purchase_entitlements`, `/purchases/{quote,verify,fulfill,reconcile}` | Command Center Money view (`stats?view=purchases`) |
 | Troubleshoot | `bug_reports`, `analytics_events` (87k+ rows), `/bug-report`, `/trace`, F8 `break-log.jsonl` | `admin/db.js` (raw rows), `tools/db-viewer/index.html` |
 | Tickets | `WorkOrders/*.md` → `BOARD.html` (`tools/board_build.py`) | BOARD.html — **dev tickets only, not player issues** |
-| Promos | `promo_codes`, `promo_redemptions`, `/promo/redeem` | ⛔ **no authoring surface** — codes must be inserted by hand |
+| Promos | `promo_codes`, `promo_redemptions`, `/promo/redeem` | Command Center authoring/status surface (WO-1244) |
 
 Admin plumbing is real and sound: `api/admin/db.js` (raw-table viewer, **read-only by construction**
 — every statement a SELECT with a hard LIMIT), `api/admin/stats.js` (aggregates), `admin/cleanup.js`,
 gated by `ADMIN_DASH_KEY`.
 
-## 2. ⛔ THE FINDING: the money tables are invisible to BOTH admin surfaces
+## 2. Historical finding (resolved): the money tables were invisible to both admin surfaces
 
 `api/purchases/*.js` reads and writes **`purchase_quotes`** and **`purchase_entitlements`**. These are
 the SERVER's authoritative record: the exact base-unit amount, mint, decimals, destination, the tx
@@ -102,12 +118,12 @@ that grants value — it does not belong in the read-only viewer, and it needs i
 
 ## 6. Acceptance for §3
 
-- [ ] Both purchase tables appear in `db.js` with counts + latest timestamp
-- [ ] `stats.js` `purchases` view reads `purchase_entitlements`; figures reconcile against chain for
+- [x] Both purchase tables appear in `db.js` with counts + latest timestamp
+- [x] `stats.js` `purchases` view reads `purchase_entitlements`; figures reconcile against chain for
       a known settled purchase
-- [ ] Client-reported vs server-settled shown SEPARATELY, with disagreements surfaced
-- [ ] Every added statement is a SELECT with a hard LIMIT — the read-only contract holds
-- [ ] No secrets, wallet addresses or tx signatures logged beyond what the tables already store
+- [x] Client-reported vs server-settled shown SEPARATELY, with disagreements surfaced
+- [x] Every added statement is a SELECT with a hard LIMIT — the read-only contract holds
+- [x] No secrets, wallet addresses or tx signatures logged beyond what the tables already store
 
 ## 2026-08-24 - TROUBLESHOOT pillar (§4): code side landed, consolidation ASSESSED not built
 

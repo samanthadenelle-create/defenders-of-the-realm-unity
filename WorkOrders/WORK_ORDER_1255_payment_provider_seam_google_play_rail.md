@@ -1,10 +1,7 @@
 # WORK ORDER 1255 — Payment-Provider Seam + Google Play Fiat Rail (one build, three channels)
 
-**Status:** BLOCKED 2026-08-28 — TESTED FAIL-CLOSED. Dormant server verification/ledger, client settlement, authenticated account binding, and a deep AAB packaging gate are implemented and regression-tested, but a distributable Play artifact is correctly refused: Wallet/Web3 lack a `!GOOGLE_PLAY` boundary, Village directly references Wallet, and the MWA Android plugin is unconditional. Store UI is also held by the owner design gate below; Play Console/service credentials remain external. Nothing is deployed or enabled.
-**⛔ DESIGN GATE (owner, 2026-08-28): "i want designs first before oking it."** The Play-channel
-store SCREEN (fiat pricing, no wallet UI) ships to the owner as design mockups for approval BEFORE
-any store-facing UI work lands. Lanes A/C (seam + server) may proceed; the Play storefront
-presentation is blocked on the approved design.
+**Status:** BLOCKED 2026-08-29 — storefront design is approved, but the fail-closed Play artifact gate still proves three architecture blockers: Wallet/Web3 lack a `!GOOGLE_PLAY` boundary, Village directly references Wallet, and the MWA Android plugin is unconditional. A signed Play AAB and licensed receipt test also require external Play Console/service credentials. Dormant verification/ledger and settlement remain implemented and regression-tested; nothing is deployed or enabled.
+**DESIGN GATE CLEARED (owner, 2026-08-29):** The updated Play-channel store interface images are approved guidance: localized fiat presentation and no wallet/crypto UI. Store-facing implementation may proceed, but approval does not waive source-isolation, billing, signing, artifact-inspection, or regression gates.
 **Minted:** 2026-08-28 (CLI seat; banner bumped 1255 → 1256 in the same edit)
 **Owner directive (2026-08-28, BINDING):** *"I would prefer one build that ships all three ways and
 the data pulled is only from that respective source."* — ONE project/build chain serving all three

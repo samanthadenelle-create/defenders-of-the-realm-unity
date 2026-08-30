@@ -1,6 +1,13 @@
 # WORK ORDER 1006 — Manage becomes a LAUNCHER; the upgrade catalog moves into per-category browser panels
 
-**Status:** DONE — owner-confirmed 2026-08-21.
+**Status:** FIXED 2026-08-29 - progressive disclosure and the Defense build route are present in Seeker tester APK 2026.08.29.346849; awaiting owner device test. *(Prior: DONE — owner-confirmed 2026-08-21.)*
+
+**2026-08-29 correction:** Manage categories now derive from authoritative current-town placements;
+empty/locked categories are absent until the first relevant structure is placed. Only actionable
+placed rows render, with the selected actions before queue history, explicit result counts and
+Previous/Next paging when more than four structures qualify. A secondary **Build new** route remains
+available for absent categories. Static gate and `DeNelle.Village.csproj` compile are green; status
+is now device-present in APK 2026.08.29.346849 and awaits the owner's phone-viewport test.
 **Minted:** 2026-08-08 (UI seat, owner directive) — number from `CLI_LANES_WO_NUMBERS.md` banner (UI block, bumped 1006 → 1007 in the same edit)
 **Lane:** HUD/UI. Presentation + a read-only browse model. **No economy, timer, or catalog-data changes.**
 **Provenance:** owner ask, verbatim below. Refines the owner's words into a spec (memory `grok-authors-work-orders` flow: owner → UI refine → CLI implement).

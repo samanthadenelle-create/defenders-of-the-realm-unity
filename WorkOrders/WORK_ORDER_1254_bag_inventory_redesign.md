@@ -1,4 +1,35 @@
-**Status:** FIXED — IMPLEMENTED + FULL REGRESSION PASS; SHIELD BODY DEVICE PROOF OWED
+**Status:** READY 2026-08-29 - Seeker APK 2026.08.29.346931 owner test: wolf color passes, but the equipped Knight shield is still not visible and Trade exposes Store only instead of Store + Armorer + Weaponsmith. The local shield projected-area capture was a false-green; both player-visible failures remain open.
+**Jeweler progression follow-up (2026-08-29):** DEVICE-PRESENT in Seeker APK 2026.08.29.346849; owner test pending, including
+first real dungeon-return proof. The persistent `EverAcquiredItemIds` ledger is now written only
+by `VillageInventory.AddEarned`; the authoritative dungeon payout uses that seam, while ordinary
+shop/dev `Add` cannot reveal the Jeweler. `JewelerProgression.IsUnlocked` remains true after the
+stone is spent, duplicate exit callbacks cannot grant the guaranteed introduction twice, and the
+Jeweler panel refuses direct routes before unlock. The repository has no shared Market/Crafting
+navigation model to re-home: Market is reached through `OpenShop`/PartyShop and Weaponsmith/
+Armorer vendor contexts; transformation stations independently route through `PanelId.Crafting`,
+`PanelId.ConsumableCrafting`, and `PanelId.JewelerCrafting`. Therefore the new Bag navigation must
+use those existing destinations, put Weaponsmith + Armorer in Market only, and include Jeweler in
+Crafting only when `JewelerProgression.IsUnlocked` (hidden and excluded from counts beforehand).
+The owner-approved fallback tuning now authors subsequent eligible completed dungeons at a pinned
+15% rough-stone chance; the first dungeon-earned stone still bypasses RNG and is guaranteed once.
+Each runtime run atomically claims one reward evaluation, so exit retry/re-entry cannot grant or
+roll twice. The return-home Obsidian discovery modal explains that the introduction is guaranteed
+but later stones are uncommon and not every dungeon contains one, routes into Jeweler, and persists
+completion only after the authoritative polish queue accepts the first rough-stone action. The
+Jeweler station and direct panel route stay absent/refused before the monotonic earned-history gate.
+There is still no shared Bag/global Market-Crafting navigation bar in the repository to re-home;
+Weaponsmith and Armorer remain their existing Market/vendor world routes, while Crafting surfaces
+remain transformation-only PanelRouter destinations. Do not create a duplicate menu authority.
+Fresh compile evidence: `Builds/compilegate-jeweler-ftue-final.log` (`COMPILE_GATE_OK`). Device
+dungeon-return and installed-APK proof remain required, so status stays READY.
+**Owner flag follow-up (2026-08-29):** READY pending corrected Seeker APK. Device evidence
+`Logs/device/wo-no-shield-current.png` showed the Gear landing state listing the same five
+equipped slots twice while the right pane still said `Nothing selected`. The Gear pane now
+contains action guidance plus only the open-slot names; each authoritative worn row opens its
+matching replacement category. The Off Hand row remains visible and still reports the live
+loadout, so this presentation change does not hide or claim to fix the separately flagged
+shield-render defect. Focused source regression requires both the non-duplicating guidance path
+and the worn-row navigation seam.
 **Minted:** 2026-08-27 (UI/UX design seat). Number = CLI main-line next free **1254** (read off `CLI_LANES_WO_NUMBERS.md` banner: `RECONCILED 2026-08-27 (CLI): main line next free = 1254`).
 **BANNER:** this seat cannot bump `CLI_LANES_WO_NUMBERS.md` (read-only). **Orchestrator must bump the CLI main-line row 1254 -> 1255 in the SAME edit that records this mint.** A mint on disk without the banner bump is the collision.
 
