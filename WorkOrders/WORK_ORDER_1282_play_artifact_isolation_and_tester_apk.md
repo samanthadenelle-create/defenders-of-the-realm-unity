@@ -37,17 +37,44 @@ work was deliberately left fail-closed and is now being pulled forward by an ext
 
 ---
 
-## ⛔ OWNER PIN — BLOCKING, do not start Lane C without it
+## OWNER PINS — PIN-1 PART 1 RESOLVED 2026-08-30
 
-WO-1255's RESULT records: *"The owner-required Play storefront design is not approved."* A Play
-build with `DeNelle.Wallet` excluded has **no storefront at all** unless a rail-neutral one exists.
+**⚠ MY EARLIER FRAMING OF PIN-1 WAS TOO BROAD AND IS CORRECTED HERE.** It read "the owner must
+approve the fiat-only Play store design", implying a storefront had to be invented. It does not.
+Google requires **Google Play Billing** for digital goods, and that rail is ALREADY BUILT and
+dormant from WO-1255:
 
-**PIN-1:** the owner must approve the **fiat-only Play store design** (what a Play player sees where
-the Solana pack rail is today). Until then Lanes A and B may proceed — they are structural and
-rail-neutral — but Lane C must not invent a storefront.
+| Piece | Where |
+|---|---|
+| Unity IAP SDK | `Packages/manifest.json:18` — `com.unity.purchasing: 5.0.4` |
+| Receipt verification | `api/purchases/google-play-verify.js` |
+| Verified-purchase fulfilment | `api/purchases/google-play-fulfill.js` |
+| Account binding (HMAC-pseudonymous) | `api/purchases/google-play-binding.js` |
+| Ledger | `api/_lib/google-play-purchases.js`, `api/migrations/20260828_0007_google_play_purchase_state.sql` (applied to Neon) |
+
+### ✅ PIN-1a RESOLVED — pricing (owner ruling 2026-08-30: *"30% when now i get 0 is fine"*)
+**The Play shop ships the SAME SKU ladder at the SAME prices as the dApp Store** ($1.99–$49.99, plus
+the planned $99+ prestige tier). Google's 30% cut is ACCEPTED. Rationale, in the owner's terms: the
+app is live on the Solana dApp Store but **no purchase has ever completed**, so the real comparison
+is 70% of a sale against 100% of nothing. Do NOT re-open this to "optimise" Play pricing, and do NOT
+author a separate Play price ladder — one ladder, two rails.
+
+### ⛔ PIN-1b STILL OPEN — identity, and it is the REAL blocker
+WO-1255's RESULT: *"There is no safe wallet-free Play account/session issuer yet and no durable
+`IGooglePlayGrantApplier` that atomically records purchase-token settlement with the local pack
+mutation."*
+
+On Seeker the **wallet IS the identity** (saves and entitlements are keyed by `BoundWallet`). A Play
+player has no wallet. Something else must key their saves and entitlements before a purchase can be
+fulfilled durably — **Firebase Auth is already in the project and is the obvious candidate**. Until
+this is answered, a Play build can display a shop and take money it cannot reliably grant against.
+This is a bigger gap than the artifact work in this WO and should be sized separately.
 
 **PIN-2:** external Play Console app + service-account configuration is not present (WO-1255 RESULT).
 Not needed to *build* the artifact; needed before any receipt-verification test. Out of scope here.
+
+**PIN-3: ✅ ANSWERED 2026-08-30** — *"delete them they are dead code."* `TowerSwapService` /
+`TowerSwapMenu` deleted; Lane A landed.
 
 ---
 
