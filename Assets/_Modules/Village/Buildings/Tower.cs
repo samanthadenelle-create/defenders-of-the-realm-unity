@@ -58,7 +58,10 @@ namespace DeNelle.Village
 
         /// <summary>
         /// Static event — fires when any tower is held for <see cref="LongPressSeconds"/>.
-        /// <see cref="TowerSwapService"/> subscribes to this to open the swap menu.
+        /// NO SUBSCRIBER since 2026-08-30. Its only consumer, TowerSwapService (the
+        /// Solana Pay instant tower swap, WO7), was deleted as dead code: never placed in
+        /// any scene or prefab, and the tower-defense pillar it served was removed 06-09.
+        /// The event is left invoked so a future consumer can attach; if none does, delete it.
         /// </summary>
         public static event Action<Tower> AnyLongPressed;
 
@@ -88,7 +91,8 @@ namespace DeNelle.Village
 
         /// <summary>
         /// Instantly replaces this tower's type while keeping its current level,
-        /// position, and empowerment state. Called by <see cref="TowerSwapService"/>
+        /// position, and empowerment state. Its only caller, TowerSwapService, was deleted
+        /// as dead code 2026-08-30 (see AnyLongPressed above)
         /// after a confirmed Solana Pay transaction.
         /// </summary>
         /// <param name="newData">The TowerData for the target tower type.</param>

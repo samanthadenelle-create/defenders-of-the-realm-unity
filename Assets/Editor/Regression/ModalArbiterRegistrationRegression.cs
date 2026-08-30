@@ -16,7 +16,7 @@
 // DEFAULT PARAMETER, so 13 call sites had no literal and never reached the check. The suite was
 // green because it was blind. BuildsTopBandModal now resolves the default (see below).
 //
-// It ALSO hard-checks the two named fixes -- TowerSwapMenu + WelcomeBackPopup (UIDocument
+// It ALSO hard-checks the named fix -- WelcomeBackPopup (a UIDocument
 // panels that set a dynamic top sort) -- register through the arbiter.
 //
 // Marker: MODAL_REGISTRATION_OK / MODAL_REGISTRATION_FAIL. Expected: RED today (some
@@ -71,7 +71,10 @@ namespace DeNelle.Editor
 
         // The two named fixes this suite must confirm register (dynamic top-sort UIDocument panels
         // that the sorting-literal scan would not otherwise catch).
-        private static readonly string[] NamedMustRegister = { "TowerSwapMenu.cs", "WelcomeBackPopup.cs" };
+        // TowerSwapMenu.cs was REMOVED from this list 2026-08-30: the file was deleted as dead
+        // code (owner ruling, PIN-3 of WO-1282). Keeping the name here would fail the suite
+        // looking for a file that no longer exists. Do not re-add it.
+        private static readonly string[] NamedMustRegister = { "WelcomeBackPopup.cs" };
 
         public static bool Run(out string reason)
         {
