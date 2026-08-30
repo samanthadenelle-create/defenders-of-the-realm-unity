@@ -355,6 +355,9 @@ namespace DeNelle.Village
         // GearLoadout.EquippedOffHand on the SAME OnGearChanged event the main weapon uses.
         private const string OffHandPropName = "EquipmentProp_OffHand";
         private GameObject _currentOffHandProp;
+        /// <summary>PROD-019: last sheathe parent we ran EnsureWeaponRenderersVisible for —
+        /// cleared when the off-hand leaves that seat so a reparent re-shows without per-frame spam.</summary>
+        private Transform _offHandSheatheShownOn;
         private string _currentOffHandId;
 
         // OFF-HAND Addressables handle (Blink shields load via "gear/weapon/Shield1h_XX"). ONE owner
@@ -766,6 +769,7 @@ namespace DeNelle.Village
             // height) - the same path the trace proved healthy on every fresh boot.
             _currentWeaponId = null;
             _currentOffHandId = null;
+            _offHandSheatheShownOn = null;
             EquipBestForHero();
             ApplyHoldPose();
             FlowTrace.Step("Equip",
@@ -2983,16 +2987,20 @@ namespace DeNelle.Village
                     if (_sheatheSocketOffIsArm)
                         ApplyOffHandArmSurfaceSeat(offT, sheatheOff);
                     ApplySheathedOffset(offT, _currentOffHandMeshKey);
-                    // PROD-019: parity with main-hand attach — sheathe reparent must leave
-                    // active mesh renderers on. Bag can list Off Hand while the world plate
-                    // is invisible if MagentaGuard / layer / disabled renderer sticks.
-                    if (_currentOffHandProp != null)
+                    // PROD-019: ensure renderers once per sheathe parent — NOT every ApplyHoldPose
+                    // frame (that spammed SHOW lines and blinded F8 harvests on Seeker).
+                    if (_currentOffHandProp != null &&
+                        !ReferenceEquals(_offHandSheatheShownOn, sheatheOff))
+                    {
+                        _offHandSheatheShownOn = sheatheOff;
                         EnsureWeaponRenderersVisible(_currentOffHandProp, sheatheOff,
                             _currentOffHandId ?? _currentOffHandMeshKey ?? "off-hand");
+                    }
                     RecordOffHandSeatWrite("ApplyHoldPose.sheathed");   // WO-994 tripwire
                 }
                 else if (_offHandHand != null)
                 {
+                    _offHandSheatheShownOn = null;   // next sheathe must re-run SHOW
                     offT.SetParent(_offHandHand, false);
                     if (_offHandParentCompensate)
                         CompensateParentScale(offT, _offHandAuthoredScale,
@@ -3442,12 +3450,12 @@ namespace DeNelle.Village
         {
             Transform body = _animator != null ? _animator.transform : transform;
             Vector3 lateral = body.right * OffHandSheatheSide();
-            // PROD-019: arm sheathe needs a stronger rearward cant so the plate faces the
-            // ordinary town / follow camera (behind the hero). 0.65 left the face nearly
-            // edge-on in the owner's Seeker capture; 1.15 keeps lateral strap-on-arm read
-            // while opening a clear silhouette from the rear.
+            // PROD-019: sheathed arm plate must read from the REAR follow/build camera.
+            // Prefer back-of-body (+ toward camera when viewing the cape) over pure lateral
+            // strap — lateral-only parks the disc under the cape where faceOff=0 still
+            // photographs as "no shield". Hip fallback stays lateral.
             Vector3 outward = _sheatheSocketOffIsArm
-                ? lateral - body.forward * 1.15f
+                ? (lateral * 0.45f) - (body.forward * 1.35f)
                 : lateral;
             return outward.sqrMagnitude > 1e-8f ? outward.normalized : lateral;
         }
@@ -3508,10 +3516,11 @@ namespace DeNelle.Village
             Vector3 thicknessWorld = grip.TransformVector(_currentOffHandShieldFrame.ThicknessAxis);
             float halfThicknessWorld = 0.5f * _currentOffHandShieldFrame.Axes.NarrowestLen *
                                        thicknessWorld.magnitude;
-            // Four centimetres clears the CC arm/armour skin while keeping the plate visibly
-            // strapped to it.  Unlike the retired 0.26 m centre offset, this is only skin clearance;
-            // the measured half-thickness does the asset-dependent part.
-            const float skinClearanceWorld = 0.04f;
+            // PROD-019 Seeker 2026-08-29: faceOff=0 and activeMeshRenderers=1 while the owner
+            // still saw NO plate (rear/build camera on Blaise). 4cm skin clearance left the
+            // heater inside the cape/arm silhouette. Push far enough that a rear follow /
+            // build overview camera can read the disc — half-thickness still scales the asset.
+            const float skinClearanceWorld = 0.16f;
             float outwardDistance = halfThicknessWorld + skinClearanceWorld;
             grip.localPosition += socket.InverseTransformVector(outwardWorld * outwardDistance);
 
