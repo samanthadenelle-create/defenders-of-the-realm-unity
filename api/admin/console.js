@@ -125,6 +125,28 @@ const PAGE = `<!DOCTYPE html>
   .gate{max-width:440px;margin:8vh auto}
   code{background:var(--panel2);border:1px solid var(--line);border-radius:5px;padding:1px 5px;font-size:12px}
   .none{color:var(--dim);font-style:italic}
+  /* WO-1281 decision areas. The head is a full-width button so the whole strip
+     is a tap target on a phone, and it never ellipsizes a label or a value:
+     both wrap instead, because a truncated metric name is a metric nobody can
+     read. */
+  .card.area{padding:0;overflow:hidden}
+  .area-head{display:block;width:100%;text-align:left;background:transparent;border:0;
+    border-radius:0;padding:16px 14px;min-height:64px}
+  .area-head:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+  .area-title{display:block;font-size:19px;font-weight:700;letter-spacing:.02em;
+    overflow-wrap:anywhere}
+  .area-q{display:block;color:var(--dim);font-size:13px;margin-top:2px;overflow-wrap:anywhere}
+  .area-toggle{display:inline-block;margin-top:8px;color:var(--accent);font-size:13px;font-weight:700}
+  .card.area>.tiles,.card.area>.note,.card.area>.msg{margin:0 14px 14px}
+  .area-detail{border-top:1px solid var(--line);padding:2px 14px 14px}
+  .area-detail h3{font-size:14px;text-transform:uppercase;letter-spacing:.07em;
+    color:var(--dim);margin:18px 0 8px;overflow-wrap:anywhere}
+  .area-detail .tiles{margin-bottom:6px}
+  .gaps{margin:6px 0;padding-left:20px;color:var(--dim);font-size:13px}
+  .gaps li{margin:6px 0}
+  /* Values wrap; they are never truncated with an ellipsis. */
+  .tile .v{overflow-wrap:anywhere}
+  .tile .k,.tile .s{overflow-wrap:anywhere;white-space:normal}
   @media (max-width:520px){ .wrap{padding:8px} .tile .v{font-size:22px} .hero-number{font-size:44px}
     .metric-grid{grid-template-columns:1fr 1fr}.metric-grid .tile:first-child{grid-column:1/-1} }
 </style>
@@ -160,7 +182,11 @@ const PAGE = `<!DOCTYPE html>
     </div>
   </header>
   <nav id="tabs">
-    <button data-tab="players" aria-pressed="true">Players</button>
+    <button data-tab="command" aria-pressed="true">Decisions</button>
+    <button id="moreBtn" type="button" aria-expanded="false">More tools</button>
+  </nav>
+  <nav id="tools" hidden>
+    <button data-tab="players" aria-pressed="false">Players</button>
     <button data-tab="toggles" aria-pressed="false">Toggles</button>
     <button data-tab="money" aria-pressed="false">Money</button>
     <button data-tab="issues" aria-pressed="false">Player issues</button>
@@ -178,7 +204,18 @@ const PAGE = `<!DOCTYPE html>
   var READ_KEY = null;
   var OPS_KEY = null;
 
-  var state = { tab:'players', days:30, overview:null, ops:null, money:null, err:null };
+  // WO-1281. tab:'command' is the DECISION surface and it is what the page opens
+  // on. The six older tabs still exist, behind the "More tools" disclosure, and
+  // are unchanged - this ticket reorders the surface, it does not delete the
+  // operational tools an incident needs.
+  //
+  // state.open is which decision area is expanded. ONE at a time, so the page stays
+  // scannable one-handed on a phone. It is remembered for the life of the tab in
+  // this variable and nowhere else: this page deliberately stores NOTHING in any
+  // browser-side store (the key rule, see the file header), and an accordion is
+  // not a reason to open that door.
+  var state = { tab:'command', days:30, open:'sales', tools:false,
+                overview:null, ops:null, money:null, command:null, err:null };
 
   var $ = function(id){ return document.getElementById(id); };
 
@@ -232,12 +269,18 @@ const PAGE = `<!DOCTYPE html>
     return Promise.all([
       getJson('/api/admin/stats?view=overview&days=' + d),
       getJson('/api/admin/stats?view=ops&days=' + d),
-      getJson('/api/admin/stats?view=purchases&days=' + d)
+      getJson('/api/admin/stats?view=purchases&days=' + d),
+      getJson('/api/admin/stats?view=command&days=' + d)
     ]).then(function(res){
       state.err = null;
       state.overview = res[0].status === 200 ? res[0].body : null;
       state.ops = res[1].status === 200 ? res[1].body : null;
       state.money = res[2].status === 200 ? res[2].body : null;
+      state.command = res[3].status === 200 ? res[3].body : null;
+      // The decision surface reports its OWN failure inside the area that failed,
+      // so one dead block never blanks the page and never renders as a zero.
+      if (!state.command) state.commandErr = (res[3].body && res[3].body.error) || ('HTTP ' + res[3].status);
+      else state.commandErr = null;
       if (!state.overview) state.err = 'player metrics failed: ' + esc((res[0].body && res[0].body.error) || res[0].status);
       else if (!state.ops) state.err = 'ops read failed: ' + esc((res[1].body && res[1].body.error) || res[1].status);
       $('stamp').textContent = 'read ' + new Date().toISOString().replace('T',' ').slice(0,16);
@@ -246,6 +289,395 @@ const PAGE = `<!DOCTYPE html>
       state.err = 'network: ' + String(e);
       render();
     });
+  }
+
+  // ---- WO-1281 THE DECISION SURFACE --------------------------------------
+  // Five questions, in business order, one column, one area open at a time.
+  //
+  //   1 Sales       what is selling
+  //   2 Retention   do they come back, are we growing, how long is a session
+  //   3 Progression are they levelling
+  //   4 Diagnostics everything else, behind an explicit second tap
+  //
+  // !! NO CARD PRINTS A NUMBER IT CANNOT SOURCE. Every block off the server
+  // carries read_ok and state; a block that could not be read renders the WORDS
+  // "COULD NOT READ" and NO figure, because a failed query rendered as 0 is a
+  // confident lie and this project has been bitten by exactly that.
+  //
+  // !! NO STATE LIVES IN A COLOUR. Every verdict is a word - GROWING, SHRINKING,
+  // FLAT, NEVER SOLD, NOT INSTRUMENTED, COULD NOT READ - because the owner is
+  // red/green colourblind. Nothing on this surface requires telling hues apart.
+
+  function dur(sec){
+    if (sec === null || sec === undefined) return '-';
+    var s = Math.round(Number(sec));
+    if (!isFinite(s) || s < 0) return '-';
+    if (s < 60) return s + ' sec';
+    var m = Math.floor(s / 60), r = s % 60;
+    if (m < 60) return m + ' min ' + r + ' s';
+    var hr = Math.floor(m / 60);
+    return hr + ' hr ' + (m % 60) + ' min';
+  }
+  function pctTxt(v){ return (v === null || v === undefined) ? 'no data yet' : (v + '%'); }
+  function chip(word){ return '<span class="state">' + esc(word) + '</span>'; }
+  function tile(k, v, s){
+    return '<div class="tile"><div class="k">' + esc(k) + '</div><div class="v">' + v +
+           '</div>' + (s ? '<div class="s">' + s + '</div>' : '') + '</div>';
+  }
+  function unreadable(what){
+    return '<p class="msg bad">COULD NOT READ ' + esc(what) + '. No figure is shown for it: a query ' +
+           'that failed must never render as a zero.</p>';
+  }
+
+  // One collapsible area. The head is a full-width button so it is a real tap
+  // target, and it says "Show detail" / "Hide detail" in words rather than
+  // relying on a caret nobody can see on a bright phone screen.
+  function area(id, title, question, headline, detail){
+    var open = state.open === id;
+    return '<div class="card area"><button class="area-head" type="button" data-area="' + esc(id) +
+      '" aria-expanded="' + (open ? 'true' : 'false') + '">' +
+      '<span class="area-title">' + esc(title) + '</span>' +
+      '<span class="area-q">' + esc(question) + '</span>' +
+      '<span class="area-toggle">' + (open ? 'Hide detail' : 'Show detail') + '</span>' +
+      '</button>' + headline +
+      (open ? '<div class="area-detail">' + detail + '</div>' : '') + '</div>';
+  }
+
+  // -- 1. SALES -------------------------------------------------------------
+  function salesArea(c){
+    var s = c.sales || {};
+    var q = s.quote_funnel || {};
+    var head, detail;
+
+    if (!s.read_ok){
+      head = unreadable('the settled purchase tables');
+    } else if (s.state === 'empty'){
+      head = '<div class="tiles">' +
+        tile('Settled revenue, all time', usd(0), 'NO PURCHASE HAS EVER SETTLED') +
+        tile('Wallet prompts opened', q.read_ok ? n(q.issued) : 'COULD NOT READ',
+             'quotes issued in this window') +
+        '</div><p class="note">' + esc(s.empty_meaning || '') + '</p>';
+    } else {
+      var w = {};
+      (s.windows || []).forEach(function(x){ w[x.window] = x; });
+      var today = w['Today'] || {}, d7 = w['7 days'] || {}, d30 = w['30 days'] || {};
+      head = '<div class="tiles">' +
+        tile('30 days', usd(d30.usd), n(d30.settled) + ' sold, ' + n(d30.buyers) + ' buyers'
+             + ' - ' + esc(d30.trend || '')) +
+        tile('7 days', usd(d7.usd), n(d7.settled) + ' sold - ' + esc(d7.trend || '')) +
+        tile('Today', usd(today.usd), n(today.settled) + ' sold - ' + esc(today.trend || '')) +
+        '</div>';
+    }
+
+    detail = '<p class="note">' + esc(s.backing || '') + '</p>';
+
+    if (s.read_ok){
+      detail += '<h3>Window against the window before it</h3><div class="scroll"><table>' +
+        '<tr><th>Window</th><th>Settled value</th><th>Purchases</th><th>Buyers</th>' +
+        '<th>Previous value</th><th>Verdict</th></tr>';
+      (s.windows || []).forEach(function(x){
+        detail += '<tr><td>' + esc(x.window) + '</td><td>' + usd(x.usd) + '</td><td>' +
+          n(x.settled) + '</td><td>' + n(x.buyers) + '</td><td>' + usd(x.prior_usd) + '</td><td>' +
+          chip(x.trend) + '</td></tr>';
+      });
+      detail += '</table></div>';
+
+      var a = s.all_time || {};
+      detail += '<h3>All time</h3><div class="tiles">' +
+        tile('Settled value', usd(a.usd), n(a.settled) + ' purchases') +
+        tile('Buyers', n(a.buyers), 'unique wallets') +
+        tile('First sale', a.first_settled_at ? when(a.first_settled_at) : 'never', '') +
+        '</div>';
+      if (Number(a.rows_without_usd_anchor || 0) > 0){
+        detail += '<p class="note">' + n(a.rows_without_usd_anchor) + ' settled row(s) carry no ' +
+          'authored price (the pinned canary skus). The value above UNDERSTATES the row count; it ' +
+          'does not mean those sales were free.</p>';
+      }
+    }
+
+    var fr = s.first_vs_repeat || {};
+    detail += '<h3>First-time and repeat buyers</h3>';
+    if (!fr.read_ok){ detail += unreadable('the first-time versus repeat split'); }
+    else {
+      detail += '<div class="tiles">' +
+        tile('First purchases', n(fr.first_time_window), 'in this window') +
+        tile('Repeat purchases', n(fr.repeat_window), 'in this window') +
+        tile('Players who bought twice', n(fr.repeat_buyers_all_time), 'all time') +
+        '</div>';
+    }
+
+    detail += '<h3>Quote to settle</h3>';
+    if (!q.read_ok){ detail += unreadable('the quote funnel'); }
+    else {
+      detail += '<p class="note">' + esc(q.definition || '') + '</p><div class="tiles">' +
+        tile('Quotes issued', n(q.issued), n(q.quoted_wallets) + ' wallets') +
+        tile('Paid', n(q.consumed), pctTxt(q.consumed_pct) + (q.low_n ? ' - too few to trust' : '')) +
+        tile('Expired unpaid', n(q.expired_unconsumed), 'opened the wallet and did not finish') +
+        '</div>';
+    }
+
+    if (s.disagreement_count === null || s.disagreement_count === undefined){
+      detail += '<p class="note">Client-versus-server disagreement could not be read.</p>';
+    } else if (Number(s.disagreement_count) > 0){
+      detail += '<p class="msg bad">ALERT: ' + n(s.disagreement_count) + ' purchase(s) the CLIENT ' +
+        'reported complete have NO server settlement. Open More tools, then Money, to review and ' +
+        'acknowledge them.</p>';
+    } else {
+      detail += '<p class="note">No client-versus-server purchase disagreement in this window.</p>';
+    }
+
+    detail += '<h3>Every sellable SKU</h3><p class="note">' + esc(s.sku_roster_note || '') +
+      '</p><div class="scroll"><table><tr><th>SKU</th><th>Price</th><th>State</th>' +
+      '<th>Sold in window</th><th>Sold all time</th><th>Value all time</th><th>Last sale</th></tr>';
+    var roster = s.sku_roster || [];
+    if (!roster.length) detail += '<tr><td colspan="7" class="none">No sellable skus on the server price ladder.</td></tr>';
+    roster.forEach(function(r){
+      detail += '<tr><td class="wrapcell">' + esc(r.sku) + '</td><td>' + usd(r.usd_price) + '</td><td>' +
+        chip(r.state) + '</td><td>' + n(r.units_window) + '</td><td>' + n(r.units_all) + '</td><td>' +
+        usd(r.usd_all) + '</td><td>' + (r.last_settled_at ? when(r.last_settled_at) : 'never') +
+        '</td></tr>';
+    });
+    detail += '</table></div>';
+
+    var push = s.push_a_sku || {};
+    detail += '<h3>Pushing or featuring a SKU ' + chip('NOT INSTRUMENTED') + '</h3>' +
+      '<p class="note">' + esc(push.reason || '') + '</p>' +
+      '<p class="note">What it would take: ' + esc(push.needed || '') + '</p>' +
+      '<p class="note">No button is offered here on purpose. A control that changes a database ' +
+      'column no shipped client reads would look like it worked and do nothing, which is worse ' +
+      'than not having it.</p>';
+
+    return area('sales', 'Sales', 'What is selling?', head, detail);
+  }
+
+  // -- 2. RETENTION ---------------------------------------------------------
+  function retentionArea(c){
+    var r = c.retention || {};
+    var g = r.growth || {};
+    var sl = r.session_length || {};
+    var ch = c.churn || {};
+    var head, detail;
+
+    if (!r.read_ok){
+      head = unreadable('the retention cohorts');
+    } else {
+      var d1 = r.d1 || {}, d7 = r.d7 || {};
+      head = '<div class="tiles">' +
+        tile('Come back next day', pctTxt(d1.pct),
+             n(d1.returned) + ' of ' + n(d1.cohort_size) + (d1.low_n ? ' - too few to trust' : '')) +
+        tile('Still here after 7 days', pctTxt(d7.pct),
+             n(d7.returned) + ' of ' + n(d7.cohort_size) + (d7.low_n ? ' - too few to trust' : '')) +
+        tile('Players, this window', g.read_ok ? n(g.active_window) : 'COULD NOT READ',
+             g.read_ok ? (esc(g.active_trend) + ' against ' + n(g.active_prior) + ' before') : '') +
+        '</div>';
+    }
+
+    detail = '<p class="note">' + esc(r.backing || '') + '</p>';
+
+    // Average online time -- the fifth question, and the one that has to say
+    // out loud what it does not know.
+    detail += '<h3>Average online time ' +
+      chip(sl.instrumented === false ? 'ESTIMATE' : 'MEASURED') + '</h3>';
+    if (!sl.read_ok){
+      detail += unreadable('the session-length estimate');
+    } else if (sl.state === 'empty'){
+      detail += '<p class="note">No session in this window carried more than one event, so no span ' +
+        'can be measured. That is unmeasurable, not zero seconds.</p>';
+    } else {
+      detail += '<div class="tiles">' +
+        tile('Median session', dur(sl.median_seconds),
+             n(sl.sessions_measured) + ' measurable sessions' + (sl.low_n ? ' - too few to trust' : '')) +
+        tile('Mean session', dur(sl.mean_seconds), 'dragged by long tails; read the median first') +
+        tile('Longest tenth', dur(sl.p90_seconds), '90th percentile') +
+        '</div>';
+      detail += '<p class="note">' + n(sl.unmeasurable_sessions) + ' of ' + n(sl.sessions) +
+        ' sessions carried a single event and are excluded from both figures. ' +
+        esc(sl.unmeasurable_note || '') + '</p>';
+      if (sl.scan_truncated){
+        detail += '<p class="msg bad">The scan hit its ' + n(sl.scan_cap) + ' event ceiling, so this ' +
+          'sample is the most recent slice of the window, not all of it.</p>';
+      }
+    }
+    detail += '<p class="note">HOW SESSIONS END: ' + esc(sl.how_sessions_end || '') + '</p>';
+
+    detail += '<h3>Return rate</h3>';
+    if (!r.read_ok){ detail += unreadable('the retention cohorts'); }
+    else {
+      detail += '<div class="scroll"><table><tr><th>Window</th><th>Returned</th><th>Cohort</th>' +
+        '<th>Rate</th><th>Confidence</th></tr>';
+      [['Next day', r.d1], ['Day 7', r.d7], ['Day 30', r.d30]].forEach(function(pair){
+        var x = pair[1] || {};
+        detail += '<tr><td>' + esc(pair[0]) + '</td><td>' + n(x.returned) + '</td><td>' +
+          n(x.cohort_size) + '</td><td>' + pctTxt(x.pct) + '</td><td>' +
+          (Number(x.cohort_size || 0) === 0 ? 'no cohort has aged this far'
+             : x.low_n ? 'too few to trust' : 'usable') + '</td></tr>';
+      });
+      detail += '</table></div>';
+    }
+
+    detail += '<h3>Growing or losing players</h3>';
+    if (!g.read_ok){ detail += unreadable('the growth comparison'); }
+    else {
+      detail += '<div class="tiles">' +
+        tile('New players', n(g.new_window), esc(g.new_trend) + ' against ' + n(g.new_prior) + ' before') +
+        tile('Active players', n(g.active_window), esc(g.active_trend) + ' against ' + n(g.active_prior) + ' before') +
+        tile('Returning share', n(g.returning_active), n(g.new_active) + ' of them are brand new') +
+        '</div><p class="note">' + esc(g.note || '') + '</p>';
+    }
+
+    detail += '<h3>Played once and left</h3>';
+    if (!ch.read_ok){ detail += unreadable('the inactivity cohorts'); }
+    else {
+      var os = ch.one_session || {}, tl = ch.tried_and_left || {}, stl = ch.stalled || {};
+      detail += '<div class="tiles">' +
+        tile('One session only', n(os.players), pctTxt(os.pct) + ' of ' + n(os.eligible) + ' judgeable') +
+        tile('Tried and left', n(tl.players), pctTxt(tl.pct) + ' of ' + n(tl.eligible) + ' judgeable') +
+        tile('Returned but stalled', n(stl.players), pctTxt(stl.pct) + ' of ' + n(stl.returned_players) + ' returners') +
+        '</div>' +
+        '<p class="note">One session only: ' + esc(os.definition || '') + '</p>' +
+        '<p class="note">Tried and left: ' + esc(tl.definition || '') + '</p>' +
+        '<p class="note">Stalled: ' + esc(stl.definition || '') + ' ' + esc(stl.approximation || '') + '</p>' +
+        '<p class="note">' + esc(ch.never_claims_deletion || '') + '</p>';
+
+      var ex = ch.early_exit_steps || [];
+      detail += '<h3>Where they stopped</h3><p class="note">' + esc(ch.early_exit_note || '') +
+        '</p><div class="scroll"><table><tr><th>Last thing they did</th><th>Players</th><th>Latest</th></tr>';
+      if (!ex.length) detail += '<tr><td colspan="3" class="none">Nobody has been quiet for seven days yet.</td></tr>';
+      ex.forEach(function(x){
+        detail += '<tr><td class="wrapcell">' + esc(x.step) + '</td><td>' + n(x.players) + '</td><td>' +
+          when(x.latest) + '</td></tr>';
+      });
+      detail += '</table></div>';
+    }
+
+    detail += '<h3>What counts as playing</h3><p class="note">Counts: ' +
+      esc((c.qualifying_play || {}).counts_as_play ? c.qualifying_play.counts_as_play.join(', ') : '') +
+      '</p><p class="note">Does NOT count: ' +
+      esc((c.qualifying_play || {}).does_not_count ? c.qualifying_play.does_not_count.join(', ') : '') +
+      '</p><p class="note">' + esc((c.qualifying_play || {}).note || '') + '</p>';
+
+    return area('retention', 'Retention', 'Do players come back, and for how long?', head, detail);
+  }
+
+  // -- 3. PROGRESSION -------------------------------------------------------
+  function progressionArea(c){
+    var p = c.progression || {};
+    var cov = p.coverage || {};
+    var hl = p.hero_level || {};
+    var wv = p.waves || {};
+    var bd = p.building || {};
+    var head, detail;
+
+    if (!p.read_ok){
+      head = unreadable('the saved player progression');
+    } else if (p.state === 'empty'){
+      head = '<p class="note">No uploaded save carries a hero level yet, so no level figure is shown. ' +
+        n(cov.saves_all) + ' save(s) exist in total. This reads as "the field is not arriving", not as ' +
+        '"every player is level 1".</p>';
+    } else {
+      head = '<div class="tiles">' +
+        tile('Median hero level', n(hl.median), 'highest seen ' + n(hl.max)) +
+        tile('Got past level 1', pctTxt(hl.levelled_pct), n(hl.above_level_1) + ' of ' + n(cov.with_hero_level) + ' saves') +
+        tile('Median best wave', n(wv.median_best_wave), 'highest seen ' + n(wv.max_best_wave)) +
+        '</div>';
+    }
+
+    detail = '<p class="note">' + esc(p.backing || '') + '</p>';
+
+    detail += '<h3>Coverage of this metric</h3>';
+    if (!p.read_ok){ detail += unreadable('save coverage'); }
+    else {
+      detail += '<div class="tiles">' +
+        tile('Saves on file', n(cov.saves_all), n(cov.saves_active_in_window) + ' updated in this window') +
+        tile('Carry a hero level', n(cov.with_hero_level), pctTxt(cov.hero_level_pct) + ' of all saves') +
+        tile('Carry a town layout', n(cov.with_base_layout), 'baseLayout present') +
+        '</div><p class="note">' + esc(cov.note || '') + ' Last save received ' +
+        (cov.last_save_at ? when(cov.last_save_at) : 'never') + '.</p>';
+    }
+
+    if (p.read_ok && p.state !== 'empty'){
+      detail += '<h3>Hero level spread</h3><div class="scroll"><table><tr><th>Band</th><th>Players</th></tr>';
+      (hl.distribution || []).forEach(function(b){
+        detail += '<tr><td>' + esc(b.band) + '</td><td>' + n(b.players) + '</td></tr>';
+      });
+      detail += '</table></div>';
+
+      detail += '<h3>Waves and building</h3><div class="tiles">' +
+        tile('Saves with a wave cleared', n(wv.saves_with_a_wave_cleared), 'persisted state') +
+        tile('Wave clears in window', n(wv.clear_events_in_window),
+             n(wv.players_clearing_in_window) + ' players - EVENT VOLUME') +
+        tile('Median structures placed', n(bd.median_structures),
+             n(bd.saves_with_any_structure) + ' saves have built something') +
+        '</div><p class="note">' + esc(wv.note || '') + ' ' + esc(bd.note || '') + '</p>';
+    }
+
+    detail += '<h3>What this area cannot answer</h3><p class="note">Named rather than filled in with ' +
+      'something adjacent. Each one is a missing instrument, not a low number.</p><ul class="gaps">';
+    (p.gaps || []).forEach(function(x){ detail += '<li>' + esc(x) + '</li>'; });
+    detail += '</ul>';
+
+    return area('progression', 'Progression', 'Are returning players levelling up?', head, detail);
+  }
+
+  // -- 4. DIAGNOSTICS -------------------------------------------------------
+  function diagnosticsArea(c){
+    var d = c.diagnostics || {};
+    var head, detail;
+    if (!d.read_ok){
+      head = unreadable('telemetry coverage');
+    } else {
+      head = '<div class="tiles">' +
+        tile('Identified telemetry', pctTxt(d.identified_coverage_pct),
+             n(d.identified_ids) + ' identified players') +
+        tile('Anonymous events', n(d.anonymous_events), 'cannot be split into people') +
+        '</div>';
+    }
+    detail = '<p class="note">' + esc(d.coverage_note || '') + '</p>';
+    detail += '<div class="tiles">' +
+      tile('Excluded ids', n((c.exclusions || {}).excluded_id_count),
+           (c.exclusions || {}).configured ? 'operator and test traffic is filtered'
+                                           : 'only the shared anonymous bucket') +
+      tile('Oldest event here', d.first_event_at ? when(d.first_event_at) : 'none', '') +
+      tile('Newest event here', d.last_event_at ? when(d.last_event_at) : 'none', '') +
+      '</div><p class="note">' + esc((c.exclusions || {}).note || '') + ' Source: ' +
+      esc((c.exclusions || {}).source || '') + '</p>';
+
+    detail += '<h3>Events the game is actually sending</h3><p class="note">' +
+      esc(d.events_note || '') + '</p><div class="scroll"><table>' +
+      '<tr><th>Event</th><th>Count</th><th>Ids</th><th>Latest</th></tr>';
+    var ev = d.events_by_name || [];
+    if (!ev.length) detail += '<tr><td colspan="4" class="none">No events received in this window.</td></tr>';
+    ev.forEach(function(x){
+      detail += '<tr><td class="wrapcell">' + esc(x.event_name) + '</td><td>' + n(x.events) +
+        '</td><td>' + n(x.ids) + '</td><td>' + when(x.latest) + '</td></tr>';
+    });
+    detail += '</table></div>';
+
+    detail += '<p class="note">The older operational tabs - Players, Toggles, Money, Player issues, ' +
+      'Promos, Tickets - are behind More tools at the top. They are unchanged; this ticket reordered ' +
+      'the surface rather than removing the tools an incident needs.</p>';
+
+    return area('diagnostics', 'Diagnostics', 'Is the telemetry itself healthy?', head, detail);
+  }
+
+  function renderCommand(){
+    var c = state.command;
+    if (!c){
+      return '<div class="card"><h2>Decision surface unavailable</h2><p class="note">' +
+        'The command read did not return, so this page is showing NO figures from it. A failed query ' +
+        'must never render as a zero. Reason: ' + esc(state.commandErr || 'unknown') + '. ' +
+        'Tap Refresh, or open More tools for the raw views.</p></div>';
+    }
+    var errs = c.errors || [];
+    var h = '<p class="note">Read ' + when(c.generated_at) + '. Window: last ' + n(c.window_days) +
+      ' days, UTC. Identity rule: ' + esc(c.identity_rule || '') + '</p>';
+    if (errs.length){
+      h += '<div class="msg bad">' + errs.length + ' of the queries behind this page FAILED. The ' +
+        'areas they feed say so instead of showing a number: ' +
+        esc(errs.map(function(e){ return e.probe; }).join(', ')) + '.</div>';
+    }
+    h += salesArea(c) + retentionArea(c) + progressionArea(c) + diagnosticsArea(c);
+    return h;
   }
 
   // ---- players and telemetry --------------------------------------------
@@ -311,11 +743,17 @@ const PAGE = `<!DOCTYPE html>
     (t.areas || []).forEach(function(a){
       h += '<div class="toggle" data-area="' + esc(a.area) + '">' +
              '<div class="top"><span class="name">' + esc(a.area) + '</span>' +
-             '<span class="state' + (a.closed ? ' on' : '') + '">' + esc(a.state) + '</span></div>' +
+             '<span><button class="issue-count" type="button" aria-expanded="false">' +
+             n(a.issue_count) + ' issue' + (Number(a.issue_count) === 1 ? '' : 's') + '</button>' +
+             '<span class="state' + (a.closed ? ' on' : '') + '">' + esc(a.state) + '</span></span></div>' +
              '<p class="note">Last flipped ' + when(a.updated_at) + ' by ' +
                 esc(a.updated_by || 'nobody') + '.' +
                 (a.note ? ' ' + esc(a.note) : '') + '</p>' +
              (a.message ? '<p class="note">Banner: ' + esc(a.message) + '</p>' : '') +
+             '<div class="gate-issues" hidden><p class="note">Matching server-authored refusals in this window. ' +
+             'Player refs are salted fingerprints, never wallets.' +
+             (a.issues_truncated ? ' Showing newest ' + n(a.issues_returned) + ' of ' + n(a.issue_count) + '.' : '') +
+             '</p>' + renderGateIssues(a.issues || []) + '</div>' +
              (a.closed
                ? '<div class="row" style="margin-top:8px"><button class="primary open-btn">Re-open ' +
                  esc(a.area) + '</button></div>'
@@ -340,6 +778,18 @@ const PAGE = `<!DOCTYPE html>
     });
     h += '</table></div></div>';
     return h;
+  }
+
+  function renderGateIssues(rows){
+    if (!rows.length) return '<p class="none">No matching containment records in this window.</p>';
+    var h = '<div class="scroll"><table><tr><th>When</th><th>Result</th><th>Player ref</th>' +
+            '<th>Correlation ref</th><th>Path</th><th>Closed by</th></tr>';
+    rows.forEach(function(x){
+      h += '<tr><td>' + when(x.at) + '</td><td>' + esc(x.kind) + '</td><td>' +
+           esc(x.player_ref || 'unidentified') + '</td><td>' + esc(x.correlation_ref || '-') +
+           '</td><td>' + esc(x.path || '-') + '</td><td>' + esc(x.closed_by || '-') + '</td></tr>';
+    });
+    return h + '</table></div>';
   }
 
   // ---- money --------------------------------------------------------------
@@ -522,7 +972,8 @@ const PAGE = `<!DOCTYPE html>
     var h = '';
     if (state.err) h += '<div class="msg bad">' + esc(state.err) + '</div>';
     if (state.flash) h += '<div class="msg' + (state.flashBad ? ' bad' : '') + '">' + esc(state.flash) + '</div>';
-    h += state.tab === 'players' ? renderPlayers()
+    h += state.tab === 'command' ? renderCommand()
+       : state.tab === 'players' ? renderPlayers()
        : state.tab === 'toggles' ? renderToggles()
        : state.tab === 'money' ? renderMoney()
        : state.tab === 'issues' ? renderIssues()
@@ -572,21 +1023,58 @@ const PAGE = `<!DOCTYPE html>
   });
   $('key').addEventListener('keydown', function(e){ if (e.key === 'Enter') $('enter').click(); });
 
-  $('tabs').addEventListener('click', function(e){
-    var b = e.target.closest('button[data-tab]');
-    if (!b) return;
+  // Both navs share one handler. The six older tools sit in the second nav,
+  // hidden until "More tools" is tapped -- WO-1281: raw tables live behind an
+  // EXPLICIT secondary disclosure and do not dominate the landing page merely
+  // because the data exists.
+  function selectTab(b){
     state.tab = b.getAttribute('data-tab');
     state.flash = null;
-    Array.prototype.forEach.call($('tabs').querySelectorAll('button'), function(x){
+    var all = $('tabs').querySelectorAll('button[data-tab]');
+    var more = $('tools').querySelectorAll('button[data-tab]');
+    Array.prototype.forEach.call(all, function(x){
+      x.setAttribute('aria-pressed', x === b ? 'true' : 'false');
+    });
+    Array.prototype.forEach.call(more, function(x){
       x.setAttribute('aria-pressed', x === b ? 'true' : 'false');
     });
     render();
+  }
+  function onNavClick(e){
+    var b = e.target.closest('button[data-tab]');
+    if (!b) return;
+    selectTab(b);
+  }
+  $('tabs').addEventListener('click', onNavClick);
+  $('tools').addEventListener('click', onNavClick);
+  $('moreBtn').addEventListener('click', function(){
+    state.tools = !state.tools;
+    $('tools').hidden = !state.tools;
+    $('moreBtn').setAttribute('aria-expanded', state.tools ? 'true' : 'false');
+    $('moreBtn').textContent = state.tools ? 'Hide tools' : 'More tools';
   });
 
   $('refresh').addEventListener('click', function(){ state.flash = null; load(); });
   $('days').addEventListener('change', function(){ state.days = Number($('days').value) || 30; load(); });
 
   $('body').addEventListener('click', function(e){
+    // WO-1281 accordion. Tapping an open area closes it; tapping a closed one
+    // opens it AND closes whatever was open, so on a phone there is never more
+    // than one detail block between the operator and the next headline.
+    var head = e.target.closest('.area-head');
+    if (head){
+      var id = head.getAttribute('data-area');
+      state.open = (state.open === id) ? null : id;
+      render();
+      return;
+    }
+    var count = e.target.closest('.issue-count');
+    if (count){
+      var detail = count.closest('.toggle').querySelector('.gate-issues');
+      detail.hidden = !detail.hidden;
+      count.setAttribute('aria-expanded', detail.hidden ? 'false' : 'true');
+      return;
+    }
     var seal = e.target.closest('.seal-btn');
     if (seal){
       var box = seal.closest('.toggle');

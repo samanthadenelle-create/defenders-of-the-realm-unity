@@ -570,6 +570,25 @@ test('the ops READ view never selects a wallet address', () => {
     assert.match(block, /player_masked: maskId\(r\.player_id\)/);
 });
 
+test('gate counts and drill-down rows share one bounded identified record set', () => {
+    const src = stripComments(readSrc('api/admin/stats.js'));
+    const block = src.slice(src.indexOf("if (view === 'ops')"), src.indexOf("=== 'players'"));
+    assert.match(block, /event_name = 'maintenance_refusal'/);
+    assert.match(block, /received_at > NOW\(\) - \(\$\{days\} \* INTERVAL '1 day'\)/);
+    assert.match(block, /COUNT\(\*\) OVER \(PARTITION BY area\)/);
+    assert.match(block, /ROW_NUMBER\(\) OVER \(PARTITION BY area ORDER BY received_at DESC\)/);
+    assert.match(block, /WHERE area_row <= 50/);
+    assert.match(block, /LIMIT 300/);
+    assert.match(block, /player_ref: r\.player_id === ANON_ID \? null : r\.player_id/);
+    assert.doesNotMatch(block, /player_ref: r\.wallet/);
+
+    const page = consoleEndpoint.PAGE;
+    assert.match(page, /class="issue-count"/);
+    assert.match(page, /function renderGateIssues\(rows\)/);
+    assert.match(page, /Player refs are salted fingerprints, never wallets/);
+    assert.match(page, /issues_truncated/);
+});
+
 test('the served page cannot render a wallet, an email or a real name', () => {
     const page = consoleEndpoint.PAGE;
     // The ONLY wallet FIELD the page may read is the already-masked one stats.js
@@ -656,11 +675,18 @@ test('the page is built for a phone: one column, big targets, no framework', () 
     assert.doesNotMatch(page, /https?:\/\//);
 });
 
-test('the default command-center view shows real daily active-player telemetry', () => {
+test('the daily active-player telemetry view survives WO-1281 as an operator tool', () => {
     const page = consoleEndpoint.PAGE;
     // The metric already has one authority: stats.js overview. The console must
     // consume it rather than counting rows or inventing a second definition.
-    assert.match(page, /state = \{ tab:'players'/);
+    //
+    // ⚠ THE DEFAULT TAB MOVED IN WO-1281 and this pin moved with it. The landing
+    // view is now the DECISION surface; the raw player-telemetry tab is one of
+    // the six tools behind the "More tools" disclosure. What must NOT change is
+    // that it still exists and still reads the one authority -- the ticket
+    // reorders the surface, it does not delete the tools an incident needs.
+    assert.match(page, /state = \{ tab:'command'/);
+    assert.match(page, /data-tab="players"/);
     assert.match(page, /stats\?view=overview&days=/);
     assert.match(page, /Active players in the last 24 hours/);
     assert.match(page, /Daily active players/);
@@ -731,4 +757,202 @@ test('the two ticket systems are named and kept apart', () => {
     assert.match(page, /BOARD\.html/);
     assert.match(page, /board_build\.py/);
     assert.match(page, /Do not fold them into BOARD\.html/);
+});
+
+// -- 7. WO-1281: THE DECISION SURFACE ----------------------------------------
+// The five questions the landing view exists to answer, and the honesty rules
+// that keep it from answering one it cannot.
+
+test('the command view exists on the READ endpoint and is still SELECT-only', () => {
+    const src = stripComments(readSrc('api/admin/stats.js'));
+    assert.match(src, /if \(view === 'command'\) \{/);
+    // A view that is not in the "unknown view" hint is a view nobody finds.
+    assert.match(src, /purchases \| ops \| players \| command/);
+    // The read/write boundary is not relaxed by adding an area to it.
+    assert.deepEqual(writeVerbsIn('api/admin/stats.js'), []);
+});
+
+test('sales authority is the SERVER, never the client purchase event', () => {
+    const src = stripComments(readSrc('api/admin/stats.js'));
+    const block = src.slice(src.indexOf("if (view === 'command')"),
+                            src.indexOf("if (view === 'ops')"));
+    assert.ok(block.length > 2000, 'the command block must be found');
+
+    // Value and units come from the settled ledger and the quote table.
+    assert.match(block, /FROM purchase_entitlements/);
+    assert.match(block, /FROM purchase_quotes/);
+    // purchase_completed appears EXACTLY where it is allowed to: the
+    // client-versus-server disagreement probe. Anywhere else it would be a
+    // client-reported number wearing a revenue label.
+    const clientHits = allMatches(block, /event_name = 'purchase_completed'/g);
+    assert.equal(clientHits.length, 1,
+        'purchase_completed may back the disagreement count and nothing else');
+    assert.match(block, /salesDisagreement/);
+    // Revenue is the persisted authored price, not a re-derivation.
+    assert.match(block, /SUM\(usd_anchor\)/);
+});
+
+test('an empty sales area is an HONEST empty, not a broken one', () => {
+    const src = stripComments(readSrc('api/admin/stats.js'));
+    // state 'empty' is a first-class outcome and it carries an explanation.
+    assert.match(src, /settledAllTime === 0 \? 'empty' : 'ok'/);
+    assert.match(src, /empty_meaning/);
+    const page = consoleEndpoint.PAGE;
+    assert.match(page, /NO PURCHASE HAS EVER SETTLED/);
+    // And the quote funnel is offered next to it, because "nobody wants it" and
+    // "the rail is broken" are different findings.
+    assert.match(page, /Wallet prompts opened/);
+});
+
+test('a failed query renders as WORDS, never as a trustworthy zero', () => {
+    const page = consoleEndpoint.PAGE;
+    // One helper, used everywhere, so a new card cannot forget the rule.
+    assert.match(page, /function unreadable\(what\)/);
+    assert.match(page, /COULD NOT READ/);
+    assert.match(page, /must never render as a zero/);
+    // Every decision block asks read_ok BEFORE it prints anything.
+    for (const fn of ['salesArea', 'retentionArea', 'progressionArea', 'diagnosticsArea']) {
+        const i = page.indexOf('function ' + fn + '(');
+        assert.ok(i > 0, fn + ' must exist');
+        const body = page.slice(i, i + 4000);
+        assert.match(body, /read_ok/, fn + ' must gate on read_ok');
+    }
+    // A whole-view failure says so instead of drawing empty cards.
+    assert.match(page, /Decision surface unavailable/);
+});
+
+test('session length says it is an ESTIMATE and says how sessions end', () => {
+    const src = stripComments(readSrc('api/admin/stats.js'));
+    assert.match(src, /instrumented: false/);
+    assert.match(src, /how_sessions_end: 'THEY DO NOT/);
+    // Median AND mean, with the median as the headline.
+    assert.match(src, /median_seconds/);
+    assert.match(src, /mean_seconds/);
+    // A single-event session has no span and is excluded from BOTH statistics
+    // rather than counted as zero seconds.
+    assert.match(src, /unmeasurable_sessions/);
+    assert.match(src, /CASE WHEN events >= 2 THEN span_seconds END/);
+
+    const page = consoleEndpoint.PAGE;
+    assert.match(page, /Median session/);
+    assert.match(page, /Mean session/);
+    assert.match(page, /HOW SESSIONS END/);
+    assert.match(page, /ESTIMATE/);
+});
+
+test('retention counts PLAY, not boots', () => {
+    const src = stripComments(readSrc('api/admin/stats.js'));
+    assert.match(src, /const QUALIFYING_PLAY_EVENTS = \[/);
+    // The allowlist is a decision, so the things it deliberately refuses are
+    // written down too and shown on the surface.
+    assert.match(src, /const NOT_PLAY_EVENTS = \[/);
+    const i = src.indexOf('const QUALIFYING_PLAY_EVENTS');
+    const list = src.slice(i, src.indexOf('];', i));
+    for (const banned of ['session_start', 'tutorial_started', 'tutorial_step_enter', 'bundle_viewed']) {
+        assert.ok(list.indexOf("'" + banned + "'") < 0,
+            banned + ' is an arrival, not an act, and must not count as play');
+    }
+    assert.ok(list.indexOf("'wave_completed'") > 0);
+    assert.ok(list.indexOf("'tutorial_step_complete'") > 0);
+
+    const page = consoleEndpoint.PAGE;
+    assert.match(page, /What counts as playing/);
+});
+
+test('the churn cohorts never claim an uninstall', () => {
+    const src = stripComments(readSrc('api/admin/stats.js'));
+    assert.match(src, /never_claims_deletion/);
+    const page = consoleEndpoint.PAGE;
+    // The words the surface must NOT be able to say about a player.
+    assert.doesNotMatch(page, /\buninstall/i);
+    assert.doesNotMatch(page, /\bdeleted the app\b/i);
+    assert.match(page, /Played once and left/);
+    assert.match(page, /Tried and left/);
+});
+
+test('progression publishes its COVERAGE and names what it cannot answer', () => {
+    const src = stripComments(readSrc('api/admin/stats.js'));
+    // The persisted save is the authority, and its jsonb reads are guarded
+    // before they are cast -- one malformed client value must not blank a card.
+    assert.match(src, /FROM player_data/);
+    assert.match(src, /game_state->>'heroLevel' ~ /);
+    assert.match(src, /jsonb_typeof\(game_state->'baseLayout'\) = 'array'/);
+    // Coverage travels with the figure.
+    assert.match(src, /with_hero_level/);
+    assert.match(src, /hero_level_pct: pct\(savesWithLevel, savesAll\)/);
+    // Missing instrumentation is stated, never filled in with something adjacent.
+    assert.match(src, /gaps: \[/);
+    assert.match(src, /XP GAINED OVER TIME: not answerable/);
+    assert.match(src, /DUNGEON ENTRIES AND COMPLETIONS: not instrumented/);
+
+    const page = consoleEndpoint.PAGE;
+    assert.match(page, /Coverage of this metric/);
+    assert.match(page, /What this area cannot answer/);
+});
+
+test('pushing a SKU is declared NOT INSTRUMENTED rather than half-built', () => {
+    const src = stripComments(readSrc('api/admin/stats.js'));
+    assert.match(src, /push_a_sku/);
+    assert.match(src, /state: 'not_instrumented'/);
+    assert.match(src, /supported: false/);
+
+    const page = consoleEndpoint.PAGE;
+    assert.match(page, /NOT INSTRUMENTED/);
+    // AND THE PROOF IS THE ACTION LIST, NOT THE PROSE. A "feature this SKU"
+    // button would have to POST a new ops action; the page's postable actions
+    // are pinned to OPS_ACTIONS, so a store write cannot appear here without
+    // also appearing on the audited, separately-keyed write endpoint.
+    const posted = allMatches(page, /action:\s*'[a-z._]+'/g)
+        .map(s => s.replace(/.*'([a-z._]+)'.*/, '$1'));
+    assert.deepEqual(posted.slice().sort(), OPS_ACTIONS.slice().sort());
+});
+
+test('operator and test traffic exclusion is server-side and visible in metadata', () => {
+    const src = stripComments(readSrc('api/admin/stats.js'));
+    assert.match(src, /function excludedPlayerIds\(\)/);
+    // The rule comes from the deployment, never from the request -- a caller
+    // must not be able to widen or narrow it to flatter a number.
+    assert.match(src, /process\.env\.ANALYTICS_EXCLUDED_PLAYER_IDS/);
+    // The COUNT is published; the ids are not.
+    assert.match(src, /excluded_id_count: EXCLUDED\.length/);
+    const i = src.indexOf('exclusions: {');
+    const block = src.slice(i, i + 900);
+    assert.doesNotMatch(block, /excluded_ids:/);
+});
+
+test('growth is answered in a WORD, because the owner is red/green colourblind', () => {
+    const src = stripComments(readSrc('api/admin/stats.js'));
+    assert.match(src, /function trendWord\(current, prior\)/);
+    for (const word of ['GROWING', 'SHRINKING', 'FLAT', 'TOO FEW TO CALL', 'NO DATA']) {
+        assert.ok(src.indexOf("'" + word + "'") > 0, 'trendWord must be able to say ' + word);
+    }
+    const page = consoleEndpoint.PAGE;
+    assert.match(page, /Growing or losing players/);
+    // The verdict is rendered through the same word-chip every other state uses.
+    assert.match(page, /chip\(x\.trend\)/);
+});
+
+test('the decision surface is a phone accordion: one area open, nothing truncated', () => {
+    const page = consoleEndpoint.PAGE;
+    assert.match(page, /function area\(id, title, question, headline, detail\)/);
+    // ONE open at a time. Opening another closes the previous one.
+    assert.match(page, /state\.open = \(state\.open === id\) \? null : id/);
+    // The head is a real tap target and says its state in words.
+    assert.match(page, /min-height:64px/);
+    assert.match(page, /Show detail/);
+    assert.match(page, /Hide detail/);
+    // Load-bearing labels and values WRAP; they are never ellipsized.
+    assert.match(page, /overflow-wrap:anywhere/);
+    assert.doesNotMatch(page, /text-overflow:ellipsis/);
+    // Raw tables sit behind an explicit second tap.
+    assert.match(page, /id="moreBtn"/);
+    assert.match(page, /<nav id="tools" hidden>/);
+    // The area order is the business order the ticket sets.
+    const order = ['salesArea(c)', 'retentionArea(c)', 'progressionArea(c)', 'diagnosticsArea(c)'];
+    let at = -1;
+    for (const fn of order) {
+        const next = page.indexOf(fn);
+        assert.ok(next > at, fn + ' must come after the area before it');
+        at = next;
+    }
 });

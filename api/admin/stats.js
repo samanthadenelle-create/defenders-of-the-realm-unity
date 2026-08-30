@@ -59,6 +59,9 @@
 //   GET /api/admin/stats?view=ops[&days=N]      (WO-1244 Command Center: toggles,
 //                                                 promos, player issues - ALL READ)
 //   GET /api/admin/stats?view=players[&limit=N][&player=<id>|&ref=<12hex>]
+//   GET /api/admin/stats?view=command[&days=N]  (WO-1281 Command Center decision
+//                                                surface - sales, retention,
+//                                                progression, churn, session length)
 //
 // ── ⛔ TWO PURCHASE VIEWS, AND THEY ARE NOT INTERCHANGEABLE ──────────────────
 //   ?view=economy   — CLIENT-REPORTED INTENT. Aggregates the purchase_completed
@@ -91,6 +94,13 @@ const crypto = require('crypto');
 // The six kill-switch area ids, imported rather than re-typed. A seventh area
 // invented here would render a toggle the enforcement layer has never heard of.
 const { AREAS: MAINTENANCE_AREAS } = require('../_lib/maintenance');
+
+// The server's OWN sellable-SKU price ladder (WO-1158). Imported, never re-typed:
+// it is the same table /api/purchases/quote charges against, so the Command
+// Center's "what is selling" list can name a SKU that has sold NOTHING rather
+// than silently omitting it. A SKU absent from a sales table is indistinguishable
+// from a SKU that does not exist, and those are very different findings.
+const { USD_ANCHORS } = require('../_lib/purchase-catalog');
 
 // Constant-time key check. Hashing both sides first makes timingSafeEqual
 // usable on unequal lengths without leaking length information.
@@ -139,6 +149,102 @@ function pct(part, whole) {
 // call, stated out loud rather than hidden: below it the page shows the raw
 // counts and labels the percentage as unreliable.
 const LOW_N_THRESHOLD = 10;
+
+// =============================================================================
+// WO-1281 - WHAT COUNTS AS "PLAYING", DECIDED ONCE AND WRITTEN DOWN
+// -----------------------------------------------------------------------------
+// The ticket is explicit: "Boot, login, heartbeat, banner fetch, store
+// impression, or background resume alone do NOT count as playing." A retention
+// number built on session_start measures INSTALLS THAT OPENED, not players, and
+// it flatters every cohort it touches.
+//
+// So the allowlist below is deliberately narrow: every entry requires the player
+// to have DONE something. It was built by reading the emitters in Assets/, not
+// from a doc:
+//   wave_completed          Village/Waves/WaveManager.cs:2930
+//   tutorial_step_complete  Village/Tutorial/V2/TutorialFlow.cs:1582
+//   tutorial_step_skip      TutorialFlow.cs:1465   (a deliberate tap, still an act)
+//   tutorial_completed      TutorialFlow.cs:1665
+//   tutorial_skipped_all    TutorialFlow.cs:1538
+//   promo_redeemed          Core/Promo/PromoCodeService.cs:231
+//   referral_*              Core/Referral/ReferralService.cs:157/181/271
+//   purchase_completed      Wallet/PackStore.cs:2632/3128
+//   rewarded_ad_completed   Village/Monetization/AdGateService.cs:249
+//
+// ⚠ tutorial_started, tutorial_step_enter and contextual_step_enter are NOT here
+// on purpose. They fire when the flow ARRIVES at a step, which for a fresh
+// install is a consequence of booting, not of playing. Counting them would put
+// every install that reached the title screen into the "played" denominator.
+const QUALIFYING_PLAY_EVENTS = [
+    'wave_completed',
+    'tutorial_step_complete',
+    'tutorial_step_skip',
+    'tutorial_completed',
+    'tutorial_skipped_all',
+    'promo_redeemed',
+    'referral_code_generated',
+    'referral_shared',
+    'referral_claimed',
+    'purchase_completed',
+    'rewarded_ad_completed',
+];
+
+// Named out loud on the card so "why is my number smaller than the event count"
+// is answered on the surface instead of in a code read.
+const NOT_PLAY_EVENTS = [
+    'session_start', 'tutorial_started', 'tutorial_step_enter', 'tutorial_step_drop',
+    'contextual_step_enter', 'bundle_viewed', 'rewarded_ad_impression',
+    'rewarded_ad_unavailable', 'playtest_break', 'maintenance_refusal', 'admin_ops_write',
+];
+
+// A milestone is a thing FINISHED, as opposed to a thing merely done. Used only
+// to separate "returned and is progressing" from "returned and is stuck".
+const MILESTONE_EVENTS = ['wave_completed', 'tutorial_completed'];
+
+// Gap-based sessionization: a quiet stretch longer than this ends a session.
+// 30 minutes is the industry-standard default, stated here rather than buried.
+const SESSION_GAP_MINUTES = 30;
+
+// Hard scan ceiling for the session-length estimate. analytics_events only grows;
+// an unbounded window function over it is a self-inflicted outage later. When the
+// cap bites, the card SAYS the sample was truncated instead of quietly shrinking.
+const SESSION_SCAN_CAP = 200000;
+
+// =============================================================================
+// OPERATOR / TEST TRAFFIC EXCLUSION (WO-1281 acceptance 9)
+// -----------------------------------------------------------------------------
+// Server-side and audited: the ids come from the DEPLOYMENT ENVIRONMENT, never
+// from a query parameter, so a caller cannot widen or narrow the exclusion to
+// make a number look better. 'anonymous' is always in the list - it is one shared
+// bucket (EventTracker.cs:168) and can never be a person.
+//
+// The COUNT is reported in every response's metadata; the IDS are not. Publishing
+// the excluded list on a screenshot-prone page would put operator wallets on it.
+function excludedPlayerIds() {
+    const out = [ANON_ID];
+    const raw = String(process.env.ANALYTICS_EXCLUDED_PLAYER_IDS || '');
+    for (const part of raw.split(',')) {
+        const s = part.trim();
+        if (s && out.indexOf(s) < 0) out.push(s);
+    }
+    return out;
+}
+
+// Growth stated as a WORD. The owner is red/green colourblind (§7) and asked the
+// question in words - "are we growing or losing players" - so it is answered in
+// words. A 10% band is FLAT rather than a false trend, and a base too small to
+// carry a direction says so instead of printing an arrow.
+function trendWord(current, prior) {
+    const c = Number(current || 0);
+    const p = Number(prior || 0);
+    if (c === 0 && p === 0) return 'NO DATA';
+    if (p === 0) return c > 0 ? 'FIRST PLAYERS' : 'NO DATA';
+    if (c + p < LOW_N_THRESHOLD) return 'TOO FEW TO CALL';
+    const delta = (c - p) / p;
+    if (delta > 0.1) return 'GROWING';
+    if (delta < -0.1) return 'SHRINKING';
+    return 'FLAT';
+}
 
 module.exports = async (req, res) => {
     // CORS: site/admin.html is deployed on the `echoes-of-elarion` Vercel project
@@ -989,6 +1095,795 @@ module.exports = async (req, res) => {
             }));
         }
 
+        // ============================================================= command
+        // WO-1281 - THE DECISION SURFACE. One request, five questions:
+        //   1. What is selling?
+        //   2. Do players return after trying it?
+        //   3. Are returning players progressing / levelling?
+        //   4. Are players playing once and never coming back?
+        //   5. How long is a session? ("average online time", owner, 2026-08-30)
+        //
+        // ⛔ EVERY BLOCK DECLARES ITS OWN BACKING AND ITS OWN STATE.
+        // A card that renders a confident number with nothing behind it is worse
+        // than no card, and this repo has been bitten by exactly that shape. So
+        // each block carries:
+        //     backing  - the literal table(s)/column(s) the figure came from
+        //     state    - 'ok' | 'empty' | 'not_instrumented' | 'error'
+        //     read_ok  - false the moment its query threw
+        // The console renders `state`, never a bare number, so a FAILED QUERY
+        // CAN NEVER PAINT ITSELF AS A ZERO (acceptance 8).
+        //
+        // ⛔ SALES AUTHORITY IS THE SERVER, ALWAYS. Money comes from
+        // purchase_entitlements + purchase_quotes and NEVER from the client's
+        // purchase_completed event. The client figure appears in exactly one
+        // place - the disagreement count - and is labelled as the alert it is.
+        //
+        // ⛔ NOTHING HERE IS A WRITE. Same contract as the rest of this file.
+        if (view === 'command') {
+            const EXCLUDED = excludedPlayerIds();
+            const errors = [];
+            const probe = async (label, run) => {
+                try {
+                    return await run();
+                } catch (err) {
+                    console.error('[admin/stats] command probe failed:', label, err);
+                    errors.push({ probe: label, error: String((err && err.message) || err) });
+                    return null;
+                }
+            };
+
+            // ---------------------------------------------------------- SALES
+            // Today / 7d / 30d, each next to the IMMEDIATELY PRECEDING equal
+            // window, so "is this good" is answerable on the card rather than
+            // from memory. usd_anchor is the authored ladder price persisted at
+            // verify time - a stable historical figure, not a re-derivation
+            // against today's market.
+            const salesTotals = await probe('sales_totals', () => sql`
+                SELECT
+                    COUNT(*)::bigint                                                                       AS all_settled,
+                    COUNT(DISTINCT wallet)::bigint                                                         AS all_buyers,
+                    COALESCE(SUM(usd_anchor), 0)::float8                                                   AS all_usd,
+                    COUNT(*) FILTER (WHERE usd_anchor IS NULL)::bigint                                     AS rows_without_usd_anchor,
+                    MIN(created_at)                                                                        AS first_settled_at,
+                    MAX(created_at)                                                                        AS last_settled_at,
+
+                    COUNT(*) FILTER (WHERE created_at > NOW() - INTERVAL '1 day')::bigint                   AS d1_settled,
+                    COUNT(DISTINCT wallet) FILTER (WHERE created_at > NOW() - INTERVAL '1 day')::bigint     AS d1_buyers,
+                    COALESCE(SUM(usd_anchor) FILTER (WHERE created_at > NOW() - INTERVAL '1 day'), 0)::float8 AS d1_usd,
+                    COUNT(*) FILTER (WHERE created_at > NOW() - INTERVAL '2 days'
+                                       AND created_at <= NOW() - INTERVAL '1 day')::bigint                  AS d1_prior_settled,
+                    COALESCE(SUM(usd_anchor) FILTER (WHERE created_at > NOW() - INTERVAL '2 days'
+                                       AND created_at <= NOW() - INTERVAL '1 day'), 0)::float8              AS d1_prior_usd,
+
+                    COUNT(*) FILTER (WHERE created_at > NOW() - INTERVAL '7 days')::bigint                  AS d7_settled,
+                    COUNT(DISTINCT wallet) FILTER (WHERE created_at > NOW() - INTERVAL '7 days')::bigint    AS d7_buyers,
+                    COALESCE(SUM(usd_anchor) FILTER (WHERE created_at > NOW() - INTERVAL '7 days'), 0)::float8 AS d7_usd,
+                    COUNT(*) FILTER (WHERE created_at > NOW() - INTERVAL '14 days'
+                                       AND created_at <= NOW() - INTERVAL '7 days')::bigint                 AS d7_prior_settled,
+                    COALESCE(SUM(usd_anchor) FILTER (WHERE created_at > NOW() - INTERVAL '14 days'
+                                       AND created_at <= NOW() - INTERVAL '7 days'), 0)::float8             AS d7_prior_usd,
+
+                    COUNT(*) FILTER (WHERE created_at > NOW() - INTERVAL '30 days')::bigint                 AS d30_settled,
+                    COUNT(DISTINCT wallet) FILTER (WHERE created_at > NOW() - INTERVAL '30 days')::bigint   AS d30_buyers,
+                    COALESCE(SUM(usd_anchor) FILTER (WHERE created_at > NOW() - INTERVAL '30 days'), 0)::float8 AS d30_usd,
+                    COUNT(*) FILTER (WHERE created_at > NOW() - INTERVAL '60 days'
+                                       AND created_at <= NOW() - INTERVAL '30 days')::bigint                AS d30_prior_settled,
+                    COALESCE(SUM(usd_anchor) FILTER (WHERE created_at > NOW() - INTERVAL '60 days'
+                                       AND created_at <= NOW() - INTERVAL '30 days'), 0)::float8            AS d30_prior_usd
+                FROM purchase_entitlements
+                LIMIT 1`);
+
+            const salesBySku = await probe('sales_by_sku', () => sql`
+                SELECT sku,
+                       COUNT(*)::bigint                                                                     AS units_all,
+                       COUNT(DISTINCT wallet)::bigint                                                       AS buyers_all,
+                       COALESCE(SUM(usd_anchor), 0)::float8                                                 AS usd_all,
+                       COUNT(*) FILTER (WHERE created_at > NOW() - (${days} * INTERVAL '1 day'))::bigint     AS units_window,
+                       COALESCE(SUM(usd_anchor) FILTER (WHERE created_at > NOW() - (${days} * INTERVAL '1 day')), 0)::float8 AS usd_window,
+                       COUNT(*) FILTER (WHERE usd_anchor IS NULL)::bigint                                   AS rows_without_usd_anchor,
+                       MAX(created_at)                                                                      AS last_settled_at
+                FROM purchase_entitlements
+                GROUP BY 1
+                ORDER BY 4 DESC
+                LIMIT 100`);
+
+            // First-time vs repeat, judged on the buyer's OWN purchase order, so
+            // a player's second-ever purchase reads as repeat whenever it landed.
+            const salesRepeat = await probe('sales_first_vs_repeat', () => sql`
+                WITH ordered AS (
+                    SELECT wallet, created_at,
+                           ROW_NUMBER() OVER (PARTITION BY wallet ORDER BY created_at) AS n
+                    FROM purchase_entitlements
+                )
+                SELECT COUNT(*) FILTER (WHERE n = 1 AND created_at > NOW() - (${days} * INTERVAL '1 day'))::bigint AS first_time_window,
+                       COUNT(*) FILTER (WHERE n > 1 AND created_at > NOW() - (${days} * INTERVAL '1 day'))::bigint AS repeat_window,
+                       COUNT(DISTINCT wallet) FILTER (WHERE n > 1)::bigint                                        AS repeat_buyers_all_time
+                FROM ordered
+                LIMIT 1`);
+
+            // The quote funnel is the ONLY thing that can see people TRYING to
+            // buy. When nothing has settled it is the difference between "nobody
+            // wants it" and "the rail is broken".
+            const salesQuotes = await probe('sales_quote_funnel', () => sql`
+                SELECT COUNT(*)::bigint                                                            AS issued,
+                       COUNT(*) FILTER (WHERE consumed_at IS NOT NULL)::bigint                     AS consumed,
+                       COUNT(*) FILTER (WHERE consumed_at IS NULL AND expires_at <= NOW())::bigint AS expired_unconsumed,
+                       COUNT(DISTINCT wallet)::bigint                                              AS wallets_quoted,
+                       MAX(issued_at)                                                              AS last_issued_at
+                FROM purchase_quotes
+                WHERE issued_at > NOW() - (${days} * INTERVAL '1 day')
+                LIMIT 1`);
+
+            // The disagreement, as a COUNT only. The full orphan list with its
+            // acknowledge action stays on ?view=purchases - this surface says
+            // "there are N to look at" and sends the operator there.
+            const salesDisagreement = await probe('sales_disagreement', () => sql`
+                SELECT COUNT(*)::bigint AS client_events_without_entitlement
+                FROM analytics_events e
+                WHERE e.event_name = 'purchase_completed'
+                  AND e.received_at > NOW() - (${days} * INTERVAL '1 day')
+                  AND NOT EXISTS (
+                      SELECT 1 FROM purchase_entitlements p
+                      WHERE p.tx_signature = e.properties->>'txSig')
+                  AND NOT EXISTS (
+                      SELECT 1 FROM analytics_events a
+                      WHERE a.event_name = 'admin_ops_write'
+                        AND a.properties->>'action' = 'purchase.alert_acknowledge'
+                        AND a.properties->>'target' = e.properties->>'txSig'
+                        AND a.properties->>'outcome' = 'acknowledged_no_action')
+                LIMIT 1`);
+
+            // Every sellable SKU, including the ones that have sold NOTHING. A
+            // ranked list built only from sales rows cannot show a dud, and a
+            // dud is exactly what the owner needs to see before deciding what to
+            // push.
+            const soldBySku = {};
+            for (const r of (salesBySku || [])) soldBySku[String(r.sku)] = r;
+            const skuRoster = Object.keys(USD_ANCHORS).sort().map((sku) => {
+                const r = soldBySku[sku] || {};
+                return {
+                    sku: sku,
+                    usd_price: Number(USD_ANCHORS[sku]),
+                    units_all: Number(r.units_all || 0),
+                    units_window: Number(r.units_window || 0),
+                    buyers_all: Number(r.buyers_all || 0),
+                    usd_all: Number(r.usd_all || 0),
+                    usd_window: Number(r.usd_window || 0),
+                    last_settled_at: r.last_settled_at || null,
+                    state: Number(r.units_all || 0) > 0 ? 'SELLING' : 'NEVER SOLD',
+                };
+            }).sort((a, b) => (b.usd_all - a.usd_all) || (b.units_all - a.units_all)
+                            || a.sku.localeCompare(b.sku));
+
+            const st = (salesTotals && salesTotals[0]) || {};
+            const sq = (salesQuotes && salesQuotes[0]) || {};
+            const sr = (salesRepeat && salesRepeat[0]) || {};
+            const salesReadOk = salesTotals !== null;
+            const settledAllTime = Number(st.all_settled || 0);
+
+            const salesWindow = (label, settled, buyers, usd, priorSettled, priorUsd) => ({
+                window: label,
+                settled: Number(settled || 0),
+                buyers: Number(buyers || 0),
+                usd: Number(usd || 0),
+                prior_settled: Number(priorSettled || 0),
+                prior_usd: Number(priorUsd || 0),
+                trend: trendWord(usd, priorUsd),
+            });
+
+            const sales = {
+                state: !salesReadOk ? 'error' : (settledAllTime === 0 ? 'empty' : 'ok'),
+                read_ok: salesReadOk,
+                backing: 'purchase_entitlements (settled, server-verified on chain) + '
+                    + 'purchase_quotes (issue/consume funnel). The client purchase_completed '
+                    + 'event is NEVER a source for value or units here.',
+                authority: 'server',
+                empty_meaning: settledAllTime === 0
+                    ? 'No purchase has EVER settled on this deployment. The app is published on the '
+                      + 'Solana dApp Store but no payment has completed, so an empty sales area is the '
+                      + 'correct reading of the data - not a broken query. The quote funnel below is '
+                      + 'what tells you whether anyone is TRYING.'
+                    : null,
+                all_time: {
+                    settled: settledAllTime,
+                    buyers: Number(st.all_buyers || 0),
+                    usd: Number(st.all_usd || 0),
+                    rows_without_usd_anchor: Number(st.rows_without_usd_anchor || 0),
+                    first_settled_at: st.first_settled_at || null,
+                    last_settled_at: st.last_settled_at || null,
+                },
+                windows: [
+                    salesWindow('Today', st.d1_settled, st.d1_buyers, st.d1_usd, st.d1_prior_settled, st.d1_prior_usd),
+                    salesWindow('7 days', st.d7_settled, st.d7_buyers, st.d7_usd, st.d7_prior_settled, st.d7_prior_usd),
+                    salesWindow('30 days', st.d30_settled, st.d30_buyers, st.d30_usd, st.d30_prior_settled, st.d30_prior_usd),
+                ],
+                first_vs_repeat: {
+                    read_ok: salesRepeat !== null,
+                    first_time_window: Number(sr.first_time_window || 0),
+                    repeat_window: Number(sr.repeat_window || 0),
+                    repeat_buyers_all_time: Number(sr.repeat_buyers_all_time || 0),
+                },
+                quote_funnel: {
+                    read_ok: salesQuotes !== null,
+                    issued: Number(sq.issued || 0),
+                    consumed: Number(sq.consumed || 0),
+                    expired_unconsumed: Number(sq.expired_unconsumed || 0),
+                    quoted_wallets: Number(sq.wallets_quoted || 0),
+                    consumed_pct: pct(sq.consumed, sq.issued),
+                    low_n: Number(sq.issued || 0) < LOW_N_THRESHOLD,
+                    last_issued_at: sq.last_issued_at || null,
+                    definition: 'A quote is issued when the wallet prompt opens and consumed when the '
+                        + 'payment verifies (5-minute TTL). Issued with none consumed means players are '
+                        + 'TRYING TO BUY AND FAILING.',
+                },
+                disagreement_count: salesDisagreement === null
+                    ? null
+                    : Number((salesDisagreement[0] || {}).client_events_without_entitlement || 0),
+                sku_roster: skuRoster,
+                sku_roster_note: 'Every sellable SKU on the server price ladder (_lib/purchase-catalog '
+                    + 'USD_ANCHORS), including those that have never sold. A SKU missing from a sales '
+                    + 'table and a SKU that does not exist look identical; this list keeps them apart.',
+                push_a_sku: {
+                    state: 'not_instrumented',
+                    supported: false,
+                    reason: 'There is NO server-side switch that changes what the store shows. The shelf '
+                        + 'flag the client honours is storeVisible inside the PACKAGED packs.json '
+                        + '(PackCatalog reads it from Resources/StreamingAssets, never over the '
+                        + 'network), so today a SKU is pushed by shipping a build. The packs table in '
+                        + 'Neon does carry a store_visible column, but nothing in api/ or in the client '
+                        + 'reads it - flipping it here would change nothing a player sees. '
+                        + 'catalog_collections is a live remote read, but it feeds the BUILD browser, '
+                        + 'not the shop.',
+                    needed: 'One shop-context remote read the client consults for shelf membership and '
+                        + 'ordering, plus a client release that consumes it, plus an audited write '
+                        + 'action on api/admin/ops.js behind the second key. Until all three exist, a '
+                        + '"push SKU" button would be a control that silently does nothing - which is '
+                        + 'worse than not having one.',
+                },
+            };
+
+            // ------------------------------------------------------ RETENTION
+            // Cohort = the day a player's FIRST QUALIFYING PLAY landed, never
+            // their first boot. See QUALIFYING_PLAY_EVENTS above.
+            const retention = await probe('retention_rollup', () => sql`
+                WITH q AS (
+                    SELECT player_id, received_at,
+                           date_trunc('day', received_at)::date AS day
+                    FROM analytics_events
+                    WHERE event_name = ANY(${QUALIFYING_PLAY_EVENTS}::text[])
+                      AND NOT (player_id = ANY(${EXCLUDED}::text[]))
+                ),
+                firsts AS (
+                    SELECT player_id, MIN(received_at) AS first_play
+                    FROM q GROUP BY 1
+                ),
+                cohort AS (
+                    SELECT f.player_id,
+                           date_trunc('day', f.first_play)::date AS cohort_day
+                    FROM firsts f
+                    WHERE f.first_play > NOW() - (${days} * INTERVAL '1 day')
+                ),
+                days_played AS (
+                    SELECT DISTINCT player_id, day FROM q
+                )
+                SELECT
+                    COUNT(*)::bigint AS cohort_players,
+                    COUNT(*) FILTER (WHERE c.cohort_day <= CURRENT_DATE - 1)::bigint  AS d1_cohort,
+                    COUNT(*) FILTER (WHERE c.cohort_day <= CURRENT_DATE - 1 AND EXISTS (
+                        SELECT 1 FROM days_played d
+                        WHERE d.player_id = c.player_id AND d.day = c.cohort_day + 1))::bigint  AS d1_returned,
+                    COUNT(*) FILTER (WHERE c.cohort_day <= CURRENT_DATE - 7)::bigint  AS d7_cohort,
+                    COUNT(*) FILTER (WHERE c.cohort_day <= CURRENT_DATE - 7 AND EXISTS (
+                        SELECT 1 FROM days_played d
+                        WHERE d.player_id = c.player_id AND d.day = c.cohort_day + 7))::bigint  AS d7_returned,
+                    COUNT(*) FILTER (WHERE c.cohort_day <= CURRENT_DATE - 30)::bigint AS d30_cohort,
+                    COUNT(*) FILTER (WHERE c.cohort_day <= CURRENT_DATE - 30 AND EXISTS (
+                        SELECT 1 FROM days_played d
+                        WHERE d.player_id = c.player_id AND d.day = c.cohort_day + 30))::bigint AS d30_returned
+                FROM cohort c
+                LIMIT 1`);
+
+            // Growth: new players and active players, this window against the
+            // one immediately before it. This is the "are we growing or losing
+            // players" question, answered in two counts and a word.
+            const growth = await probe('growth', () => sql`
+                WITH q AS (
+                    SELECT player_id, received_at
+                    FROM analytics_events
+                    WHERE event_name = ANY(${QUALIFYING_PLAY_EVENTS}::text[])
+                      AND NOT (player_id = ANY(${EXCLUDED}::text[]))
+                ),
+                firsts AS (
+                    SELECT player_id, MIN(received_at) AS first_play FROM q GROUP BY 1
+                )
+                SELECT
+                    (SELECT COUNT(*) FROM firsts
+                      WHERE first_play > NOW() - (${days} * INTERVAL '1 day'))::bigint AS new_window,
+                    (SELECT COUNT(*) FROM firsts
+                      WHERE first_play <= NOW() - (${days} * INTERVAL '1 day')
+                        AND first_play >  NOW() - (${days} * INTERVAL '2 days'))::bigint AS new_prior,
+                    (SELECT COUNT(DISTINCT player_id) FROM q
+                      WHERE received_at > NOW() - (${days} * INTERVAL '1 day'))::bigint AS active_window,
+                    (SELECT COUNT(DISTINCT player_id) FROM q
+                      WHERE received_at <= NOW() - (${days} * INTERVAL '1 day')
+                        AND received_at >  NOW() - (${days} * INTERVAL '2 days'))::bigint AS active_prior,
+                    (SELECT COUNT(DISTINCT q.player_id) FROM q JOIN firsts f ON f.player_id = q.player_id
+                      WHERE q.received_at > NOW() - (${days} * INTERVAL '1 day')
+                        AND f.first_play  > NOW() - (${days} * INTERVAL '1 day'))::bigint AS new_active,
+                    (SELECT COUNT(DISTINCT q.player_id) FROM q JOIN firsts f ON f.player_id = q.player_id
+                      WHERE q.received_at > NOW() - (${days} * INTERVAL '1 day')
+                        AND f.first_play <= NOW() - (${days} * INTERVAL '1 day'))::bigint AS returning_active
+                LIMIT 1`);
+
+            const newPerDay = await probe('new_players_per_day', () => sql`
+                WITH q AS (
+                    SELECT player_id, received_at
+                    FROM analytics_events
+                    WHERE event_name = ANY(${QUALIFYING_PLAY_EVENTS}::text[])
+                      AND NOT (player_id = ANY(${EXCLUDED}::text[]))
+                ),
+                firsts AS (
+                    SELECT player_id, MIN(received_at) AS first_play FROM q GROUP BY 1
+                )
+                SELECT date_trunc('day', first_play)::date::text AS day,
+                       COUNT(*)::bigint                          AS new_players
+                FROM firsts
+                WHERE first_play > NOW() - (${days} * INTERVAL '1 day')
+                GROUP BY 1
+                ORDER BY 1 DESC
+                LIMIT 181`);
+
+            // ------------------------------------------- AVERAGE ONLINE TIME
+            // ⛔ SESSION LENGTH IS NOT INSTRUMENTED AND THIS BLOCK SAYS SO.
+            // EventTracker.cs emits session_start on boot (Start(), line 143) and
+            // there is NO session_end anywhere in Assets/: OnApplicationPause and
+            // OnApplicationQuit only flush the queue to PlayerPrefs. So the game
+            // never reports how long anybody stayed.
+            //
+            // What IS derivable is the SPAN BETWEEN A PLAYER'S TELEMETRY EVENTS,
+            // cut wherever they went quiet for SESSION_GAP_MINUTES. That is an
+            // ESTIMATE and it is labelled one. Crucially it is the estimate that
+            // does NOT count a backgrounded phone as engagement: a locked device
+            // emits nothing, so the gap closes the session. A duration derived
+            // from "session_start until the app died" would have counted the
+            // 10863-second pause-menu hold this project logged on 2026-08-30 as
+            // three hours of play.
+            //
+            // MEDIAN IS REPORTED ALONGSIDE MEAN, and the mean is the second
+            // figure on the card, because one long tail session drags a mean and
+            // leaves a median alone.
+            //
+            // A session with ONE event has a span of zero and is UNMEASURABLE,
+            // not a zero-second session. Those are counted separately and kept
+            // out of both statistics.
+            const sessionLength = await probe('session_length_estimate', () => sql`
+                WITH ev AS (
+                    SELECT player_id, received_at
+                    FROM analytics_events
+                    WHERE NOT (player_id = ANY(${EXCLUDED}::text[]))
+                      AND received_at > NOW() - (${days} * INTERVAL '1 day')
+                    ORDER BY player_id, received_at
+                    LIMIT ${SESSION_SCAN_CAP}
+                ),
+                marked AS (
+                    SELECT player_id, received_at,
+                           CASE WHEN LAG(received_at) OVER w IS NULL
+                                  OR received_at - LAG(received_at) OVER w
+                                     > (${SESSION_GAP_MINUTES} * INTERVAL '1 minute')
+                                THEN 1 ELSE 0 END AS starts_session
+                    FROM ev
+                    WINDOW w AS (PARTITION BY player_id ORDER BY received_at)
+                ),
+                numbered AS (
+                    SELECT player_id, received_at,
+                           SUM(starts_session) OVER (PARTITION BY player_id ORDER BY received_at
+                               ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS session_no
+                    FROM marked
+                ),
+                spans AS (
+                    SELECT player_id, session_no,
+                           COUNT(*)::int AS events,
+                           EXTRACT(EPOCH FROM (MAX(received_at) - MIN(received_at)))::float8 AS span_seconds
+                    FROM numbered
+                    GROUP BY 1, 2
+                )
+                SELECT COUNT(*)::bigint                                        AS sessions,
+                       COUNT(*) FILTER (WHERE events < 2)::bigint              AS unmeasurable_sessions,
+                       COUNT(DISTINCT player_id)::bigint                       AS players,
+                       (SELECT COUNT(*) FROM ev)::bigint                       AS events_scanned,
+                       COALESCE(AVG(CASE WHEN events >= 2 THEN span_seconds END), 0)::float8 AS mean_seconds,
+                       COALESCE(percentile_cont(0.5) WITHIN GROUP (
+                           ORDER BY CASE WHEN events >= 2 THEN span_seconds END), 0)::float8 AS median_seconds,
+                       COALESCE(percentile_cont(0.9) WITHIN GROUP (
+                           ORDER BY CASE WHEN events >= 2 THEN span_seconds END), 0)::float8 AS p90_seconds
+                FROM spans
+                LIMIT 1`);
+
+            // --------------------------------------------- ONE-AND-DONE / CHURN
+            // ⛔ NONE OF THESE SAY "DELETED". Android/Solana/Pi give us no
+            // per-player uninstall fact, so these are inactivity cohorts and are
+            // named as such (WO-1281 acceptance 7).
+            const churn = await probe('churn_cohorts', () => sql`
+                WITH q AS (
+                    SELECT player_id, received_at, date_trunc('day', received_at)::date AS day
+                    FROM analytics_events
+                    WHERE event_name = ANY(${QUALIFYING_PLAY_EVENTS}::text[])
+                      AND NOT (player_id = ANY(${EXCLUDED}::text[]))
+                ),
+                firsts AS (
+                    SELECT player_id,
+                           MIN(received_at) AS first_play,
+                           MAX(received_at) AS last_play,
+                           COUNT(DISTINCT day)::int AS play_days
+                    FROM q GROUP BY 1
+                ),
+                milestones AS (
+                    SELECT DISTINCT player_id
+                    FROM analytics_events
+                    WHERE event_name = ANY(${MILESTONE_EVENTS}::text[])
+                      AND NOT (player_id = ANY(${EXCLUDED}::text[]))
+                )
+                SELECT
+                    COUNT(*)::bigint                                                              AS players_who_played,
+                    COUNT(*) FILTER (WHERE f.first_play <= NOW() - INTERVAL '1 day')::bigint      AS one_session_eligible,
+                    COUNT(*) FILTER (WHERE f.first_play <= NOW() - INTERVAL '1 day'
+                                       AND f.last_play < f.first_play + INTERVAL '1 day')::bigint AS one_session,
+                    COUNT(*) FILTER (WHERE f.first_play <= NOW() - INTERVAL '7 days')::bigint     AS tried_and_left_eligible,
+                    COUNT(*) FILTER (WHERE f.first_play <= NOW() - INTERVAL '7 days'
+                                       AND f.last_play < f.first_play + INTERVAL '7 days')::bigint AS tried_and_left,
+                    COUNT(*) FILTER (WHERE f.play_days >= 2)::bigint                              AS returned_players,
+                    COUNT(*) FILTER (WHERE f.play_days >= 2 AND m.player_id IS NULL)::bigint       AS stalled_players
+                FROM firsts f
+                LEFT JOIN milestones m ON m.player_id = f.player_id
+                LIMIT 1`);
+
+            // Where they stopped. The LAST thing a now-quiet player did - the
+            // step to fix, named rather than inferred.
+            const exitSteps = await probe('early_exit_step', () => sql`
+                WITH last_act AS (
+                    SELECT DISTINCT ON (player_id)
+                           player_id, event_name, properties->>'stepId' AS step_id, received_at
+                    FROM analytics_events
+                    WHERE NOT (player_id = ANY(${EXCLUDED}::text[]))
+                      AND event_name <> 'session_start'
+                    ORDER BY player_id, received_at DESC
+                )
+                SELECT event_name,
+                       step_id,
+                       COUNT(*)::bigint AS players,
+                       MAX(received_at) AS latest
+                FROM last_act
+                WHERE received_at < NOW() - INTERVAL '7 days'
+                GROUP BY 1, 2
+                ORDER BY 3 DESC
+                LIMIT 25`);
+
+            // ----------------------------------------------------- PROGRESSION
+            // ⭐ SERVER-PERSISTED, NOT TELEMETRY. player_data.game_state is the
+            // save the client actually uploads (SaveSchema v29 added heroLevel /
+            // rather than an event we hope fired.
+            //
+            // ⚠ EVERY JSONB READ IS REGEX-GUARDED BEFORE ITS CAST. game_state is
+            // client-authored; one malformed value in an unguarded ::numeric
+            // fails the whole query, which is how a real metric turns into a
+            // blank card. Same reason ?view=funnel sorts `order` in JS.
+            //
+            // ⚠ COVERAGE IS RETURNED WITH THE FIGURE. "Median hero level 4" over
+            // 3 of 900 saves is not a fact about the playerbase, and the console
+            // has to be able to say so.
+            const progression = await probe('progression_saves', () => sql`
+                WITH s AS (
+                    SELECT player_id, updated_at,
+                           CASE WHEN game_state->>'heroLevel' ~ '^[0-9]+(\\.[0-9]+)?$'
+                                THEN (game_state->>'heroLevel')::numeric END AS hero_level,
+                           CASE WHEN game_state->>'bestWave' ~ '^[0-9]+(\\.[0-9]+)?$'
+                                THEN (game_state->>'bestWave')::numeric END AS best_wave,
+                           CASE WHEN game_state->>'wavesCompleted' ~ '^[0-9]+(\\.[0-9]+)?$'
+                                THEN (game_state->>'wavesCompleted')::numeric END AS waves_completed,
+                           CASE WHEN jsonb_typeof(game_state->'baseLayout') = 'array'
+                                THEN jsonb_array_length(game_state->'baseLayout') END AS structures
+                    FROM player_data
+                    WHERE NOT (player_id = ANY(${EXCLUDED}::text[]))
+                )
+                SELECT
+                    COUNT(*)::bigint                                              AS saves_all,
+                    COUNT(*) FILTER (WHERE updated_at > NOW() - (${days} * INTERVAL '1 day'))::bigint AS saves_active,
+                    COUNT(*) FILTER (WHERE hero_level IS NOT NULL)::bigint        AS with_hero_level,
+                    COUNT(*) FILTER (WHERE best_wave IS NOT NULL)::bigint         AS with_best_wave,
+                    COUNT(*) FILTER (WHERE structures IS NOT NULL)::bigint        AS with_base_layout,
+                    COUNT(*) FILTER (WHERE hero_level > 1)::bigint                AS above_level_1,
+                    COUNT(*) FILTER (WHERE hero_level = 1)::bigint                AS still_level_1,
+                    COUNT(*) FILTER (WHERE hero_level >= 2 AND hero_level <= 4)::bigint  AS level_2_4,
+                    COUNT(*) FILTER (WHERE hero_level >= 5 AND hero_level <= 9)::bigint  AS level_5_9,
+                    COUNT(*) FILTER (WHERE hero_level >= 10)::bigint              AS level_10_plus,
+                    COALESCE(percentile_cont(0.5) WITHIN GROUP (ORDER BY hero_level), 0)::float8 AS median_hero_level,
+                    COALESCE(MAX(hero_level), 0)::float8                          AS max_hero_level,
+                    COALESCE(percentile_cont(0.5) WITHIN GROUP (ORDER BY best_wave), 0)::float8  AS median_best_wave,
+                    COALESCE(MAX(best_wave), 0)::float8                           AS max_best_wave,
+                    COALESCE(percentile_cont(0.5) WITHIN GROUP (ORDER BY structures), 0)::float8 AS median_structures,
+                    COUNT(*) FILTER (WHERE structures > 0)::bigint                AS with_any_structure,
+                    COUNT(*) FILTER (WHERE waves_completed > 0)::bigint            AS with_any_wave_cleared,
+                    MAX(updated_at)                                                AS last_save_at
+                FROM s
+                LIMIT 1`);
+
+            // Telemetry side of progression: waves actually cleared in the
+            // window, by unique player. Labelled as event volume, never blended
+            // with the persisted figures above.
+            const waveActivity = await probe('wave_activity', () => sql`
+                SELECT COUNT(*)::bigint                  AS wave_clear_events,
+                       COUNT(DISTINCT player_id)::bigint AS players_clearing_waves,
+                       MAX(received_at)                  AS latest
+                FROM analytics_events
+                WHERE event_name = 'wave_completed'
+                  AND received_at > NOW() - (${days} * INTERVAL '1 day')
+                  AND NOT (player_id = ANY(${EXCLUDED}::text[]))
+                LIMIT 1`);
+
+            // -------------------------------------------------- DIAGNOSTICS
+            // The blind spot, measured. If anonymous volume dwarfs identified
+            // volume then every player figure above describes a minority.
+            const coverage = await probe('identity_coverage', () => sql`
+                SELECT COUNT(*) FILTER (WHERE player_id = ${ANON_ID})::bigint  AS anonymous_events,
+                       COUNT(*) FILTER (WHERE player_id <> ${ANON_ID})::bigint AS identified_events,
+                       COUNT(DISTINCT player_id) FILTER (WHERE player_id <> ${ANON_ID})::bigint AS identified_ids,
+                       MIN(received_at)                                        AS first_event_at,
+                       MAX(received_at)                                        AS last_event_at
+                FROM analytics_events
+                WHERE received_at > NOW() - (${days} * INTERVAL '1 day')
+                LIMIT 1`);
+
+            const eventInventory = await probe('event_inventory', () => sql`
+                SELECT event_name,
+                       COUNT(*)::bigint                  AS events,
+                       COUNT(DISTINCT player_id)::bigint AS ids,
+                       MAX(received_at)                  AS latest
+                FROM analytics_events
+                WHERE received_at > NOW() - (${days} * INTERVAL '1 day')
+                GROUP BY 1
+                ORDER BY 2 DESC
+                LIMIT 60`);
+
+            // ---- assemble ---------------------------------------------------
+            const rt = (retention && retention[0]) || {};
+            const gr = (growth && growth[0]) || {};
+            const sl = (sessionLength && sessionLength[0]) || {};
+            const ch = (churn && churn[0]) || {};
+            const pr = (progression && progression[0]) || {};
+            const wa = (waveActivity && waveActivity[0]) || {};
+            const cv = (coverage && coverage[0]) || {};
+
+            const dayN = (cohortKey, returnedKey) => {
+                const cohortSize = Number(rt[cohortKey] || 0);
+                const returned = Number(rt[returnedKey] || 0);
+                return {
+                    cohort_size: cohortSize,
+                    returned: returned,
+                    pct: pct(returned, cohortSize),
+                    low_n: cohortSize < LOW_N_THRESHOLD,
+                    mature_note: cohortSize === 0
+                        ? 'No cohort in this window is old enough to have had the chance to return.'
+                        : null,
+                };
+            };
+
+            const sessionsMeasured = Number(sl.sessions || 0) - Number(sl.unmeasurable_sessions || 0);
+            const savesWithLevel = Number(pr.with_hero_level || 0);
+            const savesAll = Number(pr.saves_all || 0);
+
+            return res.status(200).json(Object.assign(meta, {
+                surface: 'command',
+                purpose: 'The five questions the landing view exists to answer: what is selling, do '
+                    + 'players return, are they progressing, are they playing once and leaving, and '
+                    + 'how long is a session.',
+                identity_rule: 'A player is one non-excluded player_id. "anonymous" is a single shared '
+                    + 'bucket (EventTracker.cs) and is never counted as a person.',
+                exclusions: {
+                    note: 'Operator and test traffic is removed server-side from every player metric. '
+                        + 'The rule lives in the deployment environment, not in the request, so a '
+                        + 'caller cannot widen or narrow it. The COUNT is published; the ids are not.',
+                    excluded_id_count: EXCLUDED.length,
+                    source: 'ANALYTICS_EXCLUDED_PLAYER_IDS (env) plus the always-excluded "anonymous".',
+                    configured: EXCLUDED.length > 1,
+                },
+                qualifying_play: {
+                    note: 'Retention, growth and churn count only players who DID something. A boot is '
+                        + 'not play.',
+                    counts_as_play: QUALIFYING_PLAY_EVENTS,
+                    does_not_count: NOT_PLAY_EVENTS,
+                },
+
+                sales: sales,
+
+                retention: {
+                    state: retention === null ? 'error'
+                         : Number(rt.cohort_players || 0) === 0 ? 'empty' : 'ok',
+                    read_ok: retention !== null,
+                    backing: 'analytics_events, restricted to the qualifying-play allowlist. Cohort day '
+                        + 'is the day of a player FIRST QUALIFYING PLAY, not their first boot.',
+                    cohort_players: Number(rt.cohort_players || 0),
+                    d1: dayN('d1_cohort', 'd1_returned'),
+                    d7: dayN('d7_cohort', 'd7_returned'),
+                    d30: dayN('d30_cohort', 'd30_returned'),
+                    low_n_threshold: LOW_N_THRESHOLD,
+                    growth: {
+                        read_ok: growth !== null,
+                        new_window: Number(gr.new_window || 0),
+                        new_prior: Number(gr.new_prior || 0),
+                        new_trend: trendWord(gr.new_window, gr.new_prior),
+                        active_window: Number(gr.active_window || 0),
+                        active_prior: Number(gr.active_prior || 0),
+                        active_trend: trendWord(gr.active_window, gr.active_prior),
+                        new_active: Number(gr.new_active || 0),
+                        returning_active: Number(gr.returning_active || 0),
+                        note: 'Each figure is set against the immediately preceding window of the same '
+                            + 'length. The verdict is a WORD, never a colour or an arrow.',
+                    },
+                    new_players_per_day: newPerDay || [],
+                    session_length: {
+                        // The honesty this whole block exists for.
+                        state: sessionLength === null ? 'error'
+                             : sessionsMeasured <= 0 ? 'empty' : 'ok',
+                        read_ok: sessionLength !== null,
+                        instrumented: false,
+                        estimated: true,
+                        backing: 'analytics_events received_at, cut into sessions wherever a player went '
+                            + 'quiet for ' + SESSION_GAP_MINUTES + ' minutes.',
+                        how_sessions_end: 'THEY DO NOT. The game emits session_start on boot '
+                            + '(EventTracker.cs) and there is NO session_end anywhere in the client: '
+                            + 'OnApplicationPause and OnApplicationQuit only flush the event queue. So '
+                            + 'this is an ESTIMATE of time between a player telemetry events, not a '
+                            + 'measured session. It deliberately does NOT count a backgrounded phone as '
+                            + 'engagement - a locked device sends nothing, so the gap ends the session.',
+                        median_seconds: Number(sl.median_seconds || 0),
+                        mean_seconds: Number(sl.mean_seconds || 0),
+                        p90_seconds: Number(sl.p90_seconds || 0),
+                        sessions: Number(sl.sessions || 0),
+                        sessions_measured: sessionsMeasured,
+                        unmeasurable_sessions: Number(sl.unmeasurable_sessions || 0),
+                        players: Number(sl.players || 0),
+                        low_n: sessionsMeasured < LOW_N_THRESHOLD,
+                        scan_truncated: Number(sl.events_scanned || 0) >= SESSION_SCAN_CAP,
+                        scan_cap: SESSION_SCAN_CAP,
+                        unmeasurable_note: 'A session carrying a single event has no span. It is counted '
+                            + 'separately and kept OUT of both statistics - it is unmeasurable, not zero '
+                            + 'seconds.',
+                        median_first_note: 'Median is the headline and mean is the second figure: one '
+                            + 'long tail session drags a mean and leaves a median alone.',
+                    },
+                },
+
+                churn: {
+                    state: churn === null ? 'error'
+                         : Number(ch.players_who_played || 0) === 0 ? 'empty' : 'ok',
+                    read_ok: churn !== null,
+                    backing: 'analytics_events, qualifying-play allowlist only.',
+                    never_claims_deletion: 'These are INACTIVITY cohorts. Android, Solana and Pi give us '
+                        + 'no per-player uninstall fact, so nothing here says a player deleted the app - '
+                        + 'only that they stopped appearing.',
+                    players_who_played: Number(ch.players_who_played || 0),
+                    one_session: {
+                        players: Number(ch.one_session || 0),
+                        eligible: Number(ch.one_session_eligible || 0),
+                        pct: pct(ch.one_session, ch.one_session_eligible),
+                        low_n: Number(ch.one_session_eligible || 0) < LOW_N_THRESHOLD,
+                        definition: 'Played once and nothing in the 24 hours after. Only players whose '
+                            + 'first play was more than 24 hours ago can be judged.',
+                    },
+                    tried_and_left: {
+                        players: Number(ch.tried_and_left || 0),
+                        eligible: Number(ch.tried_and_left_eligible || 0),
+                        pct: pct(ch.tried_and_left, ch.tried_and_left_eligible),
+                        low_n: Number(ch.tried_and_left_eligible || 0) < LOW_N_THRESHOLD,
+                        definition: 'No qualifying play within seven days of their first. Only players '
+                            + 'whose first play was more than seven days ago can be judged.',
+                    },
+                    stalled: {
+                        players: Number(ch.stalled_players || 0),
+                        returned_players: Number(ch.returned_players || 0),
+                        pct: pct(ch.stalled_players, ch.returned_players),
+                        low_n: Number(ch.returned_players || 0) < LOW_N_THRESHOLD,
+                        definition: 'Came back on a second day but has never cleared a wave or finished '
+                            + 'the tutorial.',
+                        approximation: 'APPROXIMATE. The ticket asks for "gained no XP or level in the '
+                            + 'window"; the database holds only a CURRENT hero level, never its history, '
+                            + 'so no XP-gain-over-time figure exists. Finished-milestone absence is the '
+                            + 'honest stand-in and is labelled as one.',
+                    },
+                    early_exit_steps: (exitSteps || []).map(r => ({
+                        step: r.step_id || r.event_name,
+                        event_name: r.event_name,
+                        players: Number(r.players || 0),
+                        latest: r.latest,
+                    })),
+                    early_exit_note: 'The LAST thing each now-quiet player did before going silent for '
+                        + 'seven days. Boot is excluded, so this names an act, not an arrival.',
+                },
+
+                progression: {
+                    state: progression === null ? 'error'
+                         : savesWithLevel === 0 ? 'empty' : 'ok',
+                    read_ok: progression !== null,
+                    backing: 'player_data.game_state - the save the client uploads. heroLevel has been '
+                        + 'persisted since SaveSchema v29, alongside bestWave, wavesCompleted and '
+                        + 'baseLayout. Server-persisted state, not a telemetry estimate.',
+                    coverage: {
+                        saves_all: savesAll,
+                        saves_active_in_window: Number(pr.saves_active || 0),
+                        with_hero_level: savesWithLevel,
+                        with_best_wave: Number(pr.with_best_wave || 0),
+                        with_base_layout: Number(pr.with_base_layout || 0),
+                        hero_level_pct: pct(savesWithLevel, savesAll),
+                        note: 'Coverage travels WITH the figure. A median over three of nine hundred '
+                            + 'saves is not a fact about the playerbase, and this is how the card knows '
+                            + 'to say so.',
+                        last_save_at: pr.last_save_at || null,
+                    },
+                    hero_level: {
+                        median: Number(pr.median_hero_level || 0),
+                        max: Number(pr.max_hero_level || 0),
+                        still_level_1: Number(pr.still_level_1 || 0),
+                        above_level_1: Number(pr.above_level_1 || 0),
+                        levelled_pct: pct(pr.above_level_1, savesWithLevel),
+                        distribution: [
+                            { band: 'Level 1', players: Number(pr.still_level_1 || 0) },
+                            { band: 'Level 2 to 4', players: Number(pr.level_2_4 || 0) },
+                            { band: 'Level 5 to 9', players: Number(pr.level_5_9 || 0) },
+                            { band: 'Level 10 and up', players: Number(pr.level_10_plus || 0) },
+                        ],
+                    },
+                    waves: {
+                        median_best_wave: Number(pr.median_best_wave || 0),
+                        max_best_wave: Number(pr.max_best_wave || 0),
+                        saves_with_a_wave_cleared: Number(pr.with_any_wave_cleared || 0),
+                        clear_events_in_window: Number(wa.wave_clear_events || 0),
+                        players_clearing_in_window: Number(wa.players_clearing_waves || 0),
+                        latest_clear: wa.latest || null,
+                        note: 'Best wave is persisted state. The window figures are EVENT VOLUME from '
+                            + 'wave_completed and are labelled separately; the two are never added.',
+                    },
+                    building: {
+                        median_structures: Number(pr.median_structures || 0),
+                        saves_with_any_structure: Number(pr.with_any_structure || 0),
+                        note: 'Structures placed = the length of baseLayout on the uploaded save.',
+                    },
+                    gaps: [
+                        'XP GAINED OVER TIME: not answerable. player_data holds a CURRENT heroLevel and '
+                        + 'has no source. It would need either a progression snapshot table or a '
+                        + 'hero_level_up event, neither of which exists.',
+                        'DUNGEON ENTRIES AND COMPLETIONS: not instrumented. The client emits no dungeon '
+                        + 'event and dungeon_status is a per-dungeon seal setting, not per-player play.',
+                        'STRUCTURE UPGRADES AND TOWER UPGRADES: not separable. baseLayout gives a count '
+                        + 'of placements; no upgrade event is emitted and no per-level history is kept.',
+                        'TIME TO FIRST BUILD / FIRST CLEAR / FIRST PURCHASE: only the tutorial leg is '
+                        + 'answerable, from the tutorial_step timings on ?view=funnel. There is no '
+                        + 'first-build or first-clear timestamp anywhere.',
+                    ],
+                },
+
+                diagnostics: {
+                    read_ok: coverage !== null,
+                    backing: 'analytics_events volume. Supporting detail, never the product view.',
+                    identified_events: Number(cv.identified_events || 0),
+                    anonymous_events: Number(cv.anonymous_events || 0),
+                    identified_ids: Number(cv.identified_ids || 0),
+                    identified_coverage_pct: pct(
+                        cv.identified_events,
+                        Number(cv.identified_events || 0) + Number(cv.anonymous_events || 0)),
+                    first_event_at: cv.first_event_at || null,
+                    last_event_at: cv.last_event_at || null,
+                    coverage_note: 'Every player with no bound wallet shares the single id "anonymous", '
+                        + 'so anonymous volume can never be split into people. A large anonymous share '
+                        + 'means this surface describes a MINORITY of the playerbase.',
+                    events_by_name: eventInventory || [],
+                    events_note: 'The sanity check that a metric reads zero because nobody did it, not '
+                        + 'because the event never fires.',
+                },
+
+                errors: errors,
+            }));
+        }
+
         // ================================================================= ops
         // WO-1244 - the READ half of the Command Center console's operations
         // pillars: the six kill-switch toggles (WO-1243), the promo catalog with
@@ -1072,6 +1967,41 @@ module.exports = async (req, res) => {
                 ORDER BY 1 DESC
                 LIMIT 181`);
 
+            // ---- gate issue counts + matching drill-down rows ---------------
+            // These are server-authored refusal records, not client event
+            // volume. player_id is the salted 12-hex maintenance fingerprint
+            // (_lib/maintenance.fingerprint), so it can correlate repeat
+            // failures without returning a wallet. The count and rows share
+            // this exact CTE/window/filter: tapping a number explains it.
+            const gateIssues = await probe('maintenance_gate_issues', () => sql`
+                WITH scoped AS (
+                    SELECT event_id,
+                           received_at,
+                           event_name,
+                           player_id,
+                           properties->>'area' AS area,
+                           properties->>'closedBy' AS closed_by,
+                           properties->>'ref' AS correlation_ref,
+                           properties->>'path' AS path
+                    FROM analytics_events
+                    WHERE event_name = 'maintenance_refusal'
+                      AND received_at > NOW() - (${days} * INTERVAL '1 day')
+                )
+                , ranked AS (
+                    SELECT event_id, received_at, event_name, player_id, area, closed_by,
+                           correlation_ref, path,
+                           COUNT(*) OVER (PARTITION BY area)::bigint AS area_issue_count,
+                           ROW_NUMBER() OVER (PARTITION BY area ORDER BY received_at DESC) AS area_row
+                    FROM scoped
+                    WHERE area = ANY(${MAINTENANCE_AREAS}::text[])
+                )
+                SELECT event_id, received_at, event_name, player_id, area, closed_by,
+                       correlation_ref, path, area_issue_count
+                FROM ranked
+                WHERE area_row <= 50
+                ORDER BY received_at DESC
+                LIMIT 300`);
+
             // ---- the ops write history --------------------------------------
             // Every write api/admin/ops.js performs leaves one row here. Reading
             // it back is how "who sealed raiding, and when" is answered after the
@@ -1102,9 +2032,24 @@ module.exports = async (req, res) => {
             // console has to interpret.
             const toggleById = {};
             for (const r of (toggles || [])) toggleById[String(r.area_id)] = r;
+            const gateIssueRows = {};
+            for (const id of MAINTENANCE_AREAS) gateIssueRows[id] = [];
+            for (const r of (gateIssues || [])) {
+                const id = String(r.area || '');
+                if (!Object.prototype.hasOwnProperty.call(gateIssueRows, id)) continue;
+                gateIssueRows[id].push({
+                    at: r.received_at,
+                    kind: 'REFUSED',
+                    player_ref: r.player_id === ANON_ID ? null : r.player_id,
+                    correlation_ref: r.correlation_ref || null,
+                    path: r.path || null,
+                    closed_by: r.closed_by || null,
+                });
+            }
             const areaRows = MAINTENANCE_AREAS.map((id) => {
                 const r = toggleById[id];
                 const closed = !!(r && r.closed === true);
+                const issues = gateIssueRows[id];
                 return {
                     area: id,
                     closed: closed,
@@ -1113,6 +2058,10 @@ module.exports = async (req, res) => {
                     updated_by: (r && r.updated_by) || null,
                     updated_at: (r && r.updated_at) || null,
                     row_present: !!r,
+                    issue_count: issues.length ? Number((gateIssues || []).find(x => x.area === id).area_issue_count || 0) : 0,
+                    issues_returned: issues.length,
+                    issues_truncated: issues.length > 0 && Number((gateIssues || []).find(x => x.area === id).area_issue_count || 0) > issues.length,
+                    issues: issues,
                     note: r ? null : 'no row - fail-open means this area is OPEN',
                 };
             });
@@ -1302,7 +2251,7 @@ module.exports = async (req, res) => {
         }
 
         return res.status(400).json({
-            error: 'Unknown view. Use: overview | retention | funnel | economy | purchases | ops | players',
+            error: 'Unknown view. Use: overview | retention | funnel | economy | purchases | ops | players | command',
         });
     } catch (err) {
         console.error('[admin/stats] error:', err);
