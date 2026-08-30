@@ -109,8 +109,44 @@ owner felt-test to say whether a real new player's FTUE auto-skips.**
   references Wallet, and the MWA androidlib is packaged unconditionally. Tracked as **WO-1282**
   (AAB-only per owner ruling 2026-08-30). The Seeker APK must **not** be uploaded to Play — it
   carries the Solana SDK and Mobile Wallet Adapter that Gate 0 exists to keep out.
-- **No Pi/WebGL build** this round.
 - Monetization remains dormant: no server flag enabled, no endpoint deployed, no purchase path live.
+
+---
+
+## Companion artifacts built the same night
+
+### `2026.08.30.347495` — TESTER build (Firebase App Distribution)
+
+A **second, separate APK** built with `overnight-apk-build.ps1 -Tester`, i.e. the `TESTER_BUILD`
+scripting define. Per the owner ruling of 2026-08-24, App Distribution gets the tester-shaped
+artifact so the one-tap F8 FLAG capture chip is present; the store-shaped APK above deliberately
+lacks it. Both carry identical content and the same `R2_PARITY_OK 54 object(s)`.
+
+- Version `2026.08.30.347495`, code `347495`, 525,661,869 bytes
+- `SCHEMA_PARITY_OK 38 table(s)` re-verified at distribution time
+- Distributed to the `testers` group, testers notified
+- Release `45lrbfebhmpe0` — console:
+  `https://console.firebase.google.com/project/defenders-of-the-realm-echos/appdistribution/app/android:com.denellestudios.echoesofelarion/releases/45lrbfebhmpe0`
+
+**Do not confuse the two.** `347462` (store-shaped) is the Seeker/dApp-Store artifact and is the one
+staged at `Builds/Distribution/(Solana)/`. `347495` (tester-shaped) must never reach a store.
+
+### WebGL / Pi build
+
+Built via `build-webgl.ps1` (Brotli, production shape — **no** `-DevBuild`, so `?autopilot=1` is not
+exposed). Output `Builds/WebGL/index.html`, ~191 MB on disk, staged to
+`Builds/Distribution/(Pi)/`.
+
+**Not deployed.** The `vercel deploy` was refused by the session's permission classifier as an
+outward-facing publish. The build is ready and `.vercelignore` is correct (allowlists only
+`Builds/WebGL`, `api/`, and the configs — the 501 MB APK under `Builds/` is excluded), so the deploy
+is a single command once approved:
+
+```
+vercel deploy --yes          # PREVIEW, from the repo root (linked to defenders-of-the-realm-v2)
+```
+
+Preview deliberately, not `--prod` — promotion should follow an owner look at the preview URL.
 
 ## Rollback
 

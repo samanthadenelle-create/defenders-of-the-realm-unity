@@ -76,10 +76,42 @@ Play artifact breaks the player compile. Village does not need the *rail*; it ne
 
 **7 Village files consume `DeNelle.Wallet`.** The set splits cleanly except in three places.
 
-**RAIL-NEUTRAL → move to `DeNelle.Commerce`** (usings are System/UnityEngine/Core only; verified):
-`BattlePassService` + battle-pass data (`BattleMonthlyCatalog.cs:200-236`) + `RewardGrantWriter`;
-`ShortfallPackOffer` / `ShortfallOffer` (`ShortfallPackOffer.cs:38-40`); the JSON DTOs
-`PackContents`, `PackEconomy`, `ConvenienceItemDef`, `BoostSpec`, `PackCatalogData`.
+**RAIL-NEUTRAL → move to `DeNelle.Commerce`:** `ShortfallPackOffer` / `ShortfallOffer`
+(`ShortfallPackOffer.cs:38-40`); the JSON DTOs `PackContents`, `PackEconomy`,
+`ConvenienceItemDef`, `BoostSpec`, `PackCatalogData`.
+
+> ### ⚠ CORRECTION 2026-08-30 — the battle pass is NOT in the movable set.
+> An earlier draft of this section listed `BattlePassService` + battle-pass data +
+> `RewardGrantWriter` as "the cleanest move in the set — zero references to PackCatalog".
+> **That was wrong, and it was verified wrong at source before any code moved:**
+> - `BattleMonthlyCatalog.cs:244` — `BattlePassSeason.HasPurchasablePremiumLane` calls
+>   `PackCatalog.Find(PremiumPassSku)`. It is an instance property **on the very type proposed for
+>   the move**.
+> - `BattlePassService.cs:129` and `:483` both read `BattleMonthlyCatalog.ActiveSeason`, and
+>   `BattleMonthlyCatalog` cannot move — it calls `PackCatalog.IsRedeemableConvenience` at `:604`.
+>
+> Both are hard compile dependencies in the **forbidden** direction (`Commerce → Wallet`). The only
+> clean escape is inverting them into lazily-registered static hooks in Wallet
+> (`Func<BattlePassSeason> SeasonProvider`, `Func<string,bool> PremiumSkuResolver`) — and **both
+> fail SILENTLY when registration ordering is wrong**: an unregistered `SeasonProvider` makes the
+> whole battle pass read as "no season" with no error, which is exactly the silent-failure class
+> §12 exists to prevent. Do not add those seams without instrumenting them.
+>
+> Additional entanglement: `RewardGrantWriter` is itself rail-free, but it dispatches on
+> `RewardGrant` / `RewardKind` / `RewardEconomy` / `RewardConvenience`, which live **inside**
+> `BattleMonthlyCatalog.cs:74-197`, interleaved with `MonthlyCard` / `MonthlyDailyDrip` /
+> `BattleMonthlyData` which stay. Moving it means splitting a 686-line live money-path file, and
+> `RewardKind`'s `<see cref="BattleMonthlyCatalog...">` doc comments become unresolvable across the
+> new boundary.
+>
+> **Estimate impact:** the "half a day, mechanical" line below was priced against a movable set that
+> does not exist. Re-size Lane A only after PIN-3 is answered.
+
+Full referrer map for the battle-pass types, for whoever picks this up: `ArenaProgressStore.cs:22`
+(using), `:53`/`:67`; `BattleMonthlyCatalog.cs` (owns the DTOs); `MonthlyCardService.cs`;
+`UI/SeasonTrackPanel.cs`; `Editor/Regression/BattleMonthlyRegression.cs`; and Core-side
+`BattlePassData.cs` / `BattlePassReward.cs` / `Core/UtcDay.cs` (name-matched — verify actual
+coupling before trusting).
 
 **RAIL-BOUND → must stay in Wallet:** `CurrencyKind` (`WalletService.cs:45-53` — the enum *is* the
 rail: `Sol`/`Usdc`/`Skr`), `WalletBalance` (:94), `PaymentResult` (:122 — carries a base58 tx
