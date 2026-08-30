@@ -138,6 +138,29 @@ emitted. An independent scan of the artifact with the gate's own `ForbiddenArtif
 *(False positives, excluded: `phantom` = the "Phantom Hunter" enemy; `connect wallet` = a
 `canon-strings.json` UI string.)*
 
+### ⚠ CORRECTION 2026-08-30 — MY OWN TABLE ABOVE WAS WRONG ON TWO ROWS
+
+A full re-scan (73 hits, ASCII + UTF-16, every entry) found that **two `ForbiddenArtifactTokens`
+entries are UNSATISFIABLE — the gate as written can NEVER go green**, on any artifact:
+
+| Token | What the bytes actually are |
+|---|---|
+| `phantom` | `Ljava/lang/ref/PhantomReference;` and Guava's `FinalizablePhantomReference` in `classes2.dex`. **Every Android dex on earth contains this.** Plus the "Phantom Hunter" enemy in `hero-talents.json`. |
+| `mwa/` | NOT a class path. Base64 payload inside obfuscated ad-SDK strings — `…l1AmWa/FMeYc=…`, `…RXXMwa/8xrzdbey8k…`. A 4-char case-insensitive token matching by arithmetic. |
+
+**⛔ THE ROW ABOVE THAT SAYS `mwa/` IS "the Mobile Wallet Adapter Java classes" IS FALSE.** Proven:
+`Library/Bee/artifacts/Android/Gradle/unityLibrary/` contains `FirebaseApp.androidlib` and **no**
+`MobileWalletAdapter.androidlib`, and no dex holds a `com/denelle/defenders/mwa/` string.
+**Lane B's plugin exclusion WORKED.** I recorded a false trail; this corrects it.
+
+**REQUIRED RULING (owner/lead), not a code change to make casually:** either make the two tokens
+precise — `mwa/` → `defenders/mwa/`, `phantom` → `phantom wallet` / `app.phantom` — or accept that
+the gate never passes and is therefore ignored, which is worse than no gate. ⚠ The identical list is
+duplicated in `tools/android/assert-google-play-aab-clean.ps1:18` and MUST change in the same edit
+(§16 drift — the same duplication that broke the R2 push/verify pair).
+Narrowing these two is a PRECISION fix, not a weakening: it lets the scan distinguish the Solana
+wallet from a Java stdlib reference. Do NOT add an ignore list and do NOT relax the scan.
+
 ### THE THREE DOORS NOTHING CLOSED
 
 Assembly define constraints do not reach any of these. This is why the source graph can be clean

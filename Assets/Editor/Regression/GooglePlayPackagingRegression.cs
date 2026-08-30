@@ -49,6 +49,40 @@ namespace DeNelle.Editor
             Require(scanner, "PLAY_ARTIFACT_CLEAN_OK", "standalone artifact scanner success marker missing", failures);
             Require(scanner, "Test-StreamToken", "standalone scanner no longer inspects binary payloads", failures);
 
+            // -- WO-1282 Lane D: the force-include door -------------------------------------
+            // Source isolation being green proved NOTHING about the artifact on 2026-08-30:
+            // Resources/ and StreamingAssets/ are packed by construction, so no .asmdef
+            // constraint reaches them. These assertions pin the mechanism that does, INCLUDING
+            // its restore discipline — a quarantine with no restore silently strips the Solana
+            // rail from the next Seeker APK, which is a WORSE regression than the one it fixes.
+            string content = Read("Assets/Editor/GooglePlayContentExclusion.cs", failures);
+            Require(content, "Assets/Resources/SolanaUnitySDK",
+                    "Play content exclusion no longer quarantines the force-included Solana SDK Resources", failures);
+            Require(content, "Assets/StreamingAssets/Data/Canonical/wallets.json",
+                    "Play content exclusion no longer quarantines the StreamingAssets wallet registry", failures);
+            Require(content, "Assets/Resources/Data/Canonical/wallets.json",
+                    "Play content exclusion no longer quarantines the Resources wallet registry mirror", failures);
+            Require(content, "IPostprocessBuildWithReport",
+                    "Play content exclusion has no post-build restore", failures);
+            Require(content, "InitializeOnLoadMethod",
+                    "Play content exclusion has no domain-load repair for an interrupted build", failures);
+            Require(content, "PLAY_CONTENT_REPAIRED",
+                    "interrupted-build repair no longer announces itself", failures);
+            Require(build, "GooglePlayContentExclusion.EnsureTreeIsWhole()",
+                    "AndroidBuild no longer sweeps a leftover quarantine before the content build", failures);
+
+            int sweepAt = build.IndexOf("GooglePlayContentExclusion.EnsureTreeIsWhole()", StringComparison.Ordinal);
+            int contentAt = build.IndexOf("AddressablesContentBuild.EnsureBuilt", StringComparison.Ordinal);
+            if (sweepAt < 0 || contentAt < 0 || sweepAt > contentAt)
+                failures.Add("quarantine sweep does not run before the Addressables content build; a Seeker " +
+                             "APK could be baked from a wallet-less tree");
+
+            string stamp = Read("Assets/_Modules/Core/Payments/ArtifactVariantStamp.cs", failures);
+            Require(stamp, "RuntimeInitializeOnLoadMethod",
+                    "artifact variant is no longer stamped into the device log at startup", failures);
+            Require(stamp, "SEEKER BUILD IS MISSING THE WALLET PAYLOAD",
+                    "a wallet-less Seeker build no longer announces itself on first launch", failures);
+
             // This is an audit observation, not a red regression: today Gate 0 is expected to
             // block. Once the assembly split/plugin exclusion lands, the same regression stays
             // green and the build may proceed to physical artifact proof.

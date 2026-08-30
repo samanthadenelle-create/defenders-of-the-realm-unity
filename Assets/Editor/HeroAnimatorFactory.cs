@@ -617,22 +617,48 @@ namespace DeNelle.Editor
                 // These MUST be authored before the unconditional fallback below: Unity evaluates
                 // AnyState transitions in order, so the old fallback-first order swallowed every
                 // directional request and always played generic Death (WO-586 felt regression).
-                BuildDirectionalDeath(sm, locoState, "DeathLeft",  deathL, 1);
-                BuildDirectionalDeath(sm, locoState, "DeathRight", deathR, 2);
+                var builtDirs = new List<int>();
+                if (BuildDirectionalDeath(sm, locoState, "DeathLeft",  deathL, 1)) builtDirs.Add(1);
+                if (BuildDirectionalDeath(sm, locoState, "DeathRight", deathR, 2)) builtDirs.Add(2);
                 // Extended buckets (AnimParams.DeathDirection Front=3 / Back=4) — KnightMocap package clips.
                 var deathFront = LoadAnimAsset(spec.deathFrontAnimPath);
                 var deathBack  = LoadAnimAsset(spec.deathBackAnimPath);
-                BuildDirectionalDeath(sm, locoState, "DeathFront", deathFront, 3);
-                BuildDirectionalDeath(sm, locoState, "DeathBack",  deathBack,  4);
+                if (BuildDirectionalDeath(sm, locoState, "DeathFront", deathFront, 3)) builtDirs.Add(3);
+                if (BuildDirectionalDeath(sm, locoState, "DeathBack",  deathBack,  4)) builtDirs.Add(4);
 
-                // Unconditioned fallback comes LAST so DeathDir 0 and a direction whose optional
-                // clip is absent still die, while a present directional transition wins first.
+                // Fallback comes LAST so DeathDir 0 and a direction whose optional clip is absent
+                // still die, while a present directional transition wins first.
+                //
+                // DEATH-SHAKE ROOT CAUSE (owner felt-report 2026-08-30, build 2026.08.30.348154 —
+                // "the knight dying is still shaking"). This fallback used to carry ONLY `Dead`.
+                // AnyState transitions are re-evaluated EVERY frame from EVERY state, and
+                // canTransitionToSelf=false only suppresses the transition whose destination IS the
+                // current state. Dead and DeathDir are LATCHED for the whole death window
+                // (ActorAnimator.Die -> SetInteger(DeathDir) + SetBool(Dead,true), cleared only by
+                // Revive), so with DeathDir=1 the animator ping-ponged forever:
+                //   in DeathLeft -> AnyState->DeathLeft is self (blocked), DeathRight/Front/Back fail
+                //                   their DeathDir check, the unconditioned fallback MATCHES -> Death
+                //   in Death     -> AnyState->DeathLeft matches again -> DeathLeft
+                // i.e. a 0.06s crossfade loop between two death clips, each restarting at frame 0 —
+                // the body twitches and the death sequence never advances. (Both orderings shake:
+                // the four non-mocap controllers list the fallback FIRST and loop identically.)
+                // The transform-side fixes (EnterDeathFreeze, the LateUpdate death-pin in
+                // HeroHealth) could never help, because the mover here is the ANIMATOR on the child
+                // body, not the root.
+                // FIX: make the death transitions MUTUALLY EXCLUSIVE — the fallback additionally
+                // requires DeathDir != every direction that actually got a state. Exactly one death
+                // transition can be satisfied at a time, so once a death state is entered nothing
+                // else fires and the clip plays to its final held frame. Coverage is unchanged: a
+                // direction whose optional clip was missing has no NotEqual guard, so it still lands
+                // on the fallback.
                 var deathState = sm.AddState("Death");
                 deathState.motion = death;
                 var toDeath = sm.AddAnyStateTransition(deathState);
                 toDeath.hasExitTime = false; toDeath.duration = 0.06f;
                 toDeath.canTransitionToSelf = false;
                 toDeath.AddCondition(AnimatorConditionMode.If, 0f, "Dead");
+                foreach (int builtDir in builtDirs)
+                    toDeath.AddCondition(AnimatorConditionMode.NotEqual, builtDir, "DeathDir");
                 var deathRevive = deathState.AddTransition(locoState);
                 deathRevive.hasExitTime = false; deathRevive.duration = 0.12f;
                 deathRevive.AddCondition(AnimatorConditionMode.IfNot, 0f, "Dead");
@@ -1054,11 +1080,14 @@ namespace DeNelle.Editor
         /// Dead==true AND DeathDir==dirValue, returning to Locomotion when Dead clears
         /// (Revive). Null-guarded — a missing clip skips the state and the generic Death
         /// (DeathDir 0, unconditioned) still covers every direction.
+        /// <para>Returns TRUE when the state was actually built — the caller uses that to add a
+        /// matching <c>DeathDir != dirValue</c> guard to the generic fallback, which is what stops
+        /// the two transitions ping-ponging (the 2026-08-30 death-shake; see the call site).</para>
         /// </summary>
-        private static void BuildDirectionalDeath(AnimatorStateMachine sm, AnimatorState locoState,
+        private static bool BuildDirectionalDeath(AnimatorStateMachine sm, AnimatorState locoState,
                                                   string name, AnimationClip clip, int dirValue)
         {
-            if (clip == null) return;
+            if (clip == null) return false;
             var state = sm.AddState(name);
             state.motion = clip;
             var to = sm.AddAnyStateTransition(state);
@@ -1069,6 +1098,7 @@ namespace DeNelle.Editor
             var back = state.AddTransition(locoState);
             back.hasExitTime = false; back.duration = 0.12f;
             back.AddCondition(AnimatorConditionMode.IfNot, 0f, "Dead");
+            return true;
         }
 
         /// <summary>

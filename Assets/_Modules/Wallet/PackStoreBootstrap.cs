@@ -56,7 +56,45 @@ namespace DeNelle.Wallet
             // than an instance is load-bearing: the store host is DISABLED in the scene by design,
             // so it never runs Awake and could never push itself into a registry.
             StorefrontRegistry.RegisterResolver(ResolveStorefrontRoot);
+
+            // WO-1282 (settlement) - the THIRD door: the entitlement grant itself.
+            // PackStoreVM.ApplyPackContents is the ONE local pack mutation in the game and it lives
+            // in this assembly, which a Google Play artifact compiles out. A payment provider that
+            // must not name PackStoreVM reaches it through PackGrantBridge instead. Registering the
+            // real writer here means there is still exactly ONE grant path, never a Play-side copy.
+            PackGrantBridge.RegisterApplier(ApplyPackBySku, IsPackOwned);
         }
+
+        /// <summary>
+        /// <see cref="PackGrantBridge"/> applier. Resolves the SKU in the catalog, drives the ONE
+        /// canonical entitlement writer, and reports whether the grant actually landed.
+        /// </summary>
+        /// <remarks>
+        /// The return value is the OWNERSHIP PROBE, not "ApplyPackContents did not throw".
+        /// ApplyPackContents is void and self-reporting: it FlowTrace.Fails and returns normally when
+        /// there is no GameState. A settlement caller that took "no exception" for "granted" would
+        /// confirm a Play order against a lost entitlement, so the proof has to be read back out of
+        /// the save.
+        /// </remarks>
+        private static bool ApplyPackBySku(string sku)
+        {
+            if (string.IsNullOrWhiteSpace(sku)) return false;
+            var pack = PackCatalog.Find(sku);
+            if (pack == null)
+            {
+                FlowTrace.Fail("Store",
+                    $"PackStoreBootstrap.ApplyPackBySku: '{sku}' is not in the pack catalog — refusing to " +
+                    "grant. A settled payment for an unknown SKU must never invent contents.");
+                return false;
+            }
+            var vm = PackStoreVM.CreateDefault();
+            vm.ApplyPackContents(pack);
+            return vm.IsOwned(sku);
+        }
+
+        /// <summary><see cref="PackGrantBridge"/> ownership probe — reads the live save, never a cache.</summary>
+        private static bool IsPackOwned(string sku)
+            => !string.IsNullOrWhiteSpace(sku) && PackStoreVM.CreateDefault().IsOwned(sku);
 
         /// <summary>
         /// The <see cref="StorefrontRegistry"/> resolver. Returns the PackStore host if one exists

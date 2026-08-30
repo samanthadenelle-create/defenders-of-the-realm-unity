@@ -3,6 +3,8 @@
     "rootNamespace": "DeNelle.Core.Payments.Providers",
     "references": [
         "DeNelle.Core",
+        "DeNelle.Commerce",
+        "UniTask",
         "Unity.Purchasing"
     ],
     "includePlatforms": [],

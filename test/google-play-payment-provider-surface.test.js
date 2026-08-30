@@ -83,11 +83,79 @@ test('authenticated server binding is attached to Google before purchase starts'
   assert.match(adapter, /_attachSession\(request, _playerId\)/);
 });
 
-test('Play bootstrap leaves settlement dormant until identity and durable grant composition exist', () => {
+// ⚠ THIS TEST REPLACES 'Play bootstrap leaves settlement dormant until identity and durable
+// grant composition exist' (WO-1255), which asserted the bootstrap must NOT contain
+// ConfigureSettlement. That assertion pinned the very defect WO-1282 closed: the method had NO
+// CALLER in the whole tree, so VerifyAndGrantAsync stayed null and a Play purchase would have
+// been taken and never granted. The invariant it was protecting — never sell what cannot be
+// settled — is unchanged and is now asserted where it actually lives: composition happens
+// BEFORE the store connects, and a chain that cannot be built leaves the provider unconfigured
+// so CanBuy refuses every SKU.
+test('Play bootstrap composes settlement before connecting, and fails closed if it cannot', () => {
   const bootstrap = read('Assets/_Modules/Core/Payments/Providers/GooglePlay/GooglePlayPaymentBootstrap.cs');
-  assert.doesNotMatch(bootstrap, /ConfigureSettlement|VerifyAndGrantAsync\s*=/);
+
+  // Still channel-gated: nothing on this rail runs on a Seeker/dApp-Store artifact.
+  assert.match(bootstrap, /PaymentChannelResolver\.Current != PaymentChannel\.GooglePlay\) return;/);
+
+  const compose = bootstrap.indexOf('GooglePlaySettlementComposer.TryConfigure(provider)');
+  const initialize = bootstrap.indexOf('provider.Initialize()');
+  assert.ok(compose >= 0, 'the bootstrap must be the composition root for ConfigureSettlement');
+  assert.ok(initialize > compose,
+    'settlement must be configured BEFORE the store connects, so no PendingOrder can arrive without it');
+  assert.match(bootstrap, /if \(!GooglePlaySettlementComposer\.TryConfigure\(provider\)\)[\s\S]*FlowTrace\.Fail/);
+
+  const composer = read('Assets/_Modules/Core/Payments/Providers/GooglePlay/GooglePlaySettlementComposer.cs');
+  assert.match(composer, /new GooglePlayReceiptSettlement\(transport, new GooglePlayGrantApplier\(\)\)/);
+  // A half-built chain must NOT be handed to the provider.
+  const guardFail = composer.indexOf('if (!built || settlement == null || transport == null)');
+  const configure = composer.indexOf('provider.ConfigureSettlement(settlement, transport)');
+  assert.ok(guardFail >= 0 && configure > guardFail,
+    'ConfigureSettlement must be unreachable when the chain failed to build');
+  // Identity is resolved per call, never captured at boot (WO-1282 PIN-1b: no re-keying).
+  assert.match(composer, /BackendRequestSigner\.CurrentPlayerId\(\)/);
+  assert.match(composer, /BackendRequestSigner\.TryAttachCachedSession\(request, playerId\)/);
+
   const provider = read('Assets/_Modules/Core/Payments/Providers/GooglePlay/GooglePlayBillingProvider.cs');
   assert.match(provider, /if \(VerifyAndGrantAsync == null \|\| _bindingSource == null\)[\s\S]*Secure Google Play receipt verification is unavailable/);
+});
+
+test('durable grant applier is idempotent by purchase token and never fails open', () => {
+  const applier = read('Assets/_Modules/Core/Payments/Providers/GooglePlay/GooglePlayGrantApplier.cs');
+
+  // The write-ahead ordering IS the exactly-once property: journal the intent, then mutate,
+  // then mark applied. Reversing these grants twice after a crash.
+  const preOwned = applier.indexOf('PackGrantBridge.TryIsOwned(sku, out bool preOwned)');
+  const writeAhead = applier.indexOf('WriteJournal(key, StatePending');
+  // from writeAhead: the header comment names the same call while describing the ordering.
+  const apply = applier.indexOf('PackGrantBridge.TryApply(sku)', writeAhead);
+  const markApplied = applier.indexOf('WriteJournal(key, StateApplied + "|" + sku);', apply);
+  assert.ok(preOwned >= 0 && writeAhead > preOwned && apply > writeAhead && markApplied > apply,
+    'probe ownership -> journal pending -> apply -> mark applied');
+
+  // A failed grant must leave the entry PENDING so Google re-delivers.
+  assert.match(applier, /if \(!granted\)[\s\S]*return Task\.FromResult\(false\);/);
+  // No local entitlement writer => refuse, never confirm.
+  assert.match(applier, /if \(!PackGrantBridge\.HasApplier\)[\s\S]*return Task\.FromResult\(false\);/);
+  // The token itself is never persisted — the journal key is its SHA-256.
+  assert.match(applier, /SHA256\.Create\(\)/);
+  assert.match(applier, /JournalPrefix\s*=\s*"gp\.settle\."/);
+  assert.doesNotMatch(applier, /PlayerPrefs\.SetString\(\s*purchaseToken/);
+  // Markers must be flushed; an unflushed journal is lost in the exact crash it guards.
+  assert.match(applier, /PlayerPrefs\.SetString\(key, entry\);\s*\n\s*PlayerPrefs\.Save\(\);/);
+});
+
+test('the rail-neutral pack grant bridge exists and defaults to refusing', () => {
+  const bridge = read('Assets/_Modules/Commerce/PackGrantBridge.cs');
+  assert.match(bridge, /public static bool HasApplier => _apply != null && _isOwned != null;/);
+  // Every accessor returns false when nothing is registered — no "assume granted" default.
+  assert.match(bridge, /if \(!HasApplier\)\s*\n\s*\{[\s\S]*?return false;/);
+  assert.doesNotMatch(bridge, /Solana|WalletService|CurrencyKind/);
+
+  // The one registrar is the assembly that owns the single entitlement writer.
+  const packBootstrap = read('Assets/_Modules/Wallet/PackStoreBootstrap.cs');
+  assert.match(packBootstrap, /PackGrantBridge\.RegisterApplier\(ApplyPackBySku, IsPackOwned\)/);
+  // The applier reports the OWNERSHIP PROBE, not "ApplyPackContents did not throw".
+  assert.match(packBootstrap, /vm\.ApplyPackContents\(pack\);\s*\n\s*return vm\.IsOwned\(sku\);/);
 });
 
 test('Google Play implementation remains isolated in an optional provider assembly', () => {

@@ -1091,6 +1091,61 @@ namespace DeNelle.Village
                 " forcedState=" + (string.IsNullOrEmpty(forcedState) ? "parameter-route" : forcedState) +
                 " -> " + (hasDead ? "death state requested" : "NO Dead param -> death anim NO-OP (body holds idle)") +
                 " source=" + (_lastDamageSourceWorld.HasValue ? _lastDamageSourceWorld.Value.ToString() : "none"));
+
+            // DEATH-SHAKE WATCH (owner felt-report 2026-08-30, permanent per CLAUDE.md §12). Every
+            // earlier fix targeted the ROOT transform (EnterDeathFreeze, the LateUpdate death-pin)
+            // and the shake survived, because the mover was the ANIMATOR: two AnyState death
+            // transitions were simultaneously satisfiable while Dead/DeathDir stayed latched, so the
+            // base layer ping-ponged between two death states every ~0.06s and every death clip
+            // restarted at frame 0. Nothing in the trace could say that, which is why it took three
+            // attempts. This watch samples the base layer for the death window and FAILs the moment
+            // the state re-enters — one capture now NAMES a recurrence instead of another guess.
+            if (anim != null && isActiveAndEnabled) StartCoroutine(DeathStateWatch(anim));
+        }
+
+        /// <summary>
+        /// Watches the base layer for the first seconds of death and proves whether the death clip
+        /// actually PLAYED (one state, normalizedTime advancing to its held final frame) or
+        /// RE-ENTERED (the shake signature). Unscaled time — the death animator runs unscaled so it
+        /// survives lethal hit-stop. Cheap and bounded: one state read per frame for ~1.5s, once
+        /// per death.
+        /// </summary>
+        private IEnumerator DeathStateWatch(Animator anim)
+        {
+            if (anim == null) yield break;
+            int lastHash = anim.GetCurrentAnimatorStateInfo(0).fullPathHash;
+            int changes = 0;
+            bool reported = false;
+            float elapsed = 0f;
+            while (elapsed < 1.5f)
+            {
+                yield return null;
+                if (anim == null) yield break;
+                elapsed += Time.unscaledDeltaTime;
+                int hash = anim.GetCurrentAnimatorStateInfo(0).fullPathHash;
+                if (hash != lastHash)
+                {
+                    lastHash = hash;
+                    changes++;
+                }
+                if (changes >= 3 && !reported)
+                {
+                    reported = true;
+                    DeNelle.Core.Diagnostics.FlowTrace.Fail("HeroDeath",
+                        "DEATH ANIMATION IS RE-ENTERING: " + changes + " base-layer state changes in " +
+                        elapsed.ToString("F2") + "s on ctrl='" +
+                        (anim.runtimeAnimatorController != null ? anim.runtimeAnimatorController.name : "NONE") +
+                        "' -> two AnyState death transitions are simultaneously satisfiable while Dead " +
+                        "and DeathDir stay latched, so each death clip restarts at frame 0 and the body " +
+                        "reads as a SHAKE. Fix is in HeroAnimatorFactory: the generic Death fallback must " +
+                        "carry a DeathDir != N guard for every directional death state that exists.");
+                }
+            }
+            var st = anim != null ? anim.GetCurrentAnimatorStateInfo(0) : default;
+            DeNelle.Core.Diagnostics.FlowTrace.Step("HeroDeath",
+                "death state watch: " + changes + " base-layer state change(s) in 1.5s, normalizedTime=" +
+                st.normalizedTime.ToString("F2") + " -> " +
+                (changes <= 1 ? "death clip played through and holds its final frame." : "UNSTABLE death state."));
         }
 
         private static string ForceKnightDeathState(Animator anim, DeathDirection dir)

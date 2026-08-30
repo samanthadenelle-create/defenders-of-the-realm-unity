@@ -657,6 +657,18 @@ AnimatorStateTransition:
   - m_ConditionMode: 1
     m_ConditionEvent: Dead
     m_EventTreshold: 0
+  - m_ConditionMode: 7
+    m_ConditionEvent: DeathDir
+    m_EventTreshold: 1
+  - m_ConditionMode: 7
+    m_ConditionEvent: DeathDir
+    m_EventTreshold: 2
+  - m_ConditionMode: 7
+    m_ConditionEvent: DeathDir
+    m_EventTreshold: 3
+  - m_ConditionMode: 7
+    m_ConditionEvent: DeathDir
+    m_EventTreshold: 4
   m_DstStateMachine: {fileID: 0}
   m_DstState: {fileID: 1149407882001677676}
   m_Solo: 0

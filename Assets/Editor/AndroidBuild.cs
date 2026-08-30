@@ -108,6 +108,14 @@ namespace DeNelle.Editor
                 return;
             }
 
+            // WO-1282 Lane D. MUST run before the Addressables content build below: a Play build
+            // that died mid-flight leaves the wallet payloads quarantined OUTSIDE
+            // Resources/StreamingAssets, and the content build reads the tree BEFORE
+            // BuildPlayerProcessor.PrepareForBuild ever fires — so without this sweep a Seeker
+            // APK could be baked from a wallet-less tree with every marker green. Cheap no-op
+            // when the ledger is absent, which is the normal case.
+            GooglePlayContentExclusion.EnsureTreeIsWhole();
+
             ApplyAndroidPlayerSettings();
 
             // This setting is sticky editor state, so assert it for BOTH artifacts. A Seeker
