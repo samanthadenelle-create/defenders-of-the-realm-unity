@@ -354,6 +354,10 @@ namespace DeNelle.Village
         // Mirrors the main-hand prop lifecycle (destroy-on-swap, no stacking). Driven off
         // GearLoadout.EquippedOffHand on the SAME OnGearChanged event the main weapon uses.
         private const string OffHandPropName = "EquipmentProp_OffHand";
+        // Mesh child under the grip root. MUST stay a different name: both used to be
+        // EquipmentProp_OffHand, so the Inspector had two objects with the same label —
+        // the child is identity; the root is the Offset Forge row.
+        private const string OffHandMeshName = "EquipmentProp_OffHand_Mesh";
         private GameObject _currentOffHandProp;
         /// <summary>PROD-019: last sheathe parent we ran EnsureWeaponRenderersVisible for —
         /// cleared when the off-hand leaves that seat so a reparent re-shows without per-frame spam.</summary>
@@ -1021,18 +1025,19 @@ namespace DeNelle.Village
             }
 
             HumanBodyBones boneId = vis.leftHand ? HumanBodyBones.LeftHand : HumanBodyBones.RightHand;
+            WeaponArchetype arch = GearSeat.Classify(vis.kind.ToString(),
+                def != null ? def.category : null, vis.mesh ?? weaponId);
 
-            // ── INSTANTIATION-TIME ATTACH OVERRIDE (WO-510 slice 1) ───────────────────
-            // An OPTIONAL rig-profiles.json may name the attach transform by hierarchy path
-            // (rig-agnostic — we never rename the model's bones). The override is AUTHORITATIVE;
-            // the humanoid avatar (below) is the FALLBACK. ZERO behaviour change when no profile
-            // exists. heroRoot = the GameObject owning the Animator avatar we seat on; rigId =
-            // its name (the model/prefab name key, e.g. "Knight"). A dead override path SCREAMS
-            // (FlowTrace.Fail) then falls through to the avatar — never silently swallowed.
+            // ONE door: GearSeat names the mount per family (staff RightHand, bow LeftHand,
+            // shield Socket_Shield, sword RightHand). A rig-profiles.json override still
+            // wins for non-shields; a strapped heater never follows LeftHand.
             GameObject heroRoot = _animator.gameObject;
             string rigId = heroRoot.name;
             Transform hand = null;
-            if (RigAttachmentRegistry.TryResolve(heroRoot, rigId, vis.leftHand, out var overrideAnchor, out var how))
+            string how = null;
+            Transform overrideAnchor;
+            if (arch != WeaponArchetype.Shield &&
+                RigAttachmentRegistry.TryResolve(heroRoot, rigId, vis.leftHand, out overrideAnchor, out how))
             {
                 hand = overrideAnchor;
                 FlowTrace.Step("Offset", $"attach rig={rigId} hand={(vis.leftHand ? "L" : "R")} -> '{hand.name}' (via json-override)");
@@ -1040,22 +1045,19 @@ namespace DeNelle.Village
             else
             {
                 if (how != null && how.StartsWith("missing"))
-                    FlowTrace.Fail("Offset", $"attach rig={rigId} hand={(vis.leftHand ? "L" : "R")} override path absent in model ({how}); falling back to avatar");
+                    FlowTrace.Fail("Offset", $"attach rig={rigId} hand={(vis.leftHand ? "L" : "R")} override path absent in model ({how}); falling back to GearSeat");
 
-                hand = FlowTrace.Try("Equip", $"GetBoneTransform({boneId})",
-                    () => _animator.GetBoneTransform(boneId), null);
-                FlowTrace.Step("Offset", $"attach rig={rigId} hand={(vis.leftHand ? "L" : "R")} -> '{(hand != null ? hand.name : "<null>")}' (via avatar)");
+                var plan = GearSeat.ResolveMount(_animator, transform, arch);
+                hand = plan.Mount;
             }
 
             if (hand == null)
             {
-                // LOUD: a Humanoid rig with a missing hand bone is exactly why the companion bow
-                // would not show. Fail-level so it rolls up in the capture, not a quiet warning.
-                FlowTrace.Fail("Equip", $"Humanoid rig on '{ownerName}' has NO {boneId} bone — " +
+                FlowTrace.Fail("Equip", $"Humanoid rig on '{ownerName}' has NO mount for {arch} ({boneId}) — " +
                     $"weapon '{weaponId}' NOT attached (this is the null-bone BUG 1 cause if it fires).");
                 return;
             }
-            FlowTrace.Step("Equip", $"hand bone resolved: {boneId} -> '{hand.name}'");
+            FlowTrace.Step("Equip", $"hand bone resolved: {arch} {boneId} -> '{hand.name}'");
 
             // ── DATA-DRIVEN PREFAB RESOLUTION (WO-Item, Blink Addressables) ───────────
             // If the equipped def loads via Addressables (Blink gear: prefabPath is an
@@ -2064,17 +2066,29 @@ namespace DeNelle.Village
                 return;
             }
 
-            // Idempotent: same off-hand already shown -> nothing to do.
-            if (string.Equals(_currentOffHandId, id, System.StringComparison.OrdinalIgnoreCase)
-                && _currentOffHandProp != null)
+            // Idempotent: same off-hand already shown, OR the Addressable load for that
+            // same id is still in flight. Captured 2026-08-30: GearLoadout.Refresh always
+            // invokes OnGearChanged, WireHeroBody calls Refresh AFTER OnEnable already
+            // started BeginAddressableOffHand. The old check required _currentOffHandProp
+            // != null, so the in-flight load looked like "not equipped", EquipOffHand
+            // bumped _offHandGeneration (killing the first callback), DestroyCurrentOffHand,
+            // and rebuilt the prop from JSON — wiping a live Inspector pose. Same-id +
+            // in-flight must skip, or every body-wire Refresh re-seats the heater.
+            bool sameId = string.Equals(_currentOffHandId, id, System.StringComparison.OrdinalIgnoreCase);
+            if (sameId && _currentOffHandProp != null)
             {
-                // WO-994 probe 3 (candidate C): this early-out was SILENT and is what can make
-                // the scene-load re-seat a NO-OP for a surviving shield (no re-NormalizeInto,
-                // height-cache invalidation consumed by nothing). Surface it with the frame.
                 FlowTrace.Step("Equip",
                     $"off-hand idempotent skip id='{id}' prop='{_currentOffHandProp.name}' " +
                     $"parent='{(_currentOffHandProp.transform.parent != null ? _currentOffHandProp.transform.parent.name : "<null>")}' " +
                     $"frame={Time.frameCount}");
+                return;
+            }
+            if (sameId && _offHandHandleOpen)
+            {
+                FlowTrace.Step("Equip",
+                    $"off-hand idempotent skip id='{id}' IN-FLIGHT Addressable " +
+                    $"(generation={_offHandGeneration}) — GearLoadout.Refresh/HandleGearChanged " +
+                    "will NOT bump generation or rebuild. Live Inspector pose is kept.");
                 return;
             }
 
@@ -2101,30 +2115,50 @@ namespace DeNelle.Village
                 return;
             }
 
-            // ── INSTANTIATION-TIME ATTACH OVERRIDE (WO-510 slice 1) ───────────────────
-            // Off-hand (shield) always seats on the LEFT hand; consult the rig-profiles.json
-            // override (leftHand) first, authoritative over the humanoid avatar. ZERO change
-            // when no profile exists. A dead override path SCREAMS then falls to the avatar.
-            GameObject heroRoot = _animator.gameObject;
-            string rigId = heroRoot.name;
+            // Strapped heater/kite/round: parent to Socket_Shield on LeftLowerArm, NEVER
+            // LeftHand — a real heater sits on the forearm; the hand bone waves every
+            // wrist/finger clip. Socket is a dedicated empty so shield swaps do not touch
+            // the Avatar. Created after the Humanoid Avatar is ready (gate above).
             Transform hand = null;
-            if (RigAttachmentRegistry.TryResolve(heroRoot, rigId, true, out var overrideAnchor, out var how))
+            if (vis.kind == WeaponClass.Shield)
             {
-                hand = overrideAnchor;
-                FlowTrace.Step("Offset", $"attach rig={rigId} hand=L -> '{hand.name}' (via json-override)");
-            }
-            else
-            {
-                if (how != null && how.StartsWith("missing"))
-                    FlowTrace.Fail("Offset", $"attach rig={rigId} hand=L override path absent in model ({how}); falling back to avatar");
-
-                hand = FlowTrace.Try("Equip", "GetBoneTransform(LeftHand)",
-                    () => _animator.GetBoneTransform(HumanBodyBones.LeftHand), null);
-                FlowTrace.Step("Offset", $"attach rig={rigId} hand=L -> '{(hand != null ? hand.name : "<null>")}' (via avatar)");
+                var shieldPlan = GearSeat.ResolveMount(_animator, transform, WeaponArchetype.Shield);
+                hand = shieldPlan.Mount;
+                if (hand != null)
+                {
+                    _sheatheSocketOffIsArm = true;
+                    FlowTrace.Step("Equip",
+                        $"off-hand '{id}' attach parent='{hand.name}' under '{(hand.parent != null ? hand.parent.name : "<null>")}' " +
+                        "(GearSeat Shield — same parent sheathed and drawn).");
+                }
             }
             if (hand == null)
             {
-                FlowTrace.Fail("Equip", $"Humanoid rig on '{name}' has NO LeftHand bone — " +
+                // Buckler / missing-forearm fallback only. A heater should not land here.
+                GameObject heroRoot = _animator.gameObject;
+                string rigId = heroRoot.name;
+                if (RigAttachmentRegistry.TryResolve(heroRoot, rigId, true, out var overrideAnchor, out var how))
+                {
+                    hand = overrideAnchor;
+                    FlowTrace.Step("Offset", $"attach rig={rigId} hand=L -> '{hand.name}' (via json-override)");
+                }
+                else
+                {
+                    if (how != null && how.StartsWith("missing"))
+                        FlowTrace.Fail("Offset", $"attach rig={rigId} hand=L override path absent in model ({how}); falling back to avatar");
+
+                    hand = FlowTrace.Try("Equip", "GetBoneTransform(LeftHand)",
+                        () => _animator.GetBoneTransform(HumanBodyBones.LeftHand), null);
+                    FlowTrace.Step("Offset", $"attach rig={rigId} hand=L -> '{(hand != null ? hand.name : "<null>")}' (via avatar)");
+                }
+                if (vis.kind == WeaponClass.Shield)
+                    FlowTrace.Warn("Equip",
+                        $"off-hand '{id}': Socket_Shield unavailable — falling back to LeftHand. " +
+                        "A strapped heater will follow wrist animation; map LeftLowerArm on the Avatar.");
+            }
+            if (hand == null)
+            {
+                FlowTrace.Fail("Equip", $"Humanoid rig on '{name}' has NO forearm socket and NO LeftHand bone — " +
                     $"off-hand '{id}' NOT attached.");
                 return;
             }
@@ -2234,6 +2268,46 @@ namespace DeNelle.Village
             _offHandHandle = default;
         }
 
+        // Compact TRS line for the off-hand attach step-in / step-out. Names GRIP (the Offset
+        // Forge target, EquipmentProp_OffHand) separately from MESH (the inner renderer GO the
+        // Inspector often has selected — that is NOT the offset row).
+        private static string FormatTrs(Transform t)
+        {
+            if (t == null) return "<null>";
+            string parent = t.parent != null ? t.parent.name : "<null>";
+            return $"'{t.name}' parent='{parent}' " +
+                   $"lPos={t.localPosition:0.###} lEuler={t.localEulerAngles:0.#} lScale={t.localScale:0.###} " +
+                   $"wPos={t.position:0.###} wEuler={t.eulerAngles:0.#} lossy={t.lossyScale:0.###}";
+        }
+
+        private void TraceOffHandTrs(string step, Transform gripOrProp)
+        {
+            using var scope = FlowTrace.Enter("Equip", $"TRS {step}");
+            if (gripOrProp == null)
+            {
+                FlowTrace.Warn("Equip", $"TRS {step}: transform NULL");
+                return;
+            }
+            FlowTrace.Step("Equip", $"TRS {step} ROOT {FormatTrs(gripOrProp)}");
+            int n = Mathf.Min(gripOrProp.childCount, 6);
+            for (int i = 0; i < n; i++)
+            {
+                Transform c = gripOrProp.GetChild(i);
+                FlowTrace.Step("Equip", $"TRS {step} CHILD[{i}] {FormatTrs(c)}");
+                int m = Mathf.Min(c.childCount, 4);
+                for (int j = 0; j < m; j++)
+                    FlowTrace.Step("Equip", $"TRS {step} CHILD[{i}].[{j}] {FormatTrs(c.GetChild(j))}");
+            }
+            var rend = gripOrProp.GetComponentInChildren<Renderer>();
+            if (rend != null)
+            {
+                Bounds wb = rend.bounds;
+                FlowTrace.Step("Equip",
+                    $"TRS {step} MESH '{rend.gameObject.name}' {FormatTrs(rend.transform)} " +
+                    $"worldBounds c={wb.center:0.###} s={wb.size:0.###}");
+            }
+        }
+
         // Seat an off-hand prop on the off hand. Shields are centre-gripped (their own NormalizeInto
         // + preset euler, like the bow) — they do NOT run the melee handle-inference / rig-axis
         // rotation. Kept separate from the main-hand AttachLoadedProp so the off-hand prop has its
@@ -2241,7 +2315,7 @@ namespace DeNelle.Village
         private void AttachOffHandProp(GameObject prop, WeaponVisual vis, Transform hand, string id)
         {
             using var _ = FlowTrace.Enter("Equip", $"AttachOffHandProp '{id}' -> '{hand.name}' (kind={vis.kind})");
-            prop.name = OffHandPropName;
+            prop.name = OffHandMeshName;
             foreach (var c in prop.GetComponentsInChildren<Collider>(true)) if (c != null) Destroy(c);
             foreach (var rb in prop.GetComponentsInChildren<Rigidbody>(true)) if (rb != null) Destroy(rb);
             EnsureWeaponRenderersVisible(prop, hand, id);
@@ -2272,14 +2346,42 @@ namespace DeNelle.Village
                 $"proportional={heldLen:0.###}m hero={ResolveHeroHeightM():0.###}m");
             if (fullOverride)
             {
-                // VERTICAL baseline (geometry, longest->+Y) + the saved delta. Shields are not
-                // melee, so no hilt-lower-half; the owner dials the full strap pose from vertical.
-                FlowTrace.Step("Equip", $"off-hand seat: GEOMETRY-VERTICAL + saved DELTA pos={fo.pos} rot={fo.eulerRot} scale={fo.scale:0.###}");
-                NormalizeInto(prop, gripRoot.transform, heldLen, resolveHilt: false);
-                gripRoot.transform.SetParent(hand, false);
-                gripRoot.transform.localPosition = vis.gripPos + fo.pos;
-                gripRoot.transform.localRotation = Quaternion.Euler(fo.eulerRot);
-                gripRoot.transform.localScale    = Vector3.one * (fo.scale > 0f ? fo.scale : 1f);
+                // fullOverride MEANS the Offset Forge row IS the seat. Captured 2026-08-30
+                // (Editor.log AttachOffHandProp MEASURED + WO-994 seatWrite): the previous
+                // "GEOMETRY-VERTICAL + saved DELTA" path still ran three extra writers, so the
+                // Inspector never showed the authored numbers:
+                //   1. NormalizeInto rewrote the MESH child — scale 0.45/0.63=0.714, euler
+                //      (0,270,0) which is Inspector (0,-90,0). That is the object the owner had
+                //      selected (Fantasy_shield_Runtime Off Hand), not the grip root.
+                //   2. vis.gripPos (-0.05,0,0) was ADDED → grip lPos=(-0.05, 0.33, 0.33) not
+                //      the authored (0, 0.33, 0.33).
+                //   3. ApplyGlobalWeaponYaw (+180 Y) still ran because derivation is skipped
+                //      on fullOverride — grip euler (0,120,250) became (0,300,110).
+                // Authored numbers live on the GRIP ROOT (EquipmentProp_OffHand under
+                // Socket_Shield). The inner mesh stays at identity so it does not double-scale
+                // or double-rotate under that row.
+                FlowTrace.Step("Equip",
+                    $"off-hand seat: FULL OVERRIDE exact pos={fo.pos} rot={fo.eulerRot} scale={fo.scale:0.###} " +
+                    $"vis.gripPos={vis.gripPos} heldLen={heldLen:0.###} — NormalizeInto WITHHELD, " +
+                    "vis.gripPos NOT added, ApplyGlobalWeaponYaw WITHHELD. Select EquipmentProp_OffHand " +
+                    "(grip root) in the Inspector to see these numbers; the inner mesh is identity.");
+                using (FlowTrace.Enter("Equip", "fullOverride parent prop identity under grip"))
+                {
+                    TraceOffHandTrs("fullOverride IN (prop before parent)", prop.transform);
+                    prop.transform.SetParent(gripRoot.transform, false);
+                    prop.transform.localPosition = Vector3.zero;
+                    prop.transform.localRotation = Quaternion.identity;
+                    prop.transform.localScale = Vector3.one;
+                    TraceOffHandTrs("fullOverride after prop identity", gripRoot.transform);
+                }
+                using (FlowTrace.Enter("Equip", "fullOverride write authored TRS on grip"))
+                {
+                    gripRoot.transform.SetParent(hand, false);
+                    gripRoot.transform.localPosition = fo.pos;
+                    gripRoot.transform.localRotation = Quaternion.Euler(fo.eulerRot);
+                    gripRoot.transform.localScale    = Vector3.one * (fo.scale > 0f ? fo.scale : 1f);
+                    TraceOffHandTrs("fullOverride after authored write", gripRoot.transform);
+                }
                 _offHandAuthoredScale = fo.scale > 0f ? fo.scale : 1f;
                 _offHandParentCompensate = false;   // owner dialed fo.scale by eye under this bone — don't re-solve it
             }
@@ -2290,29 +2392,40 @@ namespace DeNelle.Village
             // grip (their pivot is unknown, so normalize centres them deterministically).
             else if (vis.native)
             {
-                FlowTrace.Step("Equip", "off-hand seat: NATIVE (trust authored grip-at-origin, scale-only)");
-                SeatNative(prop, gripRoot.transform, heldLen);
-                gripRoot.transform.SetParent(hand, false);
-                _offHandParentCompensate = true;
-                _offHandAuthoredScale = 1f;   // the nudge block below records fo.scale if present
-                CompensateParentScale(gripRoot.transform, 1f,
-                    SeatSubject("off-hand", id, offsetKey), ref _offHandCompState);
-                gripRoot.transform.localPosition = Vector3.zero;
-                gripRoot.transform.localRotation = Quaternion.identity;
+                using (FlowTrace.Enter("Equip", "native seat (scale-only)"))
+                {
+                    FlowTrace.Step("Equip", "off-hand seat: NATIVE (trust authored grip-at-origin, scale-only)");
+                    TraceOffHandTrs("native IN", prop.transform);
+                    SeatNative(prop, gripRoot.transform, heldLen);
+                    gripRoot.transform.SetParent(hand, false);
+                    _offHandParentCompensate = true;
+                    _offHandAuthoredScale = 1f;   // the nudge block below records fo.scale if present
+                    CompensateParentScale(gripRoot.transform, 1f,
+                        SeatSubject("off-hand", id, offsetKey), ref _offHandCompState);
+                    gripRoot.transform.localPosition = Vector3.zero;
+                    gripRoot.transform.localRotation = Quaternion.identity;
+                    TraceOffHandTrs("native OUT", gripRoot.transform);
+                }
             }
             else
             {
-                FlowTrace.Step("Equip", "off-hand seat: NormalizeInto + preset grip (Tripo/Resources shield)");
-                NormalizeInto(prop, gripRoot.transform, heldLen, resolveHilt: false);
-                gripRoot.transform.SetParent(hand, false);
-                _offHandParentCompensate = true;
-                _offHandAuthoredScale = 1f;   // the nudge block below records fo.scale if present
-                CompensateParentScale(gripRoot.transform, 1f,
-                    SeatSubject("off-hand", id, offsetKey), ref _offHandCompState);
-                gripRoot.transform.localPosition = vis.gripPos;
-                gripRoot.transform.localRotation = Quaternion.Euler(vis.gripEuler);
+                using (FlowTrace.Enter("Equip", "NormalizeInto + preset grip"))
+                {
+                    FlowTrace.Step("Equip", "off-hand seat: NormalizeInto + preset grip (Tripo/Resources shield)");
+                    TraceOffHandTrs("geometry IN", prop.transform);
+                    NormalizeInto(prop, gripRoot.transform, heldLen, resolveHilt: false);
+                    gripRoot.transform.SetParent(hand, false);
+                    _offHandParentCompensate = true;
+                    _offHandAuthoredScale = 1f;   // the nudge block below records fo.scale if present
+                    CompensateParentScale(gripRoot.transform, 1f,
+                        SeatSubject("off-hand", id, offsetKey), ref _offHandCompState);
+                    gripRoot.transform.localPosition = vis.gripPos;
+                    gripRoot.transform.localRotation = Quaternion.Euler(vis.gripEuler);
+                    TraceOffHandTrs("geometry OUT", gripRoot.transform);
+                }
             }
             EnsureWeaponRenderersVisible(gripRoot, hand, id);
+            TraceOffHandTrs("after initial seat", gripRoot.transform);
 
             // ── WO-1123: DERIVED SHIELD SEAT (owner spec 2026-08-19) ─────────────────────────
             // WHAT THIS REPLACES: the drawn shield above is the preset euler on a hand bone —
@@ -2390,11 +2503,15 @@ namespace DeNelle.Village
             if (!fullOverride && vis.kind == WeaponClass.Shield &&
                 WeaponOrientHelper.MayDerive(hasOffset, _currentOffHandManual))
             {
-                Transform shieldBody = _animator != null ? _animator.transform : transform;
                 Quaternion derivedShield = Quaternion.identity;
                 // Reads the frame measured above — STILL exactly one vertex walk per attach, and
                 // still the frame overload (the GameObject one would walk the mesh a second time).
+                // Mount axes are the FOREARM SOCKET: +Z away from the arm (inner face flush),
+                // +Y along the forearm toward the wrist. Body-forward here was "face the camera"
+                // and is why a strapped heater spun off the limb.
                 var frame = _currentOffHandShieldFrame;
+                Vector3 socketOut, socketUp;
+                GearSeat.GetShieldAxes(_animator, transform, out socketOut, out socketUp);
                 offHandDerivedSeat = frame.Valid && Guard.Try("Equip",
                     $"derived shield seat for '{id}' (WO-1123)",
                     () => WeaponOrientHelper.TryComputeShieldMountRotation(
@@ -2403,14 +2520,16 @@ namespace DeNelle.Village
                               // so `_` is a using variable in this scope and a discard there is
                               // CS1657. Name the throwaway instead (the WHY is already traced
                               // inside the helper, so it is genuinely unused here).
-                              shieldBody.forward, shieldBody.up, out derivedShield, out string _shieldWhyUnused),
+                              socketOut, socketUp, out derivedShield, out string _shieldWhyUnused),
                     false);
                 if (offHandDerivedSeat)
                 {
+                    derivedShield = GearSeat.EnsureShieldOuterFaces(
+                        derivedShield, hand, socketOut, socketUp, frame, transform);
                     gripRoot.transform.localRotation = derivedShield;
                     FlowTrace.Step("Equip",
                         $"off-hand seat DERIVED (WO-1123) for '{id}' key='{offsetKey}': thickness -> " +
-                        $"away from the player, handle -> inward. presetEuler={vis.gripEuler} was " +
+                        $"outboard left/forward-left, handle -> inward. presetEuler={vis.gripEuler} was " +
                         $"SUPERSEDED by derivedEuler={derivedShield.eulerAngles:0.#}; global yaw WITHHELD.");
                 }
             }
@@ -2448,29 +2567,49 @@ namespace DeNelle.Village
 
             // WO-1123: WITHHELD on a derived seat (bow precedent, :1181-1188) — the flip corrects
             // bone-inherited grips, and a derived world target has not inherited anything.
-            if (!offHandDerivedSeat)
+            // fullOverride: WITHHELD as well — captured 2026-08-30, the +180 Y turned authored
+            // (0,120,250) into gripLocalEuler (0,300,110). The row already IS the seat.
+            if (fullOverride)
+                FlowTrace.Step("Equip",
+                    $"off-hand '{id}': ApplyGlobalWeaponYaw WITHHELD (fullOverride). Authored euler " +
+                    $"{fo.eulerRot} stays on the grip root.");
+            else if (!offHandDerivedSeat)
                 gripRoot.transform.localRotation = ApplyGlobalWeaponYaw(gripRoot.transform.localRotation);
             else
                 FlowTrace.Step("Equip",
                     $"off-hand '{id}': ApplyGlobalWeaponYaw WITHHELD (derived world seat). Composing " +
                     "the 180 deg flip onto a derived target would face the shield's smooth side at the player.");
+            TraceOffHandTrs("after yaw-or-withhold", gripRoot.transform);
 
-            // The live native starter shield's pivot is on its rim (proof: hand-to-origin 0.043 m,
-            // hand-to-plate-centre 0.392 m). Centre it only after final rotation and scale so the
-            // hand mounts behind the plate instead of at its edge. Full/manual overrides remain
-            // absolute; a normal Offset Forge position remains as the base nudge.
-            // ShieldWithItemLogic is authored end-for-end relative to its visible crest. Roll in
-            // the plate plane: face direction stays unchanged while top and bottom swap. Keep this
-            // asset-specific so shields whose native up is already correct are not inverted.
-            if (vis.kind == WeaponClass.Shield && !fullOverride && !_currentOffHandManual &&
-                string.Equals(offsetKey, "ShieldWithItemLogic", System.StringComparison.OrdinalIgnoreCase) &&
-                _currentOffHandShieldFrame.Valid)
-                gripRoot.transform.localRotation *= Quaternion.AngleAxis(
-                    180f, _currentOffHandShieldFrame.ThicknessAxis);
+            // Socket is the bone midpoint. Centre the heater, then shift it OUT along
+            // the opening perpendicular so the plate sits ON the arm. The handle/opening
+            // is the only volume allowed to intersect the bone — not the plate, not the torso.
 
             if (vis.kind == WeaponClass.Shield && !fullOverride && !_currentOffHandManual)
-                ApplyOffHandCentreOnSocket(gripRoot.transform, hand,
-                    gripRoot.transform.localPosition);
+            {
+                using (FlowTrace.Enter("Equip", "snap/off-bone (not fullOverride)"))
+                {
+                    TraceOffHandTrs("snap IN", gripRoot.transform);
+                    if (GearSeat.FindHandleDummy(gripRoot.transform) != null)
+                        GearSeat.SnapHandleToSocket(gripRoot.transform, hand);
+                    else
+                    {
+                        ApplyOffHandCentreOnSocket(gripRoot.transform, hand, Vector3.zero);
+                        Vector3 outward, heaterUp;
+                        GearSeat.GetShieldAxes(_animator, transform, out outward, out heaterUp);
+                        gripRoot.transform.localPosition += GearSeat.ShieldPlateOffBone(
+                            hand, outward, _currentOffHandShieldFrame, gripRoot.transform);
+                    }
+                    TraceOffHandTrs("snap OUT", gripRoot.transform);
+                }
+            }
+            else if (fullOverride)
+            {
+                FlowTrace.Step("Equip",
+                    $"off-hand '{id}': snap/off-bone WITHHELD (fullOverride) — grip stays at authored " +
+                    $"lPos={gripRoot.transform.localPosition:0.###} lEuler={gripRoot.transform.localEulerAngles:0.#} " +
+                    $"lScale={gripRoot.transform.localScale:0.###}");
+            }
 
             _currentOffHandProp = gripRoot;
             // Capture off-hand attach inputs for the in-game Seating Editor (WO-577).
@@ -2509,13 +2648,21 @@ namespace DeNelle.Village
                 if (gripRoot != null) Destroy(gripRoot);
                 return;
             }
-            // Record the DRAWN off-hand target, then place by carry state (drawn on the off-hand in
-            // combat, sheathed on the back socket out of combat) — same as the main weapon, so the
-            // shield is not shown floating on the arm in town (owner design 2026-07-04).
+            // Record the attach target. A strapped shield keeps this parent AND this local
+            // pose in town and in combat (owner: sheathed and active stay in the same position).
             _offHandHand = hand;
             _offHandDrawnLocalPos = gripRoot.transform.localPosition;
             _offHandDrawnLocalRot = gripRoot.transform.localRotation;
-            ApplyHoldPose();
+            FlowTrace.Step("Equip",
+                $"off-hand captured drawn locals pos={_offHandDrawnLocalPos:0.###} " +
+                $"euler={_offHandDrawnLocalRot.eulerAngles:0.#} scale={gripRoot.transform.localScale:0.###} " +
+                $"(ApplyHoldPose restamps these every frame onto the grip root, not the mesh child)");
+            using (FlowTrace.Enter("Equip", "ApplyHoldPose after attach"))
+            {
+                TraceOffHandTrs("hold IN", gripRoot.transform);
+                ApplyHoldPose();
+                TraceOffHandTrs("hold OUT", gripRoot.transform);
+            }
 
             // WO-994 C: measured world pose AFTER ApplyHoldPose (the hollow pre-pose line only
             // echoed offsets.json and ran before the carry-state re-parent).
@@ -2528,12 +2675,9 @@ namespace DeNelle.Village
                 $"AttachOffHandProp MEASURED after hold: id='{id}' parent='{parentName}' " +
                 $"state={(drawnNow ? "DRAWN" : "SHEATHED")} fullOverride={fullOverride} " +
                 $"comp={_offHandParentCompensate} " +
-                $"gripLocalEuler={gripRoot.transform.localEulerAngles} " +
-                $"propLocalEuler={(propChild != null ? propChild.localEulerAngles.ToString() : "n/a")} " +
-                $"worldEuler={gripRoot.transform.eulerAngles} " +
-                $"worldBounds=c{wb.center} s{wb.size} " +
-                $"boneLossy={(gripRoot.transform.parent != null ? gripRoot.transform.parent.lossyScale.ToString() : "n/a")} " +
-                $"worldPos={gripRoot.transform.position}");
+                $"GRIP {FormatTrs(gripRoot.transform)} " +
+                $"CHILD {(propChild != null ? FormatTrs(propChild) : "n/a")} " +
+                $"worldBounds=c{wb.center} s{wb.size}");
         }
 
         private void DestroyCurrentOffHand()
@@ -2716,6 +2860,35 @@ namespace DeNelle.Village
         private const float SeatAngTolDeg  = 0.5f;
         private const float SeatScaleTolFr = 0.01f;  // 1%
 
+        /// <summary>
+        /// ApplyHoldPose restamps captured attach locals EVERY FRAME via SetCombatActive
+        /// (HeroLocomotion.Update). Owner-locked 2026-08-30: the ShieldWithItemLogic row
+        /// IS the seat. Restamp pos/rot (and fullOverride scale) so a live gizmo or a
+        /// Refresh cannot drift it. STOMP logs when LIVE disagreed before the write.
+        /// </summary>
+        private void WriteOffHandDrawnOrKeepLive(string writer, Transform offT)
+        {
+            bool wouldStomp =
+                Vector3.Distance(offT.localPosition, _offHandDrawnLocalPos) > SeatPosTolM
+                || Quaternion.Angle(offT.localRotation, _offHandDrawnLocalRot) > SeatAngTolDeg;
+            if (wouldStomp)
+            {
+                string line =
+                    $"STOMP {writer} key='{_currentOffHandMeshKey}' " +
+                    $"LIVE lPos={offT.localPosition:0.###} lEuler={offT.localEulerAngles:0.#} lScale={offT.localScale:0.###} " +
+                    $"WRITE lPos={_offHandDrawnLocalPos:0.###} lEuler={_offHandDrawnLocalRot.eulerAngles:0.#} " +
+                    $"parent='{(offT.parent != null ? offT.parent.name : "<null>")}' " +
+                    "LOCKED restamp of attach-captured Offset Forge row.";
+                FlowTrace.Once("Equip", "stomp-first-" + writer, line);
+                FlowTrace.Throttle("Equip", "stomp-" + writer + "-" + (_currentOffHandMeshKey ?? "?"), 1f, line);
+            }
+
+            offT.localPosition = _offHandDrawnLocalPos;
+            offT.localRotation = _offHandDrawnLocalRot;
+            if (!_offHandParentCompensate && _offHandAuthoredScale > 0f)
+                offT.localScale = Vector3.one * _offHandAuthoredScale;
+        }
+
         private void RecordOffHandSeatWrite(string writer)
         {
             if (_currentOffHandProp == null) return;
@@ -2734,10 +2907,14 @@ namespace DeNelle.Village
                 bool sameWriter = _offSeatHas && _offSeatWriter == writer;
                 string parentNow  = t.parent != null ? t.parent.name : "<null>";
                 string parentPrev = _offSeatParentT != null ? _offSeatParentT.name : "<null>";
+                Transform child = t.childCount > 0 ? t.GetChild(0) : null;
                 string line =
                     $"WO-994 seatWrite by={writer} key='{_currentOffHandMeshKey}' " +
-                    $"pos={t.localPosition} rot={t.localEulerAngles} scale={t.localScale} " +
+                    $"GRIP pos={t.localPosition} rot={t.localEulerAngles} scale={t.localScale} " +
                     $"parent='{parentNow}' parentLossy={pLossy}" +
+                    (child != null
+                        ? $" CHILD '{child.name}' pos={child.localPosition} rot={child.localEulerAngles} scale={child.localScale}"
+                        : " CHILD=<none>") +
                     (sameWriter
                         ? $" PREV pos={_offSeatPos} rot={_offSeatRot.eulerAngles} scale={_offSeatScale} " +
                           $"parent='{parentPrev}' parentLossy={_offSeatParentLossy}"
@@ -2920,7 +3097,30 @@ namespace DeNelle.Village
             if (_currentOffHandProp != null)
             {
                 var offT = _currentOffHandProp.transform;
-                if (!drawn && sheatheOff != null)
+                // Strapped heater: ONE parent, ONE local pose, town and combat.
+                // Re-parenting to LeftHand on draw is what waved the plate with the wrist.
+                Transform forearmSocket = _currentOffHandKind == WeaponClass.Shield
+                    ? GearSeat.ResolveMount(_animator, transform, WeaponArchetype.Shield).Mount
+                    : null;
+                if (forearmSocket != null)
+                {
+                    if (offT.parent != forearmSocket)
+                        offT.SetParent(forearmSocket, false);
+                    if (_offHandParentCompensate)
+                        CompensateParentScale(offT, _offHandAuthoredScale,
+                            SeatSubject("off-hand", _currentOffHandId, _currentOffHandMeshKey),
+                            ref _offHandCompState);
+                    WriteOffHandDrawnOrKeepLive("ApplyHoldPose.forearm-socket", offT);
+                    if (_currentOffHandProp != null &&
+                        !ReferenceEquals(_offHandSheatheShownOn, forearmSocket))
+                    {
+                        _offHandSheatheShownOn = forearmSocket;
+                        EnsureWeaponRenderersVisible(_currentOffHandProp, forearmSocket,
+                            _currentOffHandId ?? _currentOffHandMeshKey ?? "off-hand");
+                    }
+                    RecordOffHandSeatWrite("ApplyHoldPose.forearm-socket");
+                }
+                else if (!drawn && sheatheOff != null)
                 {
                     // ⛔ NOTE THE PARENT: `sheatheOff`, NOT the weapon's socket. This line used to
                     // read `offT.SetParent(back, false)` with `back` being the ONE shared socket the
@@ -2978,12 +3178,11 @@ namespace DeNelle.Village
                     // pivoted shield self-corrects instead of needing a new magic number.
                     ApplyOffHandCentreOnSocket(offT, sheatheOff, offBaseLocal);
                     // A centre seat is necessary for a grip-at-the-rim prefab, but it is not
-                    // sufficient on an ARM socket: the socket lies inside the skinned arm.  The
-                    // live Seeker trace proved the renderer was enabled and 0.78 m tall while the
-                    // owner still saw no shield; its rendered centre had been placed exactly on
-                    // SheatheSocket_ArmOff, so the plate was buried through the hero.  Put the
-                    // plate's INNER FACE (not its centre) just outside the arm, using the shield's
-                    // measured thickness.  Hip fallback keeps the established centre seat.
+                    // sufficient on an ARM socket: the socket lies inside the skinned arm.  Push
+                    // LATERAL (away from the torso) by half-thickness + arm skin so the plate
+                    // straps to the forearm.  Do NOT clear the whole hero world-AABB — that is
+                    // axis-aligned and facing-dependent, and it floated the heater a metre off
+                    // Grom's side (owner capture, town rear).  Hip fallback keeps the centre seat.
                     if (_sheatheSocketOffIsArm)
                         ApplyOffHandArmSurfaceSeat(offT, sheatheOff);
                     ApplySheathedOffset(offT, _currentOffHandMeshKey);
@@ -3006,8 +3205,7 @@ namespace DeNelle.Village
                         CompensateParentScale(offT, _offHandAuthoredScale,
                             SeatSubject("off-hand", _currentOffHandId, _currentOffHandMeshKey),
                             ref _offHandCompState);
-                    offT.localPosition = _offHandDrawnLocalPos;
-                    offT.localRotation = _offHandDrawnLocalRot;
+                    WriteOffHandDrawnOrKeepLive("ApplyHoldPose.drawn", offT);
                     RecordOffHandSeatWrite("ApplyHoldPose.drawn");      // WO-994 tripwire
                 }
             }
@@ -3450,12 +3648,13 @@ namespace DeNelle.Village
         {
             Transform body = _animator != null ? _animator.transform : transform;
             Vector3 lateral = body.right * OffHandSheatheSide();
-            // PROD-019: sheathed arm plate must read from the REAR follow/build camera.
-            // Prefer back-of-body (+ toward camera when viewing the cape) over pure lateral
-            // strap — lateral-only parks the disc under the cape where faceOff=0 still
-            // photographs as "no shield". Hip fallback stays lateral.
+            // Arm strap stays LEFT of the body (owner: on the arm, not the hip/back). A
+            // rear-follow camera still needs a cant or the heater is edge-on and reads as
+            // "no shield" even when the renderer is on. 0.45/1.35 (back-heavy) parked the
+            // plate IN the cape along -forward; left-dominant + a smaller rear cant puts
+            // it beside the left arm with the orange face readable from town-rear.
             Vector3 outward = _sheatheSocketOffIsArm
-                ? (lateral * 0.45f) - (body.forward * 1.35f)
+                ? (lateral * 1.10f) - (body.forward * 0.55f)
                 : lateral;
             return outward.sqrMagnitude > 1e-8f ? outward.normalized : lateral;
         }
@@ -3500,35 +3699,40 @@ namespace DeNelle.Village
         }
 
         /// <summary>
-        /// Moves a centred shield far enough outward that its inner face clears an arm-bone
-        /// socket.  The shield frame and current transform supply the actual world thickness;
-        /// no asset-specific position is guessed.  Assignment is relative to the already
-        /// reconstructed centre seat, so ApplyHoldPose can call this every frame without drift.
+        /// Straps a centred shield to the outer skin of the off-hand forearm.
+        /// POSITION is purely lateral (away from the torso). FACE cant lives in
+        /// <see cref="OffHandShieldOutwardWorld"/> and must not drive this push —
+        /// shoving along the canted vector into the character's world AABB is what
+        /// floated the heater a body-width off Grom (owner town-rear capture).
+        /// Distance = measured half-thickness + arm-bone-to-skin. Cap 0.28 m.
+        /// Idempotent vs the centre seat: ApplyHoldPose re-assigns centre then adds this.
         /// </summary>
         private void ApplyOffHandArmSurfaceSeat(Transform grip, Transform socket)
         {
             if (grip == null || socket == null || !_currentOffHandShieldFrame.Valid) return;
 
-            Vector3 outwardWorld = OffHandShieldOutwardWorld();
-            if (outwardWorld.sqrMagnitude < 1e-8f) return;
-            outwardWorld.Normalize();
+            Transform body = _animator != null ? _animator.transform : transform;
+            Vector3 pushWorld = body.right * OffHandSheatheSide();
+            if (pushWorld.sqrMagnitude < 1e-8f) return;
+            pushWorld.Normalize();
 
             Vector3 thicknessWorld = grip.TransformVector(_currentOffHandShieldFrame.ThicknessAxis);
             float halfThicknessWorld = 0.5f * _currentOffHandShieldFrame.Axes.NarrowestLen *
                                        thicknessWorld.magnitude;
-            // PROD-019 Seeker 2026-08-29: faceOff=0 and activeMeshRenderers=1 while the owner
-            // still saw NO plate (rear/build camera on Blaise). 4cm skin clearance left the
-            // heater inside the cape/arm silhouette. Push far enough that a rear follow /
-            // build overview camera can read the disc — half-thickness still scales the asset.
-            const float skinClearanceWorld = 0.16f;
-            float outwardDistance = halfThicknessWorld + skinClearanceWorld;
-            grip.localPosition += socket.InverseTransformVector(outwardWorld * outwardDistance);
+            const float armSkinWorld = 0.10f;
+            const float minWorld = 0.22f;
+            const float capWorld = 0.28f;
+            float outwardDistance = halfThicknessWorld + armSkinWorld;
+            if (outwardDistance < minWorld) outwardDistance = minWorld;
+            if (outwardDistance > capWorld) outwardDistance = capWorld;
+
+            grip.localPosition += socket.InverseTransformVector(pushWorld * outwardDistance);
 
             FlowTrace.Throttle("Equip", "offhand-arm-surface-" + (_currentOffHandMeshKey ?? "?"), 5f,
-                $"sheathed off-hand SURFACE-SEATED outside arm: '{_currentOffHandMeshKey}' " +
-                $"halfThickness={halfThicknessWorld:0.###}m clearance={skinClearanceWorld:0.###}m " +
-                $"outward={outwardWorld} total={outwardDistance:0.###}m socket='{socket.name}'. " +
-                "The plate's inner face now clears the body instead of its centre occupying the arm bone.");
+                $"sheathed off-hand SURFACE-SEATED on arm: '{_currentOffHandMeshKey}' " +
+                $"halfThickness={halfThicknessWorld:0.###}m armSkin={armSkinWorld:0.###}m " +
+                $"push={pushWorld} total={outwardDistance:0.###}m socket='{socket.name}'. " +
+                "Lateral strap only — face cant is rotation, not a body-AABB shove.");
         }
 
         /// <summary>
@@ -3891,12 +4095,18 @@ namespace DeNelle.Village
         {
             if (offHand)
             {
-                if (_currentOffHandProp != null && _offHandHand != null)
+                if (_currentOffHandProp != null)
                 {
                     var t = _currentOffHandProp.transform;
-                    t.SetParent(_offHandHand, false);
-                    t.localPosition = _offHandDrawnLocalPos;
-                    t.localRotation = _offHandDrawnLocalRot;
+                    Transform sock = _currentOffHandKind == WeaponClass.Shield
+                        ? GearSeat.ResolveMount(_animator, transform, WeaponArchetype.Shield).Mount
+                        : _offHandHand;
+                    if (sock != null)
+                    {
+                        t.SetParent(sock, false);
+                        t.localPosition = _offHandDrawnLocalPos;
+                        t.localRotation = _offHandDrawnLocalRot;
+                    }
                 }
             }
             else if (_gripRoot != null && _weaponHand != null)

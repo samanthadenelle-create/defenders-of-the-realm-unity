@@ -1,6 +1,6 @@
 # PROD-019 — Knight shield is equipped but missing on the body at load
 
-**Status:** READY TO IMPLEMENT — **CAUSE narrowed from live Seeker logcat** (2026-08-29 ~18:29); not attach-fail  
+**Status:** DONE 2026-08-30 — owner 100% / persist Play in editor: heater on `Socket_Shield` / `EquipmentProp_OffHand` at locked Offset Forge row. See RESULT.  
 **Minted:** 2026-08-29 (CLI seat) — banner bumped with PROD-018/020 → PROD-021  
 **Priority:** HIGH — first impression / class identity; bag says heater is worn, world does not  
 **Provenance:** owner, 2026-08-29: *"the knight still does not render a shield on load"* / *"read the trace… on seeker screen now"*  

@@ -80,10 +80,19 @@ namespace DeNelle.Core.Geometry
                                          GripAnchor grip = GripAnchor.Centre,
                                          bool resolveBladeUpFromHilt = true)
         {
+            using var scope = DeNelle.Core.Diagnostics.FlowTrace.Enter("Equip",
+                $"NormalizeInto '{prop.name}' target={targetLength:0.###} grip={grip} resolveHilt={resolveBladeUpFromHilt}");
+            DeNelle.Core.Diagnostics.FlowTrace.Step("Equip",
+                $"NormalizeInto IN '{prop.name}' lPos={prop.transform.localPosition:0.###} " +
+                $"lEuler={prop.transform.localEulerAngles:0.#} lScale={prop.transform.localScale:0.###} " +
+                $"parent='{(prop.transform.parent != null ? prop.transform.parent.name : "<null>")}'");
             prop.transform.SetParent(parent, false);
             prop.transform.localPosition = Vector3.zero;
             prop.transform.localRotation = Quaternion.identity;
             prop.transform.localScale = Vector3.one;
+            DeNelle.Core.Diagnostics.FlowTrace.Step("Equip",
+                $"NormalizeInto after identity lPos={prop.transform.localPosition:0.###} " +
+                $"lEuler={prop.transform.localEulerAngles:0.#} lScale={prop.transform.localScale:0.###}");
 
             if (!TryLocalBounds(prop, parent, out Bounds b0)) return;
             AlignAxesYLongXNarrowZWide(prop, b0.size);
@@ -105,7 +114,9 @@ namespace DeNelle.Core.Geometry
             // §12 solve trace: one line names this solve's inputs per prop.
             DeNelle.Core.Diagnostics.FlowTrace.Step("Equip",
                 $"NormalizeInto '{prop.name}': raw b0={b0.size:0.###} aligned b1={b1.size:0.###} " +
-                $"target={targetLength:0.###} -> propScale={prop.transform.localScale.x:0.###}");
+                $"target={targetLength:0.###} -> propScale={prop.transform.localScale.x:0.###} " +
+                $"lPos={prop.transform.localPosition:0.###} lEuler={prop.transform.localEulerAngles:0.#} " +
+                $"lScale={prop.transform.localScale:0.###}");
 
             if (resolveBladeUpFromHilt)
                 EnsureHandleAtShortYEnd(prop, parent);
@@ -133,6 +144,10 @@ namespace DeNelle.Core.Geometry
             }
             else
                 prop.transform.localPosition -= b2.center;
+            DeNelle.Core.Diagnostics.FlowTrace.Step("Equip",
+                $"NormalizeInto OUT '{prop.name}' lPos={prop.transform.localPosition:0.###} " +
+                $"lEuler={prop.transform.localEulerAngles:0.#} lScale={prop.transform.localScale:0.###} " +
+                $"b2.center={b2.center:0.###} b2.size={b2.size:0.###}");
         }
 
         // =====================================================================

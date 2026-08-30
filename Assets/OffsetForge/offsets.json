@@ -23,22 +23,22 @@
     {
       "id": "ShieldWithItemLogic",
       "rot": {
-        "x": 0.0,
-        "y": 0.0,
-        "z": 0.0
+        "x": 1.915,
+        "y": -48.302,
+        "z": -127.941
       },
       "pos": {
-        "x": 0.0,
-        "y": 0.0,
-        "z": 0.0
+        "x": -0.103,
+        "y": 0.164,
+        "z": -0.238
       },
-      "scale": 1.733,
+      "scale": 0.71,
       "scaleXyz": {
         "x": 0.0,
         "y": 0.0,
         "z": 0.0
       },
-      "fullOverride": false
+      "fullOverride": true
     },
     {
       "id": "Knight",

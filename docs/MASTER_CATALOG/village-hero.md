@@ -444,7 +444,7 @@ Visual weapon attach on the Humanoid rig. Equip pipeline: Addressables first
 tinted-primitive last resort. Weapon-class map (Sword/Dagger/Axe/Hammer/Staff/Wand/Bow/Shield
 `:81-168`); geometric **`SeatByHandle`** sword-grip inference; bounds-normalizing `NormalizeInto`;
 render-verify + rollback (`VerifyWeaponRendersNow` `:1046`, `RollbackWeaponProp` `:1091`).
-Off-hand shields → LeftHand (`EquipOffHand` `:1403+`). **`SetCombatActive(bool)`** `:1722` —
+Off-hand shields → `Socket_Shield` on `LeftLowerArm` via `GearSeat` (never LeftHand for a strapped heater). `fullOverride` Offset Forge rows are the seat exactly: no `NormalizeInto`, no `vis.gripPos` add, no `ApplyGlobalWeaponYaw`. Locked heater (`ShieldWithItemLogic` / `knight_shield_starter`, 2026-08-30 persist Play): pos `(-0.103, 0.164, -0.238)` rot `(1.915, -48.302, -127.941)` scale `0.71` on `EquipmentProp_OffHand` (not `_Mesh`). ApplyHoldPose restamps that row; same-id in-flight Addressable skips so Refresh cannot rebuild it. **`SetCombatActive(bool)`** `:1722` —
 drawn↔sheathed (back-socket resolve `:1961`, sheath rotation `:1994`); driven per-frame by
 HeroLocomotion's `engaged` flag (the "sword out in town" fix). **`SetArmorTier(int)`** `:2095` —
 WO-567 armor read WITHOUT mesh swap: MPB multiply-tint on the body renderers `:2120-2158`

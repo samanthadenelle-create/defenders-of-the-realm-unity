@@ -155,6 +155,26 @@ namespace DeNelle.Editor.Regression
                                  "row with zero rotation means the authored delta was wiped.");
             }
 
+            // Owner-locked 2026-08-30 (persist Play + back/front proof shots): the live
+            // knight_shield_starter Addressable seats as ShieldWithItemLogic on Socket_Shield.
+            if (!AttachmentOffsetRegistry.TryGetOffset("ShieldWithItemLogic", out var knightShield))
+            {
+                failures.Add("[registry-rows] 'ShieldWithItemLogic' row MISSING - the owner-locked " +
+                             "heater seat is gone; attach falls off the Offset Forge row.");
+            }
+            else
+            {
+                if (!knightShield.fullOverride)
+                    failures.Add("[registry-rows] 'ShieldWithItemLogic' is no longer fullOverride.");
+                ExpectVec(failures, knightShield.pos, new Vector3(-0.103f, 0.164f, -0.238f),
+                    "ShieldWithItemLogic pos");
+                ExpectVec(failures, knightShield.eulerRot, new Vector3(1.915f, -48.302f, -127.941f),
+                    "ShieldWithItemLogic rot");
+                if (Mathf.Abs(knightShield.scale - 0.71f) > 1e-3f)
+                    failures.Add("[registry-rows] 'ShieldWithItemLogic' scale=" + knightShield.scale +
+                                 " (locked 0.71).");
+            }
+
             // ⛔ THE '@sheathed' RULE IS INVERTED, AND DELIBERATELY (2026-08-20).
             //
             // This line used to read: `if (!TryGetOffset("shield_A@sheathed", out _)) failures.Add(
