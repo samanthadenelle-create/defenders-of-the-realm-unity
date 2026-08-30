@@ -161,6 +161,40 @@ duplicated in `tools/android/assert-google-play-aab-clean.ps1:18` and MUST chang
 Narrowing these two is a PRECISION fix, not a weakening: it lets the scan distinguish the Solana
 wallet from a Java stdlib reference. Do NOT add an ignore list and do NOT relax the scan.
 
+### 🔴 POLICY BLOCKER FOUND 2026-08-30 — a Play build SHOWS CRYPTO UI TO THE PLAYER
+
+Bigger than the artifact scan, and NOT fixed by any of the isolation work above. The AAB could be
+**rejected on policy** even once it is byte-clean.
+
+**`Assets/_Modules/Core/Platform/CurrencySkinResolver.cs:282-288` force-resolves the SKR skin on an
+Android Play build.** Four surfaces a Play reviewer would SEE, all runtime-built (so no scene edit
+hides them):
+1. inventory **"SKR" chip**
+2. Title / HeroSelect **"Connect Wallet"** corner button
+3. Settings **wallet row**
+4. boot **"YOUR WALLET"** login modal
+
+Verified by source call path. A scene/prefab scan came back EMPTY — no `.unity` or `.prefab`
+contains baked `SKR`, `$SKR`, `Connect Wallet` or `Powered with SKR`, and `ArenaPanel` /
+`SkrShowcasePanel` / `StakeRewardsPanel` are created purely in code. So every crypto string a Play
+player could see comes from the runtime paths above, and the fix must be in the resolver, not in
+assets.
+
+`ArenaPanel` is **unreachable in practice** (`FeatureFlags.Arena` defaults OFF at
+`FeatureFlags.cs:33`, the herald is suppressed at `ArenaHeraldSpawner.cs:91`, no `.yarn` emits
+`<<OpenArena>>`, no scene pre-places it) but is still **COMPILED INTO** the Play build —
+`DeNelle.Village`, `defineConstraints: []`. Dead code, not excluded code.
+
+**Still open, both need reading before a submission:**
+- Does `FeatureFlags.Get` have a REMOTE override that could flip `ff.skrpreview` on for real Play
+  users? If yes, a flag flip becomes a policy incident.
+- Does a **development** `GOOGLE_PLAY` build fail to compile? `DeNelle.DevTools.asmdef` references
+  the absent `DeNelle.Wallet` while its own `UNITY_EDITOR || DEVELOPMENT_BUILD` constraint is
+  satisfied. Release Play builds are fine.
+
+⛔ **Do not treat `PLAY_ARTIFACT_CLEAN_OK` as release-readiness.** That gate scans BYTES. This is
+PIXELS. They are independent, exactly as source-isolation and artifact-cleanliness turned out to be.
+
 ### ✅ SCOPED 2026-08-30 — DO NOT DO THE UNITASK SWAP. Do option (d): EMBED + CONSTRAIN.
 
 **The framing everywhere above is wrong in a way that changes the answer.** A fourth option was
