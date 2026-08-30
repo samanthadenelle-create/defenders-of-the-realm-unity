@@ -671,7 +671,10 @@ namespace DeNelle.Editor.Regression
         {
             var files = new Dictionary<string, string>
             {
-                { "ShortfallPackOffer.cs", Application.dataPath + "/_Modules/Wallet/ShortfallPackOffer.cs" },
+                // WO-1282 - moved to the rail-neutral DeNelle.Commerce assembly. Same file, same
+                // guardrails; only its assembly changed (DeNelle.Village had to stop referencing
+                // DeNelle.Wallet so a Google Play artifact can exclude the Solana rail).
+                { "ShortfallPackOffer.cs", Application.dataPath + "/_Modules/Commerce/ShortfallPackOffer.cs" },
                 { "BuildingUpgradePanelMvvm.cs", Application.dataPath +
                   "/_Modules/Village/Buildings/Progression/BuildingUpgradePanelMvvm.cs" },
                 { "BuildingUpgradeVM.cs", Application.dataPath +

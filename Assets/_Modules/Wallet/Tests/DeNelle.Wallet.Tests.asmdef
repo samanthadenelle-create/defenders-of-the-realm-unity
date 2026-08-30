@@ -4,6 +4,7 @@
     "references": [
         "DeNelle.Wallet",
         "DeNelle.Core",
+        "DeNelle.Commerce",
         "DeNelle.Data",
         "UniTask",
         "UnityEngine.TestRunner",

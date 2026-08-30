@@ -151,6 +151,7 @@ namespace DeNelle.Village.UI
         private const float ListTailPx = 28f;
 
         private ManageScreenVM _vm;
+        private int _browsePage;
         private GameObject _ui;
         private RectTransform _listContent;
         private RectTransform _railBand;            // non-null only while the rail is PINNED
@@ -196,6 +197,7 @@ namespace DeNelle.Village.UI
         {
             _panelHandle = PanelManager.Register("Manage", Close, () => IsOpen);
             PanelRouter.Register(PanelId.Manage, (Action)Open);
+            PanelRouter.Register(PanelId.Manage, (Action<string>)Open);
 
             // The re-pointed bar face raises the EXISTING gate verb, so this screen is the single
             // door onto the queues and HudKitController keeps calling ObsidianQueueGate.RequestToggle
@@ -207,6 +209,7 @@ namespace DeNelle.Village.UI
         {
             ObsidianQueueGate.ToggleRequested -= Toggle;
             PanelRouter.Unregister(PanelId.Manage, (Action)Open);
+            PanelRouter.Unregister(PanelId.Manage, (Action<string>)Open);
             if (_vm != null) _vm.Changed -= Render;
             var svc = BuildTimerService.Instance;
             if (svc != null) svc.QueueChanged -= OnQueueChanged;
@@ -245,6 +248,18 @@ namespace DeNelle.Village.UI
             if (!PanelManager.NotifyOpened(_panelHandle))
                 FlowTrace.Warn("Manage", "PanelManager refused the open (another exclusive panel holds the screen).");
             FlowTrace.Step("Manage", "Manage/Queues screen opened.");
+        }
+
+        /// <summary>Contextual doorway used by Build Collections to land directly on Defense.</summary>
+        public void Open(string requestedTab)
+        {
+            Open();
+            if (_vm == null) return;
+            if (string.Equals(requestedTab, "Defense", StringComparison.OrdinalIgnoreCase))
+            {
+                _vm.SelectTab(ManageTab.Defense);
+                FlowTrace.Step("Manage", "context open -> UPGRADABLE TOWERS (Defense tab).");
+            }
         }
 
         /// <summary>Tear the screen down.</summary>
@@ -550,25 +565,32 @@ namespace DeNelle.Village.UI
             for (int i = _tabsHost.childCount - 1; i >= 0; i--) Destroy(_tabsHost.GetChild(i).gameObject);
 
             var labels = ManageScreenVM.TabLabels;
-            int n = labels.Length;
+            int n = _vm != null ? _vm.VisibleTabs.Count : 0;
+            if (n == 0)
+            {
+                ElarionUiKit.Label(_tabsHost, "Place a structure to unlock Manage categories", 0f, 1f,
+                    ElarionUi.ParchmentDim, (int)ElarionUi.FontLabel, TextAlignmentOptions.Center, 0f, 1f);
+                return;
+            }
             const float gap = 0.012f;
             float w = (1f - gap * (n - 1)) / n;
 
             for (int i = 0; i < n; i++)
             {
-                int index = i;
-                bool selected = _vm != null && (int)_vm.Tab == i;
+                ManageTab tab = _vm.VisibleTabs[i];
+                int index = (int)tab;
+                bool selected = _vm != null && _vm.Tab == tab;
                 float x = i * (w + gap);
 
-                var btn = ElarionUiKit.BuildObsidianButton(_tabsHost, labels[i],
+                var btn = ElarionUiKit.BuildObsidianButton(_tabsHost, labels[index],
                     ElarionUiKit.ObsidianButtonStyle.Style1,
                     selected ? ElarionUiKit.ObsidianButtonColor.Yellow : ElarionUiKit.ObsidianButtonColor.Gray,
                     new Vector2(x, 0.02f), new Vector2(x + w, 0.98f),
-                    () => _vm?.SelectTab((ManageTab)index));
+                    () => { _browsePage = 0; _vm?.SelectTab((ManageTab)index); });
                 ElarionUiKit.ClampMinTouch(btn);
                 if (btn != null)
                 {
-                    btn.name = "Tab_" + labels[i] + (selected ? "_Selected" : "");
+                    btn.name = "Tab_" + labels[index] + (selected ? "_Selected" : "");
                     if (selected)
                     {
                         // A stable underline is the non-colour selection signal. It reads as a
@@ -736,21 +758,42 @@ namespace DeNelle.Village.UI
                 MountRail(MakeRowHost("RailRow", _railBandPx), forceRebuild: true);
 
             var summary = FindSummary(channel);
-            AddSectionHeader("IN QUEUE - " + summary);
-
-            if (_vm.QueueRows.Count == 0)
-                AddNoteRow("Nothing queued on this line.");
+            // The selected structure and its action lead the scroll content, keeping the primary
+            // task above the queue history on a phone viewport.
+            AddSectionHeader(_vm.Tab == ManageTab.Defense
+                ? "UPGRADABLE TOWERS - affordable first"
+                : "UPGRADES - what you can afford first");
+            if (_vm.BrowseRows.Count == 0)
+                AddNoteRow(_vm.Tab == ManageTab.Defense
+                    ? "No placed towers can be upgraded yet. Max-level towers need no action."
+                    : "Nothing to upgrade on this tab yet.");
             else
-                for (int i = 0; i < _vm.QueueRows.Count; i++) AddQueueRow(_vm.QueueRows[i]);
+            {
+                const int pageSize = 4;
+                int pageCount = Mathf.CeilToInt(_vm.BrowseRows.Count / (float)pageSize);
+                _browsePage = Mathf.Clamp(_browsePage, 0, pageCount - 1);
+                int first = _browsePage * pageSize;
+                int end = Mathf.Min(first + pageSize, _vm.BrowseRows.Count);
+                AddNoteRow("Showing " + (first + 1) + "-" + end + " of " + _vm.BrowseRows.Count +
+                           " - page " + (_browsePage + 1) + " of " + pageCount);
+                for (int i = first; i < end; i++) AddBrowseRow(_vm.BrowseRows[i]);
+                if (_browsePage > 0)
+                    AddActionNoteRow("Earlier placed structures", "Previous page", () => { _browsePage--; Render(); });
+                if (end < _vm.BrowseRows.Count)
+                    AddActionNoteRow((_vm.BrowseRows.Count - end) + " more placed structures", "Next page", () => { _browsePage++; Render(); });
+            }
+
+            if (_vm.Tab == ManageTab.Defense)
+                AddActionNoteRow("Need another tower?", "Build new defense", OpenDefenseBuilder);
+            else
+                AddActionNoteRow("Need something that is not placed here?", "Build new", Close);
+
+            AddSectionHeader("IN QUEUE - " + summary);
+            if (_vm.QueueRows.Count == 0) AddNoteRow("Nothing queued on this line.");
+            else for (int i = 0; i < _vm.QueueRows.Count; i++) AddQueueRow(_vm.QueueRows[i]);
 
             if (!string.IsNullOrEmpty(_vm.RepairOfferText))
                 AddActionNoteRow(_vm.RepairOfferText, "Repair", () => { _vm.RepairAll(); FlushNotice(); });
-
-            AddSectionHeader("UPGRADES - what you can afford first");
-            if (_vm.BrowseRows.Count == 0)
-                AddNoteRow("Nothing to upgrade on this tab yet.");
-            else
-                for (int i = 0; i < _vm.BrowseRows.Count; i++) AddBrowseRow(_vm.BrowseRows[i]);
 
             // WO-1058 — TAIL SPACER. The list is a scroller inside a RectMask2D whose floor sits
             // just above the shared Close, so at max scroll the last row used to end MID-GLYPH on
@@ -823,6 +866,13 @@ namespace DeNelle.Village.UI
             var t = ElarionUiKit.Label(row, ManageScreenVM.Ascii(text), 0f, 1f, ElarionUi.ParchmentDim,
                                        (int)ElarionUi.FontLabel, TextAlignmentOptions.Left, 0.02f, 0.99f);
             ElarionUiKit.FitSingleLine(t);
+        }
+
+        private void OpenDefenseBuilder()
+        {
+            Close();
+            var controller = BuildModeController.Instance ?? BuildModeController.EnsureExists();
+            controller?.EnterBuildMode(DeNelle.Core.Catalog.BuildType.Defense);
         }
 
         private void AddActionNoteRow(string text, string action, Action onTap)

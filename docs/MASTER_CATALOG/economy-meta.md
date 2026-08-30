@@ -16,6 +16,65 @@ Legend: **[LIVE]** wired & functional · **[STUB]** scaffolded/inert · **[DEAD]
 
 ---
 
+## DELTA 2026-08-30 — WO-1282 Lane A: the store SPLIT into `DeNelle.Commerce` (rail-neutral) + `DeNelle.Wallet` (the Solana rail)
+
+**Read this before any file:line cite below that says `Assets/_Modules/Wallet/PackCatalog.cs` or
+`.../ShortfallPackOffer.cs` — those two files MOVED.** New home:
+`Assets/_Modules/Commerce/` (assembly **`DeNelle.Commerce`**). Line numbers inside them shifted;
+everything else in this document still stands.
+
+**What was done and why.** `DeNelle.Village.asmdef` referenced `DeNelle.Wallet`, which meant a
+Google Play artifact could not exclude the Solana rail — `AndroidBuild.BuildGooglePlayAab()` refuses
+at `GooglePlayPackagingGate.AssertSourceIsolation()` while that reference exists. Village never
+needed the rail, only the contracts. So:
+
+| Moved to `DeNelle.Commerce` (namespace **kept** as `DeNelle.Wallet`) | Stayed in `DeNelle.Wallet` |
+|---|---|
+| `PackCatalog`, `PackDef`, `PackContents`, `PackPricing`, `PackEconomy`, `ConvenienceItemDef`, `BoostSpec`, `StoreBand`, `PackCatalogData` | `PackStore` (3546 lines, `new WalletService()`), `PackStoreVM`, `PurchaseGate`, `PurchaseQuoteService`, `MainnetCanaryCatalog`, `BattlePassService`, `BattleMonthlyCatalog`, `RewardGrantWriter`, everything `CurrencyKind`-shaped |
+| `ShortfallPackOffer`, `ShortfallOffer` | — |
+
+**Three seams were introduced** (new files, namespace `DeNelle.Commerce`), each registered from a
+Wallet-side `BeforeSceneLoad` bootstrap and each instrumented so an unregistered seam is visible in
+the trace rather than silent (§12):
+
+- `StoreFocusRequest` — the WO-1253 focus **latch**, lifted out of `PackStore.RequestFocusSku`.
+  `PackStore.RequestFocusSku` survives as a one-line forwarder, so Wallet-side callers are unchanged;
+  `ManageScreenVM.BuySlot` now calls `StoreFocusRequest.RequestFocusSku`.
+- `StorefrontRegistry` — a **lazy resolver** for the storefront's scene host, registered by
+  `PackStoreBootstrap`. Lazy, not a push-registry, because the store host is disabled in the scene
+  and therefore never runs `Awake`. `MarketplaceInteractor` calls `ResolveRoot()` where it used to
+  call `FindAnyObjectByType<DeNelle.Wallet.PackStore>(FindObjectsInactive.Include)`.
+- `ArenaOutcomeRelay` — `ArenaProgressStore` publishes `(win, streak, perfect)`;
+  `BattleMonthlyPanelsBootstrap` subscribes `BattlePassService.OnArenaResult`. **The one-door XP rule
+  is unchanged** — the relay carries an OUTCOME, never an amount, and
+  `BattleMonthlyRegression`'s `[xp-one-door]` case now asserts BOTH halves (publish + subscription).
+
+**`PackDef` lost four members to the rail.** `AmountFor(CurrencyKind)`, `AmountLabel(CurrencyKind)`,
+`UsdApprox` and the private `IsServerPinnedSku` are now extension methods in
+`Assets/_Modules/Wallet/SolanaPackPricing.cs`. Bodies verbatim; every ruling in their comments
+(WO-1158's "the client does no price arithmetic", the ZERO-is-honest SKR branch, the server-pinned
+canary exception, the colourblind "Price unavailable" wording) is unchanged. **The one call-shape
+change in the whole refactor: `pack.UsdApprox` is now `pack.UsdApprox()`.**
+
+**⚠ THE NAMESPACE DID NOT CHANGE, AND THAT IS DELIBERATE.** The moved types are still
+`DeNelle.Wallet.*`. `Assets/_Modules/Core/Promo/PromoCodeService.cs:334-335` resolves
+`"DeNelle.Wallet.PackContents"` and `"DeNelle.Wallet.PackStoreVM"` as **string literals** by
+reflection across every loaded assembly; renaming the namespace compiles clean and turns promo-code
+redemption into a silent runtime no-op. Namespaces and assemblies are orthogonal — the Play build
+excludes the **assembly**, which is `DeNelle.Commerce` vs `DeNelle.Wallet`.
+
+**Assembly graph after this change:** `DeNelle.Commerce` -> `DeNelle.Core` **only**, forever.
+`DeNelle.Wallet` -> `DeNelle.Commerce`. `DeNelle.Village` -> `DeNelle.Commerce`, and **no longer ->
+`DeNelle.Wallet`**. Editor/EditorRegression/DevTools/Web3/both test assemblies gained
+`DeNelle.Commerce` alongside their existing `DeNelle.Wallet`.
+
+**Still open (NOT this delta):** Lane B — `MobileWalletAdapter.androidlib` still has no
+per-artifact exclusion, so `AssertSourceIsolation` still fails on that fourth condition.
+`DeNelle.DevTools` still references `DeNelle.Wallet` under `UNITY_EDITOR || DEVELOPMENT_BUILD`,
+which breaks a Play artifact built as a DEVELOPMENT build.
+
+---
+
 ## DELTA 2026-08-21 — the Season Track + Monthly Ledger runtime, The Night Market, and PurchaseGate's move into `DeNelle.Wallet`
 
 Read from source 2026-08-21. Where this block and the 08-02 body disagree, this block wins.
@@ -250,7 +309,12 @@ ticket lands here.
 
 ---
 
-## 4. Pack store — `Assets/_Modules/Wallet/` (PackStore / PackStoreVM / PackStoreBootstrap / PackCatalog)
+## 4. Pack store — `Assets/_Modules/Wallet/` (PackStore / PackStoreVM / PackStoreBootstrap) + `Assets/_Modules/Commerce/` (PackCatalog / ShortfallPackOffer)
+
+> ⚠ **WO-1282 (2026-08-30): `PackCatalog.cs` and `ShortfallPackOffer.cs` are under
+> `Assets/_Modules/Commerce/` now, in assembly `DeNelle.Commerce`.** Their namespace is still
+> `DeNelle.Wallet`. See the DELTA at the top of this file. Every cite below that names
+> `_Modules/Wallet/PackCatalog.cs` should be read as `_Modules/Commerce/PackCatalog.cs`.
 
 ### packs.json — `Assets/Resources/Data/Canonical/packs.json` (+ byte-identical StreamingAssets copy)  [LIVE]
 - **version 2, 13 packs, tiers 1–13** (`packs.json:17`, skus at `:21,37,54,72,91,111,128,145,162,180,198,215,232`):

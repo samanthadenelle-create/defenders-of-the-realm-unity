@@ -62,6 +62,7 @@ namespace DeNelle.Village.UI
         // so the WO-437 battle-lock must never reject it (like the Battle HUD / Pause). Compact banners
         // (no scrim, non-blocking, auto-dismiss) deliberately stay OUT of the arbiter -> handle is null.
         private DeNelle.Core.UI.PanelHandle _panelHandle;
+        private DeNelle.Core.UI.WorldHold.Handle _worldHold;
 
         private struct Reveal
         {
@@ -186,6 +187,8 @@ namespace DeNelle.Village.UI
                     view.CloseFromArbiter, () => view != null);
                 PanelManager.NotifyOpened(view._panelHandle);
             }
+            if (vm.HoldWorld)
+                view._worldHold = DeNelle.Core.UI.WorldHold.Acquire("wave-results");
 
             // P23 (HUD_OBSIDIAN A4.6): the end-state is the DECISION NODE — while it is
             // up the posture is hostile(postbattle) and the HUD kit stands down.
@@ -1696,6 +1699,8 @@ namespace DeNelle.Village.UI
             // HUD-2: release the arbiter slot (no-op for compact banners - handle is null - and a
             // no-op if we were already swapped out).
             if (_panelHandle != null) PanelManager.NotifyClosed(_panelHandle);
+            _worldHold?.Dispose();
+            _worldHold = null;
             if (_open == this)
             {
                 // F8-15: close step-out for the death window — pairs with the ScreenOpened above so

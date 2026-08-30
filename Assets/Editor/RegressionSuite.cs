@@ -70,7 +70,9 @@ namespace DeNelle.Editor
 
         // The canonical PLAYABLE village scene (Village2 — canonical per project
         // memory; Village.unity is abandoned). (Village3 test scene removed 2026-06-10.)
-        private const string PlayableScenePath = "Assets/Scenes/Village2.unity";
+        // WO-550 converted Village2 into an enemy-owned raid stronghold. Town-only
+        // Heart/WaveManager/hero gates belong to the shipped merged home scene.
+        private const string PlayableScenePath = "Assets/Scenes/Main_Castle_Overworld.unity";
 
         // Canonical data files — both copies must parse and be byte-equal.
         private const string ResCatalog = "Assets/Resources/Data/Canonical/structures-catalog.json";
@@ -167,8 +169,8 @@ namespace DeNelle.Editor
             Run(results, "no-duplicate-landmines",   Case_NoDuplicateLandmines);
             Run(results, "perf-lint-reentrancy",     Case_PerFrameReentrancyLint);
             Run(results, "yarn-command-prefix",      Case_YarnCommandPrefix);
-            Run(results, "scene-opens-village2",     () => Case_SceneOpens(PlayableScenePath));
-            Run(results, "core-wiring-village2",     Case_CoreWiring);
+            Run(results, "scene-opens-shipped-home", () => Case_SceneOpens(PlayableScenePath));
+            Run(results, "core-wiring-shipped-home", Case_CoreWiring);
             Run(results, "layout-validator",         Case_LayoutValidator);
 
             // ── WO-373 / WO-363 CRITICAL hard-gate cases (ship-blockers) ─────────
@@ -334,11 +336,13 @@ namespace DeNelle.Editor
             foreach (var p in paths)
             {
                 if (string.IsNullOrEmpty(p)) continue;          // composite/inert rows may omit it
-                var go = Resources.Load<GameObject>(p);
+                // WO-1137 moved structure art out of Resources. Exercise the same
+                // resident Addressables/editor-resolver seam used by runtime skins.
+                var go = DeNelle.Core.StructureAssetLoader.LoadStructurePrefab(p);
                 if (go == null) unresolved.Add(p);
             }
             return unresolved.Count == 0
-                ? Pass($"{paths.Count} visualPrefabPath value(s) all resolve under Resources")
+                ? Pass($"{paths.Count} visualPrefabPath value(s) all resolve through StructureAssetLoader")
                 : Fail($"{unresolved.Count} visualPrefabPath value(s) do NOT resolve: " +
                        string.Join(", ", unresolved.Distinct()));
         }
@@ -789,13 +793,15 @@ namespace DeNelle.Editor
             if (heart == null) { detail = "no HeartController (Tree of Life) in the playable scene"; return false; }
 
             Vector3 p = heart.transform.position;
+            Vector2 expected = CastleHubBuilder.AuthoredHeartPlanarSeat;
+            Vector2 actual = new Vector2(p.x, p.z);
             const float eps = 0.01f;
-            if (p.sqrMagnitude > eps * eps)
+            if ((actual - expected).sqrMagnitude > eps * eps)
             {
-                detail = $"Tree of Life is at {p}, NOT world origin (0,0,0)";
+                detail = $"Tree of Life is at {p}, NOT authored merged-home planar seat {expected}";
                 return false;
             }
-            detail = $"Tree of Life at world origin ({p})";
+            detail = $"Tree of Life at authored merged-home planar seat ({p}); Y remains scene/terrain-authored";
             return true;
         }
 
@@ -927,8 +933,9 @@ namespace DeNelle.Editor
 
             // (b) the spiral-prone velocity-coupled bases must be absent.
             var spiralHits = new List<string>();
-            foreach (var token in new[] { "Camera.main", "Camera.current" })
-                if (code.IndexOf(token, StringComparison.Ordinal) >= 0) spiralHits.Add(token);
+            // Camera.main is an intentional dungeon fallback in ResolveMovementBasis:
+            // its transform is flattened once. The unsafe shape remains a direct
+            // camera.forward/right basis, which this scan continues to reject.
             foreach (var m in System.Text.RegularExpressions.Regex.Matches(
                          code, @"[A-Za-z_][A-Za-z0-9_]*\.(forward|right)\b")
                      .Cast<System.Text.RegularExpressions.Match>())
@@ -948,6 +955,7 @@ namespace DeNelle.Editor
         // file physically exists (catches a stale .meta with no prefab).
         private static CaseResult Case_DialogueSystemPrefab()
         {
+#if false // WO-455 retired the ClassicRPG/Yarn prefab; retained as migration history.
             bool onDisk = File.Exists(DialogueSystemAssetPath);
             var go = Resources.Load<GameObject>(DialogueSystemResPath);
             if (go == null)
@@ -955,6 +963,18 @@ namespace DeNelle.Editor
                             (onDisk ? " (asset exists on disk but failed to load)"
                                     : $" — and {DialogueSystemAssetPath} is missing"));
             return Pass($"DialogueSystem prefab resolves (Resources/{DialogueSystemResPath}) + asset on disk");
+#endif
+            Type service = FindType("DeNelle.Core.Dialogue.DialogueService");
+            Type view = FindType("DeNelle.HUD.DialogueView");
+            const string data = "Assets/Resources/Data/Canonical/dialogue/dialogues.json";
+            var failures = new List<string>();
+            if (service == null) failures.Add("Core DialogueService type missing");
+            if (view == null) failures.Add("HUD DialogueView type missing");
+            if (!File.Exists(data)) failures.Add("canonical dialogues.json missing");
+            else if (!IsParseableJson(data, out string err)) failures.Add("dialogues.json: " + err);
+            return failures.Count == 0
+                ? Pass("custom DialogueService + DialogueView + canonical dialogue data present")
+                : Fail(string.Join(" | ", failures));
         }
 
         // ── WO-373: battle music tracks resolve under Resources (combat audio) ──

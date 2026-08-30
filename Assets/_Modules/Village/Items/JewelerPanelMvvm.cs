@@ -86,6 +86,12 @@ namespace DeNelle.Village.Items
 
         public void Open()
         {
+            if (!DeNelle.Village.Crafting.JewelerProgression.IsUnlocked)
+            {
+                DeNelle.Core.Diagnostics.FlowTrace.Warn("Crafting",
+                    "Jeweler open refused: no dungeon-earned rough stone exists in persistent history.");
+                return;
+            }
             Close();
             BuildChrome();
 

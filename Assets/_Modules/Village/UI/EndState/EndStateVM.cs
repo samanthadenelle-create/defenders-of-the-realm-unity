@@ -73,6 +73,7 @@ namespace DeNelle.Village.UI
 
         /// <summary>&gt; 0 = fire Primary automatically after this many real seconds (softlock guard).</summary>
         public float AutoDismissSeconds;
+        public bool HoldWorld;
 
         // ── WO-969: the PENDING-TRANSITION HAND-BACK (owner F8 seq 2315) ──────────
         // A screen is presentation. A PENDING STATE TRANSITION (the arena's masked home
@@ -454,15 +455,18 @@ namespace DeNelle.Village.UI
             var vm = new EndStateVM
             {
                 Kind = EndStateKind.WaveResults,
-                Title = $"Wave {waveNumber} Cleared!",
-                Subtitle = "The realm holds. Ready for the next.",
+                Title = $"Wave {waveNumber} Cleared",
+                Subtitle = WaveCelebrationManager.Significance01(waveNumber) >= 1f
+                    ? "A decisive defense. Review what changed before the next assault."
+                    : "The realm holds. Review the result, then prepare the next defense.",
                 Emblem = RpgUiCatalog.Get(RpgUiCatalog.RoleIcons, RpgUiCatalog.IconCombat),
                 // F8-43: no CTA on a compact banner — it auto-dismisses in seconds, so a
                 // Continue button is a redundant control. Exit = auto-dismiss + tap-anywhere.
-                PrimaryLabel = null,
-                PrimaryRoute = "dismiss",
-                AutoDismissSeconds = 4f,
-                Compact = true,
+                PrimaryLabel = $"Prepare for Wave {waveNumber + 1}",
+                PrimaryRoute = "prepare-next-wave",
+                AutoDismissSeconds = WaveCelebrationManager.Significance01(waveNumber) >= 1f ? 8f : 5f,
+                Compact = false,
+                HoldWorld = true,
             };
 
             // Damage report (model-side aggregation; this factory is the MVVM adapter).
@@ -485,9 +489,23 @@ namespace DeNelle.Village.UI
             Guard.Try("EndState", "wave " + waveNumber + " reward rows",
                 () => { rewardRows = AppendWavePayoutRows(vm, waveNumber, damageAvailable); });
 
+            if (RewardedProgression.TryGetWaveUnlockFor(waveNumber, out string unlockedName))
+            {
+                vm.Spoils.Add(new SpoilRowVM
+                {
+                    Icon = RpgUiCatalog.Get(RpgUiCatalog.RoleIcons, RpgUiCatalog.IconInventory),
+                    Label = "Plans Recovered",
+                    Amount = unlockedName,
+                    Rarity = 3,
+                });
+                rewardRows++;
+            }
+
             // Damage rows fill whatever the reward rows left of the compact budget. When any
             // damage exists the reward side is capped at MaxRows-1, so this is always >= 1.
-            int damageBudget = Mathf.Max(0, CompactMaxSpoilRows - rewardRows);
+            int damageBudget = vm.Compact
+                ? Mathf.Max(0, CompactMaxSpoilRows - rewardRows)
+                : damageAvailable;
             int damageRows = Mathf.Min(damageAvailable, damageBudget);
             for (int i = 0; i < damageRows; i++)
             {

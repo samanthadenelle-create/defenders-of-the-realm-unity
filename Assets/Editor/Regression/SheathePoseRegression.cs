@@ -1830,6 +1830,76 @@ namespace DeNelle.Editor
                                  "screenshot would ever show it.");
                 else
                     log.AppendLine("  P1b centring is idempotent across re-asserts .......... ok");
+
+                // DEVICE RCA 2026-08-29: centring alone can still hide the whole plate because
+                // SheatheSocket_ArmOff is an arm BONE, not the skin surface.  Reproduce the live
+                // path's measured frame and prove the surface pass moves the centred plate by its
+                // half-thickness plus skin clearance.  An enabled renderer at the centred point is
+                // exactly the false-green state the installed Seeker build reported.
+                var frame = new WeaponOrientHelper.ShieldFrame
+                {
+                    Valid = true,
+                    ThicknessAxis = Vector3.forward,
+                    Axes = new MeasuredAxes { NarrowestLen = PlateThickness }
+                };
+                var frameField = typeof(EquipmentController).GetField("_currentOffHandShieldFrame",
+                    BindingFlags.Instance | BindingFlags.NonPublic);
+                var surfaceMi = typeof(EquipmentController).GetMethod("ApplyOffHandArmSurfaceSeat",
+                    BindingFlags.Instance | BindingFlags.NonPublic);
+                if (frameField == null || surfaceMi == null)
+                {
+                    failures.Add("P1c: arm surface-seat seam is missing. A shield can have an enabled " +
+                                 "renderer centred inside SheatheSocket_ArmOff and remain invisible.");
+                }
+                else
+                {
+                    frameField.SetValue(ctrl, frame);
+                    Vector3 centreBeforeSurface = rend.bounds.center;
+                    surfaceMi.Invoke(ctrl, new object[] { gripRoot, socket });
+                    float surfaceShift = Vector3.Distance(centreBeforeSurface, rend.bounds.center);
+                    float expectedMin = PlateThickness * gripRoot.lossyScale.z * 0.5f + 0.039f;
+                    if (surfaceShift < expectedMin)
+                        failures.Add("P1c: arm surface seat moved only " + surfaceShift.ToString("0.###") +
+                                     " m (expected at least " + expectedMin.ToString("0.###") +
+                                     " m = measured half-thickness + skin clearance). The plate can " +
+                                     "still remain buried through the hero's arm.");
+                    else
+                        log.AppendLine("  P1c centred shield inner face clears arm skin (" +
+                                       surfaceShift.ToString("0.##") + " m) .......... ok");
+                }
+
+                // P1d — the exact 346834 device failure: the renderer and transform survived,
+                // but its Addressables-owned sharedMesh became null by the time combat drew it.
+                // Prove the attach seam replaces that dependency with a runtime-owned clone.
+                var preserveMi = typeof(EquipmentController).GetMethod("PreserveOffHandRenderAssets",
+                    BindingFlags.Instance | BindingFlags.NonPublic);
+                if (preserveMi == null)
+                {
+                    failures.Add("P1d: Addressable render-asset preservation seam is missing; an " +
+                                 "enabled shield renderer can later survive with sharedMesh=null.");
+                }
+                else
+                {
+                    var sourceMesh = new Mesh { name = "AddressableOwnedShieldMesh" };
+                    sourceMesh.vertices = new[] { Vector3.zero, Vector3.right, Vector3.up };
+                    sourceMesh.triangles = new[] { 0, 1, 2 };
+                    var ownedProbe = new GameObject("AddressableShieldDependency");
+                    ownedProbe.transform.SetParent(gripRoot, false);
+                    var ownedFilter = ownedProbe.AddComponent<MeshFilter>();
+                    ownedProbe.AddComponent<MeshRenderer>();
+                    ownedFilter.sharedMesh = sourceMesh;
+                    int preserved = (int)preserveMi.Invoke(ctrl,
+                        new object[] { ownedProbe, "knight_shield_starter" });
+                    Mesh runtimeMesh = ownedFilter.sharedMesh;
+                    UnityEngine.Object.DestroyImmediate(sourceMesh);
+                    if (preserved < 1 || runtimeMesh == null || runtimeMesh.name.IndexOf("RuntimeOffHand",
+                            StringComparison.Ordinal) < 0 || runtimeMesh.vertexCount != 3)
+                        failures.Add("P1d: preserving an Addressable shield did not leave a runtime-owned " +
+                                     "mesh after its source dependency was destroyed. Combat can still " +
+                                     "turn a healthy attach into MeshRenderer+sharedMesh=null.");
+                    else
+                        log.AppendLine("  P1d shield mesh survives Addressables source eviction .......... ok");
+                }
             }
             catch (Exception e)
             {

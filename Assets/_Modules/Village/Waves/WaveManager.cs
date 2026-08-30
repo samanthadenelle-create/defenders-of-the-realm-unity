@@ -2916,6 +2916,8 @@ namespace DeNelle.Village
 
             AwardWaveResources(cleared);   // WO-330: build resources (Wood/Iron) — the core economy income
             AwardWaveCrystals(cleared);
+            // Persist progression grants before OnWaveCleared presentation listeners run.
+            RewardedProgression.AwardWaveClearUnlocks(cleared);
 
             OnWaveCleared.Invoke(cleared);
 

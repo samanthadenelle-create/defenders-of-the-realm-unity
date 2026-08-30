@@ -173,6 +173,41 @@ other, two `<see cref>` doc comments in `Tower.cs:61,91`, and
 Recommendation: **(a)**. Do not start Lane A until this is answered — the two options differ by days,
 not hours.
 
+---
+
+### Lane A — LANDED 2026-08-30 (edit-only; gate + commit held by the lead seat)
+
+New assembly **`DeNelle.Commerce`** at `Assets/_Modules/Commerce/` (references `DeNelle.Core` and
+nothing else, forever). `"DeNelle.Wallet"` is **REMOVED** from
+`Assets/_Modules/Village/DeNelle.Village.asmdef`, so gate condition 3 of `InspectSourceIsolation()`
+now passes. Conditions 1 + 2 (`!GOOGLE_PLAY` on Wallet + Web3) were already green in the live tree.
+**Condition 4 (the androidlib) is still Lane B**, so `AssertSourceIsolation()` still refuses — that
+is expected, not a regression.
+
+- **Moved (files + `.meta`, GUIDs preserved):** `PackCatalog.cs`, `ShortfallPackOffer.cs`.
+- **Namespace stayed `DeNelle.Wallet` deliberately** — `PromoCodeService.cs:334-335` resolves it as
+  a reflection STRING LITERAL, so it is a live runtime contract, not tidiness. That also means the
+  landmine this WO flagged **needed no edit**: the two strings are still correct.
+- **`PackDef` lost 4 rail members** to `Assets/_Modules/Wallet/SolanaPackPricing.cs` as extension
+  methods. One call-shape change in the whole refactor: `pack.UsdApprox` -> `pack.UsdApprox()`.
+- **Three instrumented seams** in Commerce: `StoreFocusRequest` (a latch, so it cannot fail
+  silently), `StorefrontRegistry` (lazy resolver — the store host is disabled in-scene and never
+  runs `Awake`, so a push-registry would always be empty), `ArenaOutcomeRelay` (outcome-shaped,
+  never an amount). Registered at `BeforeSceneLoad` by `PackStoreBootstrap` /
+  `BattleMonthlyPanelsBootstrap`. `PackCatalog.BuildGatedPackProvider` is a fourth, registered only
+  under `#if MAINNET_CANARY_TEST`.
+- **The CORRECTION block's warning about silent hooks was honoured, not waved through:** every seam
+  distinguishes "no handler because this build has no rail" (correct) from "no handler because the
+  bootstrap did not run" (defect) in its own FlowTrace line, and `BattleMonthlyRegression`'s
+  `[xp-one-door]` case now asserts BOTH the publish AND the subscription in source.
+- **The battle pass did NOT move**, exactly as the CORRECTION block ruled. `BattleMonthlyCatalog`
+  was not split and `RewardGrantWriter` was not touched.
+
+Full detail: `Assets/_Modules/Commerce/README.md` and the 2026-08-30 DELTA in
+`docs/MASTER_CATALOG/economy-meta.md`.
+
+---
+
 ### Lane B — assembly + plugin exclusion
 
 5. Add the `!GOOGLE_PLAY` define constraint to `DeNelle.Wallet.asmdef` and `DeNelle.Web3.asmdef`.

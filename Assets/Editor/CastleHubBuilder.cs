@@ -2707,6 +2707,8 @@ namespace DeNelle.Editor
         //  there is EXACTLY ONE HeartController in the scene.
         // =====================================================================
         private const string HeartAnchorName = "HeartOfElarion";
+        /// <summary>Single planar authority for the merged home's Heart seat (X/Z).</summary>
+        public static Vector2 AuthoredHeartPlanarSeat => new Vector2(0f, 12f);
 
         private static void WireCastleHeart(Transform parent)
         {
@@ -2724,7 +2726,8 @@ namespace DeNelle.Editor
             if (existing == null && parent != null) anchor.transform.SetParent(parent, false);
 
             // North-centre plaza, in front of the keep. CLEAN scale-1 anchor (no collider-scale trap).
-            anchor.transform.position = new Vector3(0f, CastleFootprintLiftY, 12f);   // WO-593: Heart rises with the island (was world 0, re-stamped on rebake)
+            anchor.transform.position = new Vector3(
+                AuthoredHeartPlanarSeat.x, CastleFootprintLiftY, AuthoredHeartPlanarSeat.y);
             anchor.transform.localScale = Vector3.one;
 
             // Tag "HeartTarget" so EnemyBrain.FindClosestTarget can find it. The tag may not be

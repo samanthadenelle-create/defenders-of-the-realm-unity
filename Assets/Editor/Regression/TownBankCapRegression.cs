@@ -432,7 +432,7 @@ namespace DeNelle.Editor.Regression
                 TownBankCapacity.Overflowed -= handler;
             }
 
-            // The ON-SCREEN half must exist and must route through the ONE established toast seam --
+            // The ON-SCREEN half must exist and must route through the owned harvest-result modal --
             // a FlowTrace line in a log file is not a player warning.
             string presenter = Path.Combine(Application.dataPath, "_Modules/Core/UI/BankOverflowToastPresenter.cs");
             if (!File.Exists(presenter))
@@ -442,8 +442,26 @@ namespace DeNelle.Editor.Regression
                 string src = File.ReadAllText(presenter);
                 if (src.IndexOf("TownBankCapacity.Overflowed", StringComparison.Ordinal) < 0)
                     failures.Add("[clamped-grant-warns] BankOverflowToastPresenter does not subscribe to TownBankCapacity.Overflowed");
-                if (src.IndexOf("ShowToast", StringComparison.Ordinal) < 0)
-                    failures.Add("[clamped-grant-warns] BankOverflowToastPresenter does not call ShowToast -- no player-facing warn");
+                if (src.IndexOf("HarvestOverflowModal.Present", StringComparison.Ordinal) < 0)
+                    failures.Add("[clamped-grant-warns] BankOverflowToastPresenter does not open the harvest-result modal -- no player-facing warn");
+                string modal = Path.Combine(Application.dataPath, "_Modules/Core/UI/HarvestOverflowModal.cs");
+                if (!File.Exists(modal))
+                    failures.Add("[clamped-grant-warns] HarvestOverflowModal.cs is MISSING");
+                else
+                {
+                    string modalSrc = File.ReadAllText(modal);
+                    if (modalSrc.IndexOf("BuildObsidianModal", StringComparison.Ordinal) < 0
+                        || modalSrc.IndexOf("WorldHold.Acquire", StringComparison.Ordinal) < 0
+                        || modalSrc.IndexOf("PanelManager.NotifyOpened", StringComparison.Ordinal) < 0)
+                        failures.Add("[clamped-grant-warns] harvest warning is not an Obsidian, WorldHold-owned, arbiter-owned modal");
+                    if (modalSrc.IndexOf("Collected: {s.Granted} of {s.Requested}", StringComparison.Ordinal) < 0
+                        || modalSrc.IndexOf("Uncollected: {s.Lost}", StringComparison.Ordinal) < 0
+                        || modalSrc.IndexOf("was not added to storage", StringComparison.Ordinal) < 0)
+                        failures.Add("[clamped-grant-warns] harvest modal does not state authoritative collected/uncollected truth");
+                    if (modalSrc.IndexOf("FitBlock(label, ElarionUi.FontFloorMobile", StringComparison.Ordinal) < 0
+                        || modalSrc.IndexOf("TextOverflowModes.Ellipsis", StringComparison.Ordinal) >= 0)
+                        failures.Add("[clamped-grant-warns] harvest modal lacks readable-floor fitting or uses ellipsis");
+                }
                 if (src.IndexOf("RuntimeInitializeOnLoadMethod", StringComparison.Ordinal) < 0)
                     failures.Add("[clamped-grant-warns] BankOverflowToastPresenter never self-attaches -- the warn would depend on someone remembering to wire it");
             }

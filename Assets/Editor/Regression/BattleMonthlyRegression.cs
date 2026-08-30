@@ -890,16 +890,51 @@ namespace DeNelle.Editor.Regression
                 failures.Add("[xp-one-door] ArenaProgressStore.cs not found - the XP SOURCE cannot be verified.");
             else
             {
+                // WO-1282 - THE NOTIFY IS NOW TWO HALVES, AND BOTH ARE ASSERTED.
+                // DeNelle.Village stopped referencing DeNelle.Wallet (a Google Play artifact
+                // excludes the Solana rail whole), so ArenaProgressStore no longer NAMES
+                // BattlePassService. It publishes to DeNelle.Commerce.ArenaOutcomeRelay, and the
+                // Wallet side subscribes at boot. Checking only the publish would let the
+                // subscription rot silently - which is the whole failure mode this case exists for -
+                // so the SUBSCRIPTION is asserted too, in the same case.
                 string asrc = File.ReadAllText(arena);
-                if (asrc.IndexOf("BattlePassService.OnArenaResult(", StringComparison.Ordinal) < 0)
-                    failures.Add("[xp-one-door] ArenaProgressStore no longer notifies BattlePassService. That store " +
+                if (asrc.IndexOf("ArenaOutcomeRelay.Publish(", StringComparison.Ordinal) < 0)
+                    failures.Add("[xp-one-door] ArenaProgressStore no longer publishes the arena outcome. That store " +
                                  "is the ONE wired W/L recorder (RecordWin is called from exactly one site, " +
-                                 "ArenaMode). Without the notify, the pass has no XP source at all and the track " +
+                                 "ArenaMode). Without the publish, the pass has no XP source at all and the track " +
                                  "silently never advances - a failure with no error on screen.");
+                else if (!SubscribesToArenaRelay())
+                    failures.Add("[xp-one-door] ArenaProgressStore publishes to ArenaOutcomeRelay but NOTHING under " +
+                                 "_Modules/Wallet registers BattlePassService.OnArenaResult as its handler. The " +
+                                 "publish then goes nowhere and the season track silently never advances. Re-wire " +
+                                 "ArenaOutcomeRelay.RegisterHandler(BattlePassService.OnArenaResult) at boot " +
+                                 "(BattleMonthlyPanelsBootstrap).");
                 else
-                    log.AppendLine("  [xp-one-door] XP enters only via OnArenaResult, wired from ArenaProgressStore " +
-                                   "(the live W/L ledger); no public AddXp exists");
+                    log.AppendLine("  [xp-one-door] XP enters only via OnArenaResult, published from " +
+                                   "ArenaProgressStore (the live W/L ledger) through ArenaOutcomeRelay and " +
+                                   "subscribed at boot; no public AddXp exists");
             }
+        }
+
+        /// <summary>
+        /// WO-1282 - true when SOMETHING under <c>_Modules/Wallet</c> subscribes
+        /// <c>BattlePassService.OnArenaResult</c> to <c>ArenaOutcomeRelay</c>. Asserted by scanning
+        /// the folder rather than one named file because WHICH bootstrap owns the wiring is an
+        /// implementation detail; that the wiring EXISTS is the invariant.
+        /// </summary>
+        private static bool SubscribesToArenaRelay()
+        {
+            string root = Application.dataPath + "/_Modules/Wallet";
+            if (!Directory.Exists(root)) return false;
+            foreach (var file in Directory.GetFiles(root, "*.cs", SearchOption.AllDirectories))
+            {
+                string src;
+                try { src = File.ReadAllText(file); } catch { continue; }
+                if (src.IndexOf("ArenaOutcomeRelay.RegisterHandler(BattlePassService.OnArenaResult)",
+                                StringComparison.Ordinal) >= 0)
+                    return true;
+            }
+            return false;
         }
 
         // =====================================================================

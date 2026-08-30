@@ -52,9 +52,13 @@ namespace DeNelle.Editor
             if (!heroHealth.Contains("anim.updateMode = AnimatorUpdateMode.UnscaledTime") ||
                 !heroHealth.Contains("_deathAnimator.updateMode = _deathAnimatorPriorUpdateMode"))
                 failures.Add("hero death animation is not scoped to unscaled time and restored on revive; lethal hit-stop can reduce a real death clip to a visible shake");
+            if (!heroHealth.Contains("ForceKnightDeathState(anim, dir)") ||
+                !heroHealth.Contains("anim.CrossFadeInFixedTime(hash, 0.06f, 0, 0f)") ||
+                !heroHealth.Contains("anim.HasState(0, hash)"))
+                failures.Add("Knight death only sets animator parameters and assumes a transition occurred; the Seeker failure was Dead=true followed by removal without observed death-state entry");
 
             reason = failures.Count == 0
-                ? "KNIGHT_DIRECTIONAL_DEATH_OK -- four directional transitions precede the generic fallback, own full death clips, and hero death keeps animating through lethal hit-stop"
+                ? "KNIGHT_DIRECTIONAL_DEATH_OK -- four full directional clips exist, Knight explicitly enters the selected death state, and death advances through lethal hit-stop"
                 : "KNIGHT_DIRECTIONAL_DEATH_FAIL: " + string.Join("; ", failures);
             if (failures.Count == 0) Debug.Log(reason); else Debug.LogError(reason);
             return failures.Count == 0;

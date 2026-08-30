@@ -59,6 +59,7 @@ using DeNelle.Core.Platform;      // CurrencySkinResolver.WalletConnectionChange
 using DeNelle.Core.Payments;
 using DeNelle.Core.Promo;
 using DeNelle.Core.Web3;
+using DeNelle.Commerce;    // WO-1282 - StoreFocusRequest, the rail-neutral focus latch
 // WO-1188 - the confirmation screen reports what ARRIVED, so it reads the ONE authoritative
 // wallet total (TownBankCapacity.CurrentOf) before and after the grant and prints the DELTA.
 // Aliased rather than a bare `using DeNelle.Core.Economy;` so this file cannot pick up a second
@@ -90,6 +91,8 @@ namespace DeNelle.Wallet
         // Realm Store obeys the one-panel-at-a-time rule AND so PanelRouter.Open's
         // post-open VerifyOpenedVisible sees a panel actually recorded open.
         private PanelHandle _panelHandle;
+        private NightMarketSharedCardSession _sharedCardSession;
+        private readonly List<GenericCardModel> _sharedOfferCards = new List<GenericCardModel>();
 
         // =====================================================================
         //  UI-001 §R2 — THE LANDSCAPE COMPOSITION, IN AUTHORED REFERENCE PIXELS.
@@ -189,8 +192,16 @@ namespace DeNelle.Wallet
         /// carries a card height of its own, because two places holding one measurement is how the
         /// row and the card came to disagree in the first place.
         /// </summary>
-        private static StorePackCardVariant VariantFor(StoreBand band)
-            => band == StoreBand.Gap ? StorePackCardVariant.Compact : StorePackCardVariant.Standard;
+        private StorePackCardVariant VariantFor(StoreBand band)
+        {
+            if (_utilityContent != null)
+                return band == StoreBand.Basket
+                    ? StorePackCardVariant.LandscapeStandard
+                    : StorePackCardVariant.Compact;
+            return band == StoreBand.Gap ? StorePackCardVariant.Compact : StorePackCardVariant.Standard;
+        }
+
+        private int ShelfCardsPerRow => _utilityContent != null ? 3 : CardsPerRow;
 
         /// <summary>Free-band doors are drawn on the dense rung, so the free row can never out-size
         /// the priced shelf above it.</summary>
@@ -219,7 +230,8 @@ namespace DeNelle.Wallet
         private RectTransform _ctaHost;                 // cleared per focus; the CTA lives here
         private Transform _shelfContent;                // band strips + card rows
         private int _persistentShelfChildren;           // the FREE band, built once, never re-rendered
-        private Transform _utilityContent;              // landscape right rail: actions + close-the-gap offers
+        private Transform _utilityContent;              // landscape upper-right rail: persistent actions
+        private Transform _gapUtilityContent;           // landscape lower-right rail: gap offers stay visible
         private int _persistentUtilityChildren;         // action rows survive catalogue renders
         private Transform _spotlightHost;               // rebuilt whole on each focus change
         private TextMeshProUGUI _statusBanner;          // purchase status surface
@@ -257,10 +269,14 @@ namespace DeNelle.Wallet
         private string _focusSku;
         private string _pendingShortfallLabel;
         private int _pendingShortfallMissing;
-        /// <summary>WO-1253 — Manage "Buy builder" sets this before opening the store so the
-        /// spotlight lands on the permanent-builder SKU even when the host is spawned in the
-        /// same call (OnEnable -> Render runs before an instance method could).</summary>
-        private static string _pendingFocusSku;
+        // WO-1253 — Manage "Buy builder" sets a pending SKU before opening the store so the
+        // spotlight lands on the permanent-builder SKU even when the host is spawned in the same
+        // call (OnEnable -> Render runs before an instance method could).
+        //
+        // WO-1282 — THE LATCH ITSELF MOVED to DeNelle.Commerce.StoreFocusRequest so DeNelle.Village
+        // can set it without referencing DeNelle.Wallet. It is the SAME latch with the SAME
+        // write-then-consume-once behaviour; only its home changed. There is deliberately NO local
+        // copy of it here — two latches over one decision is the duplicated state that goes stale.
 
         // Selection marks, so a focus change repaints two cards instead of the whole shelf.
         // ⛔ ONE HANDLE PER CARD, HANDED BACK BY THE ONE TEMPLATE. The two parallel dictionaries
@@ -313,6 +329,13 @@ namespace DeNelle.Wallet
             EnsureBuilt();
             if (_modal != null && _modal.canvas != null)
                 _modal.canvas.SetActive(true);
+            if (_sharedCardSession == null)
+            {
+                _sharedCardSession = GetComponent<NightMarketSharedCardSession>();
+                if (_sharedCardSession == null)
+                    _sharedCardSession = gameObject.AddComponent<NightMarketSharedCardSession>();
+            }
+            _sharedCardSession.OpenBrowser();
 
             // ⛔ ADOPT THE LIVE WALLET (2026-08-24, the go-live P0). SetWalletService below is a
             // public injector that NOTHING in the project ever called, so `_wallet` was permanently
@@ -349,6 +372,7 @@ namespace DeNelle.Wallet
 
         private void OnDisable()
         {
+            _sharedCardSession?.Close();
             CurrencySkinResolver.WalletConnectionChanged -= OnWalletConnectionChanged;
             if (_redeem != null) _redeem.Close();
             if (_modal != null && _modal.canvas != null)
@@ -497,6 +521,7 @@ namespace DeNelle.Wallet
 
         private void OnDestroy()
         {
+            _sharedCardSession?.Close();
             if (_modal != null && _modal.canvas != null)
                 Destroy(_modal.canvas);
         }
@@ -570,10 +595,7 @@ namespace DeNelle.Wallet
         /// consumes it on the next Render.
         /// </summary>
         public static void RequestFocusSku(string sku)
-        {
-            _pendingFocusSku = sku;
-            FlowTrace.Step("Store", "RequestFocusSku '" + (sku ?? "<null>") + "'.");
-        }
+            => StoreFocusRequest.RequestFocusSku(sku);
 
         // =====================================================================
         //  UI construction (kit modal, lazy on first open)
@@ -597,18 +619,15 @@ namespace DeNelle.Wallet
             Destroy(_modal.canvas);
             _modal = null;
             _shelfContent = null;
+            _utilityContent = null;
+            _gapUtilityContent = null;
             _statusBanner = null;
             _balanceLabel = null;
             _legalFooter = null;
             _aurora = null;
             _cardHandles.Clear();
+            _sharedOfferCards.Clear();
 
-            if (_utilityContent != null)
-            {
-                for (int i = _utilityContent.childCount - 1; i >= _persistentUtilityChildren; i--)
-                    Destroy(_utilityContent.GetChild(i).gameObject);
-                BuildLandscapeGapOffers();
-            }
             _persistentShelfChildren = 0;
         }
 
@@ -739,10 +758,14 @@ namespace DeNelle.Wallet
 
             if (landscapeRail)
             {
-                var utilityHost = Region(_commerceHost, "LandscapeUtility",
-                    new Vector2(0f, utilityFloor), Vector2.one, Vector2.zero, Vector2.zero);
-                _utilityContent = BuildScrollColumn(utilityHost);
+                var actionsHost = Region(_commerceHost, "LandscapeActions",
+                    new Vector2(0f, 0.54f), Vector2.one, Vector2.zero, Vector2.zero);
+                var gapHost = Region(_commerceHost, "LandscapeGap",
+                    new Vector2(0f, utilityFloor), new Vector2(1f, 0.53f), Vector2.zero, Vector2.zero);
+                _utilityContent = BuildScrollColumn(actionsHost);
+                _gapUtilityContent = BuildScrollColumn(gapHost);
                 BuildLandscapeActions(PromoStrings.Get(PromoStrings.KeyEntry));
+                BuildLandscapeGapOffers();
                 _persistentUtilityChildren = _utilityContent != null ? _utilityContent.childCount : 0;
             }
 
@@ -790,12 +813,16 @@ namespace DeNelle.Wallet
         {
             if (host == null) return;
 
+            AddArt(host, "covenant-plaque", new Vector2(0f, 0f), new Vector2(0.19f, 1f));
+            AddArt(host, "night-market-wordmark", new Vector2(0.25f, -0.18f), new Vector2(0.68f, 1.20f));
+            AddArt(host, "wallet-frame", new Vector2(0.69f, 0.02f), new Vector2(0.84f, 0.98f));
+            AddArt(host, "network-frame", new Vector2(0.85f, 0.02f), new Vector2(1f, 0.98f));
+
             // The covenant, first in the reading path (§7's three-second read: 0-1s is wordmark +
             // YOUR balance + the covenant). It is the differentiator against every shop this screen
             // was benchmarked on, so it is not footer legalese here.
-            MakeText(host, StoreStrings.Get(StoreStrings.KeyCovenant), 30, ElarionUi.Gold,
-                FontStyles.Italic, TextAlignmentOptions.Left,
-                new Vector2(0f, 0f), new Vector2(0.33f, 1f));
+            // The owner's plaque carries this fixed covenant as authored art. It is intentionally
+            // not printed a second time over the plaque.
 
             // ── The wallet mirror ────────────────────────────────────────────
             // ⛔ THE GAME NEVER HOLDS SKR AND MUST NEVER READ AS IF IT DOES. SKR is Solana Mobile's
@@ -806,7 +833,7 @@ namespace DeNelle.Wallet
             // through the existing SolanaWalletProvider.GetBalance path. Never written, never
             // granted, never deducted in-game. The copy says "your wallet" for exactly that reason.
             _balanceLabel = MakeText(host, string.Empty, 30, ElarionUi.Parchment,
-                FontStyles.Normal, TextAlignmentOptions.Right, new Vector2(0.67f, 0f), new Vector2(1f, 1f));
+                FontStyles.Normal, TextAlignmentOptions.Center, new Vector2(0.70f, 0.08f), new Vector2(1f, 0.92f));
         }
 
         /// <summary>
@@ -827,6 +854,9 @@ namespace DeNelle.Wallet
             {
                 var label = content.GetChild(i).GetComponent<TextMeshProUGUI>();
                 if (label == null) continue;
+                // BuildHeader owns the illustrated wordmark in the live Night Market. Keep the
+                // modal's canonical title object for accessibility/lifecycle, but do not double-draw it.
+                label.color = new Color(label.color.r, label.color.g, label.color.b, 0f);
                 var rt = label.rectTransform;
                 rt.anchorMin = new Vector2(0.34f, bandTop);
                 rt.anchorMax = new Vector2(0.66f, 1f);
@@ -969,6 +999,7 @@ namespace DeNelle.Wallet
             for (int i = _shelfContent.childCount - 1; i >= _persistentShelfChildren; i--)
                 Destroy(_shelfContent.GetChild(i).gameObject);
             _cardHandles.Clear();
+            _sharedOfferCards.Clear();
 
             StoreLegalFooter.RefreshDisclaimer(_legalFooter);
 
@@ -999,7 +1030,8 @@ namespace DeNelle.Wallet
                 // measurement is how a 100-unit row came to carry a 168-unit card.
                 var variant = VariantFor(band);
 
-                for (int i = 0; i < rows.Count; i += CardsPerRow)
+                int cardsPerRow = ShelfCardsPerRow;
+                for (int i = 0; i < rows.Count; i += cardsPerRow)
                 {
                     // ⛔ THE ROW IS SIZED FOR THE TALLEST CARD IT WILL HOLD. A card that carries the
                     // not-sellable state line is ReasonExtraPx taller than a buyable one, and the
@@ -1007,12 +1039,12 @@ namespace DeNelle.Wallet
                     // before the cards are resolved would squeeze that block back out again, which
                     // is the two-places-hold-one-measurement defect BuildCardRow's header records.
                     bool rowHasReason = false;
-                    for (int c = 0; c < CardsPerRow && i + c < rows.Count; c++)
+                    for (int c = 0; c < cardsPerRow && i + c < rows.Count; c++)
                         if (!string.IsNullOrEmpty(CardNotSellableReason(rows[i + c]))) rowHasReason = true;
 
                     float rowHeight = StorePackCard.CardHeight(variant, rowHasReason);
                     var strip = BuildCardRow(rowHeight);
-                    for (int c = 0; c < CardsPerRow; c++)
+                    for (int c = 0; c < cardsPerRow; c++)
                     {
                         if (i + c < rows.Count)
                         {
@@ -1086,7 +1118,7 @@ namespace DeNelle.Wallet
                 rt.offsetMin = Vector2.zero; rt.offsetMax = Vector2.zero;
             }
 
-            MakeText(host, BandEyebrow(band), 34, ElarionUi.Parchment, FontStyles.Bold,
+            MakeText(host, BandEyebrowForLayout(band), 34, ElarionUi.Parchment, FontStyles.Bold,
                 TextAlignmentOptions.Left, new Vector2(0.03f, 0.06f), new Vector2(0.52f, 0.94f));
             MakeText(host, BandSubLabel(band), 30, ElarionUi.ParchmentDim, FontStyles.Italic,
                 TextAlignmentOptions.Right, new Vector2(0.54f, 0.06f), new Vector2(0.99f, 0.94f));
@@ -1156,6 +1188,16 @@ namespace DeNelle.Wallet
             BuildUtilityTab(tabs, "MONTHLY LEDGER", () => PanelRouter.Open(PanelId.MonthlyLedger), false);
         }
 
+        private string BandEyebrowForLayout(StoreBand band)
+        {
+            if (_utilityContent != null)
+            {
+                if (band == StoreBand.Basket) return "PACKS";
+                if (band == StoreBand.Patronage) return "MOVING";
+            }
+            return BandEyebrow(band);
+        }
+
         /// <summary>
         /// The landscape reference's right rail. These are navigation doors, not merchandise, so
         /// they stay visible even when purchasing is disabled or the catalogue fails to load.
@@ -1171,17 +1213,17 @@ namespace DeNelle.Wallet
 
         private void BuildLandscapeGapOffers()
         {
-            if (_utilityContent == null) return;
+            if (_gapUtilityContent == null) return;
             var rows = PacksInBand(StoreBand.Gap);
             if (rows.Count == 0) return;
 
-            BuildUtilityHeading(_utilityContent, "CLOSE THE GAP", NightMarketPalette.For(StoreBand.Gap));
+            BuildUtilityHeading(_gapUtilityContent, "CLOSE THE GAP", NightMarketPalette.For(StoreBand.Gap));
             foreach (var pack in rows)
             {
                 if (pack == null) continue;
                 string label = pack.Name + "   " + StorePriceMajor(pack);
                 var captured = pack;
-                BuildUtilityRow(_utilityContent, label,
+                BuildUtilityRow(_gapUtilityContent, label,
                     () => FocusPack(captured.Sku, BuildLedgerScale(), animate: true), false);
             }
         }
@@ -1362,9 +1404,16 @@ namespace DeNelle.Wallet
                 Band         = band,
                 OrbTint      = pack.OrbTint,
                 GlyphConcepts = GlyphConceptsFor(pack),
+                ArtResource  = NightMarketArt.ForSku(sku),
                 Selected     = !string.IsNullOrEmpty(_focusSku) &&
                                string.Equals(sku, _focusSku, StringComparison.Ordinal),
             };
+
+            // WO-1274: adapt the already-resolved strings into the shared neutral card contract.
+            // This is deliberately downstream of every commerce resolver above: no second price,
+            // entitlement, contents, or channel opinion is introduced here.
+            _sharedOfferCards.Add(NightMarketCardAdapter.Adapt(model,
+                () => FocusPack(sku, null, animate: true)));
 
             // Tapping the card moves the spotlight. It NEVER buys.
             var handle = StorePackCard.Build(strip, model, variant,
@@ -1496,10 +1545,9 @@ namespace DeNelle.Wallet
         /// </summary>
         private string ResolveFocusSku()
         {
-            if (!string.IsNullOrEmpty(_pendingFocusSku))
+            string requested = StoreFocusRequest.Consume();
+            if (!string.IsNullOrEmpty(requested))
             {
-                string requested = _pendingFocusSku;
-                _pendingFocusSku = null;
                 if (PackCatalog.Find(requested) != null)
                 {
                     FlowTrace.Step("Store", "spotlight opens on requested SKU '" + requested + "'.");
@@ -1542,6 +1590,8 @@ namespace DeNelle.Wallet
         private void FocusPack(string sku, Dictionary<string, int> scale, bool animate)
         {
             if (_spotlightHost == null) return;
+
+            _sharedCardSession?.ShowOffer(sku);
 
             _focusSku = sku;
             var pack = string.IsNullOrEmpty(sku) ? null : PackCatalog.Find(sku);
@@ -1608,7 +1658,11 @@ namespace DeNelle.Wallet
             }
 
             var orbTint = NightMarketPalette.ParseTint(pack.OrbTint, light);
-            Orb(_spotlightHost, orbTint, new Vector2(0.08f, 0.79f), new Vector2(0.30f, 0.95f));
+            string spotlightArt = string.Equals(pack.Sku, "starters-hand", StringComparison.OrdinalIgnoreCase)
+                ? "featured-starters-hand"
+                : NightMarketArt.ForSku(pack.Sku);
+            if (!AddArt(_spotlightHost, spotlightArt, new Vector2(0.05f, 0.71f), new Vector2(0.95f, 0.98f)))
+                Orb(_spotlightHost, orbTint, new Vector2(0.08f, 0.79f), new Vector2(0.30f, 0.95f));
 
             if (!string.IsNullOrEmpty(pack.StoreBadge))
                 MakeText(_spotlightHost, pack.StoreBadge, 30, ElarionUi.Gold, FontStyles.Bold,
@@ -1619,18 +1673,18 @@ namespace DeNelle.Wallet
             // never a panel-width problem, they were a font-floor problem, and widening the panel
             // would have left them exactly as unreadable.
             FitInto(MakeText(_spotlightHost, pack.Name, 52, ElarionUi.Parchment, FontStyles.Bold,
-                TextAlignmentOptions.BottomLeft, new Vector2(0.06f, 0.695f), new Vector2(0.94f, 0.80f)), 52);
+                TextAlignmentOptions.BottomLeft, new Vector2(0.06f, 0.610f), new Vector2(0.94f, 0.705f)), 52);
             FitInto(MakeText(_spotlightHost, pack.Tagline, 32, ElarionUi.Parchment, FontStyles.Italic,
-                TextAlignmentOptions.TopLeft, new Vector2(0.06f, 0.575f), new Vector2(0.94f, 0.690f)), 32);
+                TextAlignmentOptions.TopLeft, new Vector2(0.06f, 0.505f), new Vector2(0.94f, 0.605f)), 32);
 
             // ── The bar ledger ───────────────────────────────────────────────
             MakeText(_spotlightHost, StoreStrings.Get(StoreStrings.KeyLedgerHeading), 30,
                 ElarionUi.ParchmentDim, FontStyles.Bold, TextAlignmentOptions.BottomLeft,
-                new Vector2(0.06f, 0.520f), new Vector2(0.94f, 0.570f));
+                new Vector2(0.06f, 0.455f), new Vector2(0.94f, 0.495f));
             // 0.058 of a 746-unit column is ~43 px, which holds a 30-unit row without the next row
             // climbing onto it. The CTA moved to the commerce column, so this ladder now owns the
             // whole lower half of the spotlight instead of sharing it with a button.
-            float ledgerTop = 0.510f, rowH = 0.058f;
+            float ledgerTop = 0.445f, rowH = 0.058f;
             int drawn = 0;
             foreach (string key in PackCatalog.LedgerEconomyKeys)
             {
@@ -2027,7 +2081,7 @@ namespace DeNelle.Wallet
             var provider = PaymentProviders.Current;
             return provider != null && provider.Channel == PaymentChannel.GooglePlay
                 ? string.Empty
-                : pack != null ? pack.UsdApprox : string.Empty;
+                : pack != null ? pack.UsdApprox() : string.Empty;
         }
 
         // =====================================================================
@@ -2324,6 +2378,8 @@ namespace DeNelle.Wallet
                 FlowTrace.Fail("Store", "Purchase: pack is null — aborted.");
                 return PaymentResult.Failure(string.Empty, currency, "Pack is null.");
             }
+
+            using var sharedConfirmation = _sharedCardSession?.EnterConfirmation();
 
             if (PaymentProviders.Current != null &&
                 PaymentProviders.Current.Channel == PaymentChannel.GooglePlay)
@@ -3399,6 +3455,23 @@ namespace DeNelle.Wallet
             if (sprite != null) { img.sprite = sprite; img.type = Image.Type.Sliced; }
             img.color = new Color(tint.r, tint.g, tint.b, 0.85f);
             img.raycastTarget = false;
+        }
+
+        private static bool AddArt(Transform parent, string assetName, Vector2 min, Vector2 max)
+        {
+            if (parent == null || string.IsNullOrWhiteSpace(assetName)) return false;
+            var sprite = NightMarketArt.Load(assetName);
+            if (sprite == null) return false;
+            var go = new GameObject("art-" + assetName, typeof(RectTransform), typeof(Image));
+            go.transform.SetParent(parent, false);
+            var rt = (RectTransform)go.transform;
+            rt.anchorMin = min; rt.anchorMax = max;
+            rt.offsetMin = Vector2.zero; rt.offsetMax = Vector2.zero;
+            var image = go.GetComponent<Image>();
+            image.sprite = sprite;
+            image.preserveAspect = true;
+            image.raycastTarget = false;
+            return true;
         }
 
         private static Transform BuildScrollColumn(Transform host)

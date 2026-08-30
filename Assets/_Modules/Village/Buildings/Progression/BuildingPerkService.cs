@@ -323,16 +323,6 @@ namespace DeNelle.Village.Buildings.Progression
                 }
 
                 s.OwnedBuildingPerks.Add(key);
-                // The Wellspring research is the authored unlock for the Healing Caravan.
-                // The palette gate reads ProgressionUnlocks, not OwnedBuildingPerks, so merely
-                // recording the perk left the caravan hidden forever. Bridge the completed
-                // research into that existing persisted unlock authority.
-                if (string.Equals(perkId, "arcane-wellspring", System.StringComparison.OrdinalIgnoreCase))
-                {
-                    bool newlyUnlocked = DeNelle.Village.ProgressionUnlocks.Unlock("healing_caravan");
-                    FlowTrace.Step(Sys,
-                        $"Wellspring completion -> Healing Caravan palette unlock (new={newlyUnlocked}).");
-                }
                 GameStateService.Instance.Save();
                 ModifierService.Recompute();
                 FlowTrace.Step(Sys, $"research COMPLETE -> perk '{key}' granted, state saved, modifiers recomputed.");

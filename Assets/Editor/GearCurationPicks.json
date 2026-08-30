@@ -326,6 +326,11 @@
             "iconPath": ""
         },
         {
+            "id": "knight_shield_starter",
+            "included": true,
+            "iconPath": ""
+        },
+        {
             "id": "tripo_bow_a",
             "included": false,
             "iconPath": ""

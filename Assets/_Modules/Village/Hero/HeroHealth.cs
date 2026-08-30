@@ -1055,31 +1055,68 @@ namespace DeNelle.Village
             if (_actor == null) return;
             var dir = CombatDeathDirection.Resolve(
                 transform.position, transform.forward, _lastDamageSourceWorld);
+            var anim = _actor.Animator;
+            bool hasDead = AnimatorHasParam(anim, "Dead");
+
+            // Death has to advance while hit-stop / arena presentation owns timeScale.
+            // Establish that before selecting the state so the first visible death frame
+            // cannot be reduced to the lethal-hit camera shake.
+            if (anim != null && hasDead)
+            {
+                _deathAnimator = anim;
+                _deathAnimatorPriorUpdateMode = anim.updateMode;
+                anim.updateMode = AnimatorUpdateMode.UnscaledTime;
+            }
+
             _actor.Die(dir);
+
+            // DEVICE RCA 2026-08-29: KnightMocap declared valid AnyState transitions and the
+            // static regression therefore passed, but the Seeker trace only proved Dead=true;
+            // it never proved that the live animator ENTERED a death state. The player saw the
+            // lethal hit shake and then the arena return removed the upright body. Select the
+            // authored full-body directional state explicitly for this controller. Dead remains
+            // latched, so the state's existing !Dead exit still owns revive and the final pose
+            // holds until recovery. Other hero controllers keep their existing parameter path.
+            string forcedState = ForceKnightDeathState(anim, dir);
             // Prove the death CLIP will actually play (complaint "see death sequence"): name the
             // live animator + its controller and whether the canonical Dead bool is declared. If
             // hasDeadParam is false the controller has no Death latch -> Die() no-ops and the body
             // holds idle (reads as "no death sequence"); every hero controller (incl. KnightMocap)
             // declares Dead + a Death state, so this should log WILL-play on the next capture.
-            var anim = _actor.Animator;
-            bool hasDead = AnimatorHasParam(anim, "Dead");
-            if (anim != null && hasDead)
-            {
-                // Lethal impact and arena presentation deliberately manipulate Time.timeScale.
-                // The death body must still complete its authored clip while those effects run;
-                // otherwise the only visible motion is camera shake. Scope unscaled animation to
-                // the dead hero and restore the controller's prior mode on revive.
-                _deathAnimator = anim;
-                _deathAnimatorPriorUpdateMode = anim.updateMode;
-                anim.updateMode = AnimatorUpdateMode.UnscaledTime;
-            }
             DeNelle.Core.Diagnostics.FlowTrace.Step("HeroDeath",
                 "PlayDeathAnim: DeathDir=" + (int)dir +
                 " animator=" + (anim != null ? anim.name : "NONE") +
                 " ctrl=" + (anim != null && anim.runtimeAnimatorController != null ? anim.runtimeAnimatorController.name : "NONE") +
                 " hasDeadParam=" + hasDead +
-                " -> " + (hasDead ? "Death state WILL play" : "NO Dead param -> death anim NO-OP (body holds idle)") +
+                " forcedState=" + (string.IsNullOrEmpty(forcedState) ? "parameter-route" : forcedState) +
+                " -> " + (hasDead ? "death state requested" : "NO Dead param -> death anim NO-OP (body holds idle)") +
                 " source=" + (_lastDamageSourceWorld.HasValue ? _lastDamageSourceWorld.Value.ToString() : "none"));
+        }
+
+        private static string ForceKnightDeathState(Animator anim, DeathDirection dir)
+        {
+            if (anim == null || anim.runtimeAnimatorController == null ||
+                !string.Equals(anim.runtimeAnimatorController.name, "KnightMocap", StringComparison.Ordinal))
+                return null;
+
+            string stateName = dir switch
+            {
+                DeathDirection.Left  => "DeathLeft",
+                DeathDirection.Right => "DeathRight",
+                DeathDirection.Front => "DeathFront",
+                DeathDirection.Back  => "DeathBack",
+                _                    => "Death"
+            };
+            int hash = Animator.StringToHash(stateName);
+            if (!anim.HasState(0, hash))
+            {
+                stateName = "Death";
+                hash = Animator.StringToHash(stateName);
+            }
+            if (!anim.HasState(0, hash)) return null;
+
+            anim.CrossFadeInFixedTime(hash, 0.06f, 0, 0f);
+            return stateName;
         }
 
         /// <summary>True if <paramref name="anim"/> declares an animator parameter named

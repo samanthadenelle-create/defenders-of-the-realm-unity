@@ -331,8 +331,12 @@ namespace DeNelle.Village.World
             // attempts burned in the menus and placement retired before the overworld ever
             // loaded. Attempts only count IN the overworld; menus don't spend the budget.
             var active = UnityEngine.SceneManagement.SceneManager.GetActiveScene().name;
-            if (!DeNelle.Core.HubScenes.IsOverworld(active) && !DeNelle.Core.HubScenes.IsHub(active))
-                return;   // menu/battle scene — wait, no attempt spent
+            // Portal coordinates and BiomeRoads bounds belong to the merged terrain overworld.
+            // A generic hub gate is too wide: Village2 is an enemy stronghold hub with a baked
+            // NavMesh but deliberately NO Terrain, so the old branch attempted to derive/place
+            // the overworld ring there and correctly tripped the typed no-Terrain failure.
+            if (!DeNelle.Core.HubScenes.IsOverworld(active))
+                return;   // menu/town/stronghold/battle scene — wait, no attempt spent
 
             var defs = LoadDefs();
             if (defs.Count == 0) return; // nothing to place (no built dungeon scenes)

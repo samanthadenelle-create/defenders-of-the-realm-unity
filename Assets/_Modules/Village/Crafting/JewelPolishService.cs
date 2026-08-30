@@ -180,6 +180,8 @@ namespace DeNelle.Village.Crafting
     /// </summary>
     public static class JewelPolishService
     {
+        /// <summary>Raised only after the authoritative queue accepts a polish job.</summary>
+        public static event System.Action FirstPolishActionStarted;
         private const string Sys = "JewelPolish";
 
         /// <summary>Job-id prefix. Full id: <c>polish:&lt;inputItemId&gt;:&lt;seq&gt;</c>.</summary>
@@ -324,6 +326,8 @@ namespace DeNelle.Village.Crafting
             // cancel path returns the STONE (see OnJobCancelled) but deliberately does NOT refund the
             // roll: the attempt was taken.
             DungeonRunPayout.NoteRollSpent();
+            if (inputItemId == DungeonExclusiveItems.RoughStoneId)
+                FirstPolishActionStarted?.Invoke();
 
             FlowTrace.Step(Sys, $"{verb} ENQUEUED jobId={jobId} on {Channel} ({seconds:0}s, score {score}); " +
                                 $"{DungeonRunPayout.RollsLeftLabel()}");

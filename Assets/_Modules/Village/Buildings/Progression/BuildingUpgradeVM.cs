@@ -395,9 +395,16 @@ namespace DeNelle.Village.Buildings.Progression
         // ── WO-1037 — the shortfall offer (READ-ONLY; no money path touched) ──────
         //
         // Composed HERE rather than in the View for the usual reason (View stays a dumb skin), and
-        // resolved through DeNelle.Wallet.ShortfallPackOffer — a legal reference, because
-        // DeNelle.Village.asmdef lists DeNelle.Wallet (the ban runs the other way: Wallet may not
-        // name Village, which is why PackStoreVM reaches EconomyService by reflection).
+        // resolved through ShortfallPackOffer — a legal reference, because it ships in the
+        // RAIL-NEUTRAL DeNelle.Commerce assembly, which DeNelle.Village.asmdef lists. (The ban runs
+        // the other way: Commerce/Wallet may not name Village, which is why PackStoreVM reaches
+        // EconomyService by reflection.)
+        //
+        // ⚠ WO-1282 — DeNelle.Village.asmdef NO LONGER LISTS DeNelle.Wallet, and it must never
+        // list it again: a Google Play artifact excludes the Solana rail whole, and that exclusion
+        // is what GooglePlayPackagingGate.AssertSourceIsolation checks. The type is still spelled
+        // DeNelle.Wallet.ShortfallOffer below because the NAMESPACE stayed put deliberately (see the
+        // header of Assets/_Modules/Commerce/PackCatalog.cs) — the ASSEMBLY is what moved.
         //
         // ⛔ THIS RESOLVES A PackDef AND STOPS. There is no grant, no charge, no route into
         // ApplyPackContents from this property or from anything that reads it (WO-1037 §2 / WO-931).

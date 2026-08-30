@@ -14,12 +14,28 @@
 // hydrate the live struct FROM PlayerPrefs if a save hasn't already populated it.
 //
 // ASCII-only strings. Null-safe: a missing GameStateService still records to prefs.
+//
+// =============================================================================
+//  WO-1282 - THE BATTLE-PASS NOTIFY IS NOW A PUBLISH, NOT A DIRECT CALL.
+// -----------------------------------------------------------------------------
+// This store used to call DeNelle.Wallet.BattlePassService.OnArenaResult directly.
+// DeNelle.Village no longer references DeNelle.Wallet (a Google Play artifact
+// excludes the Solana rail whole - GooglePlayPackagingGate), so the outcome is
+// PUBLISHED to DeNelle.Commerce.ArenaOutcomeRelay and the pass subscribes to it at
+// boot (BattleMonthlyPanelsBootstrap).
+//
+// ⛔ NOTHING ABOUT THE ONE-DOOR RULE CHANGED. The relay carries an OUTCOME
+//    (win, streak, perfect) and has no amount parameter, exactly like
+//    BattlePassService.OnArenaResult, which is still the only public way XP enters
+//    the pass. Publishing happens AFTER the W/L is recorded and persisted, so an
+//    absent subscriber can never cost the player a recorded win - only the XP, and
+//    only on a build that carries no battle pass at all.
 // =============================================================================
 
 using UnityEngine;
 using DeNelle.Core.State;
 using DeNelle.Core.Diagnostics;
-using DeNelle.Wallet;
+using DeNelle.Commerce;   // WO-1282 - ArenaOutcomeRelay (was: DeNelle.Wallet.BattlePassService)
 
 namespace DeNelle.Village.Arena
 {
@@ -50,7 +66,7 @@ namespace DeNelle.Village.Arena
             SetLive(a);
             Persist(a);
             FlowTrace.Step("ArenaProgress", $"RecordWin purse={purseWon} -> {a.Wins}W/{a.Losses}L streak={a.Streak}");
-            BattlePassService.OnArenaResult(win: true, streak: a.Streak);
+            ArenaOutcomeRelay.Publish(win: true, streak: a.Streak);
             Debug.Log($"[ArenaProgressStore] WIN recorded - {a.Wins}W/{a.Losses}L, streak {a.Streak}, purse {a.TotalPurse}.");
         }
 
@@ -64,7 +80,7 @@ namespace DeNelle.Village.Arena
             SetLive(a);
             Persist(a);
             FlowTrace.Step("ArenaProgress", $"RecordLoss -> {a.Wins}W/{a.Losses}L streak reset");
-            BattlePassService.OnArenaResult(win: false, streak: 0);
+            ArenaOutcomeRelay.Publish(win: false, streak: 0);
             Debug.Log($"[ArenaProgressStore] LOSS recorded - {a.Wins}W/{a.Losses}L, streak reset.");
         }
 

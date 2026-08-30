@@ -67,6 +67,8 @@ namespace DeNelle.Wallet
         Standard = 1,
         /// <summary>The dense rung (impulse / gap rows). Still a full tap target.</summary>
         Compact = 2,
+        /// <summary>Three-up landscape shelf card: one-line name, full contents and price.</summary>
+        LandscapeStandard = 3,
     }
 
     /// <summary>
@@ -114,6 +116,8 @@ namespace DeNelle.Wallet
         public string OrbTint;
         /// <summary>Concept ids tried in order for the art-well glyph. Null/miss -> ASCII initials.</summary>
         public string[] GlyphConcepts;
+        /// <summary>Resources/UI/NightMarket asset name. Empty preserves the concept/initial fallback.</summary>
+        public string ArtResource;
         /// <summary>Draws the selected treatment (brighter bloom + a 1 px inset ring).</summary>
         public bool Selected;
     }
@@ -195,17 +199,27 @@ namespace DeNelle.Wallet
             Mathf.Ceil(fontPx * LineBoxMul * Mathf.Max(1, lines));
 
         /// <summary>Name block: two lines everywhere but Compact, where the card is a dense rung.</summary>
+        private static float NameFont(StorePackCardVariant v) =>
+            v == StorePackCardVariant.LandscapeStandard ? 28f : FontName;
+        private static float BodyFont(StorePackCardVariant v) =>
+            v == StorePackCardVariant.LandscapeStandard ? 25f : FontBody;
+        private static float PriceFont(StorePackCardVariant v) =>
+            v == StorePackCardVariant.LandscapeStandard ? 29f : FontPrice;
+        private static float MinorFont(StorePackCardVariant v) =>
+            v == StorePackCardVariant.LandscapeStandard ? 25f : FontMinor;
+
         public static float NameBlockPx(StorePackCardVariant v) =>
-            BlockPx(FontName, v == StorePackCardVariant.Compact ? 1 : 2);
+            BlockPx(NameFont(v), v == StorePackCardVariant.Compact ||
+                               v == StorePackCardVariant.LandscapeStandard ? 1 : 2);
 
         /// <summary>Contents block: two lines. Absent on Compact.</summary>
-        public static float ContentsBlockPx => BlockPx(FontBody, 2);
+        public static float ContentsBlockPx(StorePackCardVariant v) => BlockPx(BodyFont(v), 2);
 
         /// <summary>The OPTIONAL goods-per-dollar caption. One line, and the FIRST thing dropped.</summary>
         public static float CaptionBlockPx => BlockPx(FontCaption, 1);
 
         /// <summary>The price row. REQUIRED, bottom-pinned, never traded away.</summary>
-        public static float PriceBlockPx => BlockPx(FontPrice, 1);
+        public static float PriceBlockPx(StorePackCardVariant v) => BlockPx(PriceFont(v), 1);
 
         // =====================================================================
         //  ⭐ THE NOT-SELLABLE LINE GETS ITS OWN BLOCK — IT DOES NOT BORROW ONE.
@@ -238,22 +252,28 @@ namespace DeNelle.Wallet
         /// <summary>Card heights per variant, reference px — DERIVED from the blocks above.</summary>
         public static float FeaturedHeightPx =>
             FeaturedArtPx + TextGapPx + NameBlockPx(StorePackCardVariant.Featured)
-            + BlockGapPx + ContentsBlockPx + BlockGapPx + CaptionBlockPx
-            + PriceGapPx + PriceBlockPx + BottomPadPx;
+            + BlockGapPx + ContentsBlockPx(StorePackCardVariant.Featured) + BlockGapPx + CaptionBlockPx
+            + PriceGapPx + PriceBlockPx(StorePackCardVariant.Featured) + BottomPadPx;
 
         public static float StandardHeightPx =>
             StandardArtPx + TextGapPx + NameBlockPx(StorePackCardVariant.Standard)
-            + BlockGapPx + ContentsBlockPx
-            + PriceGapPx + PriceBlockPx + BottomPadPx;
+            + BlockGapPx + ContentsBlockPx(StorePackCardVariant.Standard)
+            + PriceGapPx + PriceBlockPx(StorePackCardVariant.Standard) + BottomPadPx;
 
         public static float CompactHeightPx =>
             CompactArtPx + TextGapPx + NameBlockPx(StorePackCardVariant.Compact)
-            + PriceGapPx + PriceBlockPx + BottomPadPx;
+            + PriceGapPx + PriceBlockPx(StorePackCardVariant.Compact) + BottomPadPx;
+
+        public static float LandscapeStandardHeightPx =>
+            LandscapeStandardArtPx + TextGapPx + NameBlockPx(StorePackCardVariant.LandscapeStandard)
+            + BlockGapPx + ContentsBlockPx(StorePackCardVariant.LandscapeStandard)
+            + PriceGapPx + PriceBlockPx(StorePackCardVariant.LandscapeStandard) + BottomPadPx;
 
         /// <summary>Art-well heights per variant, reference px (§R3: standard 152, compact 101).</summary>
         public const float FeaturedArtPx = 228f;
         public const float StandardArtPx = 152f;
         public const float CompactArtPx  = 101f;
+        public const float LandscapeStandardArtPx = 108f;
 
         /// <summary>Minimum authored card WIDTH. Two-up in the ~1058 px market column leaves
         /// ~500 each; this is the floor a third column would have to respect.</summary>
@@ -369,12 +389,14 @@ namespace DeNelle.Wallet
         /// <summary>Art-well height for a variant, reference px.</summary>
         public static float ArtWellHeight(StorePackCardVariant v) =>
             v == StorePackCardVariant.Featured ? FeaturedArtPx :
-            v == StorePackCardVariant.Compact  ? CompactArtPx  : StandardArtPx;
+            v == StorePackCardVariant.Compact  ? CompactArtPx  :
+            v == StorePackCardVariant.LandscapeStandard ? LandscapeStandardArtPx : StandardArtPx;
 
         /// <summary>Card height for a variant, reference px. Buyable card — no reason line.</summary>
         public static float CardHeight(StorePackCardVariant v) =>
             v == StorePackCardVariant.Featured ? FeaturedHeightPx :
-            v == StorePackCardVariant.Compact  ? CompactHeightPx  : StandardHeightPx;
+            v == StorePackCardVariant.Compact  ? CompactHeightPx  :
+            v == StorePackCardVariant.LandscapeStandard ? LandscapeStandardHeightPx : StandardHeightPx;
 
         /// <summary>
         /// Card height for a variant that may carry the not-sellable state line.
@@ -463,8 +485,14 @@ namespace DeNelle.Wallet
             // and no long content summary can ever reach into it — that overlap is what shipped
             // (see the budget header above), and "the price must never be clipped" is an acceptance
             // criterion, not a preference.
+            float nameFont = NameFont(variant);
+            float bodyFont = BodyFont(variant);
+            float priceFont = PriceFont(variant);
+            float minorFont = MinorFont(variant);
+            float contentsBlock = ContentsBlockPx(variant);
+            float priceBlock = PriceBlockPx(variant);
             float y = artH + TextGapPx;
-            float priceLaneTop = cardH - (BottomPadPx + PriceBlockPx);
+            float priceLaneTop = cardH - (BottomPadPx + priceBlock);
             // ⛔ THE REASON LINE IS RESERVED WITH THE PRICE LANE, NOT SPENT WITH THE OPTIONALS. It
             // is REQUIRED whenever it exists: the caller only sets it on a card whose buy control is
             // dead, and a dead control with no words is exactly the state the owner cannot read.
@@ -476,7 +504,7 @@ namespace DeNelle.Wallet
             // than the block (which the derived heights make unreachable; this is the guard, not
             // the plan). FitBlock then auto-sizes the words down INSIDE that rect.
             float nameH = Mathf.Min(NameBlockPx(variant), Mathf.Max(0f, budget));
-            var name = TopAnchoredText(card, model.Name, FontName, ElarionUi.Parchment,
+            var name = TopAnchoredText(card, model.Name, Mathf.RoundToInt(nameFont), ElarionUi.Parchment,
                 FontStyles.Bold, TextAlignmentOptions.TopLeft, y, nameH);
             if (name != null)
             {
@@ -485,7 +513,7 @@ namespace DeNelle.Wallet
                 // [FontFloorMobile .. FontName] and only then truncate. Never a raw Overflow, which
                 // would draw the name outside its rect and onto the card above it -- the exact
                 // class of spill AuditGeometry rule 1 exists to catch.
-                ElarionUiKit.FitBlock(name, ElarionUi.FontFloorMobile, FontName);
+                ElarionUiKit.FitBlock(name, ElarionUi.FontFloorMobile, nameFont);
             }
             y += nameH + BlockGapPx;
             budget -= nameH + BlockGapPx;
@@ -495,17 +523,17 @@ namespace DeNelle.Wallet
                 // ── CONTENTS — REQUIRED on the priced variants ───────────────
                 // It may compress to a single line box before it is dropped; below one line box
                 // there is nothing honest to draw and the block is omitted rather than clipped.
-                float oneLine = BlockPx(FontBody, 1);
-                float contentsH = Mathf.Min(ContentsBlockPx, Mathf.Max(0f, budget));
+                float oneLine = BlockPx(bodyFont, 1);
+                float contentsH = Mathf.Min(contentsBlock, Mathf.Max(0f, budget));
                 if (contentsH >= oneLine)
                 {
-                    var contents = TopAnchoredText(card, model.Contents, FontBody,
+                    var contents = TopAnchoredText(card, model.Contents, Mathf.RoundToInt(bodyFont),
                         new Color(0.90f, 0.93f, 0.98f, 1f), FontStyles.Normal,
                         TextAlignmentOptions.TopLeft, y, contentsH);
                     if (contents != null)
                     {
                         contents.textWrappingMode = TextWrappingModes.Normal;
-                        ElarionUiKit.FitBlock(contents, ElarionUi.FontFloorMobile, FontBody);
+                        ElarionUiKit.FitBlock(contents, ElarionUi.FontFloorMobile, bodyFont);
                     }
                     y += contentsH + BlockGapPx;
                     budget -= contentsH + BlockGapPx;
@@ -564,28 +592,28 @@ namespace DeNelle.Wallet
             // EVERY card prints while the store has no server quote - got 210px for 267px of text.
             bool hasMinor = !string.IsNullOrEmpty(model.PriceMinor);
             float priceMajorX1 = hasMinor ? PriceMajorX1WithMinor : PriceRowX1;
-            handle.PriceLabel = BottomAnchoredText(card, model.PriceMajor, FontPrice, ElarionUi.Gilt,
-                FontStyles.Bold, TextAlignmentOptions.BottomLeft, BottomPadPx, PriceBlockPx,
+            handle.PriceLabel = BottomAnchoredText(card, model.PriceMajor, Mathf.RoundToInt(priceFont), ElarionUi.Gilt,
+                FontStyles.Bold, TextAlignmentOptions.BottomLeft, BottomPadPx, priceBlock,
                 PriceRowX0, priceMajorX1);
             // ⛔ THE PRICE IS THE ONE STRING ON THIS SCREEN THAT MUST NOT CLIP. On 2026-08-22 the
             // owner's device showed "20 SKR" for a 120 SKR pack and "6 SKR" for a 36 SKR pack --
             // the leading digit occluded. FitSingleLine shrinks toward the floor before it would
             // ever truncate, so the digits survive a narrower column.
             if (handle.PriceLabel != null)
-                ElarionUiKit.FitSingleLine(handle.PriceLabel, ElarionUi.FontFloorMobile, FontPrice);
+                ElarionUiKit.FitSingleLine(handle.PriceLabel, ElarionUi.FontFloorMobile, priceFont);
             if (hasMinor)
             {
                 // ⛔ THE MINOR REFERENCE SHARES THE PRICE LANE, IT DOES NOT SIT ABOVE IT. It used to
                 // be bottom-offset 18 in a 44 px box while the major was 14/62 - two overlapping
                 // boxes in one lane whose only separation was that they happened not to be wide
                 // enough to meet. Same bottom pad, same block height, disjoint x bands.
-                var minor = BottomAnchoredText(card, model.PriceMinor, FontMinor, ElarionUi.Parchment,
-                    FontStyles.Normal, TextAlignmentOptions.BottomRight, BottomPadPx, PriceBlockPx,
+                var minor = BottomAnchoredText(card, model.PriceMinor, Mathf.RoundToInt(minorFont), ElarionUi.Parchment,
+                    FontStyles.Normal, TextAlignmentOptions.BottomRight, BottomPadPx, priceBlock,
                     PriceMinorX0, PriceRowX1);
                 // The dollars FLOAT (WO-1158 section 5) but they still must not clip: a "$49.99"
                 // that reads "$4" is the same defect as the occluded SKR digit, one currency over.
                 if (minor != null)
-                    ElarionUiKit.FitSingleLine(minor, ElarionUi.FontFloorMobile, FontMinor);
+                    ElarionUiKit.FitSingleLine(minor, ElarionUi.FontFloorMobile, minorFont);
             }
 
             // ── THE STATE / BADGE PILL — top-right of the art well ───────────
@@ -596,7 +624,7 @@ namespace DeNelle.Wallet
             // meant them to be ("BEST START"), and founders-vow's ruled replacement for its retired
             // FOMO copy is a SENTENCE -- "Founders are named on the Heart." -- which a forced
             // ToUpperInvariant would shout. Presentation must not overrule authored copy.
-            if (!string.IsNullOrEmpty(pill))
+            if (!string.IsNullOrEmpty(pill) && variant != StorePackCardVariant.LandscapeStandard)
                 handle.StateLabel = BuildPill(card, Ascii(pill), cardH, artH);
 
             // ── THE WHOLE CARD IS THE TAP TARGET ─────────────────────────────
@@ -663,10 +691,10 @@ namespace DeNelle.Wallet
             }
 
             // ── THE GLYPH — icon sprite, else ASCII initials. NEVER an emoji. ──
-            Sprite icon = null;
+            Sprite icon = NightMarketArt.Load(model.ArtResource);
             if (model.GlyphConcepts != null && model.GlyphConcepts.Length > 0)
             {
-                try { icon = ConceptIconResolver.ResolveAny(model.GlyphConcepts); }
+                try { if (icon == null) icon = ConceptIconResolver.ResolveAny(model.GlyphConcepts); }
                 catch (Exception e)
                 {
                     DeNelle.Core.Diagnostics.FlowTrace.Warn("Store",
@@ -680,7 +708,7 @@ namespace DeNelle.Wallet
                 var ig = new GameObject("Glyph", typeof(RectTransform), typeof(Image));
                 ig.transform.SetParent(wellGo.transform, false);
                 var irt = (RectTransform)ig.transform;
-                irt.anchorMin = new Vector2(0.32f, 0.20f); irt.anchorMax = new Vector2(0.68f, 0.90f);
+                irt.anchorMin = new Vector2(0.04f, 0.04f); irt.anchorMax = new Vector2(0.96f, 0.96f);
                 irt.offsetMin = Vector2.zero; irt.offsetMax = Vector2.zero;
                 var ii = ig.GetComponent<Image>();
                 ii.sprite = icon;

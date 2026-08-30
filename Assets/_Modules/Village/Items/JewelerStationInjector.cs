@@ -92,6 +92,14 @@ namespace DeNelle.Village
         {
             using var _ = FlowTrace.Enter("Crafting", "JewelerStationInjector.Inject");
 
+            // Progression-locked surfaces are absent, never disabled or teased. This reads the
+            // dungeon-earned monotonic history, so consuming the first stone cannot hide it again.
+            if (!DeNelle.Village.Crafting.JewelerProgression.IsUnlocked)
+            {
+                FlowTrace.Step("Crafting", "Jeweler station hidden: no dungeon-earned rough-stone history.");
+                return;
+            }
+
             // WO-673 L3 STANDDOWN, tightened by WO-703 / BLANK-1 (owner ruling 2026-07-13,
             // supersedes the "never lost" carve-out): once the persisted marker is set the
             // injector stands down UNCONDITIONALLY — a fresh start is the tree, the well and

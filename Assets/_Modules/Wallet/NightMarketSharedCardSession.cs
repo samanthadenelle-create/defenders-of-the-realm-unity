@@ -1,0 +1,119 @@
+using System;
+using System.Collections.Generic;
+using DeNelle.Core.UI;
+using UnityEngine;
+
+namespace DeNelle.Wallet
+{
+    /// <summary>Presentation-neutral bridge from the resolved Night Market card truth to shared cards.</summary>
+    public static class NightMarketCardAdapter
+    {
+        public const int OffersPerPage = CardCollectionPaging.MaxVisibleCards;
+
+        public static GenericCardModel Adapt(StorePackCardModel source, Action primaryAction)
+        {
+            string stateWords = !string.IsNullOrWhiteSpace(source.StateWord) ? source.StateWord :
+                (!string.IsNullOrWhiteSpace(source.NotSellableReason) ? source.NotSellableReason : "Available");
+            GenericCardState state = stateWords.IndexOf("owned", StringComparison.OrdinalIgnoreCase) >= 0
+                ? GenericCardState.Owned
+                : (!string.IsNullOrWhiteSpace(source.NotSellableReason) ? GenericCardState.Unavailable : GenericCardState.Available);
+            string price = source.PriceMajor ?? string.Empty;
+            if (!string.IsNullOrWhiteSpace(source.PriceMinor)) price += " (" + source.PriceMinor + ")";
+            return new GenericCardModel
+            {
+                StableId = source.Sku ?? string.Empty,
+                ArtworkKey = source.ArtResource ?? string.Empty,
+                Title = source.Name ?? string.Empty,
+                Purpose = source.Contents ?? string.Empty,
+                Badge = source.Badge ?? string.Empty,
+                ContentsOrCost = price,
+                StateWords = stateWords,
+                ActionLabel = state == GenericCardState.Available ? "View offer" : stateWords,
+                State = state,
+                PrimaryAction = primaryAction
+            };
+        }
+
+        public static CardCollectionModel Collection(IReadOnlyList<GenericCardModel> cards) =>
+            new CardCollectionModel
+            {
+                CollectionId = "night-market-offers",
+                Title = "The Night Market",
+                Subtitle = "Choose an offer to inspect its full contents and current channel price.",
+                IconKey = "UI/NightMarket/night-market-wordmark",
+                Cards = cards ?? Array.Empty<GenericCardModel>()
+            };
+
+        public static IReadOnlyList<GenericCardModel> Page(IReadOnlyList<GenericCardModel> cards, int page)
+        {
+            if (cards == null || cards.Count == 0) return Array.Empty<GenericCardModel>();
+            int first = CardCollectionPaging.FirstIndex(page, cards.Count);
+            int count = Math.Min(OffersPerPage, cards.Count - first);
+            var result = new List<GenericCardModel>(count);
+            for (int i = 0; i < count; i++) result.Add(cards[first + i]);
+            return result;
+        }
+    }
+
+    /// <summary>One long-lived pause lease for browsing plus nested offer/payment presentation.</summary>
+    public sealed class NightMarketSharedCardSession : MonoBehaviour
+    {
+        private FocusedModalHost _host;
+        private string _focusedSku;
+        private int _confirmationDepth;
+
+        public bool IsOpen => _host != null && _host.IsOpen;
+        public int NavigationDepth => _host != null ? _host.NavigationDepth : 0;
+
+        public bool OpenBrowser()
+        {
+            if (_host == null)
+            {
+                _host = GetComponent<FocusedModalHost>();
+                if (_host == null) _host = gameObject.AddComponent<FocusedModalHost>();
+            }
+            _focusedSku = null;
+            _confirmationDepth = 0;
+            return _host.OpenUnderExistingPanel();
+        }
+
+        public void ShowOffer(string sku)
+        {
+            if (!IsOpen || string.IsNullOrEmpty(sku) || string.Equals(_focusedSku, sku, StringComparison.Ordinal)) return;
+            if (_focusedSku == null) _host.Push();
+            _focusedSku = sku;
+        }
+
+        public IDisposable EnterConfirmation()
+        {
+            if (!IsOpen) OpenBrowser();
+            _host.Push();
+            _confirmationDepth++;
+            return new ConfirmationLease(this);
+        }
+
+        public void Close()
+        {
+            _focusedSku = null;
+            _confirmationDepth = 0;
+            _host?.Close();
+        }
+
+        private void ExitConfirmation()
+        {
+            if (_confirmationDepth <= 0 || !IsOpen) return;
+            _confirmationDepth--;
+            _host.Pop();
+        }
+
+        private sealed class ConfirmationLease : IDisposable
+        {
+            private NightMarketSharedCardSession _owner;
+            public ConfirmationLease(NightMarketSharedCardSession owner) { _owner = owner; }
+            public void Dispose() { var owner = _owner; _owner = null; owner?.ExitConfirmation(); }
+        }
+
+        private void OnDisable() => Close();
+        private void OnDestroy() => Close();
+    }
+}

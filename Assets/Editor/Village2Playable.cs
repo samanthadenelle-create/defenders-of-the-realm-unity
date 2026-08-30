@@ -463,8 +463,8 @@ namespace DeNelle.Editor
         {
             Log("=== PHASE B4: Build hero + wire camera target START ===");
             if (!OpenVillage2(out Scene scene)) return;
-            GameObject root = FindRoot(scene, "Village2");
-            if (root == null) { Err("No 'Village2' root. Aborting."); return; }
+            GameObject root = FindRoot(scene, "Village2") ?? FindRoot(scene, "StrongholdRoot");
+            if (root == null) { Err("No 'Village2' or 'StrongholdRoot' root. Aborting."); return; }
 
             var heartType = FindType(TypeHeartController);
             Component heart = heartType != null ? Object.FindAnyObjectByType(heartType) as Component : null;
@@ -670,8 +670,8 @@ namespace DeNelle.Editor
         {
             Log("=== PHASE B5: Wire waves (combat core) START ===");
             if (!OpenVillage2(out Scene scene)) return;
-            GameObject root = FindRoot(scene, "Village2");
-            if (root == null) { Err("No 'Village2' root. Aborting."); return; }
+            GameObject root = FindRoot(scene, "Village2") ?? FindRoot(scene, "StrongholdRoot");
+            if (root == null) { Err("No 'Village2' or 'StrongholdRoot' root. Aborting."); return; }
 
             var heartType = FindType(TypeHeartController);
             Component heart = heartType != null ? Object.FindAnyObjectByType(heartType) as Component : null;

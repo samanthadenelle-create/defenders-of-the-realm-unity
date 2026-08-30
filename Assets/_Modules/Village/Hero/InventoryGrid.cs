@@ -85,11 +85,11 @@ namespace DeNelle.Village
             // The five worn slots use the full stage. A vacant slot reads "empty", never a blank plate.
             var slots = new[]
             {
-                new WornSlot(InventoryStrings.KeySlotMainHand, WornName(_loadout != null ? _loadout.EquippedWeapon  : null)),
-                new WornSlot(InventoryStrings.KeySlotOffHand,  WornName(_loadout != null ? _loadout.EquippedOffHand : null)),
-                new WornSlot(InventoryStrings.KeySlotArmor,    WornArmorName(_loadout != null ? _loadout.EquippedArmor : null)),
-                new WornSlot(InventoryStrings.KeySlotAmulet,   WornAccessoryName(_loadout != null ? _loadout.EquippedAmulet : null)),
-                new WornSlot(InventoryStrings.KeySlotRing,     WornAccessoryName(_loadout != null ? _loadout.EquippedRing   : null)),
+                new WornSlot(InventoryStrings.KeySlotMainHand, WornName(_loadout != null ? _loadout.EquippedWeapon  : null), RailWeapons),
+                new WornSlot(InventoryStrings.KeySlotOffHand,  WornName(_loadout != null ? _loadout.EquippedOffHand : null), RailOffHand),
+                new WornSlot(InventoryStrings.KeySlotArmor,    WornArmorName(_loadout != null ? _loadout.EquippedArmor : null), RailArmor),
+                new WornSlot(InventoryStrings.KeySlotAmulet,   WornAccessoryName(_loadout != null ? _loadout.EquippedAmulet : null), RailTrinkets),
+                new WornSlot(InventoryStrings.KeySlotRing,     WornAccessoryName(_loadout != null ? _loadout.EquippedRing   : null), RailTrinkets),
             };
 
             const float top = 1.00f, bottom = 0.00f, gap = 0.018f;
@@ -113,7 +113,15 @@ namespace DeNelle.Village
             public readonly string LabelKey;
             /// <summary>The worn item's display name, or null when the slot is vacant.</summary>
             public readonly string ItemName;
-            public WornSlot(string labelKey, string itemName) { LabelKey = labelKey; ItemName = itemName; }
+            /// <summary>The visible item category opened when this row is tapped.</summary>
+            public readonly int BrowseRailIndex;
+            public WornSlot(string labelKey, string itemName, int browseRailIndex)
+            {
+                LabelKey = labelKey;
+                ItemName = itemName;
+                BrowseRailIndex = browseRailIndex;
+            }
+            public WornSlot(string labelKey, string itemName) : this(labelKey, itemName, RailGear) { }
         }
 
         private void BuildWornSlot(Transform stage, WornSlot slot, Vector2 min, Vector2 max)
@@ -122,6 +130,13 @@ namespace DeNelle.Village
             var plate = ElarionUiKit.Slot(stage, 0, min, max);
             if (plate == null) return;
             plate.name = "WornSlot";
+
+            // A worn row is useful navigation, not a dead summary plate: tapping it opens the
+            // matching pile where replacements can be inspected. This changes no equip semantics.
+            var browse = plate.AddComponent<Button>();
+            browse.targetGraphic = plate.GetComponent<Image>();
+            int destination = slot.BrowseRailIndex;
+            browse.onClick.AddListener(() => SelectRail(destination));
 
             var key = AddLabel(plate.transform, InventoryStrings.Get(slot.LabelKey).ToUpperInvariant(),
                      0.52f, 0.96f, InkMicro, ElarionUi.FontMicro,

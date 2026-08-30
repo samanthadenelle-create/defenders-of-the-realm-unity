@@ -3,6 +3,7 @@
     "rootNamespace": "DeNelle.DevTools",
     "references": [
         "DeNelle.Core",
+        "DeNelle.Commerce",
         "DeNelle.Village",
         "DeNelle.Wallet",
         "DeNelle.HUD",

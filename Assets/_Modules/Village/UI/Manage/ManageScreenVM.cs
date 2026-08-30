@@ -44,7 +44,9 @@ using DeNelle.Core.Diagnostics;
 using DeNelle.Core.Jobs;
 using DeNelle.Core.State;
 using DeNelle.Core.UI;
-using DeNelle.Wallet;
+using DeNelle.Wallet;     // WO-1282 - PackCatalog now ships in DeNelle.Commerce but KEEPS this
+                          // namespace (PromoCodeService resolves it as a reflection string literal).
+using DeNelle.Commerce;   // WO-1282 - StoreFocusRequest, the rail-neutral store focus latch.
 using UnityEngine;
 using CoreCost = DeNelle.Core.Catalog.ResourceCost;
 
@@ -219,6 +221,10 @@ namespace DeNelle.Village.UI
         /// <summary>The selected tab's upgrade browse list, affordable-first.</summary>
         public readonly List<BrowseRowVM> BrowseRows = new List<BrowseRowVM>(32);
 
+        /// <summary>Categories earned by structures standing in the current town.  Empty/locked
+        /// categories are absent rather than rendered as dead tabs.</summary>
+        public readonly List<ManageTab> VisibleTabs = new List<ManageTab>(4);
+
         /// <summary>Last command's player-facing message (ASCII), or null. The View toasts it.</summary>
         public string Notice { get; private set; }
 
@@ -311,6 +317,10 @@ namespace DeNelle.Village.UI
                 QueueRows.Clear();
                 BrowseRows.Clear();
 
+                BuildVisibleTabs();
+                if (VisibleTabs.Count > 0 && !VisibleTabs.Contains(Tab))
+                    Tab = VisibleTabs[0];
+
                 BuildChannelSummaries();
                 BuildQueueRows(ChannelOf(Tab));
                 BuildSlotOffer(ChannelOf(Tab));
@@ -318,6 +328,37 @@ namespace DeNelle.Village.UI
                 BuildBrowseRows();
             });
             Changed?.Invoke();
+        }
+
+        private void BuildVisibleTabs()
+        {
+            VisibleTabs.Clear();
+            var placed = CountPlacedThisTown();
+            bool defense = false, buildings = false, troops = false, research = false;
+            foreach (var kv in placed)
+            {
+                var tier = BuildingTierCatalog.Find(kv.Key);
+                if (tier != null)
+                {
+                    buildings = true;
+                    if (kv.Key.IndexOf("barracks", StringComparison.OrdinalIgnoreCase) >= 0)
+                        troops = true;
+                    if (HasAuthoredPerk(tier)) research = true;
+                }
+                if (HasLevelLadder(kv.Value)) defense = true;
+            }
+            if (defense) VisibleTabs.Add(ManageTab.Defense);
+            if (buildings) VisibleTabs.Add(ManageTab.Buildings);
+            if (troops) VisibleTabs.Add(ManageTab.Troops);
+            if (research) VisibleTabs.Add(ManageTab.Research);
+        }
+
+        private static bool HasAuthoredPerk(BuildingUpgradeDef def)
+        {
+            if (def?.Tiers == null) return false;
+            for (int i = 0; i < def.Tiers.Count; i++)
+                if (def.Tiers[i]?.Perks != null && def.Tiers[i].Perks.Count > 0) return true;
+            return false;
         }
 
         private void BuildChannelSummaries()
@@ -607,7 +648,8 @@ namespace DeNelle.Village.UI
                     placed.itemId, placed.cellX, placed.cellZ);
                 FlowTrace.Step("Manage", "defense row '" + placed.itemId + "' L" + level
                     + "/" + ceiling + " -> inline placed key '" + jobKey + "'");
-                AddBrowseRow(NameOf(entry, placed.itemId) + " -> L" + (level + 1), cost, "Upgrade",
+                string location = "grid " + placed.cellX + ", " + placed.cellZ;
+                AddBrowseRow(NameOf(entry, placed.itemId) + " - " + location + " - L" + level + " -> L" + (level + 1), cost, "Upgrade",
                              () => UpgradePlaced(jobKey));
             }
         }
@@ -999,7 +1041,10 @@ namespace DeNelle.Village.UI
                         string pId = perk.Id;
                         if (Buildings.Progression.BuildingPerkService.IsOwned(bId, pId)) continue;
 
-                        bool can = Buildings.Progression.BuildingPerkService.CanResearch(bId, pId, out string why);
+                        bool can = Buildings.Progression.BuildingPerkService.CanResearch(bId, pId, out _);
+                        // Progressive disclosure: prerequisites teach themselves when satisfied;
+                        // a locked perk is not a manageable structure action yet.
+                        if (!can) continue;
                         int price = Mathf.Max(0, perk.GoldCost);
                         bool affordable = can && gold >= price;
                         float seconds = Buildings.Progression.BuildingPerkService.ResearchSeconds(bId, pId);
@@ -1007,8 +1052,7 @@ namespace DeNelle.Village.UI
                         // Colourblind law: the state is a SENTENCE. "Ready" now also carries the
                         // WAIT, because with a timed research the price is no longer the only cost.
                         string state;
-                        if (!can) state = Ascii(string.IsNullOrEmpty(why) ? "Locked." : why);
-                        else if (!affordable) state = "Short " + (price - gold) + " gold";
+                        if (!affordable) state = "Short " + (price - gold) + " gold";
                         else state = "Ready - takes " + FormatTime(seconds);
 
                         BrowseRows.Add(new BrowseRowVM
@@ -1172,7 +1216,7 @@ namespace DeNelle.Village.UI
         /// </summary>
         public void BuySlot(ChannelId channel)
         {
-            PackStore.RequestFocusSku(PackCatalog.PermanentBuilderSku);
+            StoreFocusRequest.RequestFocusSku(PackCatalog.PermanentBuilderSku);
             if (!PanelRouter.Open(PanelId.RealmStore))
             {
                 Notice = "Store is not open right now.";

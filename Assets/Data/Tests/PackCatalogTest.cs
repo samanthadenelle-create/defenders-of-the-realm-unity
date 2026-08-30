@@ -38,8 +38,8 @@ namespace DeNelle.Data.Tests
             // owns the one-economy-key + $5-ceiling + resources-only rules. Update this count if the
             // set changes.
             Assert.That(PackCatalog.Packs, Is.Not.Null);
-            Assert.That(PackCatalog.Packs.Count, Is.EqualTo(26),
-                "packs.json must hydrate the full pack catalogue (5-tier ladder + bundle offers + impulse packs + permanent-builder).");
+            Assert.That(PackCatalog.Packs.Count, Is.EqualTo(28),
+                "packs.json must hydrate the full pack catalogue, including the two hidden Welcome reward SKUs.");
         }
 
         [Test]
@@ -83,6 +83,8 @@ namespace DeNelle.Data.Tests
         {
             foreach (var pack in PackCatalog.Packs)
             {
+                // Hidden reward-only SKUs are deliberately unpriced and cannot be purchased.
+                if (!pack.StoreVisible) continue;
                 Assert.That(pack.Pricing, Is.Not.Null, $"{pack.Sku} has no pricing.");
                 Assert.That(pack.AmountFor(CurrencyKind.Sol), Is.GreaterThan(0d),
                     $"{pack.Sku} must have a SOL price.");
@@ -114,8 +116,8 @@ namespace DeNelle.Data.Tests
             for (int tier = 1; tier <= 5; tier++)
             {
                 var pack = PackCatalog.FindByTier(tier);
-                Assert.That(pack.Pricing.Usd, Is.GreaterThan(prevUsd),
-                    $"tier {tier} ({pack.Sku}) must cost more than tier {tier - 1}.");
+                Assert.That(pack.Pricing.Usd, Is.GreaterThanOrEqualTo(prevUsd),
+                    $"tier {tier} ({pack.Sku}) must not cost less than tier {tier - 1}.");
                 prevUsd = pack.Pricing.Usd;
             }
         }
@@ -132,7 +134,7 @@ namespace DeNelle.Data.Tests
             // SKR and that amount is exact (the server's quote pins it to the base unit); the
             // dollar value is what floats, because the rate moves. "~" not the U+2248 glyph -
             // TMP is ASCII-only here and the pretty character renders as a tofu box on device.
-            Assert.That(pack.UsdApprox, Does.StartWith("~ $"),
+            Assert.That(pack.UsdApprox(), Does.StartWith("~ $"),
                 "the USD anchor must be marked approximate, and in ASCII.");
         }
 

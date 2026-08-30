@@ -203,9 +203,6 @@ namespace DeNelle.Editor
         /// "up and down"; the retired baldric diagonal was 28 and the photographed horizontal ~90,
         /// so 20 rejects both while leaving room for the hip bone's animated lean.</summary>
         private const float SheathVerticalTolDeg = 20f;
-        /// <summary>Metres the sheathed props must be separated across the body's right axis before
-        /// we will call them "opposite hips". The retired shared socket put them at ZERO.</summary>
-        private const float OppositeHipMinSeparationM = 0.12f;
         /// <summary>How far the belt-carried part of a sheathed prop may sit from the HIPS BONE
         /// before it is "off the body" rather than "on the hip". A hip carry puts it within a hand's
         /// breadth of the pelvis plus the outward stand-off (~0.26 m); 0.45 m allows that and still
@@ -220,8 +217,9 @@ namespace DeNelle.Editor
         // A centre/strap seat belongs within a forearm's breadth of the off-hand.
         private const float DrawnShieldCentreMaxM = 0.18f;
 
-        /// <summary>Shots the run must produce: 3 drawn + 1 marked diagnostic + 3 sheathed.</summary>
-        private const int ExpectedPngs = 7;
+        /// <summary>Shots the run must produce: 3 drawn + 1 marked diagnostic + 5 sheathed,
+        /// including the normal rear-gameplay view and its shield-only projected-area control.</summary>
+        private const int ExpectedPngs = 9;
 
         private static readonly string[] KnightPrefKeys =
         {
@@ -432,10 +430,17 @@ namespace DeNelle.Editor
                 _failures.Add("the SHEATHED half never left the drawn state — the sheathed PNGs are not the sheathed pose.");
             var mainSheath = MeasureSlot("SHEATHED sword ", weaponProp, rHand, anim.transform, hips, drawn: false, offHand: false);
             var offSheath = MeasureSlot("SHEATHED shield", offHandProp, lHand, anim.transform, hips, drawn: false, offHand: true);
-            AssertOppositeHips(mainSheath, offSheath);
+            AssertDistinctForearmMount(mainSheath, offSheath);
             yield return Shoot("04_SHEATHED_front34", hero, FullBodyAim(hero), FullBodyRadius(hero), ThreeQuarter(anim.transform, 0.75f, 0.18f));
             yield return Shoot("05_SHEATHED_left34", hero, FullBodyAim(hero), FullBodyRadius(hero), ThreeQuarter(anim.transform, -0.75f, 0.18f));
             yield return Shoot("06_SHEATHED_hips_closeup", hero, HipsAim(hips, weaponProp, offHandProp), 0.55f, ThreeQuarter(anim.transform, 0.75f, 0.05f));
+            Vector3 gameplayRear = RearThreeQuarter(anim.transform, -0.28f, 0.16f);
+            yield return Shoot("07_SHEATHED_gameplay_rear", hero, FullBodyAim(hero), FullBodyRadius(hero), gameplayRear);
+            // Same camera/framing, but only the shield is allowed through the culling mask.
+            // This is the projected-area control: nonzero world bounds are insufficient; the
+            // plate itself must occupy a measurable set of pixels from the player's view.
+            yield return Shoot("08_SHEATHED_gameplay_rear_SHIELD_ONLY", offHandProp.gameObject,
+                FullBodyAim(hero), FullBodyRadius(hero), gameplayRear);
         }
 
         // =====================================================================
@@ -625,24 +630,23 @@ namespace DeNelle.Editor
             return m;
         }
 
-        private void AssertOppositeHips(SlotMeasure main, SlotMeasure off)
+        private void AssertDistinctForearmMount(SlotMeasure main, SlotMeasure off)
         {
             if (!main.valid || !off.valid)
             {
-                _log.AppendLine("HIPS    one or both sheathed props could not be measured — the opposite-hip rule is UNPROVEN.");
+                _log.AppendLine("MOUNTS  one or both sheathed props could not be measured — distinct sword/forearm mounts are UNPROVEN.");
                 return;
             }
             float sep = Mathf.Abs(main.sideOfBody - off.sideOfBody);
-            bool opposite = Mathf.Sign(main.sideOfBody) != Mathf.Sign(off.sideOfBody) && sep >= OppositeHipMinSeparationM;
-            _log.AppendLine($"HIPS    sword side={main.sideOfBody:+0.###;-0.###}m  shield side={off.sideOfBody:+0.###;-0.###}m  " +
-                            $"separation={sep:0.###}m => {(opposite ? "OPPOSITE HIPS ✓" : "⛔ SAME SIDE / TOO CLOSE — this is the retired shared-socket failure")}");
-            _log.AppendLine($"HIPS    sockets: sword parent='{main.parentName}' shield parent='{off.parentName}' " +
-                            $"=> {(main.parentName != off.parentName ? "DISTINCT ✓" : "⛔ SHARED SOCKET")}");
-            if (!opposite)
-                _failures.Add($"sheathed props are not on opposite hips (sword {main.sideOfBody:+0.###;-0.###}m, " +
-                              $"shield {off.sideOfBody:+0.###;-0.###}m, separation {sep:0.###}m).");
+            bool forearm = off.parentName.IndexOf("ArmOff", System.StringComparison.OrdinalIgnoreCase) >= 0;
+            _log.AppendLine($"MOUNTS  sword side={main.sideOfBody:+0.###;-0.###}m  shield side={off.sideOfBody:+0.###;-0.###}m  separation={sep:0.###}m");
+            _log.AppendLine($"MOUNTS  sword parent='{main.parentName}' shield parent='{off.parentName}' " +
+                            $"=> {(main.parentName != off.parentName ? "DISTINCT ✓" : "⛔ SHARED SOCKET")}; " +
+                            $"shield forearm={(forearm ? "YES ✓" : "NO ⛔")}");
+            if (!forearm)
+                _failures.Add($"sheathed shield is not on the owner-approved forearm socket (parent '{off.parentName}').");
             if (main.parentName == off.parentName)
-                _failures.Add($"sheathed props share ONE socket transform ('{main.parentName}') — the exact defect the hip rework removed.");
+                _failures.Add($"sheathed props share ONE socket transform ('{main.parentName}').");
         }
 
         /// <summary>
@@ -859,6 +863,10 @@ namespace DeNelle.Editor
         /// a touch above. sideFactor &gt; 0 = the hero's right side of frame.</summary>
         private static Vector3 ThreeQuarter(Transform bodyT, float sideFactor, float up) =>
             (bodyT.forward + bodyT.right * sideFactor + Vector3.up * up).normalized;
+
+        /// <summary>Normal third-person view: camera behind the hero, slightly offset.</summary>
+        private static Vector3 RearThreeQuarter(Transform bodyT, float sideFactor, float up) =>
+            (-bodyT.forward + bodyT.right * sideFactor + Vector3.up * up).normalized;
 
         private static Vector3 FullBodyAim(GameObject hero)
         {

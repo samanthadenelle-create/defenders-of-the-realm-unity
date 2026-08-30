@@ -3,6 +3,7 @@
     "rootNamespace": "DeNelle.Data.Tests",
     "references": [
         "DeNelle.Core",
+        "DeNelle.Commerce",
         "DeNelle.Data",
         "DeNelle.Village",
         "DeNelle.Pets",

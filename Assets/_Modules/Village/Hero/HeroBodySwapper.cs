@@ -732,6 +732,22 @@ namespace DeNelle.Village
             // seated by the Offset Forge 'sword_A'/'shield_A' entries (AttachmentOffsetRegistry). Only
             // the ARMOR OVERLAY + primitive GearVisualApplier stay suppressed below (they would hide or
             // duplicate the body). Set ff.knightv3=0 to restore the package/legacy gear behavior.
+            // The marker describes the CURRENT body, not the hero root forever. A package fallback
+            // can be replaced by the bare KnightV3 body on a later rebuild/load. Leaving the old
+            // marker on the persistent root makes EquipmentController believe KnightV3 still has a
+            // baked shield, so it suppresses the equipped off-hand even though the inventory row is
+            // restored correctly. Clear stale package authority before EquipmentController re-seats.
+            if (!usePackage && TryGetComponent(out PackageBakedGearMarker staleBakedGearMarker))
+            {
+                // Destroy is end-of-frame in play mode. Disable synchronously so an existing
+                // EquipmentController and the seed's immediate OnGearChanged see the bare-body
+                // truth during this same call.
+                staleBakedGearMarker.enabled = false;
+                Destroy(staleBakedGearMarker);
+                FlowTrace.Step("HeroBody",
+                    "cleared stale PackageBakedGearMarker for a bare body - equipped weapon/shield props may attach. " +
+                    $"frame={Time.frameCount}");
+            }
             if (usePackage && GetComponent<PackageBakedGearMarker>() == null)
             {
                 gameObject.AddComponent<PackageBakedGearMarker>();

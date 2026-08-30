@@ -199,7 +199,8 @@ namespace DeNelle.Editor.Regression
             // The budget must SUM, or the stack overruns the price lane again (the 268..330 overlap).
             float requiredStandard = StorePackCard.StandardArtPx
                                    + StorePackCard.NameBlockPx(StorePackCardVariant.Standard)
-                                   + StorePackCard.ContentsBlockPx + StorePackCard.PriceBlockPx;
+                                   + StorePackCard.ContentsBlockPx(StorePackCardVariant.Standard)
+                                   + StorePackCard.PriceBlockPx(StorePackCardVariant.Standard);
             if (standard < requiredStandard)
                 failures.Add($"standard card ({standard:0}px) is shorter than the blocks it must carry " +
                              $"({requiredStandard:0}px of art + name + contents + price, before any gap) - " +
@@ -237,7 +238,7 @@ namespace DeNelle.Editor.Regression
             Require(card, "float y = artH + TextGapPx",
                 "the card's text stack no longer starts below the art well — name and the state/badge " +
                 "pill can occupy the same lane.", failures);
-            Require(card, "float priceLaneTop = cardH - (BottomPadPx + PriceBlockPx)",
+            Require(card, "float priceLaneTop = cardH - (BottomPadPx + priceBlock)",
                 "the card's text stack no longer reserves the bottom-pinned price lane before it " +
                 "spends its budget - that is the 268..330 contents-over-price overlap (WO-1162 FIX 2).",
                 failures);

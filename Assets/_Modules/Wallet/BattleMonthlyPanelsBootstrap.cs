@@ -48,6 +48,7 @@ using UnityEngine;
 using UnityEngine.SceneManagement;
 using DeNelle.Core.UI;
 using DeNelle.Core.Diagnostics;
+using DeNelle.Commerce;   // WO-1282 - ArenaOutcomeRelay, the rail-neutral XP door
 
 namespace DeNelle.Wallet
 {
@@ -73,8 +74,23 @@ namespace DeNelle.Wallet
             // authored card, exactly as the panel's own ActiveCard does.
             PanelRouter.Register(PanelId.MonthlyLedger, (string sku) => OpenMonthlyLedger(sku));
 
+            // WO-1282 - THE XP DOOR. DeNelle.Village.Arena.ArenaProgressStore used to call
+            // BattlePassService.OnArenaResult directly; Village no longer references DeNelle.Wallet,
+            // so it publishes to ArenaOutcomeRelay (DeNelle.Commerce) and this line is the ONLY
+            // thing that connects that publication to the battle pass.
+            //
+            // ⛔ THE SHAPE IS UNCHANGED AND MUST STAY UNCHANGED: (win, streak, perfect) - an
+            // OUTCOME, never an amount. BattlePassService.OnArenaResult is still the one public way
+            // XP enters the service (its own header, owner ruling Q4 "NEVER SELL TIERS"), and
+            // BattleMonthlyRegression's [xp-one-door] case asserts this wiring in source.
+            //
+            // BeforeSceneLoad is early enough by construction: an arena bout cannot finish before
+            // the first scene has loaded, so no result can be published into an empty handler.
+            ArenaOutcomeRelay.RegisterHandler(BattlePassService.OnArenaResult);
+
             FlowTrace.Step("BattlePass",
-                "BattleMonthlyPanelsBootstrap: PanelId.BattlePass + PanelId.MonthlyLedger openers registered.");
+                "BattleMonthlyPanelsBootstrap: PanelId.BattlePass + PanelId.MonthlyLedger openers registered, " +
+                "ArenaOutcomeRelay -> BattlePassService.OnArenaResult wired.");
         }
 
         /// <summary>

@@ -112,6 +112,7 @@ namespace DeNelle.Village
         private GameObject _canvas;           // own overlay canvas (kit BuildModalCanvas)
         private Transform _stripContent;      // horizontal-layout card host inside the scroll
         private TextMeshProUGUI _balanceLabel;
+        private BuildCollectionBrowser _collectionBrowser;
         private string _armedId;
 
         // Collapse-on-place (owner "minimize on select" + 2026-07-16 redesign): while an
@@ -290,12 +291,14 @@ namespace DeNelle.Village
 
         private void OnDisable()
         {
+            _collectionBrowser?.Close();
             if (_vm != null) _vm.Changed -= OnVmChanged;
         }
 
         private void OnDestroy()
         {
             if (_vm != null) { _vm.Changed -= OnVmChanged; _vm.Dispose(); _vm = null; }
+            _collectionBrowser?.Close();
             if (_canvas != null) Destroy(_canvas);
         }
 
@@ -318,13 +321,22 @@ namespace DeNelle.Village
 
         public void Show()
         {
-            EnsureBuilt();
-            if (_canvas != null) _canvas.SetActive(true);
-            Render();
+            // WO-1273: Build browsing is category-first and remains paused until the
+            // player chooses Place or exits. Placement still enters through the exact
+            // existing OnEntrySelected -> BuildModeController.Arm seam.
+            if (_collectionBrowser == null)
+            {
+                _collectionBrowser = gameObject.GetComponent<BuildCollectionBrowser>();
+                if (_collectionBrowser == null)
+                    _collectionBrowser = gameObject.AddComponent<BuildCollectionBrowser>();
+            }
+            if (_canvas != null) _canvas.SetActive(false);
+            _collectionBrowser.Show(entry => OnEntrySelected?.Invoke(entry));
         }
 
         public void Hide()
         {
+            _collectionBrowser?.Close();
             if (_canvas != null) _canvas.SetActive(false);
             _armedId = null;
         }
@@ -840,17 +852,15 @@ namespace DeNelle.Village
         /// </summary>
         public void Expand()
         {
-            if (_canvas == null) return;
-            if (_topBarGo != null) _topBarGo.SetActive(true);
-            if (_crystalsRowGo != null) _crystalsRowGo.SetActive(true);
-            if (_trayGo != null) _trayGo.SetActive(true);
-            IsCollapsed = false;
-            // WO-1010 D21: the quick-tab stack STAYS UP — it is the permanent category
-            // selector in the PICK phase too (the bottom tab band is gone).
+            // PROD-018: WO-1273 retired the legacy carousel as the browsing owner.
+            // Placement/cancel still returns through Expand(), so restore the live
+            // collection browser and force it to re-evaluate singleton eligibility.
             _armedId = null;
-            if (_canvas.activeSelf) Render();
+            IsCollapsed = false;
+            Show();
             FlowTrace.Step("BuildPalette",
-                "expand: armed cleared + cards re-rendered (live cost + single-card glow refresh); quick-tabs stand");
+                "expand: restored BuildCollectionBrowser categories after place/cancel; " +
+                "eligibility re-rendered and legacy carousel remains inactive");
         }
 
         /// <summary>

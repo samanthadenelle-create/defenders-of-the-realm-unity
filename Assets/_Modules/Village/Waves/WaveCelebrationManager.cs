@@ -114,6 +114,13 @@ namespace DeNelle.Village
             StartCoroutine(WaveClearRoutine(waveNumber));
         }
 
+        public static float Significance01(int waveNumber)
+        {
+            if (waveNumber <= 1) return 0f;
+            if (waveNumber >= 7 && waveNumber % 7 == 0) return 1f;
+            return Mathf.Clamp01((waveNumber - 1f) / 12f);
+        }
+
         // ── Main sequence ─────────────────────────────────────────────────────
 
         private IEnumerator WaveClearRoutine(int waveNumber)
@@ -123,19 +130,22 @@ namespace DeNelle.Village
             mobile = _reducedOnMobile;
 #endif
             float mobileMult = mobile ? 0.6f : 1f;
+            float significance = Significance01(waveNumber);
+            float celebrationMult = Mathf.Lerp(0.45f, 1f, significance);
 
             // 1. Bloom spike (fire-and-forget coroutine).
             if (_bloomAvailable)
-                StartCoroutine(BloomSpike(_bloomPeakIntensity * mobileMult));
+                StartCoroutine(BloomSpike(_bloomPeakIntensity * mobileMult * celebrationMult));
 
             // 2. Screen flash.
             StartCoroutine(ScreenFlash(mobile));
 
             // 3. Slow-mo dip.
-            StartCoroutine(SlowMoDip(_slowMoDuration * mobileMult));
+            StartCoroutine(SlowMoDip(_slowMoDuration * mobileMult * celebrationMult));
 
             // 4. VFX rain bursts.
-            int bursts = mobile ? Mathf.Max(1, _celebrationBursts - 1) : _celebrationBursts;
+            int maxBursts = mobile ? Mathf.Max(1, _celebrationBursts - 1) : _celebrationBursts;
+            int bursts = Mathf.Clamp(Mathf.RoundToInt(Mathf.Lerp(1f, maxBursts, significance)), 1, maxBursts);
             Vector3 origin = _textSpawnPoint != null
                 ? _textSpawnPoint.position
                 : Vector3.zero;
@@ -181,7 +191,7 @@ namespace DeNelle.Village
             }
 
             // 6. Camera shake.
-            float shakeIntensity = mobile ? 0.25f : 0.42f;
+            float shakeIntensity = (mobile ? 0.25f : 0.42f) * celebrationMult;
             CameraShakeBridge.Shake(shakeIntensity, 0.35f);
 
             // AudioService.Instance?.PlaySfx(SfxId.WaveClear);

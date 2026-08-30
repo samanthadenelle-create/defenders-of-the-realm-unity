@@ -43,7 +43,13 @@ using DeNelle.Core.Catalog;
 using DeNelle.Core.Jobs;
 using DeNelle.Core.State;
 using DeNelle.Village.Monetization;   // WO-1120 — AdGateService, the ad-placements.json interpreter
-using DeNelle.Wallet;                 // WO-1253 — PackCatalog.PermanentBuilderSku ownership
+using DeNelle.Wallet;                 // WO-1253 — PackCatalog.PermanentBuilderSku ownership.
+                                      // WO-1282 — PackCatalog now lives in the RAIL-NEUTRAL
+                                      // DeNelle.Commerce assembly (Village no longer references
+                                      // DeNelle.Wallet at all), but it KEEPS the DeNelle.Wallet
+                                      // NAMESPACE: PromoCodeService resolves "DeNelle.Wallet.
+                                      // PackContents" as a reflection string literal. Namespace and
+                                      // assembly are orthogonal; this using still resolves.
 
 // WO-911 refund plumbing refers to the resource ledger as `Ledger.*` (ResourceCost,
 // HarvestResource, ResourceLedger). There is no namespace by that name - those types
@@ -205,7 +211,58 @@ namespace DeNelle.Village
             // WO-1253: the permanent-builder SKU is CONCURRENCY on the Builder channel only.
             // It never widens Train/Research and never raises queue depth.
             bool extraBuilder = id == ChannelId.Builder && OwnsPermanentBuilder();
-            return ConcurrencyOf(free, bought, extraBuilder);
+            bool temporaryBuilder = id == ChannelId.Builder && ch != null &&
+                                    IsTemporarySlotActive(ch.TemporarySlotEndsAtUnixMs, TimeSource.NowUnixMs());
+            return ConcurrencyOf(free, bought, extraBuilder) + (temporaryBuilder ? 1 : 0);
+        }
+
+        /// <summary>Pure wall-clock check used by the live service and focused regression.</summary>
+        public static bool IsTemporarySlotActive(double endsAtUnixMs, double nowUnixMs)
+            => endsAtUnixMs > 0d && nowUnixMs < endsAtUnixMs;
+
+        /// <summary>One-time grant guard, kept pure so stacking/reclaim regressions are headless.</summary>
+        public static bool CanClaimTemporarySlot(bool alreadyClaimed) => !alreadyClaimed;
+
+        /// <summary>
+        /// Grants the builder-only temporary worker once. An active window is refused rather than
+        /// stacked, extended, or reclaimed after expiry. The server must still verify the purchase
+        /// before calling this seam; this durable guard makes local settlement idempotent.
+        /// </summary>
+        public bool TryGrantTemporaryBuilder(double durationSeconds, out string failure)
+        {
+            failure = null;
+            var ch = GetChannel(ChannelId.Builder);
+            if (ch == null) { failure = "Save not loaded."; return false; }
+
+            double now = TimeSource.NowUnixMs();
+            if (!CanClaimTemporarySlot(ch.TemporarySlotClaimed))
+            {
+                failure = IsTemporarySlotActive(ch.TemporarySlotEndsAtUnixMs, now)
+                    ? "Temporary builder is already active."
+                    : "Temporary builder was already claimed.";
+                return false;
+            }
+
+            double seconds = Math.Max(0d, durationSeconds);
+            if (seconds <= 0d) { failure = "Temporary builder duration is disabled."; return false; }
+            ch.TemporarySlotClaimed = true;
+            ch.TemporarySlotEndsAtUnixMs = now + seconds * 1000d;
+            Persist();
+            ObsidianQueueEngine.PullIntoFreeSlots(ch, SlotCount(ChannelId.Builder), now);
+            Persist();
+            RaiseQueueChanged();
+            return true;
+        }
+
+        /// <summary>Data-first default grant; pack/server settlement may call this after ownership verification.</summary>
+        public bool TryGrantTemporaryBuilder(out string failure)
+            => TryGrantTemporaryBuilder(Config != null ? Config.temporaryBuilderSeconds : 0f, out failure);
+
+        /// <summary>Seconds remaining on the temporary Builder worker; zero after expiry.</summary>
+        public double TemporaryBuilderSecondsRemaining()
+        {
+            var ch = GetChannel(ChannelId.Builder);
+            return ch == null ? 0d : Math.Max(0d, (ch.TemporarySlotEndsAtUnixMs - TimeSource.NowUnixMs()) / 1000d);
         }
 
         /// <summary>

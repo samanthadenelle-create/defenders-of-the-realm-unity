@@ -4,6 +4,7 @@
     "references": [
         "DeNelle.EditorRegression",
         "DeNelle.Core",
+        "DeNelle.Commerce",
         "DeNelle.Village",
         "DeNelle.Wallet",
         "DeNelle.Data",

@@ -427,6 +427,7 @@ namespace DeNelle.Editor
             //     entire (fully built, fully suite-covered) training stack became unreachable and no
             //     existing suite noticed — every one tested a LAYER, none tested the DOOR ---
             if (!ManageTroopsTrainDoorRegression.Run(out var manageTrainDoorReason)) failures.Add(manageTrainDoorReason); else log.AppendLine("[manage-train-door] " + manageTrainDoorReason);
+            if (!ManageProgressiveDisclosureRegression.Run(out var manageDisclosureReason)) failures.Add(manageDisclosureReason); else log.AppendLine("[manage-progressive-disclosure] " + manageDisclosureReason);
             // --- 2026-08-07: two fixes that shipped WITHOUT a pin, both "must never come back":
             //     the rewarded-ad stub that GRANTED THE REWARD with no SDK (a free timer skip on
             //     every channel), and the arena home-return that lived on a UI object three paths
@@ -458,6 +459,7 @@ namespace DeNelle.Editor
             //     prompt became a silent no-op, and a selected structure said "Repair?" with no
             //     way to confirm. This is the only automated detector that seam has. ---
             if (!RepairHudContractRegression.Run(out var repairHudReason)) failures.Add(repairHudReason); else log.AppendLine("[repair-hud-contract] " + repairHudReason);
+            if (!RepairPromptReadabilityRegression.Run(out var repairPromptReadabilityReason)) failures.Add(repairPromptReadabilityReason); else log.AppendLine("[repair-prompt-readability] " + repairPromptReadabilityReason);
             if (!OrcRigBindingAudit.Run(out var orcBindingReason)) failures.Add(orcBindingReason); else log.AppendLine("[orc-binding] " + orcBindingReason);
             if (!HeroLocomotionClipRegression.Run(out var heroLocoClipReason)) failures.Add(heroLocoClipReason); else log.AppendLine("[hero-loco-clips] " + heroLocoClipReason);
             // --- UI-Obsidian conformance (style-everything-obsidian LAW): flags NEW hand-rolled uGUI vs baseline debt ---
@@ -495,6 +497,11 @@ namespace DeNelle.Editor
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "wall-mitigation suite", () => { if (!WallHeartMitigationRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[wall-mitigation] " + r); });
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "pack-grant suite", () => { if (!PackGrantRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[pack-grant] " + r); });
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "builder-sku suite", () => { if (!DeNelle.Editor.Regression.BuilderSkuRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[builder-sku] " + r); });
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "temporary-builder suite", () => { if (!DeNelle.Editor.Regression.TemporaryBuilderRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[temporary-builder] " + r); });
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "card-collection-foundation suite", () => { if (!DeNelle.Editor.Regression.CardCollectionFoundationRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[card-collection-foundation] " + r); });
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "build-collection-player suite", () => { if (!DeNelle.Editor.Regression.BuildCollectionPlayerRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[build-collection-player] " + r); });
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "post-wave-victory-modal suite", () => { if (!DeNelle.Editor.Regression.PostWaveVictoryModalRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[post-wave-victory-modal] " + r); });
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "night-market-shared-card suite", () => { if (!DeNelle.Editor.Regression.NightMarketSharedCardRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[night-market-shared-card] " + r); });
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "upgrade-authority suite", () => { if (!BuildingUpgradeAuthorityRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[upgrade-authority] " + r); });
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "queue-full-surface suite", () => { if (!UpgradeQueueFullSurfaceRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[queue-full-surface] " + r); });
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "upgrade-family suite", () => { if (!UpgradeFamilyPrecedenceRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[upgrade-family] " + r); });
@@ -609,6 +616,8 @@ namespace DeNelle.Editor
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "starter-loadout suite", () => { if (!DeNelle.Editor.Regression.StarterLoadoutRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[starter-loadout] " + r); });
             // --- shields: every shield carries a real defense value, the ladder climbs with req.level, and GearLoadout actually SUMS the off-hand (all three were missing - shields were pure decoration) ---
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "shield-defense suite", () => { if (!DeNelle.Editor.Regression.ShieldDefenseRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[shield-defense] " + r); });
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "shield-load-restore suite", () => { if (!DeNelle.Editor.Regression.ShieldLoadRestoreRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[shield-load-restore] " + r); });
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "jeweler-discovery-ftue suite", () => { if (!DeNelle.Editor.Regression.JewelerDiscoveryFtueRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[jeweler-discovery-ftue] " + r); });
             // --- tower empowerment reachability: Tower.TryEmpower (tower-perks tier 4 + TowerCombat's GlacialCore/TrueAim/ManaSurge/EternalEmber) is gated by ONE affordance. This suite resolves the path outward from the gate - callers, then their referrers, then scene/prefab placements - and declares whether any of it is anchored in shipping code. It PINS today's orphan state, so wiring the affordance fails the suite until the expectation flag is flipped (which is what forces the owner's felt-verify of the new power). ---
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "tower-empower-reach suite", () => { if (!DeNelle.Editor.Regression.TowerEmpowermentReachabilityRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[tower-empower-reach] " + r); });
 
@@ -940,6 +949,7 @@ namespace DeNelle.Editor
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "tutorial-anchor-latch suite", () => { if (!DeNelle.Editor.Regression.TutorialAnchorLatchRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[tutorial-anchor-latch] " + r); });
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "tutorial-watchdog-bound suite", () => { if (!DeNelle.Editor.Regression.TutorialWatchdogBoundRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[tutorial-watchdog-bound] " + r); });
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "build-carousel-order suite", () => { if (!DeNelle.Editor.Regression.BuildCarouselTutorialOrderRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[build-carousel-order] " + r); });
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "build-first-use-guide suite", () => { if (!DeNelle.Editor.Regression.BuildFirstUseGuideRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[build-first-use-guide] " + r); });
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "founding-guide-wolf suite", () => { if (!DeNelle.Editor.Regression.FoundingGuideWolfBodyRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[founding-guide-wolf] " + r); });
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "hub-tree-aura suite", () => { if (!DeNelle.Editor.Regression.HubTreeAuraWithholdRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[hub-tree-aura] " + r); });
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "hud-class-fallback suite", () => { if (!DeNelle.Editor.Regression.HudHeroClassFallbackRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[hud-class-fallback] " + r); });
@@ -978,6 +988,7 @@ namespace DeNelle.Editor
             //     ability through the real ResolveKey(id, effect) -> Resolve -> DefaultSprite chain and
             //     compares the resulting Sprite REFERENCE to attack_sword / icon_shield / icon_combat. ---
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "mage-ability-icons suite", () => { if (!DeNelle.Editor.Regression.MageAbilityIconRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[mage-ability-icons] " + r); });
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "knight-heal-icon suite", () => { if (!DeNelle.Editor.Regression.KnightHealIconRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[knight-heal-icon] " + r); });
             // --- WO-1166: the hero-select cards are a HAND-MIRROR of abilities.json (Onboarding cannot
             //     reference AbilityCatalog), and had drifted: the mage advertised Frost Nova / Arcane Bolt /
             //     Healing Beacon on a slot letter "F" that does not exist. This pins every advertised name +
@@ -1098,6 +1109,13 @@ namespace DeNelle.Editor
             // mirror unparseable) with every marker green. Pins the shield_A rows through
             // the real Resources-first read path + the WO-994 seat-drift tripwire wiring.
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "attachment-offset suite", () => { if (!DeNelle.Editor.Regression.AttachmentOffsetRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[attachment-offset] " + r); });
+
+            // --- STORE ASSET MESH READABILITY (WO-1284, 2026-08-30): generalises
+            // AttachmentOffsetRegression.Case11 from the one PROD-019 shield to the whole
+            // held-prop catalogue. An FBX imported with isReadable=0 keeps its verts CPU-side
+            // in the EDITOR and returns ZERO of them in a player build, so every orientation
+            // measurement degrades silently and no editor-side proof can see it.
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "store-mesh-readable suite", () => { if (!DeNelle.Editor.Regression.StoreAssetMeshReadabilityRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[store-mesh-readable] " + r); });
 
             // --- GEAR PROP RENDERS (owner report 2026-08-18, build 2026.08.19.331306:
             // "shield is missing and sword is now wrong"). The device trace carried

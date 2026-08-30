@@ -14,6 +14,7 @@ namespace DeNelle.Village.Crafting
         public static VillageInventory Instance { get; private set; }
 
         public event Action Changed;
+        public event Action<string> FirstAcquired;
 
         [SerializeField]
         private Dictionary<string, int> _counts = new Dictionary<string, int>();
@@ -116,6 +117,31 @@ namespace DeNelle.Village.Crafting
             Changed?.Invoke();
         }
 
+        /// <summary>
+        /// Adds an item earned through an authoritative gameplay reward. Unlike Add (shops,
+        /// dev tools and compatibility callers), this advances persistent discovery history.
+        /// </summary>
+        public bool AddEarned(string id, int amount)
+        {
+            if (string.IsNullOrEmpty(id) || amount <= 0) return false;
+            EnsureLoaded();
+            if (!_counts.ContainsKey(id)) _counts[id] = 0;
+            _counts[id] += amount;
+            var state = DeNelle.Core.State.GameStateService.Instance?.State;
+            bool firstAcquisition = state != null && state.MarkEverAcquired(id);
+            SyncToState();
+            Changed?.Invoke();
+            if (firstAcquisition) FirstAcquired?.Invoke(id);
+            return firstAcquisition;
+        }
+
+        /// <summary>True even after the current stack has been completely consumed.</summary>
+        public bool HasEverAcquired(string id)
+        {
+            EnsureLoaded();
+            return DeNelle.Core.State.GameStateService.Instance?.State?.HasEverAcquired(id) == true;
+        }
+
         public bool TryConsume(string id, int amount)
         {
             if (string.IsNullOrEmpty(id) || amount <= 0) return false;
@@ -168,6 +194,20 @@ namespace DeNelle.Village.Crafting
             var go = new GameObject("[VillageInventory]");
             DontDestroyOnLoad(go);
             Instance = go.AddComponent<VillageInventory>();
+        }
+    }
+
+    /// <summary>The single persistent gate every Jeweler navigation surface reads.</summary>
+    public static class JewelerProgression
+    {
+        public static bool IsUnlocked
+        {
+            get
+            {
+                var state = DeNelle.Core.State.GameStateService.Instance?.State;
+                return state != null && state.HasEverAcquired(
+                    DeNelle.Core.Catalog.DungeonExclusiveItems.RoughStoneId);
+            }
         }
     }
 }

@@ -442,7 +442,8 @@ namespace DeNelle.Village
             body.SetActive(false);
 
             // ArmController already set applyRootMotion = false (the worker stands its ground).
-            return body.GetComponent<ConstructionWorker>() ?? body.AddComponent<ConstructionWorker>();
+            var worker = body.GetComponent<ConstructionWorker>();
+            return worker != null ? worker : body.AddComponent<ConstructionWorker>();
         }
 
         /// <summary>The lazily created, never-serialized parent every parked body lives under.

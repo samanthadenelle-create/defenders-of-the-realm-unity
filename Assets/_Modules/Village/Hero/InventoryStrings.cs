@@ -85,6 +85,10 @@ namespace DeNelle.Village
         public const string KeyPaneGearGaps         = "invPaneGearGaps";
         /// <summary>Shown where the delta column would be while the model exposes no worn comparison.</summary>
         public const string KeyPaneNothingToCompare = "invPaneNothingToCompare";
+        public const string KeyGearPaneTitle        = "invGearPaneTitle";
+        public const string KeyGearPaneGuide        = "invGearPaneGuide";
+        public const string KeyGearPaneOpenSlots    = "invGearPaneOpenSlots";
+        public const string KeyGearPaneComplete     = "invGearPaneComplete";
 
         // ── Pane, item selected ──────────────────────────────────────────────
         /// <summary>Compare column header — what is worn.</summary>
@@ -144,6 +148,7 @@ namespace DeNelle.Village
             KeyEmptyWeapons, KeyEmptyArmor, KeyEmptyTrinkets, KeyEmptyPotions, KeyEmptySkills,
             KeyEmptyMapLocked,
             KeyPaneNoSelection, KeyPaneGearGaps, KeyPaneNothingToCompare,
+            KeyGearPaneTitle, KeyGearPaneGuide, KeyGearPaneOpenSlots, KeyGearPaneComplete,
             KeyPaneColumnWorn, KeyPaneColumnThis, KeyPaneWornBadge,
             KeyActionEquip, KeyActionUse, KeyActionWorn, KeyActionGoTo,
             KeyNextReplaces, KeyNextCompareHint, KeyNextRailHint, KeyNextCountHint,

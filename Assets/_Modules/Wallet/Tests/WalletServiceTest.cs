@@ -2,7 +2,7 @@
 // Wallet — WalletService tests (EditMode)
 // -----------------------------------------------------------------------------
 // qa-test-plan.md TC-WAL-01 / TC-WAL-03 / TC-WAL-04 / TC-WAL-06: the app-facing
-// WalletService must default to Devnet, route connect / balance / pay through
+// WalletService must default to the owner-ruled production Mainnet, route connect / balance / pay through
 // its IWalletProvider seam, and surface clean failures.
 //
 // BACKTEST-WITH-STUBS: WalletService depends only on the IWalletProvider
@@ -105,18 +105,18 @@ namespace DeNelle.Wallet.Tests
         // =====================================================================
 
         [Test]
-        public void default_network_constant_is_devnet()
+        public void default_network_constant_is_mainnet()
         {
-            Assert.That(WalletService.DefaultNetwork, Is.EqualTo(WalletNetwork.Devnet),
-                "the v2 foundation ships Devnet only (spec Part 10).");
+            Assert.That(WalletService.DefaultNetwork, Is.EqualTo(WalletNetwork.Mainnet),
+                "WO-1159 records Mainnet sales as live and permanently moved the production default.");
         }
 
         [Test]
-        public void a_new_service_starts_on_devnet()
+        public void a_new_service_starts_on_mainnet()
         {
             var service = new WalletService(new FakeWalletProvider());
-            Assert.That(service.Network, Is.EqualTo(WalletNetwork.Devnet));
-            Assert.That(service.NetworkLabel, Is.EqualTo("Devnet"));
+            Assert.That(service.Network, Is.EqualTo(WalletNetwork.Mainnet));
+            Assert.That(service.NetworkLabel, Is.EqualTo("Mainnet"));
         }
 
         [Test]

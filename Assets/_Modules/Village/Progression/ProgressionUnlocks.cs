@@ -31,6 +31,9 @@ namespace DeNelle.Village
     {
         private const string KeyPrefix = "unlock.";
 
+        /// <summary>Raised only after a new unlock has been persisted.</summary>
+        public static event System.Action<string> Changed;
+
         /// <summary>The SeenTutorials key an unlock flag for <paramref name="catalogId"/> lives under.</summary>
         public static string KeyFor(string catalogId) => KeyPrefix + (catalogId ?? string.Empty);
 
@@ -66,6 +69,7 @@ namespace DeNelle.Village
             svc.MarkTutorialSeen(KeyFor(catalogId));
             FlowTrace.Step("Progression",
                 $"unlock persisted: '{KeyFor(catalogId)}' = true (SeenTutorials store, saved)");
+            Guard.Try("Progression", "unlock changed notification", () => Changed?.Invoke(catalogId));
             return true;
         }
     }

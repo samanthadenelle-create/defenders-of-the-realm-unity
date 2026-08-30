@@ -128,6 +128,12 @@ namespace DeNelle.Editor.Regression
                 failures.Add("[wo-1254-tabs] Off Hand projection/direct equip seam missing");
             if (!grid.Contains("PeekContent") || !grid.Contains("0.40f") || !grid.Contains("ScrollbarVisibility.Permanent"))
                 failures.Add("[wo-1254-tabs] peek strip, 40% tell, or permanent scrollbar missing");
+            string pane = ReadSrc(PaneSrc);
+            if (pane == null || !pane.Contains("BuildGearGuidance(host)") ||
+                !pane.Contains("Gear guidance pane: no duplicated loadout rows"))
+                failures.Add("[wo-1254-tabs] Gear landing pane again duplicates the authoritative worn-slot list");
+            if (!grid.Contains("browse.onClick.AddListener(() => SelectRail(destination))"))
+                failures.Add("[wo-1254-tabs] worn rows no longer provide direct replacement-category navigation");
             if (Regex.IsMatch(StripComments(grid), @"new Vector2\(78f,\s*72f\)"))
                 failures.Add("[wo-1254-tabs] legacy sub-floor cell returned");
             if (!shop.Contains("PartyShopCategory.OffHand") || !resolver.Contains("ReserveMainAndOffHand"))

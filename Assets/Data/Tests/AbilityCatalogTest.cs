@@ -113,19 +113,20 @@ namespace DeNelle.Data.Tests
             Assert.That(q.Name, Is.EqualTo("Fireball"),
                 "canon ability name — verbatim, never paraphrased (WO-861 A1).");
             Assert.That(q.EffectEnum, Is.EqualTo(AbilityEffect.Strike));
-            Assert.That(q.ManaCost, Is.EqualTo(0f),
-                "the mage primary stays the NO-MANA attack — out of mana must never mean unarmed " +
-                "(WO-861: mana is the survival lifeline, so the basic can never be gated on it).");
+            Assert.That(q.ManaCost, Is.EqualTo(3f),
+                "WO-999's 2026-08-21 felt retune makes Fireball spend Mana so sustained Q casting " +
+                "exhausts the pool (eight casts from the authored 24 Mana).");
             Assert.That(q.Range, Is.GreaterThan(0f),
                 "Thrain is a RANGED glass cannon — his primary must not be melee-range.");
         }
 
         [Test]
-        public void mage_r_is_the_canon_meteor_strike_ultimate()
+        public void mage_r_is_the_canon_poison_cloud_ultimate()
         {
             var r = AbilityCatalog.Find("mage", AbilitySlot.R);
-            Assert.That(r.Name, Is.EqualTo("Meteor Strike"));
-            Assert.That(r.EffectEnum, Is.EqualTo(AbilityEffect.Meteor));
+            Assert.That(r.Name, Is.EqualTo("Poison Cloud"));
+            Assert.That(r.Effect, Is.EqualTo("dot"),
+                "Poison uses the shipped raw-string dot resolver; the legacy React enum has no dot member.");
             Assert.That(r.Cooldown, Is.GreaterThan(0f), "the ultimate has a cooldown.");
         }
 

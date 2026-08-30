@@ -29,6 +29,7 @@ using UnityEngine;
 using UnityEngine.SceneManagement;
 using DeNelle.Core.UI;
 using DeNelle.Core.Diagnostics;
+using DeNelle.Commerce;   // WO-1282 - StorefrontRegistry, the rail-neutral host handle
 
 namespace DeNelle.Wallet
 {
@@ -46,6 +47,27 @@ namespace DeNelle.Wallet
             // future entry point open the store via PanelRouter.Open(PanelId.RealmStore).
             PanelRouter.Register(PanelId.RealmStore, OpenRealmStore);
             FlowTrace.Step("Store", "PackStoreBootstrap: PanelId.RealmStore opener registered.");
+
+            // WO-1282 - the second door, for callers that need the HOST rather than an open request.
+            // MarketplaceInteractor (DeNelle.Village) used to reach it with
+            // FindAnyObjectByType<PackStore>(FindObjectsInactive.Include); Village no longer
+            // references DeNelle.Wallet, so the SAME search is installed here as a lazy resolver and
+            // still runs at call time with inactive objects included. Registering a resolver rather
+            // than an instance is load-bearing: the store host is DISABLED in the scene by design,
+            // so it never runs Awake and could never push itself into a registry.
+            StorefrontRegistry.RegisterResolver(ResolveStorefrontRoot);
+        }
+
+        /// <summary>
+        /// The <see cref="StorefrontRegistry"/> resolver. Returns the PackStore host if one exists
+        /// in the loaded scenes (inactive included), else null. Deliberately does NOT spawn one:
+        /// a handle lookup must not have the side effect of creating a storefront - that is what
+        /// <see cref="OpenRealmStore"/> is for.
+        /// </summary>
+        private static GameObject ResolveStorefrontRoot()
+        {
+            var store = UnityEngine.Object.FindAnyObjectByType<PackStore>(FindObjectsInactive.Include);
+            return store != null ? store.gameObject : null;
         }
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]

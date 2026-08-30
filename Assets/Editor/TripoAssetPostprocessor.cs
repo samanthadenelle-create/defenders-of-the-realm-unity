@@ -139,10 +139,57 @@ namespace DeNelle.Editor
         private void OnPostprocessModel(GameObject root)
         {
             if (!IsTripoPath(assetPath)) return;
+
+            // Enemy FBXs commonly export every body mesh as the generic "CC_Base_Body".
+            // Those names survive into the player and make independently authored silhouettes
+            // indistinguishable to runtime diagnostics (and any mesh-keyed presentation cache).
+            // Give every imported EnemyContent mesh a stable model-qualified identity. This is
+            // import metadata only: geometry, skinning, materials and sub-asset file ids stay put.
+            QualifyEnemyMeshNames(root, assetPath);
+
             if (HasMarker(assetPath)) return;
 
             Pending.Add(assetPath);
             ScheduleDrain();
+        }
+
+        private static void QualifyEnemyMeshNames(GameObject root, string path)
+        {
+            if (root == null || string.IsNullOrEmpty(path) ||
+                !path.Replace('\\', '/').StartsWith(DeNelle.Core.AssetRoots.EnemyContent + "/",
+                    System.StringComparison.OrdinalIgnoreCase)) return;
+
+            string model = Path.GetFileNameWithoutExtension(path);
+            var seen = new HashSet<Mesh>();
+            int index = 0;
+            foreach (var renderer in root.GetComponentsInChildren<SkinnedMeshRenderer>(true))
+            {
+                Mesh mesh = renderer != null ? renderer.sharedMesh : null;
+                if (mesh == null || !seen.Add(mesh)) continue;
+                mesh.name = model + "_Mesh" + index++;
+            }
+            foreach (var filter in root.GetComponentsInChildren<MeshFilter>(true))
+            {
+                Mesh mesh = filter != null ? filter.sharedMesh : null;
+                if (mesh == null || !seen.Add(mesh)) continue;
+                mesh.name = model + "_Mesh" + index++;
+            }
+        }
+
+        /// <summary>One-shot/editor-CI repair for enemy models imported before mesh identities
+        /// were qualified. Safe to repeat; OnPostprocessModel derives the same names each time.</summary>
+        [MenuItem("Defenders/Art/Reimport Enemy Mesh Identities")]
+        public static void ReimportEnemyMeshIdentities()
+        {
+            string[] guids = AssetDatabase.FindAssets("t:Model", new[] { DeNelle.Core.AssetRoots.EnemyContent });
+            foreach (string guid in guids)
+            {
+                string path = AssetDatabase.GUIDToAssetPath(guid);
+                if (path.EndsWith(".fbx", System.StringComparison.OrdinalIgnoreCase))
+                    AssetDatabase.ImportAsset(path, ImportAssetOptions.ForceUpdate);
+            }
+            AssetDatabase.SaveAssets();
+            Debug.Log("ENEMY_MESH_IDENTITIES_OK :: reimported " + guids.Length + " EnemyContent models.");
         }
 
         // ---------------------------------------------------------------------

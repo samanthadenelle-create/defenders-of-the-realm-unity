@@ -504,21 +504,46 @@ namespace DeNelle.Village
             bool destroyed = _selected.DamageFraction >= DestroyedFraction;
             string name = _selected.DisplayName;
             string costText = DescribeMaterials(cost);
+            CoreCost shortfall = MaterialShortfall(cost);
+            string action = destroyed ? WallRepairStrings.RebuildLabel : WallRepairStrings.ConfirmLabel;
+            string details = ComposePromptDetails(name, _selected.DamageFraction, costText,
+                DescribeMaterials(shortfall), MaterialsZero(shortfall), action);
             PromptShown?.Invoke(new RepairPromptInfo
             {
                 StructureName = name,
                 // The materials cost travels IN the sub-line (the HUD shows it
                 // verbatim); destroyed rows read "Rebuild", damaged read "Repair".
-                Subtitle = string.Format(
-                    destroyed ? WallRepairStrings.RebuildSubtitleFormat
-                              : WallRepairStrings.SubtitleWithCostFormat,
-                    name, costText),
+                Subtitle = details,
                 CrystalCost = 0,           // owner 2026-07-11: crystals never spent on repair
                 CostText = costText,
                 Affordable = CanAffordMaterials(cost),
                 DamageFraction = _selected.DamageFraction,
                 Destroyed = destroyed,
             });
+        }
+
+        /// <summary>Phone-safe, complete repair copy. Newlines are intentional layout structure.</summary>
+        public static string ComposePromptDetails(string name, float damageFraction, string costText,
+            string shortfallText, bool affordable, string action)
+        {
+            int damage = Mathf.Clamp(Mathf.RoundToInt(damageFraction * 100f), 0, 100);
+            int health = 100 - damage;
+            string availability = affordable ? "Ready to " + action.ToLowerInvariant()
+                : "Shortfall: " + shortfallText;
+            return (string.IsNullOrWhiteSpace(name) ? WallRepairStrings.StructureGenericName : name) + "\n" +
+                   "Health: " + health + "% | Damage: " + damage + "%\n" +
+                   action + " cost: " + costText + "\n" + availability;
+        }
+
+        private static CoreCost MaterialShortfall(CoreCost cost)
+        {
+            var econ = EconomyService.Instance;
+            return new CoreCost {
+                wood = Mathf.Max(0, cost.wood - (econ != null ? econ.Wood : 0)),
+                iron = Mathf.Max(0, cost.iron - (econ != null ? econ.Iron : 0)),
+                food = Mathf.Max(0, cost.food - (econ != null ? econ.Food : 0)),
+                crystals = Mathf.Max(0, cost.crystals - (econ != null ? econ.Crystals : 0)),
+            };
         }
 
         // =====================================================================

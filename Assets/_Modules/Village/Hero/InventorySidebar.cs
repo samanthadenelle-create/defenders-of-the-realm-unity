@@ -59,6 +59,12 @@ namespace DeNelle.Village
         // when the screen OPENS, so it is the state that has to earn the tap.
         private void BuildPaneNoSelection(Transform host)
         {
+            if (_railIndex == RailGear)
+            {
+                BuildGearGuidance(host);
+                return;
+            }
+
             var title = AddLabel(host, InventoryStrings.Get(InventoryStrings.KeyPaneNoSelection),
                      0.90f, 0.98f, InkMicro, ElarionUi.FontMicro,
                      TMPro.TextAlignmentOptions.MidlineLeft, 0.06f, 0.94f, spacing: 2f);
@@ -116,6 +122,50 @@ namespace DeNelle.Village
             FlowTrace.Step("Inventory",
                 $"Pane (no selection): {rows.Length - vacant}/{rows.Length} slots worn, {vacant} vacant; " +
                 $"gap line={(vacant == 2 ? "authored two-slot sentence" : "generic hint (count is not two)")}.");
+        }
+
+        /// <summary>
+        /// Gear already owns the authoritative five-row loadout at left. Repeating those names in
+        /// this pane made the phone screenshot read like two competing sources of truth. The pane
+        /// instead explains the useful next action and names only vacancies, which are information
+        /// the player can act on. The Off Hand row remains visible at left even when its world prop
+        /// is missing; presentation must never conceal that separate renderer defect.
+        /// </summary>
+        private void BuildGearGuidance(Transform host)
+        {
+            var title = AddLabel(host, InventoryStrings.Get(InventoryStrings.KeyGearPaneTitle),
+                0.84f, 0.96f, GiltInk, ElarionUi.FontBody,
+                TMPro.TextAlignmentOptions.MidlineLeft, 0.08f, 0.92f, bold: true);
+            title.raycastTarget = false;
+            ElarionUiKit.FitSingleLine(title, 0f, ElarionUi.FontBody);
+
+            var guide = AddLabel(host, InventoryStrings.Get(InventoryStrings.KeyGearPaneGuide),
+                0.58f, 0.80f, Ink, ElarionUi.FontMicro,
+                TMPro.TextAlignmentOptions.TopLeft, 0.08f, 0.92f);
+            guide.raycastTarget = false;
+
+            var vacant = new System.Collections.Generic.List<string>();
+            if (_loadout == null || _loadout.EquippedWeapon == null) vacant.Add(InventoryStrings.Get(InventoryStrings.KeySlotMainHand));
+            if (_loadout == null || _loadout.EquippedOffHand == null) vacant.Add(InventoryStrings.Get(InventoryStrings.KeySlotOffHand));
+            if (_loadout == null || _loadout.EquippedArmor == null) vacant.Add(InventoryStrings.Get(InventoryStrings.KeySlotArmor));
+            if (_loadout == null || _loadout.EquippedAmulet == null) vacant.Add(InventoryStrings.Get(InventoryStrings.KeySlotAmulet));
+            if (_loadout == null || _loadout.EquippedRing == null) vacant.Add(InventoryStrings.Get(InventoryStrings.KeySlotRing));
+
+            string gapTitle = vacant.Count == 0
+                ? InventoryStrings.Get(InventoryStrings.KeyGearPaneComplete)
+                : InventoryStrings.Format(InventoryStrings.KeyGearPaneOpenSlots, vacant.Count);
+            var gaps = AddLabel(host, gapTitle, 0.42f, 0.53f, InkMicro, ElarionUi.FontMicro,
+                TMPro.TextAlignmentOptions.MidlineLeft, 0.08f, 0.92f, spacing: 2f, bold: true);
+            gaps.raycastTarget = false;
+
+            if (vacant.Count > 0)
+            {
+                var names = AddLabel(host, string.Join("\n", vacant), 0.12f, 0.40f, InkDim,
+                    ElarionUi.FontLabel, TMPro.TextAlignmentOptions.TopLeft, 0.08f, 0.92f);
+                names.raycastTarget = false;
+            }
+
+            FlowTrace.Step("Inventory", $"Gear guidance pane: no duplicated loadout rows; vacancies={vacant.Count}; worn rows route to item tabs.");
         }
 
         // ── ITEM SELECTED ────────────────────────────────────────────────────

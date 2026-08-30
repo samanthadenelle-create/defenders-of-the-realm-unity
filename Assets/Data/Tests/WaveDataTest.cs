@@ -150,15 +150,17 @@ namespace DeNelle.Data.Tests
         }
 
         [Test]
-        public void exactly_one_enemy_is_flagged_boss()
+        public void exactly_one_wave_enemy_is_flagged_boss()
         {
-            // enemies.json — the Necromancer leads boss waves.
+            // The Necromancer leads village waves. Troll Overlord is also boss=true, but is
+            // deliberately camp-only (the authored troll encounter), not a wave boss.
             var catalog = Await(WaveDataLoader.LoadEnemiesAsync());
             int bossCount = 0;
             foreach (var enemy in catalog.Enemies)
-                if (enemy.Boss) bossCount++;
+                if (enemy.Boss && enemy.Spawn != null && enemy.Spawn.Contains("wave")) bossCount++;
             Assert.That(bossCount, Is.EqualTo(1),
-                "exactly one village enemy (the Necromancer) must carry the boss flag.");
+                "exactly one village-wave enemy (the Necromancer) must carry the boss flag; " +
+                "camp bosses are a separate authored context.");
         }
 
         [Test]

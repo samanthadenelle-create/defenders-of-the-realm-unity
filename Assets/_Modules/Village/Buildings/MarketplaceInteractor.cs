@@ -61,11 +61,20 @@ namespace DeNelle.Village
             // Ensure store panel starts hidden regardless of scene save state.
             if (_storeUiRoot != null) _storeUiRoot.SetActive(false);
 
-            // Auto-find PackStore if root not assigned.
+            // Auto-find the storefront host if root not assigned.
+            //
+            // WO-1282 - this used to be FindAnyObjectByType<DeNelle.Wallet.PackStore>(...Include).
+            // DeNelle.Village no longer references DeNelle.Wallet, so the SAME search now lives with
+            // the storefront (PackStoreBootstrap.ResolveStorefrontRoot) and is reached through the
+            // rail-neutral registry. Inactive objects are still included there - the store host is
+            // disabled in the scene by design, which is why this was never a plain registry lookup.
+            //
+            // A null answer is ORDINARY, not an error: a Google Play build carries no Solana
+            // storefront at all. StorefrontRegistry traces the distinction; OpenStore below already
+            // warns when it is asked to open a store it does not have.
             if (_storeUiRoot == null)
             {
-                var ps = Object.FindAnyObjectByType<DeNelle.Wallet.PackStore>(FindObjectsInactive.Include);
-                if (ps != null) _storeUiRoot = ps.gameObject;
+                _storeUiRoot = DeNelle.Commerce.StorefrontRegistry.ResolveRoot();
             }
         }
 

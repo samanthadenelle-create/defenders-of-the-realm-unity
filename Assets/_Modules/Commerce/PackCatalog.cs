@@ -11,6 +11,30 @@
 // The pack store (PackStore.cs) reads PackDefs from here; it never types pack
 // names, prices or contents inline (spec Part 4 — canon strings flow from JSON).
 // =============================================================================
+//
+// =============================================================================
+//  WO-1282 - ASSEMBLY: DeNelle.Commerce.   NAMESPACE: DeNelle.Wallet (DELIBERATE).
+// -----------------------------------------------------------------------------
+// This file MOVED out of DeNelle.Wallet so that DeNelle.Village can stop referencing
+// the Solana rail and a Google Play artifact can exclude DeNelle.Wallet whole
+// (GooglePlayPackagingGate.AssertSourceIsolation). Commerce is rail-neutral by
+// construction: it references DeNelle.Core and NOTHING else, and it may NEVER
+// reference DeNelle.Wallet or DeNelle.Web3. Wallet references Commerce, one way.
+//
+// ⛔ THE NAMESPACE STAYED `DeNelle.Wallet` ON PURPOSE - IT IS A LIVE RUNTIME CONTRACT,
+//    NOT A LEFTOVER. Assets/_Modules/Core/Promo/PromoCodeService.cs resolves
+//    "DeNelle.Wallet.PackContents" as a STRING LITERAL by reflection, walking every
+//    loaded assembly (TryApplyInlinePack). Renaming the namespace compiles perfectly
+//    clean and turns promo-code redemption into a silent runtime no-op - the exact
+//    compiler-invisible landmine WO-1282 was written to avoid. A namespace that a
+//    string resolves at runtime is an interface, and interfaces do not get renamed
+//    for tidiness. (Same reason PackDef.LegacySkus can never be pruned and PackEconomy
+//    keeps the field name `Food` for the authored key `stone`.)
+//
+//    C# namespaces and assemblies are orthogonal; the ASSEMBLY is what the Play build
+//    excludes, and the assembly is DeNelle.Commerce. Nothing about the exclusion needs
+//    the namespace to change.
+// =============================================================================
 
 using System;
 using System.Collections.Generic;
@@ -293,103 +317,31 @@ namespace DeNelle.Wallet
             }
         }
 
-        /// <summary>The native amount payable in the given currency rail.</summary>
-        public double AmountFor(CurrencyKind currency)
-        {
-            if (Pricing == null) return 0d;
-            switch (currency)
-            {
-                case CurrencyKind.Sol: return Pricing.Sol;
-                case CurrencyKind.Usdc: return Pricing.Usdc;
-                case CurrencyKind.Skr:
-                    // ⛔ THE CLIENT DOES NO PRICE ARITHMETIC. WO-1158.
-                    //
-                    // This branch used to read `SkrValuationOracle.SkrForUsd(Pricing.Usd)` - the
-                    // CLIENT resolving a market rate and rounding it into an SKR amount - while the
-                    // BACKEND checked the settled transfer against its own figure. Those two can
-                    // never be made to agree, because they are two different opinions about a
-                    // moving number, and /verify runs AFTER the transfer settles: the moment they
-                    // diverge the player has paid and been granted nothing. The trigger is a MARKET
-                    // MOVE, not a deploy, so nobody would be watching when it fired.
-                    //
-                    // The SERVER now issues the price (api/purchases/quote.js) and this returns
-                    // whatever it quoted, or ZERO.
-                    //
-                    // ⛔ ZERO IS DELIBERATE AND IT IS THE HONEST ANSWER. It is not "free" and it is
-                    // not "fall back to Pricing.Skr" - the authored `pricing.skr` in packs.json is a
-                    // stale hand-typed figure from before the SKR rail existed at a real rate, and
-                    // rendering it would put a number on screen that nobody will honour. Callers
-                    // turn 0 into the WORDS "Price unavailable" (see AmountLabel) and
-                    // WalletService.Pay refuses an amount <= 0 outright, so the fail is closed on
-                    // both the display and the charge path.
-                    //
-                    // The two CANARIES are the one exception and they keep their authored number:
-                    // their amount IS a protocol constant that the backend pins by exact equality
-                    // (a proof-of-rail, not a sale), so a market rate must never touch it.
-                    if (IsServerPinnedSku(Sku)) return Pricing.Skr;
-                    return PurchaseQuoteService.SkrAmountFor(Sku);
-                default: return 0d;
-            }
-        }
-
-        /// <summary>
-        /// True when the BACKEND pins this SKU's on-chain amount and verifies it by exact equality
-        /// (<c>api/_lib/purchase-catalog.js</c>). Such a price may never be resolved from a market
-        /// oracle: client and server must agree to the base unit or the purchase is refused after
-        /// the funds have already moved.
-        /// <para>⚠ Keep this in step with the server catalog. If a SKU is added there, add it here
-        /// in the SAME change - a server-pinned SKU that is missing from this list is a silent
-        /// paid-but-not-granted bug that only fires when the market crosses the price.</para>
-        /// </summary>
-        private static bool IsServerPinnedSku(string sku)
-            => string.Equals(sku, MainnetCanaryCatalog.Sku, System.StringComparison.Ordinal)
-            || string.Equals(sku, PurchaseGate.DevnetCanarySku, System.StringComparison.Ordinal);
-
         /// <summary>The USD reference price string, e.g. <c>"$4.99"</c>.</summary>
+        /// <remarks>Rail-free on purpose: it reads the AUTHORED usd anchor and nothing else, so it
+        /// survives in a build that carries no wallet at all. The rate-derived twin lives with the
+        /// rail - see the pointer below.</remarks>
         public string UsdReference => Pricing != null ? $"${Pricing.Usd:0.00}" : "$0.00";
 
-        /// <summary>
-        /// The USD anchor, MARKED APPROXIMATE - <c>"~ $2.99"</c> (WO-1158 §5, owner ruling
-        /// 2026-08-23: "we should be transparent that price is approx 2.99 or 5.99 or 9.99").
-        ///
-        /// <para>⚠ WHICH NUMBER CARRIES THE "APPROX" IS NOT A WORDING PREFERENCE AND IT IS EASY TO
-        /// GET BACKWARDS. The player pays SKR and the amount charged is EXACT - the server's quote
-        /// pins it to the base unit. What FLOATS is the dollar value, because the rate moves. So the
-        /// SKR is stated precisely (<see cref="AmountLabel"/>) and it is the DOLLARS that get the
-        /// tilde. Printing a flat "$2.99" while charging a rate-derived amount is the misleading
-        /// version, and it is the one a reader assumes.</para>
-        ///
-        /// <para>The SERVER's anchor wins when it differs from the authored one: two prices on one
-        /// screen is worse than a stale one, and the server's is the one the charge is derived from.
-        /// "~" not "≈" on purpose - TMP is ASCII-only here and U+2248 renders as a tofu box.</para>
-        /// </summary>
-        public string UsdApprox
-        {
-            get
-            {
-                double served = PurchaseQuoteService.UsdAnchorFor(Sku);
-                double usd = served > 0d ? served : (Pricing != null ? Pricing.Usd : 0d);
-                return usd > 0d ? $"~ ${usd:0.00}" : string.Empty;
-            }
-        }
-
-        /// <summary>Formats one currency rail's amount + symbol, e.g. <c>"60 SKR"</c>.</summary>
-        public string AmountLabel(CurrencyKind currency)
-        {
-            var amount = AmountFor(currency);
-            switch (currency)
-            {
-                case CurrencyKind.Sol: return $"{amount:0.###} SOL";
-                case CurrencyKind.Usdc: return $"{amount:0.00} USDC";
-                // ⛔ NO SERVER QUOTE = NO NUMBER. WORDS, not a zero and not a stale authored
-                // figure: "0 SKR" reads as free and a stale figure reads as a promise. The owner is
-                // RED/GREEN COLOURBLIND, so an unavailable price can never be signalled by a tint -
-                // it says so in text, and the greyscale capture is the acceptance test.
-                case CurrencyKind.Skr: return amount > 0d ? $"{amount:0.######} SKR"
-                                                          : "Price unavailable";
-                default: return amount.ToString("0.##");
-            }
-        }
+        // =====================================================================
+        //  WO-1282 - THE RAIL-PRICED MEMBERS ARE NOT HERE ANY MORE, AND THAT IS THE POINT.
+        // ---------------------------------------------------------------------
+        //  AmountFor(CurrencyKind) / AmountLabel(CurrencyKind) / UsdApprox() moved VERBATIM to
+        //  DeNelle.Wallet.SolanaPackPricing (Assets/_Modules/Wallet/SolanaPackPricing.cs) as
+        //  EXTENSION METHODS on this type. They are still called as `pack.AmountFor(...)` from any
+        //  file that is `namespace DeNelle.Wallet` - nothing about the call sites changed.
+        //
+        //  WHY: CurrencyKind IS the Solana rail (Sol/Usdc/Skr, WalletService.cs) and
+        //  PurchaseQuoteService/PurchaseGate/MainnetCanaryCatalog are all rail-bound. A Google Play
+        //  artifact excludes DeNelle.Wallet entirely (GooglePlayPackagingGate), so a PackDef that
+        //  NAMES CurrencyKind cannot compile there. The DATA ships everywhere; the PRICE IN A
+        //  TOKEN ships only with the rail that can charge it.
+        //
+        //  DO NOT re-add a CurrencyKind member to this file. The compiler will let you - Commerce
+        //  does not reference Wallet, so it will simply fail to resolve the name and you will be
+        //  tempted to "fix" it by adding the reference. Adding it re-breaks the Play artifact,
+        //  silently, and the gate that catches it runs at BUILD time, not here.
+        // =====================================================================
     }
 
     /// <summary>The parsed packs.json root.</summary>
@@ -699,15 +651,41 @@ namespace DeNelle.Wallet
             }
         }
 
+        /// <summary>
+        /// WO-1282 seam. A build-gated, RAIL-SIDE pack contributed on top of packs.json - today the
+        /// one and only user is <c>DeNelle.Wallet.MainnetCanaryCatalog</c> under
+        /// <c>#if MAINNET_CANARY_TEST</c>, which registers itself at BeforeSceneLoad and calls
+        /// <see cref="Reload"/> so ordering cannot matter.
+        /// <para>⚠ NULL IS THE NORMAL, CORRECT ANSWER AND IT IS NOT A FAILURE. Every ordinary build
+        /// - including every Play build, which has no DeNelle.Wallet assembly at all - leaves this
+        /// unregistered and ships exactly the authored catalogue. That is why this hook does NOT
+        /// warn when it is unset: the silent-failure risk the WO-1282 correction block names runs
+        /// the other way (a hook whose ABSENCE hides a feature). Here the absence IS the feature.
+        /// The registration itself is FlowTrace'd at the Wallet end, so a canary build that fails
+        /// to register says so on the one build where that would be wrong.</para>
+        /// <para>⛔ This is deliberately a <c>Func</c>, not a reference to the canary type. Naming
+        /// <c>MainnetCanaryCatalog</c> here would be Commerce -&gt; Wallet, the forbidden direction,
+        /// and would put the owner-only real-money SKU's type name in the Play artifact.</para>
+        /// </summary>
+        public static Func<PackDef> BuildGatedPackProvider;
+
         private static void EnsureLoaded()
         {
             if (_data != null) return;
             _data = LoadCatalog();
-#if MAINNET_CANARY_TEST
+
             // Isolated from canonical production data. The compile symbol is forwarded only to an
-            // owner sideload; clean builds cannot load, find, render, or grant this SKU.
-            _data.Packs.Add(MainnetCanaryCatalog.Create());
-#endif
+            // owner sideload; clean builds cannot load, find, render, or grant this SKU. WO-1282
+            // moved the #if to the Wallet side (see BuildGatedPackProvider) because this file no
+            // longer lives in an assembly that can name the canary catalogue.
+            var gated = BuildGatedPackProvider != null ? BuildGatedPackProvider() : null;
+            if (gated != null)
+            {
+                _data.Packs.Add(gated);
+                FlowTrace.Warn("Covenant", "PackCatalog: a BUILD-GATED pack '" + gated.Sku +
+                    "' was added on top of packs.json. This must NEVER appear in a shipped build.");
+            }
+
             EnforceCovenant(_data);
         }
 
