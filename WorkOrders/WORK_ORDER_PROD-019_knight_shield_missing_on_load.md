@@ -1,6 +1,6 @@
 # PROD-019 — Knight shield is equipped but missing on the body at load
 
-**Status:** DONE 2026-08-30 — owner 100% / persist Play in editor: heater on `Socket_Shield` / `EquipmentProp_OffHand` at locked Offset Forge row. See RESULT.  
+**Status:** ⛔ REOPENED 2026-08-30 — closed on EDITOR-ONLY evidence; still broken on device. See §0b.  
 **Minted:** 2026-08-29 (CLI seat) — banner bumped with PROD-018/020 → PROD-021  
 **Priority:** HIGH — first impression / class identity; bag says heater is worn, world does not  
 **Provenance:** owner, 2026-08-29: *"the knight still does not render a shield on load"* / *"read the trace… on seeker screen now"*  
@@ -35,6 +35,59 @@ Pulled `adb logcat` while owner had Blaise on screen (`logs/device/current-scree
 3. `EnsureWeaponRenderersVisible` after sheathed off-hand pose (parity with main hand).  
 
 **Still required before DONE:** owner felt on device — plate readable from rear/¾ town camera + combat draw. Paste a post-fix `faceOffOutward≈0` seat-proof line in RESULT.
+
+---
+
+## 0b. ★ REOPENED 2026-08-30 — device capture, build `2026.08.30.347947`
+
+Closed on 2026-08-30 01:45 against **editor-only** proof (an isolated `debug.txt`, "Persist Play:
+Inspector stayed on the row", and `AttachmentOffsetRegression`, which lives in `Assets/Editor/` and
+asserts JSON numbers). Acceptance criteria **#2 (player-visible screenshots)** and **#6 (PO
+felt-close)** were never met. Owner on device, 2026-08-30: still not readable.
+
+### What a cold-boot device capture PROVES (do not re-derive any of this)
+
+| Claim | Status |
+|---|---|
+| Offset Forge locked row applies on device | ✅ `AttachOffHandProp MEASURED after hold: parent='Socket_Shield' fullOverride=True GRIP lPos=(-0.103, 0.164, -0.238) lEuler=(1.9, 311.7, 232.1) lScale=(0.71,…)` — byte-exact vs the locked row (`311.7/232.1` = `-48.302/-127.941`) |
+| Renderer is live | ✅ `VerifyWeaponRenders: renderers total=1 enabled=1 withMesh=1 inactiveGo=0 => renders=True seated=True` |
+| Addressable loads | ✅ completes in ~630 ms; the 7 in-flight skips + 6 `LateAttachRetry` all fall inside that window and correctly decline to rebuild — **the WO-994 guard works** |
+| Gear ships in the APK | ✅ `Gear` group LoadPath = `Local.LoadPath` (not R2). Zero gear bundles in the R2 catalog is CORRECT, not a §16 miss |
+| Shield is on screen | ✅ visible in the zoom, hugging the left arm — **present but unreadable**, exactly Grok's `ac40ab578` note: *"the plate still vanishes under the arm/cape"* |
+
+**⛔ THE SEAT IS NOT THE DEFECT. Stop dialling it.** Three commits on 2026-08-29 went at the seat and
+at orientation heuristics (`30a3e7a1e` removed a +180 flip, `ac40ab578` canted outward + skin
+clearance, `74d9e6546` locked the row). The row was already applying correctly on device.
+
+### The actual blocker, in the code's own words
+
+`Fantasy_Shield.FBX` had `isReadable: 0`, so on device the mesh measured as 0 vertices. **Fixed
+under WO-1284** (405 meshes + the shield; `checked=417 passed=417 offenders=0`). With the mesh now
+readable the device reports:
+
+```
+ShieldHandleSide 'EquipmentProp_OffHand_Mesh': AMBIGUOUS — smoothScore(+Z)=0.073 (-Z)=0.146
+margin=0.072 < 0.1, and the dish is flat too (centroidBias=-0.018 < 0.05). Neither face reads as
+the smooth one, so NO flip is applied and the existing pose stands.
+This mesh needs an owner dial, not a derived guess (WO-1123).
+```
+
+**⚠ AND THE HONEST CORRECTION:** the Editor could always read this mesh, so it computed the same
+AMBIGUOUS result. Read/Write was a real catalogue-wide defect, but it is **NOT** what made the
+shield read correctly in Play mode and wrong on device. Owner confirmed the shield looks unchanged
+on `347947`. Whatever made it look right in the editor was never captured — most likely the editor
+proof verified Inspector persistence and a favourable viewing angle, not the follow-camera read.
+
+### Next move — the ONLY sanctioned one
+
+The plate is geometrically ambiguous; no derived rule can pick its outward face, and the trace
+forbids inventing one: *"a single-renderer plate has no bounds-only signal that separates its two
+faces, so any such rule would be a coin-flip."* So the face must be **owner-dialled** into the
+Offset Forge row for `ShieldWithItemLogic` (rotate ~180° about the plate normal until the crest
+faces outward), then **verified ON DEVICE**, never in Play mode.
+
+⛔ **NO EDITOR-ONLY CLOSE.** This ticket has now been closed once on editor evidence and reopened.
+Acceptance #2 and #6 are binding: a device screenshot from the follow camera, and a PO felt-close.
 
 ---
 
