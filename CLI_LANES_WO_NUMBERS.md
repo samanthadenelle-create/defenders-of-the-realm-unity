@@ -158,7 +158,23 @@
 > fine as history. A copied number is the bug **even when it was right the day it was written** -
 > that is exactly how the retired 860-899 UI block kept re-seeding collisions from CLAUDE.md sec.2.
 
-> ## ⚠ RECONCILED 2026-08-29 (CLI): main line next free = **1282**.
+> ## ⚠ RECONCILED 2026-08-30 (CLI): main line next free = **1284**.
+> **1283** = the overnight APK build is judged UNASSERTED: `overnight-apk-build.ps1:72` calls
+> `run-unity-method.ps1` with no `-ExpectMarker`, so the prod ship chain prints
+> `VERDICT=PASS-UNASSERTED` while `install-apk-to-seeker.ps1` asserts
+> `'[AndroidBuild] SUCCEEDED'` for the same method. Observed live on the 2026-08-30 02:02 ship.
+> Same duplicated-state drift as the §16 push/verify pair. Banner bumped 1283 -> 1284 in this
+> SAME edit.
+>
+> ### superseded: RECONCILED 2026-08-30 (CLI): main line next free = **1283**.
+> **1282** = Play artifact isolation + tester APK variant: split the rail-neutral store/grant
+> contracts out of `DeNelle.Wallet` so `DeNelle.Village` stops referencing it, add the
+> `!GOOGLE_PLAY` constraints to Wallet/Web3, give `MobileWalletAdapter.androidlib` a real
+> per-artifact exclusion, and add a `GOOGLE_PLAY` **APK** entry point (Google asked for an APK for
+> tester verification; `BuildGooglePlayAab` emits an AAB). Continues WO-1255's "Safe next slice".
+> Banner bumped 1282 -> 1283 in this SAME edit.
+>
+> ### superseded: RECONCILED 2026-08-29 (CLI): main line next free = **1282**.
 > **1281** = Command Center decision dashboard: minimized sections, authoritative sales/SKU
 > performance, D1/D7/D30 retention, progression activity, and honest one-session churn-risk cohorts.
 > Banner bumped 1281 -> 1282 in this SAME edit.
