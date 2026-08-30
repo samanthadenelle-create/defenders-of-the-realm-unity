@@ -51,6 +51,54 @@ Not needed to *build* the artifact; needed before any receipt-verification test.
 
 ---
 
+## ⛔ FINDING 2026-08-30 — SOURCE ISOLATION IS NOT ARTIFACT CLEANLINESS
+
+All four `InspectSourceIsolation()` conditions now PASS (`PLAY_SOURCE_ISOLATION_OK`, proven by the
+gate on a real run) and an AAB built: `Builds/Android/EchoesOfElarion-GooglePlay.aab`, 523 MB.
+
+**IT IS DIRTY. DO NOT UPLOAD IT.** The build was cut short before
+`GooglePlayPackagingGate.AssertBuiltArtifact` could run, so no `PLAY_ARTIFACT_*` verdict was ever
+emitted. An independent scan of the artifact with the gate's own `ForbiddenArtifactTokens` found:
+
+| Token | Where |
+|---|---|
+| `solana` | `base/assets/bin/Data/Managed/Resources/Solana.Unity.Metaplex.dll-resources.dat`, `…KeyStore.dll…`, `…Rpc.dll…` |
+| `mwa/` | `base/dex/classes2.dex` — the Mobile Wallet Adapter **Java** classes |
+| `solana-wallet`, `mobilewalletadapter`, `walletadapter` | `base/assets/bin/Data/Managed/Metadata/global-metadata.dat` |
+| `solflare`, `seed vault` | `base/assets/Data/Canonical/wallets.json` |
+
+*(False positives, excluded: `phantom` = the "Phantom Hunter" enemy; `connect wallet` = a
+`canon-strings.json` UI string.)*
+
+### THE THREE DOORS NOTHING CLOSED
+
+Assembly define constraints do not reach any of these. This is why the source graph can be clean
+while the artifact is not:
+
+1. **`Assets/Resources/SolanaUnitySDK`** — anything under a `Resources/` folder is force-included in
+   EVERY build by construction. `.asmdef` constraints are irrelevant to it. This is the same
+   force-include hazard `SupercyanGearAddressableMarker`'s header already warns about (WO-191/408).
+2. **`com.solana.unity_sdk`** in `Packages/manifest.json`
+   (`magicblock-labs/Solana.Unity-SDK.git#v1.2.9`) — a project-level UPM dependency. It compiles in
+   regardless of what any `.asmdef` says, and its Android aar is the most likely source of `mwa/`
+   in `classes2.dex`.
+3. **`Assets/Resources/Data/Canonical/wallets.json`** — the on-chain address registry, also
+   force-included via `Resources/`.
+
+### What this means for the WO
+
+`GooglePlayPackagingGate`'s class doc frames isolation as *"the storefront split out of Wallet and
+the MWA Android library excluded."* **That framing is incomplete** and should be corrected: two
+further doors (Resources force-include, and the package manifest) admit the rail into the artifact.
+Closing them is a distinct piece of work from Lanes A and B — likely a build-time preprocessor that
+relocates/strips the Resources payload plus a per-variant package strategy. Size it before promising
+a Play date.
+
+**⚠ AND JUDGE BY THE ARTIFACT SCAN, NEVER BY `PLAY_SOURCE_ISOLATION_OK`.** Today proved they are
+independent: source green, artifact dirty. `AssertBuiltArtifact` is the authority.
+
+---
+
 ## Scope
 
 ### Lane A — split the rail-neutral store/grant contracts out of Wallet
