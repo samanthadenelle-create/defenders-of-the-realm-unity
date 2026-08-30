@@ -161,6 +161,68 @@ duplicated in `tools/android/assert-google-play-aab-clean.ps1:18` and MUST chang
 Narrowing these two is a PRECISION fix, not a weakening: it lets the scan distinguish the Solana
 wallet from a Java stdlib reference. Do NOT add an ignore list and do NOT relax the scan.
 
+### ✅ SCOPED 2026-08-30 — DO NOT DO THE UNITASK SWAP. Do option (d): EMBED + CONSTRAIN.
+
+**The framing everywhere above is wrong in a way that changes the answer.** A fourth option was
+missed, and it is ~1 day instead of a multi-day migration.
+
+**First, the fact that kills the "remove the package" plan outright: THE SEEKER BUILD REQUIRES IT.**
+`SolanaWalletProvider.cs` (Web3.Instance, IRpcClient, SystemProgram.Transfer, TokenProgram
+.TransferChecked, PublicKey) and `TargetedLocalAssociationScenario.cs` (MobileWalletAdapterSession/
+Client, LocalAssociationIntentCreator) are the ENTIRE live wallet rail — connect, sign, balance, SOL
+and SPL transfer. Removing `com.solana.unity_sdk` from the manifest deletes the shipping product's
+payment rail. So manifest removal is not a permanent state, and a per-build swap is the only version
+of it that could ever work.
+
+**OPTION (d) — embed the package and constrain it in place. RECOMMENDED, ~1 day.**
+Move `Library/PackageCache/com.solana.unity_sdk@3d139411ef2b/` → `Packages/com.solana.unity_sdk/`
+(an EMBEDDED package: auto-discovered, git-tracked, fully editable), drop the git line from
+`manifest.json`, then:
+1. `Runtime/com.solana.unity_sdk.asmdef` → `defineConstraints: ["!GOOGLE_PLAY"]` (currently `[]`).
+2. The **15 precompiled MANAGED DLLs** (`Solana.Unity.Rpc/.Wallet/.Programs/.Dex/.Metaplex/
+   .KeyStore/.Extensions/.SessionKeys/.Soar`, BouncyCastle, Chaos.NaCl, Avro, System.CodeDom …) →
+   `defineConstraints: ["!GOOGLE_PLAY"]` in each `.dll.meta` PluginImporter block.
+   **Define constraints ARE honoured for MANAGED plugins** — that is precisely the distinction
+   `MobileWalletAdapterPlayExclusion.cs:31-37` researched: they are unreliable for NATIVE plugins,
+   which is why MWA needed a platform-compatibility enforcer. These are managed.
+3. **Leave `Runtime/Plugins/UniTask/**` untouched.** UniTask survives into the Play build.
+   **Nothing about the swap is needed.**
+4. Optionally drop `Samples~/` (5.8 MB, never imported) and handle three package `Resources/` PNGs
+   (`magicblock-logo.png` in a Play AAB is a policy smell, though it matches no forbidden token).
+
+This is the SAME mechanism already proven working on `DeNelle.Wallet.asmdef` with
+`extraScriptingDefines` from `AndroidBuild.ArtifactScriptingDefines`. Cost: ~12 MB of tracked
+binaries and manual re-vendoring on update (the package is pinned to `#v1.2.9` anyway).
+
+**⚠ MOST LIKELY TO BITE, in order:**
+1. The package contains **TWO asmdefs both named `NativeWebSocket`**, and **neither has a `.meta`**.
+   PackageCache generates GUIDs transiently; an embedded package writes real `.meta` files, which
+   could surface the duplicate assembly name as a hard compile error. Trivial to fix (delete/rename
+   the redundant `Packages/NativeWebSocket.asmdef`) but it cannot be predicted without opening Unity.
+2. `DeNelle.Wallet.asmdef:24-30` `versionDefines` keys on package presence to set `SOLANA_SDK`.
+   Embedded packages carry a version so it SHOULD resolve — needs Unity to confirm; fallback is a
+   plain PlayerSettings define, which `WalletProviderSelectionRegression.cs:78-79` says is set anyway.
+3. Residual `solana`/`walletadapter` strings the SOURCE GRAPH cannot see — source-green and
+   artifact-clean are independent, as this WO already learned the hard way.
+
+**Rejected alternatives, costed:** (a) separate project/branch = weeks then forever, two trees that
+must stay content-identical, the exact duplicated-state failure §2/§5/§16 have each been burned by —
+**do not**; (b) pre-build manifest swap + resolve = 2-4 days and a crashed phase leaves a
+half-swapped manifest that breaks EVERY seat on the shared tree, buys nothing (d) does not; (c)
+relax the gate = zero engineering, unbounded product risk, and this WO already forbids it.
+
+**Corrections to earlier claims in this WO:** it is **21** first-party asmdefs referencing UniTask,
+not 16. The UniTask delta would have been **2.5.0 → 2.5.11** (patch-level, no breaking change this
+repo hits — the API census is entirely stable 2.x core; zero use of AsyncEnumerable, Linq, Triggers,
+AsyncLazy, SwitchToMainThread, WithCancellation). So the swap was low-risk — and unnecessary.
+
+**One live uncertainty needing a Unity compile:** three sites call `ToUniTask()` on an Addressables
+`AsyncOperationHandle` (`SkinController.cs:106`, `PortalStructure.cs:116`, `SceneRouter.cs:311`), an
+extension living in the `UniTask.Addressables` assembly which **no asmdef in `Assets/` references**.
+How that resolves today is unexplained from source. `PortalStructure.cs:114-115` even carries the
+comment *"ToUniTask() ... yields no value in this UniTask version"* — a version-sensitivity marker at
+the one non-core integration point.
+
 ### THE THREE DOORS NOTHING CLOSED
 
 Assembly define constraints do not reach any of these. This is why the source graph can be clean
