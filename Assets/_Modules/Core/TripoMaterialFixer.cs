@@ -112,6 +112,7 @@ namespace DeNelle.Core
 
         [SerializeField] private string _fallbackTextureName;
         [SerializeField] private string _forcedTextureName;   // WO-719: UNCONDITIONAL albedo override (see SetForcedTexture)
+        private Texture _forcedSourceTexture;
         // WHITE-STREAK FIX (fleet triage 2026-07-18): default was Color.white, so a texture
         // MISS (missing basecolor/albedo atlas) with the tint path active rendered the whole
         // body SOLID WHITE — the recurring "white line/streak" in the party stack. Default to
@@ -165,6 +166,13 @@ namespace DeNelle.Core
         /// Opt-in: only callers that set this are affected; default (null) = no change.
         /// </summary>
         public void SetForcedTexture(string resourcesPath) => _forcedTextureName = resourcesPath;
+
+        /// <summary>
+        /// Pins an albedo already referenced by the instantiated model. This avoids relying on
+        /// shader-property aliases while rebuilding materials in a player build (where an otherwise
+        /// valid model dependency could be rebuilt as a flat white/tint-only material).
+        /// </summary>
+        public void SetForcedSourceTexture(Texture texture) => _forcedSourceTexture = texture;
 
         /// <summary>
         /// Forces a solid fallback colour on every material rebuilt by this
@@ -262,7 +270,7 @@ namespace DeNelle.Core
             // WO-719: the UNCONDITIONAL forced albedo (arcane spire). Loaded once, applied to every
             // slot below regardless of the source's own map. A miss is a hard Fail (break-log) because
             // a set-but-unresolved force = the spire stays white (the exact symptom being fixed).
-            Texture2D forcedTex = null;
+            Texture forcedTex = _forcedSourceTexture;
             if (!string.IsNullOrEmpty(_forcedTextureName))
             {
                 forcedTex = HeroTextureLoader.Load(_forcedTextureName, false);
