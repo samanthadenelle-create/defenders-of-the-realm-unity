@@ -25,8 +25,22 @@
 //      this function never answered).
 //   5. The body parser is genuinely disabled now — see the note at the bottom.
 //
+// WHAT CHANGED 2026-08-30 (WO-1282 PIN-1b — a THIRD rail):
+//   A "play-<64hex>" id takes the GOOGLE PLAY rail: X-Session only, where the session
+//   was minted by api/auth/google-session.js from a Google-signed ID token. The id is
+//   HMAC'd server-side from the Google `sub`, so the client CANNOT mint one — which is
+//   why it is a proven identity like the wallet and unlike the guest. The `trust` column
+//   written below therefore gains a THIRD value, 'google', straight out of auth.mode:
+//     'wallet' — ed25519 signature over a burned nonce.
+//     'google' — Google-signed ID token, RS256-verified against Google's JWKS.
+//     'guest'  — an unverified device hash. Bearer-token trust, explicitly second-class.
+//     'legacy' — written before the rails existed (the column DEFAULT; never back-filled).
+//   ⛔ The wallet remains the SOLE identity on the Seeker/APK artifact (owner ruling
+//      2026-08-30); 'google' exists only for the Google Play / AAB artifact.
+//
 // Env vars: DATABASE_URL (Neon). Optional: GUEST_SAVE_ENABLED=false to kill the
-// guest rail without a code change.
+// guest rail without a code change; GOOGLE_IDENTITY_ENABLED=true to arm the Play
+// identity rail (default OFF — a play- id cannot authenticate at all until it is).
 //
 // Status codes: 200 | 400 | 401 | 404 | 500 (project constraint — no others).
 // =============================================================================
@@ -34,7 +48,7 @@
 const { neon } = require('@neondatabase/serverless');
 const { decode } = require('@msgpack/msgpack');
 const {
-    AuthCode, authenticate, isGuestId,
+    AuthCode, authenticate, isGuestId, isPlayId,
     GUEST_MAX_BODY_BYTES, WALLET_MAX_BODY_BYTES,
 } = require('../_lib/wallet-auth');
 const { applyCors, newRef, quietFail, readBodyExact } = require('../_lib/http');
@@ -165,8 +179,12 @@ async function handler(req, res) {
     //
     // The guard still stands for the signature path, which genuinely cannot verify without exact
     // bytes. It is now scoped to requests that will actually use that path.
+    // WO-1282 PIN-1b: a `play-` id NEVER uses the signature path either — the Google
+    // Play rail authenticates by session token only (see wallet-auth.authenticate). Left
+    // out of this guard it would 500 on a body the rail does not need, which is the same
+    // shape of bug the session rail hit above.
     const hasSessionHeader = !!(req.headers && req.headers['x-session']);
-    if (!exactBytes && !isGuestId(String(playerId)) && !hasSessionHeader) {
+    if (!exactBytes && !isGuestId(String(playerId)) && !isPlayId(String(playerId)) && !hasSessionHeader) {
         await logAuthReject(sql, req, {
             code: AuthCode.SERVER_ERROR, ref, identity: playerId, mode: 'wallet',
             detail: { reason: 'raw_body_unavailable_bodyparser_active' },

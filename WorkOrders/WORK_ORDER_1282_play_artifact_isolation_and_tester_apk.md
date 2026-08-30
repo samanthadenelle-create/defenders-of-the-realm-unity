@@ -70,6 +70,47 @@ fulfilled durably — **Firebase Auth is already in the project and is the obvio
 this is answered, a Play build can display a shop and take money it cannot reliably grant against.
 This is a bigger gap than the artifact work in this WO and should be sized separately.
 
+### ✅ PIN-1b RULINGS 2026-08-30 — identity shape settled by the owner
+
+**Rail scoping:** *"only applicable to apk not aab"*. The wallet stays the SOLE identity on the
+Seeker/APK artifact and `WalletIdentityRegression`'s wallet-only-identity case stays GREEN AND
+UNAMENDED. Google identity exists ONLY in the Play/AAB artifact. This is achieved architecturally,
+not by weakening the guard: the Google implementation lives in a new assembly constrained
+`defineConstraints: ["GOOGLE_PLAY"]`, and `LoginViewModel` talks to a bridge in `DeNelle.Core`
+(the `LoginWalletBridge` pattern) so it never names a banned token. **Do not amend that regression.**
+
+**Sign-in timing:** *"if the only rail to pay is through google then they need to login to account
+to pay"*. Correct, and it is why this costs nothing in friction: Google Play Billing REQUIRES a
+signed-in Google account, so at the moment a player taps Buy they are already authenticated to
+Google. Our sign-in is a consent tap on an account already present, not a login. A player with no
+Google account cannot purchase on Play regardless.
+→ **Guest by default; Google sign-in required at the FIRST PURCHASE, not at install.**
+⛔ Do NOT soften this to "sign in later to keep your stuff" — see the no-re-key rule below.
+
+**Guest → signed-in collision (owner ruling): *"give them the choice? confirm data to db first"*.**
+When a player signs in and BOTH a local guest town and an existing cloud save under that Google
+identity exist:
+1. **FLUSH the local guest state to the DB FIRST**, under its existing guest row, before anything
+   else. Guests already have cloud saves (`GameStateService.CanCloudSync`), so the row exists.
+2. Only then **present the choice** — continue the saved game, or keep the town being played.
+3. The losing save **STAYS IN THE DB**. It is never overwritten, and support can restore it.
+
+**Why the choice is safe to offer at all:** purchases bind to the IDENTITY, not the save. A
+`play-<hmac>` id owns its entitlements whichever town sits under it, so "keep my new town" can never
+cost a player packs they bought. State that in the UI copy.
+
+**This also closes a real hazard:** `api/game/save.js:322` does a shallow JSONB merge, so a naive
+full-snapshot POST would silently overwrite a strong cloud save with weaker local state.
+Confirm-then-choose removes that path — nothing is written until the player has chosen.
+
+⛔ **AND THE INVARIANT THAT OUTRANKS ALL OF THE ABOVE:** a player holding ANY `google_play_purchases`
+row must NEVER be re-keyed. `google-play-purchases.js:157` HMACs the player id into Play's
+`setObfuscatedAccountId` and `timingSafeEqual`-compares it on the way back; there is no alias table
+and no version field, so a changed id makes every past purchase permanently unverifiable and
+un-restorable, silently. The migration says it in its own words: *"Never mutate ownership/product
+identity after insert."* Enforce SERVER-SIDE, not by convention. Choosing which SAVE sits under an
+identity is fine; changing the IDENTITY is not.
+
 **PIN-2:** external Play Console app + service-account configuration is not present (WO-1255 RESULT).
 Not needed to *build* the artifact; needed before any receipt-verification test. Out of scope here.
 

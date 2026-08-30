@@ -1300,3 +1300,9 @@ ON CONFLICT (area_id) DO NOTHING;
 -- =============================================================================
 -- END OF SCHEMA
 -- =============================================================================
+
+-- WO-1282 PIN-1b (2026-08-30): auth_sessions.wallet now holds a SUBJECT, not
+-- necessarily a wallet address. identity_kind records which rail minted the session
+-- ('wallet' | 'google' | 'guest'). AUDIT ONLY - authorization still routes on id SHAPE,
+-- so a wrong value here cannot grant anything.
+ALTER TABLE auth_sessions ADD COLUMN IF NOT EXISTS identity_kind TEXT NOT NULL DEFAULT 'wallet';

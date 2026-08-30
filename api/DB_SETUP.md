@@ -468,6 +468,22 @@ save / load / nonce / bug-report that were broken.
    `view=bugreports` added by WO-846, so repo-side fixes are not live.
 3. Optional env: `GUEST_SAVE_ENABLED=false` kills the guest rail with no code
    change. Absent/empty = ON.
+4. **Google Play identity rail (WO-1282 PIN-1b) — DORMANT until switched on.**
+   Apply `api/migrations/20260830_0013_auth_sessions_identity_kind.sql` (additive:
+   one `auth_sessions.identity_kind` column, defaulted `'wallet'`), then set:
+
+   | Env var | Required | What it is |
+   |---|---|---|
+   | `GOOGLE_IDENTITY_ENABLED` | yes, `true` to arm | Default OFF. While unset, `POST /api/auth/google-session` answers **503** and no `play-` id can authenticate anywhere. |
+   | `GOOGLE_IDENTITY_KEY` | yes | HMAC-SHA256 key that derives `play-<64 hex>` from the Google `sub`. ⛔ **Treat as permanent** — rotating it is the only way a player's id can change, and `resolveStablePlayerId` will pin any player holding `google_play_purchases` rows to the old key rather than re-key them. |
+   | `GOOGLE_IDENTITY_AUDIENCES` | yes | Comma-separated OAuth client-id allowlist checked against the token's `aud`. Empty = UNCONFIGURED = the rail refuses. There is no "allow any". |
+   | `GOOGLE_IDENTITY_KEY_PREVIOUS` | only during a rotation | The key being rotated away from, so the no-re-key guard can see the id a player used to have. |
+   | `GOOGLE_IDENTITY_JWKS_URL` | no | JWKS override for tests/staging. Defaults to Google's `https://www.googleapis.com/oauth2/v3/certs`. |
+
+   ⛔ **The wallet remains the SOLE identity on the Seeker / dApp-Store artifact**
+   (owner ruling 2026-08-30). This rail is for the Google Play / AAB artifact only,
+   and `auth/nonce.js` / `auth/session.js` / `verifyWallet` / `verifySession` are
+   untouched by it.
 
 ### Reading the failures (the new read paths)
 

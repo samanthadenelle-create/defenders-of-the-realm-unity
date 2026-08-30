@@ -1,0 +1,47 @@
+-- WO-1282 PIN-1b. The server-side Google identity rail (Google Play / AAB artifact only).
+--
+-- Applying this migration does NOT enable anything. The rail additionally requires
+-- GOOGLE_IDENTITY_ENABLED=true plus GOOGLE_IDENTITY_KEY and GOOGLE_IDENTITY_AUDIENCES,
+-- exactly like GOOGLE_PLAY_BILLING_ENABLED gates the purchase ledger
+-- (20260828_0007_google_play_purchase_state.sql). Until then api/auth/google-session.js
+-- answers 503 and no `play-` id can authenticate anywhere.
+--
+-- ⛔ THE WALLET REMAINS THE SOLE IDENTITY ON THE SEEKER / dApp-STORE ARTIFACT
+--    (owner ruling 2026-08-30). Nothing below weakens the wallet path: auth/nonce.js,
+--    auth/session.js, verifyWallet and verifySession are untouched by this work.
+--
+-- ADDITIVE AND IDEMPOTENT. One column, with a default, on an existing table. No drops,
+-- no renames, no back-fill, no data touched.
+--
+-- ⛔ NO COLUMN IS RENAMED. auth_sessions.wallet and sku_entitlements.wallet are LIVE
+--    KEYS read by the deployed functions and keep their names. Read `wallet` as a
+--    SUBJECT: it holds either a base58 Solana address (wallet rail) or a
+--    'play-<64 lowercase hex>' id — HMAC-SHA256(GOOGLE_IDENTITY_KEY, google_sub),
+--    computed server-side from a Google-signed ID token. The raw Google `sub` is NEVER
+--    stored, logged or returned; only the HMAC exists outside the verifier. The two
+--    shapes are lexically disjoint, so a row can never be routed to the wrong rail.
+--
+-- ⛔ A PLAYER HOLDING ANY google_play_purchases ROW MUST NEVER BE RE-KEYED.
+--    google-play-purchases.js HMACs the playerId into Play's setObfuscatedAccountId and
+--    timingSafeEqual-compares it back, and there is no alias table and no version field
+--    — a changed id silently makes every past purchase unverifiable and un-restorable.
+--    The derivation is deterministic, so the only way an id can change is a rotation of
+--    GOOGLE_IDENTITY_KEY, and api/auth/google-session.js::resolveStablePlayerId enforces
+--    the rule server-side against this database: a player with rows under the previous
+--    key is PINNED to that id, and if the check itself cannot run the request is refused
+--    rather than issued. Same law as this file's neighbour: never mutate ownership or
+--    product identity after insert.
+
+-- identity_kind — WHICH proof stood behind the session mint:
+--   'wallet' — ed25519 signature over a single-use, wallet-bound nonce (api/auth/session.js)
+--   'google' — a Google ID token, RS256-verified against Google's JWKS
+--              (api/auth/google-session.js)
+-- AUDIT ONLY. Nothing reads this column to decide access, so a wrong value cannot grant
+-- anything; authorization still routes on the SHAPE of the player id. The default is
+-- 'wallet' because every pre-existing row was issued by the wallet path.
+ALTER TABLE auth_sessions ADD COLUMN IF NOT EXISTS identity_kind TEXT NOT NULL DEFAULT 'wallet';
+
+-- Verify (expect one row, data_type 'text', column_default '''wallet''::text'):
+--   SELECT column_name, data_type, is_nullable, column_default
+--     FROM information_schema.columns
+--    WHERE table_name = 'auth_sessions' AND column_name = 'identity_kind';
