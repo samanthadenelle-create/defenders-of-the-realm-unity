@@ -329,18 +329,41 @@ namespace DeNelle.Village
                 int n = CountOf(counts, kind);
                 return n > 0 ? label + " " + n : label;
             }
-            var labels = new[]
+            // ⚠ THE TAB ORDER IS THE RAIL ORDINAL ORDER, AND THAT IS LOAD-BEARING.
+            // BuildTabRow hands its callback the tab INDEX, which is forwarded verbatim to
+            // SelectRail — so labels[i] must be the section RailXxx == i names. Appending in
+            // ordinal order (Gear 0 .. Potions 5, Skills 6, Map 7) is what keeps that true.
+            // Insert nothing in the middle without renumbering the RailXxx constants.
+            //
+            // ⛔ SKILLS IS NOT OPTIONAL HERE — IT IS THE ONLY PLAYER-REACHABLE SKILL-TREE DOOR.
+            // The other two openers of PanelId.HeroSkillTree are an ArcaneTower building
+            // (BuildingInteractable.cs:491 — needs one PLACED, so a fresh save has none) and a
+            // Yarn "OpenTalents" command (DialogueCommandSink.cs:106 — no live script calls it).
+            // When this row was first authored as a scrolling rail it carried a Skills entry;
+            // the 2026-08-30 rewrite to a tab row dropped it, and the hero talent tree became
+            // unreachable in a normal town session while every talent-layer suite still passed.
+            // HeroSkillTreeDoorRegression pins the label back to SelectRail -> OpenSkillTree.
+            bool mapOn = DeNelle.Core.FeatureFlags.MapTab;
+            var labelList = new System.Collections.Generic.List<string>
             {
                 "Gear",
                 WithCount("Weapons", InventoryTabKind.Weapons),
                 WithCount("Off Hand", InventoryTabKind.OffHand),
                 WithCount("Armor", InventoryTabKind.Armor),
                 WithCount("Trinkets", InventoryTabKind.Outfits),
-                WithCount("Potions", InventoryTabKind.Consumables)
+                WithCount("Potions", InventoryTabKind.Consumables),
+                InventoryStrings.Get(InventoryStrings.KeyRailSkills)
             };
-            ElarionUiKit.BuildTabRow(host, labels, index => SelectRail(index),
+            // Map stays DORMANT behind FeatureFlags.MapTab (WO-827 realm travel is a stub, §7).
+            // It is appended only when the flag is on so that flipping the flag restores a real
+            // tab instead of leaving a second silently-orphaned door behind it.
+            if (mapOn) labelList.Add(InventoryStrings.Get(InventoryStrings.KeyRailMap));
+
+            ElarionUiKit.BuildTabRow(host, labelList.ToArray(), index => SelectRail(index),
                 initial: Mathf.Clamp(_railIndex, RailGear, RailPotions));
-            FlowTrace.Step("Inventory", "Bag tabs: 6 visible, non-scrolling; selected=" + _railIndex);
+            FlowTrace.Step("Inventory", "Bag tabs: " + labelList.Count +
+                " visible, non-scrolling (Skills routes out to the hero skill tree; Map " +
+                (mapOn ? "on" : "OFF - not drawn") + "); selected=" + _railIndex);
         }
 
         private static int CountOf(Dictionary<InventoryTabKind, int> counts, InventoryTabKind kind)

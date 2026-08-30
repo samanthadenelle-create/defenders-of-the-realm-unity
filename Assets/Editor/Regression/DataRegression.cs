@@ -428,6 +428,12 @@ namespace DeNelle.Editor
             //     existing suite noticed — every one tested a LAYER, none tested the DOOR ---
             if (!ManageTroopsTrainDoorRegression.Run(out var manageTrainDoorReason)) failures.Add(manageTrainDoorReason); else log.AppendLine("[manage-train-door] " + manageTrainDoorReason);
             if (!ManageProgressiveDisclosureRegression.Run(out var manageDisclosureReason)) failures.Add(manageDisclosureReason); else log.AppendLine("[manage-progressive-disclosure] " + manageDisclosureReason);
+            // The two DOOR oracles for the owner's 2026-08-30 felt-test ("I do not see a way to get
+            // to Skill Tree now" / "no way from manage or anywhere else to the upgrade defensive
+            // screen"). Both sit beside the train-door suite deliberately: all three exist because a
+            // whole feature became unreachable while every LAYER suite over it kept passing.
+            if (!HeroSkillTreeDoorRegression.Run(out var skillTreeDoorReason)) failures.Add(skillTreeDoorReason); else log.AppendLine("[skill-tree-door] " + skillTreeDoorReason);
+            if (!ManageDefenseUpgradeDoorRegression.Run(out var manageDefenseDoorReason)) failures.Add(manageDefenseDoorReason); else log.AppendLine("[manage-defense-door] " + manageDefenseDoorReason);
             // --- 2026-08-07: two fixes that shipped WITHOUT a pin, both "must never come back":
             //     the rewarded-ad stub that GRANTED THE REWARD with no SDK (a free timer skip on
             //     every channel), and the arena home-return that lived on a UI object three paths

@@ -351,6 +351,25 @@ namespace DeNelle.Village.UI
             if (buildings) VisibleTabs.Add(ManageTab.Buildings);
             if (troops) VisibleTabs.Add(ManageTab.Troops);
             if (research) VisibleTabs.Add(ManageTab.Research);
+
+            // NO SILENT DISCLOSURE (§12). This is the single decision that answers the recurring
+            // felt-test "there is no way to get to the upgrade/defensive screen", and until now it
+            // left NO trace at all — so the only way to tell a correctly-gated fresh save from a
+            // genuinely orphaned door was to read the source. It is a Step, not a Warn: zero tabs
+            // on an empty BaseLayout is the DESIGNED progressive-disclosure state (the player is
+            // sent to the "Build new" route), and the tabs appear as soon as something is placed.
+            // A DEFENSE tab specifically needs a placed id whose repo.maxLevel > 1 — baked scene
+            // walls and towers are NOT BaseLayout records and therefore never raise it.
+            if (VisibleTabs.Count == 0)
+                FlowTrace.Step("Manage",
+                    "visible tabs: NONE - " + placed.Count + " placed type(s) in this town's " +
+                    "BaseLayout. Every category is absent by design until something is placed; " +
+                    "the screen offers the Build-new route instead.");
+            else
+                FlowTrace.Step("Manage",
+                    "visible tabs: " + string.Join(", ", VisibleTabs) + " (from " + placed.Count +
+                    " placed type(s); defense=" + defense + " buildings=" + buildings +
+                    " troops=" + troops + " research=" + research + ").");
         }
 
         private static bool HasAuthoredPerk(BuildingUpgradeDef def)
