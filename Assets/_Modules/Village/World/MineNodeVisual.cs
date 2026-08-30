@@ -154,8 +154,31 @@ namespace DeNelle.Village
                     // Owner F8 2026-07-08 (scope update): WOOD, IRON, and CRYSTALS all share ONE
                     // authored upright pose — the euler (-90,0,90). (Supersedes the earlier F8-6 wood
                     // value (270,90,0).) FOOD keeps the auto SeatFlat pass.
+                    // Owner F8 2026-08-30 ("a node that didn't have the flat surface face down"):
+                    // FOOD JOINS THE AUTHORED-POSE LIST. This is NOT a new orientation guess — it is
+                    // the SAME already-owner-verified pose applied to the SAME geometry, proven by
+                    // asset identity:
+                    //   • WO-1163/PROD-016 (commit 0082dcc99, 2026-08-25) re-pointed Food's model
+                    //     from "Harvest/food" to "Harvest/stone" in a ONE-LINE path change, and left
+                    //     this authoredPose list untouched.
+                    //   • Assets/Resources/Harvest/stone.fbx is BYTE-IDENTICAL to crystals.fbx
+                    //     (md5 233dcdffb2a60359d9f4137315223c91 for both); their .meta files differ
+                    //     ONLY in the guid — same bakeAxisConversion:0, useFileUnits:1, globalScale:1.
+                    //     They even share the same Tripo source texture (a8bcc942-...).
+                    //   • Identical geometry through an identical import needs an identical upright
+                    //     pose. Crystals' upright pose is owner-verified (F8 2026-07-08) as
+                    //     Euler(-90,0,90) with SeatFlat OFF. Therefore stone's is too.
+                    //   • SeatFlat can never reach it: the pose maps the model's LOCAL +Z to world +Y,
+                    //     i.e. this Tripo export is Z-up and its long axis is its up axis. SeatFlat's
+                    //     contract is the OPPOSITE — it drives the NARROWEST bounds axis to +Y — so on
+                    //     an elongated cluster it either reports "already flat (Y narrowest)" and
+                    //     applies nothing, or stands a short axis up; either way the long axis stays
+                    //     horizontal and the prop lies on its side. That is the reported symptom.
+                    // Wood/Iron/AetherCrystal are untouched by this change: they already evaluated
+                    // true and still do, so their SkinOptions are identical before and after.
                     bool authoredPose = Resource == MineResource.Wood
                         || Resource == MineResource.Iron
+                        || Resource == MineResource.Food
                         || Resource == MineResource.AetherCrystal;
                     var skinned = VisualFactory.Skin(_visual.transform, path,
                         new SkinOptions
@@ -167,6 +190,20 @@ namespace DeNelle.Village
                             LocalRotation = authoredPose
                                 ? Quaternion.Euler(-90f, 0f, 90f) : (Quaternion?)null,
                         });
+                    // PERMANENT ORIENTATION TRACE (§12). The next "node is lying down" report must be
+                    // ONE capture, not another hunt: name the resource, the model path, the pose ROUTE
+                    // taken, and the FINAL WORLD rotation the player actually sees. VerifyNodeRenders
+                    // in ClaimableCamp cannot host this - it runs synchronously after SetActive(true),
+                    // i.e. BEFORE this MineNodeVisual.Start() has built anything, so it can only ever
+                    // see the pre-build state. This is the only site that knows the resolved pose.
+                    FlowTrace.Step("HarvestNode",
+                        "MineNodeVisual POSE: resource=" + Resource + " model='" + path +
+                        "' route=" + (authoredPose ? "AUTHORED Euler(-90,0,90) [SeatFlat OFF]"
+                                                   : "SeatFlat bounds-heuristic [no authored euler]") +
+                        " skinned=" + (skinned != null) +
+                        " worldEuler=" + (skinned != null
+                            ? skinned.transform.rotation.eulerAngles.ToString("F1") : "n/a") +
+                        " hostEuler=" + transform.rotation.eulerAngles.ToString("F1"));
                     if (skinned != null) return;
                 }
             }

@@ -295,14 +295,32 @@ namespace DeNelle.Village.World
             // Owner F8 2026-07-08 (scope update): WOOD, IRON, and CRYSTALS all share ONE authored
             // upright pose — the euler (-90,0,90). (Supersedes the earlier F8-6 wood value (270,90,0).)
             // FOOD keeps the auto SeatFlat pass.
+            // Owner F8 2026-08-30 ("a node that didn't have the flat surface face down"): FOOD JOINS
+            // THE AUTHORED-POSE LIST, for the reason recorded in full at MineNodeVisual.Build —
+            // WO-1163 re-pointed Food to "Harvest/stone", and stone.fbx is BYTE-IDENTICAL to
+            // crystals.fbx (md5 233dcdffb2a60359d9f4137315223c91, metas differ only by guid), whose
+            // upright pose is the owner-verified Euler(-90,0,90). Same mesh, same import, same pose.
+            // Kept in lockstep with MineNodeVisual so both consumers of each Harvest/<type> model
+            // never disagree about how that model stands.
             bool authoredPose = ResourceType == MineResource.Wood
                 || ResourceType == MineResource.Iron
+                || ResourceType == MineResource.Food
                 || ResourceType == MineResource.AetherCrystal;
             var model = string.IsNullOrEmpty(modelPath) ? null : VisualFactory.Skin(transform, modelPath,
                 new SkinOptions { FitLargest = 2.4f, SeatOnGround = true, FixTripoMaterials = true,
                     SeatFlat = !authoredPose,
                     LocalRotation = authoredPose
                         ? Quaternion.Euler(-90f, 0f, 90f) : (Quaternion?)null });
+            // PERMANENT ORIENTATION TRACE (§12) — twin of the one in MineNodeVisual, so a lying prop
+            // is one capture regardless of which consumer built it.
+            FlowTrace.Step("HarvestNode",
+                "HarvestSite POSE: resource=" + ResourceType + " model='" + modelPath +
+                "' route=" + (authoredPose ? "AUTHORED Euler(-90,0,90) [SeatFlat OFF]"
+                                           : "SeatFlat bounds-heuristic [no authored euler]") +
+                " skinned=" + (model != null) +
+                " worldEuler=" + (model != null
+                    ? model.transform.rotation.eulerAngles.ToString("F1") : "n/a") +
+                " hostEuler=" + transform.rotation.eulerAngles.ToString("F1"));
             if (model != null)
             {
                 model.name = "HarvestVisual_Model";
