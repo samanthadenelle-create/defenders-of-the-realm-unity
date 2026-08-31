@@ -92,14 +92,22 @@ namespace DeNelle.Village
                 new WornSlot(InventoryStrings.KeySlotRing,     WornAccessoryName(_loadout != null ? _loadout.EquippedRing   : null), RailTrinkets),
             };
 
-            const float top = 1.00f, bottom = 0.00f, gap = 0.018f;
-            float h = ((top - bottom) - gap * (slots.Length - 1)) / slots.Length;
             int filled = 0;
-            for (int i = 0; i < slots.Length; i++)
             {
-                float y1 = top - i * (h + gap);
-                BuildWornSlot(stage, slots[i], new Vector2(0.04f, y1 - h), new Vector2(0.96f, y1));
-                if (slots[i].ItemName != null) filled++;
+                // Both aspects use two columns: the portrait stage is deliberately shallow so
+                // the detail pane remains useful, and five stacked rows would fall below 112px.
+                // A 2x3 arrangement keeps every action visible without scrolling.
+                const float xGap = 0.018f, yGap = 0.012f;
+                float w = (1f - xGap) * 0.5f;
+                float h = (1f - yGap * 2f) / 3f;
+                for (int i = 0; i < slots.Length; i++)
+                {
+                    int row = i / 2, col = i % 2;
+                    float x0 = col == 0 ? 0f : w + xGap;
+                    float y1 = 1f - row * (h + yGap);
+                    BuildWornSlot(stage, slots[i], new Vector2(x0, y1 - h), new Vector2(x0 + w, y1));
+                    if (slots[i].ItemName != null) filled++;
+                }
             }
 
             FlowTrace.Step("Inventory",
@@ -270,68 +278,93 @@ namespace DeNelle.Village
 
         private void BuildPeekStrip(Transform stage)
         {
-            const float card = 240f;
-            var viewport = AddImage(stage, "PeekViewport", new Vector2(0f, 0.12f), Vector2.one,
-                new Color(0f, 0f, 0f, 0.001f));
-            viewport.AddComponent<RectMask2D>();
-            var scroll = viewport.AddComponent<ScrollRect>();
-            scroll.horizontal = true;
-            scroll.vertical = false;
-            scroll.movementType = ScrollRect.MovementType.Clamped;
+            const float landscapeCard = 240f;
+            const float portraitRow = 160f;
 
-            var content = new GameObject("PeekContent", typeof(RectTransform));
-            content.transform.SetParent(viewport.transform, false);
-            var crt = content.GetComponent<RectTransform>();
-            crt.anchorMin = new Vector2(0f, 0f);
-            crt.anchorMax = new Vector2(0f, 1f);
-            crt.pivot = new Vector2(0f, 0.5f);
-            crt.anchoredPosition = Vector2.zero;
-            crt.sizeDelta = Vector2.zero;
-            scroll.viewport = viewport.GetComponent<RectTransform>();
-            scroll.content = crt;
+            // The kit owns the viewport, mask, track and gilt thumb. This screen only
+            // changes the axis and the visibility policy required by WO-1254.
+            var scrollHost = AddImage(stage, "PeekStage",
+                _portraitLayout ? new Vector2(0f, 0.14f) : new Vector2(0f, 0.14f),
+                Vector2.one, new Color(0f, 0f, 0f, 0f));
+            NoRaycast(scrollHost);
+            var zone = ElarionUiKit.MakeScrollZone(scrollHost.transform, GridGapPx, (int)GridPadPx);
+            zone.content.gameObject.name = "PeekContent";
 
-            var row = content.AddComponent<HorizontalLayoutGroup>();
-            row.spacing = GridGapPx;
-            row.padding = new RectOffset((int)GridPadPx, (int)(card * 0.40f), (int)GridPadPx, (int)GridPadPx);
-            row.childAlignment = TextAnchor.MiddleLeft;
-            row.childControlWidth = false;
-            row.childControlHeight = false;
-            row.childForceExpandWidth = false;
-            row.childForceExpandHeight = false;
-            var fitter = content.AddComponent<ContentSizeFitter>();
-            fitter.horizontalFit = ContentSizeFitter.FitMode.PreferredSize;
-
-            BuildCellsFromVM(content.transform);
-            for (int i = 0; i < content.transform.childCount; i++)
+            if (_portraitLayout)
             {
-                var child = content.transform.GetChild(i) as RectTransform;
-                if (child != null) child.sizeDelta = new Vector2(card, card);
+                var column = zone.content.GetComponent<VerticalLayoutGroup>();
+                column.padding.bottom = Mathf.CeilToInt(portraitRow * 0.40f);
+                zone.scroll.horizontal = false;
+                zone.scroll.vertical = true;
+                zone.scroll.verticalScrollbar = zone.scrollbar;
+            }
+            else
+            {
+                var column = zone.content.GetComponent<VerticalLayoutGroup>();
+                if (column != null) column.enabled = false;
+                var row = zone.content.gameObject.AddComponent<HorizontalLayoutGroup>();
+                row.spacing = GridGapPx;
+                row.padding = new RectOffset((int)GridPadPx,
+                    Mathf.CeilToInt(landscapeCard * 0.40f), (int)GridPadPx, (int)GridPadPx);
+                row.childAlignment = TextAnchor.MiddleLeft;
+                row.childControlWidth = false;
+                row.childControlHeight = false;
+                row.childForceExpandWidth = false;
+                row.childForceExpandHeight = false;
+                var fitter = zone.content.GetComponent<ContentSizeFitter>();
+                fitter.horizontalFit = ContentSizeFitter.FitMode.PreferredSize;
+                fitter.verticalFit = ContentSizeFitter.FitMode.Unconstrained;
+                zone.content.anchorMin = new Vector2(0f, 0f);
+                zone.content.anchorMax = new Vector2(0f, 1f);
+                zone.content.pivot = new Vector2(0f, 0.5f);
+                zone.scroll.horizontal = true;
+                zone.scroll.vertical = false;
+                zone.scroll.verticalScrollbar = null;
+                zone.scroll.horizontalScrollbar = zone.scrollbar;
+                zone.scrollbar.direction = Scrollbar.Direction.LeftToRight;
+                var srt = zone.scrollbar.transform as RectTransform;
+                srt.anchorMin = new Vector2(0f, 0f);
+                srt.anchorMax = new Vector2(1f, 0f);
+                srt.pivot = new Vector2(0.5f, 0f);
+                srt.offsetMin = Vector2.zero;
+                srt.offsetMax = new Vector2(0f, 10f);
+            }
+
+            BuildCellsFromVM(zone.content);
+            float itemExtent = _portraitLayout ? portraitRow : landscapeCard;
+            for (int i = 0; i < zone.content.childCount; i++)
+            {
+                var child = zone.content.GetChild(i) as RectTransform;
+                if (child == null) continue;
+                child.sizeDelta = _portraitLayout
+                    ? new Vector2(0f, portraitRow)
+                    : new Vector2(landscapeCard, landscapeCard);
             }
 
             Canvas.ForceUpdateCanvases();
-            var stageRt = stage as RectTransform ?? stage.GetComponent<RectTransform>();
-            float stageW = stageRt != null ? stageRt.rect.width : card * 3.5f;
-            int visible = Mathf.Max(1, Mathf.FloorToInt((stageW - GridPadPx * 2f) / (card + GridGapPx)));
+            LayoutRebuilder.ForceRebuildLayoutImmediate(zone.content);
+            var viewportExtent = _portraitLayout ? zone.viewport.rect.height : zone.viewport.rect.width;
+            int visible = Mathf.Max(1, Mathf.FloorToInt(
+                (viewportExtent - GridPadPx * 2f) / (itemExtent + GridGapPx)));
             int overflow = Mathf.Max(0, _vm.Slots.Count - visible);
-            if (overflow > 0)
+            bool hasOverflow = overflow > 0;
+            zone.scrollbar.gameObject.SetActive(hasOverflow);
+            if (_portraitLayout)
+                zone.scroll.verticalScrollbarVisibility = ScrollRect.ScrollbarVisibility.Permanent;
+            else
+                zone.scroll.horizontalScrollbarVisibility = ScrollRect.ScrollbarVisibility.Permanent;
+
+            if (hasOverflow)
             {
-                var more = AddLabel(stage, overflow + " more", 0.06f, 0.12f, Ink,
+                string key = _portraitLayout ? InventoryStrings.KeyMoreBelow : InventoryStrings.KeyMoreCount;
+                var more = AddLabel(stage, InventoryStrings.Format(key, overflow), 0.02f, 0.13f, Ink,
                     ElarionUi.FontMicro, TMPro.TextAlignmentOptions.MidlineLeft, 0.02f, 0.98f, bold: true);
                 more.raycastTarget = false;
-                var track = AddImage(stage, "ScrollbarH", new Vector2(0.02f, 0.01f), new Vector2(0.98f, 0.055f),
-                    new Color(0f, 0f, 0f, 0.45f));
-                var area = AddImage(track.transform, "SlidingArea", Vector2.zero, Vector2.one,
-                    new Color(0f, 0f, 0f, 0f));
-                var handle = AddImage(area.transform, "Handle", Vector2.zero, Vector2.one,
-                    new Color(ElarionUi.Gilt.r, ElarionUi.Gilt.g, ElarionUi.Gilt.b, 0.9f));
-                var sb = track.AddComponent<Scrollbar>();
-                sb.handleRect = handle.GetComponent<RectTransform>();
-                sb.targetGraphic = handle.GetComponent<Image>();
-                sb.direction = Scrollbar.Direction.LeftToRight;
-                scroll.horizontalScrollbar = sb;
-                scroll.horizontalScrollbarVisibility = ScrollRect.ScrollbarVisibility.Permanent;
             }
-            FlowTrace.Step("Inventory", $"Peek strip: cards={_vm.Slots.Count}, visible={visible}, overflow={overflow}, peek=40%, scrollbar={(overflow > 0 ? "Permanent" : "none")}");
+            FlowTrace.Step("Inventory", $"Peek strip: axis={(_portraitLayout ? "vertical" : "horizontal")} " +
+                $"cards={_vm.Slots.Count}, visible={visible}, overflow={overflow}, peek=40%, " +
+                $"word={(hasOverflow ? (_portraitLayout ? "more-below" : "more") : "none")}, " +
+                $"scrollbar={(hasOverflow ? "Permanent" : "none")}");
         }
 
         // The grid is a pure projection of vm.Slots (OWNED items in the active section). Every

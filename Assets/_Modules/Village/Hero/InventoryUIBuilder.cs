@@ -65,7 +65,7 @@ namespace DeNelle.Village
         private const float StageX1 = 0.620f;
 
         /// <summary>Header band (hero identity + vitals) - D3's full-width x 120 strip.</summary>
-        private const float HeaderY0 = 0.885f, HeaderY1 = 0.985f;
+        private const float HeaderY0 = 0.845f, HeaderY1 = 0.985f;
 
         /// <summary>
         /// The STAGE and PANE floor. The kit seats the ONE shared Close as a fixed
@@ -74,10 +74,10 @@ namespace DeNelle.Village
         /// horizontally (it is far left of the centred Close), which is why RailY0 is
         /// lower - exactly the dodge the previous layout's left column already used.
         /// </summary>
-        private const float BodyY0 = 0.300f, BodyY1 = 0.750f;
+        private const float BodyY0 = 0.300f, BodyY1 = 0.685f;
 
         /// <summary>The rail column's band. Lower than the body because it clears the Close in X.</summary>
-        private const float RailY0 = 0.760f, RailY1 = 0.875f;
+        private const float RailY0 = 0.695f, RailY1 = 0.835f;
 
         /// <summary>Purse strip - above the reserved Close band, below the stage.</summary>
         private const float PurseY0 = 0.222f, PurseY1 = 0.288f;
@@ -97,9 +97,13 @@ namespace DeNelle.Village
         /// <summary>Gap between rail entries, reference px.</summary>
         private const float RailEntryGapPx = 8f;
 
+        /// <summary>Resolved once per open; portrait uses stacked content and a 2x3 tab row.</summary>
+        private bool _portraitLayout;
+
         // --- ROOT + CHROME ---------------------------------------------------
         private void BuildRoot()
         {
+            _portraitLayout = Screen.height > Screen.width;
             // The kit's ONE standard modal canvas (1080x1920 reference / 0.5 match / 31000
             // band), same as every other Obsidian modal. overrideSorting is applied after,
             // preserving the prior behaviour.
@@ -169,14 +173,16 @@ namespace DeNelle.Village
 
             // ── STAGE: the selected section.
             _stageRoot = AddImage(panel.transform, "Stage",
-                                  new Vector2(ZoneX0, BodyY0), new Vector2(StageX1, BodyY1),
+                                  _portraitLayout ? new Vector2(ZoneX0, 0.405f) : new Vector2(ZoneX0, BodyY0),
+                                  _portraitLayout ? new Vector2(ZoneX1, BodyY1) : new Vector2(StageX1, BodyY1),
                                   new Color(0f, 0f, 0f, 0f));
             NoRaycast(_stageRoot);
 
             // ── PANE: detail / compare, ALWAYS present (D3). Never the old thin strip that
             //    could only say "Tap an item to inspect it."
             _paneRoot = AddImage(panel.transform, "Pane",
-                                 new Vector2(StageX1, BodyY0), new Vector2(ZoneX1, BodyY1),
+                                 _portraitLayout ? new Vector2(ZoneX0, BodyY0) : new Vector2(StageX1, BodyY0),
+                                 _portraitLayout ? new Vector2(ZoneX1, 0.395f) : new Vector2(ZoneX1, BodyY1),
                                  new Color(0f, 0f, 0f, 0f));
             NoRaycast(_paneRoot);
 
@@ -190,10 +196,13 @@ namespace DeNelle.Village
             // collapsed or overlapping band names the offending edge here instead of leaving the
             // next reader to measure a screenshot with a ruler.
             FlowTrace.Step("Inventory", string.Format(
-                "Bag layout: rail x[{0:F3}..{1:F3}] stage x[{1:F3}..{2:F3}] pane x[{2:F3}..{3:F3}] " +
+                "Bag layout: tabs x[{0:F3}..{3:F3}] stage x[{0:F3}..{2:F3}] pane x[{2:F3}..{3:F3}] " +
                 "| header y[{4:F3}..{5:F3}] body y[{6:F3}..{7:F3}] rail y[{8:F3}..{9:F3}] purse y[{10:F3}..{11:F3}]",
                 ZoneX0, RailX1, StageX1, ZoneX1,
                 HeaderY0, HeaderY1, BodyY0, BodyY1, RailY0, RailY1, PurseY0, PurseY1));
+            FlowTrace.Step("Inventory", "Bag aspect: " + (_portraitLayout
+                ? "portrait (2x3 tabs, vertical item list, pane below)"
+                : "landscape (1x6 tabs, horizontal item strip, pane right)"));
 
             BuildPurseStrip(_purseRoot.transform);
 
@@ -330,10 +339,8 @@ namespace DeNelle.Village
                 return n > 0 ? label + " " + n : label;
             }
             // ⚠ THE TAB ORDER IS THE RAIL ORDINAL ORDER, AND THAT IS LOAD-BEARING.
-            // BuildTabRow hands its callback the tab INDEX, which is forwarded verbatim to
-            // SelectRail — so labels[i] must be the section RailXxx == i names. Appending in
-            // ordinal order (Gear 0 .. Potions 5, Skills 6, Map 7) is what keeps that true.
-            // Insert nothing in the middle without renumbering the RailXxx constants.
+            // BuildTabRow hands its callback the tab INDEX, so the six visible inventory
+            // categories retain their RailXxx ordinal order. Talents and Map live in the header.
             //
             // ⛔ SKILLS IS NOT OPTIONAL HERE — IT IS THE ONLY PLAYER-REACHABLE SKILL-TREE DOOR.
             // The other two openers of PanelId.HeroSkillTree are an ArcaneTower building
@@ -343,27 +350,36 @@ namespace DeNelle.Village
             // the 2026-08-30 rewrite to a tab row dropped it, and the hero talent tree became
             // unreachable in a normal town session while every talent-layer suite still passed.
             // HeroSkillTreeDoorRegression pins the label back to SelectRail -> OpenSkillTree.
-            bool mapOn = DeNelle.Core.FeatureFlags.MapTab;
-            var labelList = new System.Collections.Generic.List<string>
+            var labels = new[]
             {
-                "Gear",
-                WithCount("Weapons", InventoryTabKind.Weapons),
-                WithCount("Off Hand", InventoryTabKind.OffHand),
-                WithCount("Armor", InventoryTabKind.Armor),
-                WithCount("Trinkets", InventoryTabKind.Outfits),
-                WithCount("Potions", InventoryTabKind.Consumables),
-                InventoryStrings.Get(InventoryStrings.KeyRailSkills)
+                InventoryStrings.Get(InventoryStrings.KeyTabGear),
+                WithCount(InventoryStrings.Get(InventoryStrings.KeyTabWeapons), InventoryTabKind.Weapons),
+                WithCount(InventoryStrings.Get(InventoryStrings.KeyTabOffHand), InventoryTabKind.OffHand),
+                WithCount(InventoryStrings.Get(InventoryStrings.KeyTabArmor), InventoryTabKind.Armor),
+                WithCount(InventoryStrings.Get(InventoryStrings.KeyTabTrinkets), InventoryTabKind.Outfits),
+                WithCount(InventoryStrings.Get(InventoryStrings.KeyTabPotions), InventoryTabKind.Consumables)
             };
-            // Map stays DORMANT behind FeatureFlags.MapTab (WO-827 realm travel is a stub, §7).
-            // It is appended only when the flag is on so that flipping the flag restores a real
-            // tab instead of leaving a second silently-orphaned door behind it.
-            if (mapOn) labelList.Add(InventoryStrings.Get(InventoryStrings.KeyRailMap));
-
-            ElarionUiKit.BuildTabRow(host, labelList.ToArray(), index => SelectRail(index),
-                initial: Mathf.Clamp(_railIndex, RailGear, RailPotions));
-            FlowTrace.Step("Inventory", "Bag tabs: " + labelList.Count +
-                " visible, non-scrolling (Skills routes out to the hero skill tree; Map " +
-                (mapOn ? "on" : "OFF - not drawn") + "); selected=" + _railIndex);
+            if (_portraitLayout)
+            {
+                var rowA = AddImage(host, "TabRowA", new Vector2(0f, 0.51f), Vector2.one,
+                    new Color(0f, 0f, 0f, 0f));
+                var rowB = AddImage(host, "TabRowB", Vector2.zero, new Vector2(1f, 0.49f),
+                    new Color(0f, 0f, 0f, 0f));
+                NoRaycast(rowA); NoRaycast(rowB);
+                ElarionUiKit.BuildTabRow(rowA.transform, new[] { labels[0], labels[1], labels[2] },
+                    index => SelectRail(index), initial: _railIndex <= RailOffHand ? _railIndex : -1);
+                ElarionUiKit.BuildTabRow(rowB.transform, new[] { labels[3], labels[4], labels[5] },
+                    index => SelectRail(index + RailArmor),
+                    initial: _railIndex >= RailArmor && _railIndex <= RailPotions
+                        ? _railIndex - RailArmor : -1);
+            }
+            else
+            {
+                ElarionUiKit.BuildTabRow(host, labels, index => SelectRail(index),
+                    initial: Mathf.Clamp(_railIndex, RailGear, RailPotions));
+            }
+            FlowTrace.Step("Inventory", "Bag tabs: exactly 6 visible, non-scrolling; selected=" +
+                _railIndex + "; wrap=" + (_portraitLayout ? "1" : "0"));
         }
 
         private static int CountOf(Dictionary<InventoryTabKind, int> counts, InventoryTabKind kind)
@@ -510,7 +526,7 @@ namespace DeNelle.Village
         {
             switch (_railIndex)
             {
-                case RailGear:  return InventoryStrings.Get(InventoryStrings.KeyNextRailHint);
+                case RailGear:  return InventoryStrings.Get(InventoryStrings.KeyNextTabsHint);
                 case RailSkills: return InventoryStrings.Get(InventoryStrings.KeyEmptySkills);
                 case RailMap:   return InventoryStrings.Get(InventoryStrings.KeyEmptyMapLocked);
             }

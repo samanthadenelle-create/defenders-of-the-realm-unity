@@ -110,13 +110,30 @@ namespace DeNelle.Village
             ElarionUiKit.FitSingleLine(lvLbl, 0f, ElarionUi.FontMicro);
 
             var xpBar = ElarionUiKit.BuildObsidianBar(_headerRoot.transform, ElarionUiKit.ObsidianBarKind.Xp,
-                new Vector2(0.75f, 0.30f), new Vector2(1.00f, 0.70f), withValue: false);
+                new Vector2(0.705f, 0.30f), new Vector2(0.75f, 0.70f), withValue: false);
             if (prog != null) xpBar.SetImmediate(prog.Xp, prog.XpToNext);
             else xpBar.SetImmediate(0f, 1f);
 
+            // WO-1254: Skills and Map are wayfinding chips in the header, never
+            // inventory categories. Both are words, so dormancy survives greyscale.
+            var talents = ElarionUiKit.ButtonPack(_headerRoot.transform,
+                InventoryStrings.Get(InventoryStrings.KeyHeaderTalents),
+                ElarionUiKit.ButtonKind.Quiet,
+                new Vector2(0.755f, 0f), new Vector2(0.87f, 1f), OpenSkillTree);
+            if (talents != null) ElarionUiKit.ClampMinTouch(talents);
+
+            bool mapOn = DeNelle.Core.FeatureFlags.MapTab;
+            string mapLabel = InventoryStrings.Get(InventoryStrings.KeyRailMap);
+            if (!mapOn) mapLabel += " " + InventoryStrings.Get(InventoryStrings.KeyRailMapSoon);
+            var map = ElarionUiKit.ButtonPack(_headerRoot.transform, mapLabel,
+                ElarionUiKit.ButtonKind.Quiet,
+                new Vector2(0.88f, 0f), Vector2.one, mapOn ? (System.Action)OpenRealmMap : null);
+            if (map != null) ElarionUiKit.ClampMinTouch(map);
+
             FlowTrace.Step("Inventory",
                 $"Header built: job='{job}' lv={level} hero={(vitalsHero != null ? "found" : "MISSING")} " +
-                $"hp={(hh != null ? "live" : "none")} mp={(ha != null ? "live" : "none")} xp={(prog != null ? "live" : "none")}");
+                $"hp={(hh != null ? "live" : "none")} mp={(ha != null ? "live" : "none")} xp={(prog != null ? "live" : "none")} " +
+                $"Talents=header Map={(mapOn ? "header-live" : "header-soon")}");
         }
 
         // WO-573 — load the active hero's portrait art for the frame's medallion socket. The

@@ -55,6 +55,7 @@ namespace DeNelle.Editor
     public static class HeroSkillTreeDoorRegression
     {
         private const string BuilderPath = "Assets/_Modules/Village/Hero/InventoryUIBuilder.cs";
+        private const string HeaderPath = "Assets/_Modules/Village/Hero/InventoryPaperDoll.cs";
         private const string ControllerPath = "Assets/_Modules/Village/Hero/HeroInventoryController.cs";
         private const string PanelPath = "Assets/_Modules/Village/Talents/HeroSkillTreePanelMvvm.cs";
         private const string ModulesRoot = "Assets/_Modules";
@@ -79,14 +80,13 @@ namespace DeNelle.Editor
             try
             {
                 string builder = ReadSource(BuilderPath, failures);
+                string header = ReadSource(HeaderPath, failures);
                 string controller = ReadSource(ControllerPath, failures);
                 string panel = ReadSource(PanelPath, failures);
 
-                if (builder != null && controller != null)
+                if (builder != null && header != null)
                 {
-                    CheckActiveTabBuilder(builder, failures, log);
-                    CheckOrdinalAlignment(builder, controller, failures, log);
-                    CheckRouteToPanel(builder, controller, failures, log);
+                    CheckHeaderDoor(header, builder, failures, log);
                 }
                 if (panel != null) CheckPanelRegisters(panel, failures, log);
 
@@ -98,6 +98,26 @@ namespace DeNelle.Editor
             }
 
             return Verdict(failures, log, out reason);
+        }
+
+        // WO-1254: Talents is deliberately a header chip, not a seventh inventory tab.
+        private static void CheckHeaderDoor(string header, string builder,
+                                            List<string> failures, StringBuilder log)
+        {
+            string rebuild = MethodBody(header, "private void RebuildHeader(");
+            if (rebuild == null ||
+                rebuild.IndexOf("KeyHeaderTalents", StringComparison.Ordinal) < 0 ||
+                rebuild.IndexOf("OpenSkillTree", StringComparison.Ordinal) < 0)
+                failures.Add("[case 1] the active Bag header does not draw the canonical Talents chip " +
+                             "wired to OpenSkillTree; the hero talent tree is unreachable.");
+            else
+                log.AppendLine("  case 1 OK - canonical Talents header chip -> OpenSkillTree");
+
+            string open = MethodBody(builder, "private void OpenSkillTree(");
+            if (open == null || open.IndexOf("PanelId.HeroSkillTree", StringComparison.Ordinal) < 0)
+                failures.Add("[case 3] OpenSkillTree no longer opens PanelId.HeroSkillTree.");
+            else
+                log.AppendLine("  case 3 OK - OpenSkillTree -> PanelId.HeroSkillTree");
         }
 
         // ── CASE 1: the ACTIVE tab builder names Skills. THE case. ────────────

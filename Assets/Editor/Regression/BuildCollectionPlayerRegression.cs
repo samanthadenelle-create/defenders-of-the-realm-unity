@@ -32,6 +32,14 @@ namespace DeNelle.Editor.Regression
             var defense = build.Single(c => c.CollectionId == "build-defenses");
             if (defense.Items.Count != 5 || CardCollectionPaging.PageCount(defense.Items.Count) != 2 || CardCollectionPaging.FirstIndex(1, 5) != 4)
                 return Fail("Defense must page 4+1", out reason);
+            var craftingIds = build.Single(c => c.CollectionId == "build-crafting").Items
+                .OrderBy(i => i.Order).Select(i => i.ItemId).ToArray();
+            var tradeIds = build.Single(c => c.CollectionId == "build-trade").Items
+                .OrderBy(i => i.Order).Select(i => i.ItemId).ToArray();
+            if (!new[] { "workshop", "jeweler" }.SequenceEqual(craftingIds))
+                return Fail("Crafting membership/order must be workshop,jeweler only", out reason);
+            if (!new[] { "market", "forge", "armorer" }.SequenceEqual(tradeIds))
+                return Fail("Trade membership/order must be market,forge,armorer only", out reason);
             string browser = File.ReadAllText("Assets/_Modules/Village/BuildMode/BuildCollectionBrowser.cs");
             string palette = File.ReadAllText("Assets/_Modules/Village/BuildMode/BuildPaletteUI.cs");
             if (!browser.Contains("_focus.Open") || !browser.Contains("Close(); // release") || !browser.Contains("callback?.Invoke(entry)"))

@@ -50,6 +50,22 @@ namespace DeNelle.Village
         /// <summary>The rail column's own caption.</summary>
         public const string KeyRailHeader   = "invRailHeader";
 
+        // WO-1254 top-tab/navigation copy. These are deliberately distinct from the
+        // retired rail keys so the gate can prove the painted surface has exactly six
+        // category destinations and no pseudo-tab.
+        public const string KeyTabGear       = "invTabGear";
+        public const string KeyTabWeapons    = "invTabWeapons";
+        public const string KeyTabOffHand    = "invTabOffHand";
+        public const string KeyTabArmor      = "invTabArmor";
+        public const string KeyTabTrinkets   = "invTabTrinkets";
+        public const string KeyTabPotions    = "invTabPotions";
+        public const string KeyMoreCount     = "invMoreCount";
+        public const string KeyMoreBelow     = "invMoreBelow";
+        public const string KeyEmptyOffHand  = "invEmptyOffHand";
+        public const string KeyGoToItems     = "invGoToItems";
+        public const string KeyHeaderTalents = "invHeaderTalents";
+        public const string KeyNextTabsHint  = "invNextTabsHint";
+
         // ── Worn-slot keys, the Gear section (D3 / D9) ───────────────────────
         /// <summary>Worn slot — main hand.</summary>
         public const string KeySlotMainHand = "invSlotMainHand";
@@ -144,6 +160,9 @@ namespace DeNelle.Village
         {
             KeyRailGear, KeyRailWeapons, KeyRailArmor, KeyRailTrinkets, KeyRailPotions,
             KeyRailSkills, KeyRailMap, KeyRailMapSoon, KeyRailWorn, KeyRailHeader,
+            KeyTabGear, KeyTabWeapons, KeyTabOffHand, KeyTabArmor, KeyTabTrinkets,
+            KeyTabPotions, KeyMoreCount, KeyMoreBelow, KeyEmptyOffHand, KeyGoToItems,
+            KeyHeaderTalents, KeyNextTabsHint,
             KeySlotMainHand, KeySlotOffHand, KeySlotArmor, KeySlotAmulet, KeySlotRing, KeySlotEmpty,
             KeyEmptyWeapons, KeyEmptyArmor, KeyEmptyTrinkets, KeyEmptyPotions, KeyEmptySkills,
             KeyEmptyMapLocked,
@@ -182,7 +201,7 @@ namespace DeNelle.Village
             switch (tab)
             {
                 case InventoryTabKind.Weapons:     return Get(KeyEmptyWeapons);
-                case InventoryTabKind.OffHand:     return "Nothing here yet. The Forge sells heaters and bucklers.";
+                case InventoryTabKind.OffHand:     return Get(KeyEmptyOffHand);
                 case InventoryTabKind.Armor:       return Get(KeyEmptyArmor);
                 case InventoryTabKind.Outfits:     return Get(KeyEmptyTrinkets);
                 case InventoryTabKind.Consumables: return Get(KeyEmptyPotions);

@@ -106,6 +106,8 @@ namespace DeNelle.Editor.Regression
                      () => Case10_StaffLoadoutShowsRenderers(failures));
                 Case(failures, "shield-mesh-readable",
                      () => Case11_ShieldMeshIsReadable(failures));
+                Case(failures, "off-hand-seat-proof",
+                     () => Case12_OffHandSeatProof(failures));
             }
             catch (Exception ex)
             {
@@ -188,6 +190,73 @@ namespace DeNelle.Editor.Regression
                     "worn edge/strap-inward. This is invisible to every editor-only proof " +
                     "(PROD-019). Re-enable Read/Write on the FBX; do NOT add a face heuristic.");
             }
+        }
+
+        // =====================================================================
+        // Case 12 - WO-1254 D-SEAT: equipped must never mean zero renderers
+        // =====================================================================
+        private static void Case12_OffHandSeatProof(List<string> failures)
+        {
+            WeaponDef starter = GearCatalog.FindWeapon("knight_shield_starter");
+            if (starter == null || !starter.IsOffHandItem)
+                failures.Add("[off-hand-seat-proof] starter Knight off-hand does not resolve as an " +
+                             "off-hand WeaponDef; the fixture cannot represent the shipped loadout.");
+
+            GameObject emptySeat = null;
+            try
+            {
+                // This is the exact contradiction the oracle must redden: the
+                // loadout says equipped, a prop object exists and is parented,
+                // but it resolves to zero active mesh renderers.
+                emptySeat = new GameObject("EquipmentProp_OffHand_ZeroRenderers");
+                int active = EquipmentController.CountActiveMeshRenderers(emptySeat);
+                string cause = EquipmentController.ClassifyOffHandSeatProof(
+                    equipped: true, packageBaked: false, addressableFailed: false,
+                    propPresent: true, parentMatches: true,
+                    activeMeshRenderers: active, nonZeroBounds: false);
+                if (active != 0 || cause != "attached-invisible")
+                    failures.Add("[off-hand-seat-proof] equipped off-hand with zero active mesh " +
+                                 "renderers classified as CAUSE=" + cause + " (count=" + active +
+                                 "), expected CAUSE=attached-invisible. The bag can claim a shield " +
+                                 "while the player sees an empty arm.");
+            }
+            finally
+            {
+                if (emptySeat != null) UnityEngine.Object.DestroyImmediate(emptySeat);
+            }
+
+            // Pin the entire explicit vocabulary so device evidence cannot drift
+            // into prose that no longer maps to PROD-019's cause-specific lanes.
+            string[,] expected =
+            {
+                { EquipmentController.ClassifyOffHandSeatProof(false, false, false, false, false, 0, false), "loadout-null" },
+                { EquipmentController.ClassifyOffHandSeatProof(true,  true,  false, false, false, 0, false), "baked-skip" },
+                { EquipmentController.ClassifyOffHandSeatProof(true,  false, true,  true,  true,  1, true),  "addr-fail" },
+                { EquipmentController.ClassifyOffHandSeatProof(true,  false, false, false, false, 0, false), "attach-fail" },
+                { EquipmentController.ClassifyOffHandSeatProof(true,  false, false, true,  true,  1, true),  "ok" },
+            };
+            for (int i = 0; i < expected.GetLength(0); i++)
+                if (expected[i, 0] != expected[i, 1])
+                    failures.Add("[off-hand-seat-proof] classifier vocabulary drift: got '" +
+                                 expected[i, 0] + "', expected '" + expected[i, 1] + "'.");
+
+            if (!File.Exists(EquipSrc))
+            {
+                failures.Add("[off-hand-seat-proof] source not found: " + EquipSrc);
+                return;
+            }
+            string src = File.ReadAllText(EquipSrc);
+            int pose = src.IndexOf("private void ApplyHoldPose()", StringComparison.Ordinal);
+            int proof = pose >= 0
+                ? src.IndexOf("TraceOffHandSeatProof(drawn, drawn ? _offHandHand : (sheatheOff ?? _offHandHand));",
+                    pose, StringComparison.Ordinal) : -1;
+            if (pose < 0 || proof < 0)
+                failures.Add("[off-hand-seat-proof] final ApplyHoldPose path no longer emits " +
+                             "TraceOffHandSeatProof with the state-specific parent; town/battle/cave " +
+                             "cannot produce trustworthy CAUSE lines.");
+            if (!src.Contains("activeMeshRenderers={active}") || !src.Contains("CAUSE={cause}"))
+                failures.Add("[off-hand-seat-proof] trace no longer names activeMeshRenderers and " +
+                             "CAUSE explicitly; an equipped-but-empty arm would be ambiguous again.");
         }
 
         private static string Case1_RegistryRows(List<string> failures)

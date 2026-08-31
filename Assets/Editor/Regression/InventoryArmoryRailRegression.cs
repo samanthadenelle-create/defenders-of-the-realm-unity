@@ -115,19 +115,73 @@ namespace DeNelle.Editor.Regression
             string controller = ReadSrc("Assets/_Modules/Village/Hero/HeroInventoryController.cs");
             string shop = ReadSrc("Assets/_Modules/Village/Hero/PartyShopVM.cs");
             string resolver = ReadSrc("Assets/_Modules/Village/Hero/VendorStockResolver.cs");
-            if (builder == null || grid == null || vm == null || controller == null || shop == null || resolver == null)
+            string header = ReadSrc(HeaderSrc);
+            if (builder == null || grid == null || vm == null || controller == null || shop == null ||
+                resolver == null || header == null)
             { failures.Add("[wo-1254-tabs] cannot read one or more Bag sources"); return; }
 
-            if (!Regex.IsMatch(builder, @"BuildTabRow\s*\("))
+            string tabMethod = SourceSlice(StripComments(builder), "private void BuildTopTabs",
+                "private static int CountOf");
+            if (!Regex.IsMatch(tabMethod, @"BuildTabRow\s*\("))
                 failures.Add("[wo-1254-tabs] Bag does not use the kit tab row");
-            foreach (string label in new[] { "Gear", "Weapons", "Off Hand", "Armor", "Trinkets", "Potions" })
-                if (!builder.Contains("\"" + label + "\"")) failures.Add("[wo-1254-tabs] missing visible tab " + label);
+            string[] tabKeys = { "KeyTabGear", "KeyTabWeapons", "KeyTabOffHand", "KeyTabArmor",
+                "KeyTabTrinkets", "KeyTabPotions" };
+            foreach (string key in tabKeys)
+                if (!tabMethod.Contains("InventoryStrings." + key))
+                    failures.Add("[wo-1254-tabs] missing canonical visible tab " + key);
+            int paintedTabKeys = Regex.Matches(tabMethod, @"InventoryStrings\.KeyTab[A-Za-z]+").Count;
+            if (paintedTabKeys != 6)
+                failures.Add("[wo-1254-tabs] runtime tab array has " + paintedTabKeys +
+                    " category-key references, not exactly six");
+            if (tabMethod.Contains("KeyRailSkills") || tabMethod.Contains("KeyRailMap"))
+                failures.Add("[wo-1254-tabs] Skills or Map is still painted as a Bag tab");
+            if (!tabMethod.Contains("TabRowA") || !tabMethod.Contains("TabRowB") ||
+                !tabMethod.Contains("_portraitLayout"))
+                failures.Add("[wo-1254-tabs] portrait 2x3 non-scrolling tab wrap is absent");
+            if (!header.Contains("KeyHeaderTalents") || !header.Contains("KeyRailMapSoon") ||
+                !header.Contains("FeatureFlags.MapTab"))
+                failures.Add("[wo-1254-tabs] Talents and dormant Map-soon header chips are not both present");
             if (!Regex.IsMatch(controller, @"_railIndex\s*=\s*RailGear"))
                 failures.Add("[wo-1254-tabs] Bag no longer lands on Gear");
             if (!vm.Contains("InventoryTabKind.OffHand") || !vm.Contains("EquipOffHandById"))
                 failures.Add("[wo-1254-tabs] Off Hand projection/direct equip seam missing");
-            if (!grid.Contains("PeekContent") || !grid.Contains("0.40f") || !grid.Contains("ScrollbarVisibility.Permanent"))
+            if (!grid.Contains("ElarionUiKit.MakeScrollZone") || !grid.Contains("0.40f") ||
+                !grid.Contains("ScrollbarVisibility.Permanent"))
                 failures.Add("[wo-1254-tabs] peek strip, 40% tell, or permanent scrollbar missing");
+            if (!grid.Contains("KeyMoreCount") || !grid.Contains("KeyMoreBelow") ||
+                !grid.Contains("zone.scroll.horizontal = true") ||
+                !grid.Contains("zone.scroll.vertical = true"))
+                failures.Add("[wo-1254-tabs] aspect-specific overflow axis/word contract is incomplete");
+            if (Regex.IsMatch(StripComments(grid), @"overflow\s*\+\s*"" more"))
+                failures.Add("[wo-1254-tabs] overflow word is hard-coded instead of canonical");
+
+            // Independent touch arithmetic at the primary aspect. These values come from the
+            // CanvasScaler contract and MinTouchPx, not from the runtime's own trace.
+            float tabY0, tabY1, headerY0, headerY1;
+            if (!TryConst(builder, "RailY0", out tabY0) || !TryConst(builder, "RailY1", out tabY1) ||
+                !TryConst(builder, "HeaderY0", out headerY0) || !TryConst(builder, "HeaderY1", out headerY1))
+                failures.Add("[wo-1254-tabs] current tab/header bands are not independently measurable");
+            else
+            {
+                float panelH = 1200f / ScaleFactor(2670f, 1200f) * 0.94f;
+                float tabH = panelH * (tabY1 - tabY0);
+                float headerH = panelH * (headerY1 - headerY0);
+                if (tabH < ElarionUiKit.MinTouchPx)
+                    failures.Add("[wo-1254-tabs] landscape tab short side " + tabH.ToString("F1") +
+                        " is below MinTouchPx " + ElarionUiKit.MinTouchPx);
+                if (headerH < ElarionUiKit.MinTouchPx)
+                    failures.Add("[wo-1254-tabs] header-chip short side " + headerH.ToString("F1") +
+                        " is below MinTouchPx " + ElarionUiKit.MinTouchPx);
+            }
+
+            foreach (string key in new[] { InventoryStrings.KeyTabGear, InventoryStrings.KeyTabWeapons,
+                InventoryStrings.KeyTabOffHand, InventoryStrings.KeyTabArmor,
+                InventoryStrings.KeyTabTrinkets, InventoryStrings.KeyTabPotions,
+                InventoryStrings.KeyMoreCount, InventoryStrings.KeyMoreBelow,
+                InventoryStrings.KeyEmptyOffHand, InventoryStrings.KeyGoToItems,
+                InventoryStrings.KeyHeaderTalents, InventoryStrings.KeyNextTabsHint })
+                if (Array.IndexOf(InventoryStrings.AllKeys, key) < 0)
+                    failures.Add("[wo-1254-tabs] required key is outside InventoryStrings.AllKeys: " + key);
             string pane = ReadSrc(PaneSrc);
             if (pane == null || !pane.Contains("BuildGearGuidance(host)") ||
                 !pane.Contains("Gear guidance pane: no duplicated loadout rows"))
@@ -138,7 +192,9 @@ namespace DeNelle.Editor.Regression
                 failures.Add("[wo-1254-tabs] legacy sub-floor cell returned");
             if (!shop.Contains("PartyShopCategory.OffHand") || !resolver.Contains("ReserveMainAndOffHand"))
                 failures.Add("[wo-1254-tabs] Forge Off Hand shelf/category contract missing");
-            notes.Add("six non-scrolling tabs, Gear landing, Off Hand split, 40% peek + word + permanent scrollbar, Forge shelf reservation");
+            notes.Add("exactly six canonical non-scrolling tabs; Talents/Map header chips; Gear landing; " +
+                "Off Hand split; landscape/portrait 40% peek + canonical word + kit permanent scrollbar; " +
+                "independent 2670x1200 touch arithmetic; Forge shelf reservation");
         }
 
         private static void Case(List<string> failures, string name, Action body)
@@ -633,6 +689,15 @@ namespace DeNelle.Editor.Regression
         {
             try { return File.Exists(path) ? File.ReadAllText(path) : null; }
             catch { return null; }
+        }
+
+        private static string SourceSlice(string src, string startToken, string endToken)
+        {
+            if (string.IsNullOrEmpty(src)) return "";
+            int start = src.IndexOf(startToken, StringComparison.Ordinal);
+            if (start < 0) return "";
+            int end = src.IndexOf(endToken, start + startToken.Length, StringComparison.Ordinal);
+            return end > start ? src.Substring(start, end - start) : src.Substring(start);
         }
 
         /// <summary>Strip // and /* */ so a rule quoted in a comment is never mistaken for code.</summary>

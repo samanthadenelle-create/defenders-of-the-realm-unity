@@ -257,10 +257,13 @@ namespace DeNelle.Editor
 
         // =====================================================================
         //  WO-1103 (6) FIELD-KILL TOAST -- source-lint (the WO-sanctioned probe):
-        //  Enemy.Die's out-of-arena branch must call the ONE existing label system
-        //  (DamageNumberSpawner.SpawnLabel via ShowFieldKillReward) and carry the
-        //  owner's 'Pack bounty' wording for a leader-carried pack payout. Red on
-        //  revert: deleting the call site or the wording fails by name.
+        //  Enemy.Die's out-of-arena branch must call the ONE bounded screen-space
+        //  stamp system (CombatText Reward via ShowFieldKillReward) and carry the
+        //  owner's 'Pack bounty' wording for a leader-carried pack payout. The old
+        //  world-space SpawnLabel path is explicitly forbidden: its apparent size
+        //  varies with camera distance and obscured the fight on Seeker. Red on
+        //  revert: deleting the call site, restoring SpawnLabel, or losing the
+        //  wording fails by name.
         // =====================================================================
         private static void CheckFieldToastSourceLint(List<string> failures, StringBuilder log)
         {
@@ -274,13 +277,15 @@ namespace DeNelle.Editor
             }
             if (!src.Contains("ShowFieldKillReward("))
                 failures.Add("[enemy-rewards] WO-1103 toast: Enemy.cs has no ShowFieldKillReward call (field kills notify nothing -- B2 regressed)");
-            if (!src.Contains("DamageNumberSpawner.SpawnLabel("))
-                failures.Add("[enemy-rewards] WO-1103 toast: Enemy.cs does not route the field-kill label through DamageNumberSpawner.SpawnLabel (the ONE label system)");
+            if (!src.Contains("CombatText.Show(CombatTextKind.Reward"))
+                failures.Add("[enemy-rewards] WO-1103 toast: Enemy.cs does not route the field-kill label through bounded CombatTextKind.Reward");
+            if (src.Contains("DamageNumberSpawner.SpawnLabel(label"))
+                failures.Add("[enemy-rewards] WO-1103 toast: Enemy.cs restored the camera-scaled world-space SpawnLabel path (oversized Seeker reward text regressed)");
             if (!src.Contains("Pack bounty"))
                 failures.Add("[enemy-rewards] WO-1103 toast: Enemy.cs lost the 'Pack bounty' wording (leader-carry pack payout reads as a single-kill overpay)");
             if (!src.Contains("ReportArenaKillGrant("))
                 failures.Add("[enemy-rewards] WO-1103 toast: Enemy.cs no longer banks arena kills via ReportArenaKillGrant (victory SUMMARY under-reports again)");
-            log.AppendLine("  WO-1103 toast lint: SpawnLabel + 'Pack bounty' + ReportArenaKillGrant call sites present in Enemy.cs");
+            log.AppendLine("  WO-1103 toast lint: bounded CombatText(Reward) + 'Pack bounty' + ReportArenaKillGrant present; world-space SpawnLabel absent");
         }
 
         private static void DriveGrantSeam(EnemyDef def, List<string> failures, StringBuilder log)

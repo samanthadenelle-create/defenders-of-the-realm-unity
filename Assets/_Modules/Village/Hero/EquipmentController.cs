@@ -359,6 +359,11 @@ namespace DeNelle.Village
         // the child is identity; the root is the Offset Forge row.
         private const string OffHandMeshName = "EquipmentProp_OffHand_Mesh";
         private GameObject _currentOffHandProp;
+        // PROD-019/D-SEAT instrumentation only. Records whether the current
+        // off-hand attach left the Addressables success path. No runtime pose or
+        // fallback decision reads this field.
+        private bool _offHandAddressableFailed;
+        private string _lastOffHandSeatProofSignature;
         /// <summary>PROD-019: last sheathe parent we ran EnsureWeaponRenderersVisible for —
         /// cleared when the off-hand leaves that seat so a reparent re-shows without per-frame spam.</summary>
         private Transform _offHandSheatheShownOn;
@@ -2096,6 +2101,7 @@ namespace DeNelle.Village
             _offHandGeneration++;
             DestroyCurrentOffHand();
             ReleaseOffHandHandle();
+            _offHandAddressableFailed = false;
             _currentOffHandId = id;
             if (string.IsNullOrEmpty(id)) return;   // detach
 
@@ -2198,6 +2204,7 @@ namespace DeNelle.Village
             }
             catch (System.Exception ex)
             {
+                _offHandAddressableFailed = true;
                 FlowTrace.Fail("Gear", $"Addressable off-hand load threw for '{address}': {ex.Message} — " +
                                        "falling back to Resources shield (hero keeps a shield).");
                 FallbackResourcesOffHand(vis, hand, id);
@@ -2222,6 +2229,7 @@ namespace DeNelle.Village
 
                 if (!op.IsValid() || op.Status != AsyncOperationStatus.Succeeded || op.Result == null)
                 {
+                    _offHandAddressableFailed = true;
                     FlowTrace.Fail("Gear", $"Addressable off-hand load FAILED for '{address}' " +
                         $"(status={op.Status}) — falling back to Resources shield (hero keeps a shield).");
                     ReleaseOffHandHandle();
@@ -2237,6 +2245,7 @@ namespace DeNelle.Village
                     () => prop = Instantiate(op.Result));
                 if (prop == null)
                 {
+                    _offHandAddressableFailed = true;
                     FlowTrace.Fail("Gear", $"Addressable off-hand Instantiate returned null for '{address}' " +
                         $"(id='{id}') — falling back to Resources shield (hero keeps a shield).");
                     ReleaseOffHandHandle();
@@ -3237,6 +3246,71 @@ namespace DeNelle.Village
                     Guard.Try("Equip", "OnCarryStateChanged(" + (drawn ? "drawn" : "sheathed") + ")",
                         () => handler(drawn));
             }
+
+            // WO-1254 D-SEAT / PROD-019: classify the FINAL off-hand state only
+            // after every ApplyHoldPose writer has run. This is an oracle, not a
+            // seat: it writes no transform, material, renderer, scene, or camera.
+            // Use the sanctioned target already resolved by this pose pass. In
+            // legacy/fallback rigs SHEATHED may use sheatheOff while DRAWN uses
+            // _offHandHand; comparing both states only to the hand would report
+            // a healthy town carry as attach-fail.
+            TraceOffHandSeatProof(drawn, drawn ? _offHandHand : (sheatheOff ?? _offHandHand));
+        }
+
+        /// <summary>Pure D-SEAT cause classifier shared by runtime and regression.
+        /// `ok` proves structural renderability, not gameplay-camera readability.</summary>
+        public static string ClassifyOffHandSeatProof(bool equipped, bool packageBaked,
+            bool addressableFailed, bool propPresent, bool parentMatches,
+            int activeMeshRenderers, bool nonZeroBounds)
+        {
+            if (!equipped) return "loadout-null";
+            if (packageBaked) return "baked-skip";
+            if (!propPresent || !parentMatches) return "attach-fail";
+            if (activeMeshRenderers <= 0 || !nonZeroBounds) return "attached-invisible";
+            if (addressableFailed) return "addr-fail";
+            return "ok";
+        }
+
+        private void TraceOffHandSeatProof(bool drawn, Transform expectedParent)
+        {
+            string equippedId = _loadout != null && _loadout.EquippedOffHand != null
+                ? _loadout.EquippedOffHand.id : _currentOffHandId;
+            bool equipped = !string.IsNullOrEmpty(equippedId);
+            int active = CountActiveMeshRenderers(_currentOffHandProp);
+            bool nonZeroBounds = false;
+            Bounds combined = default;
+            bool haveBounds = false;
+            if (_currentOffHandProp != null)
+            {
+                foreach (var r in _currentOffHandProp.GetComponentsInChildren<Renderer>(true))
+                {
+                    if (r == null || !r.enabled || !r.gameObject.activeInHierarchy || MeshOf(r) == null)
+                        continue;
+                    if (!haveBounds) { combined = r.bounds; haveBounds = true; }
+                    else combined.Encapsulate(r.bounds);
+                }
+                nonZeroBounds = haveBounds && combined.size.sqrMagnitude > 1e-8f;
+            }
+            bool parentMatches = _currentOffHandProp != null && expectedParent != null &&
+                ReferenceEquals(_currentOffHandProp.transform.parent, expectedParent);
+            string cause = ClassifyOffHandSeatProof(equipped, PackageBakedGear,
+                _offHandAddressableFailed, _currentOffHandProp != null, parentMatches,
+                active, nonZeroBounds);
+            string scene = SceneManager.GetActiveScene().name;
+            string state = drawn ? "DRAWN" : "SHEATHED";
+            string parent = _currentOffHandProp != null && _currentOffHandProp.transform.parent != null
+                ? _currentOffHandProp.transform.parent.name : "<null>";
+            string signature = scene + "|" + state + "|" + equippedId + "|" + cause + "|" +
+                parent + "|" + active + "|" + nonZeroBounds;
+            if (signature == _lastOffHandSeatProofSignature) return;
+            _lastOffHandSeatProofSignature = signature;
+            string bounds = haveBounds ? combined.size.ToString("0.###") : "(0, 0, 0)";
+            FlowTrace.Step("Equip",
+                $"seat-proof scene='{scene}' state={state} offHand='{(equipped ? equippedId : "<null>")}' " +
+                $"prop={(_currentOffHandProp != null)} parent='{parent}' expected='" +
+                $"{(expectedParent != null ? expectedParent.name : "<null>")}' activeMeshRenderers={active} " +
+                $"bounds={bounds} baked={PackageBakedGear} addressableFailed={_offHandAddressableFailed} " +
+                $"CAUSE={cause}");
         }
 
         // How a sheathed registry entry was resolved (explicit @sheathed vs drawn-key fallback).

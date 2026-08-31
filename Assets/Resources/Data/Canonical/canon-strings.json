@@ -4,7 +4,6 @@
     "narrativeBible": "defenders-unity/docs/narrative-bible.md",
     "storyTs": "defenders-of-the-realm/src/content/story.ts"
   },
-
   "avalon": "Avalon",
   "avalonEpithet": "the last green sanctuary",
   "elarion": "Elarion",
@@ -14,7 +13,6 @@
   "theHeartTree": "The Heart-Tree",
   "theHeartTagline": "The living core of Elarion — if it falls, the village falls.",
   "worldTree": "the World Tree",
-
   "blaise": "Blaise",
   "blaiseEpithet": "apprentice of the missing Warden",
   "blaiseMentor": "Warden Aelwyn",
@@ -22,24 +20,18 @@
   "guardianTitle": "Realm Guardian",
   "guardianOfTheLantern": "Guardian of the Lantern",
   "_guardianLegacyNote": "Retired title — the player is now 'the Keeper' (STORYLINE.md §4). Preserved so any v1 data reference does not hard-error.",
-
   "alduin": "Alduin the Mournful",
   "alduinTitle": "the Necromancer",
-
   "bossSyndrath": "Syndrath the Devourer",
   "bossSyndrathEpithet": "the Devourer",
   "_bossSyndrathNote": "Apex village wave-boss (the Black Dragon). NOT from narrative-bible.md / story.ts — agent-authored content the owner pulled in and ratified 2026-05-19 (see docs/port-notes/dragon-boss.md §1). Keyed here as a proper noun so the HUD / boss bar never hardcodes it; the displayed name can be re-pointed without touching code.",
-
   "heartWing": "The Heart-Wing",
   "heartWingDescription": "Elarion's airborne aspect; Elarion sometimes walks the sky and the Folk call it the Heart-Wing.",
-
   "lantern": "the Lantern of Elarion",
   "lanternShort": "the Lantern",
-
   "tunnelName": "The Rootways",
   "tunnelOrigin": "made by the Heart's own roots",
   "_tunnelNameNote": "WO-1044 R1/R2, owner ruling 2026-08-17 ('yes to all defaults on 1044'). RETIRED: 'The Hollow Roads'. That name read as THE HOLLOWED'S roads, which promises enemies inside a graph that deliberately authors zero encounters (nine rooms, no traps, no keys, no chests) -- so the player walked an empty crossroads and concluded content was missing. 'The Rootways' explains the quiet as lore: the Heart's song runs down there, so the rot does not; and it explains why the tunnel reaches exactly the four marches, because roots reach where the wards are. THE ID IS DELIBERATELY NOT RENAMED: the scene/graph id stays 'dg_hollow_roads' (BiomeRoads.TunnelSceneId), a contract shared by BiomeRoads.ArmRoomIdFor, dg_hollow_roads.json (dual copy), HollowRoadsDropInjector and BiomeRoadsRegression. Ids are live contracts; display names are not. Pinned by BiomeRoadsRegression Case 7, which fails both if this key drifts from BiomeRoads.TunnelDisplayName and if the retired name returns.",
-
   "regionGoldfields": "Goldfields",
   "regionStoneback": "Stoneback",
   "regionMirewood": "Mirewood",
@@ -49,7 +41,6 @@
   "regionMirewoodLong": "Mirewood",
   "regionAshwoodLong": "Corrupted Ashwood",
   "_regionNamesNote": "WO-1044 R3, owner ruling 2026-08-17. Code said 'Stoneback'/'Ashwood' while narrative canon said 'Stoneback Ridge'/'Corrupted Ashwood'; the two disagreed. RULED: the SHORT forms are the UI names (they fit the travel prompt, 'Travel to Ashwood (deadly)'), and the LONG forms are PROSE ONLY -- narrative docs, region intro voice lines, quest text. The RUNTIME authority is ZoneManager.Regions, never this file: these keys are the canon RECORD so the ruling has a home outside a markdown doc, and BiomeRoadsRegression Case 3 fails if the short forms here ever drift from that table.",
-
   "tagline": "Echoes of a Forgotten Civilization",
   "titleTagline": "Echoes of a Forgotten Civilization",
   "bibleTitleTagline": "Tend the Heart. Hold the dark.",
@@ -59,14 +50,12 @@
   "gameSubtitle": "Defenders of the Realm",
   "_gameSubtitleNote": "Updated 2026-06-28 (WO-570). gameTitle is the MAIN game title 'Echoes of Elarion'; gameSubtitle 'Defenders of the Realm' is the SERIES/franchise label — this game is a chapter of the Defenders of the Realm saga (full title 'Defenders of the Realm: Echoes of Elarion'). The intro video bakes both on-screen.",
   "_gameSubtitleLegacy": "RETIRED subtitles: 'Defenders of the Realm: Elarion', 'Defenders of the Realm: The Lantern of Avalon'.",
-
   "hollowOnes": "the Hollow Ones",
   "hollowed": "the Hollowed",
   "wardens": "the Wardens",
   "theFolk": "the Folk",
   "firstLight": "the First Light",
   "theKeepersSong": "the Heart's song",
-
   "wardenAelwyn": "Warden Aelwyn",
   "sirBram": "Sir Bram",
   "sirBramEpithet": "of the Last Banner",
@@ -79,7 +68,6 @@
   "garranMentor": "Sir Bram",
   "wrenThornquiver": "Wren Thornquiver",
   "wrenMentor": "Sela Thornquiver",
-
   "bryn": "Bryn",
   "mara": "Mara",
   "tovin": "Tovin",
@@ -87,22 +75,18 @@
   "aelf": "Aelf",
   "mira": "Mira",
   "_namesNotInSources": "Bryn, Mara, Tovin, Eira, Aelf, Mira were requested by the task brief but do NOT appear in narrative-bible.md or story.ts. Placeholder values mirror the requested spelling; verify against canon before shipping. See canon-data.md.",
-
   "theWound": "the Wound",
   "theWithering": "the Withering",
   "firstLightEvent": "First Light",
   "_firstLightNote": "narrative-bible.md uses 'the First Light' as the planter(s) of Elarion. No standalone 'First Light' event term was found in the sources; value here matches the requested wording but is unverified. See canon-data.md.",
-
   "aetherSprite": "Aether Sprite",
   "aetherSpriteEpithet": "the Light's Child",
   "flamePup": "Flame Pup",
   "flamePupEpithet": "the Hearth-Heir",
   "iceWolf": "Ice Wolf",
   "iceWolfEpithet": "the Cold-Wandered",
-
   "theKeeperKeyword": "the Keeper",
   "keeper": "Keeper",
-
   "crystalMines": "The Crystal Mines",
   "crystalMine": "Crystal Mine",
   "petHouse": "Echo Hollow",
@@ -116,7 +100,6 @@
   "blacksmith": "Blacksmith",
   "market": "Store",
   "jeweler": "Jeweler",
-
   "_upgradeQueueNote": "WO-1045. The building upgrade button's QUEUE-FULL face. ASCII only (TMP renders non-ASCII as tofu). These are the only NEW words that WO authored: the refusal SENTENCES it shows come live from BuildTimerService.LineFullMessage / TryBuySlot and are deliberately NOT duplicated here — two copies of a refusal is the drift bug the WO closes. upgradeQueueFullDetail's {0}/{1} are DEPTH (items lined up, queueDepthPerLine=5); upgradeQueueCrews' {0}/{1} are CONCURRENCY (jobs running at once, freeBuildSlots=2). Never swap those: exhausted concurrency QUEUES, only exhausted depth REFUSES, and the remedies differ.",
   "upgradeQueueFull": "Queue full",
   "upgradeQueueFullDetail": "Queue full - {0} of {1} lined up",
@@ -127,7 +110,6 @@
   "upgradeShortHarvest": "Harvest more {0}, or set an Echo to gather it.",
   "upgradeShortPackOffer": "{0}\n{1} {2} - {3}",
   "upgradeShortPackSoon": "Coming soon - tap to dismiss",
-
   "_redeemNote": "WO promo-redeem door. The Realm Store's Redeem-a-Code screen (RedeemCodePanel) and every failure sentence PromoCodeService can raise. ASCII only (TMP renders non-ASCII as tofu). EVERY failure says what happened AND whether the code was spent - a bare 'invalid code' on a redeem screen reads as a scam, which is why each server error gets its OWN sentence and none of them is reused. redeemSuccess {0}=the reward summary composed from redeemRewardCrystals/redeemRewardCoins. This entry is DELIBERATELY not gated on FeatureFlags.RealmStorePurchase - that flag gates BUYING, not redeeming.",
   "redeemEntry": "Redeem a Code",
   "redeemTitle": "REDEEM A CODE",
@@ -181,7 +163,7 @@
   "zoneEmberfall": "The Emberfall",
   "zoneSkyloom": "The Skyloom",
   "zoneGreenrows": "The Greenrows",
-  "_nightMarketNote": "WO-1050 THE NIGHT MARKET (2026-08-21) - the store presentation copy. ASCII only. THE RULE THESE SENTENCES ARE WRITTEN TO: the shelf may only advertise what the grant seam actually pays, and no sentence may imply the GAME holds SKR. SKR is Solana Mobile's own governance token - the owner did not mint it, does not own it and is not releasing a token; there is NO in-game SKR ledger, earn loop or spend loop and there must never be one. storeBalance* are a READ-ONLY MIRROR of the players OWN wallet, read through SolanaWalletProvider.GetBalance, never written, never granted, never deducted in-game - which is why the copy says your wallet and never your SKR. The four storeBalance states are deliberately DISTINCT sentences: no wallet connected is NOT the same fact as a zero balance, and neither is an unreadable one. A confident 0 SKR would launder three different facts (genuinely none / SKR mint unprovisioned in this build / the RPC failed) into one number, which is the same defect class that hid keepers-satchel. storeBalanceFiat is APPROXIMATE by construction - it is derived from a live Jupiter quote that moves between render and purchase - so it keeps its tilde and is DROPPED entirely rather than shown stale or invented. storeTrustTreasury names the on-chain Rewards Distributor account and says nothing about what it holds.",
+  "_nightMarketNote": "Google Play store presentation.",
   "storeWordmark": "The Night Market",
   "storeBandFree": "FREE TONIGHT",
   "storeBandFreeSub": "Nothing is asked for before something is given.",
@@ -224,10 +206,9 @@
   "storeBuyClosed": "Purchases are not open yet. Everything here is still earned in-game.",
   "storeBuyRailNotReady": "The payment rail is not ready in this build, so nothing was charged. Try again after the next update.",
   "storeBuyWalletRequired": "Packs over {0} need a connected wallet, so what you buy stays yours if you reinstall or change phones. Connect a wallet to buy this one - anything {0} and under you can buy right now.",
-  "storeBuyWalletRequiredCta": "Connect Wallet",
+  "storeBuyWalletRequiredCta": "Continue",
   "storeBuyComingSoon": "Coming soon",
   "storeShelfClosed": "Coming soon - purchases are not open in this build. Nothing here is required to play.",
-
   "_raidCooldownNote": "WO-728 per-camp raid cooldown. ASCII only (TMP renders non-ASCII as tofu). The owner is red/green colourblind, so EVERY one of these is a WORD the player can read - the card state must never be signalled by tint alone, and a camp on cooldown must SAY so rather than simply not responding to a tap. raidCooldownCardLine {0} and raidCooldownBlocked {0} take the humanised remaining time built from raidDurationHm/raidDurationM/raidDurationSub (RaidStrings.Humanise, which rounds UP so the number the player sees is never optimistic). raidCooldownStarted {0} is the full window length, shown on the victory screen so the wait is announced at the moment it is earned, not discovered later at a refused tap. The DURATIONS themselves are balance and live in RaidCooldownService, not here.",
   "raidCooldownBadge": "RECOVERING",
   "raidReadyBadge": "READY",
@@ -238,7 +219,6 @@
   "raidDurationHm": "{0}h {1}m",
   "raidDurationM": "{0}m",
   "raidDurationSub": "less than a minute",
-
   "_battleMonthlyNote": "WORK_ORDER_battle_and_monthly_packs - the Season Track and Monthly Ledger screens. Keys are named in StoreStrings.SeasonTrackKeys / MonthlyLedgerKeys and NEVER typed inline. Two house rules are load-bearing in this block and both are checkable: (1) the owner is red/green colourblind, so every screen state carries a WORD here - strip every hue and the screens still read; (2) nothing in either family expires, so no sentence here counts down, and the monthly ledger deliberately says 'N claims left' rather than a time.",
   "seasonTrackTitle": "Season Track",
   "seasonTrackDaysLeft": "{0} days left this season",
@@ -301,6 +281,18 @@
   "invRailMapSoon": "soon",
   "invRailWorn": "worn",
   "invRailHeader": "Sections",
+  "invTabGear": "Gear",
+  "invTabWeapons": "Weapons",
+  "invTabOffHand": "Off Hand",
+  "invTabArmor": "Armor",
+  "invTabTrinkets": "Trinkets",
+  "invTabPotions": "Potions",
+  "invMoreCount": "{0} more",
+  "invMoreBelow": "{0} more below",
+  "invEmptyOffHand": "Nothing here yet. The Forge sells heaters and bucklers.",
+  "invGoToItems": "Show items",
+  "invHeaderTalents": "Talents",
+  "invNextTabsHint": "Every pile is a tab on this row.",
   "invSlotMainHand": "Main Hand",
   "invSlotOffHand": "Off Hand",
   "invSlotArmor": "Armor",
@@ -314,6 +306,10 @@
   "invEmptySkills": "The Knight tree opens here. Ranged, Heal and Sustain, Control.",
   "invEmptyMapLocked": "Realm travel is still being built. This section stays visible so it is never a surprise when it opens.",
   "invPaneNoSelection": "Nothing selected",
+  "invGearPaneTitle": "Manage your gear",
+  "invGearPaneGuide": "Tap a slot at left to browse items for that position.",
+  "invGearPaneOpenSlots": "OPEN SLOTS: {0}",
+  "invGearPaneComplete": "ALL SLOTS FILLED",
   "invPaneGearGaps": "Two slots are empty. An amulet and a ring are the cheapest points of defence you can add.",
   "invPaneNothingToCompare": "There is nothing here to compare yet.",
   "invPaneColumnWorn": "Worn",

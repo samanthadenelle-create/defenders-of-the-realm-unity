@@ -71,6 +71,8 @@ REFLECTION_BRIDGE_ALLOWLIST = {
         "reads MineNode state / SetWorkerClaim + TryAutoExtract across a module boundary",
     "Assets/_Modules/Pets/PetAttackVfxBridge.cs":
         "invokes the VFX kit's static SpawnAbilityVfx without linking the VFX assembly",
+    "Assets/_Modules/Wallet/BattlePassLevelUpVfxBridge.cs":
+        "invokes optional Village LevelUpVFXController without creating a Wallet-to-Village assembly cycle",
     "Assets/_Modules/Village/Buildings/BuildMenuHudBridge.cs":
         "binds VillageHudController.BuildRequested (UnityEvent field, not on IVillageHud)",
     "Assets/_Modules/Village/BuildMode/BuildButtonBridge.cs":
@@ -371,6 +373,35 @@ def check_canonical_json(root):
     return failures, checked
 
 
+# --- 6) player-build marker provenance --------------------------------------
+def check_player_build_markers(root):
+    """Every run-unity-method player build must assert its method's success marker."""
+    failures = []
+    checked = 0
+    for dirpath, dirnames, filenames in os.walk(root):
+        dirnames[:] = [d for d in dirnames if d not in {".git", "tmp", "Library", "Builds"}]
+        for fn in filenames:
+            if not fn.lower().endswith(".ps1"):
+                continue
+            path = os.path.join(dirpath, fn)
+            statement = ""
+            start = 0
+            for number, line in enumerate(read(path).splitlines(), 1):
+                if not statement:
+                    start = number
+                statement += " " + line.strip()
+                if line.rstrip().endswith("`"):
+                    continue
+                if "run-unity-method.ps1" in statement and "BuildSeekerApk" in statement:
+                    checked += 1
+                    single = "-ExpectMarker '[AndroidBuild] SUCCEEDED'"
+                    double = '-ExpectMarker "[AndroidBuild] SUCCEEDED"'
+                    if single not in statement and double not in statement:
+                        failures.append((rel(root, path), f"line {start}: BuildSeekerApk invocation lacks its explicit success marker"))
+                statement = ""
+    return failures, checked
+
+
 def report(failures):
     if failures:
         print(f"  FAIL ({len(failures)}):")
@@ -445,6 +476,10 @@ def main(argv):
     json_failures, json_count = check_canonical_json(root)
     print(f"\n--- 5. Canonical JSON validity ({json_count} files parsed) ---")
     total_fail += report(json_failures)
+
+    marker_failures, marker_count = check_player_build_markers(root)
+    print(f"\n--- 6. Player-build marker provenance ({marker_count} invocations checked) ---")
+    total_fail += report(marker_failures)
 
     print("\n" + "=" * 70)
     if total_fail == 0:

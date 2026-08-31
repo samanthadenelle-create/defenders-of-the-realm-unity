@@ -1671,6 +1671,9 @@ All batchmode runs through `run-unity-method.ps1` (handles the relaunch-fork qui
 exe/marker, not the wrapper exit code; the 505 license line is transient/non-fatal). **Editor must
 be closed.**
 
+Player-artifact callers must name the success marker they expect. Android APK callers pass
+`-ExpectMarker '[AndroidBuild] SUCCEEDED'`; `PASS-UNASSERTED` is not a shippable verdict.
+
 | Task | Invocation |
 |---|---|
 | **Compile gate (authoritative)** | `run-unity-method.ps1 -Method DeNelle.Editor.CompileGate.Run` → `COMPILE_GATE_OK` (brace + leak + NUL scan) |

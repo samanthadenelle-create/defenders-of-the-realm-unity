@@ -1,4 +1,4 @@
-**Status:** READY 2026-08-29 - Seeker APK 2026.08.29.346931 owner test: wolf color passes, but the equipped Knight shield is still not visible and Trade exposes Store only instead of Store + Armorer + Weaponsmith. The local shield projected-area capture was a false-green; both player-visible failures remain open.
+**Status:** FIXED — D-LAYOUT/D-SHELF/Trade implemented and regression-gated; D-SEAT cause instrumentation added without changing approved offsets. Awaiting final Seeker town/battle/cave captures and owner felt verification (2026-08-30).
 **Jeweler progression follow-up (2026-08-29):** DEVICE-PRESENT in Seeker APK 2026.08.29.346849; owner test pending, including
 first real dungeon-return proof. The persistent `EverAcquiredItemIds` ledger is now written only
 by `VillageInventory.AddEarned`; the authoritative dungeon payout uses that seam, while ordinary

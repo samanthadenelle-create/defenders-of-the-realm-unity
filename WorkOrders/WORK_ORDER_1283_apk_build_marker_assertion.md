@@ -1,6 +1,6 @@
 # WORK ORDER 1283 — the overnight APK build is judged UNASSERTED
 
-**Status:** READY TO IMPLEMENT
+**Status:** FIXED — marker callers, failure guard, and bidirectional static oracle implemented; awaiting real final build proof (2026-08-30)
 **Minted:** 2026-08-30 (CLI seat, main line; banner bumped 1283 -> 1284 in the same edit)
 **Lane:** Build/ship tooling (isolated — no gameplay code)
 **Size:** small. One argument, one guard, one regression.

@@ -69,7 +69,10 @@ if ($LASTEXITCODE -ne 0 -or
 "SCHEMA_PARITY_OK $(Get-Date -Format o)" | Out-File -Encoding ascii -Append $status
 
 try {
-    & '.\run-unity-method.ps1' -Method DeNelle.Editor.AndroidBuild.BuildSeekerApk -LogName apk-build.log -TimeoutMin 120 -BuildTarget Android -ExtraScriptingDefines $Defines
+    & '.\run-unity-method.ps1' -Method DeNelle.Editor.AndroidBuild.BuildSeekerApk -LogName apk-build.log -TimeoutMin 120 -BuildTarget Android -ExtraScriptingDefines $Defines -ExpectMarker '[AndroidBuild] SUCCEEDED'
+    if ($LASTEXITCODE -ne 0) {
+        throw "APK Unity build marker absent; see Builds\apk-build.log"
+    }
 } catch {
     "APK_THREW $($_.Exception.Message)" | Out-File -Encoding ascii -Append $status
 }

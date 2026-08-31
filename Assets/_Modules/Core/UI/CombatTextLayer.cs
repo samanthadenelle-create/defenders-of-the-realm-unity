@@ -33,7 +33,7 @@ namespace DeNelle.Core.UI
     /// <summary>What a combat stamp announces — drives tint + dedupe bucketing (§1.8).
     /// Perfect = the perfect-timed basic-hit stamp (gold; owner ruling 2026-08-02 —
     /// replaces the deleted melee impact burst as the perfect-hit read).</summary>
-    public enum CombatTextKind { Parry, Riposte, Block, Status, Perfect }
+    public enum CombatTextKind { Parry, Riposte, Block, Status, Perfect, Reward }
 
     /// <summary>
     /// The one static entry point for combat text stamps. Safe from any call site:
@@ -148,6 +148,7 @@ namespace DeNelle.Core.UI
                 case CombatTextKind.Riposte: return new Color(0.95f, 0.52f, 0.22f, 1f); // ember
                 case CombatTextKind.Block:   return new Color(0.72f, 0.78f, 0.86f, 1f); // steel
                 case CombatTextKind.Perfect: return new Color(1.00f, 0.84f, 0.20f, 1f); // gold (owner 2026-08-02)
+                case CombatTextKind.Reward:  return new Color(1.00f, 0.82f, 0.30f, 1f); // earned-reward gold
                 default:                     return new Color(0.72f, 0.55f, 0.92f, 1f); // status violet
             }
         }

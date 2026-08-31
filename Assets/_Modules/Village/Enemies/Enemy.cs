@@ -30,6 +30,7 @@
 using System;
 using UnityEngine;
 using UnityEngine.AI;
+using DeNelle.Core.UI;
 using DeNelle.Core.Combat;   // IDamageableStructure — moved to Core so all assemblies can reference it
 
 namespace DeNelle.Village
@@ -3269,22 +3270,19 @@ namespace DeNelle.Village
         // Helpers
         // ---------------------------------------------------------------------
 
-        // WO-1103 field-kill toast tint: warm gold so the earned line reads as loot, and
-        // it survives a greyscale check (bright vs the white damage numbers) — owner is
-        // colourblind, so contrast (not hue) is the carrier.
-        private static readonly Color FieldKillRewardColor = new Color(1f, 0.82f, 0.30f, 1f);
-
         /// <summary>
         /// WO-1103 item 4 (B2) + WO-1104: ONE aggregate earned-rewards label per KILL
-        /// ("+N XP  +M gold" at the corpse — the LEVEL UP precedent, reusing
-        /// <see cref="DamageNumberSpawner.SpawnLabel"/>; NO new notification system).
+        /// ("+N XP  +M gold" at the corpse). It uses the shared screen-space
+        /// <see cref="CombatText"/> layer: font capped at 44 reference pixels, pooled,
+        /// deduped and outlined. The old world-space <see cref="DamageNumberSpawner.SpawnLabel"/>
+        /// path scaled with camera distance and painted this line across the fight on Seeker.
         /// WO-1104 widened it from field-only to EVERY kill: an arena kill banked silently
         /// before, so a five-body fight and a one-body fight looked identical while they
         /// were being fought (owner felt-test 2026-08-16).
         /// A pack-carrying leader (def.PackBodies &gt; 1 — leader-carry payout KEPT,
         /// owner default) is worded "Pack bounty" so the oversized grant reads as the
         /// whole family's payout, not a bug. Followers pay 0 and never reach here, so
-        /// a pack is one toast, never per-body spam. Camera-null-safe via SpawnLabel.
+        /// a pack is one toast, never per-body spam.
         /// The amounts passed in are the MEASURED credited deltas, so the label can never
         /// promise an award the player did not actually bank.
         /// </summary>
@@ -3299,16 +3297,13 @@ namespace DeNelle.Village
                 sb.Append("+").Append(gold).Append(" gold");
             }
             string label = sb.ToString();
-            var spawned = DamageNumberSpawner.SpawnLabel(label, transform.position + Vector3.up * 1.6f,
-                                                         FieldKillRewardColor, 1.15f);
+            CombatText.Show(CombatTextKind.Reward, label, transform.position + Vector3.up * 1.6f);
             // §12 permanent trace: the notification call-site fires provably (B2 was
-            // "no call site at all" — this line is the captured evidence it now exists), and
-            // 'shown' records whether the label BODY was really leased (SpawnLabel returns
-            // null with no camera) — the fired/rendered distinction the owner's "I couldn't
-            // tell if it awarded anything" needs to be answerable from a capture alone.
+            // "no call site at all" — this line is the captured evidence it now exists).
+            // CombatText is camera-null-safe and owns the bounded presentation contract.
             DeNelle.Core.Diagnostics.FlowTrace.Step("Reward",
                 $"KILL REWARD TOAST '{label}' id={(_def != null ? _def.Id : "?")} " +
-                $"shown={(spawned != null)} at {transform.position}");
+                $"routed=CombatText(Reward) at {transform.position}");
         }
 
         /// <summary>

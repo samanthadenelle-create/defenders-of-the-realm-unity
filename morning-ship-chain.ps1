@@ -106,7 +106,11 @@ if (-not $SkipExe) {
 if (-not $SkipApk) {
     Say "2/4 Seeker APK (IL2CPP/ARM64, release-signed) ..."
     & powershell -ExecutionPolicy Bypass -File (Join-Path $proj 'run-unity-method.ps1') `
-        -Method DeNelle.Editor.AndroidBuild.BuildSeekerApk -LogName apk-build.log -TimeoutMin 120
+        -Method DeNelle.Editor.AndroidBuild.BuildSeekerApk -LogName apk-build.log -TimeoutMin 120 `
+        -ExpectMarker '[AndroidBuild] SUCCEEDED'
+    if ($LASTEXITCODE -ne 0) {
+        Die "APK Unity build marker absent; see Builds\apk-build.log" 12
+    }
     if ((StampOf $apkPath) -le $apkWas) {
         Die "apk not refreshed (still $apkWas UTC). See Builds\apk-build.log" 12
     }

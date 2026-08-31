@@ -1,6 +1,6 @@
 # PROD-020 — Trade Build collection shows Store only; Weaponsmith + Armorer stuck under Crafting
 
-**Status:** READY TO IMPLEMENT  
+**Status:** FIXED — awaiting clean-build + Seeker felt verification (2026-08-30)  
 **Minted:** 2026-08-29 (CLI seat) — banner bumped with PROD-018/019 → PROD-021  
 **Priority:** HIGH — wrong shelf teaches the wrong town model  
 **Provenance:** owner, 2026-08-29: *"Trade: broken—the route exposes only Store, not Armorer and Weaponsmith. those still show under crafting."*  

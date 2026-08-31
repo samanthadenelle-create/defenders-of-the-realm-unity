@@ -49,7 +49,11 @@ if (-not (Get-Command firebase -ErrorAction SilentlyContinue)) {
 # Optional: build a fresh APK first.
 if ($Build) {
   Write-Host "[distribute] Building Android APK (release, dev-menu-free)..."
-  & powershell -ExecutionPolicy Bypass -File .\run-unity-method.ps1 -Method DeNelle.Editor.AndroidBuild.BuildSeekerApk -LogName android-build.log
+  & powershell -ExecutionPolicy Bypass -File .\run-unity-method.ps1 -Method DeNelle.Editor.AndroidBuild.BuildSeekerApk -LogName android-build.log -ExpectMarker '[AndroidBuild] SUCCEEDED'
+  if ($LASTEXITCODE -ne 0) {
+    Write-Error "APK Unity build marker absent; see Builds\android-build.log"
+    exit 2
+  }
 }
 
 if (-not (Test-Path $Apk)) {

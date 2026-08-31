@@ -1,0 +1,99 @@
+{
+  "version": 1,
+  "minimumClientVersion": "0",
+  "collections": [
+    {
+      "collectionId": "build-gathering",
+      "context": "build",
+      "title": "Gathering",
+      "subtitle": "Bring the realm's raw materials home.",
+      "iconKey": "UI/BuildCollections/Resources",
+      "active": true,
+      "items": [
+        { "itemId": "collector_lumbermill", "order": 10 },
+        { "itemId": "collector_farm", "order": 20 },
+        { "itemId": "collector_forge", "order": 30 },
+        { "itemId": "mine_crystal", "order": 40 }
+      ]
+    },
+    {
+      "collectionId": "build-realm",
+      "context": "build",
+      "title": "Realm",
+      "subtitle": "Grow the people and power of Elarion.",
+      "iconKey": "UI/BuildCollections/Realm",
+      "active": true,
+      "items": [
+        { "itemId": "barracks", "order": 10 },
+        { "itemId": "pet-house", "order": 20 },
+        { "itemId": "arcane-tower", "order": 30 }
+      ]
+    },
+    {
+      "collectionId": "build-defenses",
+      "context": "build",
+      "title": "Defenses",
+      "subtitle": "Hold the line against every threat.",
+      "iconKey": "UI/BuildCollections/Defense",
+      "active": true,
+      "items": [
+        { "itemId": "tower_ground_archer", "order": 10 },
+        { "itemId": "tower_ballista", "order": 20 },
+        { "itemId": "tower_arcane_spire", "order": 30 },
+        { "itemId": "tower_catapult", "order": 40 },
+        { "itemId": "tower_siege_tower", "order": 50 }
+      ]
+    },
+    {
+      "collectionId": "build-crafting",
+      "context": "build",
+      "title": "Crafting",
+      "subtitle": "Turn gathered materials into lasting strength.",
+      "iconKey": "UI/BuildCollections/Crafting",
+      "active": true,
+      "items": [
+        { "itemId": "workshop", "order": 10 },
+        { "itemId": "jeweler", "order": 20 }
+      ]
+    },
+    {
+      "collectionId": "build-storage",
+      "context": "build",
+      "title": "Storage",
+      "subtitle": "Keep the realm's reserves protected.",
+      "iconKey": "UI/BuildCollections/Storage",
+      "active": true,
+      "items": [
+        { "itemId": "lumberyard", "order": 10 },
+        { "itemId": "silo", "order": 20 },
+        { "itemId": "foundry", "order": 30 }
+      ]
+    },
+    {
+      "collectionId": "build-protection",
+      "context": "build",
+      "title": "Protection",
+      "subtitle": "Shape the walls and recovery line.",
+      "iconKey": "UI/BuildCollections/Protection",
+      "active": true,
+      "items": [
+        { "itemId": "wall_wood", "order": 10 },
+        { "itemId": "gate_stone", "order": 20 },
+        { "itemId": "healing_caravan", "order": 30 }
+      ]
+    },
+    {
+      "collectionId": "build-trade",
+      "context": "build",
+      "title": "Trade",
+      "subtitle": "Visit the realm's shops and outfitters.",
+      "iconKey": "UI/BuildCollections/Trade",
+      "active": true,
+      "items": [
+        { "itemId": "market", "order": 10 },
+        { "itemId": "forge", "order": 20 },
+        { "itemId": "armorer", "order": 30 }
+      ]
+    }
+  ]
+}
