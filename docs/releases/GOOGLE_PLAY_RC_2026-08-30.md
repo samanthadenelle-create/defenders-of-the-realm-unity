@@ -103,3 +103,24 @@ reversal policy and licensed-device refund/void matrix are implemented and verif
 
 Baseline-to-candidate release notes are recorded in
 `docs/releases/RELEASE_NOTES_2026.08.31.348534_GOOGLE_PLAY.md`.
+
+## Production policy deployment — 2026-08-30
+
+The pushed commit `37837f585` was deployed from a clean detached worktree after both previews
+reached `READY` and their routes were probed. Outgoing production deployment IDs were captured in
+`Builds/PROD_ROLLBACK.txt` before promotion.
+
+- API/WebGL project `defenders-of-the-realm-v2`: production deployment
+  `dpl_9VAD85zaBih91ecQxM2tYbVsW3us`, status `READY`.
+- Legal-site project `echoes-of-elarion`: production deployment
+  `dpl_9NdshgufPHD4YZwpMrtxpF2Aug37`, status `READY`.
+- Production `/api/purchases/google-play-rtdn`: GET returns 405 and an unauthenticated POST returns
+  503 while Play RTDN configuration is absent, proving the value-moving rail remains default-off.
+- Production `/api/account/delete-request`: GET returns the expected quiet 400 contract; malformed
+  POST returns `PLAYER_ID_MISSING`/400 without creating a request.
+- Production `/delete-account` serves the current Google Play sign-in and in-app request
+  instructions; the obsolete “Google sign-in is planned” claim is absent.
+
+This closes code/site deployment, not Console configuration. Play OAuth, Publisher API, RTDN
+audience/service-account identity, product catalogue, and billing enable flags remain intentionally
+unset until Internal-track and licensed-device verification are ready.
