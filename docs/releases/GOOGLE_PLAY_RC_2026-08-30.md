@@ -80,3 +80,27 @@ These are external acceptance steps, not satisfied by a local green build:
 **Locally release-candidate ready; not yet Play-approved.** Artifact isolation, compile, regression,
 and APK parity are green. Approval remains gated by authoritative Play upload diagnostics, licensed
 billing/restore testing, production backend configuration, Console declarations, and review.
+
+## Post-artifact policy hardening
+
+Work completed after the candidate hash above was built:
+
+- authenticated, identity-bound account/data-deletion request intake with an idempotent operations
+  queue and a bounded second-tap confirmation in the Play client;
+- corrected public deletion instructions for the now-live Google identity rail;
+- OIDC-authenticated Google Play RTDN ingestion with strict Pub/Sub-envelope validation,
+  message-id deduplication, ProductPurchaseV2 re-query, and durable quarantine for refunds,
+  partial voids, unknown tokens, unsupported notifications, and pending refund review;
+- additive migrations `0014` and `0015` applied to the target database, followed by
+  `SCHEMA_PARITY_OK 40 table(s)`;
+- focused Node coverage green at 38/38, fresh `COMPILE_GATE_OK`, and fresh full
+  `REGRESSION_OK` in `Builds/goal-play-policy-regression.log`.
+
+These changes remain default-off where activation could move value. They do not claim that a
+refunded consumable has been reversed: billing activation remains gated until the entitlement
+reversal policy and licensed-device refund/void matrix are implemented and verified. Because the
+client deletion confirmation changed after the recorded AAB was produced, a fresh AAB is required
+before this hardening can be claimed as part of the uploaded artifact.
+
+Baseline-to-candidate release notes are recorded in
+`docs/releases/RELEASE_NOTES_2026.08.31.348504_GOOGLE_PLAY.md`.

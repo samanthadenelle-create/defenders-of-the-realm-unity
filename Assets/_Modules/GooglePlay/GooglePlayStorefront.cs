@@ -67,7 +67,7 @@ namespace DeNelle.GooglePlay
                 new Vector2(.03f, .20f), new Vector2(.97f, .285f), _vm.Restore);
             ElarionUiKit.BuildObsidianButton(body, "Request account and data deletion",
                 ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Gray,
-                new Vector2(.03f, .105f), new Vector2(.97f, .19f), _vm.OpenDeletionPage);
+                new Vector2(.03f, .105f), new Vector2(.97f, .19f), _vm.RequestDeletion);
             _status = ElarionUiKit.Label(body, "", .01f, .095f, ElarionUi.ParchmentDim,
                 ElarionUi.FontBody, TextAlignmentOptions.Center, .03f, .97f);
             _modal.canvas.SetActive(false);

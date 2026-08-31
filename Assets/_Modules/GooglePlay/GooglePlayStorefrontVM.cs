@@ -1,14 +1,22 @@
 using System;
 using System.Collections.Generic;
+using System.Text;
+using System.Threading.Tasks;
 using DeNelle.Commerce;
+using DeNelle.Core.Diagnostics;
 using DeNelle.Core.Payments;
+using DeNelle.Core.State;
+using DeNelle.Core.Web3;
 using DeNelle.Wallet; // PackCatalog's namespace is a preserved runtime contract; its assembly is Commerce.
 using UnityEngine;
+using UnityEngine.Networking;
 
 namespace DeNelle.GooglePlay
 {
     internal sealed class GooglePlayStorefrontVM
     {
+        private const float DeletionConfirmationSeconds = 12f;
+        private float _deletionConfirmUntil;
         internal readonly struct Row
         {
             internal readonly string Sku, Label;
@@ -54,7 +62,87 @@ namespace DeNelle.GooglePlay
                 _status(ok ? "Purchases checked and restored." : (message ?? "Restore failed.")));
         }
 
-        internal void OpenDeletionPage() =>
-            Application.OpenURL("https://echoes-of-elarion.vercel.app/delete-account");
+        private const string DeletionUrl =
+            BackendRequestSigner.BackendBase + "/api/account/delete-request";
+
+        internal async void RequestDeletion()
+        {
+            if (Time.realtimeSinceStartup > _deletionConfirmUntil)
+            {
+                _deletionConfirmUntil = Time.realtimeSinceStartup + DeletionConfirmationSeconds;
+                _status("Tap again within 12 seconds to confirm account deletion.");
+                return;
+            }
+            _deletionConfirmUntil = 0f;
+
+            try
+            {
+                _status("Confirming your Google Play account...");
+                if (!await GooglePlayIdentityClient.EnsureSignedInAsync())
+                {
+                    _status("Sign in is required. Opening deletion instructions...");
+                    Application.OpenURL("https://echoes-of-elarion.vercel.app/delete-account");
+                    return;
+                }
+
+                string playerId = BackendRequestSigner.CurrentPlayerId();
+                if (!GameStateService.IsGooglePlayIdentity(playerId))
+                {
+                    _status("Account could not be verified. Opening deletion instructions...");
+                    Application.OpenURL("https://echoes-of-elarion.vercel.app/delete-account");
+                    return;
+                }
+
+                byte[] body = Encoding.UTF8.GetBytes(JsonUtility.ToJson(
+                    new DeletionRequest { playerId = playerId, scope = "account" }));
+                using var request = new UnityWebRequest(DeletionUrl, UnityWebRequest.kHttpVerbPOST)
+                {
+                    uploadHandler = new UploadHandlerRaw(body),
+                    downloadHandler = new DownloadHandlerBuffer(),
+                    timeout = 20,
+                };
+                request.SetRequestHeader("Content-Type", "application/json");
+                if (!BackendRequestSigner.TryAttachCachedSession(request, playerId))
+                {
+                    _status("Session expired. Please try again.");
+                    return;
+                }
+
+                _status("Submitting deletion request...");
+                var operation = request.SendWebRequest();
+                while (!operation.isDone) await Task.Yield();
+                if (request.result != UnityWebRequest.Result.Success)
+                {
+                    FlowTrace.Warn("AccountDeletion",
+                        "request failed: result=" + request.result + " http=" + request.responseCode);
+                    _status("Request could not be submitted. Opening deletion instructions...");
+                    Application.OpenURL("https://echoes-of-elarion.vercel.app/delete-account");
+                    return;
+                }
+
+                var reply = JsonUtility.FromJson<DeletionReply>(request.downloadHandler.text);
+                _status(reply != null && reply.ok && !string.IsNullOrWhiteSpace(reply.requestId)
+                    ? "Deletion requested. Reference: " + reply.requestId
+                    : "Deletion request received.");
+            }
+            catch (Exception ex)
+            {
+                FlowTrace.Warn("AccountDeletion", "request failed: " + ex.GetType().Name);
+                _status("Request could not be submitted. Opening deletion instructions...");
+                Application.OpenURL("https://echoes-of-elarion.vercel.app/delete-account");
+            }
+        }
+
+        [Serializable] private sealed class DeletionRequest
+        {
+            public string playerId;
+            public string scope;
+        }
+
+        [Serializable] private sealed class DeletionReply
+        {
+            public bool ok;
+            public string requestId;
+        }
     }
 }

@@ -1065,6 +1065,61 @@ CREATE INDEX IF NOT EXISTS idx_google_play_purchases_unfinished
     ON google_play_purchases (updated_at)
     WHERE state IN ('created','pending','purchased','verified','granted');
 
+-- Authenticated Pub/Sub inbox for Google Play Real-time Developer Notifications.
+-- Quarantine is deliberately durable: RTDN is a change hint, not proof, and this
+-- table must not be mistaken for an entitlement-reversal implementation.
+CREATE TABLE IF NOT EXISTS google_play_rtdn_messages (
+    message_id          TEXT PRIMARY KEY,
+    package_name       TEXT NOT NULL,
+    notification_kind  TEXT NOT NULL CHECK (notification_kind IN
+        ('oneTimeProductNotification','subscriptionNotification',
+         'voidedPurchaseNotification','pendingRefundReviewNotification','testNotification')),
+    event_time          TIMESTAMPTZ NOT NULL,
+    status              TEXT NOT NULL CHECK (status IN
+        ('processing','processed','quarantined','retry')),
+    quarantine_reason   TEXT,
+    purchase_token      TEXT,
+    google_order_id     TEXT,
+    pending_refund_token TEXT,
+    attempts            INTEGER NOT NULL DEFAULT 1 CHECK (attempts > 0),
+    processed_at        TIMESTAMPTZ,
+    created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at          TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_google_play_rtdn_attention
+    ON google_play_rtdn_messages (status, updated_at)
+    WHERE status IN ('quarantined','retry');
+
+-- Authenticated account/data deletion requests. This queue is intentionally
+-- separate from destructive execution: an operator must apply the documented
+-- retention and pseudonymization rules before marking a request complete.
+CREATE TABLE IF NOT EXISTS account_deletion_requests (
+    request_id         UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+    player_id          TEXT        NOT NULL,
+    identity_kind      TEXT        NOT NULL CHECK (identity_kind IN ('wallet', 'google', 'guest')),
+    request_scope      TEXT        NOT NULL CHECK (request_scope IN ('account', 'associated_data')),
+    request_categories TEXT[]      NOT NULL DEFAULT ARRAY[]::TEXT[],
+    status             TEXT        NOT NULL DEFAULT 'requested'
+                                  CHECK (status IN ('requested', 'in_progress', 'completed', 'rejected', 'cancelled')),
+    requested_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at         TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    completed_at       TIMESTAMPTZ,
+    operator_note      TEXT,
+    CHECK (
+        (request_scope = 'account' AND cardinality(request_categories) = 0)
+        OR
+        (request_scope = 'associated_data' AND cardinality(request_categories) > 0)
+    ),
+    CHECK (request_categories <@ ARRAY[
+        'cloud_saves', 'gameplay_analytics', 'diagnostics', 'bug_reports'
+    ]::TEXT[])
+);
+CREATE UNIQUE INDEX IF NOT EXISTS account_deletion_requests_one_active_per_player
+    ON account_deletion_requests (player_id)
+    WHERE status IN ('requested', 'in_progress');
+CREATE INDEX IF NOT EXISTS account_deletion_requests_status_requested
+    ON account_deletion_requests (status, requested_at);
+
 -- =============================================================================
 -- 16. purchase_quotes — WO-1158. THE SERVER'S OWN PRICE, WRITTEN DOWN.
 -- -----------------------------------------------------------------------------

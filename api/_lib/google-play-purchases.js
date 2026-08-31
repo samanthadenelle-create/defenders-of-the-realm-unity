@@ -120,6 +120,43 @@ async function fetchProductPurchase(input, accessToken, options) {
     return classifyProductPurchase(await response.json());
 }
 
+// Current RTDN lifecycle guidance points one-time notifications at the V2
+// token-only resource. Keep the legacy verifier above stable for the shipped
+// client route, while lifecycle ingestion uses the richer current proof.
+async function fetchProductPurchaseV2(packageName, purchaseToken, accessToken, options) {
+    if (!PACKAGE_RE.test(String(packageName || '')) || !TOKEN_RE.test(String(purchaseToken || '')))
+        throw Object.assign(new Error('invalid_play_purchase_request'), { code: 'bad_payload' });
+    const fetchFn = (options && options.fetchFn) || fetch;
+    const url = API_ROOT + '/applications/' + encodeURIComponent(packageName) +
+        '/purchases/productsv2/tokens/' + encodeURIComponent(purchaseToken);
+    const response = await fetchFn(url, { headers: { Authorization: 'Bearer ' + accessToken,
+        Accept: 'application/json' } });
+    if (response.status === 404) return { state: PurchaseState.CANCELLED, reason: 'token_not_found' };
+    if (!response.ok) throw Object.assign(new Error('google_play_api_rejected'), { code: 'play_api_unavailable' });
+    return classifyProductPurchaseV2(await response.json());
+}
+
+function classifyProductPurchaseV2(purchase) {
+    const namedState = String(purchase && purchase.purchaseStateContext &&
+        purchase.purchaseStateContext.purchaseState || '');
+    const state = namedState === 'PURCHASED' ? PurchaseState.PURCHASED
+        : namedState === 'PENDING' ? PurchaseState.PENDING : PurchaseState.CANCELLED;
+    const lines = Array.isArray(purchase && purchase.productLineItem) ? purchase.productLineItem : [];
+    const line = lines.length === 1 ? lines[0] : null;
+    const offer = line && line.productOfferDetails || {};
+    const completion = Date.parse(String(purchase && purchase.purchaseCompletionTime || ''));
+    return { state, productId: line ? String(line.productId || '') : '',
+        acknowledgementState: purchase && purchase.acknowledgementState ===
+            'ACKNOWLEDGEMENT_STATE_ACKNOWLEDGED' ? 1 : 0,
+        consumptionState: offer.consumptionState === 'CONSUMPTION_STATE_CONSUMED' ? 1 : 0,
+        quantity: Number(offer.quantity) || 1,
+        refundableQuantity: Number.isFinite(Number(offer.refundableQuantity))
+            ? Number(offer.refundableQuantity) : null,
+        obfuscatedExternalAccountId: String(purchase && purchase.obfuscatedExternalAccountId || ''),
+        orderId: purchase && purchase.orderId ? String(purchase.orderId) : null,
+        purchaseTimeMillis: Number.isFinite(completion) ? completion : null };
+}
+
 // Call only after the durable ledger has atomically moved VERIFIED -> GRANTED.
 // A consumable is consumed; a durable product is acknowledged. Both satisfy
 // Google's acknowledgement deadline, but they are intentionally not interchangeable.
@@ -306,8 +343,10 @@ async function markFinalized(sql, input, finalState) {
 }
 
 module.exports = { PLAY_SCOPE, TOKEN_URL, API_ROOT, PRODUCT_PREFIX, PRODUCT_TYPES, PurchaseState,
+    TOKEN_RE,
     ALLOWED_TRANSITIONS, productIdForSku, productTypeForSku, validRequest, configurationReady,
-    serviceAccountAccessToken, fetchProductPurchase, finalizeGrantedPurchase, classifyProductPurchase,
+    serviceAccountAccessToken, fetchProductPurchase, fetchProductPurchaseV2,
+    finalizeGrantedPurchase, classifyProductPurchase, classifyProductPurchaseV2,
     accountBinding, proofDecision, canTransition, finalizationAction, safeProofSnapshot,
     persistedRowMatches, persistVerifiedProof, persistPendingProof, claimGrantAcknowledgement,
     markFinalized };

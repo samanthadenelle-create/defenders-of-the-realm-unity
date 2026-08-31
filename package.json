@@ -11,6 +11,7 @@
     "@msgpack/msgpack": "^2.8.0",
     "@neondatabase/serverless": "^0.10.4",
     "bs58": "^5.0.0",
+    "google-auth-library": "^10.9.1",
     "tweetnacl": "^1.0.3"
   },
   "devDependencies": {
