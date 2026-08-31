@@ -21,7 +21,7 @@ Google's official `bundletool` 1.18.3 validates this AAB. A default split APK se
 the exact candidate reports `get-size total` MIN 479,363,936 and MAX 479,444,447 bytes. This is a
 close local estimate, not the authoritative Console calculation, but it creates at least 20.5 MB
 of margin even if the published 500 MB threshold is interpreted as decimal bytes. The preceding
-candidate estimated 513,590,887â€“513,670,750 bytes; the existing conservative Android texture
+candidate estimated 513,590,887–513,670,750 bytes; the existing conservative Android texture
 pass reduced 65 eligible overrides (source/default platforms and hero fidelity preserved) before
 the final rebuild.
 
