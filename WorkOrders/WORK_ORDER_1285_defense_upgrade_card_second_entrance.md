@@ -1,6 +1,6 @@
 # WORK ORDER 1285 - Defense upgrade needs its own card / second entrance
 
-**Status:** READY TO IMPLEMENT
+**Status:** IMPLEMENTED — AWAITING FELT VERIFY 2026-08-30. The fresh-save Defense empty state now explains the gate and opens the defensive build list; the owned-structure route remains the upgrade entrance. Compile and full regression gates are green. Phone-width fresh-save and owned-save captures/taps remain required before DONE.
 **Minted:** 2026-08-30 (CLI seat, main line; banner bumped 1285 -> 1286 in the same edit)
 **Provenance:** owner, 2026-08-30: *"in defense can we add a card for upgrades, that allows
 another enterance to it?"*
@@ -16,10 +16,11 @@ could not find her own upgrade path.
 Add a CARD in the Defense area that acts as a SECOND ENTRANCE to structure upgrades, so the route
 does not depend solely on the tab appearing once something is placed.
 
-## Design questions for the owner (do not guess)
-1. Should the card appear when NOTHING is placed - i.e. as a teaching/empty state that explains
-   "place a tower or wall to unlock upgrades" - or only once at least one structure exists?
-2. Does it deep-link to a specific structure, or open a defensive-structures list?
+## Implemented interaction decision
+The card appears on a fresh save as an honest teaching/empty state and opens the defensive
+structures list. Once an owned defensive structure exists, the existing placed-structure route
+continues to open the specific upgrade detail. This adds discoverability without defeating the
+progressive-disclosure gate.
 
 ## Constraints
 - Respect the existing progressive-disclosure contract; `ManageProgressiveDisclosureRegression`

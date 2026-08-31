@@ -1,6 +1,6 @@
 # WORK ORDER 1282 — Play artifact isolation + tester APK variant
 
-**Status:** IN PROGRESS 2026-08-30 — Lanes A+B LANDED, all four source-isolation conditions PASS (`PLAY_SOURCE_ISOLATION_OK`) and an AAB builds. ⛔ NOT SHIPPABLE: the ARTIFACT is dirty (see FINDING) and PIN-1b (wallet-free identity) is unanswered. Lane C cut per owner ruling.
+**Status:** IMPLEMENTED LOCALLY — AWAITING PLAY-CONSOLE ACCEPTANCE 2026-08-30. Source isolation, wallet-free Google identity, Play storefront/grant composition, and the physical AAB audit now pass. Fresh evidence: `PLAY_ARTIFACT_CLEAN_OK`, `COMPILE_GATE_OK`, and `REGRESSION_OK 332/332`. External Console upload/size diagnostics and licensed Play-delivered billing/restore testing remain open; see `docs/releases/GOOGLE_PLAY_RC_2026-08-30.md`.
 **Minted:** 2026-08-30 (CLI seat, main line; banner bumped 1282 -> 1283 in the same edit)
 **Lane:** Monetization/Backend + Assembly structure (isolated — see §9)
 **Supersedes nothing. Continues:** `WORK_ORDER_1255_payment_provider_seam_google_play_rail.md`

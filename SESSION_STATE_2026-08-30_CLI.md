@@ -62,3 +62,20 @@ changes you did not make, they are probably from these. Gate before trusting any
 - I claimed Read/Write was the shield's editor-vs-device divergence. It was not.
 - I committed ~30 files of another seat's in-flight work via a directory-level `git add`
   (commit 459b8edd, disclosed in its own message). Commit BY EXPLICIT PATH.
+
+## SUPERSESSION — 2026-08-30 evening
+
+The in-flight/known-broken statements above are historical. Current release-candidate evidence is
+`docs/releases/GOOGLE_PLAY_RC_2026-08-30.md`. The AAB is now physically clean, the embedded Solana
+package is constrained out of `GOOGLE_PLAY`, `PackStoreVM` and the grant writer live in Commerce,
+and the Play identity/storefront/restore composition exists. Fresh gates are
+`COMPILE_GATE_OK` and `REGRESSION_OK 332/332`; the AAB emits `PLAY_ARTIFACT_CLEAN_OK`.
+
+The remaining Play blockers are external: Console-calculated size/prechecks, OAuth/App Signing
+certificate registration, production backend migrations/env/deploy, 26 active products, licensed
+Play-delivered billing/restore/refund proof, declarations/listing, and review. The APK was rebuilt
+last and passed schema plus R2 parity; connected-device/F8 felt acceptance is still pending.
+
+WO-1285's empty-state/list decision is implemented and awaits phone-width felt proof.
+`ClaimableCamp` verification is delayed post-`Start` and still needs lifecycle/device evidence.
+The shield remains hands-off.

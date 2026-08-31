@@ -2,7 +2,7 @@
 
 ## Verdict
 
-Partially implemented, tested, and deliberately blocked fail-closed. This is not a shippable Google Play rail yet. No endpoint was deployed, no feature flag was enabled, and no Play artifact was submitted.
+Implemented and locally release-candidate gated; awaiting Play Console and licensed-test acceptance. The prior architecture and dirty-artifact blockers described below are retained as historical implementation evidence, but were superseded on 2026-08-30 by the clean AAB, Play identity/storefront/grant composition, and 332/332 integrated regression result recorded in `docs/releases/GOOGLE_PLAY_RC_2026-08-30.md`. No claim of Play approval is made: no artifact has been submitted from this workspace and production credentials remain external.
 
 ## Implemented dormant foundation
 

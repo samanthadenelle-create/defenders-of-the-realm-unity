@@ -168,3 +168,26 @@ and the ledger shows one settlement for one token.
 
 The shield. `offsets.json` is at HEAD with the owner hand-dialled, movement-cycle-validated values.
 I overwrote them twice today and was wrong both times. Do not touch without an explicit request.
+
+---
+
+## G. SUPERSESSION — GOOGLE PLAY RC + APK TICKETS (2026-08-30 evening)
+
+The Play and APK statements above describe the morning baseline. Current evidence is recorded in
+`docs/releases/GOOGLE_PLAY_RC_2026-08-30.md`:
+
+- fresh Play AAB built and physically scanned: `PLAY_ARTIFACT_CLEAN_OK`;
+- compile green and full `REGRESSION_OK 332/332`;
+- Wallet/Web3/MWA/Solana SDK and crypto-facing content are excluded from the Play artifact;
+- Google identity, Play storefront, grant composition, and restore paths are present;
+- store-shaped APK was built last; schema parity and all 54 catalog objects passed R2 parity.
+
+The old 200 MB blocker is obsolete: the current Play base-module limit is 500 MB compressed
+download size as calculated by Play Console. The raw 517,301,470-byte AAB is not that calculation;
+upload to Internal testing remains the authoritative size/precheck gate.
+
+WO-1285 is implemented as a fresh-save Defense teaching/empty state that opens the defensive list,
+while an owned structure retains the specific upgrade route. It awaits phone-width felt proof.
+`ClaimableCamp` verification is now delayed until after the visual's `Start`; deterministic
+lifecycle or device/log proof remains required. Skill-tree and Train door regressions are green;
+phone-width/device taps remain required.
