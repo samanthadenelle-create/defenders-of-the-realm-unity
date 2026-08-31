@@ -149,3 +149,19 @@ The Play deployment certificate SHA-1 for the current Seeker/internal-test path 
 `84:D4:D2:09:58:B6:A0:61:39:9B:B5:FF:28:86:05:23:49:6A:72:22`. Google OAuth must bind the Android
 client to the Play App Signing certificate, not the upload certificate. Quantum hybrid SHA-1 values
 are retained in the exported public certificate bundle for additional Android OAuth client entries.
+
+### Production Google identity activation
+
+Production deployment `dpl_BcqvZx4CrFSM7PGc8UysiPRRKRDx` is `READY` and supersedes
+`dpl_APcmeo5LMe18dqdsSsMouMQSnEoo` after adding the server-side identity configuration. A permanent
+cryptographically random `GOOGLE_IDENTITY_KEY`, the compiled web OAuth audience
+`264518851517-q9i3gj5dfocqme8v9vh8ria4na6avlj1.apps.googleusercontent.com`, and
+`GOOGLE_IDENTITY_ENABLED=true` are stored as sensitive Production variables. No secret value is
+recorded in source or logs.
+
+A production malformed-token probe now returns `401 GOOGLE_TOKEN_MALFORMED` rather than a disabled
+or unconfigured `503`, proving the verifier and audience configuration are active without minting a
+session or player id. Digital Asset Links remained at four verified fingerprints after redeployment.
+The remaining external identity gate is creation/verification of Android OAuth client entries for
+package `com.denellestudios.echoesofelarion` using the Play signing SHA-1 certificate(s), followed by
+a real ID-token exchange from the Play-delivered build.
