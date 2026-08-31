@@ -23,6 +23,16 @@
 *.uss        text eol=lf
 *.uxml       text eol=lf
 
+# Generated fallback freshness hashes the canonical JSON bytes. Pin these source
+# files to LF so a Windows checkout cannot make a fresh generated fallback appear
+# stale merely because global core.autocrlf rewrote the line endings.
+Assets/Resources/Data/Canonical/build-categories.json text eol=crlf
+Assets/StreamingAssets/Data/Canonical/build-categories.json text eol=crlf
+Assets/Resources/Data/Canonical/stake-rewards.json text eol=lf
+Assets/StreamingAssets/Data/Canonical/stake-rewards.json text eol=lf
+Assets/Resources/Data/Canonical/structures-catalog.json text eol=crlf
+Assets/StreamingAssets/Data/Canonical/structures-catalog.json text eol=crlf
+
 # BUT binary-serialized .asset files (TerrainData / NavMesh / LightingData) are NOT YAML —
 # the `*.asset text eol=lf` rule above EOL-mangles them (strips CR bytes on commit -> the
 # committed blob is corrupt -> Unity "Unknown error occurred while loading" -> null TerrainData,
