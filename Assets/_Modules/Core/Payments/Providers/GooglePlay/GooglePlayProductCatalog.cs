@@ -5,8 +5,9 @@ using UnityEngine.Purchasing;
 namespace DeNelle.Core.Payments.Providers
 {
     /// <summary>
-    /// Stable save SKU to Play Console product-id mapping. All current packs are consumables:
-    /// the server ledger owns restoration after the Play purchase is consumed.
+    /// Stable save SKU to Play Console product-id mapping. Resource/convenience baskets are
+    /// consumable; any product containing a permanent entitlement is non-consumable and restored
+    /// from Play plus the server ledger. This classification must match the backend map below.
     /// </summary>
     public static class GooglePlayProductCatalog
     {

@@ -165,3 +165,20 @@ session or player id. Digital Asset Links remained at four verified fingerprints
 The remaining external identity gate is creation/verification of Android OAuth client entries for
 package `com.denellestudios.echoesofelarion` using the Play signing SHA-1 certificate(s), followed by
 a real ID-token exchange from the Play-delivered build.
+
+## Billing-library artifact proof
+
+Official bundletool `1.18.3` manifest extraction from the exact AAB hash recorded above proves:
+
+- package `com.denellestudios.echoesofelarion`, version code `348534`, version name
+  `2026.08.31.348534`;
+- compile SDK and target SDK `36` with minimum SDK `26`;
+- `com.android.vending.BILLING` permission and the Billing service query;
+- `com.google.android.play.billingclient.version=8.0.0` in the physical base manifest.
+
+Google's current support table accepts Play Billing Library 8 for new apps and updates through
+2027-08-31 (extension deadline 2027-11-01). This removes the 2026 Billing Library 7 deprecation
+deadline as a submission blocker for this AAB. The Console remains authoritative after upload.
+
+The exact 26-row product contract and eight-product first Internal-test activation set are recorded
+in `docs/releases/GOOGLE_PLAY_PRODUCT_CATALOG_2026-08-30.md`.
