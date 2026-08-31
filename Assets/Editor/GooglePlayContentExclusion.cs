@@ -69,6 +69,8 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 using UnityEditor;
 using UnityEditor.Build;
 using UnityEditor.Build.Reporting;
@@ -97,6 +99,8 @@ namespace DeNelle.Editor
         /// <summary>Repo-relative ledger of in-flight moves. Survives an editor crash, which
         /// is the entire reason it is a FILE and not SessionState.</summary>
         public const string LedgerPath = "Builds/play-content-quarantine.txt";
+        public const string RewriteLedgerPath = "Builds/play-neutral-rewrite-ledger.txt";
+        public const string RewriteBackupRoot = "Builds/play-neutral-rewrite-backups";
 
         private const string LogTag = "[PlayContentExclusion]";
 
@@ -126,6 +130,35 @@ namespace DeNelle.Editor
             "Assets/Resources/SolanaUnitySDK",
             "Assets/Resources/Data/Canonical/wallets.json",
             "Assets/StreamingAssets/Data/Canonical/wallets.json",
+            // Crypto-rail catalogs and mixed presentation tables. All are either unused by
+            // GOOGLE_PLAY assemblies or have code fallbacks (skin resolves to the neutral
+            // store skin). Keep BOTH force-included mirrors paired: StreamingAssets creates
+            // readable paths while Resources creates opaque hashed player-data blobs.
+            "Assets/Resources/Data/Canonical/battle_monthly.json",
+            "Assets/StreamingAssets/Data/Canonical/battle_monthly.json",
+            "Assets/Resources/Data/Canonical/battle_monthly_packs.sample.json",
+            "Assets/StreamingAssets/Data/Canonical/battle_monthly_packs.sample.json",
+            "Assets/Resources/Data/Canonical/skin.json",
+            "Assets/StreamingAssets/Data/Canonical/skin.json",
+            "Assets/Resources/Data/Canonical/skr_staking.json",
+            "Assets/StreamingAssets/Data/Canonical/skr_staking.json",
+            "Assets/Resources/Data/Canonical/skr_store.json",
+            "Assets/StreamingAssets/Data/Canonical/skr_store.json",
+            "Assets/Resources/Data/Canonical/stake-rewards.json",
+            "Assets/StreamingAssets/Data/Canonical/stake-rewards.json",
+        };
+
+        private static readonly string[][] PlayNeutralMirrorPairs =
+        {
+            new[] { "Assets/Resources/Data/Canonical/canon-strings.json", "Assets/StreamingAssets/Data/Canonical/canon-strings.json" },
+            new[] { "Assets/Resources/Data/Canonical/en.json", "Assets/StreamingAssets/Data/Canonical/en.json" },
+            new[] { "Assets/Resources/Data/Canonical/packs.json", "Assets/StreamingAssets/Data/Canonical/packs.json" },
+        };
+
+        private static readonly string[] PlayNeutralUxmlPaths =
+        {
+            "Assets/_Modules/Onboarding/UI/TitleScreen.uxml",
+            "Assets/_Modules/Onboarding/UI/HeroSelectScreen.uxml",
         };
 
         // -------------------------------------------------------------------------
@@ -148,6 +181,7 @@ namespace DeNelle.Editor
                 // A Seeker build RE-ASSERTS the whole tree rather than assuming it. If a
                 // previous Play build died, this is the moment that would otherwise ship a
                 // Seeker APK with no wallet.
+                RestoreNeutralRewrites("non-Play Android build");
                 RestoreAll("non-Play Android build");
                 Debug.Log($"{LogTag} PLAY_CONTENT_INCLUDED — defines=[{defineList}]. " +
                           $"{PlayExcludedAssetPaths.Length} wallet payload(s) stay in Resources/StreamingAssets. " +
@@ -156,7 +190,133 @@ namespace DeNelle.Editor
             }
 
             Quarantine(defineList);
+            try { ApplyNeutralRewrites(); }
+            catch
+            {
+                RestoreNeutralRewrites("aborted neutral rewrite");
+                RestoreAll("aborted neutral rewrite");
+                throw;
+            }
             return false;
+        }
+
+        private static void ApplyNeutralRewrites()
+        {
+            RestoreNeutralRewrites("pre-rewrite sweep");
+            Directory.CreateDirectory(RewriteBackupRoot);
+            var ledger = new List<string>();
+            try
+            {
+                foreach (string[] pair in PlayNeutralMirrorPairs)
+                {
+                    foreach (string path in pair)
+                    {
+                        if (!File.Exists(path))
+                            throw new BuildFailedException($"{LogTag} PLAY_NEUTRAL_SOURCE_MISSING - {path}");
+                        string backup = Path.Combine(RewriteBackupRoot, path.Replace('/', '_').Replace('\\', '_') + ".bytes");
+                        File.WriteAllBytes(backup, File.ReadAllBytes(path));
+                        ledger.Add(path + "\t" + backup);
+                        File.WriteAllText(RewriteLedgerPath, string.Join(Environment.NewLine, ledger));
+
+                        JObject root = JObject.Parse(File.ReadAllText(path));
+                        string file = Path.GetFileName(path);
+                        if (file == "canon-strings.json")
+                        {
+                            root["_nightMarketNote"] = "Google Play store presentation.";
+                            root["storeBuyWalletRequiredCta"] = "Continue";
+                        }
+                        else if (file == "en.json")
+                        {
+                            root["swap.poweredBy"] = "Store service";
+                        }
+                        else if (file == "packs.json")
+                        {
+                            JObject notes = root["_schemaNotes"] as JObject;
+                            if (notes != null)
+                            {
+                                foreach (JProperty property in notes.Properties().ToArray())
+                                    if (ContainsForbiddenAuthoringToken(property.Value?.ToString()))
+                                        property.Remove();
+                            }
+                            JProperty disclaimer = root.Property("currencyDisclaimer");
+                            if (disclaimer != null && ContainsForbiddenAuthoringToken(disclaimer.Value?.ToString()))
+                                disclaimer.Remove();
+                            foreach (JObject pack in (root["packs"] as JArray ?? new JArray()).OfType<JObject>())
+                            {
+                                JObject pricing = pack["pricing"] as JObject;
+                                pricing?.Property("usdc")?.Remove();
+                                pricing?.Property("sol")?.Remove();
+                                pricing?.Property("skr")?.Remove();
+                            }
+                        }
+                        File.WriteAllText(path, root.ToString(Formatting.Indented) + Environment.NewLine);
+                        JObject.Parse(File.ReadAllText(path));
+                    }
+                }
+                foreach (string path in PlayNeutralUxmlPaths)
+                {
+                    if (!File.Exists(path))
+                        throw new BuildFailedException($"{LogTag} PLAY_NEUTRAL_SOURCE_MISSING - {path}");
+                    string backup = Path.Combine(RewriteBackupRoot, path.Replace('/', '_').Replace('\\', '_') + ".bytes");
+                    File.WriteAllBytes(backup, File.ReadAllBytes(path));
+                    ledger.Add(path + "\t" + backup);
+                    File.WriteAllText(RewriteLedgerPath, string.Join(Environment.NewLine, ledger));
+                    string uxml = File.ReadAllText(path);
+                    if (uxml.IndexOf("Connect Wallet", StringComparison.Ordinal) < 0)
+                        throw new BuildFailedException($"{LogTag} PLAY_NEUTRAL_UXML_ANCHOR_MISSING - {path}");
+                    File.WriteAllText(path, uxml.Replace("Connect Wallet", "Continue with Google"));
+                    if (File.ReadAllText(path).IndexOf("Connect Wallet", StringComparison.OrdinalIgnoreCase) >= 0)
+                        throw new BuildFailedException($"{LogTag} PLAY_NEUTRAL_UXML_REWRITE_FAILED - {path}");
+                }
+                ValidateNeutralMirrorEquality("rewrite");
+                AssetDatabase.Refresh();
+                Debug.Log($"{LogTag} PLAY_NEUTRAL_REWRITE_OK - rewrote {ledger.Count} mirrored catalogs; ledger={RewriteLedgerPath}");
+            }
+            catch (Exception ex)
+            {
+                Debug.LogError($"{LogTag} PLAY_NEUTRAL_REWRITE_FAIL - {ex.Message}");
+                throw new BuildFailedException($"Play-neutral catalog rewrite failed: {ex.Message}");
+            }
+        }
+
+        private static bool ContainsForbiddenAuthoringToken(string value)
+        {
+            string text = value ?? string.Empty;
+            string[] tokens = { "solana", "jupiter", "$skr", " skr", "usdc", "crypto", "web3", "wallet" };
+            return tokens.Any(token => text.IndexOf(token, StringComparison.OrdinalIgnoreCase) >= 0);
+        }
+
+        internal static void RestoreNeutralRewrites(string reason)
+        {
+            if (!File.Exists(RewriteLedgerPath)) return;
+            foreach (string raw in File.ReadAllLines(RewriteLedgerPath))
+            {
+                string[] parts = raw.Split('\t');
+                if (parts.Length != 2 || !File.Exists(parts[1]))
+                {
+                    Debug.LogError($"{LogTag} PLAY_NEUTRAL_RESTORE_FAILED - invalid/missing backup row '{raw}'.");
+                    continue;
+                }
+                File.WriteAllBytes(parts[0], File.ReadAllBytes(parts[1]));
+                if (!File.ReadAllBytes(parts[0]).SequenceEqual(File.ReadAllBytes(parts[1])))
+                    throw new BuildFailedException($"{LogTag} PLAY_NEUTRAL_BYTE_RESTORE_MISMATCH - {parts[0]}");
+            }
+            ValidateNeutralMirrorEquality("restore");
+            File.Delete(RewriteLedgerPath);
+            if (Directory.Exists(RewriteBackupRoot)) Directory.Delete(RewriteBackupRoot, true);
+            AssetDatabase.Refresh();
+            Debug.Log($"{LogTag} PLAY_NEUTRAL_RESTORED - original catalog bytes restored ({reason}).");
+        }
+
+        private static void ValidateNeutralMirrorEquality(string phase)
+        {
+            foreach (string[] pair in PlayNeutralMirrorPairs)
+            {
+                byte[] left = File.ReadAllBytes(pair[0]);
+                byte[] right = File.ReadAllBytes(pair[1]);
+                if (!left.SequenceEqual(right))
+                    throw new BuildFailedException($"{LogTag} PLAY_NEUTRAL_MIRROR_MISMATCH ({phase}) - {pair[0]} != {pair[1]}");
+            }
         }
 
         private static void Quarantine(string defineList)
@@ -268,6 +428,7 @@ namespace DeNelle.Editor
         /// </summary>
         public static void EnsureTreeIsWhole()
         {
+            RestoreNeutralRewrites("pre-build sweep");
             if (!File.Exists(LedgerPath))
                 return;
 
@@ -297,7 +458,7 @@ namespace DeNelle.Editor
             if (SessionState.GetBool(ExclusionActiveKey, false))
                 return; // A build in this editor session owns the quarantine right now.
 
-            if (!File.Exists(LedgerPath))
+            if (!File.Exists(LedgerPath) && !File.Exists(RewriteLedgerPath))
                 return;
 
             Debug.LogWarning($"{LogTag} PLAY_CONTENT_REPAIRED — {LedgerPath} survived an interrupted " +
@@ -305,6 +466,7 @@ namespace DeNelle.Editor
                              "Resources/StreamingAssets, which would silently strip the Solana rail from " +
                              "the next Seeker/dApp-Store APK. Restoring them now; re-check `git status` " +
                              $"and that {QuarantineRoot} is gone before committing.");
+            RestoreNeutralRewrites("interrupted-build repair");
             RestoreAll("interrupted-build repair");
         }
 
@@ -458,6 +620,7 @@ namespace DeNelle.Editor
             if (report != null && report.summary.platform != BuildTarget.Android)
                 return;
 
+            GooglePlayContentExclusion.RestoreNeutralRewrites("post-build");
             GooglePlayContentExclusion.RestoreAll("post-build");
         }
     }

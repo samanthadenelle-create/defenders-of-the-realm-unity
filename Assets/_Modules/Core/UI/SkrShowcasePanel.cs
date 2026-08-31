@@ -65,8 +65,14 @@ namespace DeNelle.Core.UI
         private bool IsShowing() => _modal != null && _modal.canvas != null && _modal.canvas.activeInHierarchy;
 
         // The honest value-prop copy (docs/PI_PITCH.md + skr-separate-ingame-currency canon).
+#if GOOGLE_PLAY
+        private const string ValueRealToken = "Store rewards are unavailable in this edition.";
+        private const string ConnectActionLabel = "Continue with Google";
+#else
         private const string ValueRealToken =
             "SKR is a REAL Solana / Seeker token — not an in-game balance we mint or hold.";
+        private const string ConnectActionLabel = "Connect Wallet";
+#endif
         private const string ValueNonCustodial =
             "Non-custodial by design: you stake natively — we never take custody of your SKR.";
         private const string ValueServerVerified =
@@ -182,7 +188,7 @@ namespace DeNelle.Core.UI
                 new Vector2(0.06f, 0.255f), new Vector2(0.49f, 0.335f), OnViewStakeRewards);
 
             // Connect-wallet — deliberate NO-OP. Calls NO wallet; shows a "coming soon" toast.
-            ElarionUiKit.BuildObsidianButton(body, "Connect Wallet",
+            ElarionUiKit.BuildObsidianButton(body, ConnectActionLabel,
                 ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Gray,
                 new Vector2(0.51f, 0.255f), new Vector2(0.94f, 0.335f), OnConnectWalletComingSoon);
 
@@ -237,10 +243,15 @@ namespace DeNelle.Core.UI
 
         private void OnConnectWalletComingSoon()
         {
+#if GOOGLE_PLAY
+            FlowTrace.Step("Skr", "Store preview action is unavailable in this edition.");
+            ShowToast("Unavailable in this edition.");
+#else
             // DELIBERATE NO-OP. No wallet call, no signature, no transaction. The Pi/Seeker wallet
             // is not connected in this build — the grant preview shows the INTENDED flow, honestly.
             FlowTrace.Step("Skr", "SkrShowcasePanel: Connect Wallet is a no-op (preview) — no wallet call made.");
             ShowToast("Coming soon — testnet preview. No wallet connected.");
+#endif
         }
 
         private void ShowToast(string message)

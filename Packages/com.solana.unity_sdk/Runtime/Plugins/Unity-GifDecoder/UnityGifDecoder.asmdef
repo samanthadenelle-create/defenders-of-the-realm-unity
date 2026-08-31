@@ -1,0 +1,4 @@
+﻿{
+	"name": "UnityGifDecoder",
+	"defineConstraints": ["!GOOGLE_PLAY"]
+}

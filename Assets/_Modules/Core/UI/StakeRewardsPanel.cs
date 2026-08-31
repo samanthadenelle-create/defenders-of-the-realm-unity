@@ -54,8 +54,12 @@ namespace DeNelle.Core.UI
         private bool IsShowing() => _modal != null && _modal.canvas != null && _modal.canvas.activeInHierarchy;
 
         // Copy that carries the non-custodial / native-staking message, reused for the capture.
+#if GOOGLE_PLAY
+        private const string StakeNativeLine = "Store rewards are unavailable in this edition.";
+#else
         private const string StakeNativeLine =
             "Stake natively at Stake.solanamobile - rewards apply automatically. We never hold your SKR.";
+#endif
         private const string SmallThankYouLine =
             "A small thank-you for staking - modest perks, never pay-to-win.";
 
