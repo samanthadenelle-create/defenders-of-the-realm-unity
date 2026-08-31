@@ -381,14 +381,30 @@ namespace DeNelle.HUD.Kit
                 affordable ? ElarionUiKit.ToastTone.Gold : ElarionUiKit.ToastTone.Danger,
                 accentLeft: true, align: TextAnchor.MiddleLeft);
             var rt = (RectTransform)parts.card.transform;
-            rt.anchorMin = new Vector2(0.22f, 0.80f);
-            rt.anchorMax = new Vector2(0.78f, 0.92f);
+            // Four readable detail lines plus phone-sized actions. The old 12%-high toast seat
+            // forced the full structure/cost sentence behind the buttons on narrow screens.
+            rt.anchorMin = new Vector2(0.08f, 0.66f);
+            rt.anchorMax = new Vector2(0.92f, 0.94f);
             rt.offsetMin = Vector2.zero; rt.offsetMax = Vector2.zero;
             parts.label.text = subtitle ?? "";
+            parts.label.horizontalOverflow = HorizontalWrapMode.Wrap;
+            parts.label.verticalOverflow = VerticalWrapMode.Overflow;
+            parts.label.resizeTextForBestFit = true;
+            parts.label.resizeTextMinSize = 18;
+            parts.label.resizeTextMaxSize = 28;
+            var labelRt = (RectTransform)parts.label.transform;
+            labelRt.anchorMin = new Vector2(0f, 0f);
+            labelRt.anchorMax = new Vector2(0.57f, 1f);
+            labelRt.offsetMin = new Vector2(22f, 12f);
+            labelRt.offsetMax = new Vector2(-10f, -12f);
 
-            var repairBtn = ElarionUiKit.BuildObsidianButton(parts.card.transform, "Repair",
+            bool rebuild = !string.IsNullOrEmpty(subtitle) &&
+                           subtitle.IndexOf("Rebuild cost:", System.StringComparison.Ordinal) >= 0;
+            string actionCopy = rebuild ? "Rebuild structure" : "Repair structure";
+
+            var repairBtn = ElarionUiKit.BuildObsidianButton(parts.card.transform, actionCopy,
                 ElarionUiKit.ObsidianButtonStyle.Style2, ElarionUiKit.ObsidianButtonColor.Green,
-                new Vector2(0.58f, 0.12f), new Vector2(0.77f, 0.88f), () =>
+                new Vector2(0.59f, 0.53f), new Vector2(0.97f, 0.91f), () =>
                 {
                     if (_owner != null) _owner.RepairConfirmRequested?.Invoke();
                     HideRepairPrompt();
@@ -397,7 +413,7 @@ namespace DeNelle.HUD.Kit
 
             ElarionUiKit.BuildObsidianButton(parts.card.transform, "Cancel",
                 ElarionUiKit.ObsidianButtonStyle.Style2, ElarionUiKit.ObsidianButtonColor.Gray,
-                new Vector2(0.79f, 0.12f), new Vector2(0.97f, 0.88f), () =>
+                new Vector2(0.59f, 0.09f), new Vector2(0.97f, 0.47f), () =>
                 {
                     if (_owner != null) _owner.RepairCancelRequested?.Invoke();
                     HideRepairPrompt();

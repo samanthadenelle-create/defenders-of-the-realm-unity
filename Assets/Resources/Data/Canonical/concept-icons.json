@@ -130,6 +130,10 @@
    "role": "abilities",
    "name": "charge_knight"
   },
+  "knight.e": {
+   "role": "spellicons",
+   "name": "Paladin5"
+  },
   "mage.fireball": {
    "role": "spellicons",
    "name": "Pyromancer18"

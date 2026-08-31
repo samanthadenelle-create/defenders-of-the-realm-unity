@@ -84,6 +84,7 @@ namespace DeNelle.Dungeons
 
         [Tooltip("True once a run has been started (StartRun called).")]
         [SerializeField] private bool _runActive;
+        [SerializeField] private bool _rewardClaimed;
 
         [Header("Encounter handoff (survives the ATB scene round-trip)")]
         [Tooltip("Id of the encounter that launched the in-flight ATB battle, or " +
@@ -218,6 +219,15 @@ namespace DeNelle.Dungeons
         /// <summary>True when a treasure chest with the given id has been opened.</summary>
         public bool HasOpenedChest(string chestId) => _chestsOpened.Contains(chestId);
 
+        /// <summary>Atomically claims this run's one reward evaluation. Survives the dungeon scene
+        /// round-trip with this ScriptableObject, preventing retry/re-entry duplicate grants.</summary>
+        public bool TryClaimReward()
+        {
+            if (_rewardClaimed) return false;
+            _rewardClaimed = true;
+            return true;
+        }
+
         // ── Lifecycle ────────────────────────────────────────────────────────
 
         /// <summary>
@@ -241,6 +251,7 @@ namespace DeNelle.Dungeons
             _inCombat = false;
             _bossDefeated = false;
             _runActive = true;
+            _rewardClaimed = false;
             // NOTE: StartRun deliberately does NOT touch the encounter handoff or
             // the hero-vitals snapshot. Both must survive the ATB scene
             // round-trip — when the dungeon scene reloads after a battle, the
@@ -269,6 +280,7 @@ namespace DeNelle.Dungeons
             _inCombat = false;
             _bossDefeated = false;
             _runActive = false;
+            _rewardClaimed = false;
             _pendingEncounterId = string.Empty;
             _pendingEncounterIsBoss = false;
             _encounterResumePosition = Vector3.zero;

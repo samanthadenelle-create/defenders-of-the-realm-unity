@@ -67,7 +67,7 @@ using DeNelle.Core.Economy;
 
 namespace DeNelle.Core.UI
 {
-    /// <summary>Renders <see cref="TownBankCapacity.Overflowed"/> as the one transient toast --
+    /// <summary>Renders <see cref="TownBankCapacity.Overflowed"/> as one harvest-result modal --
     /// but ONLY inside an opted-in <see cref="WarnScope"/> (WO-1207 ruling 3).</summary>
     public static class BankOverflowToastPresenter
     {
@@ -207,7 +207,6 @@ namespace DeNelle.Core.UI
             _scopeTrims.Clear();
 
             var sentences = new List<string>();
-            bool anyLoss = false;
             int spoken = 0;
             int throttled = 0;
             for (int i = 0; i < order.Count; i++)
@@ -220,7 +219,6 @@ namespace DeNelle.Core.UI
                 }
                 _lastShownAt[s.Resource] = now;
                 sentences.Add(SentenceFor(s));
-                if (!s.OverCap) anyLoss = true;
                 spoken++;
             }
 
@@ -235,20 +233,11 @@ namespace DeNelle.Core.UI
 
             string msg = string.Join(" ", sentences.ToArray());
 
-            // The kit card holds ~2 lines at the 480x76 default; a multi-resource dump needs room,
-            // and ToastCard overflows OUTSIDE the plate rather than clipping. Grow, never clip.
-            float width = spoken > 1 ? 620f : 480f;
-            float height = spoken > 1 ? 76f + 34f * (spoken - 1) : 76f;
-            float life = spoken > 1 ? 4.2f : (anyLoss ? 3.2f : 4.5f);
-
-            // Tone is DECORATION (colourblind law) -- the sentence carries the whole message.
-            var tone = anyLoss ? ElarionUiKit.ToastTone.Danger : ElarionUiKit.ToastTone.Info;
-
             ToastCount++;
             LastToastMessage = msg;
-            ElarionUiKit.ShowToast(msg, tone, life, 720, width, height);
+            HarvestOverflowModal.Present(order.ConvertAll(r => merged[r]));
             FlowTrace.Step("Bank",
-                $"bank-cap toast for [{_scopeSource ?? "?"}] naming {spoken} trimmed resource(s)"
+                $"bank-cap harvest-result modal for [{_scopeSource ?? "?"}] naming {spoken} trimmed resource(s)"
                 + (throttled > 0 ? $" ({throttled} suppressed by cooldown)" : "") + ".");
             _scopeSource = null;
         }

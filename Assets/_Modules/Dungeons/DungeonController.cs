@@ -568,8 +568,25 @@ namespace DeNelle.Dungeons
                     return;
                 }
 
+                if (!st.TryClaimReward())
+                {
+                    DeNelle.Core.Diagnostics.FlowTrace.Step("JewelPolish",
+                        $"run payout skipped ({via}) - this run already evaluated its one reward.");
+                    return;
+                }
+
                 string stoneId = DeNelle.Core.Catalog.DungeonExclusiveItems.RoughStoneId;
-                inv.Add(stoneId, 1);
+                bool firstDungeonStone = !inv.HasEverAcquired(stoneId);
+                if (!firstDungeonStone && !ShouldAwardPostFirstStone(UnityEngine.Random.value))
+                {
+                    DeNelle.Core.Diagnostics.FlowTrace.Step("JewelPolish",
+                        $"run payout ({via}): first rough-stone introduction already earned; " +
+                        $"post-first roll missed the {PostFirstRoughStoneDropRate:P0} drop rate.");
+                    return;
+                }
+                // Only the dungeon reward authority may stamp this as EARNED. Shop/dev/plain
+                // inventory Add calls deliberately cannot reveal the Jeweler.
+                inv.AddEarned(stoneId, 1);
                 DungeonRunPayout.LastPolishScore = score;
 
                 DeNelle.Core.Diagnostics.FlowTrace.Step("JewelPolish",
@@ -578,6 +595,13 @@ namespace DeNelle.Dungeons
                     "Take it to the Jeweler.");
             });
         }
+
+        /// <summary>Owner fallback tuning for subsequent completed eligible dungeons. The first
+        /// dungeon-earned stone bypasses this roll and remains guaranteed exactly once.</summary>
+        public const float PostFirstRoughStoneDropRate = 0.15f;
+
+        public static bool ShouldAwardPostFirstStone(float roll01)
+            => roll01 >= 0f && roll01 < PostFirstRoughStoneDropRate;
 
         // ── Per-frame: room tracking + encounter clock ───────────────────────
 

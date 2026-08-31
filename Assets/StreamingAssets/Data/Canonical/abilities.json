@@ -128,6 +128,7 @@
           "slot": "e",
           "key": "E",
           "name": "Warden's Grace",
+          "verb": "Heal",
           "description": "A radiant ward \u2014 heal 25% max HP (+Defense bonus), then Grace Shield 8s: -20% damage taken + a healing drip (20s cd).",
           "icon": "\u271a",
           "color": "#ffd27a",

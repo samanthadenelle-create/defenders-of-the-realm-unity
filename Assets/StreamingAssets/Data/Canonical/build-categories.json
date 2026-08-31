@@ -65,10 +65,11 @@
    "lockedIds": [
     "tower_siege_tower",
     "tower_catapult",
-    "gate_stone",
     "tower_arcane_spire"
    ],
-   "visibleLockedIds": {}
+   "visibleLockedIds": {
+    "gate_stone": "Create a Stone Wall to unlock"
+   }
   },
   {
    "buildType": "Walls",
@@ -94,9 +95,10 @@
    "catalogTypes": [
     "Support"
    ],
-   "lockedIds": [
-    "healing_caravan"
-   ]
+   "lockedIds": [],
+   "visibleLockedIds": {
+    "healing_caravan": "Recover its plans after Wave 7"
+   }
   }
  ]
 }
