@@ -8,8 +8,8 @@ baseline that drove this work. It is not evidence for the current artifact.
 
 | Channel | Artifact | Bytes | SHA-256 |
 |---|---|---:|---|
-| Google Play | `Builds/Android/EchoesOfElarion-GooglePlay.aab` | 482,839,103 | `A33E36EC9E54BAC857D9E91ECA0095B3882ADBE5A90B6520ACC822A2DE71A9E3` |
-| Seeker/store-shaped APK (built after AAB) | `Builds/Android/DefendersOfTheRealm.apk` | 493,482,245 | `DC7891ACC2A8E75E1EB0936A0C65671B9CC058E319EBFAE22E95279B0B94FA92` |
+| Google Play | `Builds/Android/EchoesOfElarion-GooglePlay.aab` | 482,843,623 | `F353DE81A8E1C63950E9B0E0AF415AB7F7A14DF9F15C153F2F9B214DF5A29ADE` |
+| Latest Seeker/store-shaped APK | `Builds/Android/DefendersOfTheRealm.apk` | 493,482,245 | `DC7891ACC2A8E75E1EB0936A0C65671B9CC058E319EBFAE22E95279B0B94FA92` |
 
 The raw AAB size is **not** the Google Play size verdict. Play's published limit for the base
 module is 500 MB compressed download size **as calculated by Play Console after upload**. The
@@ -18,7 +18,7 @@ The prior audit's 200 MB upload-blocker conclusion is obsolete; 200 MB is the la
 warning threshold, not the current base-module rejection limit.
 
 Google's official `bundletool` 1.18.3 validates this AAB. A default split APK set generated from
-the exact candidate reports `get-size total` MIN 479,363,936 and MAX 479,444,447 bytes. This is a
+the exact candidate reports `get-size total` MIN 479,371,759 and MAX 479,452,660 bytes. This is a
 close local estimate, not the authoritative Console calculation, but it creates at least 20.5 MB
 of margin even if the published 500 MB threshold is interpreted as decimal bytes. The preceding
 candidate estimated 513,590,887–513,670,750 bytes; the existing conservative Android texture
@@ -29,7 +29,7 @@ the final rebuild.
 
 - `Builds/goal-play-compile18-size-margin.log`: `COMPILE_GATE_OK :: scripts compiled clean`.
 - `Builds/goal-play-data-regression10-size-margin.log`: `REGRESSION_OK 332/332 suites -- 332 green, 0 red, 0 skipped`.
-- `Builds/goal-play-aab8-size-margin.log`: optimized product build succeeded and emitted
+- `Builds/goal-play-aab9-policy-hardening.log`: optimized product build succeeded and emitted
   `[GooglePlayPackagingGate] PLAY_ARTIFACT_CLEAN_OK` after scanning the physical AAB.
 - `Builds/overnight-apk-status.txt`: `SCHEMA_PARITY_OK`, fresh `APK_OK`,
   `R2_PARITY_OK 54 object(s) verified`, then `APK_DONE`.
@@ -37,8 +37,8 @@ the final rebuild.
 The Play artifact gate scans readable content plus compiled/native payloads. It rejects wallet,
 MWA, Solana SDK/runtime, crypto copy, live token addresses, stake URLs, and wallet brands. The
 Play build uses its own immutable `GOOGLE_PLAY` stamp; persistent Android PlayerSettings no longer
-carry `DAPP_STORE` or `SOLANA_SDK`. The Seeker APK was built last to prove those exclusions did
-not damage the normal channel.
+carry `DAPP_STORE` or `SOLANA_SDK`. The separately built Seeker APK proves those exclusions did
+not damage the normal channel; version `2026.08.31.348504` is installed on the connected Seeker.
 
 ## Implemented review surfaces
 
@@ -83,7 +83,7 @@ billing/restore testing, production backend configuration, Console declarations,
 
 ## Post-artifact policy hardening
 
-Work completed after the candidate hash above was built:
+Work completed and incorporated into the fresh candidate hash above:
 
 - authenticated, identity-bound account/data-deletion request intake with an idempotent operations
   queue and a bounded second-tap confirmation in the Play client;
@@ -98,9 +98,8 @@ Work completed after the candidate hash above was built:
 
 These changes remain default-off where activation could move value. They do not claim that a
 refunded consumable has been reversed: billing activation remains gated until the entitlement
-reversal policy and licensed-device refund/void matrix are implemented and verified. Because the
-client deletion confirmation changed after the recorded AAB was produced, a fresh AAB is required
-before this hardening can be claimed as part of the uploaded artifact.
+reversal policy and licensed-device refund/void matrix are implemented and verified. The fresh
+`2026.08.31.348534` AAB recorded above includes the client-side deletion confirmation.
 
 Baseline-to-candidate release notes are recorded in
-`docs/releases/RELEASE_NOTES_2026.08.31.348504_GOOGLE_PLAY.md`.
+`docs/releases/RELEASE_NOTES_2026.08.31.348534_GOOGLE_PLAY.md`.

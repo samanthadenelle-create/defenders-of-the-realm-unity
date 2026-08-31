@@ -1,12 +1,12 @@
-# Release Notes — Echoes of Elarion `2026.08.31.348504` Google Play RC
+# Release Notes — Echoes of Elarion `2026.08.31.348534` Google Play RC
 
 **Compared with:** production Seeker build `2026.08.30.347462`
 
 **Google Play artifact:** `Builds/Android/EchoesOfElarion-GooglePlay.aab`
 
-**Size:** 482,839,103 bytes (460.47 MiB)
+**Size:** 482,843,623 bytes (460.48 MiB)
 
-**SHA-256:** `A33E36EC9E54BAC857D9E91ECA0095B3882ADBE5A90B6520ACC822A2DE71A9E3`
+**SHA-256:** `F353DE81A8E1C63950E9B0E0AF415AB7F7A14DF9F15C153F2F9B214DF5A29ADE`
 
 ## Player-facing highlights
 
@@ -54,13 +54,13 @@
 ## Verification completed for this exact AAB
 
 - Official bundletool 1.18.3 validates the bundle.
-- Local Play delivery estimate: 479,363,936–479,444,447 bytes, leaving approximately 20.56 MB
+- Local Play delivery estimate: 479,371,759–479,452,660 bytes, leaving approximately 20.55 MB
   below the published 500 MB compressed-download ceiling.
 - Physical artifact scan: `PLAY_ARTIFACT_CLEAN_OK`.
 - Unity compile gate: `COMPILE_GATE_OK`.
 - Data regression: `REGRESSION_OK 332/332`.
-- The Seeker/store-shaped APK was rebuilt after the AAB and passed schema plus all 54 remote-object
-  parity checks.
+- The separately built Seeker/store-shaped APK passed schema plus all 54 remote-object parity
+  checks; version `2026.08.31.348504` is installed on the connected Seeker.
 
 ## Still required before public release
 
@@ -78,6 +78,6 @@
 ## Post-build hardening status
 
 Authenticated deletion-request intake and secure Google Play real-time developer-notification
-ingestion were implemented after the AAB hash above was produced. Their focused tests and compile
-gate are green and their additive database migrations are applied, but they require a fresh AAB
-before they can be claimed as part of the shipped client artifact. Billing remains disabled.
+ingestion are included in this release state. Their focused tests, compile gate, and full regression
+gate are green, and their additive database migrations are applied. Billing remains disabled until
+the Console configuration and licensed-device test matrix are complete.
