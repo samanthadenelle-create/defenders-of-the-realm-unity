@@ -195,6 +195,10 @@ namespace DeNelle.Core.Catalog
         [Tooltip("How many jobs may run at once for free. CoC-style scarcity — extra slots are a future unlock/purchase.")]
         [Min(1)] public int freeBuildSlots = 2;
 
+        [Tooltip("Seconds granted by the one-time temporary Builder taste. Default: 24 hours. " +
+                 "The grant is non-stacking; an active window cannot be extended or overlapped.")]
+        [Min(0f)] public float temporaryBuilderSeconds = 24f * 60f * 60f;
+
         // ─────────────────────────────────────────────────────────────────────
         //  WO-911 (M1) — QUEUE DEPTH. A DIFFERENT AXIS FROM freeBuildSlots.
         //  -------------------------------------------------------------------

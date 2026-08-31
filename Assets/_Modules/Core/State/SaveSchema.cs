@@ -915,6 +915,8 @@ namespace DeNelle.Core.State
                         var ch = kv.Value;
                         if (ch == null) continue;
                         ch.BoughtSlots = NonNegInt(ch.BoughtSlots, $"obsidianQueue.{kv.Key}.boughtSlots");
+                        ch.TemporarySlotEndsAtUnixMs = Math.Max(0d,
+                            FiniteInt(ch.TemporarySlotEndsAtUnixMs, $"obsidianQueue.{kv.Key}.temporarySlotEndsAtUnixMs"));
                         ClampJobList(ch.ActiveJobs, $"obsidianQueue.{kv.Key}.active");
                         ClampJobList(ch.PendingQueue, $"obsidianQueue.{kv.Key}.pending");
                     }

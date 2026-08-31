@@ -35,6 +35,16 @@ namespace DeNelle.Core.Jobs
         /// <summary>Purchased extra slots on top of the config free slots (IAP/premium). Clamped ≥0.</summary>
         [JsonProperty("boughtSlots")] public int BoughtSlots;
 
+        /// <summary>
+        /// Wall-clock end of the one temporary worker taste, in Unix milliseconds. Zero means none.
+        /// This is deliberately separate from <see cref="BoughtSlots"/>: expiry must never turn a
+        /// temporary worker into permanent progression or affect permanent-slot gates.
+        /// </summary>
+        [JsonProperty("temporarySlotEndsAtUnixMs")] public double TemporarySlotEndsAtUnixMs;
+
+        /// <summary>Durable one-time guard. This taste cannot be reclaimed after it expires.</summary>
+        [JsonProperty("temporarySlotClaimed")] public bool TemporarySlotClaimed;
+
         /// <summary>Running jobs — one per occupied slot. Length ≤ SlotCount. Each has StartMs &gt; 0.</summary>
         [JsonProperty("active")] public List<BuildJobData> ActiveJobs = new List<BuildJobData>();
 
