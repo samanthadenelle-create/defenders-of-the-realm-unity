@@ -2209,8 +2209,11 @@ namespace DeNelle.Village
 
             handle.Completed += op =>
             {
-                // Stale: the player swapped/unequipped the off-hand while this load was in flight.
-                if (generation != _offHandGeneration)
+                // Stale: the player swapped/unequipped the off-hand, or a scene/body swap
+                // destroyed the captured rig bone while this load was in flight. The latter can
+                // happen before this component's OnDisable callback runs, so generation alone is
+                // not a sufficient lifetime proof.
+                if (generation != _offHandGeneration || hand == null || !isActiveAndEnabled)
                 {
                     if (_offHandHandle.Equals(op)) { _offHandHandle = default; _offHandHandleOpen = false; }
                     DeferRelease(op);
@@ -2314,6 +2317,15 @@ namespace DeNelle.Village
         // own lifecycle reference (no clobbering the main weapon's grip-root / hold-pose state).
         private void AttachOffHandProp(GameObject prop, WeaponVisual vis, Transform hand, string id)
         {
+            // Async Addressables completion may race a scene/body replacement. Never inspect or
+            // parent through Unity's destroyed-object sentinel; discard the unattached instance.
+            if (prop == null) return;
+            if (hand == null)
+            {
+                FlowTrace.Warn("Equip", $"AttachOffHandProp '{id}' discarded: target hand was destroyed.");
+                Destroy(prop);
+                return;
+            }
             using var _ = FlowTrace.Enter("Equip", $"AttachOffHandProp '{id}' -> '{hand.name}' (kind={vis.kind})");
             prop.name = OffHandMeshName;
             foreach (var c in prop.GetComponentsInChildren<Collider>(true)) if (c != null) Destroy(c);

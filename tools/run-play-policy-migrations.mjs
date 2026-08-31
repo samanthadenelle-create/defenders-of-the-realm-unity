@@ -10,6 +10,7 @@ const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const migrationPaths = [
   join(root, 'api/migrations/20260830_0014_account_deletion_requests.sql'),
   join(root, 'api/migrations/20260830_0015_google_play_rtdn.sql'),
+  join(root, 'api/migrations/20260830_0016_google_play_voided_reconciliation.sql'),
 ];
 
 function fail(message) {
@@ -51,12 +52,15 @@ try {
      GROUP BY table_name
      ORDER BY table_name`, [[
        'account_deletion_requests', 'google_play_rtdn_messages',
+       'google_play_voided_events', 'google_play_voided_cursors',
      ]]);
   const actual = new Map(proof.rows.map(row => [row.table_name, Number(row.column_count)]));
   if (actual.get('account_deletion_requests') !== 10 ||
-      actual.get('google_play_rtdn_messages') !== 13)
+      actual.get('google_play_rtdn_messages') !== 13 ||
+      actual.get('google_play_voided_events') !== 14 ||
+      actual.get('google_play_voided_cursors') !== 5)
     fail('post-migration shape proof failed.');
-  console.log('PLAY_POLICY_MIGRATION_OK tables=2 requests=0 notifications=0 billing=disabled');
+  console.log('PLAY_POLICY_MIGRATION_OK tables=4 billing=disabled reconciliation=disabled');
 } finally {
   await client.end().catch(() => {});
 }
