@@ -121,7 +121,11 @@ namespace DeNelle.Core.Platform
             // because TMP renders the U+2026 ellipsis of WalletAccount.ShortAddress as tofu.
             string desired = connected && !string.IsNullOrEmpty(shortAddress)
                 ? "Wallet " + shortAddress
+#if GOOGLE_PLAY
+                : "Continue with Google";
+#else
                 : "Connect Wallet";
+#endif
             if (_label.text == desired) return;
 
             // Connected: stop it being tappable. There is no disconnect surface here and one
@@ -367,7 +371,13 @@ namespace DeNelle.Core.Platform
             // which warns (no silent failure) until that handler is subscribed.
             bool walletSkin = _skin != null && _skin.AuthMode == SkinAuthMode.SolanaWallet;
             _walletSkin = walletSkin;
-            string initialLabel = walletSkin ? "Connect Wallet" : "Sign in with Pi";
+            string initialLabel = walletSkin
+#if GOOGLE_PLAY
+                ? "Continue with Google"
+#else
+                ? "Connect Wallet"
+#endif
+                : "Sign in with Pi";
             Action onClick = walletSkin
                 ? (Action)CurrencySkinResolver.RequestWalletConnect
                 : SignIn;

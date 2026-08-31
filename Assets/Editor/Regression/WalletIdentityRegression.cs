@@ -408,6 +408,20 @@ namespace DeNelle.Editor.Regression
             // this case exists to close. So we assert the guard AND that the save rail aborts on it.
             string signerSrc = StripComments(ReadSource(SignerSrc, failures) ?? string.Empty);
 
+            // Google Play has a separate, server-verified session rail. Remove only that
+            // compile-time branch before proving the legacy wallet rail still fails closed;
+            // then pin the exception independently so it cannot become a general bypass.
+            string walletSignerSrc = Regex.Replace(
+                signerSrc,
+                @"#if\s+GOOGLE_PLAY[\s\S]*?#endif",
+                string.Empty);
+            if (!Regex.IsMatch(signerSrc,
+                    @"#if\s+GOOGLE_PLAY[\s\S]{0,500}?IsGooglePlayIdentity\s*\(\s*playerId\s*\)" +
+                    @"[\s\S]{0,300}?TryAttachCachedSession\s*\(\s*req\s*,\s*playerId\s*\)" +
+                    @"[\s\S]{0,120}?return\s+true[\s\S]{0,500}?return\s+false[\s\S]{0,120}?#endif"))
+                failures.Add("[real-wallet-gate] GOOGLE_PLAY identity exception is no longer tightly " +
+                             "scoped to a verified cached session and fail-closed missing-session path");
+
             // ⚠ ANCHORED to the GUEST RAIL on purpose. MintSessionAsync carries a
             // character-identical `signer == null || !signer.CanSign` guard, so an
             // unanchored match would have gone on passing with TryAttachAsync's own guard
@@ -415,7 +429,7 @@ namespace DeNelle.Editor.Regression
             // only in TryAttachAsync, so requiring guest-rail -> X-Guest-Id -> fail-closed IN
             // THAT ORDER pins both the guard AND the fact that the guest shortcut is the only
             // thing permitted to precede it.
-            if (!Regex.IsMatch(signerSrc,
+            if (!Regex.IsMatch(walletSignerSrc,
                     @"IsGuestIdentity\s*\(\s*playerId\s*\)[\s\S]{0,200}?X-Guest-Id[\s\S]{0,300}?" +
                     @"signer\s*==\s*null\s*\|\|\s*!\s*signer\.CanSign" +
                     // ⚠ TEMPERED: the window may not contain a `return true`. A plain lazy

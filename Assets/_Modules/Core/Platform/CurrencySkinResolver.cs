@@ -93,8 +93,13 @@ namespace DeNelle.Core.Platform
             if (handler == null)
             {
                 FlowTrace.Warn("Skin",
+#if GOOGLE_PLAY
+                    "Continue with Google pressed but no identity handler is subscribed " +
+                    "(WalletConnectRequested) - Google Play identity setup is incomplete.");
+#else
                     "Connect Wallet pressed but no wallet-connect handler is subscribed " +
                     "(WalletConnectRequested) — the full Solana wallet flow is a follow-up (WO-603 flagged).");
+#endif
                 return;
             }
             try { handler.Invoke(); }
@@ -231,8 +236,13 @@ namespace DeNelle.Core.Platform
             if (handler == null)
             {
                 FlowTrace.Warn("Wallet",
+#if GOOGLE_PLAY
+                    "Identity state changed but NO view is subscribed (WalletConnectionChanged) - " +
+                    "a signed-in player may still read 'Continue with Google' on screen.");
+#else
                     "Wallet connection state changed but NO view is subscribed (WalletConnectionChanged) - " +
                     "a connected wallet may still be reading as 'Connect Wallet' on screen.");
+#endif
                 return;
             }
             try { handler.Invoke(IsWalletConnected, ConnectedWalletShortAddress); }
@@ -253,6 +263,13 @@ namespace DeNelle.Core.Platform
         {
             string requested = ReadUrlSkinOverride();          // step 1 — URL param
             JObject table = LoadSkinTable();                   // skin.json (may be null)
+
+#if GOOGLE_PLAY
+            // The Play artifact is a fiat-IAP build. Force the existing symbol-free,
+            // neutral presentation instead of inheriting Android's SKR routing.
+            requested = "wallet";
+            FlowTrace.Step("Skin", "Google Play artifact - resolving the neutral store skin.");
+#else
 
             // WO-787 Part C (owner 2026-07-30): "if not Pi-facing should always be SKR."
             // Resolve WebGL currency from the HOST before skin.json's generic `active: wallet`
@@ -293,6 +310,7 @@ namespace DeNelle.Core.Platform
             if (string.IsNullOrEmpty(requested))               // step 3 — V1 generic-wallet default
                 requested = "wallet";
 
+#endif
             requested = requested.Trim().ToLowerInvariant();
 
             _active = BuildSkin(requested, table);

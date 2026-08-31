@@ -61,8 +61,13 @@ namespace DeNelle.Core.Platform
             if (handler == null)
             {
                 FlowTrace.Warn("Auth",
+#if GOOGLE_PLAY
+                    "login Continue with Google pressed but no identity handler is registered " +
+                    "(LoginWalletBridge) - Google Play identity setup is incomplete.");
+#else
                     "login Connect Wallet pressed but no wallet-connect handler is registered " +
                     "(LoginWalletBridge) - WalletSkinBootstrap.Install did not run?");
+#endif
                 return AuthOutcome.Fail("Wallet connect isn't available in this build.");
             }
             try

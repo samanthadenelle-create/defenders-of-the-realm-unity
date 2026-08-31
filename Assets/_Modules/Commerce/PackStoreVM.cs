@@ -1,7 +1,7 @@
 // =============================================================================
 // PackStoreVM — the pack-store's game-state seam (WO-744 MVVM migration).
 // -----------------------------------------------------------------------------
-// Assembly: DeNelle.Wallet   Namespace: DeNelle.Wallet
+// Assembly: DeNelle.Commerce   Namespace: DeNelle.Wallet
 //
 // Extracted from PackStore (the View) so the View stops naming GameStateService
 // and the MarketplaceInteractor scene-resolve (FindFirstObjectOfType). The MONEY
@@ -251,7 +251,7 @@ namespace DeNelle.Wallet
         }
 
         // ---- Cross-asmdef grant seams (ECON-01 / ECON-02) -------------------
-        // PackStoreVM lives in DeNelle.Wallet, which cannot reference DeNelle.Cosmetics
+        // PackStoreVM lives in DeNelle.Commerce, which cannot reference DeNelle.Cosmetics
         // (Cosmetics -> Wallet already, so a back-reference would be circular) nor DeNelle.Village
         // (one-way asmdef guard). So the canonical, persisted grant services are reached by
         // AppDomain type-name reflection. Every miss Fails LOUDLY: by the time ApplyPackContents

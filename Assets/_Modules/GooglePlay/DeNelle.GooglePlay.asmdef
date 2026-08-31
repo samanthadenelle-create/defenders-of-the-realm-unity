@@ -1,0 +1,21 @@
+{
+    "name": "DeNelle.GooglePlay",
+    "rootNamespace": "DeNelle.GooglePlay",
+    "references": [
+        "DeNelle.Core",
+        "DeNelle.Commerce",
+        "DeNelle.PaymentProviders.GooglePlay",
+        "GoogleSignIn",
+        "UnityEngine.UI",
+        "Unity.TextMeshPro"
+    ],
+    "includePlatforms": ["Android", "Editor"],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": ["GOOGLE_PLAY"],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

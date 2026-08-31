@@ -112,6 +112,12 @@ namespace DeNelle.Core.Payments.Providers
         {
             try
             {
+                if (!await GooglePlayIdentityBridge.EnsureSignedInAsync())
+                {
+                    CompleteBeforeOrder(productId, sku,
+                        "Sign in with Google to purchase and restore this item.");
+                    return;
+                }
                 var binding = await _bindingSource.FetchAccountBindingAsync();
                 if (string.IsNullOrWhiteSpace(binding) || binding.Length != 64 ||
                     _store.GooglePlayStoreExtendedService == null)
@@ -138,9 +144,14 @@ namespace DeNelle.Core.Payments.Providers
             _callbacks.Remove(productId);
         }
 
-        public void RestorePurchases(Action<bool, string> onComplete)
+        public async void RestorePurchases(Action<bool, string> onComplete)
         {
             if (onComplete == null) throw new ArgumentNullException(nameof(onComplete));
+            if (!await GooglePlayIdentityBridge.EnsureSignedInAsync())
+            {
+                onComplete(false, "Sign in with Google to restore purchases.");
+                return;
+            }
             if (!_connected)
             {
                 onComplete(false, _failure);

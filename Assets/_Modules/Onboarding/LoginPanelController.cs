@@ -242,7 +242,12 @@ namespace DeNelle.Onboarding
                 TextAlignmentOptions.Center, 0.06f, 0.94f);
             _status.raycastTarget = false;
 
-            _connectWallet = ElarionUiKit.BuildObsidianButton(body, "Connect Wallet",
+            _connectWallet = ElarionUiKit.BuildObsidianButton(body,
+#if GOOGLE_PLAY
+                "Continue with Google",
+#else
+                "Connect Wallet",
+#endif
                 ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Yellow,
                 new Vector2(0.08f, 0.38f), new Vector2(0.92f, 0.56f), OnConnectWallet);
 
@@ -290,8 +295,13 @@ namespace DeNelle.Onboarding
                     $"wallet connect did not resolve within {ConnectUiTimeoutSeconds}s - restoring the login " +
                     "surface (guest escape was live throughout).");
                 SetBusy(false);
+#if GOOGLE_PLAY
+                SetStatus("Google sign-in did not respond. Try Continue with Google again, " +
+                          "or tap Play as Guest to start now.", info: false);
+#else
                 SetStatus("Your wallet did not respond. Open your wallet app and try Connect Wallet again, " +
                           "or tap Play as Guest to start now.", info: false);
+#endif
                 WatchLateConnect(attempt);
                 return;
             }

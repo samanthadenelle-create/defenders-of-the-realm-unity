@@ -611,6 +611,7 @@ namespace DeNelle.Core.State
                 TroopLevels = s.TroopLevels != null ? new Dictionary<string, int>(s.TroopLevels) : null,   // WO-771.9 — per-troop upgrade levels (additive default-on-read)
                 GearLevels = s.GearLevels != null ? new Dictionary<string, int>(s.GearLevels) : null,   // WO-808 — per-instance gear power levels (additive default-on-read)
                 EverBuiltStructureIds = s.EverBuiltStructureIds != null ? new List<string>(s.EverBuiltStructureIds) : null,   // WO-834 — ever-player-built ledger (v36; monotonic — the blank-town baked-twin gate input)
+                EverAcquiredItemIds = s.EverAcquiredItemIds != null ? new List<string>(s.EverAcquiredItemIds) : null,
                 DefenseReports = s.DefenseReports != null ? new List<DeNelle.Core.Defense.DefenseOutcomeRecord>(s.DefenseReports) : null,   // WO-1026 — defence-report ring buffer (additive default-on-read; NO schema bump)
                 LastSiegeUnixMs = s.LastSiegeUnixMs,   // WO-1026 — siege cadence clock (SEPARATE from LastHarvestClaimMs by design — WO-1147)
                 EverCompletedRaid = s.EverCompletedRaid,   // WO-823 Phase E (v41) - has this save ever finished a raid; the ONE input to the first-raid soft gate
@@ -732,6 +733,7 @@ namespace DeNelle.Core.State
             if (p.TroopLevels != null) s.TroopLevels = p.TroopLevels;   // WO-771.9 — per-troop upgrade levels; absent → keep the fresh empty dict (all baseline)
             if (p.GearLevels != null) s.GearLevels = p.GearLevels;   // WO-808 — per-instance gear levels; absent → keep the fresh empty dict (all baseline)
             if (p.EverBuiltStructureIds != null) s.EverBuiltStructureIds = p.EverBuiltStructureIds;   // WO-834 — ever-built ledger (v36); absent → keep the fresh empty list (MigrateToV36 seeds real pre-v36 saves before this runs)
+            if (p.EverAcquiredItemIds != null) s.EverAcquiredItemIds = p.EverAcquiredItemIds;
             if (p.DefenseReports != null)
             {
                 // WO-1026 — defence reports; absent → keep the fresh empty list (a pre-WO-1026
@@ -923,6 +925,41 @@ namespace DeNelle.Core.State
             _state.BoundWallet = address;
             PlayerChanged.Invoke();
             Save();
+        }
+
+        /// <summary>
+        /// Binds a non-wallet player id only after the backend has verified its provider credential
+        /// and minted a session. Kept separate from BindWallet so a Play identity can never acquire
+        /// wallet attestation and wallet-only artifacts retain their existing path unchanged.
+        /// </summary>
+        public bool BindVerifiedExternalIdentity(string playerId)
+        {
+            if (!IsGooglePlayIdentity(playerId))
+            {
+                FlowTrace.Fail("Auth", "external identity bind refused: unsupported player-id shape.");
+                return false;
+            }
+            if (_state == null) return false;
+            if (_state.BoundWallet != playerId)
+            {
+                _state.BoundWallet = playerId;
+                PlayerChanged.Invoke();
+                Save();
+            }
+            return true;
+        }
+
+        public static bool IsGooglePlayIdentity(string id)
+        {
+            const string prefix = "play-";
+            if (string.IsNullOrEmpty(id) || id.Length != prefix.Length + 64 ||
+                !id.StartsWith(prefix, StringComparison.Ordinal)) return false;
+            for (int i = prefix.Length; i < id.Length; i++)
+            {
+                char c = id[i];
+                if (!((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f'))) return false;
+            }
+            return true;
         }
 
         /// <summary>playerSlice <c>chooseHero</c> — lock in the hero class. Idempotent.</summary>
@@ -1227,6 +1264,7 @@ namespace DeNelle.Core.State
             s.RaidCooldowns = new List<RaidCooldownRecord>();  // WO-728 — New Game: no camp is recovering, every raid is available. AUDIT NOTE: this line is what stops "Start New" inheriting the previous save's lockouts — exactly the Settlements defect found 2026-08-02 directly below.
             s.EverCompletedRaid = false;                      // WO-823 Phase E (v41) - New Game: no raid has ever been finished, so the FIRST raid is softened to 3 deployable slots. RaidDeployController.ReconcileRaidEnd stamps it true at the first raid exit (victory, retreat OR hero death) and the full army cap applies from then on, permanently.
             s.EverBuiltStructureIds = new List<string>();     // WO-834 (v36) — New Game: nothing ever built. With StrategicPlacementMigrated=true (above) this makes every baked twin's surface gate CLOSED = the truly blank Build-Your-Own town; choosing Default Town clears the marker and the migration writer then grants the template ids.
+            s.EverAcquiredItemIds = new List<string>();       // New Game: no item-discovery progression earned.
             s.Tribes = new List<DeNelle.Core.World.TribeState>();          // WO-160 (v34) — New Game: no claimed tribe progress (managers re-seed from defs).
             s.Wards = new List<DeNelle.Core.World.WardStoneState>();       // WO-112 (v34) — New Game: no relit wards (base reach only).
             s.Arena = ArenaProgress.Empty;                    // ARENA MVP (v34) — New Game: zeroed W/L ledger.
@@ -1534,6 +1572,7 @@ namespace DeNelle.Core.State
             string id = _state?.BoundWallet;
             if (string.IsNullOrEmpty(id)) return;
             if (id.StartsWith(GuestWalletPrefix, StringComparison.Ordinal)) return;
+            if (IsGooglePlayIdentity(id)) return;
             if (IsCloudIdentityShaped(id)) return;   // a real wallet-shaped key - leave it alone
 
             // Keep a small de-duplicated list rather than a single slot: a debug/dev bind
@@ -1582,9 +1621,14 @@ namespace DeNelle.Core.State
                 {
                     _warnedUnattested = true;
                     FlowTrace.Warn("Sync",
+#if GOOGLE_PLAY
+                        "the bound save key is identity-shaped but no verified Google Play session is " +
+                        "available on this device - staying LOCAL-ONLY. Sign in again to resume cloud sync.");
+#else
                         "the bound save key is wallet-SHAPED but no real wallet has attested it on this " +
                         "device - staying LOCAL-ONLY. Tap Connect Wallet once to re-attest and resume " +
                         "cloud sync. (This is also what stops a devnet-stub address from keying a shared row.)");
+#endif
                 }
                 return false;
             }
@@ -1613,7 +1657,8 @@ namespace DeNelle.Core.State
         /// server-side). The guest rail exists because the front door offers "Play as Guest" and a tester
         /// who cannot save is a tester we lose. The two rails are chosen by the SHAPE of the bound id, never
         /// by which headers arrive, so a caller can never downgrade a wallet row onto the weak rail.</summary>
-        private bool CanCloudSync() => IsRealWalletConnected() || IsGuestIdentity(_state?.BoundWallet);
+        private bool CanCloudSync() => IsRealWalletConnected() || IsGuestIdentity(_state?.BoundWallet) ||
+                                       IsGooglePlayIdentity(_state?.BoundWallet);
 
         // ── Lifecycle hooks ───────────────────────────────────────────────
         private void OnApplicationPause(bool paused)

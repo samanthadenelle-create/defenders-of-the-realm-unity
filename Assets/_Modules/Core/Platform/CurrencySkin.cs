@@ -127,6 +127,16 @@ namespace DeNelle.Core.Platform
 
         /// <summary>The Solana/$SKR skin — the Seekerthon submission skin.</summary>
         public static CurrencySkin SkrDefault { get; } = new CurrencySkin(
+#if GOOGLE_PLAY
+            skinId: "wallet",
+            currencySymbol: "",
+            currencyName: "Store credit",
+            authMode: SkinAuthMode.PiSdk,
+            brandingKey: "",
+            storeCtaVerb: "Continue",
+            identityKeyKind: SkinIdentityKeyKind.PiUid,
+            bindIdentityOnAuth: false);
+#else
             skinId: "skr",
             currencySymbol: "$SKR",
             currencyName: "SKR",
@@ -138,5 +148,6 @@ namespace DeNelle.Core.Platform
             // Solana-wallet-native (playerId = base58 pubkey), so binding the wallet pubkey as the
             // identity is correct here. The Pi default stays false to preserve production identity.
             bindIdentityOnAuth: true);
+#endif
     }
 }

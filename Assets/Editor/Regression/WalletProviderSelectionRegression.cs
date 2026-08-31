@@ -13,8 +13,8 @@
 //      real provider and throwing NotSupportedException out of Connect (F8
 //      capture 2026-08-06 10:41:22) precisely because it measured this instead of
 //      the selector. Check 3 now measures the selector.
-//   2. Packages/manifest.json carries the pinned magicblock-labs SDK
-//      (com.solana.unity_sdk @ a tagged git URL - never a floating branch).
+//   2. The magicblock-labs SDK is reproducibly pinned: either a tagged git URL,
+//      or the embedded Play-isolation copy with the exact version + commit fingerprint.
 //   3. WalletService auto-select keys off SolanaWalletProvider
 //      .IsSupportedOnThisPlatform - compiled from the same
 //      "#if SOLANA_SDK && UNITY_ANDROID && !UNITY_EDITOR" that guards the working
@@ -60,7 +60,9 @@ namespace DeNelle.Editor
             string root = Path.GetFullPath(Path.Combine(Application.dataPath, ".."));
             string projectSettings = Path.Combine(root, "ProjectSettings/ProjectSettings.asset");
             string manifest = Path.Combine(root, "Packages/manifest.json");
+            string embeddedPackage = Path.Combine(root, "Packages/com.solana.unity_sdk/package.json");
             string walletDir = Path.Combine(Application.dataPath, "_Modules/Wallet");
+            string walletAsmdef = Path.Combine(walletDir, "DeNelle.Wallet.asmdef");
             string providerPath = Path.Combine(walletDir, "SolanaWalletProvider.cs");
             string servicePath = Path.Combine(walletDir, "WalletService.cs");
             string packStorePath = Path.Combine(walletDir, "PackStore.cs");
@@ -68,19 +70,22 @@ namespace DeNelle.Editor
             string mwaManifest = Path.Combine(Application.dataPath,
                 "Plugins/Android/MobileWalletAdapter.androidlib/AndroidManifest.xml");
 
-            // -- 1. Scripting defines: Android ON, Standalone OFF -------------
+            // -- 1. SDK define is package-scoped, never persisted per platform --
             if (!File.Exists(projectSettings))
                 failures.Add("ProjectSettings.asset missing");
             else
             {
                 var defines = ReadDefineBlock(File.ReadAllLines(projectSettings));
-                if (!defines.TryGetValue("Android", out var androidDefines) ||
-                    !androidDefines.Contains("SOLANA_SDK"))
-                    failures.Add("SOLANA_SDK not in the Android scriptingDefineSymbols group");
-                if (defines.TryGetValue("Standalone", out var standaloneDefines) &&
-                    standaloneDefines.Contains("SOLANA_SDK"))
-                    failures.Add("SOLANA_SDK leaked into the Standalone define group (desktop must keep the stub)");
+                foreach (var pair in defines)
+                    if (pair.Value.Contains("SOLANA_SDK"))
+                        failures.Add("SOLANA_SDK is persisted in the " + pair.Key +
+                                     " scriptingDefineSymbols group instead of being package-scoped");
             }
+            if (!File.Exists(walletAsmdef) ||
+                !Regex.IsMatch(File.ReadAllText(walletAsmdef),
+                    "\\\"name\\\"\\s*:\\s*\\\"com\\.solana\\.unity_sdk\\\"[\\s\\S]{0,160}?" +
+                    "\\\"define\\\"\\s*:\\s*\\\"SOLANA_SDK\\\""))
+                failures.Add("DeNelle.Wallet no longer derives SOLANA_SDK from the pinned package versionDefine");
 
             // -- 2. Pinned SDK package ----------------------------------------
             if (!File.Exists(manifest))
@@ -91,7 +96,19 @@ namespace DeNelle.Editor
                 if (!manifestText.Contains("\"com.solana.unity_sdk\""))
                     failures.Add("com.solana.unity_sdk missing from Packages/manifest.json");
                 else if (!manifestText.Contains("Solana.Unity-SDK.git#v"))
-                    failures.Add("com.solana.unity_sdk is not pinned to a tagged git version (floating ref)");
+                {
+                    bool embedded = manifestText.Contains(
+                        "\"com.solana.unity_sdk\": \"file:com.solana.unity_sdk\"");
+                    string packageText = File.Exists(embeddedPackage)
+                        ? File.ReadAllText(embeddedPackage)
+                        : string.Empty;
+                    bool pinnedEmbeddedCopy = embedded &&
+                        Regex.IsMatch(packageText, "\\\"version\\\"\\s*:\\s*\\\"1\\.2\\.9\\\"") &&
+                        packageText.Contains("3d139411ef2b0b0cad451dd97e63c609fad63ea0");
+                    if (!pinnedEmbeddedCopy)
+                        failures.Add("com.solana.unity_sdk is neither a tagged git dependency nor the " +
+                                     "approved embedded v1.2.9 commit 3d139411 copy");
+                }
             }
 
             // -- 3. WalletService selection -----------------------------------

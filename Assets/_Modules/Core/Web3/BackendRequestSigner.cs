@@ -100,6 +100,27 @@ namespace DeNelle.Core.Web3
             _sessionWallet = null;
             _sessionExpiresUtc = DateTime.MinValue;
         }
+
+        /// <summary>
+        /// Installs a bearer session returned by a server endpoint that already verified an external
+        /// identity credential. This never accepts guest ids and never verifies credentials locally;
+        /// the only intended caller is the GOOGLE_PLAY identity assembly after /api/auth/google-session.
+        /// </summary>
+        public static bool InstallVerifiedSession(string playerId, string token, string expiresAt)
+        {
+            if (string.IsNullOrWhiteSpace(playerId) || string.IsNullOrWhiteSpace(token) ||
+                !DateTime.TryParse(expiresAt, null,
+                    System.Globalization.DateTimeStyles.AdjustToUniversal |
+                    System.Globalization.DateTimeStyles.AssumeUniversal, out var expiry) ||
+                expiry <= DateTime.UtcNow + SessionSkew)
+                return false;
+
+            _sessionWallet = playerId.Trim();
+            _sessionToken = token.Trim();
+            _sessionExpiresUtc = expiry.ToUniversalTime();
+            FlowTrace.Step("Auth", "verified external identity session installed in memory.");
+            return true;
+        }
         private const int    RequestTimeoutSeconds = 15;
         private const string GuestWalletPrefix = "guest-local-";
 
@@ -167,6 +188,18 @@ namespace DeNelle.Core.Web3
                 req.SetRequestHeader("X-Guest-Id", playerId);
                 return true;
             }
+
+            // A play-* id is minted only after /api/auth/google-session verifies Google's token.
+            // Compile-scope this exception: non-GOOGLE_PLAY artifacts retain the invariant that
+            // every non-guest identity must be backed by the current real wallet signer.
+#if GOOGLE_PLAY
+            if (GameStateService.IsGooglePlayIdentity(playerId))
+            {
+                if (TryAttachCachedSession(req, playerId)) return true;
+                Debug.LogWarning("[BackendAuth] Google Play identity has no live session - aborting request.");
+                return false;
+            }
+#endif
 
             var signer = CoreServices.WalletSigner;
             if (signer == null || !signer.CanSign)
