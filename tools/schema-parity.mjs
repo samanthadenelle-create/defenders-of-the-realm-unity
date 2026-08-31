@@ -120,14 +120,18 @@ async function readDeployed(sql, tableNames) {
         let col = null;
         let vals = null;
 
-        const many = /\(\(?([a-z_]+)\s*=\s*ANY\s*\(ARRAY\[([^\]]*)\]/i.exec(r.def);
+        // Match only a WHOLE enum constraint. A compound relational check such as
+        // `(scope='account' AND cardinality(categories)=0) OR ...` also contains
+        // enum-looking fragments; accepting its first fragment overwrote the real
+        // scope constraint and falsely reported the live DB as narrower.
+        const many = /^CHECK\s*\(\(+([a-z_]+)\s*=\s*ANY\s*\(ARRAY\[([^\]]*)\]\)\)+\)$/i.exec(r.def);
         if (many) {
             col = many[1];
             vals = many[2].split(',')
                 .map(v => v.trim().replace(/::text/g, '').replace(/^'|'$/g, ''))
                 .filter(Boolean);
         } else {
-            const one = /\(\(?([a-z_]+)\s*=\s*'([^']*)'(?:::[a-z ]+)?\)?\)/i.exec(r.def);
+            const one = /^CHECK\s*\(\(+([a-z_]+)\s*=\s*'([^']*)'(?:::[a-z ]+)?\)+\)$/i.exec(r.def);
             if (one) { col = one[1]; vals = [one[2]]; }
         }
 
