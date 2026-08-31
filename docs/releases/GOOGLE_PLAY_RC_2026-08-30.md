@@ -182,3 +182,10 @@ deadline as a submission blocker for this AAB. The Console remains authoritative
 
 The exact 26-row product contract and eight-product first Internal-test activation set are recorded
 in `docs/releases/GOOGLE_PLAY_PRODUCT_CATALOG_2026-08-30.md`.
+
+Production deployment `dpl_DdECbbCWFmtyWFwHjhNEhY4Z6FFV` adds the exact package name and a
+separately generated cryptographically random account-binding key as sensitive configuration.
+`GOOGLE_PLAY_BILLING_ENABLED` and the service-account credential remain absent. A production verify
+probe returns `503 PLAY_BILLING_UNAVAILABLE`, proving these preparatory values did not activate the
+money rail. The preceding identity deployment `dpl_BcqvZx4CrFSM7PGc8UysiPRRKRDx` is the immediate
+rollback target.
