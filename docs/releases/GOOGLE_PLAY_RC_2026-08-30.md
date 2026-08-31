@@ -124,3 +124,28 @@ reached `READY` and their routes were probed. Outgoing production deployment IDs
 This closes code/site deployment, not Console configuration. Play OAuth, Publisher API, RTDN
 audience/service-account identity, product catalogue, and billing enable flags remain intentionally
 unset until Internal-track and licensed-device verification are ready.
+
+## Play signing identity and void safety-net deployment — 2026-08-30
+
+Commit `dcd25e9fe` was pushed after the full shared-tree gate passed: `COMPILE_GATE_OK`,
+`REGRESSION_OK 332/332`, `CHECKIN_SUITE_OK 22/22`, EditMode `1029/1029`, and PlayMode `6/6`.
+The PlayMode pass includes the stale Addressables off-hand completion fix; no authored shield pose,
+scale, registry row, or offset value was changed.
+
+- Migration `0016` is applied and live schema parity is `SCHEMA_PARITY_OK 42 table(s)`.
+- The Voided Purchases pull endpoint durably deduplicates and quarantines evidence but performs no
+  automatic entitlement reversal. It independently requires
+  `GOOGLE_PLAY_VOIDED_RECONCILIATION_ENABLED=true` and remains disabled.
+- Production API/WebGL deployment `dpl_APcmeo5LMe18dqdsSsMouMQSnEoo` is `READY`; outgoing rollback
+  deployment was `dpl_9VAD85zaBih91ecQxM2tYbVsW3us`.
+- The production Digital Asset Links response contains four SHA-256 fingerprints: the retained
+  direct/Seeker certificate plus Play's deployment, quantum hybrid-classical, and hybrid-PQC
+  certificates. Live response verification confirmed package
+  `com.denellestudios.echoesofelarion` and all four exact fingerprints.
+- An unauthenticated production call to `/api/admin/google-play-voided-reconcile` returns the
+  expected quiet `400 Unauthorized`; no reconciliation run or value mutation occurred.
+
+The Play deployment certificate SHA-1 for the current Seeker/internal-test path is
+`84:D4:D2:09:58:B6:A0:61:39:9B:B5:FF:28:86:05:23:49:6A:72:22`. Google OAuth must bind the Android
+client to the Play App Signing certificate, not the upload certificate. Quantum hybrid SHA-1 values
+are retained in the exported public certificate bundle for additional Android OAuth client entries.
