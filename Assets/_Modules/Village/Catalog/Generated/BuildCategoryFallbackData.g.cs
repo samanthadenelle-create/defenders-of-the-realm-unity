@@ -6,8 +6,8 @@ namespace DeNelle.Village
 {
     public static class BuildCategoryFallbackData
     {
-        public const string SourceSha256 = "dc2e46755167ce5c93cc93b21fa7c9c908758dbe0a764b08636dab82b4c9bd01";
-        public const int SourceByteLength = 7435;
+        public const string SourceSha256 = "d757031fdee1d54aad200f3e381c8b4e13e21f09b3fa6294b6b771fed942b29f";
+        public const int SourceByteLength = 7539;
         public const int SourceCategoryCount = 5;
         public const int SourceVersion = 5;
         public const string RegenerateCommand = "powershell -NoProfile -File .\\run-unity-method.ps1 -Method DeNelle.Editor.BuildCategoryFallbackGenerator.Generate -LogName build-category-fallback-gen.log -ExpectMarker BUILD_CATEGORY_FALLBACK_GEN_OK";
