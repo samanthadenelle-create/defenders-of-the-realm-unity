@@ -175,6 +175,17 @@ namespace DeNelle.Core.UI
         }
 
         /// <summary>
+        /// Renews a legitimate long-lived hold's watchdog age without changing ownership or the
+        /// captured clock. Focused browsing surfaces call this while visible; a leaked/disabled
+        /// owner stops renewing and is still caught by the ordinary watchdog deadline.
+        /// </summary>
+        public static void Renew(Handle handle)
+        {
+            if (handle == null || !handle.IsHeld || !s_holds.Contains(handle)) return;
+            handle.AcquiredUnscaled = Time.unscaledTime;
+        }
+
+        /// <summary>
         /// Emergency release of EVERY outstanding hold, restoring the captured scale. For
         /// teardown paths that must never leave the engine frozen (quit to title, scene unload,
         /// the stuck-hold watchdog). Loud by design: a caller reaching this means something on

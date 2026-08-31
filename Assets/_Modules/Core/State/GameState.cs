@@ -602,6 +602,29 @@ namespace DeNelle.Core.State
         /// </summary>
         public bool EverCompletedRaid = false;
 
+        /// <summary>Monotonic item-possession history; spending an ingredient never erases discovery.</summary>
+        public List<string> EverAcquiredItemIds = new List<string>();
+
+        public bool MarkEverAcquired(string itemId)
+        {
+            if (string.IsNullOrEmpty(itemId)) return false;
+            if (EverAcquiredItemIds == null) EverAcquiredItemIds = new List<string>();
+            for (int i = 0; i < EverAcquiredItemIds.Count; i++)
+                if (string.Equals(EverAcquiredItemIds[i], itemId, System.StringComparison.OrdinalIgnoreCase))
+                    return false;
+            EverAcquiredItemIds.Add(itemId);
+            return true;
+        }
+
+        public bool HasEverAcquired(string itemId)
+        {
+            if (string.IsNullOrEmpty(itemId) || EverAcquiredItemIds == null) return false;
+            for (int i = 0; i < EverAcquiredItemIds.Count; i++)
+                if (string.Equals(EverAcquiredItemIds[i], itemId, System.StringComparison.OrdinalIgnoreCase))
+                    return true;
+            return false;
+        }
+
         /// <summary>
         /// WO-834 — record that <paramref name="itemId"/> has been player-built at least
         /// once (idempotent set-add, OrdinalIgnoreCase — catalog-id convention). Returns

@@ -643,6 +643,7 @@ namespace DeNelle.Core.State
             /// Append-only field at the END so older saves stay loadable.
             /// </summary>
             [JsonProperty("everBuiltStructureIds")] public List<string> EverBuiltStructureIds;
+            [JsonProperty("everAcquiredItemIds")] public List<string> EverAcquiredItemIds;
 
             // ── WO-1026 — PvE siege / defence reports (additive, NO schema bump) ──
             /// <summary>
