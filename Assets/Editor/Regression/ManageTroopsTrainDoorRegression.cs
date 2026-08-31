@@ -112,6 +112,14 @@ namespace DeNelle.Editor
                 // is only that the DOOR exists, so every gate is deliberately wide open.
                 throwaway.Onboarded = true;
                 throwaway.BarracksLevel = 3;
+                // The VM derives visible categories from THIS town's placed layout. BarracksLevel
+                // is account progression, not proof that a barracks stands in the current town.
+                // Keep the fixture honest: this is the "founded town with a working barracks"
+                // described above, not an impossible empty-town/account-level hybrid.
+                throwaway.BaseLayout = new List<PlacedStructureData>
+                {
+                    new PlacedStructureData("barracks", 2, 2, 0, 1),
+                };
                 throwaway.Wood = 100000;
                 throwaway.Iron = 100000;
                 var bal = throwaway.Resources;

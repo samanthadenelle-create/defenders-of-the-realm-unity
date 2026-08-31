@@ -32,8 +32,7 @@
 //
 // Proves, with REAL types, the REAL catalog and the REAL VM (no play mode):
 //   0. premise — the catalog still carries at least one per-instance level ladder;
-//   1. an EMPTY BaseLayout yields NO tabs (the gate is real, and this is the state
-//      the owner reported from);
+//   1. an EMPTY BaseLayout still yields Defense (WO-1285 discoverability);
 //   2. ONE placed ladder structure makes ManageTab.Defense appear — the case that
 //      catches a genuinely orphaned door;
 //   3. the Defense tab emits a real Upgrade row for it, with a live Activate; a
@@ -175,18 +174,16 @@ namespace DeNelle.Editor
                 throwaway.Onboarded = true;
                 throwaway.BaseLayout = new List<PlacedStructureData>();
 
-                // ── CASE 1: empty town -> no categories. The gate is real. ────
-                // This is the exact state the owner reported from (ResetToNewGame, blank town).
-                // It must stay TRUE: if this ever fails, the disclosure contract has inverted and
-                // a fresh player is being shown categories for things they do not own.
+                // ── CASE 1: empty town -> actionable Defense empty state. ─────
+                // WO-1285: hiding Defense until AFTER a defense is placed makes the route circular.
                 var empty = new ManageScreenVM();
                 empty.Rebuild();
-                if (empty.VisibleTabs.Count != 0)
-                    failures.Add("[case 1] an EMPTY BaseLayout produced " + empty.VisibleTabs.Count + " visible tab(s) " +
-                                 "(" + Describe(empty.VisibleTabs) + "). Progressive disclosure says every category is " +
-                                 "absent until something is placed; the Build-new route is the fresh-save answer.");
+                if (empty.VisibleTabs.Count != 1 || !empty.VisibleTabs.Contains(ManageTab.Defense))
+                    failures.Add("[case 1] an EMPTY BaseLayout did not produce exactly the Defense empty-state tab " +
+                                 "(tabs: " + Describe(empty.VisibleTabs) + "). A fresh-town player would again need " +
+                                 "to place a defense before discovering the route used to place one.");
                 else
-                    log.AppendLine("  case 1 OK - empty BaseLayout -> 0 visible tabs (correctly gated fresh save)");
+                    log.AppendLine("  case 1 OK - empty BaseLayout -> Defense empty state (discoverable first action)");
 
                 // ── CASE 2: place ONE. The Defense tab must appear. THE case. ──
                 throwaway.BaseLayout.Add(new PlacedStructureData(subject.id, 3, 7, 0, 1));
@@ -285,7 +282,7 @@ namespace DeNelle.Editor
         {
             if (failures.Count == 0)
             {
-                reason = "MANAGE DEFENSE DOOR OK - an empty town shows no categories (correctly gated), placing one " +
+                reason = "MANAGE DEFENSE DOOR OK - an empty town shows the actionable Defense empty state, placing one " +
                          "ladder structure raises the Defense tab, and that tab emits a tappable Upgrade row keyed " +
                          "through PlacedUpgradeKey";
                 Debug.Log("MANAGE_DEFENSE_DOOR_OK\n" + log);

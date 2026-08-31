@@ -43,7 +43,7 @@ namespace DeNelle.Editor.Regression
                 return Fail("unfinished Stone Gate card is exposed instead of presentation-gated", out reason);
             if (!browser.Contains("IsCollectionItemVisible") ||
                 !browser.Contains("ProgressionUnlocks.IsUnlocked(itemId)") ||
-                !browser.Contains("string.IsNullOrEmpty(lockReason) ||"))
+                !browser.Contains("!string.IsNullOrEmpty(lockReason) && !ProgressionUnlocks.IsUnlocked(itemId)"))
                 return Fail("progression-locked collection entries are not hidden-before/unhidden-after authoritative unlock", out reason);
             if (!browser.Contains("CollectionHasVisibleItems(c)") ||
                 !browser.Contains("var entry = CatalogRegistry.Get(item.ItemId)") ||

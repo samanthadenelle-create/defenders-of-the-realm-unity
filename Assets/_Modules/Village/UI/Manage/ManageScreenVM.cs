@@ -221,8 +221,9 @@ namespace DeNelle.Village.UI
         /// <summary>The selected tab's upgrade browse list, affordable-first.</summary>
         public readonly List<BrowseRowVM> BrowseRows = new List<BrowseRowVM>(32);
 
-        /// <summary>Categories earned by structures standing in the current town.  Empty/locked
-        /// categories are absent rather than rendered as dead tabs.</summary>
+        /// <summary>Categories earned by structures standing in the current town. Defense is the
+        /// one intentional empty-state exception: it remains visible before the first placement
+        /// so a fresh-town player can discover the defensive build route.</summary>
         public readonly List<ManageTab> VisibleTabs = new List<ManageTab>(4);
 
         /// <summary>Last command's player-facing message (ASCII), or null. The View toasts it.</summary>
@@ -347,7 +348,9 @@ namespace DeNelle.Village.UI
                 }
                 if (HasLevelLadder(kv.Value)) defense = true;
             }
-            if (defense) VisibleTabs.Add(ManageTab.Defense);
+            // WO-1285: hiding Defense until after the first defense is placed makes its route
+            // circular. Keep one actionable empty-state tab; its View CTA opens the Defense builder.
+            VisibleTabs.Add(ManageTab.Defense);
             if (buildings) VisibleTabs.Add(ManageTab.Buildings);
             if (troops) VisibleTabs.Add(ManageTab.Troops);
             if (research) VisibleTabs.Add(ManageTab.Research);
@@ -360,16 +363,10 @@ namespace DeNelle.Village.UI
             // sent to the "Build new" route), and the tabs appear as soon as something is placed.
             // A DEFENSE tab specifically needs a placed id whose repo.maxLevel > 1 — baked scene
             // walls and towers are NOT BaseLayout records and therefore never raise it.
-            if (VisibleTabs.Count == 0)
-                FlowTrace.Step("Manage",
-                    "visible tabs: NONE - " + placed.Count + " placed type(s) in this town's " +
-                    "BaseLayout. Every category is absent by design until something is placed; " +
-                    "the screen offers the Build-new route instead.");
-            else
-                FlowTrace.Step("Manage",
-                    "visible tabs: " + string.Join(", ", VisibleTabs) + " (from " + placed.Count +
-                    " placed type(s); defense=" + defense + " buildings=" + buildings +
-                    " troops=" + troops + " research=" + research + ").");
+            FlowTrace.Step("Manage",
+                "visible tabs: " + string.Join(", ", VisibleTabs) + " (from " + placed.Count +
+                " placed type(s); defenseOwned=" + defense + " buildings=" + buildings +
+                " troops=" + troops + " research=" + research + ").");
         }
 
         private static bool HasAuthoredPerk(BuildingUpgradeDef def)

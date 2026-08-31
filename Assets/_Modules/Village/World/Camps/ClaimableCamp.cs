@@ -550,7 +550,10 @@ namespace DeNelle.Village.World.Camps
                     // V — the node must RENDER, else the hero can't see a resource to harvest
                     // (the invisible-marker class). AutoBuildVisual builds it active-side; a Warn
                     // self-reports if it produced no enabled renderer with a mesh.
-                    VerifyNodeRenders(go, $"node {CampNodeResources[idx]}", spots[idx]);
+                    // MineNodeVisual builds from Start(), after this activation callback returns.
+                    // A synchronous check can only inspect the pre-build GameObject.
+                    StartCoroutine(VerifyNodeRendersAfterStart(
+                        go, $"node {CampNodeResources[idx]}", spots[idx]));
                 })) planted++;
             }
             FlowTrace.Step("Camp", $"{CampId} planted {planted}/{CampNodeResources.Length} direct-harvest node(s) in the courtyard.");
@@ -580,6 +583,15 @@ namespace DeNelle.Village.World.Camps
 
         // RETIRED (design pivot 2026-06-16) — no longer called. Kept so the counterattack
         // stage can be restored once attacker spawning at camp anchors is fixed.
+        /// <summary>Runs after MineNodeVisual.Start has had a frame to build its renderer tree.</summary>
+        private System.Collections.IEnumerator VerifyNodeRendersAfterStart(
+            GameObject go, string what, Vector3 localPos)
+        {
+            yield return null;
+            if (go == null) yield break;
+            VerifyNodeRenders(go, what, localPos);
+        }
+
         private void StartDefense()
         {
             if (_outpost == null) return;

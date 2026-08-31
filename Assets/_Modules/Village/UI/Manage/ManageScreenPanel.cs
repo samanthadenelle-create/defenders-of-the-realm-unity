@@ -765,7 +765,7 @@ namespace DeNelle.Village.UI
                 : "UPGRADES - what you can afford first");
             if (_vm.BrowseRows.Count == 0)
                 AddNoteRow(_vm.Tab == ManageTab.Defense
-                    ? "No placed towers can be upgraded yet. Max-level towers need no action."
+                    ? "No defenses are ready to upgrade. Build your first tower or wall here."
                     : "Nothing to upgrade on this tab yet.");
             else
             {

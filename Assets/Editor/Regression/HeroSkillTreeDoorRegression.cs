@@ -170,7 +170,13 @@ namespace DeNelle.Editor
 
             string activeBody = MethodBody(builder, "private void BuildTopTabs(")
                                 ?? MethodBody(builder, "private void BuildLegacyRail(");
-            if (activeBody == null) return;
+            if (activeBody == null)
+            {
+                failures.Add("[case 2] neither InventoryUIBuilder.BuildTopTabs nor BuildLegacyRail could be read. " +
+                             "The ordinal fixture is absent, so this case cannot prove the Skills label opens " +
+                             "RailSkills. This is a FAIL, not a skip.");
+                return;
+            }
 
             int labelIndex = LabelListIndexOf(activeBody, "KeyRailSkills");
             if (labelIndex < 0)
@@ -247,6 +253,7 @@ namespace DeNelle.Editor
                 string code = StripLineComments(File.ReadAllText(file));
                 if (code.IndexOf("PanelId.HeroSkillTree", StringComparison.Ordinal) < 0) continue;
                 if (code.IndexOf("PanelRouter.Open(PanelId.HeroSkillTree", StringComparison.Ordinal) < 0 &&
+                    code.IndexOf("PanelRouter.Open(DeNelle.Core.UI.PanelId.HeroSkillTree", StringComparison.Ordinal) < 0 &&
                     code.IndexOf("panelId = PanelId.HeroSkillTree", StringComparison.Ordinal) < 0) continue;
                 openers.Add(Path.GetFileName(file));
             }
