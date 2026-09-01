@@ -105,3 +105,33 @@ now present, parity-verified, and publicly readable.
   `R2_PARITY_OK targets=Android,StandaloneWindows64,WebGL objects=195`; anonymous access passed
   `R2_CHECK_OK`. The exact Windows catalog returned HTTP 200 with length 32. This keeps the earlier
   first-run “no internet” fix valid for the follow-up build as well.
+
+## Final felt-test and Firebase closure (2026-09-01)
+
+- Replaced the provisional Journey portraits with the owner's exact locked wide-card assets from
+  `quests.png` and `Raids.png`; both cards now use the shared full-card surface.
+- Equipment had no gameplay unlock requirement. The gray card was caused by a missing runtime panel
+  host, so `EquipmentPanelBootstrap` registers `PanelId.EquipmentPanel` before Hero opens.
+- Raised Skip Tutorial above the full-screen dialogue raycast canvas. The prior player log recorded
+  `SHOW`/`RESTORED` but no `TAPPED`, confirming pointer interception rather than a state bug.
+- The shared Close plate already contains `CLOSE`; live TMP labels are hidden when that authored plate
+  loads, removing the doubled word while preserving a missing-art fallback.
+- Removed the floating repair quad and world-space `Repair?` label that rendered edge-on as the yellow
+  line/squashed text. The subtle ground disc and actionable HUD repair prompt remain.
+- Defense reports use matching obsidian card wells instead of a raw black list beside a beige panel.
+- Mana, Vigor, and Focus remain intentional class-resource names for the second hero bar; they are not
+  unlock requirements.
+- Compile: `Builds/compile_final_ui_batch.log` — `COMPILE_GATE_OK`.
+- Full regression: `Builds/regression_final_ui_batch.log` — `REGRESSION_OK 341/341 suites`.
+- Windows build: `Builds/build_final_ui_batch.log` — `[DesktopBuild] SUCCEEDED`, 2,083 MB.
+  Fresh module hashes: Core `2922A2FDC2D15DA4D63A40F3D3D9C91B2F20B395A5398D5283562C68E4D0585E`,
+  HUD `4AAEDE713AABB58877FB57FE69984483FA3177A562759645BF86F466D3B943D0`, Village
+  `19168FBD00B2CA3775257609C8F20B4009B30DD35901F509D64CB15978B637A8`.
+- Tester APK version `2026.09.01.351238 (351238)`: 543,703,055 bytes, SHA-256
+  `8C9D1BB964557F22C596B122922483F61591BA0C6EDB13361F6149A015BFEAE3`.
+  `Builds/apk-build.log` records `[AndroidBuild] SUCCEEDED`; schema parity passed all 42 tables.
+- R2: `R2_PUSH_OK 49 uploaded (85.5 MB), 529 unchanged`; full parity passed with
+  `R2_PARITY_OK targets=Android,StandaloneWindows64,WebGL objects=228`.
+- Firebase App Distribution succeeded to group `testers`: release `2026.09.01.351238`, release ID
+  `43nnpnk9lad7g`. Console:
+  https://console.firebase.google.com/project/defenders-of-the-realm-echos/appdistribution/app/android:com.denellestudios.echoesofelarion/releases/43nnpnk9lad7g

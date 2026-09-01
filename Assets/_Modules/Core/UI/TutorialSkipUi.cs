@@ -47,7 +47,9 @@ namespace DeNelle.Core.UI
     public sealed class TutorialSkipUi : MonoBehaviour
     {
         private const float FadeSeconds = 0.2f;
-        private const int CanvasSortOrder = 4310;   // above mask/pointer, beside the strip band
+        // DialogueView is 4800 and owns a full-screen raycast surface. Skip used to
+        // remain visible below it but never received the pointer.
+        private const int CanvasSortOrder = 6000;
 
         // ── TOP-MIDDLE anchor (WO-1033) ───────────────────────────────────────
         // ANCHORS, never corner offsets: the mount's anchor is the screen FRACTION
@@ -141,6 +143,7 @@ namespace DeNelle.Core.UI
             var canvas = gameObject.AddComponent<Canvas>();
             canvas.renderMode = RenderMode.ScreenSpaceOverlay;
             canvas.sortingOrder = CanvasSortOrder;
+            canvas.overrideSorting = true;
             // Same scaler contract as HudAreasHost, so "reference px" means the same
             // thing here as it does for every other kit widget (MinTouchPx included).
             var scaler = gameObject.AddComponent<CanvasScaler>();

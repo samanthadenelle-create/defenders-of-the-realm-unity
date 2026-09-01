@@ -25,7 +25,6 @@ namespace DeNelle.HUD
             public string Purpose;
             public string Concept;
             public string ArtKey;
-            public string PortraitArtPath;
             public Func<bool> Available;
             public Action Open;
         }
@@ -105,8 +104,6 @@ namespace DeNelle.HUD
             var cardImage = button.GetComponent<Image>();
             var illustratedCard = string.IsNullOrEmpty(spec.ArtKey) ? null :
                 Resources.Load<Sprite>("UI/ElarionMedieval/cards/" + spec.ArtKey);
-            var portraitArt = string.IsNullOrEmpty(spec.PortraitArtPath) ? null :
-                Resources.Load<Sprite>(spec.PortraitArtPath);
             var cardFrame = illustratedCard != null ? illustratedCard :
                 Resources.Load<Sprite>("UI/ElarionMedieval/frames/card-frame-empty");
             if (cardImage != null && cardFrame != null)
@@ -151,27 +148,11 @@ namespace DeNelle.HUD
                 }
             }
 
-            // Quest/Raid artwork predates the new wide-card set and is portrait-authored.
-            // Seat it aspect-true inside the card's left illustration well instead of stretching
-            // it across the full destination surface; the shared frame remains the outer bound.
-            if (portraitArt != null)
-            {
-                var portraitGo = ElarionUiKit.AddImage(button.transform, "PortraitCardArt",
-                    new Vector2(0.035f, 0.10f), new Vector2(0.43f, 0.90f),
-                    available ? Color.white : new Color(.48f, .48f, .50f, .82f), false);
-                portraitGo.transform.SetAsFirstSibling();
-                var portraitImage = portraitGo.GetComponent<Image>();
-                portraitImage.sprite = portraitArt;
-                portraitImage.type = Image.Type.Simple;
-                portraitImage.preserveAspect = true;
-                portraitImage.raycastTarget = false;
-            }
-
             var face = button.GetComponentInChildren<TMP_Text>();
             if (face != null)
             {
                 var rt = face.rectTransform;
-                rt.anchorMin = new Vector2(illustratedCard != null || portraitArt != null ? 0.48f : 0.27f, 0.56f);
+                rt.anchorMin = new Vector2(illustratedCard != null ? 0.48f : 0.27f, 0.56f);
                 rt.anchorMax = new Vector2(0.93f, 0.86f);
                 rt.offsetMin = rt.offsetMax = Vector2.zero;
                 face.alignment = TextAlignmentOptions.Left;
@@ -181,7 +162,7 @@ namespace DeNelle.HUD
                 ElarionUiKit.FitSingleLine(face, 22f, 34f);
             }
 
-            if (illustratedCard == null && portraitArt == null)
+            if (illustratedCard == null)
             {
                 Sprite sprite = ConceptIconResolver.Resolve(spec.Concept);
                 var iconFrame = ElarionUiKit.AddImage(button.transform, "IdentityMedallion",
@@ -212,7 +193,7 @@ namespace DeNelle.HUD
                 available ? spec.Purpose : "Unavailable - complete its requirement first",
                 0.16f, 0.52f, available ? ElarionUi.Parchment : ElarionUi.ParchmentDim,
                 (int)ElarionUi.FontLabel, TextAlignmentOptions.Left,
-                illustratedCard != null || portraitArt != null ? 0.48f : 0.28f, 0.92f);
+                illustratedCard != null ? 0.48f : 0.28f, 0.92f);
             purpose.enableWordWrapping = false;
             purpose.overflowMode = TextOverflowModes.Ellipsis;
             ElarionUiKit.FitSingleLine(purpose, 16f, ElarionUi.FontLabel);
@@ -254,11 +235,11 @@ namespace DeNelle.HUD
                     return new List<Card>
                     {
                         new Card { Title = "Quests", Purpose = "Read active quests and realm rumors",
-                            Concept = "quest", PortraitArtPath = "HudIcons/hud_quest",
+                            Concept = "quest", ArtKey = "quests",
                             Available = () => PanelRouter.IsRegistered(PanelId.RumorBoard),
                             Open = () => PanelRouter.Open(PanelId.RumorBoard) },
                         new Card { Title = "Raids", Purpose = "Choose a camp and deploy your army", Concept = "raid",
-                            PortraitArtPath = "HudIcons/hud_raid", Available = () => true,
+                            ArtKey = "raids", Available = () => true,
                             Open = RaidEntryGate.RequestOpen }
                     };
                 default:

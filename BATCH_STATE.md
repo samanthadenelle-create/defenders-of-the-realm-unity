@@ -591,3 +591,20 @@ run the relevant offline/content regression plus compile gate, then rebuild the 
   `R2_PARITY_OK targets=Android,StandaloneWindows64,WebGL objects=195`; `R2_CHECK_OK`; exact Windows
   catalog HEAD is HTTP 200 / 32 bytes. The follow-up build therefore retains the Windows first-run
   connectivity fix rather than regressing it.
+
+## 7.17 — FINAL FELT-TEST UI + TESTER APK/FIREBASE (2026-09-01)
+
+- Journey uses the owner's exact locked `quests.png` and `Raids.png` wide-card art.
+- Fixed the remaining runtime UI causes: Equipment is registered by a persistent bootstrap (there is
+  no unlock requirement), Skip Tutorial renders above DialogueView's pointer surface, authored Close
+  art no longer receives a duplicate TMP word, repair selection no longer creates an edge-on yellow
+  quad/world label, and Defense Report uses matching obsidian wells.
+- Mana/Vigor/Focus are the intentional class-resource names for the second hero bar, not requirements.
+- Evidence: `COMPILE_GATE_OK`; `REGRESSION_OK 341/341`; Windows `[DesktopBuild] SUCCEEDED` (2,083 MB).
+- Fresh tester APK `2026.09.01.351238 (351238)` is 543,703,055 bytes, SHA-256
+  `8C9D1BB964557F22C596B122922483F61591BA0C6EDB13361F6149A015BFEAE3`.
+- Production dependency gate: `SCHEMA_PARITY_OK 42 table(s)`.
+- Content: `R2_PUSH_OK 49 uploaded (85.5 MB), 529 unchanged` and
+  `R2_PARITY_OK targets=Android,StandaloneWindows64,WebGL objects=228`.
+- Firebase App Distribution succeeded to `testers`: release `2026.09.01.351238`, ID
+  `43nnpnk9lad7g`.

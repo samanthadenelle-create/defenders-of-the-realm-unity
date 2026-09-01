@@ -25,13 +25,16 @@ namespace DeNelle.Editor.Regression
                 Require(skin, "Image.Type.Sliced");
                 Require(skin, "buttons/button-disabled-empty");
                 Require(skin, "buttons/close-ornate");
+                Require(skin, "bool authoredLabel");
+                Require(skin, "GetComponentsInChildren<TMP_Text>(true)");
+                Require(skin, "label.gameObject.SetActive(false)");
 
                 string buttons = File.ReadAllText("Assets/_Modules/Core/UI/ElarionUiKitObsidian.cs");
                 Require(buttons, "CanonicalizeButtonLabels");
                 Require(buttons, "GetComponentsInChildren<TMP_Text>(true)");
                 Require(buttons, "candidate.gameObject.SetActive(false)");
 
-                result = "Pause uses the compact medieval shell, one authoritative label per shared button, three approved actions, and authoritative WorldHold.";
+                result = "Pause uses the compact medieval shell, the baked Close label is the sole authority, three approved actions, and authoritative WorldHold.";
                 return true;
             }
             catch (Exception ex)

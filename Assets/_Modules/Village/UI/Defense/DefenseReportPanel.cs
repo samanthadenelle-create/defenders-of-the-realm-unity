@@ -133,7 +133,11 @@ namespace DeNelle.Village.UI
                 ? (Transform)layout.bodyRight
                 : FallbackZone(chrome.content.transform, "DetailWell",
                     new Vector2(0.320f, 0.22f), new Vector2(0.965f, 0.885f));
-            _onParchment = layout != null && layout.bodyRight != null;
+            // This report is one dark modal, not a parchment sheet pasted beside a
+            // black list. A matching authored card surface covers both inherited wells.
+            StyleObsidianWell(listZone, "ReportListWell");
+            StyleObsidianWell(detailZone, "ReportDetailWell");
+            _onParchment = false;
 
             _listContent = ElarionUiKit.MakeScrollZone(listZone, spacing: 8f, padding: 8).content;
             _detailContent = ElarionUiKit.MakeScrollZone(detailZone, spacing: 12f, padding: 16).content;
@@ -632,6 +636,22 @@ namespace DeNelle.Village.UI
             rt.anchorMin = min; rt.anchorMax = max;
             rt.offsetMin = Vector2.zero; rt.offsetMax = Vector2.zero;
             return go.transform;
+        }
+
+        private static void StyleObsidianWell(Transform zone, string name)
+        {
+            if (zone == null) return;
+            var go = ElarionUiKit.AddImage(zone, name, Vector2.zero, Vector2.one,
+                ElarionUiKit.ObsidianFill, rounded: true);
+            var img = go != null ? go.GetComponent<Image>() : null;
+            var frame = Resources.Load<Sprite>("UI/ElarionMedieval/frames/card-frame-empty");
+            if (img != null && frame != null)
+            {
+                img.sprite = frame;
+                img.type = Image.Type.Simple;
+                img.color = Color.white;
+                img.raycastTarget = false;
+            }
         }
 
         private static void ClearChildren(RectTransform host)

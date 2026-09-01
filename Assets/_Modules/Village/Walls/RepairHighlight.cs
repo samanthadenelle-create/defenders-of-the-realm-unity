@@ -6,10 +6,9 @@
 // spawns one of these per damaged structure (a soft "this is repairable" pulse)
 // and one brighter instance for the actively-selected structure.
 //
-// Built entirely at runtime from Unity primitives + an unlit URP material so it
-// needs no imported art. A thin floating ring of quads above the structure plus
-// a soft ground disc; it pulses (scale + alpha) so damaged structures read at a
-// glance while the player scans the village.
+// Built entirely at runtime from a Unity primitive + an unlit URP material so it
+// needs no imported art. A soft ground disc pulses (scale + alpha) so damaged
+// structures read at a glance without an edge-on floating strip or world text.
 //
 // Module isolation: DeNelle.Village only; no other-module / HUD coupling.
 // =============================================================================
@@ -20,7 +19,7 @@ using UnityEngine;
 namespace DeNelle.Village
 {
     /// <summary>
-    /// A runtime-built, prefab-free highlight marker that floats over a
+    /// A runtime-built, prefab-free ground highlight marker for a
     /// repairable village structure. Two intensities — a calm "repairable"
     /// pulse and a bright "selected" state — set through <see cref="SetSelected"/>.
     /// Spawned and pooled by <see cref="WallRepairController"/>.
@@ -31,19 +30,10 @@ namespace DeNelle.Village
         private static readonly Color RepairableColor = new Color(0.96f, 0.77f, 0.35f, 0.55f); // amber
         private static readonly Color SelectedColor = new Color(0.49f, 0.23f, 0.93f, 0.85f);   // violet
 
-        private MeshRenderer _ringRenderer;
         private MeshRenderer _discRenderer;
         private MaterialPropertyBlock _mpb;
         private static readonly int BaseColorId = Shader.PropertyToID("_BaseColor");
         private static readonly int ColorId = Shader.PropertyToID("_Color");
-
-        // DEF-226: a small floating world-space label so the amber ground disc is
-        // SELF-EXPLANATORY. Without it the marker reads as an unexplained green/gold
-        // glow (the transparent amber disc seen over green grass) — a mobile playtester
-        // saw exactly this and could not tell what it was. Code-built TextMesh billboard
-        // (no UXML, so it renders in WebGL builds), mirroring BuildingInteractable's bubble.
-        private TextMesh _label;
-        private Transform _labelRoot;
 
         private bool _selected;
         private float _radius = 2f;
@@ -85,46 +75,7 @@ namespace DeNelle.Village
             _discRenderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
             _discRenderer.receiveShadows = false;
 
-            // Floating ring — a billboard-ish quad held above the structure.
-            var ring = GameObject.CreatePrimitive(PrimitiveType.Quad);
-            ring.name = "Ring";
-            DestroyCollider(ring);
-            ring.transform.SetParent(transform, false);
-            ring.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
-            ring.transform.localPosition = new Vector3(0f, 0.5f, 0f);
-            _ringRenderer = ring.GetComponent<MeshRenderer>();
-            if (mat != null) _ringRenderer.sharedMaterial = mat;
-            else _ringRenderer.enabled = false;
-            _ringRenderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
-            _ringRenderer.receiveShadows = false;
-
-            BuildLabel();
             ApplyColor();
-        }
-
-        // DEF-226: a camera-facing "Repair" text label floating above the disc so the
-        // player instantly understands the marker. TextMesh + PromptBillboard (the same
-        // WebGL-safe pattern BuildingInteractable uses); no UXML/UIDocument (which do not
-        // render in player builds — PIPELINE_STATE.md §8).
-        private void BuildLabel()
-        {
-            var root = new GameObject("RepairLabel");
-            root.transform.SetParent(transform, false);
-            root.transform.localPosition = new Vector3(0f, 2.2f, 0f);
-            root.transform.localScale = Vector3.one * 0.5f;
-            _labelRoot = root.transform;
-
-            var tm = root.AddComponent<TextMesh>();
-            tm.text = "Repair";
-            tm.fontSize = 64;
-            tm.characterSize = 0.18f;
-            tm.anchor = TextAnchor.LowerCenter;
-            tm.alignment = TextAlignment.Center;
-            tm.color = new Color(1f, 0.92f, 0.62f, 1f);   // warm gold, matches the marker
-            _label = tm;
-
-            var billboard = root.AddComponent<PromptBillboard>();
-            billboard.Camera = Camera.main;
         }
 
         private static void DestroyCollider(GameObject go)
@@ -234,14 +185,6 @@ namespace DeNelle.Village
             _radius = radius;
             transform.position = center;
 
-            // Lift the label so it clears the structure it sits over (taller props get a
-            // higher label), reading as "this structure is repairable".
-            if (_labelRoot != null)
-            {
-                float lift = (target.TryGetWorldBounds(out var lb) ? lb.size.y : 2f) + 0.8f;
-                _labelRoot.localPosition = new Vector3(0f, Mathf.Clamp(lift, 1.6f, 7f), 0f);
-            }
-
             ApplyScale(1f);
         }
 
@@ -268,13 +211,6 @@ namespace DeNelle.Village
             float pulse = 1f + Mathf.Sin(_phase) * amp;
             ApplyScale(pulse);
 
-            // NO spin (owner 2026-05-27): the "ring" is a solid flat quad, so
-            // spinning it around its normal read as a rotating yellow SQUARE, which
-            // the owner mistook for an "under attack" cue. Hold it flat — the gentle
-            // scale pulse is enough "life." "Under attack" is now its own red signal
-            // (StructureAttackAlert); this amber marker only means "repairable".
-            if (_ringRenderer != null)
-                _ringRenderer.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
         }
 
         private void ApplyScale(float pulse)
@@ -282,25 +218,12 @@ namespace DeNelle.Village
             float d = _radius * 2f * pulse;
             if (_discRenderer != null)
                 _discRenderer.transform.localScale = new Vector3(d, d, 1f);
-            if (_ringRenderer != null)
-                _ringRenderer.transform.localScale = new Vector3(d * 0.82f, d * 0.82f, 1f);
         }
 
         private void ApplyColor()
         {
             Color c = _selected ? SelectedColor : RepairableColor;
-            ApplyColorTo(_discRenderer, new Color(c.r, c.g, c.b, c.a * 0.45f));
-            ApplyColorTo(_ringRenderer, c);
-
-            // DEF-226: keep the label readable + in step with the marker's state — a calm
-            // "Repair" affordance, a clearer call to action once the structure is picked.
-            if (_label != null)
-            {
-                _label.text  = _selected ? "Repair?" : "Repair";
-                _label.color = _selected
-                    ? new Color(0.86f, 0.74f, 1f, 1f)   // violet, matches the selected marker
-                    : new Color(1f, 0.92f, 0.62f, 1f);  // warm gold, matches the calm marker
-            }
+            ApplyColorTo(_discRenderer, new Color(c.r, c.g, c.b, c.a * 0.32f));
         }
 
         private void ApplyColorTo(MeshRenderer r, Color c)

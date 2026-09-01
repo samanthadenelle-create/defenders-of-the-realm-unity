@@ -101,7 +101,8 @@ namespace DeNelle.Core.UI
             if (button == null) return;
             var image = button.targetGraphic as Image ?? button.GetComponent<Image>();
             var sprite = Resources.Load<Sprite>(Root + "buttons/close-ornate");
-            if (image != null && sprite != null)
+            bool authoredLabel = image != null && sprite != null;
+            if (authoredLabel)
             {
                 image.sprite = sprite;
                 // The ornate source has deep borders; at the shared short Close footprint a
@@ -125,12 +126,19 @@ namespace DeNelle.Core.UI
                 button.colors = colors;
                 button.targetGraphic = image;
             }
-            var label = button.GetComponentInChildren<TMP_Text>();
-            if (label != null)
+            var labels = button.GetComponentsInChildren<TMP_Text>(true);
+            for (int i = 0; i < labels.Length; i++)
             {
-                // The supplied close plate is an EMPTY scalable face. Hiding the runtime
-                // label therefore produced a blank button on Barracks and other shared
-                // modals. Keep the command text data-bound and visible in every state.
+                var label = labels[i];
+                if (label == null) continue;
+                // close-ornate.png already contains the word CLOSE. A live TMP copy over
+                // that baked label produces the doubled/offset word seen on shared modals.
+                // Keep runtime text only as the visual fallback if the plate is missing.
+                if (authoredLabel)
+                {
+                    label.gameObject.SetActive(false);
+                    continue;
+                }
                 label.gameObject.SetActive(true);
                 label.text = "CLOSE";
                 label.color = ElarionUi.Parchment;

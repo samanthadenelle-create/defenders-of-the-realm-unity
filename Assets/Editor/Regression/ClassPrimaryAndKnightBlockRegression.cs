@@ -29,6 +29,8 @@ namespace DeNelle.Editor.Regression
 
                 string skip = File.ReadAllText("Assets/_Modules/Core/UI/TutorialSkipUi.cs");
                 Require(skip, "face.raycastTarget = true");
+                Require(skip, "CanvasSortOrder = 6000");
+                Require(skip, "canvas.overrideSorting = true");
 
                 string ui = File.ReadAllText("Assets/_Modules/Core/UI/ElarionUiKit.cs");
                 Require(ui, "MedallionBounds");
