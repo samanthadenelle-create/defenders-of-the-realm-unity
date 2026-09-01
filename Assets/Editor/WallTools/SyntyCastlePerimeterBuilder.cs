@@ -134,6 +134,17 @@ namespace DeNelle.Editor
             }
             float wallHeight = MeasureY(wall);
             float towerHalf  = MeasureX(tower) * 0.5f;
+            // ⚠ MEASURE THE PIVOT, NEVER INFER IT. How far the mesh's -X edge sits from the
+            // prefab's own origin, taken from a real instance placed at the world origin.
+            // The raw FBX reports SM_Bld_Castle_Wall_01 at X -0.00..5.00 (pivot on the LEFT
+            // edge), but Unity's FBX axis conversion MIRRORS X on import, so the instantiated
+            // prefab actually occupies -5.00..0.00. Reading the origin convention off the FBX
+            // instead of off an instance is what put the whole ring 5m out and opened a corner
+            // (2026-09-01 symmetry oracle: centre -5.00, bounds [-42.50, 32.50]). This value
+            // is 0 for a left-edge pivot, -width for a right-edge pivot, -width/2 if centred —
+            // all three place correctly without another edit.
+            float wallPivotMinX = MeasureMinX(wall);
+            float gatePivotMinX = MeasureMinX(gate);
             // How far the tower's authored foundation hangs BELOW its own origin (negative
             // min.y). Measured, never assumed — a pack update must move the seat with it.
             float towerBaseDrop = Mathf.Max(0f, -MeasureMinY(tower));
@@ -182,12 +193,26 @@ namespace DeNelle.Editor
 
                 for (int i = 0; i < SlotsPerSide; i++)
                 {
-                    float offset = -span * 0.5f + (i + 0.5f) * moduleWidth;
-                    var pos = midpoint + along * offset;
+                    // ⚠ LEFT-EDGE ORIGIN, NOT CENTRED. Measured 2026-09-01 from the FBX:
+                    //   SM_Bld_Castle_Wall_01        X  -0.00..5.00   <- origin at the LEFT end
+                    //   SM_Bld_Castle_Wall_Gate_01   X  -0.34..5.34   <- same
+                    //   SM_Bld_Castle_Battlements_01 X   0.00..5.00   <- same
+                    //   SM_Bld_Castle_Wall_Tower_M_01 X -1.47..1.59   <- this one IS centred
+                    // The first cut of this loop used (i + 0.5) * moduleWidth, i.e. it treated
+                    // the wall origin as CENTRED. That shifted every module +2.5m, so a run
+                    // covered [-35,+40] instead of [-37.5,+37.5]: a 2.5m HOLE at one corner and
+                    // a 2.5m overshoot at the other. That — not a missing corner module — was
+                    // the open corner in the first proof capture. Towers stay centre-placed.
+                    // Left edge of slot i along the run, then back off the MEASURED pivot so the
+                    // module's -X edge lands exactly there. Slot i therefore occupies
+                    // [runLeft, runLeft + moduleWidth] whatever the prefab's pivot convention is.
+                    float runLeft = -span * 0.5f + i * moduleWidth;
+                    var pos = midpoint + along * (runLeft - wallPivotMinX);
 
                     if (i == gateIndex)
                     {
-                        if (Place(side.transform, gate, pos, rot, "Gate") != null) gates++;
+                        var gatePos = midpoint + along * (runLeft - gatePivotMinX);
+                        if (Place(side.transform, gate, gatePos, rot, "Gate") != null) gates++;
                         continue;   // no battlement cap over the gate arch
                     }
 
@@ -204,6 +229,47 @@ namespace DeNelle.Editor
                 if (structureLayer >= 0) SetLayerRecursively(side, structureLayer);
             }
 
+            // ── SYMMETRY ORACLE (measured, not assumed) ─────────────────────────────
+            // The south side must straddle x=0 evenly. A module-origin mistake (left-edge
+            // treated as centred, or vice versa) shows up here as a non-zero centre offset
+            // long before it shows up as an open corner in a screenshot.
+            // ⚠ MEASURE THE WALL RUN ONLY, NOT THE WHOLE SIDE GROUP. Each side carries exactly
+            // ONE corner tower, at its -X end, so the GROUP is asymmetric by design — its centre
+            // sits ~1.5m negative and always will. The first cut of this oracle measured the whole
+            // group and duly fired PERIMETER_ASYMMETRIC on geometry that was already correct.
+            // An oracle that fails a correct build is worse than no oracle: it invites someone to
+            // "fix" working code. What must straddle x=0 is the RUN of wall/gate/battlement slots.
+            var southSide = GameObject.Find(SideNames[0]);
+            if (southSide != null)
+            {
+                var runRends = new List<Renderer>();
+                foreach (Transform child in southSide.transform)
+                {
+                    if (child.name.StartsWith("CornerTower")) continue;   // excluded, see above
+                    runRends.AddRange(child.GetComponentsInChildren<Renderer>(true));
+                }
+                if (runRends.Count > 0)
+                {
+                    Bounds b = runRends[0].bounds;
+                    for (int i = 1; i < runRends.Count; i++) b.Encapsulate(runRends[i].bounds);
+                    float centreOffset = b.center.x;
+                    Debug.Log($"[SyntyPerimeter] south WALL RUN (towers excluded) X " +
+                              $"[{b.min.x:F2},{b.max.x:F2}] centre {centreOffset:F2} (want ~0), " +
+                              $"width {b.size.x:F2}m (want {span:F2}m).");
+                    if (Mathf.Abs(centreOffset) > moduleWidth * 0.25f)
+                        Debug.LogError($"[SyntyPerimeter] PERIMETER_ASYMMETRIC the south wall run centres " +
+                                       $"on x={centreOffset:F2}, not 0 — a pivot mistake shifts every piece " +
+                                       "and opens a corner. Pivots are MEASURED (wallPivotMinX); do not " +
+                                       "infer them from the FBX, whose X is mirrored on import.");
+                    if (Mathf.Abs(b.size.x - span) > moduleWidth * 0.25f)
+                        Debug.LogError($"[SyntyPerimeter] PERIMETER_SPAN_WRONG the south wall run measures " +
+                                       $"{b.size.x:F2}m but the slot maths says {span:F2}m.");
+                }
+            }
+
+            Debug.Log($"[SyntyPerimeter] measured pivots: wall minX {wallPivotMinX:F2} " +
+                      $"(0 = left-edge, -{moduleWidth:F2} = right-edge), gate minX {gatePivotMinX:F2}, " +
+                      $"tower base drop {towerBaseDrop:F2}m.");
             Debug.Log($"[SyntyPerimeter] module {moduleWidth:F2}m (measured) x {wallHeight:F2}m tall, " +
                       $"tower half {towerHalf:F2}m -> {SlotsPerSide} slots/side, span {span:F1}m, " +
                       $"extent +-{halfExtent:F1}m (plinth 44), gate slot {gateIndex} centred. " +
@@ -242,25 +308,31 @@ namespace DeNelle.Editor
         private static float MeasureX(GameObject prefab) => MeasureAxis(prefab, 0);
         private static float MeasureY(GameObject prefab) => MeasureAxis(prefab, 1);
 
+        /// <summary>Lowest world X of a prefab's combined renderer bounds when placed at the
+        /// origin — i.e. where its mesh starts relative to its own pivot. See wallPivotMinX.</summary>
+        private static float MeasureMinX(GameObject prefab) => MeasureMin(prefab, 0);
+
         /// <summary>Lowest world Y of a prefab's combined renderer bounds when placed at the
         /// origin — negative for a module with an authored below-origin foundation.</summary>
-        private static float MeasureMinY(GameObject prefab)
+        private static float MeasureMinY(GameObject prefab) => MeasureMin(prefab, 1);
+
+        private static float MeasureMin(GameObject prefab, int axis)
         {
             if (prefab == null) return 0f;
             var tmp = Object.Instantiate(prefab);
             tmp.transform.position = Vector3.zero;
             tmp.transform.rotation = Quaternion.identity;
             tmp.transform.localScale = Vector3.one;
-            float minY = 0f;
+            float min = 0f;
             var rends = tmp.GetComponentsInChildren<Renderer>(true);
             if (rends.Length > 0)
             {
                 Bounds b = rends[0].bounds;
                 for (int i = 1; i < rends.Length; i++) b.Encapsulate(rends[i].bounds);
-                minY = b.min.y;
+                min = b.min[axis];
             }
             Object.DestroyImmediate(tmp);
-            return minY;
+            return min;
         }
 
         /// <summary>Combined renderer-bounds extent of a prefab along one axis, from a
