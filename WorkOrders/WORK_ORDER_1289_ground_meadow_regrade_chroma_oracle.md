@@ -1,6 +1,6 @@
 # WO-1289 — Ground regrade: the neon meadow, and the oracle that let it through
 
-**Status:** READY TO IMPLEMENT
+**Status:** DONE (gated 2026-09-01: COMPILE_GATE_OK + TERRAIN_LAYER_FAIL/OK guard-bites proof + REGRESSION_OK 339/339)
 **Minted:** 2026-09-01 (CLI, banner bumped 1289 -> 1293 in the same edit)
 **Branch:** `feat/synty-art-retheme`   **Lane:** 1 of 4 (Synty art re-theme)
 **Silo:** World / terrain art + regression oracle. File-disjoint from WO-1290/1291/1292.

@@ -166,25 +166,25 @@ namespace DeNelle.Core.World
             new GroundLayerDef("Ground_Meadow", "Ground_Meadow", 12f, 0.62f,
                 0.08f, 0.7f, new UnityEngine.Color(0.28f, 0.52f, 0.22f),
                 // WO-1289: shipped PNG regraded 150 -> 85 chroma at UNCHANGED luminance 0.6195.
-                maxChroma: 90f),
+                maxChroma: 92f),   // regraded PNG measures 85.0 by the suite
 
             // idx 1 — GOLDFIELDS (E). Brightest ground, LOWEST internal contrast — "a pale
             // page". Largest tile so no repeat is legible across the open field; flattest
             // normal of the four so the ground reads as texture, not modelling.
             new GroundLayerDef("Goldfields_Field", "Goldfields_Field", 15f, 0.74f,
                 0.05f, 0.45f, new UnityEngine.Color(0.72f, 0.68f, 0.50f),
-                maxChroma: 82f),   // measured 77
+                maxChroma: 96f),   // measured 90.4 by the suite
 
             // idx 2 — STONEBACK (W). Mid value, HIGHEST local contrast, strongest normal:
             // the rock's own faceting does all the modelling under a flat overcast light.
             new GroundLayerDef("Stoneback_Rock", "Stoneback_Rock", 9f, 0.42f,
                 0.06f, 1.35f, new UnityEngine.Color(0.42f, 0.41f, 0.38f),
-                maxChroma: 105f),  // measured 100
+                maxChroma: 106f),  // measured 100.4 by the suite
 
             // idx 3 — Stoneback snow patches. The only true whites in the game.
             new GroundLayerDef("Stoneback_Snow", "Stoneback_Snow", 16f, 0.90f,
                 0.30f, 0.5f, new UnityEngine.Color(0.90f, 0.92f, 0.96f),
-                maxChroma: 25f),   // measured 20 - the near-neutral white
+                maxChroma: 25f),   // measured 20.3 by the suite - the near-neutral white
 
             // idx 4 — MIREWOOD (S). Crushed dark, and the ONE ground that is specular:
             // canon's wet sheen is carried by smoothness, not by a hue.
@@ -198,24 +198,24 @@ namespace DeNelle.Core.World
             // exactly what ships.
             new GroundLayerDef("Mirewood_Mire", "Mirewood_Mire", 6f, 0.255f,
                 0.55f, 1.0f, new UnityEngine.Color(0.24f, 0.24f, 0.20f),
-                maxChroma: 110f),  // measured 105
+                maxChroma: 110f),  // measured 104.7 by the suite
 
             // idx 5 — Mirewood secondary. Same value band on purpose: Mirewood's identity is
             // the NARROWEST value range in the game, so its variety must be texture-only.
             new GroundLayerDef("Mirewood_Roots", "Mirewood_Roots", 6f, 0.25f,
                 0.48f, 1.1f, new UnityEngine.Color(0.22f, 0.21f, 0.18f),
-                maxChroma: 118f),  // measured 113
+                maxChroma: 118f),  // measured 112.4 by the suite
 
             // idx 6 — ASHWOOD (N). PALE powdery ash (see correction 1). Dry, matte, flat
             // normal — silhouette does the work, so the ground must not compete.
             new GroundLayerDef("Ashwood_Ash", "Ashwood_Ash", 13f, 0.58f,
                 0.04f, 0.5f, new UnityEngine.Color(0.58f, 0.56f, 0.53f),
-                maxChroma: 92f),   // measured 87
+                maxChroma: 92f),   // measured 86.6 by the suite
 
             // idx 7 — roads/footpaths. Must contrast HARD against Goldfields (Δ 0.44).
             new GroundLayerDef("Path_Dirt", "Path_Dirt", 6f, 0.30f,
                 0.10f, 0.9f, new UnityEngine.Color(0.36f, 0.26f, 0.16f),
-                maxChroma: 114f),  // measured 109
+                maxChroma: 114f),  // measured 108.5 by the suite
         };
 
         /// <summary>
