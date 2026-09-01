@@ -51,9 +51,23 @@ namespace DeNelle.Core.World
         public readonly float NormalScale;
         /// <summary>Last-resort tint if the curated PNG is missing on this machine (fresh clone / un-fetched LFS).</summary>
         public readonly UnityEngine.Color FallbackTint;
+        /// <summary>
+        /// WO-1289 — ceiling on mean per-pixel CHROMA (max-min of the 8-bit RGB triple) of the
+        /// shipped BaseColor, ±<see cref="TerrainLayerSet.ChromaTolerance"/>.
+        /// ⚠ WHY THIS EXISTS, so nobody removes it as redundant with TargetLuminance:
+        /// until 2026-09-01 the contract bounded VALUE and nothing else, so
+        /// Ground_Meadow_BaseColor.png shipped at RGB 93/189/39 — chroma 150, 35% more
+        /// saturated than any other layer and the ground the player actually stands on — and
+        /// PASSED the oracle at luminance 0.620 against its authored 0.62. The owner reported
+        /// it as "a bright neon green grass" while every gate stayed green. Luminance cannot
+        /// see saturation; this is the second axis. Regrading the PNG without this bound just
+        /// means the next authored texture does it again.
+        /// </summary>
+        public readonly float MaxChroma;
 
         public GroundLayerDef(string name, string textureStem, float tileSize, float targetLuminance,
-                              float smoothness, float normalScale, UnityEngine.Color fallbackTint)
+                              float smoothness, float normalScale, UnityEngine.Color fallbackTint,
+                              float maxChroma)
         {
             Name = name;
             TextureStem = textureStem;
@@ -62,6 +76,7 @@ namespace DeNelle.Core.World
             Smoothness = smoothness;
             NormalScale = normalScale;
             FallbackTint = fallbackTint;
+            MaxChroma = maxChroma;
         }
     }
 
@@ -106,6 +121,9 @@ namespace DeNelle.Core.World
         /// <summary>Oracle tolerance on <see cref="GroundLayerDef.TargetLuminance"/>.</summary>
         public const float LuminanceTolerance = 0.06f;
 
+        /// <summary>Oracle tolerance on <see cref="GroundLayerDef.MaxChroma"/> (8-bit units). WO-1289.</summary>
+        public const float ChromaTolerance = 5f;
+
         /// <summary>
         /// Minimum Rec.709 ΔL between the primary ground of any two ADJACENT marches.
         /// This is the colourblind gate turned into a measurement. Today's shipped tints
@@ -146,22 +164,27 @@ namespace DeNelle.Core.World
         {
             // idx 0 — hub meadow. Lush, mid-high value; flows into the golden east.
             new GroundLayerDef("Ground_Meadow", "Ground_Meadow", 12f, 0.62f,
-                0.08f, 0.7f, new UnityEngine.Color(0.28f, 0.52f, 0.22f)),
+                0.08f, 0.7f, new UnityEngine.Color(0.28f, 0.52f, 0.22f),
+                // WO-1289: shipped PNG regraded 150 -> 85 chroma at UNCHANGED luminance 0.6195.
+                maxChroma: 90f),
 
             // idx 1 — GOLDFIELDS (E). Brightest ground, LOWEST internal contrast — "a pale
             // page". Largest tile so no repeat is legible across the open field; flattest
             // normal of the four so the ground reads as texture, not modelling.
             new GroundLayerDef("Goldfields_Field", "Goldfields_Field", 15f, 0.74f,
-                0.05f, 0.45f, new UnityEngine.Color(0.72f, 0.68f, 0.50f)),
+                0.05f, 0.45f, new UnityEngine.Color(0.72f, 0.68f, 0.50f),
+                maxChroma: 82f),   // measured 77
 
             // idx 2 — STONEBACK (W). Mid value, HIGHEST local contrast, strongest normal:
             // the rock's own faceting does all the modelling under a flat overcast light.
             new GroundLayerDef("Stoneback_Rock", "Stoneback_Rock", 9f, 0.42f,
-                0.06f, 1.35f, new UnityEngine.Color(0.42f, 0.41f, 0.38f)),
+                0.06f, 1.35f, new UnityEngine.Color(0.42f, 0.41f, 0.38f),
+                maxChroma: 105f),  // measured 100
 
             // idx 3 — Stoneback snow patches. The only true whites in the game.
             new GroundLayerDef("Stoneback_Snow", "Stoneback_Snow", 16f, 0.90f,
-                0.30f, 0.5f, new UnityEngine.Color(0.90f, 0.92f, 0.96f)),
+                0.30f, 0.5f, new UnityEngine.Color(0.90f, 0.92f, 0.96f),
+                maxChroma: 25f),   // measured 20 - the near-neutral white
 
             // idx 4 — MIREWOOD (S). Crushed dark, and the ONE ground that is specular:
             // canon's wet sheen is carried by smoothness, not by a hue.
@@ -174,21 +197,25 @@ namespace DeNelle.Core.World
             // baked into the shipped texture, not applied via diffuseRemapMax, so the oracle measures
             // exactly what ships.
             new GroundLayerDef("Mirewood_Mire", "Mirewood_Mire", 6f, 0.255f,
-                0.55f, 1.0f, new UnityEngine.Color(0.24f, 0.24f, 0.20f)),
+                0.55f, 1.0f, new UnityEngine.Color(0.24f, 0.24f, 0.20f),
+                maxChroma: 110f),  // measured 105
 
             // idx 5 — Mirewood secondary. Same value band on purpose: Mirewood's identity is
             // the NARROWEST value range in the game, so its variety must be texture-only.
             new GroundLayerDef("Mirewood_Roots", "Mirewood_Roots", 6f, 0.25f,
-                0.48f, 1.1f, new UnityEngine.Color(0.22f, 0.21f, 0.18f)),
+                0.48f, 1.1f, new UnityEngine.Color(0.22f, 0.21f, 0.18f),
+                maxChroma: 118f),  // measured 113
 
             // idx 6 — ASHWOOD (N). PALE powdery ash (see correction 1). Dry, matte, flat
             // normal — silhouette does the work, so the ground must not compete.
             new GroundLayerDef("Ashwood_Ash", "Ashwood_Ash", 13f, 0.58f,
-                0.04f, 0.5f, new UnityEngine.Color(0.58f, 0.56f, 0.53f)),
+                0.04f, 0.5f, new UnityEngine.Color(0.58f, 0.56f, 0.53f),
+                maxChroma: 92f),   // measured 87
 
             // idx 7 — roads/footpaths. Must contrast HARD against Goldfields (Δ 0.44).
             new GroundLayerDef("Path_Dirt", "Path_Dirt", 6f, 0.30f,
-                0.10f, 0.9f, new UnityEngine.Color(0.36f, 0.26f, 0.16f)),
+                0.10f, 0.9f, new UnityEngine.Color(0.36f, 0.26f, 0.16f),
+                maxChroma: 114f),  // measured 109
         };
 
         /// <summary>

@@ -197,8 +197,8 @@ namespace DeNelle.Editor.Regression
             for (int i = 0; i < TerrainLayerSet.Count; i++)
             {
                 var def = TerrainLayerSet.Layers[i];
-                float l;
-                if (!TryMeasureLuminance(TerrainLayerSet.BaseColorPath(i), out l))
+                float l, chroma;
+                if (!TryMeasureBaseColor(TerrainLayerSet.BaseColorPath(i), out l, out chroma))
                 {
                     failures.Add("could not measure luminance of '" + def.Name + "' at " +
                                  TerrainLayerSet.BaseColorPath(i));
@@ -206,11 +206,20 @@ namespace DeNelle.Editor.Regression
                 }
                 measured++;
                 log.AppendLine("  " + def.Name.PadRight(18) + " L=" + l.ToString("0.000") +
-                               " (target " + def.TargetLuminance.ToString("0.00") + ")");
+                               " (target " + def.TargetLuminance.ToString("0.00") + ")" +
+                               "  C=" + chroma.ToString("0.0") +
+                               " (max " + def.MaxChroma.ToString("0") + ")");
                 if (Mathf.Abs(l - def.TargetLuminance) > TerrainLayerSet.LuminanceTolerance)
                     failures.Add("'" + def.Name + "' measures L=" + l.ToString("0.000") +
                                  " but is authored at " + def.TargetLuminance.ToString("0.00") +
                                  " (tolerance ±" + TerrainLayerSet.LuminanceTolerance.ToString("0.00") + ")");
+                // WO-1289 — the SECOND axis. Luminance alone let a chroma-150 neon meadow ship.
+                if (chroma > def.MaxChroma + TerrainLayerSet.ChromaTolerance)
+                    failures.Add("'" + def.Name + "' measures CHROMA=" + chroma.ToString("0.0") +
+                                 " but is capped at " + def.MaxChroma.ToString("0") +
+                                 " (tolerance +" + TerrainLayerSet.ChromaTolerance.ToString("0") +
+                                 "). Over-saturated ground reads as neon to the player even when its " +
+                                 "VALUE is on target — regrade the PNG, do not raise the cap.");
             }
             if (measured == 0) failures.Add("measured zero textures — the suite did not run");
             log.AppendLine("  case3: measured " + measured + " basecolor(s)");
@@ -525,7 +534,21 @@ namespace DeNelle.Editor.Regression
         /// </summary>
         private static bool TryMeasureLuminance(string assetPath, out float luminance)
         {
+            float ignored;
+            return TryMeasureBaseColor(assetPath, out luminance, out ignored);
+        }
+
+        /// <summary>
+        /// WO-1289 — one decode, BOTH axes: mean Rec.709 luminance (0..1) and mean per-pixel
+        /// CHROMA (max-min of the 8-bit RGB triple, 0..255).
+        /// ⚠ The chroma axis exists because until 2026-09-01 this oracle bounded VALUE alone, so
+        /// Ground_Meadow shipped at chroma 150 — "a bright neon green grass" (owner) — and PASSED
+        /// at luminance 0.620 against its authored 0.62. Value cannot see saturation.
+        /// </summary>
+        private static bool TryMeasureBaseColor(string assetPath, out float luminance, out float chroma)
+        {
             luminance = 0f;
+            chroma = 0f;
             if (!File.Exists(assetPath)) return false;
 
             Texture2D tex = null;
@@ -539,7 +562,7 @@ namespace DeNelle.Editor.Regression
                 if (w < 2 || h < 2) return false;
                 var px = tex.GetPixels32();
 
-                double sum = 0.0; int n = 0;
+                double sum = 0.0; double chromaSum = 0.0; int n = 0;
                 int step = Mathf.Max(1, w / 128);
                 for (int y = 0; y < h; y += step)
                 {
@@ -548,11 +571,15 @@ namespace DeNelle.Editor.Regression
                     {
                         var c = px[row + x];
                         sum += (0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b) / 255.0;
+                        int hi = c.r > c.g ? c.r : c.g; if (c.b > hi) hi = c.b;
+                        int lo = c.r < c.g ? c.r : c.g; if (c.b < lo) lo = c.b;
+                        chromaSum += hi - lo;
                         n++;
                     }
                 }
                 if (n == 0) return false;
                 luminance = (float)(sum / n);
+                chroma = (float)(chromaSum / n);
                 return true;
             }
             catch (Exception ex)
