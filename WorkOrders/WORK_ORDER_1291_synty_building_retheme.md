@@ -1,6 +1,6 @@
 # WO-1291 — Building re-theme: catalog + hand-placed storefronts onto Synty
 
-**Status:** READY TO IMPLEMENT (BLOCKED ON WO-1290 landing — shared visual language)
+**Status:** IN PROGRESS (2026-09-01: 30 of 33 addresses swapped + gated; 3 unmapped, scene storefronts + runtime visual proof outstanding)
 **Minted:** 2026-09-01 (CLI, banner bumped 1289 -> 1293 in the same edit)
 **Branch:** `feat/synty-art-retheme`   **Lane:** 3 of 4 (Synty art re-theme)
 **Owner ruling 2026-09-01:** **FULL re-theme, everything Synty** (catalog + storefronts + props).
