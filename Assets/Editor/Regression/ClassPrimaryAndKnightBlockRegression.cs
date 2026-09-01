@@ -29,8 +29,13 @@ namespace DeNelle.Editor.Regression
 
                 string skip = File.ReadAllText("Assets/_Modules/Core/UI/TutorialSkipUi.cs");
                 Require(skip, "face.raycastTarget = true");
+                Require(skip, "faceGo.transform.SetParent(_button.transform, false)");
+                Require(skip, "face.transform.IsChildOf(_button.transform)");
                 Require(skip, "CanvasSortOrder = 6000");
                 Require(skip, "canvas.overrideSorting = true");
+                Require(skip, "EventSystem.current.RaycastAll(pointer, hits)");
+                Require(skip, "SKIP_TOP_HIT_OK");
+                Require(skip, "SKIP_TOP_HIT_BLOCKED");
 
                 string ui = File.ReadAllText("Assets/_Modules/Core/UI/ElarionUiKit.cs");
                 Require(ui, "MedallionBounds");

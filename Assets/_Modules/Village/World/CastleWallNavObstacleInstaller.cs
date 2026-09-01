@@ -197,6 +197,10 @@ namespace DeNelle.Village.World
             {
                 Collider col = colliders[i];
                 if (col == null) continue;
+                // Permanently-open gate art has all of its colliders disabled. Never use
+                // a disabled gate collider's empty bounds; wall-owned DoorJamb boxes are
+                // the sole solid flanks and are processed normally below.
+                if (!col.enabled || col.isTrigger) continue;
                 if (IsArchway(col.transform, sideRoot))
                 {
                     // OWNER 2026-07-17 "extend the walls to the edge of the entrances so the only

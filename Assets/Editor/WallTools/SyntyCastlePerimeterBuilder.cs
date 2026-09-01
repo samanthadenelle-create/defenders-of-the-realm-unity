@@ -227,6 +227,7 @@ namespace DeNelle.Editor
                         if (gateInstance != null)
                         {
                             ApplyOpenGatePose(gateInstance);
+                            AddGateFlankColliders(side.transform, gateInstance, s);
                             gates++;
                         }
                         continue;   // no battlement cap over the gate arch
@@ -283,6 +284,12 @@ namespace DeNelle.Editor
                 }
             }
 
+            if (!VerifyGateClearance(roots))
+            {
+                Debug.LogError("[SyntyPerimeter] PERIMETER_FAIL gate clearance contract failed; scene will not be saved.");
+                return null;
+            }
+
             Debug.Log($"[SyntyPerimeter] measured pivots: wall minX {wallPivotMinX:F2} " +
                       $"(0 = left-edge, -{moduleWidth:F2} = right-edge), gate minX {gatePivotMinX:F2}, " +
                       $"ground seats wall={wallSeatY:F2}, arrowslit={arrowslitSeatY:F2}, " +
@@ -293,6 +300,43 @@ namespace DeNelle.Editor
                       $"Placed {walls} walls + {caps} battlements + {gates} gates + {towers} towers " +
                       $"= {walls + caps + gates + towers} objects, ALL at scale 1.");
             return roots[0];
+        }
+
+        /// <summary>Four-gate proof: gate art owns no enabled collider, while two wall-owned
+        /// jamb boxes reach to a centred passage at least four metres wide.</summary>
+        private static bool VerifyGateClearance(List<GameObject> roots)
+        {
+            int passed = 0;
+            for (int s = 0; s < roots.Count; s++)
+            {
+                var root = roots[s];
+                if (root == null) continue;
+                Transform gate = root.transform.Find("Gate");
+                Transform left = root.transform.Find("Wall_DoorJamb_L");
+                Transform right = root.transform.Find("Wall_DoorJamb_R");
+                var leftBox = left != null ? left.GetComponent<BoxCollider>() : null;
+                var rightBox = right != null ? right.GetComponent<BoxCollider>() : null;
+                if (gate == null || leftBox == null || rightBox == null ||
+                    !leftBox.enabled || !rightBox.enabled)
+                    continue;
+
+                bool gateClear = true;
+                var gateCols = gate.GetComponentsInChildren<Collider>(true);
+                for (int i = 0; i < gateCols.Length; i++)
+                    if (gateCols[i] != null && gateCols[i].enabled) gateClear = false;
+
+                bool alongX = s == 0 || s == 2;
+                float clearWidth = alongX
+                    ? rightBox.bounds.min.x - leftBox.bounds.max.x
+                    : rightBox.bounds.min.z - leftBox.bounds.max.z;
+                if (gateClear && clearWidth >= 3.95f) passed++;
+                else Debug.LogError($"[SyntyPerimeter] gate {SideNames[s]} clearance failed: " +
+                                    $"gateClear={gateClear} width={clearWidth:F2}m.");
+            }
+
+            if (passed == 4)
+                Debug.Log("GATE_CLEARANCE_OK 4/4 gates: gate colliders disabled; wall jambs meet a 4.00m opening.");
+            return passed == 4;
         }
 
         // ── helpers ──────────────────────────────────────────────────────────────
@@ -342,12 +386,73 @@ namespace DeNelle.Editor
             // permanently-open state while retaining the prefab child for future animation.
             if (portcullis != null) portcullis.gameObject.SetActive(false);
 
-            DisableColliders(left);
-            DisableColliders(right);
-            DisableColliders(portcullis);
+            // The gate is presentation only in this permanently-open perimeter. Disable
+            // EVERY collider under it (including the arch/root MeshCollider), then let the
+            // wall-owned DoorJamb flank boxes below extend masonry collision precisely to
+            // the opening. This avoids catching the hero/enemy on a hidden gate surface.
+            DisableColliders(gate.transform);
 
             if (left == null || right == null || portcullis == null)
                 Debug.LogWarning("[SyntyPerimeter] gate child layout changed; open pose is incomplete on " + gate.name + ".");
+        }
+
+        /// <summary>
+        /// Extend the wall collision through the gate module's side masonry while keeping
+        /// the central four-metre passage completely clear. These are siblings owned by the
+        /// wall side, never children of the gate, so "remove every gate collider" remains a
+        /// literal invariant. The visible arch supplies the masonry art.
+        /// </summary>
+        private static void AddGateFlankColliders(Transform side, GameObject gate, int sideIndex)
+        {
+            if (side == null || gate == null) return;
+            var renderers = gate.GetComponentsInChildren<Renderer>(true);
+            if (renderers.Length == 0)
+            {
+                Debug.LogWarning("[SyntyPerimeter] gate has no renderer bounds; wall flanks not authored.");
+                return;
+            }
+
+            Bounds b = renderers[0].bounds;
+            for (int i = 1; i < renderers.Length; i++) b.Encapsulate(renderers[i].bounds);
+
+            const float doorwayHalf = 2f;
+            bool splitAlongX = sideIndex == 0 || sideIndex == 2;
+            if (splitAlongX)
+            {
+                AddGateFlankCollider(side, "Wall_DoorJamb_L", b,
+                    b.min.x, b.center.x - doorwayHalf, true);
+                AddGateFlankCollider(side, "Wall_DoorJamb_R", b,
+                    b.center.x + doorwayHalf, b.max.x, true);
+            }
+            else
+            {
+                AddGateFlankCollider(side, "Wall_DoorJamb_L", b,
+                    b.min.z, b.center.z - doorwayHalf, false);
+                AddGateFlankCollider(side, "Wall_DoorJamb_R", b,
+                    b.center.z + doorwayHalf, b.max.z, false);
+            }
+        }
+
+        private static void AddGateFlankCollider(Transform side, string name, Bounds source,
+                                                  float axisMin, float axisMax, bool axisIsX)
+        {
+            if (axisMax <= axisMin + 0.05f) return;
+            Vector3 min = source.min;
+            Vector3 max = source.max;
+            if (axisIsX) { min.x = axisMin; max.x = axisMax; }
+            else { min.z = axisMin; max.z = axisMax; }
+
+            var bounds = new Bounds();
+            bounds.SetMinMax(min, max);
+            var go = new GameObject(name);
+            go.transform.SetParent(side, false);
+            go.transform.position = bounds.center;
+            go.transform.rotation = Quaternion.identity;
+            go.transform.localScale = Vector3.one;
+            var box = go.AddComponent<BoxCollider>();
+            box.center = Vector3.zero;
+            box.size = bounds.size;
+            Undo.RegisterCreatedObjectUndo(go, "Build gate wall flank");
         }
 
         private static Transform FindDescendant(Transform root, string exactName)

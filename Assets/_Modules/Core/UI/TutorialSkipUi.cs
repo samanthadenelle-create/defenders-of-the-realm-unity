@@ -34,7 +34,9 @@
 // =============================================================================
 
 using System;
+using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.EventSystems;
 using UnityEngine.UI;
 
 namespace DeNelle.Core.UI
@@ -80,6 +82,8 @@ namespace DeNelle.Core.UI
         /// disarm the tutorial skip intent — only the chrome.</summary>
         private bool _suppressed;
         private float _fadeT;
+        private bool _topHitProved;
+        private int _topHitProbeFrames;
 
         // ── Public API ────────────────────────────────────────────────────────
 
@@ -89,6 +93,8 @@ namespace DeNelle.Core.UI
         {
             var s = Ensure();
             s._onConfirmedSkipAll = onConfirmedSkipAll;
+            s._topHitProved = false;
+            s._topHitProbeFrames = 0;
             if (!s._visible)
             {
                 s._visible = true;
@@ -193,7 +199,10 @@ namespace DeNelle.Core.UI
                     if (inherited[i] != null) inherited[i].enabled = false;
                 var faceGo = new GameObject("SkipMedievalFace", typeof(RectTransform),
                     typeof(CanvasRenderer), typeof(Image));
-                faceGo.transform.SetParent(_mount, false);
+                // The hit Graphic MUST live below the Button in the transform tree.
+                // EventSystem dispatch starts at the raycast Graphic and walks upward;
+                // the old sibling face looked enabled but could never reach OnSkipTapped.
+                faceGo.transform.SetParent(_button.transform, false);
                 faceGo.transform.SetAsFirstSibling();
                 var faceRt = (RectTransform)faceGo.transform;
                 faceRt.anchorMin = Vector2.zero;
@@ -207,6 +216,9 @@ namespace DeNelle.Core.UI
                 // GraphicRaycaster hit testing or the visible Skip control cannot be tapped.
                 face.raycastTarget = true;
                 _button.targetGraphic = face;
+                if (!face.transform.IsChildOf(_button.transform))
+                    Diagnostics.FlowTrace.Fail("Tutorial",
+                        "SkipControl hit face is not under its Button - pointer dispatch is broken.");
                 _button.transition = Selectable.Transition.ColorTint;
                 _button.colors = new ColorBlock
                 {
@@ -277,6 +289,13 @@ namespace DeNelle.Core.UI
             _group.blocksRaycasts = chromeOn && _onConfirmedSkipAll != null;
             _group.interactable = _group.blocksRaycasts;
 
+            // This is a click-path proof, not a hover-state assumption. Once layout and
+            // the fade have settled, ask the live EventSystem what is actually topmost at
+            // the centre of the visible Skip button. A result outside the Button subtree
+            // names the exact overlay that is stealing the tap.
+            if (!_topHitProved && _confirm == null && _group.blocksRaycasts && _group.alpha > .95f)
+                VerifyTopPointerHit();
+
             // MinTouchPx on the CONFIRM sheet's buttons: the kit modal lays its buttons
             // out as panel fractions, so measure one frame after open (rects are valid
             // post-layout) and pad any short button up to the touch floor via sizeDelta
@@ -286,6 +305,53 @@ namespace DeNelle.Core.UI
                 bool measured = EnsureTouchFloor(_confirm.confirm) & EnsureTouchFloor(_confirm.cancel);
                 if (measured) _confirmTouchFloorApplied = true;
             }
+        }
+
+        private void VerifyTopPointerHit()
+        {
+            if (_button == null || EventSystem.current == null) return;
+            if (++_topHitProbeFrames < 3) return; // allow canvas/layout rebuilds to settle
+
+            Canvas.ForceUpdateCanvases();
+            var rt = _button.transform as RectTransform;
+            if (rt == null || rt.rect.width < 1f || rt.rect.height < 1f) return;
+
+            Vector3 worldCentre = rt.TransformPoint(rt.rect.center);
+            Vector2 screenCentre = RectTransformUtility.WorldToScreenPoint(null, worldCentre);
+            var pointer = new PointerEventData(EventSystem.current) { position = screenCentre };
+            var hits = new List<RaycastResult>(8);
+            EventSystem.current.RaycastAll(pointer, hits);
+            if (hits.Count == 0) return;
+
+            var top = hits[0].gameObject;
+            bool reachesButton = top == _button.gameObject || top.transform.IsChildOf(_button.transform);
+            if (reachesButton)
+            {
+                _topHitProved = true;
+                Diagnostics.FlowTrace.Step("Tutorial",
+                    "SKIP_TOP_HIT_OK top=" + top.name +
+                    " is inside SkipTutorialButton; no panel blocks the click target.");
+                return;
+            }
+
+            // Report once after several stable frames so a transient canvas rebuild does
+            // not create noise, while retaining the blocker name for field diagnostics.
+            if (_topHitProbeFrames >= 8)
+            {
+                _topHitProved = true;
+                Diagnostics.FlowTrace.Fail("Tutorial",
+                    "SKIP_TOP_HIT_BLOCKED top=" + top.name +
+                    " path=" + GetHierarchyPath(top.transform));
+            }
+        }
+
+        private static string GetHierarchyPath(Transform leaf)
+        {
+            if (leaf == null) return "<null>";
+            string path = leaf.name;
+            for (var p = leaf.parent; p != null; p = p.parent)
+                path = p.name + "/" + path;
+            return path;
         }
 
         /// <summary>Pad a button's rect up to the MinTouchPx floor once its layout has

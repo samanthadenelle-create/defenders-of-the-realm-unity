@@ -135,3 +135,31 @@ now present, parity-verified, and publicly readable.
 - Firebase App Distribution succeeded to group `testers`: release `2026.09.01.351238`, release ID
   `43nnpnk9lad7g`. Console:
   https://console.firebase.google.com/project/defenders-of-the-realm-echos/appdistribution/app/android:com.denellestudios.echoesofelarion/releases/43nnpnk9lad7g
+
+## Skip click and gate-clearance closure (2026-09-01)
+
+- Fixed the remaining Skip Tutorial click defect at its actual dispatch seam. The visible
+  `SkipMedievalFace` raycast graphic had been a sibling of the `Button`, so EventSystem bubbling could
+  never reach `OnSkipTapped`. It is now a child of `SkipTutorialButton`.
+- Added a live, non-hover pointer proof. Once the control is visible, it raycasts the button centre
+  through the active EventSystem. It records `SKIP_TOP_HIT_OK` when the top hit belongs to the button,
+  or `SKIP_TOP_HIT_BLOCKED` with the exact blocking hierarchy path if another panel ever covers it.
+- Gate art is presentation-only: every collider below each of the four visible gate prefabs is
+  disabled. Wall-owned left/right jamb boxes extend masonry collision to a centred, measured 4.00 m
+  opening, so neither heroes nor enemies can catch on a hidden gate surface.
+- Rebuilt and saved `Main_Castle_Overworld`; the existing old stone Archer Tower ladder remains in
+  use. The refreshed perimeter captures are under `docs/ui-evidence/wo1290_synty_perimeter/`.
+- Compile: `Builds/compile_skip_gate_final.log` - `COMPILE_GATE_OK`.
+- Gate build proof: `Builds/rebuild_gate_clearance_final.log` -
+  `GATE_CLEARANCE_OK 4/4 gates` and `PERIMETER_OK`.
+- Perimeter capture proof: `Builds/perimeter_proof_final.log` - `PERIMETER_PROOF_OK`.
+- Full regression: `Builds/data_regression_final.log` - `REGRESSION_OK 341/341 suites`, zero red and
+  zero skipped.
+- Tester APK `2026.09.01.351290 (351290)`: 543,702,575 bytes, SHA-256
+  `E377A916D030E5693F7045A0C4A4D733E2CCF40E2FE22692143659F3ACE1DF50`.
+- Production dependency gate: `SCHEMA_PARITY_OK 42 table(s)`.
+- R2: `R2_PUSH_OK 2 uploaded (0.1 MB), 578 unchanged`; full parity passed with
+  `R2_PARITY_OK targets=Android,StandaloneWindows64,WebGL objects=228`.
+- Firebase App Distribution succeeded to `testers`: release `2026.09.01.351290`, release ID
+  `46rbucqgcr04g`. Console:
+  https://console.firebase.google.com/project/defenders-of-the-realm-echos/appdistribution/app/android:com.denellestudios.echoesofelarion/releases/46rbucqgcr04g

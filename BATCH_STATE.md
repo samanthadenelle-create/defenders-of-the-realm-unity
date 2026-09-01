@@ -608,3 +608,22 @@ run the relevant offline/content regression plus compile gate, then rebuild the 
   `R2_PARITY_OK targets=Android,StandaloneWindows64,WebGL objects=228`.
 - Firebase App Distribution succeeded to `testers`: release `2026.09.01.351238`, ID
   `43nnpnk9lad7g`.
+
+## 7.18 - SKIP POINTER + FOUR-GATE CLEARANCE + TESTER APK/FIREBASE (2026-09-01)
+
+- Fixed Skip Tutorial at the pointer-dispatch seam: its visible raycast face is now a descendant of
+  `SkipTutorialButton`, allowing EventSystem bubbling to reach the Button. A runtime centre-point
+  raycast logs `SKIP_TOP_HIT_OK`, or names the exact blocking hierarchy with
+  `SKIP_TOP_HIT_BLOCKED`; validation does not depend on desktop hover feedback.
+- Removed every collider from the visible permanently-open gate art. Two wall-owned jamb colliders
+  per gate extend the wall to a measured 4.00 m central passage. Nav carving ignores disabled/trigger
+  colliders. Builder proof passed `GATE_CLEARANCE_OK 4/4 gates`; perimeter proof passed
+  `PERIMETER_PROOF_OK`.
+- Fresh compile passed `COMPILE_GATE_OK`; full regression passed `REGRESSION_OK 341/341 suites`
+  with 341 green, zero red, and zero skipped.
+- Fresh tester APK `2026.09.01.351290 (351290)` is 543,702,575 bytes, SHA-256
+  `E377A916D030E5693F7045A0C4A4D733E2CCF40E2FE22692143659F3ACE1DF50`.
+- Schema parity passed all 42 tables. Content shipment passed `R2_PUSH_OK 2 uploaded (0.1 MB), 578
+  unchanged` and `R2_PARITY_OK targets=Android,StandaloneWindows64,WebGL objects=228`.
+- Firebase App Distribution succeeded to `testers`: release `2026.09.01.351290`, ID
+  `46rbucqgcr04g`.

@@ -25,7 +25,15 @@ namespace DeNelle.Editor.Regression
                 Require(src, "SM_Bld_Castle_Wall_Gate_Door_L_01");
                 Require(src, "SM_Bld_Castle_Wall_Gate_Door_R_01");
                 Require(src, "SM_Bld_Castle_Wall_Gate_Portcullis_01");
-                Require(src, "DisableColliders(portcullis)");
+                Require(src, "DisableColliders(gate.transform)");
+                Require(src, "AddGateFlankColliders(side.transform, gateInstance, s)");
+                Require(src, "Wall_DoorJamb_L");
+                Require(src, "Wall_DoorJamb_R");
+                Require(src, "GATE_CLEARANCE_OK 4/4 gates");
+                Require(src, "GetComponentsInChildren<Collider>(true)");
+                Require(src, "clearWidth >= 3.95f");
+                string carve = File.ReadAllText("Assets/_Modules/Village/World/CastleWallNavObstacleInstaller.cs");
+                Require(carve, "if (!col.enabled || col.isTrigger) continue;");
                 string traversal = File.ReadAllText("Assets/_Modules/Village/World/GateTraversalInjector.cs");
                 Require(traversal, "NavMeshLink");
                 Require(traversal, "bidirectional = true");
