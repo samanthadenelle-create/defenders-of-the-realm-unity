@@ -709,3 +709,15 @@ __pycache__/
 *.pyc
 
 .env*
+
+# Synty POLYGON Fantasy Kingdom + POLYGON Generic — 461MB Asset-Store packs kept
+# LOCAL (same policy as polyperfect / Quaternius / Blink; owner purchase 2026-09-01,
+# WO-1289 art re-theme). Unlike MedievalCastlePackLite these ship URP-native
+# (Materials -> PolygonGeneric/Shaders/Generic_Basic.shadergraph, UniversalTarget +
+# UniversalLitSubTarget; com.unity.shadergraph is already in Packages/manifest.json)
+# so there is NO built-in-Standard magenta pass to run on import.
+# On a fresh clone: re-import both packs from the Asset Store into Assets/Synty/.
+# Only the specific prefabs/meshes the game references are copied into tracked
+# Resources/ + Addressable paths — see WorkOrders/WORK_ORDER_1289_*.md.
+/Assets/Synty/
+/Assets/Synty.meta

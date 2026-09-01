@@ -158,7 +158,35 @@
 > fine as history. A copied number is the bug **even when it was right the day it was written** -
 > that is exactly how the retired 860-899 UI block kept re-seeding collisions from CLAUDE.md sec.2.
 
-> ## ⚠ RECONCILED 2026-08-30 (CLI): main line next free = **1286**.
+> ## ⚠ RECONCILED 2026-09-01 (CLI): main line next free = **1293**.
+> *(CLI minted **WO-1289 through WO-1292** for the Synty art re-theme lane, owner-approved
+> 2026-09-01 on branch `feat/synty-art-retheme`. **1289** = ground regrade (Ground_Meadow
+> measures RGB 93/189/39, chroma 150 — 35% more saturated than any other layer; it passes
+> TerrainLayerRegression because the oracle bounds LUMINANCE only) + a chroma ceiling in the
+> oracle. **1290** = castle walls rebuilt on Synty's native 5m module, retiring the
+> scale-stretch recipe path. **1291** = building re-theme, catalog + hand-placed storefronts.
+> **1292** = environment/prop dressing. Owner ruled FULL re-theme + native 5m wall height.
+> Bumped 1289 -> 1293 in this SAME edit.)*
+>
+> ### superseded: RECONCILED 2026-08-31 (CLI): main line next free = **1289**.
+> *(CLI minted **WO-1288** for the owner-approved living starter settlement:
+> recommended prebuilt founding, retained Start-from-Scratch secondary path, and an
+> idempotent second pass that adds current economy buildings plus four gate towers as
+> real BaseLayout structures. Bumped 1288 -> 1289 in this SAME edit.)*
+>
+> ### superseded: RECONCILED 2026-08-31 (CLI): main line next free = **1288**.
+> *(CLI minted **WO-1287** for the wave-three onboarding and repair economy:
+> near-player plans, explicit Arcane Spire instruction, guaranteed early resource
+> runway, one-time complimentary Echo repairs, and truthful repair progress UI.
+> Bumped 1287 -> 1288 in this SAME edit.)*
+>
+> ### superseded: RECONCILED 2026-08-31 (CLI): main line next free = **1287**.
+> *(CLI minted **WO-1286** for the owner-authorized mobile-first Obsidian card-navigation
+> redesign: shared workspace/back-stack foundation, then Build/Manage/Hero/Journey/Realm migration,
+> duplicate-door retirement, captured UI review, and an SME acceptance gate. Bumped 1286 -> 1287 in
+> this SAME edit.)*
+>
+> ### superseded: RECONCILED 2026-08-30 (CLI): main line next free = **1286**.
 > **1285** = Defense upgrade needs its own card / second entrance (owner: discoverability, not routing - the screen is correctly gated on placed structures). Banner bumped 1285 -> 1286 in this SAME edit.
 >
 > ### superseded: RECONCILED 2026-08-30 (CLI): main line next free = **1285**.
