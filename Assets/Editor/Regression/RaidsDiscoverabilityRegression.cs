@@ -113,6 +113,11 @@ namespace DeNelle.Editor
                 failures.Add("WO-1286: Journey no longer routes Raids through RaidEntryGate.RequestOpen");
             if (deck.IndexOf("PanelId.JourneyDeck", StringComparison.Ordinal) < 0)
                 failures.Add("WO-1286: the stable Journey workspace is not registered");
+            string rawDeck = File.ReadAllText(deckPath);
+            if (rawDeck.IndexOf("HudIcons/hud_quest", StringComparison.Ordinal) < 0 ||
+                rawDeck.IndexOf("HudIcons/hud_raid", StringComparison.Ordinal) < 0 ||
+                rawDeck.IndexOf("PortraitCardArt", StringComparison.Ordinal) < 0)
+                failures.Add("WO-1286: Journey Quests/Raids cards lost their authored artwork surfaces");
             log.AppendLine("  WO-1286 stable Journey door, no duplicate face, RaidEntryGate authority intact - OK");
         }
 

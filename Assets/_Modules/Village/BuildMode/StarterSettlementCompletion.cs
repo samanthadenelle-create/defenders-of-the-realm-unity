@@ -4,6 +4,7 @@ using DeNelle.Core.Analytics;
 using DeNelle.Core.Catalog;
 using DeNelle.Core.Diagnostics;
 using DeNelle.Core.State;
+using Newtonsoft.Json;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
@@ -15,26 +16,24 @@ namespace DeNelle.Village
     {
         public const string SelectedKey = "founding.default_town_selected";
         public const string CompletedKey = "founding.starter_settlement_v1";
+        public const string LayoutRelativePath = "Data/Canonical/starter-settlement-layout.json";
 
-        private readonly struct Entry
+        [System.Serializable]
+        private sealed class LayoutTable
         {
-            public readonly string Id; public readonly Vector2Int Cell; public readonly int Yaw;
-            public Entry(string id, int x, int z, int yaw = 0)
-            { Id = id; Cell = new Vector2Int(x, z); Yaw = yaw; }
+            public int version;
+            public Entry[] entries;
         }
 
-        private static readonly Entry[] Template =
+        [System.Serializable]
+        private sealed class Entry
         {
-            new Entry("workshop",              9, 18),
-            new Entry("collector_forge",     11, 18),
-            new Entry("lumberyard",           13, 18),
-            new Entry("foundry",              15, 18),
-            new Entry("silo",                 17, 18),
-            new Entry("tower_ground_archer", 14,  5, 0),
-            new Entry("tower_ground_archer",  5, 14, 1),
-            new Entry("tower_ground_archer", 24, 14, 3),
-            new Entry("tower_ground_archer", 14, 25, 2),
-        };
+            public string id;
+            public int x;
+            public int z;
+            public int yawQuarterTurns;
+            [JsonIgnore] public Vector2Int Cell => new Vector2Int(x, z);
+        }
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
         private static void Arm()
@@ -69,43 +68,53 @@ namespace DeNelle.Village
             if (state == null || !Seen(state, SelectedKey) || Seen(state, CompletedKey))
             { Destroy(gameObject); yield break; }
 
+            Entry[] template = LoadTemplate();
+            if (template == null || template.Length == 0)
+            {
+                FlowTrace.Fail("Founding", $"starter layout missing/empty: {LayoutRelativePath}");
+                Destroy(gameObject);
+                yield break;
+            }
+
             var grid = PlacementGrid.Instance;
             if (grid == null) grid = new GameObject("PlacementGrid").AddComponent<PlacementGrid>();
             var loader = BaseLayoutLoader.Instance != null ? BaseLayoutLoader.Instance : BaseLayoutLoader.EnsureExists();
             if (state.BaseLayout == null) state.BaseLayout = new List<PlacedStructureData>();
 
             int added = 0, existing = 0, failed = 0;
-            for (int i = 0; i < Template.Length; i++)
+            for (int i = 0; i < template.Length; i++)
             {
-                Entry item = Template[i];
-                if (Count(state.BaseLayout, item.Id) > OccurrenceBefore(i, item.Id))
+                Entry item = template[i];
+                if (item == null || string.IsNullOrWhiteSpace(item.id))
+                { failed++; FlowTrace.Fail("Founding", $"starter layout row {i} has no id"); continue; }
+                if (Count(state.BaseLayout, item.id) > OccurrenceBefore(template, i, item.id))
                 { existing++; continue; }
 
-                CatalogEntry catalog = CatalogRegistry.Get(item.Id);
-                if (catalog == null) { failed++; FlowTrace.Fail("Founding", $"starter id missing: {item.Id}"); continue; }
+                CatalogEntry catalog = CatalogRegistry.Get(item.id);
+                if (catalog == null) { failed++; FlowTrace.Fail("Founding", $"starter id missing: {item.id}"); continue; }
                 Vector2Int footprint = grid.FootprintCells(
-                    StructureFactory.MeasureClaimFootprintXZ(catalog), item.Yaw * 90f);
+                    StructureFactory.MeasureClaimFootprintXZ(catalog), item.yawQuarterTurns * 90f);
                 if (!ResolveFreeCell(grid, item.Cell, footprint, out Vector2Int cell))
-                { failed++; FlowTrace.Fail("Founding", $"no starter seat for {item.Id} near {item.Cell}"); continue; }
+                { failed++; FlowTrace.Fail("Founding", $"no starter seat for {item.id} near {item.Cell}"); continue; }
 
-                var record = new PlacedStructureData(item.Id, cell.x, cell.y, item.Yaw, 1);
+                var record = new PlacedStructureData(item.id, cell.x, cell.y, item.yawQuarterTurns, 1);
                 state.BaseLayout.Add(record);
-                state.MarkEverBuilt(item.Id);
+                state.MarkEverBuilt(item.id);
                 if (loader == null || loader.Spawn(record, grid) == null)
                 {
                     state.BaseLayout.RemoveAt(state.BaseLayout.Count - 1);
                     failed++;
-                    FlowTrace.Fail("Founding", $"starter spawn failed: {item.Id} at {cell}");
+                    FlowTrace.Fail("Founding", $"starter spawn failed: {item.id} at {cell}");
                     continue;
                 }
                 added++;
-                FlowTrace.Step("Founding", $"starter placed {item.Id} at {cell}");
+                FlowTrace.Step("Founding", $"starter placed {item.id} at {cell}");
                 yield return null;
             }
 
             svc.MarkTutorialSeen(CompletedKey);
             svc.Save();
-            EventTracker.Track("starter_settlement_ready", new { added, existing, failed, total = Template.Length });
+            EventTracker.Track("starter_settlement_ready", new { added, existing, failed, total = template.Length });
             FlowTrace.Step("Founding", $"starter settlement ready: added={added} existing={existing} failed={failed}");
             Destroy(gameObject);
         }
@@ -116,8 +125,23 @@ namespace DeNelle.Village
         private static int Count(List<PlacedStructureData> layout, string id)
         { int n = 0; for (int i = 0; i < layout.Count; i++) if (layout[i].itemId == id) n++; return n; }
 
-        private static int OccurrenceBefore(int index, string id)
-        { int n = 0; for (int i = 0; i < index; i++) if (Template[i].Id == id) n++; return n; }
+        private static Entry[] LoadTemplate()
+        {
+            try
+            {
+                string json = DeNelle.Core.CanonicalJson.Read(LayoutRelativePath);
+                if (string.IsNullOrWhiteSpace(json)) return null;
+                return JsonConvert.DeserializeObject<LayoutTable>(json)?.entries;
+            }
+            catch (System.Exception ex)
+            {
+                FlowTrace.Fail("Founding", $"starter layout parse failed: {ex.Message}");
+                return null;
+            }
+        }
+
+        private static int OccurrenceBefore(Entry[] template, int index, string id)
+        { int n = 0; for (int i = 0; i < index; i++) if (template[i] != null && template[i].id == id) n++; return n; }
 
         public static bool ResolveFreeCell(PlacementGrid grid, Vector2Int preferred,
                                            Vector2Int footprint, out Vector2Int cell)

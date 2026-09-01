@@ -1199,6 +1199,7 @@ namespace DeNelle.Editor
 
             // 2026-08-16: the ranger's Attack/Cast/CastUpper all bound Ranger_Aim_Idle (a static pose) so every shot froze the hero mid-aim; pins the real bow clip in the BUILT controller AND its generator.
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "ranger-bow-fire suite", () => { if (!DeNelle.Editor.Regression.RangerBowFireRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[ranger-bow-fire] " + r); });
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "class-primary-block suite", () => { if (!DeNelle.Editor.Regression.ClassPrimaryAndKnightBlockRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[class-primary-block] " + r); });
 
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "raid-repeat-clear suite", () => { if (!DeNelle.Editor.Regression.RaidRepeatClearRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[raid-repeat-clear] " + r); });
             // WO-728: the per-camp raid COOLDOWN — the only bound on the game's one unbounded

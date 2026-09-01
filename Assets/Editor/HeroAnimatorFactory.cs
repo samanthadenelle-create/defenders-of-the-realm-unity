@@ -204,6 +204,9 @@ namespace DeNelle.Editor
                     "sword and shield power up",            // [3] e  Oath Ward (buff/ward pose)
                     "standing melee attack downward",       // [4] r  Lantern Charge (heavy)
                 },
+                // Held defensive pose authored for sword + shield: the left arm visibly raises
+                // and presents the equipped off-hand shield for the entire Block bool window.
+                blockClipOverride = "sword and shield block idle",
                 searchRoots = KnightRoots },
             new HeroSpec { slug = "Mage",
                 controllerPath = "Assets/Resources/Heroes/Mage.controller",

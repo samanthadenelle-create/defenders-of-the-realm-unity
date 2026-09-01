@@ -629,13 +629,10 @@ namespace DeNelle.Core.UI
                     var pfLabel = FindDeep<TMP_Text>(pf.transform, "text", "label");
                     if (pfLabel != null)
                     {
-                        pfLabel.text = label ?? "";
+                        CanonicalizeButtonLabels(pf.transform, pfLabel, label,
+                            ObsidianButtonLabelColor(color));
                         // CONTRAST LAW: the prefab's BAKED label colour (gold) is unreadable on the
                         // yellow/gold face — override it here so every caller inherits the one rule.
-                        pfLabel.color = ObsidianButtonLabelColor(color);
-                        pfLabel.fontStyle |= FontStyles.Bold;
-                        EnsureFont(pfLabel, FontRole.Body);
-                        FitSingleLine(pfLabel);                            // §1.14 — button text never clips ("BU SEL")
                     }
                     else
                     {
@@ -690,6 +687,28 @@ namespace DeNelle.Core.UI
             ClampMinTouch(btn);   // P0 kit touch floor
             MedievalUiSkin.ApplyButton(btn, color == ObsidianButtonColor.Yellow);
             return btn;
+        }
+
+        /// <summary>Imported button prefabs can contain multiple authored label layers.
+        /// Runtime copy has one authority: keep the binder-selected label and disable the rest.</summary>
+        private static void CanonicalizeButtonLabels(Transform root, TMP_Text canonical,
+            string label, Color color)
+        {
+            if (root == null || canonical == null) return;
+            var labels = root.GetComponentsInChildren<TMP_Text>(true);
+            for (int i = 0; i < labels.Length; i++)
+            {
+                var candidate = labels[i];
+                if (candidate == null || candidate == canonical) continue;
+                candidate.gameObject.SetActive(false);
+            }
+
+            canonical.gameObject.SetActive(true);
+            canonical.text = label ?? "";
+            canonical.color = color;
+            canonical.fontStyle |= FontStyles.Bold;
+            EnsureFont(canonical, FontRole.Body);
+            FitSingleLine(canonical);
         }
 
         /// <summary>Toast tone → Notification plate variant (§1.5).</summary>

@@ -153,7 +153,10 @@ namespace DeNelle.Editor
             float wallSeatY      = MergedWorldGroundY - MeasureMinY(wall);
             float arrowslitSeatY = MergedWorldGroundY - MeasureMinY(arrowslit != null ? arrowslit : wall);
             float gateSeatY      = MergedWorldGroundY - MeasureMinY(gate);
-            float towerSeatY     = MergedWorldGroundY - MeasureMinY(tower);
+            // This pack's wall-tower module imports vertically inverted relative to the
+            // wall/gate modules. Flip it upright, then seat the rotated lower bound (which is
+            // the negative of the unrotated max Y) on ground.
+            float towerSeatY     = MergedWorldGroundY + MeasureMaxY(tower);
 
             // Clear the four side groups for a clean, reproducible rebuild.
             foreach (var n in SideNames)
@@ -194,7 +197,8 @@ namespace DeNelle.Editor
                 // Push it down by its own min.y so the foundation goes where it belongs and
                 // the tower's visible height matches the wall it joins.
                 var cornerPos = rot * new Vector3(-halfExtent, towerSeatY, -halfExtent);
-                if (Place(side.transform, tower, cornerPos, rot, "CornerTower") != null) towers++;
+                var towerRot = rot * Quaternion.Euler(180f, 0f, 0f);
+                if (Place(side.transform, tower, cornerPos, towerRot, "CornerTower") != null) towers++;
 
                 for (int i = 0; i < SlotsPerSide; i++)
                 {
@@ -373,6 +377,8 @@ namespace DeNelle.Editor
         /// origin — negative for a module with an authored below-origin foundation.</summary>
         private static float MeasureMinY(GameObject prefab) => MeasureMin(prefab, 1);
 
+        private static float MeasureMaxY(GameObject prefab) => MeasureMax(prefab, 1);
+
         private static float MeasureMin(GameObject prefab, int axis)
         {
             if (prefab == null) return 0f;
@@ -390,6 +396,25 @@ namespace DeNelle.Editor
             }
             Object.DestroyImmediate(tmp);
             return min;
+        }
+
+        private static float MeasureMax(GameObject prefab, int axis)
+        {
+            if (prefab == null) return 0f;
+            var tmp = Object.Instantiate(prefab);
+            tmp.transform.position = Vector3.zero;
+            tmp.transform.rotation = Quaternion.identity;
+            tmp.transform.localScale = Vector3.one;
+            float max = 0f;
+            var rends = tmp.GetComponentsInChildren<Renderer>(true);
+            if (rends.Length > 0)
+            {
+                Bounds b = rends[0].bounds;
+                for (int i = 1; i < rends.Length; i++) b.Encapsulate(rends[i].bounds);
+                max = b.max[axis];
+            }
+            Object.DestroyImmediate(tmp);
+            return max;
         }
 
         /// <summary>Combined renderer-bounds extent of a prefab along one axis, from a

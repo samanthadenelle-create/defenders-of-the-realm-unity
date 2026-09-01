@@ -566,3 +566,28 @@ run the relevant offline/content regression plus compile gate, then rebuild the 
   This directly covers the earlier Windows first-run "no internet" symptom, whose root cause was
   missing remote catalog/content rather than a Windows networking regression.
 - Previous Windows output is recoverable at `Builds/previous/Windows-20260901-152746`.
+
+## 7.16 — FELT-TEST CLOSURE: TOWERS, TRAVERSAL, HUD, CLASSES (2026-09-01)
+
+- Restored the pre-wooden Archer Tower visuals (`Tower_Castle_Round`, `Tower_Castle_Square`,
+  `Tower_Medieval_Big`) without changing its stable ID, stats, costs, or saved placements. Registered
+  all three in the `Structure_Art` Addressable group; the initial full regression correctly rejected
+  the catalog until those runtime addresses existed.
+- Rebuilt the perimeter with upright/seated corners and added bidirectional `NavMeshLink` passages at
+  every permanently open gate. Hero traversal remains available through the short paired crossing.
+- Starter settlement placement is now canonical-data-driven through dual-copy
+  `starter-settlement-layout.json`: stable catalog ID + x/z/yaw, resolved through `CatalogRegistry`.
+- Fixed duplicate shared button labels (including Pause `CLOSE`), square-bounded circular HUD art,
+  clickable Skip Tutorial, the missing town Talk action, and Journey Quest/Raid artwork.
+- Mage/Ranger primary actions now execute and mirror their authored Q spell/bow ability. Knight Block
+  reuses the existing `Block` Animator contract with the authored sword-and-shield held pose.
+- Verification: `Builds/compile_final_followup.log` has `COMPILE_GATE_OK`;
+  `Builds/regression_final_followup2.log` has `REGRESSION_OK 341/341 suites`;
+  `Builds/build_final_followup.log` has `[DesktopBuild] SUCCEEDED` (2,071 MB, 52.0 seconds).
+- Windows payload hashes: game assembly
+  `340900CC532D2F368911751648B17DFDAC10481EFBD4C628E8E502834F2D5C9D`; overworld `level3`
+  `63433F00782CA616D47347D38C0B2CC0DE25EE6F70AFE7CBE619A5D225731856`.
+- R2 closure: `R2_PUSH_OK 5 uploaded (0.4 MB), 524 unchanged`;
+  `R2_PARITY_OK targets=Android,StandaloneWindows64,WebGL objects=195`; `R2_CHECK_OK`; exact Windows
+  catalog HEAD is HTTP 200 / 32 bytes. The follow-up build therefore retains the Windows first-run
+  connectivity fix rather than regressing it.

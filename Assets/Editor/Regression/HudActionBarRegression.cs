@@ -236,6 +236,9 @@ namespace DeNelle.Editor
                 failures.Add("HudKitController does not consume ActiveButtonsChanged (repack render pass unbound)");
             if (kitSrc.IndexOf("\"upgradeButton\"") < 0)
                 failures.Add("HudKitController does not register the upgradeButton face (WO-835 §3c split missing)");
+            if (kitSrc.IndexOf("BuildPeacefulDockSlot(1, \"TALK\"") < 0 ||
+                kitSrc.IndexOf("const int count = 5;") < 0)
+                failures.Add("adaptive peaceful dock lost its always-reachable Talk medallion or five-slot fit");
 
             // The retired gate reads must NOT return to the View (predicates live in Core).
             if (kitSrc.IndexOf("GameStateService") >= 0)

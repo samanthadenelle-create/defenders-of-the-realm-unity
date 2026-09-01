@@ -17,7 +17,8 @@ namespace DeNelle.Editor.Regression
                 Require(src, "private const float MergedWorldGroundY = 0f;");
                 Require(src, "MergedWorldGroundY - MeasureMinY(wall)");
                 Require(src, "MergedWorldGroundY - MeasureMinY(gate)");
-                Require(src, "MergedWorldGroundY - MeasureMinY(tower)");
+                Require(src, "MergedWorldGroundY + MeasureMaxY(tower)");
+                Require(src, "Quaternion.Euler(180f, 0f, 0f)");
                 Require(src, "Vector3.up * moduleSeatY");
                 Require(src, "Vector3.up * gateSeatY");
                 Require(src, "ApplyOpenGatePose(gateInstance)");
@@ -25,10 +26,18 @@ namespace DeNelle.Editor.Regression
                 Require(src, "SM_Bld_Castle_Wall_Gate_Door_R_01");
                 Require(src, "SM_Bld_Castle_Wall_Gate_Portcullis_01");
                 Require(src, "DisableColliders(portcullis)");
+                string traversal = File.ReadAllText("Assets/_Modules/Village/World/GateTraversalInjector.cs");
+                Require(traversal, "NavMeshLink");
+                Require(traversal, "bidirectional = true");
+                Require(traversal, "agentTypeID = 0");
+                Require(traversal, "InnerRadius = 37f");
+                Require(traversal, "OuterRadius = 41f");
+                string flags = File.ReadAllText("Assets/_Modules/Core/FeatureFlags.cs");
+                Require(flags, "Get(\"gatetraversal\", defaultOn: true)");
                 if (src.IndexOf("CastleHubBuilder.CastleFootprintLiftY", StringComparison.Ordinal) >= 0)
                     throw new InvalidOperationException("merged perimeter reads the retired +3m island lift and can float above y=0 again");
 
-                reason = "SYNTY_PERIMETER_GROUNDING_OK: walls, gates, and towers seat measured renderer bounds on merged-world y=0; traversable gates are visibly authored open.";
+                reason = "SYNTY_PERIMETER_GROUNDING_OK: walls/gates ground, source corner towers are corrected, and short hero + bidirectional NavMesh gate traversal is default-on.";
                 return true;
             }
             catch (Exception ex)

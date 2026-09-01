@@ -12,8 +12,7 @@
 // TIME, so registration order vs. hero spawn order cannot break them.
 //
 // Registered here:
-//   attack      -> PlayerAttackController.TriggerBasicAttack() (the owner's
-//                  HUD seam, same gates as Space/LMB).
+//   attack      -> Mage/Ranger authored Q primary; Knight basic weapon attack.
 //   cycleSelect -> HeroTargetIndicator.EngageLock on the Enemy whose instance
 //                  id matches the TargetRecord.Id (mirrors the retired
 //                  BattleHud9Zone.SelectCycleRow WO-512 routing).
@@ -63,14 +62,21 @@ namespace DeNelle.Village.Hud
                     FlowTrace.Step("HudKit", "attack gated while Block is held");
                     return;
                 }
+                var abilities = Object.FindAnyObjectByType<HeroAbilities>();
+                string heroClass = abilities != null ? abilities.HeroClass : null;
+                if (abilities != null && (string.Equals(heroClass, "mage", System.StringComparison.OrdinalIgnoreCase) ||
+                                          string.Equals(heroClass, "ranger", System.StringComparison.OrdinalIgnoreCase)))
+                {
+                    bool cast = abilities.TryCast(AbilitySlot.Q);
+                    FlowTrace.Step("HudKit", "primary command -> class Q for " + heroClass + " " +
+                                               (cast ? "FIRED" : "gated"));
+                    return;
+                }
+
                 var atk = Object.FindAnyObjectByType<PlayerAttackController>();
                 if (atk == null) { FlowTrace.Warn("HudKit", "attack fired but no PlayerAttackController in scene"); return; }
-                // ⭐ WO-1105 REVISION (owner 2026-08-16, verbatim: "change the bow and arrow attack
-                // to the action bar and leave the attack as the dagger attack"): this button is the
-                // MELEE/DAGGER swing for every class. The archer's bow is an action-bar ability
-                // (the Q medallion -> HeroAbilities.TryCast), so this input never spends an arrow.
                 bool swung = atk.TriggerBasicAttack();
-                FlowTrace.Step("HudKit", "attack command -> TriggerBasicAttack " + (swung ? "SWUNG" : "gated"));
+                FlowTrace.Step("HudKit", "primary command -> knight basic swing " + (swung ? "SWUNG" : "gated"));
             });
 
             HudCommands.RegisterBlock(held =>

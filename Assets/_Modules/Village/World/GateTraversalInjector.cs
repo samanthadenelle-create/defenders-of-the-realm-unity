@@ -14,13 +14,14 @@
 // ([RuntimeInitializeOnLoadMethod(AfterSceneLoad)] + sceneLoaded re-arm,
 // runtime-authored -- NO scene edit, NO navmesh rebake, guarded try/catch that
 // never throws into gameplay, idempotent per load, gated behind a FeatureFlags
-// flag). At each of the 4 castle gates (N/S/E/W) author a PAIRED inner/outer warp:
+// flag). At each of the 4 castle gates (N/S/E/W) author a bidirectional NavMeshLink
+// across the open arch. When the optional hero warp is enabled, it uses the same
+// measured inner/outer anchors:
 //   * the gate opening faces OUTWARD on its side; the castle walls sit at ~r=44,
 //     the north opening near +Z ~40 (BuildNorthDiag measure; sides symmetric at
 //     +/-40 on their axis).
-//   * INNER anchor at r=46 (just inside the arch), OUTER landing at r=52 (just
-//     past the wall so the hero clears the arch). Both NavMesh-seated at author
-//     time so the hero lands on walkable mesh.
+//   * INNER anchor at r=37 (courtyard side), OUTER landing at r=41 (exterior side).
+//     Both are NavMesh-seated at author time so agents cross the wall thickness.
 //   * a hero walking OUT hits the inner anchor -> warped to the outer landing,
 //     FACING OUTWARD; a hero walking IN hits the outer anchor -> warped to the
 //     inner landing, FACING INWARD. Bidirectional, so the gate works both ways.
@@ -30,7 +31,7 @@
 // the partner anchor never bounces back.
 //
 // NO OVERLAP with HomeReturnPortalInjector: those OUTER return portals sit at
-// r~72; the gate landings stay at r~52 (max trigger reach ~55.5) so the two
+// r~72; the gate landings stay at r~41, so the two
 // systems never fight over the same ground.
 //
 // WARP API: reuses HeroLocomotion.WarpTo(Vector3, Quaternion?) -- it disables the
@@ -42,25 +43,24 @@
 using UnityEngine;
 using UnityEngine.AI;
 using UnityEngine.SceneManagement;
+using Unity.AI.Navigation;
 using DeNelle.Core.Diagnostics;
 
 namespace DeNelle.Village.World
 {
     public static class GateTraversalInjector
     {
-        private const string GatePrefix = "GateWarp_";
+        private const string GatePrefix = "GatePassage_";
 
         // Castle walls ~r=44; gate openings face outward at ~+/-40 on each axis.
         // Inner anchor just inside the arch, outer landing just past the wall -- kept
         // well inside the HomeReturnPortal outer ring (r~72) so the two never fight.
-        // MEASURED geometry (BuildNorthDiag 2026-07-16): each castle wall spans radius ~36..44 on
-        // its cardinal axis (courtyard/INNER face ~36, exterior/OUTER face ~44). So the INNER anchor
-        // must sit on the COURTYARD side (r=34, just inside the wall) and the OUTER landing just past
-        // the wall (r=48). The agent's first cut (46/52) put BOTH anchors OUTSIDE the wall, which
-        // would fire the warp in the wrong place. Walking OUT from the courtyard hits the inner
-        // trigger and warps across the arch to the exterior — "navigate to the other side".
-        private const float InnerRadius = 34f;
-        private const float OuterRadius = 48f;
+        // Current open-gate geometry is narrower than the retired perimeter: the measured walkable
+        // seats are r=37 and r=41. The link bridges that short non-walkable seam without putting a
+        // trigger in normal courtyard traffic.
+        private const float InnerRadius = 37f;
+        private const float OuterRadius = 41f;
+        private const float PassageWidth = 3.5f;
 
         // South 0deg . West 90deg . North 180deg . East 270deg is the locked bridge
         // clone convention (HomeReturnPortalInjector); here we just need the 4 cardinal
@@ -101,19 +101,12 @@ namespace DeNelle.Village.World
             string active = SceneManager.GetActiveScene().name;
             if (!DeNelle.Core.HubScenes.IsOverworld(active)) return;   // overworld-only authoring
 
-            if (!DeNelle.Core.FeatureFlags.GateTraversal)
-            {
-                FlowTrace.Once("GateWarp", "flag-off",
-                    "ff.gatetraversal OFF -- gate warps NOT authored.");
-                return;
-            }
-
             // Idempotency: a gate-warp set already authored on this scene is left alone.
-            var existing = Object.FindObjectsByType<GateWarp>(FindObjectsSortMode.None);
-            if (existing != null && existing.Length > 0)
+            var existing = GameObject.Find(GatePrefix + Sides[0]);
+            if (existing != null)
             {
                 FlowTrace.Step("GateWarp",
-                    $"gate warps already authored on '{active}' (found {existing.Length}) -- idempotent skip.");
+                    $"gate passages already authored on '{active}' -- idempotent skip.");
                 return;
             }
 
@@ -134,16 +127,34 @@ namespace DeNelle.Village.World
                 var go = new GameObject(GatePrefix + Sides[i]);
                 go.transform.position = inner;   // parked at the inner anchor (presentation-free)
 
-                var warp = go.AddComponent<GateWarp>();
-                warp.Init(Sides[i], inner, outer, dir);
+                // Pathfinding agents (enemies and troops) need a REAL graph edge. The visual
+                // opening alone cannot reconnect two navmesh regions separated by the baked wall.
+                var link = go.AddComponent<NavMeshLink>();
+                link.startPoint = Vector3.zero;
+                link.endPoint = outer - inner;
+                link.width = PassageWidth;
+                link.bidirectional = true;
+                link.area = 0;
+                link.agentTypeID = 0;
+                link.autoUpdate = true;
+                link.UpdateLink();
+
+                // The player is input-driven (NavMeshAgent.Move), so it cannot auto-traverse a
+                // NavMeshLink. Keep the paired crossing, now narrowed to the wall thickness.
+                if (DeNelle.Core.FeatureFlags.GateTraversal)
+                {
+                    var warp = go.AddComponent<GateWarp>();
+                    warp.Init(Sides[i], inner, outer, dir);
+                }
 
                 built++;
                 FlowTrace.Step("GateWarp",
-                    $"gate={Sides[i]} paired warp ONLINE -- inner {inner} <-> outer {outer} (outward {dir}).");
+                    $"gate={Sides[i]} passage ONLINE -- hero crossing + NavMeshLink " +
+                    $"inner {inner} <-> outer {outer}, width {PassageWidth:F1} (outward {dir}).");
             }
 
             FlowTrace.Step("GateWarp",
-                $"{built}/4 gate warps authored on '{active}' -- walk-through-the-gate wired.");
+                $"{built}/4 gate passages authored on '{active}' -- hero + enemy traversal wired.");
         }
 
         private static Vector3 SeatOnMesh(Vector3 pos, string side, string which)
@@ -172,7 +183,7 @@ namespace DeNelle.Village.World
         // Trigger reach around each anchor. Small enough that the outer trigger's max reach
         // (OuterRadius + TriggerRadius = ~55.5) stays well inside the HomeReturnPortal ring
         // (r~72), and large enough to catch a NavMeshAgent stepping through in one frame.
-        private const float TriggerRadius = 3.5f;
+        private const float TriggerRadius = 1.5f;
 
         private string  _side;
         private Vector3 _inner;

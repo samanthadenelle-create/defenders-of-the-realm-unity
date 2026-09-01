@@ -1518,20 +1518,25 @@ namespace DeNelle.HUD.Kit
             {
                 if (_owner != null) _owner.BuildRequested?.Invoke();
             });
-            BuildPeacefulDockSlot(1, "HERO", UiStyle.Icon("hero", "helmet", "sword"), () =>
+            BuildPeacefulDockSlot(1, "TALK", UiStyle.Icon("talk", "speech", "dialogue"), () =>
+            {
+                HudCommands.Talk();
+                if (_owner != null) _owner.TalkRequested?.Invoke();
+            });
+            BuildPeacefulDockSlot(2, "HERO", UiStyle.Icon("hero", "helmet", "sword"), () =>
             {
                 if (!PanelRouter.Open(PanelId.HeroDeck))
                     FlowTrace.Warn("HudKit", "Hero workspace opener not registered");
             });
-            BuildPeacefulDockSlot(2, "JOURNEY", UiStyle.Icon("journey", "compass", "quest"), OnQuestsAction);
-            BuildPeacefulDockSlot(3, "MANAGE", UiStyle.Icon("manage", "banner", "shield"), OnManageAction);
+            BuildPeacefulDockSlot(3, "JOURNEY", UiStyle.Icon("journey", "compass", "quest"), OnQuestsAction);
+            BuildPeacefulDockSlot(4, "MANAGE", UiStyle.Icon("manage", "banner", "shield"), OnManageAction);
 
             Register("peacefulDock", WrapAsWidget("peacefulDock", _peacefulDockRoot));
         }
 
         private void BuildPeacefulDockSlot(int index, string caption, Sprite icon, Action command)
         {
-            const int count = 4;
+            const int count = 5;
             const float gap = 0.018f;
             float width = (1f - gap * (count + 1)) / count;
             float x0 = gap + index * (width + gap);
@@ -2089,7 +2094,7 @@ namespace DeNelle.HUD.Kit
         // RaidsDimmedChanged (tint the Raids face) — zero predicate reads remain.
         private void BindActionBar()
         {
-            // The approved adaptive HUD uses one stable four-medallion peaceful dock. Its
+            // The approved adaptive HUD uses one stable five-medallion peaceful dock. Its
             // commands are the same authoritative routes as the retired repacking faces, but
             // its geometry is posture-owned through hud-areas.json and never changes with
             // transient Talk/Raid applicability. Keep the old faces constructed for reversal
@@ -2668,6 +2673,21 @@ namespace DeNelle.HUD.Kit
                 }
                 if (!medallion && h.button != null && s.Equipped)
                     h.button.interactable = !cooling && s.Affordable;
+            }
+
+            // The adaptive combat dock's primary face mirrors the authored class Q. Mage shows
+            // Cast/Fireball and Ranger shows Shoot/bow; the command bridge dispatches that same Q.
+            if (_adaptiveCombatSlots != null && _adaptiveCombatSlots.Length > 0 &&
+                _adaptiveCombatSlots[0] != null && a.Slots.Count > 0)
+            {
+                var primary = _adaptiveCombatSlots[0];
+                var q = a.Slots[0];
+                primary.SetLabel(null);
+                primary.SetIcon(string.IsNullOrEmpty(q.IconKey) ? null : UiStyle.Icon(q.IconKey));
+                primary.SetCaption(string.IsNullOrEmpty(q.Verb) ? "ATTACK" : q.Verb.ToUpperInvariant());
+                primary.SetCooldown(q.CooldownRemaining, q.CooldownTotal);
+                if (primary.button != null)
+                    primary.button.interactable = q.Equipped && q.Affordable && q.CooldownRemaining <= 0f;
             }
         }
 

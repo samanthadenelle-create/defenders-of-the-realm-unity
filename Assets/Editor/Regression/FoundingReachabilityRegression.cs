@@ -17,6 +17,7 @@
 // =============================================================================
 using System;
 using System.Collections.Generic;
+using System.Collections;
 using System.IO;
 using System.Reflection;
 using System.Text;
@@ -127,6 +128,26 @@ namespace DeNelle.Editor
                 !choice.Contains("new Vector2(-BodyFillHorizontalOverscan, 0f)") ||
                 !choice.Contains("new Vector2(1f + BodyFillHorizontalOverscan, 1f)"))
                 failures.Add("[founding-reach] founding modal body fill no longer overscans beneath both frame shoulders; the previous screen can bleed through at the sides");
+            string completionPath = Path.Combine(Application.dataPath, "_Modules/Village/BuildMode/StarterSettlementCompletion.cs");
+            string layoutRes = Path.Combine(Application.dataPath, "Resources/Data/Canonical/starter-settlement-layout.json");
+            string layoutStream = Path.Combine(Application.dataPath, "StreamingAssets/Data/Canonical/starter-settlement-layout.json");
+            string completion = File.Exists(completionPath) ? File.ReadAllText(completionPath) : "";
+            if (!completion.Contains("CanonicalJson.Read(LayoutRelativePath)") ||
+                !completion.Contains("CatalogRegistry.Get(item.id)"))
+                failures.Add("[founding-reach] ready-settlement layout no longer reads canonical ids and resolves their current catalog art");
+            if (completion.Contains("private static readonly Entry[] Template"))
+                failures.Add("[founding-reach] starter transforms returned to a hardcoded C# table instead of canonical data");
+            if (!File.Exists(layoutRes) || !File.Exists(layoutStream))
+                failures.Add("[founding-reach] starter-settlement-layout.json dual copies are missing");
+            else if (!StructuralComparisons.StructuralEqualityComparer.Equals(
+                         File.ReadAllBytes(layoutRes), File.ReadAllBytes(layoutStream)))
+                failures.Add("[founding-reach] starter-settlement-layout.json Resources/StreamingAssets copies diverged");
+            string structuresRes = Path.Combine(Application.dataPath, "Resources/Data/Canonical/structures-catalog.json");
+            string structures = File.Exists(structuresRes) ? File.ReadAllText(structuresRes) : "";
+            if (!structures.Contains("Structures/Tower_Castle_Round") ||
+                !structures.Contains("Structures/Tower_Castle_Square") ||
+                !structures.Contains("Structures/Tower_Medieval_Big"))
+                failures.Add("[founding-reach] Archer Tower no longer uses the owner-approved legacy stone tower family");
             log.AppendLine("  recommended starter settlement default + scratch secondary path checked");
         }
 

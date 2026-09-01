@@ -74,3 +74,34 @@ now present, parity-verified, and publicly readable.
   contain runtime captures, browser Local Storage/session material, and recovery metadata and are not
   part of the project check-in.
 
+## Follow-up closure (2026-09-01)
+
+- Restored the owner-approved legacy stone Archer Tower ladder: Castle Round at L1, Castle Square at
+  L2, and Medieval Big at L3. The retired wooden tower assets remain in the project for compatibility
+  but are no longer selected by `tower_ground_archer`. All three restored prefabs are registered in
+  `Structure_Art` and were uploaded with this build.
+- Rebuilt the perimeter with upright, ground-seated corner towers. The four permanently open gates now
+  have short bidirectional `NavMeshLink` passages for enemies/troops; optional hero warps use the same
+  measured inner/outer seats. Gate traversal is default-on.
+- Moved the recommended starter settlement from a hardcoded C# transform table to the dual-copy
+  canonical `starter-settlement-layout.json`. It stores stable catalog IDs plus placement transforms;
+  `CatalogRegistry` resolves whichever art each ID currently selects.
+- Shared Obsidian buttons now retain one authoritative text child, removing the doubled Pause `CLOSE`.
+  HUD medallion art is fitted inside a true-square circular bound.
+- Restored the five-action peaceful dock (`Build`, `Talk`, `Hero`, `Journey`, `Manage`) and the Skip
+  Tutorial button's raycast target. Journey cards now show the canonical Quest and Raid artwork.
+- Mage primary dispatches the authored Q spell, Ranger primary dispatches the authored Q bow attack,
+  and the adaptive primary face mirrors that ability's icon/caption/cooldown. Knight remains a basic
+  weapon attack; Block drives the existing Animator `Block` bool with the authored
+  `sword and shield block idle` clip, producing a visible held offhand/shield pose.
+- Fresh compile: `Builds/compile_final_followup.log` — `COMPILE_GATE_OK`.
+- Fresh full regression: `Builds/regression_final_followup2.log` —
+  `REGRESSION_OK 341/341 suites`.
+- Fresh Windows build: `Builds/build_final_followup.log` — `[DesktopBuild] SUCCEEDED`, 2,071 MB in
+  52.0 seconds. Player: `Builds/Windows/DefendersOfTheRealm.exe` (667,648 bytes); game assembly
+  SHA-256 `340900CC532D2F368911751648B17DFDAC10481EFBD4C628E8E502834F2D5C9D`; overworld `level3`
+  SHA-256 `63433F00782CA616D47347D38C0B2CC0DE25EE6F70AFE7CBE619A5D225731856`.
+- R2: `R2_PUSH_OK 5 uploaded (0.4 MB), 524 unchanged` and
+  `R2_PARITY_OK targets=Android,StandaloneWindows64,WebGL objects=195`; anonymous access passed
+  `R2_CHECK_OK`. The exact Windows catalog returned HTTP 200 with length 32. This keeps the earlier
+  first-run “no internet” fix valid for the follow-up build as well.

@@ -26,7 +26,12 @@ namespace DeNelle.Editor.Regression
                 Require(skin, "buttons/button-disabled-empty");
                 Require(skin, "buttons/close-ornate");
 
-                result = "Pause uses the compact medieval shell, stable aspect, three approved actions, and authoritative WorldHold.";
+                string buttons = File.ReadAllText("Assets/_Modules/Core/UI/ElarionUiKitObsidian.cs");
+                Require(buttons, "CanonicalizeButtonLabels");
+                Require(buttons, "GetComponentsInChildren<TMP_Text>(true)");
+                Require(buttons, "candidate.gameObject.SetActive(false)");
+
+                result = "Pause uses the compact medieval shell, one authoritative label per shared button, three approved actions, and authoritative WorldHold.";
                 return true;
             }
             catch (Exception ex)

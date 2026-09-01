@@ -3656,6 +3656,27 @@ namespace DeNelle.Core.UI
         public static void StyleAsRoundMedallion(ActionSlotHandle slot, string keyBadge = null)
         {
             if (slot == null || slot.root == null) return;
+
+            // The full slot is a wide touch/caption cell. All circular artwork shares this one
+            // square container, making the outer bezel the physical bound and guaranteeing that
+            // the face, mask, and icon remain concentric at every phone/tablet aspect ratio.
+            RectTransform medallionBounds;
+            var existingBounds = slot.root.transform.Find("MedallionBounds") as RectTransform;
+            if (existingBounds != null) medallionBounds = existingBounds;
+            else
+            {
+                var boundsGo = new GameObject("MedallionBounds", typeof(RectTransform), typeof(AspectRatioFitter));
+                boundsGo.transform.SetParent(slot.root.transform, false);
+                boundsGo.transform.SetAsFirstSibling();
+                medallionBounds = (RectTransform)boundsGo.transform;
+                medallionBounds.anchorMin = new Vector2(0f, 0.20f);
+                medallionBounds.anchorMax = Vector2.one;
+                medallionBounds.offsetMin = Vector2.zero;
+                medallionBounds.offsetMax = Vector2.zero;
+                var boundsAspect = boundsGo.GetComponent<AspectRatioFitter>();
+                boundsAspect.aspectMode = AspectRatioFitter.AspectMode.FitInParent;
+                boundsAspect.aspectRatio = 1f;
+            }
             if (slot.frame != null)
             {
                 var med = CombatMedallionSprite;
@@ -3674,7 +3695,7 @@ namespace DeNelle.Core.UI
                     slot.frame.color = new Color(0.169f, 0.196f, 0.239f, 0.96f);   // #2b323d
                     if (slot.frame.sprite == null) ApplyRounded(slot.frame);
                     var rim = new GameObject("GoldRim", typeof(Image));
-                    rim.transform.SetParent(slot.root.transform, false);
+                    rim.transform.SetParent(medallionBounds, false);
                     var rimRt = (RectTransform)rim.transform;
                     rimRt.anchorMin = Vector2.zero; rimRt.anchorMax = Vector2.one;
                     rimRt.offsetMin = Vector2.zero; rimRt.offsetMax = Vector2.zero;
@@ -3697,11 +3718,12 @@ namespace DeNelle.Core.UI
                 // the visual face into a dedicated upper square-safe band and leave the bottom
                 // fifth exclusively for the caption. The root Image stays transparent as the
                 // Button targetGraphic, so interaction geometry does not change.
-                var faceGo = new GameObject("MedallionFace", typeof(Image));
-                faceGo.transform.SetParent(slot.root.transform, false);
+                var faceTr = medallionBounds.Find("MedallionFace");
+                var faceGo = faceTr != null ? faceTr.gameObject : new GameObject("MedallionFace", typeof(Image));
+                if (faceTr == null) faceGo.transform.SetParent(medallionBounds, false);
                 faceGo.transform.SetAsFirstSibling();
                 var faceRt = (RectTransform)faceGo.transform;
-                faceRt.anchorMin = new Vector2(0f, 0.20f);
+                faceRt.anchorMin = Vector2.zero;
                 faceRt.anchorMax = Vector2.one;
                 faceRt.offsetMin = Vector2.zero;
                 faceRt.offsetMax = Vector2.zero;
@@ -3725,26 +3747,15 @@ namespace DeNelle.Core.UI
                 slot.icon.transform.parent.name != "RoundIconMask")
             {
                 var icon = slot.icon;
-                var oldParent = icon.transform.parent;
-                int oldIndex = icon.transform.GetSiblingIndex();
                 var maskGo = new GameObject("RoundIconMask", typeof(RectTransform), typeof(Image), typeof(Mask));
-                maskGo.transform.SetParent(oldParent, false);
-                maskGo.transform.SetSiblingIndex(oldIndex);
+                maskGo.transform.SetParent(medallionBounds, false);
                 var mrt = (RectTransform)maskGo.transform;
                 var irt = icon.rectTransform;
-                mrt.anchorMin = irt.anchorMin;
-                mrt.anchorMax = irt.anchorMax;
-                mrt.offsetMin = irt.offsetMin;
-                mrt.offsetMax = irt.offsetMax;
-                mrt.anchorMin = new Vector2(mrt.anchorMin.x, Mathf.Max(0.25f, mrt.anchorMin.y));
-                mrt.anchorMax = new Vector2(mrt.anchorMax.x, Mathf.Max(0.94f, mrt.anchorMax.y));
-                // The owning action slot may be a wide quarter of a landscape dock. Keep that
-                // wide touch allocation, but fit the visual stencil to a true 1:1 medallion.
-                // Putting this constraint on the slot root collapses sibling anchors; putting it
-                // here affects only the artwork and leaves all four navigation actions visible.
-                var maskAspect = maskGo.AddComponent<AspectRatioFitter>();
-                maskAspect.aspectMode = AspectRatioFitter.AspectMode.FitInParent;
-                maskAspect.aspectRatio = 1f;
+                const float iconInset = 0.14f;
+                mrt.anchorMin = new Vector2(iconInset, iconInset);
+                mrt.anchorMax = new Vector2(1f - iconInset, 1f - iconInset);
+                mrt.offsetMin = Vector2.zero;
+                mrt.offsetMax = Vector2.zero;
                 var maskImage = maskGo.GetComponent<Image>();
                 maskImage.sprite = CircleSprite != null ? CircleSprite : SolidSprite;
                 maskImage.type = Image.Type.Simple;
@@ -3764,13 +3775,13 @@ namespace DeNelle.Core.UI
             // chrome: at HUD scale it reads as a plain brown disc beside the black-iron/gold UI.
             // Overlay the canonical transparent four-point bezel on every round action so HUD,
             // Skills and item medallions share one visual grammar without flattening live icons.
-            if (slot.root.transform.Find("CanonicalBezel") == null &&
+            if (medallionBounds.Find("CanonicalBezel") == null &&
                 CanonicalMedallionFrameSprite != null)
             {
                 var bezelGo = new GameObject("CanonicalBezel", typeof(Image));
-                bezelGo.transform.SetParent(slot.root.transform, false);
+                bezelGo.transform.SetParent(medallionBounds, false);
                 var bezelRt = (RectTransform)bezelGo.transform;
-                bezelRt.anchorMin = new Vector2(0f, 0.20f);
+                bezelRt.anchorMin = Vector2.zero;
                 bezelRt.anchorMax = Vector2.one;
                 bezelRt.offsetMin = Vector2.zero;
                 bezelRt.offsetMax = Vector2.zero;

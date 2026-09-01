@@ -200,7 +200,9 @@ namespace DeNelle.Core.UI
                 face.sprite = medievalFace;
                 face.type = Image.Type.Simple;
                 face.color = Color.white;
-                face.raycastTarget = false;
+                // This is the only enabled Graphic left under the button. It must participate in
+                // GraphicRaycaster hit testing or the visible Skip control cannot be tapped.
+                face.raycastTarget = true;
                 _button.targetGraphic = face;
                 _button.transition = Selectable.Transition.ColorTint;
                 _button.colors = new ColorBlock
