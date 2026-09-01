@@ -4,7 +4,8 @@
     "references": [
         "DeNelle.Core",
         "DeNelle.Village",
-        "DeNelle.Data"
+        "DeNelle.Data",
+        "DeNelle.Editor"
     ],
     "includePlatforms": [
         "Editor"

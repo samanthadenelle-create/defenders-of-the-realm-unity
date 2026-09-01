@@ -1,6 +1,6 @@
 # WO-1290 — Castle walls rebuilt on Synty's native 5m module
 
-**Status:** READY TO IMPLEMENT
+**Status:** IN PROGRESS (2026-09-01: ring built + gated; corner treatment NOT done — see RESULT notes)
 **Minted:** 2026-09-01 (CLI, banner bumped 1289 -> 1293 in the same edit)
 **Branch:** `feat/synty-art-retheme`   **Lane:** 2 of 4 (Synty art re-theme)
 **Silo:** Castle perimeter geometry. File-disjoint from WO-1289 (terrain) / WO-1291 (buildings).
