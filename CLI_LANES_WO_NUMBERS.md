@@ -1,6 +1,15 @@
 # Lanes â€” Work-Order Numbers Only (for CLI)  Â·  reconciled 2026-06-12 (nightly refill)
 
-> ## PROD SERIES (post-launch): next free = **PROD-021**.
+> ## PROD SERIES (post-launch): next free = **PROD-022**.
+> *(CLI minted **PROD-021** 2026-09-01 from the F8 backlog: the R2 catalog for the shipped build
+> was NEVER PUSHED - the exe 404s on StandaloneWindows64/catalog_2026.08.31.349579.hash while that
+> file sits in ServerData/ on disk. Occurrence FOUR of the CLAUDE.md s16 class, and it covers 93 of
+> the 148 un-acked captures. Root gate defect: r2-ship.ps1 verifies ONE explicit target, so a run
+> that pushes the parent and verifies Android emits R2_PARITY_OK while Windows 404s. Emergency /
+> live defect - the owner's own flags 4099 + 4161 are the Title screen failing to load.
+> Bumped 021 -> 022 in this SAME edit.)*
+>
+> ### superseded: PROD SERIES next free = **PROD-021**.
 > *(CLI seat minted **PROD-018 through PROD-020** and bumped 018 -> 021 in this SAME edit.
 > Owner felt 2026-08-29: **018** = Build confirm-place does not restore category cards (WO-1273
 > BM-1 still Expand()s the dormant carousel). **019** = Knight shield equipped in bag but missing
@@ -158,7 +167,13 @@
 > fine as history. A copied number is the bug **even when it was right the day it was written** -
 > that is exactly how the retired 860-899 UI block kept re-seeding collisions from CLAUDE.md sec.2.
 
-> ## ⚠ RECONCILED 2026-09-01 (CLI): main line next free = **1293**.
+> ## ⚠ RECONCILED 2026-09-01 (CLI): main line next free = **1294**.
+> *(CLI minted **WO-1293** from F8 device capture seq 4077: BuildPeekStrip NRE blanks the Bag peek
+> strip on a gear-tab tap. The method MOVED to InventoryGrid.cs:290 in d6d3146b2, so grepping
+> HeroInventoryController.cs finds nothing - the ticket says so. Three unguarded derefs located,
+> instrument-first before any fix. Bumped 1293 -> 1294 in this SAME edit.)*
+>
+> ### superseded: RECONCILED 2026-09-01 (CLI): main line next free = **1293**.
 > *(CLI minted **WO-1289 through WO-1292** for the Synty art re-theme lane, owner-approved
 > 2026-09-01 on branch `feat/synty-art-retheme`. **1289** = ground regrade (Ground_Meadow
 > measures RGB 93/189/39, chroma 150 — 35% more saturated than any other layer; it passes
