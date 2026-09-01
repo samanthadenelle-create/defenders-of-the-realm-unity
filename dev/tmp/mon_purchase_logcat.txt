@@ -1,0 +1,1200 @@
+08-22 14:14:52.412  6853  6909 I Unity   : DeNelle.Village.Enemy:TickContactAttack()
+08-22 14:14:52.412  6853  6909 I Unity   : DeNelle.Village.Enemy:Update()
+08-22 14:14:52.412  6853  6909 I Unity   : 
+08-22 14:14:52.456  6853  6909 I Unity   : [Flow:Perf]     fps=43 ms=23.2 mem=430MB gc=24MB scene=Main_Castle_Overworld towers=0 enemies=8
+08-22 14:14:52.456  6853  6909 I Unity   : UnityEngine.DebugLogHandler:Internal_Log(LogType, LogOption, String, Object)
+08-22 14:14:52.456  6853  6909 I Unity   : DeNelle.Core.Diagnostics.<>c__DisplayClass18_0:<Sample>b__0()
+08-22 14:14:52.456  6853  6909 I Unity   : DeNelle.Core.Diagnostics.Guard:Try(String, String, Action)
+08-22 14:14:52.456  6853  6909 I Unity   : 
+08-22 14:14:52.711  6853  6909 I Unity   : [Flow:HeroOwner] WORLD CLOCK FROZEN: Time.timeScale=0.00 in scene 'Main_Castle_Overworld'. The hero CANNOT move, turn or animate while this holds, however healthy the locomotion path is — every writer scales by Time.deltaTime. If no pause menu is on screen, a freeze owner (PauseController background auto-pause / BreakCaptureHarness F8 note) failed to restore it.
+08-22 14:14:52.711  6853  6909 I Unity   : UnityEngine.DebugLogHandler:Internal_Log(LogType, LogOption, String, Object)
+08-22 14:14:52.711  6853  6909 I Unity   : DeNelle.Core.Diagnostics.FlowTrace:Throttle(String, String, Single, String)
+08-22 14:14:52.711  6853  6909 I Unity   : DeNelle.Village.HeroLocomotion:LateUpdate()
+08-22 14:14:52.711  6853  6909 I Unity   : 
+08-22 14:14:52.740  6853  6909 I Unity   : [Flow:Zone] GetZone(x=-9.6,z=33.4).
+08-22 14:14:52.740  6853  6909 I Unity   : UnityEngine.DebugLogHandler:Internal_Log(LogType, LogOption, String, Object)
+08-22 14:14:52.740  6853  6909 I Unity   : DeNelle.Core.Diagnostics.FlowTrace:Throttle(String, String, Single, String)
+08-22 14:14:52.740  6853  6909 I Unity   : DeNelle.Core.World.ZoneManager:GetZone(Vector3)
+08-22 14:14:52.740  6853  6909 I Unity   : DeNelle.Village.WorldMusicDirector:Update()
+08-22 14:14:52.740  6853  6909 I Unity   : 
+08-22 14:14:52.741  6853  6909 I Unity   : [Flow:Offset] sheathed FALLBACK (drawn 'sword_A' on back pose): pos=(0.01, 0.03, -0.01) rot=SKIPPED (pos-only, ff.sheathdrawnrot=0)
+08-22 14:14:52.741  6853  6909 I Unity   : UnityEngine.DebugLogHandler:Internal_Log(LogType, LogOption, String, Object)
+08-22 14:14:52.741  6853  6909 I Unity   : DeNelle.Core.Diagnostics.FlowTrace:Throttle(String, String, Single, String)
+08-22 14:14:52.741  6853  6909 I Unity   : DeNelle.Village.EquipmentController:ApplySheathedOffset(Transform, String)
+08-22 14:14:52.741  6853  6909 I Unity   : DeNelle.Village.EquipmentController:ApplyHoldPose()
+08-22 14:14:52.741  6853  6909 I Unity   : DeNelle.Village.HeroLocomotion:Update()
+08-22 14:14:52.741  6853  6909 I Unity   : 
+08-22 14:14:52.742  6853  6909 I Unity   : [Flow:Offset] sheathed FALLBACK (drawn 'ShieldWithItemLogic' on back pose): pos=(0.00, 0.00, 0.00) rot=SKIPPED (pos-only, ff.sheathdrawnrot=0)
+08-22 14:14:52.742  6853  6909 I Unity   : UnityEngine.DebugLogHandler:Internal_Log(LogType, LogOption, String, Object)
+08-22 14:14:52.742  6853  6909 I Unity   : DeNelle.Core.Diagnostics.FlowTrace:Throttle(String, String, Single, String)
+08-22 14:14:52.742  6853  6909 I Unity   : DeNelle.Village.EquipmentController:ApplySheathedOffset(Transform, String)
+08-22 14:14:52.742  6853  6909 I Unity   : DeNelle.Village.EquipmentController:ApplyHoldPose()
+08-22 14:14:52.742  6853  6909 I Unity   : DeNelle.Village.HeroLocomotion:Update()
+08-22 14:14:52.742  6853  6909 I Unity   : 
+08-22 14:14:52.743  6853  6909 I Unity   : [Flow:EnemyAggro] orc-rep-0: ProbeForStructure null -> no structure target (Heart-march / roam only)
+08-22 14:14:52.743  6853  6909 I Unity   : UnityEngine.DebugLogHandler:Internal_Log(LogType, LogOption, String, Object)
+08-22 14:14:52.743  6853  6909 I Unity   : DeNelle.Core.Diagnostics.FlowTrace:Throttle(String, String, Single, String)
+08-22 14:14:52.743  6853  6909 I Unity   : DeNelle.Village.Enemy:TickContactAttack()
+08-22 14:14:52.743  6853  6909 I Unity   : DeNelle.Village.Enemy:Update()
+08-22 14:14:52.743  6853  6909 I Unity   : 
+08-22 14:14:52.744  6853  6909 I Unity   : [Flow:EnemyAggro] orc-rep-1: ProbeForStructure null -> no structure target (Heart-march / roam only)
+08-22 14:14:52.744  6853  6909 I Unity   : UnityEngine.DebugLogHandler:Internal_Log(LogType, LogOption, String, Object)
+08-22 14:14:52.744  6853  6909 I Unity   : DeNelle.Core.Diagnostics.FlowTrace:Throttle(String, String, Single, String)
+08-22 14:14:52.744  6853  6909 I Unity   : DeNelle.Village.Enemy:TickContactAttack()
+08-22 14:14:52.744  6853  6909 I Unity   : DeNelle.Village.Enemy:Update()
+08-22 14:14:52.744  6853  6909 I Unity   : 
+08-22 14:14:52.744  6853  6909 I Unity   : [Flow:EnemyAggro] orc-rep-2: ProbeForStructure null -> no structure target (Heart-march / roam only)
+08-22 14:14:52.744  6853  6909 I Unity   : UnityEngine.DebugLogHandler:Internal_Log(LogType, LogOption, String, Object)
+08-22 14:14:52.744  6853  6909 I Unity   : DeNelle.Core.Diagnostics.FlowTrace:Throttle(String, String, Single, String)
+08-22 14:14:52.744  6853  6909 I Unity   : DeNelle.Village.Enemy:TickContactAttack()
+08-22 14:14:52.744  6853  6909 I Unity   : DeNelle.Village.Enemy:Update()
+08-22 14:14:52.744  6853  6909 I Unity   : 
+08-22 14:14:52.745  6853  6909 I Unity   : [Flow:EnemyAggro] orc-rep-3: ProbeForStructure null -> no structure target (Heart-march / roam only)
+08-22 14:14:52.745  6853  6909 I Unity   : UnityEngine.DebugLogHandler:Internal_Log(LogType, LogOption, String, Object)
+08-22 14:14:52.745  6853  6909 I Unity   : DeNelle.Core.Diagnostics.FlowTrace:Throttle(String, String, Single, String)
+08-22 14:14:52.745  6853  6909 I Unity   : DeNelle.Village.Enemy:TickContactAttack()
+08-22 14:14:52.745  6853  6909 I Unity   : DeNelle.Village.Enemy:Update()
+08-22 14:14:52.745  6853  6909 I Unity   : 
+08-22 14:14:52.746  6853  6909 I Unity   : [Flow:EnemyAggro] orc-rep-5: ProbeForStructure null -> no structure target (Heart-march / roam only)
+08-22 14:14:52.746  6853  6909 I Unity   : UnityEngine.DebugLogHandler:Internal_Log(LogType, LogOption, String, Object)
+08-22 14:14:52.746  6853  6909 I Unity   : DeNelle.Core.Diagnostics.FlowTrace:Throttle(String, String, Single, String)
+08-22 14:14:52.746  6853  6909 I Unity   : DeNelle.Village.Enemy:TickContactAttack()
+08-22 14:14:52.746  6853  6909 I Unity   : DeNelle.Village.Enemy:Update()
+08-22 14:14:52.746  6853  6909 I Unity   : 
+08-22 14:14:52.746  6853  6909 I Unity   : [Flow:EnemyAggro] wave2-hollow-walker-4: ProbeForStructure null -> no structure target (Heart-march / roam only)
+08-22 14:14:52.746  6853  6909 I Unity   : UnityEngine.DebugLogHandler:Internal_Log(LogType, LogOption, String, Object)
+08-22 14:14:52.746  6853  6909 I Unity   : DeNelle.Core.Diagnostics.FlowTrace:Throttle(String, String, Single, String)
+08-22 14:14:52.746  6853  6909 I Unity   : DeNelle.Village.Enemy:TickContactAttack()
+08-22 14:14:52.746  6853  6909 I Unity   : DeNelle.Village.Enemy:Update()
+08-22 14:14:52.746  6853  6909 I Unity   : 
+08-22 14:14:52.747  6853  6909 I Unity   : [Flow:EnemyAggro] wave2-hollow-walker-5: ProbeForStructure null -> no structure target (Heart-march / roam only)
+08-22 14:14:52.747  6853  6909 I Unity   : UnityEngine.DebugLogHandler:Internal_Log(LogType, LogOption, String, Object)
+08-22 14:14:52.747  6853  6909 I Unity   : DeNelle.Core.Diagnostics.FlowTrace:Throttle(String, String, Single, String)
+08-22 14:14:52.747  6853  6909 I Unity   : DeNelle.Village.Enemy:TickContactAttack()
+08-22 14:14:52.747  6853  6909 I Unity   : DeNelle.Village.Enemy:Update()
+08-22 14:14:52.747  6853  6909 I Unity   : 
+08-22 14:14:52.747  6853  6909 I Unity   : [Flow:EnemyAggro] wave2-hollow-walker-6: ProbeForStructure null -> no structure target (Heart-march / roam only)
+08-22 14:14:52.747  6853  6909 I Unity   : UnityEngine.DebugLogHandler:Internal_Log(LogType, LogOption, String, Object)
+08-22 14:14:52.747  6853  6909 I Unity   : DeNelle.Core.Diagnostics.FlowTrace:Throttle(String, String, Single, String)
+08-22 14:14:52.747  6853  6909 I Unity   : DeNelle.Village.Enemy:TickContactAttack()
+08-22 14:14:52.747  6853  6909 I Unity   : DeNelle.Village.Enemy:Update()
+08-22 14:14:52.747  6853  6909 I Unity   : 
+08-22 14:14:52.952  6853  6909 I Unity   : [Flow:HUD] context inputs: wave=False battleLock=False pursuit=False inVillage=True modal=True buildMode=False scene='Main_Castle_Overworld' -> Modal
+08-22 14:14:52.952  6853  6909 I Unity   : UnityEngine.DebugLogHandler:Internal_Log(LogType, LogOption, String, Object)
+08-22 14:14:52.952  6853  6909 I Unity   : DeNelle.Core.Diagnostics.FlowTrace:Throttle(String, String, Single, String)
+08-22 14:14:52.952  6853  6909 I Unity   : DeNelle.Village.Hud.HudContextEvaluator:Poll()
+08-22 14:14:52.952  6853  6909 I Unity   : DeNelle.Core.Diagnostics.Guard:Try(String, String, Action)
+08-22 14:14:52.952  6853  6909 I Unity   : DeNelle.Village.Hud.HudModelHost:Update()
+08-22 14:14:52.952  6853  6909 I Unity   : 
+08-22 14:14:53.117  6853  6909 I Unity   : [Flow:Progression] plans-drop not spawning: wavesCompleted=1 (need >=3) unlocked=False propAlive=False -- ShouldSpawnDrop false
+08-22 14:14:53.117  6853  6909 I Unity   : UnityEngine.DebugLogHandler:Internal_Log(LogType, LogOption, String, Object)
+08-22 14:14:53.117  6853  6909 I Unity   : DeNelle.Core.Diagnostics.FlowTrace:Throttle(String, String, Single, String)
+08-22 14:14:53.117  6853  6909 I Unity   : DeNelle.Village.CastleDefensePlansService:Update()
+08-22 14:14:53.117  6853  6909 I Unity   : 
+08-22 14:14:53.121  6853  6909 I Unity   : [Flow:RealmPins] source 'realm.hero' published 1 pin(s).
+08-22 14:14:53.121  6853  6909 I Unity   : UnityEngine.DebugLogHandler:Internal_Log(LogType, LogOption, String, Object)
+08-22 14:14:53.121  6853  6909 I Unity   : DeNelle.Core.Diagnostics.FlowTrace:Throttle(String, String, Single, String)
+08-22 14:14:53.121  6853  6909 I Unity   : DeNelle.Core.World.RealmPinBoard:Publish(String, IReadOnlyList`1)
+08-22 14:14:53.121  6853  6909 I Unity   : DeNelle.Village.World.RealmPinProducers:PublishHero()
+08-22 14:14:53.121  6853  6909 I Unity   : DeNelle.Village.World.RealmPinProducers:PublishAll()
+08-22 14:14:53.121  6853  6909 I Unity   : DeNelle.Core.Diagnostics.Guard:Try(String, String, Action)
+08-22 14:14:53.121  6853  6909 I Unity   : 
+08-22 14:14:53.123  6853  6909 I Unity   : [Flow:RealmPins] source 'realm.dungeons' published 7 pin(s).
+08-22 14:14:53.123  6853  6909 I Unity   : UnityEngine.DebugLogHandler:Internal_Log(LogType, LogOption, String, Object)
+08-22 14:14:53.123  6853  6909 I Unity   : DeNelle.Core.Diagnostics.FlowTrace:Throttle(String, String, Single, String)
+08-22 14:14:53.123  6853  6909 I Unity   : DeNelle.Core.World.RealmPinBoard:Publish(String, IReadOnlyList`1)
+08-22 14:14:53.123  6853  6909 I Unity   : DeNelle.Village.World.RealmPinProducers:PublishDungeons()
+08-22 14:14:53.123  6853  6909 I Unity   : DeNelle.Village.World.RealmPinProducers:PublishAll()
+08-22 14:14:53.123  6853  6909 I Unity   : DeNelle.Core.Diagnostics.Guard:Try(String, String, Action)
+08-22 14:14:53.123  6853  6909 I Unity   : 
+08-22 14:14:53.125  6853  6909 I Unity   : [Flow:RealmPins] source 'realm.army' published 1 pin(s).
+08-22 14:14:53.125  6853  6909 I Unity   : UnityEngine.DebugLogHandler:Internal_Log(LogType, LogOption, String, Object)
+08-22 14:14:53.125  6853  6909 I Unity   : DeNelle.Core.Diagnostics.FlowTrace:Throttle(String, String, Single, String)
+08-22 14:14:53.125  6853  6909 I Unity   : DeNelle.Core.World.RealmPinBoard:Publish(String, IReadOnlyList`1)
+08-22 14:14:53.125  6853  6909 I Unity   : DeNelle.Village.World.RealmPinProducers:PublishArmy()
+08-22 14:14:53.125  6853  6909 I Unity   : DeNelle.Core.Diagnostics.Guard:Try(String, String, Action)
+08-22 14:14:53.125  6853  6909 I Unity   : 
+08-22 14:14:53.127  6853  6909 I Unity   : [Flow:HeroLoco] vel=0.00 m/s | clips=[idle_ready(w=1.00,len=3.42s)] | baseState hash=902114326 nt=0.61 | avatar=KnightV3Avatar | controller=KnightMocap
+08-22 14:14:53.127  6853  6909 I Unity   : UnityEngine.DebugLogHandler:Internal_Log(LogType, LogOption, String, Object)
+08-22 14:14:53.127  6853  6909 I Unity   : DeNelle.Core.Diagnostics.FlowTrace:Throttle(String, String, Single, String)
+08-22 14:14:53.127  6853  6909 I Unity   : DeNelle.Village.HeroLocomotion:Update()
+08-22 14:14:53.127  6853  6909 I Unity   : 
+08-22 14:14:53.128  6853  6909 I Unity   : [Flow:EnemyLoco] vel=5.98 m/s | animSpeed=5.62 | clips=[mixamo.com(w=1.00,len=0.87s)] | baseState hash=-2089788878 nt=0.42 | controller=SkeletonHumanoid
+08-22 14:14:53.128  6853  6909 I Unity   : UnityEngine.DebugLogHandler:Internal_Log(LogType, LogOption, String, Object)
+08-22 14:14:53.128  6853  6909 I Unity   : DeNelle.Core.Diagnostics.FlowTrace:Throttle(String, String, Single, String)
+08-22 14:14:53.128  6853  6909 I Unity   : DeNelle.Village.Enemy:DriveAnimator()
+08-22 14:14:53.128  6853  6909 I Unity   : DeNelle.Village.Enemy:Update()
+08-22 14:14:53.128  6853  6909 I Unity   : 
+08-22 14:14:53.129  6853  6909 I Unity   : [Flow:EnemyLoco] vel=0.00 m/s | animSpeed=0.00 | clips=[mixamo.com(w=1.00,len=7.38s)] | baseState hash=-2089788878 nt=0.70 | controller=LargeHumanoid
+08-22 14:14:53.129  6853  6909 I Unity   : UnityEngine.DebugLogHandler:Internal_Log(LogType, LogOption, String, Object)
+08-22 14:14:53.129  6853  6909 I Unity   : DeNelle.Core.Diagnostics.FlowTrace:Throttle(String, String, Single, String)
+08-22 14:14:53.129  6853  6909 I Unity   : DeNelle.Village.Enemy:DriveAnimator()
+08-22 14:14:53.129  6853  6909 I Unity   : DeNelle.Village.Enemy:Update()
+08-22 14:14:53.129  6853  6909 I Unity   : 
+08-22 14:14:53.129  6853  6909 I Unity   : [Flow:EnemyLoco] vel=1.59 m/s | animSpeed=0.95 | clips=[mixamo.com(w=1.00,len=4.67s)] | baseState hash=1080829965 nt=0.42 | controller=OrcHumanoid
+08-22 14:14:53.129  6853  6909 I Unity   : UnityEngine.DebugLogHandler:Internal_Log(LogType, LogOption, String, Object)
+08-22 14:14:53.129  6853  6909 I Unity   : DeNelle.Core.Diagnostics.FlowTrace:Throttle(String, String, Single, String)
+08-22 14:14:53.129  6853  6909 I Unity   : DeNelle.Village.Enemy:DriveAnimator()
+08-22 14:14:53.129  6853  6909 I Unity   : DeNelle.Village.Enemy:Update()
+08-22 14:14:53.129  6853  6909 I Unity   : 
+08-22 14:14:53.130  6853  6909 I Unity   : [Flow:EnemyLoco] vel=3.07 m/s | animSpeed=3.83 | clips=[mixamo.com(w=1.00,len=0.87s)] | baseState hash=-2089788878 nt=0.17 | controller=SkeletonHumanoid
+08-22 14:14:53.130  6853  6909 I Unity   : UnityEngine.DebugLogHandler:Internal_Log(LogType, LogOption, String, Object)
+08-22 14:14:53.130  6853  6909 I Unity   : DeNelle.Core.Diagnostics.FlowTrace:Throttle(String, String, Single, String)
+08-22 14:14:53.130  6853  6909 I Unity   : DeNelle.Village.Enemy:DriveAnimator()
+08-22 14:14:53.130  6853  6909 I Unity   : DeNelle.Village.Enemy:Update()
+08-22 14:14:53.130  6853  6909 I Unity   : 
+08-22 14:14:53.130  6853  6909 I Unity   : [Flow:EnemyLoco] vel=5.98 m/s | animSpeed=5.97 | clips=[mixamo.com(w=1.00,len=0.87s)] | baseState hash=-2089788878 nt=0.65 | controller=OrcHumanoid_Warrior
+08-22 14:14:53.130  6853  6909 I Unity   : UnityEngine.DebugLogHandler:Internal_Log(LogType, LogOption, String, Object)
+08-22 14:14:53.130  6853  6909 I Unity   : DeNelle.Core.Diagnostics.FlowTrace:Throttle(String, String, Single, String)
+08-22 14:14:53.130  6853  6909 I Unity   : DeNelle.Village.Enemy:DriveAnimator()
+08-22 14:14:53.130  6853  6909 I Unity   : DeNelle.Village.Enemy:Update()
+08-22 14:14:53.130  6853  6909 I Unity   : 
+08-22 14:14:53.131  6853  6909 I Unity   : [Flow:EnemyLoco] vel=0.00 m/s | animSpeed=0.00 | clips=[mixamo.com(w=1.00,len=2.63s)] | baseState hash=931510065 nt=0.39 | controller=SkeletonHumanoid
+08-22 14:14:53.131  6853  6909 I Unity   : UnityEngine.DebugLogHandler:Internal_Log(LogType, LogOption, String, Object)
+08-22 14:14:53.131  6853  6909 I Unity   : DeNelle.Core.Diagnostics.FlowTrace:Throttle(String, String, Single, String)
+08-22 14:14:53.131  6853  6909 I Unity   : DeNelle.Village.Enemy:DriveAnimator()
+08-22 14:14:53.131  6853  6909 I Unity   : DeNelle.Village.Enemy:Update()
+08-22 14:14:53.131  6853  6909 I Unity   : 
+08-22 14:14:53.131  6853  6909 I Unity   : [Flow:EnemyLoco] vel=0.00 m/s | animSpeed=0.00 | clips=[mixamo.com(w=1.00,len=1.75s)] | baseState hash=1080829965 nt=0.16 | controller=SkeletonHumanoid
+08-22 14:14:53.131  6853  6909 I Unity   : UnityEngine.DebugLogHandler:Internal_Log(LogType, LogOption, String, Object)
+08-22 14:14:53.131  6853  6909 I Unity   : DeNelle.Core.Diagnostics.FlowTrace:Throttle(String, String, Single, String)
+08-22 14:14:53.131  6853  6909 I Unity   : DeNelle.Village.Enemy:DriveAnimator()
+08-22 14:14:53.131  6853  6909 I Unity   : DeNelle.Village.Enemy:Update()
+08-22 14:14:53.131  6853  6909 I Unity   : 
+08-22 14:14:53.132  6853  6909 I Unity   : [Flow:EnemyLoco] vel=0.00 m/s | animSpeed=0.00 | clips=[mixamo.com(w=1.00,len=2.63s)] | baseState hash=931510065 nt=0.35 | controller=SkeletonHumanoid
+08-22 14:14:53.132  6853  6909 I Unity   : UnityEngine.DebugLogHandler:Internal_Log(LogType, LogOption, String, Object)
+08-22 14:14:53.132  6853  6909 I Unity   : DeNelle.Core.Diagnostics.FlowTrace:Throttle(String, String, Single, String)
+08-22 14:14:53.132  6853  6909 I Unity   : DeNelle.Village.Enemy:DriveAnimator()
+08-22 14:14:53.132  6853  6909 I Unity   : DeNelle.Village.Enemy:Update()
+08-22 14:14:53.132  6853  6909 I Unity   : 
+08-22 14:14:53.133  6853  6909 I Unity   : [Flow:HeroOwner] scene='Main_Castle_Overworld' owner=HeroLocomotion ownerCC=none ownerAgent=on-mesh scriptedMove=off velSelf=0.00 velRoot=0.00 animFeed=velSelf animSpeed=0.00 rootYaw=343.1 basis=SmartMobileCamera.CameraYaw basisYaw=-376.9 timeScale=0.00 dt=0.0000 inputSuppressed=False autoWalk=False mainCamYaw=343.1 pos=(-9.62, 0.08, 33.40)
+08-22 14:14:53.133  6853  6909 I Unity   : UnityEngine.DebugLogHandler:Internal_Log(LogType, LogOption, String, Object)
+08-22 14:14:53.133  6853  6909 I Unity   : DeNelle.Core.Diagnostics.FlowTrace:Throttle(String, String, Single, String)
+08-22 14:14:53.133  6853  6909 I Unity   : DeNelle.Village.HeroLocomotion:LateUpdate()
+08-22 14:14:53.133  6853  6909 I Unity   : 
+08-22 14:14:53.720  6853  6909 I Unity   : [Flow:HeroOwner] WORLD CLOCK FROZEN: Time.timeScale=0.00 in scene 'Main_Castle_Overworld'. The hero CANNOT move, turn or animate while this holds, however healthy the locomotion path is — every writer scales by Time.deltaTime. If no pause menu is on screen, a freeze owner (PauseController background auto-pause / BreakCaptureHarness F8 note) failed to restore it.
+08-22 14:14:53.720  6853  6909 I Unity   : UnityEngine.DebugLogHandler:Internal_Log(LogType, LogOption, String, Object)
+08-22 14:14:53.720  6853  6909 I Unity   : DeNelle.Core.Diagnostics.FlowTrace:Throttle(String, String, Single, String)
+08-22 14:14:53.720  6853  6909 I Unity   : DeNelle.Village.HeroLocomotion:LateUpdate()
+08-22 14:14:53.720  6853  6909 I Unity   : 
+08-22 14:14:53.768  6853  6909 I Unity   : [Flow:Zone] GetZone(x=-9.6,z=33.4).
+08-22 14:14:53.768  6853  6909 I Unity   : UnityEngine.DebugLogHandler:Internal_Log(LogType, LogOption, String, Object)
+08-22 14:14:53.768  6853  6909 I Unity   : DeNelle.Core.Diagnostics.FlowTrace:Throttle(String, String, Single, String)
+08-22 14:14:53.768  6853  6909 I Unity   : DeNelle.Core.World.ZoneManager:GetZone(Vector3)
+08-22 14:14:53.768  6853  6909 I Unity   : DeNelle.Village.WorldMusicDirector:Update()
+08-22 14:14:53.768  6853  6909 I Unity   : 
+08-22 14:14:53.769  6853  6909 I Unity   : [Flow:Offset] sheathed FALLBACK (drawn 'sword_A' on back pose): pos=(0.01, 0.03, -0.01) rot=SKIPPED (pos-only, ff.sheathdrawnrot=0)
+08-22 14:14:53.769  6853  6909 I Unity   : UnityEngine.DebugLogHandler:Internal_Log(LogType, LogOption, String, Object)
+08-22 14:14:53.769  6853  6909 I Unity   : DeNelle.Core.Diagnostics.FlowTrace:Throttle(String, String, Single, String)
+08-22 14:14:53.769  6853  6909 I Unity   : DeNelle.Village.EquipmentController:ApplySheathedOffset(Transform, String)
+08-22 14:14:53.769  6853  6909 I Unity   : DeNelle.Village.EquipmentController:ApplyHoldPose()
+08-22 14:14:53.769  6853  6909 I Unity   : DeNelle.Village.HeroLocomotion:Update()
+08-22 14:14:53.769  6853  6909 I Unity   : 
+08-22 14:14:53.770  6853  6909 I Unity   : [Flow:Offset] sheathed FALLBACK (drawn 'ShieldWithItemLogic' on back pose): pos=(0.00, 0.00, 0.00) rot=SKIPPED (pos-only, ff.sheathdrawnrot=0)
+08-22 14:14:53.770  6853  6909 I Unity   : UnityEngine.DebugLogHandler:Internal_Log(LogType, LogOption, String, Object)
+08-22 14:14:53.770  6853  6909 I Unity   : DeNelle.Core.Diagnostics.FlowTrace:Throttle(String, String, Single, String)
+08-22 14:14:53.770  6853  6909 I Unity   : DeNelle.Village.EquipmentController:ApplySheathedOffset(Transform, String)
+08-22 14:14:53.770  6853  6909 I Unity   : DeNelle.Village.EquipmentController:ApplyHoldPose()
+08-22 14:14:53.770  6853  6909 I Unity   : DeNelle.Village.HeroLocomotion:Update()
+08-22 14:14:53.770  6853  6909 I Unity   : 
+08-22 14:14:53.771  6853  6909 I Unity   : [Flow:EnemyAggro] orc-rep-0: ProbeForStructure null -> no structure target (Heart-march / roam only)
+08-22 14:14:53.771  6853  6909 I Unity   : UnityEngine.DebugLogHandler:Internal_Log(LogType, LogOption, String, Object)
+08-22 14:14:53.771  6853  6909 I Unity   : DeNelle.Core.Diagnostics.FlowTrace:Throttle(String, String, Single, String)
+08-22 14:14:53.771  6853  6909 I Unity   : DeNelle.Village.Enemy:TickContactAttack()
+08-22 14:14:53.771  6853  6909 I Unity   : DeNelle.Village.Enemy:Update()
+08-22 14:14:53.771  6853  6909 I Unity   : 
+08-22 14:14:53.772  6853  6909 I Unity   : [Flow:EnemyAggro] orc-rep-1: ProbeForStructure null -> no structure target (Heart-march / roam only)
+08-22 14:14:53.772  6853  6909 I Unity   : UnityEngine.DebugLogHandler:Internal_Log(LogType, LogOption, String, Object)
+08-22 14:14:53.772  6853  6909 I Unity   : DeNelle.Core.Diagnostics.FlowTrace:Throttle(String, String, Single, String)
+08-22 14:14:53.772  6853  6909 I Unity   : DeNelle.Village.Enemy:TickContactAttack()
+08-22 14:14:53.772  6853  6909 I Unity   : DeNelle.Village.Enemy:Update()
+08-22 14:14:53.772  6853  6909 I Unity   : 
+08-22 14:14:53.773  6853  6909 I Unity   : [Flow:EnemyAggro] orc-rep-2: ProbeForStructure null -> no structure target (Heart-march / roam only)
+08-22 14:14:53.773  6853  6909 I Unity   : UnityEngine.DebugLogHandler:Internal_Log(LogType, LogOption, String, Object)
+08-22 14:14:53.773  6853  6909 I Unity   : DeNelle.Core.Diagnostics.FlowTrace:Throttle(String, String, Single, String)
+08-22 14:14:53.773  6853  6909 I Unity   : DeNelle.Village.Enemy:TickContactAttack()
+08-22 14:14:53.773  6853  6909 I Unity   : DeNelle.Village.Enemy:Update()
+08-22 14:14:53.773  6853  6909 I Unity   : 
+08-22 14:14:53.774  6853  6909 I Unity   : [Flow:EnemyAggro] orc-rep-3: ProbeForStructure null -> no structure target (Heart-march / roam only)
+08-22 14:14:53.774  6853  6909 I Unity   : UnityEngine.DebugLogHandler:Internal_Log(LogType, LogOption, String, Object)
+08-22 14:14:53.774  6853  6909 I Unity   : DeNelle.Core.Diagnostics.FlowTrace:Throttle(String, String, Single, String)
+08-22 14:14:53.774  6853  6909 I Unity   : DeNelle.Village.Enemy:TickContactAttack()
+08-22 14:14:53.774  6853  6909 I Unity   : DeNelle.Village.Enemy:Update()
+08-22 14:14:53.774  6853  6909 I Unity   : 
+08-22 14:14:53.775  6853  6909 I Unity   : [Flow:EnemyAggro] orc-rep-5: ProbeForStructure null -> no structure target (Heart-march / roam only)
+08-22 14:14:53.775  6853  6909 I Unity   : UnityEngine.DebugLogHandler:Internal_Log(LogType, LogOption, String, Object)
+08-22 14:14:53.775  6853  6909 I Unity   : DeNelle.Core.Diagnostics.FlowTrace:Throttle(String, String, Single, String)
+08-22 14:14:53.775  6853  6909 I Unity   : DeNelle.Village.Enemy:TickContactAttack()
+08-22 14:14:53.775  6853  6909 I Unity   : DeNelle.Village.Enemy:Update()
+08-22 14:14:53.775  6853  6909 I Unity   : 
+08-22 14:14:53.775  6853  6909 I Unity   : [Flow:EnemyAggro] wave2-hollow-walker-4: ProbeForStructure ENTRY fwdProbeDist=1.1m sweepRadius=3.0m mask=~0(all layers) awareFlag=True heart=True
+08-22 14:14:53.775  6853  6909 I Unity   : UnityEngine.DebugLogHandler:Internal_Log(LogType, LogOption, String, Object)
+08-22 14:14:53.775  6853  6909 I Unity   : DeNelle.Core.Diagnostics.FlowTrace:Throttle(String, String, Single, String)
+08-22 14:14:53.775  6853  6909 I Unity   : DeNelle.Village.Enemy:ProbeForStructure()
+08-22 14:14:53.775  6853  6909 I Unity   : DeNelle.Village.Enemy:TickContactAttack()
+08-22 14:14:53.775  6853  6909 I Unity   : DeNelle.Village.Enemy:Update()
+08-22 14:14:53.775  6853  6909 I Unity   : 
+08-22 14:14:53.776  6853  6909 I Unity   : [Flow:EnemyAggro] wave2-hollow-walker-4: sweep OverlapSphere r=3.0m colliders=3 -> accepted=0 rejected[null=0,noStructComp=2,dead=1,hero=0] nearest=<null>
+08-22 14:14:53.776  6853  6909 I Unity   : UnityEngine.DebugLogHandler:Internal_Log(LogType, LogOption, String, Object)
+08-22 14:14:53.776  6853  6909 I Unity   : DeNelle.Core.Diagnostics.FlowTrace:Throttle(String, String, Single, String)
+08-22 14:14:53.776  6853  6909 I Unity   : DeNelle.Village.Enemy:SweepForNearestStructure()
+08-22 14:14:53.776  6853  6909 I Unity   : DeNelle.Village.Enemy:ProbeForStructure()
+08-22 14:14:53.776  6853  6909 I Unity   : DeNelle.Village.Enemy:TickContactAttack()
+08-22 14:14:53.776  6853  6909 I Unity   : DeNelle.Village.Enemy:Update()
+08-22 14:14:53.776  6853  6909 I Unity   : 
+08-22 14:14:53.776  6853  6909 I Unity   : [Flow:EnemyAggro] wave2-hollow-walker-4: ProbeForStructure null -> no structure target (Heart-march / roam only)
+08-22 14:14:53.776  6853  6909 I Unity   : UnityEngine.DebugLogHandler:Internal_Log(LogType, LogOption, String, Object)
+08-22 14:14:53.776  6853  6909 I Unity   : DeNelle.Core.Diagnostics.FlowTrace:Throttle(String, String, Single, String)
+08-22 14:14:53.776  6853  6909 I Unity   : DeNelle.Village.Enemy:TickContactAttack()
+08-22 14:14:53.776  6853  6909 I Unity   : DeNelle.Village.Enemy:Update()
+08-22 14:14:53.776  6853  6909 I Unity   : 
+08-22 14:14:53.777  6853  6909 I Unity   : [Flow:EnemyAggro] wave2-hollow-walker-5: ProbeForStructure ENTRY fwdProbeDist=1.1m sweepRadius=3.0m mask=~0(all layers) awareFlag=True heart=True
+08-22 14:14:53.777  6853  6909 I Unity   : UnityEngine.DebugLogHandler:Internal_Log(LogType, LogOption, String, Object)
+08-22 14:14:53.777  6853  6909 I Unity   : DeNelle.Core.Diagnostics.FlowTrace:Throttle(String, String, Single, String)
+08-22 14:14:53.777  6853  6909 I Unity   : DeNelle.Village.Enemy:ProbeForStructure()
+08-22 14:14:53.777  6853  6909 I Unity   : DeNelle.Village.Enemy:TickContactAttack()
+08-22 14:14:53.777  6853  6909 I Unity   : DeNelle.Village.Enemy:Update()
+08-22 14:14:53.777  6853  6909 I Unity   : 
+08-22 14:14:53.777  6853  6909 I Unity   : [Flow:EnemyAggro] wave2-hollow-walker-5: sweep OverlapSphere r=3.0m colliders=3 -> accepted=0 rejected[null=0,noStructComp=2,dead=1,hero=0] nearest=<null>
+08-22 14:14:53.777  6853  6909 I Unity   : UnityEngine.DebugLogHandler:Internal_Log(LogType, LogOption, String, Object)
+08-22 14:14:53.777  6853  6909 I Unity   : DeNelle.Core.Diagnostics.FlowTrace:Throttle(String, String, Single, String)
+08-22 14:14:53.777  6853  6909 I Unity   : DeNelle.Village.Enemy:SweepForNearestStructure()
+08-22 14:14:53.777  6853  6909 I Unity   : DeNelle.Village.Enemy:ProbeForStructure()
+08-22 14:14:53.777  6853  6909 I Unity   : DeNelle.Village.Enemy:TickContactAttack()
+08-22 14:14:53.777  6853  6909 I Unity   : DeNelle.Village.Enemy:Update()
+08-22 14:14:53.777  6853  6909 I Unity   : 
+08-22 14:14:53.777  6853  6909 I Unity   : [Flow:EnemyAggro] wave2-hollow-walker-5: ProbeForStructure null -> no structure target (Heart-march / roam only)
+08-22 14:14:53.777  6853  6909 I Unity   : UnityEngine.DebugLogHandler:Internal_Log(LogType, LogOption, String, Object)
+08-22 14:14:53.777  6853  6909 I Unity   : DeNelle.Core.Diagnostics.FlowTrace:Throttle(String, String, Single, String)
+08-22 14:14:53.777  6853  6909 I Unity   : DeNelle.Village.Enemy:TickContactAttack()
+08-22 14:14:53.777  6853  6909 I Unity   : DeNelle.Village.Enemy:Update()
+08-22 14:14:53.777  6853  6909 I Unity   : 
+08-22 14:14:53.778  6853  6909 I Unity   : [Flow:EnemyAggro] wave2-hollow-walker-6: ProbeForStructure ENTRY fwdProbeDist=1.1m sweepRadius=3.0m mask=~0(all layers) awareFlag=True heart=True
+08-22 14:14:53.778  6853  6909 I Unity   : UnityEngine.DebugLogHandler:Internal_Log(LogType, LogOption, String, Object)
+08-22 14:14:53.778  6853  6909 I Unity   : DeNelle.Core.Diagnostics.FlowTrace:Throttle(String, String, Single, String)
+08-22 14:14:53.778  6853  6909 I Unity   : DeNelle.Village.Enemy:ProbeForStructure()
+08-22 14:14:53.778  6853  6909 I Unity   : DeNelle.Village.Enemy:TickContactAttack()
+08-22 14:14:53.778  6853  6909 I Unity   : DeNelle.Village.Enemy:Update()
+08-22 14:14:53.778  6853  6909 I Unity   : 
+08-22 14:14:53.779  6853  6909 I Unity   : [Flow:EnemyAggro] wave2-hollow-walker-6: sweep OverlapSphere r=3.0m colliders=3 -> accepted=0 rejected[null=0,noStructComp=2,dead=1,hero=0] nearest=<null>
+08-22 14:14:53.779  6853  6909 I Unity   : UnityEngine.DebugLogHandler:Internal_Log(LogType, LogOption, String, Object)
+08-22 14:14:53.779  6853  6909 I Unity   : DeNelle.Core.Diagnostics.FlowTrace:Throttle(String, String, Single, String)
+08-22 14:14:53.779  6853  6909 I Unity   : DeNelle.Village.Enemy:SweepForNearestStructure()
+08-22 14:14:53.779  6853  6909 I Unity   : DeNelle.Village.Enemy:ProbeForStructure()
+08-22 14:14:53.779  6853  6909 I Unity   : DeNelle.Village.Enemy:TickContactAttack()
+08-22 14:14:53.779  6853  6909 I Unity   : DeNelle.Village.Enemy:Update()
+08-22 14:14:53.779  6853  6909 I Unity   : 
+08-22 14:14:53.779  6853  6909 I Unity   : [Flow:EnemyAggro] wave2-hollow-walker-6: ProbeForStructure null -> no structure target (Heart-march / roam only)
+08-22 14:14:53.779  6853  6909 I Unity   : UnityEngine.DebugLogHandler:Internal_Log(LogType, LogOption, String, Object)
+08-22 14:14:53.779  6853  6909 I Unity   : DeNelle.Core.Diagnostics.FlowTrace:Throttle(String, String, Single, String)
+08-22 14:14:53.779  6853  6909 I Unity   : DeNelle.Village.Enemy:TickContactAttack()
+08-22 14:14:53.779  6853  6909 I Unity   : DeNelle.Village.Enemy:Update()
+08-22 14:14:53.779  6853  6909 I Unity   : 
+08-22 14:14:54.033  6853  6909 I Unity   : [Flow:HUD] context inputs: wave=False battleLock=False pursuit=False inVillage=True modal=True buildMode=False scene='Main_Castle_Overworld' -> Modal
+08-22 14:14:54.033  6853  6909 I Unity   : UnityEngine.DebugLogHandler:Internal_Log(LogType, LogOption, String, Object)
+08-22 14:14:54.033  6853  6909 I Unity   : DeNelle.Core.Diagnostics.FlowTrace:Throttle(String, String, Single, String)
+08-22 14:14:54.033  6853  6909 I Unity   : DeNelle.Village.Hud.HudContextEvaluator:Poll()
+08-22 14:14:54.033  6853  6909 I Unity   : DeNelle.Core.Diagnostics.Guard:Try(String, String, Action)
+08-22 14:14:54.033  6853  6909 I Unity   : DeNelle.Village.Hud.HudModelHost:Update()
+08-22 14:14:54.033  6853  6909 I Unity   : 
+08-22 14:14:54.134  6853  6909 I Unity   : [Flow:RealmPins] source 'realm.hero' published 1 pin(s).
+08-22 14:14:54.134  6853  6909 I Unity   : UnityEngine.DebugLogHandler:Internal_Log(LogType, LogOption, String, Object)
+08-22 14:14:54.134  6853  6909 I Unity   : DeNelle.Core.Diagnostics.FlowTrace:Throttle(String, String, Single, String)
+08-22 14:14:54.134  6853  6909 I Unity   : DeNelle.Core.World.RealmPinBoard:Publish(String, IReadOnlyList`1)
+08-22 14:14:54.134  6853  6909 I Unity   : DeNelle.Village.World.RealmPinProducers:PublishHero()
+08-22 14:14:54.134  6853  6909 I Unity   : DeNelle.Village.World.RealmPinProducers:PublishAll()
+08-22 14:14:54.134  6853  6909 I Unity   : DeNelle.Core.Diagnostics.Guard:Try(String, String, Action)
+08-22 14:14:54.134  6853  6909 I Unity   : 
+08-22 14:14:54.135  6853  6909 I Unity   : [Flow:RealmPins] source 'realm.dungeons' published 7 pin(s).
+08-22 14:14:54.135  6853  6909 I Unity   : UnityEngine.DebugLogHandler:Internal_Log(LogType, LogOption, String, Object)
+08-22 14:14:54.135  6853  6909 I Unity   : DeNelle.Core.Diagnostics.FlowTrace:Throttle(String, String, Single, String)
+08-22 14:14:54.135  6853  6909 I Unity   : DeNelle.Core.World.RealmPinBoard:Publish(String, IReadOnlyList`1)
+08-22 14:14:54.135  6853  6909 I Unity   : DeNelle.Village.World.RealmPinProducers:PublishDungeons()
+08-22 14:14:54.135  6853  6909 I Unity   : DeNelle.Village.World.RealmPinProducers:PublishAll()
+08-22 14:14:54.135  6853  6909 I Unity   : DeNelle.Core.Diagnostics.Guard:Try(String, String, Action)
+08-22 14:14:54.135  6853  6909 I Unity   : 
+08-22 14:14:54.136  6853  6909 I Unity   : [Flow:RealmPins] source 'realm.army' published 1 pin(s).
+08-22 14:14:54.136  6853  6909 I Unity   : UnityEngine.DebugLogHandler:Internal_Log(LogType, LogOption, String, Object)
+08-22 14:14:54.136  6853  6909 I Unity   : DeNelle.Core.Diagnostics.FlowTrace:Throttle(String, String, Single, String)
+08-22 14:14:54.136  6853  6909 I Unity   : DeNelle.Core.World.RealmPinBoard:Publish(String, IReadOnlyList`1)
+08-22 14:14:54.136  6853  6909 I Unity   : DeNelle.Village.World.RealmPinProducers:PublishArmy()
+08-22 14:14:54.136  6853  6909 I Unity   : DeNelle.Core.Diagnostics.Guard:Try(String, String, Action)
+08-22 14:14:54.136  6853  6909 I Unity   : 
+08-22 14:14:54.138  6853  6909 I Unity   : [Flow:HeroLoco] vel=0.00 m/s | clips=[idle_ready(w=1.00,len=3.42s)] | baseState hash=902114326 nt=0.61 | avatar=KnightV3Avatar | controller=KnightMocap
+08-22 14:14:54.138  6853  6909 I Unity   : UnityEngine.DebugLogHandler:Internal_Log(LogType, LogOption, String, Object)
+08-22 14:14:54.138  6853  6909 I Unity   : DeNelle.Core.Diagnostics.FlowTrace:Throttle(String, String, Single, String)
+08-22 14:14:54.138  6853  6909 I Unity   : DeNelle.Village.HeroLocomotion:Update()
+08-22 14:14:54.138  6853  6909 I Unity   : 
+08-22 14:14:54.139  6853  6909 I Unity   : [Flow:EnemyLoco] vel=5.98 m/s | animSpeed=5.62 | clips=[mixamo.com(w=1.00,len=0.87s)] | baseState hash=-2089788878 nt=0.42 | controller=SkeletonHumanoid
+08-22 14:14:54.139  6853  6909 I Unity   : UnityEngine.DebugLogHandler:Internal_Log(LogType, LogOption, String, Object)
+08-22 14:14:54.139  6853  6909 I Unity   : DeNelle.Core.Diagnostics.FlowTrace:Throttle(String, String, Single, String)
+08-22 14:14:54.139  6853  6909 I Unity   : DeNelle.Village.Enemy:DriveAnimator()
+08-22 14:14:54.139  6853  6909 I Unity   : DeNelle.Village.Enemy:Update()
+08-22 14:14:54.139  6853  6909 I Unity   : 
+08-22 14:14:54.140  6853  6909 I Unity   : [Flow:EnemyLoco] vel=0.00 m/s | animSpeed=0.00 | clips=[mixamo.com(w=1.00,len=7.38s)] | baseState hash=-2089788878 nt=0.70 | controller=LargeHumanoid
+08-22 14:14:54.140  6853  6909 I Unity   : UnityEngine.DebugLogHandler:Internal_Log(LogType, LogOption, String, Object)
+08-22 14:14:54.140  6853  6909 I Unity   : DeNelle.Core.Diagnostics.FlowTrace:Throttle(String, String, Single, String)
+08-22 14:14:54.140  6853  6909 I Unity   : DeNelle.Village.Enemy:DriveAnimator()
+08-22 14:14:54.140  6853  6909 I Unity   : DeNelle.Village.Enemy:Update()
+08-22 14:14:54.140  6853  6909 I Unity   : 
+08-22 14:14:54.140  6853  6909 I Unity   : [Flow:EnemyLoco] vel=1.59 m/s | animSpeed=0.95 | clips=[mixamo.com(w=1.00,len=4.67s)] | baseState hash=1080829965 nt=0.42 | controller=OrcHumanoid
+08-22 14:14:54.140  6853  6909 I Unity   : UnityEngine.DebugLogHandler:Internal_Log(LogType, LogOption, String, Object)
+08-22 14:14:54.140  6853  6909 I Unity   : DeNelle.Core.Diagnostics.FlowTrace:Throttle(String, String, Single, String)
+08-22 14:14:54.140  6853  6909 I Unity   : DeNelle.Village.Enemy:DriveAnimator()
+08-22 14:14:54.140  6853  6909 I Unity   : DeNelle.Village.Enemy:Update()
+08-22 14:14:54.140  6853  6909 I Unity   : 
+08-22 14:14:54.141  6853  6909 I Unity   : [Flow:EnemyLoco] vel=3.07 m/s | animSpeed=3.83 | clips=[mixamo.com(w=1.00,len=0.87s)] | baseState hash=-2089788878 nt=0.17 | controller=SkeletonHumanoid
+08-22 14:14:54.141  6853  6909 I Unity   : UnityEngine.DebugLogHandler:Internal_Log(LogType, LogOption, String, Object)
+08-22 14:14:54.141  6853  6909 I Unity   : DeNelle.Core.Diagnostics.FlowTrace:Throttle(String, String, Single, String)
+08-22 14:14:54.141  6853  6909 I Unity   : DeNelle.Village.Enemy:DriveAnimator()
+08-22 14:14:54.141  6853  6909 I Unity   : DeNelle.Village.Enemy:Update()
+08-22 14:14:54.141  6853  6909 I Unity   : 
+08-22 14:14:54.141  6853  6909 I Unity   : [Flow:EnemyLoco] vel=5.98 m/s | animSpeed=5.97 | clips=[mixamo.com(w=1.00,len=0.87s)] | baseState hash=-2089788878 nt=0.65 | controller=OrcHumanoid_Warrior
+08-22 14:14:54.141  6853  6909 I Unity   : UnityEngine.DebugLogHandler:Internal_Log(LogType, LogOption, String, Object)
+08-22 14:14:54.141  6853  6909 I Unity   : DeNelle.Core.Diagnostics.FlowTrace:Throttle(String, String, Single, String)
+08-22 14:14:54.141  6853  6909 I Unity   : DeNelle.Village.Enemy:DriveAnimator()
+08-22 14:14:54.141  6853  6909 I Unity   : DeNelle.Village.Enemy:Update()
+08-22 14:14:54.141  6853  6909 I Unity   : 
+08-22 14:14:54.142  6853  6909 I Unity   : [Flow:EnemyLoco] vel=0.00 m/s | animSpeed=0.00 | clips=[mixamo.com(w=1.00,len=2.63s)] | baseState hash=931510065 nt=0.39 | controller=SkeletonHumanoid
+08-22 14:14:54.142  6853  6909 I Unity   : UnityEngine.DebugLogHandler:Internal_Log(LogType, LogOption, String, Object)
+08-22 14:14:54.142  6853  6909 I Unity   : DeNelle.Core.Diagnostics.FlowTrace:Throttle(String, String, Single, String)
+08-22 14:14:54.142  6853  6909 I Unity   : DeNelle.Village.Enemy:DriveAnimator()
+08-22 14:14:54.142  6853  6909 I Unity   : DeNelle.Village.Enemy:Update()
+08-22 14:14:54.142  6853  6909 I Unity   : 
+08-22 14:14:54.142  6853  6909 I Unity   : [Flow:EnemyLoco] vel=0.00 m/s | animSpeed=0.00 | clips=[mixamo.com(w=1.00,len=1.75s)] | baseState hash=1080829965 nt=0.16 | controller=SkeletonHumanoid
+08-22 14:14:54.142  6853  6909 I Unity   : UnityEngine.DebugLogHandler:Internal_Log(LogType, LogOption, String, Object)
+08-22 14:14:54.142  6853  6909 I Unity   : DeNelle.Core.Diagnostics.FlowTrace:Throttle(String, String, Single, String)
+08-22 14:14:54.142  6853  6909 I Unity   : DeNelle.Village.Enemy:DriveAnimator()
+08-22 14:14:54.142  6853  6909 I Unity   : DeNelle.Village.Enemy:Update()
+08-22 14:14:54.142  6853  6909 I Unity   : 
+08-22 14:14:54.143  6853  6909 I Unity   : [Flow:EnemyLoco] vel=0.00 m/s | animSpeed=0.00 | clips=[mixamo.com(w=1.00,len=2.63s)] | baseState hash=931510065 nt=0.35 | controller=SkeletonHumanoid
+08-22 14:14:54.143  6853  6909 I Unity   : UnityEngine.DebugLogHandler:Internal_Log(LogType, LogOption, String, Object)
+08-22 14:14:54.143  6853  6909 I Unity   : DeNelle.Core.Diagnostics.FlowTrace:Throttle(String, String, Single, String)
+08-22 14:14:54.143  6853  6909 I Unity   : DeNelle.Village.Enemy:DriveAnimator()
+08-22 14:14:54.143  6853  6909 I Unity   : DeNelle.Village.Enemy:Update()
+08-22 14:14:54.143  6853  6909 I Unity   : 
+08-22 14:14:54.144  6853  6909 I Unity   : [Flow:HeroOwner] scene='Main_Castle_Overworld' owner=HeroLocomotion ownerCC=none ownerAgent=on-mesh scriptedMove=off velSelf=0.00 velRoot=0.00 animFeed=velSelf animSpeed=0.00 rootYaw=343.1 basis=SmartMobileCamera.CameraYaw basisYaw=-376.9 timeScale=0.00 dt=0.0000 inputSuppressed=False autoWalk=False mainCamYaw=343.1 pos=(-9.62, 0.08, 33.40)
+08-22 14:14:54.144  6853  6909 I Unity   : UnityEngine.DebugLogHandler:Internal_Log(LogType, LogOption, String, Object)
+08-22 14:14:54.144  6853  6909 I Unity   : DeNelle.Core.Diagnostics.FlowTrace:Throttle(String, String, Single, String)
+08-22 14:14:54.144  6853  6909 I Unity   : DeNelle.Village.HeroLocomotion:LateUpdate()
+08-22 14:14:54.144  6853  6909 I Unity   : 
+08-22 14:14:54.246  6853  6909 I Unity   : [Flow:EnemyAggro] orc-rep-0: ProbeForStructure ENTRY fwdProbeDist=1.1m sweepRadius=3.0m mask=~0(all layers) awareFlag=True heart=False
+08-22 14:14:54.246  6853  6909 I Unity   : UnityEngine.DebugLogHandler:Internal_Log(LogType, LogOption, String, Object)
+08-22 14:14:54.246  6853  6909 I Unity   : DeNelle.Core.Diagnostics.FlowTrace:Throttle(String, String, Single, String)
+08-22 14:14:54.246  6853  6909 I Unity   : DeNelle.Village.Enemy:ProbeForStructure()
+08-22 14:14:54.246  6853  6909 I Unity   : DeNelle.Village.Enemy:TickContactAttack()
+08-22 14:14:54.246  6853  6909 I Unity   : DeNelle.Village.Enemy:Update()
+08-22 14:14:54.246  6853  6909 I Unity   : 
+08-22 14:14:54.246  6853  6909 I Unity   : [Flow:EnemyAggro] orc-rep-0: sweep OverlapSphere r=3.0m colliders=2 -> accepted=0 rejected[null=0,noStructComp=2,dead=0,hero=0] nearest=<null>
+08-22 14:14:54.246  6853  6909 I Unity   : UnityEngine.DebugLogHandler:Internal_Log(LogType, LogOption, String, Object)
+08-22 14:14:54.246  6853  6909 I Unity   : DeNelle.Core.Diagnostics.FlowTrace:Throttle(String, String, Single, String)
+08-22 14:14:54.246  6853  6909 I Unity   : DeNelle.Village.Enemy:SweepForNearestStructure()
+08-22 14:14:54.246  6853  6909 I Unity   : DeNelle.Village.Enemy:ProbeForStructure()
+08-22 14:14:54.246  6853  6909 I Unity   : DeNelle.Village.Enemy:TickContactAttack()
+08-22 14:14:54.246  6853  6909 I Unity   : DeNelle.Village.Enemy:Update()
+08-22 14:14:54.246  6853  6909 I Unity   : 
+08-22 14:14:54.247  6853  6909 I Unity   : [Flow:EnemyAggro] orc-rep-1: ProbeForStructure ENTRY fwdProbeDist=1.1m sweepRadius=3.0m mask=~0(all layers) awareFlag=True heart=False
+08-22 14:14:54.247  6853  6909 I Unity   : UnityEngine.DebugLogHandler:Internal_Log(LogType, LogOption, String, Object)
+08-22 14:14:54.247  6853  6909 I Unity   : DeNelle.Core.Diagnostics.FlowTrace:Throttle(String, String, Single, String)
+08-22 14:14:54.247  6853  6909 I Unity   : DeNelle.Village.Enemy:ProbeForStructure()
+08-22 14:14:54.247  6853  6909 I Unity   : DeNelle.Village.Enemy:TickContactAttack()
+08-22 14:14:54.247  6853  6909 I Unity   : DeNelle.Village.Enemy:Update()
+08-22 14:14:54.247  6853  6909 I Unity   : 
+08-22 14:14:54.247  6853  6909 I Unity   : [Flow:EnemyAggro] orc-rep-1: sweep OverlapSphere r=3.0m colliders=1 -> accepted=0 rejected[null=0,noStructComp=1,dead=0,hero=0] nearest=<null>
+08-22 14:14:54.247  6853  6909 I Unity   : UnityEngine.DebugLogHandler:Internal_Log(LogType, LogOption, String, Object)
+08-22 14:14:54.247  6853  6909 I Unity   : DeNelle.Core.Diagnostics.FlowTrace:Throttle(String, String, Single, String)
+08-22 14:14:54.247  6853  6909 I Unity   : DeNelle.Village.Enemy:SweepForNearestStructure()
+08-22 14:14:54.247  6853  6909 I Unity   : DeNelle.Village.Enemy:ProbeForStructure()
+08-22 14:14:54.247  6853  6909 I Unity   : DeNelle.Village.Enemy:TickContactAttack()
+08-22 14:14:54.247  6853  6909 I Unity   : DeNelle.Village.Enemy:Update()
+08-22 14:14:54.247  6853  6909 I Unity   : 
+08-22 14:14:54.248  6853  6909 I Unity   : [Flow:EnemyAggro] orc-rep-2: ProbeForStructure ENTRY fwdProbeDist=1.1m sweepRadius=3.0m mask=~0(all layers) awareFlag=True heart=False
+08-22 14:14:54.248  6853  6909 I Unity   : UnityEngine.DebugLogHandler:Internal_Log(LogType, LogOption, String, Object)
+08-22 14:14:54.248  6853  6909 I Unity   : DeNelle.Core.Diagnostics.FlowTrace:Throttle(String, String, Single, String)
+08-22 14:14:54.248  6853  6909 I Unity   : DeNelle.Village.Enemy:ProbeForStructure()
+08-22 14:14:54.248  6853  6909 I Unity   : DeNelle.Village.Enemy:TickContactAttack()
+08-22 14:14:54.248  6853  6909 I Unity   : DeNelle.Village.Enemy:Update()
+08-22 14:14:54.248  6853  6909 I Unity   : 
+08-22 14:14:54.248  6853  6909 I Unity   : [Flow:EnemyAggro] orc-rep-2: sweep OverlapSphere r=3.0m colliders=1 -> accepted=0 rejected[null=0,noStructComp=1,dead=0,hero=0] nearest=<null>
+08-22 14:14:54.248  6853  6909 I Unity   : UnityEngine.DebugLogHandler:Internal_Log(LogType, LogOption, String, Object)
+08-22 14:14:54.248  6853  6909 I Unity   : DeNelle.Core.Diagnostics.FlowTrace:Throttle(String, String, Single, String)
+08-22 14:14:54.248  6853  6909 I Unity   : DeNelle.Village.Enemy:SweepForNearestStructure()
+08-22 14:14:54.248  6853  6909 I Unity   : DeNelle.Village.Enemy:ProbeForStructure()
+08-22 14:14:54.248  6853  6909 I Unity   : DeNelle.Village.Enemy:TickContactAttack()
+08-22 14:14:54.248  6853  6909 I Unity   : DeNelle.Village.Enemy:Update()
+08-22 14:14:54.248  6853  6909 I Unity   : 
+08-22 14:14:54.422  6853  6909 I Unity   : [Flow:EnemyAggro] orc-rep-3: ProbeForStructure ENTRY fwdProbeDist=1.1m sweepRadius=3.0m mask=~0(all layers) awareFlag=True heart=False
+08-22 14:14:54.422  6853  6909 I Unity   : UnityEngine.DebugLogHandler:Internal_Log(LogType, LogOption, String, Object)
+08-22 14:14:54.422  6853  6909 I Unity   : DeNelle.Core.Diagnostics.FlowTrace:Throttle(String, String, Single, String)
+08-22 14:14:54.422  6853  6909 I Unity   : DeNelle.Village.Enemy:ProbeForStructure()
+08-22 14:14:54.422  6853  6909 I Unity   : DeNelle.Village.Enemy:TickContactAttack()
+08-22 14:14:54.422  6853  6909 I Unity   : DeNelle.Village.Enemy:Update()
+08-22 14:14:54.422  6853  6909 I Unity   : 
+08-22 14:14:54.422  6853  6909 I Unity   : [Flow:EnemyAggro] orc-rep-3: sweep OverlapSphere r=3.0m colliders=1 -> accepted=0 rejected[null=0,noStructComp=1,dead=0,hero=0] nearest=<null>
+08-22 14:14:54.422  6853  6909 I Unity   : UnityEngine.DebugLogHandler:Internal_Log(LogType, LogOption, String, Object)
+08-22 14:14:54.422  6853  6909 I Unity   : DeNelle.Core.Diagnostics.FlowTrace:Throttle(String, String, Single, String)
+08-22 14:14:54.422  6853  6909 I Unity   : DeNelle.Village.Enemy:SweepForNearestStructure()
+08-22 14:14:54.422  6853  6909 I Unity   : DeNelle.Village.Enemy:ProbeForStructure()
+08-22 14:14:54.422  6853  6909 I Unity   : DeNelle.Village.Enemy:TickContactAttack()
+08-22 14:14:54.422  6853  6909 I Unity   : DeNelle.Village.Enemy:Update()
+08-22 14:14:54.422  6853  6909 I Unity   : 
+08-22 14:14:54.423  6853  6909 I Unity   : [Flow:EnemyAggro] orc-rep-5: ProbeForStructure ENTRY fwdProbeDist=1.1m sweepRadius=3.0m mask=~0(all layers) awareFlag=True heart=False
+08-22 14:14:54.423  6853  6909 I Unity   : UnityEngine.DebugLogHandler:Internal_Log(LogType, LogOption, String, Object)
+08-22 14:14:54.423  6853  6909 I Unity   : DeNelle.Core.Diagnostics.FlowTrace:Throttle(String, String, Single, String)
+08-22 14:14:54.423  6853  6909 I Unity   : DeNelle.Village.Enemy:ProbeForStructure()
+08-22 14:14:54.423  6853  6909 I Unity   : DeNelle.Village.Enemy:TickContactAttack()
+08-22 14:14:54.423  6853  6909 I Unity   : DeNelle.Village.Enemy:Update()
+08-22 14:14:54.423  6853  6909 I Unity   : 
+08-22 14:14:54.423  6853  6909 I Unity   : [Flow:EnemyAggro] orc-rep-5: sweep OverlapSphere r=3.0m colliders=1 -> accepted=0 rejected[null=0,noStructComp=1,dead=0,hero=0] nearest=<null>
+08-22 14:14:54.423  6853  6909 I Unity   : UnityEngine.DebugLogHandler:Internal_Log(LogType, LogOption, String, Object)
+08-22 14:14:54.423  6853  6909 I Unity   : DeNelle.Core.Diagnostics.FlowTrace:Throttle(String, String, Single, String)
+08-22 14:14:54.423  6853  6909 I Unity   : DeNelle.Village.Enemy:SweepForNearestStructure()
+08-22 14:14:54.423  6853  6909 I Unity   : DeNelle.Village.Enemy:ProbeForStructure()
+08-22 14:14:54.423  6853  6909 I Unity   : DeNelle.Village.Enemy:TickContactAttack()
+08-22 14:14:54.423  6853  6909 I Unity   : DeNelle.Village.Enemy:Update()
+08-22 14:14:54.423  6853  6909 I Unity   : 
+08-22 14:14:54.694  6853  6909 I Unity   : [Flow:Equip] sheathed long axis on 'Hero (Blaise)': tiltFromVertical=0deg (must read ~0; ~90 means it is lying across the body) longAxisDotUp=-1 (sign=-1 maps prop+Y onto body.up*sign) src=PER-MESH derived why=grip-origin/taper unavailable (0 readable vertices — Read/Write is OFF on this prop, which is the SHIPPED state of the live weapons); grip-origin on Y: |-end|=0.1151 |+end|=0.5349 relGap=0.646 -> hilt at -Y socket='SheatheSocket_HipMain'. ? 'GLOBAL fallback field' here means this mesh could not be measured and is hanging on a guess shared with every other prop — that is the 08-20/08-21 upside-down defect, and the fix is to make the mesh measurable, NEVER to flip the field.
+08-22 14:14:54.694  6853  6909 I Unity   : UnityEngine.DebugLogHandler:Internal_Log(LogType, LogOption, String, Object)
+08-22 14:14:54.694  6853  6909 I Unity   : DeNelle.Core.Diagnostics.FlowTrace:Throttle(String, String, Single, String)
+08-22 14:14:54.694  6853  6909 I Unity   : DeNelle.Village.EquipmentController:ComputeSheathRotation(Transform, Single)
+08-22 14:14:54.694  6853  6909 I Unity   : DeNelle.Village.EquipmentController:ApplyHoldPose()
+08-22 14:14:54.694  6853  6909 I Unity   : DeNelle.Village.HeroLocomotion:Update()
+08-22 14:14:54.694  6853  6909 I Unity   : 
+08-22 14:14:54.695  6853  6909 I Unity   : [Flow:Equip] sheathed shield 'ShieldWithItemLogic' DERIVED: thickness faces away from the player at the HIP; localEuler=(294.6, 356.1, 207) faceOffOutward=180deg longTiltFromVertical=0deg longAxisDotUp=1 frame[size=(0.3653, 0.45, 0.1152) longest=Y(0.45) middle=X(0.3653) narrowest=Z(0.1152)] (if 'narrowest' is not the plate's thinness the pose is right about a WRONG frame — that reads as a flat shield however healthy these angles look) (shipped constant would have been (0, 270, 168)).
+08-22 14:14:54.695  6853  6909 I Unity   : UnityEngine.DebugLogHandler:Internal_Log(LogType, LogOption, String, Object)
+08-22 14:14:54.695  6853  6909 I Unity   : DeNelle.Core.Diagnostics.FlowTrace:Throttle(String, String, Single, String)
+08-22 14:14:54.695  6853  6909 I Unity   : DeNelle.Village.EquipmentController:ComputeSheathedOffHandRotation(Transform)
+08-22 14:14:54.695  6853  6909 I Unity   : DeNelle.Village.EquipmentController:ApplyHoldPose()
+08-22 14:14:54.695  6853  6909 I Unity   : DeNelle.Village.HeroLocomotion:Update()
+08-22 14:14:54.695  6853  6909 I Unity   : 
+08-22 14:14:54.754  6853  6909 I Unity   : [Flow:HeroOwner] WORLD CLOCK FROZEN: Time.timeScale=0.00 in scene 'Main_Castle_Overworld'. The hero CANNOT move, turn or animate while this holds, however healthy the locomotion path is — every writer scales by Time.deltaTime. If no pause menu is on screen, a freeze owner (PauseController background auto-pause / BreakCaptureHarness F8 note) failed to restore it.
+08-22 14:14:54.754  6853  6909 I Unity   : UnityEngine.DebugLogHandler:Internal_Log(LogType, LogOption, String, Object)
+08-22 14:14:54.754  6853  6909 I Unity   : DeNelle.Core.Diagnostics.FlowTrace:Throttle(String, String, Single, String)
+08-22 14:14:54.754  6853  6909 I Unity   : DeNelle.Village.HeroLocomotion:LateUpdate()
+08-22 14:14:54.754  6853  6909 I Unity   : 
+08-22 14:14:54.794  6853  6909 I Unity   : [Flow:Zone] GetZone(x=-9.6,z=33.4).
+08-22 14:14:54.794  6853  6909 I Unity   : UnityEngine.DebugLogHandler:Internal_Log(LogType, LogOption, String, Object)
+08-22 14:14:54.794  6853  6909 I Unity   : DeNelle.Core.Diagnostics.FlowTrace:Throttle(String, String, Single, String)
+08-22 14:14:54.794  6853  6909 I Unity   : DeNelle.Core.World.ZoneManager:GetZone(Vector3)
+08-22 14:14:54.794  6853  6909 I Unity   : DeNelle.Village.WorldMusicDirector:Update()
+08-22 14:14:54.794  6853  6909 I Unity   : 
+08-22 14:14:54.795  6853  6909 I Unity   : [Flow:Offset] sheathed FALLBACK (drawn 'sword_A' on back pose): pos=(0.01, 0.03, -0.01) rot=SKIPPED (pos-only, ff.sheathdrawnrot=0)
+08-22 14:14:54.795  6853  6909 I Unity   : UnityEngine.DebugLogHandler:Internal_Log(LogType, LogOption, String, Object)
+08-22 14:14:54.795  6853  6909 I Unity   : DeNelle.Core.Diagnostics.FlowTrace:Throttle(String, String, Single, String)
+08-22 14:14:54.795  6853  6909 I Unity   : DeNelle.Village.EquipmentController:ApplySheathedOffset(Transform, String)
+08-22 14:14:54.795  6853  6909 I Unity   : DeNelle.Village.EquipmentController:ApplyHoldPose()
+08-22 14:14:54.795  6853  6909 I Unity   : DeNelle.Village.HeroLocomotion:Update()
+08-22 14:14:54.795  6853  6909 I Unity   : 
+08-22 14:14:54.795  6853  6909 I Unity   : [Flow:Offset] sheathed FALLBACK (drawn 'ShieldWithItemLogic' on back pose): pos=(0.00, 0.00, 0.00) rot=SKIPPED (pos-only, ff.sheathdrawnrot=0)
+08-22 14:14:54.795  6853  6909 I Unity   : UnityEngine.DebugLogHandler:Internal_Log(LogType, LogOption, String, Object)
+08-22 14:14:54.795  6853  6909 I Unity   : DeNelle.Core.Diagnostics.FlowTrace:Throttle(String, String, Single, String)
+08-22 14:14:54.795  6853  6909 I Unity   : DeNelle.Village.EquipmentController:ApplySheathedOffset(Transform, String)
+08-22 14:14:54.795  6853  6909 I Unity   : DeNelle.Village.EquipmentController:ApplyHoldPose()
+08-22 14:14:54.795  6853  6909 I Unity   : DeNelle.Village.HeroLocomotion:Update()
+08-22 14:14:54.795  6853  6909 I Unity   : 
+08-22 14:14:54.797  6853  6909 I Unity   : [Flow:EnemyAggro] orc-rep-0: ProbeForStructure null -> no structure target (Heart-march / roam only)
+08-22 14:14:54.797  6853  6909 I Unity   : UnityEngine.DebugLogHandler:Internal_Log(LogType, LogOption, String, Object)
+08-22 14:14:54.797  6853  6909 I Unity   : DeNelle.Core.Diagnostics.FlowTrace:Throttle(String, String, Single, String)
+08-22 14:14:54.797  6853  6909 I Unity   : DeNelle.Village.Enemy:TickContactAttack()
+08-22 14:14:54.797  6853  6909 I Unity   : DeNelle.Village.Enemy:Update()
+08-22 14:14:54.797  6853  6909 I Unity   : 
+08-22 14:14:54.797  6853  6909 I Unity   : [Flow:EnemyAggro] orc-rep-1: ProbeForStructure null -> no structure target (Heart-march / roam only)
+08-22 14:14:54.797  6853  6909 I Unity   : UnityEngine.DebugLogHandler:Internal_Log(LogType, LogOption, String, Object)
+08-22 14:14:54.797  6853  6909 I Unity   : DeNelle.Core.Diagnostics.FlowTrace:Throttle(String, String, Single, String)
+08-22 14:14:54.797  6853  6909 I Unity   : DeNelle.Village.Enemy:TickContactAttack()
+08-22 14:14:54.797  6853  6909 I Unity   : DeNelle.Village.Enemy:Update()
+08-22 14:14:54.797  6853  6909 I Unity   : 
+08-22 14:14:54.798  6853  6909 I Unity   : [Flow:EnemyAggro] orc-rep-2: ProbeForStructure null -> no structure target (Heart-march / roam only)
+08-22 14:14:54.798  6853  6909 I Unity   : UnityEngine.DebugLogHandler:Internal_Log(LogType, LogOption, String, Object)
+08-22 14:14:54.798  6853  6909 I Unity   : DeNelle.Core.Diagnostics.FlowTrace:Throttle(String, String, Single, String)
+08-22 14:14:54.798  6853  6909 I Unity   : DeNelle.Village.Enemy:TickContactAttack()
+08-22 14:14:54.798  6853  6909 I Unity   : DeNelle.Village.Enemy:Update()
+08-22 14:14:54.798  6853  6909 I Unity   : 
+08-22 14:14:54.799  6853  6909 I Unity   : [Flow:EnemyAggro] orc-rep-3: ProbeForStructure null -> no structure target (Heart-march / roam only)
+08-22 14:14:54.799  6853  6909 I Unity   : UnityEngine.DebugLogHandler:Internal_Log(LogType, LogOption, String, Object)
+08-22 14:14:54.799  6853  6909 I Unity   : DeNelle.Core.Diagnostics.FlowTrace:Throttle(String, String, Single, String)
+08-22 14:14:54.799  6853  6909 I Unity   : DeNelle.Village.Enemy:TickContactAttack()
+08-22 14:14:54.799  6853  6909 I Unity   : DeNelle.Village.Enemy:Update()
+08-22 14:14:54.799  6853  6909 I Unity   : 
+08-22 14:14:54.799  6853  6909 I Unity   : [Flow:EnemyAggro] orc-rep-5: ProbeForStructure null -> no structure target (Heart-march / roam only)
+08-22 14:14:54.799  6853  6909 I Unity   : UnityEngine.DebugLogHandler:Internal_Log(LogType, LogOption, String, Object)
+08-22 14:14:54.799  6853  6909 I Unity   : DeNelle.Core.Diagnostics.FlowTrace:Throttle(String, String, Single, String)
+08-22 14:14:54.799  6853  6909 I Unity   : DeNelle.Village.Enemy:TickContactAttack()
+08-22 14:14:54.799  6853  6909 I Unity   : DeNelle.Village.Enemy:Update()
+08-22 14:14:54.799  6853  6909 I Unity   : 
+08-22 14:14:54.800  6853  6909 I Unity   : [Flow:EnemyAggro] wave2-hollow-walker-4: ProbeForStructure null -> no structure target (Heart-march / roam only)
+08-22 14:14:54.800  6853  6909 I Unity   : UnityEngine.DebugLogHandler:Internal_Log(LogType, LogOption, String, Object)
+08-22 14:14:54.800  6853  6909 I Unity   : DeNelle.Core.Diagnostics.FlowTrace:Throttle(String, String, Single, String)
+08-22 14:14:54.800  6853  6909 I Unity   : DeNelle.Village.Enemy:TickContactAttack()
+08-22 14:14:54.800  6853  6909 I Unity   : DeNelle.Village.Enemy:Update()
+08-22 14:14:54.800  6853  6909 I Unity   : 
+08-22 14:14:54.801  6853  6909 I Unity   : [Flow:EnemyAggro] wave2-hollow-walker-5: ProbeForStructure null -> no structure target (Heart-march / roam only)
+08-22 14:14:54.801  6853  6909 I Unity   : UnityEngine.DebugLogHandler:Internal_Log(LogType, LogOption, String, Object)
+08-22 14:14:54.801  6853  6909 I Unity   : DeNelle.Core.Diagnostics.FlowTrace:Throttle(String, String, Single, String)
+08-22 14:14:54.801  6853  6909 I Unity   : DeNelle.Village.Enemy:TickContactAttack()
+08-22 14:14:54.801  6853  6909 I Unity   : DeNelle.Village.Enemy:Update()
+08-22 14:14:54.801  6853  6909 I Unity   : 
+08-22 14:14:54.801  6853  6909 I Unity   : [Flow:EnemyAggro] wave2-hollow-walker-6: ProbeForStructure null -> no structure target (Heart-march / roam only)
+08-22 14:14:54.801  6853  6909 I Unity   : UnityEngine.DebugLogHandler:Internal_Log(LogType, LogOption, String, Object)
+08-22 14:14:54.801  6853  6909 I Unity   : DeNelle.Core.Diagnostics.FlowTrace:Throttle(String, String, Single, String)
+08-22 14:14:54.801  6853  6909 I Unity   : DeNelle.Village.Enemy:TickContactAttack()
+08-22 14:14:54.801  6853  6909 I Unity   : DeNelle.Village.Enemy:Update()
+08-22 14:14:54.801  6853  6909 I Unity   : 
+08-22 14:14:55.123  6853  6909 I Unity   : [Flow:HUD] context inputs: wave=False battleLock=False pursuit=False inVillage=True modal=True buildMode=False scene='Main_Castle_Overworld' -> Modal
+08-22 14:14:55.123  6853  6909 I Unity   : UnityEngine.DebugLogHandler:Internal_Log(LogType, LogOption, String, Object)
+08-22 14:14:55.123  6853  6909 I Unity   : DeNelle.Core.Diagnostics.FlowTrace:Throttle(String, String, Single, String)
+08-22 14:14:55.123  6853  6909 I Unity   : DeNelle.Village.Hud.HudContextEvaluator:Poll()
+08-22 14:14:55.123  6853  6909 I Unity   : DeNelle.Core.Diagnostics.Guard:Try(String, String, Action)
+08-22 14:14:55.123  6853  6909 I Unity   : DeNelle.Village.Hud.HudModelHost:Update()
+08-22 14:14:55.123  6853  6909 I Unity   : 
+08-22 14:14:55.143  6853  6909 I Unity   : [Flow:RealmPins] source 'realm.hero' published 1 pin(s).
+08-22 14:14:55.143  6853  6909 I Unity   : UnityEngine.DebugLogHandler:Internal_Log(LogType, LogOption, String, Object)
+08-22 14:14:55.143  6853  6909 I Unity   : DeNelle.Core.Diagnostics.FlowTrace:Throttle(String, String, Single, String)
+08-22 14:14:55.143  6853  6909 I Unity   : DeNelle.Core.World.RealmPinBoard:Publish(String, IReadOnlyList`1)
+08-22 14:14:55.143  6853  6909 I Unity   : DeNelle.Village.World.RealmPinProducers:PublishHero()
+08-22 14:14:55.143  6853  6909 I Unity   : DeNelle.Village.World.RealmPinProducers:PublishAll()
+08-22 14:14:55.143  6853  6909 I Unity   : DeNelle.Core.Diagnostics.Guard:Try(String, String, Action)
+08-22 14:14:55.143  6853  6909 I Unity   : 
+08-22 14:14:55.145  6853  6909 I Unity   : [Flow:RealmPins] source 'realm.dungeons' published 7 pin(s).
+08-22 14:14:55.145  6853  6909 I Unity   : UnityEngine.DebugLogHandler:Internal_Log(LogType, LogOption, String, Object)
+08-22 14:14:55.145  6853  6909 I Unity   : DeNelle.Core.Diagnostics.FlowTrace:Throttle(String, String, Single, String)
+08-22 14:14:55.145  6853  6909 I Unity   : DeNelle.Core.World.RealmPinBoard:Publish(String, IReadOnlyList`1)
+08-22 14:14:55.145  6853  6909 I Unity   : DeNelle.Village.World.RealmPinProducers:PublishDungeons()
+08-22 14:14:55.145  6853  6909 I Unity   : DeNelle.Village.World.RealmPinProducers:PublishAll()
+08-22 14:14:55.145  6853  6909 I Unity   : DeNelle.Core.Diagnostics.Guard:Try(String, String, Action)
+08-22 14:14:55.145  6853  6909 I Unity   : 
+08-22 14:14:55.147  6853  6909 I Unity   : [Flow:RealmPins] source 'realm.army' published 1 pin(s).
+08-22 14:14:55.147  6853  6909 I Unity   : UnityEngine.DebugLogHandler:Internal_Log(LogType, LogOption, String, Object)
+08-22 14:14:55.147  6853  6909 I Unity   : DeNelle.Core.Diagnostics.FlowTrace:Throttle(String, String, Single, String)
+08-22 14:14:55.147  6853  6909 I Unity   : DeNelle.Core.World.RealmPinBoard:Publish(String, IReadOnlyList`1)
+08-22 14:14:55.147  6853  6909 I Unity   : DeNelle.Village.World.RealmPinProducers:PublishArmy()
+08-22 14:14:55.147  6853  6909 I Unity   : DeNelle.Core.Diagnostics.Guard:Try(String, String, Action)
+08-22 14:14:55.147  6853  6909 I Unity   : 
+08-22 14:14:55.149  6853  6909 I Unity   : [Flow:HeroLoco] vel=0.00 m/s | clips=[idle_ready(w=1.00,len=3.42s)] | baseState hash=902114326 nt=0.61 | avatar=KnightV3Avatar | controller=KnightMocap
+08-22 14:14:55.149  6853  6909 I Unity   : UnityEngine.DebugLogHandler:Internal_Log(LogType, LogOption, String, Object)
+08-22 14:14:55.149  6853  6909 I Unity   : DeNelle.Core.Diagnostics.FlowTrace:Throttle(String, String, Single, String)
+08-22 14:14:55.149  6853  6909 I Unity   : DeNelle.Village.HeroLocomotion:Update()
+08-22 14:14:55.149  6853  6909 I Unity   : 
+08-22 14:14:55.150  6853  6909 I Unity   : [Flow:EnemyLoco] vel=5.98 m/s | animSpeed=5.62 | clips=[mixamo.com(w=1.00,len=0.87s)] | baseState hash=-2089788878 nt=0.42 | controller=SkeletonHumanoid
+08-22 14:14:55.150  6853  6909 I Unity   : UnityEngine.DebugLogHandler:Internal_Log(LogType, LogOption, String, Object)
+08-22 14:14:55.150  6853  6909 I Unity   : DeNelle.Core.Diagnostics.FlowTrace:Throttle(String, String, Single, String)
+08-22 14:14:55.150  6853  6909 I Unity   : DeNelle.Village.Enemy:DriveAnimator()
+08-22 14:14:55.150  6853  6909 I Unity   : DeNelle.Village.Enemy:Update()
+08-22 14:14:55.150  6853  6909 I Unity   : 
+08-22 14:14:55.151  6853  6909 I Unity   : [Flow:EnemyLoco] vel=0.00 m/s | animSpeed=0.00 | clips=[mixamo.com(w=1.00,len=7.38s)] | baseState hash=-2089788878 nt=0.70 | controller=LargeHumanoid
+08-22 14:14:55.151  6853  6909 I Unity   : UnityEngine.DebugLogHandler:Internal_Log(LogType, LogOption, String, Object)
+08-22 14:14:55.151  6853  6909 I Unity   : DeNelle.Core.Diagnostics.FlowTrace:Throttle(String, String, Single, String)
+08-22 14:14:55.151  6853  6909 I Unity   : DeNelle.Village.Enemy:DriveAnimator()
+08-22 14:14:55.151  6853  6909 I Unity   : DeNelle.Village.Enemy:Update()
+08-22 14:14:55.151  6853  6909 I Unity   : 
+08-22 14:14:55.151  6853  6909 I Unity   : [Flow:EnemyLoco] vel=1.59 m/s | animSpeed=0.95 | clips=[mixamo.com(w=1.00,len=4.67s)] | baseState hash=1080829965 nt=0.42 | controller=OrcHumanoid
+08-22 14:14:55.151  6853  6909 I Unity   : UnityEngine.DebugLogHandler:Internal_Log(LogType, LogOption, String, Object)
+08-22 14:14:55.151  6853  6909 I Unity   : DeNelle.Core.Diagnostics.FlowTrace:Throttle(String, String, Single, String)
+08-22 14:14:55.151  6853  6909 I Unity   : DeNelle.Village.Enemy:DriveAnimator()
+08-22 14:14:55.151  6853  6909 I Unity   : DeNelle.Village.Enemy:Update()
+08-22 14:14:55.151  6853  6909 I Unity   : 
+08-22 14:14:55.152  6853  6909 I Unity   : [Flow:EnemyLoco] vel=3.07 m/s | animSpeed=3.83 | clips=[mixamo.com(w=1.00,len=0.87s)] | baseState hash=-2089788878 nt=0.17 | controller=SkeletonHumanoid
+08-22 14:14:55.152  6853  6909 I Unity   : UnityEngine.DebugLogHandler:Internal_Log(LogType, LogOption, String, Object)
+08-22 14:14:55.152  6853  6909 I Unity   : DeNelle.Core.Diagnostics.FlowTrace:Throttle(String, String, Single, String)
+08-22 14:14:55.152  6853  6909 I Unity   : DeNelle.Village.Enemy:DriveAnimator()
+08-22 14:14:55.152  6853  6909 I Unity   : DeNelle.Village.Enemy:Update()
+08-22 14:14:55.152  6853  6909 I Unity   : 
+08-22 14:14:55.152  6853  6909 I Unity   : [Flow:EnemyLoco] vel=5.98 m/s | animSpeed=5.97 | clips=[mixamo.com(w=1.00,len=0.87s)] | baseState hash=-2089788878 nt=0.65 | controller=OrcHumanoid_Warrior
+08-22 14:14:55.152  6853  6909 I Unity   : UnityEngine.DebugLogHandler:Internal_Log(LogType, LogOption, String, Object)
+08-22 14:14:55.152  6853  6909 I Unity   : DeNelle.Core.Diagnostics.FlowTrace:Throttle(String, String, Single, String)
+08-22 14:14:55.152  6853  6909 I Unity   : DeNelle.Village.Enemy:DriveAnimator()
+08-22 14:14:55.152  6853  6909 I Unity   : DeNelle.Village.Enemy:Update()
+08-22 14:14:55.152  6853  6909 I Unity   : 
+08-22 14:14:55.153  6853  6909 I Unity   : [Flow:EnemyLoco] vel=0.00 m/s | animSpeed=0.00 | clips=[mixamo.com(w=1.00,len=2.63s)] | baseState hash=931510065 nt=0.39 | controller=SkeletonHumanoid
+08-22 14:14:55.153  6853  6909 I Unity   : UnityEngine.DebugLogHandler:Internal_Log(LogType, LogOption, String, Object)
+08-22 14:14:55.153  6853  6909 I Unity   : DeNelle.Core.Diagnostics.FlowTrace:Throttle(String, String, Single, String)
+08-22 14:14:55.153  6853  6909 I Unity   : DeNelle.Village.Enemy:DriveAnimator()
+08-22 14:14:55.153  6853  6909 I Unity   : DeNelle.Village.Enemy:Update()
+08-22 14:14:55.153  6853  6909 I Unity   : 
+08-22 14:14:55.153  6853  6909 I Unity   : [Flow:EnemyLoco] vel=0.00 m/s | animSpeed=0.00 | clips=[mixamo.com(w=1.00,len=1.75s)] | baseState hash=1080829965 nt=0.16 | controller=SkeletonHumanoid
+08-22 14:14:55.153  6853  6909 I Unity   : UnityEngine.DebugLogHandler:Internal_Log(LogType, LogOption, String, Object)
+08-22 14:14:55.153  6853  6909 I Unity   : DeNelle.Core.Diagnostics.FlowTrace:Throttle(String, String, Single, String)
+08-22 14:14:55.153  6853  6909 I Unity   : DeNelle.Village.Enemy:DriveAnimator()
+08-22 14:14:55.153  6853  6909 I Unity   : DeNelle.Village.Enemy:Update()
+08-22 14:14:55.153  6853  6909 I Unity   : 
+08-22 14:14:55.154  6853  6909 I Unity   : [Flow:EnemyLoco] vel=0.00 m/s | animSpeed=0.00 | clips=[mixamo.com(w=1.00,len=2.63s)] | baseState hash=931510065 nt=0.35 | controller=SkeletonHumanoid
+08-22 14:14:55.154  6853  6909 I Unity   : UnityEngine.DebugLogHandler:Internal_Log(LogType, LogOption, String, Object)
+08-22 14:14:55.154  6853  6909 I Unity   : DeNelle.Core.Diagnostics.FlowTrace:Throttle(String, String, Single, String)
+08-22 14:14:55.154  6853  6909 I Unity   : DeNelle.Village.Enemy:DriveAnimator()
+08-22 14:14:55.154  6853  6909 I Unity   : DeNelle.Village.Enemy:Update()
+08-22 14:14:55.154  6853  6909 I Unity   : 
+08-22 14:14:55.155  6853  6909 I Unity   : [Flow:HeroOwner] scene='Main_Castle_Overworld' owner=HeroLocomotion ownerCC=none ownerAgent=on-mesh scriptedMove=off velSelf=0.00 velRoot=0.00 animFeed=velSelf animSpeed=0.00 rootYaw=343.1 basis=SmartMobileCamera.CameraYaw basisYaw=-376.9 timeScale=0.00 dt=0.0000 inputSuppressed=False autoWalk=False mainCamYaw=343.1 pos=(-9.62, 0.08, 33.40)
+08-22 14:14:55.155  6853  6909 I Unity   : UnityEngine.DebugLogHandler:Internal_Log(LogType, LogOption, String, Object)
+08-22 14:14:55.155  6853  6909 I Unity   : DeNelle.Core.Diagnostics.FlowTrace:Throttle(String, String, Single, String)
+08-22 14:14:55.155  6853  6909 I Unity   : DeNelle.Village.HeroLocomotion:LateUpdate()
+08-22 14:14:55.155  6853  6909 I Unity   : 
+08-22 14:14:55.760  6853  6909 I Unity   : [Flow:HeroOwner] WORLD CLOCK FROZEN: Time.timeScale=0.00 in scene 'Main_Castle_Overworld'. The hero CANNOT move, turn or animate while this holds, however healthy the locomotion path is — every writer scales by Time.deltaTime. If no pause menu is on screen, a freeze owner (PauseController background auto-pause / BreakCaptureHarness F8 note) failed to restore it.
+08-22 14:14:55.760  6853  6909 I Unity   : UnityEngine.DebugLogHandler:Internal_Log(LogType, LogOption, String, Object)
+08-22 14:14:55.760  6853  6909 I Unity   : DeNelle.Core.Diagnostics.FlowTrace:Throttle(String, String, Single, String)
+08-22 14:14:55.760  6853  6909 I Unity   : DeNelle.Village.HeroLocomotion:LateUpdate()
+08-22 14:14:55.760  6853  6909 I Unity   : 
+08-22 14:14:55.785  6853  6909 I Unity   : [Flow:EnemyAggro] wave2-hollow-walker-4: ProbeForStructure ENTRY fwdProbeDist=1.1m sweepRadius=3.0m mask=~0(all layers) awareFlag=True heart=True
+08-22 14:14:55.785  6853  6909 I Unity   : UnityEngine.DebugLogHandler:Internal_Log(LogType, LogOption, String, Object)
+08-22 14:14:55.785  6853  6909 I Unity   : DeNelle.Core.Diagnostics.FlowTrace:Throttle(String, String, Single, String)
+08-22 14:14:55.785  6853  6909 I Unity   : DeNelle.Village.Enemy:ProbeForStructure()
+08-22 14:14:55.785  6853  6909 I Unity   : DeNelle.Village.Enemy:TickContactAttack()
+08-22 14:14:55.785  6853  6909 I Unity   : DeNelle.Village.Enemy:Update()
+08-22 14:14:55.785  6853  6909 I Unity   : 
+08-22 14:14:55.785  6853  6909 I Unity   : [Flow:EnemyAggro] wave2-hollow-walker-4: sweep OverlapSphere r=3.0m colliders=3 -> accepted=0 rejected[null=0,noStructComp=2,dead=1,hero=0] nearest=<null>
+08-22 14:14:55.785  6853  6909 I Unity   : UnityEngine.DebugLogHandler:Internal_Log(LogType, LogOption, String, Object)
+08-22 14:14:55.785  6853  6909 I Unity   : DeNelle.Core.Diagnostics.FlowTrace:Throttle(String, String, Single, String)
+08-22 14:14:55.785  6853  6909 I Unity   : DeNelle.Village.Enemy:SweepForNearestStructure()
+08-22 14:14:55.785  6853  6909 I Unity   : DeNelle.Village.Enemy:ProbeForStructure()
+08-22 14:14:55.785  6853  6909 I Unity   : DeNelle.Village.Enemy:TickContactAttack()
+08-22 14:14:55.785  6853  6909 I Unity   : DeNelle.Village.Enemy:Update()
+08-22 14:14:55.785  6853  6909 I Unity   : 
+08-22 14:14:55.786  6853  6909 I Unity   : [Flow:EnemyAggro] wave2-hollow-walker-5: ProbeForStructure ENTRY fwdProbeDist=1.1m sweepRadius=3.0m mask=~0(all layers) awareFlag=True heart=True
+08-22 14:14:55.786  6853  6909 I Unity   : UnityEngine.DebugLogHandler:Internal_Log(LogType, LogOption, String, Object)
+08-22 14:14:55.786  6853  6909 I Unity   : DeNelle.Core.Diagnostics.FlowTrace:Throttle(String, String, Single, String)
+08-22 14:14:55.786  6853  6909 I Unity   : DeNelle.Village.Enemy:ProbeForStructure()
+08-22 14:14:55.786  6853  6909 I Unity   : DeNelle.Village.Enemy:TickContactAttack()
+08-22 14:14:55.786  6853  6909 I Unity   : DeNelle.Village.Enemy:Update()
+08-22 14:14:55.786  6853  6909 I Unity   : 
+08-22 14:14:55.786  6853  6909 I Unity   : [Flow:EnemyAggro] wave2-hollow-walker-5: sweep OverlapSphere r=3.0m colliders=3 -> accepted=0 rejected[null=0,noStructComp=2,dead=1,hero=0] nearest=<null>
+08-22 14:14:55.786  6853  6909 I Unity   : UnityEngine.DebugLogHandler:Internal_Log(LogType, LogOption, String, Object)
+08-22 14:14:55.786  6853  6909 I Unity   : DeNelle.Core.Diagnostics.FlowTrace:Throttle(String, String, Single, String)
+08-22 14:14:55.786  6853  6909 I Unity   : DeNelle.Village.Enemy:SweepForNearestStructure()
+08-22 14:14:55.786  6853  6909 I Unity   : DeNelle.Village.Enemy:ProbeForStructure()
+08-22 14:14:55.786  6853  6909 I Unity   : DeNelle.Village.Enemy:TickContactAttack()
+08-22 14:14:55.786  6853  6909 I Unity   : DeNelle.Village.Enemy:Update()
+08-22 14:14:55.786  6853  6909 I Unity   : 
+08-22 14:14:55.787  6853  6909 I Unity   : [Flow:EnemyAggro] wave2-hollow-walker-6: ProbeForStructure ENTRY fwdProbeDist=1.1m sweepRadius=3.0m mask=~0(all layers) awareFlag=True heart=True
+08-22 14:14:55.787  6853  6909 I Unity   : UnityEngine.DebugLogHandler:Internal_Log(LogType, LogOption, String, Object)
+08-22 14:14:55.787  6853  6909 I Unity   : DeNelle.Core.Diagnostics.FlowTrace:Throttle(String, String, Single, String)
+08-22 14:14:55.787  6853  6909 I Unity   : DeNelle.Village.Enemy:ProbeForStructure()
+08-22 14:14:55.787  6853  6909 I Unity   : DeNelle.Village.Enemy:TickContactAttack()
+08-22 14:14:55.787  6853  6909 I Unity   : DeNelle.Village.Enemy:Update()
+08-22 14:14:55.787  6853  6909 I Unity   : 
+08-22 14:14:55.787  6853  6909 I Unity   : [Flow:EnemyAggro] wave2-hollow-walker-6: sweep OverlapSphere r=3.0m colliders=3 -> accepted=0 rejected[null=0,noStructComp=2,dead=1,hero=0] nearest=<null>
+08-22 14:14:55.787  6853  6909 I Unity   : UnityEngine.DebugLogHandler:Internal_Log(LogType, LogOption, String, Object)
+08-22 14:14:55.787  6853  6909 I Unity   : DeNelle.Core.Diagnostics.FlowTrace:Throttle(String, String, Single, String)
+08-22 14:14:55.787  6853  6909 I Unity   : DeNelle.Village.Enemy:SweepForNearestStructure()
+08-22 14:14:55.787  6853  6909 I Unity   : DeNelle.Village.Enemy:ProbeForStructure()
+08-22 14:14:55.787  6853  6909 I Unity   : DeNelle.Village.Enemy:TickContactAttack()
+08-22 14:14:55.787  6853  6909 I Unity   : DeNelle.Village.Enemy:Update()
+08-22 14:14:55.787  6853  6909 I Unity   : 
+08-22 14:14:55.796  6853  6909 I Unity   : [Flow:Offset] sheathed FALLBACK (drawn 'sword_A' on back pose): pos=(0.01, 0.03, -0.01) rot=SKIPPED (pos-only, ff.sheathdrawnrot=0)
+08-22 14:14:55.796  6853  6909 I Unity   : UnityEngine.DebugLogHandler:Internal_Log(LogType, LogOption, String, Object)
+08-22 14:14:55.796  6853  6909 I Unity   : DeNelle.Core.Diagnostics.FlowTrace:Throttle(String, String, Single, String)
+08-22 14:14:55.796  6853  6909 I Unity   : DeNelle.Village.EquipmentController:ApplySheathedOffset(Transform, String)
+08-22 14:14:55.796  6853  6909 I Unity   : DeNelle.Village.EquipmentController:ApplyHoldPose()
+08-22 14:14:55.796  6853  6909 I Unity   : DeNelle.Village.HeroLocomotion:Update()
+08-22 14:14:55.796  6853  6909 I Unity   : 
+08-22 14:14:55.797  6853  6909 I Unity   : [Flow:Offset] sheathed FALLBACK (drawn 'ShieldWithItemLogic' on back pose): pos=(0.00, 0.00, 0.00) rot=SKIPPED (pos-only, ff.sheathdrawnrot=0)
+08-22 14:14:55.797  6853  6909 I Unity   : UnityEngine.DebugLogHandler:Internal_Log(LogType, LogOption, String, Object)
+08-22 14:14:55.797  6853  6909 I Unity   : DeNelle.Core.Diagnostics.FlowTrace:Throttle(String, String, Single, String)
+08-22 14:14:55.797  6853  6909 I Unity   : DeNelle.Village.EquipmentController:ApplySheathedOffset(Transform, String)
+08-22 14:14:55.797  6853  6909 I Unity   : DeNelle.Village.EquipmentController:ApplyHoldPose()
+08-22 14:14:55.797  6853  6909 I Unity   : DeNelle.Village.HeroLocomotion:Update()
+08-22 14:14:55.797  6853  6909 I Unity   : 
+08-22 14:14:55.798  6853  6909 I Unity   : [Flow:EnemyAggro] orc-rep-0: ProbeForStructure null -> no structure target (Heart-march / roam only)
+08-22 14:14:55.798  6853  6909 I Unity   : UnityEngine.DebugLogHandler:Internal_Log(LogType, LogOption, String, Object)
+08-22 14:14:55.798  6853  6909 I Unity   : DeNelle.Core.Diagnostics.FlowTrace:Throttle(String, String, Single, String)
+08-22 14:14:55.798  6853  6909 I Unity   : DeNelle.Village.Enemy:TickContactAttack()
+08-22 14:14:55.798  6853  6909 I Unity   : DeNelle.Village.Enemy:Update()
+08-22 14:14:55.798  6853  6909 I Unity   : 
+08-22 14:14:55.799  6853  6909 I Unity   : [Flow:EnemyAggro] orc-rep-1: ProbeForStructure null -> no structure target (Heart-march / roam only)
+08-22 14:14:55.799  6853  6909 I Unity   : UnityEngine.DebugLogHandler:Internal_Log(LogType, LogOption, String, Object)
+08-22 14:14:55.799  6853  6909 I Unity   : DeNelle.Core.Diagnostics.FlowTrace:Throttle(String, String, Single, String)
+08-22 14:14:55.799  6853  6909 I Unity   : DeNelle.Village.Enemy:TickContactAttack()
+08-22 14:14:55.799  6853  6909 I Unity   : DeNelle.Village.Enemy:Update()
+08-22 14:14:55.799  6853  6909 I Unity   : 
+08-22 14:14:55.799  6853  6909 I Unity   : [Flow:EnemyAggro] orc-rep-2: ProbeForStructure null -> no structure target (Heart-march / roam only)
+08-22 14:14:55.799  6853  6909 I Unity   : UnityEngine.DebugLogHandler:Internal_Log(LogType, LogOption, String, Object)
+08-22 14:14:55.799  6853  6909 I Unity   : DeNelle.Core.Diagnostics.FlowTrace:Throttle(String, String, Single, String)
+08-22 14:14:55.799  6853  6909 I Unity   : DeNelle.Village.Enemy:TickContactAttack()
+08-22 14:14:55.799  6853  6909 I Unity   : DeNelle.Village.Enemy:Update()
+08-22 14:14:55.799  6853  6909 I Unity   : 
+08-22 14:14:55.800  6853  6909 I Unity   : [Flow:EnemyAggro] orc-rep-3: ProbeForStructure null -> no structure target (Heart-march / roam only)
+08-22 14:14:55.800  6853  6909 I Unity   : UnityEngine.DebugLogHandler:Internal_Log(LogType, LogOption, String, Object)
+08-22 14:14:55.800  6853  6909 I Unity   : DeNelle.Core.Diagnostics.FlowTrace:Throttle(String, String, Single, String)
+08-22 14:14:55.800  6853  6909 I Unity   : DeNelle.Village.Enemy:TickContactAttack()
+08-22 14:14:55.800  6853  6909 I Unity   : DeNelle.Village.Enemy:Update()
+08-22 14:14:55.800  6853  6909 I Unity   : 
+08-22 14:14:55.801  6853  6909 I Unity   : [Flow:EnemyAggro] orc-rep-5: ProbeForStructure null -> no structure target (Heart-march / roam only)
+08-22 14:14:55.801  6853  6909 I Unity   : UnityEngine.DebugLogHandler:Internal_Log(LogType, LogOption, String, Object)
+08-22 14:14:55.801  6853  6909 I Unity   : DeNelle.Core.Diagnostics.FlowTrace:Throttle(String, String, Single, String)
+08-22 14:14:55.801  6853  6909 I Unity   : DeNelle.Village.Enemy:TickContactAttack()
+08-22 14:14:55.801  6853  6909 I Unity   : DeNelle.Village.Enemy:Update()
+08-22 14:14:55.801  6853  6909 I Unity   : 
+08-22 14:14:55.802  6853  6909 I Unity   : [Flow:EnemyAggro] wave2-hollow-walker-4: ProbeForStructure null -> no structure target (Heart-march / roam only)
+08-22 14:14:55.802  6853  6909 I Unity   : UnityEngine.DebugLogHandler:Internal_Log(LogType, LogOption, String, Object)
+08-22 14:14:55.802  6853  6909 I Unity   : DeNelle.Core.Diagnostics.FlowTrace:Throttle(String, String, Single, String)
+08-22 14:14:55.802  6853  6909 I Unity   : DeNelle.Village.Enemy:TickContactAttack()
+08-22 14:14:55.802  6853  6909 I Unity   : DeNelle.Village.Enemy:Update()
+08-22 14:14:55.802  6853  6909 I Unity   : 
+08-22 14:14:55.803  6853  6909 I Unity   : [Flow:EnemyAggro] wave2-hollow-walker-5: ProbeForStructure null -> no structure target (Heart-march / roam only)
+08-22 14:14:55.803  6853  6909 I Unity   : UnityEngine.DebugLogHandler:Internal_Log(LogType, LogOption, String, Object)
+08-22 14:14:55.803  6853  6909 I Unity   : DeNelle.Core.Diagnostics.FlowTrace:Throttle(String, String, Single, String)
+08-22 14:14:55.803  6853  6909 I Unity   : DeNelle.Village.Enemy:TickContactAttack()
+08-22 14:14:55.803  6853  6909 I Unity   : DeNelle.Village.Enemy:Update()
+08-22 14:14:55.803  6853  6909 I Unity   : 
+08-22 14:14:55.804  6853  6909 I Unity   : [Flow:EnemyAggro] wave2-hollow-walker-6: ProbeForStructure null -> no structure target (Heart-march / roam only)
+08-22 14:14:55.804  6853  6909 I Unity   : UnityEngine.DebugLogHandler:Internal_Log(LogType, LogOption, String, Object)
+08-22 14:14:55.804  6853  6909 I Unity   : DeNelle.Core.Diagnostics.FlowTrace:Throttle(String, String, Single, String)
+08-22 14:14:55.804  6853  6909 I Unity   : DeNelle.Village.Enemy:TickContactAttack()
+08-22 14:14:55.804  6853  6909 I Unity   : DeNelle.Village.Enemy:Update()
+08-22 14:14:55.804  6853  6909 I Unity   : 
+08-22 14:14:55.819  6853  6909 I Unity   : [Flow:Zone] GetZone(x=-9.6,z=33.4).
+08-22 14:14:55.819  6853  6909 I Unity   : UnityEngine.DebugLogHandler:Internal_Log(LogType, LogOption, String, Object)
+08-22 14:14:55.819  6853  6909 I Unity   : DeNelle.Core.Diagnostics.FlowTrace:Throttle(String, String, Single, String)
+08-22 14:14:55.819  6853  6909 I Unity   : DeNelle.Core.World.ZoneManager:GetZone(Vector3)
+08-22 14:14:55.819  6853  6909 I Unity   : DeNelle.Village.WorldMusicDirector:Update()
+08-22 14:14:55.819  6853  6909 I Unity   : 
+08-22 14:14:56.170  6853  6909 I Unity   : [Flow:RealmPins] source 'realm.hero' published 1 pin(s).
+08-22 14:14:56.170  6853  6909 I Unity   : UnityEngine.DebugLogHandler:Internal_Log(LogType, LogOption, String, Object)
+08-22 14:14:56.170  6853  6909 I Unity   : DeNelle.Core.Diagnostics.FlowTrace:Throttle(String, String, Single, String)
+08-22 14:14:56.170  6853  6909 I Unity   : DeNelle.Core.World.RealmPinBoard:Publish(String, IReadOnlyList`1)
+08-22 14:14:56.170  6853  6909 I Unity   : DeNelle.Village.World.RealmPinProducers:PublishHero()
+08-22 14:14:56.170  6853  6909 I Unity   : DeNelle.Village.World.RealmPinProducers:PublishAll()
+08-22 14:14:56.170  6853  6909 I Unity   : DeNelle.Core.Diagnostics.Guard:Try(String, String, Action)
+08-22 14:14:56.170  6853  6909 I Unity   : 
+08-22 14:14:56.172  6853  6909 I Unity   : [Flow:RealmPins] source 'realm.dungeons' published 7 pin(s).
+08-22 14:14:56.172  6853  6909 I Unity   : UnityEngine.DebugLogHandler:Internal_Log(LogType, LogOption, String, Object)
+08-22 14:14:56.172  6853  6909 I Unity   : DeNelle.Core.Diagnostics.FlowTrace:Throttle(String, String, Single, String)
+08-22 14:14:56.172  6853  6909 I Unity   : DeNelle.Core.World.RealmPinBoard:Publish(String, IReadOnlyList`1)
+08-22 14:14:56.172  6853  6909 I Unity   : DeNelle.Village.World.RealmPinProducers:PublishDungeons()
+08-22 14:14:56.172  6853  6909 I Unity   : DeNelle.Village.World.RealmPinProducers:PublishAll()
+08-22 14:14:56.172  6853  6909 I Unity   : DeNelle.Core.Diagnostics.Guard:Try(String, String, Action)
+08-22 14:14:56.172  6853  6909 I Unity   : 
+08-22 14:14:56.173  6853  6909 I Unity   : [Flow:RealmPins] source 'realm.army' published 1 pin(s).
+08-22 14:14:56.173  6853  6909 I Unity   : UnityEngine.DebugLogHandler:Internal_Log(LogType, LogOption, String, Object)
+08-22 14:14:56.173  6853  6909 I Unity   : DeNelle.Core.Diagnostics.FlowTrace:Throttle(String, String, Single, String)
+08-22 14:14:56.173  6853  6909 I Unity   : DeNelle.Core.World.RealmPinBoard:Publish(String, IReadOnlyList`1)
+08-22 14:14:56.173  6853  6909 I Unity   : DeNelle.Village.World.RealmPinProducers:PublishArmy()
+08-22 14:14:56.173  6853  6909 I Unity   : DeNelle.Core.Diagnostics.Guard:Try(String, String, Action)
+08-22 14:14:56.173  6853  6909 I Unity   : 
+08-22 14:14:56.177  6853  6909 I Unity   : [Flow:HeroLoco] vel=0.00 m/s | clips=[idle_ready(w=1.00,len=3.42s)] | baseState hash=902114326 nt=0.61 | avatar=KnightV3Avatar | controller=KnightMocap
+08-22 14:14:56.177  6853  6909 I Unity   : UnityEngine.DebugLogHandler:Internal_Log(LogType, LogOption, String, Object)
+08-22 14:14:56.177  6853  6909 I Unity   : DeNelle.Core.Diagnostics.FlowTrace:Throttle(String, String, Single, String)
+08-22 14:14:56.177  6853  6909 I Unity   : DeNelle.Village.HeroLocomotion:Update()
+08-22 14:14:56.177  6853  6909 I Unity   : 
+08-22 14:14:56.178  6853  6909 I Unity   : [Flow:EnemyLoco] vel=5.98 m/s | animSpeed=5.62 | clips=[mixamo.com(w=1.00,len=0.87s)] | baseState hash=-2089788878 nt=0.42 | controller=SkeletonHumanoid
+08-22 14:14:56.178  6853  6909 I Unity   : UnityEngine.DebugLogHandler:Internal_Log(LogType, LogOption, String, Object)
+08-22 14:14:56.178  6853  6909 I Unity   : DeNelle.Core.Diagnostics.FlowTrace:Throttle(String, String, Single, String)
+08-22 14:14:56.178  6853  6909 I Unity   : DeNelle.Village.Enemy:DriveAnimator()
+08-22 14:14:56.178  6853  6909 I Unity   : DeNelle.Village.Enemy:Update()
+08-22 14:14:56.178  6853  6909 I Unity   : 
+08-22 14:14:56.179  6853  6909 I Unity   : [Flow:EnemyLoco] vel=0.00 m/s | animSpeed=0.00 | clips=[mixamo.com(w=1.00,len=7.38s)] | baseState hash=-2089788878 nt=0.70 | controller=LargeHumanoid
+08-22 14:14:56.179  6853  6909 I Unity   : UnityEngine.DebugLogHandler:Internal_Log(LogType, LogOption, String, Object)
+08-22 14:14:56.179  6853  6909 I Unity   : DeNelle.Core.Diagnostics.FlowTrace:Throttle(String, String, Single, String)
+08-22 14:14:56.179  6853  6909 I Unity   : DeNelle.Village.Enemy:DriveAnimator()
+08-22 14:14:56.179  6853  6909 I Unity   : DeNelle.Village.Enemy:Update()
+08-22 14:14:56.179  6853  6909 I Unity   : 
+08-22 14:14:56.179  6853  6909 I Unity   : [Flow:EnemyLoco] vel=1.59 m/s | animSpeed=0.95 | clips=[mixamo.com(w=1.00,len=4.67s)] | baseState hash=1080829965 nt=0.42 | controller=OrcHumanoid
+08-22 14:14:56.179  6853  6909 I Unity   : UnityEngine.DebugLogHandler:Internal_Log(LogType, LogOption, String, Object)
+08-22 14:14:56.179  6853  6909 I Unity   : DeNelle.Core.Diagnostics.FlowTrace:Throttle(String, String, Single, String)
+08-22 14:14:56.179  6853  6909 I Unity   : DeNelle.Village.Enemy:DriveAnimator()
+08-22 14:14:56.179  6853  6909 I Unity   : DeNelle.Village.Enemy:Update()
+08-22 14:14:56.179  6853  6909 I Unity   : 
+08-22 14:14:56.180  6853  6909 I Unity   : [Flow:EnemyLoco] vel=3.07 m/s | animSpeed=3.83 | clips=[mixamo.com(w=1.00,len=0.87s)] | baseState hash=-2089788878 nt=0.17 | controller=SkeletonHumanoid
+08-22 14:14:56.180  6853  6909 I Unity   : UnityEngine.DebugLogHandler:Internal_Log(LogType, LogOption, String, Object)
+08-22 14:14:56.180  6853  6909 I Unity   : DeNelle.Core.Diagnostics.FlowTrace:Throttle(String, String, Single, String)
+08-22 14:14:56.180  6853  6909 I Unity   : DeNelle.Village.Enemy:DriveAnimator()
+08-22 14:14:56.180  6853  6909 I Unity   : DeNelle.Village.Enemy:Update()
+08-22 14:14:56.180  6853  6909 I Unity   : 
+08-22 14:14:56.180  6853  6909 I Unity   : [Flow:EnemyLoco] vel=5.98 m/s | animSpeed=5.97 | clips=[mixamo.com(w=1.00,len=0.87s)] | baseState hash=-2089788878 nt=0.65 | controller=OrcHumanoid_Warrior
+08-22 14:14:56.180  6853  6909 I Unity   : UnityEngine.DebugLogHandler:Internal_Log(LogType, LogOption, String, Object)
+08-22 14:14:56.180  6853  6909 I Unity   : DeNelle.Core.Diagnostics.FlowTrace:Throttle(String, String, Single, String)
+08-22 14:14:56.180  6853  6909 I Unity   : DeNelle.Village.Enemy:DriveAnimator()
+08-22 14:14:56.180  6853  6909 I Unity   : DeNelle.Village.Enemy:Update()
+08-22 14:14:56.180  6853  6909 I Unity   : 
+08-22 14:14:56.181  6853  6909 I Unity   : [Flow:EnemyLoco] vel=0.00 m/s | animSpeed=0.00 | clips=[mixamo.com(w=1.00,len=2.63s)] | baseState hash=931510065 nt=0.39 | controller=SkeletonHumanoid
+08-22 14:14:56.181  6853  6909 I Unity   : UnityEngine.DebugLogHandler:Internal_Log(LogType, LogOption, String, Object)
+08-22 14:14:56.181  6853  6909 I Unity   : DeNelle.Core.Diagnostics.FlowTrace:Throttle(String, String, Single, String)
+08-22 14:14:56.181  6853  6909 I Unity   : DeNelle.Village.Enemy:DriveAnimator()
+08-22 14:14:56.181  6853  6909 I Unity   : DeNelle.Village.Enemy:Update()
+08-22 14:14:56.181  6853  6909 I Unity   : 
+08-22 14:14:56.181  6853  6909 I Unity   : [Flow:EnemyLoco] vel=0.00 m/s | animSpeed=0.00 | clips=[mixamo.com(w=1.00,len=1.75s)] | baseState hash=1080829965 nt=0.16 | controller=SkeletonHumanoid
+08-22 14:14:56.181  6853  6909 I Unity   : UnityEngine.DebugLogHandler:Internal_Log(LogType, LogOption, String, Object)
+08-22 14:14:56.181  6853  6909 I Unity   : DeNelle.Core.Diagnostics.FlowTrace:Throttle(String, String, Single, String)
+08-22 14:14:56.181  6853  6909 I Unity   : DeNelle.Village.Enemy:DriveAnimator()
+08-22 14:14:56.181  6853  6909 I Unity   : DeNelle.Village.Enemy:Update()
+08-22 14:14:56.181  6853  6909 I Unity   : 
+08-22 14:14:56.182  6853  6909 I Unity   : [Flow:EnemyLoco] vel=0.00 m/s | animSpeed=0.00 | clips=[mixamo.com(w=1.00,len=2.63s)] | baseState hash=931510065 nt=0.35 | controller=SkeletonHumanoid
+08-22 14:14:56.182  6853  6909 I Unity   : UnityEngine.DebugLogHandler:Internal_Log(LogType, LogOption, String, Object)
+08-22 14:14:56.182  6853  6909 I Unity   : DeNelle.Core.Diagnostics.FlowTrace:Throttle(String, String, Single, String)
+08-22 14:14:56.182  6853  6909 I Unity   : DeNelle.Village.Enemy:DriveAnimator()
+08-22 14:14:56.182  6853  6909 I Unity   : DeNelle.Village.Enemy:Update()
+08-22 14:14:56.182  6853  6909 I Unity   : 
+08-22 14:14:56.184  6853  6909 I Unity   : [Flow:HeroOwner] scene='Main_Castle_Overworld' owner=HeroLocomotion ownerCC=none ownerAgent=on-mesh scriptedMove=off velSelf=0.00 velRoot=0.00 animFeed=velSelf animSpeed=0.00 rootYaw=343.1 basis=SmartMobileCamera.CameraYaw basisYaw=-376.9 timeScale=0.00 dt=0.0000 inputSuppressed=False autoWalk=False mainCamYaw=343.1 pos=(-9.62, 0.08, 33.40)
+08-22 14:14:56.184  6853  6909 I Unity   : UnityEngine.DebugLogHandler:Internal_Log(LogType, LogOption, String, Object)
+08-22 14:14:56.184  6853  6909 I Unity   : DeNelle.Core.Diagnostics.FlowTrace:Throttle(String, String, Single, String)
+08-22 14:14:56.184  6853  6909 I Unity   : DeNelle.Village.HeroLocomotion:LateUpdate()
+08-22 14:14:56.184  6853  6909 I Unity   : 
+08-22 14:14:56.234  6853  6909 I Unity   : [Flow:HUD] context inputs: wave=False battleLock=False pursuit=False inVillage=True modal=True buildMode=False scene='Main_Castle_Overworld' -> Modal
+08-22 14:14:56.234  6853  6909 I Unity   : UnityEngine.DebugLogHandler:Internal_Log(LogType, LogOption, String, Object)
+08-22 14:14:56.234  6853  6909 I Unity   : DeNelle.Core.Diagnostics.FlowTrace:Throttle(String, String, Single, String)
+08-22 14:14:56.234  6853  6909 I Unity   : DeNelle.Village.Hud.HudContextEvaluator:Poll()
+08-22 14:14:56.234  6853  6909 I Unity   : DeNelle.Core.Diagnostics.Guard:Try(String, String, Action)
+08-22 14:14:56.234  6853  6909 I Unity   : DeNelle.Village.Hud.HudModelHost:Update()
+08-22 14:14:56.234  6853  6909 I Unity   : 
+08-22 14:14:56.269  6853  6909 I Unity   : [Flow:EnemyAggro] orc-rep-0: ProbeForStructure ENTRY fwdProbeDist=1.1m sweepRadius=3.0m mask=~0(all layers) awareFlag=True heart=False
+08-22 14:14:56.269  6853  6909 I Unity   : UnityEngine.DebugLogHandler:Internal_Log(LogType, LogOption, String, Object)
+08-22 14:14:56.269  6853  6909 I Unity   : DeNelle.Core.Diagnostics.FlowTrace:Throttle(String, String, Single, String)
+08-22 14:14:56.269  6853  6909 I Unity   : DeNelle.Village.Enemy:ProbeForStructure()
+08-22 14:14:56.269  6853  6909 I Unity   : DeNelle.Village.Enemy:TickContactAttack()
+08-22 14:14:56.269  6853  6909 I Unity   : DeNelle.Village.Enemy:Update()
+08-22 14:14:56.269  6853  6909 I Unity   : 
+08-22 14:14:56.269  6853  6909 I Unity   : [Flow:EnemyAggro] orc-rep-0: sweep OverlapSphere r=3.0m colliders=2 -> accepted=0 rejected[null=0,noStructComp=2,dead=0,hero=0] nearest=<null>
+08-22 14:14:56.269  6853  6909 I Unity   : UnityEngine.DebugLogHandler:Internal_Log(LogType, LogOption, String, Object)
+08-22 14:14:56.269  6853  6909 I Unity   : DeNelle.Core.Diagnostics.FlowTrace:Throttle(String, String, Single, String)
+08-22 14:14:56.269  6853  6909 I Unity   : DeNelle.Village.Enemy:SweepForNearestStructure()
+08-22 14:14:56.269  6853  6909 I Unity   : DeNelle.Village.Enemy:ProbeForStructure()
+08-22 14:14:56.269  6853  6909 I Unity   : DeNelle.Village.Enemy:TickContactAttack()
+08-22 14:14:56.269  6853  6909 I Unity   : DeNelle.Village.Enemy:Update()
+08-22 14:14:56.269  6853  6909 I Unity   : 
+08-22 14:14:56.270  6853  6909 I Unity   : [Flow:EnemyAggro] orc-rep-1: ProbeForStructure ENTRY fwdProbeDist=1.1m sweepRadius=3.0m mask=~0(all layers) awareFlag=True heart=False
+08-22 14:14:56.270  6853  6909 I Unity   : UnityEngine.DebugLogHandler:Internal_Log(LogType, LogOption, String, Object)
+08-22 14:14:56.270  6853  6909 I Unity   : DeNelle.Core.Diagnostics.FlowTrace:Throttle(String, String, Single, String)
+08-22 14:14:56.270  6853  6909 I Unity   : DeNelle.Village.Enemy:ProbeForStructure()
+08-22 14:14:56.270  6853  6909 I Unity   : DeNelle.Village.Enemy:TickContactAttack()
+08-22 14:14:56.270  6853  6909 I Unity   : DeNelle.Village.Enemy:Update()
+08-22 14:14:56.270  6853  6909 I Unity   : 
+08-22 14:14:56.270  6853  6909 I Unity   : [Flow:EnemyAggro] orc-rep-1: sweep OverlapSphere r=3.0m colliders=1 -> accepted=0 rejected[null=0,noStructComp=1,dead=0,hero=0] nearest=<null>
+08-22 14:14:56.270  6853  6909 I Unity   : UnityEngine.DebugLogHandler:Internal_Log(LogType, LogOption, String, Object)
+08-22 14:14:56.270  6853  6909 I Unity   : DeNelle.Core.Diagnostics.FlowTrace:Throttle(String, String, Single, String)
+08-22 14:14:56.270  6853  6909 I Unity   : DeNelle.Village.Enemy:SweepForNearestStructure()
+08-22 14:14:56.270  6853  6909 I Unity   : DeNelle.Village.Enemy:ProbeForStructure()
+08-22 14:14:56.270  6853  6909 I Unity   : DeNelle.Village.Enemy:TickContactAttack()
+08-22 14:14:56.270  6853  6909 I Unity   : DeNelle.Village.Enemy:Update()
+08-22 14:14:56.270  6853  6909 I Unity   : 
+08-22 14:14:56.271  6853  6909 I Unity   : [Flow:EnemyAggro] orc-rep-2: ProbeForStructure ENTRY fwdProbeDist=1.1m sweepRadius=3.0m mask=~0(all layers) awareFlag=True heart=False
+08-22 14:14:56.271  6853  6909 I Unity   : UnityEngine.DebugLogHandler:Internal_Log(LogType, LogOption, String, Object)
+08-22 14:14:56.271  6853  6909 I Unity   : DeNelle.Core.Diagnostics.FlowTrace:Throttle(String, String, Single, String)
+08-22 14:14:56.271  6853  6909 I Unity   : DeNelle.Village.Enemy:ProbeForStructure()
+08-22 14:14:56.271  6853  6909 I Unity   : DeNelle.Village.Enemy:TickContactAttack()
+08-22 14:14:56.271  6853  6909 I Unity   : DeNelle.Village.Enemy:Update()
+08-22 14:14:56.271  6853  6909 I Unity   : 
+08-22 14:14:56.271  6853  6909 I Unity   : [Flow:EnemyAggro] orc-rep-2: sweep OverlapSphere r=3.0m colliders=1 -> accepted=0 rejected[null=0,noStructComp=1,dead=0,hero=0] nearest=<null>
+08-22 14:14:56.271  6853  6909 I Unity   : UnityEngine.DebugLogHandler:Internal_Log(LogType, LogOption, String, Object)
+08-22 14:14:56.271  6853  6909 I Unity   : DeNelle.Core.Diagnostics.FlowTrace:Throttle(String, String, Single, String)
+08-22 14:14:56.271  6853  6909 I Unity   : DeNelle.Village.Enemy:SweepForNearestStructure()
+08-22 14:14:56.271  6853  6909 I Unity   : DeNelle.Village.Enemy:ProbeForStructure()
+08-22 14:14:56.271  6853  6909 I Unity   : DeNelle.Village.Enemy:TickContactAttack()
+08-22 14:14:56.271  6853  6909 I Unity   : DeNelle.Village.Enemy:Update()
+08-22 14:14:56.271  6853  6909 I Unity   : 
+08-22 14:14:56.441  6853  6909 I Unity   : [Flow:EnemyAggro] orc-rep-3: ProbeForStructure ENTRY fwdProbeDist=1.1m sweepRadius=3.0m mask=~0(all layers) awareFlag=True heart=False
+08-22 14:14:56.441  6853  6909 I Unity   : UnityEngine.DebugLogHandler:Internal_Log(LogType, LogOption, String, Object)
+08-22 14:14:56.441  6853  6909 I Unity   : DeNelle.Core.Diagnostics.FlowTrace:Throttle(String, String, Single, String)
+08-22 14:14:56.441  6853  6909 I Unity   : DeNelle.Village.Enemy:ProbeForStructure()
+08-22 14:14:56.441  6853  6909 I Unity   : DeNelle.Village.Enemy:TickContactAttack()
+08-22 14:14:56.441  6853  6909 I Unity   : DeNelle.Village.Enemy:Update()
+08-22 14:14:56.441  6853  6909 I Unity   : 
+08-22 14:14:56.441  6853  6909 I Unity   : [Flow:EnemyAggro] orc-rep-3: sweep OverlapSphere r=3.0m colliders=1 -> accepted=0 rejected[null=0,noStructComp=1,dead=0,hero=0] nearest=<null>
+08-22 14:14:56.441  6853  6909 I Unity   : UnityEngine.DebugLogHandler:Internal_Log(LogType, LogOption, String, Object)
+08-22 14:14:56.441  6853  6909 I Unity   : DeNelle.Core.Diagnostics.FlowTrace:Throttle(String, String, Single, String)
+08-22 14:14:56.441  6853  6909 I Unity   : DeNelle.Village.Enemy:SweepForNearestStructure()
+08-22 14:14:56.441  6853  6909 I Unity   : DeNelle.Village.Enemy:ProbeForStructure()
+08-22 14:14:56.441  6853  6909 I Unity   : DeNelle.Village.Enemy:TickContactAttack()
+08-22 14:14:56.441  6853  6909 I Unity   : DeNelle.Village.Enemy:Update()
+08-22 14:14:56.441  6853  6909 I Unity   : 
+08-22 14:14:56.442  6853  6909 I Unity   : [Flow:EnemyAggro] orc-rep-5: ProbeForStructure ENTRY fwdProbeDist=1.1m sweepRadius=3.0m mask=~0(all layers) awareFlag=True heart=False
+08-22 14:14:56.442  6853  6909 I Unity   : UnityEngine.DebugLogHandler:Internal_Log(LogType, LogOption, String, Object)
+08-22 14:14:56.442  6853  6909 I Unity   : DeNelle.Core.Diagnostics.FlowTrace:Throttle(String, String, Single, String)
+08-22 14:14:56.442  6853  6909 I Unity   : DeNelle.Village.Enemy:ProbeForStructure()
+08-22 14:14:56.442  6853  6909 I Unity   : DeNelle.Village.Enemy:TickContactAttack()
+08-22 14:14:56.442  6853  6909 I Unity   : DeNelle.Village.Enemy:Update()
+08-22 14:14:56.442  6853  6909 I Unity   : 
+08-22 14:14:56.447  6853  6909 I Unity   : [Flow:EnemyAggro] orc-rep-5: sweep OverlapSphere r=3.0m colliders=1 -> accepted=0 rejected[null=0,noStructComp=1,dead=0,hero=0] nearest=<null>
+08-22 14:14:56.447  6853  6909 I Unity   : UnityEngine.DebugLogHandler:Internal_Log(LogType, LogOption, String, Object)
+08-22 14:14:56.447  6853  6909 I Unity   : DeNelle.Core.Diagnostics.FlowTrace:Throttle(String, String, Single, String)
+08-22 14:14:56.447  6853  6909 I Unity   : DeNelle.Village.Enemy:SweepForNearestStructure()
+08-22 14:14:56.447  6853  6909 I Unity   : DeNelle.Village.Enemy:ProbeForStructure()
+08-22 14:14:56.447  6853  6909 I Unity   : DeNelle.Village.Enemy:TickContactAttack()
+08-22 14:14:56.447  6853  6909 I Unity   : DeNelle.Village.Enemy:Update()
+08-22 14:14:56.447  6853  6909 I Unity   : 
+08-22 14:14:56.471  6853  6909 I Unity   : [Flow:Perf]     fps=43 ms=23.5 mem=430MB gc=24MB scene=Main_Castle_Overworld towers=0 enemies=8
+08-22 14:14:56.471  6853  6909 I Unity   : UnityEngine.DebugLogHandler:Internal_Log(LogType, LogOption, String, Object)
+08-22 14:14:56.471  6853  6909 I Unity   : DeNelle.Core.Diagnostics.<>c__DisplayClass18_0:<Sample>b__0()
+08-22 14:14:56.471  6853  6909 I Unity   : DeNelle.Core.Diagnostics.Guard:Try(String, String, Action)
+08-22 14:14:56.471  6853  6909 I Unity   : 
+08-22 14:14:56.775  6853  6909 I Unity   : [Flow:HeroOwner] WORLD CLOCK FROZEN: Time.timeScale=0.00 in scene 'Main_Castle_Overworld'. The hero CANNOT move, turn or animate while this holds, however healthy the locomotion path is — every writer scales by Time.deltaTime. If no pause menu is on screen, a freeze owner (PauseController background auto-pause / BreakCaptureHarness F8 note) failed to restore it.
+08-22 14:14:56.775  6853  6909 I Unity   : UnityEngine.DebugLogHandler:Internal_Log(LogType, LogOption, String, Object)
+08-22 14:14:56.775  6853  6909 I Unity   : DeNelle.Core.Diagnostics.FlowTrace:Throttle(String, String, Single, String)
+08-22 14:14:56.775  6853  6909 I Unity   : DeNelle.Village.HeroLocomotion:LateUpdate()
+08-22 14:14:56.775  6853  6909 I Unity   : 
+08-22 14:14:56.819  6853  6909 I Unity   : [Flow:Offset] sheathed FALLBACK (drawn 'sword_A' on back pose): pos=(0.01, 0.03, -0.01) rot=SKIPPED (pos-only, ff.sheathdrawnrot=0)
+08-22 14:14:56.819  6853  6909 I Unity   : UnityEngine.DebugLogHandler:Internal_Log(LogType, LogOption, String, Object)
+08-22 14:14:56.819  6853  6909 I Unity   : DeNelle.Core.Diagnostics.FlowTrace:Throttle(String, String, Single, String)
+08-22 14:14:56.819  6853  6909 I Unity   : DeNelle.Village.EquipmentController:ApplySheathedOffset(Transform, String)
+08-22 14:14:56.819  6853  6909 I Unity   : DeNelle.Village.EquipmentController:ApplyHoldPose()
+08-22 14:14:56.819  6853  6909 I Unity   : DeNelle.Village.HeroLocomotion:Update()
+08-22 14:14:56.819  6853  6909 I Unity   : 
+08-22 14:14:56.820  6853  6909 I Unity   : [Flow:Offset] sheathed FALLBACK (drawn 'ShieldWithItemLogic' on back pose): pos=(0.00, 0.00, 0.00) rot=SKIPPED (pos-only, ff.sheathdrawnrot=0)
+08-22 14:14:56.820  6853  6909 I Unity   : UnityEngine.DebugLogHandler:Internal_Log(LogType, LogOption, String, Object)
+08-22 14:14:56.820  6853  6909 I Unity   : DeNelle.Core.Diagnostics.FlowTrace:Throttle(String, String, Single, String)
+08-22 14:14:56.820  6853  6909 I Unity   : DeNelle.Village.EquipmentController:ApplySheathedOffset(Transform, String)
+08-22 14:14:56.820  6853  6909 I Unity   : DeNelle.Village.EquipmentController:ApplyHoldPose()
+08-22 14:14:56.820  6853  6909 I Unity   : DeNelle.Village.HeroLocomotion:Update()
+08-22 14:14:56.820  6853  6909 I Unity   : 
+08-22 14:14:56.821  6853  6909 I Unity   : [Flow:EnemyAggro] orc-rep-0: ProbeForStructure null -> no structure target (Heart-march / roam only)
+08-22 14:14:56.821  6853  6909 I Unity   : UnityEngine.DebugLogHandler:Internal_Log(LogType, LogOption, String, Object)
+08-22 14:14:56.821  6853  6909 I Unity   : DeNelle.Core.Diagnostics.FlowTrace:Throttle(String, String, Single, String)
+08-22 14:14:56.821  6853  6909 I Unity   : DeNelle.Village.Enemy:TickContactAttack()
+08-22 14:14:56.821  6853  6909 I Unity   : DeNelle.Village.Enemy:Update()
+08-22 14:14:56.821  6853  6909 I Unity   : 
+08-22 14:14:56.822  6853  6909 I Unity   : [Flow:EnemyAggro] orc-rep-1: ProbeForStructure null -> no structure target (Heart-march / roam only)
+08-22 14:14:56.822  6853  6909 I Unity   : UnityEngine.DebugLogHandler:Internal_Log(LogType, LogOption, String, Object)
+08-22 14:14:56.822  6853  6909 I Unity   : DeNelle.Core.Diagnostics.FlowTrace:Throttle(String, String, Single, String)
+08-22 14:14:56.822  6853  6909 I Unity   : DeNelle.Village.Enemy:TickContactAttack()
+08-22 14:14:56.822  6853  6909 I Unity   : DeNelle.Village.Enemy:Update()
+08-22 14:14:56.822  6853  6909 I Unity   : 
+08-22 14:14:56.822  6853  6909 I Unity   : [Flow:EnemyAggro] orc-rep-2: ProbeForStructure null -> no structure target (Heart-march / roam only)
+08-22 14:14:56.822  6853  6909 I Unity   : UnityEngine.DebugLogHandler:Internal_Log(LogType, LogOption, String, Object)
+08-22 14:14:56.822  6853  6909 I Unity   : DeNelle.Core.Diagnostics.FlowTrace:Throttle(String, String, Single, String)
+08-22 14:14:56.822  6853  6909 I Unity   : DeNelle.Village.Enemy:TickContactAttack()
+08-22 14:14:56.822  6853  6909 I Unity   : DeNelle.Village.Enemy:Update()
+08-22 14:14:56.822  6853  6909 I Unity   : 
+08-22 14:14:56.823  6853  6909 I Unity   : [Flow:EnemyAggro] orc-rep-3: ProbeForStructure null -> no structure target (Heart-march / roam only)
+08-22 14:14:56.823  6853  6909 I Unity   : UnityEngine.DebugLogHandler:Internal_Log(LogType, LogOption, String, Object)
+08-22 14:14:56.823  6853  6909 I Unity   : DeNelle.Core.Diagnostics.FlowTrace:Throttle(String, String, Single, String)
+08-22 14:14:56.823  6853  6909 I Unity   : DeNelle.Village.Enemy:TickContactAttack()
+08-22 14:14:56.823  6853  6909 I Unity   : DeNelle.Village.Enemy:Update()
+08-22 14:14:56.823  6853  6909 I Unity   : 
+08-22 14:14:56.824  6853  6909 I Unity   : [Flow:EnemyAggro] orc-rep-5: ProbeForStructure null -> no structure target (Heart-march / roam only)
+08-22 14:14:56.824  6853  6909 I Unity   : UnityEngine.DebugLogHandler:Internal_Log(LogType, LogOption, String, Object)
+08-22 14:14:56.824  6853  6909 I Unity   : DeNelle.Core.Diagnostics.FlowTrace:Throttle(String, String, Single, String)
+08-22 14:14:56.824  6853  6909 I Unity   : DeNelle.Village.Enemy:TickContactAttack()
+08-22 14:14:56.824  6853  6909 I Unity   : DeNelle.Village.Enemy:Update()
+08-22 14:14:56.824  6853  6909 I Unity   : 
+08-22 14:14:56.824  6853  6909 I Unity   : [Flow:EnemyAggro] wave2-hollow-walker-4: ProbeForStructure null -> no structure target (Heart-march / roam only)
+08-22 14:14:56.824  6853  6909 I Unity   : UnityEngine.DebugLogHandler:Internal_Log(LogType, LogOption, String, Object)
+08-22 14:14:56.824  6853  6909 I Unity   : DeNelle.Core.Diagnostics.FlowTrace:Throttle(String, String, Single, String)
+08-22 14:14:56.824  6853  6909 I Unity   : DeNelle.Village.Enemy:TickContactAttack()
+08-22 14:14:56.824  6853  6909 I Unity   : DeNelle.Village.Enemy:Update()
+08-22 14:14:56.824  6853  6909 I Unity   : 
+08-22 14:14:56.825  6853  6909 I Unity   : [Flow:EnemyAggro] wave2-hollow-walker-5: ProbeForStructure null -> no structure target (Heart-march / roam only)
+08-22 14:14:56.825  6853  6909 I Unity   : UnityEngine.DebugLogHandler:Internal_Log(LogType, LogOption, String, Object)
+08-22 14:14:56.825  6853  6909 I Unity   : DeNelle.Core.Diagnostics.FlowTrace:Throttle(String, String, Single, String)
+08-22 14:14:56.825  6853  6909 I Unity   : DeNelle.Village.Enemy:TickContactAttack()
+08-22 14:14:56.825  6853  6909 I Unity   : DeNelle.Village.Enemy:Update()
+08-22 14:14:56.825  6853  6909 I Unity   : 
+08-22 14:14:56.826  6853  6909 I Unity   : [Flow:EnemyAggro] wave2-hollow-walker-6: ProbeForStructure null -> no structure target (Heart-march / roam only)
+08-22 14:14:56.826  6853  6909 I Unity   : UnityEngine.DebugLogHandler:Internal_Log(LogType, LogOption, String, Object)
+08-22 14:14:56.826  6853  6909 I Unity   : DeNelle.Core.Diagnostics.FlowTrace:Throttle(String, String, Single, String)
+08-22 14:14:56.826  6853  6909 I Unity   : DeNelle.Village.Enemy:TickContactAttack()
+08-22 14:14:56.826  6853  6909 I Unity   : DeNelle.Village.Enemy:Update()
+08-22 14:14:56.826  6853  6909 I Unity   : 
+08-22 14:14:56.854  6853  6909 I Unity   : [Flow:Zone] GetZone(x=-9.6,z=33.4).
+08-22 14:14:56.854  6853  6909 I Unity   : UnityEngine.DebugLogHandler:Internal_Log(LogType, LogOption, String, Object)
+08-22 14:14:56.854  6853  6909 I Unity   : DeNelle.Core.Diagnostics.FlowTrace:Throttle(String, String, Single, String)
+08-22 14:14:56.854  6853  6909 I Unity   : DeNelle.Core.World.ZoneManager:GetZone(Vector3)
+08-22 14:14:56.854  6853  6909 I Unity   : DeNelle.Village.WorldMusicDirector:Update()
+08-22 14:14:56.854  6853  6909 I Unity   : 
+08-22 14:14:57.065  6853  6909 I Unity   : [Flow:VFX] live systems=151 particles~4044 | pool hosts free=4 inUse=0/16 units free=12 lights free=4
+08-22 14:14:57.065  6853  6909 I Unity   : UnityEngine.DebugLogHandler:Internal_Log(LogType, LogOption, String, Object)
+08-22 14:14:57.065  6853  6909 I Unity   : DeNelle.Core.Diagnostics.FlowTrace:Throttle(String, String, Single, String)
+08-22 14:14:57.065  6853  6909 I Unity   : DeNelle.Village.AbilityVfxPool:Update()
+08-22 14:14:57.065  6853  6909 I Unity   : 
+08-22 14:14:57.194  6853  6909 I Unity   : [Flow:RealmPins] source 'realm.hero' published 1 pin(s).
+08-22 14:14:57.194  6853  6909 I Unity   : UnityEngine.DebugLogHandler:Internal_Log(LogType, LogOption, String, Object)
+08-22 14:14:57.194  6853  6909 I Unity   : DeNelle.Core.Diagnostics.FlowTrace:Throttle(String, String, Single, String)
+08-22 14:14:57.194  6853  6909 I Unity   : DeNelle.Core.World.RealmPinBoard:Publish(String, IReadOnlyList`1)
+08-22 14:14:57.194  6853  6909 I Unity   : DeNelle.Village.World.RealmPinProducers:PublishHero()
+08-22 14:14:57.194  6853  6909 I Unity   : DeNelle.Village.World.RealmPinProducers:PublishAll()
+08-22 14:14:57.194  6853  6909 I Unity   : DeNelle.Core.Diagnostics.Guard:Try(String, String, Action)
+08-22 14:14:57.194  6853  6909 I Unity   : 
+08-22 14:14:57.195  6853  6909 I Unity   : [Flow:RealmPins] source 'realm.dungeons' published 7 pin(s).
+08-22 14:14:57.195  6853  6909 I Unity   : UnityEngine.DebugLogHandler:Internal_Log(LogType, LogOption, String, Object)
+08-22 14:14:57.195  6853  6909 I Unity   : DeNelle.Core.Diagnostics.FlowTrace:Throttle(String, String, Single, String)
+08-22 14:14:57.195  6853  6909 I Unity   : DeNelle.Core.World.RealmPinBoard:Publish(String, IReadOnlyList`1)
+08-22 14:14:57.195  6853  6909 I Unity   : DeNelle.Village.World.RealmPinProducers:PublishDungeons()
+08-22 14:14:57.195  6853  6909 I Unity   : DeNelle.Village.World.RealmPinProducers:PublishAll()
+08-22 14:14:57.195  6853  6909 I Unity   : DeNelle.Core.Diagnostics.Guard:Try(String, String, Action)
+08-22 14:14:57.195  6853  6909 I Unity   : 
+08-22 14:14:57.196  6853  6909 I Unity   : [Flow:RealmPins] source 'realm.army' published 1 pin(s).
+08-22 14:14:57.196  6853  6909 I Unity   : UnityEngine.DebugLogHandler:Internal_Log(LogType, LogOption, String, Object)
+08-22 14:14:57.196  6853  6909 I Unity   : DeNelle.Core.Diagnostics.FlowTrace:Throttle(String, String, Single, String)
+08-22 14:14:57.196  6853  6909 I Unity   : DeNelle.Core.World.RealmPinBoard:Publish(String, IReadOnlyList`1)
+08-22 14:14:57.196  6853  6909 I Unity   : DeNelle.Village.World.RealmPinProducers:PublishArmy()
+08-22 14:14:57.196  6853  6909 I Unity   : DeNelle.Core.Diagnostics.Guard:Try(String, String, Action)
+08-22 14:14:57.196  6853  6909 I Unity   : 
+08-22 14:14:57.198  6853  6909 I Unity   : [Flow:HeroLoco] vel=0.00 m/s | clips=[idle_ready(w=1.00,len=3.42s)] | baseState hash=902114326 nt=0.61 | avatar=KnightV3Avatar | controller=KnightMocap
+08-22 14:14:57.198  6853  6909 I Unity   : UnityEngine.DebugLogHandler:Internal_Log(LogType, LogOption, String, Object)
+08-22 14:14:57.198  6853  6909 I Unity   : DeNelle.Core.Diagnostics.FlowTrace:Throttle(String, String, Single, String)
+08-22 14:14:57.198  6853  6909 I Unity   : DeNelle.Village.HeroLocomotion:Update()
+08-22 14:14:57.198  6853  6909 I Unity   : 
+08-22 14:14:57.199  6853  6909 I Unity   : [Flow:EnemyLoco] vel=5.98 m/s | animSpeed=5.62 | clips=[mixamo.com(w=1.00,len=0.87s)] | baseState hash=-2089788878 nt=0.42 | controller=SkeletonHumanoid
+08-22 14:14:57.199  6853  6909 I Unity   : UnityEngine.DebugLogHandler:Internal_Log(LogType, LogOption, String, Object)
+08-22 14:14:57.199  6853  6909 I Unity   : DeNelle.Core.Diagnostics.FlowTrace:Throttle(String, String, Single, String)
+08-22 14:14:57.199  6853  6909 I Unity   : DeNelle.Village.Enemy:DriveAnimator()
+08-22 14:14:57.199  6853  6909 I Unity   : DeNelle.Village.Enemy:Update()
+08-22 14:14:57.199  6853  6909 I Unity   : 
+08-22 14:14:57.199  6853  6909 I Unity   : [Flow:EnemyLoco] vel=0.00 m/s | animSpeed=0.00 | clips=[mixamo.com(w=1.00,len=7.38s)] | baseState hash=-2089788878 nt=0.70 | controller=LargeHumanoid
+08-22 14:14:57.199  6853  6909 I Unity   : UnityEngine.DebugLogHandler:Internal_Log(LogType, LogOption, String, Object)
+08-22 14:14:57.199  6853  6909 I Unity   : DeNelle.Core.Diagnostics.FlowTrace:Throttle(String, String, Single, String)
+08-22 14:14:57.199  6853  6909 I Unity   : DeNelle.Village.Enemy:DriveAnimator()
+08-22 14:14:57.199  6853  6909 I Unity   : DeNelle.Village.Enemy:Update()
+08-22 14:14:57.199  6853  6909 I Unity   : 
+08-22 14:14:57.200  6853  6909 I Unity   : [Flow:EnemyLoco] vel=1.59 m/s | animSpeed=0.95 | clips=[mixamo.com(w=1.00,len=4.67s)] | baseState hash=1080829965 nt=0.42 | controller=OrcHumanoid
+08-22 14:14:57.200  6853  6909 I Unity   : UnityEngine.DebugLogHandler:Internal_Log(LogType, LogOption, String, Object)
+08-22 14:14:57.200  6853  6909 I Unity   : DeNelle.Core.Diagnostics.FlowTrace:Throttle(String, String, Single, String)
+08-22 14:14:57.200  6853  6909 I Unity   : DeNelle.Village.Enemy:DriveAnimator()
+08-22 14:14:57.200  6853  6909 I Unity   : DeNelle.Village.Enemy:Update()
+08-22 14:14:57.200  6853  6909 I Unity   : 
+08-22 14:14:57.201  6853  6909 I Unity   : [Flow:EnemyLoco] vel=3.07 m/s | animSpeed=3.83 | clips=[mixamo.com(w=1.00,len=0.87s)] | baseState hash=-2089788878 nt=0.17 | controller=SkeletonHumanoid
+08-22 14:14:57.201  6853  6909 I Unity   : UnityEngine.DebugLogHandler:Internal_Log(LogType, LogOption, String, Object)
+08-22 14:14:57.201  6853  6909 I Unity   : DeNelle.Core.Diagnostics.FlowTrace:Throttle(String, String, Single, String)
+08-22 14:14:57.201  6853  6909 I Unity   : DeNelle.Village.Enemy:DriveAnimator()
+08-22 14:14:57.201  6853  6909 I Unity   : DeNelle.Village.Enemy:Update()
+08-22 14:14:57.201  6853  6909 I Unity   : 
+08-22 14:14:57.201  6853  6909 I Unity   : [Flow:EnemyLoco] vel=5.98 m/s | animSpeed=5.97 | clips=[mixamo.com(w=1.00,len=0.87s)] | baseState hash=-2089788878 nt=0.65 | controller=OrcHumanoid_Warrior
+08-22 14:14:57.201  6853  6909 I Unity   : UnityEngine.DebugLogHandler:Internal_Log(LogType, LogOption, String, Object)
+08-22 14:14:57.201  6853  6909 I Unity   : DeNelle.Core.Diagnostics.FlowTrace:Throttle(String, String, Single, String)
+08-22 14:14:57.201  6853  6909 I Unity   : DeNelle.Village.Enemy:DriveAnimator()
+08-22 14:14:57.201  6853  6909 I Unity   : DeNelle.Village.Enemy:Update()
+08-22 14:14:57.201  6853  6909 I Unity   : 
+08-22 14:14:57.202  6853  6909 I Unity   : [Flow:EnemyLoco] vel=0.00 m/s | animSpeed=0.00 | clips=[mixamo.com(w=1.00,len=2.63s)] | baseState hash=931510065 nt=0.39 | controller=SkeletonHumanoid
+08-22 14:14:57.202  6853  6909 I Unity   : UnityEngine.DebugLogHandler:Internal_Log(LogType, LogOption, String, Object)
+08-22 14:14:57.202  6853  6909 I Unity   : DeNelle.Core.Diagnostics.FlowTrace:Throttle(String, String, Single, String)
+08-22 14:14:57.202  6853  6909 I Unity   : DeNelle.Village.Enemy:DriveAnimator()
+08-22 14:14:57.202  6853  6909 I Unity   : DeNelle.Village.Enemy:Update()
+08-22 14:14:57.202  6853  6909 I Unity   : 
+08-22 14:14:57.202  6853  6909 I Unity   : [Flow:EnemyLoco] vel=0.00 m/s | animSpeed=0.00 | clips=[mixamo.com(w=1.00,len=1.75s)] | baseState hash=1080829965 nt=0.16 | controller=SkeletonHumanoid
+08-22 14:14:57.202  6853  6909 I Unity   : UnityEngine.DebugLogHandler:Internal_Log(LogType, LogOption, String, Object)
+08-22 14:14:57.202  6853  6909 I Unity   : DeNelle.Core.Diagnostics.FlowTrace:Throttle(String, String, Single, String)
+08-22 14:14:57.202  6853  6909 I Unity   : DeNelle.Village.Enemy:DriveAnimator()
+08-22 14:14:57.202  6853  6909 I Unity   : DeNelle.Village.Enemy:Update()
+08-22 14:14:57.202  6853  6909 I Unity   : 
+08-22 14:14:57.203  6853  6909 I Unity   : [Flow:EnemyLoco] vel=0.00 m/s | animSpeed=0.00 | clips=[mixamo.com(w=1.00,len=2.63s)] | baseState hash=931510065 nt=0.35 | controller=SkeletonHumanoid
+08-22 14:14:57.203  6853  6909 I Unity   : UnityEngine.DebugLogHandler:Internal_Log(LogType, LogOption, String, Object)
+08-22 14:14:57.203  6853  6909 I Unity   : DeNelle.Core.Diagnostics.FlowTrace:Throttle(String, String, Single, String)
+08-22 14:14:57.203  6853  6909 I Unity   : DeNelle.Village.Enemy:DriveAnimator()
+08-22 14:14:57.203  6853  6909 I Unity   : DeNelle.Village.Enemy:Update()
+08-22 14:14:57.203  6853  6909 I Unity   : 
+08-22 14:14:57.205  6853  6909 I Unity   : [Flow:HeroOwner] scene='Main_Castle_Overworld' owner=HeroLocomotion ownerCC=none ownerAgent=on-mesh scriptedMove=off velSelf=0.00 velRoot=0.00 animFeed=velSelf animSpeed=0.00 rootYaw=343.1 basis=SmartMobileCamera.CameraYaw basisYaw=-376.9 timeScale=0.00 dt=0.0000 inputSuppressed=False autoWalk=False mainCamYaw=343.1 pos=(-9.62, 0.08, 33.40)
+08-22 14:14:57.205  6853  6909 I Unity   : UnityEngine.DebugLogHandler:Internal_Log(LogType, LogOption, String, Object)
+08-22 14:14:57.205  6853  6909 I Unity   : DeNelle.Core.Diagnostics.FlowTrace:Throttle(String, String, Single, String)
+08-22 14:14:57.205  6853  6909 I Unity   : DeNelle.Village.HeroLocomotion:LateUpdate()
+08-22 14:14:57.205  6853  6909 I Unity   : 
+08-22 14:14:57.327  6853  6909 I Unity   : [Flow:HUD] context inputs: wave=False battleLock=False pursuit=False inVillage=True modal=True buildMode=False scene='Main_Castle_Overworld' -> Modal
+08-22 14:14:57.327  6853  6909 I Unity   : UnityEngine.DebugLogHandler:Internal_Log(LogType, LogOption, String, Object)
+08-22 14:14:57.327  6853  6909 I Unity   : DeNelle.Core.Diagnostics.FlowTrace:Throttle(String, String, Single, String)
+08-22 14:14:57.327  6853  6909 I Unity   : DeNelle.Village.Hud.HudContextEvaluator:Poll()
+08-22 14:14:57.327  6853  6909 I Unity   : DeNelle.Core.Diagnostics.Guard:Try(String, String, Action)
+08-22 14:14:57.327  6853  6909 I Unity   : DeNelle.Village.Hud.HudModelHost:Update()
+08-22 14:14:57.327  6853  6909 I Unity   : 
+08-22 14:14:57.781  6853  6909 I Unity   : [Flow:HeroOwner] WORLD CLOCK FROZEN: Time.timeScale=0.00 in scene 'Main_Castle_Overworld'. The hero CANNOT move, turn or animate while this holds, however healthy the locomotion path is — every writer scales by Time.deltaTime. If no pause menu is on screen, a freeze owner (PauseController background auto-pause / BreakCaptureHarness F8 note) failed to restore it.
+08-22 14:14:57.781  6853  6909 I Unity   : UnityEngine.DebugLogHandler:Internal_Log(LogType, LogOption, String, Object)
+08-22 14:14:57.781  6853  6909 I Unity   : DeNelle.Core.Diagnostics.FlowTrace:Throttle(String, String, Single, String)
+08-22 14:14:57.781  6853  6909 I Unity   : DeNelle.Village.HeroLocomotion:LateUpdate()
+08-22 14:14:57.781  6853  6909 I Unity   : 
+08-22 14:14:57.798  6853  6909 I Unity   : [Flow:EnemyAggro] wave2-hollow-walker-4: ProbeForStructure ENTRY fwdProbeDist=1.1m sweepRadius=3.0m mask=~0(all layers) awareFlag=True heart=True
+08-22 14:14:57.798  6853  6909 I Unity   : UnityEngine.DebugLogHandler:Internal_Log(LogType, LogOption, String, Object)
+08-22 14:14:57.798  6853  6909 I Unity   : DeNelle.Core.Diagnostics.FlowTrace:Throttle(String, String, Single, String)
+08-22 14:14:57.798  6853  6909 I Unity   : DeNelle.Village.Enemy:ProbeForStructure()
+08-22 14:14:57.798  6853  6909 I Unity   : DeNelle.Village.Enemy:TickContactAttack()
+08-22 14:14:57.798  6853  6909 I Unity   : DeNelle.Village.Enemy:Update()
+08-22 14:14:57.798  6853  6909 I Unity   : 
+08-22 14:14:57.799  6853  6909 I Unity   : [Flow:EnemyAggro] wave2-hollow-walker-4: sweep OverlapSphere r=3.0m colliders=3 -> accepted=0 rejected[null=0,noStructComp=2,dead=1,hero=0] nearest=<null>
+08-22 14:14:57.799  6853  6909 I Unity   : UnityEngine.DebugLogHandler:Internal_Log(LogType, LogOption, String, Object)
+08-22 14:14:57.799  6853  6909 I Unity   : DeNelle.Core.Diagnostics.FlowTrace:Throttle(String, String, Single, String)
+08-22 14:14:57.799  6853  6909 I Unity   : DeNelle.Village.Enemy:SweepForNearestStructure()
+08-22 14:14:57.799  6853  6909 I Unity   : DeNelle.Village.Enemy:ProbeForStructure()
+08-22 14:14:57.799  6853  6909 I Unity   : DeNelle.Village.Enemy:TickContactAttack()
+08-22 14:14:57.799  6853  6909 I Unity   : DeNelle.Village.Enemy:Update()
+08-22 14:14:57.799  6853  6909 I Unity   : 
+08-22 14:14:57.800  6853  6909 I Unity   : [Flow:EnemyAggro] wave2-hollow-walker-5: ProbeForStructure ENTRY fwdProbeDist=1.1m sweepRadius=3.0m mask=~0(all layers) awareFlag=True heart=True
+08-22 14:14:57.800  6853  6909 I Unity   : UnityEngine.DebugLogHandler:Internal_Log(LogType, LogOption, String, Object)
+08-22 14:14:57.800  6853  6909 I Unity   : DeNelle.Core.Diagnostics.FlowTrace:Throttle(String, String, Single, String)
+08-22 14:14:57.800  6853  6909 I Unity   : DeNelle.Village.Enemy:ProbeForStructure()
+08-22 14:14:57.800  6853  6909 I Unity   : DeNelle.Village.Enemy:TickContactAttack()
+08-22 14:14:57.800  6853  6909 I Unity   : DeNelle.Village.Enemy:Update()
+08-22 14:14:57.800  6853  6909 I Unity   : 
+08-22 14:14:57.800  6853  6909 I Unity   : [Flow:EnemyAggro] wave2-hollow-walker-5: sweep OverlapSphere r=3.0m colliders=3 -> accepted=0 rejected[null=0,noStructComp=2,dead=1,hero=0] nearest=<null>
+08-22 14:14:57.800  6853  6909 I Unity   : UnityEngine.DebugLogHandler:Internal_Log(LogType, LogOption, String, Object)
+08-22 14:14:57.800  6853  6909 I Unity   : DeNelle.Core.Diagnostics.FlowTrace:Throttle(String, String, Single, String)
+08-22 14:14:57.800  6853  6909 I Unity   : DeNelle.Village.Enemy:SweepForNearestStructure()
+08-22 14:14:57.800  6853  6909 I Unity   : DeNelle.Village.Enemy:ProbeForStructure()
+08-22 14:14:57.800  6853  6909 I Unity   : DeNelle.Village.Enemy:TickContactAttack()
+08-22 14:14:57.800  6853  6909 I Unity   : DeNelle.Village.Enemy:Update()
+08-22 14:14:57.800  6853  6909 I Unity   : 
+08-22 14:14:57.801  6853  6909 I Unity   : [Flow:EnemyAggro] wave2-hollow-walker-6: ProbeForStructure ENTRY fwdProbeDist=1.1m sweepRadius=3.0m mask=~0(all layers) awareFlag=True heart=True
+08-22 14:14:57.801  6853  6909 I Unity   : UnityEngine.DebugLogHandler:Internal_Log(LogType, LogOption, String, Object)
+08-22 14:14:57.801  6853  6909 I Unity   : DeNelle.Core.Diagnostics.FlowTrace:Throttle(String, String, Single, String)
+08-22 14:14:57.801  6853  6909 I Unity   : DeNelle.Village.Enemy:ProbeForStructure()
+08-22 14:14:57.801  6853  6909 I Unity   : DeNelle.Village.Enemy:TickContactAttack()
+08-22 14:14:57.801  6853  6909 I Unity   : DeNelle.Village.Enemy:Update()
+08-22 14:14:57.801  6853  6909 I Unity   : 
+08-22 14:14:57.801  6853  6909 I Unity   : [Flow:EnemyAggro] wave2-hollow-walker-6: sweep OverlapSphere r=3.0m colliders=3 -> accepted=0 rejected[null=0,noStructComp=2,dead=1,hero=0] nearest=<null>
+08-22 14:14:57.801  6853  6909 I Unity   : UnityEngine.DebugLogHandler:Internal_Log(LogType, LogOption, String, Object)
+08-22 14:14:57.801  6853  6909 I Unity   : DeNelle.Core.Diagnostics.FlowTrace:Throttle(String, String, Single, String)
+08-22 14:14:57.801  6853  6909 I Unity   : DeNelle.Village.Enemy:SweepForNearestStructure()
+08-22 14:14:57.801  6853  6909 I Unity   : DeNelle.Village.Enemy:ProbeForStructure()
+08-22 14:14:57.801  6853  6909 I Unity   : DeNelle.Village.Enemy:TickContactAttack()
+08-22 14:14:57.801  6853  6909 I Unity   : DeNelle.Village.Enemy:Update()
+08-22 14:14:57.801  6853  6909 I Unity   : 
+08-22 14:14:57.828  6853  6909 I Unity   : [Flow:Offset] sheathed FALLBACK (drawn 'sword_A' on back pose): pos=(0.01, 0.03, -0.01) rot=SKIPPED (pos-only, ff.sheathdrawnrot=0)
+08-22 14:14:57.828  6853  6909 I Unity   : UnityEngine.DebugLogHandler:Internal_Log(LogType, LogOption, String, Object)
+08-22 14:14:57.828  6853  6909 I Unity   : DeNelle.Core.Diagnostics.FlowTrace:Throttle(String, String, Single, String)
+08-22 14:14:57.828  6853  6909 I Unity   : DeNelle.Village.EquipmentController:ApplySheathedOffset(Transform, String)
+08-22 14:14:57.828  6853  6909 I Unity   : DeNelle.Village.EquipmentController:ApplyHoldPose()
+08-22 14:14:57.828  6853  6909 I Unity   : DeNelle.Village.HeroLocomotion:Update()
+08-22 14:14:57.828  6853  6909 I Unity   : 
+08-22 14:14:57.828  6853  6909 I Unity   : [Flow:Offset] sheathed FALLBACK (drawn 'ShieldWithItemLogic' on back pose): pos=(0.00, 0.00, 0.00) rot=SKIPPED (pos-only, ff.sheathdrawnrot=0)
+08-22 14:14:57.828  6853  6909 I Unity   : UnityEngine.DebugLogHandler:Internal_Log(LogType, LogOption, String, Object)
+08-22 14:14:57.828  6853  6909 I Unity   : DeNelle.Core.Diagnostics.FlowTrace:Throttle(String, String, Single, String)
+08-22 14:14:57.828  6853  6909 I Unity   : DeNelle.Village.EquipmentController:ApplySheathedOffset(Transform, String)
+08-22 14:14:57.828  6853  6909 I Unity   : DeNelle.Village.EquipmentController:ApplyHoldPose()
+08-22 14:14:57.828  6853  6909 I Unity   : DeNelle.Village.HeroLocomotion:Update()
+08-22 14:14:57.828  6853  6909 I Unity   : 
+08-22 14:14:57.831  6853  6909 I Unity   : [Flow:EnemyAggro] orc-rep-0: ProbeForStructure null -> no structure target (Heart-march / roam only)
+08-22 14:14:57.831  6853  6909 I Unity   : UnityEngine.DebugLogHandler:Internal_Log(LogType, LogOption, String, Object)
+08-22 14:14:57.831  6853  6909 I Unity   : DeNelle.Core.Diagnostics.FlowTrace:Throttle(String, String, Single, String)
+08-22 14:14:57.831  6853  6909 I Unity   : DeNelle.Village.Enemy:TickContactAttack()
+08-22 14:14:57.831  6853  6909 I Unity   : DeNelle.Village.Enemy:Update()
+08-22 14:14:57.831  6853  6909 I Unity   : 
+08-22 14:14:57.831  6853  6909 I Unity   : [Flow:EnemyAggro] orc-rep-1: ProbeForStructure null -> no structure target (Heart-march / roam only)
+08-22 14:14:57.831  6853  6909 I Unity   : UnityEngine.DebugLogHandler:Internal_Log(LogType, LogOption, String, Object)
+08-22 14:14:57.831  6853  6909 I Unity   : DeNelle.Core.Diagnostics.FlowTrace:Throttle(String, String, Single, String)
+08-22 14:14:57.831  6853  6909 I Unity   : DeNelle.Village.Enemy:TickContactAttack()
+08-22 14:14:57.831  6853  6909 I Unity   : DeNelle.Village.Enemy:Update()
+08-22 14:14:57.831  6853  6909 I Unity   : 
+08-22 14:14:57.832  6853  6909 I Unity   : [Flow:EnemyAggro] orc-rep-2: ProbeForStructure null -> no structure target (Heart-march / roam only)
+08-22 14:14:57.832  6853  6909 I Unity   : UnityEngine.DebugLogHandler:Internal_Log(LogType, LogOption, String, Object)
+08-22 14:14:57.832  6853  6909 I Unity   : DeNelle.Core.Diagnostics.FlowTrace:Throttle(String, String, Single, String)
+08-22 14:14:57.832  6853  6909 I Unity   : DeNelle.Village.Enemy:TickContactAttack()
+08-22 14:14:57.832  6853  6909 I Unity   : DeNelle.Village.Enemy:Update()
+08-22 14:14:57.832  6853  6909 I Unity   : 
+08-22 14:14:57.833  6853  6909 I Unity   : [Flow:EnemyAggro] orc-rep-3: ProbeForStructure null -> no structure target (Heart-march / roam only)
+08-22 14:14:57.833  6853  6909 I Unity   : UnityEngine.DebugLogHandler:Internal_Log(LogType, LogOption, String, Object)
+08-22 14:14:57.833  6853  6909 I Unity   : DeNelle.Core.Diagnostics.FlowTrace:Throttle(String, String, Single, String)
+08-22 14:14:57.833  6853  6909 I Unity   : DeNelle.Village.Enemy:TickContactAttack()
+08-22 14:14:57.833  6853  6909 I Unity   : DeNelle.Village.Enemy:Update()
+08-22 14:14:57.833  6853  6909 I Unity   : 
+08-22 14:14:57.833  6853  6909 I Unity   : [Flow:EnemyAggro] orc-rep-5: ProbeForStructure null -> no structure target (Heart-march / roam only)
+08-22 14:14:57.833  6853  6909 I Unity   : UnityEngine.DebugLogHandler:Internal_Log(LogType, LogOption, String, Object)
+08-22 14:14:57.833  6853  6909 I Unity   : DeNelle.Core.Diagnostics.FlowTrace:Throttle(String, String, Single, String)
+08-22 14:14:57.833  6853  6909 I Unity   : DeNelle.Village.Enemy:TickContactAttack()
+08-22 14:14:57.833  6853  6909 I Unity   : DeNelle.Village.Enemy:Update()
+08-22 14:14:57.833  6853  6909 I Unity   : 
+08-22 14:14:57.834  6853  6909 I Unity   : [Flow:EnemyAggro] wave2-hollow-walker-4: ProbeForStructure null -> no structure target (Heart-march / roam only)
+08-22 14:14:57.834  6853  6909 I Unity   : UnityEngine.DebugLogHandler:Internal_Log(LogType, LogOption, String, Object)
+08-22 14:14:57.834  6853  6909 I Unity   : DeNelle.Core.Diagnostics.FlowTrace:Throttle(String, String, Single, String)
+08-22 14:14:57.834  6853  6909 I Unity   : DeNelle.Village.Enemy:TickContactAttack()
+08-22 14:14:57.834  6853  6909 I Unity   : DeNelle.Village.Enemy:Update()
+08-22 14:14:57.834  6853  6909 I Unity   : 
+08-22 14:14:57.834  6853  6909 I Unity   : [Flow:EnemyAggro] wave2-hollow-walker-5: ProbeForStructure null -> no structure target (Heart-march / roam only)
+08-22 14:14:57.834  6853  6909 I Unity   : UnityEngine.DebugLogHandler:Internal_Log(LogType, LogOption, String, Object)
+08-22 14:14:57.834  6853  6909 I Unity   : DeNelle.Core.Diagnostics.FlowTrace:Throttle(String, String, Single, String)
+08-22 14:14:57.834  6853  6909 I Unity   : DeNelle.Village.Enemy:TickContactAttack()
+08-22 14:14:57.834  6853  6909 I Unity   : DeNelle.Village.Enemy:Update()
+08-22 14:14:57.834  6853  6909 I Unity   : 
+08-22 14:14:57.835  6853  6909 I Unity   : [Flow:EnemyAggro] wave2-hollow-walker-6: ProbeForStructure null -> no structure target (Heart-march / roam only)
+08-22 14:14:57.835  6853  6909 I Unity   : UnityEngine.DebugLogHandler:Internal_Log(LogType, LogOption, String, Object)
+08-22 14:14:57.835  6853  6909 I Unity   : DeNelle.Core.Diagnostics.FlowTrace:Throttle(String, String, Single, String)
+08-22 14:14:57.835  6853  6909 I Unity   : DeNelle.Village.Enemy:TickContactAttack()
+08-22 14:14:57.835  6853  6909 I Unity   : DeNelle.Village.Enemy:Update()
+08-22 14:14:57.835  6853  6909 I Unity   : 
+08-22 14:14:57.899  6853  6909 I Unity   : [Flow:Zone] GetZone(x=-9.6,z=33.4).
+08-22 14:14:57.899  6853  6909 I Unity   : UnityEngine.DebugLogHandler:Internal_Log(LogType, LogOption, String, Object)
+08-22 14:14:57.899  6853  6909 I Unity   : DeNelle.Core.Diagnostics.FlowTrace:Throttle(String, String, Single, String)
+08-22 14:14:57.899  6853  6909 I Unity   : DeNelle.Core.World.ZoneManager:GetZone(Vector3)
+08-22 14:14:57.899  6853  6909 I Unity   : DeNelle.Village.WorldMusicDirector:Update()
+08-22 14:14:57.899  6853  6909 I Unity   : 

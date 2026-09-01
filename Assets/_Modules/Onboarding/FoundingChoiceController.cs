@@ -57,6 +57,11 @@ namespace DeNelle.Onboarding
     /// </summary>
     public sealed class FoundingChoiceController : MonoBehaviour
     {
+        public const string DefaultTownSelectedKey = "founding.default_town_selected";
+        // The ornate frame has transparent shoulders beyond the kit's content rect. Let the
+        // opaque body field run underneath those shoulders so the previous screen cannot show
+        // through as two bright side strips (owner capture 2026-09-01).
+        private const float BodyFillHorizontalOverscan = 0.06f;
         // Session latch — the choice is offered at most once per session. New Game +
         // this being pre-hub means it never needs to re-offer within a run.
         private static bool _decidedThisSession;
@@ -160,7 +165,7 @@ namespace DeNelle.Onboarding
             // Raycast-blocking scrim (mirrors OnboardingFlow) — swallows taps to the
             // intro UI beneath while the choice is up.
             var scrim = ElarionUiKit.AddImage(_canvas.transform, "Scrim",
-                Vector2.zero, Vector2.one, new Color(0f, 0f, 0f, 0.72f), rounded: false);
+                Vector2.zero, Vector2.one, new Color(0f, 0f, 0f, 0.94f), rounded: false);
             var scrimImg = scrim.GetComponent<Image>();
             if (scrimImg != null) scrimImg.raycastTarget = true;
 
@@ -181,6 +186,7 @@ namespace DeNelle.Onboarding
             var chrome = ElarionUiKit.BuildObsidianPanel(_canvas.transform, "FOUND YOUR TOWN",
                 new Vector2(0.12f, 0.12f), new Vector2(0.88f, 0.88f), onClose: null,
                 withBackdrop: false);
+            MedievalUiSkin.ApplyShell(chrome, compact: false);
             if (chrome.close != null) chrome.close.gameObject.SetActive(false);
 
             Transform body = chrome.layout != null && chrome.layout.body != null
@@ -200,13 +206,28 @@ namespace DeNelle.Onboarding
                 bodyRt.offsetMin = Vector2.zero;
             }
 
+            // The frame art is transparent through its centre. Give the forced-choice
+            // body the same opaque black-iron field as the rest of the reskinned modal
+            // family so Hero Select cannot bleed through its copy and actions.
+            var bodyFill = ElarionUiKit.AddImage(body, "FoundingBodyFill",
+                Vector2.zero, Vector2.one, ElarionUiKit.ObsidianFill, rounded: false);
+            var bodyFillRt = bodyFill.transform as RectTransform;
+            if (bodyFillRt != null)
+            {
+                bodyFillRt.anchorMin = new Vector2(-BodyFillHorizontalOverscan, 0f);
+                bodyFillRt.anchorMax = new Vector2(1f + BodyFillHorizontalOverscan, 1f);
+                bodyFillRt.offsetMin = Vector2.zero;
+                bodyFillRt.offsetMax = Vector2.zero;
+            }
+            bodyFill.transform.SetAsFirstSibling();
+            var bodyFillImage = bodyFill.GetComponent<Image>();
+            if (bodyFillImage != null) bodyFillImage.raycastTarget = false;
+
             // Body copy — teaches that BOTH options stay editable, so the choice is
             // low-stakes (owner: every building is movable). Inline ASCII literal (not a
             // canon key) so it never shows a missing-key placeholder.
             var copy = ElarionUiKit.Label(body,
-                "How would you like to begin? Start with a ready-made town you can rearrange, " +
-                "or a clear field to raise from the ground up. Either way, every building can be " +
-                "moved, upgraded, or sold later.",
+                "Begin with a ready settlement and starter defenses, or choose an empty realm to build yourself.",
                 0.56f, 0.94f, ElarionUi.Parchment, ElarionUi.FontBody,
                 TextAlignmentOptions.Center, 0.06f, 0.94f);
             copy.textWrappingMode = TextWrappingModes.Normal;
@@ -260,18 +281,27 @@ namespace DeNelle.Onboarding
             column.sizeDelta        = new Vector2(0f, BtnH * 2f + BtnGap);
             column.anchoredPosition = new Vector2(0f, BtnBottomPad);
 
-            ElarionUiKit.AddColumnButton(column, "Default Town  (Faster Onboarding)",
+            var readyButton = ElarionUiKit.AddColumnButton(column, "READY SETTLEMENT  (Recommended)",
                 ElarionUiKit.ObsidianButtonColor.Green, OnDefaultTown,
                 ElarionUiKit.ObsidianButtonStyle.Style1, BtnH);
-            ElarionUiKit.AddColumnButton(column, "Build Your Own  (Customize Locations)",
+            var emptyButton = ElarionUiKit.AddColumnButton(column, "EMPTY REALM  (Build It Yourself)",
                 ElarionUiKit.ObsidianButtonColor.Gray, OnBuildYourOwn,
                 ElarionUiKit.ObsidianButtonStyle.Style1, BtnH);
+            FitChoiceLabel(readyButton);
+            FitChoiceLabel(emptyButton);
 
             // UIF: join the single-modal arbiter. isOpen reflects the live overlay; the close
             // delegate routes onward (Continue) — the arbiter's back/close proceeds to the hub.
             if (_panelHandle == null)
                 _panelHandle = PanelManager.Register("FoundingChoice", Continue, () => !_routed && _canvas != null);
             PanelManager.NotifyOpened(_panelHandle);
+        }
+
+        private static void FitChoiceLabel(Button button)
+        {
+            if (button == null) return;
+            var label = button.GetComponentInChildren<TMP_Text>(true);
+            if (label != null) ElarionUiKit.FitSingleLine(label, 20f, 32f);
         }
 
         // =====================================================================
@@ -307,7 +337,14 @@ namespace DeNelle.Onboarding
             bool ok = Guard.Try("Founding", "arm Default Town (clear StrategicPlacementMigrated)", () =>
             {
                 svc.State.StrategicPlacementMigrated = false;
+                svc.MarkTutorialSeen(DefaultTownSelectedKey);
                 svc.Save();
+            });
+
+            DeNelle.Core.Analytics.EventTracker.Track("founding_path_selected", new
+            {
+                path = "starter_settlement",
+                recommended = true,
             });
 
             if (ok)
@@ -328,6 +365,11 @@ namespace DeNelle.Onboarding
         {
             if (_routed) return;
             FlowTrace.Step("Founding", "choice = BUILD YOUR OWN (blank template + FTUE) — no state change.");
+            DeNelle.Core.Analytics.EventTracker.Track("founding_path_selected", new
+            {
+                path = "start_from_scratch",
+                recommended = false,
+            });
             Continue();
         }
 

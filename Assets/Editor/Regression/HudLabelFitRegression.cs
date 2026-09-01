@@ -202,12 +202,10 @@ namespace DeNelle.Editor.Regression
             if (Mathf.Abs(ElarionUiKit.FontFloor - 30f) > 0.01f)
                 notes.Add("FontFloor is " + ElarionUiKit.FontFloor + " (was 30 when these boxes were fitted)");
 
-            if (HudActionBarModel.MaxVisibleFaces != 6)
+            if (HudActionBarModel.MaxVisibleFaces != 4)
                 failures.Add("[boxes-pinned] HudActionBarModel.MaxVisibleFaces is " +
-                             HudActionBarModel.MaxVisibleFaces + ", not 6 - the bar face got NARROWER or " +
-                             "wider, so the Manage face measurement below is stale. Re-measure before " +
-                             "changing this number: a face is already only about 10 characters wide at " +
-                             "the legibility floor");
+                             HudActionBarModel.MaxVisibleFaces + ", not 4 - adaptive peaceful HUD is locked " +
+                             "to Build/Hero/Journey/Manage");
 
             // The two widgets that collided are STILL both authored into one area, which is why the
             // wave block has to buy its own band rather than trust two fraction stacks to agree.

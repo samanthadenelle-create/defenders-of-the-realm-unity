@@ -65,8 +65,10 @@ namespace DeNelle.Village.Hero
         public static bool IsScreenOpen { get; private set; }
 
         // Card pixel height in the scroll list (tall plaque — banner + badge + time + reward).
-        private const float CardHeightPx = 168f;
-        private const float CardGapPx    = 10f;
+        // Three flagship camps must fit in the first fold at the shortest supported
+        // landscape height. Scrolling remains available for future catalog growth.
+        private const float CardHeightPx = 142f;
+        private const float CardGapPx    = 12f;
 
         // ── Entry hook ───────────────────────────────────────────────────────
 
@@ -176,6 +178,7 @@ namespace DeNelle.Village.Hero
             var chrome = ElarionUiKit.BuildObsidianPanel(_ui.transform, "RAIDS",
                 new Vector2(0.16f, 0.06f), new Vector2(0.84f, 0.94f), Close, withBackdrop: false,
                 frameName: RpgUiCatalog.FrameCore);
+            MedievalUiSkin.ApplyShell(chrome);
 
             // (#28) The decorative RAIDS banner Niche was REMOVED — with BlinkChrome off (the
             // default look) the Niche paints an opaque warm-stone slab that covered the frame's
@@ -188,12 +191,34 @@ namespace DeNelle.Village.Hero
             _bodyZone = chrome.layout != null && chrome.layout.body != null
                 ? chrome.layout.body
                 : (RectTransform)chrome.content.transform;
+            if (_bodyZone != null && chrome.layout != null)
+            {
+                // The generic frame body reserves far more footer space than this selector
+                // uses, leaving the third of only three camps clipped above a dead lower half.
+                // Reclaim that verified-empty band while preserving the Close keep-out.
+                _bodyZone.anchorMin = new Vector2(_bodyZone.anchorMin.x, 0.20f);
+                _bodyZone.anchorMax = new Vector2(_bodyZone.anchorMax.x, 0.80f);
+                _bodyZone.offsetMin = Vector2.zero;
+                _bodyZone.offsetMax = Vector2.zero;
+            }
 
             // WO-714 P8: the ONE shared open ease (scale target = the panel rect, never the canvas).
             ElarionUiKit.AttachPanelOpenFx(_ui,
                 chrome.root != null ? chrome.root.transform as RectTransform : null);
 
             BuildCards();
+
+            // ApplyShell skins the factory-owned, reserved Close control. Do not add a
+            // second panel-local Close: it overlaps the scroll well and falls through the
+            // ornate bottom border at ultrawide aspect ratios.
+            MedievalUiSkin.ApplyClose(chrome.close);
+            if (chrome.close != null)
+            {
+                chrome.close.gameObject.SetActive(true);
+                var closeImage = chrome.close.targetGraphic as Image ?? chrome.close.GetComponent<Image>();
+                // close-ornate is a complete baked control, not a stretchable border.
+                if (closeImage != null) closeImage.type = Image.Type.Simple;
+            }
 
             // UIF-01: join the single-modal arbiter. A battle-lock rejection tears this down
             // (handle.Close, which also clears IsScreenOpen) and returns before arming the Herald.
@@ -265,6 +290,16 @@ namespace DeNelle.Village.Hero
             var cardBtn = card.GetComponent<Button>();
             cardBtn.targetGraphic = cardImg;
             ElarionUiKit.StyleButtonColors(cardBtn);
+            MedievalUiSkin.ApplyButton(cardBtn, primary: !onCooldown);
+            var medievalCard = Resources.Load<Sprite>("UI/ElarionMedieval/frames/content-panel");
+            if (medievalCard != null)
+            {
+                cardImg.sprite = medievalCard;
+                cardImg.type = Image.Type.Simple;
+                cardImg.color = onCooldown
+                    ? new Color(.46f, .46f, .48f, .86f)
+                    : Color.white;
+            }
             string idCopy = id;
             cardBtn.onClick.AddListener(() => OnCardTapped(idCopy));
 
@@ -278,8 +313,8 @@ namespace DeNelle.Village.Hero
             // player-visible — missing displayName routes through the ONE kit formatter.
             string name = string.IsNullOrEmpty(item.Name)
                 ? ElarionUiKit.SpacedDisplayName(id) : item.Name;
-            var nameLabel = ElarionUiKit.Label(card.transform, name, 0.66f, 0.94f, ElarionUi.Gilt,
-                ElarionUi.FontHead, TMPro.TextAlignmentOptions.Left, 0.05f, 0.70f, bold: true);
+            var nameLabel = ElarionUiKit.Label(card.transform, name, 0.66f, 0.91f, ElarionUi.Gilt,
+                30, TMPro.TextAlignmentOptions.Left, 0.05f, 0.70f, bold: true);
             nameLabel.raycastTarget = false;
             // §1.14 fit-never-truncate: a long fortress name shrinks, never clips, at phone aspect.
             ElarionUiKit.FitSingleLine(nameLabel);
@@ -287,10 +322,16 @@ namespace DeNelle.Village.Hero
             // Difficulty badge — colour-tinted chip, top-right.
             var badge = ElarionUiKit.AddImage(card.transform, "DiffBadge",
                 new Vector2(0.72f, 0.68f), new Vector2(0.96f, 0.92f),
-                new Color(tint.r, tint.g, tint.b, 0.85f));
-            badge.GetComponent<Image>().raycastTarget = false;
+                Color.white);
+            var badgeImage = badge.GetComponent<Image>();
+            var badgeFrame = Resources.Load<Sprite>("UI/ElarionMedieval/frames/status-panel-icon-socket");
+            if (badgeImage != null)
+            {
+                badgeImage.raycastTarget = false;
+                if (badgeFrame != null) { badgeImage.sprite = badgeFrame; badgeImage.type = Image.Type.Sliced; }
+            }
             var badgeLbl = ElarionUiKit.Label(badge.transform, DifficultyLabel(_vm.DifficultyFor(id)), 0f, 1f,
-                ElarionUi.Ink, ElarionUi.FontLabel, TMPro.TextAlignmentOptions.Center, 0f, 1f, bold: true);
+                tint, 22, TMPro.TextAlignmentOptions.Center, 0.05f, 0.95f, bold: true);
             badgeLbl.raycastTarget = false;
 
             // 3-star target time — m:ss in gilt, mid band. Tofu fix (2026-07-02):
@@ -300,7 +341,7 @@ namespace DeNelle.Village.Hero
             StarRatingRow.Build(card.transform, 3, 3, 0.05f, 0.40f, 0.20f, 0.58f, sizePx: 11f);
             var timeLabel = ElarionUiKit.Label(card.transform,
                 "Clock: " + FormatTime(_vm.TargetTimeFor(id)), 0.38f, 0.60f,
-                ElarionUi.Parchment, ElarionUi.FontBody, TMPro.TextAlignmentOptions.Left, 0.22f, 0.95f);
+                ElarionUi.Parchment, 28, TMPro.TextAlignmentOptions.Left, 0.22f, 0.95f);
             timeLabel.raycastTarget = false;
 
             // Bottom band — the reward hint when the camp is available, the RECOVERY SENTENCE
@@ -317,9 +358,9 @@ namespace DeNelle.Village.Hero
                 ? DeNelle.Village.World.Camps.RaidCooldownService.DescribeState(id)
                 : RewardHint(_vm.RewardMultiplierFor(id), _vm.ShardChanceFor(id));
             var rewardLabel = ElarionUiKit.Label(card.transform,
-                bottomLine, 0.10f, 0.32f,
+                bottomLine, 0.18f, 0.34f,
                 onCooldown ? ElarionUi.ParchmentDim : ElarionUi.Affordable,
-                ElarionUi.FontLabel, TMPro.TextAlignmentOptions.Left, 0.05f, 0.95f, bold: true);
+                22, TMPro.TextAlignmentOptions.Left, 0.05f, 0.95f, bold: true);
             rewardLabel.raycastTarget = false;
             // §1.14 fit-never-truncate: "Recovering - raidable in 12h 45m" must never clip.
             ElarionUiKit.FitSingleLine(rewardLabel);

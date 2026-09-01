@@ -24,6 +24,7 @@ using System;
 using System.Collections.Generic;
 using DeNelle.Core.UI.Mvvm;
 using DeNelle.Village.Crafting;   // VillageInventory
+using DeNelle.Village.Items;      // ItemIdentity: authoritative consumable display names
 
 namespace DeNelle.Village.Hero
 {
@@ -101,7 +102,11 @@ namespace DeNelle.Village.Hero
         private readonly Action<ResourceSnapshot> _ecoHandler;
         private bool _disposed;
 
-        private readonly List<string> _potionIds = new List<string> { "minor-heal-potion", "minor-mana-potion" };
+        private readonly List<string> _potionIds = new List<string>
+        {
+            DeNelle.Core.HUD.HudCommands.HpPotionId,
+            DeNelle.Core.HUD.HudCommands.ManaPotionId
+        };
 
         // The per-row buy/sell/equip action of the active list, keyed by item id (armed on Select).
         private readonly Dictionary<string, Action> _rowActions = new Dictionary<string, Action>();
@@ -113,6 +118,7 @@ namespace DeNelle.Village.Hero
 
         // Type filter for the SELL list (Buy is vendor-locked). Default = All.
         private GearKind _buyFilter = GearKind.Weapon | GearKind.Armor | GearKind.Potion | GearKind.Accessory;
+        private int _quantity = 1;
 
         /// <summary>
         /// DI-in-Open factory (UI_MVVM_MIGRATION_PLAN §1 step 5): resolves the IEconomy handle
@@ -181,6 +187,41 @@ namespace DeNelle.Village.Hero
         public ShopDetail? Selected =>
             SelectedId != null && _rowDetails.TryGetValue(SelectedId, out var d) ? d : (ShopDetail?)null;
 
+        public int Quantity => _quantity;
+        public int SelectedUnitPrice
+        {
+            get
+            {
+                for (int i = 0; i < _items.Count; i++)
+                    if (_items[i].Id == SelectedId) return Math.Max(0, _items[i].Price);
+                return 0;
+            }
+        }
+        public int TotalPrice => SelectedUnitPrice * _quantity;
+        public bool SelectedAffordable
+        {
+            get
+            {
+                for (int i = 0; i < _items.Count; i++)
+                    if (_items[i].Id == SelectedId) return _items[i].Affordable;
+                return false;
+            }
+        }
+        public bool CanExecuteSelected => SelectedId != null &&
+            (Mode != ShopMode.Buy || (SelectedAffordable && TotalPrice <= Coins));
+        public int MaxQuantity
+        {
+            get
+            {
+                var detail = Selected;
+                if (Mode != ShopMode.Buy || !detail.HasValue || detail.Value.IconRole != IconRolePotion)
+                    return 1;
+                int unit = SelectedUnitPrice;
+                if (unit <= 0) return 99;
+                return Math.Max(1, Math.Min(99, Coins / unit));
+            }
+        }
+
         public string Status { get; private set; }
 
         /// <summary>Bottom action button label ("Purchase" on Buy, "Sell" on Sell, "" on Equip).</summary>
@@ -215,6 +256,7 @@ namespace DeNelle.Village.Hero
             if (mode == ShopMode.Buy)
                 _buyFilter = GearKind.Weapon | GearKind.Armor | GearKind.Potion | GearKind.Accessory;   // buy is vendor-locked
             SelectedId = null;
+            _quantity = 1;
             Rebuild();
             Raise();
         }
@@ -226,6 +268,7 @@ namespace DeNelle.Village.Hero
             // The filter row drives the SELL list (BUY is vendor-locked).
             Mode = ShopMode.Sell;
             SelectedId = null;
+            _quantity = 1;
             Rebuild();
             Raise();
         }
@@ -234,11 +277,30 @@ namespace DeNelle.Village.Hero
         {
             if (string.IsNullOrEmpty(id)) return;
             SelectedId = id;
+            _quantity = 1;
+            Raise();
+        }
+
+        public void ChangeQuantity(int delta)
+        {
+            _quantity = Math.Max(1, Math.Min(MaxQuantity, _quantity + delta));
             Raise();
         }
 
         /// <summary>Fire the selected row's buy action (or set the "select first" status).</summary>
-        public void Buy() => InvokeSelectedAction();
+        public void Buy()
+        {
+            int count = Math.Max(1, Math.Min(MaxQuantity, _quantity));
+            if (SelectedId == null || !_rowActions.TryGetValue(SelectedId, out var act) || act == null)
+            {
+                Status = "Select an item first.";
+                Raise();
+                return;
+            }
+            for (int i = 0; i < count; i++) act(); // each domain action re-checks/spends authoritatively
+            _quantity = 1;
+            Raise();
+        }
 
         /// <summary>Fire the selected row's sell action (same arming as Buy; label differs).</summary>
         public void Sell() => InvokeSelectedAction();
@@ -391,14 +453,18 @@ namespace DeNelle.Village.Hero
             if (potionsAllowed)
             foreach (var pid in _potionIds)
             {
-                var cost = new ResourceCost(coins: pid.Contains("mana") ? 12 : 8);
+                var definition = ConsumableCatalog.Find(pid);
+                var cost = new ResourceCost(coins: definition != null ? Math.Max(0, definition.Price) : 0);
                 bool affordable = _economy == null || _economy.CanAfford(cost);
                 string pidCopy = pid; var costCopy = cost;
-                string potionDesc = pid.Contains("mana") ? "Restores mana in a pinch." : "Restores health in a pinch.";
-                _rowDetails[pid] = new ShopDetail(pid, potionDesc, "Consumable",
+                string potionName = ItemIdentity.DisplayName(pid);
+                string potionDesc = definition != null && definition.Effect == ConsumableEffect.Mana
+                    ? "Restores mana over time."
+                    : "Restores health immediately.";
+                _rowDetails[pid] = new ShopDetail(potionName, potionDesc, "Consumable",
                     "Cost: " + CostString(cost), IconRolePotion, pid);
                 _rowActions[pid] = () => TryBuyPotion(pidCopy, costCopy);
-                _items.Add(new ItemVM(pid, pid, IconRolePotion, pid, cost.Coins, "gold", affordable));
+                _items.Add(new ItemVM(pid, potionName, IconRolePotion, pid, cost.Coins, "gold", affordable));
                 _currentStock.Add((pid, GearKind.Potion));
             }
 
@@ -418,6 +484,11 @@ namespace DeNelle.Village.Hero
                         $"BUY tab EMPTY for vendor '{_vendorContext}' (allowed {allowed}) though the catalog " +
                         $"has {allWeapons.Count} weapon(s) + {allArmors.Count} armor(s) + {allAccessories.Count} accessory(ies) — filter excluded all stock.");
             }
+            else if (SelectedId == null)
+            {
+                SelectedId = _items[0].Id;
+                _quantity = 1;
+            }
         }
 
         private void TryBuyWeapon(WeaponDef w)
@@ -429,11 +500,12 @@ namespace DeNelle.Village.Hero
             {
                 if (VillageInventory.Instance != null) VillageInventory.Instance.Add(w.id, 1);
                 var ap = GearAppraisal.Appraise(w);
-                Status = ap != null && ap.isElarionMarked
+                string success = ap != null && ap.isElarionMarked
                     ? "Purchased " + w.name + "! " + ap.Summary() + " (added to inventory - see EQUIP)"
                     : "Purchased " + w.name + "! Added to inventory - see EQUIP.";
                 PushHudResources();
                 Rebuild();
+                Status = success;
             }
             else
             {
@@ -450,11 +522,12 @@ namespace DeNelle.Village.Hero
             {
                 if (VillageInventory.Instance != null) VillageInventory.Instance.Add(a.id, 1);
                 var ap = GearAppraisal.Appraise(a);
-                Status = ap != null && ap.isElarionMarked
+                string success = ap != null && ap.isElarionMarked
                     ? "Purchased " + a.name + "! " + ap.Summary() + " (added to inventory - see EQUIP)"
                     : "Purchased " + a.name + "! Added to inventory - see EQUIP.";
                 PushHudResources();
                 Rebuild();
+                Status = success;
             }
             else
             {
@@ -471,11 +544,12 @@ namespace DeNelle.Village.Hero
             {
                 if (VillageInventory.Instance != null) VillageInventory.Instance.Add(ac.id, 1);
                 var ap = GearAppraisal.Appraise(ac);
-                Status = ap != null && ap.isElarionMarked
+                string success = ap != null && ap.isElarionMarked
                     ? "Purchased " + ac.name + "! " + ap.Summary() + " (added to inventory - see EQUIP)"
                     : "Purchased " + ac.name + "! Added to inventory - see EQUIP.";
                 PushHudResources();
                 Rebuild();
+                Status = success;
             }
             else
             {
@@ -489,11 +563,12 @@ namespace DeNelle.Village.Hero
             if (_economy.TrySpend(cost))
             {
                 if (VillageInventory.Instance != null) VillageInventory.Instance.Add(id, 1);
-                Status = "Purchased " + id + "!";
+                string success = "Purchased " + ItemIdentity.DisplayName(id) + "!";
                 PushHudResources();
                 Rebuild();
+                Status = success;
             }
-            else Status = "Not enough resources for " + id + " - needs " + CostString(cost) + ".";
+            else Status = "Not enough resources for " + ItemIdentity.DisplayName(id) + " - needs " + CostString(cost) + ".";
         }
 
         // Mirror ShopPanel.RefreshEco's town-HUD push (owner: "sync on subtract"). Pure data call

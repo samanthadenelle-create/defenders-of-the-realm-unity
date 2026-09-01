@@ -1922,6 +1922,15 @@ namespace DeNelle.Village
 
         private async UniTaskVoid RunScriptedTownWave(WaveSpawnPoint gate)
         {
+            // EnterStep arms this self-driving wave before it presents the step intro.
+            // Yield once so the dialogue can open, then treat that line as the authored
+            // pre-fight buffer. Spawning while Dialogue still owns Modal posture hides
+            // the combat HUD even though the enemies are already attacking.
+            await UniTask.Yield();
+            while (_townWaveArmed && CoreDialogue.DialogueService.IsRunning)
+                await UniTask.Yield();
+            if (!_townWaveArmed) return;
+
             // SpawnAt awaits the enemy catalog before any enemy exists; IsCleared would
             // read true (spawn-requested, none live) during that await — so the clear
             // poll (TickScriptedWave) only arms once the spawn has actually settled.

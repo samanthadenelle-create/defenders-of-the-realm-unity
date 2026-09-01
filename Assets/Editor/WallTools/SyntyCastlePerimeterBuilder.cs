@@ -87,6 +87,9 @@ namespace DeNelle.Editor
         // this only guards against a pack update changing the mesh.
         private const float MinModuleWidth = 0.5f;
 
+        // The shipped merged world is flat at y=0 and has no raised-island plinth.
+        private const float MergedWorldGroundY = 0f;
+
         [MenuItem("Defenders/Walls/Build Synty Castle Perimeter")]
         public static void BuildInOpenScene()
         {
@@ -147,7 +150,10 @@ namespace DeNelle.Editor
             float gatePivotMinX = MeasureMinX(gate);
             // How far the tower's authored foundation hangs BELOW its own origin (negative
             // min.y). Measured, never assumed — a pack update must move the seat with it.
-            float towerBaseDrop = Mathf.Max(0f, -MeasureMinY(tower));
+            float wallSeatY      = MergedWorldGroundY - MeasureMinY(wall);
+            float arrowslitSeatY = MergedWorldGroundY - MeasureMinY(arrowslit != null ? arrowslit : wall);
+            float gateSeatY      = MergedWorldGroundY - MeasureMinY(gate);
+            float towerSeatY     = MergedWorldGroundY - MeasureMinY(tower);
 
             // Clear the four side groups for a clean, reproducible rebuild.
             foreach (var n in SideNames)
@@ -156,7 +162,6 @@ namespace DeNelle.Editor
                 if (ex != null) { Object.DestroyImmediate(ex); Debug.Log("[SyntyPerimeter] removed " + n); }
             }
 
-            float liftY      = CastleHubBuilder.CastleFootprintLiftY;  // WO-593 island raise
             float span       = SlotsPerSide * moduleWidth;
             float halfExtent = span * 0.5f + towerHalf;
             int   gateIndex  = (SlotsPerSide - 1) / 2;
@@ -177,7 +182,7 @@ namespace DeNelle.Editor
                 roots.Add(side);
 
                 var rot      = Quaternion.Euler(0f, 90f * s, 0f);
-                var midpoint = rot * new Vector3(0f, liftY, -halfExtent);
+                var midpoint = rot * new Vector3(0f, 0f, -halfExtent);
                 var along    = rot * Vector3.right;
 
                 // Corner tower for this side, at the side's own -X end. Four sides x one
@@ -188,7 +193,7 @@ namespace DeNelle.Editor
                 // standing proud above the ground (seen in the 2026-09-01 proof capture).
                 // Push it down by its own min.y so the foundation goes where it belongs and
                 // the tower's visible height matches the wall it joins.
-                var cornerPos = rot * new Vector3(-halfExtent, liftY - towerBaseDrop, -halfExtent);
+                var cornerPos = rot * new Vector3(-halfExtent, towerSeatY, -halfExtent);
                 if (Place(side.transform, tower, cornerPos, rot, "CornerTower") != null) towers++;
 
                 for (int i = 0; i < SlotsPerSide; i++)
@@ -207,18 +212,25 @@ namespace DeNelle.Editor
                     // module's -X edge lands exactly there. Slot i therefore occupies
                     // [runLeft, runLeft + moduleWidth] whatever the prefab's pivot convention is.
                     float runLeft = -span * 0.5f + i * moduleWidth;
-                    var pos = midpoint + along * (runLeft - wallPivotMinX);
+                    bool useArrowslit = arrowslit != null && i % 4 == 1;
+                    float moduleSeatY = useArrowslit ? arrowslitSeatY : wallSeatY;
+                    var pos = midpoint + along * (runLeft - wallPivotMinX) + Vector3.up * moduleSeatY;
 
                     if (i == gateIndex)
                     {
-                        var gatePos = midpoint + along * (runLeft - gatePivotMinX);
-                        if (Place(side.transform, gate, gatePos, rot, "Gate") != null) gates++;
+                        var gatePos = midpoint + along * (runLeft - gatePivotMinX) + Vector3.up * gateSeatY;
+                        var gateInstance = Place(side.transform, gate, gatePos, rot, "Gate");
+                        if (gateInstance != null)
+                        {
+                            ApplyOpenGatePose(gateInstance);
+                            gates++;
+                        }
                         continue;   // no battlement cap over the gate arch
                     }
 
                     // Every 4th module gets an arrowslit for silhouette variety. Same
                     // footprint, same pitch — variety WITHOUT breaking the grid.
-                    var art = (arrowslit != null && i % 4 == 1) ? arrowslit : wall;
+                    var art = useArrowslit ? arrowslit : wall;
                     if (Place(side.transform, art, pos, rot, $"Wall_{i}") != null) walls++;
 
                     if (battlements != null &&
@@ -269,7 +281,8 @@ namespace DeNelle.Editor
 
             Debug.Log($"[SyntyPerimeter] measured pivots: wall minX {wallPivotMinX:F2} " +
                       $"(0 = left-edge, -{moduleWidth:F2} = right-edge), gate minX {gatePivotMinX:F2}, " +
-                      $"tower base drop {towerBaseDrop:F2}m.");
+                      $"ground seats wall={wallSeatY:F2}, arrowslit={arrowslitSeatY:F2}, " +
+                      $"gate={gateSeatY:F2}, tower={towerSeatY:F2} (floor y={MergedWorldGroundY:F2}).");
             Debug.Log($"[SyntyPerimeter] module {moduleWidth:F2}m (measured) x {wallHeight:F2}m tall, " +
                       $"tower half {towerHalf:F2}m -> {SlotsPerSide} slots/side, span {span:F1}m, " +
                       $"extent +-{halfExtent:F1}m (plinth 44), gate slot {gateIndex} centred. " +
@@ -303,6 +316,50 @@ namespace DeNelle.Editor
             go.transform.localScale = Vector3.one;   // NEVER scaled — that is the whole point
             Undo.RegisterCreatedObjectUndo(go, "Build Synty Castle Perimeter");
             return go;
+        }
+
+        /// <summary>
+        /// The Synty gate prefab ships closed, while the overworld's four entrances are
+        /// permanently traversable (GateTraversalInjector provides the nav-safe crossing).
+        /// Author the matching open pose into the scene: swing both hinged leaves outward
+        /// and lift the portcullis into the arch. Child names are pack-authored; missing
+        /// children degrade to a warning instead of breaking a perimeter rebuild.
+        /// </summary>
+        private static void ApplyOpenGatePose(GameObject gate)
+        {
+            Transform left = FindDescendant(gate.transform, "SM_Bld_Castle_Wall_Gate_Door_L_01");
+            Transform right = FindDescendant(gate.transform, "SM_Bld_Castle_Wall_Gate_Door_R_01");
+            Transform portcullis = FindDescendant(gate.transform, "SM_Bld_Castle_Wall_Gate_Portcullis_01");
+
+            if (left != null) left.localRotation = Quaternion.Euler(0f, 105f, 0f);
+            if (right != null) right.localRotation = Quaternion.Euler(0f, -105f, 0f);
+            // This modular arch has no upper gatehouse volume to conceal a raised grille;
+            // leaving it translated above the roof reads as floating bars. Hide it in the
+            // permanently-open state while retaining the prefab child for future animation.
+            if (portcullis != null) portcullis.gameObject.SetActive(false);
+
+            DisableColliders(left);
+            DisableColliders(right);
+            DisableColliders(portcullis);
+
+            if (left == null || right == null || portcullis == null)
+                Debug.LogWarning("[SyntyPerimeter] gate child layout changed; open pose is incomplete on " + gate.name + ".");
+        }
+
+        private static Transform FindDescendant(Transform root, string exactName)
+        {
+            if (root == null) return null;
+            var all = root.GetComponentsInChildren<Transform>(true);
+            for (int i = 0; i < all.Length; i++)
+                if (all[i].name == exactName) return all[i];
+            return null;
+        }
+
+        private static void DisableColliders(Transform root)
+        {
+            if (root == null) return;
+            var colliders = root.GetComponentsInChildren<Collider>(true);
+            for (int i = 0; i < colliders.Length; i++) colliders[i].enabled = false;
         }
 
         private static float MeasureX(GameObject prefab) => MeasureAxis(prefab, 0);

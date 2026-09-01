@@ -28,6 +28,9 @@ namespace DeNelle.Editor
             string build = Read("Assets/Editor/AndroidBuild.cs", failures);
             string gate = Read("Assets/Editor/Regression/GooglePlayPackagingGate.cs", failures);
             string scanner = Read("tools/android/assert-google-play-aab-clean.ps1", failures);
+            string piController = Read("Assets/_Modules/Core/Platform/PiSignInController.cs", failures);
+            string loginBridge = Read("Assets/_Modules/Core/Platform/LoginSurfacePlatform.cs", failures);
+            string loginVm = Read("Assets/_Modules/Onboarding/LoginViewModel.cs", failures);
 
             Require(build, "BuildGooglePlayAab", "Play AAB entry point missing", failures);
             Require(build, "GooglePlayPackagingGate.AssertSourceIsolation()", "Play build no longer runs Gate 0", failures);
@@ -59,6 +62,8 @@ namespace DeNelle.Editor
             Require(gate, "SKRbvo6Gf7GondiT3BbTfuRDPqLWei4j2Qy2NPGZhW3", "live SKR mint is absent from forbidden material", failures);
             Require(gate, "stake.solanamobile", "staking marketing is absent from forbidden material", failures);
             Require(gate, "\"crypto\"", "generic crypto token is absent from forbidden material", failures);
+            Require(gate, "\"sign in with pi\"", "Pi authentication CTA is absent from forbidden material", failures);
+            Require(gate, "\"api.minepi.com\"", "Pi authentication backend is absent from forbidden material", failures);
             Require(gate, "defenders/mwa/", "in-build scanner does not target the actual MWA package path", failures);
             Require(gate, "phantom wallet", "in-build scanner does not target Phantom wallet branding", failures);
             Require(gate, "app.phantom", "in-build scanner does not target Phantom app identifiers", failures);
@@ -68,6 +73,8 @@ namespace DeNelle.Editor
             Require(scanner, "Test-StreamToken", "standalone scanner no longer inspects binary payloads", failures);
             Require(scanner, "stake.solanamobile", "standalone scanner does not cover staking marketing", failures);
             Require(scanner, "'crypto'", "standalone scanner does not cover generic crypto material", failures);
+            Require(scanner, "'sign in with pi'", "standalone scanner does not cover Pi authentication CTA", failures);
+            Require(scanner, "'api.minepi.com'", "standalone scanner does not cover Pi authentication backend", failures);
             Require(scanner, "'defenders/mwa/'", "standalone scanner does not target the actual MWA package path", failures);
             Require(scanner, "'phantom wallet'", "standalone scanner does not target Phantom wallet branding", failures);
             Require(scanner, "'app.phantom'", "standalone scanner does not target Phantom app identifiers", failures);
@@ -77,6 +84,21 @@ namespace DeNelle.Editor
             Require(scanner, "BUNDLE-METADATA/com.unity/dependencies.pb", "standalone scanner no longer classifies dependency provenance separately", failures);
             Reject(scanner, "'mwa/'", "standalone scanner still uses ambiguous mwa/ token", failures);
             Reject(scanner, "'phantom'", "standalone scanner still uses ambiguous phantom token", failures);
+
+            Require(piController, "#if GOOGLE_PLAY", "Pi runtime has no Play compile-time exclusion", failures);
+            Require(piController, "public static string SignedInUid => null;",
+                    "Play Pi stub no longer preserves the shared read-only identity seam", failures);
+            int piGuard = piController.IndexOf("#if GOOGLE_PLAY", StringComparison.Ordinal);
+            int piElse = piController.IndexOf("#else", piGuard, StringComparison.Ordinal);
+            int piRuntime = piController.IndexOf("public sealed class PiSignInController : MonoBehaviour", StringComparison.Ordinal);
+            if (piGuard < 0 || piElse < 0 || piRuntime < piElse)
+                failures.Add("Pi runtime controller is not confined to the non-Play branch");
+
+            Require(loginBridge, "GooglePlayIdentityBridge.EnsureSignedInAsync()",
+                    "Play login still does not call the real Google identity bridge", failures);
+            Require(loginBridge, "GameStateService.IsGooglePlayIdentity(playerId)",
+                    "Play login no longer verifies the bound play-* identity", failures);
+            Require(loginVm, "#if !GOOGLE_PLAY", "Play VM can re-bind Google identity through the wallet API", failures);
 
             // Semantic-tier mutation pins: readable authoring content keeps broad policy
             // vocabulary, while opaque runtime metadata rejects only executable SDK evidence.

@@ -171,9 +171,13 @@ namespace DeNelle.Village
             // POOLED: leased from MoverProjectilePool (GC-free), returns itself on Arrive.
             if (_spellOrbPrefab == null)
             {
-                // WO-VFX-RANGED: with a Hovl travel key, lease a NO-FX body so the Hovl orb
-                // (below) is the ONLY travelling visual (no arcane-orb double).
-                var smover = LeaseMover(useHovl ? ProjectileBodyKind.NoFxOrb : ProjectileBodyKind.MageOrbVfx, origin);
+                // F8 2026-09-01: some Hovl "projectile" prefabs are world-space burst
+                // emitters, not a continuously-rendered travelling body. Making their mover
+                // invisible left the only readable fireball at the caster even though the
+                // authoritative ProjectileMover reached the target. Keep the pooled arcane
+                // orb as the guaranteed moving silhouette; the Hovl effect remains additive
+                // and follows the same mover. Damage timing is unchanged.
+                var smover = LeaseMover(ProjectileBodyKind.MageOrbVfx, origin);
                 System.Action arrive = suppressOldImpact
                     ? WithLandBurst(targetWorldPos, onArrive)
                     : WithImpactVfx(targetWorldPos, DamageElement.Aether, WithLandBurst(targetWorldPos, onArrive));

@@ -164,11 +164,11 @@ namespace DeNelle.Onboarding
         // "Pr..." (NoWrap + Ellipsis). The new lanes are sized so BOTH axes clear
         // MinTouchPx(112) at portrait 1080x1920 AND landscape 2670x1200, and stay
         // disjoint from the side cards (SideLXMin / SideRXMax) by construction.
-        private const float PrevXMin = 0.012f, PrevXMax = 0.148f;
-        private const float SideLXMin = 0.2591f, SideLXMax = 0.3505f;
+        private const float PrevXMin = 0.012f, PrevXMax = 0.215f;
+        private const float SideLXMin = 0.225f, SideLXMax = 0.405f;
         private const float FocalXMin = 0.4353f, FocalXMax = 0.5650f;
-        private const float SideRXMin = 0.6494f, SideRXMax = 0.7409f;
-        private const float NextXMin = 0.852f, NextXMax = 0.988f;
+        private const float SideRXMin = 0.595f, SideRXMax = 0.775f;
+        private const float NextXMin = 0.785f, NextXMax = 0.988f;
 
         // ── WO-1234 — WHAT THE DELIVERED ART IS, declared once ───────────────────────
         // The owner's 2026-08-26 delivery is a FULL CARD, not a bare portrait: it bakes
@@ -196,18 +196,11 @@ namespace DeNelle.Onboarding
         // side stays >= MinTouchPx on landscape (where height is the scarce axis).
         private const float CarArrowYMin = 0.42f, CarArrowYMax = 0.90f;
 
-        // WO-1248 — designed rotate copy. ICON+word, not a truncated "Previous".
-        // PREV / NEXT is the designed word (full "Previous" is wider than a
-        // MinTouchPx-wide portrait plate at FontFloor, so stuffing it in the old
-        // recipe is what produced "Pr..."). Chevron is the rotate affordance;
-        // the word is confirmation. Size + shape carry the state, never hue.
-        private const string RotatePrevWord = "PREV";
-        private const string RotateNextWord = "NEXT";
-        private const string RotatePrevChevron = "<<";
-        private const string RotateNextChevron = ">>";
-        private const float RotateWordX0 = 0.06f, RotateWordX1 = 0.94f;
-        private const float RotateChevronYMin = 0.34f, RotateChevronYMax = 0.96f;
-        private const float RotateWordYMin = 0.04f, RotateWordYMax = 0.32f;
+        // Full words now use the same shared medieval button recipe as every other
+        // action on the screen. The widened lanes above provide enough room for the
+        // canonical font without ellipsis at the supported mobile ratios.
+        private const string RotatePrevLabel = "PREVIOUS";
+        private const string RotateNextLabel = "NEXT";
 
         // The four details columns (fractions of the well's width).
         private static readonly Vector2[] DetailColumns =
@@ -347,7 +340,10 @@ namespace DeNelle.Onboarding
                 FallbackLocale(TitleKey, "Choose Your Hero"),
                 new Vector2(0.015f, 0.02f), new Vector2(0.985f, 0.98f), onClose: null,
                 frameName: RpgUiCatalog.FrameCore, medallionIcon: "crest");
+            MedievalUiSkin.ApplyShell(_chrome, compact: false);
             if (_chrome.close != null) _chrome.close.gameObject.SetActive(false);
+            if (_chrome.layout != null && _chrome.layout.medallion != null)
+                _chrome.layout.medallion.gameObject.SetActive(false);
 
             // W9 (WO-714): the kit's shared open ease (PanelOpenCloseFx, P8) on the
             // master-frame chrome — the same eased scale+fade every kit panel opens
@@ -381,7 +377,7 @@ namespace DeNelle.Onboarding
 
             // Subtitle eyebrow — the frame's SUB-HEADER band, under the title and ABOVE
             // the well (it used to ride the body top and stole a row from the carousel).
-            var subtitle = ElarionUiKit.Label(content, FallbackLocale(SubtitleKey, "Only one may answer the call."),
+            var subtitle = ElarionUiKit.Label(content, "CHOOSE YOUR DEFENDER",
                 0.845f, 0.900f, ElarionUi.Gold, ElarionUi.FontLabel,
                 TextAlignmentOptions.Center, 0.24f, 0.945f, spacing: 1f, bold: true);
             subtitle.raycastTarget = false;
@@ -428,6 +424,7 @@ namespace DeNelle.Onboarding
                 FallbackLocale(DiveKey, "Enter Elarion"),
                 ElarionUiKit.ObsidianButtonStyle.Style2, ElarionUiKit.ObsidianButtonColor.Green,
                 ctaMin, ctaMax, OnDiveVillageClicked);
+            ApplyHeroSelectButton(_confirmButton, primary: true);
             _confirmLabel = _confirmButton != null
                 ? _confirmButton.GetComponentInChildren<TextMeshProUGUI>(true)
                 : null;
@@ -495,13 +492,9 @@ namespace DeNelle.Onboarding
             BuildPreviewCard(0, new Vector2(SideLXMin, CarSideYMin), new Vector2(SideLXMax, CarSideYMax));
             BuildPreviewCard(1, new Vector2(SideRXMin, CarSideYMin), new Vector2(SideRXMax, CarSideYMax));
 
-            // Rotate controls — OUTBOARD of the side cards (WO-1083 defects #3/#4: they
-            // used to sit in a bottom strip UNDER the cards and ClampMinTouch grew them
-            // into the card rects). WO-1248: they are no longer kit word-buttons labelled
-            // "< PREV" / "NEXT >". That recipe (BuildObsidianButton + FitSingleLine
-            // NoWrap+Ellipsis) is what truncated "Previous" to "Pr..." in a 0.068-wide
-            // lane. Designed ICON+word, authored above MinTouchPx on both axes so the
-            // clamp has nothing to grow. ASCII chevrons, richText OFF.
+            // Rotate controls — OUTBOARD of the side cards and authored above the
+            // touch floor. They deliberately use the same shared medieval word-button
+            // component and typography as the other actions on this screen.
             BuildRotateControl(-1);
             BuildRotateControl(1);
 
@@ -529,13 +522,8 @@ namespace DeNelle.Onboarding
         }
 
         /// <summary>
-        /// WO-1248 — one carousel rotate plate. Obsidian gray face (same family as the
-        /// rest of the screen) carrying a large ASCII chevron over the word PREV / NEXT.
-        /// The kit's own label is suppressed: BuildObsidianButton always arms
-        /// FitSingleLine (ellipsis), which is the truncation recipe this control must
-        /// not use. The chevron and the word are sized to FIT their bands at the
-        /// authored font; Overflow rather than Ellipsis so a too-long string is a
-        /// visible miss, not a silent "Pr...".
+        /// One carousel rotate button. It uses the canonical shared button label,
+        /// font, frame, hover, pressed and disabled states rather than bespoke glyphs.
         /// </summary>
         private void BuildRotateControl(int delta)
         {
@@ -543,42 +531,14 @@ namespace DeNelle.Onboarding
             bool prev = delta < 0;
             var min = new Vector2(prev ? PrevXMin : NextXMin, CarArrowYMin);
             var max = new Vector2(prev ? PrevXMax : NextXMax, CarArrowYMax);
-            var btn = ElarionUiKit.BuildObsidianButton(_classColumn, "",
+            var btn = ElarionUiKit.BuildObsidianButton(_classColumn,
+                prev ? RotatePrevLabel : RotateNextLabel,
                 ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Gray,
                 min, max, () => StepCarousel(delta));
             if (btn == null) return;
+            ApplyHeroSelectButton(btn, primary: false);
             btn.gameObject.name = prev ? "CarouselPrev" : "CarouselNext";
-
-            // Hide every label the kit/prefab already placed — including the empty
-            // FitSingleLine one — so a later string cannot be ellipsised into "Pr...".
-            var kitLabels = btn.GetComponentsInChildren<TextMeshProUGUI>(true);
-            for (int i = 0; i < kitLabels.Length; i++)
-                kitLabels[i].gameObject.SetActive(false);
-
-            var chevron = ElarionUiKit.Label(btn.transform, prev ? RotatePrevChevron : RotateNextChevron,
-                RotateChevronYMin, RotateChevronYMax, ElarionUi.Parchment, ElarionUi.FontHead,
-                TextAlignmentOptions.Center, RotateWordX0, RotateWordX1, bold: true);
-            ArmRotateGlyph(chevron);
-
-            var word = ElarionUiKit.Label(btn.transform, prev ? RotatePrevWord : RotateNextWord,
-                RotateWordYMin, RotateWordYMax, ElarionUi.Parchment, ElarionUi.FontMicro,
-                TextAlignmentOptions.Center, RotateWordX0, RotateWordX1, spacing: 1f, bold: true);
-            ArmRotateGlyph(word);
-        }
-
-        /// <summary>
-        /// Rotate-control text is a designed glyph, not a fitted line. richText OFF so
-        /// a chevron is never a TMP tag; Overflow so a miss is visible; no autosize, so
-        /// the geometry oracle measures the same size the player sees.
-        /// </summary>
-        private static void ArmRotateGlyph(TextMeshProUGUI t)
-        {
-            if (t == null) return;
-            t.raycastTarget = false;
-            t.richText = false;
-            t.textWrappingMode = TextWrappingModes.NoWrap;
-            t.overflowMode = TextOverflowModes.Overflow;
-            t.enableAutoSizing = false;
+            FitLine(btn.GetComponentInChildren<TextMeshProUGUI>(true));
         }
 
         // Page-dot geometry. The ACTIVE dot is larger AND gilt (size + colour), never
@@ -609,6 +569,7 @@ namespace DeNelle.Onboarding
                 min, max, () => StepCarousel(slot == 0 ? -1 : 1));
             _carouselCards[slot] = card;
             if (card == null) return;
+            ApplyHeroSelectButton(card, primary: false);
 
             var portrait = new GameObject("Portrait", typeof(RectTransform), typeof(Image));
             portrait.transform.SetParent(card.transform, false);
@@ -618,7 +579,7 @@ namespace DeNelle.Onboarding
             _carouselPortraits[slot] = portrait.GetComponent<Image>();
             _carouselPortraits[slot].preserveAspect = true;
             _carouselPortraits[slot].raycastTarget = false;
-            _carouselLabels[slot] = ElarionUiKit.Label(card.transform, "", 0.03f, 0.22f,
+            _carouselLabels[slot] = ElarionUiKit.Label(card.transform, "", 0.12f, 0.30f,
                 ElarionUi.Parchment, ElarionUi.FontMicro, TextAlignmentOptions.Center, 0.03f, 0.97f, bold: true);
             _carouselLabels[slot].raycastTarget = false;
             FitLine(_carouselLabels[slot]);
@@ -637,6 +598,19 @@ namespace DeNelle.Onboarding
             FitLine(ribbonLbl);
             ribbon.SetActive(false);
             _carouselSoon[slot] = ribbon;
+        }
+
+        private static void ApplyHeroSelectButton(Button button, bool primary)
+        {
+            if (button == null) return;
+            MedievalUiSkin.ApplyButton(button, primary);
+            if (button.targetGraphic is Image image)
+            {
+                var frame = Resources.Load<Sprite>("UI/ElarionMedieval/frames/content-panel");
+                if (frame != null) image.sprite = frame;
+                image.type = Image.Type.Simple;
+                image.color = Color.white;
+            }
         }
 
         private static void AddTrigger(EventTrigger trigger, EventTriggerType type, System.Action<BaseEventData> action)
@@ -745,7 +719,8 @@ namespace DeNelle.Onboarding
             {
                 well = ElarionUiKit.AddImage(_stageCenter, "HeroCard",
                     Vector2.zero, Vector2.one, new Color(0f, 0f, 0f, 0f), rounded: false);
-                var fitter = well.GetComponent<AspectRatioFitter>() ?? well.AddComponent<AspectRatioFitter>();
+                var fitter = well.GetComponent<AspectRatioFitter>();
+                if (fitter == null) fitter = well.AddComponent<AspectRatioFitter>();
                 fitter.aspectMode = AspectRatioFitter.AspectMode.FitInParent;
                 fitter.aspectRatio = PortraitArtAspect;
             }
@@ -753,7 +728,8 @@ namespace DeNelle.Onboarding
             {
                 well = ElarionUiKit.Well(_stageCenter, new Vector2(0.022f, 0.295f), new Vector2(0.978f, 0.985f));
             }
-            var swipeTrigger = well.GetComponent<EventTrigger>() ?? well.AddComponent<EventTrigger>();
+            var swipeTrigger = well.GetComponent<EventTrigger>();
+            if (swipeTrigger == null) swipeTrigger = well.AddComponent<EventTrigger>();
             AddTrigger(swipeTrigger, EventTriggerType.BeginDrag, e => BeginSwipe((PointerEventData)e));
             AddTrigger(swipeTrigger, EventTriggerType.EndDrag, e => EndSwipe((PointerEventData)e));
 
@@ -1017,7 +993,7 @@ namespace DeNelle.Onboarding
                 string heroName = HeroCatalog.Heroes.Length > 0
                     ? CanonStrings.Locale(HeroCatalog.Heroes[_shownIndex].NameKey) : "Hero";
                 if (string.IsNullOrEmpty(heroName)) heroName = "Hero";
-                _confirmLabel.text = playable ? "Choose " + heroName : "Coming Soon";
+                _confirmLabel.text = playable ? "CHOOSE " + heroName.ToUpperInvariant() : "COMING SOON";
                 FitLine(_confirmLabel);
             }
             _confirmButton.interactable = playable && _hasSelection;

@@ -74,6 +74,12 @@ ALTER TABLE player_data ADD COLUMN IF NOT EXISTS created_at     TIMESTAMPTZ NOT 
 
 -- TRUST TIER (2026-08-02, the guest rail). Which auth rail last wrote this row:
 --   'wallet' — an ed25519 signature over a single-use nonce proved key ownership.
+--   'google' — (added 2026-08-30, WO-1282 PIN-1b) a Google ID token, RS256-verified
+--              against Google's JWKS, proved the account; the player id is
+--              HMAC-SHA256(GOOGLE_IDENTITY_KEY, google_sub) derived SERVER-SIDE, so the
+--              client cannot mint one. PROVEN, like 'wallet' and unlike 'guest'. Exists
+--              only for the Google Play / AAB artifact — the wallet remains the SOLE
+--              identity on the Seeker / dApp-Store artifact (owner ruling 2026-08-30).
 --   'guest'  — an unverified device-hash bearer id (see guest_rate_limit's header
 --              for exactly how little that is worth).
 -- Recorded so the distinction is VISIBLE in one column instead of inferred from
@@ -194,6 +200,30 @@ CREATE TABLE IF NOT EXISTS auth_sessions (
 );
 CREATE INDEX IF NOT EXISTS auth_sessions_wallet_idx  ON auth_sessions (wallet);
 CREATE INDEX IF NOT EXISTS auth_sessions_expires_idx ON auth_sessions (expires_at);
+
+-- IDENTITY KIND (2026-08-30, WO-1282 PIN-1b — the Google Play rail).
+--
+-- ⚠ READ THE `wallet` COLUMN ABOVE AS A **SUBJECT**, NOT STRICTLY A WALLET ADDRESS.
+-- It is a LIVE PRIMARY KEY REFERENCE used by _lib/wallet-auth.verifySession and by
+-- every Play endpoint (purchases/google-play-binding|verify|fulfill), so it KEEPS ITS
+-- NAME — renaming it would break the deployed functions for zero behavioural gain. What
+-- changed is what may appear in it:
+--   * a base58 Solana address  — the wallet rail (Seeker / dApp Store artifact), OR
+--   * 'play-<64 hex>'          — HMAC-SHA256(GOOGLE_IDENTITY_KEY, google_sub), derived
+--                                SERVER-SIDE in _lib/google-identity.derivePlayerId and
+--                                minted ONLY by api/auth/google-session.js.
+-- The two shapes are lexically disjoint, so a row can never be read as the wrong rail.
+--
+-- identity_kind records WHICH proof stood behind the mint — 'wallet' (ed25519 signature
+-- over a burned nonce) or 'google' (a Google-signed ID token, RS256-verified against
+-- Google's JWKS). It is AUDIT, never an authorization input: nothing reads it to decide
+-- access, so a wrong value cannot grant anything. The DEFAULT is 'wallet' because every
+-- row that predates this column was issued by api/auth/session.js, which is the wallet
+-- path and remains untouched — additive and idempotent, same pattern as player_data.trust.
+--
+-- ⛔ The wallet remains the SOLE identity on the Seeker/APK artifact (owner ruling
+--    2026-08-30). 'google' exists only for the Google Play / AAB artifact.
+ALTER TABLE auth_sessions ADD COLUMN IF NOT EXISTS identity_kind TEXT NOT NULL DEFAULT 'wallet';
 
 CREATE TABLE IF NOT EXISTS auth_nonces (
     nonce      TEXT        PRIMARY KEY,             -- random one-time challenge (base64url, 32 bytes)
@@ -1386,11 +1416,342 @@ INSERT INTO maintenance_toggles (area_id, closed, message, updated_by) VALUES
 ON CONFLICT (area_id) DO NOTHING;
 
 -- =============================================================================
+-- 19. catalog_items / catalog_collections - WO-1272 remote collection pointers.
+--
+-- Neon owns metadata and ordered pointers only. Large art/model payloads stay in
+-- immutable Addressables/R2 objects. Existing packaged canonical JSON remains the
+-- offline fallback; these rows may add compatible content without making network
+-- availability a prerequisite for the baseline game.
+-- =============================================================================
+CREATE TABLE IF NOT EXISTS catalog_items (
+    sku                     TEXT PRIMARY KEY,
+    item_kind               TEXT NOT NULL CHECK (item_kind IN
+                                ('building','pack','tower','cosmetic','decoration','offer')),
+    definition              JSONB NOT NULL DEFAULT '{}'::jsonb,
+    version                 INTEGER NOT NULL CHECK (version > 0),
+    active                  BOOLEAN NOT NULL DEFAULT FALSE,
+    min_client_version      TEXT,
+    packaged_fallback_key   TEXT,
+    fallback_sku            TEXT REFERENCES catalog_items(sku) ON DELETE RESTRICT,
+    asset_url               TEXT,
+    asset_sha256            TEXT CHECK (asset_sha256 ~ '^[0-9a-f]{64}$'),
+    asset_size_bytes        BIGINT CHECK (asset_size_bytes > 0),
+    asset_version           INTEGER CHECK (asset_version > 0),
+    expiry_behavior         TEXT NOT NULL DEFAULT 'lock'
+                                CHECK (expiry_behavior IN ('hide','lock','fallback')),
+    created_at              TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at              TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CHECK (
+        (asset_url IS NULL AND asset_sha256 IS NULL AND asset_size_bytes IS NULL AND asset_version IS NULL)
+        OR
+        (asset_url IS NOT NULL AND asset_sha256 IS NOT NULL AND asset_size_bytes IS NOT NULL AND asset_version IS NOT NULL)
+    ),
+    CHECK (fallback_sku IS NULL OR fallback_sku <> sku)
+);
+
+CREATE TABLE IF NOT EXISTS catalog_collections (
+    collection_id           TEXT PRIMARY KEY,
+    context                 TEXT NOT NULL CHECK (context IN ('build','shop','owned','showcase')),
+    title                   TEXT NOT NULL,
+    subtitle                TEXT,
+    icon_key                TEXT,
+    icon_url                TEXT,
+    icon_sha256             TEXT CHECK (icon_sha256 ~ '^[0-9a-f]{64}$'),
+    version                 INTEGER NOT NULL CHECK (version > 0),
+    active                  BOOLEAN NOT NULL DEFAULT FALSE,
+    starts_at               TIMESTAMPTZ,
+    ends_at                 TIMESTAMPTZ,
+    min_client_version      TEXT,
+    fallback_collection_id TEXT REFERENCES catalog_collections(collection_id) ON DELETE RESTRICT,
+    created_at              TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at              TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CHECK ((icon_url IS NULL AND icon_sha256 IS NULL) OR
+           (icon_url IS NOT NULL AND icon_sha256 IS NOT NULL)),
+    CHECK (ends_at IS NULL OR starts_at IS NULL OR ends_at > starts_at),
+    CHECK (fallback_collection_id IS NULL OR fallback_collection_id <> collection_id)
+);
+
+CREATE TABLE IF NOT EXISTS catalog_collection_items (
+    collection_id  TEXT NOT NULL REFERENCES catalog_collections(collection_id) ON DELETE CASCADE,
+    sku            TEXT NOT NULL REFERENCES catalog_items(sku) ON DELETE RESTRICT,
+    display_order  INTEGER NOT NULL CHECK (display_order >= 0),
+    badge          TEXT,
+    visibility_rule JSONB NOT NULL DEFAULT '{}'::jsonb,
+    PRIMARY KEY (collection_id, sku),
+    UNIQUE (collection_id, display_order)
+);
+
+CREATE INDEX IF NOT EXISTS idx_catalog_collections_active
+    ON catalog_collections (context, active, starts_at, ends_at);
+CREATE INDEX IF NOT EXISTS idx_catalog_collection_items_order
+    ON catalog_collection_items (collection_id, display_order);
+
+-- =============================================================================
+-- 20. sku_entitlements - WO-1275 non-payment reward authority.
+--
+-- This table is deliberately separate from purchase_entitlements. A reward has
+-- no chain transaction, expected amount, recipient, or settlement state, and
+-- pretending otherwise would weaken the money ledger's invariants. grant_id is
+-- the idempotency key: retrying one award returns the same entitlement rather
+-- than incrementing quantity or creating a duplicate.
+-- =============================================================================
+CREATE TABLE IF NOT EXISTS sku_entitlements (
+    entitlement_id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    wallet          TEXT NOT NULL,
+    sku             TEXT NOT NULL REFERENCES catalog_items(sku) ON DELETE RESTRICT,
+    grant_id        TEXT NOT NULL UNIQUE,
+    source_kind     TEXT NOT NULL CHECK (source_kind IN
+                        ('progression','tournament','promotion','community','operator','migration')),
+    source_ref      TEXT,
+    quantity        INTEGER NOT NULL DEFAULT 1 CHECK (quantity > 0),
+    state           TEXT NOT NULL DEFAULT 'active' CHECK (state IN ('active','revoked')),
+    granted_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    expires_at      TIMESTAMPTZ,
+    revoked_at      TIMESTAMPTZ,
+    revoke_reason   TEXT,
+    metadata        JSONB NOT NULL DEFAULT '{}'::jsonb,
+    updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CHECK (expires_at IS NULL OR expires_at > granted_at),
+    CHECK ((state = 'active' AND revoked_at IS NULL AND revoke_reason IS NULL) OR
+           (state = 'revoked' AND revoked_at IS NOT NULL AND revoke_reason IS NOT NULL))
+);
+
+CREATE INDEX IF NOT EXISTS idx_sku_entitlements_wallet_active
+    ON sku_entitlements (wallet, state, expires_at, granted_at DESC);
+CREATE INDEX IF NOT EXISTS idx_sku_entitlements_sku
+    ON sku_entitlements (sku, granted_at DESC);
+
+-- =============================================================================
+-- 21. public_town_showcases - WO-1276 explicit-opt-in, privacy-safe town visits.
+--
+-- owner_wallet is an internal authorization/join key and is never returned by a
+-- public route. Public reads use high-entropy opaque showcase_id values. Each
+-- publication writes an immutable, layout-only version; unpublish flips the
+-- directory bit without destroying history or exposing the private save blob.
+-- =============================================================================
+CREATE TABLE IF NOT EXISTS public_town_showcases (
+    owner_wallet     TEXT        PRIMARY KEY,
+    showcase_id      TEXT        NOT NULL UNIQUE,
+    public_owner_id  TEXT        NOT NULL UNIQUE,
+    current_version  BIGINT      NOT NULL DEFAULT 0 CHECK (current_version >= 0),
+    published        BOOLEAN     NOT NULL DEFAULT FALSE,
+    published_at     TIMESTAMPTZ,
+    updated_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CHECK (showcase_id ~ '^sh_[A-Za-z0-9_-]{16,93}$'),
+    CHECK (public_owner_id ~ '^po_[A-Za-z0-9_-]{16,93}$')
+);
+
+CREATE TABLE IF NOT EXISTS public_town_snapshot_versions (
+    owner_wallet           TEXT        NOT NULL,
+    showcase_id            TEXT        NOT NULL,
+    snapshot_version       BIGINT      NOT NULL CHECK (snapshot_version >= 1),
+    schema_version         INTEGER     NOT NULL CHECK (schema_version IN (1, 2)),
+    catalog_version        INTEGER     NOT NULL CHECK (catalog_version >= 1),
+    minimum_client_version TEXT        NOT NULL,
+    structures             JSONB       NOT NULL,
+    equipped_cosmetic_skus JSONB       NOT NULL DEFAULT '[]'::jsonb,
+    public_hero_lineup     JSONB       NOT NULL DEFAULT '[]'::jsonb,
+    public_army_lineup     JSONB       NOT NULL DEFAULT '[]'::jsonb,
+    selected_echoes        JSONB       NOT NULL DEFAULT '[]'::jsonb,
+    echoes_saved           INTEGER     NOT NULL DEFAULT 0,
+    banner_sku             TEXT,
+    title_sku              TEXT,
+    town_level             INTEGER     NOT NULL DEFAULT 1,
+    public_achievement_skus JSONB      NOT NULL DEFAULT '[]'::jsonb,
+    leaderboard_rank       INTEGER,
+    created_at             TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    PRIMARY KEY (owner_wallet, snapshot_version),
+    FOREIGN KEY (owner_wallet) REFERENCES public_town_showcases(owner_wallet) ON DELETE CASCADE,
+    FOREIGN KEY (showcase_id) REFERENCES public_town_showcases(showcase_id) ON DELETE CASCADE,
+    UNIQUE (showcase_id, snapshot_version),
+    CHECK (jsonb_typeof(structures) = 'array'),
+    CHECK (jsonb_array_length(structures) <= 300),
+    CHECK (jsonb_typeof(equipped_cosmetic_skus) = 'array' AND jsonb_array_length(equipped_cosmetic_skus) <= 16),
+    CHECK (jsonb_typeof(public_hero_lineup) = 'array' AND jsonb_array_length(public_hero_lineup) <= 4),
+    CHECK (jsonb_typeof(public_army_lineup) = 'array' AND jsonb_array_length(public_army_lineup) <= 12),
+    CHECK (jsonb_typeof(selected_echoes) = 'array' AND jsonb_array_length(selected_echoes) <= 4),
+    CHECK (jsonb_typeof(public_achievement_skus) = 'array' AND jsonb_array_length(public_achievement_skus) <= 32),
+    CHECK (echoes_saved BETWEEN 0 AND 1000000),
+    CHECK (banner_sku IS NULL OR banner_sku ~ '^[a-z0-9][a-z0-9_-]{0,63}$'),
+    CHECK (title_sku IS NULL OR title_sku ~ '^[a-z0-9][a-z0-9_-]{0,63}$'),
+    CHECK (town_level BETWEEN 1 AND 1000),
+    CHECK (leaderboard_rank IS NULL OR leaderboard_rank BETWEEN 1 AND 1000000)
+);
+
+CREATE INDEX IF NOT EXISTS idx_public_town_showcases_directory
+    ON public_town_showcases (published, updated_at DESC)
+    WHERE published = TRUE;
+
+-- =============================================================================
+-- 22. showcase contests - WO-1277 default-off community voting and cosmetics.
+--
+-- No contest, candidate, tier, or vote is seeded here. Runtime routes additionally
+-- require COMMUNITY_SHOWCASE_VOTING_ENABLED=true. Candidates bind to one immutable
+-- published snapshot version; one wallet gets one immutable vote per contest.
+-- Reward tiers point only at server-authored catalog SKUs and finalization grants
+-- idempotent non-payment sku_entitlements.
+-- =============================================================================
+CREATE TABLE IF NOT EXISTS showcase_contests (
+    contest_id      TEXT PRIMARY KEY CHECK (contest_id ~ '^[a-z0-9][a-z0-9_-]{2,63}$'),
+    title           TEXT NOT NULL,
+    starts_at       TIMESTAMPTZ NOT NULL,
+    voting_ends_at  TIMESTAMPTZ NOT NULL,
+    finalized_at    TIMESTAMPTZ,
+    finalized_by    TEXT,
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CHECK (voting_ends_at > starts_at),
+    CHECK ((finalized_at IS NULL AND finalized_by IS NULL) OR
+           (finalized_at IS NOT NULL AND finalized_by IS NOT NULL))
+);
+
+CREATE TABLE IF NOT EXISTS showcase_contest_candidates (
+    contest_id      TEXT NOT NULL REFERENCES showcase_contests(contest_id) ON DELETE RESTRICT,
+    showcase_id     TEXT NOT NULL REFERENCES public_town_showcases(showcase_id) ON DELETE RESTRICT,
+    snapshot_version BIGINT NOT NULL CHECK (snapshot_version >= 1),
+    eligible        BOOLEAN NOT NULL DEFAULT FALSE,
+    entered_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    PRIMARY KEY (contest_id, showcase_id),
+    FOREIGN KEY (showcase_id, snapshot_version)
+        REFERENCES public_town_snapshot_versions(showcase_id, snapshot_version) ON DELETE RESTRICT
+);
+
+CREATE TABLE IF NOT EXISTS showcase_contest_votes (
+    contest_id      TEXT NOT NULL,
+    voter_wallet    TEXT NOT NULL,
+    showcase_id     TEXT NOT NULL,
+    cast_at         TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    PRIMARY KEY (contest_id, voter_wallet),
+    FOREIGN KEY (contest_id, showcase_id)
+        REFERENCES showcase_contest_candidates(contest_id, showcase_id) ON DELETE RESTRICT
+);
+
+CREATE OR REPLACE FUNCTION reject_showcase_vote_mutation() RETURNS trigger AS $$
+BEGIN
+    RAISE EXCEPTION 'showcase votes are immutable';
+END;
+$$ LANGUAGE plpgsql;
+DROP TRIGGER IF EXISTS showcase_votes_immutable ON showcase_contest_votes;
+CREATE TRIGGER showcase_votes_immutable
+    BEFORE UPDATE OR DELETE ON showcase_contest_votes
+    FOR EACH ROW EXECUTE FUNCTION reject_showcase_vote_mutation();
+
+CREATE TABLE IF NOT EXISTS showcase_contest_reward_tiers (
+    contest_id      TEXT NOT NULL REFERENCES showcase_contests(contest_id) ON DELETE RESTRICT,
+    tier_id         TEXT NOT NULL CHECK (tier_id ~ '^[a-z0-9][a-z0-9_-]{1,31}$'),
+    placement_from  INTEGER NOT NULL CHECK (placement_from >= 1),
+    placement_to    INTEGER NOT NULL CHECK (placement_to >= placement_from),
+    cosmetic_sku    TEXT NOT NULL REFERENCES catalog_items(sku) ON DELETE RESTRICT,
+    duration_days   INTEGER CHECK (duration_days IS NULL OR duration_days > 0),
+    PRIMARY KEY (contest_id, tier_id),
+    UNIQUE (contest_id, placement_from),
+    UNIQUE (contest_id, placement_to)
+);
+
+CREATE INDEX IF NOT EXISTS idx_showcase_votes_count
+    ON showcase_contest_votes (contest_id, showcase_id);
+
+-- WO-1277 category-qualified, authored, auditable voting foundation. The v1
+-- tables above remain immutable history; runtime voting uses these v2 tables.
+CREATE TABLE IF NOT EXISTS showcase_contest_categories (
+    contest_id TEXT NOT NULL REFERENCES showcase_contests(contest_id) ON DELETE RESTRICT,
+    category_id TEXT NOT NULL CHECK (category_id ~ '^[a-z0-9][a-z0-9_-]{1,31}$'),
+    label TEXT NOT NULL CHECK (char_length(label) BETWEEN 1 AND 80),
+    vote_weight NUMERIC(8,4) NOT NULL DEFAULT 1 CHECK (vote_weight > 0),
+    discovery_salt TEXT NOT NULL CHECK (char_length(discovery_salt) BETWEEN 16 AND 128),
+    rules_version INTEGER NOT NULL DEFAULT 1 CHECK (rules_version > 0),
+    active BOOLEAN NOT NULL DEFAULT FALSE,
+    authored_by TEXT NOT NULL,
+    authored_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    PRIMARY KEY (contest_id, category_id)
+);
+CREATE TABLE IF NOT EXISTS showcase_contest_category_candidates (
+    contest_id TEXT NOT NULL,
+    category_id TEXT NOT NULL,
+    showcase_id TEXT NOT NULL,
+    snapshot_version BIGINT NOT NULL CHECK (snapshot_version >= 1),
+    eligible BOOLEAN NOT NULL DEFAULT FALSE,
+    eligibility_reason TEXT,
+    authored_by TEXT NOT NULL,
+    entered_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    PRIMARY KEY (contest_id, category_id, showcase_id),
+    FOREIGN KEY (contest_id, category_id) REFERENCES showcase_contest_categories(contest_id, category_id) ON DELETE RESTRICT,
+    FOREIGN KEY (showcase_id, snapshot_version) REFERENCES public_town_snapshot_versions(showcase_id, snapshot_version) ON DELETE RESTRICT
+);
+CREATE TABLE IF NOT EXISTS showcase_contest_category_votes (
+    contest_id TEXT NOT NULL,
+    category_id TEXT NOT NULL,
+    voter_wallet TEXT NOT NULL,
+    showcase_id TEXT NOT NULL,
+    cast_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    PRIMARY KEY (contest_id, category_id, voter_wallet),
+    FOREIGN KEY (contest_id, category_id, showcase_id)
+      REFERENCES showcase_contest_category_candidates(contest_id, category_id, showcase_id) ON DELETE RESTRICT
+);
+CREATE TABLE IF NOT EXISTS showcase_contest_category_reward_tiers (
+    contest_id TEXT NOT NULL,
+    category_id TEXT NOT NULL,
+    tier_id TEXT NOT NULL CHECK (tier_id ~ '^[a-z0-9][a-z0-9_-]{1,31}$'),
+    placement_from INTEGER NOT NULL CHECK (placement_from >= 1),
+    placement_to INTEGER NOT NULL CHECK (placement_to >= placement_from),
+    cosmetic_sku TEXT NOT NULL REFERENCES catalog_items(sku) ON DELETE RESTRICT,
+    duration_days INTEGER CHECK (duration_days IS NULL OR duration_days > 0),
+    authored_by TEXT NOT NULL,
+    authored_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    PRIMARY KEY (contest_id, category_id, tier_id),
+    FOREIGN KEY (contest_id, category_id) REFERENCES showcase_contest_categories(contest_id, category_id) ON DELETE RESTRICT,
+    UNIQUE (contest_id, category_id, placement_from), UNIQUE (contest_id, category_id, placement_to)
+);
+CREATE TABLE IF NOT EXISTS showcase_contest_result_runs (
+    result_id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    contest_id TEXT NOT NULL,
+    category_id TEXT NOT NULL,
+    rules_version INTEGER NOT NULL CHECK (rules_version > 0),
+    finalized_by TEXT NOT NULL,
+    finalized_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE (contest_id, category_id),
+    FOREIGN KEY (contest_id, category_id) REFERENCES showcase_contest_categories(contest_id, category_id) ON DELETE RESTRICT
+);
+CREATE TABLE IF NOT EXISTS showcase_contest_result_rows (
+    result_id BIGINT NOT NULL REFERENCES showcase_contest_result_runs(result_id) ON DELETE RESTRICT,
+    showcase_id TEXT NOT NULL REFERENCES public_town_showcases(showcase_id) ON DELETE RESTRICT,
+    placement INTEGER NOT NULL CHECK (placement >= 1),
+    vote_count BIGINT NOT NULL CHECK (vote_count >= 0),
+    weighted_score NUMERIC(20,4) NOT NULL CHECK (weighted_score >= 0),
+    PRIMARY KEY (result_id, showcase_id), UNIQUE (result_id, placement)
+);
+CREATE TABLE IF NOT EXISTS showcase_contest_result_reversals (
+    result_id BIGINT PRIMARY KEY REFERENCES showcase_contest_result_runs(result_id) ON DELETE RESTRICT,
+    reversed_by TEXT NOT NULL,
+    reason TEXT NOT NULL CHECK (char_length(reason) BETWEEN 3 AND 500),
+    reversed_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE OR REPLACE FUNCTION reject_showcase_v2_audit_mutation() RETURNS trigger AS $$
+BEGIN RAISE EXCEPTION 'showcase voting audit rows are immutable'; END;
+$$ LANGUAGE plpgsql;
+DROP TRIGGER IF EXISTS showcase_category_votes_immutable ON showcase_contest_category_votes;
+CREATE TRIGGER showcase_category_votes_immutable BEFORE UPDATE OR DELETE ON showcase_contest_category_votes
+    FOR EACH ROW EXECUTE FUNCTION reject_showcase_v2_audit_mutation();
+DROP TRIGGER IF EXISTS showcase_category_candidates_immutable ON showcase_contest_category_candidates;
+CREATE TRIGGER showcase_category_candidates_immutable BEFORE UPDATE OR DELETE ON showcase_contest_category_candidates
+    FOR EACH ROW EXECUTE FUNCTION reject_showcase_v2_audit_mutation();
+DROP TRIGGER IF EXISTS showcase_categories_immutable ON showcase_contest_categories;
+CREATE TRIGGER showcase_categories_immutable BEFORE UPDATE OR DELETE ON showcase_contest_categories
+    FOR EACH ROW EXECUTE FUNCTION reject_showcase_v2_audit_mutation();
+DROP TRIGGER IF EXISTS showcase_category_tiers_immutable ON showcase_contest_category_reward_tiers;
+CREATE TRIGGER showcase_category_tiers_immutable BEFORE UPDATE OR DELETE ON showcase_contest_category_reward_tiers
+    FOR EACH ROW EXECUTE FUNCTION reject_showcase_v2_audit_mutation();
+DROP TRIGGER IF EXISTS showcase_result_runs_immutable ON showcase_contest_result_runs;
+CREATE TRIGGER showcase_result_runs_immutable BEFORE UPDATE OR DELETE ON showcase_contest_result_runs
+    FOR EACH ROW EXECUTE FUNCTION reject_showcase_v2_audit_mutation();
+DROP TRIGGER IF EXISTS showcase_result_rows_immutable ON showcase_contest_result_rows;
+CREATE TRIGGER showcase_result_rows_immutable BEFORE UPDATE OR DELETE ON showcase_contest_result_rows
+    FOR EACH ROW EXECUTE FUNCTION reject_showcase_v2_audit_mutation();
+DROP TRIGGER IF EXISTS showcase_result_reversals_immutable ON showcase_contest_result_reversals;
+CREATE TRIGGER showcase_result_reversals_immutable BEFORE UPDATE OR DELETE ON showcase_contest_result_reversals
+    FOR EACH ROW EXECUTE FUNCTION reject_showcase_v2_audit_mutation();
+CREATE INDEX IF NOT EXISTS idx_showcase_category_votes_count
+    ON showcase_contest_category_votes (contest_id, category_id, showcase_id);
+
+-- =============================================================================
 -- END OF SCHEMA
 -- =============================================================================
-
--- WO-1282 PIN-1b (2026-08-30): auth_sessions.wallet now holds a SUBJECT, not
--- necessarily a wallet address. identity_kind records which rail minted the session
--- ('wallet' | 'google' | 'guest'). AUDIT ONLY - authorization still routes on id SHAPE,
--- so a wrong value here cannot grant anything.
-ALTER TABLE auth_sessions ADD COLUMN IF NOT EXISTS identity_kind TEXT NOT NULL DEFAULT 'wallet';

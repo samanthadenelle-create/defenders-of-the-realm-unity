@@ -42,10 +42,18 @@ namespace DeNelle.Editor.Regression
                 return Fail("Trade membership/order must be market,forge,armorer only", out reason);
             string browser = File.ReadAllText("Assets/_Modules/Village/BuildMode/BuildCollectionBrowser.cs");
             string palette = File.ReadAllText("Assets/_Modules/Village/BuildMode/BuildPaletteUI.cs");
-            if (!browser.Contains("_focus.Open") || !browser.Contains("Close(); // release") || !browser.Contains("callback?.Invoke(entry)"))
-                return Fail("focused pause/Place release contract missing", out reason);
+            if (!browser.Contains("BuildCollectionBrowser : ObsidianNavigationWorkspace<BuildCollectionPage>") ||
+                !browser.Contains("public override void Close()") ||
+                !browser.Contains("base.Close();") ||
+                !browser.Contains("Done(BuildFirstUseGuide.ItemSelected") || !browser.Contains("callback?.Invoke(entry)"))
+                return Fail("shared workspace/Place release contract missing", out reason);
             if (!browser.Contains("LOCKED") || !browser.Contains("[LOCKED]") || !browser.Contains("COST: ") || !browser.Contains("vm?.Description"))
                 return Fail("readable card/state contract missing", out reason);
+            if (!browser.Contains("BuildCardSlot_") ||
+                !browser.Contains("Box(\"BuildCard_\" + itemId, slot.transform") ||
+                !browser.Contains("ButtonBox(slot.transform, buttonFace") ||
+                !browser.Contains("card.anchorMin = new Vector2(0f, .18f)"))
+                return Fail("shared collection action is no longer a footer below the card; mobile copy can be covered again", out reason);
             if (!browser.Contains("HiddenUntilFinishedArtId = \"gate_stone\"") ||
                 !browser.Contains("VisibleItemIds()"))
                 return Fail("unfinished Stone Gate card is exposed instead of presentation-gated", out reason);
@@ -72,18 +80,21 @@ namespace DeNelle.Editor.Regression
                 return Fail("collection cards can truncate/ellipsize required copy or lack a full-copy wrapping path", out reason);
             if (!palette.Contains("_collectionBrowser.Show(entry => OnEntrySelected?.Invoke(entry))"))
                 return Fail("existing Arm event seam bypassed", out reason);
-            if (!browser.Contains("PanelRouter.Open(PanelId.Manage, \"Defense\")"))
-                return Fail("Defense category no longer opens the placed-tower upgrade-first destination", out reason);
+            if (!browser.Contains("upgradeCard.name = \"DefenseUpgradeCard\"") ||
+                !browser.Contains("\"Upgrade Defenses\"") ||
+                !browser.Contains("PanelRouter.Open(PanelId.Manage, \"Defense\")"))
+                return Fail("separate Upgrade Defenses card no longer opens the placed-defense upgrade destination", out reason);
             string managePanel = File.ReadAllText("Assets/_Modules/Village/UI/Manage/ManageScreenPanel.cs");
             string manageVm = File.ReadAllText("Assets/_Modules/Village/UI/Manage/ManageScreenVM.cs");
             if (!managePanel.Contains("UPGRADABLE TOWERS - affordable first") ||
-                !managePanel.Contains("Build new defense") ||
+                !managePanel.Contains("\"Build defense\", OpenDefenseBuilder") ||
+                !managePanel.Contains("controller?.EnterBuildMode(DeNelle.Core.Catalog.BuildType.Defense)") ||
                 !managePanel.Contains("Action<string>") ||
                 !manageVm.Contains("PlacedStructureUpgradeService.MaxLevelFor") ||
                 !manageVm.Contains("UpgradeCostFor(entry, level)") ||
                 !manageVm.Contains("grid \" + placed.cellX"))
                 return Fail("Defense upgrade screen lost identity/location, authority cost, empty state, or secondary build route", out reason);
-            reason = "BUILD_COLLECTION_PLAYER_OK: 7 categories, approved icons, intentional missing-art fallback, locked entries hidden until authoritative unlock, Stone Gate presentation-gated, 80% safe-area modal, readable cards, Defense 4+1, focused pause, exact Arm seam";
+            reason = "BUILD_COLLECTION_PLAYER_OK: 7 build categories plus separate Upgrade Defenses card, approved icons, intentional missing-art fallback, locked entries hidden until authoritative unlock, Stone Gate presentation-gated, shared Obsidian workspace, readable cards, Defense 4+1, pause released before exact Arm seam";
             return true;
         }
 

@@ -446,7 +446,13 @@ namespace DeNelle.Village
         {
             if (_railRoot == null) return;
             for (int i = _railRoot.transform.childCount - 1; i >= 0; i--)
-                Destroy(_railRoot.transform.GetChild(i).gameObject);
+            {
+                // Destroy is deferred to end-of-frame. Detach first so two authoritative
+                // Changed events in one frame cannot leave duplicate live raycast targets.
+                var child = _railRoot.transform.GetChild(i);
+                child.SetParent(null, false);
+                Destroy(child.gameObject);
+            }
             BuildRail(_railRoot.transform);
         }
 

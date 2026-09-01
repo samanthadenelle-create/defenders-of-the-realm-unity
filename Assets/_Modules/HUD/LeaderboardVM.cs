@@ -15,7 +15,9 @@
 
 using System;
 using System.Collections.Generic;
+using Cysharp.Threading.Tasks;
 using DeNelle.Core.Services;
+using DeNelle.Core.Social;
 using DeNelle.Core.UI.Mvvm;
 
 namespace DeNelle.HUD
@@ -38,6 +40,12 @@ namespace DeNelle.HUD
             string SourceLabel { get; }                                    // LeaderboardService.SourceLabel
         }
 
+        /// <summary>Read-only public-town directory seam, separate from score authority.</summary>
+        public interface IShowcaseSource
+        {
+            void FetchTopTen(Action<IReadOnlyList<TopTownVisitEntry>> onResult);
+        }
+
         /// <summary>One projected leaderboard row (all strings ready to render, no LeaderboardEntry leak).</summary>
         public readonly struct Row
         {
@@ -46,25 +54,32 @@ namespace DeNelle.HUD
             public readonly string Score;
             public readonly bool IsLocal;
             public readonly int Index;     // zebra striping
-            public Row(string rank, string name, string score, bool isLocal, int index)
-            { Rank = rank; Name = name; Score = score; IsLocal = isLocal; Index = index; }
+            public readonly string ShowcaseId;
+            public bool CanVisit => TownShowcaseIds.IsShowcaseId(ShowcaseId);
+            public Row(string rank, string name, string score, bool isLocal, int index, string showcaseId = null)
+            { Rank = rank; Name = name; Score = score; IsLocal = isLocal; Index = index; ShowcaseId = showcaseId; }
         }
 
         private const int FetchLimit = 20;
 
         private readonly ISource _source;
+        private readonly IShowcaseSource _showcaseSource;
         private readonly Action _onClose;
         private readonly Action _changedHandler;
         private bool _disposed;
 
         private readonly List<Row> _rows = new List<Row>();
+        private readonly Dictionary<int, TopTownVisitEntry> _visitsByRank =
+            new Dictionary<int, TopTownVisitEntry>();
+        private int _refreshGeneration;
 
         public static LeaderboardVM CreateDefault(Action onClose)
-            => new LeaderboardVM(new ServiceSource(), onClose);
+            => new LeaderboardVM(new ServiceSource(), onClose, new ShowcaseSource());
 
-        public LeaderboardVM(ISource source, Action onClose)
+        public LeaderboardVM(ISource source, Action onClose, IShowcaseSource showcaseSource = null)
         {
             _source = source;
+            _showcaseSource = showcaseSource;
             _onClose = onClose;
             if (_source != null)
             {
@@ -104,6 +119,10 @@ namespace DeNelle.HUD
         /// <summary>Projected ranked rows (a single "No entries yet." row when empty). Never null.</summary>
         public IReadOnlyList<Row> Rows => _rows;
 
+        /// <summary>Compatible, explicitly-published Top-10 towns for next/previous navigation.</summary>
+        public IReadOnlyList<TopTownVisitEntry> VisitEntries { get; private set; } =
+            Array.Empty<TopTownVisitEntry>();
+
         // ── Commands ────────────────────────────────────────────────────────────
 
         /// <summary>Switch the ranked metric + re-fetch. No-op if already active.</summary>
@@ -116,6 +135,7 @@ namespace DeNelle.HUD
         /// <summary>Re-pull profile + footer + the ranked rows for the active metric.</summary>
         public void Refresh()
         {
+            int generation = ++_refreshGeneration;
             if (_source == null) { _rows.Clear(); Raise(); return; }
 
             RebuildProfile(_source.GetLocalProfile());
@@ -124,8 +144,41 @@ namespace DeNelle.HUD
                 ? "Source: " + _source.SourceLabel + ". Scores are local; ranks shown are placeholder rivals until the online ladder is connected."
                 : "Source: " + _source.SourceLabel + ".";
 
+            // Clear the previous board's visit join BEFORE either async source can complete.
+            // In particular, a synchronous score stub must never briefly inherit Best-Wave
+            // showcase ids after the user switches to Crystals/Arena.
+            _visitsByRank.Clear();
+            VisitEntries = Array.Empty<TopTownVisitEntry>();
+
             // Owns the async fetch: the stub completes synchronously, a live source later.
-            _source.FetchTopAsync(Metric, FetchLimit, RebuildRows);
+            _source.FetchTopAsync(Metric, FetchLimit, rows =>
+            {
+                if (generation != _refreshGeneration) return;
+                RebuildRows(rows);
+            });
+            // Public town visits are deliberately attached only to the all-time Best Wave Top 10.
+            // Offline placeholder rivals and non-wave boards must never look publishable.
+            if (Metric == LeaderboardMetric.BestWave && !_source.IsLocalStub && _showcaseSource != null)
+            {
+                _showcaseSource.FetchTopTen(entries =>
+                {
+                    if (generation != _refreshGeneration || Metric != LeaderboardMetric.BestWave) return;
+                    var safe = new List<TopTownVisitEntry>();
+                    if (entries != null)
+                    {
+                        for (int i = 0; i < entries.Count && safe.Count < 10; i++)
+                        {
+                            var entry = entries[i];
+                            if (entry == null || entry.Rank < 1 || entry.Rank > 10) continue;
+                            safe.Add(entry);
+                            if (entry.CanVisit) _visitsByRank[entry.Rank] = entry;
+                        }
+                    }
+                    VisitEntries = safe;
+                    ApplyVisitAffordances();
+                    Raise();
+                });
+            }
         }
 
         // ── Projection (moved verbatim from the View) ───────────────────────────
@@ -157,9 +210,21 @@ namespace DeNelle.HUD
             for (int i = 0; i < rows.Count; i++)
             {
                 var e = rows[i];
-                _rows.Add(new Row(e.Rank.ToString(), e.Name ?? "?", e.Score.ToString(), e.IsLocalPlayer, i));
+                string showcaseId = _visitsByRank.TryGetValue(e.Rank, out var visit) ? visit.ShowcaseId : null;
+                _rows.Add(new Row(e.Rank.ToString(), e.Name ?? "?", e.Score.ToString(), e.IsLocalPlayer, i, showcaseId));
             }
             Raise();
+        }
+
+        private void ApplyVisitAffordances()
+        {
+            for (int i = 0; i < _rows.Count; i++)
+            {
+                var row = _rows[i];
+                if (!int.TryParse(row.Rank, out int rank)) continue;
+                string showcaseId = _visitsByRank.TryGetValue(rank, out var visit) ? visit.ShowcaseId : null;
+                _rows[i] = new Row(row.Rank, row.Name, row.Score, row.IsLocal, row.Index, showcaseId);
+            }
         }
 
         private void Raise() { if (!_disposed) Changed?.Invoke(); }
@@ -186,6 +251,18 @@ namespace DeNelle.HUD
 
             public bool IsLocalStub => LeaderboardService.Instance == null || LeaderboardService.Instance.IsLocalStub;
             public string SourceLabel => LeaderboardService.Instance != null ? LeaderboardService.Instance.SourceLabel : "Local (offline)";
+        }
+
+        private sealed class ShowcaseSource : IShowcaseSource
+        {
+            private readonly TownShowcaseClient _client = new TownShowcaseClient();
+            public void FetchTopTen(Action<IReadOnlyList<TopTownVisitEntry>> onResult) => Fetch(onResult).Forget();
+
+            private async Cysharp.Threading.Tasks.UniTaskVoid Fetch(Action<IReadOnlyList<TopTownVisitEntry>> onResult)
+            {
+                var rows = await _client.FetchTopTenAsync();
+                onResult?.Invoke(rows ?? Array.Empty<TopTownVisitEntry>());
+            }
         }
     }
 }

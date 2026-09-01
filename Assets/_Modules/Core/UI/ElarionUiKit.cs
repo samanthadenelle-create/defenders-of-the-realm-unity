@@ -783,6 +783,7 @@ namespace DeNelle.Core.UI
                 // measured close zone (Stats_Panel's top-right notch etc.).
                 if (onClose != null)
                     chrome.close = ObsidianCloseButton(chrome.content.transform, onClose, z.close);
+                MedievalUiSkin.ApplyShell(chrome);
                 return chrome;
             }
 
@@ -856,6 +857,7 @@ namespace DeNelle.Core.UI
                 if (chrome.layout.footer != null) chrome.layout.footer.SetSiblingIndex(2);
             }
 
+            MedievalUiSkin.ApplyShell(chrome);
             return chrome;
         }
 
@@ -2278,8 +2280,13 @@ namespace DeNelle.Core.UI
             rr.anchorMin = Vector2.zero; rr.anchorMax = Vector2.one;
             rr.offsetMin = Vector2.zero; rr.offsetMax = Vector2.zero;
             var ring = ringGo.GetComponent<Image>();
-            ring.sprite = RingSprite;
-            ring.color = active ? ElarionUi.Gilt : new Color(ElarionUi.Gold.r, ElarionUi.Gold.g, ElarionUi.Gold.b, 0.85f);
+            ring.sprite = CanonicalMedallionFrameSprite != null
+                ? CanonicalMedallionFrameSprite : RingSprite;
+            ring.type = Image.Type.Simple;
+            ring.preserveAspect = true;
+            // Preserve the authored black-iron/gold pixels. Active state is expressed by the
+            // surrounding control, never by recolouring this shared identity frame.
+            ring.color = Color.white;
             ring.raycastTarget = false;
             ringGo.transform.SetAsLastSibling();
 
@@ -2704,6 +2711,23 @@ namespace DeNelle.Core.UI
         private static bool _circleTried;
         private static Sprite _ring;
         private static bool _ringTried;
+        private static Sprite _canonicalMedallionFrame;
+        private static bool _canonicalMedallionFrameTried;
+
+        /// <summary>The approved four-point black-iron/gold frame for generic round content.</summary>
+        public static Sprite CanonicalMedallionFrameSprite
+        {
+            get
+            {
+                if (!_canonicalMedallionFrameTried)
+                {
+                    _canonicalMedallionFrameTried = true;
+                    _canonicalMedallionFrame = Resources.Load<Sprite>(
+                        "UI/ElarionMedieval/frames/circular-bezel-four-point");
+                }
+                return _canonicalMedallionFrame;
+            }
+        }
 
         /// <summary>Solid white AA disc for a portrait fill (null if the build failed under WebGL).</summary>
         public static Sprite CircleSprite
@@ -3203,9 +3227,18 @@ namespace DeNelle.Core.UI
                 rimRt.sizeDelta = new Vector2(Radius * 2f, Radius * 2f);
                 rimRt.anchoredPosition = Vector2.zero;
                 var rimImg = rim.GetComponent<Image>();
-                if (disc != null) { rimImg.sprite = disc; rimImg.type = Image.Type.Simple; }
+                var medievalBezel = Resources.Load<Sprite>("UI/ElarionMedieval/frames/circular-bezel-four-point");
+                if (medievalBezel != null)
+                {
+                    rimImg.sprite = medievalBezel;
+                    rimImg.type = Image.Type.Simple;
+                    rimImg.preserveAspect = true;
+                    rimImg.color = new Color(1f, 1f, 1f, 0.78f);
+                }
+                else if (disc != null) { rimImg.sprite = disc; rimImg.type = Image.Type.Simple; }
                 else ApplyRounded(rimImg);
-                rimImg.color = new Color(C611GoldDim.r, C611GoldDim.g, C611GoldDim.b, 0.45f);
+                if (medievalBezel == null)
+                    rimImg.color = new Color(C611GoldDim.r, C611GoldDim.g, C611GoldDim.b, 0.45f);
                 rimImg.raycastTarget = false;
 
                 // BASE FILL — the dark translucent well the knob rides in.
@@ -3646,10 +3679,107 @@ namespace DeNelle.Core.UI
                     rimRt.anchorMin = Vector2.zero; rimRt.anchorMax = Vector2.one;
                     rimRt.offsetMin = Vector2.zero; rimRt.offsetMax = Vector2.zero;
                     var rimImg = rim.GetComponent<Image>();
-                    if (RingSprite != null) { rimImg.sprite = RingSprite; rimImg.type = Image.Type.Simple; rimImg.color = C611GoldDim; }
+                    var fallbackFrame = CanonicalMedallionFrameSprite != null
+                        ? CanonicalMedallionFrameSprite : RingSprite;
+                    if (fallbackFrame != null)
+                    {
+                        rimImg.sprite = fallbackFrame;
+                        rimImg.type = Image.Type.Simple;
+                        rimImg.preserveAspect = true;
+                        rimImg.color = CanonicalMedallionFrameSprite != null ? Color.white : C611GoldDim;
+                    }
                     else rimImg.enabled = false;
                     rimImg.raycastTarget = false;
                 }
+
+                // The slot root is the full touch/caption cell, not the round artwork. Keeping
+                // the medallion on that complete rect made the lower verb cross the bezel. Move
+                // the visual face into a dedicated upper square-safe band and leave the bottom
+                // fifth exclusively for the caption. The root Image stays transparent as the
+                // Button targetGraphic, so interaction geometry does not change.
+                var faceGo = new GameObject("MedallionFace", typeof(Image));
+                faceGo.transform.SetParent(slot.root.transform, false);
+                faceGo.transform.SetAsFirstSibling();
+                var faceRt = (RectTransform)faceGo.transform;
+                faceRt.anchorMin = new Vector2(0f, 0.20f);
+                faceRt.anchorMax = Vector2.one;
+                faceRt.offsetMin = Vector2.zero;
+                faceRt.offsetMax = Vector2.zero;
+                var face = faceGo.GetComponent<Image>();
+                face.sprite = slot.frame.sprite;
+                face.type = Image.Type.Simple;
+                face.preserveAspect = true;
+                face.color = slot.frame.color;
+                face.raycastTarget = false;
+                var transparent = slot.frame.color;
+                transparent.a = 0f;
+                slot.frame.color = transparent;
+            }
+
+            // A round FRAME is not enough: several authoritative navigation icons are authored
+            // as square/tall card art.  preserveAspect merely letterboxes those rectangles inside
+            // the medallion (the BUILD/HERO defect captured on Seeker).  Put the live icon Image
+            // under a circular stencil so every caller may keep using SetIcon while the artwork is
+            // aspect-filled and physically incapable of painting outside the round socket.
+            if (slot.icon != null && slot.icon.transform.parent != null &&
+                slot.icon.transform.parent.name != "RoundIconMask")
+            {
+                var icon = slot.icon;
+                var oldParent = icon.transform.parent;
+                int oldIndex = icon.transform.GetSiblingIndex();
+                var maskGo = new GameObject("RoundIconMask", typeof(RectTransform), typeof(Image), typeof(Mask));
+                maskGo.transform.SetParent(oldParent, false);
+                maskGo.transform.SetSiblingIndex(oldIndex);
+                var mrt = (RectTransform)maskGo.transform;
+                var irt = icon.rectTransform;
+                mrt.anchorMin = irt.anchorMin;
+                mrt.anchorMax = irt.anchorMax;
+                mrt.offsetMin = irt.offsetMin;
+                mrt.offsetMax = irt.offsetMax;
+                mrt.anchorMin = new Vector2(mrt.anchorMin.x, Mathf.Max(0.25f, mrt.anchorMin.y));
+                mrt.anchorMax = new Vector2(mrt.anchorMax.x, Mathf.Max(0.94f, mrt.anchorMax.y));
+                // The owning action slot may be a wide quarter of a landscape dock. Keep that
+                // wide touch allocation, but fit the visual stencil to a true 1:1 medallion.
+                // Putting this constraint on the slot root collapses sibling anchors; putting it
+                // here affects only the artwork and leaves all four navigation actions visible.
+                var maskAspect = maskGo.AddComponent<AspectRatioFitter>();
+                maskAspect.aspectMode = AspectRatioFitter.AspectMode.FitInParent;
+                maskAspect.aspectRatio = 1f;
+                var maskImage = maskGo.GetComponent<Image>();
+                maskImage.sprite = CircleSprite != null ? CircleSprite : SolidSprite;
+                maskImage.type = Image.Type.Simple;
+                maskImage.color = Color.white;
+                maskImage.raycastTarget = false;
+                maskGo.GetComponent<Mask>().showMaskGraphic = false;
+
+                icon.transform.SetParent(maskGo.transform, false);
+                irt.anchorMin = Vector2.zero;
+                irt.anchorMax = Vector2.one;
+                irt.offsetMin = Vector2.zero;
+                irt.offsetMax = Vector2.zero;
+                icon.preserveAspect = false; // square kit art fills the stencil; the stencil owns shape
+                icon.raycastTarget = false;
+            }
+            // The radial combat face supplies the dark socket, but it is not the approved public
+            // chrome: at HUD scale it reads as a plain brown disc beside the black-iron/gold UI.
+            // Overlay the canonical transparent four-point bezel on every round action so HUD,
+            // Skills and item medallions share one visual grammar without flattening live icons.
+            if (slot.root.transform.Find("CanonicalBezel") == null &&
+                CanonicalMedallionFrameSprite != null)
+            {
+                var bezelGo = new GameObject("CanonicalBezel", typeof(Image));
+                bezelGo.transform.SetParent(slot.root.transform, false);
+                var bezelRt = (RectTransform)bezelGo.transform;
+                bezelRt.anchorMin = new Vector2(0f, 0.20f);
+                bezelRt.anchorMax = Vector2.one;
+                bezelRt.offsetMin = Vector2.zero;
+                bezelRt.offsetMax = Vector2.zero;
+                var bezel = bezelGo.GetComponent<Image>();
+                bezel.sprite = CanonicalMedallionFrameSprite;
+                bezel.type = Image.Type.Simple;
+                bezel.preserveAspect = true;
+                bezel.color = Color.white;
+                bezel.raycastTarget = false;
             }
             if (!string.IsNullOrEmpty(keyBadge))
             {
@@ -3769,8 +3899,20 @@ namespace DeNelle.Core.UI
             rt.anchorMin = anchorMin; rt.anchorMax = anchorMax;
             rt.offsetMin = Vector2.zero; rt.offsetMax = Vector2.zero;
             var img = go.GetComponent<Image>();
+            // Public docks use the authored medieval surface. The generated blue-grey rounded
+            // tray was structurally sound but visibly belonged to the retired debug HUD family.
+            var medievalPanel = Resources.Load<Sprite>("UI/ElarionMedieval/buttons/button-normal-empty");
             var grad = CombatHousingSprite;
-            if (grad != null)
+            if (medievalPanel != null)
+            {
+                img.sprite = medievalPanel;
+                // Its 112px importer borders exceed this compact HUD band and collapse a
+                // nine-slice. Scale the complete authored plate so the housing stays visible.
+                img.type = Image.Type.Simple;
+                img.fillCenter = true;
+                img.color = Color.white;
+            }
+            else if (grad != null)
             {
                 img.sprite = grad;
                 img.type = Image.Type.Sliced;
@@ -3782,8 +3924,14 @@ namespace DeNelle.Core.UI
                 ApplyRounded(img);
             }
             img.raycastTarget = false;
-            AddRoundedRing(go.transform, "Edge", 0f, C611Edge, 1f);                                    // 1px edge border
-            AddRoundedRing(go.transform, "GoldRing", 3f, new Color(C611Gold.r, C611Gold.g, C611Gold.b, 0.28f), 3f); // inner gold ring
+            // Authored art owns its borders. The procedural fallback keeps the old rings so a
+            // missing resource can never leave an unframed action surface.
+            if (medievalPanel == null)
+            {
+                AddRoundedRing(go.transform, "Edge", 0f, C611Edge, 1f);
+                AddRoundedRing(go.transform, "GoldRing", 3f,
+                    new Color(C611Gold.r, C611Gold.g, C611Gold.b, 0.28f), 3f);
+            }
             go.transform.SetAsFirstSibling();
             return go;
         }

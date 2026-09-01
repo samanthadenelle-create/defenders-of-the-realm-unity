@@ -61,6 +61,14 @@ namespace DeNelle.Village.Hero
         private bool _slotListScrolls;          // budget outcome — traced, never guessed
         private GameObject _targetBar;
 
+        // Approved 2026 medieval Equipment workspace. These are presentation hosts only; all
+        // selection, item, slot, and action state remains in EquipVM.
+        private RectTransform _approvedPlayerStrip;
+        private RectTransform _approvedEquippedHost;
+        private RectTransform _approvedInventoryHost;
+        private RectTransform _approvedDetailHost;
+        private static readonly bool ApprovedWorkspaceEnabled = true;
+
         // Change-drawer (tap a slot → browse compatible items for it).
         private GameObject _drawerHost;
         private string _drawerSlotKey;          // the slot the drawer is editing (null = closed)
@@ -172,7 +180,7 @@ namespace DeNelle.Village.Hero
             // Header shows the HERO'S NAME, not the generic "CHARACTER" (owner ask 2026-06-29:
             // "upgrade from Character in the ragdoll to characters name"). Resolved from the active
             // hero's class -> canon full name (Grom Ironhand, etc.), matching the inventory card.
-            string headerName = HeroFullName(ResolveActiveHeroJob());
+            string headerName = "HERO - EQUIPMENT";
             // WO-1015 E3/E7: the panel was 0.12..0.88 x 0.06..0.95 — a narrow column inside which the
             // kit's FIXED-PIXEL canonical Close (360x132) looked enormous relative to the content it
             // closes. Widened to 0.06..0.94 x 0.05..0.96: the Close keeps its canonical size (never
@@ -182,6 +190,8 @@ namespace DeNelle.Village.Hero
                 new Vector2(0.06f, 0.05f), new Vector2(0.94f, 0.96f),
                 () => _vm?.Close(), headerX0: 0.10f, headerX1: 0.90f,
                 frameName: RpgUiCatalog.FrameCharacter, medallionIcon: "armor");
+            MedievalUiSkin.ApplyShell(chrome);
+            BuildApprovedHeaderActions(chrome);
             var panel = chrome.content;
 
             // =================================================================
@@ -244,6 +254,17 @@ namespace DeNelle.Village.Hero
                                 new Vector2(0.055f, bodyFloor), new Vector2(0.945f, BodyTopFrac));
             }
             _panelTransform = well;
+
+            if (ApprovedWorkspaceEnabled)
+            {
+                BuildApprovedWorkspace(well);
+                Bind(_vm);
+                if (chrome.root != null)
+                    ElarionUiKit.AttachPanelOpenFx(_ui, chrome.root.GetComponent<RectTransform>());
+                if (!PanelManager.NotifyOpened(_panelHandle)) return;
+                Debug.Log("[EquipmentPanel] Opened approved three-column Equipment workspace bound to EquipVM.");
+                return;
+            }
 
             float wellPx = Mathf.Max(0f, (BodyTopFrac - bodyFloor) * panelPx);
             float wellWpx = Mathf.Max(1f, panelWpx * Mathf.Max(0.05f, well.anchorMax.x - well.anchorMin.x));
@@ -540,10 +561,417 @@ namespace DeNelle.Village.Hero
         private void Render()
         {
             if (_vm == null) return;
+            if (_approvedEquippedHost != null)
+            {
+                RenderApprovedWorkspace();
+                return;
+            }
             HighlightTargets();
             RebuildSlots();
             RenderPreview();
             if (_drawerSlotKey != null) RebuildList();   // keep the open drawer fresh
+        }
+
+        // =====================================================================
+        // Approved Hero -> Equipment composition: player strip, equipped slots,
+        // category-filtered inventory, and one selected-item detail/action pane.
+        // =====================================================================
+        private void BuildApprovedWorkspace(RectTransform well)
+        {
+            if (well == null) return;
+            _approvedPlayerStrip = ApprovedPanel(well, "PlayerStrip",
+                new Vector2(0.01f, 0.79f), new Vector2(0.99f, 0.99f));
+            _approvedEquippedHost = ApprovedPanel(well, "EquippedColumn",
+                new Vector2(0.01f, 0.01f), new Vector2(0.275f, 0.77f));
+            _approvedInventoryHost = ApprovedPanel(well, "InventoryColumn",
+                new Vector2(0.29f, 0.01f), new Vector2(0.675f, 0.77f));
+            _approvedDetailHost = ApprovedPanel(well, "DetailColumn",
+                new Vector2(0.69f, 0.01f), new Vector2(0.99f, 0.77f));
+        }
+
+        private static RectTransform ApprovedPanel(Transform parent, string name,
+                                                    Vector2 anchorMin, Vector2 anchorMax)
+        {
+            var go = new GameObject(name, typeof(Image));
+            go.transform.SetParent(parent, false);
+            var rt = (RectTransform)go.transform;
+            rt.anchorMin = anchorMin; rt.anchorMax = anchorMax;
+            rt.offsetMin = Vector2.zero; rt.offsetMax = Vector2.zero;
+            var image = go.GetComponent<Image>();
+            // content-panel.png is a horizontal source sheet with a large transparent tail.
+            // Stretching it into these tall columns made the visible frame end halfway down,
+            // leaving equipment/detail rows apparently floating outside their panel. These
+            // columns need scalable geometry: one continuous black-iron body and four restrained
+            // antique-gold structural rules.
+            image.sprite = null;
+            image.color = new Color(0.018f, 0.018f, 0.021f, 0.985f);
+            image.raycastTarget = false;
+            void Edge(string edgeName, Vector2 min, Vector2 max)
+            {
+                var edge = ElarionUiKit.AddImage(go.transform, edgeName, min, max,
+                    new Color(ElarionUi.Gold.r, ElarionUi.Gold.g, ElarionUi.Gold.b, 0.78f), false);
+                edge.GetComponent<Image>().raycastTarget = false;
+            }
+            Edge("GoldTop",    new Vector2(.012f, .992f), new Vector2(.988f, 1f));
+            Edge("GoldBottom", new Vector2(.012f, 0f),    new Vector2(.988f, .008f));
+            Edge("GoldLeft",   new Vector2(0f, .008f),    new Vector2(.008f, .992f));
+            Edge("GoldRight",  new Vector2(.992f, .008f), Vector2.one);
+            return rt;
+        }
+
+        private void RenderApprovedWorkspace()
+        {
+            ClearApprovedChildren(_approvedPlayerStrip);
+            ClearApprovedChildren(_approvedEquippedHost);
+            ClearApprovedChildren(_approvedInventoryHost);
+            ClearApprovedChildren(_approvedDetailHost);
+            RenderApprovedPlayerStrip();
+            RenderApprovedEquipped();
+            RenderApprovedInventory();
+            RenderApprovedDetail();
+        }
+
+        private static void ClearApprovedChildren(RectTransform host)
+        {
+            if (host == null) return;
+            for (int i = host.childCount - 1; i >= 0; i--)
+            {
+                var child = host.GetChild(i);
+                if (child == null) continue;
+                if (Application.isPlaying) Destroy(child.gameObject);
+                else DestroyImmediate(child.gameObject);
+            }
+        }
+
+        private void RenderApprovedPlayerStrip()
+        {
+            if (_approvedPlayerStrip == null || _vm == null) return;
+            var portraitFrame = ElarionUiKit.AddImage(_approvedPlayerStrip, "PortraitMedallion",
+                new Vector2(0.012f, 0.02f), new Vector2(0.145f, 0.98f), Color.white, false);
+            var frameImage = portraitFrame.GetComponent<Image>();
+            var frame = Resources.Load<Sprite>("UI/ElarionMedieval/frames/circular-bezel-four-point");
+            if (frameImage != null && frame != null)
+            {
+                frameImage.sprite = frame; frameImage.type = Image.Type.Simple;
+                frameImage.preserveAspect = true;
+            }
+            var portrait = new GameObject("Portrait", typeof(RawImage));
+            portrait.transform.SetParent(portraitFrame.transform, false);
+            var portraitRt = (RectTransform)portrait.transform;
+            portraitRt.anchorMin = new Vector2(0.13f, 0.13f);
+            portraitRt.anchorMax = new Vector2(0.87f, 0.87f);
+            portraitRt.offsetMin = Vector2.zero; portraitRt.offsetMax = Vector2.zero;
+            var portraitImage = portrait.GetComponent<RawImage>();
+            portraitImage.texture = Resources.Load<Texture2D>(DeNelle.Core.HeroPortraitPaths.ResourceKey(
+                PortraitSlug(_vm.Portrait.IconName)));
+            portraitImage.color = portraitImage.texture != null ? Color.white : new Color(0f, 0f, 0f, 0f);
+            portraitImage.raycastTarget = false;
+
+            var identity = ElarionUiKit.Label(_approvedPlayerStrip, _vm.CharacterLabel.ToUpperInvariant(),
+                0.54f, 0.90f, ElarionUi.Gold, 34, TMPro.TextAlignmentOptions.Left,
+                0.155f, 0.37f, bold: true);
+            ElarionUiKit.FitSingleLine(identity, 22f, 34f);
+
+            for (int i = 0; i < Mathf.Min(2, _vm.Stats.Count); i++)
+            {
+                var stat = _vm.Stats[i];
+                float y1 = i == 0 ? 0.72f : 0.40f;
+                float y0 = y1 - 0.22f;
+                BuildApprovedStateBar(_approvedPlayerStrip, "Player" + i,
+                    new Vector2(0.37f, y0), new Vector2(0.72f, y1), stat.Bar.Fill01,
+                    stat.Bar.Label, i == 0
+                        ? new Color(.48f, .075f, .08f, 1f)
+                        : new Color(.07f, .20f, .48f, 1f));
+            }
+
+            // Equipment intentionally shows one economy only. The runtime chip remains data-bound.
+            var gold = ElarionUiKit.CurrencyChip(_approvedPlayerStrip, ElarionUiKit.CurrencyKind.Gold,
+                new Vector2(0.80f, 0.18f), new Vector2(0.98f, 0.82f), tag: "GOLD");
+            var economy = FindAnyObjectByType<EconomyService>();
+            if (gold != null)
+            {
+                gold.SetAmount(economy != null ? economy.Coins : 0, animate: false);
+                if (gold.plate != null) gold.plate.color = new Color(.025f, .024f, .023f, .98f);
+                var plateFrame = gold.root != null ? gold.root.transform.Find("PlateFrame") : null;
+                var plateFrameImage = plateFrame != null ? plateFrame.GetComponent<Image>() : null;
+                if (plateFrameImage != null)
+                    plateFrameImage.color = new Color(ElarionUi.Gold.r, ElarionUi.Gold.g,
+                        ElarionUi.Gold.b, .90f);
+            }
+        }
+
+        private static void BuildApprovedStateBar(Transform parent, string name,
+                                                   Vector2 min, Vector2 max, float fill01,
+                                                   string value, Color fillColor)
+        {
+            var track = ElarionUiKit.AddImage(parent, name + "Track", min, max,
+                new Color(.018f, .018f, .021f, .98f), false);
+            var trackRt = (RectTransform)track.transform;
+            var fill = ElarionUiKit.AddImage(track.transform, name + "Fill",
+                new Vector2(.012f, .14f), new Vector2(Mathf.Lerp(.012f, .988f,
+                    Mathf.Clamp01(fill01)), .86f), fillColor, false);
+            fill.GetComponent<Image>().raycastTarget = false;
+            void Rule(string ruleName, Vector2 a, Vector2 b)
+            {
+                ElarionUiKit.AddImage(track.transform, ruleName, a, b,
+                    new Color(ElarionUi.Gold.r, ElarionUi.Gold.g,
+                        ElarionUi.Gold.b, .82f), false);
+            }
+            Rule("Top", new Vector2(0f, .93f), Vector2.one);
+            Rule("Bottom", Vector2.zero, new Vector2(1f, .07f));
+            Rule("Left", Vector2.zero, new Vector2(.008f, 1f));
+            Rule("Right", new Vector2(.992f, 0f), Vector2.one);
+            var label = ElarionUiKit.Label(track.transform, value ?? "", .05f, .95f,
+                ElarionUi.Parchment, 20, TMPro.TextAlignmentOptions.Center,
+                .05f, .95f, bold: true);
+            ElarionUiKit.FitSingleLine(label, 15f, 20f);
+        }
+
+        private void RenderApprovedEquipped()
+        {
+            if (_approvedEquippedHost == null || _vm == null) return;
+            ApprovedHeading(_approvedEquippedHost, "EQUIPPED");
+            string[] order = { EquipVM.SlotMainhand, EquipVM.SlotOffHand, EquipVM.SlotChest,
+                               EquipVM.SlotAmulet, EquipVM.SlotRing };
+            for (int i = 0; i < order.Length; i++)
+            {
+                string key = order[i];
+                float top = 0.88f - i * 0.166f;
+                float bottom = top - 0.145f;
+                var slot = FindSlot(key);
+                bool filled = slot.HasValue && slot.Value.Content.HasValue;
+                string value = filled ? slot.Value.Content.Value.Name : "Empty";
+                var row = ApprovedPanel(_approvedEquippedHost, "Slot_" + key,
+                    new Vector2(0.035f, bottom), new Vector2(0.965f, top));
+                var button = row.gameObject.AddComponent<Button>();
+                button.targetGraphic = row.GetComponent<Image>();
+                string capturedKey = key;
+                button.onClick.AddListener(() => SelectApprovedSlot(capturedKey));
+                ElarionUiKit.StyleButtonColors(button);
+                var medallion = ElarionUiKit.AddImage(row, "SlotMedallion",
+                    new Vector2(.025f, .04f), new Vector2(.245f, .96f), Color.white, false);
+                var medallionImage = medallion.GetComponent<Image>();
+                medallionImage.sprite = Resources.Load<Sprite>(
+                    "UI/ElarionMedieval/frames/circular-bezel-four-point");
+                medallionImage.type = Image.Type.Simple;
+                medallionImage.preserveAspect = true;
+                if (filled)
+                {
+                    var art = ElarionUiKit.AddImage(medallion.transform, "ItemArt",
+                        new Vector2(.22f, .22f), new Vector2(.78f, .78f), Color.white, false)
+                        .GetComponent<Image>();
+                    art.sprite = ResolveApprovedItemArt(key, slot.Value.Content.Value);
+                    art.preserveAspect = true;
+                    if (art.sprite == null) art.color = Color.clear;
+                }
+                var caption = ElarionUiKit.Label(row, ShortSlotCaption(key),
+                    0.52f, 0.90f, ElarionUi.Gold, 21, TMPro.TextAlignmentOptions.Left,
+                    0.28f, 0.94f, bold: true);
+                ElarionUiKit.FitSingleLine(caption, 16f, 21f);
+                var equippedName = ElarionUiKit.Label(row, value,
+                    0.10f, 0.50f, filled ? ElarionUi.Parchment : ElarionUi.ParchmentDim,
+                    19, TMPro.TextAlignmentOptions.Left, 0.28f, 0.94f);
+                ElarionUiKit.FitSingleLine(equippedName, 15f, 19f);
+            }
+        }
+
+        private static string ShortSlotCaption(string key)
+        {
+            switch (key)
+            {
+                case EquipVM.SlotMainhand: return "MAIN HAND";
+                case EquipVM.SlotOffHand: return "OFF HAND";
+                case EquipVM.SlotChest: return "ARMOR";
+                case EquipVM.SlotAmulet: return "AMULET";
+                case EquipVM.SlotRing: return "RING";
+                default: return SlotCaption(key).ToUpperInvariant();
+            }
+        }
+
+        private void SelectApprovedSlot(string key)
+        {
+            SelectSlotKey(key);
+        }
+
+        private void RenderApprovedInventory()
+        {
+            if (_approvedInventoryHost == null || _vm == null) return;
+            ApprovedHeading(_approvedInventoryHost, "INVENTORY");
+            var selected = _vm.SelectedItem;
+            int count = Mathf.Min(5, _vm.CompatibleItems.Count);
+            if (count == 0)
+            {
+                ElarionUiKit.Label(_approvedInventoryHost, "No compatible items owned.",
+                    0.40f, 0.62f, ElarionUi.ParchmentDim, 26,
+                    TMPro.TextAlignmentOptions.Center, 0.08f, 0.92f);
+                return;
+            }
+            const float gap = 0.025f;
+            const float width = 0.285f;
+            for (int i = 0; i < count; i++)
+            {
+                var item = _vm.CompatibleItems[i];
+                float x0 = 0.03f + i * (width + gap);
+                float x1 = x0 + width;
+                bool isSelected = selected.HasValue && selected.Value.Id == item.Id;
+                string itemId = item.Id;
+                var card = ApprovedPanel(_approvedInventoryHost, "ItemCard_" + itemId,
+                    new Vector2(x0, 0.40f), new Vector2(x1, 0.84f));
+                var cardButton = card.gameObject.AddComponent<Button>();
+                cardButton.targetGraphic = card.GetComponent<Image>();
+                cardButton.onClick.AddListener(() => _vm.SelectItem(itemId));
+                ElarionUiKit.StyleButtonColors(cardButton);
+                var artFrame = ElarionUiKit.AddImage(card, "ItemMedallion",
+                    new Vector2(.16f, .30f), new Vector2(.84f, .96f), Color.white, false);
+                var artFrameImage = artFrame.GetComponent<Image>();
+                artFrameImage.sprite = Resources.Load<Sprite>(
+                    "UI/ElarionMedieval/frames/circular-bezel-four-point");
+                artFrameImage.type = Image.Type.Simple;
+                artFrameImage.preserveAspect = true;
+                var art = ElarionUiKit.AddImage(artFrame.transform, "ItemArt",
+                    new Vector2(.22f, .22f), new Vector2(.78f, .78f), Color.white, false)
+                    .GetComponent<Image>();
+                art.sprite = ResolveApprovedItemArt(_vm.SelectedSlotKey, item);
+                art.preserveAspect = true;
+                if (art.sprite == null) art.color = Color.clear;
+                var itemLabel = ElarionUiKit.Label(card, item.Name.ToUpperInvariant(),
+                    .12f, .30f, ElarionUi.Parchment, 21,
+                    TMPro.TextAlignmentOptions.Center, .06f, .94f, bold: true);
+                itemLabel.textWrappingMode = TMPro.TextWrappingModes.Normal;
+                ElarionUiKit.FitBlock(itemLabel, 15f, 21f);
+                ElarionUiKit.Label(card,
+                    item.Equipped ? "EQUIPPED" : isSelected ? "SELECTED" : "",
+                    .02f, .12f, isSelected ? ElarionUi.Gilt : ElarionUi.ParchmentDim,
+                    16, TMPro.TextAlignmentOptions.Center, .06f, .94f, bold: true);
+            }
+        }
+
+        private void RenderApprovedDetail()
+        {
+            if (_approvedDetailHost == null || _vm == null) return;
+            ApprovedHeading(_approvedDetailHost, "ITEM DETAILS");
+            var selected = _vm.SelectedItem;
+            if (!selected.HasValue)
+            {
+                ElarionUiKit.Label(_approvedDetailHost, "Select an item to compare.",
+                    0.44f, 0.62f, ElarionUi.ParchmentDim, 25,
+                    TMPro.TextAlignmentOptions.Center, 0.08f, 0.92f);
+                return;
+            }
+            var item = selected.Value;
+            var iconFrame = ElarionUiKit.AddImage(_approvedDetailHost, "SelectedMedallion",
+                new Vector2(0.31f, 0.66f), new Vector2(0.69f, 0.90f), Color.white, false);
+            var image = iconFrame.GetComponent<Image>();
+            var bezel = Resources.Load<Sprite>("UI/ElarionMedieval/frames/circular-bezel-four-point");
+            if (image != null && bezel != null) { image.sprite = bezel; image.type = Image.Type.Simple; image.preserveAspect = true; }
+            var icon = ElarionUiKit.AddImage(iconFrame.transform, "ItemIcon",
+                new Vector2(0.22f, 0.22f), new Vector2(0.78f, 0.78f), Color.white, false).GetComponent<Image>();
+            if (icon != null)
+            {
+                icon.sprite = ResolveApprovedItemArt(_vm.SelectedSlotKey, item);
+                icon.preserveAspect = true;
+                if (icon.sprite == null) icon.color = new Color(0f, 0f, 0f, 0f);
+            }
+            var name = ElarionUiKit.Label(_approvedDetailHost, item.Name.ToUpperInvariant(),
+                0.55f, 0.64f, ElarionUi.Gold, 26, TMPro.TextAlignmentOptions.Center,
+                0.05f, 0.95f, bold: true);
+            ElarionUiKit.FitSingleLine(name, 18f, 26f);
+            ElarionUiKit.Label(_approvedDetailHost, SlotCaption(_vm.SelectedSlotKey),
+                0.47f, 0.54f, ElarionUi.ParchmentDim, 21,
+                TMPro.TextAlignmentOptions.Center, 0.08f, 0.92f);
+            if (item.Equipped)
+            {
+                ElarionUiKit.Label(_approvedDetailHost, "EQUIPPED",
+                    0.34f, 0.43f, ElarionUi.Affordable, 23,
+                    TMPro.TextAlignmentOptions.Center, 0.08f, 0.92f, bold: true);
+            }
+            else
+            {
+                ElarionUiKit.Label(_approvedDetailHost, "COMPARE TO EQUIPPED",
+                    0.38f, 0.46f, ElarionUi.Gold, 19,
+                    TMPro.TextAlignmentOptions.Center, 0.08f, 0.92f, bold: true);
+                var lines = _vm.SelectedComparison;
+                for (int i = 0; i < Mathf.Min(3, lines.Count); i++)
+                {
+                    var line = lines[i];
+                    float top = 0.37f - i * 0.075f;
+                    float bottom = top - 0.065f;
+                    string direction = line.Delta > 0.01f ? "UP +" + Mathf.RoundToInt(line.Delta)
+                        : line.Delta < -0.01f ? "DOWN " + Mathf.RoundToInt(line.Delta) : "SAME";
+                    Color deltaColor = line.Delta > 0.01f ? ElarionUi.Affordable
+                        : line.Delta < -0.01f ? ElarionUi.Danger : ElarionUi.ParchmentDim;
+                    ElarionUiKit.Label(_approvedDetailHost, line.Label,
+                        bottom, top, ElarionUi.Parchment, 18,
+                        TMPro.TextAlignmentOptions.Left, 0.08f, 0.43f);
+                    ElarionUiKit.Label(_approvedDetailHost, line.Candidate,
+                        bottom, top, ElarionUi.Parchment, 18,
+                        TMPro.TextAlignmentOptions.Right, 0.43f, 0.66f, bold: true);
+                    ElarionUiKit.Label(_approvedDetailHost, direction,
+                        bottom, top, deltaColor, 18,
+                        TMPro.TextAlignmentOptions.Right, 0.66f, 0.92f, bold: true);
+                }
+            }
+            var action = ElarionUiKit.ButtonPack(_approvedDetailHost,
+                item.Equipped ? "REMOVE" : "EQUIP", ElarionUiKit.ButtonKind.Gold,
+                new Vector2(0.12f, 0.07f), new Vector2(0.88f, 0.21f),
+                () => _vm.ActivateSelected(), RpgUiCatalog.ButtonFrame);
+            MedievalUiSkin.ApplyButton(action, primary: true);
+        }
+
+        private Sprite ResolveApprovedItemArt(string slotKey, ItemVM item)
+        {
+            var sprite = ResolveSlotItemArt(slotKey, item);
+            if (sprite != null)
+            {
+                float aspect = sprite.rect.height > 0f
+                    ? sprite.rect.width / sprite.rect.height : 1f;
+                if (aspect >= 0.45f && aspect <= 2.2f) return sprite;
+            }
+            return RpgUiCatalog.Get(RpgUiCatalog.RoleIcons, SlotIconName(slotKey));
+        }
+
+        private static void ApprovedHeading(Transform host, string text)
+        {
+            var heading = ElarionUiKit.Label(host, text, 0.89f, 0.985f,
+                ElarionUi.Gold, 28, TMPro.TextAlignmentOptions.Center, 0.05f, 0.95f, bold: true);
+            ElarionUiKit.FitSingleLine(heading, 20f, 28f);
+        }
+
+        private static string PortraitSlug(string heroClass)
+        {
+            switch ((heroClass ?? "").ToLowerInvariant())
+            {
+                case "ranger": return "Sylas";
+                case "mage": return "Thrain";
+                case "cleric": return "Elara";
+                default: return "Grom";
+            }
+        }
+
+        private void BuildApprovedHeaderActions(ElarionUiKit.PanelChrome chrome)
+        {
+            if (chrome == null || chrome.root == null) return;
+            var back = ElarionUiKit.ButtonPack(chrome.root.transform, "BACK",
+                ElarionUiKit.ButtonKind.Quiet,
+                new Vector2(0.025f, 0.885f), new Vector2(0.15f, 0.975f),
+                Close, RpgUiCatalog.ButtonFrame);
+            MedievalUiSkin.ApplyButton(back, primary: false);
+            var backLabel = back != null ? back.GetComponentInChildren<TMPro.TMP_Text>() : null;
+            if (backLabel != null) ElarionUiKit.FitSingleLine(backLabel, 18f, 26f);
+
+            var talents = ElarionUiKit.ButtonPack(chrome.root.transform, "TALENTS",
+                ElarionUiKit.ButtonKind.Gold,
+                new Vector2(0.82f, 0.885f), new Vector2(0.975f, 0.975f),
+                OpenTalentsFromEquipment, RpgUiCatalog.ButtonFrame);
+            MedievalUiSkin.ApplyButton(talents, primary: true);
+            var talentLabel = talents != null ? talents.GetComponentInChildren<TMPro.TMP_Text>() : null;
+            if (talentLabel != null) ElarionUiKit.FitSingleLine(talentLabel, 18f, 26f);
+        }
+
+        private void OpenTalentsFromEquipment()
+        {
+            Close();
+            PanelRouter.Open(PanelId.HeroSkillTree);
         }
 
         // WO-434 Phase D — drive the live preview from vm state.

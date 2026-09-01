@@ -58,6 +58,7 @@ namespace DeNelle.Core.UI
         private RectTransform _barFill;   // the animated fill of the standard loading bar
         private TMPro.TextMeshProUGUI _messageLabel;
         private Button _retryButton;
+        private Transform _cardHost;
         private bool _connectionRequired;
         private bool _retrying;
         private float _barT;              // 0..1 sweep progress (indeterminate)
@@ -122,10 +123,12 @@ namespace DeNelle.Core.UI
             if (_messageLabel != null) _messageLabel.text = message;
             if (_retryButton == null)
             {
-                _retryButton = ElarionUiKit.Button(transform,
+                _retryButton = ElarionUiKit.ButtonPack(_cardHost != null ? _cardHost : transform,
                     string.IsNullOrWhiteSpace(retryLabel) ? "Retry" : retryLabel,
                     ElarionUiKit.ButtonKind.Gold,
-                    new Vector2(0.30f, 0.56f), new Vector2(0.70f, 0.64f), OnRetryConnection);
+                    new Vector2(0.22f, 0.20f), new Vector2(0.78f, 0.40f), OnRetryConnection,
+                    RpgUiCatalog.ButtonFrame);
+                MedievalUiSkin.ApplyButton(_retryButton, primary: true);
             }
         }
 
@@ -177,19 +180,44 @@ namespace DeNelle.Core.UI
             ElarionUiKit.AddImage(transform, "LoadingBg", Vector2.zero, Vector2.one,
                 new Color(0.02f, 0.02f, 0.03f, 0.96f), rounded: false);
 
+            // One restrained medieval focus card keeps loading/error copy in the same visual
+            // language as every modal without pretending this transient cover is dismissible.
+            var card = ElarionUiKit.AddImage(transform, "LoadingCard",
+                new Vector2(0.25f, 0.34f), new Vector2(0.75f, 0.66f), Color.white, rounded: false);
+            var cardImage = card != null ? card.GetComponent<Image>() : null;
+            if (cardImage != null)
+            {
+                var sprite = Resources.Load<Sprite>("UI/ElarionMedieval/frames/content-panel");
+                if (sprite != null) cardImage.sprite = sprite;
+                cardImage.type = Image.Type.Simple;
+                cardImage.color = Color.white;
+            }
+            _cardHost = card != null ? card.transform : transform;
+
+            var brand = ElarionUiKit.Label(_cardHost, "ECHOES OF ELARION",
+                0.72f, 0.88f, ElarionUi.Gilt, 40,
+                TMPro.TextAlignmentOptions.Center, 0.08f, 0.92f, bold: true);
+            ElarionUiKit.FitSingleLine(brand, 28f, 40f);
+
             // Centred message (parchment on the dark cover, no meaning in colour).
-            var label = ElarionUiKit.Label(transform, message,
-                0.42f, 0.50f, ElarionUi.Parchment, ElarionUi.FontBody,
+            var label = ElarionUiKit.Label(_cardHost, message,
+                0.46f, 0.70f, ElarionUi.Parchment, ElarionUi.FontBody,
                 TMPro.TextAlignmentOptions.Center, 0.08f, 0.92f);
             _messageLabel = label;
-            if (label != null) label.raycastTarget = false;
+            if (label != null)
+            {
+                label.raycastTarget = false;
+                ElarionUiKit.FitBlock(label, ElarionUi.FontFloorMobile, ElarionUi.FontBody);
+            }
 
             if (_connectionRequired)
             {
-                _retryButton = ElarionUiKit.Button(transform,
+                _retryButton = ElarionUiKit.ButtonPack(_cardHost,
                     string.IsNullOrWhiteSpace(retryLabel) ? "Retry" : retryLabel,
                     ElarionUiKit.ButtonKind.Gold,
-                    new Vector2(0.30f, 0.56f), new Vector2(0.70f, 0.64f), OnRetryConnection);
+                    new Vector2(0.22f, 0.20f), new Vector2(0.78f, 0.40f), OnRetryConnection,
+                    RpgUiCatalog.ButtonFrame);
+                MedievalUiSkin.ApplyButton(_retryButton, primary: true);
                 _shownAt = Time.unscaledTime;
                 return;
             }
@@ -197,8 +225,8 @@ namespace DeNelle.Core.UI
             // Standard loading BAR (owner 2026-07-26 "can we do a standard loading bar"): a dark rounded
             // track with a gold fill that sweeps 0->100% and repeats — indeterminate, since the async scene
             // load has no reliable progress value to bind. Centred just below the message.
-            var track = ElarionUiKit.AddImage(transform, "LoadingBarTrack",
-                new Vector2(0.30f, 0.53f), new Vector2(0.70f, 0.552f),
+            var track = ElarionUiKit.AddImage(_cardHost, "LoadingBarTrack",
+                new Vector2(0.16f, 0.24f), new Vector2(0.84f, 0.32f),
                 new Color(1f, 1f, 1f, 0.14f), rounded: true);
             var trackImg = track != null ? track.GetComponent<Image>() : null;
             if (trackImg != null) trackImg.raycastTarget = false;

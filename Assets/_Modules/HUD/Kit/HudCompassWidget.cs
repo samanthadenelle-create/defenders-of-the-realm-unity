@@ -326,8 +326,23 @@ namespace DeNelle.HUD.Kit
             rt.offsetMin = new Vector2(inset, inset);
             rt.offsetMax = new Vector2(-inset, -inset);
             var img = go.GetComponent<Image>();
-            ElarionUiKit.ApplyRounded(img);
-            img.color = color;
+            var medievalFrame = Resources.Load<Sprite>("UI/ElarionMedieval/frames/content-panel");
+            if (medievalFrame != null)
+            {
+                img.sprite = medievalFrame;
+                img.type = Image.Type.Simple;
+                img.preserveAspect = false;
+                // One shared black-iron/gold shell replaces the temporary rounded rectangles.
+                // The inner plate stays slightly dimmer so the moving tape remains readable.
+                img.color = name == "StripRim"
+                    ? new Color(1f, 1f, 1f, 0.96f)
+                    : new Color(0.42f, 0.39f, 0.31f, 0.72f);
+            }
+            else
+            {
+                ElarionUiKit.ApplyRounded(img);
+                img.color = color;
+            }
             img.raycastTarget = false;   // the compass is a READOUT: it never eats a tap
         }
 

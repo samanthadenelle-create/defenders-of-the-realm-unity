@@ -253,7 +253,7 @@ namespace DeNelle.Village.Items
                 chips.Add(new ElarionUiKit.DetailCardChip(
                     cost[i].ConceptId, cost[i].Word, cost[i].Amount));
 
-            ElarionUiKit.BuildParchmentDetailCard(_detailHost, new ElarionUiKit.DetailCardSpec
+            var card = ElarionUiKit.BuildParchmentDetailCard(_detailHost, new ElarionUiKit.DetailCardSpec
             {
                 IconPath = recipe.OutputIconPath,
                 Title = display,
@@ -266,6 +266,15 @@ namespace DeNelle.Village.Items
                 CtaEnabled = recipe.CanCraft,
                 OnCta = () => { if (_vm != null) _vm.Craft(recipeId); },
             });
+            if (card != null)
+            {
+                var rt = card.GetComponent<RectTransform>();
+                var le = card.GetComponent<LayoutElement>() ?? card.AddComponent<LayoutElement>();
+                float height = Mathf.Max(320f, rt != null ? rt.sizeDelta.y + 28f : 640f);
+                le.minHeight = height;
+                le.preferredHeight = height;
+                le.flexibleHeight = 0f;
+            }
         }
 
         /// <summary>The ONE action carries the blocker when disabled ("SET GEMS - missing 2
@@ -310,9 +319,10 @@ namespace DeNelle.Village.Items
             _recipeHost = layout != null && layout.bodyLeft != null
                 ? (Transform)layout.bodyLeft
                 : (layout != null && layout.body != null ? (Transform)layout.body : chrome.content.transform);
-            _detailHost = layout != null && layout.bodyRight != null
+            var detailZone = layout != null && layout.bodyRight != null
                 ? (Transform)layout.bodyRight
                 : (layout != null && layout.body != null ? (Transform)layout.body : chrome.content.transform);
+            _detailHost = ElarionUiKit.MakeScrollZone(detailZone, spacing: 0f, padding: 4).content;
 
             BuildRecipeScrollWell();
 
@@ -324,7 +334,7 @@ namespace DeNelle.Village.Items
 
         // ── Recipe scroll well (WO-795: rows never stack/overlap; overflow scrolls) ──
 
-        private const float RowPixelH = 96f;   // fixed row height (touch-comfortable, matches RumorBoardPanel)
+        private const float RowPixelH = 120f;   // fixed row height at/above the mobile touch floor
 
         /// <summary>Build the vertical scroll well inside the recipe list host, ONCE per
         /// Open (RumorBoardPanel WO-795 pattern): Viewport (near-invisible Image drag

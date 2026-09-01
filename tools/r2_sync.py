@@ -311,8 +311,15 @@ def cmd_verify_catalog(cfg, folder):
         target = os.path.basename(os.path.abspath(root))
         target_dir = root
 
+    # Unity's Addressables build-state directory is not always the same token as
+    # the remote CDN directory. For a StandaloneWindows64 player Unity 6 writes
+    # Library/.../aa/Windows/settings.json, while the catalog URL and ServerData
+    # directory correctly use StandaloneWindows64. Treat that as an explicit
+    # platform mapping; never weaken the verifier into choosing "the newest"
+    # settings file, because that could green-light a catalog from another target.
+    state_target = "Windows" if target == "StandaloneWindows64" else target
     settings_path = os.path.join(REPO, "Library", "com.unity.addressables", "aa",
-                                 target, "settings.json")
+                                 state_target, "settings.json")
     if not os.path.isfile(settings_path):
         sys.exit(f"FAIL: {settings_path} not found - no built Addressables state for '{target}'.\n"
                  "      Build Addressables content, then re-run. Without it there is no proof of\n"
@@ -346,7 +353,7 @@ def cmd_verify_catalog(cfg, folder):
 
     # Cross-check: the live Library catalog must BE this catalog, byte for byte. If it is not,
     # ServerData holds artifacts from a different build than the one the player was stamped with.
-    live_bin = os.path.join(REPO, "Library", "com.unity.addressables", "aa", target, "catalog.bin")
+    live_bin = os.path.join(REPO, "Library", "com.unity.addressables", "aa", state_target, "catalog.bin")
     if os.path.isfile(live_bin) and md5_of(live_bin) != md5_of(cat_bin):
         sys.exit(f"FAIL: {cat_bin}\n      differs from the live {live_bin}.\n"
                  "      Mixed build artifacts - do not ship. Rebuild Addressables content.")

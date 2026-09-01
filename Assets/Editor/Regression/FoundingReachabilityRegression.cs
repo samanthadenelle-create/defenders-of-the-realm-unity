@@ -105,9 +105,29 @@ namespace DeNelle.Editor
             // Source-scan: the reachability wiring calls PresentOrContinue.
             CheckReferences("Onboarding/HeroSelectController.cs", "HeroSelect bypass", failures, log);
             CheckReferences("Onboarding/PetSelectController.cs", "PetSelect", failures, log);
+            CheckRecommendedDefault(failures, log);
 
             reason = Finish(failures, log);
             return failures.Count == 0;
+        }
+
+        private static void CheckRecommendedDefault(List<string> failures, StringBuilder log)
+        {
+            string flagsPath = Path.Combine(Application.dataPath, "_Modules/Core/FeatureFlags.cs");
+            string choicePath = Path.Combine(Application.dataPath, "_Modules/Onboarding/FoundingChoiceController.cs");
+            string flags = File.Exists(flagsPath) ? File.ReadAllText(flagsPath) : "";
+            string choice = File.Exists(choicePath) ? File.ReadAllText(choicePath) : "";
+            if (!flags.Contains("Get(\"defaulttown\", defaultOn: true)"))
+                failures.Add("[founding-reach] Default Town is not default-on -- fresh players still fall into blank founding");
+            if (!choice.Contains("READY SETTLEMENT  (Recommended)") || !choice.Contains("OnDefaultTown"))
+                failures.Add("[founding-reach] recommended starter-settlement CTA is absent");
+            if (!choice.Contains("EMPTY REALM  (Build It Yourself)") || !choice.Contains("OnBuildYourOwn"))
+                failures.Add("[founding-reach] blank-canvas secondary path is no longer exposed");
+            if (!choice.Contains("BodyFillHorizontalOverscan") ||
+                !choice.Contains("new Vector2(-BodyFillHorizontalOverscan, 0f)") ||
+                !choice.Contains("new Vector2(1f + BodyFillHorizontalOverscan, 1f)"))
+                failures.Add("[founding-reach] founding modal body fill no longer overscans beneath both frame shoulders; the previous screen can bleed through at the sides");
+            log.AppendLine("  recommended starter settlement default + scratch secondary path checked");
         }
 
         private static void CheckReferences(string rel, string label, List<string> failures, StringBuilder log)

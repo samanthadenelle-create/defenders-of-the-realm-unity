@@ -103,7 +103,9 @@ namespace DeNelle.HUD.Kit
             Add(HudArea.Status,      new Vector2(0.340f, 0.845f), new Vector2(0.660f, 0.990f));
             Add(HudArea.System,      new Vector2(0.845f, 0.880f), new Vector2(0.995f, 0.985f));
             Add(HudArea.TargetInfo,  new Vector2(0.280f, 0.660f), new Vector2(0.720f, 0.840f));
-            Add(HudArea.ActionRail,  new Vector2(0.780f, 0.040f), new Vector2(0.995f, 0.420f));
+            // Peaceful economy plaque lives in the approved top-right information column.
+            // Combat leaves this mount empty, so thumb actions remain owned by ActionBar.
+            Add(HudArea.ActionRail,  new Vector2(0.780f, 0.770f), new Vector2(0.995f, 0.965f));
             // WO-835: widened 0.280-0.720 -> 0.270-0.730 (still symmetric, clear of the
             // MoveCluster right edge at 0.270 and the ActionRail left edge at 0.780) so the
             // 7-face applicability MAX (Build/Talk/Bag/Raids/Map/Quests/Upgrade) keeps each
@@ -131,7 +133,7 @@ namespace DeNelle.HUD.Kit
             // height is transparent rather than the old full-height dark rows plate that
             // reserved five rows to show one job. Still clear of ActionRail (tops 0.420).
             // (RIGHT column - deliberately not in HudLayoutBands, which owns the LEFT one.)
-            Add(HudArea.QueueStatus, new Vector2(0.780f, 0.530f), new Vector2(0.995f, 0.865f));
+            Add(HudArea.QueueStatus, new Vector2(0.780f, 0.510f), new Vector2(0.995f, 0.750f));
             // The Minimap mount now carries TWO exclusive bands: the square plate hanging from its
             // top-left, and the region STATUS LINE in its own band immediately below the plate -
             // never across it, never beside it competing with the Dock row.

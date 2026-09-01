@@ -181,7 +181,11 @@ namespace DeNelle.Village.Monetization
 
             _doubleButton = ElarionUiKit.BuildObsidianButton(_well, label,
                 ElarionUiKit.ObsidianButtonStyle.Style1, color, AdMin, AdMax, WatchForDouble);
-            if (_doubleButton != null) _doubleButton.interactable = face == AdFace.Ready;
+            if (_doubleButton != null)
+            {
+                MedievalUiSkin.ApplyButton(_doubleButton, primary: false);
+                _doubleButton.interactable = face == AdFace.Ready;
+            }
             FlowTrace.Step("DailyChest", "ad CTA face=" + face + " label='" + label + "'");
         }
 
@@ -204,6 +208,7 @@ namespace DeNelle.Village.Monetization
             // the id resolved to nothing and had nowhere to render even if it had.
             _modal = ElarionUiKit.BuildObsidianModal("DailyChestUI", VillageStrings.Canon(KeyTitle),
                 new Vector2(0.155f, 0.08f), new Vector2(0.845f, 0.92f), Close, 31010);
+            MedievalUiSkin.ApplyShell(_modal.chrome, compact: false);
 
             _well = ResolveWell();
             if (_well == null) { Close(); return; }
@@ -229,9 +234,10 @@ namespace DeNelle.Village.Monetization
             ElarionUiKit.FitBlock(_status);
 
             // PRIMARY: the free path. Gold face, left seat - it must never read as the lesser option.
-            ElarionUiKit.BuildObsidianButton(_well, VillageStrings.Canon(KeyClaimFree),
+            var free = ElarionUiKit.BuildObsidianButton(_well, VillageStrings.Canon(KeyClaimFree),
                 ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Yellow,
                 ClaimMin, ClaimMax, () => Claim(BaseGold, "free"));
+            MedievalUiSkin.ApplyButton(free, primary: true);
 
             // SECONDARY: the optional ad. Built through SetAdFace so it can never be born wearing
             // a state it is not in.

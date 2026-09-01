@@ -56,14 +56,18 @@ namespace DeNelle.Wallet
         private const float GridWidthFraction = 1700f / 2670f;
         private static readonly Vector2 HeaderMin = new Vector2(0.015f, 1f - 120f / 1200f);
         private static readonly Vector2 HeaderMax = new Vector2(0.985f, 0.99f);
-        private static readonly Vector2 TabsMin   = new Vector2(0.015f, 1f - 245f / 1200f);
+        // Author these bands above the shared 112px touch floor after CanvasScaler + panel inset.
+        // The former 120px tabs and 150px footer resolved to 90-101px on supported landscape
+        // ratios, so the runtime rescue clamp spilled controls into neighbouring content.
+        private static readonly Vector2 TabsMin   = new Vector2(0.015f, 1f - 315f / 1200f);
         private static readonly Vector2 TabsMax   = new Vector2(GridWidthFraction, 1f - 125f / 1200f);
-        private static readonly Vector2 GridMin   = new Vector2(0.015f, 150f / 1200f);
+        private static readonly Vector2 GridMin   = new Vector2(0.015f, 240f / 1200f);
         private static readonly Vector2 GridMax   = new Vector2(GridWidthFraction, 1f - 120f / 1200f);
-        private static readonly Vector2 SideMin   = new Vector2(GridWidthFraction + 0.01f, 150f / 1200f);
-        private static readonly Vector2 SideMax   = new Vector2(0.985f, 1f - 120f / 1200f);
+        private static readonly Vector2 SideMin   = new Vector2(GridWidthFraction + 0.01f, 240f / 1200f);
+        // Reserve the upper-right Close footprint instead of allowing Today's claim copy beneath it.
+        private static readonly Vector2 SideMax   = new Vector2(0.985f, 1f - 225f / 1200f);
         private static readonly Vector2 FooterMin = new Vector2(0.015f, 0.02f);
-        private static readonly Vector2 FooterMax = new Vector2(0.985f, 150f / 1200f);
+        private static readonly Vector2 FooterMax = new Vector2(0.985f, 240f / 1200f);
 
         private const int DaysPerWeek = 7;
         private const int WeekCount = 5;
@@ -161,15 +165,28 @@ namespace DeNelle.Wallet
             }
 
             ElarionUiKit.Scrim(_canvas.transform, Close);
-            var panel = ElarionUiKit.Panel(_canvas.transform, new Vector2(0.02f, 0.03f), new Vector2(0.98f, 0.97f),
-                                           deep: true);
-            _body = panel.transform;
+            // Build on the shared shell itself. Re-skinning the old rounded Panel left its
+            // mustard procedural backing visible through the authored frame margins.
+            var chrome = ElarionUiKit.BuildObsidianPanel(_canvas.transform, string.Empty,
+                new Vector2(0.02f, 0.03f), new Vector2(0.98f, 0.97f), onClose: null,
+                withBackdrop: false, frameName: RpgUiCatalog.FrameCore);
+            MedievalUiSkin.ApplyShell(chrome);
+            var body = new GameObject("LedgerContent", typeof(RectTransform), typeof(Image));
+            body.transform.SetParent(chrome.content.transform, false);
+            var bodyRt = (RectTransform)body.transform;
+            bodyRt.anchorMin = new Vector2(0.045f, 0.075f);
+            bodyRt.anchorMax = new Vector2(0.955f, 0.925f);
+            bodyRt.offsetMin = Vector2.zero; bodyRt.offsetMax = Vector2.zero;
+            var bodyImage = body.GetComponent<Image>();
+            bodyImage.color = new Color(0.018f, 0.015f, 0.020f, 0.94f);
+            bodyImage.raycastTarget = false;
+            _body = body.transform;
 
             BuildHeader();
             _tabsHost = Zone(_body, "WeekTabs", TabsMin, TabsMax);
             _gridHost = Zone(_body, "WeekGrid", GridMin, new Vector2(GridMax.x, TabsMin.y - 0.008f));
             _sideHost = Zone(_body, "Side", SideMin, SideMax);
-            Plate(_sideHost, NightMarketPalette.GroundRaised);
+            Plate(_sideHost, new Color(0.025f, 0.022f, 0.032f, 0.98f));
             BuildSidePanel();
             BuildFooter();
 
@@ -181,48 +198,50 @@ namespace DeNelle.Wallet
         {
             var host = Zone(_body, "Header", HeaderMin, HeaderMax);
 
-            _titleLine = Text(host, StoreStrings.Get(StoreStrings.KeyMonthlyLedgerTitle), 20,
-                              ElarionUi.Parchment, FontStyles.Bold, TextAlignmentOptions.Left,
+            _titleLine = Text(host, StoreStrings.Get(StoreStrings.KeyMonthlyLedgerTitle), 42,
+                              ElarionUi.Gold, FontStyles.Bold, TextAlignmentOptions.Left,
                               new Vector2(0f, 0f), new Vector2(0.55f, 1f));
+            ElarionUiKit.FitSingleLine(_titleLine, 28f, 42f);
 
             // ⛔ A COUNT OF CLAIMS, NEVER A DATE OR A CLOCK. See the file header.
-            _claimsLine = Text(host, string.Empty, 15, NightMarketPalette.Patronage, FontStyles.Bold,
-                               TextAlignmentOptions.Right, new Vector2(0.55f, 0f), new Vector2(0.93f, 1f));
+            _claimsLine = Text(host, string.Empty, 30, NightMarketPalette.Patronage, FontStyles.Bold,
+                               TextAlignmentOptions.Right, new Vector2(0.55f, 0f), new Vector2(0.76f, 1f));
 
             // The shared Close is a fixed 360x132 control. Parenting it to this
             // shallow header band made it overhang the top edge. Seat it against the
             // full panel body so the complete control remains inside the frame.
-            ElarionUiKit.ObsidianCloseButton(_body, Close,
+            var close = ElarionUiKit.ObsidianCloseButton(_body, Close,
                 new Vector4(0.79f, 0.84f, 0.97f, 0.96f));
+            MedievalUiSkin.ApplyClose(close);
         }
 
         private void BuildSidePanel()
         {
-            _todayLine = Text(_sideHost, StoreStrings.Get(StoreStrings.KeyMonthlyLedgerTodayReward), 13,
+            _todayLine = Text(_sideHost, StoreStrings.Get(StoreStrings.KeyMonthlyLedgerTodayReward), 28,
                               ElarionUi.Parchment, FontStyles.Bold, TextAlignmentOptions.Left,
                               new Vector2(0.06f, 0.86f), new Vector2(0.94f, 0.96f));
 
-            _todayReward = Text(_sideHost, string.Empty, 12, NightMarketPalette.Free, FontStyles.Normal,
+            _todayReward = Text(_sideHost, string.Empty, 24, NightMarketPalette.Free, FontStyles.Normal,
                                 TextAlignmentOptions.Left,
                                 new Vector2(0.06f, 0.68f), new Vector2(0.94f, 0.85f));
 
             // The month-exclusive keepsake slot. Unauthored today, and the copy SAYS SO rather than
             // drawing an empty frame - a blank box on a paid card reads as broken or as a tease.
-            _exclusiveLine = Text(_sideHost, string.Empty, 11, ElarionUi.ParchmentDim, FontStyles.Italic,
+            _exclusiveLine = Text(_sideHost, string.Empty, 20, ElarionUi.ParchmentDim, FontStyles.Italic,
                                   TextAlignmentOptions.Left,
                                   new Vector2(0.06f, 0.46f), new Vector2(0.94f, 0.66f));
 
             // The full-value promise. It is the reason the pool model exists and it is stated on the
             // screen, not just in the data file.
-            Text(_sideHost, StoreStrings.Get(StoreStrings.KeyMonthlyLedgerPoolPromise), 11,
+            Text(_sideHost, StoreStrings.Get(StoreStrings.KeyMonthlyLedgerPoolPromise), 20,
                  ElarionUi.Parchment, FontStyles.Normal, TextAlignmentOptions.Left,
                  new Vector2(0.06f, 0.26f), new Vector2(0.94f, 0.44f));
 
-            Text(_sideHost, StoreStrings.Get(StoreStrings.KeyMonthlyLedgerNoTimer), 10,
+            Text(_sideHost, StoreStrings.Get(StoreStrings.KeyMonthlyLedgerNoTimer), 20,
                  NightMarketPalette.Free, FontStyles.Bold, TextAlignmentOptions.Left,
                  new Vector2(0.06f, 0.16f), new Vector2(0.94f, 0.25f));
 
-            Text(_sideHost, StoreStrings.Get(StoreStrings.KeyMonthlyLedgerBonusOnly), 10,
+            Text(_sideHost, StoreStrings.Get(StoreStrings.KeyMonthlyLedgerBonusOnly), 18,
                  ElarionUi.ParchmentDim, FontStyles.Normal, TextAlignmentOptions.Left,
                  new Vector2(0.06f, 0.03f), new Vector2(0.94f, 0.15f));
         }
@@ -232,7 +251,7 @@ namespace DeNelle.Wallet
             var host = Zone(_body, "Footer", FooterMin, FooterMax);
             Plate(host, new Color(0f, 0f, 0f, 0.30f));
 
-            Text(host, StoreStrings.Get(StoreStrings.KeyMonthlyLedgerNoCard), 11, ElarionUi.ParchmentDim,
+            Text(host, StoreStrings.Get(StoreStrings.KeyMonthlyLedgerNoCard), 20, ElarionUi.ParchmentDim,
                  FontStyles.Normal, TextAlignmentOptions.Left,
                  new Vector2(0.02f, 0.10f), new Vector2(0.62f, 0.90f));
 
@@ -240,7 +259,10 @@ namespace DeNelle.Wallet
                                             ElarionUiKit.ButtonKind.Gold,
                                             new Vector2(0.66f, 0.08f), new Vector2(0.98f, 0.92f),
                                             OnClaimTapped);
+            MedievalUiSkin.ApplyButton(_claimCta, primary: true);
             _claimCtaLabel = _claimCta != null ? _claimCta.GetComponentInChildren<TextMeshProUGUI>() : null;
+            if (_claimCtaLabel != null)
+                ElarionUiKit.FitSingleLine(_claimCtaLabel, 18f, 38f);
         }
 
         // =====================================================================
@@ -272,7 +294,8 @@ namespace DeNelle.Wallet
             }
 
             if (_titleLine != null)
-                _titleLine.text = StoreStrings.Get(StoreStrings.KeyMonthlyLedgerTitle) + " - " + (card.Name ?? "");
+                _titleLine.text = (StoreStrings.Get(StoreStrings.KeyMonthlyLedgerTitle) + " - " +
+                                   (card.Name ?? "")).ToUpperInvariant();
 
             if (_claimsLine != null)
                 _claimsLine.text = StoreStrings.Format(StoreStrings.KeyMonthlyLedgerClaimsLeft,
@@ -307,13 +330,29 @@ namespace DeNelle.Wallet
                 string label = StoreStrings.Format(StoreStrings.KeyMonthlyLedgerWeekTab,
                     week + 1, first, last);
                 if (week == claimWeek)
-                    label += "\n" + StoreStrings.Get(StoreStrings.KeyMonthlyLedgerWeekClaimable);
+                    label = "WEEK " + (week + 1) + "\nREADY";
+                else
+                    label = "WEEK " + (week + 1) + "\nDAYS " + first + "-" + last;
 
                 var button = ElarionUiKit.Button(_tabsHost, label, ElarionUiKit.ButtonKind.Quiet,
                     new Vector2(week * tabW + 0.004f, 0f),
                     new Vector2((week + 1) * tabW - 0.004f, 1f),
                     () => { _selectedWeek = captured; Render(); });
                 if (button == null) continue;
+                MedievalUiSkin.ApplyButton(button, primary: week == _selectedWeek);
+                var tabLabel = button.GetComponentInChildren<TextMeshProUGUI>();
+                if (tabLabel != null)
+                {
+                    // Five tabs must remain fully contained at the narrow 16:9 gate.
+                    // Fixed two-line typography is more stable here than TMP auto-size,
+                    // which previously selected 32px and pushed SELECTED below the frame.
+                    tabLabel.enableAutoSizing = false;
+                    tabLabel.fontSize = 20f;
+                    tabLabel.textWrappingMode = TextWrappingModes.NoWrap;
+                    tabLabel.overflowMode = TextOverflowModes.Truncate;
+                    tabLabel.margin = new Vector4(10f, 5f, 10f, 7f);
+                    tabLabel.lineSpacing = -8f;
+                }
                 var le = button.gameObject.AddComponent<LayoutElement>();
                 le.minHeight = ElarionUiKit.MinTouchPx;
                 le.minWidth = ElarionUiKit.MinTouchPx;
@@ -324,7 +363,7 @@ namespace DeNelle.Wallet
                 {
                     var text = button.GetComponentInChildren<TextMeshProUGUI>();
                     if (text != null)
-                        text.text += "\n" + StoreStrings.Get(StoreStrings.KeyMonthlyLedgerWeekSelected);
+                        text.text = "WEEK " + (week + 1) + "\nSELECTED";
                     var underline = new GameObject("SelectedUnderline", typeof(RectTransform), typeof(Image));
                     underline.transform.SetParent(button.transform, false);
                     var urt = underline.GetComponent<RectTransform>();
@@ -372,9 +411,24 @@ namespace DeNelle.Wallet
 
             var plate = cell.GetComponent<Image>();
             plate.raycastTarget = false;
-            plate.color = state == MonthlyDayState.Claimed
-                ? new Color(NightMarketPalette.Free.r, NightMarketPalette.Free.g, NightMarketPalette.Free.b, 0.10f)
-                : NightMarketPalette.GroundRaised;
+            // Ledger days are portrait/square tiles. The former landscape card frame only
+            // occupied the middle band when nine-sliced into these cells, leaving labels
+            // visually detached from their container.
+            var cardFrame = Resources.Load<Sprite>("UI/ElarionMedieval/frames/square-icon-frame");
+            if (cardFrame != null)
+            {
+                plate.sprite = cardFrame;
+                plate.type = Image.Type.Sliced;
+                plate.color = state == MonthlyDayState.Claimed
+                    ? new Color(0.62f, 0.72f, 0.62f, 0.72f)
+                    : Color.white;
+            }
+            else
+            {
+                plate.color = state == MonthlyDayState.Claimed
+                    ? new Color(0.055f, 0.08f, 0.065f, 0.98f)
+                    : new Color(0.025f, 0.022f, 0.032f, 0.98f);
+            }
 
             // A highlight day gets a gold rail at its head - a MARK, so "this one is bigger" is not
             // carried by a colour.
@@ -388,29 +442,36 @@ namespace DeNelle.Wallet
                 var mimg = mark.GetComponent<Image>();
                 mimg.color = NightMarketPalette.Patronage;
                 mimg.raycastTarget = false;
-                Text(cell.transform, StoreStrings.Get(StoreStrings.KeyMonthlyLedgerMilestone), 11,
+                Text(cell.transform, StoreStrings.Get(StoreStrings.KeyMonthlyLedgerMilestone), 13,
                      ElarionUi.Parchment, FontStyles.Bold, TextAlignmentOptions.Center,
                      new Vector2(0.05f, 0.82f), new Vector2(0.95f, 0.94f));
             }
 
-            Text(cell.transform, StoreStrings.Format(StoreStrings.KeyMonthlyLedgerDay, day), 18,
-                 ElarionUi.Parchment, FontStyles.Bold,
-                 TextAlignmentOptions.Center, new Vector2(0.05f, 0.62f), new Vector2(0.95f, 0.82f));
+            var dayText = Text(cell.transform, StoreStrings.Format(StoreStrings.KeyMonthlyLedgerDay, day), 21,
+                ElarionUi.Parchment, FontStyles.Bold,
+                TextAlignmentOptions.Center, new Vector2(0.08f, 0.66f), new Vector2(0.92f, 0.82f));
+            ElarionUiKit.FitSingleLine(dayText, 16f, 21f);
 
             // The reward, always drawn - pre-purchase included. That is the point of the screen.
             string body = drip != null && drip.Grant != null ? drip.Grant.Describe() : "-";
-            Text(cell.transform, body, 13, ElarionUi.Parchment, FontStyles.Normal,
-                 TextAlignmentOptions.Center, new Vector2(0.04f, 0.25f), new Vector2(0.96f, 0.61f));
+            var rewardText = Text(cell.transform, body, 15, ElarionUi.Parchment, FontStyles.Normal,
+                 TextAlignmentOptions.Center, new Vector2(0.10f, 0.27f), new Vector2(0.90f, 0.64f));
+            rewardText.enableAutoSizing = true;
+            rewardText.fontSizeMin = 11f;
+            rewardText.fontSizeMax = 15f;
+            rewardText.textWrappingMode = TextWrappingModes.Normal;
+            rewardText.overflowMode = TextOverflowModes.Truncate;
 
             // The WORD - what survives a greyscale read.
-            Text(cell.transform, DayStateWord(state), 12, DayStateColor(state), FontStyles.Bold,
-                 TextAlignmentOptions.Center, new Vector2(0.04f, 0.04f), new Vector2(0.96f, 0.24f));
+            var stateText = Text(cell.transform, DayStateWord(state), 17, DayStateColor(state), FontStyles.Bold,
+                TextAlignmentOptions.Center, new Vector2(0.07f, 0.07f), new Vector2(0.93f, 0.23f));
+            ElarionUiKit.FitSingleLine(stateText, 13f, 17f);
 
             // THE ONE ANIMATION on this screen.
             if (state == MonthlyDayState.Today)
             {
                 var pulse = cell.AddComponent<PulseToday>();
-                pulse.Bind(plate, NightMarketPalette.GroundRaised, NightMarketPalette.Patronage);
+                pulse.Bind(plate, plate.color, ElarionUi.Gold);
             }
         }
 
@@ -463,7 +524,7 @@ namespace DeNelle.Wallet
 
             if (canClaim)      _claimCtaLabel.text = StoreStrings.Get(StoreStrings.KeyMonthlyLedgerClaimCta);
             else if (owned)    _claimCtaLabel.text = StoreStrings.Get(StoreStrings.KeyMonthlyLedgerClaimedToday);
-            else               _claimCtaLabel.text = StoreStrings.Get(StoreStrings.KeyMonthlyLedgerNotForSale);
+            else               _claimCtaLabel.text = StoreStrings.Get(StoreStrings.KeyMonthlyLedgerNotForSaleCta);
         }
 
         private void OnClaimTapped()

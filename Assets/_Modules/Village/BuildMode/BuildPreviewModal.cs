@@ -16,8 +16,10 @@ using System;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
+using TMPro;
 using UnityEngine.Rendering.Universal; // URP: configure the preview camera to actually render to the RT
 using DeNelle.Core.Catalog;
+using DeNelle.Core.UI;
 
 namespace DeNelle.Village
 {
@@ -39,7 +41,7 @@ namespace DeNelle.Village
         private float _currentYaw;
         private bool _dragging;
         private Vector2 _lastDragPos;
-        private Text _yawReadout; // live "Yaw: XX°" for premium viewer feel
+        private TMP_Text _yawReadout; // live "Yaw: XX°" for premium viewer feel
         private bool _closing;    // WO-314: idempotent close guard (prevents double-fire + post-close NRE)
         private readonly List<Material> _tempMaterials = new List<Material>(); // WO-314: runtime mats to free on close
 
@@ -82,109 +84,91 @@ namespace DeNelle.Village
 
         private void SetupUI()
         {
-            // Self contained screen-space overlay canvas for the modal.
+            // Responsive common-shell modal. This is a normal public confirmation
+            // surface, so it must not retain the old fixed grey 360x440 widget family.
             _canvas = gameObject.AddComponent<Canvas>();
             _canvas.renderMode = RenderMode.ScreenSpaceOverlay;
             _canvas.sortingOrder = 100; // on top
-            gameObject.AddComponent<CanvasScaler>();
+            var scaler = gameObject.AddComponent<CanvasScaler>();
+            scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
+            scaler.referenceResolution = new Vector2(1920f, 1080f);
+            scaler.matchWidthOrHeight = 0.5f;
             gameObject.AddComponent<GraphicRaycaster>();
 
-            // Semi-transparent panel (modal background) — slightly larger for premium viewer breathing room.
-            var panel = new GameObject("ModalPanel", typeof(RectTransform), typeof(Image));
-            panel.transform.SetParent(_canvas.transform, false);
-            var panelRT = panel.GetComponent<RectTransform>();
-            panelRT.anchorMin = new Vector2(0.5f, 0.5f);
-            panelRT.anchorMax = new Vector2(0.5f, 0.5f);
-            panelRT.sizeDelta = new Vector2(360, 440);
-            panelRT.anchoredPosition = Vector2.zero;
-            var panelImg = panel.GetComponent<Image>();
-            panelImg.color = new Color(0.02f, 0.02f, 0.025f, 0.98f); // WO-562 obsidian canon (was earthy brown)
-
-            // Title with friendly display name when available (premium touch).
-            var titleGO = new GameObject("Title", typeof(RectTransform), typeof(Text));
-            titleGO.transform.SetParent(panel.transform, false);
-            var titleRT = titleGO.GetComponent<RectTransform>();
-            titleRT.anchorMin = new Vector2(0, 1);
-            titleRT.anchorMax = new Vector2(1, 1);
-            titleRT.sizeDelta = new Vector2(0, 32);
-            titleRT.anchoredPosition = new Vector2(0, -18);
-            var title = titleGO.GetComponent<Text>();
             string display = (_entry != null && !string.IsNullOrEmpty(_entry.displayName)) ? _entry.displayName : (_entry != null ? _entry.id : "Object");
-            title.text = "Preview & Orient — " + display;
-            title.alignment = TextAnchor.MiddleCenter;
-            title.fontSize = 15;
-            title.color = new Color(0.933f, 0.784f, 0.282f); // WO-562 runic gold title
+            var chrome = ElarionUiKit.BuildObsidianPanel(_canvas.transform,
+                "ORIENT " + display.ToUpperInvariant(),
+                new Vector2(0.28f, 0.06f), new Vector2(0.72f, 0.94f), Cancel,
+                withBackdrop: true, frameName: RpgUiCatalog.FrameCore,
+                medallionIcon: "build");
+            MedievalUiSkin.ApplyShell(chrome, compact: true);
+            Transform panel = chrome.layout != null && chrome.layout.body != null
+                ? chrome.layout.body
+                : chrome.content.transform;
+            Transform actions = chrome.layout != null && chrome.layout.footer != null
+                ? chrome.layout.footer
+                : panel;
+            if (chrome.close != null) chrome.close.gameObject.SetActive(false);
 
             // RawImage for 3D preview RT (bigger = proper model viewer)
             var imgGO = new GameObject("PreviewImage", typeof(RectTransform), typeof(RawImage));
-            imgGO.transform.SetParent(panel.transform, false);
+            imgGO.transform.SetParent(panel, false);
             var imgRT = imgGO.GetComponent<RectTransform>();
-            imgRT.anchorMin = new Vector2(0.08f, 0.28f);
-            imgRT.anchorMax = new Vector2(0.92f, 0.82f);
+            imgRT.anchorMin = new Vector2(0.08f, 0.38f);
+            imgRT.anchorMax = new Vector2(0.92f, 0.84f);
             imgRT.sizeDelta = Vector2.zero;
             _previewImage = imgGO.GetComponent<RawImage>();
             _previewImage.color = Color.white;
             _previewImageRT = imgRT; // drag-rotate area for the manual hit-test in Update()
 
             // Live yaw readout (premium intuitive feedback — player always sees the exact offset being chosen).
-            var yawGO = new GameObject("YawReadout", typeof(RectTransform), typeof(Text));
-            yawGO.transform.SetParent(panel.transform, false);
+            var yawGO = new GameObject("YawReadout", typeof(RectTransform), typeof(TextMeshProUGUI));
+            yawGO.transform.SetParent(panel, false);
             var yawRT = yawGO.GetComponent<RectTransform>();
-            yawRT.anchorMin = new Vector2(0, 0.82f);
-            yawRT.anchorMax = new Vector2(1, 0.88f);
+            yawRT.anchorMin = new Vector2(0.08f, 0.84f);
+            yawRT.anchorMax = new Vector2(0.92f, 0.92f);
             yawRT.sizeDelta = Vector2.zero;
-            yawRT.anchoredPosition = new Vector2(0, -4);
-            _yawReadout = yawGO.GetComponent<Text>();
-            _yawReadout.alignment = TextAnchor.MiddleCenter;
-            _yawReadout.fontSize = 13;
-            _yawReadout.color = new Color(0.85f, 0.85f, 0.9f);
+            _yawReadout = yawGO.GetComponent<TextMeshProUGUI>();
+            _yawReadout.alignment = TextAlignmentOptions.Center;
+            _yawReadout.fontSize = ElarionUi.FontBody;
+            _yawReadout.color = ElarionUi.Parchment;
+            ElarionUiKit.FitSingleLine(_yawReadout, ElarionUi.FontFloorMobile, ElarionUi.FontBody);
 
-            // Buttons row — larger thumb-friendly targets for mobile, earthy theme.
-            CreateButton(panel.transform, "–90°", new Vector2(-85, -38), () => RotatePreview(-90));
-            CreateButton(panel.transform, "+90°", new Vector2(0, -38), () => RotatePreview(90));
-            CreateButton(panel.transform, "Reset", new Vector2(85, -38), ResetToSaved);
-            CreateButton(panel.transform, "Confirm", new Vector2(-85, -78), Confirm);
-            CreateButton(panel.transform, "Cancel", new Vector2(85, -78), Cancel);
+            CreateButton(panel, "-90 DEG", new Vector2(0.06f, 0.20f), new Vector2(0.34f, 0.31f), () => RotatePreview(-90));
+            CreateButton(panel, "+90 DEG", new Vector2(0.36f, 0.20f), new Vector2(0.64f, 0.31f), () => RotatePreview(90));
+            CreateButton(panel, "RESET", new Vector2(0.66f, 0.20f), new Vector2(0.94f, 0.31f), ResetToSaved);
+            CreateButton(actions, "CONFIRM", new Vector2(0.06f, 0.08f), new Vector2(0.58f, 0.92f), Confirm, true);
+            CreateButton(actions, "CANCEL", new Vector2(0.62f, 0.08f), new Vector2(0.94f, 0.92f), Cancel);
 
-            // Instruction text — explicitly communicates the "save as default for type" behavior.
-            var instrGO = new GameObject("Instr", typeof(RectTransform), typeof(Text));
-            instrGO.transform.SetParent(panel.transform, false);
+            var instrGO = new GameObject("Instr", typeof(RectTransform), typeof(TextMeshProUGUI));
+            instrGO.transform.SetParent(panel, false);
             var instrRT = instrGO.GetComponent<RectTransform>();
-            instrRT.anchorMin = new Vector2(0, 0);
-            instrRT.anchorMax = new Vector2(1, 0);
-            instrRT.sizeDelta = new Vector2(0, 22);
-            instrRT.anchoredPosition = new Vector2(0, 12);
-            var instr = instrGO.GetComponent<Text>();
-            instr.text = "Drag the preview or use snaps to rotate until it sits naturally. This orientation is remembered for this structure type.";
-            instr.alignment = TextAnchor.MiddleCenter;
-            instr.fontSize = 10;
-            instr.color = new Color(0.75f, 0.72f, 0.65f);
+            instrRT.anchorMin = new Vector2(0.08f, 0.31f);
+            instrRT.anchorMax = new Vector2(0.92f, 0.37f);
+            instrRT.sizeDelta = Vector2.zero;
+            var instr = instrGO.GetComponent<TextMeshProUGUI>();
+            instr.text = "DRAG TO ROTATE - THE ORIENTATION IS REMEMBERED";
+            instr.alignment = TextAlignmentOptions.Center;
+            instr.fontSize = ElarionUi.FontMicro;
+            instr.color = ElarionUi.ParchmentDim;
+            ElarionUiKit.FitSingleLine(instr, ElarionUi.FontFloorMobile, ElarionUi.FontMicro);
         }
 
-        private void CreateButton(Transform parent, string label, Vector2 anchored, Action onClick)
+        private void CreateButton(Transform parent, string label, Vector2 anchorMin,
+                                  Vector2 anchorMax, Action onClick, bool primary = false)
         {
-            var btnGO = new GameObject(label, typeof(RectTransform), typeof(Button), typeof(Image), typeof(Text));
-            btnGO.transform.SetParent(parent, false);
-            var btnRT = btnGO.GetComponent<RectTransform>();
-            btnRT.anchorMin = new Vector2(0.5f, 0);
-            btnRT.anchorMax = new Vector2(0.5f, 0);
-            btnRT.sizeDelta = new Vector2(78, 32); // compact but still thumb-reachable with 5 buttons row
-            btnRT.anchoredPosition = anchored;
-
-            var img = btnGO.GetComponent<Image>();
-            img.color = new Color(0.831f, 0.686f, 0.216f, 0.97f); // WO-562 gold CTA button (was earthy brown)
-
-            var txt = btnGO.GetComponentInChildren<Text>();
-            txt.text = label;
-            txt.alignment = TextAnchor.MiddleCenter;
-            txt.fontSize = 12;
-            txt.color = new Color(0.137f, 0.098f, 0.055f); // dark ink on gold
-
-            // uGUI onClick is registered as a best-effort path, but is NOT relied upon —
-            // builds here lack a working EventSystem/GraphicRaycaster, so the manual rect
-            // hit-test in Update() is the authoritative input. Register the rect for it.
-            var btn = btnGO.GetComponent<Button>();
-            btn.onClick.AddListener(() => onClick());
+            var btn = ElarionUiKit.ButtonPack(parent, label,
+                primary ? ElarionUiKit.ButtonKind.Confirm : ElarionUiKit.ButtonKind.Quiet,
+                anchorMin, anchorMax, onClick, RpgUiCatalog.ButtonFrame);
+            MedievalUiSkin.ApplyButton(btn, primary);
+            if (btn != null && btn.targetGraphic is Image image)
+            {
+                var card = Resources.Load<Sprite>("UI/ElarionMedieval/frames/content-panel");
+                if (card != null) image.sprite = card;
+                image.type = Image.Type.Simple;
+                image.color = Color.white;
+            }
+            var btnRT = btn.GetComponent<RectTransform>();
             _buttons.Add((btnRT, onClick));
         }
 
@@ -331,12 +315,18 @@ namespace DeNelle.Village
         {
             Bounds b;
             var rends = _previewRoot != null ? _previewRoot.GetComponentsInChildren<Renderer>() : null;
-            if (rends != null && rends.Length > 0)
+            bool foundVisual = false;
+            b = default;
+            if (rends != null)
             {
-                b = rends[0].bounds;
-                for (int i = 1; i < rends.Length; i++) b.Encapsulate(rends[i].bounds);
+                for (int i = 0; i < rends.Length; i++)
+                {
+                    if (rends[i] == null || rends[i].gameObject.name == PLANE_NAME) continue;
+                    if (!foundVisual) { b = rends[i].bounds; foundVisual = true; }
+                    else b.Encapsulate(rends[i].bounds);
+                }
             }
-            else
+            if (!foundVisual)
             {
                 // No renderers (shouldn't happen — disc fallback always adds one) — frame the root.
                 b = new Bounds(_previewRoot != null ? _previewRoot.transform.position : Vector3.zero, Vector3.one * 4f);

@@ -23,3 +23,4 @@
 # 3) within Builds, keep ONLY the WebGL output (drop Builds/Windows etc.)
 /Builds/*
 !/Builds/WebGL
+!/Builds/WebGL/**

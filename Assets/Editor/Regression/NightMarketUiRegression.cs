@@ -49,6 +49,7 @@ namespace DeNelle.Editor.Regression
         private const string CardRel   = "/_Modules/Wallet/StorePackCard.cs";
         private const string FooterRel = "/_Modules/Wallet/StoreLegalFooter.cs";
         private const string HudRel    = "/_Modules/HUD/Kit/HudKitController.cs";
+        private const string DeckRel   = "/_Modules/HUD/PlayerDeckWorkspace.cs";
         private const string CompositionRel = "/_Modules/Wallet/NightMarketComposition.cs";
         private const string KitRel    = "/_Modules/Core/UI/ElarionUiKit.cs";
         private const string UiRel     = "/_Modules/Core/UI/ElarionUi.cs";
@@ -76,6 +77,7 @@ namespace DeNelle.Editor.Regression
             string card   = Read(Application.dataPath + CardRel,   failures);
             string footer = Read(Application.dataPath + FooterRel, failures);
             string hud    = Read(Application.dataPath + HudRel,    failures);
+            string deck   = Read(Application.dataPath + DeckRel,   failures);
             string kit    = Read(Application.dataPath + KitRel,    failures);
             string ui     = Read(Application.dataPath + UiRel,     failures);
 
@@ -90,7 +92,7 @@ namespace DeNelle.Editor.Regression
             CheckFreeBand(store, minTouch, failures);
             CheckCommerceCta(store, minTouch, ctaWidth, failures);
             CheckOneTitleAndOneLegalOwner(store, footer, ctaWidth, failures);
-            CheckHudDoor(hud, failures);
+            CheckHudDoor(hud, deck, failures);
 
             if (failures.Count > 0)
             {
@@ -270,8 +272,10 @@ namespace DeNelle.Editor.Regression
 
             if (Regex.Matches(freeBand, @"BuildCardRow\(").Count != 1)
                 failures.Add("FREE TONIGHT is not composed as ONE tab rail.");
-            if (Regex.Matches(freeBand, @"BuildUtilityTab\(").Count != 3)
-                failures.Add("FREE TONIGHT does not carry its three doors (redeem + season track + monthly ledger).");
+            if (Regex.Matches(freeBand, @"BuildUtilityTab\(").Count != 2)
+                failures.Add("FREE TONIGHT must carry exactly redeem + monthly ledger after Season retirement.");
+            if (freeBand.Contains("PanelId.BattlePass"))
+                failures.Add("retired Season Track returned to the public FREE band.");
             // Nothing is asked for before something is given: the redeem door is first on the rail.
             int redeemAt = freeBand.IndexOf("OpenRedeemPanel", StringComparison.Ordinal);
             int seasonAt = freeBand.IndexOf("PanelId.BattlePass", StringComparison.Ordinal);
@@ -401,25 +405,28 @@ namespace DeNelle.Editor.Regression
         // =====================================================================
         //  The persistent HUD door — exactly ONE routing authority.
         // =====================================================================
-        private static void CheckHudDoor(string hud, List<string> failures)
+        private static void CheckHudDoor(string hud, string deck, List<string> failures)
         {
-            Require(hud, "RealmStoreHudButton", "dedicated HUD Store face is absent", failures);
-            Require(hud, "sizeDelta = new Vector2(dockTabPx, dockTabPx)",
-                "HUD Store face is not pinned to the touch floor", failures);
+            if (hud.Contains("RealmHudButton"))
+                failures.Add("legacy persistent Realm face remains; Night Market belongs in the menu drawer.");
+            Require(hud, "AddDockTab(_slideDock.panel, dockRow++, \"Night Market\", OpenRealmStore)",
+                "Night Market drawer destination is absent or not bound to its route", failures);
+            Require(hud, "DockTabCount = 6",
+                "drawer capacity was not expanded for the Night Market touch row", failures);
             Require(hud, "HudLayoutBands.DockEdgePx",
-                "HUD Store face is not seated from the shared dock safe-edge value", failures);
-            Require(hud, "PanelRouter.Open(PanelId.RealmStore)",
-                "HUD Store does not route to the existing Realm Store door", failures);
+                "HUD menu handle is not seated from the shared dock safe-edge value", failures);
+            Require(hud, "PanelRouter.Open(PanelId.RealmDeck)",
+                "Night Market drawer command does not route to the Realm workspace", failures);
+            Require(deck, "PanelId.RealmStore",
+                "Realm workspace does not route its Store card to the existing store door", failures);
 
             // Count CALL SITES, not substrings — comments and log strings are not authorities.
-            int authorities = Regex.Matches(Code(hud), @"PanelRouter\.Open\(PanelId\.RealmStore\)").Count;
+            int authorities = Regex.Matches(Code(deck), @"PanelId\.RealmStore").Count;
             if (authorities != 1)
                 failures.Add($"HUD declares {authorities} Realm Store routing authorities; there must be exactly one.");
 
-            if (hud.Contains("AddDockTab(_slideDock.panel, 5, \"Realm Store\""))
-                failures.Add("Realm Store still occupies a drawer row in addition to the persistent face.");
             Require(hud, "Register(\"chatDock\"",
-                "Store/Menu column is not posture-owned with the dock", failures);
+                "Night Market/Menu drawer is not posture-owned with the dock", failures);
         }
 
         // =====================================================================

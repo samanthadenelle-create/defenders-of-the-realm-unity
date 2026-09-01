@@ -45,6 +45,7 @@ namespace DeNelle.Tests.EditMode
         }
 
         private ICraftableCatalog _savedProvider;
+        private readonly List<CatalogEntry> _savedCatalog = new List<CatalogEntry>();
 
         [SetUp]
         public void SetUp()
@@ -52,6 +53,15 @@ namespace DeNelle.Tests.EditMode
             // Preserve whatever the runtime registered (usually null in EditMode) and restore in TearDown.
             _savedProvider = CraftableCatalogRegistry.Provider;
             CraftableCatalogRegistry.Provider = null;
+            _savedCatalog.Clear();
+            foreach (var entry in CatalogRegistry.All()) _savedCatalog.Add(entry);
+            CatalogRegistry.Clear();
+            CatalogRegistry.Register(new CatalogEntry
+            {
+                id = "workshop", displayName = "Crafting Station",
+                type = CatalogType.Support, role = StructureRole.CraftingStation,
+            });
+            StructureRoles.Invalidate();
             GearCatalog.Reload();
         }
 
@@ -59,6 +69,9 @@ namespace DeNelle.Tests.EditMode
         public void TearDown()
         {
             CraftableCatalogRegistry.Provider = _savedProvider;
+            CatalogRegistry.Clear();
+            foreach (var entry in _savedCatalog) CatalogRegistry.Register(entry);
+            StructureRoles.Invalidate();
         }
 
         [Test]
@@ -112,7 +125,9 @@ namespace DeNelle.Tests.EditMode
                 new ShoppableCraftable("torch", "Torch", "A simple torch.", "T", craftable: true),
                 new ShoppableCraftable("incomplete", "No Recipe", "missing ingredients", "?", craftable: false));
 
-            var list = ShopCatalog.Shoppable("crafting", "knight", 1);
+            // WO-1161 removed display-word/substr matching. "workshop" is the canonical
+            // structure id whose authored role is crafting_station.
+            var list = ShopCatalog.Shoppable("workshop", "knight", 1);
 
             // Only craftables, and only the actually-craftable one (the no-ingredient recipe is skipped).
             Assert.That(list.Count, Is.EqualTo(1), "only the craftable recipe should be offered");
@@ -129,7 +144,7 @@ namespace DeNelle.Tests.EditMode
             // No provider registered (SetUp cleared it) -> a crafting vendor yields nothing, never throws.
             Assert.DoesNotThrow(() =>
             {
-                var list = ShopCatalog.Shoppable("workbench", "mage", 5);
+                var list = ShopCatalog.Shoppable("workshop", "mage", 5);
                 Assert.That(list.Count, Is.EqualTo(0),
                     "with no craftable provider, a crafting vendor must be empty (data-absent, not a crash)");
             });

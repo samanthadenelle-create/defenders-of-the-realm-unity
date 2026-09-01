@@ -99,7 +99,9 @@ namespace DeNelle.Village.World.Camps
             crt.sizeDelta = new Vector2(420f, 96f);
 
             var bg = card.GetComponent<Image>();
-            bg.color = new Color(0.07f, 0.08f, 0.12f, 0.92f);
+            bg.sprite = Resources.Load<Sprite>("UI/ElarionMedieval/frames/content-panel");
+            bg.type = Image.Type.Sliced;
+            bg.color = Color.white;
             bg.raycastTarget = false;
 
             // Gold left accent bar (matches the project's prompt styling).

@@ -1,0 +1,82 @@
+# content build [after]  target=Android  locations=694  duration=55.6s
+# outputPath=Library/com.unity.addressables/aa/Android/settings.json
+# ---- per-prefix totals ----
+# 7797cabea3a24d3d431cf7bfcfb0ab3c    2 file(s)       114749 bytes (0.11 MiB)
+# addressables                    1 file(s)        18512 bytes (0.02 MiB)
+# catalog                         4 file(s)       243290 bytes (0.23 MiB)
+# dungeon                         1 file(s)      3464491 bytes (3.30 MiB)
+# enemy_art                       5 file(s)      5374496 bytes (5.13 MiB)
+# enemy_controllers               4 file(s)      1616592 bytes (1.54 MiB)
+# enemy_models                    4 file(s)     69165445 bytes (65.96 MiB)
+# enemy_textures                  1 file(s)        20633 bytes (0.02 MiB)
+# gear                            1 file(s)     13112112 bytes (12.50 MiB)
+# localization                    3 file(s)        15625 bytes (0.01 MiB)
+# settings.json                   1 file(s)         4182 bytes (0.00 MiB)
+# structure_art                  38 file(s)     32318943 bytes (30.82 MiB)
+# TOTAL 65 file(s) 125469070 bytes (119.66 MiB)
+# ---- files ----
+          32  catalog.hash
+          32  catalog_2026.08.28.345316.hash
+        1916  7797cabea3a24d3d431cf7bfcfb0ab3c_monoscripts_dec3535cab5a8415cf5400b779c950d1.bundle
+        1991  localization-locales_assets_all.bundle
+        4182  settings.json
+        4665  localization-assets-shared_assets_all.bundle
+        8969  localization-string-tables-english_assets_all.bundle
+       18512  addressables_content_state.bin
+       20633  enemy_textures_assets_enemyfam-hollow_0e79ddbc813a1a4200d0b00d8035c964.bundle
+       86471  enemy_controllers_assets_enemyfam-bosses_7cdc28fe427da68eff916abc278d54e8.bundle
+      112833  7797cabea3a24d3d431cf7bfcfb0ab3c_unitybuiltinassets_9bc7e56d2a07387346c07f4d9761734e.bundle
+      121613  catalog.bin
+      121613  catalog_2026.08.28.345316.bin
+      148359  structure_art_assets_structures_wall_medieval_stone_ce807470c70fbfa5afb05f672fecd788.bundle
+      148740  structure_art_assets_structures_ballista_76fa878d2f5dcc3ec5fdca9a897f21d0.bundle
+      151414  structure_art_assets_structures_well_66106376e8283c5ef51e3b56934a06b7.bundle
+      154816  structure_art_assets_structures_arcanetower_albedo_b0e18942516f2e3cb81d7d75b7ab7377.bundle
+      157354  structure_art_assets_structures_arcanespire_2_albedo_78f360a5a4f75f13393908eed091f8b5.bundle
+      157904  structure_art_assets_structures_arcanespire_3_albedo_c7b608854a2ee1fd2b5647947244af80.bundle
+      158403  structure_art_assets_structures_arcanespire_albedo_0eff9389432e48660435859983584dce.bundle
+      158505  enemy_art_assets_enemyfam-bosses_98797db9069b04d5d323ef12e9370913.bundle
+      158829  structure_art_assets_structures_arcanetower_03b6672f70cfa34d102910b59d0c4409.bundle
+      163031  structure_art_assets_structures_wall_medieval_wood_638513e6255d1f8da6c2b98f697b185d.bundle
+      163146  structure_art_assets_structures_catapult_2adde02ad29e831312f3b8bbc2b9f62e.bundle
+      166920  structure_art_assets_structures_tower_wooden_watchtower_l3_tex_woodenwatchtowerl3_basecolor_41fbd4622f62fb5dd9640ab2aae24f9f.bundle
+      173358  enemy_art_assets_enemyfam-shared_b9772cdf0b5da0c0f914a65d51d6ea0c.bundle
+      173359  structure_art_assets_structures_gate_medieval_medium_74583beef33ef2f6f3ac4b1ef5b954f3.bundle
+      221628  structure_art_assets_structures_ironmine_3d502adccb081116e63605f7da485845.bundle
+      223105  structure_art_assets_structures_torche_wall_d9f99c4e1ff2383f416dc41c698e5127.bundle
+      257084  structure_art_assets_structures_house_medieval_medium_b94a8486aa5c14536eade3d5b63d566a.bundle
+      290747  structure_art_assets_structures_windmill_medieval_2d15d6381b775559b0813ba9f188320e.bundle
+      323901  structure_art_assets_structures_watermill_medieval_f0c79acb0d6e4fdfc7224706e3649153.bundle
+      328335  enemy_controllers_assets_enemyfam-shared_4aedaf12d31991bbaf01638c39453b5d.bundle
+      334540  structure_art_assets_structures_pethouse2_ccc7ec40ef8221a05987680b02c48a6f.bundle
+      359895  structure_art_assets_structures_store_b4e82717639cc78bb0fa84bb84c6a870.bundle
+      368975  structure_art_assets_structures_farm_209189dc07100967c89df5da6f1ea50f.bundle
+      378050  structure_art_assets_structures_lumbermill_72d60f30acf39299944fa9af69e15d72.bundle
+      382741  structure_art_assets_structures_barracks_6e7c822da8ffa67d45629b8501683ea7.bundle
+      416883  enemy_controllers_assets_enemyfam-hollow_e070d2b6dd29bc8500d4c8bd8cb71d6f.bundle
+      534582  enemy_art_assets_enemyfam-troll_96fdfb0077cf24a93e8ea789069bfc0b.bundle
+      784903  enemy_controllers_assets_enemyfam-orc_3b1e6e758b1defd47d818eb6f6db6418.bundle
+      837729  structure_art_assets_structures_arcanespire_3_52e948e6396696273362854af9677c11.bundle
+      869606  structure_art_assets_structures_arcanespire_1_9b064c41f956a70d0921edd05a7722cd.bundle
+     1037201  structure_art_assets_structures_arcanespire_2_7d6191569a758558ee6ee2bd65b55e54.bundle
+     1143891  structure_art_assets_structures_tower_wooden_watchtower_l3_5e009b85e4ceee695b1e9447142891e0.bundle
+     1192454  enemy_art_assets_enemyfam-hollow_a0f90790cb845d17bd1cf3cc2d06bc3b.bundle
+     1435776  structure_art_assets_structures_ballista_l2_992332c0f6bcd0982ae94276b0c4f134.bundle
+     1441689  structure_art_assets_structures_armorer_7117032da7cd408f0aa21a15fd0fe313.bundle
+     1445996  structure_art_assets_structures_jeweler_4cb6ebf5c507166af736c790fd04a6e8.bundle
+     1460717  structure_art_assets_structures_ballista_l1_c8c42f99f507f65af91e22408b72b0e8.bundle
+     1474695  structure_art_assets_structures_forge_b7cd9b22c327c19d9a12ceff4dcec9c5.bundle
+     1496644  structure_art_assets_structures_shopandcrafting_bd9548b31eb86098250394fbf28cfb7b.bundle
+     1519074  structure_art_assets_structures_ballista_l3_cd10be71f15b77c7a115452a11d361fa.bundle
+     1859989  structure_art_assets_structures_genericcontainer_bec066018cfaab7314091a567a3814fb.bundle
+     2571912  structure_art_assets_structures_tower_wooden_watchtower_l2_e42f42ac27ad3d525e76983868c5cc5d.bundle
+     2704380  structure_art_assets_structures_tower_wooden_watchtower_f596bbc6dc0e929fe34992054cd824f5.bundle
+     2893544  structure_art_assets_structures_crystalmine_609124b7c2c64f01e8088ab8a8b1cce2.bundle
+     3083159  structure_art_assets_structures_healingcaravan_9afc788b09ac520421e6545d11ab3b21.bundle
+     3315597  enemy_art_assets_enemyfam-orc_183f9099952f12364295b9744f36d9e5.bundle
+     3464491  dungeon_assets_all_6254f25263467f7b8ecec6b2c02391a7.bundle
+     5812225  enemy_models_assets_enemyfam-bosses_6731632138993efde7ed5306a293b496.bundle
+    13112112  gear_assets_all_2d4302935337a9c471bd3951ed02b067.bundle
+    18123122  enemy_models_assets_enemyfam-troll_1120f8b017ed68821fa973c87692b9fc.bundle
+    19223019  enemy_models_assets_enemyfam-orc_9823594788ec5d3032bb5007e38b37ab.bundle
+    26007079  enemy_models_assets_enemyfam-hollow_5fa9d35d355d4d397698fae955573809.bundle

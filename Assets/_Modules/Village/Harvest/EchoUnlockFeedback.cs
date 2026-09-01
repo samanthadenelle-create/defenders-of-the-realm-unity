@@ -390,9 +390,25 @@ namespace DeNelle.Village
                     EchoRoster.Open();
                 });
             if (btn == null) return;
+            // Retire the last silver/grey HUD plate while preserving the shared Button
+            // behavior. Text/state remain data-bound on an empty medieval face.
+            var chipFace = btn.GetComponent<Image>();
+            var medievalFace = Resources.Load<Sprite>("UI/ElarionMedieval/buttons/button-normal-empty");
+            if (chipFace != null && medievalFace != null)
+            {
+                chipFace.sprite = medievalFace;
+                chipFace.type = Image.Type.Simple;
+                chipFace.color = Color.white;
+            }
             // WO-867: the chip is the ONE Echoes surface — word + count on one face, so the
             // count is text-encoded and no longer needs a card of its own. RefreshPip rewrites it.
             _chipLabel = btn.GetComponentInChildren<TMP_Text>();
+            if (_chipLabel != null)
+            {
+                _chipLabel.color = ElarionUi.Parchment;
+                _chipLabel.fontStyle |= FontStyles.Bold;
+                ElarionUiKit.FitSingleLine(_chipLabel, ElarionUiKit.FontFloor, ElarionUi.FontLabel);
+            }
             if (_chipLabel == null)
                 FlowTrace.Warn("Echo", "Echoes chip: no TMP label — the Echo count will not render.");
 

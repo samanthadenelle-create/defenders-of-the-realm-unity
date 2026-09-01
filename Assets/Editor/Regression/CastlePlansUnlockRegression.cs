@@ -209,6 +209,26 @@ namespace DeNelle.Editor
                 failures.Add("[castle-plans] a scripted drop would spawn AFTER collection -- the once-ever guardrail is broken");
             log.AppendLine($"  ShouldSpawnDrop truth table OK (>={req} uncollected spawns; collected never again)");
 
+            // WO-1287: every opening clear must contribute to the repair runway. The
+            // former stagger paid zero iron through wave three; cumulative iron must
+            // now cover the 400 reported repair obligation before the plans arrive.
+            int earlyIron = 0;
+            for (int wave = 1; wave <= req; wave++)
+            {
+                var reward = WaveManager.EarlyWaveRewardFloor(wave);
+                if (reward.Wood <= 0 || reward.Iron <= 0 || reward.Stone <= 0)
+                    failures.Add($"[castle-plans] wave {wave} early floor is not a complete common-resource basket " +
+                                 $"(w{reward.Wood}/i{reward.Iron}/s{reward.Stone})");
+                earlyIron += reward.Iron;
+            }
+            if (earlyIron < 400)
+                failures.Add($"[castle-plans] first {req} waves guarantee only {earlyIron} iron -- " +
+                             "below the reported 400-iron repair obligation");
+            var postFtue = WaveManager.EarlyWaveRewardFloor(req + 1);
+            if (postFtue.Wood != 0 || postFtue.Iron != 0 || postFtue.Stone != 0)
+                failures.Add("[castle-plans] onboarding floor leaks past the plans wave and inflates the late economy");
+            log.AppendLine($"  opening repair runway OK: {earlyIron} guaranteed iron by wave {req}");
+
             // ---- 2 + 4 (grant half): collect once, ever, funding == catalog row ----
             bool hadSave = PlayerPrefs.HasKey(SaveKey);
             string rawSave = hadSave ? PlayerPrefs.GetString(SaveKey, null) : null;

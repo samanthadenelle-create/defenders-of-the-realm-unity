@@ -353,6 +353,10 @@ namespace DeNelle.Village
         {
             Instance = this;
             _cam    = GetComponent<Camera>();
+            // A tight third-person collision seat needs a small near plane; otherwise the
+            // camera transform can be safely in front of a wall while the near plane still
+            // cuts through it and exposes the far side.
+            if (_cam.nearClipPlane > 0.08f) _cam.nearClipPlane = 0.08f;
             _baseFov = _cam.fieldOfView;
 
             // SINGLE-AUTHORITY GUARD: the scene builder attaches BOTH VillageCamera
@@ -964,7 +968,8 @@ namespace DeNelle.Village
             // and the hero shrank to a speck. Fix: spherecast from the hero pivot toward
             // the desired position; if it hits world geometry, pull the seat IN to just
             // in front of the hit so the camera body (+ near clip) never enters the wall.
-            desired = ApplyCollision(desired, dt);
+            // Apply collision after SmoothDamp below. Smoothing toward an already-safe point
+            // can leave the actual camera behind/inside the obstruction for several frames.
 
             // WO-958 (3): ceiling backstop — with dungeon collision OFF (WO-920 ruling)
             // nothing else stops a pitched-up seat from rising into the WO-919 ceiling
@@ -982,7 +987,9 @@ namespace DeNelle.Village
                 }
             }
 
-            transform.position = Vector3.SmoothDamp(transform.position, desired, ref _posVelocity, _smoothTime, float.MaxValue, dt);
+            Vector3 smoothed = Vector3.SmoothDamp(
+                transform.position, desired, ref _posVelocity, _smoothTime, float.MaxValue, dt);
+            transform.position = ApplyCollision(smoothed, dt);
             // DEF-67: apply shake offset on top of the smoothed position.
             if (_shakeOffset.sqrMagnitude > 0.0001f)
                 transform.position += _shakeOffset;
@@ -1261,7 +1268,7 @@ namespace DeNelle.Village
 
             Vector3 dir = toCam / fullDist;
 
-            _fadedThisFrame.Clear();
+            RestoreAllFaded();
             float nearestOccluderDist = float.MaxValue;
 
             // SphereCastAll so the camera body — not an infinitely-thin ray — clears the wall,
@@ -1281,11 +1288,9 @@ namespace DeNelle.Village
                 if (hitDist < nearestOccluderDist) nearestOccluderDist = hitDist;
 
                 // Hide the visible mesh of this occluder (keep its shadows) so the hero shows through.
-                FadeOccluder(col);
             }
 
             // Restore any renderer we faded on a previous frame that is NOT occluding now.
-            RestoreFadedNotHitThisFrame();
 
             // Target fraction of the full distance we're allowed this frame (1 = full seat).
             // Default: hold the full seat (we faded the wall rather than pulling in).
@@ -1294,19 +1299,25 @@ namespace DeNelle.Village
             // SAFETY BACKSTOP ONLY: if an occluder is point-blank close, still pull in to it so
             // the camera body / near clip never embeds in the mesh. This is the rare last resort
             // — normal corner walls (well beyond _occluderPullInDistance) are faded, not pulled in.
-            if (nearestOccluderDist < _occluderPullInDistance)
+            if (nearestOccluderDist < float.MaxValue)
             {
-                float allowed = nearestOccluderDist - _collisionSkin;
-                if (allowed < _minCollisionDistance) allowed = _minCollisionDistance;
-                if (allowed > fullDist)               allowed = fullDist;
+                float allowed = AllowedCameraDistance(fullDist, nearestOccluderDist, _collisionSkin);
                 targetFrac = allowed / fullDist;
             }
 
             // Pull IN fast (avoid a clip frame), ease OUT slowly (no jitter along a wall).
-            float speed = targetFrac < _distanceFrac ? _collisionApproachSpeed : _collisionReturnSpeed;
-            _distanceFrac = Mathf.MoveTowards(_distanceFrac, targetFrac, speed * dt);
+            _distanceFrac = targetFrac < _distanceFrac
+                ? targetFrac
+                : Mathf.MoveTowards(_distanceFrac, targetFrac, _collisionReturnSpeed * dt);
 
             return pivot + dir * (fullDist * _distanceFrac);
+        }
+
+        /// <summary>Pure near-side seating contract used by regression coverage.</summary>
+        public static float AllowedCameraDistance(float fullDistance, float hitDistance, float skin)
+        {
+            if (fullDistance <= 0f) return 0f;
+            return Mathf.Clamp(hitDistance - Mathf.Max(0f, skin), 0.25f, fullDistance);
         }
 
         // Hide an occluder's visible mesh (set ShadowsOnly) so the hero shows through, keeping its

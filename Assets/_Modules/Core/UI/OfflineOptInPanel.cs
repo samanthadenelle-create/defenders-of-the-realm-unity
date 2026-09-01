@@ -129,29 +129,34 @@ namespace DeNelle.Core.UI
                 "OfflineOptInUI", "Play Offline",
                 new Vector2(0.10f, 0.14f), new Vector2(0.90f, 0.86f),
                 onClose: DeclineAndClose, sortingOrder: 31010);
+            MedievalUiSkin.ApplyShell(_modal.chrome, compact: true);
 
             var content = _modal.chrome.content.transform;
 
             _body = ElarionUiKit.Label(content,
                 "Download everything now so the game works without a connection?\n\n" +
                 "Checking download size...",
-                0.52f, 0.92f, ElarionUi.Parchment, 34, TextAlignmentOptions.Top);
+                0.56f, 0.84f, ElarionUi.Parchment, 34, TextAlignmentOptions.Top,
+                0.06f, 0.94f);
 
             // The consequence is WORDED, in its own block, above the two buttons — never
             // signalled by tint (the owner is red/green colourblind, so colour carries no
             // meaning here; the dim parchment is hierarchy only).
             _localSaveNote = ElarionUiKit.Label(content,
                 HudStrings.Get(KeyLocalSaveTitle) + "\n" + HudStrings.Get(KeyLocalSaveNote),
-                0.34f, 0.50f, ElarionUi.ParchmentDim, 26, TextAlignmentOptions.Top);
+                0.39f, 0.54f, ElarionUi.ParchmentDim, 26, TextAlignmentOptions.Top,
+                0.06f, 0.94f);
 
             _progress = ElarionUiKit.Label(content, "",
-                0.27f, 0.33f, ElarionUi.ParchmentDim, 28, TextAlignmentOptions.Center);
+                0.33f, 0.38f, ElarionUi.ParchmentDim, 28, TextAlignmentOptions.Center);
 
-            ElarionUiKit.Button(content, "Download Now", ElarionUiKit.ButtonKind.Gold,
-                new Vector2(0.06f, 0.10f), new Vector2(0.48f, 0.26f), OnDownload);
+            var download = ElarionUiKit.Button(content, "Download Now", ElarionUiKit.ButtonKind.Gold,
+                new Vector2(0.06f, 0.18f), new Vector2(0.48f, 0.32f), OnDownload);
 
-            ElarionUiKit.Button(content, "Not Now", ElarionUiKit.ButtonKind.Quiet,
-                new Vector2(0.52f, 0.10f), new Vector2(0.94f, 0.26f), DeclineAndClose);
+            var later = ElarionUiKit.Button(content, "Not Now", ElarionUiKit.ButtonKind.Quiet,
+                new Vector2(0.52f, 0.18f), new Vector2(0.94f, 0.32f), DeclineAndClose);
+            MedievalUiSkin.ApplyButton(download, primary: true);
+            MedievalUiSkin.ApplyButton(later, primary: false);
 
             // PERMANENT (§12): a capture of this screen can then be read as "the player was
             // told the save is device-only" rather than argued about from the source.

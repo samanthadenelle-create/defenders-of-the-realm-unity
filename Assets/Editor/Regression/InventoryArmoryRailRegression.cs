@@ -138,9 +138,10 @@ namespace DeNelle.Editor.Regression
             if (!tabMethod.Contains("TabRowA") || !tabMethod.Contains("TabRowB") ||
                 !tabMethod.Contains("_portraitLayout"))
                 failures.Add("[wo-1254-tabs] portrait 2x3 non-scrolling tab wrap is absent");
-            if (!header.Contains("KeyHeaderTalents") || !header.Contains("KeyRailMapSoon") ||
-                !header.Contains("FeatureFlags.MapTab"))
-                failures.Add("[wo-1254-tabs] Talents and dormant Map-soon header chips are not both present");
+            if (!header.Contains("KeyHeaderTalents"))
+                failures.Add("[wo-1254-tabs] Talents header chip is absent");
+            if (header.Contains("KeyRailMap") || header.Contains("FeatureFlags.MapTab"))
+                failures.Add("[wo-1254-tabs] retired Realm Map returned to the public Bag header");
             if (!Regex.IsMatch(controller, @"_railIndex\s*=\s*RailGear"))
                 failures.Add("[wo-1254-tabs] Bag no longer lands on Gear");
             if (!vm.Contains("InventoryTabKind.OffHand") || !vm.Contains("EquipOffHandById"))

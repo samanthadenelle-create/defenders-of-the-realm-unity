@@ -930,6 +930,7 @@ namespace DeNelle.Village
         private struct RepairAllItem
         {
             public string Name;
+            public GameObject Target;
             public float DamageFraction;
             public CoreCost Cost;     // in-kind materials. ⚠ The "crystals slot always 0" note here was
                                       // retired 2026-08-24: the owner ruled crystals ARE a universal repair
@@ -969,6 +970,27 @@ namespace DeNelle.Village
         /// </summary>
         public (int repairedCount, CoreCost spent, int remainingDamaged) RepairAll()
             => RepairAllInternal(payShortfallInCrystals: false);
+
+        /// <summary>One-time onboarding assistance invoked only by the plans Echo offer.
+        /// It uses the same repair target set and fix delegates as paid repair, but does
+        /// not touch the wallet. The caller owns the persisted once-ever entitlement.</summary>
+        public int RepairAllComplimentary(string reason)
+        {
+            var items = CollectRepairAllSet();
+            int repaired = 0;
+            foreach (var item in items)
+            {
+                var fix = item.Fix;
+                if (!Guard.Try("Repair", $"complimentary fix '{item.Name}'", () => fix?.Invoke()))
+                    continue;
+                repaired++;
+                FlowTrace.Step("Repair",
+                    $"complimentary Echo repair: '{item.Name}' restored from dmg " +
+                    $"{item.DamageFraction:0.00}; spent NOTHING ({reason})");
+            }
+            Rescan();
+            return repaired;
+        }
 
         /// <summary>
         /// The ONE Repair-All sweep. <paramref name="payShortfallInCrystals"/> is the PROD-014
@@ -1081,10 +1103,17 @@ namespace DeNelle.Village
         /// </summary>
         public bool TryPeekWorstDamaged(out string name, out float damageFraction, out CoreCost cost)
         {
+            return TryPeekWorstDamaged(out name, out damageFraction, out cost, out _);
+        }
+
+        /// <summary>Target-bearing overload for truthful world-space repair feedback.</summary>
+        public bool TryPeekWorstDamaged(out string name, out float damageFraction,
+                                        out CoreCost cost, out GameObject target)
+        {
             var items = CollectRepairAllSet();
             if (items.Count == 0)
             {
-                name = ""; damageFraction = 0f; cost = default;
+                name = ""; damageFraction = 0f; cost = default; target = null;
                 return false;
             }
             int best = 0;
@@ -1093,6 +1122,7 @@ namespace DeNelle.Village
             name = items[best].Name;
             damageFraction = items[best].DamageFraction;
             cost = items[best].Cost;
+            target = items[best].Target;
             return true;
         }
 
@@ -1177,6 +1207,7 @@ namespace DeNelle.Village
                 items.Add(new RepairAllItem
                 {
                     Name = t.DisplayName,
+                    Target = t.GameObject,
                     DamageFraction = t.DamageFraction,
                     Cost = CostFor(t),
                     Fix = () => tc.RepairFull(),   // REP-1: full BY CONTRACT (a fixed 100f under-repaired 120..240-MaxHp buildings), same as ConfirmRepair
@@ -1222,6 +1253,7 @@ namespace DeNelle.Village
                 items.Add(new RepairAllItem
                 {
                     Name = c.BuildingId,
+                    Target = c.gameObject,
                     DamageFraction = frac,
                     // Priced from its Collector catalog row (was free pre-ruling).
                     Cost = CostForStructure(c, frac),
@@ -1243,6 +1275,7 @@ namespace DeNelle.Village
             items.Add(new RepairAllItem
             {
                 Name = name,
+                Target = structure != null ? structure.gameObject : null,
                 DamageFraction = frac,
                 Cost = CostForStructure(structure, frac),
                 Fix = repair,

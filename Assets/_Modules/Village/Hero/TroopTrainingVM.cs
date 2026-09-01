@@ -213,6 +213,7 @@ namespace DeNelle.Village.Hero
         public IReadOnlyList<ItemVM> Troops => _troops;
 
         /// <summary>Live wallet readout (the View's footer chips rebuild from these).</summary>
+        public int Gold     => _economy?.Coins ?? 0;
         public int Wood     => _economy?.Wood ?? 0;
         public int Iron     => _economy?.Iron ?? 0;
         public int Food     => _economy?.Food ?? 0;

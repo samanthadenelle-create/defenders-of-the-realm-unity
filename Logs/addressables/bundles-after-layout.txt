@@ -1,0 +1,67 @@
+# content build [after-layout]  target=Android  locations=672  duration=12.7s
+# outputPath=Library/com.unity.addressables/aa/Android/settings.json
+# ---- per-prefix totals ----
+# 7797cabea3a24d3d431cf7bfcfb0ab3c    2 file(s)       114749 bytes (0.11 MiB)
+# addressables                    1 file(s)        15085 bytes (0.01 MiB)
+# catalog                         4 file(s)       233962 bytes (0.22 MiB)
+# dungeon                         1 file(s)      3464491 bytes (3.30 MiB)
+# enemy_art                       5 file(s)     68927999 bytes (65.73 MiB)
+# gear                            1 file(s)     13112112 bytes (12.50 MiB)
+# localization                    3 file(s)        15625 bytes (0.01 MiB)
+# settings.json                   1 file(s)         4182 bytes (0.00 MiB)
+# structure_art                  35 file(s)     26120614 bytes (24.91 MiB)
+# TOTAL 53 file(s) 112008819 bytes (106.82 MiB)
+# ---- files ----
+          32  catalog.hash
+          32  catalog_2026.08.20.333674.hash
+        1916  7797cabea3a24d3d431cf7bfcfb0ab3c_monoscripts_1b4b4d40685fc1975e33907ff175da32.bundle
+        1991  localization-locales_assets_all.bundle
+        4182  settings.json
+        4665  localization-assets-shared_assets_all.bundle
+        8969  localization-string-tables-english_assets_all.bundle
+       15085  addressables_content_state.bin
+      112833  7797cabea3a24d3d431cf7bfcfb0ab3c_unitybuiltinassets_9bc7e56d2a07387346c07f4d9761734e.bundle
+      116949  catalog.bin
+      116949  catalog_2026.08.20.333674.bin
+      148359  structure_art_assets_structures_wall_medieval_stone_ce807470c70fbfa5afb05f672fecd788.bundle
+      148740  structure_art_assets_structures_ballista_76fa878d2f5dcc3ec5fdca9a897f21d0.bundle
+      151414  structure_art_assets_structures_well_66106376e8283c5ef51e3b56934a06b7.bundle
+      154816  structure_art_assets_structures_arcanetower_albedo_b0e18942516f2e3cb81d7d75b7ab7377.bundle
+      157354  structure_art_assets_structures_arcanespire_2_albedo_78f360a5a4f75f13393908eed091f8b5.bundle
+      157904  structure_art_assets_structures_arcanespire_3_albedo_c7b608854a2ee1fd2b5647947244af80.bundle
+      158403  structure_art_assets_structures_arcanespire_albedo_0eff9389432e48660435859983584dce.bundle
+      158829  structure_art_assets_structures_arcanetower_03b6672f70cfa34d102910b59d0c4409.bundle
+      163031  structure_art_assets_structures_wall_medieval_wood_638513e6255d1f8da6c2b98f697b185d.bundle
+      163146  structure_art_assets_structures_catapult_2adde02ad29e831312f3b8bbc2b9f62e.bundle
+      166920  structure_art_assets_structures_tower_wooden_watchtower_l3_tex_woodenwatchtowerl3_basecolor_41fbd4622f62fb5dd9640ab2aae24f9f.bundle
+      173359  structure_art_assets_structures_gate_medieval_medium_74583beef33ef2f6f3ac4b1ef5b954f3.bundle
+      223105  structure_art_assets_structures_torche_wall_d9f99c4e1ff2383f416dc41c698e5127.bundle
+      257084  structure_art_assets_structures_house_medieval_medium_b94a8486aa5c14536eade3d5b63d566a.bundle
+      290747  structure_art_assets_structures_windmill_medieval_2d15d6381b775559b0813ba9f188320e.bundle
+      323901  structure_art_assets_structures_watermill_medieval_f0c79acb0d6e4fdfc7224706e3649153.bundle
+      334540  structure_art_assets_structures_pethouse2_ccc7ec40ef8221a05987680b02c48a6f.bundle
+      359895  structure_art_assets_structures_store_b4e82717639cc78bb0fa84bb84c6a870.bundle
+      368975  structure_art_assets_structures_farm_209189dc07100967c89df5da6f1ea50f.bundle
+      378050  structure_art_assets_structures_lumbermill_72d60f30acf39299944fa9af69e15d72.bundle
+      382741  structure_art_assets_structures_barracks_6e7c822da8ffa67d45629b8501683ea7.bundle
+      500002  enemy_art_assets_enemyfam-shared_5a05148fd8589f5e341f2c234fc5d125.bundle
+      837729  structure_art_assets_structures_arcanespire_3_52e948e6396696273362854af9677c11.bundle
+      869606  structure_art_assets_structures_arcanespire_1_9b064c41f956a70d0921edd05a7722cd.bundle
+     1037201  structure_art_assets_structures_arcanespire_2_7d6191569a758558ee6ee2bd65b55e54.bundle
+     1143893  structure_art_assets_structures_tower_wooden_watchtower_l3_0b5db53400ee55c1d24d8ebd12ab16ce.bundle
+     1435776  structure_art_assets_structures_ballista_l2_992332c0f6bcd0982ae94276b0c4f134.bundle
+     1441689  structure_art_assets_structures_armorer_7117032da7cd408f0aa21a15fd0fe313.bundle
+     1445996  structure_art_assets_structures_jeweler_4cb6ebf5c507166af736c790fd04a6e8.bundle
+     1460717  structure_art_assets_structures_ballista_l1_c8c42f99f507f65af91e22408b72b0e8.bundle
+     1474695  structure_art_assets_structures_forge_b7cd9b22c327c19d9a12ceff4dcec9c5.bundle
+     1496644  structure_art_assets_structures_shopandcrafting_bd9548b31eb86098250394fbf28cfb7b.bundle
+     1519074  structure_art_assets_structures_ballista_l3_cd10be71f15b77c7a115452a11d361fa.bundle
+     1859989  structure_art_assets_structures_genericcontainer_bec066018cfaab7314091a567a3814fb.bundle
+     2571912  structure_art_assets_structures_tower_wooden_watchtower_l2_e42f42ac27ad3d525e76983868c5cc5d.bundle
+     2704380  structure_art_assets_structures_tower_wooden_watchtower_ebc35504e455abecd2c991ddc6cf6e61.bundle
+     3464491  dungeon_assets_all_6254f25263467f7b8ecec6b2c02391a7.bundle
+     6036026  enemy_art_assets_enemyfam-bosses_ae5aa5ac7ee88577f3c05425c54e10d3.bundle
+    13112112  gear_assets_all_2d4302935337a9c471bd3951ed02b067.bundle
+    18662436  enemy_art_assets_enemyfam-troll_40a0f178fe1bd584fec8c55815f664bb.bundle
+    20196632  enemy_art_assets_enemyfam-hollow_ed4d3c7344cdeedf02e62127ba1d6cd3.bundle
+    23532903  enemy_art_assets_enemyfam-orc_68b19fdb1df205247e4d22b3b6b13966.bundle

@@ -57,6 +57,12 @@ namespace DeNelle.Village.Hud
             // (follows body swaps / respawns; never a cached destroyed instance).
             HudCommands.RegisterAttack(() =>
             {
+                var health = Object.FindAnyObjectByType<HeroHealth>();
+                if (health != null && health.IsBlocking)
+                {
+                    FlowTrace.Step("HudKit", "attack gated while Block is held");
+                    return;
+                }
                 var atk = Object.FindAnyObjectByType<PlayerAttackController>();
                 if (atk == null) { FlowTrace.Warn("HudKit", "attack fired but no PlayerAttackController in scene"); return; }
                 // ⭐ WO-1105 REVISION (owner 2026-08-16, verbatim: "change the bow and arrow attack
@@ -65,6 +71,17 @@ namespace DeNelle.Village.Hud
                 // (the Q medallion -> HeroAbilities.TryCast), so this input never spends an arrow.
                 bool swung = atk.TriggerBasicAttack();
                 FlowTrace.Step("HudKit", "attack command -> TriggerBasicAttack " + (swung ? "SWUNG" : "gated"));
+            });
+
+            HudCommands.RegisterBlock(held =>
+            {
+                var health = Object.FindAnyObjectByType<HeroHealth>();
+                if (health == null)
+                {
+                    FlowTrace.Warn("HudKit", "block fired but no HeroHealth in scene");
+                    return;
+                }
+                health.SetBlocking(held);
             });
 
             HudCommands.RegisterCycleSelect(id =>
@@ -118,7 +135,7 @@ namespace DeNelle.Village.Hud
                 FlowTrace.Step("HudKit", "assignableCast slot=" + slot + " id=" + id + " -> " + (fired ? "FIRED" : "gated"));
             });
 
-            FlowTrace.Step("HudKit", "command bridge registered (attack, cycleSelect, potions, assignable) for scene '" +
+            FlowTrace.Step("HudKit", "command bridge registered (attack, block, cycleSelect, potions, assignable) for scene '" +
                            SceneManager.GetActiveScene().name + "'");
         }
     }

@@ -118,7 +118,7 @@ namespace DeNelle.Core.HudModel
         /// Bag as a tab. This is the number the View must size a slot from; <see cref="ButtonCount"/>
         /// is the enum-identity bound and is deliberately larger (Map stays dormant at ordinal 4).
         /// </summary>
-        public const int MaxVisibleFaces = 6;
+        public const int MaxVisibleFaces = 4;
 
         // Posture keys the model maps to button sets (HudPostureKeys spellings —
         // the owner's hud-areas.json vocabulary; any other key => empty bar,
@@ -508,20 +508,23 @@ namespace DeNelle.Core.HudModel
                 //    lines, so gating it on _source.BuildingFocused (the old WO-835 §3c split-out)
                 //    would make the queues reachable only while standing next to a building, which
                 //    is the exact undiscoverability this WO exists to remove.
-                int mask = Bit(ActionBarButtonId.Build)      // always in town (posture gates)
-                         | Bit(ActionBarButtonId.Bag)        // always applicable
-                         | Bit(ActionBarButtonId.Quests)     // owner: "quests active more often"
-                         | Bit(ActionBarButtonId.Upgrade);   // WO-911: the Manage/Queues door
-                if (_source.TalkAvailable) mask |= Bit(ActionBarButtonId.Talk);
-                if (_source.RaidCapable) mask |= Bit(ActionBarButtonId.Raids);      // WO-835 §3d hide default
+                int mask = Bit(ActionBarButtonId.Build)      // BUILD
+                         | Bit(ActionBarButtonId.Bag)        // HERO (ordinal retained)
+                         | Bit(ActionBarButtonId.Quests)     // JOURNEY (ordinal retained)
+                         | Bit(ActionBarButtonId.Upgrade);   // MANAGE (ordinal retained)
+                // WO-1286: Raids moved under the always-visible Journey card. Keeping a second
+                // conditional Raids face made the same destination appear/disappear in two places.
+                // The enum identity stays dormant for array/save compatibility; Journey calls the
+                // unchanged RaidEntryGate authority.
                 return mask;
             }
             if (_postureKey == PostureExplore)
             {
                 // The calm(explore) occupancy row carries only Talk + Bag — same set here.
-                int mask = Bit(ActionBarButtonId.Bag);
-                if (_source.TalkAvailable) mask |= Bit(ActionBarButtonId.Talk);
-                return mask;
+                return Bit(ActionBarButtonId.Build)
+                     | Bit(ActionBarButtonId.Bag)
+                     | Bit(ActionBarButtonId.Quests)
+                     | Bit(ActionBarButtonId.Upgrade);
             }
             return 0;   // build / hostile / modal / unknown: the bar is down
         }

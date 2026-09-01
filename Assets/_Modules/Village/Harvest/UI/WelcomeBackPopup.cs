@@ -1,271 +1,150 @@
-// =============================================================================
-// WelcomeBackPopup — the "your realm gathered while you slept" summary (WO-115 §2).
-// -----------------------------------------------------------------------------
-// Assembly: DeNelle.Village   Namespace: DeNelle.Village.UI
-//
-// CODE-BUILT UI Toolkit — NOT UXML. PIPELINE_STATE.md §8 hard rule: UXML-sourced
-// UIDocuments render empty in this project's player builds. We build the
-// VisualElement tree in code and host it on a UIDocument whose PanelSettings is
-// BORROWED from the top-most live UIDocument in the scene (a code UIDocument with
-// no PanelSettings renders NOTHING — the documented empty-UI trap). This mirrors
-// LevelUpSkillPopupBootstrap's self-install exactly.
-//
-// REVEAL, NOT TRANSACTION: the grant already happened in OfflineHarvestService
-// before this is shown. Collect just dismisses. A player who closes the app
-// without tapping Collect keeps the haul — it was banked + persisted on claim.
-// =============================================================================
+using TMPro;
 using UnityEngine;
-using UnityEngine.UIElements;
-using DeNelle.Village;
+using UnityEngine.UI;
+using DeNelle.Core.UI;
 
 namespace DeNelle.Village.UI
 {
-    /// <summary>
-    /// One-tap welcome-back summary of the offline haul. Self-installs a code-built
-    /// UI Toolkit panel on a borrowed PanelSettings; <see cref="Show"/> is the only
-    /// entry point (called by OfflineHarvestService after a non-zero claim).
-    /// </summary>
-    [RequireComponent(typeof(UIDocument))]
+    /// <summary>One-tap summary of authoritative offline haul and Echo mending.</summary>
     public sealed class WelcomeBackPopup : MonoBehaviour
     {
-        private static bool s_open;   // at most one welcome-back panel at a time
-
+        private static WelcomeBackPopup s_active;
         private OfflineHarvestResult _result;
+        private ElarionUiKit.ObsidianModal _modal;
+        private PanelHandle _panelHandle;
+        private bool _open;
 
-        // UIF-01: single-modal arbiter handle. Registering routes this reveal through PanelManager so
-        // opening it closes any other panel and the Android/ESC back button can dismiss it. Fully
-        // qualified to avoid any UnityEngine.UIElements name clash.
-        private DeNelle.Core.UI.PanelHandle _panelHandle;
-
-        /// <summary>
-        /// Reveal the welcome-back summary for <paramref name="result"/>. No-op when
-        /// the haul is empty or a panel is already open. Borrows a PanelSettings from
-        /// the scene's top-most UIDocument; if none exists (a scene with no UI to host
-        /// it), the reveal is skipped — the haul is already banked regardless.
-        /// </summary>
         public static void Show(OfflineHarvestResult result)
         {
-            // WO-1231: the gate is "haul OR mend news", not "haul". Passive Echo mending
-            // SPENDS Wood and Iron out of the same away window, so a player could return to
-            // materials already gone and get NO summary at all -- which is the exact case
-            // where a summary matters most, and is what made the spend read as resources
-            // simply vanishing. A stall counts as news too ("your walls stopped mending
-            // because you are out of Wood" is actionable).
-            if (result == null) return;
-            if (result.Total <= 0 && !result.HasMendNews) return;
-            if (s_open) return;
-
-            PanelSettings ps = null;
-            float topSort = float.MinValue;
-            foreach (var doc in Object.FindObjectsByType<UIDocument>(FindObjectsInactive.Include))
-            {
-                if (doc == null || doc.panelSettings == null) continue;
-                if (doc.sortingOrder >= topSort) { topSort = doc.sortingOrder; ps = doc.panelSettings; }
-            }
-            if (ps == null) return;   // no UI in this scene to host the reveal
-
-            var go = new GameObject("WelcomeBackPopup");
-            go.SetActive(false);
-            var doc2 = go.AddComponent<UIDocument>();
-            doc2.panelSettings = ps;
-            doc2.sortingOrder = topSort + 70;   // above the scene UI (and the level-up popup)
-            var popup = go.AddComponent<WelcomeBackPopup>();
+            if (result == null || (result.Total <= 0 && !result.HasMendNews)) return;
+            if (s_active != null) s_active.Dismiss();
+            var host = new GameObject("WelcomeBackPopup");
+            var popup = host.AddComponent<WelcomeBackPopup>();
+            s_active = popup;
             popup._result = result;
-            go.SetActive(true);   // OnEnable builds the tree with PanelSettings already set
+            popup.BuildUi();
         }
-
-        private void OnEnable()
-        {
-            s_open = true;
-            BuildUi();
-
-            // UIF-01: join the single-modal arbiter. Opening this reveal closes any prior panel and the
-            // back button reaches it via PanelManager.CloseOpen. Close action = Dismiss (destroys this GO).
-            _panelHandle = DeNelle.Core.UI.PanelManager.Register("Welcome Back", Dismiss, () => this != null);
-            DeNelle.Core.UI.PanelManager.NotifyOpened(_panelHandle);
-        }
-
-        private void OnDisable()
-        {
-            s_open = false;
-            // UIF-01: release the arbiter slot (no-op if already swapped out).
-            if (_panelHandle != null) DeNelle.Core.UI.PanelManager.NotifyClosed(_panelHandle);
-        }
-
-        private void Dismiss()
-        {
-            Destroy(gameObject);
-        }
-
-        // --- Code-built panel ----------------------------------------------------
 
         private void BuildUi()
         {
-            var doc = GetComponent<UIDocument>();
-            var root = doc != null ? doc.rootVisualElement : null;
-            if (root == null || _result == null) return;
+            _modal = ElarionUiKit.BuildObsidianModal("WelcomeBackUI", "WELCOME BACK, KEEPER",
+                new Vector2(0.18f, 0.08f), new Vector2(0.82f, 0.92f), Dismiss,
+                sortingOrder: 32020, frameName: RpgUiCatalog.FrameCore);
+            if (_modal == null || _modal.canvas == null) { Dismiss(); return; }
+            MedievalUiSkin.ApplyShell(_modal.chrome, compact: false);
 
-            var overlay = new VisualElement { name = "welcomeback-overlay" };
-            overlay.pickingMode = PickingMode.Ignore;   // children still pick; backdrop doesn't steal input
-            var os = overlay.style;
-            os.position = Position.Absolute;
-            os.top = 0f; os.left = 0f; os.right = 0f; os.bottom = 0f;
-            os.alignItems = Align.Center;
-            os.justifyContent = Justify.Center;
+            if (_modal.chrome.layout != null && _modal.chrome.layout.body != null)
+            {
+                var bodyRect = _modal.chrome.layout.body;
+                bodyRect.anchorMin = new Vector2(bodyRect.anchorMin.x, 0.22f);
+                bodyRect.anchorMax = new Vector2(bodyRect.anchorMax.x, 0.82f);
+                bodyRect.offsetMin = Vector2.zero;
+                bodyRect.offsetMax = Vector2.zero;
+            }
 
-            var card = new VisualElement { name = "welcomeback-card" };
-            var cs = card.style;
-            cs.minWidth = 320f;
-            cs.maxWidth = 420f;
-            cs.paddingTop = 20f; cs.paddingBottom = 20f; cs.paddingLeft = 24f; cs.paddingRight = 24f;
-            // WO-562 obsidian canon: near-black card + a 2px gold trim (was a hand-rolled blue-grey fill).
-            cs.backgroundColor = new Color(0.02f, 0.02f, 0.025f, 0.98f);
-            cs.borderTopLeftRadius = 14f; cs.borderTopRightRadius = 14f;
-            cs.borderBottomLeftRadius = 14f; cs.borderBottomRightRadius = 14f;
-            var goldTrim = new Color(0.831f, 0.686f, 0.216f, 1f);
-            cs.borderTopWidth = 2f; cs.borderBottomWidth = 2f; cs.borderLeftWidth = 2f; cs.borderRightWidth = 2f;
-            cs.borderTopColor = goldTrim; cs.borderBottomColor = goldTrim;
-            cs.borderLeftColor = goldTrim; cs.borderRightColor = goldTrim;
+            var body = _modal.chrome.layout != null && _modal.chrome.layout.body != null
+                ? (Transform)_modal.chrome.layout.body : _modal.chrome.content.transform;
 
-            card.Add(MakeLabel("Welcome back, Keeper.", 22f, FontStyle.Bold, new Color(0.933f, 0.784f, 0.282f)));
+            var summary = ElarionUiKit.Label(body, AwayText(), 0.86f, 0.98f,
+                ElarionUi.Parchment, ElarionUi.FontLabel, TextAlignmentOptions.Center,
+                0.05f, 0.95f, bold: false);
+            ElarionUiKit.FitSingleLine(summary);
 
-            var awayLine = MakeLabel(AwayText(), 14f, FontStyle.Normal, new Color(0.78f, 0.82f, 0.9f));
-            awayLine.style.marginTop = 4f;
-            awayLine.style.marginBottom = 12f;
-            card.Add(awayLine);
-
-            AddRowIf(card, _result.AetherCrystals, "Aether Crystals", new Color(0.55f, 0.8f, 1f));
-            AddRowIf(card, _result.Food, "Stone", new Color(0.58f, 0.62f, 0.68f));
-            AddRowIf(card, _result.Iron, "Iron", new Color(0.85f, 0.7f, 0.6f));
-            AddRowIf(card, _result.Wood, "Wood", new Color(0.7f, 0.85f, 0.55f));
-
-            // -- WO-1231: PASSIVE ECHO MENDING, on the same away window ---------
-            // THE SPEND-ATTRIBUTION HOME. Owner-approved surface: this summary, because it
-            // is the moment the player is ALREADY reading a "here is what happened" report.
-            // ⛔ Deliberately NOT a toast per repair -- WO-1231 rules that out by name; it
-            // would spam on every mend. All copy comes from EchoMendCopy (one home for the
-            // sentences, shared with the Echo card and pinned by the regression), and every
-            // number comes from the live claim -- nothing here is invented.
-            //
-            // The spend rows are indented and dimmer so the block reads as "what mending
-            // did" rather than as more haul, but the MINUS SIGN and the word "spent" carry
-            // that meaning on their own: greyscale-safe, no hue doing any work.
-            AddMendRows(card);
+            float y = 0.82f;
+            AddResourceRow(body, ref y, _result.AetherCrystals, "AETHER CRYSTALS");
+            AddResourceRow(body, ref y, _result.Food, "STONE");
+            AddResourceRow(body, ref y, _result.Iron, "IRON");
+            AddResourceRow(body, ref y, _result.Wood, "WOOD");
+            AddMendRows(body, ref y);
 
             if (_result.WasCapped)
             {
-                var nudge = MakeLabel(
-                    "Your mines filled up — keep them defended and check in sooner to catch every shard.",
-                    12f, FontStyle.Italic, new Color(0.95f, 0.78f, 0.45f));
-                nudge.style.whiteSpace = WhiteSpace.Normal;
-                nudge.style.marginTop = 12f;
-                card.Add(nudge);
+                var capped = ElarionUiKit.Label(body,
+                    "Storage filled while you were away. Check in sooner to keep every reward.",
+                    Mathf.Max(0.03f, y - 0.12f), y, ElarionUi.Gold,
+                    ElarionUi.FontMicro, TextAlignmentOptions.Center, 0.06f, 0.94f, bold: true);
+                ElarionUiKit.FitBlock(capped, 26f, ElarionUi.FontMicro);
             }
 
-            var collect = new Button(Dismiss) { text = "Collect" };
-            var bs = collect.style;
-            bs.height = 42f;
-            bs.marginTop = 16f;
-            bs.fontSize = 16f;
-            bs.unityFontStyleAndWeight = FontStyle.Bold;
-            bs.unityTextAlign = TextAnchor.MiddleCenter;
-            bs.color = Color.white;
-            bs.backgroundColor = new Color(0.18f, 0.5f, 0.32f, 0.98f);
-            bs.borderTopLeftRadius = 9f; bs.borderTopRightRadius = 9f;
-            bs.borderBottomLeftRadius = 9f; bs.borderBottomRightRadius = 9f;
-            card.Add(collect);
+            // This report can contain seven data lines; the generic footer zone is
+            // re-seated above the shared Close reservation and lands in that data stack.
+            // Seat the sole action directly in the shell's bottom thumb band instead.
+            var collect = ElarionUiKit.BuildObsidianButton(_modal.chrome.content.transform, "COLLECT",
+                ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Yellow,
+                new Vector2(0.37f, 0.045f), new Vector2(0.63f, 0.155f), Dismiss);
+            MedievalUiSkin.ApplyButton(collect, primary: true);
+            var face = collect != null ? collect.targetGraphic as Image : null;
+            if (face != null) face.type = Image.Type.Simple;
 
-            overlay.Add(card);
-            root.Add(overlay);
+            _open = true;
+            _panelHandle = PanelManager.Register("Welcome Back", Dismiss, () => _open);
+            if (!PanelManager.NotifyOpened(_panelHandle)) Dismiss();
+        }
+
+        private static void AddResourceRow(Transform body, ref float y, int amount, string label)
+        {
+            if (amount <= 0) return;
+            const float h = 0.095f;
+            var plate = ElarionUiKit.AddImage(body, "Reward_" + label,
+                new Vector2(0.08f, y - h), new Vector2(0.92f, y),
+                new Color(0.05f, 0.045f, 0.04f, 0.96f), rounded: false);
+            var name = ElarionUiKit.Label(plate.transform, label, 0f, 1f,
+                ElarionUi.Parchment, ElarionUi.FontMicro, TextAlignmentOptions.Left,
+                0.05f, 0.70f, bold: false);
+            var value = ElarionUiKit.Label(plate.transform, "+" + amount, 0f, 1f,
+                ElarionUi.Gold, ElarionUi.FontLabel, TextAlignmentOptions.Right,
+                0.70f, 0.95f, bold: true);
+            ElarionUiKit.FitSingleLine(name); ElarionUiKit.FitSingleLine(value);
+            y -= h + 0.012f;
+        }
+
+        private void AddMendRows(Transform body, ref float y)
+        {
+            var mend = _result != null ? _result.Mend : null;
+            if (mend == null || !mend.HasContent) return;
+            AddMendLine(body, ref y, EchoMendCopy.AwayMendedLine(mend), ElarionUi.Parchment);
+            AddMendLine(body, ref y, EchoMendCopy.AwaySpentLine(mend), ElarionUi.ParchmentDim);
+            AddMendLine(body, ref y, EchoMendCopy.AwayStallLine(mend), ElarionUi.Gold);
+        }
+
+        private static void AddMendLine(Transform body, ref float y, string text, Color color)
+        {
+            if (string.IsNullOrEmpty(text)) return;
+            const float h = 0.09f;
+            var label = ElarionUiKit.Label(body, text, y - h, y, color,
+                ElarionUi.FontMicro, TextAlignmentOptions.Center, 0.07f, 0.93f, bold: true);
+            ElarionUiKit.FitBlock(label, 24f, ElarionUi.FontMicro);
+            y -= h + 0.01f;
         }
 
         private string AwayText()
         {
             double hours = _result.AwaySeconds / 3600.0;
-            string span = hours >= 1.0
-                ? $"{hours:0.#}h"
-                : $"{Mathf.RoundToInt((float)(_result.AwaySeconds / 60.0))}m";
-            return _result.WasCapped
-                ? $"Your realm gathered for {span} (capped)."
-                : $"Your realm gathered for {span}.";
+            string span = hours >= 1.0 ? $"{hours:0.#}h" : $"{Mathf.RoundToInt((float)(_result.AwaySeconds / 60.0))}m";
+            return _result.WasCapped ? $"YOUR REALM WORKED FOR {span} (STORAGE FULL)" : $"YOUR REALM WORKED FOR {span}";
         }
 
-        /// <summary>
-        /// WO-1231: the mend block -- what the walls gained, what it COST, and whether it
-        /// stalled broke. No-op when mending did nothing worth saying, so a player with no
-        /// Echoes (or an undamaged town) sees exactly the summary they saw before.
-        /// </summary>
-        private void AddMendRows(VisualElement card)
+        private void Dismiss()
         {
-            var mend = _result != null ? _result.Mend : null;
-            if (mend == null || !mend.HasContent) return;
-
-            var rule = new VisualElement();
-            rule.style.height = 1f;
-            rule.style.marginTop = 12f;
-            rule.style.marginBottom = 8f;
-            rule.style.backgroundColor = new Color(0.831f, 0.686f, 0.216f, 0.45f);
-            card.Add(rule);
-
-            if (mend.Repairs > 0 || mend.HealthFraction > 0f)
+            _open = false;
+            if (_panelHandle != null) { PanelManager.NotifyClosed(_panelHandle); _panelHandle = null; }
+            if (_modal != null && _modal.canvas != null)
             {
-                var mended = MakeLabel(EchoMendCopy.AwayMendedLine(mend), 15f, FontStyle.Bold,
-                                       new Color(0.85f, 0.88f, 0.92f));
-                mended.style.whiteSpace = WhiteSpace.Normal;
-                card.Add(mended);
+                if (Application.isPlaying) Destroy(_modal.canvas); else DestroyImmediate(_modal.canvas);
             }
-
-            string spent = EchoMendCopy.AwaySpentLine(mend);
-            if (!string.IsNullOrEmpty(spent))
+            _modal = null;
+            if (s_active == this) s_active = null;
+            if (gameObject != null)
             {
-                var spentLabel = MakeLabel(spent, 13f, FontStyle.Normal, new Color(0.78f, 0.78f, 0.82f));
-                spentLabel.style.whiteSpace = WhiteSpace.Normal;
-                spentLabel.style.marginTop = 2f;
-                card.Add(spentLabel);
-            }
-
-            string stall = EchoMendCopy.AwayStallLine(mend);
-            if (!string.IsNullOrEmpty(stall))
-            {
-                // The actionable one: mending stopped and the player can DO something about
-                // it. Word-carried ("paused", "ran out of <resource>"), never hue-carried.
-                var stallLabel = MakeLabel(stall, 13f, FontStyle.Bold, new Color(0.95f, 0.78f, 0.45f));
-                stallLabel.style.whiteSpace = WhiteSpace.Normal;
-                stallLabel.style.marginTop = 6f;
-                card.Add(stallLabel);
+                if (Application.isPlaying) Destroy(gameObject); else DestroyImmediate(gameObject);
             }
         }
 
-        private void AddRowIf(VisualElement card, int amount, string label, Color accent)
+        private void OnDestroy()
         {
-            if (amount <= 0) return;
-
-            var row = new VisualElement();
-            var rs = row.style;
-            rs.flexDirection = FlexDirection.Row;
-            rs.justifyContent = Justify.SpaceBetween;
-            rs.marginTop = 4f; rs.marginBottom = 4f;
-
-            var name = MakeLabel(label, 15f, FontStyle.Normal, new Color(0.85f, 0.88f, 0.92f));
-            name.style.unityTextAlign = TextAnchor.MiddleLeft;
-
-            var amt = MakeLabel($"+{amount}", 16f, FontStyle.Bold, accent);
-            amt.style.unityTextAlign = TextAnchor.MiddleRight;
-
-            row.Add(name);
-            row.Add(amt);
-            card.Add(row);
-        }
-
-        private Label MakeLabel(string text, float size, FontStyle weight, Color color)
-        {
-            var l = new Label(text);
-            var s = l.style;
-            s.color = color;
-            s.fontSize = size;
-            s.unityFontStyleAndWeight = weight;
-            s.unityTextAlign = TextAnchor.MiddleCenter;
-            return l;
+            _open = false;
+            if (_panelHandle != null) PanelManager.NotifyClosed(_panelHandle);
+            if (s_active == this) s_active = null;
         }
     }
 }

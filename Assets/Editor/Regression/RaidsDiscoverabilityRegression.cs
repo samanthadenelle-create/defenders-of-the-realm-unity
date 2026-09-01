@@ -75,9 +75,7 @@ namespace DeNelle.Editor
 
             try
             {
-                CheckVisibleAndDimmed(failures, log);
-                CheckReasonsSpeakInWords(failures, log);
-                CheckVisibilityPredicateSource(failures, log);
+                CheckStableJourneyDoor(failures, log);
                 CheckUnderlyingGateUnchanged(failures, log);
             }
             catch (Exception ex)
@@ -86,6 +84,36 @@ namespace DeNelle.Editor
             }
 
             return Verdict(failures, log, out reason);
+        }
+
+        private static void CheckStableJourneyDoor(List<string> failures, StringBuilder log)
+        {
+            var src = new FakeSource();
+            var model = new HudActionBarModel(src);
+            model.SetPosture(HudActionBarModel.PostureTown);
+            int[,] states = { { 0, 0 }, { 0, 3 }, { 1, 0 }, { 3, 1 }, { 5, 0 } };
+            for (int i = 0; i < states.GetLength(0); i++)
+            {
+                src.Deployable = states[i, 0];
+                src.Queued = states[i, 1];
+                src.ArmyReady = src.Deployable + src.Queued >= src.Cap;
+                model.Tick();
+                if (model.Active.Contains(ActionBarButtonId.Raids))
+                    failures.Add("WO-1286: troop state created a duplicate Raids bottom-bar face");
+            }
+
+            string deckPath = Path.Combine(Application.dataPath, "_Modules/HUD/PlayerDeckWorkspace.cs");
+            if (!File.Exists(deckPath))
+            {
+                failures.Add("WO-1286: PlayerDeckWorkspace.cs is missing");
+                return;
+            }
+            string deck = StripCommentsAndStrings(File.ReadAllText(deckPath));
+            if (deck.IndexOf("RaidEntryGate.RequestOpen", StringComparison.Ordinal) < 0)
+                failures.Add("WO-1286: Journey no longer routes Raids through RaidEntryGate.RequestOpen");
+            if (deck.IndexOf("PanelId.JourneyDeck", StringComparison.Ordinal) < 0)
+                failures.Add("WO-1286: the stable Journey workspace is not registered");
+            log.AppendLine("  WO-1286 stable Journey door, no duplicate face, RaidEntryGate authority intact - OK");
         }
 
         // ── D1/D2: visible-and-dimmed, never hidden ──────────────────────────
@@ -315,9 +343,8 @@ namespace DeNelle.Editor
         {
             if (failures.Count == 0)
             {
-                reason = "RAIDS DISCOVERABILITY OK — a built Barracks always shows the Raids face; zero troops " +
-                         "greys it with a NoTroops reason; the two dim reasons carry distinct words; the " +
-                         "full-army gate is unchanged";
+                reason = "RAIDS DISCOVERABILITY OK - Journey is the stable Raids door, no conditional duplicate " +
+                         "returns to the primary bar, and the full-army gate is unchanged";
                 Debug.Log("RAIDS_DISCOVERABILITY_OK\n" + log);
                 return true;
             }

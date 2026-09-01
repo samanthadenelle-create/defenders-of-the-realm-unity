@@ -132,6 +132,7 @@ namespace DeNelle.HUD.Kit
 
         private ElarionUiKit.CurrencyChipHandle _wisdomChip;
         private ElarionUiKit.PartyNameplateHandle _heartPlate;   // WO-432: Heart of Elarion on the shared plate
+        private TMP_Text _heartObjectiveLabel;
         private ElarionUiKit.TargetFrameHandle _targetFrame;
         private ElarionUiKit.CastBarHandle _castBar;
         private ElarionUiKit.ActionSlotHandle[] _abilitySlots;
@@ -140,8 +141,15 @@ namespace DeNelle.HUD.Kit
         private ElarionUiKit.SoftGlowCooldown[] _abilityGlows;   // WO-611: soft under-glow cooldown (combat HUD only)
         private ElarionUiKit.LockCrosshairHandle _lockBadge;     // WO-611: animated target lock crosshair (combat HUD only)
         private ElarionUiKit.ActionSlotHandle[] _assignableSlots;
-        private ElarionUiKit.ActionSlotHandle _hpPotionSlot;
-        private ElarionUiKit.ActionSlotHandle _manaPotionSlot;
+        private ElarionUiKit.ActionSlotHandle _itemSlot;
+        private ElarionUiKit.ObsidianModal _itemPicker;
+        private PanelHandle _itemPickerPanelHandle;
+        private WorldHold.Handle _itemPickerHold;
+        private Button _itemHealButton;
+        private Button _itemManaButton;
+        private TMP_Text _itemHealLabel;
+        private TMP_Text _itemManaLabel;
+        private bool _itemUseInFlight;
         private ElarionUiKit.ActionSlotHandle[] _playerStatusSlots;
         private ElarionUiKit.ActionSlotHandle[] _enemyStatusSlots;
         private const int StatusSlotCount = 6;
@@ -168,6 +176,9 @@ namespace DeNelle.HUD.Kit
         private HudActionBarModel _barModel;
         private readonly GameObject[] _barButtons = new GameObject[HudActionBarModel.ButtonCount];
         private readonly RectTransform[] _barButtonRects = new RectTransform[HudActionBarModel.ButtonCount];
+        private GameObject _peacefulDockRoot;
+        private GameObject _combatDockRoot;
+        private ElarionUiKit.ActionSlotHandle[] _adaptiveCombatSlots;
         // Constant per-button width (owner default: never resize a face as context
         // changes) sized so the 7-button MAX packs the ActionBar zone exactly; smaller
         // sets keep the SAME width and the group centers ((1 - gap*(max-1)) / max).
@@ -302,8 +313,10 @@ namespace DeNelle.HUD.Kit
         /// <summary>Start-Wave availability push (StartWaveHudBridge -> VillageHudController adapter).</summary>
         public void SetStartWaveAvailable(bool available)
         {
+            // StartWaveHudBridge owns the gameplay/onboarding predicate and pushes the
+            // already-gated availability. This view only renders that model input.
             _startWaveAvailable = available;
-            if (_startWaveButton != null) _startWaveButton.gameObject.SetActive(available);
+            if (_startWaveButton != null) _startWaveButton.gameObject.SetActive(_startWaveAvailable);
         }
 
         /// <summary>Repair-prompt push adapter — the shared toast PLUS a factory Repair
@@ -533,11 +546,7 @@ namespace DeNelle.HUD.Kit
             // ⛔ Do not solve a truncation by shortening the authored string - a two-glyph stub in
             // front of a number is a naked number with noise on it, which is what this tag exists
             // to prevent.
-            _wisdomChip = ElarionUiKit.CurrencyChip(pool, ElarionUiKit.CurrencyKind.Wisdom,
-                new Vector2(HudLayoutBands.SkillChipInVitals.xMin, HudLayoutBands.SkillChipInVitals.yMin),
-                new Vector2(HudLayoutBands.SkillChipInVitals.xMax, HudLayoutBands.SkillChipInVitals.yMax),
-                tag: "SKILL");
-            Register("wisdomChip", WrapAsWidget("wisdomChip", _wisdomChip.root));
+            // Locked adaptive-HUD ruling: skill points live only in Hero -> Skills.
 
             // ── status: wave block (calm(town), between waves only) + heart ──
             BuildWaveBlock(pool);
@@ -666,7 +675,7 @@ namespace DeNelle.HUD.Kit
             // ── actionRail: static W/E/R class kit (WO-609 — bottom-right) ──
             BuildAbilityRow(pool);
 
-            // ── actionBar: hotswap extras + dual potions (WO-609 — bottom-center) ──
+            // ── actionBar: hotswap extras + one paused Item picker ──
             BuildAssignableSkillRow(pool);
             BuildPotionSlots(pool);
 
@@ -757,7 +766,7 @@ namespace DeNelle.HUD.Kit
             // from the array; the old dim-to-0.45 CanvasGroup treatment is retired.
             RegisterBarButton(ActionBarButtonId.Talk, "talkButton", talk);
 
-            var bag = ElarionUiKit.BuildObsidianButton(pool, "Bag",
+            var bag = ElarionUiKit.BuildObsidianButton(pool, "Hero",
                 ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Gray,
                 slot0Min, slot0Max, () =>
                 {
@@ -766,10 +775,8 @@ namespace DeNelle.HUD.Kit
                     // is scene-whitelisted and never spawned). Route through PanelRouter — the
                     // scene-independent Core opener HeroInventoryController registers at boot.
                     // The legacy events still fire for any listener that DOES exist (hub scenes).
-                    FlowTrace.Step("HudKit", "Bag tapped -> PanelRouter.Open(Inventory)");
-                    PanelRouter.Open(PanelId.Inventory);
-                    if (_owner != null) _owner.InventoryRequested?.Invoke();
-                    VillageHudController.RaiseInventoryRequested();
+                    FlowTrace.Step("HudKit", "Hero tapped -> PanelRouter.Open(HeroDeck)");
+                    PanelRouter.Open(PanelId.HeroDeck);
                 });
             RegisterBarButton(ActionBarButtonId.Bag, "bagButton", bag);
 
@@ -820,7 +827,7 @@ namespace DeNelle.HUD.Kit
 
             // QUESTS (WO-835 §3c): its OWN always-in-town face — the 07-06 Quests<->Upgrade
             // relabel hijack is retired (owner: "allows quests to be active more often").
-            var quests = ElarionUiKit.BuildObsidianButton(pool, "Quests",
+            var quests = ElarionUiKit.BuildObsidianButton(pool, "Journey",
                 ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Gray,
                 slot0Min, slot0Max, OnQuestsAction);
             RegisterBarButton(ActionBarButtonId.Quests, "questButton", quests);
@@ -850,6 +857,9 @@ namespace DeNelle.HUD.Kit
             // floor cost nothing; FitBlock keeps the same bounded auto-size and the same floor
             // and uses the height already reserved. The BuildRailChip precedent, same reasoning.
             if (_manageButtonLabel != null) ElarionUiKit.FitBlock(_manageButtonLabel);
+
+            BuildAdaptivePeacefulDock(pool);
+            BuildAdaptiveCombatDock(pool);
 
             // ── moveCluster -> HudMoveInput ──
             if (FeatureFlags.CombatHud611)
@@ -899,16 +909,7 @@ namespace DeNelle.HUD.Kit
             //
             // Flag-OFF builds NOTHING (not a hidden widget): a minimap that is off should
             // cost zero, and an unregistered id is simply absent from every occupancy row.
-            if (FeatureFlags.Minimap)
-            {
-                _minimap = HudMinimapWidget.Create(pool);
-                WireMinimapProviders(_minimap);
-                Register("minimap", WrapAsWidget("minimap", _minimap.gameObject));
-            }
-            else
-            {
-                FlowTrace.Step("Minimap", "ff.minimap=0 - the corner minimap is not built this session.");
-            }
+            // Locked adaptive-HUD ruling: no minimap is constructed on the player HUD.
 
             // ── feedback: the CombatTextLayer marker (its own capped/pooled canvas) ──
             var fb = new GameObject("FeedbackLayerMarker", typeof(RectTransform));
@@ -1042,7 +1043,7 @@ namespace DeNelle.HUD.Kit
             // Labels + progress + Start Wave (all factory pieces).
             // WO-432: NO olive Panel() slab — a bare transparent container so the wave
             // labels/progress/button read cleanly against the scene (kill the block bg).
-            _waveBlockRoot = new GameObject("WaveBlock", typeof(RectTransform));
+            _waveBlockRoot = new GameObject("WaveBlock", typeof(RectTransform), typeof(Image));
             _waveBlockRoot.transform.SetParent(pool, false);
             var wbrt = (RectTransform)_waveBlockRoot.transform;
             // ── WO-1144: THE WAVE BLOCK GETS ITS OWN BAND, HUNG BELOW THE STATUS CROWN ──
@@ -1078,15 +1079,32 @@ namespace DeNelle.HUD.Kit
             wbrt.pivot = new Vector2(0.5f, 1f);          // top edge pinned to the mount's bottom edge
             wbrt.sizeDelta = new Vector2(0f, WaveBandHeightPx);
             wbrt.anchoredPosition = Vector2.zero;
+            var wavePlate = _waveBlockRoot.GetComponent<Image>();
+            var wavePlateSprite = Resources.Load<Sprite>("UI/ElarionMedieval/frames/content-panel");
+            if (wavePlateSprite != null)
+            {
+                wavePlate.sprite = wavePlateSprite;
+                wavePlate.type = Image.Type.Simple;
+                wavePlate.preserveAspect = false;
+                wavePlate.color = Color.white;
+            }
+            else wavePlate.color = new Color(0.03f, 0.035f, 0.045f, 0.94f);
+            wavePlate.raycastTarget = false;
             // Labels + progress occupy the LEFT ~58% of the band; the CTA owns the right ~37%.
             // (F8 2026-07-08 lesson kept: every label band below is tall enough to seat its line —
             // the guard FAIL that started this stack was "0 visible glyphs, rect 333x25".)
             _waveLabel = ElarionUiKit.Label(_waveBlockRoot.transform, "", 0.50f, 0.96f,
                 ElarionUi.Parchment, ElarionUi.FontHead, TextAlignmentOptions.Center, 0.02f, 0.60f, bold: true);
+            _waveLabel.enableAutoSizing = true;
+            _waveLabel.fontSizeMin = 22f;
+            _waveLabel.fontSizeMax = 30f;
             _waveCountdown = ElarionUiKit.Label(_waveBlockRoot.transform, "", 0.16f, 0.48f,
                 ElarionUi.Gilt, ElarionUi.FontLabel, TextAlignmentOptions.Center, 0.02f, 0.60f, bold: true);
+            _waveCountdown.enableAutoSizing = true;
+            _waveCountdown.fontSizeMin = 18f;
+            _waveCountdown.fontSizeMax = 24f;
             _waveProgress = ElarionUiKit.BuildObsidianBar(_waveBlockRoot.transform,
-                ElarionUiKit.ObsidianBarKind.Stat, new Vector2(0.03f, 0.04f), new Vector2(0.59f, 0.13f),
+                ElarionUiKit.ObsidianBarKind.Stat, new Vector2(0.03f, 0.08f), new Vector2(0.59f, 0.18f),
                 withValue: false, framed: false);
             // y 0.03-0.93 of the 128 px band == 115 ref px, clear of ElarionUiKit.MinTouchPx (112),
             // so the CTA is authored ABOVE the floor rather than relying on ClampMinTouch to rescue
@@ -1096,6 +1114,14 @@ namespace DeNelle.HUD.Kit
                 ElarionUiKit.ObsidianButtonStyle.Style2, ElarionUiKit.ObsidianButtonColor.Green,
                 new Vector2(0.63f, 0.03f), new Vector2(1.00f, 0.93f),
                 () => { if (_owner != null) _owner.StartWaveRequested?.Invoke(); });
+            MedievalUiSkin.ApplyButton(_startWaveButton, primary: true);
+            var startWaveLabel = _startWaveButton != null
+                ? _startWaveButton.GetComponentInChildren<TMP_Text>(true) : null;
+            if (startWaveLabel != null)
+            {
+                startWaveLabel.fontSizeMin = 20f;
+                startWaveLabel.fontSizeMax = 30f;
+            }
             // Carry-over (WO-T2 working-tree intent): the tutorial spotlight target.
             TutorialHighlightRegistry.Register("hud.wave_button", (RectTransform)_startWaveButton.transform);
             _startWaveButton.gameObject.SetActive(false);
@@ -1320,8 +1346,14 @@ namespace DeNelle.HUD.Kit
             // reports it. The chip is 112 px TALL, so the label wraps instead: FitBlock keeps the
             // same bounded auto-size and legibility floor, uses the height we already reserved,
             // and nothing is clipped or dropped. Single-word chips ("Resources") are unaffected.
+            MedievalUiSkin.ApplyButton(btn, primary: true);
             var lbl = btn.GetComponentInChildren<TMP_Text>(true);
-            if (lbl != null) ElarionUiKit.FitBlock(lbl);
+            if (lbl != null)
+            {
+                lbl.fontSizeMin = 22f;
+                lbl.fontSizeMax = 30f;
+                ElarionUiKit.FitSingleLine(lbl, 22f, 30f);
+            }
             return btn;
         }
 
@@ -1430,14 +1462,31 @@ namespace DeNelle.HUD.Kit
             var markImg = mark.GetComponent<Image>();
             markImg.preserveAspect = true; markImg.raycastTarget = false;
             var markSprite = UiStyle.Icon("tree");
-            if (markSprite != null) markImg.sprite = markSprite; else mark.SetActive(false);
+            // The adjacent campfire/tree glyph duplicated the explicit Heart of Elarion label
+            // and read as a separate unexplained control. Keep the object for prefab/capture
+            // compatibility, but retire its player-facing rendering.
+            mark.SetActive(false);
 
             // WO-432: the Heart of Elarion now renders on the SHARED PartyNameplate builder
             // (name = "Heart of Elarion" + a single HP bar). Only HealthFill is used; the mana row is
             // hidden so it reads as the world-tree/heart status, never a second hero MP bar.
             // (ASCII name; the old "♥" heart glyph tofu'd on the build font.)
             _heartPlate = ElarionUiKit.BuildPartyNameplate(root.transform, "Heart of Elarion",
-                new Vector2(0.16f, 0.02f), new Vector2(0.99f, 0.98f));
+                new Vector2(0.02f, 0.02f), new Vector2(0.99f, 0.98f));
+            _heartObjectiveLabel = ElarionUiKit.Label(_heartPlate.Root.transform,
+                "Prepare the realm for the next wave.", 0.08f, 0.48f,
+                ElarionUi.Parchment, ElarionUi.FontLabel, TextAlignmentOptions.MidlineLeft,
+                0.05f, 0.95f);
+            _heartObjectiveLabel.enableAutoSizing = true;
+            ElarionUiKit.FitSingleLine(_heartObjectiveLabel, 16f, 18f);
+            if (_heartPlate.NameLabel != null)
+            {
+                _heartPlate.NameLabel.fontSizeMin = 20f;
+                _heartPlate.NameLabel.fontSizeMax = 26f;
+            }
+            var heartHealthRow = _heartPlate.HealthFill != null
+                ? _heartPlate.HealthFill.transform.parent : null;
+            if (heartHealthRow != null) heartHealthRow.gameObject.SetActive(false);
             if (_heartPlate.ManaFill != null)
             {
                 _heartPlate.ManaFill.fillAmount = 0f;
@@ -1446,6 +1495,107 @@ namespace DeNelle.HUD.Kit
             }
 
             Register("heartStatus", WrapAsWidget("heartStatus", root));
+        }
+
+        /// <summary>
+        /// Approved calm-state dock: one stable housing with four touch-first medallions.
+        /// Navigation remains routed through the existing authoritative seams; this method owns
+        /// presentation and labels only.
+        /// </summary>
+        private void BuildAdaptivePeacefulDock(Transform pool)
+        {
+            _peacefulDockRoot = new GameObject("AdaptivePeacefulDock", typeof(RectTransform));
+            _peacefulDockRoot.transform.SetParent(pool, false);
+            var rootRt = (RectTransform)_peacefulDockRoot.transform;
+            rootRt.anchorMin = Vector2.zero;
+            rootRt.anchorMax = Vector2.one;
+            rootRt.offsetMin = rootRt.offsetMax = Vector2.zero;
+
+            ElarionUiKit.BuildActionBarHousing(_peacefulDockRoot.transform,
+                new Vector2(0f, 0f), new Vector2(1f, 1f));
+
+            BuildPeacefulDockSlot(0, "BUILD", UiStyle.Icon("build", "hammer"), () =>
+            {
+                if (_owner != null) _owner.BuildRequested?.Invoke();
+            });
+            BuildPeacefulDockSlot(1, "HERO", UiStyle.Icon("hero", "helmet", "sword"), () =>
+            {
+                if (!PanelRouter.Open(PanelId.HeroDeck))
+                    FlowTrace.Warn("HudKit", "Hero workspace opener not registered");
+            });
+            BuildPeacefulDockSlot(2, "JOURNEY", UiStyle.Icon("journey", "compass", "quest"), OnQuestsAction);
+            BuildPeacefulDockSlot(3, "MANAGE", UiStyle.Icon("manage", "banner", "shield"), OnManageAction);
+
+            Register("peacefulDock", WrapAsWidget("peacefulDock", _peacefulDockRoot));
+        }
+
+        private void BuildPeacefulDockSlot(int index, string caption, Sprite icon, Action command)
+        {
+            const int count = 4;
+            const float gap = 0.018f;
+            float width = (1f - gap * (count + 1)) / count;
+            float x0 = gap + index * (width + gap);
+            var slot = ElarionUiKit.BuildActionSlot(_peacefulDockRoot.transform,
+                new Vector2(x0, 0.08f), new Vector2(x0 + width, 0.94f), command);
+            // Keep the slot as an equal-width quarter of the shared dock.  Only its medallion
+            // artwork is square; constraining the slot itself makes Unity centre all four roots
+            // on the same point and the last one (MANAGE) visually covers the others.
+            ElarionUiKit.StyleAsRoundMedallion(slot);
+            slot.SetIcon(icon);
+            slot.SetCaption(caption);
+            if (slot.button != null) ElarionUiKit.ClampMinTouch(slot.button);
+        }
+
+        /// <summary>Approved active-combat dock: Attack, held Block, three live assignable skills,
+        /// and the atomic paused Item picker in one stable six-medallion housing.</summary>
+        private void BuildAdaptiveCombatDock(Transform pool)
+        {
+            _combatDockRoot = new GameObject("AdaptiveCombatDock", typeof(RectTransform));
+            _combatDockRoot.transform.SetParent(pool, false);
+            var rootRt = (RectTransform)_combatDockRoot.transform;
+            rootRt.anchorMin = Vector2.zero;
+            rootRt.anchorMax = Vector2.one;
+            rootRt.offsetMin = rootRt.offsetMax = Vector2.zero;
+            ElarionUiKit.BuildActionBarHousing(_combatDockRoot.transform, Vector2.zero, Vector2.one);
+
+            _adaptiveCombatSlots = new ElarionUiKit.ActionSlotHandle[6];
+            _adaptiveCombatSlots[0] = BuildCombatDockSlot(0, "ATTACK",
+                UiStyle.Icon("attack", "energy-sword", "sword"), HudCommands.Attack);
+            _adaptiveCombatSlots[1] = BuildCombatDockSlot(1, "BLOCK",
+                UiStyle.Icon("block", "shield", "defense"), null);
+            if (_adaptiveCombatSlots[1] != null && _adaptiveCombatSlots[1].root != null)
+                _adaptiveCombatSlots[1].root.AddComponent<HudBlockPressRelay>();
+            _adaptiveCombatSlots[2] = BuildCombatDockSlot(2, "SKILL I",
+                UiStyle.Icon("skill", "ability"), () => HudCommands.AssignableCast(0));
+            _adaptiveCombatSlots[3] = BuildCombatDockSlot(3, "SKILL II",
+                UiStyle.Icon("skill", "ability"), () => HudCommands.AssignableCast(1));
+            _adaptiveCombatSlots[4] = BuildCombatDockSlot(4, "SKILL III",
+                UiStyle.Icon("skill", "ability"), () => HudCommands.AssignableCast(2));
+            _adaptiveCombatSlots[5] = BuildCombatDockSlot(5, "ITEM",
+                UiStyle.Icon("potion", "consumable", "bag"), OpenItemPicker);
+            if (_adaptiveCombatSlots[5] != null)
+            {
+                _adaptiveCombatSlots[5].showZero = true;
+                ElarionUiKit.StyleAsStackBadge(_adaptiveCombatSlots[5]);
+            }
+
+            Register("combatDock", WrapAsWidget("combatDock", _combatDockRoot));
+        }
+
+        private ElarionUiKit.ActionSlotHandle BuildCombatDockSlot(int index, string caption,
+            Sprite icon, Action command)
+        {
+            const int count = 6;
+            const float gap = 0.010f;
+            float width = (1f - gap * (count + 1)) / count;
+            float x0 = gap + index * (width + gap);
+            var slot = ElarionUiKit.BuildActionSlot(_combatDockRoot.transform,
+                new Vector2(x0, 0.06f), new Vector2(x0 + width, 0.95f), command);
+            ElarionUiKit.StyleAsRoundMedallion(slot);
+            slot.SetIcon(icon);
+            slot.SetCaption(caption);
+            if (slot.button != null) ElarionUiKit.ClampMinTouch(slot.button);
+            return slot;
         }
 
         private void BuildAbilityRow(Transform pool)
@@ -1578,45 +1728,126 @@ namespace DeNelle.HUD.Kit
 
         private void BuildPotionSlots(Transform pool)
         {
-            _hpPotionSlot = ElarionUiKit.BuildActionSlot(pool,
-                new Vector2(0.70f, 0.10f), new Vector2(0.83f, 0.95f), HudCommands.Potion);
-            var healIcon = UiStyle.Icon("potion", "consumable", "heal");
-            if (healIcon != null) _hpPotionSlot.SetIcon(healIcon);
-            // Owner ruling 2026-08-05: the potion badges are STACK counts, not ability charges —
-            // an empty larder must render a literal ASCII "0" rather than the blank face a
-            // single-potion stack shows. Opt in per-slot; every other action slot is unchanged.
-            _hpPotionSlot.showZero = true;
-            Register("hpPotionSlot", WrapAsWidget("hpPotionSlot", _hpPotionSlot.root));
+            _itemSlot = ElarionUiKit.BuildActionSlot(pool,
+                new Vector2(0.82f, 0.10f), new Vector2(0.99f, 0.95f), OpenItemPicker);
+            var itemIcon = UiStyle.Icon("potion", "consumable", "bag");
+            if (itemIcon != null) _itemSlot.SetIcon(itemIcon);
+            _itemSlot.SetCaption("ITEM");
+            _itemSlot.showZero = true;
+            if (FeatureFlags.CombatHud611) ElarionUiKit.StyleAsRoundMedallion(_itemSlot);
+            ElarionUiKit.StyleAsStackBadge(_itemSlot);
+            Register("itemSlot", WrapAsWidget("itemSlot", _itemSlot.root));
+        }
 
-            _manaPotionSlot = ElarionUiKit.BuildActionSlot(pool,
-                new Vector2(0.85f, 0.10f), new Vector2(0.99f, 0.95f), HudCommands.ManaPotion);
-            // Owner ruling 2026-08-05 ("the other one looks like a crystal, I think that should be
-            // a mana potion"): resolve the MANA POTION concept. concept-icons.json maps
-            // mana -> role 'potion' / potion_mana (the blue flask art already on disk at
-            // Resources/RpgUi/potion/potion_mana.png). The fallback chain deliberately NO LONGER
-            // ends in "crystal" — that currency-crystal sprite IS the wrong icon the owner
-            // reported, so if the mana art ever fails to load we degrade to another POTION shape
-            // rather than silently reintroducing the defect.
-            var manaIcon = UiStyle.Icon("mana", "potion", "consumable");
-            if (manaIcon != null) _manaPotionSlot.SetIcon(manaIcon);
-            _manaPotionSlot.showZero = true;   // stack semantics, same ruling as the HP slot
-            Register("manaPotionSlot", WrapAsWidget("manaPotionSlot", _manaPotionSlot.root));
+        private void OpenItemPicker()
+        {
+            if (_itemPicker != null || _itemUseInFlight) return;
 
-            if (FeatureFlags.CombatHud611)
+            if (_itemPickerPanelHandle == null)
+                _itemPickerPanelHandle = PanelManager.RegisterBattleAllowed(
+                    "Combat Item Picker", CloseItemPicker, () => _itemPicker != null);
+            if (!PanelManager.NotifyOpened(_itemPickerPanelHandle)) return;
+
+            _itemPickerHold = WorldHold.Acquire(WorldHold.ReasonCombatItemPicker);
+            _itemPicker = ElarionUiKit.BuildObsidianModal("CombatItemPicker", "CHOOSE AN ITEM",
+                new Vector2(0.25f, 0.18f), new Vector2(0.75f, 0.82f), CloseItemPicker,
+                sortingOrder: 31500);
+            MedievalUiSkin.ApplyShell(_itemPicker.chrome, compact: true);
+
+            var body = _itemPicker.chrome.layout.body;
+            // The legacy title zone is designed around a tall left medallion and floats above
+            // this compact art. Replace only its presentation with a body-seated heading.
+            if (_itemPicker.chrome.title != null) _itemPicker.chrome.title.gameObject.SetActive(false);
+            if (_itemPicker.chrome.layout.header != null)
+                _itemPicker.chrome.layout.header.gameObject.SetActive(false);
+            // The procedural shell creates its title underline as a direct sibling rather
+            // than inside the header zone. Once the legacy header is replaced, hide that
+            // orphan too; otherwise it floats above the compact picker as an unexplained line.
+            if (_itemPicker.chrome.content != null)
             {
-                // WO-611 (mockup v8): the two potions are ROUND in the housed action bar — the
-                // medallion face without a key badge (they overlay the obsidian housing, killing
-                // the tan Blink slot faces the 07-05 capture showed).
-                ElarionUiKit.StyleAsRoundMedallion(_hpPotionSlot);
-                ElarionUiKit.StyleAsRoundMedallion(_manaPotionSlot);
+                var contentTransform = _itemPicker.chrome.content.transform;
+                for (int i = 0; i < contentTransform.childCount; i++)
+                {
+                    var child = contentTransform.GetChild(i);
+                    if (child != null && child.name == "Rule") child.gameObject.SetActive(false);
+                }
             }
+            var pickerTitle = ElarionUiKit.Label(body, "CHOOSE AN ITEM",
+                0.74f, 0.89f, ElarionUi.Gold, ElarionUi.FontTitle,
+                TextAlignmentOptions.Center, 0.12f, 0.88f, bold: true);
+            pickerTitle.characterSpacing = 3f;
+            pickerTitle.enableAutoSizing = false;
+            pickerTitle.fontSize = 48f;
+            pickerTitle.enableWordWrapping = false;
+            pickerTitle.raycastTarget = false;
 
-            // Owner ruling 2026-08-05 (quantity on the quick action): give both potion slots the
-            // kit's fixed-pixel STACK badge. MUST run AFTER StyleAsRoundMedallion — that call can
-            // add a GoldRim child, and whatever is parented last draws on top; badge-then-rim
-            // would bury the number under the medallion ring.
-            ElarionUiKit.StyleAsStackBadge(_hpPotionSlot);
-            ElarionUiKit.StyleAsStackBadge(_manaPotionSlot);
+            var hint = ElarionUiKit.Label(body, "Gameplay is paused while you choose.",
+                0.59f, 0.71f, ElarionUi.ParchmentDim, ElarionUi.FontBody,
+                TextAlignmentOptions.Center, 0.12f, 0.88f);
+            hint.enableAutoSizing = false;
+            hint.fontSize = 28f;
+            hint.enableWordWrapping = false;
+            hint.raycastTarget = false;
+
+            _itemHealButton = ElarionUiKit.BuildObsidianButton(body, "HEALING POTION",
+                ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Gray,
+                new Vector2(0.12f, 0.34f), new Vector2(0.88f, 0.51f), () => UseItem(false));
+            _itemManaButton = ElarionUiKit.BuildObsidianButton(body, "MANA DRAUGHT",
+                ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Gray,
+                new Vector2(0.12f, 0.13f), new Vector2(0.88f, 0.30f), () => UseItem(true));
+            MedievalUiSkin.ApplyButton(_itemHealButton, primary: true);
+            MedievalUiSkin.ApplyButton(_itemManaButton, primary: false);
+            _itemHealLabel = _itemHealButton != null ? _itemHealButton.GetComponentInChildren<TMP_Text>() : null;
+            _itemManaLabel = _itemManaButton != null ? _itemManaButton.GetComponentInChildren<TMP_Text>() : null;
+            if (_itemHealLabel != null) { _itemHealLabel.enableAutoSizing = false; _itemHealLabel.fontSize = 34f; }
+            if (_itemManaLabel != null) { _itemManaLabel.enableAutoSizing = false; _itemManaLabel.fontSize = 34f; }
+            RefreshItemPicker();
+            FlowTrace.Step("HudKit", "combat Item picker opened; world hold acquired");
+        }
+
+        private void RefreshItemPicker()
+        {
+            if (_itemPicker == null) return;
+            var c = _models != null ? _models.Consumables : null;
+            int hp = c != null ? c.HpPotionCount : 0;
+            int mana = c != null ? c.ManaPotionCount : 0;
+            if (_itemHealLabel != null) _itemHealLabel.text = "HEALING POTION  x" + hp;
+            if (_itemManaLabel != null) _itemManaLabel.text = "MANA DRAUGHT  x" + mana;
+            if (_itemHealButton != null)
+                _itemHealButton.interactable = HudCommands.HasPotion && c != null && c.HpCooldownRemaining <= 0f;
+            if (_itemManaButton != null)
+                _itemManaButton.interactable = HudCommands.HasManaPotion && c != null && c.ManaCooldownRemaining <= 0f;
+        }
+
+        private void UseItem(bool mana)
+        {
+            if (_itemUseInFlight) return;
+            var c = _models != null ? _models.Consumables : null;
+            bool eligible = c != null && (mana
+                ? HudCommands.HasManaPotion && c.ManaCooldownRemaining <= 0f
+                : HudCommands.HasPotion && c.HpCooldownRemaining <= 0f);
+            if (!eligible) { RefreshItemPicker(); return; }
+
+            _itemUseInFlight = true;
+            try
+            {
+                // The authoritative Village command performs the final inventory check and
+                // consumption. Closing only after it returns prevents rapid-tap duplication.
+                if (mana) HudCommands.ManaPotion(); else HudCommands.Potion();
+                CloseItemPicker();
+            }
+            finally { _itemUseInFlight = false; }
+        }
+
+        private void CloseItemPicker()
+        {
+            if (_itemPicker != null && _itemPicker.canvas != null) Destroy(_itemPicker.canvas);
+            _itemPicker = null;
+            _itemHealButton = _itemManaButton = null;
+            _itemHealLabel = _itemManaLabel = null;
+            _itemPickerHold?.Dispose();
+            _itemPickerHold = null;
+            if (_itemPickerPanelHandle != null) PanelManager.NotifyClosed(_itemPickerPanelHandle);
         }
 
         private void BuildTargetCycle(Transform pool)
@@ -1672,8 +1903,32 @@ namespace DeNelle.HUD.Kit
             // WO-697 icon-first: the coin icon carries identity; "Gold" is the no-art
             // fallback tag only (builder-enforced — the chip is never a naked number).
             _resGoldOnly = ElarionUiKit.CurrencyChip(pool, ElarionUiKit.CurrencyKind.Gold,
-                new Vector2(0.05f, 0.82f), new Vector2(1f, 1f), primary: true, tag: "Gold");
+                new Vector2(0.05f, 0.45f), new Vector2(1f, 1f), primary: true, tag: "Gold");
             var tapGo = _resGoldOnly.root;
+            if (_resGoldOnly.plate != null)
+            {
+                var medievalChip = Resources.Load<Sprite>("UI/ElarionMedieval/frames/content-panel");
+                if (medievalChip != null)
+                {
+                    _resGoldOnly.plate.sprite = medievalChip;
+                    _resGoldOnly.plate.type = Image.Type.Simple;
+                    _resGoldOnly.plate.preserveAspect = false;
+                    _resGoldOnly.plate.color = Color.white;
+                }
+            }
+            var goldFrame = tapGo.transform.Find("PlateFrame")?.GetComponent<Image>();
+            if (goldFrame != null)
+            {
+                var medievalChip = Resources.Load<Sprite>("UI/ElarionMedieval/frames/content-panel");
+                if (medievalChip != null)
+                {
+                    goldFrame.sprite = medievalChip;
+                    goldFrame.type = Image.Type.Simple;
+                    goldFrame.preserveAspect = false;
+                    goldFrame.fillCenter = true;
+                    goldFrame.color = Color.white;
+                }
+            }
             var tapBtn = tapGo.AddComponent<Button>();
             tapBtn.transition = Selectable.Transition.None;
             tapBtn.onClick.AddListener(() =>
@@ -1834,6 +2089,18 @@ namespace DeNelle.HUD.Kit
         // RaidsDimmedChanged (tint the Raids face) — zero predicate reads remain.
         private void BindActionBar()
         {
+            // The approved adaptive HUD uses one stable four-medallion peaceful dock. Its
+            // commands are the same authoritative routes as the retired repacking faces, but
+            // its geometry is posture-owned through hud-areas.json and never changes with
+            // transient Talk/Raid applicability. Keep the old faces constructed for reversal
+            // compatibility, while leaving them unoccupied and out of the render pass.
+            if (_peacefulDockRoot != null)
+            {
+                for (int i = 0; i < _barButtons.Length; i++)
+                    if (_barButtons[i] != null) _barButtons[i].SetActive(false);
+                FlowTrace.Step("HudKit", "adaptive peaceful dock owns the actionBar; legacy repacker retired");
+                return;
+            }
             _barModel = HudActionBarModel.Shared;
             _barModel.ActiveButtonsChanged += ApplyActionBar;
             _unsubscribe.Add(() => _barModel.ActiveButtonsChanged -= ApplyActionBar);
@@ -1988,6 +2255,13 @@ namespace DeNelle.HUD.Kit
                     _manaFillShown = target;
                     _vitals.ManaFill.fillAmount = target;
                 }
+                else if (!Application.isPlaying)
+                {
+                    // Synchronous screenshot evidence has no runtime Update loop. Paint the
+                    // authoritative target immediately so an empty capture cannot hide this row.
+                    _manaFillShown = target;
+                    _vitals.ManaFill.fillAmount = target;
+                }
                 // Steady-state easing runs in Update() (AnimateManaFill).
             }
             // FIX 2026-08-05: this rendered the CLASS WORD ("Ranger  Lv 1"), so nothing in the
@@ -2026,7 +2300,7 @@ namespace DeNelle.HUD.Kit
                 // WO-1104: MEASURE the gain off this push versus the last one, and present it.
                 if (hasXp) NoteXpGain(v.Xp, v.XpToNext, v.Level);
             }
-            _wisdomChip.SetAmount(v.Wisdom);
+            // Wisdom is intentionally not painted on the HUD; Hero -> Skills owns it.
         }
 
         private void OnEconomy()
@@ -2245,8 +2519,10 @@ namespace DeNelle.HUD.Kit
             // AND self-gates to BETWEEN-waves phases. Countdown shows ONLY when real.
             bool betweenWaves = w.Phase == WavePhase.Idle || w.Phase == WavePhase.Countdown ||
                                 w.Phase == WavePhase.Cleared;
-            _waveBlockRoot.SetActive(betweenWaves);
-            if (!betweenWaves) return;
+            bool activeWave = w.Phase == WavePhase.Active || w.Phase == WavePhase.Breached;
+            bool show = betweenWaves || activeWave;
+            _waveBlockRoot.SetActive(show);
+            if (!show) return;
 
             // WO-432: the wave label shows ONLY during an actual wave (Number > 0); the
             // village-at-rest state hides the label entirely instead of a resting caption.
@@ -2254,16 +2530,34 @@ namespace DeNelle.HUD.Kit
             _waveLabel.gameObject.SetActive(hasWave);
             if (hasWave) _waveLabel.text = "Wave " + w.Number;
             bool realCountdown = w.Phase == WavePhase.Countdown && w.CountdownRemaining > 0f;
-            _waveCountdown.text = realCountdown
-                ? "Next wave in " + Mathf.CeilToInt(w.CountdownRemaining) + "s" : "";
-            _waveProgress.SetValue(w.EnemiesTotal - w.EnemiesLive, Mathf.Max(1, w.EnemiesTotal));
+            var labelRt = (RectTransform)_waveLabel.transform;
+            var countdownRt = (RectTransform)_waveCountdown.transform;
+            var progressRt = _waveProgress != null ? _waveProgress.track : null;
+            float contentX1 = activeWave ? 0.97f : 0.60f;
+            labelRt.anchorMin = new Vector2(0.03f, 0.50f);
+            labelRt.anchorMax = new Vector2(contentX1, 0.96f);
+            countdownRt.anchorMin = new Vector2(0.03f, 0.18f);
+            countdownRt.anchorMax = new Vector2(contentX1, 0.49f);
+            if (progressRt != null)
+            {
+                progressRt.anchorMin = new Vector2(0.05f, 0.07f);
+                progressRt.anchorMax = new Vector2(activeWave ? 0.95f : 0.58f, 0.15f);
+                progressRt.offsetMin = Vector2.zero;
+                progressRt.offsetMax = Vector2.zero;
+            }
+            _waveCountdown.text = activeWave
+                ? Mathf.Max(0, w.EnemiesLive) + " enemies remain"
+                : (realCountdown ? "Next wave in " + Mathf.CeilToInt(w.CountdownRemaining) + "s" : "");
+            _waveProgress.SetValue(activeWave ? w.EnemiesLive : w.EnemiesTotal - w.EnemiesLive,
+                Mathf.Max(1, w.EnemiesTotal));
             _waveProgress.track.gameObject.SetActive(w.EnemiesTotal > 0);
             // Owner 07-06 ("missing option to start wave now... they might be fully ready"):
             // the button used to HIDE during Countdown; with countdown now = active battle it
             // must stay available as the skip. Relabel contextually so one control = one action.
             if (_startWaveButton != null)
             {
-                _startWaveButton.gameObject.SetActive(_startWaveAvailable);
+                _startWaveButton.gameObject.SetActive(
+                    betweenWaves && _startWaveAvailable);
                 var swLabel = _startWaveButton.GetComponentInChildren<TMP_Text>(true);
                 if (swLabel != null)
                 {
@@ -2406,16 +2700,39 @@ namespace DeNelle.HUD.Kit
         private void OnAssignable()
         {
             var a = _models != null ? _models.Assignable : null;
-            if (a == null || _assignableSlots == null) return;
-            for (int i = 0; i < _assignableSlots.Length; i++)
+            if (a == null) return;
+            if (_assignableSlots != null)
             {
-                var h = _assignableSlots[i];
-                if (i >= a.Slots.Count) { h.root.SetActive(true); continue; }
-                var s = a.Slots[i];
-                h.root.SetActive(true);
-                h.SetIcon(string.IsNullOrEmpty(s.IconKey) ? null : UiStyle.Icon(s.IconKey));
-                h.SetCooldown(s.CooldownRemaining, s.CooldownTotal);
-                if (h.button != null) h.button.interactable = s.Equipped;
+                for (int i = 0; i < _assignableSlots.Length; i++)
+                {
+                    var h = _assignableSlots[i];
+                    if (i >= a.Slots.Count) { h.root.SetActive(true); continue; }
+                    var s = a.Slots[i];
+                    h.root.SetActive(true);
+                    h.SetIcon(string.IsNullOrEmpty(s.IconKey) ? null : UiStyle.Icon(s.IconKey));
+                    h.SetCooldown(s.CooldownRemaining, s.CooldownTotal);
+                    if (h.button != null) h.button.interactable = s.Equipped;
+                }
+            }
+
+            if (_adaptiveCombatSlots != null)
+            {
+                for (int i = 0; i < 3; i++)
+                {
+                    var h = _adaptiveCombatSlots[i + 2];
+                    if (h == null) continue;
+                    if (i >= a.Slots.Count)
+                    {
+                        h.SetIcon(null);
+                        h.SetCooldown(0f, 0f);
+                        if (h.button != null) h.button.interactable = false;
+                        continue;
+                    }
+                    var s = a.Slots[i];
+                    h.SetIcon(string.IsNullOrEmpty(s.IconKey) ? null : UiStyle.Icon(s.IconKey));
+                    h.SetCooldown(s.CooldownRemaining, s.CooldownTotal);
+                    if (h.button != null) h.button.interactable = s.Equipped;
+                }
             }
         }
 
@@ -2423,31 +2740,20 @@ namespace DeNelle.HUD.Kit
         {
             var c = _models != null ? _models.Consumables : null;
             if (c == null) return;
-            if (_hpPotionSlot != null)
+            if (_itemSlot != null)
             {
-                _hpPotionSlot.SetCount(c.HpPotionCount);
-                // Cooldown sweep from the model (state owned by ConsumableUseService). SetCooldown
-                // drives cdRing/cdText AND sets interactable=!cooling; re-apply the count gate AFTER
-                // so a used-up or unbound potion still greys out even when not cooling.
-                _hpPotionSlot.SetCooldown(c.HpCooldownRemaining, c.HpCooldownTotal);
-                if (_hpPotionSlot.button != null)
-                    // Owner ruling 2026-08-05: the count term is GONE from this predicate. A tap at
-                    // ZERO must be RECEIVED so ConsumableUseService's empty-larder branch can tell the
-                    // player what is wrong and where to get more — a dead button absorbs the tap with
-                    // no trace, which is the silence the owner reported. The COOLDOWN term stays, so a
-                    // cooling potion keeps its existing greyed-out behaviour (the sweep already says why).
-                    _hpPotionSlot.button.interactable =
-                        HudCommands.HasPotion && c.HpCooldownRemaining <= 0f;
+                _itemSlot.SetCount(c.HpPotionCount + c.ManaPotionCount);
+                if (_itemSlot.button != null)
+                    _itemSlot.button.interactable = HudCommands.HasPotion || HudCommands.HasManaPotion;
             }
-            if (_manaPotionSlot != null)
+            if (_adaptiveCombatSlots != null && _adaptiveCombatSlots.Length > 5)
             {
-                _manaPotionSlot.SetCount(c.ManaPotionCount);
-                _manaPotionSlot.SetCooldown(c.ManaCooldownRemaining, c.ManaCooldownTotal);
-                if (_manaPotionSlot.button != null)
-                    // Same ruling as the HP slot: tap-at-zero is received (toast), cooldown still greys.
-                    _manaPotionSlot.button.interactable =
-                        HudCommands.HasManaPotion && c.ManaCooldownRemaining <= 0f;
+                var item = _adaptiveCombatSlots[5];
+                item.SetCount(c.HpPotionCount + c.ManaPotionCount);
+                if (item.button != null)
+                    item.button.interactable = HudCommands.HasPotion || HudCommands.HasManaPotion;
             }
+            RefreshItemPicker();
         }
 
         private void OnPlayerStatus() => RefreshStatusRow(_playerStatusSlots, _models?.PlayerStatus);
@@ -2700,8 +3006,8 @@ namespace DeNelle.HUD.Kit
         // argument — not an applicability predicate; visibility lives in the model.)
         private void OnQuestsAction()
         {
-            if (!PanelRouter.Open(PanelId.RumorBoard))
-                FlowTrace.Warn("HudKit", "RumorBoard opener not registered — quest board unreachable");
+            if (!PanelRouter.Open(PanelId.JourneyDeck))
+                FlowTrace.Warn("HudKit", "Journey workspace opener not registered - journey destinations unreachable");
         }
 
         /// <summary>
@@ -2791,10 +3097,10 @@ namespace DeNelle.HUD.Kit
             const float dockTabPx = HudLayoutBands.DockControlPx;   // == ElarionUiKit.MinTouchPx (112)
             const float dockGapPx = HudLayoutBands.DockGapPx;
             float safeLeftPx = HudLayoutBands.DockEdgePx;
-            // The drawer opens to the right of BOTH faces now, not just the gear - otherwise the
-            // panel would park on the Store button, which is the WO-908 handle-on-panel defect
-            // wearing a different hat.
-            const float dockColumnPx = dockTabPx + dockGapPx + dockTabPx;   // gear | gap | Store
+            // One compact menu handle owns secondary navigation. The former persistent
+            // "Realm" face was actually the Store/Night Market and both mislabeled the route
+            // and created an unrelated two-control island over the world.
+            const float dockColumnPx = dockTabPx;
             var dockPanelRt = _slideDock.panel;
             dockPanelRt.anchorMin = new Vector2(0f, 0.5f);
             dockPanelRt.anchorMax = new Vector2(0f, 0.5f);
@@ -2805,35 +3111,49 @@ namespace DeNelle.HUD.Kit
             // AddDockTab's rows resolve to EXACTLY 112px (0.16 * 700), so any smaller panel puts
             // them under the floor and ClampMinTouch would grow them about their centres into each
             // other — the documented WO-852/865/868 overlap trap.
-            dockPanelRt.sizeDelta = new Vector2(400f, DockPanelHeightPx);
+            // Six full-height rows obscured the objective and analog stick when expanded.
+            // A 2 x 3 drawer preserves six mobile-safe targets in a compact footprint.
+            dockPanelRt.sizeDelta = new Vector2(720f, DockPanelHeightPx);
+            // BuildSlideTab's legacy "Rim" is a full-centre rounded Image, not a hollow
+            // border. With gold trim tint it paints over the obsidian panel and produces the
+            // flat mustard slab seen on device. Retire that fill and draw four structural gold
+            // rules around the actual black-iron surface instead.
+            var legacyPanelRim = _slideDock.panel.Find("Rim");
+            if (legacyPanelRim != null) legacyPanelRim.gameObject.SetActive(false);
+            var drawerImage = _slideDock.panel.GetComponent<Image>();
+            var drawerArt = Resources.Load<Sprite>("UI/ElarionMedieval/frames/content-panel");
+            if (drawerImage != null && drawerArt != null)
+            {
+                drawerImage.sprite = drawerArt;
+                drawerImage.type = Image.Type.Sliced;
+                drawerImage.fillCenter = true;
+                drawerImage.color = Color.white;
+            }
             var dockTabRt = (RectTransform)_slideDock.tab.transform;
             dockTabRt.anchorMin = new Vector2(0f, 0.5f);
             dockTabRt.anchorMax = new Vector2(0f, 0.5f);
             dockTabRt.pivot = new Vector2(0f, 0.5f);
-            // The left column is two deliberate 112px controls: Menu (gear) LEFT, Store RIGHT
-            // (WO-1219 - they were stacked, and the stack did not fit its band; see above).
-            // Both sit inside the shared safe-area breathing margin and the drawer begins after
-            // their column, so neither can overlap a row when it opens.
+            // One touch-safe menu handle sits inside the shared safe-area breathing margin.
             dockTabRt.anchoredPosition = new Vector2(safeLeftPx, 0f);
             dockTabRt.sizeDelta = new Vector2(dockTabPx, dockTabPx);   // was 84 - under the 112 floor
 
-            var storeButton = ElarionUiKit.BuildObsidianButton(_slideDock.root.transform, "Store",
-                ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Yellow,
-                Vector2.zero, Vector2.one, OpenRealmStore);
-            if (storeButton != null)
+            // Complete-reskin contract: retain the gear glyph and command, but replace the
+            // legacy flat mustard face with the approved black-iron / antique-gold icon frame.
+            var dockTabImage = _slideDock.tab.targetGraphic as Image ??
+                               _slideDock.tab.GetComponent<Image>();
+            var dockTabFrame = Resources.Load<Sprite>("UI/ElarionMedieval/frames/square-icon-frame");
+            if (dockTabImage != null && dockTabFrame != null)
             {
-                storeButton.gameObject.name = "RealmStoreHudButton";
-                var storeRt = (RectTransform)storeButton.transform;
-                storeRt.anchorMin = storeRt.anchorMax = new Vector2(0f, 0.5f);
-                storeRt.pivot = new Vector2(0f, 0.5f);
-                storeRt.anchoredPosition = new Vector2(safeLeftPx + dockTabPx + dockGapPx, 0f);
-                storeRt.sizeDelta = new Vector2(dockTabPx, dockTabPx);
-                ElarionUiKit.ClampMinTouch(storeButton);
+                dockTabImage.sprite = dockTabFrame;
+                dockTabImage.type = Image.Type.Simple;
+                dockTabImage.preserveAspect = true;
+                dockTabImage.color = Color.white;
+                _slideDock.tab.targetGraphic = dockTabImage;
             }
-            else
-            {
-                FlowTrace.Fail("RealmStore", "dedicated HUD Store button failed to build.");
-            }
+            // BuildSlideTab's procedural Rim is a filled child, not border-only artwork. It
+            // would paint over this authored frame, which already owns its complete rim.
+            var legacyDockRim = _slideDock.tab.transform.Find("Rim");
+            if (legacyDockRim != null) legacyDockRim.gameObject.SetActive(false);
 
             int dockRow = 0;
             if (DeNelle.Core.Services.ClanFeatureGate.PlayerFacingEnabled)
@@ -2841,6 +3161,7 @@ namespace DeNelle.HUD.Kit
             AddDockTab(_slideDock.panel, dockRow++, "Leaderboard", OpenLeaderboard);
             AddDockTab(_slideDock.panel, dockRow++, "Music", OpenJukebox);
             AddDockTab(_slideDock.panel, dockRow++, "Settings", OpenSettings);
+            AddDockTab(_slideDock.panel, dockRow++, "Night Market", OpenRealmStore);
             // Pause folded into the LEFT gear (cosmetic flag A, 2026-07-24): the standalone
             // top-right pause chip (PauseHudBootstrap.PauseHudButton) was culled to leave ONE
             // door. PauseController/SettingsController stay installed by PauseHudBootstrap; this
@@ -2852,8 +3173,7 @@ namespace DeNelle.HUD.Kit
             // door that already exists (PanelRouter.Open(PanelId.RealmStore), registered by
             // PackStoreBootstrap and used by RealmStoreVendor); it is not a second opener.
             // It lives here rather than on the bottom action bar deliberately: that bar is
-            // capped at MaxVisibleFaces = 6 and a seventh face would re-open the "8th face"
-            // problem WO-911 dissolved on purpose.
+            // deliberately: the five-slot bottom bar remains reserved for immediate play verbs.
             Register("chatDock", WrapAsWidget("chatDock", _slideDock.root));
         }
 
@@ -2886,21 +3206,31 @@ namespace DeNelle.HUD.Kit
         // Both numbers now come from DockTabCount. Add a tab -> the panel grows to
         // keep every row at the touch floor, automatically. Do NOT re-introduce a
         // literal height.
-        private const int DockTabCount = 5;   // Chat/Leaderboard/Music/Settings/Pause; Store owns the persistent button
-        private const float DockRowGapFrac = 0.02f;   // gap above AND below each row
+        private const int DockTabCount = 6;   // Chat/Leaderboard/Music/Settings/Night Market/Pause
+        private const float DockRowGapFrac = 0.01f;
 
-        // Height that keeps a row at exactly the kit touch floor for DockTabCount rows.
-        private static float DockPanelHeightPx =>
-            ElarionUiKit.MinTouchPx / ((1f / DockTabCount) - (2f * DockRowGapFrac));
+        // Three physical rows with breathing room around the 112px touch floor.
+        private static float DockPanelHeightPx => 450f;
 
         private void AddDockTab(RectTransform panel, int i, string label, Action onTap)
         {
-            const int n = DockTabCount;
-            float y1 = 1f - (i / (float)n) - DockRowGapFrac;
-            float y0 = 1f - ((i + 1) / (float)n) + DockRowGapFrac;
+            const int columns = 2;
+            const int rows = 3;
+            int column = i % columns;
+            int row = i / columns;
+            const float innerX0 = 0.08f;
+            const float innerX1 = 0.92f;
+            const float innerY0 = 0.09f;
+            const float innerY1 = 0.91f;
+            float cellW = (innerX1 - innerX0) / columns;
+            float cellH = (innerY1 - innerY0) / rows;
+            float x0 = innerX0 + column * cellW + DockRowGapFrac;
+            float x1 = innerX0 + (column + 1) * cellW - DockRowGapFrac;
+            float y1 = innerY1 - row * cellH - DockRowGapFrac;
+            float y0 = innerY1 - (row + 1) * cellH + DockRowGapFrac;
             ElarionUiKit.BuildObsidianButton(panel, label,
                 ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Gray,
-                new Vector2(0.06f, y0), new Vector2(0.94f, y1), onTap);
+                new Vector2(x0, y0), new Vector2(x1, y1), onTap);
         }
 
         // Settings tab -> the Help/Settings card (same target as the gear/Menu button).
@@ -2920,14 +3250,14 @@ namespace DeNelle.HUD.Kit
         // reported, never swallowed.
         private void OpenRealmStore()
         {
-            Guard.Try("RealmStore", "open the Realm Store from the HUD", () =>
+            Guard.Try("Realm", "open the Realm workspace from the HUD", () =>
             {
-                if (PanelRouter.Open(PanelId.RealmStore))
-                    FlowTrace.Step("RealmStore", "HUD Store face opened PanelId.RealmStore.");
+                if (PanelRouter.Open(PanelId.RealmDeck))
+                    FlowTrace.Step("Realm", "HUD Realm face opened PanelId.RealmDeck.");
                 else
-                    FlowTrace.Fail("RealmStore",
-                        "PanelRouter.Open(PanelId.RealmStore) returned FALSE from the HUD - the " +
-                        "opener is not registered (PackStoreBootstrap did not run in this scene).");
+                    FlowTrace.Fail("Realm",
+                        "PanelRouter.Open(PanelId.RealmDeck) returned FALSE from the HUD - the " +
+                        "PlayerDeckWorkspace opener is not registered in this scene.");
             });
         }
 
@@ -3014,6 +3344,11 @@ namespace DeNelle.HUD.Kit
             OnPlayerStatus();
             OnTargetStatus();
             OnWave();   // wave block phase gate re-evaluates with the posture
+            if (_heartObjectiveLabel != null)
+                _heartObjectiveLabel.text = posture == HudPosture.HostilePrebattle ||
+                    posture == HudPosture.HostileActiveBattle
+                        ? "Defend the realm"
+                        : "Prepare the realm for the next wave.";
 
             FlowTrace.Step("HudKit", "occupancy applied: posture " + HudPostureKeys.Key(posture) +
                            " -> " + shown + " widgets live");
@@ -3339,6 +3674,7 @@ namespace DeNelle.HUD.Kit
 
         private void OnDestroy()
         {
+            CloseItemPicker();
             foreach (var u in _unsubscribe) { try { u(); } catch { /* teardown */ } }
             _unsubscribe.Clear();
             if (_targetFrame != null) _targetFrame.Unbind();

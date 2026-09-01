@@ -74,6 +74,9 @@ namespace DeNelle.Core.UI
         /// <summary>Reason token for a money-path transaction (PackStore.Purchase).</summary>
         public const string ReasonPurchase = "purchase";
 
+        /// <summary>Reason token for the combat HUD's paused consumable picker.</summary>
+        public const string ReasonCombatItemPicker = "combat-item-picker";
+
         /// <summary>
         /// Unscaled seconds after which an outstanding hold is force-released with a loud
         /// FlowTrace.Fail. Deliberately generous: a real chain settlement legitimately takes

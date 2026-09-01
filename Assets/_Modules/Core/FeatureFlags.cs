@@ -922,7 +922,7 @@ namespace DeNelle.Core
         /// PlayerPrefs "ff.minimap" = 0. Visibility per posture stays owned by hud-areas.json —
         /// this flag is the master switch, NOT a posture rule.</para>
         /// </summary>
-        public static bool Minimap => Get("minimap", defaultOn: true);
+        public static bool Minimap => Get("minimap", defaultOn: false);
 
         /// <summary>
         /// Owner ruling 2026-08-20 — gates the founding "Default Town" (prebuilt ring) option.
@@ -961,7 +961,7 @@ namespace DeNelle.Core
         /// <para>Nothing is deleted and the path stays intact (see above). PlayerPrefs
         /// "ff.defaulttown" = 1 restores the choice with no rebuild, which is what its own re-test
         /// needs once WO-1163 lands and the ring can be re-authored against the new vocabulary.</para>
-        public static bool FoundingDefaultTown => Get("defaulttown", defaultOn: false);
+        public static bool FoundingDefaultTown => Get("defaulttown", defaultOn: true);
 
         /// <summary>
         /// WO-1042 (owner ruling 2026-08-16) — gates the STAKING bonus hook on the Jeweler's polish

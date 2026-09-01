@@ -201,7 +201,27 @@ namespace DeNelle.Wallet
             return band == StoreBand.Gap ? StorePackCardVariant.Compact : StorePackCardVariant.Standard;
         }
 
-        private int ShelfCardsPerRow => _utilityContent != null ? 3 : CardsPerRow;
+        // Compact landscape reserves enough width for two readable cards. Promote to
+        // three only when the measured wide shelf still preserves the card contract;
+        // this keeps 800/1280 touch-safe while using the otherwise-empty ultrawide row.
+        private int ShelfCardsPerRow
+        {
+            get
+            {
+                const int wideCount = 3;
+                float chrome = (wideCount - 1) * NightMarketComposition.RowSpacingPx
+                    + (2f * NightMarketComposition.RowPadPerSidePx)
+                    + (2f * NightMarketComposition.ShelfPadPerSidePx)
+                    + NightMarketComposition.ScrollGutterPx;
+                float wideCardWidth = (_plan.MarketWidthPx - chrome) / wideCount;
+                return ElarionUiKit.SurfaceWidth >= 2000
+                       && (_plan.Mode == NightMarketMode.WideThreeColumn
+                        || _plan.Mode == NightMarketMode.CompactThreeColumn)
+                       && wideCardWidth >= StorePackCard.MinCardWidthPx
+                    ? wideCount
+                    : CardsPerRow;
+            }
+        }
 
         /// <summary>Free-band doors are drawn on the dense rung, so the free row can never out-size
         /// the priced shelf above it.</summary>
@@ -736,7 +756,10 @@ namespace DeNelle.Wallet
             // silently loses its second line. The plan states the band's height; the band takes it.
             bool landscapeRail = _plan.Mode == NightMarketMode.WideThreeColumn ||
                                  _plan.Mode == NightMarketMode.CompactThreeColumn;
-            float utilityFloor = landscapeRail ? 0.14f : 1f;
+            // Landscape commerce has no CTA inside this host (the CTA lives in
+            // _bottomBand), so use its full vertical budget. The old 14% dead strip
+            // hid the third catch-up offer at supported ultrawide resolutions.
+            float utilityFloor = landscapeRail ? 0.02f : 1f;
             var statusBand = Region(_commerceHost, "CommerceStatus",
                 landscapeRail ? Vector2.zero : new Vector2(0f, 1f),
                 landscapeRail ? new Vector2(1f, 0.14f) : new Vector2(1f, 1f),
@@ -751,7 +774,7 @@ namespace DeNelle.Wallet
             // The CTA sub-host. Cleared and rebuilt per focus so the spotlight column never has to be
             // torn down to repaint a button — and so the status surface above it SURVIVES a rebuild.
             _ctaHost = landscapeRail
-                ? Region(_bottomBand, "CommerceCta", new Vector2(0.18f, 0f), new Vector2(0.42f, 1f),
+                ? Region(_bottomBand, "CommerceCta", new Vector2(0.30f, 0f), new Vector2(0.50f, 1f),
                     Vector2.zero, Vector2.zero)
                 : Region(_commerceHost, "CommerceCta", Vector2.zero, new Vector2(1f, 0f),
                     Vector2.zero, new Vector2(0f, _plan.CtaHostPx));
@@ -759,9 +782,9 @@ namespace DeNelle.Wallet
             if (landscapeRail)
             {
                 var actionsHost = Region(_commerceHost, "LandscapeActions",
-                    new Vector2(0f, 0.54f), Vector2.one, Vector2.zero, Vector2.zero);
+                    new Vector2(0f, 0.64f), Vector2.one, Vector2.zero, Vector2.zero);
                 var gapHost = Region(_commerceHost, "LandscapeGap",
-                    new Vector2(0f, utilityFloor), new Vector2(1f, 0.53f), Vector2.zero, Vector2.zero);
+                    new Vector2(0f, utilityFloor), new Vector2(1f, 0.63f), Vector2.zero, Vector2.zero);
                 _utilityContent = BuildScrollColumn(actionsHost);
                 _gapUtilityContent = BuildScrollColumn(gapHost);
                 BuildLandscapeActions(PromoStrings.Get(PromoStrings.KeyEntry));
@@ -896,27 +919,52 @@ namespace DeNelle.Wallet
             var rt = close.transform as RectTransform;
             if (rt == null) return;
             close.transform.SetParent(_bottomBand, false);
+            _bottomBand.SetAsLastSibling();
+            Plate(_bottomBand, new Color(NightMarketPalette.Ground.r,
+                NightMarketPalette.Ground.g, NightMarketPalette.Ground.b, 0.98f));
             bool landscapeRail = _plan.Mode == NightMarketMode.WideThreeColumn ||
                                  _plan.Mode == NightMarketMode.CompactThreeColumn;
-            float closeX = landscapeRail ? 0.085f : 0.5f;
+            // Keep the complete 360px control inside the left notice seat. At 1280-wide
+            // landscape, 0.085 put the button centre closer to the edge than its own
+            // half-width and visibly cut away the frame.
+            float closeX = landscapeRail ? 0.15f : 0.5f;
             rt.anchorMin = new Vector2(closeX, 0.5f);
             rt.anchorMax = new Vector2(closeX, 0.5f);
             rt.pivot = new Vector2(0.5f, 0.5f);
             rt.anchoredPosition = Vector2.zero;
             rt.sizeDelta = new Vector2(ElarionUiKit.CanonCtaWidth, ElarionUiKit.CanonCtaHeight);
             close.transform.SetAsLastSibling();
+            MedievalUiSkin.ApplyButton(close, primary: true);
+            // Some imported button-state sprites contain no baked label. Keep the action
+            // runtime-authored and explicit so hover/selected art can never turn Close into
+            // the blank framed slab caught by the screenshot gate.
+            var closeLabel = close.GetComponentInChildren<TMP_Text>(true);
+            if (closeLabel != null)
+            {
+                closeLabel.gameObject.SetActive(true);
+                closeLabel.text = "CLOSE";
+                closeLabel.color = ElarionUi.Parchment;
+                closeLabel.raycastTarget = false;
+                ElarionUiKit.FitSingleLine(closeLabel, ElarionUi.FontFloorMobile, 38f);
+                closeLabel.transform.SetAsLastSibling();
+            }
             FlowTrace.Step("Store", "SeatCloseInBottomBand: canon Close seated INSIDE the single 132-unit bottom band.");
         }
 
         private void BuildLandscapeBottomNotice(Transform host)
         {
             if (host == null) return;
-            MakeText(host, PackCatalog.CurrencyDisclaimer, 30,
+            // The landscape CTA owns x .30-.50 even when it is a non-interactive
+            // "Coming soon" plate. Legal copy begins after that keep-out; the prior
+            // .34 start drew two sentences through the CTA at every supported ratio.
+            var marketLine = MakeText(host, PackCatalog.CurrencyDisclaimer, 19,
                 ElarionUi.ParchmentDim, FontStyles.Normal, TextAlignmentOptions.Left,
-                new Vector2(0.45f, 0f), new Vector2(0.69f, 1f));
-            MakeText(host, StoreStrings.Get(StoreStrings.KeyCovenant), 30,
+                new Vector2(0.51f, 0.18f), new Vector2(0.68f, 0.82f));
+            var feeLine = MakeText(host, StoreStrings.Get(StoreStrings.KeyTrustFee), 18,
                 ElarionUi.Gold, FontStyles.Bold, TextAlignmentOptions.Right,
-                new Vector2(0.70f, 0f), new Vector2(1f, 1f));
+                new Vector2(0.69f, 0.18f), new Vector2(0.995f, 0.82f));
+            ElarionUiKit.FitSingleLine(marketLine, 12f, 19f);
+            ElarionUiKit.FitSingleLine(feeLine, 11f, 18f);
         }
 
         /// <summary>
@@ -1184,7 +1232,6 @@ namespace DeNelle.Wallet
             BuildBandHead(StoreBand.Free);
             var tabs = BuildCardRow(FreeTabRowPx);
             BuildUtilityTab(tabs, entryLabel, OpenRedeemPanel, true);
-            BuildUtilityTab(tabs, "SEASON TRACK", () => PanelRouter.Open(PanelId.BattlePass), false);
             BuildUtilityTab(tabs, "MONTHLY LEDGER", () => PanelRouter.Open(PanelId.MonthlyLedger), false);
         }
 
@@ -1206,9 +1253,9 @@ namespace DeNelle.Wallet
         {
             if (_utilityContent == null) return;
             BuildUtilityHeading(_utilityContent, "ACTIONS", NightMarketPalette.For(StoreBand.Free));
-            BuildUtilityRow(_utilityContent, entryLabel, OpenRedeemPanel, true);
-            BuildUtilityRow(_utilityContent, "SEASON TRACK", () => PanelRouter.Open(PanelId.BattlePass), false);
-            BuildUtilityRow(_utilityContent, "MONTHLY LEDGER", () => PanelRouter.Open(PanelId.MonthlyLedger), false);
+            BuildUtilityRow(_utilityContent, entryLabel, "gift-icon", OpenRedeemPanel, true);
+            BuildUtilityRow(_utilityContent, "MONTHLY LEDGER", "calendar-icon",
+                () => PanelRouter.Open(PanelId.MonthlyLedger), false);
         }
 
         private void BuildLandscapeGapOffers()
@@ -1221,10 +1268,9 @@ namespace DeNelle.Wallet
             foreach (var pack in rows)
             {
                 if (pack == null) continue;
-                string label = pack.Name + "   " + StorePriceMajor(pack);
                 var captured = pack;
-                BuildUtilityRow(_gapUtilityContent, label,
-                    () => FocusPack(captured.Sku, BuildLedgerScale(), animate: true), false);
+                BuildGapUtilityRow(_gapUtilityContent, pack.Name, StorePriceMajor(pack),
+                    () => FocusPack(captured.Sku, BuildLedgerScale(), animate: true));
             }
         }
 
@@ -1233,12 +1279,16 @@ namespace DeNelle.Wallet
             var go = new GameObject("utility-heading-" + label, typeof(RectTransform), typeof(LayoutElement));
             go.transform.SetParent(parent, false);
             go.GetComponent<LayoutElement>().preferredHeight = 64f;
-            Plate(go.transform, new Color(light.r, light.g, light.b, 0.16f));
-            MakeText(go.transform, label, 31, ElarionUi.Parchment, FontStyles.Bold,
+            var backing = Plate(go.transform, Color.white);
+            var image = backing != null ? backing.GetComponent<Image>() : null;
+            var frame = Resources.Load<Sprite>("UI/ElarionMedieval/frames/content-panel");
+            if (image != null && frame != null) { image.sprite = frame; image.type = Image.Type.Simple; }
+            MakeText(go.transform, label, 29, light, FontStyles.Bold,
                 TextAlignmentOptions.Left, new Vector2(0.06f, 0f), new Vector2(0.96f, 1f));
         }
 
-        private static void BuildUtilityRow(Transform parent, string label, Action action, bool accent)
+        private static void BuildUtilityRow(Transform parent, string label, string iconResource,
+                                            Action action, bool accent)
         {
             var slot = new GameObject("utility-row-" + label, typeof(RectTransform), typeof(LayoutElement));
             slot.transform.SetParent(parent, false);
@@ -1249,8 +1299,57 @@ namespace DeNelle.Wallet
                 ElarionUiKit.ObsidianButtonStyle.Style1,
                 accent ? ElarionUiKit.ObsidianButtonColor.Yellow : ElarionUiKit.ObsidianButtonColor.Gray,
                 new Vector2(0.01f, 0.03f), new Vector2(0.99f, 0.97f), action);
+            MedievalUiSkin.ApplyButton(button, primary: accent);
+            var face = button != null ? button.targetGraphic as Image : null;
+            if (face != null) face.type = Image.Type.Simple;
             var text = button != null ? button.GetComponentInChildren<TMP_Text>(true) : null;
-            if (text != null) ElarionUiKit.FitSingleLine(text, ElarionUi.FontFloorMobile, 31f);
+            if (text != null)
+            {
+                var textRect = text.rectTransform;
+                textRect.anchorMin = new Vector2(0.20f, 0f);
+                textRect.anchorMax = new Vector2(0.92f, 1f);
+                textRect.offsetMin = Vector2.zero;
+                textRect.offsetMax = Vector2.zero;
+                text.alignment = TextAlignmentOptions.Left;
+                ElarionUiKit.FitSingleLine(text, ElarionUi.FontFloorMobile, 28f);
+            }
+            if (button != null)
+                AddArt(button.transform, iconResource,
+                    new Vector2(0.035f, 0.12f), new Vector2(0.17f, 0.88f));
+        }
+
+        /// <summary>Compact two-field offer row used by the landscape catch-up rail.</summary>
+        private static void BuildGapUtilityRow(Transform parent, string name, string price, Action action)
+        {
+            var slot = new GameObject("gap-offer-" + name, typeof(RectTransform), typeof(LayoutElement));
+            slot.transform.SetParent(parent, false);
+            var layout = slot.GetComponent<LayoutElement>();
+            // The button sits at y .03..97 inside this slot, so the slot must be
+            // 120 px for the visible/raycast face itself to remain >=112 px.
+            layout.preferredHeight = ElarionUiKit.MinTouchPx + 8f;
+            layout.minHeight = ElarionUiKit.MinTouchPx;
+
+            var button = ElarionUiKit.BuildObsidianButton(slot.transform, string.Empty,
+                ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Gray,
+                new Vector2(0.01f, 0.03f), new Vector2(0.99f, 0.97f), action);
+            MedievalUiSkin.ApplyButton(button, primary: false);
+            var face = button != null ? button.targetGraphic as Image : null;
+            if (face != null) face.type = Image.Type.Simple;
+
+            var nameLabel = MakeText(button.transform, name, 27, ElarionUi.Parchment,
+                FontStyles.Bold, TextAlignmentOptions.Left,
+                new Vector2(0.07f, 0.08f), new Vector2(0.53f, 0.92f));
+            string priceDisplay = string.Equals(price, "Price unavailable", StringComparison.OrdinalIgnoreCase)
+                ? "UNAVAILABLE" : price;
+            var priceLabel = MakeText(button.transform, priceDisplay, 22, ElarionUi.Gold,
+                FontStyles.Bold, TextAlignmentOptions.Right,
+                new Vector2(0.55f, 0.08f), new Vector2(0.94f, 0.92f));
+            FitInto(nameLabel, 27f);
+            if (priceLabel != null)
+            {
+                priceLabel.textWrappingMode = TextWrappingModes.NoWrap;
+                ElarionUiKit.FitSingleLine(priceLabel, 16f, 22f);
+            }
         }
 
         /// <summary>
@@ -1278,6 +1377,7 @@ namespace DeNelle.Wallet
                 ElarionUiKit.ObsidianButtonStyle.Style1,
                 accent ? ElarionUiKit.ObsidianButtonColor.Yellow : ElarionUiKit.ObsidianButtonColor.Gray,
                 new Vector2(0.02f, 0.02f), new Vector2(0.98f, 0.98f), action);
+            MedievalUiSkin.ApplyButton(button, primary: accent);
             var text = button != null ? button.GetComponentInChildren<TMP_Text>(true) : null;
             if (text != null) ElarionUiKit.FitSingleLine(text, ElarionUi.FontFloorMobile, 28f);
         }
@@ -1302,6 +1402,7 @@ namespace DeNelle.Wallet
             var open = ElarionUiKit.BuildObsidianButton(slot.transform, "OPEN",
                 ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Gray,
                 new Vector2(0.06f, 0.02f), new Vector2(0.60f, 0.53f), () => PanelRouter.Open(panel));
+            MedievalUiSkin.ApplyButton(open, primary: false);
             var openLabel = open != null ? open.GetComponentInChildren<TMP_Text>(true) : null;
             if (openLabel != null) ElarionUiKit.FitSingleLine(openLabel, ElarionUi.FontFloorMobile, 34f);
         }
@@ -1675,16 +1776,16 @@ namespace DeNelle.Wallet
             FitInto(MakeText(_spotlightHost, pack.Name, 52, ElarionUi.Parchment, FontStyles.Bold,
                 TextAlignmentOptions.BottomLeft, new Vector2(0.06f, 0.610f), new Vector2(0.94f, 0.705f)), 52);
             FitInto(MakeText(_spotlightHost, pack.Tagline, 32, ElarionUi.Parchment, FontStyles.Italic,
-                TextAlignmentOptions.TopLeft, new Vector2(0.06f, 0.505f), new Vector2(0.94f, 0.605f)), 32);
+                TextAlignmentOptions.TopLeft, new Vector2(0.06f, 0.455f), new Vector2(0.94f, 0.605f)), 32);
 
             // ── The bar ledger ───────────────────────────────────────────────
             MakeText(_spotlightHost, StoreStrings.Get(StoreStrings.KeyLedgerHeading), 30,
                 ElarionUi.ParchmentDim, FontStyles.Bold, TextAlignmentOptions.BottomLeft,
-                new Vector2(0.06f, 0.455f), new Vector2(0.94f, 0.495f));
+                new Vector2(0.06f, 0.405f), new Vector2(0.94f, 0.445f));
             // 0.058 of a 746-unit column is ~43 px, which holds a 30-unit row without the next row
             // climbing onto it. The CTA moved to the commerce column, so this ladder now owns the
             // whole lower half of the spotlight instead of sharing it with a button.
-            float ledgerTop = 0.445f, rowH = 0.058f;
+            float ledgerTop = 0.395f, rowH = 0.055f;
             int drawn = 0;
             foreach (string key in PackCatalog.LedgerEconomyKeys)
             {
@@ -1732,9 +1833,14 @@ namespace DeNelle.Wallet
             rt.anchorMin = new Vector2(0.06f, y0); rt.anchorMax = new Vector2(0.94f, y1);
             rt.offsetMin = Vector2.zero; rt.offsetMax = Vector2.zero;
 
-            // Receipt-style rows match the landscape reference: resource marker + exact grant.
-            // A resource quantity is not progress, so no comparative progress bar is drawn here.
-            Orb(go.transform, light, new Vector2(0f, 0.16f), new Vector2(0.10f, 0.84f));
+            // Receipt-style rows match the approved landscape reference: recognizable
+            // resource art + exact grant. A generic empty socket made five distinct goods
+            // look identical, so use the supplied kit icons and retain the socket strictly
+            // as a missing-art fallback.
+            string icon = LedgerIconResource(key);
+            if (string.IsNullOrEmpty(icon) ||
+                !AddArt(go.transform, icon, new Vector2(0f, 0.08f), new Vector2(0.11f, 0.92f)))
+                Orb(go.transform, light, new Vector2(0f, 0.16f), new Vector2(0.10f, 0.84f));
             MakeText(go.transform, key, 30, ElarionUi.Parchment, FontStyles.Normal,
                 TextAlignmentOptions.Left, new Vector2(0.13f, 0f), new Vector2(0.66f, 1f));
             // ⛔ THE PRINTED NUMBER IS THE TRUTH AND IT MUST NEVER CLIP (§5). The bar is only the
@@ -1744,6 +1850,21 @@ namespace DeNelle.Wallet
                 MakeText(go.transform, amount.ToString("N0"), 32, ElarionUi.Parchment, FontStyles.Bold,
                     TextAlignmentOptions.Right, new Vector2(0.66f, 0f), new Vector2(1f, 1f)),
                 ElarionUi.FontFloorMobile, 32f);
+        }
+
+        private static string LedgerIconResource(string economyKey)
+        {
+            switch ((economyKey ?? string.Empty).Trim().ToLowerInvariant())
+            {
+                case "wood":     return "wood-icon";
+                case "iron":     return "iron-icon";
+                case "crystal":
+                case "crystals": return "crystal-icon";
+                case "stone":    return "stone-icon";
+                case "coin":
+                case "coins":    return "coin-icon";
+                default:          return string.Empty;
+            }
         }
 
         /// <summary>
@@ -3412,7 +3533,7 @@ namespace DeNelle.Wallet
             rt.offsetMin = Vector2.zero; rt.offsetMax = Vector2.zero;
             var img = go.GetComponent<Image>();
             img.sprite = sprite;
-            img.color = new Color(0.114f, 0.071f, 0.208f, 0.85f);   // #1D1235 falling to the panel fill
+            img.color = new Color(0.22f, 0.15f, 0.045f, 0.34f); // restrained antique-gold warmth
             img.raycastTarget = false;
             go.transform.SetAsFirstSibling();
         }
@@ -3462,15 +3583,30 @@ namespace DeNelle.Wallet
             if (parent == null || string.IsNullOrWhiteSpace(assetName)) return false;
             var sprite = NightMarketArt.Load(assetName);
             if (sprite == null) return false;
-            var go = new GameObject("art-" + assetName, typeof(RectTransform), typeof(Image));
+            var go = new GameObject("art-" + assetName, typeof(RectTransform));
             go.transform.SetParent(parent, false);
             var rt = (RectTransform)go.transform;
             rt.anchorMin = min; rt.anchorMax = max;
             rt.offsetMin = Vector2.zero; rt.offsetMax = Vector2.zero;
-            var image = go.GetComponent<Image>();
-            image.sprite = sprite;
-            image.preserveAspect = true;
+
+            var visual = new GameObject("Visual", typeof(RectTransform), typeof(RawImage), typeof(AspectRatioFitter));
+            visual.transform.SetParent(go.transform, false);
+            var visualRt = (RectTransform)visual.transform;
+            visualRt.anchorMin = Vector2.zero; visualRt.anchorMax = Vector2.one;
+            visualRt.offsetMin = Vector2.zero; visualRt.offsetMax = Vector2.zero;
+            var image = visual.GetComponent<RawImage>();
+            image.texture = sprite.texture;
+            var textureRect = sprite.textureRect;
+            image.uvRect = new Rect(
+                textureRect.x / sprite.texture.width,
+                textureRect.y / sprite.texture.height,
+                textureRect.width / sprite.texture.width,
+                textureRect.height / sprite.texture.height);
+            image.color = Color.white;
             image.raycastTarget = false;
+            var fitter = visual.GetComponent<AspectRatioFitter>();
+            fitter.aspectMode = AspectRatioFitter.AspectMode.FitInParent;
+            fitter.aspectRatio = textureRect.height > 0f ? textureRect.width / textureRect.height : 1f;
             return true;
         }
 

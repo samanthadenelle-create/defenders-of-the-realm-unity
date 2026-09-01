@@ -162,7 +162,7 @@ namespace DeNelle.Village.Hero
 
         /// <summary>Title band top inset. Clears the tag plate, which hangs from
         /// +TypeTagOverhangPx down to TypeTagPx - TypeTagOverhangPx (60 px) below the top.</summary>
-        public const float TitleTopPx = 68f;
+        public const float TitleTopPx = 92f;
         /// <summary>TWO FontBody(50) line boxes (2 x 62.5 = 125) plus slack.</summary>
         public const float TitleBandPx = 130f;
         /// <summary>Hook band top inset (title floor + an 8 px breath).</summary>
@@ -210,7 +210,10 @@ namespace DeNelle.Village.Hero
         private const float ChipPadPx = 18f;
         private const float ChipSpacingPx = 8f;
         private const float ChipHeightPx = 52f;
-        private const float ChipMinFontPx = ElarionUi.FontFloorMobile;
+        // Reward chips are secondary metadata in a dense four-chip row. A 24px floor
+        // remains comfortably legible at the supported physical resolutions and avoids
+        // replacing authoritative XP / MORE words with ellipses.
+        private const float ChipMinFontPx = 24f;
 
         /// <summary>Swipe distance (screen px) that commits a page turn. Same gesture family
         /// and the same threshold as the hero-select carousel, deliberately.</summary>
@@ -256,6 +259,8 @@ namespace DeNelle.Village.Hero
                 new Vector2(PanelAnchorMin, PanelAnchorMin),
                 new Vector2(PanelAnchorMax, PanelAnchorMax),
                 Close, sortingOrder: 1000);
+            MedievalUiSkin.ApplyShell(modal.chrome);
+            ForceSimpleArtwork(modal.chrome != null ? modal.chrome.close : null);
             _ui = modal.canvas;
             var panel = modal.chrome != null ? modal.chrome.content : null;
             if (panel == null)
@@ -264,6 +269,11 @@ namespace DeNelle.Village.Hero
                 return;
             }
             _content = panel.transform;
+
+            // This board authors its own left-aligned title and head-row rule. The
+            // kit's intentionally empty title still produces a crest, shadow, and
+            // underline; those decorations otherwise sit behind the paging controls.
+            RetireUnusedKitHeader(panel.transform, modal.chrome.title);
 
             // The ONE shared Close, RE-SEATED (position only) into the head row beside Next.
             // Owner ruling: Close is a LABELED BUTTON next to Next - no X glyph. It keeps the
@@ -285,7 +295,6 @@ namespace DeNelle.Village.Hero
             BuildPreviousButton();
             BuildNextButton();
             BuildTitle();
-            BuildStatusBand();
 
             var hostGo = new GameObject("PosterRow", typeof(RectTransform));
             hostGo.transform.SetParent(_content, false);
@@ -341,6 +350,28 @@ namespace DeNelle.Village.Hero
         }
 
         private static float CloseCentreXFrac() => PanelFrac(CloseCentreX);
+
+        private static void RetireUnusedKitHeader(Transform panel, TMPro.TextMeshProUGUI kitTitle)
+        {
+            if (panel == null) return;
+            for (int i = panel.childCount - 1; i >= 0; i--)
+            {
+                var child = panel.GetChild(i);
+                var label = child.GetComponent<TMPro.TextMeshProUGUI>();
+                if (label != null && (label == kitTitle || label.text.Trim() == ElarionUi.CrestGlyph))
+                {
+                    child.gameObject.SetActive(false);
+                    continue;
+                }
+
+                if (child.name == "Rule")
+                {
+                    var rt = child as RectTransform;
+                    if (rt != null && rt.anchorMin.y > 0.85f)
+                        child.gameObject.SetActive(false);
+                }
+            }
+        }
 
         // -- Chrome ---------------------------------------------------------------
 
@@ -422,7 +453,7 @@ namespace DeNelle.Village.Hero
             t.gameObject.name = "BoardTitle";
             var titleRt = t.rectTransform;
             titleRt.offsetMax = new Vector2(-titleRightInset, titleRt.offsetMax.y);
-            ElarionUiKit.FitSingleLine(t, ElarionUi.FontFloorMobile, ElarionUi.FontTitle);
+            ElarionUiKit.FitSingleLine(t, ElarionUi.FontFloorMobile, 46f);
         }
 
         /// <summary>Previous in a FIXED-PIXEL host sized from the MEASURED label, hung off
@@ -442,9 +473,10 @@ namespace DeNelle.Village.Hero
             rt.sizeDelta = new Vector2(width, HeadBandPx);
             rt.anchoredPosition = new Vector2(-HeadGapPx, 0f);
 
-            ElarionUiKit.BuildObsidianButton(host.transform, PreviousLabel,
+            var previous = ElarionUiKit.BuildObsidianButton(host.transform, PreviousLabel,
                 ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Yellow,
                 Vector2.zero, Vector2.one, PrevPage);
+            ApplyPosterButton(previous, primary: true);
         }
 
         /// <summary>Next &gt; in a FIXED-PIXEL head band. Advances one page of three and WRAPS
@@ -462,9 +494,10 @@ namespace DeNelle.Village.Hero
             rt.sizeDelta = new Vector2(0f, HeadBandPx);
             rt.anchoredPosition = Vector2.zero;
 
-            ElarionUiKit.BuildObsidianButton(host.transform, NextLabel,
+            var next = ElarionUiKit.BuildObsidianButton(host.transform, NextLabel,
                 ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Yellow,
                 Vector2.zero, Vector2.one, NextPage);
+            ApplyPosterButton(next, primary: true);
         }
 
         private void BuildStatusBand()
@@ -550,10 +583,20 @@ namespace DeNelle.Village.Hero
                 new Vector2(PanelFrac(xMax), PanelFrac(PosterYMax)),
                 CardEdge, rounded: true);
             var cardImg = card.GetComponent<Image>();
-            if (cardImg != null) cardImg.raycastTarget = false;
+            if (cardImg != null)
+            {
+                var cardFrame = Resources.Load<Sprite>("UI/ElarionMedieval/frames/content-panel");
+                if (cardFrame != null)
+                {
+                    cardImg.sprite = cardFrame;
+                    cardImg.type = Image.Type.Simple;
+                    cardImg.color = Color.white;
+                }
+                cardImg.raycastTarget = false;
+            }
 
             var fill = ElarionUiKit.AddImage(card.transform, "Fill", Vector2.zero, Vector2.one,
-                CardFill, rounded: true);
+                new Color(CardFill.r, CardFill.g, CardFill.b, 0.12f), rounded: true);
             var frt = fill.GetComponent<RectTransform>();
             frt.offsetMin = new Vector2(2f, 2f);
             frt.offsetMax = new Vector2(-2f, -2f);
@@ -583,7 +626,7 @@ namespace DeNelle.Village.Hero
             titleLabel.alignment = TMPro.TextAlignmentOptions.Center;
             // TWO lines, fitted as a block: a title too long for two lines shrinks INSIDE its
             // band. It never clips a descender and it never runs into the hook.
-            ElarionUiKit.FitBlock(titleLabel, ElarionUi.FontFloorMobile, ElarionUi.FontBody);
+            ElarionUiKit.FitBlock(titleLabel, ElarionUi.FontFloorMobile, 40f);
 
             var hookLabel = ElarionUiKit.Label(body, _vm.HookFor(id), 0f, 1f,
                 ElarionUi.ParchmentDim, ElarionUi.FontMicro, TMPro.TextAlignmentOptions.Center,
@@ -607,9 +650,10 @@ namespace DeNelle.Village.Hero
             readRt.offsetMax = Vector2.zero;
             readRt.sizeDelta = new Vector2(0f, ReadBandPx);
             readRt.anchoredPosition = new Vector2(0f, -ReadTopPx);
-            ElarionUiKit.BuildObsidianButton(readHost.transform, "Read the letter >",
+            var read = ElarionUiKit.BuildObsidianButton(readHost.transform, "Read the letter >",
                 ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Gray,
                 Vector2.zero, Vector2.one, () => OpenLetter(card.transform, body, questId));
+            ApplyPosterButton(read, primary: true);
 
             // Gilt hairline over the reward row - the same rule language as the rest of the kit.
             var rule = ElarionUiKit.AddImage(body, "RewardRule",
@@ -634,9 +678,10 @@ namespace DeNelle.Village.Hero
             art.offsetMax = Vector2.zero;
             art.sizeDelta = new Vector2(0f, AcceptBandPx);
             art.anchoredPosition = new Vector2(0f, AcceptBottomPx);
-            ElarionUiKit.BuildObsidianButton(acceptHost.transform, "Accept",
+            var accept = ElarionUiKit.BuildObsidianButton(acceptHost.transform, "Accept",
                 ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Yellow,
                 Vector2.zero, Vector2.one, () => OnAccept(questId));
+            ApplyPosterButton(accept, primary: true);
         }
 
         /// <summary>Hang a rect from its parent's TOP edge as a FIXED-PIXEL band.</summary>
@@ -742,16 +787,26 @@ namespace DeNelle.Village.Hero
             rt.sizeDelta = new Vector2(0f, RewardBandPx);
             rt.anchoredPosition = new Vector2(0f, RewardBottomPx);
             var hlg = rowGo.GetComponent<HorizontalLayoutGroup>();
-            hlg.childControlWidth = true; hlg.childForceExpandWidth = false;
+            // Reward rows can contain up to five authoritative grants. Share the row
+            // evenly so one long word cannot push neighboring currency chips off-card.
+            hlg.childControlWidth = true; hlg.childForceExpandWidth = true;
             hlg.childControlHeight = true; hlg.childForceExpandHeight = false;
             hlg.childAlignment = TextAnchor.MiddleCenter;
             hlg.spacing = ChipSpacingPx;
 
-            foreach (var c in chips)
+            // Dense rewards reserve one explicit summary chip. Keeping three grants
+            // plus the summary produced four equal slivers and reduced "XP 650" to
+            // "X..." at 1920x1080. A player needs readable values more than a fourth
+            // micro-chip, so overflow rows show two exact grants plus one summary.
+            int visible = Mathf.Min(chips.Count, chips.Count > 3 ? 2 : 3);
+            for (int i = 0; i < visible; i++)
             {
+                var c = chips[i];
                 if (c.IsCurrency) MakeCurrencyChip(rt, c);
                 else MakeWordChip(rt, c.Text);
             }
+            if (chips.Count > visible)
+                MakeWordChip(rt, "+" + (chips.Count - visible) + " MORE");
         }
 
         /// <summary>Map the VM's neutral reward kind onto the kit's CurrencyKind. The kit then
@@ -805,8 +860,8 @@ namespace DeNelle.Village.Hero
             var le = handle.root.GetComponent<LayoutElement>();
             if (le == null) le = handle.root.AddComponent<LayoutElement>();
             le.preferredHeight = ChipHeightPx;
-            le.preferredWidth = 172f;   // the chip's own content-fit sync grows this if needed
-            le.flexibleWidth = 0f;
+            le.preferredWidth = 0f;
+            le.flexibleWidth = 1f;
             handle.SetAmount(chip.Amount, animate: false);
         }
 
@@ -821,7 +876,7 @@ namespace DeNelle.Village.Hero
                 new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), ChipBorder, rounded: true);
             var le = chip.AddComponent<LayoutElement>();
             le.preferredHeight = ChipHeightPx;
-            le.flexibleWidth = 0f;
+            le.flexibleWidth = 1f;
             le.minWidth = 0f;
             var borderImg = chip.GetComponent<Image>();
             if (borderImg != null) borderImg.raycastTarget = false;
@@ -834,14 +889,16 @@ namespace DeNelle.Village.Hero
             var fillImg = fill.GetComponent<Image>();
             if (fillImg != null) fillImg.raycastTarget = false;
 
-            var lbl = ElarionUiKit.Label(fill.transform, text, 0f, 1f,
+            string display = text.EndsWith(" Drop", System.StringComparison.OrdinalIgnoreCase)
+                ? text.Substring(0, text.Length - 5) : text;
+            var lbl = ElarionUiKit.Label(fill.transform, display, 0f, 1f,
                 ElarionUi.Parchment, ElarionUi.FontMicro, TMPro.TextAlignmentOptions.Center, 0f, 1f);
             lbl.textWrappingMode = TMPro.TextWrappingModes.NoWrap;
 
-            float textW = lbl.GetPreferredValues(text).x;
-            if (textW <= 1f) textW = text.Length * 16f;
-            le.preferredWidth = textW + 2f * ChipPadPx;
-            ElarionUiKit.FitSingleLine(lbl, ChipMinFontPx, ElarionUi.FontMicro);
+            le.preferredWidth = 0f;
+            float floor = display.EndsWith(" MORE", System.StringComparison.OrdinalIgnoreCase)
+                ? 18f : ChipMinFontPx;
+            ElarionUiKit.FitSingleLine(lbl, floor, ElarionUi.FontMicro);
         }
 
         // -- The letter overlay -----------------------------------------------------
@@ -916,15 +973,35 @@ namespace DeNelle.Village.Hero
             brt.sizeDelta = new Vector2(0f, AcceptBandPx);
             brt.anchoredPosition = new Vector2(0f, AcceptBottomPx);
             var overlayGo = overlay;
-            ElarionUiKit.BuildObsidianButton(backHost.transform, "Back",
+            var back = ElarionUiKit.BuildObsidianButton(backHost.transform, "Back",
                 ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Gray,
                 Vector2.zero, Vector2.one, () => CloseLetter(overlayGo, body));
+            ApplyPosterButton(back, primary: true);
         }
 
         private void CloseLetter(GameObject overlay, RectTransform body)
         {
             if (body != null) body.gameObject.SetActive(true);
             SafeDestroy(overlay);
+        }
+
+        // The handoff button sources carry wide ornamental end caps. Their imported
+        // nine-slice borders are intentionally large for full-width CTAs, but collapse
+        // when used by this board's compact poster/head controls. Simple scaling keeps
+        // the complete authored silhouette visible at every supported landscape ratio.
+        private static void ApplyPosterButton(Button button, bool primary)
+        {
+            MedievalUiSkin.ApplyButton(button, primary);
+            ForceSimpleArtwork(button);
+            var label = button != null ? button.GetComponentInChildren<TMPro.TMP_Text>() : null;
+            if (label != null) ElarionUiKit.FitSingleLine(label, ElarionUi.FontFloorMobile, 36f);
+        }
+
+        private static void ForceSimpleArtwork(Button button)
+        {
+            if (button == null) return;
+            var image = button.targetGraphic as Image ?? button.GetComponent<Image>();
+            if (image != null) image.type = Image.Type.Simple;
         }
 
         // -- Empty state ------------------------------------------------------------
@@ -966,7 +1043,8 @@ namespace DeNelle.Village.Hero
         {
             if (_vm == null) return;
             _vm.Accept(id);   // StartQuest + status; the VM raises Changed -> Repaint
-            if (_statusText != null) _statusText.text = _vm.Status;
+            if (!string.IsNullOrEmpty(_vm.Status))
+                ElarionUiKit.ShowToast(_vm.Status, ElarionUiKit.ToastTone.Info);
         }
 
         // -- Helpers ----------------------------------------------------------------

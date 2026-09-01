@@ -10,8 +10,19 @@ using Cysharp.Threading.Tasks;
 
 namespace DeNelle.Village
 {
+    public sealed class BuildCollectionPage
+    {
+        public CardCollectionDefinition Collection { get; }
+        public bool IsRoot => Collection == null;
+
+        private BuildCollectionPage(CardCollectionDefinition collection) => Collection = collection;
+        public static BuildCollectionPage Root() => new BuildCollectionPage(null);
+        public static BuildCollectionPage For(CardCollectionDefinition collection) =>
+            new BuildCollectionPage(collection ?? throw new ArgumentNullException(nameof(collection)));
+    }
+
     /// <summary>Player-facing, data-authored Build collection browser. It owns no placement logic.</summary>
-    public sealed class BuildCollectionBrowser : MonoBehaviour
+    public sealed class BuildCollectionBrowser : ObsidianNavigationWorkspace<BuildCollectionPage>
     {
         public const int CardsPerPage = CardCollectionPaging.MaxVisibleCards;
         // The catalog/progression row remains live for saves and unlock bookkeeping, but its
@@ -19,8 +30,6 @@ namespace DeNelle.Village
         private const string HiddenUntilFinishedArtId = "gate_stone";
         private const string MissingImageCopy = "Image coming soon";
         private readonly List<GameObject> _pageObjects = new List<GameObject>();
-        private FocusedModalHost _focus;
-        private GameObject _canvas;
         private RectTransform _panel;
         private CardCollectionDocument _document;
         private CardCollectionDefinition _collection;
@@ -30,22 +39,36 @@ namespace DeNelle.Village
         private int _page;
         private Action<CatalogEntry> _place;
 
-        public bool IsOpen => _focus != null && _focus.IsOpen;
+        protected override string WorkspaceName => "Build Collections";
+
+        protected override string TitleFor(BuildCollectionPage page) =>
+            page == null || page.IsRoot ? "Build Collections" : page.Collection.Title;
+
+        protected override string SubtitleFor(BuildCollectionPage page) =>
+            page == null || page.IsRoot
+                ? (BuildFirstUseGuide.Current == BuildFirstUseGuide.Step.Category
+                    ? BuildFirstUseGuide.Copy : "Choose what the realm needs next.")
+                : string.Empty; // collection guidance owns a dedicated row below its cards
+
+        protected override void RenderPage(BuildCollectionPage page, RectTransform content)
+        {
+            _panel = content;
+            _collection = page != null ? page.Collection : null;
+            if (_collection == null) RenderCategories();
+            else RenderCollection();
+        }
 
         public void Show(Action<CatalogEntry> place)
         {
             _place = place;
             BuildFirstUseGuide.BeginSession();
-            EnsureBuilt();
             _catalog = CardCollectionCatalog.CreateDefault(Application.persistentDataPath, Application.version);
             _remote = new CardCollectionRemoteService(_catalog,
                 System.IO.Path.Combine(Application.persistentDataPath, "card-collections"));
             _document = _catalog.Resolve();
             _collection = null;
             _page = 0;
-            if (!_focus.Open("Build Collections")) return;
-            _canvas.SetActive(true);
-            RenderCategories();
+            Open(BuildCollectionPage.Root());
         }
 
         private void OnEnable()
@@ -58,56 +81,32 @@ namespace DeNelle.Village
         private void OnFiniteCapacityChanged(string itemId, GameObject placed) => OnFiniteCapacityChanged(itemId);
         private void OnFiniteCapacityChanged(string itemId)
         {
-            if (IsOpen && _collection == null) RenderCategories();
+            if (IsOpen && _collection == null) Refresh();
         }
 
         private void OnProgressionUnlockChanged(string catalogId)
         {
             if (!IsOpen || _collection == null ||
                 string.IsNullOrEmpty(RewardedProgression.LockReasonFor(catalogId))) return;
-            RenderCollection();
+            Refresh();
         }
 
-        public void Close()
+        public override void Close()
         {
-            if (_canvas != null) _canvas.SetActive(false);
-            _focus?.Close();
+            base.Close();
             _collection = null;
+            _remoteCollection = null;
             _page = 0;
-        }
-
-        private void EnsureBuilt()
-        {
-            if (_canvas != null) return;
-            _focus = gameObject.GetComponent<FocusedModalHost>();
-            if (_focus == null) _focus = gameObject.AddComponent<FocusedModalHost>();
-            _canvas = ElarionUiKit.BuildModalCanvas("BuildCollectionsCanvas", 1200);
-            _canvas.transform.SetParent(transform, false);
-            var scaler = _canvas.GetComponent<CanvasScaler>(); scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
-            scaler.referenceResolution = new Vector2(1920, 1080); scaler.matchWidthOrHeight = .5f;
-            Stretch(_canvas.GetComponent<RectTransform>());
-
-            var dim = Box("Dim", _canvas.transform, new Color(0.015f, 0.02f, 0.035f, .82f)); Stretch(dim);
-            var panelGo = Box("FocusedCollectionPanel", dim, new Color(.055f, .07f, .105f, .98f));
-            _panel = panelGo.GetComponent<RectTransform>();
-            ApplySafeArea(_panel);
-            var outline = panelGo.gameObject.AddComponent<Outline>(); outline.effectColor = new Color(.83f, .66f, .25f, 1f); outline.effectDistance = new Vector2(3, -3);
-            _canvas.SetActive(false);
         }
 
         private void RenderCategories()
         {
-            ClearPanel();
-            Header("BUILD COLLECTIONS", BuildFirstUseGuide.Current == BuildFirstUseGuide.Step.Category
-                ? BuildFirstUseGuide.Copy : "Choose what the realm needs next.", "CLOSE", Close);
-            var grid = Region("CategoryGrid", new Vector2(.04f, .08f), new Vector2(.96f, .78f));
-            var layout = grid.gameObject.AddComponent<GridLayoutGroup>();
-            layout.constraint = GridLayoutGroup.Constraint.FixedColumnCount; layout.constraintCount = 4;
-            layout.spacing = new Vector2(22, 22); layout.padding = new RectOffset(12, 12, 12, 12);
-            Canvas.ForceUpdateCanvases();
-            float cellWidth = Mathf.Max(150f, (grid.rect.width - layout.padding.horizontal - layout.spacing.x * 3f) / 4f);
-            layout.cellSize = new Vector2(cellWidth, Mathf.Max(190f, (grid.rect.height - layout.padding.vertical - layout.spacing.y) / 2f));
+            // Reserve the upper body band for the first-use/category guidance. The
+            // device capture proved .96 let row one paint directly through that line.
+            var grid = Region("CategoryGrid", new Vector2(.02f, .18f), new Vector2(.98f, .84f));
+            var layout = grid.gameObject.AddComponent<HorizontalLayoutGroup>();
             if (_document?.Collections == null) return;
+            var visible = new List<CardCollectionDefinition>();
             foreach (var c in _document.Collections)
             {
                 if (c == null || !c.Active || !string.Equals(c.Context, "build", StringComparison.OrdinalIgnoreCase)) continue;
@@ -115,51 +114,117 @@ namespace DeNelle.Village
                 // affordability. An unlocked expensive category remains a useful goal; a category
                 // whose definitions are all locked/missing/unfinished is not navigation yet.
                 if (!CollectionHasVisibleItems(c)) continue;
+                visible.Add(c);
+            }
+            // Category discovery is one glance, not paged navigation. Seven portrait cards fit
+            // comfortably across the supported landscape canvas and read as a collection rather
+            // than oversized horizontal buttons.
+            layout.spacing = 14f;
+            layout.padding = new RectOffset(8, 8, 8, 8);
+            layout.childAlignment = TextAnchor.MiddleCenter;
+            layout.childControlWidth = true;
+            layout.childControlHeight = true;
+            layout.childForceExpandWidth = true;
+            layout.childForceExpandHeight = true;
+            for (int index = 0; index < visible.Count; index++)
+            {
+                var c = visible[index];
                 var captured = c;
-                var card = ButtonBox(grid, c.Title, () =>
+                // A collection is browseable content, not an action command.  Building it
+                // through ButtonBox made the four choices read as enormous Back/Next buttons
+                // (and inherited the button label which then had to be hidden).  Give the
+                // collection its own card surface; the Button is only the hit target/state
+                // carrier layered over that surface.
+                var card = BuildCategoryCard(grid, () =>
                 {
                     BuildFirstUseGuide.CategorySelected();
-                    if (BuildFirstUseGuide.IsComplete &&
-                        string.Equals(captured.CollectionId, "build-defenses", StringComparison.OrdinalIgnoreCase))
-                    {
-                        Close();
-                        PanelRouter.Open(PanelId.Manage, "Defense");
-                        return;
-                    }
                     OpenCollection(captured);
                 });
-                var titleLabel = card.GetComponentInChildren<TextMeshProUGUI>();
-                if (titleLabel != null)
-                {
-                    var tr = titleLabel.rectTransform; tr.anchorMin = new Vector2(.05f, .82f); tr.anchorMax = new Vector2(.95f, .98f);
-                    tr.offsetMin = tr.offsetMax = Vector2.zero; titleLabel.fontSize = 27;
-                }
-                var icon = ElarionUiKit.AddImage(card.transform, "Icon", new Vector2(.32f, .29f), new Vector2(.68f, .80f), Color.white, false);
+                var icon = ElarionUiKit.AddImage(card.transform, "CategoryArtwork",
+                    new Vector2(.10f, .38f), new Vector2(.90f, .91f), Color.white, false);
                 var image = icon.GetComponent<Image>(); image.preserveAspect = true; image.raycastTarget = false;
                 SetArtworkOrFallback(icon.transform, image, Resources.Load<Sprite>(c.IconKey));
-                Label(card.transform, c.Subtitle, 25, TextAlignmentOptions.Center, new Vector2(.06f, .05f), new Vector2(.94f, .28f));
+                var divider = ElarionUiKit.AddImage(card.transform, "CardDivider",
+                    new Vector2(.08f, .35f), new Vector2(.92f, .355f), ElarionUi.Gold, false);
+                divider.GetComponent<Image>().raycastTarget = false;
+                var explicitTitle = Label(card.transform, c.Title, 30, TextAlignmentOptions.Center,
+                    new Vector2(.07f, .22f), new Vector2(.93f, .34f));
+                explicitTitle.color = ElarionUi.Gold;
+                explicitTitle.fontStyle = FontStyles.Bold;
+                explicitTitle.enableWordWrapping = false;
+                explicitTitle.enableAutoSizing = true;
+                explicitTitle.fontSizeMin = 20f;
+                explicitTitle.overflowMode = TextOverflowModes.Overflow;
+                explicitTitle.transform.SetAsLastSibling();
+                var subtitle = Label(card.transform, c.Subtitle, 21, TextAlignmentOptions.Top,
+                    new Vector2(.08f, .05f), new Vector2(.92f, .21f));
+                subtitle.color = ElarionUi.Parchment;
+                subtitle.raycastTarget = false;
+                ElarionUiKit.FitBlock(subtitle, 18f, 21f);
             }
+
+            // Building new defenses and managing existing defenses are different player
+            // intents. The old behavior silently changed the Defenses category into an upgrade
+            // shortcut after FTUE, which made the build catalog disappear precisely when an
+            // experienced player expected it. Keep Defenses stable and add one explicit card
+            // that routes to the authoritative Manage -> Defense destination.
+            CardCollectionDefinition defenseCollection = visible.Find(c =>
+                string.Equals(c.CollectionId, "build-defenses", StringComparison.OrdinalIgnoreCase));
+            var upgradeCard = BuildCategoryCard(grid, () =>
+            {
+                Close();
+                PanelRouter.Open(PanelId.Manage, "Defense");
+            });
+            upgradeCard.name = "DefenseUpgradeCard";
+            var upgradeArt = ElarionUiKit.AddImage(upgradeCard.transform, "CategoryArtwork",
+                new Vector2(.10f, .38f), new Vector2(.90f, .91f), Color.white, false);
+            var upgradeImage = upgradeArt.GetComponent<Image>();
+            upgradeImage.preserveAspect = true;
+            upgradeImage.raycastTarget = false;
+            Sprite defenseIcon = defenseCollection != null
+                ? Resources.Load<Sprite>(defenseCollection.IconKey)
+                : Resources.Load<Sprite>("UI/ElarionMedieval/cards/defense");
+            SetArtworkOrFallback(upgradeArt.transform, upgradeImage, defenseIcon);
+            var upgradeDivider = ElarionUiKit.AddImage(upgradeCard.transform, "CardDivider",
+                new Vector2(.08f, .35f), new Vector2(.92f, .355f), ElarionUi.Gold, false);
+            upgradeDivider.GetComponent<Image>().raycastTarget = false;
+            var upgradeTitle = Label(upgradeCard.transform, "Upgrade Defenses", 30,
+                TextAlignmentOptions.Center, new Vector2(.07f, .22f), new Vector2(.93f, .34f));
+            upgradeTitle.color = ElarionUi.Gold;
+            upgradeTitle.fontStyle = FontStyles.Bold;
+            upgradeTitle.enableWordWrapping = false;
+            upgradeTitle.enableAutoSizing = true;
+            upgradeTitle.fontSizeMin = 15f;
+            upgradeTitle.fontSizeMax = 26f;
+            upgradeTitle.transform.SetAsLastSibling();
+            var upgradeSubtitle = Label(upgradeCard.transform,
+                "Manage every defense.", 21, TextAlignmentOptions.Top,
+                new Vector2(.08f, .05f), new Vector2(.92f, .21f));
+            upgradeSubtitle.color = ElarionUi.Parchment;
+            upgradeSubtitle.raycastTarget = false;
+            ElarionUiKit.FitBlock(upgradeSubtitle, 18f, 21f);
         }
 
         private async void OpenCollection(CardCollectionDefinition collection)
         {
-            _collection = collection; _remoteCollection = null; _page = 0; _focus.Push(); RenderCollection();
+            _collection = collection; _remoteCollection = null; _page = 0;
+            Push(BuildCollectionPage.For(collection));
             CardCollectionModel loaded = await _remote.ResolveAsync(collection.CollectionId, Application.version);
             if (_collection != collection || !IsOpen) return;
             _remoteCollection = loaded;
-            RenderCollection();
+            Refresh();
         }
 
         private void RenderCollection()
         {
-            ClearPanel();
             var visibleIds = VisibleItemIds();
             int count = visibleIds.Count;
             int pages = CardCollectionPaging.PageCount(count);
-            Header(_collection?.Title?.ToUpperInvariant() ?? "BUILD",
-                BuildFirstUseGuide.Current == BuildFirstUseGuide.Step.Item
-                    ? BuildFirstUseGuide.Copy : (_collection?.Subtitle ?? ""), "BACK", Back);
-            var row = Region("Cards", new Vector2(.03f, .13f), new Vector2(.97f, .80f));
+            // Keep the cards in their own upper field. The collection instruction used
+            // to occupy the shared shell subtitle at y .78-.84 and painted through the
+            // card titles. Seat it below the card row where the screen has deliberate
+            // breathing room; paging remains in the footer band beneath it.
+            var row = Region("Cards", new Vector2(.02f, .20f), new Vector2(.98f, .96f));
             var layout = row.gameObject.AddComponent<HorizontalLayoutGroup>();
             layout.spacing = 18; layout.padding = new RectOffset(10, 10, 6, 6); layout.childForceExpandWidth = true; layout.childForceExpandHeight = true;
             int first = CardCollectionPaging.FirstIndex(_page, count);
@@ -168,12 +233,19 @@ namespace DeNelle.Village
             {
                 BuildItemCard(row, visibleIds[i]);
             }
+            string guidance = BuildFirstUseGuide.Current == BuildFirstUseGuide.Step.Item
+                ? BuildFirstUseGuide.Copy : _collection.Subtitle;
+            var guidanceLabel = Label(_panel, guidance, 28, TextAlignmentOptions.Center,
+                new Vector2(.08f, .11f), new Vector2(.92f, .19f));
+            guidanceLabel.color = ElarionUi.Parchment;
+            guidanceLabel.raycastTarget = false;
+            ElarionUiKit.FitSingleLine(guidanceLabel, 22f, 28f);
             if (pages > 1)
             {
-                var prev = FooterButton("PREVIOUS", new Vector2(.04f, .035f), new Vector2(.22f, .11f), () => { _page = Math.Max(0, _page - 1); RenderCollection(); });
+                var prev = FooterButton("PREVIOUS", new Vector2(.04f, .035f), new Vector2(.22f, .11f), () => { _page = Math.Max(0, _page - 1); Refresh(); });
                 prev.interactable = _page > 0;
                 Label(_panel, "PAGE " + (_page + 1) + " / " + pages, 26, TextAlignmentOptions.Center, new Vector2(.42f, .035f), new Vector2(.58f, .11f));
-                var next = FooterButton("NEXT", new Vector2(.78f, .035f), new Vector2(.96f, .11f), () => { _page = Math.Min(pages - 1, _page + 1); RenderCollection(); });
+                var next = FooterButton("NEXT", new Vector2(.78f, .035f), new Vector2(.96f, .11f), () => { _page = Math.Min(pages - 1, _page + 1); Refresh(); });
                 next.interactable = _page + 1 < pages;
             }
         }
@@ -190,7 +262,18 @@ namespace DeNelle.Village
             bool built = entry != null && StructureSingleton.IsSingleton(entry.id) && StructureSingleton.IsBuilt(entry);
             bool locked = entry == null || (vm != null && vm.Locked);
             bool available = vm != null && vm.Affordable && !locked && !built;
-            var card = Box("BuildCard_" + itemId, parent, new Color(.09f, .11f, .16f, 1f));
+            // Shared collection-card law: the action is a sibling footer BELOW the
+            // information card. Keeping it out of the card prevents ornate button art
+            // from covering cost/status copy as the layout contracts on mobile.
+            var slot = new GameObject("BuildCardSlot_" + itemId, typeof(RectTransform));
+            slot.transform.SetParent(parent, false);
+            var slotRt = slot.GetComponent<RectTransform>();
+            slotRt.anchorMin = Vector2.zero; slotRt.anchorMax = Vector2.one;
+            slotRt.offsetMin = slotRt.offsetMax = Vector2.zero;
+            var card = Box("BuildCard_" + itemId, slot.transform, new Color(.09f, .11f, .16f, 1f));
+            card.anchorMin = new Vector2(0f, .18f);
+            card.anchorMax = Vector2.one;
+            card.offsetMin = card.offsetMax = Vector2.zero;
             var outline = card.gameObject.AddComponent<Outline>(); outline.effectColor = locked ? new Color(.5f,.5f,.55f,1) : new Color(.5f,.4f,.2f,1);
             Label(card, vm?.DisplayName ?? Humanize(itemId), 32, TextAlignmentOptions.Center, new Vector2(.05f,.86f), new Vector2(.95f,.98f));
             var artGo = ElarionUiKit.AddImage(card, "Artwork", new Vector2(.12f,.54f), new Vector2(.88f,.84f), Color.white, false);
@@ -198,15 +281,15 @@ namespace DeNelle.Village
             SetArtworkOrFallback(artGo.transform, image, BuildPaletteUI.ResolveEntryArtPublic(entry));
             Label(card, vm?.Description ?? "Catalog definition unavailable.", 25, TextAlignmentOptions.TopLeft, new Vector2(.07f,.30f), new Vector2(.93f,.53f));
             string cost = vm == null ? "Cost unavailable" : CostWords(vm.EffectiveCost, vm.Freebie);
-            Label(card, "COST: " + cost, 25, TextAlignmentOptions.Center, new Vector2(.06f,.20f), new Vector2(.94f,.29f));
+            Label(card, "COST: " + cost, 25, TextAlignmentOptions.Center, new Vector2(.06f,.13f), new Vector2(.94f,.23f));
             string state = locked ? "LOCKED — unavailable" : built ? "BUILT — one allowed" : !vm.Affordable ? "NEED MORE RESOURCES" : "AVAILABLE";
             if (progressionLocked) state = "Locked - " + lockReason;
-            Label(card, (locked ? "[LOCKED] " : "[READY] ") + state, 25, TextAlignmentOptions.Center, new Vector2(.06f,.12f), new Vector2(.94f,.20f));
+            Label(card, (locked ? "[LOCKED] " : "[READY] ") + state, 25, TextAlignmentOptions.Center, new Vector2(.06f,.02f), new Vector2(.94f,.12f));
             // The complete state already lives in the wrapping status band above. Button faces
             // carry only a short action/state word so the kit never ellipsizes required copy.
             string buttonFace = available ? "PLACE" : built ? "BUILT" : !locked ? "NEED RESOURCES" : "UNAVAILABLE";
-            var place = ButtonBox(card, buttonFace, () => Place(entry));
-            var pr = place.GetComponent<RectTransform>(); pr.anchorMin = new Vector2(.10f,.02f); pr.anchorMax = new Vector2(.90f,.115f); pr.offsetMin = pr.offsetMax = Vector2.zero;
+            var place = ButtonBox(slot.transform, buttonFace, () => Place(entry));
+            var pr = place.GetComponent<RectTransform>(); pr.anchorMin = new Vector2(.10f,.01f); pr.anchorMax = new Vector2(.90f,.16f); pr.offsetMin = pr.offsetMax = Vector2.zero;
             place.GetComponent<Button>().interactable = available;
             var buttonLabel = place.GetComponentInChildren<TextMeshProUGUI>();
             if (buttonLabel != null)
@@ -222,10 +305,10 @@ namespace DeNelle.Village
         private void Place(CatalogEntry entry)
         {
             if (entry == null) return;
-            BuildFirstUseGuide.ItemSelected();
             var callback = _place;
-            Close(); // release the browsing pause before the existing Arm seam begins placement
-            callback?.Invoke(entry);
+            // Done commits the selection, releases the browsing pause, then returns
+            // to the existing placement authority. No economy/placement logic moved.
+            Done(BuildFirstUseGuide.ItemSelected, () => callback?.Invoke(entry));
         }
 
         private List<string> VisibleItemIds()
@@ -329,22 +412,57 @@ namespace DeNelle.Village
             fallback.raycastTarget = false;
         }
 
-        private void Back() { if (_collection == null) { Close(); return; } _focus.Pop(); _collection = null; _remoteCollection = null; RenderCategories(); }
-
-        private void Header(string title, string subtitle, string closeText, Action close)
-        {
-            Label(_panel, title, 42, TextAlignmentOptions.Left, new Vector2(.04f,.88f), new Vector2(.72f,.98f));
-            Label(_panel, subtitle, 27, TextAlignmentOptions.Left, new Vector2(.04f,.80f), new Vector2(.76f,.89f));
-            var b = FooterButton(closeText, new Vector2(.80f,.87f), new Vector2(.96f,.96f), close); b.gameObject.name = "CloseButton";
-        }
-
         private Button FooterButton(string text, Vector2 min, Vector2 max, Action action)
-        { var go = ButtonBox(_panel, text, action); var rt = go.GetComponent<RectTransform>(); rt.anchorMin=min;rt.anchorMax=max;rt.offsetMin=rt.offsetMax=Vector2.zero; return go.GetComponent<Button>(); }
+        {
+            var go = ButtonBox(_panel, text, action);
+            var rt = go.GetComponent<RectTransform>(); rt.anchorMin=min;rt.anchorMax=max;rt.offsetMin=rt.offsetMax=Vector2.zero;
+            var button = go.GetComponent<Button>();
+            MedievalUiSkin.ApplyButton(button, primary: text == "NEXT");
+            return button;
+        }
         private RectTransform Region(string name, Vector2 min, Vector2 max)
         { var go = new GameObject(name, typeof(RectTransform)); go.transform.SetParent(_panel,false); var rt=go.GetComponent<RectTransform>();rt.anchorMin=min;rt.anchorMax=max;rt.offsetMin=rt.offsetMax=Vector2.zero;return rt; }
-        private void ClearPanel() { for (int i=_panel.childCount-1;i>=0;i--) Destroy(_panel.GetChild(i).gameObject); }
         private static GameObject ButtonBox(Transform parent, string text, Action click)
         { return ElarionUiKit.Button(parent,text,ElarionUiKit.ButtonKind.Quiet,Vector2.zero,Vector2.one,click).gameObject; }
+
+        private static GameObject BuildCategoryCard(Transform parent, Action click)
+        {
+            var go = new GameObject("BuildCollectionCard", typeof(RectTransform), typeof(CanvasRenderer),
+                typeof(Image), typeof(Button));
+            go.transform.SetParent(parent, false);
+            var face = go.GetComponent<Image>();
+            // The supplied horizontal content-panel bitmap has a large transparent tail below
+            // its visible border. Stretching it into a portrait card leaves the footer copy
+            // outside the painted surface. Use native scalable geometry for this vertical
+            // component: one continuous obsidian face plus an explicit antique-gold perimeter.
+            face.sprite = null;
+            face.color = new Color(.025f, .024f, .023f, .985f);
+            void Edge(string name, Vector2 min, Vector2 max)
+            {
+                var edge = ElarionUiKit.AddImage(go.transform, name, min, max,
+                    new Color(ElarionUi.Gold.r, ElarionUi.Gold.g, ElarionUi.Gold.b, .95f), false);
+                edge.GetComponent<Image>().raycastTarget = false;
+            }
+            Edge("GoldTop",    new Vector2(.018f, .982f), new Vector2(.982f, .992f));
+            Edge("GoldBottom", new Vector2(.018f, .008f), new Vector2(.982f, .018f));
+            Edge("GoldLeft",   new Vector2(.008f, .018f), new Vector2(.018f, .982f));
+            Edge("GoldRight",  new Vector2(.982f, .018f), new Vector2(.992f, .982f));
+            var button = go.GetComponent<Button>();
+            button.targetGraphic = face;
+            button.transition = Selectable.Transition.ColorTint;
+            button.colors = new ColorBlock
+            {
+                normalColor = Color.white,
+                highlightedColor = new Color(1f, .92f, .72f, 1f),
+                pressedColor = new Color(.82f, .66f, .36f, 1f),
+                selectedColor = new Color(1f, .92f, .72f, 1f),
+                disabledColor = new Color(.42f, .42f, .42f, .75f),
+                colorMultiplier = 1f,
+                fadeDuration = .08f
+            };
+            if (click != null) button.onClick.AddListener(() => click());
+            return go;
+        }
         private static RectTransform Box(string name, Transform parent, Color color)
         { return ElarionUiKit.AddImage(parent,name,Vector2.zero,Vector2.one,color,true).GetComponent<RectTransform>(); }
         private static TextMeshProUGUI Label(Transform parent,string text,float size,TextAlignmentOptions align,Vector2 min,Vector2 max)
@@ -357,25 +475,22 @@ namespace DeNelle.Village
             t.overflowMode=TextOverflowModes.Overflow;
             return t;
         }
-        private static void Stretch(RectTransform rt) { rt.anchorMin=Vector2.zero;rt.anchorMax=Vector2.one;rt.offsetMin=rt.offsetMax=Vector2.zero; }
-        private static void ApplySafeArea(RectTransform rt)
-        { var s=Screen.safeArea;float w=Math.Max(1,Screen.width);float h=Math.Max(1,Screen.height);var min=new Vector2(s.xMin/w,s.yMin/h);var max=new Vector2(s.xMax/w,s.yMax/h);var d=max-min;rt.anchorMin=min+d*.10f;rt.anchorMax=max-d*.10f;rt.offsetMin=rt.offsetMax=Vector2.zero; }
         private static string Humanize(string id) => string.IsNullOrEmpty(id) ? "Unknown" : id.Replace('_',' ').Replace('-',' ');
         private static string CostWords(DeNelle.Core.Catalog.ResourceCost c,bool free)
         { if(free)return "NO COST";var p=new List<string>();if(c.wood>0)p.Add(c.wood+" Wood");if(c.food>0)p.Add(c.food+" Stone");if(c.iron>0)p.Add(c.iron+" Iron");if(c.crystals>0)p.Add(c.crystals+" Crystals");return p.Count==0?"No resources":string.Join(" | ",p); }
-        private void OnDisable()
+        protected override void OnDisable()
         {
             ProgressionUnlocks.Changed -= OnProgressionUnlockChanged;
             StructureSingleton.SingletonResolved -= OnFiniteCapacityChanged;
             StructureSingleton.SingletonReleased -= OnFiniteCapacityChanged;
-            Close();
+            base.OnDisable();
         }
-        private void OnDestroy()
+        protected override void OnDestroy()
         {
             ProgressionUnlocks.Changed -= OnProgressionUnlockChanged;
             StructureSingleton.SingletonResolved -= OnFiniteCapacityChanged;
             StructureSingleton.SingletonReleased -= OnFiniteCapacityChanged;
-            Close();
+            base.OnDestroy();
         }
     }
 }

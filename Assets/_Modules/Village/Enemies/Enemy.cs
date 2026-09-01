@@ -258,6 +258,12 @@ namespace DeNelle.Village
 
         private bool _telegraphing;   // DEF-48: true during wind-up — blocks double-trigger
         private IDamageableStructure _currentTarget;
+        private bool _attackTokenHeld;
+        private bool _contactCommitPending;
+        private bool _contactCommitInterrupted;
+        private IDamageableStructure _contactCommitTarget;
+        private const float ContactHitFallbackSeconds = 0.72f;
+        private const float ContactRecoverSeconds = 0.48f;
 
         // ── Smooth target/attack facing (anti-snap) ──────────────────────────
         // The old target-facing did `transform.rotation = LookRotation(toTarget)`
@@ -1022,6 +1028,9 @@ namespace DeNelle.Village
         private void OnDisable()
         {
             TargetManager.Unregister(this);
+            ReleaseAttackToken();
+            _contactCommitPending = false;
+            _contactCommitInterrupted = false;
             // Release the in-scene battle-lock membership so a despawned/pooled/destroyed enemy
             // can never wedge BattleLock.IsInBattle() true (a stale token would keep combat input
             // locked in town). OnDisable runs before OnDestroy and on pool release — covers all exits.
@@ -1745,6 +1754,15 @@ namespace DeNelle.Village
             _attackCooldown -= Time.deltaTime;
             if (_attackCooldown <= 0f && !_telegraphing)
             {
+                var targetObject = _currentTarget as UnityEngine.Object;
+                int maxCommitters = Tier == EnemyTier.Ordinary ? 2 : 1;
+                if (!EnemyAttackDirector.TryAcquire(this, targetObject, maxCommitters))
+                {
+                    _attackCooldown = UnityEngine.Random.Range(0.18f, 0.42f);
+                    return;
+                }
+                _attackTokenHeld = true;
+                _contactCommitTarget = _currentTarget;
                 _attackCooldown = _attackInterval;
 
                 // DEF-48 / WO-560: ALWAYS telegraph the contact strike. Arena orcs are
@@ -1789,6 +1807,7 @@ namespace DeNelle.Village
         private System.Collections.IEnumerator TelegraphThenAttack(float duration)
         {
             _telegraphing = true;
+            _contactCommitInterrupted = false;
 
             // Wind-up animation trigger — Animator must have a "WindUp" state.
             if (_animator != null && _hasWindUpParam) _animator.SetTrigger(AnimWindUp);
@@ -1825,10 +1844,72 @@ namespace DeNelle.Village
             if (telegraphVFX != null) Destroy(telegraphVFX);
 
             // Re-check viability after the delay — target may have died or moved.
-            if (!_dead && _currentTarget != null && _currentTarget.IsAlive)
-                ExecuteContactAttack();
+            if (!_dead && !_contactCommitInterrupted && _contactCommitTarget != null && _contactCommitTarget.IsAlive)
+            {
+                _contactCommitPending = true;
+                _actor?.PlayAttack();
+                // Let the trigger transition enter its attack state, then put the
+                // compatibility fallback AFTER the reviewed clip event. This keeps
+                // legacy controllers functional without racing a real HitFrame.
+                yield return null;
+                float fallbackDelay = ResolveContactHitFallbackDelay();
+                yield return new WaitForSeconds(fallbackDelay);
+                if (_contactCommitPending)
+                {
+                    DeNelle.Core.Diagnostics.FlowTrace.Throttle("EnemyAttack", "fallback-hitframe", 2f,
+                        "Enemy contact used legacy HitFrame fallback; author a reviewed clip event.");
+                    OnAnimationHitFrame();
+                }
+            }
 
+            yield return new WaitForSeconds(ContactRecoverSeconds);
+            _contactCommitPending = false;
             _telegraphing = false;
+            ReleaseAttackToken();
+        }
+
+        /// <summary>Animation Event seam. Consumes a pending contact hit exactly once.</summary>
+        public void OnAnimationHitFrame()
+        {
+            if (!_contactCommitPending || _contactCommitInterrupted || _dead) return;
+            _contactCommitPending = false;
+            ExecuteContactAttack(_contactCommitTarget);
+        }
+
+        private float ResolveContactHitFallbackDelay()
+        {
+            if (_animator == null) return ContactHitFallbackSeconds;
+            float latestReviewedHit = -1f;
+            var current = _animator.GetCurrentAnimatorClipInfo(0);
+            var next = _animator.IsInTransition(0) ? _animator.GetNextAnimatorClipInfo(0) : null;
+            FindReviewedHitTime(current, ref latestReviewedHit);
+            FindReviewedHitTime(next, ref latestReviewedHit);
+            return latestReviewedHit >= 0f
+                ? Mathf.Max(ContactHitFallbackSeconds, latestReviewedHit + 0.12f)
+                : ContactHitFallbackSeconds;
+        }
+
+        private static void FindReviewedHitTime(AnimatorClipInfo[] infos, ref float latest)
+        {
+            if (infos == null) return;
+            for (int i = 0; i < infos.Length; i++)
+            {
+                AnimationClip clip = infos[i].clip;
+                if (clip == null) continue;
+                AnimationEvent[] events = clip.events;
+                if (events == null) continue;
+                for (int e = 0; e < events.Length; e++)
+                    if (events[e] != null && events[e].functionName == "HitFrame")
+                        latest = Mathf.Max(latest, events[e].time);
+            }
+        }
+
+        private void ReleaseAttackToken()
+        {
+            if (!_attackTokenHeld) return;
+            _attackTokenHeld = false;
+            EnemyAttackDirector.Release(this);
+            _contactCommitTarget = null;
         }
 
         /// <summary>
@@ -1836,21 +1917,20 @@ namespace DeNelle.Village
         /// <see cref="TickContactAttack"/> so both the instant and telegraph paths
         /// share one call site.
         /// </summary>
-        private void ExecuteContactAttack()
+        private void ExecuteContactAttack(IDamageableStructure strikeTarget)
         {
-            if (_currentTarget == null || !_currentTarget.IsAlive) return;
+            if (strikeTarget == null || !strikeTarget.IsAlive) return;
 
             // Smooth pivot to face the struck target so the melee read is correct
             // (anti-snap: request the facing; TickFacing slerps over frames). The
             // contact path runs while the agent is stopped, so velocity-facing is
             // silent and this is the only facing driver — but it turns, never snaps.
-            var targetMb = _currentTarget as MonoBehaviour;
+            var targetMb = strikeTarget as MonoBehaviour;
             if (targetMb != null)
                 RequestFacing(targetMb.transform.position - transform.position);
 
-            NoteHeroDamageSource(_currentTarget);
-            DealStructureDamage(_currentTarget, _contactDamage, contact: true);
-            _actor?.PlayAttack();
+            NoteHeroDamageSource(strikeTarget);
+            DealStructureDamage(strikeTarget, _contactDamage, contact: true);
             PlayTypeSound(_typeVfxSet != null ? _typeVfxSet.RandomAttackClip() : null);
 
             // VFX-FREE-WIN-3: the BLOW LANDING was the only silent beat in the melee
@@ -2446,6 +2526,12 @@ namespace DeNelle.Village
         {
             if (_dead || amount <= 0f) return;
 
+            if (_telegraphing)
+            {
+                _contactCommitInterrupted = true;
+                _contactCommitPending = false;
+            }
+
             // WO-910 Hunter's Mark: marked foes take amplified damage.
             amount = CombatMark.ScaleDamage(this, amount);
 
@@ -2722,6 +2808,14 @@ namespace DeNelle.Village
             _spawnTellPending      = false;
 
             // Combat / motion latches.
+            // A pooled committer must surrender its director token before its local
+            // bit is cleared, otherwise the director permanently believes a dead body
+            // still owns capacity and future packs stop attacking.
+            ReleaseAttackToken();
+            _attackTokenHeld        = false;
+            _contactCommitPending   = false;
+            _contactCommitInterrupted = false;
+            _contactCommitTarget    = null;
             _casting               = false;
             _telegraphing          = false;
             _stopTightenedForHero  = false;
@@ -3620,6 +3714,13 @@ namespace DeNelle.Village
         {
             if (_animator == null)
                 _animator = GetComponentInChildren<Animator>();
+
+            if (_animator != null)
+            {
+                var relay = _animator.GetComponent<EnemyAnimationEventRelay>();
+                if (relay == null) relay = _animator.gameObject.AddComponent<EnemyAnimationEventRelay>();
+                relay.Configure(this);
+            }
 
             RuntimeAnimatorController controller = _animator != null
                 ? _animator.runtimeAnimatorController

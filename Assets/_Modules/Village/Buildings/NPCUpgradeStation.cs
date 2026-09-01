@@ -22,6 +22,7 @@ using UnityEngine;
 using UnityEngine.UI;
 using DeNelle.Core.Catalog; // StructureRoles — the single naming authority
 using DeNelle.Core.State; // for Economy if needed, but use the Village one
+using DeNelle.Core.UI;
 
 namespace DeNelle.Village
 {
@@ -113,7 +114,10 @@ namespace DeNelle.Village
             var rect = panel.GetComponent<RectTransform>();
             rect.sizeDelta = new Vector2(4f, 3f);
             rect.localPosition = new Vector3(0, 3f, 0);
-            panel.GetComponent<Image>().color = new Color(0.1f, 0.08f, 0.06f, 0.92f);
+            var panelImage = panel.GetComponent<Image>();
+            panelImage.sprite = Resources.Load<Sprite>("UI/ElarionMedieval/frames/content-panel");
+            panelImage.type = Image.Type.Sliced;
+            panelImage.color = Color.white;
 
             // Title
             CreateText(panel.transform, $"{DisplayName} (Tier {CurrentTier}/{MaxTier})", new Vector2(0, 1.1f), 22, Color.white);
@@ -173,6 +177,7 @@ namespace DeNelle.Village
             tRect.anchorMin = Vector2.zero;
             tRect.anchorMax = Vector2.one;
             tRect.sizeDelta = Vector2.zero;
+            MedievalUiSkin.ApplyButton(btn, primary: string.Equals(label, "Upgrade", StringComparison.Ordinal));
         }
 
         private ResourceCost GetNextTierCost()

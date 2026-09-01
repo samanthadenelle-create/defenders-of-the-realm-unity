@@ -22,6 +22,7 @@ using System.Collections.Generic;
 using DeNelle.Core.Services;
 using DeNelle.Core.UI;
 using DeNelle.Core.Diagnostics;
+using DeNelle.Core.Social;
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
@@ -35,6 +36,7 @@ namespace DeNelle.HUD
         private Transform _profileHost;
         private Transform _tabHost;
         private Transform _listContent;   // ScrollRect content (VerticalLayoutGroup)
+        private ScrollRect _listScroll;
         private TextMeshProUGUI _footer;
 
         private bool _visible;
@@ -210,6 +212,7 @@ namespace DeNelle.HUD
             scroll.vertical = true;
             scroll.movementType = ScrollRect.MovementType.Clamped;
             scroll.scrollSensitivity = 24f;
+            _listScroll = scroll;
 
             _listContent = contentGo.transform;
         }
@@ -252,27 +255,57 @@ namespace DeNelle.HUD
                 Destroy(_listContent.GetChild(i).gameObject);
 
             foreach (var row in _vm.Rows)
-                MakeRow(row.Rank, row.Name, row.Score, row.IsLocal, row.Index);
+                MakeRow(row);
         }
 
-        private void MakeRow(string rank, string name, string score, bool isLocal, int index)
+        private void MakeRow(LeaderboardVM.Row row)
         {
             var rowGo = new GameObject("Row", typeof(RectTransform), typeof(Image), typeof(LayoutElement));
             rowGo.transform.SetParent(_listContent, false);
-            rowGo.GetComponent<LayoutElement>().preferredHeight = 34f;
+            // Visit rows reserve a full kit touch rung. BuildObsidianButton clamps to 112 px;
+            // anything shorter would inflate across neighboring leaderboard rows on Seeker.
+            rowGo.GetComponent<LayoutElement>().preferredHeight = row.CanVisit ? 120f : 48f;
             var bg = rowGo.GetComponent<Image>();
-            bg.color = isLocal
+            bg.color = row.IsLocal
                 ? new Color(ElarionUi.Gold.r, ElarionUi.Gold.g, ElarionUi.Gold.b, 0.16f)
-                : ((index & 1) == 1 ? new Color(1f, 1f, 1f, 0.04f) : Color.clear);
+                : ((row.Index & 1) == 1 ? new Color(1f, 1f, 1f, 0.04f) : Color.clear);
 
-            Color fg = isLocal ? ElarionUi.Gilt : ElarionUi.Parchment;
-            var style = isLocal ? FontStyles.Bold : FontStyles.Normal;
-            MakeText(rowGo.transform, rank, 14, isLocal ? ElarionUi.Gilt : ElarionUi.ParchmentDim,
+            Color fg = row.IsLocal ? ElarionUi.Gilt : ElarionUi.Parchment;
+            var style = row.IsLocal ? FontStyles.Bold : FontStyles.Normal;
+            MakeText(rowGo.transform, row.Rank, 14, row.IsLocal ? ElarionUi.Gilt : ElarionUi.ParchmentDim,
                 FontStyles.Bold, TextAlignmentOptions.Center, new Vector2(0f, 0f), new Vector2(0.10f, 1f));
-            MakeText(rowGo.transform, name, 14, fg, style,
-                TextAlignmentOptions.Left, new Vector2(0.11f, 0f), new Vector2(0.78f, 1f));
-            MakeText(rowGo.transform, score, 14, isLocal ? ElarionUi.Gilt : ElarionUi.Aether,
-                FontStyles.Bold, TextAlignmentOptions.Right, new Vector2(0.78f, 0f), new Vector2(1f, 1f));
+            MakeText(rowGo.transform, row.Name, 14, fg, style,
+                TextAlignmentOptions.Left, new Vector2(0.11f, 0f), new Vector2(row.CanVisit ? 0.60f : 0.78f, 1f));
+            MakeText(rowGo.transform, row.Score, 14, row.IsLocal ? ElarionUi.Gilt : ElarionUi.Aether,
+                FontStyles.Bold, TextAlignmentOptions.Right, new Vector2(row.CanVisit ? 0.58f : 0.78f, 0f),
+                new Vector2(row.CanVisit ? 0.73f : 1f, 1f));
+            if (row.CanVisit)
+            {
+                var visit = ElarionUiKit.BuildObsidianButton(rowGo.transform, "Visit Town",
+                    ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Yellow,
+                    new Vector2(.74f, .03f), new Vector2(.995f, .97f), () => OpenTown(row));
+                visit.name = "VisitTown_" + row.Rank;
+            }
+        }
+
+        private void OpenTown(LeaderboardVM.Row row)
+        {
+            if (_vm == null || !row.CanVisit) return;
+            float anchor = _listScroll != null ? _listScroll.verticalNormalizedPosition : 1f;
+            var visitPanel = GetComponent<TownShowcaseVisitPanel>();
+            if (visitPanel == null) visitPanel = gameObject.AddComponent<TownShowcaseVisitPanel>();
+            visitPanel.Open(_vm.VisitEntries, row.ShowcaseId, row.Index, anchor, () =>
+            {
+                // Opening the showcase correctly claims the global modal slot, which closes
+                // this panel. Re-open it through the same arbiter before restoring the exact
+                // captured anchor; otherwise Return would reveal gameplay, not the Top 10 row.
+                SetVisible(true);
+                if (_listScroll != null)
+                {
+                    Canvas.ForceUpdateCanvases();
+                    _listScroll.verticalNormalizedPosition = anchor;
+                }
+            });
         }
 
         // ── uGUI helpers ─────────────────────────────────────────────────────

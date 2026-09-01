@@ -148,7 +148,8 @@ namespace DeNelle.Core.Tests
             Assert.That(_state.BestWave, Is.EqualTo(0), "bestWave wiped");
             Assert.That(_state.Resources.Crystals, Is.EqualTo(250), "resources -> STARTER");
             Assert.That(_state.Resources.Food, Is.EqualTo(80));
-            Assert.That(_state.Resources.Coins, Is.EqualTo(15));
+            Assert.That(_state.Resources.Coins, Is.EqualTo(StartingBudget.StrategicGold),
+                "gold -> owner-ruled founding seed");
             Assert.That(_state.OwnedItemIds, Is.Empty, "ownedItemIds wiped");
             Assert.That(_state.PetBonds, Is.EqualTo(new List<int> { 0, 0, 0 }), "petBonds -> [0,0,0]");
             Assert.That(_state.Voidshards, Is.EqualTo(5), "voidshards -> 5");

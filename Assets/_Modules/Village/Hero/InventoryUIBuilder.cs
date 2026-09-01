@@ -65,7 +65,7 @@ namespace DeNelle.Village
         private const float StageX1 = 0.620f;
 
         /// <summary>Header band (hero identity + vitals) - D3's full-width x 120 strip.</summary>
-        private const float HeaderY0 = 0.845f, HeaderY1 = 0.985f;
+        private const float HeaderY0 = 0.775f, HeaderY1 = 0.905f;
 
         /// <summary>
         /// The STAGE and PANE floor. The kit seats the ONE shared Close as a fixed
@@ -74,10 +74,10 @@ namespace DeNelle.Village
         /// horizontally (it is far left of the centred Close), which is why RailY0 is
         /// lower - exactly the dodge the previous layout's left column already used.
         /// </summary>
-        private const float BodyY0 = 0.300f, BodyY1 = 0.685f;
+        private const float BodyY0 = 0.315f, BodyY1 = 0.625f;
 
         /// <summary>The rail column's band. Lower than the body because it clears the Close in X.</summary>
-        private const float RailY0 = 0.695f, RailY1 = 0.835f;
+        private const float RailY0 = 0.635f, RailY1 = 0.765f;
 
         /// <summary>Purse strip - above the reserved Close band, below the stage.</summary>
         private const float PurseY0 = 0.222f, PurseY1 = 0.288f;
@@ -124,6 +124,10 @@ namespace DeNelle.Village
                 new Vector2(0.04f, 0.03f), new Vector2(0.96f, 0.97f),
                 Close, headerX0: 0.05f, headerX1: 0.80f,
                 frameName: RpgUiCatalog.FrameInventory);
+            MedievalUiSkin.ApplyShell(panelChrome);
+            var closeImage = panelChrome.close != null
+                ? panelChrome.close.targetGraphic as Image : null;
+            if (closeImage != null) closeImage.type = Image.Type.Simple;
             var panel = panelChrome.content;
 
             // The frame's own medallion socket keeps the active hero's portrait. This is the
@@ -133,14 +137,47 @@ namespace DeNelle.Village
             var medallion = panelChrome.layout != null ? panelChrome.layout.medallion : null;
             if (medallion != null)
             {
+                medallion.gameObject.SetActive(true);
+                // ApplyShell intentionally retires the legacy oversized socket. Bag still needs
+                // hero identity, but as a compact header medallion—not a portrait card covering
+                // the title and vitals. Re-seat it inside the identity band and hold a true 1:1.
+                medallion.anchorMin = medallion.anchorMax = new Vector2(0.085f, 0.84f);
+                medallion.pivot = new Vector2(0.5f, 0.5f);
+                medallion.anchoredPosition = Vector2.zero;
+                medallion.sizeDelta = new Vector2(156f, 156f);
+                var inheritedAspect = medallion.GetComponent<AspectRatioFitter>();
+                if (inheritedAspect != null)
+                    inheritedAspect.aspectMode = AspectRatioFitter.AspectMode.None;
+                var medallionImage = medallion.GetComponent<Image>();
+                var medallionSprite = Resources.Load<Sprite>(
+                    "UI/ElarionMedieval/frames/circular-bezel-four-point");
+                if (medallionImage != null && medallionSprite != null)
+                {
+                    medallionImage.sprite = medallionSprite;
+                    medallionImage.type = Image.Type.Simple;
+                    medallionImage.color = Color.white;
+                }
                 string portraitSlug = ActiveHeroPortraitSlug();
                 // WO-1234: folder from the ONE constant (DeNelle.Core.HeroPortraitPaths).
                 var portraitTex = Resources.Load<Texture2D>(DeNelle.Core.HeroPortraitPaths.ResourceKey(portraitSlug));
                 if (portraitTex != null)
                 {
+                    var maskGo = new GameObject("HeroPortraitMask", typeof(Image), typeof(Mask));
+                    var maskRt = (RectTransform)maskGo.transform;
+                    maskRt.SetParent(medallion, false);
+                    maskRt.anchorMin = new Vector2(.16f, .16f);
+                    maskRt.anchorMax = new Vector2(.84f, .84f);
+                    maskRt.offsetMin = maskRt.offsetMax = Vector2.zero;
+                    var maskImage = maskGo.GetComponent<Image>();
+                    maskImage.sprite = ElarionUiKit.CircleSprite;
+                    maskImage.type = Image.Type.Simple;
+                    maskImage.color = Color.white;
+                    maskImage.raycastTarget = false;
+                    maskGo.GetComponent<Mask>().showMaskGraphic = false;
+
                     var raw = new GameObject("HeroPortrait", typeof(RawImage));
                     var rrt = raw.GetComponent<RectTransform>();
-                    rrt.SetParent(medallion, false);
+                    rrt.SetParent(maskRt, false);
                     rrt.anchorMin = Vector2.zero;
                     rrt.anchorMax = Vector2.one;
                     rrt.offsetMin = Vector2.zero;
@@ -293,8 +330,6 @@ namespace DeNelle.Village
             if (_vm != null && _vm.Tabs != null)
                 foreach (var t in _vm.Tabs) counts[t.Kind] = t.Count;
 
-            bool mapOn = DeNelle.Core.FeatureFlags.MapTab;
-
             BuildRailEntry(content.transform, RailGear,     InventoryStrings.KeyRailGear,     -1, false);
             AddRailSeparator(content.transform);
             BuildRailEntry(content.transform, RailWeapons,  InventoryStrings.KeyRailWeapons,
@@ -309,20 +344,7 @@ namespace DeNelle.Village
                            CountOf(counts, InventoryTabKind.Consumables), false);
             BuildRailEntry(content.transform, RailSkills,   InventoryStrings.KeyRailSkills,   -1, false);
             AddRailSeparator(content.transform);
-            BuildRailEntry(content.transform, RailMap,      InventoryStrings.KeyRailMap,      -1, !mapOn);
-
-            if (!mapOn)
-            {
-                // §12: the DORMANCY must be readable in a capture, or the next person hunts a dead
-                // entry instead of finding the flag that dimmed it. D8 says render it dimmed and
-                // inert rather than hiding it - "inert" is read here as "does not open the map",
-                // not "cannot be selected", because the section still has an authored sentence
-                // (invEmptyMapLocked) that exists precisely so the lock is never a surprise.
-                FlowTrace.Step("UI",
-                    "Bag rail: Map entry DORMANT (FeatureFlags.MapTab OFF - realm travel is a WO-827 " +
-                    "stub). It is drawn dimmed with the 'soon' badge and selects to its locked copy; " +
-                    "it does not route.");
-            }
+            // Realm Map retired from public inventory navigation (owner 2026-08-31).
 
             Canvas.ForceUpdateCanvases();
             LayoutRebuilder.ForceRebuildLayoutImmediate(crt);
@@ -377,6 +399,46 @@ namespace DeNelle.Village
             {
                 ElarionUiKit.BuildTabRow(host, labels, index => SelectRail(index),
                     initial: Mathf.Clamp(_railIndex, RailGear, RailPotions));
+            }
+            foreach (var tabButton in host.GetComponentsInChildren<Button>(true))
+            {
+                // Category tabs are navigation, not six competing primary calls-to-action.
+                // The active tab is communicated by the inset rim below.
+                MedievalUiSkin.ApplyButton(tabButton, primary: false);
+                tabButton.colors = new ColorBlock
+                {
+                    normalColor = Color.white,
+                    highlightedColor = new Color(1f, .93f, .72f, 1f),
+                    pressedColor = new Color(.82f, .68f, .36f, 1f),
+                    selectedColor = Color.white,
+                    disabledColor = new Color(.45f, .45f, .45f, .75f),
+                    colorMultiplier = 1f,
+                    fadeDuration = .08f
+                };
+                var image = tabButton.targetGraphic as Image;
+                if (image != null)
+                {
+                    image.type = Image.Type.Simple;
+                    // This screen supplies an explicit inset selected rim below. Reusing the
+                    // generic pressed sprite as Selectable.selectedSprite produced a solid
+                    // mustard slab whenever EventSystem focus rested on the active tab.
+                    var states = tabButton.spriteState;
+                    states.selectedSprite = image.sprite;
+                    tabButton.spriteState = states;
+                }
+
+                // BuildTab's old arrow_box_on selection plate was designed for the retired
+                // silver skin. When stretched across a landscape tab it becomes a giant gold
+                // wedge. Preserve selection semantics, but express them with a quiet inset rim.
+                var selected = tabButton.transform.Find("Selected");
+                if (selected != null)
+                {
+                    selected.gameObject.SetActive(false);
+                    DestroyImmediate(selected.gameObject);
+                    if (tabButton.transform.GetSiblingIndex() == Mathf.Clamp(_railIndex, RailGear, RailPotions))
+                        AddInnerRim(tabButton.gameObject, new Color(ElarionUi.Gold.r,
+                            ElarionUi.Gold.g, ElarionUi.Gold.b, 0.95f));
+                }
             }
             FlowTrace.Step("Inventory", "Bag tabs: exactly 6 visible, non-scrolling; selected=" +
                 _railIndex + "; wrap=" + (_portraitLayout ? "1" : "0"));

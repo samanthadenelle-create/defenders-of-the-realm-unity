@@ -405,6 +405,16 @@ namespace DeNelle.Village.Arena
         private GameObject AddPanel(Transform parent, Vector2 min, Vector2 max, bool deep = false)
         {
             var p = AddImage(parent, "Panel", min, max, deep ? GlassDeep : Glass);
+            var image = p.GetComponent<Image>();
+            var shell = Resources.Load<Sprite>(parent == _ui.transform
+                ? "UI/ElarionMedieval/frames/modal-frame-16x9"
+                : "UI/ElarionMedieval/frames/content-panel");
+            if (image != null && shell != null)
+            {
+                image.sprite = shell;
+                image.type = Image.Type.Sliced;
+                image.color = Color.white;
+            }
             AddRimUnderline(p);
             return p;
         }
@@ -508,6 +518,7 @@ namespace DeNelle.Village.Arena
             var tt = AddLabel(go.transform, label, 0f, 1f, textColor, ElarionUi.FontBody,
                               TMPro.TextAlignmentOptions.Center, 0f, 1f, spacing: 1f, bold: true);
             tt.raycastTarget = false;
+            MedievalUiSkin.ApplyButton(btn, primary: kind == ButtonKind.Gold || kind == ButtonKind.Confirm);
             return btn;
         }
 

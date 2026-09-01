@@ -102,6 +102,7 @@ namespace DeNelle.Core.UI
 
             var rootImg = rootGo.GetComponent<Image>();
             rootImg.raycastTarget = false;
+            var medievalPlate = Resources.Load<Sprite>("UI/ElarionMedieval/frames/content-panel");
             // WO-867 — THE RAGGED EDGE ON THE HERO + HEART PLATES.
             // nameplate_party.png is 1280x299 imported `spriteMode: 1` (Single), i.e. ONE sprite
             // over the WHOLE atlas page. Measured off the committed PNG: the plate body ends at
@@ -111,7 +112,16 @@ namespace DeNelle.Core.UI
             // in 03-town.png / 06-combat-hud.png. It is NOT damage styling; it is the wrong rect.
             // PlatePageSprite draws the measured plate sub-rect (§1.10b in ElarionUiKitObsidian).
             var plateSprite = PlatePageSprite(RpgUiCatalog.HudNameplateParty);
-            if (plateSprite != null)
+            if (medievalPlate != null)
+            {
+                rootImg.sprite = medievalPlate;
+                // This compact HUD band is shorter than the source's 96 px top+bottom
+                // nine-slice border, which makes Unity collapse the sliced image to nothing.
+                rootImg.type = Image.Type.Simple;
+                rootImg.preserveAspect = false;
+                rootImg.color = Color.white;
+            }
+            else if (plateSprite != null)
             {
                 rootImg.sprite = plateSprite;
                 rootImg.type = Image.Type.Simple;   // ornate party plate — never slice
@@ -128,12 +138,13 @@ namespace DeNelle.Core.UI
 
             // ── PlayerName (TMP, top, left-aligned, auto-size like the prefab) ─
             h.NameLabel = Label(rootGo.transform, playerName ?? "", 0.58f, 1.0f,
-                                Color.white, ElarionUi.FontHead, TextAlignmentOptions.MidlineLeft,
+                                ElarionUi.Gold, ElarionUi.FontHead, TextAlignmentOptions.MidlineLeft,
                                 0.04f, 0.97f, bold: true);
             h.NameLabel.enableAutoSizing = true;
-            h.NameLabel.fontSizeMin = 32f;   // mobile floor (was 12, sub-legible on a phone)
-            h.NameLabel.fontSizeMax = 72f;   // prefab 18–72 scaled to the kit's reference res
+            h.NameLabel.fontSizeMin = 24f;
+            h.NameLabel.fontSizeMax = 32f;
             h.NameLabel.raycastTarget = false;
+            EnsureFont(h.NameLabel, FontRole.Title);
 
             // ── StatBars (two stacked horizontal bars) ───────────────────────
             // The prefab uses a fixed-cell (348x31) GridLayoutGroup; a "drop anywhere"
@@ -268,8 +279,16 @@ namespace DeNelle.Core.UI
             // ended short of its own rect. Draw the measured bar sub-rect so the row's background
             // reaches its right inset cleanly (the 8% end-cap inset below is unchanged — it is a
             // felt-verified value for the FILL's pointed cap, a different sprite).
+            var medievalTrack = Resources.Load<Sprite>("UI/ElarionMedieval/progress/progress-track-empty");
             var barBg = PlatePageSprite(RpgUiCatalog.HudNameplateBar);
-            if (barBg != null)
+            if (medievalTrack != null)
+            {
+                bgImg.sprite = medievalTrack;
+                bgImg.type = Image.Type.Simple;
+                bgImg.preserveAspect = false;
+                bgImg.color = Color.white;
+            }
+            else if (barBg != null)
             {
                 bgImg.sprite = barBg;
                 bgImg.type = Image.Type.Simple;
@@ -291,7 +310,14 @@ namespace DeNelle.Core.UI
             frt.offsetMin = new Vector2(2f, 2f); frt.offsetMax = new Vector2(-2f, -2f);
             var fillImg = fillGo.GetComponent<Image>();
             var fillSprite = RpgUiCatalog.Get(RpgUiCatalog.RoleHud, fillSpriteName);
-            if (fillSprite != null)
+            if (medievalTrack != null)
+            {
+                // New chrome owns the bar grammar too: clean semantic fills over the shared
+                // medieval track, never a legacy pack fill embedded inside the reskin.
+                fillImg.sprite = FillSpriteChain(null);
+                fillImg.color = fillFallback;
+            }
+            else if (fillSprite != null)
             {
                 fillImg.sprite = fillSprite;
                 fillImg.color = Color.white;   // coloured pack art — untinted

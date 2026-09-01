@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="utf-8"?>
+<test-run id="2" testcasecount="3" result="Passed" total="3" passed="3" failed="0" inconclusive="0" skipped="0" asserts="0" engine-version="3.5.0.0" clr-version="4.0.30319.42000" start-time="2026-08-23 04:23:51Z" end-time="2026-08-23 04:23:51Z" duration="0.0583244">
+  <test-suite type="TestSuite" id="1000" name="Echoes of Elarion" fullname="Echoes of Elarion" runstate="Runnable" testcasecount="971" result="Passed" start-time="2026-08-23 04:23:51Z" end-time="2026-08-23 04:23:51Z" duration="0.058324" total="3" passed="3" failed="0" inconclusive="0" skipped="0" asserts="0">
+    <properties>
+      <property name="platform" value="EditMode" />
+    </properties>
+    <test-suite type="Assembly" id="2052" name="DeNelle.Tests.EditMode.dll" fullname="D:/EoA/Library/ScriptAssemblies/DeNelle.Tests.EditMode.dll" runstate="Runnable" testcasecount="685" result="Passed" start-time="2026-08-23 04:23:51Z" end-time="2026-08-23 04:23:51Z" duration="0.046803" total="3" passed="3" failed="0" inconclusive="0" skipped="0" asserts="0">
+      <properties>
+        <property name="_PID" value="44564" />
+        <property name="_APPDOMAIN" value="Unity Child Domain" />
+        <property name="platform" value="EditMode" />
+        <property name="EditorOnly" value="True" />
+      </properties>
+      <test-suite type="TestSuite" id="2053" name="DeNelle" fullname="DeNelle" runstate="Runnable" testcasecount="675" result="Passed" start-time="2026-08-23 04:23:51Z" end-time="2026-08-23 04:23:51Z" duration="0.042168" total="3" passed="3" failed="0" inconclusive="0" skipped="0" asserts="0">
+        <properties />
+        <test-suite type="TestSuite" id="2054" name="Tests" fullname="DeNelle.Tests" runstate="Runnable" testcasecount="675" result="Passed" start-time="2026-08-23 04:23:51Z" end-time="2026-08-23 04:23:51Z" duration="0.037960" total="3" passed="3" failed="0" inconclusive="0" skipped="0" asserts="0">
+          <properties />
+          <test-suite type="TestSuite" id="2055" name="EditMode" fullname="DeNelle.Tests.EditMode" runstate="Runnable" testcasecount="675" result="Passed" start-time="2026-08-23 04:23:51Z" end-time="2026-08-23 04:23:51Z" duration="0.033822" total="3" passed="3" failed="0" inconclusive="0" skipped="0" asserts="0">
+            <properties />
+            <test-suite type="TestFixture" id="1644" name="GearProgramContractTests" fullname="DeNelle.Tests.EditMode.GearProgramContractTests" classname="DeNelle.Tests.EditMode.GearProgramContractTests" runstate="Runnable" testcasecount="3" result="Passed" start-time="2026-08-23 04:23:51Z" end-time="2026-08-23 04:23:51Z" duration="0.024880" total="3" passed="3" failed="0" inconclusive="0" skipped="0" asserts="0">
+              <properties />
+              <test-case id="1646" name="Functioning_effect_has_price_value_but_vfx_and_lore_do_not" fullname="DeNelle.Tests.EditMode.GearProgramContractTests.Functioning_effect_has_price_value_but_vfx_and_lore_do_not" methodname="Functioning_effect_has_price_value_but_vfx_and_lore_do_not" classname="DeNelle.Tests.EditMode.GearProgramContractTests" runstate="Runnable" seed="126766852" result="Passed" start-time="2026-08-23 04:23:51Z" end-time="2026-08-23 04:23:51Z" duration="0.014291" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1645" name="Price_floors_are_monotonic_on_daily_chest_denominator" fullname="DeNelle.Tests.EditMode.GearProgramContractTests.Price_floors_are_monotonic_on_daily_chest_denominator" methodname="Price_floors_are_monotonic_on_daily_chest_denominator" classname="DeNelle.Tests.EditMode.GearProgramContractTests" runstate="Runnable" seed="761604890" result="Passed" start-time="2026-08-23 04:23:51Z" end-time="2026-08-23 04:23:51Z" duration="0.000187" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1647" name="Semantic_vfx_registry_holds_unknown_verbs" fullname="DeNelle.Tests.EditMode.GearProgramContractTests.Semantic_vfx_registry_holds_unknown_verbs" methodname="Semantic_vfx_registry_holds_unknown_verbs" classname="DeNelle.Tests.EditMode.GearProgramContractTests" runstate="Runnable" seed="1605537462" result="Passed" start-time="2026-08-23 04:23:51Z" end-time="2026-08-23 04:23:51Z" duration="0.000578" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+                <output><![CDATA[Saving results to: C:/Users/Elden/AppData/LocalLow/DeNelle/Echoes of Elarion\TestResults.xml
+]]></output>
+              </test-case>
+            </test-suite>
+          </test-suite>
+        </test-suite>
+      </test-suite>
+    </test-suite>
+  </test-suite>
+</test-run>

@@ -4,13 +4,18 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Echoes of Elarion — DeNelle Studios</title>
-<meta name="description" content="The Heart of Elarion still stands. Build the last village, wake the Echoes, hold the dark back. Live on the Solana dApp Store for Seeker.">
+<meta name="description" content="Echoes of a Forgotten Civilization. Build the village, wake the Echoes, hold the dark back. Live on the Solana dApp Store for Seeker.">
 <meta name="theme-color" content="#07060a">
 <meta property="og:title" content="Echoes of Elarion">
-<meta property="og:description" content="A town-builder and defense game. Raise the village around the Heart, wake the Echoes, take the Realm back.">
+<meta property="og:description" content="A town-builder and defense game from DeNelle Studios. Raise the village around the Heart, wake the Echoes, take the Realm back. Live on Solana dApp Store.">
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://echoes-of-elarion.vercel.app/">
-<meta name="twitter:card" content="summary">
+<meta property="og:image" content="https://echoes-of-elarion.vercel.app/assets/key-art-web.jpg">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:image" content="https://echoes-of-elarion.vercel.app/assets/key-art-web.jpg">
+<link rel="icon" href="/favicon.ico" sizes="any">
+<link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32.png">
+<link rel="apple-touch-icon" href="/assets/apple-touch-icon.png">
 <link rel="stylesheet" href="/styles.css">
 </head>
 <body>
@@ -18,72 +23,35 @@
 <div class="atmosphere" aria-hidden="true">
   <div class="atmosphere__glow"></div>
   <div class="atmosphere__vignette"></div>
-  <div class="atmosphere__roots"></div>
 </div>
 
 <header class="topbar">
   <div class="wrap topbar__inner">
     <a class="brand" href="/" aria-label="Echoes of Elarion home">
-      <svg class="brand__mark" viewBox="0 0 48 48" width="28" height="28" aria-hidden="true">
-        <circle cx="24" cy="24" r="21" fill="none" stroke="currentColor" stroke-width="1.2" opacity="0.55"/>
-        <path d="M24 8v32M24 16l-9 8M24 16l9 8M24 26l-7 8M24 26l7 8" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
-        <circle cx="24" cy="14" r="3.2" fill="currentColor"/>
-      </svg>
+      <img class="brand__mark" src="/assets/favicon-32.png" width="32" height="32" alt="" decoding="async">
       <span class="brand__text">Echoes of Elarion</span>
     </a>
     <nav class="topbar__nav" aria-label="Primary">
       <a href="#about">About</a>
+      <a href="#heroes">Heroes</a>
       <a href="#pillars">Play</a>
+      <a href="#gameplay">Gameplay</a>
+      <a href="#get-the-app">Get it</a>
       <a href="#support">Support</a>
-      <a href="/privacy">Privacy</a>
-      <a href="/terms">Terms</a>
     </nav>
   </div>
 </header>
 
 <header class="hero">
+  <div class="hero__bg" aria-hidden="true">
+    <img src="/assets/title-screen-a-web.jpg" alt="" width="1920" height="1107" decoding="async" fetchpriority="high">
+  </div>
+  <div class="hero__shade" aria-hidden="true"></div>
   <div class="wrap hero__inner">
-
-    <!-- Heart of Elarion — world-tree sigil (inline; no remote assets) -->
-    <div class="hero__sigil-wrap">
-      <svg class="hero__sigil" viewBox="0 0 120 140" role="img" aria-label="Heart of Elarion — the world tree" xmlns="http://www.w3.org/2000/svg">
-        <defs>
-          <radialGradient id="heartGlow" cx="50%" cy="42%" r="55%">
-            <stop offset="0%" stop-color="#7dffc8" stop-opacity="0.55"/>
-            <stop offset="45%" stop-color="#e8b84b" stop-opacity="0.22"/>
-            <stop offset="100%" stop-color="#e8b84b" stop-opacity="0"/>
-          </radialGradient>
-          <linearGradient id="trunkGold" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stop-color="#f0d078"/>
-            <stop offset="100%" stop-color="#8a6a28"/>
-          </linearGradient>
-        </defs>
-        <ellipse cx="60" cy="58" rx="48" ry="52" fill="url(#heartGlow)"/>
-        <!-- canopy -->
-        <path d="M60 18c-18 2-32 16-34 34 8-6 18-8 28-6-4 10-2 20 4 28 10-8 22-10 34-6-4-16-12-30-28-36-2-6-4-12-4-14z"
-              fill="none" stroke="#e8b84b" stroke-width="1.6" opacity="0.9"/>
-        <path d="M42 42c6-10 14-16 22-18 10 4 18 14 22 28-10-4-20-2-28 4-4-6-10-10-16-14z"
-              fill="#e8b84b" opacity="0.12"/>
-        <!-- trunk + roots -->
-        <path d="M56 52c0 18 1 34 2 48M64 52c0 18-1 34-2 48"
-              fill="none" stroke="url(#trunkGold)" stroke-width="2.2" stroke-linecap="round"/>
-        <path d="M58 98c-14 8-22 16-26 26M62 98c14 8 22 16 26 26M60 100c0 12 0 18 0 26"
-              fill="none" stroke="#a88a3c" stroke-width="1.5" stroke-linecap="round" opacity="0.85"/>
-        <!-- echo motes -->
-        <circle cx="38" cy="56" r="1.6" fill="#7dffc8" opacity="0.9"/>
-        <circle cx="84" cy="48" r="1.2" fill="#7dffc8" opacity="0.7"/>
-        <circle cx="72" cy="72" r="1.4" fill="#e8b84b" opacity="0.8"/>
-        <circle cx="48" cy="78" r="1" fill="#7dffc8" opacity="0.6"/>
-      </svg>
-    </div>
-
     <p class="eyebrow">DeNelle Studios presents</p>
-    <h1>Echoes of Elarion</h1>
     <p class="series">A chapter of <em>Defenders of the Realm</em></p>
-    <!-- CANON TAGLINE. Sourced from canon-strings.json ("tagline"/"titleTagline"). The retired
-         "Hold the last light" family was superseded 2026-07-24 (CLAUDE.md section 7) and must not
-         return here: this page is what a dApp Store reviewer reads, and it was one `vercel --prod`
-         away from publishing the retired line. -->
+    <h1 class="visually-hidden">Echoes of Elarion</h1>
+    <p class="hero__hook">They gave their souls to survive.</p>
     <p class="tagline">Echoes of a Forgotten Civilization</p>
     <p class="hero__sub">
       Build the village. Hold the line. Wake the Echoes.<br>
@@ -91,54 +59,117 @@
     </p>
 
     <div class="hero__actions">
-      <!-- The "Coming to the Solana dApp Store" badge that used to sit here is REPLACED by the
-           button below (owner 2026-08-19). It was stale twice over: the app is live, and a badge
-           announces where the game is while the button actually takes you there. -->
-      <!-- Deep link. There is NO https listing URL for a dApp Store app: the store app registers
-           only the solanadappstore:// scheme (verified 2026-08-19 via
-           `dumpsys package com.solanamobile.dappstore`), so this is the only link that can open a
-           listing, and it resolves ONLY on a device with the store installed. Desktop visitors get
-           the QR below instead. See docs/SOLANA_STORE_LISTING.md. -->
       <a class="btn btn--gold" id="dappStoreLink"
          href="solanadappstore://details?id=com.denellestudios.echoesofelarion">
         Get it on Solana dApp Store
       </a>
-      <a class="btn btn--ghost" href="#about">Enter the story</a>
+      <a class="btn btn--ghost" href="https://discord.gg/zDdwdy3duB" rel="noopener noreferrer" target="_blank">Discord</a>
+      <a class="btn btn--ghost" href="https://x.com/EchoesOfElarion" rel="noopener noreferrer" target="_blank">X</a>
     </div>
 
-    <!-- Shown only when the deep link did NOT open the store app (see the script at the end of the
-         page). Hidden by default so the hero stays clean for the Seeker visitors it works for. -->
     <p class="hero__note" id="dappStoreFallback" hidden>
       That link opens the Solana dApp Store, which lives on Solana Mobile devices such as the Seeker.
       On a desktop or another phone, scan the code below with your Seeker instead.
     </p>
+    <p class="hero__live">Live on Solana dApp Store &middot; Seeker</p>
   </div>
 </header>
 
 <main>
 
-  <section class="wrap section" id="about">
-    <div class="section__label">About</div>
-    <h2 class="section__title">The Heart still stands</h2>
-    <p class="lede">
-      The Heart of Elarion still stands, and it still remembers. Raise the last village
-      around it, wake the Echoes sleeping in its roots, and hold the dark back one night
-      at a time.
-    </p>
-    <div class="prose">
-      <p>
-        Echoes of Elarion is a town-builder and defense game. You lay out your own village
-        around the Heart — the world tree at its centre — place and upgrade its
-        buildings, walls and towers, keep the builder, training and research queues turning,
-        and defend it when the waves come. Between defenses you range out across the Realm
-        Map to raid what the dark has taken.
-      </p>
-      <p>
-        The Echoes are the awakened essences of the people the Heart once guarded. Each
-        returns with a calling of its own, and you decide what each one tends — match
-        an Echo to its calling and it gives back more.
-      </p>
+
+  <section class="wrap section section--cinematic" id="cinematic" aria-label="Game cinematic">
+    <div class="cinematic">
+      <div class="cinematic__copy">
+        <div class="section__label">Cinematic</div>
+        <h2 class="section__title">A living poster</h2>
+        <p>Five seconds from the Realm — muted loop, sound off by default.</p>
+      </div>
+      <div class="cinematic__frame">
+        <video class="cinematic__video"
+               autoplay muted loop playsinline
+               poster="/assets/trailer-poster.jpg"
+               width="448" height="672"
+               aria-label="Defenders of the Realm living poster from DeNelle Studios">
+          <source src="/assets/trailer-web.mp4" type="video/mp4">
+          <source src="/assets/trailer.mp4" type="video/mp4">
+        </video>
+      </div>
     </div>
+  </section>
+
+  <section class="wrap section section--about" id="about">
+    <div class="about-grid">
+      <div class="about-copy">
+        <div class="section__label">About</div>
+        <h2 class="section__title">The Heart still stands</h2>
+        <p class="lede">
+          The Heart of Elarion still stands, and it still remembers. Raise the last village
+          around it, wake the Echoes sleeping in its roots, and hold the dark back one night
+          at a time.
+        </p>
+        <div class="prose">
+          <p>
+            Echoes of Elarion is a town-builder and defense game. You lay out your own village
+            around the Heart — the world tree at its centre — place and upgrade its
+            buildings, walls and towers, keep the builder, training and research queues turning,
+            and defend it when the waves come. Between defenses you range out across the Realm
+            Map to raid what the dark has taken.
+          </p>
+          <p>
+            The Echoes are the awakened essences of the people the Heart once guarded. Each
+            returns with a calling of its own, and you decide what each one tends — match
+            an Echo to its calling and it gives back more.
+          </p>
+        </div>
+      </div>
+      <figure class="about-art">
+        <img src="/assets/title-screen-b-web.jpg" alt="Title art — the Heart of Elarion, a glowing world tree" width="900" height="1178" loading="lazy" decoding="async">
+      </figure>
+    </div>
+  </section>
+
+  <section class="wrap section" id="heroes">
+    <div class="section__label">Heroes</div>
+    <h2 class="section__title">Battle-worn. Still standing.</h2>
+    <p class="section__intro">The Realm answers with steel, faith, fire, and a quiet bow.</p>
+    <figure class="party-banner">
+      <img src="/assets/battle-worn-heroes-web.jpg" alt="Battle-worn heroes — warrior, cleric, mage, and ranger standing together" width="900" height="1350" decoding="async">
+    </figure>
+    <h3 class="heroes-subhead">Three who answer the call</h3>
+    <p class="section__intro section__intro--tight">Choose your front line. Each brings a different edge to the night.</p>
+    <ul class="heroes">
+      <li class="hero-card">
+        <div class="hero-card__art">
+          <img src="/assets/grom-web.jpg" alt="Grom, Knight — armored warrior with a lion-crest shield" width="800" height="1066" decoding="async">
+        </div>
+        <div class="hero-card__body">
+          <h3>Grom</h3>
+          <p class="hero-card__role">Knight</p>
+          <p class="hero-card__line">Steel at the gate. The line holds with him.</p>
+        </div>
+      </li>
+      <li class="hero-card">
+        <div class="hero-card__art">
+          <img src="/assets/thrain-web.jpg" alt="Thrain, Black Mage — dark-robed sorcerer with a crystal staff" width="800" height="1066" decoding="async">
+        </div>
+        <div class="hero-card__body">
+          <h3>Thrain</h3>
+          <p class="hero-card__role">Black Mage</p>
+          <p class="hero-card__line">Arcane fire for the nights that refuse to break.</p>
+        </div>
+      </li>
+      <li class="hero-card">
+        <div class="hero-card__art">
+          <img src="/assets/sylas-web.jpg" alt="Sylas, Ranger — elven archer in a leaf-cloak" width="800" height="1066" decoding="async">
+        </div>
+        <div class="hero-card__body">
+          <h3>Sylas</h3>
+          <p class="hero-card__role">Ranger</p>
+          <p class="hero-card__line">Quiet paths beyond the wall. A bow that finds them.</p>
+        </div>
+      </li>
+    </ul>
   </section>
 
   <section class="wrap section" id="pillars">
@@ -168,25 +199,43 @@
     </ul>
   </section>
 
-  <!-- Screenshots: intentionally omitted until approved marketing frames exist.
-       See site/README.md. Re-add #screens with local /assets/*.png when ready. -->
+
+  <section class="wrap section section--gameplay" id="gameplay">
+    <div class="section__label">Gameplay</div>
+    <h2 class="section__title">Hold the line</h2>
+    <p class="section__intro">Defend the Heart when the waves come — towers, heroes, and the village walls under fire.</p>
+    <figure class="gameplay-shot">
+      <img src="/assets/gameplay-hold-the-line-web.jpg" width="1600" height="900" alt="Hold The Line battle — Grom and allies defending the Heart of Elarion as enemies attack the walls" loading="lazy" decoding="async">
+      <figcaption>In-game defense at the Heart of Elarion</figcaption>
+    </figure>
+  </section>
 
   <section class="wrap section section--get" id="get-the-app">
-    <div class="section__label">Get it</div>
-    <h2 class="section__title">Play on Seeker</h2>
-    <p>
-      Echoes of Elarion is published on the Solana dApp Store, which ships on Solana Mobile devices.
-      Scan this with your Seeker to open the listing.
-    </p>
-    <!-- The QR is the DESKTOP path. The hero button is the on-device path: a solanadappstore:// link
-         cannot resolve anywhere the store app is not installed, so a page with only that link is a
-         dead end for most visitors. The image is hidden by script if the file is absent, so a missing
-         asset never renders as a broken image on a page dApp Store reviewers read. -->
-    <figure class="qr" id="dappStoreQr" hidden>
-      <img src="/qr-dappstore.png" alt="QR code linking to Echoes of Elarion on the Solana dApp Store"
-           width="240" height="240" loading="lazy" id="dappStoreQrImg">
-      <figcaption>Scan to download in the Solana dApp Store</figcaption>
-    </figure>
+    <div class="get-panel">
+      <div class="get-panel__badge">
+        <img src="/assets/key-art-web.jpg" alt="Defenders of the Realm: Echoes of Elarion — armored knight and dragon key art" width="220" height="220" decoding="async">
+      </div>
+      <div class="get-panel__copy">
+        <div class="section__label">Get it</div>
+        <h2 class="section__title">Play on Seeker</h2>
+        <p>
+          Echoes of Elarion is live on the Solana dApp Store, which ships on Solana Mobile devices.
+          On a Seeker, tap the button. On desktop, scan the code with your Seeker to open the listing.
+        </p>
+        <div class="get-panel__actions">
+          <a class="btn btn--gold" href="solanadappstore://details?id=com.denellestudios.echoesofelarion">
+            Open in dApp Store
+          </a>
+          <a class="btn btn--ghost" href="https://discord.gg/zDdwdy3duB" rel="noopener noreferrer" target="_blank">Join Discord</a>
+        </div>
+        <p class="get-panel__pkg"><code>com.denellestudios.echoesofelarion</code></p>
+      </div>
+      <figure class="qr" id="dappStoreQr" hidden>
+        <img src="/qr-dappstore.png" alt="QR code linking to Echoes of Elarion on the Solana dApp Store"
+             width="240" height="240" loading="lazy" id="dappStoreQrImg">
+        <figcaption>Scan to download in the Solana dApp Store</figcaption>
+      </figure>
+    </div>
   </section>
 
   <section class="wrap section section--support" id="support">
@@ -195,7 +244,12 @@
       <h2 class="section__title">We are listening</h2>
       <p>Questions, bug reports, or data requests — write the studio.</p>
       <p class="support-card__mail">
-        <a href="mailto:support.EoA@icloud.com">support.EoA@icloud.com</a>
+        <a href="mailto:support.eoa@icloud.com">support.eoa@icloud.com</a>
+      </p>
+      <p class="support-card__social">
+        <a href="https://discord.gg/zDdwdy3duB" rel="noopener noreferrer" target="_blank">Discord</a>
+        <span aria-hidden="true">&middot;</span>
+        <a href="https://x.com/EchoesOfElarion" rel="noopener noreferrer" target="_blank">X / @EchoesOfElarion</a>
       </p>
     </div>
   </section>
@@ -207,8 +261,9 @@
     <nav aria-label="Footer">
       <a href="/privacy">Privacy Policy</a>
       <a href="/terms">Terms of Use</a>
-      <a href="#about">About</a>
-      <a href="mailto:support.EoA@icloud.com">Support</a>
+      <a href="https://discord.gg/zDdwdy3duB" rel="noopener noreferrer" target="_blank">Discord</a>
+      <a href="https://x.com/EchoesOfElarion" rel="noopener noreferrer" target="_blank">X</a>
+      <a href="mailto:support.eoa@icloud.com">Support</a>
     </nav>
     <p class="site-footer__legal">
       Defenders of the Realm: Echoes of Elarion<br>
@@ -243,8 +298,6 @@
     var qr = document.getElementById('dappStoreQr');
     var qrImg = document.getElementById('dappStoreQrImg');
 
-    // Only offer the QR if the asset actually exists - a broken image on the page a store
-    // reviewer reads is worse than no QR at all.
     if (qr && qrImg) {
       if (qrImg.complete && qrImg.naturalWidth > 0) qr.hidden = false;
       qrImg.addEventListener('load', function () { qr.hidden = false; });
@@ -257,7 +310,6 @@
       var left = false;
       var markLeft = function () { left = true; };
 
-      // Any of these means the OS handed the visitor to the store app.
       document.addEventListener('visibilitychange', function () {
         if (document.hidden) markLeft();
       });
@@ -265,7 +317,7 @@
       window.addEventListener('blur', markLeft);
 
       window.setTimeout(function () {
-        if (left || document.hidden) return;   // the store opened - say nothing
+        if (left || document.hidden) return;
         note.hidden = false;
         var target = document.getElementById('get-the-app');
         if (target && target.scrollIntoView) target.scrollIntoView({ behavior: 'smooth' });

@@ -55,7 +55,7 @@ namespace DeNelle.Village.Talents
         private GameObject _ui;
         private RectTransform _graphContent;     // fixed-size scroll content (nodes + edges live here)
         private TMPro.TextMeshProUGUI _headerLabel;
-        private ElarionUiKit.CurrencyChipHandle _wisdomChip;   // Wisdom chip, top-right of the graph
+        private TMPro.TextMeshProUGUI _wisdomLabel;
         private RectTransform _quickSwapHost;
         private TMPro.TextMeshProUGUI _quickSwapStatus;
 
@@ -376,7 +376,8 @@ namespace DeNelle.Village.Talents
         {
             if (_vm == null) return;
             if (_headerLabel != null) _headerLabel.text = _vm.Title;
-            if (_wisdomChip != null) _wisdomChip.SetAmount(_vm.RemainingWisdom);
+            if (_wisdomLabel != null)
+                _wisdomLabel.text = "WISDOM  " + _vm.RemainingWisdom;
 
             RebuildTracks();
             RenderQuickSwapBar();
@@ -395,7 +396,12 @@ namespace DeNelle.Village.Talents
             if (!show) return;
 
             if (_popupName != null) _popupName.text = _vm.SelectedNodeName;
-            if (_popupDesc != null) _popupDesc.text = _vm.SelectedNodeDescription;
+            // The compact nested shell deliberately suppresses its outer title band at
+            // short landscape heights. Keep the selected talent's identity inside the
+            // readable body as well, so no device ratio can show an anonymous prompt.
+            if (_popupDesc != null)
+                _popupDesc.text = "<color=#E5B93F><b>" + _vm.SelectedNodeName +
+                                  "</b></color>\n" + _vm.SelectedNodeDescription;
             if (_popupPrompt != null) _popupPrompt.text = _vm.SelectedSpendPrompt;
 
             bool canSpend = _vm.CanSpendSelected;
@@ -492,6 +498,34 @@ namespace DeNelle.Village.Talents
             // Norm positions (0..1+, may extend past 1 for auto secondary branches).
             var norm = new Dictionary<string, Vector2>(seats.Count);
             ResolveGraphNorms(seats, norm);
+
+            // Landscape-mobile composition: authored progression is bottom-to-top, which
+            // required opening the graph at a vertical scroll offset and visibly amputated
+            // the upper rank. Rotate the semantic axes once: tracks run top-to-bottom while
+            // progression runs LEFT (basic/default) to RIGHT (advanced). Normalize against
+            // the visible frontier so the rotation consumes the whole measured well.
+            if (norm.Count > 1)
+            {
+                float sourceMinX = float.MaxValue, sourceMaxX = float.MinValue;
+                float sourceMinY = float.MaxValue, sourceMaxY = float.MinValue;
+                foreach (var pair in norm)
+                {
+                    sourceMinX = Mathf.Min(sourceMinX, pair.Value.x);
+                    sourceMaxX = Mathf.Max(sourceMaxX, pair.Value.x);
+                    sourceMinY = Mathf.Min(sourceMinY, pair.Value.y);
+                    sourceMaxY = Mathf.Max(sourceMaxY, pair.Value.y);
+                }
+                float spanX = Mathf.Max(0.001f, sourceMaxX - sourceMinX);
+                float spanY = Mathf.Max(0.001f, sourceMaxY - sourceMinY);
+                var rotated = new Dictionary<string, Vector2>(norm.Count);
+                foreach (var pair in norm)
+                {
+                    float trackY = (pair.Value.x - sourceMinX) / spanX;
+                    float progressX = 1f - (pair.Value.y - sourceMinY) / spanY;
+                    rotated[pair.Key] = new Vector2(progressX, trackY);
+                }
+                norm = rotated;
+            }
 
             // WO-1021 sec 2.1b — POSITION IS SOLVED IN ONE PLACE. The lattice box is derived
             // from the MEASURED well (GraphUnitWpx/Hpx remain the documented fallback for the
@@ -1016,7 +1050,8 @@ namespace DeNelle.Village.Talents
             if (border != null)
             {
                 img.sprite = border;
-                img.type = Image.Type.Sliced;
+                img.type = Image.Type.Simple;
+                img.preserveAspect = true;
                 img.color = BorderTintFor(state, focus);
             }
             else
@@ -1036,17 +1071,22 @@ namespace DeNelle.Village.Talents
             fillRt.offsetMin = new Vector2(inset, inset);
             fillRt.offsetMax = new Vector2(-inset, -inset);
             var fillImg = fillGo.GetComponent<Image>();
-            ElarionUiKit.ApplyRounded(fillImg);
+            fillImg.sprite = ElarionUiKit.CircleSprite;
+            fillImg.type = Image.Type.Simple;
+            fillImg.preserveAspect = true;
             fillImg.color = PlateFillFor(state);
             fillImg.raycastTarget = false;
+
+            // The approved medallion is circular. Clip square source illustrations to its
+            // inner well so old talent-slot corners never protrude through the gold bezel.
+            var artMask = fillGo.AddComponent<Mask>();
+            artMask.showMaskGraphic = true;
 
             // FOCUS: double gold frame (demo / PoE / Diablo style selected node).
             if (focus)
             {
                 BuildOuterRing(go.transform, 0.10f,
-                    new Color(ElarionUi.Gold.r, ElarionUi.Gold.g, ElarionUi.Gold.b, 0.55f));
-                BuildOuterRing(go.transform, 0.055f,
-                    new Color(1f, 0.92f, 0.45f, 1f));
+                    new Color(1f, 0.92f, 0.45f, 0.55f));
             }
             else if (node.IsCapstone)
             {
@@ -1080,11 +1120,11 @@ namespace DeNelle.Village.Talents
             if (sprite != null)
             {
                 var iconGo = new GameObject("Icon", typeof(Image));
-                iconGo.transform.SetParent(go.transform, false);
+                iconGo.transform.SetParent(fillGo.transform, false);
                 var ir = iconGo.GetComponent<RectTransform>();
                 // Larger art well — skill art is the product, not the chrome.
-                ir.anchorMin = new Vector2(0.14f, 0.14f);
-                ir.anchorMax = new Vector2(0.86f, 0.86f);
+                ir.anchorMin = Vector2.zero;
+                ir.anchorMax = Vector2.one;
                 ir.offsetMin = Vector2.zero; ir.offsetMax = Vector2.zero;
                 var iImg = iconGo.GetComponent<Image>();
                 iImg.sprite = sprite;
@@ -1094,7 +1134,7 @@ namespace DeNelle.Village.Talents
                 if (state == SkillNodeState.Owned)
                     iImg.color = Color.white;
                 else if (locked || inert)
-                    iImg.color = new Color(0.55f, 0.55f, 0.58f, 0.72f);
+                    iImg.color = new Color(0.72f, 0.72f, 0.76f, 0.88f);
                 else
                     iImg.color = Color.white;
             }
@@ -1117,6 +1157,12 @@ namespace DeNelle.Village.Talents
                 (int)ElarionUiKit.FontFloor, TMPro.TextAlignmentOptions.Center, 0.12f, 0.88f, bold: true);
             rankLbl.raycastTarget = false;
             ElarionUiKit.FitSingleLine(rankLbl);
+
+            // Mobile-first recognition: icon-only trees force trial-and-error tapping. Keep the
+            // art dominant, but state the authoritative talent name in the unused pitch beneath
+            // every plate. The dark nameplate is shape-backed, so it stays readable over VFX and
+            // does not rely on the node tint.
+            BuildNodeNamePlate(go.transform, node.Name, locked);
 
             // Type is stated in WORDS, not inferred from colour. Assigned actives name the
             // same numbered seat shown in the persistent quick-swap rail.
@@ -1290,6 +1336,28 @@ namespace DeNelle.Village.Talents
             ElarionUiKit.FitSingleLine(label, 0f, ElarionUi.FontMicro);
         }
 
+        private static void BuildNodeNamePlate(Transform nodeRoot, string text, bool locked)
+        {
+            if (string.IsNullOrWhiteSpace(text)) return;
+            var plate = new GameObject("NamePlate", typeof(Image));
+            plate.transform.SetParent(nodeRoot, false);
+            var rt = (RectTransform)plate.transform;
+            rt.anchorMin = new Vector2(-0.28f, -0.40f);
+            rt.anchorMax = new Vector2(1.28f, 0.01f);
+            rt.offsetMin = Vector2.zero; rt.offsetMax = Vector2.zero;
+            var image = plate.GetComponent<Image>();
+            ElarionUiKit.ApplyRounded(image);
+            image.color = new Color(0.025f, 0.022f, 0.028f, 0.96f);
+            image.raycastTarget = false;
+            var label = ElarionUiKit.Label(plate.transform, text.ToUpperInvariant(),
+                0.08f, 0.92f, locked ? ElarionUi.ParchmentDim : ElarionUi.Parchment,
+                18, TMPro.TextAlignmentOptions.Center, 0.04f, 0.96f,
+                spacing: 0.25f, bold: true);
+            label.raycastTarget = false;
+            label.textWrappingMode = TMPro.TextWrappingModes.Normal;
+            ElarionUiKit.FitBlock(label, 14f, 18f);
+        }
+
         /// <summary>Per-track NEXT badge ink / disc (WO-1021 sec 2.1d). PUBLIC so the oracle can
         /// read them and PROVE the cue survives greyscale: a near-white chevron on a near-black
         /// disc is a Rec.709 luma gap of ~0.9, so the badge reads with hue stripped entirely and
@@ -1361,36 +1429,31 @@ namespace DeNelle.Village.Talents
 
         private static Sprite TalentBorderSprite(SkillNodeVM node)
         {
-            // Capstone uses the ornate 6-slot border; tiers 1-4 pick talent_N / slot_talent_N.
-            if (node.IsCapstone)
-            {
-                var cap = RpgUiCatalog.Get("slot", "slot_talent_6");
-                if (cap != null) return cap;
-            }
-            int t = Mathf.Clamp(node.Tier <= 0 ? 1 : node.Tier, 1, 4);
-            var sp = RpgUiCatalog.Get("slot", "slot_talent_" + t);
-            if (sp != null) return sp;
-            sp = RpgUiCatalog.Get("slot", "talent_" + t);
-            if (sp != null) return sp;
-            return RpgUiCatalog.Get("slot", "slot_talent");
+            // One canonical circular grammar across Skills and generic item sockets. State is
+            // communicated by tint, rank, words and glow—not by stacking legacy slot frames.
+            return Resources.Load<Sprite>(
+                "UI/ElarionMedieval/frames/circular-bezel-four-point");
         }
 
         private static Color BorderTintFor(SkillNodeState state, bool focus)
         {
-            if (focus) return new Color(1f, 0.92f, 0.55f, 1f);
+            // Preserve the authored black-iron/antique-gold pixels. Multiplying this sprite
+            // by the former grey state colours made the approved bezel effectively vanish.
+            // Locked state already has dimmed art plus an explicit lock glyph.
+            if (focus) return Color.white;
             switch (state)
             {
                 case SkillNodeState.Owned:
-                    return new Color(1f, 0.88f, 0.45f, 1f);
+                    return Color.white;
                 case SkillNodeState.Planned:
-                    return new Color(0.85f, 0.95f, 0.70f, 1f);
+                    return Color.white;
                 case SkillNodeState.Next:
                 case SkillNodeState.Available:
-                    return new Color(0.95f, 0.90f, 0.70f, 0.95f);
+                    return Color.white;
                 case SkillNodeState.Inert:
-                    return new Color(0.55f, 0.55f, 0.55f, 0.70f);
+                    return new Color(0.78f, 0.78f, 0.78f, 0.82f);
                 default:
-                    return new Color(0.45f, 0.45f, 0.50f, 0.55f);
+                    return new Color(0.88f, 0.88f, 0.88f, 0.90f);
             }
         }
 
@@ -1408,18 +1471,20 @@ namespace DeNelle.Village.Talents
             return rt;
         }
 
-        // A rounded ring behind the plate, peeking <paramref name="grow"/> of the plate on
-        // every side (the plate is opaque and drawn over it).
+        // A quiet circular state glow behind the one canonical bezel. This deliberately uses
+        // no second ornamental frame, avoiding the doubled legacy-ring appearance.
         private static void BuildOuterRing(Transform nodeRoot, float grow, Color color)
         {
-            var ring = new GameObject("Ring", typeof(Image));
+            var ring = new GameObject("StateGlow", typeof(Image));
             ring.transform.SetParent(nodeRoot, false);
             var rr = ring.GetComponent<RectTransform>();
             rr.anchorMin = new Vector2(-grow, -grow);
             rr.anchorMax = new Vector2(1f + grow, 1f + grow);
             rr.offsetMin = Vector2.zero; rr.offsetMax = Vector2.zero;
             var rImg = ring.GetComponent<Image>();
-            ElarionUiKit.ApplyRounded(rImg);
+            rImg.sprite = ElarionUiKit.RingSprite;
+            rImg.type = Image.Type.Simple;
+            rImg.preserveAspect = true;
             rImg.color = color;
             rImg.raycastTarget = false;
             ring.transform.SetAsFirstSibling();
@@ -1581,13 +1646,44 @@ namespace DeNelle.Village.Talents
 
             var chrome = ElarionUiKit.BuildObsidianPanel(_ui.transform, "TALENT TREE",
                 new Vector2(0.07f, 0.05f), new Vector2(0.93f, 0.95f), () => { if (_vm != null) _vm.Close(); },
-                headerX0: 0.04f, headerX1: 0.74f, frameName: RpgUiCatalog.FrameTalent,
+                headerX0: 0.18f, headerX1: 0.78f, frameName: RpgUiCatalog.FrameTalent,
                 medallionIcon: "talent");
+            MedievalUiSkin.ApplyShell(chrome);
+            var back = ElarionUiKit.ButtonPack(chrome.root.transform, "BACK",
+                ElarionUiKit.ButtonKind.Quiet,
+                new Vector2(0.02f, 0.84f), new Vector2(0.17f, 0.98f),
+                () => { if (_vm != null) _vm.Close(); }, RpgUiCatalog.ButtonFrame);
+            MedievalUiSkin.ApplyButton(back, primary: false);
+            if (back != null && back.targetGraphic is Image backImage) backImage.type = Image.Type.Simple;
+            var equipment = ElarionUiKit.ButtonPack(chrome.root.transform, "EQUIPMENT",
+                ElarionUiKit.ButtonKind.Gold,
+                new Vector2(0.78f, 0.84f), new Vector2(0.98f, 0.98f),
+                OpenEquipmentFromSkills, RpgUiCatalog.ButtonFrame);
+            MedievalUiSkin.ApplyButton(equipment, primary: true);
+            if (equipment != null && equipment.targetGraphic is Image equipmentImage) equipmentImage.type = Image.Type.Simple;
+            // FrameTalent keeps the generic broad title band unless its imported title and shadow
+            // are explicitly re-seated. Reserve a disjoint centre lane between the two actions.
+            if (chrome.title != null && chrome.title.transform.parent != null)
+            {
+                foreach (var heading in chrome.title.transform.parent.GetComponentsInChildren<TMPro.TextMeshProUGUI>(true))
+                {
+                    var headingRect = heading.rectTransform;
+                    headingRect.anchorMin = new Vector2(0.22f, headingRect.anchorMin.y);
+                    headingRect.anchorMax = new Vector2(0.78f, headingRect.anchorMax.y);
+                    headingRect.offsetMin = new Vector2(0f, headingRect.offsetMin.y);
+                    headingRect.offsetMax = new Vector2(0f, headingRect.offsetMax.y);
+                }
+            }
             // Hide the shared bottom Close — the tree is graph-only; scrim / X dismisses.
             if (chrome.close != null) chrome.close.gameObject.SetActive(false);
 
-            var bodyHost = (chrome.layout != null && chrome.layout.body != null)
-                ? chrome.layout.body : (RectTransform)chrome.content.transform;
+            var workspace = new GameObject("TalentWorkspace", typeof(RectTransform));
+            workspace.transform.SetParent(chrome.content.transform, false);
+            var bodyHost = workspace.GetComponent<RectTransform>();
+            bodyHost.anchorMin = new Vector2(0.035f, 0.10f);
+            bodyHost.anchorMax = new Vector2(0.965f, 0.84f);
+            bodyHost.offsetMin = Vector2.zero;
+            bodyHost.offsetMax = Vector2.zero;
             Transform panel = bodyHost;
             _headerLabel = chrome.title;
 
@@ -1603,12 +1699,38 @@ namespace DeNelle.Village.Talents
             BuildQuickSwapBar(panel);
 
             // Wisdom owns a header band above the graph so nodes can never render beneath it.
-            _wisdomChip = ElarionUiKit.CurrencyChip(panel, ElarionUiKit.CurrencyKind.Wisdom,
-                new Vector2(0.72f, 1f), new Vector2(0.98f, 1f), tag: "WISDOM");
-            if (_wisdomChip != null && _wisdomChip.root != null)
-                PinBandFromTop((RectTransform)_wisdomChip.root.transform, BodyPadPx, WisdomBandPx);
+            var pointsPlate = new GameObject("WisdomPlate", typeof(Image));
+            pointsPlate.transform.SetParent(panel, false);
+            var pointsRt = (RectTransform)pointsPlate.transform;
+            pointsRt.anchorMin = new Vector2(0.80f, 1f);
+            pointsRt.anchorMax = new Vector2(0.98f, 1f);
+            pointsRt.offsetMin = Vector2.zero; pointsRt.offsetMax = Vector2.zero;
+            PinBandFromTop(pointsRt, BodyPadPx, WisdomBandPx);
+            var pointsImage = pointsPlate.GetComponent<Image>();
+            pointsImage.sprite = Resources.Load<Sprite>("UI/ElarionMedieval/frames/content-panel");
+            if (pointsImage.sprite != null)
+            {
+                pointsImage.type = Image.Type.Simple;
+                pointsImage.color = Color.white;
+            }
+            else
+            {
+                ElarionUiKit.ApplyRounded(pointsImage);
+                pointsImage.color = new Color(0.035f, 0.03f, 0.035f, 0.98f);
+            }
+            pointsImage.raycastTarget = false;
+            _wisdomLabel = ElarionUiKit.Label(pointsPlate.transform, "WISDOM  0",
+                0.10f, 0.90f, ElarionUi.Gold, 20,
+                TMPro.TextAlignmentOptions.Center, 0.06f, 0.94f, bold: true);
+            ElarionUiKit.FitSingleLine(_wisdomLabel, 15f, 20f);
 
             BuildSpendPopup(panel);
+        }
+
+        private void OpenEquipmentFromSkills()
+        {
+            if (_vm != null) _vm.Close();
+            PanelRouter.Open(PanelId.EquipmentPanel);
         }
 
         /// <summary>
@@ -1640,12 +1762,13 @@ namespace DeNelle.Village.Talents
             var chrome = ElarionUiKit.BuildObsidianPanel(
                 _popupRoot.transform,
                 "Talent",
-                new Vector2(0.20f, 0.12f), new Vector2(0.80f, 0.88f),
+                new Vector2(0.24f, 0.20f), new Vector2(0.76f, 0.80f),
                 () => { if (_vm != null) _vm.ClearSelection(); },
                 headerX0: 0.14f, headerX1: 0.86f,
                 withBackdrop: false,
                 frameName: RpgUiCatalog.FrameCore,
                 medallionIcon: "talent");
+            MedievalUiSkin.ApplyShell(chrome, compact: true);
             // Nested popup: Cancel is the labeled dismiss; hide the shared bottom Close
             // so we don't stack two "leave" affordances under the buttons.
             if (chrome.close != null) chrome.close.gameObject.SetActive(false);
@@ -1664,13 +1787,13 @@ namespace DeNelle.Village.Talents
 
             // Body: description + spend prompt (chrome-less labels into the frame well).
             const float tx0 = 0.06f, tx1 = 0.94f;
-            _popupDesc = ElarionUiKit.Label(body, "", 0.46f, 0.96f, ElarionUi.Parchment,
+            _popupDesc = ElarionUiKit.Label(body, "", 0.48f, 0.90f, ElarionUi.Parchment,
                 ElarionUi.FontLabel, TMPro.TextAlignmentOptions.Top, tx0, tx1);
-            ElarionUiKit.FitBlock(_popupDesc);
+            ElarionUiKit.FitBlock(_popupDesc, 24f, 34f);
 
             _popupPrompt = ElarionUiKit.Label(body, "", 0.16f, 0.34f, ElarionUi.Affordable,
                 ElarionUi.FontBody, TMPro.TextAlignmentOptions.Center, tx0, tx1, bold: true);
-            ElarionUiKit.FitBlock(_popupPrompt);
+            ElarionUiKit.FitBlock(_popupPrompt, 22f, 30f);
 
             // Footer (or body floor fallback): Cancel | CONFIRM — kit ButtonPack + touch floor.
             RectTransform btnHost;
@@ -1688,6 +1811,7 @@ namespace DeNelle.Village.Talents
                 new Vector2(0.04f, 0.08f), new Vector2(0.46f, 0.92f),
                 () => { if (_vm != null) _vm.ClearSelection(); },
                 packSpriteName: RpgUiCatalog.ButtonFrame);
+            MedievalUiSkin.ApplyButton(_popupCancelBtn, primary: false);
             StyleActionLabel(_popupCancelBtn, ElarionUi.Parchment);
 
             // Emphasis ring — child of the Confirm button so it never outlives it
@@ -1696,6 +1820,7 @@ namespace DeNelle.Village.Talents
                 new Vector2(0.54f, 0.08f), new Vector2(0.96f, 0.92f),
                 OnPopupConfirm,
                 packSpriteName: RpgUiCatalog.ButtonFrame);
+            MedievalUiSkin.ApplyButton(_popupConfirmBtn, primary: true);
             _popupConfirmLabel = StyleActionLabel(_popupConfirmBtn, ElarionUi.Gilt);
 
             var ring = new GameObject("ConfirmRing", typeof(Image));
@@ -1719,7 +1844,7 @@ namespace DeNelle.Village.Talents
             else if (_vm.SelectedIsAssignable) _vm.ConfirmOrAssign();
         }
 
-        /// <summary>Persistent four-slot hot-swap rail. It sits beside the discovery surface so
+        /// <summary>Persistent three-slot hot-swap rail. It sits beside the discovery surface so
         /// the player can learn an active, equip it, and recognize the same numbered slot in combat.</summary>
         private void BuildQuickSwapBar(Transform panel)
         {
@@ -1733,11 +1858,12 @@ namespace DeNelle.Village.Talents
             _quickSwapHost.offsetMax = new Vector2(0f, BodyPadPx + BandGapPx + AbilityRowPx);
 
             var layout = rail.GetComponent<HorizontalLayoutGroup>();
-            layout.spacing = 10f;
+            layout.spacing = 46f;
             layout.childControlWidth = true;
-            layout.childForceExpandWidth = true;
+            layout.childForceExpandWidth = false;
             layout.childControlHeight = true;
-            layout.childForceExpandHeight = true;
+            layout.childForceExpandHeight = false;
+            layout.childAlignment = TextAnchor.LowerCenter;
             layout.padding = new RectOffset(0, 0, 34, 0);
 
             _quickSwapStatus = ElarionUiKit.Label(rail.transform,
@@ -1758,6 +1884,10 @@ namespace DeNelle.Village.Talents
             {
                 var child = _quickSwapHost.GetChild(i);
                 if (_quickSwapStatus != null && child == _quickSwapStatus.transform) continue;
+                // Changed events can repaint more than once in a frame. Destroy is deferred
+                // in play mode, so hide the retired card immediately or duplicate slots flash
+                // (and appear in deterministic screenshots) until end-of-frame.
+                child.gameObject.SetActive(false);
                 Destroy(child.gameObject);
             }
             if (_quickSwapStatus != null) _quickSwapStatus.text = _vm.QuickSwapStatus;
@@ -1767,19 +1897,69 @@ namespace DeNelle.Village.Talents
             {
                 var slot = slots[i];
                 int captured = slot.SlotIndex;
-                string label = slot.SlotKey + "  " + (slot.IsEmpty ? "Empty" : slot.AbilityName);
+                string label = slot.IsEmpty ? slot.SlotKey + "\nEMPTY" : string.Empty;
                 var btn = ElarionUiKit.BuildObsidianButton(_quickSwapHost, label,
                     ElarionUiKit.ObsidianButtonStyle.Style1,
                     slot.IsEmpty ? ElarionUiKit.ObsidianButtonColor.Gray
                                  : ElarionUiKit.ObsidianButtonColor.Yellow,
                     Vector2.zero, Vector2.one,
                     () => _vm?.AssignSelectedToSlot(captured));
+                MedievalUiSkin.ApplyButton(btn, primary: !slot.IsEmpty);
+                if (btn != null && btn.targetGraphic is Image slotImage)
+                {
+                    var bezel = Resources.Load<Sprite>(
+                        "UI/ElarionMedieval/frames/circular-bezel-four-point");
+                    if (bezel != null) slotImage.sprite = bezel;
+                    slotImage.type = Image.Type.Simple;
+                    slotImage.preserveAspect = true;
+                    slotImage.color = slot.IsEmpty
+                        ? new Color(0.72f, 0.72f, 0.72f, 0.88f) : Color.white;
+                }
                 var le = btn.gameObject.GetComponent<LayoutElement>();
                 if (le == null) le = btn.gameObject.AddComponent<LayoutElement>();
+                le.minWidth = ElarionUiKit.MinTouchPx;
+                le.preferredWidth = ElarionUiKit.MinTouchPx;
                 le.minHeight = ElarionUiKit.MinTouchPx;
                 le.preferredHeight = ElarionUiKit.MinTouchPx;
                 var text = btn.GetComponentInChildren<TMPro.TextMeshProUGUI>();
-                if (text != null) ElarionUiKit.FitSingleLine(text);
+                if (text != null)
+                {
+                    text.textWrappingMode = TMPro.TextWrappingModes.Normal;
+                    text.alignment = TMPro.TextAlignmentOptions.Center;
+                    ElarionUiKit.FitBlock(text, 18f, ElarionUi.FontLabel);
+                }
+
+                if (!slot.IsEmpty)
+                {
+                    // The canonical concept table owns the art choice. PreserveAspect and
+                    // symmetric anchors keep every silhouette centred inside the circle.
+                    var icon = ConceptIconResolver.Resolve(slot.AbilityId) ??
+                               ConceptIconResolver.DefaultSprite();
+                    if (icon != null)
+                    {
+                        var iconGo = new GameObject("AbilityIcon", typeof(RectTransform), typeof(Image));
+                        iconGo.transform.SetParent(btn.transform, false);
+                        var iconRt = (RectTransform)iconGo.transform;
+                        iconRt.anchorMin = new Vector2(.18f, .18f);
+                        iconRt.anchorMax = new Vector2(.82f, .82f);
+                        iconRt.offsetMin = iconRt.offsetMax = Vector2.zero;
+                        var iconImage = iconGo.GetComponent<Image>();
+                        iconImage.sprite = icon;
+                        iconImage.preserveAspect = true;
+                        iconImage.raycastTarget = false;
+                    }
+
+                    var slotBadge = ElarionUiKit.Label(btn.transform, slot.SlotKey,
+                        .68f, .94f, ElarionUi.Gilt, 18,
+                        TMPro.TextAlignmentOptions.Center, .68f, .94f, bold: true);
+                    slotBadge.raycastTarget = false;
+                    ElarionUiKit.FitSingleLine(slotBadge, 14f, 18f);
+                    var name = ElarionUiKit.Label(btn.transform, slot.AbilityName.ToUpperInvariant(),
+                        .02f, .22f, ElarionUi.Parchment, 14,
+                        TMPro.TextAlignmentOptions.Center, .08f, .92f, bold: true);
+                    name.raycastTarget = false;
+                    ElarionUiKit.FitSingleLine(name, 10f, 14f);
+                }
             }
         }
 
@@ -1920,7 +2100,7 @@ namespace DeNelle.Village.Talents
             Unbind();
             if (_vm != null) { _vm.Dispose(); _vm = null; }
             _headerLabel = null;
-            _wisdomChip = null;
+            _wisdomLabel = null;
             _popupRoot = null;
             _popupConfirmRing = null;
             _popupName = null;

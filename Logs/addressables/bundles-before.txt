@@ -1,0 +1,29 @@
+# content build [before]  target=Android  locations=634  duration=19.8s
+# outputPath=Library/com.unity.addressables/aa/Android/settings.json
+# ---- per-prefix totals ----
+# 7797cabea3a24d3d431cf7bfcfb0ab3c    2 file(s)       114749 bytes (0.11 MiB)
+# addressables                    1 file(s)         3752 bytes (0.00 MiB)
+# catalog                         4 file(s)       208068 bytes (0.20 MiB)
+# dungeon                         1 file(s)      3464491 bytes (3.30 MiB)
+# enemy_art                       1 file(s)     67582523 bytes (64.45 MiB)
+# gear                            1 file(s)     13112112 bytes (12.50 MiB)
+# localization                    3 file(s)        15625 bytes (0.01 MiB)
+# settings.json                   1 file(s)         4182 bytes (0.00 MiB)
+# structure_art                   1 file(s)     20670596 bytes (19.71 MiB)
+# TOTAL 15 file(s) 105176098 bytes (100.30 MiB)
+# ---- files ----
+          32  catalog.hash
+          32  catalog_2026.08.20.333674.hash
+        1916  7797cabea3a24d3d431cf7bfcfb0ab3c_monoscripts_1b4b4d40685fc1975e33907ff175da32.bundle
+        1991  localization-locales_assets_all.bundle
+        3752  addressables_content_state.bin
+        4182  settings.json
+        4665  localization-assets-shared_assets_all.bundle
+        8969  localization-string-tables-english_assets_all.bundle
+      104002  catalog.bin
+      104002  catalog_2026.08.20.333674.bin
+      112833  7797cabea3a24d3d431cf7bfcfb0ab3c_unitybuiltinassets_9bc7e56d2a07387346c07f4d9761734e.bundle
+     3464491  dungeon_assets_all_6254f25263467f7b8ecec6b2c02391a7.bundle
+    13112112  gear_assets_all_2d4302935337a9c471bd3951ed02b067.bundle
+    20670596  structure_art_assets_all_7608a3cb0e5cc3e554d7f39b01ee1a70.bundle
+    67582523  enemy_art_assets_all_2d9daff59ea4adbcc4ba89197db9313d.bundle

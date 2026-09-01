@@ -171,7 +171,9 @@ namespace DeNelle.Tests.EditMode
             var store = SeedStore();
             using var vm = new InventoryVM(store);
             Assert.That(vm.Tabs.Count, Is.EqualTo(5));
-            Assert.That(vm.Tabs[(int)InventoryTabKind.Weapons].Count, Is.EqualTo(2));
+            Assert.That(vm.Tabs[(int)InventoryTabKind.Weapons].Count, Is.EqualTo(3),
+                "tab badge counts owned copies (sword x1 + axe x2), while Slots count definitions");
+            Assert.That(vm.Tabs[(int)InventoryTabKind.OffHand].Count, Is.Zero);
             Assert.That(vm.Tabs[(int)InventoryTabKind.Armor].Count, Is.EqualTo(1));
             Assert.That(vm.Tabs[(int)InventoryTabKind.Consumables].Count, Is.EqualTo(1));
         }

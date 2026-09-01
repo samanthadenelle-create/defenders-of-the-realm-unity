@@ -91,6 +91,10 @@ namespace DeNelle.Village
         /// Configure()'d -- the authored GatePosition is preferred in every normal case.</summary>
         public const float SpawnToGateMetres = 12f;
 
+        /// <summary>Close enough to read immediately, outside the pickup trigger so
+        /// the movement that ended the wave cannot collect the plans unseen.</summary>
+        public const float PlayerDropOffsetMetres = 3.25f;
+
         public static CastleDefensePlansService Instance { get; private set; }
 
         private GameObject _prop;
@@ -191,7 +195,7 @@ namespace DeNelle.Village
 
         private void SpawnDrop(int wavesCompleted)
         {
-            Vector3 seat = ResolveGateSeat(out string seatSource);
+            Vector3 seat = ResolveDropSeat(out string seatSource);
 
             _prop = new GameObject("CastleDefensePlans_Drop");
             // Scene-owned on purpose (NOT under this DDOL service): the prop dies with
@@ -215,6 +219,38 @@ namespace DeNelle.Village
             FlowTrace.Step("Progression",
                 $"plans-drop-spawned @ {seat} (seat={seatSource}, wavesCompleted={wavesCompleted}, " +
                 "one authored drop -- persists until collected; WO-1013)");
+        }
+
+        /// <summary>Prefer a visible position just ahead of the hero who earned the
+        /// reward. The deterministic gate seat remains the loading/headless fallback.</summary>
+        private static Vector3 ResolveDropSeat(out string source)
+        {
+            var heroes = FindObjectsByType<HeroHealth>(FindObjectsSortMode.None);
+            if (heroes != null)
+            {
+                for (int i = 0; i < heroes.Length; i++)
+                {
+                    var hero = heroes[i];
+                    if (hero == null || !hero.gameObject.activeInHierarchy) continue;
+
+                    Vector3 forward = hero.transform.forward;
+                    forward.y = 0f;
+                    if (forward.sqrMagnitude < 0.01f)
+                    {
+                        forward = -hero.transform.position;
+                        forward.y = 0f;
+                    }
+                    if (forward.sqrMagnitude < 0.01f) forward = Vector3.forward;
+
+                    source = "player:" + hero.name;
+                    return GroundSnap(hero.transform.position +
+                                      forward.normalized * PlayerDropOffsetMetres);
+                }
+            }
+
+            Vector3 fallback = ResolveGateSeat(out string fallbackSource);
+            source = "fallback:" + fallbackSource;
+            return fallback;
         }
 
         /// <summary>

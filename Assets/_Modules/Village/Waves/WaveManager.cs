@@ -3003,6 +3003,15 @@ namespace DeNelle.Village
             int food = DueThisWave(waveId, _foodRewardInterval)
                 ? ScaledRoll(_foodRewardBase, _foodRewardSpread, scale) : 0;
 
+            // FTUE recovery floor: the legacy stagger paid no iron before wave four,
+            // then only 15-25 against repair bills in the hundreds. The first three
+            // clears now guarantee 480 iron in total. Max preserves stronger authored
+            // or talent payouts; wave four onward keeps the established economy curve.
+            EarlyWaveReward floor = EarlyWaveRewardFloor(waveId);
+            wood = Mathf.Max(wood, floor.Wood);
+            iron = Mathf.Max(iron, floor.Iron);
+            food = Mathf.Max(food, floor.Stone);
+
             if (wood <= 0 && iron <= 0 && food <= 0) return;
 
             economy.Grant(new ResourceCost(wood: wood, food: food, iron: iron));
@@ -3022,6 +3031,28 @@ namespace DeNelle.Village
                 $"[WaveManager] Wave {waveId} cleared — granted build resources (×{scale:0.0} scale): " +
                 string.Join(", ", BuildRewardParts(wood, iron, food)) +
                 " (defend → earn → build).");
+        }
+
+        public readonly struct EarlyWaveReward
+        {
+            public readonly int Wood;
+            public readonly int Iron;
+            public readonly int Stone;
+
+            public EarlyWaveReward(int wood, int iron, int stone)
+            { Wood = wood; Iron = iron; Stone = stone; }
+        }
+
+        /// <summary>Pure balance authority for the guaranteed onboarding runway.</summary>
+        public static EarlyWaveReward EarlyWaveRewardFloor(int waveId)
+        {
+            switch (waveId)
+            {
+                case 1: return new EarlyWaveReward(180, 120, 80);
+                case 2: return new EarlyWaveReward(240, 160, 120);
+                case 3: return new EarlyWaveReward(320, 200, 160);
+                default: return new EarlyWaveReward(0, 0, 0);
+            }
         }
 
         /// <summary>True when a payout with the given interval is due on this wave.

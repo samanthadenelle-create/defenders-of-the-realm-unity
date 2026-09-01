@@ -608,11 +608,12 @@ namespace DeNelle.Village.Hero
 
                 var row = DeNelle.Village.Items.ItemIdentity.Resolve(id);
                 bool isMaterial = row.Kind == DeNelle.Village.Items.ItemIdentityKind.Material;
+                var consumable = !isMaterial ? DeNelle.Village.Items.ConsumableCatalog.Find(id) : null;
 
                 string name = row.DisplayName;                       // authored name, else the raw id
                 string role = isMaterial ? IconRoleMaterial : IconRolePotion;
-                string desc = isMaterial ? "A crafting material." : "Consumable you own.";
-                string stats = isMaterial ? "Material" : "Consumable";
+                string desc = isMaterial ? "A crafting material." : ConsumableDescription(consumable);
+                string stats = isMaterial ? "Material" : ConsumableEffectLine(consumable);
 
                 // A material has no use-effect. Marking it CanUse produced a live "Use" button
                 // that could only ever fail - the same identity lie in verb form.
@@ -622,6 +623,38 @@ namespace DeNelle.Village.Hero
                 _slots.Add(new ItemVM(id, name + (qty > 1 ? " x" + qty : ""), role, id,
                     0, "gold", true, iconPath: row.IconPath));
             }
+        }
+
+        private static string ConsumableDescription(DeNelle.Village.Items.ConsumableDef def)
+        {
+            if (def == null) return "Consumable you own.";
+            switch (def.Kind)
+            {
+                case DeNelle.Village.Items.ConsumableKind.Potion: return "A prepared potion.";
+                case DeNelle.Village.Items.ConsumableKind.Food:   return "Provisions ready to use.";
+                case DeNelle.Village.Items.ConsumableKind.Tent:   return "A rest supply for use outside battle.";
+                default: return "Consumable you own.";
+            }
+        }
+
+        private static string ConsumableEffectLine(DeNelle.Village.Items.ConsumableDef def)
+        {
+            if (def == null) return "Usable item";
+            string amount = def.MagnitudePct > 0f
+                ? RoundToInt(def.MagnitudePct) + "% of maximum"
+                : RoundToInt(def.Magnitude).ToString();
+            string effect;
+            switch (def.Effect)
+            {
+                case DeNelle.Village.Items.ConsumableEffect.Heal: effect = "Restores " + amount + " health"; break;
+                case DeNelle.Village.Items.ConsumableEffect.Mana: effect = "Restores " + amount + " focus"; break;
+                case DeNelle.Village.Items.ConsumableEffect.Rest: effect = "Restores " + amount + " health"; break;
+                case DeNelle.Village.Items.ConsumableEffect.Buff: effect = "Temporary enhancement"; break;
+                default: effect = "Usable item"; break;
+            }
+            if (def.UseCooldown > 0f) effect += "\n" + RoundToInt(def.UseCooldown) + "s reuse time";
+            effect += def.UsableInFight ? " - usable in battle" : " - rest only";
+            return effect;
         }
 
         // ── Description (mirrors ShopVM.DescribeGear) ─────────────────────────────

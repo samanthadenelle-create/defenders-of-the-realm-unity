@@ -21,6 +21,7 @@
 using System;
 using DeNelle.Core.Catalog;   // StructureRoles — the single naming authority
 using DeNelle.Core.Diagnostics;
+using DeNelle.Core.UI;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -84,7 +85,10 @@ namespace DeNelle.Village
             prt.pivot = new Vector2(0.5f, 0f);
             prt.anchoredPosition = new Vector2(0f, 150f);
             prt.sizeDelta = new Vector2(720f, 96f);
-            panel.GetComponent<Image>().color = new Color(0.05f, 0.06f, 0.09f, 0.0f); // invisible spacer
+            var panelImage = panel.GetComponent<Image>();
+            panelImage.sprite = Resources.Load<Sprite>("UI/ElarionMedieval/frames/content-panel");
+            panelImage.type = Image.Type.Sliced;
+            panelImage.color = Color.white;
 
             // The building word comes from the catalog row claiming the weaponsmith role
             // (WO-1161) — a button that names a building by a word the town does not use
@@ -103,7 +107,7 @@ namespace DeNelle.Village
         private static RectTransform MakeButton(Transform parent, string label,
             Vector2 anchorMin, Vector2 anchorMax, Vector2 offMin, Vector2 offMax, Color color)
         {
-            var go = new GameObject("Btn_" + label, typeof(RectTransform), typeof(Image));
+            var go = new GameObject("Btn_" + label, typeof(RectTransform), typeof(Image), typeof(Button));
             go.transform.SetParent(parent, false);
             var rt = (RectTransform)go.transform;
             rt.anchorMin = anchorMin;
@@ -111,6 +115,9 @@ namespace DeNelle.Village
             rt.offsetMin = offMin;
             rt.offsetMax = offMax;
             go.GetComponent<Image>().color = color;
+            var button = go.GetComponent<Button>();
+            button.targetGraphic = go.GetComponent<Image>();
+            MedievalUiSkin.ApplyButton(button, primary: label.StartsWith("Visit", StringComparison.Ordinal));
 
             var lblGo = new GameObject("Label", typeof(RectTransform), typeof(Text));
             lblGo.transform.SetParent(go.transform, false);

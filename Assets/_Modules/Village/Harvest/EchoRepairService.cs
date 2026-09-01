@@ -130,6 +130,30 @@ namespace DeNelle.Village
         /// <summary>True when the last scan found at least one damaged, non-destroyed structure.</summary>
         public bool HasRepairTargets { get; private set; }
 
+        public const string ComplimentaryRepairSeenKey = "echo_plans_complimentary_repair";
+
+        /// <summary>Consumes the plans moment's once-ever free repair offer.</summary>
+        public static int ClaimComplimentaryPlansRepair()
+        {
+            var gs = GameStateService.Instance;
+            var state = gs != null ? gs.State : null;
+            if (state == null || (state.SeenTutorials != null &&
+                state.SeenTutorials.TryGetValue(ComplimentaryRepairSeenKey, out bool used) && used))
+                return 0;
+
+            gs.MarkTutorialSeen(ComplimentaryRepairSeenKey);
+            var repair = FindAnyObjectByType<WallRepairController>();
+            if (repair == null)
+            {
+                var go = new GameObject("WallRepair_ComplimentaryEchoEngine");
+                repair = go.AddComponent<WallRepairController>();
+                repair.enabled = false;
+            }
+            int count = repair.RepairAllComplimentary("Castle Defense Plans Echo offer");
+            FlowTrace.Step("Echo", $"complimentary plans repair CLAIMED: {count} structure(s), no resources spent");
+            return count;
+        }
+
         /// <summary>Banked repair work in structure-damage fractions (diagnostic readout).</summary>
         public float BankedWork => _workBudget;
 
@@ -370,7 +394,8 @@ namespace DeNelle.Village
             var repair = EnsureRepair();
             if (repair == null) return;
 
-            if (!repair.TryPeekWorstDamaged(out string worstName, out float worstFrac, out CoreCost worstCost))
+            if (!repair.TryPeekWorstDamaged(out string worstName, out float worstFrac,
+                                           out CoreCost worstCost, out GameObject worstTarget))
             {
                 // ZERO targets = ZERO progress: no accrual, no fake work (WO-811 honesty rule).
                 SetStatus(EchoRepairStatus.NothingToRepair, false);
@@ -380,6 +405,9 @@ namespace DeNelle.Village
             }
 
             _workBudget = Mathf.Min(MaxBankedFractions, _workBudget + rate * dt);
+            EchoRepairProgressBillboard.Show(worstTarget,
+                worstFrac > BudgetEps ? Mathf.Clamp01(_workBudget / worstFrac) : 1f,
+                RepairingEchoName());
             FlowTrace.Throttle("Echo", "repair-tick", 5f,
                 $"Echo repair tick: rate {rate * 3600f:0.###}/h, banked {_workBudget:0.###}, " +
                 $"worst '{worstName}' (dmg {worstFrac:0.00}).");
@@ -413,6 +441,14 @@ namespace DeNelle.Village
                     $"{WallRepairController.DescribeMaterials(spent)}; {_workBudget:0.###} work banked.");
                 Changed?.Invoke();
             }
+        }
+
+        private static string RepairingEchoName()
+        {
+            var entry = EchoRosterCatalog.ByCount(1);
+            string display = entry != null ? entry.DisplayName : "";
+            int comma = display.IndexOf(',');
+            return comma > 0 ? display.Substring(0, comma).Trim() : display.Trim();
         }
 
         /// <param name="stalledLabel">WO-1231: the short resource's player-facing name while

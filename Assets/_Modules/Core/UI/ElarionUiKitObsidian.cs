@@ -648,6 +648,7 @@ namespace DeNelle.Core.UI
                     }
                     if (onClick != null) pfBtn.onClick.AddListener(() => onClick());
                     ClampMinTouch(pfBtn);   // P0 kit touch floor
+                    MedievalUiSkin.ApplyButton(pfBtn, color == ObsidianButtonColor.Yellow);
                     return pfBtn;
                 }
                 FlowTrace.Warn("UI", "BuildObsidianButton: prefab '" + pf.name + "' has no Button — constructing fallback");
@@ -657,7 +658,11 @@ namespace DeNelle.Core.UI
             // ── MODE 2: constructed on the mirrored sprite ────────────────────
             var art = RpgUiCatalog.Get(RpgUiCatalog.RoleButton, ObsidianButtonSpriteName(style, color));
             if (art == null)
-                return Button(parent, label, KindFor(color), anchorMin, anchorMax, onClick); // procedural (shim won't loop: it re-checks this same null)
+            {
+                var fallback = Button(parent, label, KindFor(color), anchorMin, anchorMax, onClick);
+                MedievalUiSkin.ApplyButton(fallback, color == ObsidianButtonColor.Yellow);
+                return fallback; // procedural (shim won't loop: it re-checks this same null)
+            }
 
             var go = new GameObject("ObsBtn_" + label, typeof(Image), typeof(Button));
             go.transform.SetParent(parent, false);
@@ -683,6 +688,7 @@ namespace DeNelle.Core.UI
             EnsureFont(tt, FontRole.Body);
             FitSingleLine(tt);                                             // §1.14 — button text never clips
             ClampMinTouch(btn);   // P0 kit touch floor
+            MedievalUiSkin.ApplyButton(btn, color == ObsidianButtonColor.Yellow);
             return btn;
         }
 
@@ -1253,11 +1259,13 @@ namespace DeNelle.Core.UI
             var plate = new GameObject("StackBadge", typeof(Image));
             plate.transform.SetParent(slot.root.transform, false);
             var prt = (RectTransform)plate.transform;
-            prt.anchorMin = new Vector2(1f, 0f);          // bottom-right CORNER of the slot
-            prt.anchorMax = new Vector2(1f, 0f);
-            prt.pivot = new Vector2(1f, 0f);
+            // The caption now owns the lower band of a round HUD action. Keep quantity on the
+            // upper-right of the medallion so ITEM and its literal zero never merge into ITEM0.
+            prt.anchorMin = new Vector2(1f, 1f);
+            prt.anchorMax = new Vector2(1f, 1f);
+            prt.pivot = new Vector2(1f, 1f);
             prt.sizeDelta = new Vector2(BadgeW, BadgeH);  // FIXED px, not a fraction of the slot
-            prt.anchoredPosition = new Vector2(-Inset, Inset);
+            prt.anchoredPosition = new Vector2(-Inset, -Inset);
 
             var pimg = plate.GetComponent<Image>();
             var disc = RoundedSprite;                     // rounded plate; falls back to the solid quad
@@ -2041,8 +2049,19 @@ namespace DeNelle.Core.UI
                 //     the assembly". §1.10b draws the measured body only.
                 if (h.plate != null)
                 {
-                    var body = PlatePageSprite(RpgUiCatalog.HudTargetCore);
-                    if (body != null) { h.plate.sprite = body; h.plate.type = Image.Type.Simple; }
+                    var medievalFrame = Resources.Load<Sprite>("UI/ElarionMedieval/frames/content-panel");
+                    if (medievalFrame != null)
+                    {
+                        h.plate.sprite = medievalFrame;
+                        h.plate.type = Image.Type.Simple;
+                        h.plate.preserveAspect = false;
+                        h.plate.color = Color.white;
+                    }
+                    else
+                    {
+                        var body = PlatePageSprite(RpgUiCatalog.HudTargetCore);
+                        if (body != null) { h.plate.sprite = body; h.plate.type = Image.Type.Simple; }
+                    }
                 }
 
                 // 2. RANK-FRAME DECORATIONS OFF. BossTarget ships m_IsActive:1 and draws the

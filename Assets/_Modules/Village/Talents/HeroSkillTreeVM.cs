@@ -370,7 +370,7 @@ namespace DeNelle.Village.Talents
         private readonly HashSet<string> _pending = new HashSet<string>(StringComparer.Ordinal);
 
         // Single-screen folds (owner 2026-06-28): the currently SELECTED node (drives the
-        // detail/description panel) + a mirror of the player's QUICK-SWAP bar (slots 1..4)
+        // detail/description panel) + a mirror of the player's QUICK-SWAP bar (slots 1..3)
         // so a player can read a perk AND assign an owned skill without a second screen.
         private string _selectedId = "";
         private readonly List<LoadoutSlotVM> _quickSlots = new List<LoadoutSlotVM>(AssignableSkillBar.SlotCount);
@@ -1309,7 +1309,7 @@ namespace DeNelle.Village.Talents
         }
 
         /// <summary>The ability id the selected node grants IF it is an OWNED, assignable skill — else "".
-        /// Non-empty means the quick-swap row can drop this skill into a slot 1..4.</summary>
+        /// Non-empty means the quick-swap row can drop this skill into a slot 1..3.</summary>
         public string SelectedAssignAbilityId
         {
             get
@@ -1327,7 +1327,7 @@ namespace DeNelle.Village.Talents
         public bool SelectedIsAssignable => !string.IsNullOrEmpty(SelectedAssignAbilityId);
 
         /// <summary>One-based destination used by the popup assignment action. An empty slot is
-        /// preferred; when all four are occupied, slot 1 is named explicitly as the replacement.</summary>
+        /// preferred; when all three are occupied, slot 1 is named explicitly as the replacement.</summary>
         public int SelectedSuggestedSlot => SelectedIsAssignable ? FirstAssignSlot() + 1 : 0;
 
         /// <summary>One-based current slot for the selected active, or 0 when not assigned.</summary>
@@ -1354,11 +1354,11 @@ namespace DeNelle.Village.Talents
 
         // ── Quick-swap bar (folds in the loadout screen) ─────────────────────────
 
-        /// <summary>The player's quick-swap slots 1..4 (mirror of AssignableSkillBar). Never null.</summary>
+        /// <summary>The player's quick-swap slots 1..3 (mirror of AssignableSkillBar). Never null.</summary>
         public IReadOnlyList<LoadoutSlotVM> QuickSlots => _quickSlots;
 
         /// <summary>Last quick-swap action / hint line.</summary>
-        public string QuickSwapStatus { get; private set; } = "Select an owned skill, then tap a slot (1-4).";
+        public string QuickSwapStatus { get; private set; } = "Select an owned skill, then tap a slot (1-3).";
 
         /// <summary>Assign the SELECTED owned skill into quick-swap <paramref name="slotIndex"/>; with no
         /// assignable selection, tapping a filled slot clears it. Battle-locked + persisted via the bar.</summary>
@@ -1370,7 +1370,7 @@ namespace DeNelle.Village.Talents
                 if (AssignableSkillBarAccess.EditsLocked) { QuickSwapStatus = "Can't change skills during battle."; Raise(); return; }
                 bool cleared = AssignableSkillBarAccess.Clear(slotIndex);
                 QuickSwapStatus = cleared ? "Slot " + (slotIndex + 1) + " cleared."
-                                          : "Select an owned skill, then tap a slot (1-4).";
+                                          : "Select an owned skill, then tap a slot (1-3).";
                 FlowTrace.Step("SkillTree", "quickswap clear slot " + slotIndex + " => " + cleared);
                 Rebuild(); Raise();
                 return;

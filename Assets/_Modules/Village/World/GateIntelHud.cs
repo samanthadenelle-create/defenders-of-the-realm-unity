@@ -236,8 +236,10 @@ namespace DeNelle.Village.World
             panelGo.transform.SetParent(_canvas.transform, false);
             var img = panelGo.AddComponent<Image>();
             // Dark-wood glass chip with the shared rounded corners (lightweight readout).
-            img.color = ElarionUiKit.GlassDeep;
-            ElarionUiKit.ApplyRounded(img);
+            img.sprite = Resources.Load<Sprite>("UI/ElarionMedieval/frames/content-panel");
+            img.type = Image.Type.Sliced;
+            img.color = Color.white;
+            ElarionUiKit.AddInnerRim(panelGo, ElarionUiKit.ObsidianTrim);
             _panelRect = img.rectTransform;
             // Bottom-centre strip.
             _panelRect.anchorMin = new Vector2(0.5f, 0f);

@@ -98,6 +98,7 @@ namespace DeNelle.Village.World.Camps
         public event System.Action<GarrisonController> OnCleared;
 
         private readonly List<Enemy> _garrison = new List<Enemy>();
+        private readonly Dictionary<Enemy, EnemyOccupancySlot> _slotsByEnemy = new Dictionary<Enemy, EnemyOccupancySlot>();
         private Transform _garrisonRoot;
         private int _aliveCount;
         private bool _activated;
@@ -204,7 +205,12 @@ namespace DeNelle.Village.World.Camps
                 // A defender is a TROLL by default; every 3rd is the lighter, faster
                 // "Stonebelly" variant for silhouette variety (still the Troll family/model).
                 bool stonebelly = (i % 3) == 2;
-                SpawnOne(sp.position, sp.rotation, stonebelly, i);
+                var slot = sp.GetComponent<EnemyOccupancySlot>();
+                if (slot == null) slot = sp.gameObject.AddComponent<EnemyOccupancySlot>();
+                slot.ConfigureRuntime($"{name}-guard-{i}", RoleForSlot(i), transform);
+                if (!slot.Validate(out string slotIssue))
+                    FlowTrace.Warn("Garrison", $"occupancy slot '{slot.StableId}' invalid: {slotIssue}");
+                SpawnOne(sp.position, sp.rotation, stonebelly, i, slot);
             });
 
             if (_aliveCount == 0)
@@ -244,7 +250,7 @@ namespace DeNelle.Village.World.Camps
 
         // Spawn exactly one defender at a point. Prefer an authored prefab when supplied,
         // else build through the canonical EnemyFactory path with a Troll/Stonebelly def.
-        private void SpawnOne(Vector3 wantPos, Quaternion rot, bool stonebelly, int index)
+        private void SpawnOne(Vector3 wantPos, Quaternion rot, bool stonebelly, int index, EnemyOccupancySlot slot)
         {
             Vector3 pos = SnapToNav(wantPos);
 
@@ -266,6 +272,11 @@ namespace DeNelle.Village.World.Camps
                         // V — verify the authored-prefab defender RENDERS, else the hero fights
                         // an invisible garrison member.
                         VerifyGuardRenders(e, $"prefab-guard-{index} ({prefab.name})", pos);
+                        if (slot != null && slot.TryReserve(e))
+                        {
+                            _slotsByEnemy[e] = slot;
+                            BindOccupancyAgent(e, slot);
+                        }
                         Track(e);
                     }
                     else
@@ -308,7 +319,27 @@ namespace DeNelle.Village.World.Camps
             // V — the defender must RENDER, else the hero fights an invisible garrison member.
             VerifyGuardRenders(enemy, $"guard-{index} ({def.Id})", pos);
 
+            if (slot != null && slot.TryReserve(enemy))
+            {
+                _slotsByEnemy[enemy] = slot;
+                BindOccupancyAgent(enemy, slot);
+            }
             Track(enemy);
+        }
+
+        private static void BindOccupancyAgent(Enemy enemy, EnemyOccupancySlot slot)
+        {
+            if (enemy == null || slot == null) return;
+            var agent = enemy.GetComponent<EnemyOccupancyAgent>();
+            if (agent == null) agent = enemy.gameObject.AddComponent<EnemyOccupancyAgent>();
+            agent.Bind(slot);
+        }
+
+        private static EnemyOccupancyRole RoleForSlot(int index)
+        {
+            if (index == 0) return EnemyOccupancyRole.Sentry;
+            if (index == 1) return EnemyOccupancyRole.Prowler;
+            return (index & 1) == 0 ? EnemyOccupancyRole.PackLeft : EnemyOccupancyRole.PackRight;
         }
 
         // V — confirm a spawned garrison defender actually RENDERS (>=1 enabled renderer carrying a
@@ -365,6 +396,11 @@ namespace DeNelle.Village.World.Camps
         private void HandleGarrisonDied(Enemy enemy)
         {
             if (enemy != null) enemy.Died -= HandleGarrisonDied;
+            if (enemy != null && _slotsByEnemy.TryGetValue(enemy, out var slot))
+            {
+                slot?.Release(enemy);
+                _slotsByEnemy.Remove(enemy);
+            }
             _aliveCount = Mathf.Max(0, _aliveCount - 1);
             if (_aliveCount == 0) MarkCleared();
         }

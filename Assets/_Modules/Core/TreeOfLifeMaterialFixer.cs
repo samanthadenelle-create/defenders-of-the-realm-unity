@@ -70,7 +70,7 @@ namespace DeNelle.Core
         // unlike a scene mesh ref / File.ReadAllText) at exactly (0,0,0), stand it
         // up, scale it to the plaza centrepiece height, then run the material fix so
         // it is never grey. Robust in every build incl. WebGL with no scene re-save.
-        private const string TreeResourcePath = "Structures/tree_of_life";
+        private const string TreeAssetKey = StructureAssetLoader.StructureAddrPrefix + "tree_of_life";
 
         // Centrepiece sizing/orientation — mirrors Village2Generator's authored values
         // (targetTreeHeight 14 m; the Tripo tree imports lying down -> -90° X stands it
@@ -124,9 +124,11 @@ namespace DeNelle.Core
             // the WebGL player. Wrap EVERYTHING so a bad tree fix can never freeze the game.
             try
             {
-                string n = scene.name;
-                bool village = !string.IsNullOrEmpty(n) && n.StartsWith("Village");
-                EnsureCentrepiece(village);
+                // WO-550 moved Village2 to the enemy-stronghold role.  A name-prefix
+                // check therefore installs the player's Tree of Life in hostile territory
+                // (and tries to load town-only content there).  The merged overworld is
+                // the sole shipped player-town surface and HubScenes owns that identity.
+                EnsureCentrepiece(HubScenes.IsOverworld(scene.name));
             }
             catch (System.Exception e)
             {
@@ -159,7 +161,7 @@ namespace DeNelle.Core
             if (tree == null)
             {
                 if (!village) return;                   // only the town gets a centrepiece
-                tree = SpawnCentrepieceFromResources();
+                tree = SpawnCentrepieceFromCatalog();
                 if (tree == null) return;               // resource missing — nothing to do
             }
 
@@ -177,26 +179,26 @@ namespace DeNelle.Core
             Apply(tree);
         }
 
-        // True when the active scene is one of the playable towns (Village2 canonical,
-        // Village3, Village). Keeps the spawn-guard from dropping a tree into Title /
-        // HeroSelect / DTT / dungeon scenes that this RuntimeInitialize hook also runs in.
+        // True only for the shipped player-town overworld. Village2 is the enemy
+        // stronghold (WO-550), so broad "Village*" matching is actively unsafe here.
+        // Keeps the spawn-guard out of Title / HeroSelect / DTT / raids / dungeons too.
         private static bool InVillageScene()
         {
             string n = UnityEngine.SceneManagement.SceneManager.GetActiveScene().name;
-            return !string.IsNullOrEmpty(n) && n.StartsWith("Village");
+            return HubScenes.IsOverworld(n);
         }
 
         // Instantiate the Tree-of-Life mesh from Resources at world origin, stand it
         // upright from its own bounds, scale it to the plaza centrepiece height, strip
         // colliders (the gameplay blocker is HeartController's capsule), and seat its
         // base at y=0. Resources.Load is WebGL-safe (no File I/O, no scene mesh ref).
-        private static GameObject SpawnCentrepieceFromResources()
+        private static GameObject SpawnCentrepieceFromCatalog()
         {
-            GameObject src = Resources.Load<GameObject>(TreeResourcePath);
+            GameObject src = StructureAssetLoader.LoadStructurePrefab(TreeAssetKey);
             if (src == null)
             {
                 FlowTrace.Fail("TreeOfLifeFix",
-                    "WebGL spawn-guard — no Tree-of-Life at Resources/" + TreeResourcePath +
+                    "WebGL spawn-guard — no Tree-of-Life at structure catalog key '" + TreeAssetKey + "'" +
                     "; centre plaza will be EMPTY (baked centrepiece did not resolve and the Resources fallback is missing).");
                 return null;
             }
@@ -215,7 +217,7 @@ namespace DeNelle.Core
             StripColliders(tree);
 
             Debug.Log("[TreeOfLifeMaterialFixer] WebGL spawn-guard — baked centrepiece was missing; " +
-                      "spawned Tree-of-Life from Resources/" + TreeResourcePath + " at (0,0,0).");
+                      "spawned Tree-of-Life from structure catalog key '" + TreeAssetKey + "' at (0,0,0).");
             return tree;
         }
 

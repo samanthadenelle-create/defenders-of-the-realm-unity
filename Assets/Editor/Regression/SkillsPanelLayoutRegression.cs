@@ -492,7 +492,7 @@ namespace DeNelle.Editor.Regression
 
             // -- ability tile: the name WRAPS, so the binding constraint is the longest
             //    UNBREAKABLE WORD, not the longest full name.
-            const int slots = 4;   // the quick-swap bar is 1..4
+            const int slots = DeNelle.Village.AssignableSkillBar.SlotCount; // WO-1294: 1..3
             float leftColW = RefBodyWidthPx * L.ColX1;
             float tileW = leftColW * ((1f - L.SlotGap * (slots - 1)) / slots);
             float tileTextW = tileW * (1f - L.SlotInset * 2f);
@@ -578,6 +578,21 @@ namespace DeNelle.Editor.Regression
                 "and the assigned quick-swap position cannot be read without opening every node");
             Law(failures, code, "SelectedSuggestedSlot",
                 "the learn-to-assign flow no longer names its destination/replacement slot");
+            Law(failures, code, "UI/ElarionMedieval/frames/circular-bezel-four-point",
+                "skill nodes no longer use the canonical black-iron/four-point-gold medallion");
+            Law(failures, code, "fillGo.AddComponent<Mask>()",
+                "skill artwork is no longer clipped into the circular medallion well");
+            Law(failures, code, "_wisdomLabel.text = \"WISDOM  \" + _vm.RemainingWisdom",
+                "the top-right talent balance no longer names and reads the Wisdom currency it spends");
+            Law(failures, code, "UI/ElarionMedieval/frames/circular-bezel-four-point",
+                "the three bottom quick-swap slots no longer use the shared circular medallion");
+            Law(failures, code, "ConceptIconResolver.Resolve(slot.AbilityId)",
+                "assigned quick-swap art no longer resolves through the canonical concept-icon table");
+            if (code.IndexOf("SKILL POINTS", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                code.IndexOf("RemainingSkillPoints", StringComparison.Ordinal) >= 0)
+                failures.Add("[source] the redundant Skill Points header returned beside Wisdom - the talent tree must show one WISDOM balance");
+            if (code.IndexOf("slot_talent_", StringComparison.Ordinal) >= 0)
+                failures.Add("[source] legacy square slot_talent frames returned to the public Skills graph");
 
             string vmSrc = ReadText(VmSrc, failures, "[source-flow]");
             if (vmSrc != null)

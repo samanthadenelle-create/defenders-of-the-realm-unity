@@ -158,6 +158,7 @@ namespace DeNelle.Village
                 return false;
             }
             s_canvas = modal.canvas;
+            MedievalUiSkin.ApplyShell(modal.chrome, compact: true);
             var content = modal.chrome.content.transform;
 
             float cursor = StackTopPx;

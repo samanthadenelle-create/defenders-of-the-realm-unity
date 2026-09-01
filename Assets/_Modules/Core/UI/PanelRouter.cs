@@ -135,6 +135,12 @@ namespace DeNelle.Core.UI
         /// section 7 caps the calm(town) bar and spends paragraphs on why.
         /// Append-only: values are load-bearing.</summary>
         Benefactors = 21,
+        /// <summary>WO-1286 mobile-first card launcher for realm services and status surfaces.</summary>
+        RealmDeck = 22,
+        /// <summary>WO-1286 mobile-first card launcher for hero inventory, equipment and skills.</summary>
+        HeroDeck = 23,
+        /// <summary>WO-1286 mobile-first card launcher for quests, map, raids and seasons.</summary>
+        JourneyDeck = 24,
     }
 
     /// <summary>

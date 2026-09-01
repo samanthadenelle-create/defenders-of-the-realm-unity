@@ -27,6 +27,7 @@
 
 using System.Reflection;
 using DeNelle.Core;
+using DeNelle.Core.State;
 using UnityEngine;
 using UnityEngine.Events;
 
@@ -120,6 +121,8 @@ namespace DeNelle.Village
         private void OnStartWaveClicked()
         {
             if (_wave == null) return;
+            var state = GameStateService.Instance != null ? GameStateService.Instance.State : null;
+            if (state == null || !state.Onboarded) return;
             _wave.ForceBeginNextWave();
         }
 
@@ -131,6 +134,8 @@ namespace DeNelle.Village
         {
             if (_setAvailableMethod == null || _hud == null || _wave == null) return;
 
+            var state = GameStateService.Instance != null ? GameStateService.Instance.State : null;
+            bool tutorialComplete = state != null && state.Onboarded;
             bool available;
             switch (_wave.Phase)
             {
@@ -143,6 +148,7 @@ namespace DeNelle.Village
                     available = false;
                     break;
             }
+            available &= tutorialComplete;
 
             if (_everPushed && available == _lastPushedAvailable) return;
             _lastPushedAvailable = available;

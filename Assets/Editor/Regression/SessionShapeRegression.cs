@@ -229,9 +229,9 @@ namespace DeNelle.Editor.Regression
                 failures.Add("[bar-shape] ButtonCount is " + HudActionBarModel.ButtonCount +
                              ", expected 7 (enum IDENTITY bound - Map stays dormant at ordinal 4, so " +
                              "dropping it to 6 puts Upgrade out of bounds)");
-            if (HudActionBarModel.MaxVisibleFaces != 6)
+            if (HudActionBarModel.MaxVisibleFaces != 4)
                 failures.Add("[bar-shape] MaxVisibleFaces is " + HudActionBarModel.MaxVisibleFaces +
-                             ", expected 6 (Build/Talk/Bag/Raids/Quests/Manage)");
+                             ", expected 4 (Build/Hero/Journey/Manage)");
             if ((int)ActionBarButtonId.Map != 4)
                 failures.Add("[bar-shape] ActionBarButtonId.Map moved off ordinal 4 - every face array " +
                              "is indexed by the ordinal, so this silently re-points other faces");
@@ -240,7 +240,7 @@ namespace DeNelle.Editor.Regression
             if (ObsidianQueueGate.WorkQueueStatus.LineCount != 3)
                 failures.Add("[bar-shape] LineCount is " + ObsidianQueueGate.WorkQueueStatus.LineCount +
                              ", expected 3 - it is the denominator the glance is written around");
-            notes.Add("bar frozen: 6 visible / 7 identities / Map@4 / Upgrade@6");
+            notes.Add("bar frozen: 4 visible / 7 identities / contextual Talk + dormant Raids/Map / Upgrade@6");
         }
 
         // =====================================================================

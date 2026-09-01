@@ -1,95 +1,72 @@
-# `site/` — public one-pager + hosted privacy policy (WO-863)
+# Echoes of Elarion — marketing site
 
-The two stable public URLs the Solana dApp Store Publisher Portal asks for:
+Static HTML/CSS one-pager for the Solana dApp Store listing and public brand surface.
 
 | Portal field | Path | File |
 |---|---|---|
 | Website | `/` | `index.html` |
-| Privacy policy (required) | `/privacy` | `privacy.html` (served without the extension via `cleanUrls`) |
+| Privacy policy | `/privacy` | `privacy.html` |
+| Terms of Use | `/terms` | `terms.html` |
 
-Plain static HTML + one stylesheet. **No framework, no build step, no CDN, no webfonts, no
-remote images** — everything the page loads is in this directory. Graphics are **inline SVG**
-only (Heart-of-Elarion tree sigil + brand mark). Atmosphere is pure CSS (gold + teal glow).
+**Vercel project:** `echoes-of-elarion`  
+**Package:** `com.denellestudios.echoesofelarion`  
+**Deep link:** `solanadappstore://details?id=com.denellestudios.echoesofelarion`
 
-**Design (2026-08 redesign):** cinematic “last light of the Heart” marketing page —
-obsidian ink, gold lantern, life-force teal; sticky top nav; hero + four pillars + support
-card. Canon copy unchanged (build-accurate claims only). No fake “Available now” CTAs.
+## Constraints
 
-## ✅ DEPLOYED (owner-confirmed 2026-08-09) — Vercel project `echoes-of-elarion`
+- No framework, no build step, no CDN, no webfonts
+- All images local under `assets/` (plus root `qr-dappstore.png`)
+- Canon tagline: **Echoes of a Forgotten Civilization** (never restore retired “last light of the Heart”)
+- Honest deep-link fallback uses Page Visibility — no elapsed-time redirect hack
 
-> **This heading used to read "⛔ NOT DEPLOYED. Do not deploy until this checklist is clear."**
-> That was STALE and it contradicted `KEY_FACTS.md` + `docs/HANDOVER.md`, which record the Terms page
-> live at `echoes-of-elarion.vercel.app/terms`. The site IS deployed: `site/.vercel/project.json`
-> links this directory to Vercel project `echoes-of-elarion` (written by `vercel link`/`deploy`, not
-> by hand), and commit `c8320434` "host a Terms of Use" shipped `site/terms.html`.
->
-> ⚠ **This is a LEGAL surface** (Terms + Privacy) and it is PUBLIC. Two binding docs disagreeing about
-> whether it was published is the worst place in the repo for canon drift — resolved as RULES.md
-> conflict **C-7**. Treat the checklist below as **post-publication maintenance**, not a pre-flight
-> gate: the pages are already reachable, so an unticked item is a live defect, not a pending task.
+## Design (2026-08 redesign)
 
-Both pages currently render a bright pink **PRE-PUBLICATION DRAFT — DO NOT DEPLOY** banner
-and are marked `noindex`. That is on purpose: the page is not publishable yet.
+Shipped-indie look: full-bleed title key art hero, About + secondary art, three hero cards
+(Grom / Thrain / Sylas), four gameplay pillars, Get-it + QR, Support + footer with Privacy,
+Terms, Discord, and X.
 
-- [ ] **Public store title** — canon (`canon-strings.json`) says `gameTitle` = *Echoes of
-      Elarion* and `gameSubtitle` = *Defenders of the Realm* (the series/franchise label);
-      the package is `com.denellestudios.echoesofelarion`. The owner still has to confirm the
-      exact title she is putting on the listing and whether the series label appears as a
-      subtitle. → remove `OWNER_CONFIRM_STORE_TITLE` in `index.html`.
-- [ ] **Support email** — a studio/support inbox the owner is OK publishing.
-      **Never the owner's personal HP address.** → replace `support.EoA@icloud.com`
-      in `index.html` with a `mailto:` link.
-- [ ] **Description copy** — the About/What-you-do text is a draft written only from systems
-      that exist in the build. Owner approves or rewrites.
-- [ ] **Screenshots** — see below. Three empty slots.
-- [ ] **Privacy policy is still a DRAFT.** `docs/PRIVACY_POLICY.md` is dated 2026-07-23,
-      is labelled "for owner review before hosting", and still contains unfilled `{{...}}`
-      fields (support email, effective date, children's age, ads + telemetry-toggle wording).
-      Fix them **in the markdown**, then re-render `privacy.html` from it. Publishing a
-      privacy policy that says "draft" is worse than not publishing one.
-- [ ] Delete the `<div class="predeploy-banner">` block from **both** pages.
-- [ ] Delete the `<meta name="robots" content="noindex, nofollow">` tag from **both** pages.
+### Assets
 
-## The privacy page is verbatim
+| File | Role |
+|---|---|
+| `assets/title-screen-a-web.jpg` | Landscape hero background (UI chrome cropped) |
+| `assets/title-screen-b-web.jpg` | Portrait About visual |
+| `assets/battle-worn-heroes-web.jpg` | Party/squad banner above hero cards |
+| `assets/grom-web.jpg` / `thrain-web.jpg` / `sylas-web.jpg` | Individual hero cards (~200KB each) |
+| `assets/key-art-web.jpg` (+ favicon / apple-touch) | App-icon mark, og:image, Get-it badge |
+| `assets/trailer-web.mp4` (+ `trailer-poster.jpg`) | Portrait living-poster loop (muted autoplay) |
+| `qr-dappstore.png` | Seeker deep-link QR |
 
-`privacy.html` is a presentation-only render of `docs/PRIVACY_POLICY.md`. No wording is
-changed, added, reordered or paraphrased — including the `{{...}}` fields, which appear
-exactly as authored (the pink highlight on them is CSS, not a text edit). The policy declares
-analytics + wallet-address collection, which is precisely why the store requires the URL, so
-it must stay authoritative. **When the markdown changes, re-render this file from it.**
+Source PNGs (`grom.png`, etc.) and full title screens remain for archival; pages reference the `-web` JPEGs.
 
-## Screenshots
+## Local preview
 
-Empty on purpose. The full headless capture set (`Builds/ui-capture/`, `Builds/ui-capture-archive/`,
-`Builds/UICaps/`) was reviewed on 2026-08-04 and **nothing in it is fit for a public page** —
-every frame carries at least one of: a debug overlay (`Do Flag`, overlapping `Skip`/`Tutorial`),
-clipped or overlapping text, an empty state, or unauthored placeholder data
-(`Upgrade cost not authored for this tower`, `?` region tiles, `relic_drowned_ledger`).
-A bad frame on a store listing is worse than no frame, so the slots were left sized instead.
-
-To fill them: drop the approved PNGs in `site/assets/`, then in `index.html` replace each
-`<li><div class="shot">…</div></li>` with
-
-```html
-<li><img src="/assets/NAME.png" width="2340" height="1080" alt="…" loading="lazy"></li>
+```bash
+python3 -m http.server 8765 --directory /workspace/eoa-site
+# open http://127.0.0.1:8765/
 ```
 
-Slots are sized to the game's landscape capture ratio (2340 × 1080). Local files only —
-never hotlink.
+## Deploy (owner only — separate Vercel project)
 
-## Deploying (its own Vercel project — NOT the `api/` one)
-
-The repo root is already linked to the `defenders-of-the-realm-v2` project
-(`/.vercel/project.json`) which serves `Builds/WebGL` + the `api/` functions. This site must
-**not** be folded into it, so that this public URL is stable regardless of the pending
-`api/`-to-prod promotion. Deploy from **inside this directory** so the CLI creates a separate
-`site/.vercel` link (gitignored) and uploads only these files:
+This directory is its own Vercel project (`echoes-of-elarion`), **not** the WebGL/`api` project.
+Deploy from **inside** this directory so only these files upload:
 
 ```powershell
-cd <repoRoot>\site      # repo root is machine-dependent (C:\eoa or D:\eoa) - do not hardcode
-vercel link          # first time only: create/select a NEW project, e.g. echoes-of-elarion
+cd <repoRoot>\site
+vercel link    # first time: project echoes-of-elarion
 vercel --prod
 ```
 
-`vercel.json` here sets `cleanUrls`, disables git-triggered deployments, and pins the output
-directory to `.` with no build command.
+`vercel.json` sets `cleanUrls`, disables git-triggered deployments, and pins `outputDirectory` to `.` with no build command.
+
+## Support & social
+
+- Email: support.eoa@icloud.com
+- Discord: https://discord.gg/zDdwdy3duB
+- X: https://x.com/EchoesOfElarion
+
+## Legal pages
+
+`privacy.html` and `terms.html` are presentation renders of the studio policy docs. Do not invent
+claims here — re-render from source markdown when policy text changes. Pre-deploy / `noindex`
+banners are removed; pages are public.

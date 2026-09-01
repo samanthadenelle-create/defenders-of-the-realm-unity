@@ -347,14 +347,26 @@ namespace DeNelle.Village.Hero
             rowImg.color = ElarionUiKit.Cell;
             ElarionUiKit.ApplyRounded(rowImg);
 
-            // Icon well (glyph placeholder — troops have no portrait art yet).
+            // Canonical troop portrait; keep the compact role glyph only as the honest
+            // missing-asset fallback (WO-1294).
             var well = ElarionUiKit.AddImage(row.transform, "IconWell",
                 new Vector2(0.03f, 0.15f), new Vector2(0.20f, 0.85f), new Color(0f, 0f, 0f, 0.30f));
-            well.GetComponent<Image>().raycastTarget = false;
-            string glyph = _vm != null ? _vm.RoleGlyph(troopDefId) : "MEL";
-            var ic = ElarionUiKit.Label(well.transform, glyph, 0f, 1f, ElarionUi.Gilt,
-                ElarionUi.FontHead, TMPro.TextAlignmentOptions.Center, 0f, 1f, bold: true);
-            ic.raycastTarget = false;
+            var wellImage = well.GetComponent<Image>();
+            wellImage.raycastTarget = false;
+            var portrait = RpgUiCatalog.Get(RpgUiCatalog.RoleTroop, item.IconName);
+            if (portrait != null)
+            {
+                wellImage.sprite = portrait;
+                wellImage.preserveAspect = true;
+                wellImage.color = Color.white;
+            }
+            else
+            {
+                string glyph = _vm != null ? _vm.RoleGlyph(troopDefId) : "MEL";
+                var ic = ElarionUiKit.Label(well.transform, glyph, 0f, 1f, ElarionUi.Gilt,
+                    ElarionUi.FontHead, TMPro.TextAlignmentOptions.Center, 0f, 1f, bold: true);
+                ic.raycastTarget = false;
+            }
 
             var nameLbl = ElarionUiKit.Label(row.transform, name, 0.45f, 0.95f, ElarionUi.Parchment,
                 ElarionUi.FontBody, TMPro.TextAlignmentOptions.Left, 0.23f, 0.98f, bold: true);

@@ -1,0 +1,68 @@
+{
+  "schemaVersion": 1,
+  "entries": [
+    {
+      "assetPath": "Assets/Action/Knight/Motion/studio-mocap-sword-and-shield-moves/atk_slashleft.fbx",
+      "clipName": "atk_slashleft",
+      "hitFrameNormalized": 0.395,
+      "reviewedBy": "Codex SME contact-sheet review 2026-08-31",
+      "reviewNote": "Actual Orc_Warrior Humanoid retarget; 1% right-hand velocity scan plus marked +/-10% pose sheet. Contact arc crosses the target plane at the measured 0.395 peak."
+    },
+    {
+      "assetPath": "Assets/Action/Knight/Motion/studio-mocap-sword-and-shield-moves/atk_slashright.fbx",
+      "clipName": "atk_slashright",
+      "hitFrameNormalized": 0.405,
+      "reviewedBy": "Codex SME contact-sheet review 2026-08-31",
+      "reviewNote": "Actual Orc_Warrior Humanoid retarget; 1% right-hand velocity scan plus marked +/-10% pose sheet. Contact arc crosses the target plane at the measured 0.405 peak."
+    },
+    {
+      "assetPath": "Assets/Action/Knight/Motion/studio-mocap-sword-and-shield-moves/atk_slashup.fbx",
+      "clipName": "atk_slashup",
+      "hitFrameNormalized": 0.395,
+      "reviewedBy": "Codex SME contact-sheet review 2026-08-31",
+      "reviewNote": "Actual Orc_Warrior Humanoid retarget after authoritative reimport; 1% right-hand velocity scan plus marked +/-10% pose sheet. Rising contact arc crosses the target plane at the measured 0.395 peak."
+    },
+    {
+      "assetPath": "Assets/Action/Knight/standing melee attack 360 high.fbx",
+      "clipName": "mixamo.com",
+      "hitFrameNormalized": 0.335,
+      "reviewedBy": "Codex SME contact-sheet review 2026-08-31",
+      "reviewNote": "Actual Orc_Warrior Humanoid retarget; marked fine sheet confirms the primary high sweep crosses the forward target plane at the 1% right-hand velocity peak."
+    },
+    {
+      "assetPath": "Assets/Action/Knight/standing melee attack downward.fbx",
+      "clipName": "mixamo.com",
+      "hitFrameNormalized": 0.355,
+      "reviewedBy": "Codex SME contact-sheet review 2026-08-31",
+      "reviewNote": "Actual Orc_Warrior Humanoid retarget; marked fine sheet confirms the committed downward acceleration and primary contact at the measured right-hand peak."
+    },
+    {
+      "assetPath": "Assets/Action/Knight/standing melee attack horizontal.fbx",
+      "clipName": "mixamo.com",
+      "hitFrameNormalized": 0.395,
+      "reviewedBy": "Codex SME contact-sheet review 2026-08-31",
+      "reviewNote": "Actual Orc_Warrior Humanoid retarget; marked fine sheet confirms the horizontal hand arc crossing the forward target plane at the measured peak."
+    },
+    {
+      "assetPath": "Assets/Action/Knight/standing melee combo attack ver. 1.fbx",
+      "clipName": "mixamo.com",
+      "hitFrameNormalized": 0.635,
+      "reviewedBy": "Codex SME contact-sheet review 2026-08-31",
+      "reviewNote": "Actual Orc_Warrior Humanoid retarget; the primary combo commit is selected from the marked fine sheet at the strongest right-hand velocity peak. Exactly one gameplay hit is intentional."
+    },
+    {
+      "assetPath": "Assets/Action/Knight/standing melee combo attack ver. 2.fbx",
+      "clipName": "mixamo.com",
+      "hitFrameNormalized": 0.215,
+      "reviewedBy": "Codex SME contact-sheet review 2026-08-31",
+      "reviewNote": "Actual Orc_Warrior Humanoid retarget; the primary combo commit is selected from the marked fine sheet at the strongest right-hand velocity peak. Exactly one gameplay hit is intentional."
+    },
+    {
+      "assetPath": "Assets/Action/Sword And Shield Attack.fbx",
+      "clipName": "mixamo.com",
+      "hitFrameNormalized": 0.445,
+      "reviewedBy": "Codex SME contact-sheet review 2026-08-31",
+      "reviewNote": "Actual Orc_Warrior Humanoid retarget; marked fine sheet confirms the sword-hand commit crossing the forward target plane at the measured peak."
+    }
+  ]
+}

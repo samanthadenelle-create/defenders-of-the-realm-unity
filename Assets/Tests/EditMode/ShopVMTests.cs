@@ -167,14 +167,36 @@ namespace DeNelle.Tests.EditMode
         }
 
         [Test]
-        public void buy_with_nothing_selected_sets_select_first_status()
+        public void buy_store_opens_with_a_real_default_selection()
         {
             var eco = new FakeEconomy { Coins = 1000000 };
             using var vm = NewVm(eco);
-            // No Select() call.
+            Assert.That(vm.SelectedId, Is.Not.Null,
+                "the three-column Store must open with a detail card rather than an empty right pane");
+            Assert.That(vm.Selected.HasValue, Is.True);
+        }
+
+        [Test]
+        public void potion_quantity_is_bounded_totals_live_and_each_unit_revalidates_spend()
+        {
+            var eco = new FakeEconomy { Coins = 100 };
+            using var vm = NewVm(eco);
+            string potion = null;
+            foreach (var item in vm.Items)
+                if (item.IconRole == ShopVM.IconRolePotion && item.Price > 0) { potion = item.Id; break; }
+            Assert.That(potion, Is.Not.Null, "quantity fixture requires a stocked potion");
+
+            vm.Select(potion);
+            int unit = vm.SelectedUnitPrice;
+            vm.ChangeQuantity(2);
+            Assert.That(vm.Quantity, Is.EqualTo(3));
+            Assert.That(vm.TotalPrice, Is.EqualTo(unit * 3));
+            Assert.That(vm.CanExecuteSelected, Is.True);
+
             vm.Buy();
-            Assert.That(vm.Status, Does.Contain("Select an item"),
-                "Buy with no selection must prompt to select an item first");
+            Assert.That(eco.SpendCalls, Is.EqualTo(3), "three units must be three guarded domain spends");
+            Assert.That(eco.Coins, Is.EqualTo(100 - unit * 3));
+            Assert.That(vm.Quantity, Is.EqualTo(1), "completed purchase resets the stepper");
         }
 
         [Test]
@@ -193,7 +215,7 @@ namespace DeNelle.Tests.EditMode
             // Switch to SELL: selection resets, list is the (empty in EditMode) sell list, label flips.
             vm.SetMode(ShopMode.Sell);
             Assert.That(vm.Mode, Is.EqualTo(ShopMode.Sell));
-            Assert.That(vm.SelectedId, Is.Null, "SetMode must reset selection");
+            Assert.That(vm.SelectedId, Is.Null, "empty SELL mode has no default selection");
             Assert.That(vm.ActionLabel, Is.EqualTo("Sell"));
 
             // Switch back to BUY: list repopulates.
@@ -201,6 +223,7 @@ namespace DeNelle.Tests.EditMode
             Assert.That(vm.Mode, Is.EqualTo(ShopMode.Buy));
             Assert.That(vm.ActionLabel, Is.EqualTo("Purchase"));
             Assert.That(vm.Items.Count, Is.GreaterThan(0), "BUY list must repopulate after SetMode");
+            Assert.That(vm.SelectedId, Is.Not.Null, "repopulated BUY mode selects its first real item");
         }
 
         [Test]

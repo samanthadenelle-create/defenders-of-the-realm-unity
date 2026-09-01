@@ -157,14 +157,29 @@ namespace DeNelle.Village
                 // Crafting master-list grammar), quiet Gray otherwise.
                 var host = new GameObject("TabRow", typeof(RectTransform), typeof(LayoutElement));
                 host.transform.SetParent(_railContent, false);
+                var hostRt = (RectTransform)host.transform;
+                hostRt.sizeDelta = new Vector2(0f, 144f);
                 var le = host.GetComponent<LayoutElement>();
-                le.preferredHeight = 96f;
-                le.minHeight = 96f;
-                ElarionUiKit.BuildObsidianButton(host.transform, tabs[i],
+                // FrameGuide's body is scaled relative to the reference surface; 120 local
+                // units resolve to only 100 reference px at 1920x1080. Author above that scale
+                // so every topic row still clears the global 112px mobile touch floor.
+                le.preferredHeight = 144f;
+                le.minHeight = 144f;
+                var tabButton = ElarionUiKit.BuildObsidianButton(host.transform, tabs[i],
                     ElarionUiKit.ObsidianButtonStyle.Style1,
                     selected ? ElarionUiKit.ObsidianButtonColor.Yellow
                              : ElarionUiKit.ObsidianButtonColor.Gray,
                     Vector2.zero, Vector2.one, () => _vm.SelectTab(index));
+                // Prefab-backed Obsidian buttons carry a legacy fixed 120-unit root rect.
+                // Explicitly make the interactive root consume the authored row host; otherwise
+                // the visual can look tall while the real hit target remains below the mobile floor.
+                if (tabButton != null && tabButton.transform is RectTransform tabRt)
+                {
+                    tabRt.anchorMin = Vector2.zero;
+                    tabRt.anchorMax = Vector2.one;
+                    tabRt.offsetMin = Vector2.zero;
+                    tabRt.offsetMax = Vector2.zero;
+                }
             }
         }
 

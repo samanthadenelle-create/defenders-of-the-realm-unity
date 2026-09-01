@@ -49,10 +49,10 @@ namespace DeNelle.Village.Crafting
         private const string PanelName = "JewelPolishConfirm";
 
         // Fixed-pixel bands (a fractional band culls glyphs), flowed from the content's top edge.
-        private const float LinePx = 56f;
-        private const float HeadingPx = 66f;
-        private const float StackTopPx = 24f;
-        private const float StackGapPx = 12f;
+        private const float LinePx = 46f;
+        private const float HeadingPx = 52f;
+        private const float StackTopPx = 10f;
+        private const float StackGapPx = 6f;
 
         private static GameObject s_canvas;
         private static PanelHandle s_handle;
@@ -92,7 +92,7 @@ namespace DeNelle.Village.Crafting
 
             var modal = ElarionUiKit.BuildObsidianModal(
                 PanelName, "POLISH AGAIN?",
-                new Vector2(0.14f, 0.16f), new Vector2(0.86f, 0.86f),
+                new Vector2(0.18f, 0.10f), new Vector2(0.82f, 0.90f),
                 onClose: CloseCancelled, sortingOrder: 31040,
                 frameName: RpgUiCatalog.FrameCore);
             if (modal == null || modal.canvas == null || modal.chrome == null || modal.chrome.content == null)
@@ -102,7 +102,14 @@ namespace DeNelle.Village.Crafting
                 return false;
             }
             s_canvas = modal.canvas;
-            var content = modal.chrome.content.transform;
+            MedievalUiSkin.ApplyShell(modal.chrome, compact: true);
+            if (modal.chrome.close != null) modal.chrome.close.gameObject.SetActive(false);
+            var content = modal.chrome.layout != null && modal.chrome.layout.body != null
+                ? modal.chrome.layout.body
+                : modal.chrome.content.transform;
+            var actions = modal.chrome.layout != null && modal.chrome.layout.footer != null
+                ? modal.chrome.layout.footer
+                : content;
 
             float cursor = StackTopPx;
 
@@ -113,12 +120,12 @@ namespace DeNelle.Village.Crafting
             var held = ElarionUiKit.Label(content, "You are risking: " + heldName, 0f, 0f,
                 ElarionUi.Gilt, ElarionUi.FontBody, TextAlignmentOptions.Center, 0.06f, 0.94f, bold: true);
             StackDown(held, HeadingPx, ref cursor);
-            ElarionUiKit.FitSingleLine(held);
+            ElarionUiKit.FitSingleLine(held, 24f, 34f);
 
             var heading = ElarionUiKit.Label(content, "It could become any of these:", 0f, 0f,
                 ElarionUi.ParchmentDim, ElarionUi.FontBody, TextAlignmentOptions.Center, 0.06f, 0.94f);
             StackDown(heading, HeadingPx, ref cursor);
-            ElarionUiKit.FitSingleLine(heading);
+            ElarionUiKit.FitSingleLine(heading, 22f, 30f);
 
             // The disclosed table. One TMP block so the whole list shares one flowed band, and every
             // number comes straight from DescribeOdds - see this file's header.
@@ -134,6 +141,7 @@ namespace DeNelle.Village.Crafting
                 ElarionUi.Parchment, ElarionUi.FontBody, TextAlignmentOptions.Center,
                 0.08f, 0.92f, bold: true);
             StackDown(table, LinePx * Mathf.Max(1, rows), ref cursor);
+            ElarionUiKit.FitBlock(table, 22f, 32f);
 
             // The shatter risk again, in plain words. It is already a row in the table above, but a
             // percentage in a list is easy to skim past and "the stone is destroyed" is the one
@@ -145,7 +153,7 @@ namespace DeNelle.Village.Crafting
                     "There is a " + shatterPct + "% chance the stone is destroyed and you get nothing.",
                     0f, 0f, ElarionUi.Gilt, ElarionUi.FontBody, TextAlignmentOptions.Center, 0.05f, 0.95f);
                 StackDown(warn, HeadingPx, ref cursor);
-                ElarionUiKit.FitSingleLine(warn);
+                ElarionUiKit.FitBlock(warn, 20f, 28f);
             }
 
             // The VISIBLE COUNTER the owner asked for. It reads "up to N more chances" because the
@@ -155,16 +163,18 @@ namespace DeNelle.Village.Crafting
                 0f, 0f, ElarionUi.ParchmentDim, ElarionUi.FontBody,
                 TextAlignmentOptions.Center, 0.06f, 0.94f);
             StackDown(counter, HeadingPx, ref cursor);
-            ElarionUiKit.FitSingleLine(counter);
+            ElarionUiKit.FitSingleLine(counter, 22f, 30f);
 
             // Cancel is the WIDER, left-hand default. On a screen whose whole purpose is to slow the
             // player down, the safe choice should be the easy one to hit.
-            ElarionUiKit.Button(content, "Keep it", ElarionUiKit.ButtonKind.Quiet,
-                new Vector2(0.06f, 0.05f), new Vector2(0.48f, 0.20f),
-                CloseCancelled);
-            ElarionUiKit.Button(content, "Polish again", ElarionUiKit.ButtonKind.Danger,
-                new Vector2(0.52f, 0.05f), new Vector2(0.94f, 0.20f),
-                CloseConfirmed);
+            var keep = ElarionUiKit.ButtonPack(actions, "KEEP IT", ElarionUiKit.ButtonKind.Quiet,
+                new Vector2(0.04f, 0.08f), new Vector2(0.52f, 0.92f),
+                CloseCancelled, RpgUiCatalog.ButtonFrame);
+            MedievalUiSkin.ApplyButton(keep, primary: false);
+            var polish = ElarionUiKit.ButtonPack(actions, "POLISH AGAIN", ElarionUiKit.ButtonKind.Danger,
+                new Vector2(0.56f, 0.08f), new Vector2(0.96f, 0.92f),
+                CloseConfirmed, RpgUiCatalog.ButtonFrame);
+            MedievalUiSkin.ApplyButton(polish, primary: false);
 
             s_onConfirm = null;      // armed only after the arbiter accepts (see DungeonTreasurePanel)
             if (s_handle == null) s_handle = PanelManager.Register(PanelName, CloseCancelled, () => IsOpen);

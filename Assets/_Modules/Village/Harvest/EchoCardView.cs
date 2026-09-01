@@ -274,7 +274,25 @@ namespace DeNelle.Village
                 frameName: RpgUiCatalog.FrameCore);
             _modal = built.canvas;
 
+            MedievalUiSkin.ApplyShell(built.chrome);
+            var closeImage = built.chrome != null && built.chrome.close != null
+                ? built.chrome.close.targetGraphic as Image : null;
+            if (closeImage != null) closeImage.type = Image.Type.Simple;
+
             var layout = built.chrome.layout;
+            if (layout != null && layout.medallion != null)
+            {
+                layout.medallion.gameObject.SetActive(true);
+                var medallionImage = layout.medallion.GetComponent<Image>();
+                var medallionSprite = Resources.Load<Sprite>(
+                    "UI/ElarionMedieval/frames/circular-bezel-four-point");
+                if (medallionImage != null && medallionSprite != null)
+                {
+                    medallionImage.sprite = medallionSprite;
+                    medallionImage.type = Image.Type.Simple;
+                    medallionImage.color = Color.white;
+                }
+            }
 
             // NAME -> the frame's HEADER PLATE. WO-852: this used to be an 82px
             // FontHead band inside the body well; the plate is the designed home for a
@@ -293,8 +311,15 @@ namespace DeNelle.Village
                 () => _vm != null ? _vm.Portrait : null, fallback: null);
             if (portraitSprite != null && layout != null && layout.medallion != null)
             {
-                var pg = ElarionUiKit.AddImage(layout.medallion, "EchoPortrait",
-                    new Vector2(0.12f, 0.12f), new Vector2(0.88f, 0.88f), Color.white, rounded: false);
+                var portraitFrame = ElarionUiKit.AddImage(layout.medallion, "EchoPortraitMedallion",
+                    new Vector2(0.04f, 0.04f), new Vector2(0.96f, 0.96f), Color.white, rounded: false);
+                var portraitFrameImage = portraitFrame.GetComponent<Image>();
+                portraitFrameImage.sprite = Resources.Load<Sprite>(
+                    "UI/ElarionMedieval/frames/circular-bezel-four-point");
+                portraitFrameImage.preserveAspect = true;
+                portraitFrameImage.raycastTarget = false;
+                var pg = ElarionUiKit.AddImage(portraitFrame.transform, "EchoPortrait",
+                    new Vector2(0.23f, 0.23f), new Vector2(0.77f, 0.77f), Color.white, rounded: false);
                 _portrait = pg.GetComponent<Image>();
                 _portrait.sprite = portraitSprite;
                 _portrait.preserveAspect = true;
@@ -495,8 +520,11 @@ namespace DeNelle.Village
                 string resId = chip.Id;   // capture for the closure
                 // Selected resource = Gold face (plus the "(now)" TEXT cue -- never hue alone).
                 var kind = chip.Selected ? ElarionUiKit.ButtonKind.Gold : ElarionUiKit.ButtonKind.Quiet;
-                ElarionUiKit.Button(cellGo.transform, chip.Label, kind,
+                var chipButton = ElarionUiKit.Button(cellGo.transform, chip.Label, kind,
                     Vector2.zero, Vector2.one, () => OnChipTapped(resId));
+                MedievalUiSkin.ApplyButton(chipButton, primary: chip.Selected);
+                var chipImage = chipButton != null ? chipButton.targetGraphic as Image : null;
+                if (chipImage != null) chipImage.type = Image.Type.Simple;
 
                 // Affinity note UNDER the button -- its OWN fixed floor line box, pinned
                 // to the row's bottom edge, so it can never borrow the button's touch

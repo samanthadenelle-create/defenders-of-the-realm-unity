@@ -164,6 +164,8 @@ namespace DeNelle.Village.UI
                     medallionIcon: "crest");   // explicit: the socket seats the crest family, never blank
             }
 
+            MedievalUiSkin.ApplyShell(chrome, compact: vm.Compact);
+
             // Owner button law: an end-state has exactly ONE way out (the primary button).
             // Hide the factory's shared Close chip.
             // LOAD-BEARING: Bind's owned geometry pass RECLAIMS the kit's close-band reservation
@@ -223,7 +225,7 @@ namespace DeNelle.Village.UI
         // ── COMPACT BANNER GEOMETRY (the wave-clear / outpost variant) ────────────
         /// <summary>Compact body-well TOP as a fraction of the banner panel — pulled below the
         /// tall splash header band so the headline and the content can never overlap.</summary>
-        private const float CompactBodyTopY = 0.745f;
+        private const float CompactBodyTopY = 0.785f;
         /// <summary>Compact body-well FLOOR. This is FrameCore's OWN art-measured well floor
         /// (ElarionUiKit ZonesFor, case FrameCore: z.body = (0.055, 0.075, 0.945, 0.835)) — it
         /// clears the frame's ornate bottom border. WO-952: the owned compact solve reclaims
@@ -251,10 +253,14 @@ namespace DeNelle.Village.UI
         /// <summary>The grown banner's bottom-edge floor (the pre-existing growth clamp:
         /// the world stays visible below the banner, so it may span at most
         /// <see cref="CompactTopY"/> minus this of the screen = 0.78h).</summary>
-        private const float CompactGrowthFloorY = 0.08f;
+        private const float CompactGrowthFloorY = 0.00f;
         /// <summary>Gap between the body well's floor and the seated banner CTA, ref px
         /// (matches the +12 the legacy footer-grow compensation used).</summary>
         private const float CompactCtaGapPx = 12f;
+        // Layout groups and pixel rounding consume a few reference pixels after the
+        // analytical solve. Budget that loss here so the result never enters the
+        // uniform-compression fallback merely because the measured stack is 12px short.
+        private const float CompactBodySafetyPx = 16f;
 
         /// <summary>Deterministic body-well height in reference px for the OWNED geometry path
         /// (0 = not owned; BuildBody then measures). Set by the geometry pass in Bind.</summary>
@@ -509,7 +515,7 @@ namespace DeNelle.Village.UI
             {
                 // Compact banner (and any layout without a footer zone): unchanged splash header.
                 var hdr = chrome.layout.header;
-                hdr.anchorMin = new Vector2(hdr.anchorMin.x, 0.760f);   // was ~0.900
+                hdr.anchorMin = new Vector2(hdr.anchorMin.x, 0.800f);   // body now owns the reclaimed band below
                 hdr.anchorMax = new Vector2(hdr.anchorMax.x, 0.985f);   // was ~0.972
                 if (chrome.layout.body != null && chrome.layout.body.anchorMax.y > CompactBodyTopY)
                     chrome.layout.body.anchorMax =                       // body top clears the band
@@ -555,7 +561,8 @@ namespace DeNelle.Village.UI
                     // Invert the layout law (the PanelHalfHeight recipe): the body well is
                     // (CompactBodyTopY - CompactBodyFloorY) of the panel minus the CTA band's
                     // pixels, so panelPx = (need + ctaBand) / that fraction.
-                    float solvedPx = (needPx + ctaPx) / (CompactBodyTopY - CompactBodyFloorY);
+                    float solvedPx = (needPx + CompactBodySafetyPx + ctaPx)
+                                     / (CompactBodyTopY - CompactBodyFloorY);
                     float panelFrac = Mathf.Clamp(solvedPx / Mathf.Max(1f, _canvasH),
                                                   hNow, topY - CompactGrowthFloorY);
                     rootRt0.anchorMin = new Vector2(rootRt0.anchorMin.x, topY - panelFrac);
@@ -653,10 +660,19 @@ namespace DeNelle.Village.UI
                 // (informative, not dead — owner law; state carried by the disabled
                 // interaction + greyed kit visuals, never color alone).
                 if (hasBannerCta) btn.interactable = vm.CtaEnabled;
+                MedievalUiSkin.ApplyButton(btn, primary: hasCta);
                 // OWNER F8 x3: the Continue/primary action is the SAME pixel size on every
                 // screen (matches the shared Close). The anchors above only centre it in the
                 // footer band; the canonical size is stamped here.
                 ElarionUiKit.PinCanonicalCtaSize(btn);
+                if (hasBannerCta)
+                {
+                    var bannerCtaRect = (RectTransform)btn.transform;
+                    bannerCtaRect.sizeDelta = new Vector2(
+                        Mathf.Max(680f, bannerCtaRect.sizeDelta.x), bannerCtaRect.sizeDelta.y);
+                    var bannerCtaLabel = btn.GetComponentInChildren<TMPro.TextMeshProUGUI>(true);
+                    if (bannerCtaLabel != null) ElarionUiKit.FitSingleLine(bannerCtaLabel);
+                }
                 Canvas.ForceUpdateCanvases();
                 var bRt = (RectTransform)btn.transform;
                 // Robust CTA height: measured rect, else the pinned sizeDelta, floored at the
@@ -806,6 +822,23 @@ namespace DeNelle.Village.UI
             StartCoroutine(RevealRoutine(rootGroup, (RectTransform)chrome.root.transform, 0f, 0.25f, 0.94f));
             foreach (var r in _reveals)
                 StartCoroutine(RevealRoutine(r.Group, r.Rect, r.Delay, 0.20f, r.FromScale));
+
+#if UNITY_EDITOR
+            // Synchronous edit-mode captures cannot advance the reveal coroutines. Measure and
+            // render the settled player-facing posture instead of the transient 0.94 entrance
+            // frame; play-mode/runtime animation is unchanged.
+            if (!Application.isPlaying)
+            {
+                rootGroup.alpha = 1f;
+                ((RectTransform)chrome.root.transform).localScale = Vector3.one;
+                foreach (var r in _reveals)
+                {
+                    if (r.Group != null) r.Group.alpha = 1f;
+                    if (r.Rect != null) r.Rect.localScale = Vector3.one;
+                }
+                Canvas.ForceUpdateCanvases();
+            }
+#endif
 
             if (vm.AutoDismissSeconds > 0f)
                 StartCoroutine(AutoDismissAfter(vm.AutoDismissSeconds));

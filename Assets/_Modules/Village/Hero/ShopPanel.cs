@@ -41,6 +41,7 @@ namespace DeNelle.Village.Hero
         private GameObject _tabBar;
         private RectTransform _scrollContent;
         private TMPro.TextMeshProUGUI _actionLabel;
+        private Button _purchaseButton;
 
         // WO-714 W1 (P1 kit tabs): mode + filter rows are kit BuildTab handles — selection is
         // the kit's PLATE/underline highlight (shape + luminance), never a hue-only tint.
@@ -64,6 +65,10 @@ namespace DeNelle.Village.Hero
         private TMPro.TextMeshProUGUI _detailsDesc;
         private TMPro.TextMeshProUGUI _detailsStats;
         private TMPro.TextMeshProUGUI _detailsCost;
+        private TMPro.TextMeshProUGUI _quantityLabel;
+        private TMPro.TextMeshProUGUI _totalLabel;
+        private Button _quantityMinus;
+        private Button _quantityPlus;
 
         private GameObject _filterBar;
 
@@ -150,12 +155,16 @@ namespace DeNelle.Village.Hero
             // WO-714 W1 (P5): transient status surfaces as a toast, never a stuck strip.
             MaybeToastStatus();
 
-            if (_actionLabel != null) _actionLabel.text = _vm.ActionLabel;
+            if (_actionLabel != null)
+                _actionLabel.text = _vm.Mode == ShopMode.Buy ? "BUY" : _vm.ActionLabel;
+            if (_purchaseButton != null) _purchaseButton.interactable = _vm.CanExecuteSelected;
 
             HighlightTab();
 
-            if (_filterBar != null) _filterBar.SetActive(_vm.FilterBarVisible);
-            if (_vm.FilterBarVisible) HighlightFilter();
+            // Categories remain visible even when a specialist currently stocks one family.
+            // Unavailable/empty categories are honest navigation states, not disappearing UI.
+            if (_filterBar != null) _filterBar.SetActive(true);
+            HighlightFilter();
 
             RebuildList();
             HighlightSelectedRow();
@@ -239,6 +248,21 @@ namespace DeNelle.Village.Hero
         private void RenderDetails()
         {
             var sel = _vm.Selected;
+            bool quantityVisible = sel.HasValue && _vm.Mode == ShopMode.Buy;
+            if (_quantityMinus != null) _quantityMinus.gameObject.SetActive(quantityVisible);
+            if (_quantityPlus != null) _quantityPlus.gameObject.SetActive(quantityVisible);
+            if (_quantityLabel != null)
+            {
+                _quantityLabel.gameObject.SetActive(quantityVisible);
+                _quantityLabel.text = _vm.Quantity.ToString();
+            }
+            if (_totalLabel != null)
+            {
+                _totalLabel.gameObject.SetActive(quantityVisible);
+                _totalLabel.text = quantityVisible ? "TOTAL  " + ElarionUi.CompactNumber(_vm.TotalPrice) + " GOLD" : "";
+            }
+            if (_quantityMinus != null) _quantityMinus.interactable = quantityVisible && _vm.Quantity > 1;
+            if (_quantityPlus != null) _quantityPlus.interactable = quantityVisible && _vm.Quantity < _vm.MaxQuantity;
             if (sel == null)
             {
                 if (_detailsName != null) _detailsName.text = "Select an item";
@@ -308,9 +332,12 @@ namespace DeNelle.Village.Hero
             // comes from the VM (vm.Title) — set after Bind in Render via _headerLabel.
             // Shared store size (owner felt-test 2026-07-15: all stores same size / matching Y).
             var chrome = ElarionUiKit.BuildObsidianPanel(_ui.transform, "Vendor Wares",
-                ElarionUiKit.StorePanelAnchorMin, ElarionUiKit.StorePanelAnchorMax, () => _vm?.Close(),
+                new Vector2(0.035f, 0.025f), new Vector2(0.965f, 0.975f), () => _vm?.Close(),
                 headerX0: 0.04f, headerX1: 0.96f, frameName: RpgUiCatalog.FrameMerchant,
                 medallionIcon: "coin");
+            MedievalUiSkin.ApplyShell(chrome);
+            if (chrome.close != null && chrome.close.targetGraphic is Image closeImage)
+                closeImage.type = Image.Type.Simple;
             var panel = chrome.content.transform;
             _headerLabel = chrome.title;
 
@@ -319,8 +346,10 @@ namespace DeNelle.Village.Hero
             // economy/tabs/list/details/buttons from overlapping the frame's ornate border. Falls back
             // to the panel rect when no frame is used. Mirrors CraftingPanelMvvm.BuildChrome. The shared
             // Close (chrome.close) + the per-vendor glow stay on the full panel (chrome, not content).
-            var bodyHost = (chrome.layout != null && chrome.layout.body != null)
-                ? chrome.layout.body : (RectTransform)panel;
+            // The approved Realm Store is a landscape three-column workspace. Merchant_Panel's
+            // historic portrait drop zones are deliberately not reused: they produced a narrow
+            // phone-within-a-phone slab and clipped every merchandise name on landscape devices.
+            var bodyHost = (RectTransform)panel;
 
             // Subtle per-vendor accent glow (atmosphere over the shared black chrome).
             string vcLow = (_vendorContext ?? "").ToLowerInvariant();
@@ -337,22 +366,22 @@ namespace DeNelle.Village.Hero
             var glow = ElarionUiKit.AddImage(panel, "VendorGlow",
                 new Vector2(0.05f, 0.015f), new Vector2(0.95f, 0.17f), glowColor, rounded: false);
             var glowImg = glow.GetComponent<Image>();
-            if (glowImg != null) glowImg.raycastTarget = false;
+            if (glowImg != null)
+            {
+                glowImg.raycastTarget = false;
+                glowImg.color = new Color(glowImg.color.r, glowImg.color.g, glowImg.color.b, 0f);
+            }
             glow.transform.SetAsFirstSibling();
 
             // WO-714 W1 (P2): wallet chips ride the frame's FOOTER drop-zone (WO-675 §5 grammar);
             // art-absent fallback = a synthesized strip in the old eco band so the wallet never blanks.
-            RectTransform walletHost = chrome.layout != null ? chrome.layout.footer : null;
-            if (walletHost == null)
-            {
-                var fb = new GameObject("Zone_WalletFallback", typeof(RectTransform));
-                fb.transform.SetParent(bodyHost, false);
-                walletHost = fb.GetComponent<RectTransform>();
-                walletHost.anchorMin = new Vector2(0.02f, 0.875f);
-                walletHost.anchorMax = new Vector2(0.98f, 0.93f);
-                walletHost.offsetMin = Vector2.zero;
-                walletHost.offsetMax = Vector2.zero;
-            }
+            var walletGo = new GameObject("Zone_GoldWallet", typeof(RectTransform));
+            walletGo.transform.SetParent(bodyHost, false);
+            RectTransform walletHost = walletGo.GetComponent<RectTransform>();
+            walletHost.anchorMin = new Vector2(0.80f, 0.86f);
+            walletHost.anchorMax = new Vector2(0.955f, 0.935f);
+            walletHost.offsetMin = Vector2.zero;
+            walletHost.offsetMax = Vector2.zero;
             BuildWalletChips(walletHost);
 
             // WO-714 W1 (P1): the mode row is kit BuildTab — element_tab plates with the kit's
@@ -360,8 +389,8 @@ namespace DeNelle.Village.Hero
             var tabBar = new GameObject("TabBar", typeof(RectTransform));
             tabBar.transform.SetParent(bodyHost, false);
             var tbRect = tabBar.GetComponent<RectTransform>();
-            tbRect.anchorMin = new Vector2(0.02f, 0.78f);
-            tbRect.anchorMax = new Vector2(0.98f, 0.86f);
+            tbRect.anchorMin = new Vector2(0.055f, 0.755f);
+            tbRect.anchorMax = new Vector2(0.285f, 0.835f);
             tbRect.offsetMin = Vector2.zero;
             tbRect.offsetMax = Vector2.zero;
 
@@ -372,14 +401,17 @@ namespace DeNelle.Village.Hero
             _tabSell  = ElarionUiKit.BuildTab(tabBar.transform, "SELL",
                 new Vector2(0.67f, 0.05f), new Vector2(0.98f, 0.95f), () => _vm?.SetMode(ShopMode.Sell));
             _tabBar = tabBar;
+            StyleStoreTab(_tabBuy);
+            StyleStoreTab(_tabEquip);
+            StyleStoreTab(_tabSell);
 
             _contentRoot = new GameObject("Content", typeof(RectTransform));
             _contentRoot.transform.SetParent(bodyHost, false);
             var cr = _contentRoot.GetComponent<RectTransform>();
             // Eyes-sweep 2026-07-06 rule 2: the list must end ABOVE the shared bottom-centre
             // Close band (SeatSharedCloseInside seats a fixed 360x120 box there) — was 0.13.
-            cr.anchorMin = new Vector2(0.02f, 0.165f);
-            cr.anchorMax = new Vector2(0.62f, 0.71f);
+            cr.anchorMin = new Vector2(0.315f, 0.205f);
+            cr.anchorMax = new Vector2(0.675f, 0.745f);
             cr.offsetMin = Vector2.zero;
             cr.offsetMax = Vector2.zero;
 
@@ -391,9 +423,15 @@ namespace DeNelle.Village.Hero
             // plate art, label ink (contrast law) and text-fit; no per-screen label styling.
             var purchaseBtn = ElarionUiKit.BuildObsidianButton(bodyHost, "Purchase",
                 ElarionUiKit.ObsidianButtonStyle.Style2, ElarionUiKit.ObsidianButtonColor.Green,
-                new Vector2(0.04f, 0.03f), new Vector2(0.30f, 0.105f),
+                new Vector2(0.735f, 0.08f), new Vector2(0.935f, 0.21f),
                 () => { if (_vm != null) { if (_vm.Mode == ShopMode.Sell) _vm.Sell(); else _vm.Buy(); } });
             _actionLabel = purchaseBtn != null ? purchaseBtn.GetComponentInChildren<TMPro.TextMeshProUGUI>() : null;
+            _purchaseButton = purchaseBtn;
+            if (purchaseBtn != null)
+            {
+                MedievalUiSkin.ApplyButton(purchaseBtn, primary: true);
+                if (purchaseBtn.targetGraphic is Image purchaseImage) purchaseImage.type = Image.Type.Simple;
+            }
             // Close is the SHARED bottom-centre Obsidian Close button (WO-554) — no per-panel footer Close.
             // Keep it above the dynamically-rebuilt rows so a row can never cover/eat it (fleet soft-trap).
             if (chrome.close != null) chrome.close.transform.SetAsLastSibling();
@@ -410,8 +448,8 @@ namespace DeNelle.Village.Hero
             var bar = new GameObject("FilterBar", typeof(RectTransform));
             bar.transform.SetParent(panel, false);
             var br = bar.GetComponent<RectTransform>();
-            br.anchorMin = new Vector2(0.02f, 0.715f);
-            br.anchorMax = new Vector2(0.62f, 0.76f);
+            br.anchorMin = new Vector2(0.055f, 0.255f);
+            br.anchorMax = new Vector2(0.285f, 0.735f);
             br.offsetMin = Vector2.zero;
             br.offsetMax = Vector2.zero;
             _filterBar = bar;
@@ -420,18 +458,26 @@ namespace DeNelle.Village.Hero
             // underline state (shape + luminance), never a hue-only tint.
             _filterTabs.Clear();
             GearKind all = GearKind.Weapon | GearKind.Armor | GearKind.Potion;
-            CreateFilterTab(bar.transform, "All",     new Vector2(0.01f, 0.245f), all);
-            CreateFilterTab(bar.transform, "Weapons", new Vector2(0.255f, 0.49f), GearKind.Weapon);
-            CreateFilterTab(bar.transform, "Armor",   new Vector2(0.505f, 0.745f), GearKind.Armor);
-            CreateFilterTab(bar.transform, "Potions", new Vector2(0.755f, 0.99f), GearKind.Potion);
+            CreateFilterTab(bar.transform, "All",      new Vector2(0.81f, 0.99f), all);
+            CreateFilterTab(bar.transform, "Weapons",  new Vector2(0.61f, 0.79f), GearKind.Weapon);
+            CreateFilterTab(bar.transform, "Armor",    new Vector2(0.41f, 0.59f), GearKind.Armor);
+            CreateFilterTab(bar.transform, "Trinkets", new Vector2(0.21f, 0.39f), GearKind.Accessory);
+            CreateFilterTab(bar.transform, "Potions",  new Vector2(0.01f, 0.19f), GearKind.Potion);
         }
 
         private void CreateFilterTab(Transform parent, string label, Vector2 anchorX, GearKind kind)
         {
             var tab = ElarionUiKit.BuildTab(parent, label,
-                new Vector2(anchorX.x, 0.05f), new Vector2(anchorX.y, 0.95f),
+                new Vector2(0.02f, anchorX.x), new Vector2(0.98f, anchorX.y),
                 () => _vm?.SetFilter(kind));
-            if (tab != null) _filterTabs.Add((kind, tab));
+            if (tab != null)
+            {
+                MedievalUiSkin.ApplyButton(tab.button, primary: true);
+                if (tab.button.targetGraphic is Image image) image.type = Image.Type.Simple;
+                var selected = tab.button.transform.Find("Selected");
+                if (selected != null) DestroyImmediate(selected.gameObject);
+                _filterTabs.Add((kind, tab));
+            }
         }
 
         private void HighlightFilter()
@@ -453,18 +499,20 @@ namespace DeNelle.Village.Hero
             pane.transform.SetParent(panel, false);
             var pr = pane.GetComponent<RectTransform>();
             // Bottom raised 0.12 -> 0.165: the pane ends above the shared Close band (rule 2).
-            pr.anchorMin = new Vector2(0.63f, 0.165f);
-            pr.anchorMax = new Vector2(0.985f, 0.76f);
+            pr.anchorMin = new Vector2(0.695f, 0.245f);
+            pr.anchorMax = new Vector2(0.955f, 0.835f);
             pr.offsetMin = Vector2.zero;
             pr.offsetMax = Vector2.zero;
 
             var frameC = new GameObject("PortraitFrame", typeof(RectTransform));
             frameC.transform.SetParent(pane.transform, false);
             var fc = frameC.GetComponent<RectTransform>();
-            fc.anchorMin = new Vector2(0f, 0.18f); fc.anchorMax = new Vector2(1f, 1f);
+            fc.anchorMin = new Vector2(0f, 0.37f); fc.anchorMax = new Vector2(1f, 1f);
             fc.offsetMin = Vector2.zero; fc.offsetMax = Vector2.zero;
 
             var frameSprite = RpgUiCatalog.Get(RpgUiCatalog.RolePanel, RpgUiCatalog.PanelPortrait);
+            var medievalPanel = Resources.Load<Sprite>("UI/ElarionMedieval/frames/content-panel");
+            if (medievalPanel != null) frameSprite = medievalPanel;
             if (frameSprite != null)
             {
                 var fImg = frameC.AddComponent<Image>();
@@ -479,7 +527,7 @@ namespace DeNelle.Village.Hero
             }
 
             var iconGo = ElarionUiKit.AddImage(frameC.transform, "DetailIcon",
-                new Vector2(0.21f, 0.45f), new Vector2(0.79f, 0.80f), Color.white, rounded: false);
+                new Vector2(0.23f, 0.42f), new Vector2(0.77f, 0.88f), Color.white, rounded: false);
             _detailsIcon = iconGo.GetComponent<Image>();
             _detailsIcon.preserveAspect = true;
             _detailsIcon.raycastTarget = false;
@@ -487,28 +535,46 @@ namespace DeNelle.Village.Hero
 
             // Eyes-sweep 2026-07-06: every details label fits its OWN band (§1.14 NoWrap+ellipsis)
             // so long names/costs/stats never paint over each other or the description below.
-            _detailsName = ElarionUiKit.Label(frameC.transform, "Select an item", 0.285f, 0.375f,
-                ElarionUi.Gilt, ElarionUi.FontBody, TMPro.TextAlignmentOptions.Center, 0.20f, 0.80f, bold: true);
+            _detailsName = ElarionUiKit.Label(frameC.transform, "Select an item", 0.26f, 0.38f,
+                ElarionUi.Gilt, ElarionUi.FontLabel, TMPro.TextAlignmentOptions.Center, 0.12f, 0.88f, bold: true);
             _detailsName.raycastTarget = false;
-            ElarionUiKit.FitSingleLine(_detailsName, 0f, ElarionUi.FontBody);
+            ElarionUiKit.FitSingleLine(_detailsName, ElarionUi.FontMicro, ElarionUi.FontLabel);
 
-            _detailsCost = ElarionUiKit.Label(frameC.transform, "", 0.245f, 0.29f,
+            _detailsCost = ElarionUiKit.Label(frameC.transform, "", 0.17f, 0.25f,
                 ElarionUi.Gilt, ElarionUi.FontLabel, TMPro.TextAlignmentOptions.Center, 0.20f, 0.80f, bold: true);
             _detailsCost.raycastTarget = false;
             ElarionUiKit.FitSingleLine(_detailsCost, 0f, ElarionUi.FontLabel);
 
-            _detailsStats = ElarionUiKit.Label(frameC.transform, "", 0.115f, 0.235f,
+            _detailsStats = ElarionUiKit.Label(frameC.transform, "", 0.06f, 0.16f,
                 ElarionUi.Affordable, ElarionUi.FontLabel, TMPro.TextAlignmentOptions.Center, 0.20f, 0.80f, bold: true);
             _detailsStats.raycastTarget = false;
             ElarionUiKit.FitSingleLine(_detailsStats, 0f, ElarionUi.FontLabel);
 
             // Desc top pulled 0.31 -> 0.26: the stats band (frameC 0.115–0.235 = pane ~0.274–0.373)
             // used to share pane-space with the desc top. FitBlock truncates inside the band.
-            _detailsDesc = ElarionUiKit.Label(pane.transform, "Tap an item to inspect it.", 0.02f, 0.26f,
+            _detailsDesc = ElarionUiKit.Label(pane.transform, "Tap an item to inspect it.", 0.295f, 0.36f,
                 ElarionUi.ParchmentDim, ElarionUi.FontLabel, TMPro.TextAlignmentOptions.Top, 0.06f, 0.94f);
             _detailsDesc.textWrappingMode = TMPro.TextWrappingModes.Normal;
             _detailsDesc.raycastTarget = false;
             ElarionUiKit.FitBlock(_detailsDesc, 0f, ElarionUi.FontLabel);
+
+            _quantityMinus = ElarionUiKit.BuildObsidianButton(pane.transform, "-",
+                ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Yellow,
+                new Vector2(0.07f, 0.005f), new Vector2(0.33f, 0.215f), () => _vm?.ChangeQuantity(-1));
+            _quantityLabel = ElarionUiKit.Label(pane.transform, "1", 0.005f, 0.215f,
+                ElarionUi.Parchment, ElarionUi.FontBody, TMPro.TextAlignmentOptions.Center, 0.34f, 0.66f, bold: true);
+            _quantityPlus = ElarionUiKit.BuildObsidianButton(pane.transform, "+",
+                ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Yellow,
+                new Vector2(0.67f, 0.005f), new Vector2(0.93f, 0.215f), () => _vm?.ChangeQuantity(1));
+            _totalLabel = ElarionUiKit.Label(pane.transform, "", 0.215f, 0.29f,
+                ElarionUi.Gilt, ElarionUi.FontLabel, TMPro.TextAlignmentOptions.Center, 0.08f, 0.92f, bold: true);
+            ElarionUiKit.FitSingleLine(_totalLabel, ElarionUi.FontMicro, ElarionUi.FontLabel);
+            foreach (var qButton in new[] { _quantityMinus, _quantityPlus })
+            {
+                if (qButton == null) continue;
+                MedievalUiSkin.ApplyButton(qButton, primary: true);
+                if (qButton.targetGraphic is Image qImage) qImage.type = Image.Type.Simple;
+            }
         }
 
         // WO-714 W1 (P2): one CurrencyChip per spendable currency, Gold primary first, laid
@@ -519,14 +585,9 @@ namespace DeNelle.Village.Hero
             _walletChips.Clear();
             if (host == null) return;
 
-            var kinds = new[]
-            {
-                ElarionUiKit.CurrencyKind.Gold,
-                ElarionUiKit.CurrencyKind.Wood,
-                ElarionUiKit.CurrencyKind.Iron,
-                ElarionUiKit.CurrencyKind.Food,
-                ElarionUiKit.CurrencyKind.Crystal,
-            };
+            // Product lock: ordinary Store presents only its spend currency. Resource balances
+            // belong to the town HUD; showing five wallets here made price comprehension harder.
+            var kinds = new[] { ElarionUiKit.CurrencyKind.Gold };
             int n = kinds.Length;
             const float gap = 0.008f;
             for (int i = 0; i < n; i++)
@@ -539,6 +600,15 @@ namespace DeNelle.Village.Hero
                     primary: primary, tag: kinds[i].ToString());
                 _walletChips.Add((kinds[i], chip));
             }
+        }
+
+        private static void StyleStoreTab(ElarionUiKit.TabHandle tab)
+        {
+            if (tab == null || tab.button == null) return;
+            MedievalUiSkin.ApplyButton(tab.button, primary: true);
+            if (tab.button.targetGraphic is Image image) image.type = Image.Type.Simple;
+            var selected = tab.button.transform.Find("Selected");
+            if (selected != null) DestroyImmediate(selected.gameObject);
         }
 
         // Map a chip kind to the bound VM's wallet values (presentation read of VM data only).
@@ -561,6 +631,9 @@ namespace DeNelle.Village.Hero
             _tabBuy?.SetSelected(_vm.Mode == ShopMode.Buy);
             _tabEquip?.SetSelected(_vm.Mode == ShopMode.Equip);
             _tabSell?.SetSelected(_vm.Mode == ShopMode.Sell);
+            if (_tabBuy?.label != null) _tabBuy.label.color = _vm.Mode == ShopMode.Buy ? ElarionUi.Gilt : ElarionUi.Parchment;
+            if (_tabEquip?.label != null) _tabEquip.label.color = _vm.Mode == ShopMode.Equip ? ElarionUi.Gilt : ElarionUi.Parchment;
+            if (_tabSell?.label != null) _tabSell.label.color = _vm.Mode == ShopMode.Sell ? ElarionUi.Gilt : ElarionUi.Parchment;
         }
 
         // ── Status toast (WO-714 W1, P5) ─────────────────────────────────────────
@@ -628,8 +701,8 @@ namespace DeNelle.Village.Hero
 
         // ── Scroll list (rendering mechanism — UNCHANGED, guarded by ShopPanelRowRenderTests) ──
 
-        private const float RowHeightPx = 58f;
-        private const float RowGapPx    = 3f;
+        private const float RowHeightPx = 156f;
+        private const float RowGapPx    = 10f;
 
         private Transform BuildScrollContent(int rowCount)
         {
@@ -664,14 +737,13 @@ namespace DeNelle.Village.Hero
             cr.anchoredPosition = Vector2.zero;
             cr.sizeDelta = new Vector2(0f, 0f);
 
-            var vlg = content.AddComponent<VerticalLayoutGroup>();
-            vlg.childAlignment = TextAnchor.UpperCenter;
-            vlg.spacing = RowGapPx;
-            vlg.padding = new RectOffset(3, 3, 3, 3);
-            vlg.childControlWidth = true;
-            vlg.childControlHeight = true;
-            vlg.childForceExpandWidth = true;
-            vlg.childForceExpandHeight = false;
+            var grid = content.AddComponent<GridLayoutGroup>();
+            grid.childAlignment = TextAnchor.UpperCenter;
+            grid.constraint = GridLayoutGroup.Constraint.FixedColumnCount;
+            grid.constraintCount = 2;
+            grid.cellSize = new Vector2(168f, RowHeightPx);
+            grid.spacing = new Vector2(RowGapPx, RowGapPx);
+            grid.padding = new RectOffset(3, 3, 3, 3);
 
             var fitter = content.AddComponent<ContentSizeFitter>();
             fitter.horizontalFit = ContentSizeFitter.FitMode.Unconstrained;
@@ -706,6 +778,14 @@ namespace DeNelle.Village.Hero
         private static void DressRowPlate(Image rowImg)
         {
             if (rowImg == null) return;
+            var medieval = Resources.Load<Sprite>("UI/ElarionMedieval/frames/content-panel");
+            if (medieval != null)
+            {
+                rowImg.sprite = medieval;
+                rowImg.type = Image.Type.Simple;
+                rowImg.color = Color.white;
+                return;
+            }
             if (DeNelle.Core.FeatureFlags.BlinkChrome)
             {
                 var plate = RpgUiCatalog.Get(RpgUiCatalog.RoleSlot, RpgUiCatalog.SlotItem);
@@ -745,27 +825,28 @@ namespace DeNelle.Village.Hero
             string id = item.Id;
             rowBtn.onClick.AddListener(() => _vm?.Select(id));
 
-            if (!isSell)
+            var iconSprite = ResolveIcon(item.IconRole, item.IconName);
+            if (iconSprite != null)
             {
-                var viewBtn = ElarionUiKit.ButtonPack(row.transform, "View", ElarionUiKit.ButtonKind.Quiet,
-                    new Vector2(0.02f, 0.14f), new Vector2(0.18f, 0.86f),
-                    () => _vm?.Select(id),
-                    packSpriteName: RpgUiCatalog.ButtonFrame);
-                if (viewBtn != null)
-                {
-                    var vLbl = viewBtn.GetComponentInChildren<TMPro.TextMeshProUGUI>();
-                    if (vLbl != null) { vLbl.color = ElarionUi.Parchment; vLbl.fontStyle = TMPro.FontStyles.Bold; }
-                }
+                var icon = ElarionUiKit.AddImage(row.transform, "ItemIcon",
+                    new Vector2(0.28f, 0.42f), new Vector2(0.72f, 0.90f), Color.white, rounded: false);
+                var iconImage = icon.GetComponent<Image>();
+                iconImage.sprite = iconSprite;
+                iconImage.type = Image.Type.Simple;
+                iconImage.preserveAspect = true;
+                iconImage.raycastTarget = false;
             }
 
             // Eyes-sweep 2026-07-06: name + price each get a DISJOINT band and fit-or-ellipsize
             // (§1.14 NoWrap+ellipsis) — long names used to wrap onto neighbouring rows so every
             // item name painted onto the next ("Apprentice Wand / Arcane Heart ... illegible").
-            float nameX0 = isSell ? 0.04f : 0.20f;
-            float nameX1 = isSell ? 0.52f : 0.48f;
-            var nameLbl = ElarionUiKit.Label(row.transform, item.Name, 0.15f, 0.85f, ElarionUi.Parchment,
-                ElarionUi.FontBody, TMPro.TextAlignmentOptions.Left, nameX0, nameX1);
-            ElarionUiKit.FitSingleLine(nameLbl, 0f, ElarionUi.FontBody);
+            var nameLbl = ElarionUiKit.Label(row.transform, item.Name, 0.23f, 0.42f, ElarionUi.Parchment,
+                ElarionUi.FontMicro, TMPro.TextAlignmentOptions.Center, 0.05f, 0.95f, bold: true);
+            nameLbl.enableAutoSizing = true;
+            nameLbl.fontSizeMin = 14f;
+            nameLbl.fontSizeMax = ElarionUi.FontMicro;
+            nameLbl.textWrappingMode = TMPro.TextWrappingModes.NoWrap;
+            nameLbl.overflowMode = TMPro.TextOverflowModes.Ellipsis;
 
             // COLORBLIND CANON (owner is red/green colorblind — meaning is NEVER hue-only).
             // The old encoding here was green(ElarionUi.Affordable) vs red(ElarionUi.Danger)
@@ -776,11 +857,13 @@ namespace DeNelle.Village.Hero
             bool canAfford = isSell || item.Price <= 0 || item.Affordable;
             if (!canAfford) priceText += "  [needs " + ElarionUi.CompactNumber(item.Price) + "]";   // WO-697
             Color priceColor = canAfford ? ElarionUi.Parchment : ElarionUi.ParchmentDim;
-            float px0 = isSell ? 0.54f : 0.50f;
-            float px1 = 0.97f;
-            var priceLbl = ElarionUiKit.Label(row.transform, priceText, 0.15f, 0.85f, priceColor,
-                ElarionUi.FontLabel, TMPro.TextAlignmentOptions.Left, px0, px1, bold: canAfford);
-            ElarionUiKit.FitSingleLine(priceLbl, 0f, ElarionUi.FontLabel);
+            var priceLbl = ElarionUiKit.Label(row.transform, priceText, 0.04f, 0.23f, priceColor,
+                ElarionUi.FontMicro, TMPro.TextAlignmentOptions.Center, 0.06f, 0.94f, bold: canAfford);
+            priceLbl.enableAutoSizing = true;
+            priceLbl.fontSizeMin = 16f;
+            priceLbl.fontSizeMax = ElarionUi.FontMicro;
+            priceLbl.textWrappingMode = TMPro.TextWrappingModes.NoWrap;
+            priceLbl.overflowMode = TMPro.TextOverflowModes.Ellipsis;
         }
 
         // Render the price text from the item's Price (the VM denominates everything in gold for
@@ -901,7 +984,12 @@ namespace DeNelle.Village.Hero
             for (int i = _contentRoot.transform.childCount - 1; i >= 0; i--)
             {
                 var c = _contentRoot.transform.GetChild(i);
-                if (c != null) Destroy(c.gameObject);
+                if (c == null) continue;
+                // Rebuild may run several times in one frame (quantity purchase and economy
+                // notifications). Detach immediately so deferred Destroy objects cannot remain
+                // visible/auditable beside the newly-created list during that frame.
+                c.SetParent(null, false);
+                Destroy(c.gameObject);
             }
         }
 

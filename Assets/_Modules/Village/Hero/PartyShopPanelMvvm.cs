@@ -354,7 +354,7 @@ namespace DeNelle.Village.Hero
             // Shared store size (owner felt-test 2026-07-15: all stores same size / matching Y).
             // These portrait values ARE the shared StorePanel rect the kit exposes.
             var chrome = ElarionUiKit.BuildObsidianPanel(_ui.transform, "Party Shop",
-                ElarionUiKit.StorePanelAnchorMin, ElarionUiKit.StorePanelAnchorMax, () => _vm?.Close(),
+                new Vector2(0.06f, 0.06f), new Vector2(0.94f, 0.94f), () => _vm?.Close(),
                 headerX0: 0.04f, headerX1: 0.96f, frameName: RpgUiCatalog.FrameMerchant,
                 medallionIcon: "sword");
             var panel = chrome.content.transform;
@@ -369,24 +369,22 @@ namespace DeNelle.Village.Hero
             // wallet/party/tabs/list/preview/buttons from overlapping the frame's ornate border. Falls
             // back to the panel rect when no frame is used. Mirrors CraftingPanelMvvm.BuildChrome. The
             // shared Close (chrome.close) stays on the full panel (chrome, not content).
-            var bodyHost = (chrome.layout != null && chrome.layout.body != null)
-                ? chrome.layout.body : (RectTransform)panel;
+            // The merchant frame's legacy `body` drop-zone is intentionally shallow. Seating this
+            // complete multi-column workspace inside it collapsed party/filter bands to 15-40px
+            // rails on landscape phones. Party Shop therefore owns the full safe inner panel and
+            // explicitly reserves its title and Close bands, like the approved Equipment/Store shell.
+            var bodyHost = (RectTransform)panel;
 
             // WO-714 W1 (P2): the wallet is a kit CurrencyChip (gold primary) riding the frame's
             // FOOTER drop-zone (WO-675 §5 grammar); art-absent fallback = the old top-right band
             // so the wallet never blanks.
-            RectTransform walletHost = chrome.layout != null ? chrome.layout.footer : null;
-            Vector2 chipMin = new Vector2(0.58f, 0.10f), chipMax = new Vector2(0.98f, 0.90f);
-            if (walletHost == null)
-            {
-                var fb = new GameObject("Zone_WalletFallback", typeof(RectTransform));
-                fb.transform.SetParent(bodyHost, false);
-                walletHost = fb.GetComponent<RectTransform>();
-                walletHost.anchorMin = new Vector2(0.60f, 0.905f);
-                walletHost.anchorMax = new Vector2(0.96f, 0.96f);
-                walletHost.offsetMin = Vector2.zero; walletHost.offsetMax = Vector2.zero;
-                chipMin = Vector2.zero; chipMax = Vector2.one;
-            }
+            var walletGo = new GameObject("Zone_GoldWallet", typeof(RectTransform));
+            walletGo.transform.SetParent(bodyHost, false);
+            RectTransform walletHost = walletGo.GetComponent<RectTransform>();
+            walletHost.anchorMin = new Vector2(0.78f, 0.905f);
+            walletHost.anchorMax = new Vector2(0.96f, 0.965f);
+            walletHost.offsetMin = Vector2.zero; walletHost.offsetMax = Vector2.zero;
+            Vector2 chipMin = Vector2.zero, chipMax = Vector2.one;
             _walletChip = ElarionUiKit.CurrencyChip(walletHost, ElarionUiKit.CurrencyKind.Gold,
                 chipMin, chipMax, primary: true, tag: "Gold");
 
@@ -399,14 +397,14 @@ namespace DeNelle.Village.Hero
             // line (0 glyphs). Bar grows into the free 0.885..0.90 strip (wallet starts 0.905;
             // MemberLabel below tops at 0.80) and the chip's name band widens (see RebuildPartyBar)
             // so the label seats ~18px — a LAYOUT fix, never a font-floor cut.
-            pb.anchorMin = new Vector2(0.04f, 0.80f); pb.anchorMax = new Vector2(0.96f, 0.90f);
+            pb.anchorMin = new Vector2(0.04f, 0.74f); pb.anchorMax = new Vector2(0.96f, 0.90f);
             pb.offsetMin = Vector2.zero; pb.offsetMax = Vector2.zero;
 
             // Selected-member sub-header (name - class (Lv N)).
             var memGo = new GameObject("MemberLabel", typeof(TMPro.TextMeshProUGUI));
             memGo.transform.SetParent(bodyHost, false);
             var mr = memGo.GetComponent<RectTransform>();
-            mr.anchorMin = new Vector2(0.04f, 0.755f); mr.anchorMax = new Vector2(0.66f, 0.80f);
+            mr.anchorMin = new Vector2(0.04f, 0.685f); mr.anchorMax = new Vector2(0.62f, 0.735f);
             mr.offsetMin = Vector2.zero; mr.offsetMax = Vector2.zero;
             _memberLabel = memGo.GetComponent<TMPro.TextMeshProUGUI>();
             _memberLabel.fontSize = ElarionUi.FontBody;
@@ -420,13 +418,15 @@ namespace DeNelle.Village.Hero
             _tabBar = new GameObject("TabBar", typeof(RectTransform));
             _tabBar.transform.SetParent(bodyHost, false);
             var tb = _tabBar.GetComponent<RectTransform>();
-            tb.anchorMin = new Vector2(0.66f, 0.755f); tb.anchorMax = new Vector2(0.96f, 0.80f);
+            tb.anchorMin = new Vector2(0.64f, 0.675f); tb.anchorMax = new Vector2(0.96f, 0.74f);
             tb.offsetMin = Vector2.zero; tb.offsetMax = Vector2.zero;
             // WO-714 W1 (P1): kit BuildTab — plate/underline selection (shape + luminance).
             _tabBuy  = ElarionUiKit.BuildTab(_tabBar.transform, "BUY",
                 new Vector2(0.02f, 0.05f), new Vector2(0.49f, 0.95f), () => _vm?.SetTab(PartyShopTab.Buy));
             _tabSell = ElarionUiKit.BuildTab(_tabBar.transform, "SELL",
                 new Vector2(0.51f, 0.05f), new Vector2(0.98f, 0.95f), () => _vm?.SetTab(PartyShopTab.Sell));
+            StylePartyTab(_tabBuy);
+            StylePartyTab(_tabSell);
 
             // Category selector ("dropdown selections": All / Weapons / Armor) - the missing
             // narrow over the combined weapons+armor list. Pinned/hidden for single-kind vendors
@@ -439,7 +439,7 @@ namespace DeNelle.Village.Hero
             // "All" pennant bleeding over the neighbour row). Re-spaced with real gaps
             // (tab band 0.755 -> cb 0.744 -> 0.703 -> tyb 0.690 -> 0.648) and the chips
             // inset a touch deeper inside each bar (0.10-0.90) so the plate art clears.
-            cb.anchorMin = new Vector2(0.04f, 0.703f); cb.anchorMax = new Vector2(0.96f, 0.744f);
+            cb.anchorMin = new Vector2(0.04f, 0.605f); cb.anchorMax = new Vector2(0.52f, 0.67f);
             cb.offsetMin = Vector2.zero; cb.offsetMax = Vector2.zero;
             _categoryTabs.Clear();
             CreateCategory("All",      new Vector2(0.01f, 0.24f), PartyShopCategory.All);
@@ -454,7 +454,7 @@ namespace DeNelle.Village.Hero
             var tyb = _typeBar.GetComponent<RectTransform>();
             // WO-840 B2: dropped from 0.655-0.70 to open the pennant-clearing gap below
             // the category bar (see cb above).
-            tyb.anchorMin = new Vector2(0.04f, 0.648f); tyb.anchorMax = new Vector2(0.96f, 0.690f);
+            tyb.anchorMin = new Vector2(0.04f, 0.535f); tyb.anchorMax = new Vector2(0.52f, 0.60f);
             tyb.offsetMin = Vector2.zero; tyb.offsetMax = Vector2.zero;
 
             // The scroll list area - SLIM name column (WO-501 owner point 2): narrowed to the left ~36%
@@ -464,7 +464,7 @@ namespace DeNelle.Village.Hero
             var cr = _contentRoot.GetComponent<RectTransform>();
             // owner 07-04: widened list column (36%->48%). Orchestrator capture 07-06 #3: bottom
             // raised 0.12->0.23 so the action-bar stack clears the shared Close CTA (see below).
-            cr.anchorMin = new Vector2(0.04f, 0.23f); cr.anchorMax = new Vector2(0.52f, 0.645f);
+            cr.anchorMin = new Vector2(0.04f, 0.36f); cr.anchorMax = new Vector2(0.52f, 0.525f);
             cr.offsetMin = Vector2.zero; cr.offsetMax = Vector2.zero;
 
             // The 3D render preview pane (WO-501 owner point 3) beside the slim list.
@@ -489,9 +489,15 @@ namespace DeNelle.Village.Hero
             // (0.02-0.30 / 0.32-0.68 / 0.70-0.98); heights (touch size) unchanged.
             _buySellBtn = ElarionUiKit.BuildObsidianButton(bodyHost, "Purchase",
                 ElarionUiKit.ObsidianButtonStyle.Style2, ElarionUiKit.ObsidianButtonColor.Green,
-                new Vector2(0.32f, 0.10f), new Vector2(0.68f, 0.175f),
+                new Vector2(0.32f, 0.22f), new Vector2(0.68f, 0.38f),
                 () => { var s = _vm?.SelectedId; if (!string.IsNullOrEmpty(s)) _vm.Act(s); });
             _buySellLabel = _buySellBtn != null ? _buySellBtn.GetComponentInChildren<TMPro.TextMeshProUGUI>() : null;
+            if (_buySellBtn != null)
+            {
+                MedievalUiSkin.ApplyButton(_buySellBtn, primary: true);
+                if (_buySellBtn.targetGraphic is Image primaryPlate)
+                    primaryPlate.color = new Color(1f, 0.78f, 0.42f, 1f);
+            }
 
             // EQUIP the selected owned item to the selected member (IEquipTarget seam via the VM).
             // Owner ruling 07-06: 3-state control — the tap dispatches on the SELECTED item's
@@ -500,7 +506,7 @@ namespace DeNelle.Village.Hero
             // with a status line rather than mis-acting).
             _equipBtn = ElarionUiKit.BuildObsidianButton(bodyHost, "Equip",
                 ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Yellow,
-                new Vector2(0.70f, 0.10f), new Vector2(0.98f, 0.175f),   // WO-840 B3: widened (was 0.64-0.86)
+                new Vector2(0.70f, 0.22f), new Vector2(0.98f, 0.38f),
                 () =>
                 {
                     if (_vm == null) return;
@@ -509,6 +515,7 @@ namespace DeNelle.Village.Hero
                     else _vm.EquipSelected();
                 });
             _equipLabel = _equipBtn != null ? _equipBtn.GetComponentInChildren<TMPro.TextMeshProUGUI>() : null;
+            if (_equipBtn != null) MedievalUiSkin.ApplyButton(_equipBtn, primary: false);
             // The kit set the label ink per contrast law — remember it so RenderActionBar's
             // disabled cue dims the SAME ink (luminance cue) instead of forcing a hue.
             _equipLabelBase = _equipLabel != null ? _equipLabel.color : ElarionUi.Parchment;
@@ -519,9 +526,10 @@ namespace DeNelle.Village.Hero
             // on tap, so a stale tap no-ops with an honest status line.
             _improveBtn = ElarionUiKit.BuildObsidianButton(bodyHost, "Improve",
                 ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Green,
-                new Vector2(0.02f, 0.10f), new Vector2(0.30f, 0.175f),
+                new Vector2(0.02f, 0.22f), new Vector2(0.30f, 0.38f),
                 () => _vm?.ImproveSelected());
             _improveLabel = _improveBtn != null ? _improveBtn.GetComponentInChildren<TMPro.TextMeshProUGUI>() : null;
+            if (_improveBtn != null) MedievalUiSkin.ApplyButton(_improveBtn, primary: false);
             _improveLabelBase = _improveLabel != null ? _improveLabel.color : ElarionUi.Parchment;
 
             // WO-714 W1 (P5): no stuck status strip — vm.Status changes surface as a kit toast
@@ -541,7 +549,32 @@ namespace DeNelle.Village.Hero
             var tab = ElarionUiKit.BuildTab(_categoryBar.transform, label,
                 new Vector2(anchorX.x, 0.10f), new Vector2(anchorX.y, 0.90f),   // WO-840 B2: deeper inset, pennant clears the bar
                 () => _vm?.SetCategory(cat));
-            if (tab != null) _categoryTabs.Add((cat, tab));
+            if (tab != null)
+            {
+                StylePartyTab(tab);
+                _categoryTabs.Add((cat, tab));
+            }
+        }
+
+        private static void StylePartyTab(ElarionUiKit.TabHandle tab)
+        {
+            if (tab == null || tab.button == null) return;
+            MedievalUiSkin.ApplyButton(tab.button, primary: true);
+            if (tab.button.targetGraphic is Image plate) plate.type = Image.Type.Simple;
+            var selected = tab.button.transform.Find("Selected") as RectTransform;
+            if (selected == null) return;
+            selected.anchorMin = new Vector2(0.08f, 0.02f);
+            selected.anchorMax = new Vector2(0.92f, 0.10f);
+            selected.offsetMin = Vector2.zero;
+            selected.offsetMax = Vector2.zero;
+            var image = selected.GetComponent<Image>();
+            if (image != null)
+            {
+                image.sprite = null;
+                image.type = Image.Type.Simple;
+                image.color = ElarionUi.Gilt;
+                image.raycastTarget = false;
+            }
         }
 
         // -- Finer weapon/armor TYPE chip row (WO-501 owner point 1) ------------------
@@ -554,7 +587,9 @@ namespace DeNelle.Village.Hero
             for (int i = _typeBar.transform.childCount - 1; i >= 0; i--)
             {
                 var c = _typeBar.transform.GetChild(i);
-                if (c != null) Destroy(c.gameObject);
+                if (c == null) continue;
+                c.SetParent(null, false);
+                Destroy(c.gameObject);
             }
 
             var avail = _vm.AvailableTypes;
@@ -578,8 +613,10 @@ namespace DeNelle.Village.Hero
                     new Vector2(x0, 0.10f), new Vector2(x0 + w, 0.90f),   // WO-840 B2: deeper inset, pennant clears the bar
                     () => _vm?.SetType(chip.type));
                 if (tab == null) continue;
+                StylePartyTab(tab);
                 if (tab.button != null) tab.button.name = "Type_" + chip.type;
                 tab.SetSelected(_vm.Type == chip.type);
+                if (tab.label != null) tab.label.color = _vm.Type == chip.type ? ElarionUi.Gilt : ElarionUi.Parchment;
                 _typeTabs.Add((chip.type, tab));
             }
         }
@@ -608,13 +645,20 @@ namespace DeNelle.Village.Hero
 
             // WO-714 W1: kit tab selection state (shape + luminance), never a hue-only tint.
             for (int i = 0; i < _categoryTabs.Count; i++)
-                _categoryTabs[i].tab?.SetSelected(_categoryTabs[i].cat == _vm.Category);
+            {
+                bool selected = _categoryTabs[i].cat == _vm.Category;
+                _categoryTabs[i].tab?.SetSelected(selected);
+                if (_categoryTabs[i].tab?.label != null)
+                    _categoryTabs[i].tab.label.color = selected ? ElarionUi.Gilt : ElarionUi.Parchment;
+            }
         }
 
         private void HighlightTab(PartyShopTab tab)
         {
             _tabBuy?.SetSelected(tab == PartyShopTab.Buy);
             _tabSell?.SetSelected(tab == PartyShopTab.Sell);
+            if (_tabBuy?.label != null) _tabBuy.label.color = tab == PartyShopTab.Buy ? ElarionUi.Gilt : ElarionUi.Parchment;
+            if (_tabSell?.label != null) _tabSell.label.color = tab == PartyShopTab.Sell ? ElarionUi.Gilt : ElarionUi.Parchment;
         }
 
         // -- Party selector (top-left member icon buttons) -------------------------
@@ -625,7 +669,9 @@ namespace DeNelle.Village.Hero
             for (int i = _partyBar.transform.childCount - 1; i >= 0; i--)
             {
                 var c = _partyBar.transform.GetChild(i);
-                if (c != null) Destroy(c.gameObject);
+                if (c == null) continue;
+                c.SetParent(null, false);
+                Destroy(c.gameObject);
             }
 
             var party = _vm.Party;
@@ -645,6 +691,7 @@ namespace DeNelle.Village.Hero
                     () => _vm?.SelectMember(idx), packSpriteName: RpgUiCatalog.ButtonFrame);
                 if (btn == null) continue;
                 btn.name = "Member_" + idx;
+                MedievalUiSkin.ApplyButton(btn, primary: member.Selected);
 
                 // Portrait/crest glyph + class initial as the member token (real portrait sprite when present).
                 var icon = ResolvePortrait(member.Class);
@@ -1002,7 +1049,7 @@ namespace DeNelle.Village.Hero
             // the item list (0.12→0.645) so the two columns read as side-by-side portrait columns
             // under the filter stack, instead of a short-and-wide landscape pane. Its internal
             // square/specs/price are pane-relative, so they scale with the taller/narrower column.
-            _previewRoot = ElarionUiKit.Well(panel, new Vector2(0.54f, 0.23f), new Vector2(0.96f, 0.645f));   // owner 07-04: narrowed to pair with the widened list column; 07-06 #3: bottom raised 0.12->0.23 with the list (action-bar stack clears the Close CTA)
+            _previewRoot = ElarionUiKit.Well(panel, new Vector2(0.54f, 0.36f), new Vector2(0.96f, 0.67f));
             var wImg = _previewRoot.GetComponent<Image>();
             if (wImg != null)
             {
@@ -1059,12 +1106,12 @@ namespace DeNelle.Village.Hero
                 ElarionUi.ParchmentDim, ElarionUi.FontLabel, TMPro.TextAlignmentOptions.Center, 0.05f, 0.95f);
 
             // Name (gilt bold).
-            _previewName = ElarionUiKit.Label(pane, "", 0.355f, 0.41f, ElarionUi.Gilt,
+            _previewName = ElarionUiKit.Label(pane, "", 0.29f, 0.42f, ElarionUi.Gilt,
                 ElarionUi.FontHead, TMPro.TextAlignmentOptions.Center, 0.04f, 0.96f, bold: true);
             ElarionUiKit.FitSingleLine(_previewName);   // flag_06: long gear names ellipsize in the pane
 
             // Flavour line (rarity + class fit) - the readable desc under the name.
-            _previewStats = ElarionUiKit.Label(pane, "", 0.325f, 0.355f, ElarionUi.ParchmentDim,
+            _previewStats = ElarionUiKit.Label(pane, "", 0.20f, 0.29f, ElarionUi.ParchmentDim,
                 ElarionUi.FontMicro, TMPro.TextAlignmentOptions.Center, 0.04f, 0.96f);
             ElarionUiKit.FitSingleLine(_previewStats, 0f, ElarionUi.FontMicro);
 
@@ -1077,7 +1124,7 @@ namespace DeNelle.Village.Hero
             var specsGo = new GameObject("PreviewSpecs", typeof(RectTransform), typeof(RectMask2D));
             specsGo.transform.SetParent(pane, false);
             _previewSpecs = specsGo.GetComponent<RectTransform>();
-            _previewSpecs.anchorMin = new Vector2(0.06f, 0.185f); _previewSpecs.anchorMax = new Vector2(0.94f, 0.32f);
+            _previewSpecs.anchorMin = new Vector2(0.06f, 0.02f); _previewSpecs.anchorMax = new Vector2(0.94f, 0.19f);
             _previewSpecs.offsetMin = Vector2.zero; _previewSpecs.offsetMax = Vector2.zero;
             var specsVlg = specsGo.AddComponent<VerticalLayoutGroup>();
             specsVlg.childAlignment = TextAnchor.UpperCenter;
@@ -1095,6 +1142,7 @@ namespace DeNelle.Village.Hero
             _previewPrice = ElarionUiKit.Label(pane, "", 0.04f, 0.18f, ElarionUi.Gilt,
                 ElarionUi.FontTitle, TMPro.TextAlignmentOptions.Center, 0.04f, 0.96f, bold: true);
             ElarionUiKit.FitSingleLine(_previewPrice);   // flag_06: "Purchase 1,250 Gold" never spills the pane
+            _previewPrice.gameObject.SetActive(false);   // action CTA already carries authoritative price; no duplicate summary
         }
 
         // Repaint the preview pane from _vm.Selected ONLY (name/stats/delta/price) + rebuild the 3D
@@ -1195,7 +1243,9 @@ namespace DeNelle.Village.Hero
             for (int i = _previewSpecs.childCount - 1; i >= 0; i--)
             {
                 var c = _previewSpecs.GetChild(i);
-                if (c != null) Destroy(c.gameObject);
+                if (c == null) continue;
+                c.SetParent(null, false);
+                Destroy(c.gameObject);
             }
         }
 
@@ -1559,6 +1609,15 @@ namespace DeNelle.Village.Hero
         // ItemIconCatalog art for the def, else the pack glyph, else null (the View draws a glyph).
         private static Sprite ResolveItemSprite(PartyShopDetail? detail, ItemVM item)
         {
+            string role = detail.HasValue ? detail.Value.IconRole : item.IconRole;
+            // Large party-shop previews reject old catalog cards with baked white backgrounds.
+            // The clean transparent medieval equipment glyphs preserve category recognition;
+            // the authoritative item identity remains the adjacent name/spec data.
+            if (role == PartyShopVM.IconRoleArmor)
+                return RpgUiCatalog.Get(RpgUiCatalog.RoleIcons, RpgUiCatalog.IconShield);
+            if (role == PartyShopVM.IconRoleWeapon)
+                return RpgUiCatalog.Get(RpgUiCatalog.RoleIcons, RpgUiCatalog.IconSword);
+
             string iconPath = detail.HasValue ? detail.Value.IconPath : null;
             if (!string.IsNullOrEmpty(iconPath))
             {
@@ -1566,19 +1625,6 @@ namespace DeNelle.Village.Hero
                 if (s != null) return s;
             }
             // Catalog art by def (sprite-first, the same source the legacy details pane used).
-            string role = detail.HasValue ? detail.Value.IconRole : item.IconRole;
-            if (role == PartyShopVM.IconRoleArmor)
-            {
-                // Presentation seam (no GearCatalog in the View): GearIconCatalog does the
-                // Find*+ItemIconCatalog.For* pair internally. Pack-icon fallback kept.
-                var s = GearIconCatalog.Resolve(PartyShopVM.IconRoleArmor, item.Id);
-                return s != null ? s : RpgUiCatalog.Get(RpgUiCatalog.RoleIcons, RpgUiCatalog.IconShield);
-            }
-            if (role == PartyShopVM.IconRoleWeapon)
-            {
-                var s = GearIconCatalog.Resolve(PartyShopVM.IconRoleWeapon, item.Id);
-                return s != null ? s : RpgUiCatalog.Get(RpgUiCatalog.RoleIcons, RpgUiCatalog.IconSword);
-            }
             // WO-598 goods/jeweler bands: try the sliced item-icon art by id/name; a miss
             // returns null so the caller draws the role glyph (never a wrong sword icon).
             return ItemIconCatalog.ForConsumable(item.Id, item.Name);
@@ -1595,6 +1641,14 @@ namespace DeNelle.Village.Hero
         private static void DressRowPlate(Image rowImg)
         {
             if (rowImg == null) return;
+            var medieval = Resources.Load<Sprite>("UI/ElarionMedieval/frames/content-panel");
+            if (medieval != null)
+            {
+                rowImg.sprite = medieval;
+                rowImg.type = Image.Type.Simple;
+                rowImg.color = Color.white;
+                return;
+            }
             if (DeNelle.Core.FeatureFlags.BlinkChrome)
             {
                 var plate = RpgUiCatalog.Get(RpgUiCatalog.RoleSlot, RpgUiCatalog.SlotItem);
@@ -1670,7 +1724,9 @@ namespace DeNelle.Village.Hero
             for (int i = _contentRoot.transform.childCount - 1; i >= 0; i--)
             {
                 var c = _contentRoot.transform.GetChild(i);
-                if (c != null) Destroy(c.gameObject);
+                if (c == null) continue;
+                c.SetParent(null, false);
+                Destroy(c.gameObject);
             }
         }
 

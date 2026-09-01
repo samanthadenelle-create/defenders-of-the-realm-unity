@@ -41,6 +41,15 @@ namespace DeNelle.Village.Hero
         }
     }
 
+    public readonly struct EquipComparisonLine
+    {
+        public readonly string Label;
+        public readonly string Candidate;
+        public readonly float Delta;
+        public EquipComparisonLine(string label, string candidate, float delta)
+        { Label = label; Candidate = candidate; Delta = delta; }
+    }
+
     public sealed class EquipVM : IPanelViewModel, IDisposable
     {
         // ── Slot keys (SlotVM.SlotKey) — weapon + off-hand + armor + WO-543 ring/amulet ──
@@ -67,6 +76,7 @@ namespace DeNelle.Village.Hero
 
         private int _activeTargetIndex;
         private string _selectedSlotKey = SlotMainhand;
+        private string _selectedItemId;
 
         private readonly List<SlotVM> _equipSlots = new List<SlotVM>();
         private readonly List<ItemVM> _compatible = new List<ItemVM>();
@@ -147,7 +157,8 @@ namespace DeNelle.Village.Hero
                 if (t == null) return "No hero";
                 string name = string.IsNullOrEmpty(t.TargetName) ? "Hero" : t.TargetName;
                 string cls = string.IsNullOrEmpty(t.TargetClass) ? "" : Cap(t.TargetClass);
-                return string.IsNullOrEmpty(cls) ? name : name + " - " + cls;
+                return string.IsNullOrEmpty(cls) ? name
+                    : name + " - " + cls + " - Level " + t.TargetLevel;
             }
         }
 
@@ -173,6 +184,75 @@ namespace DeNelle.Village.Hero
 
         /// <summary>Owned items valid for the selected slot (fit by the active target's class). Never null.</summary>
         public IReadOnlyList<ItemVM> CompatibleItems => _compatible;
+
+        /// <summary>The inventory card selected for detail/action presentation. Selection is VM
+        /// state so every Equipment view renders the same contextual action.</summary>
+        public ItemVM? SelectedItem
+        {
+            get
+            {
+                foreach (var item in _compatible)
+                    if (string.Equals(item.Id, _selectedItemId, StringComparison.OrdinalIgnoreCase))
+                        return item;
+                return null;
+            }
+        }
+
+        /// <summary>Relevant candidate stats compared with the item in the same equipped slot.</summary>
+        public IReadOnlyList<EquipComparisonLine> SelectedComparison
+        {
+            get
+            {
+                var lines = new List<EquipComparisonLine>();
+                var selected = SelectedItem;
+                if (!selected.HasValue) return lines;
+                string id = selected.Value.Id;
+                string equippedId = null;
+                foreach (var slot in _equipSlots)
+                    if (slot.SlotKey == _selectedSlotKey && slot.Content.HasValue)
+                    { equippedId = slot.Content.Value.Id; break; }
+
+                if (_selectedSlotKey == SlotMainhand)
+                {
+                    var candidate = GearCatalog.FindWeapon(id);
+                    var equipped = GearCatalog.FindWeapon(equippedId);
+                    if (candidate != null)
+                    {
+                        float value = (GearStatResolver.EffectiveDamageMult(candidate, GearLevel(id)) - 1f) * 100f;
+                        float baseline = equipped != null
+                            ? (GearStatResolver.EffectiveDamageMult(equipped, GearLevel(equippedId)) - 1f) * 100f : 0f;
+                        lines.Add(new EquipComparisonLine("DAMAGE", "+" + RoundToInt(value) + "%", value - baseline));
+                    }
+                }
+                else if (_selectedSlotKey == SlotOffHand)
+                {
+                    var candidate = GearCatalog.FindWeapon(id);
+                    var equipped = GearCatalog.FindWeapon(equippedId);
+                    if (candidate != null)
+                    {
+                        float value = GearStatResolver.EffectiveDefense(candidate, GearLevel(id)) * 100f;
+                        float baseline = equipped != null
+                            ? GearStatResolver.EffectiveDefense(equipped, GearLevel(equippedId)) * 100f : 0f;
+                        lines.Add(new EquipComparisonLine("DEFENSE", RoundToInt(value) + "%", value - baseline));
+                    }
+                }
+                else if (_selectedSlotKey == SlotChest)
+                {
+                    var candidate = GearCatalog.FindArmor(id);
+                    var equipped = GearCatalog.FindArmor(equippedId);
+                    if (candidate != null)
+                    {
+                        float value = GearStatResolver.EffectiveDefense(candidate, GearLevel(id)) * 100f;
+                        float baseline = equipped != null
+                            ? GearStatResolver.EffectiveDefense(equipped, GearLevel(equippedId)) * 100f : 0f;
+                        lines.Add(new EquipComparisonLine("DEFENSE", RoundToInt(value) + "%", value - baseline));
+                        lines.Add(new EquipComparisonLine("HEALTH", "+" + Fmt1(candidate.hpBonus),
+                            candidate.hpBonus - (equipped != null ? equipped.hpBonus : 0f)));
+                    }
+                }
+                return lines;
+            }
+        }
 
         /// <summary>The party-target chips (one per assignable member). Never null.</summary>
         public IReadOnlyList<string> TargetNames
@@ -213,6 +293,12 @@ namespace DeNelle.Village.Hero
             string id = null;
             foreach (var s in _equipSlots)
                 if (s.SlotKey == slotKey && s.Content.HasValue) { id = s.Content.Value.Id; break; }
+            return GrantLineForItem(slotKey, id);
+        }
+
+        /// <summary>Authoritative one-line projection for any candidate item in a slot.</summary>
+        public string GrantLineForItem(string slotKey, string id)
+        {
             if (string.IsNullOrEmpty(id)) return "";
 
             if (slotKey == SlotMainhand)
@@ -265,6 +351,27 @@ namespace DeNelle.Village.Hero
             _selectedSlotKey = _equipSlots[index].SlotKey;
             RebuildCompatible();
             Raise();
+        }
+
+        public void SelectItem(string itemId)
+        {
+            if (string.IsNullOrEmpty(itemId)) return;
+            foreach (var item in _compatible)
+            {
+                if (!string.Equals(item.Id, itemId, StringComparison.OrdinalIgnoreCase)) continue;
+                _selectedItemId = item.Id;
+                Raise();
+                return;
+            }
+        }
+
+        /// <summary>Execute the single contextual action required by the approved Equipment UI.</summary>
+        public void ActivateSelected()
+        {
+            var selected = SelectedItem;
+            if (!selected.HasValue) { Status = "Select an item first."; Raise(); return; }
+            if (selected.Value.Equipped) Unequip();
+            else Equip(selected.Value.Id);
         }
 
         /// <summary>Equip an owned item into the selected slot (routes by slot kind).</summary>
@@ -599,6 +706,15 @@ namespace DeNelle.Village.Hero
                     $"-> listed={_compatible.Count} rejectedWeight={rejectedWeight} " +
                     $"equippedHere='{equippedId ?? "<none>"}' {armorVerdict} :: {(perArmor.Length > 0 ? perArmor.ToString() : "<no owned armor>")}");
             }
+
+            // Preserve a valid selection across model refreshes; otherwise choose the first card.
+            // This keeps the detail pane deterministic without manufacturing a UI-side copy.
+            bool selectedStillValid = false;
+            foreach (var item in _compatible)
+                if (string.Equals(item.Id, _selectedItemId, StringComparison.OrdinalIgnoreCase))
+                { selectedStillValid = true; break; }
+            if (!selectedStillValid)
+                _selectedItemId = _compatible.Count > 0 ? _compatible[0].Id : null;
         }
 
         private static string Cap(string s)

@@ -176,28 +176,55 @@ namespace DeNelle.Settings
             // guaranteeing disjoint, gapped, >=MinTouchPx bands that always fit inside the frame at
             // any screen size (verified headless: Builds/ui-capture/PauseMenu_<res>.png).
             _modal = ElarionUiKit.BuildObsidianModal("PauseUI", "Paused",
-                ElarionUiKit.ModalArchetype.Compact, Resume,
+                new Vector2(0.29f, 0.12f), new Vector2(0.71f, 0.88f), Resume,
                 sortingOrder: 31500,
                 frameName: RpgUiCatalog.FrameOptions, medallionIcon: "settings");
+            MedievalUiSkin.ApplyShell(_modal.chrome, compact: true);
 
-            var layout = _modal.chrome.layout;
-            var body = layout != null && layout.body != null
-                ? (Transform)layout.body
-                : _modal.chrome.content.transform;
+            var aspect = _modal.chrome.root.GetComponent<AspectRatioFitter>();
+            if (aspect == null) aspect = _modal.chrome.root.AddComponent<AspectRatioFitter>();
+            aspect.aspectMode = AspectRatioFitter.AspectMode.HeightControlsWidth;
+            aspect.aspectRatio = 0.96f;
 
-            // Common spaced button column (ElarionUiKit) -- one shared VerticalLayoutGroup so buttons
-            // never overlap under the touch floor, at any screen size (owner 2026-07-16 "fix in
-            // common"). bottomInset 0.18 keeps the whole stack ABOVE the frame's shared Close button.
-            var stack = ElarionUiKit.BuildButtonColumn(body,
-                gapPx: 18f, sideInset: 0.08f, topInset: 0.05f, bottomInset: 0.18f);
-            ElarionUiKit.AddColumnButton(stack, "Resume",
-                ElarionUiKit.ObsidianButtonColor.Green, Resume);
+            if (_modal.chrome.layout != null && _modal.chrome.layout.header != null)
+                _modal.chrome.layout.header.gameObject.SetActive(false);
+            if (_modal.chrome.layout != null && _modal.chrome.layout.body != null)
+                _modal.chrome.layout.body.gameObject.SetActive(false);
+            if (_modal.chrome.layout != null && _modal.chrome.layout.footer != null)
+                _modal.chrome.layout.footer.gameObject.SetActive(false);
+            if (_modal.chrome.layout != null && _modal.chrome.layout.subHeader != null)
+                _modal.chrome.layout.subHeader.gameObject.SetActive(false);
+
+            var body = _modal.chrome.content.transform;
+            var title = ElarionUiKit.Label(body, "PAUSED", 0.79f, 0.89f,
+                ElarionUi.Gold, 64, TMPro.TextAlignmentOptions.Center,
+                0.16f, 0.84f, bold: true);
+            ElarionUiKit.EnsureFont(title, ElarionUiKit.FontRole.Title);
+
+            var resume = ElarionUiKit.BuildObsidianButton(body, "Resume",
+                ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Green,
+                new Vector2(0.12f, 0.605f), new Vector2(0.88f, 0.765f), Resume);
+            MedievalUiSkin.ApplyButton(resume, primary: true);
             // Settings button only when a settings screen is wired — never a dead control.
             if (_settings != null)
-                ElarionUiKit.AddColumnButton(stack, "Settings",
-                    ElarionUiKit.ObsidianButtonColor.Gray, OnSettingsClicked);
-            ElarionUiKit.AddColumnButton(stack, "Quit to Title",
-                ElarionUiKit.ObsidianButtonColor.Red, OnQuitClicked);
+            {
+                var settings = ElarionUiKit.BuildObsidianButton(body, "Settings",
+                    ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Gray,
+                    new Vector2(0.12f, 0.43f), new Vector2(0.88f, 0.59f), OnSettingsClicked);
+                MedievalUiSkin.ApplyButton(settings);
+            }
+            var quit = ElarionUiKit.BuildObsidianButton(body, "Quit to Title",
+                ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Red,
+                new Vector2(0.12f, 0.255f), new Vector2(0.88f, 0.415f), OnQuitClicked);
+            MedievalUiSkin.ApplyButton(quit);
+
+            if (_modal.chrome.close != null)
+            {
+                var closeRect = _modal.chrome.close.GetComponent<RectTransform>();
+                closeRect.anchorMin = new Vector2(0.27f, 0.065f);
+                closeRect.anchorMax = new Vector2(0.73f, 0.225f);
+                closeRect.offsetMin = closeRect.offsetMax = Vector2.zero;
+            }
 
             // Register with the single-modal arbiter (battle-allowed — a pause menu must be
             // openable mid-combat and never rejected). The back button / arbiter close = Resume.

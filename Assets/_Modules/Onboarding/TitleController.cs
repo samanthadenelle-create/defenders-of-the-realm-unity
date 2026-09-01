@@ -269,14 +269,24 @@ namespace DeNelle.Onboarding
         /// is forced WHITE for high contrast ("pops").</summary>
         private void BuildButtonColumn(Transform parent)
         {
-            var row = new GameObject("TitleButtons", typeof(RectTransform));
+            var row = new GameObject("TitleButtons", typeof(RectTransform), typeof(Image));
             row.transform.SetParent(parent, false);
             var rt = (RectTransform)row.transform;
             // A single low, wide band — small clean buttons side-by-side. Kept a healthy
             // ~7% screen-height so the touch target stays tappable on mobile.
-            rt.anchorMin = new Vector2(0.10f, 0.070f);
-            rt.anchorMax = new Vector2(0.90f, 0.140f);
+            rt.anchorMin = new Vector2(0.20f, 0.045f);
+            rt.anchorMax = new Vector2(0.80f, 0.135f);
             rt.offsetMin = Vector2.zero; rt.offsetMax = Vector2.zero;
+            var tray = row.GetComponent<Image>();
+            var traySprite = Resources.Load<Sprite>("UI/ElarionMedieval/frames/content-panel");
+            if (traySprite != null) tray.sprite = traySprite;
+            tray.type = Image.Type.Simple;
+            tray.color = Color.white;
+            tray.raycastTarget = false;
+            var well = ElarionUiKit.AddImage(row.transform, "TitleActionWell",
+                new Vector2(0.01f, 0.08f), new Vector2(0.99f, 0.92f),
+                new Color(0.01f, 0.01f, 0.012f, 0.98f), rounded: false);
+            if (well != null) well.transform.SetAsFirstSibling();
 
             // Continue is Green and only present when a save exists (owner spec) —
             // resuming players see it first; fresh installs see Start New leftmost.
@@ -289,7 +299,7 @@ namespace DeNelle.Onboarding
             entries.Add(("Play Intro", ElarionUiKit.ObsidianButtonColor.Gray, OnPlayIntro, false));
 
             // Even HORIZONTAL distribution across the row, left to right.
-            const float slotGap = 0.03f;
+            const float slotGap = 0.035f;
             float slotW = (1f - slotGap * (entries.Count - 1)) / entries.Count;
             for (int i = 0; i < entries.Count; i++)
             {
@@ -298,7 +308,17 @@ namespace DeNelle.Onboarding
                 var e = entries[i];
                 var btn = ElarionUiKit.BuildObsidianButton(row.transform, e.label,
                     ElarionUiKit.ObsidianButtonStyle.Style1, e.color,
-                    new Vector2(x0, 0f), new Vector2(x1, 1f), e.onClick);
+                    new Vector2(x0, 0.10f), new Vector2(x1, 0.90f), e.onClick);
+                MedievalUiSkin.ApplyButton(btn, primary: e.color != ElarionUiKit.ObsidianButtonColor.Gray);
+                if (btn != null && btn.targetGraphic is Image buttonImage)
+                {
+                    var frame = Resources.Load<Sprite>("UI/ElarionMedieval/frames/content-panel");
+                    if (frame != null) buttonImage.sprite = frame;
+                    buttonImage.type = Image.Type.Simple;
+                    buttonImage.color = Color.white;
+                }
+                var buttonLabel = btn != null ? btn.GetComponentInChildren<TMPro.TextMeshProUGUI>(true) : null;
+                if (buttonLabel != null) ElarionUiKit.FitSingleLine(buttonLabel, 24f, 34f);
 
                 // Owner F8: "make the start new text white as well" — force the label
                 // TMP colour to white for high contrast where requested.

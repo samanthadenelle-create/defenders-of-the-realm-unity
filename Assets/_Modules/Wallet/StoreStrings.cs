@@ -227,6 +227,7 @@ namespace DeNelle.Wallet
         public const string KeyMonthlyLedgerStateUpcoming  = "monthlyLedgerStateUpcoming";
         public const string KeyMonthlyLedgerExclusiveNone  = "monthlyLedgerExclusiveNone";
         public const string KeyMonthlyLedgerNotForSale     = "monthlyLedgerNotForSale";
+        public const string KeyMonthlyLedgerNotForSaleCta  = "monthlyLedgerNotForSaleCta";
         public const string KeyMonthlyLedgerEmpty          = "monthlyLedgerEmpty";
         /// <summary>{0}=week number, {1}=first day, {2}=last day.</summary>
         public const string KeyMonthlyLedgerWeekTab        = "monthlyLedgerWeekTab";
@@ -256,7 +257,7 @@ namespace DeNelle.Wallet
             KeyMonthlyLedgerPoolPromise, KeyMonthlyLedgerNoTimer, KeyMonthlyLedgerBonusOnly,
             KeyMonthlyLedgerStateClaimed, KeyMonthlyLedgerStateToday, KeyMonthlyLedgerStateAvailable,
             KeyMonthlyLedgerStateUpcoming, KeyMonthlyLedgerExclusiveNone, KeyMonthlyLedgerNotForSale,
-            KeyMonthlyLedgerEmpty,
+            KeyMonthlyLedgerNotForSaleCta, KeyMonthlyLedgerEmpty,
             KeyMonthlyLedgerWeekTab, KeyMonthlyLedgerWeekSelected,
             KeyMonthlyLedgerWeekClaimable, KeyMonthlyLedgerDay, KeyMonthlyLedgerMilestone,
         };

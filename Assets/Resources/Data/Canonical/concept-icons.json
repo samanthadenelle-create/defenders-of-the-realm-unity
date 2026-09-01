@@ -72,19 +72,19 @@
   },
   "knight.ranged-poke": {
    "role": "spellicons",
-   "name": "Hunter8"
+   "name": "Ranger8"
   },
   "knight.mending-salve": {
    "role": "spellicons",
-   "name": "Paladin5"
+   "name": "Priest4"
   },
   "knight.snare-arrow": {
    "role": "spellicons",
-   "name": "Hunter3"
+   "name": "Hunter8"
   },
   "knight.suppressing-volley": {
    "role": "spellicons",
-   "name": "Hunter15"
+   "name": "Guardian5"
   },
   "ranger.q": {
    "role": "spellicons",
@@ -92,11 +92,11 @@
   },
   "knight.shield-bash": {
    "role": "spellicons",
-   "name": "Guardian1"
+   "name": "Guardian2"
   },
   "knight.thunderbolt": {
    "role": "spellicons",
-   "name": "Electromancer9"
+   "name": "Electromancer1"
   },
   "knight.emberbrand-throw": {
    "role": "spellicons",
@@ -104,27 +104,27 @@
   },
   "knight.wardens-roar": {
    "role": "spellicons",
-   "name": "Barbarian5"
+   "name": "Barbarian3"
   },
   "knight.sweeping-cut": {
    "role": "spellicons",
-   "name": "Barbarian13"
+   "name": "Barbarian1"
   },
   "knight.oathmend": {
    "role": "spellicons",
-   "name": "Paladin19"
+   "name": "Priest2"
   },
   "knight.eternal-aegis": {
    "role": "spellicons",
-   "name": "Guardian13"
+   "name": "Guardian4"
   },
   "knight.second-wind": {
    "role": "spellicons",
-   "name": "Paladin12"
+   "name": "Priest1"
   },
   "knight.champions-combo": {
    "role": "spellicons",
-   "name": "Barbarian18"
+   "name": "Berserker4"
   },
   "knight.q": {
    "role": "abilities",
@@ -134,6 +134,42 @@
    "role": "spellicons",
    "name": "Paladin5"
   },
+  "knight.r": {
+   "role": "spellicons",
+   "name": "Paladin11"
+  },
+  "ranger.w": {
+   "role": "spellicons",
+   "name": "Hunter3"
+  },
+  "ranger.healing-shot": {
+   "role": "spellicons",
+   "name": "Priest6"
+  },
+  "ranger.r": {
+   "role": "spellicons",
+   "name": "Ranger11"
+  },
+  "ranger.hunters-mark": {
+   "role": "spellicons",
+   "name": "Hunter1"
+  },
+  "ranger.tumble-step": {
+   "role": "spellicons",
+   "name": "Ranger3"
+  },
+  "ranger.multishot": {
+   "role": "spellicons",
+   "name": "Ranger2"
+  },
+  "ranger.precision-strike": {
+   "role": "spellicons",
+   "name": "Ranger1"
+  },
+  "ranger.storm-of-arrows": {
+   "role": "spellicons",
+   "name": "Ranger10"
+  },
   "mage.fireball": {
    "role": "spellicons",
    "name": "Pyromancer18"
@@ -142,9 +178,49 @@
    "role": "spellicons",
    "name": "Arcanist12"
   },
+  "mage.drain": {
+   "role": "spellicons",
+   "name": "Priest6"
+  },
+  "mage.poison": {
+   "role": "spellicons",
+   "name": "Rogue6"
+  },
+  "mage.frost-nova": {
+   "role": "spellicons",
+   "name": "Cryomancer2"
+  },
   "mage.arcane-bolt": {
    "role": "spellicons",
    "name": "Arcanist6"
+  },
+  "mage.manaweave": {
+   "role": "spellicons",
+   "name": "Arcanist6"
+  },
+  "mage.void-rift": {
+   "role": "spellicons",
+   "name": "Cultist6"
+  },
+  "mage.blink": {
+   "role": "spellicons",
+   "name": "Arcanist10"
+  },
+  "mage.cataclysm": {
+   "role": "spellicons",
+   "name": "Pyromancer12"
+  },
+  "mage.thunder": {
+   "role": "spellicons",
+   "name": "Electromancer5"
+  },
+  "mage.heal": {
+   "role": "spellicons",
+   "name": "Priest5"
+  },
+  "mage.meteor": {
+   "role": "spellicons",
+   "name": "Pyromancer8"
   },
   "universal.mend": {
    "role": "spellicons",

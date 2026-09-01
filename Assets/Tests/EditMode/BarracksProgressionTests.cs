@@ -143,22 +143,22 @@ namespace DeNelle.Tests.EditMode
         [Test]
         public void barracks_upgrade_cost_is_deducted_from_wallet()
         {
-            // barracks.json: level 2 cost = { wood 150, food 40, iron 60 }.
+            // Read through BarracksProgression, then pin the current canonical L2 basket.
             var cost = BarracksProgression.BarracksUpgradeCost(1);
-            Assert.That(cost.Wood, Is.EqualTo(150));
-            Assert.That(cost.Food, Is.EqualTo(40));
-            Assert.That(cost.Iron, Is.EqualTo(60));
+            Assert.That(cost.Wood, Is.EqualTo(300));
+            Assert.That(cost.Food, Is.EqualTo(80));
+            Assert.That(cost.Iron, Is.EqualTo(120));
 
-            var exact = new FakeEconomy { Wood = 150, Food = 40, Iron = 60 };
+            var exact = new FakeEconomy { Wood = cost.Wood, Food = cost.Food, Iron = cost.Iron };
             Assert.That(exact.TrySpend(cost), Is.True, "an exactly-funded wallet affords the upgrade");
             Assert.That(exact.Wood, Is.EqualTo(0));
             Assert.That(exact.Food, Is.EqualTo(0));
             Assert.That(exact.Iron, Is.EqualTo(0));
 
-            var broke = new FakeEconomy { Wood = 149, Food = 40, Iron = 60 };
+            var broke = new FakeEconomy { Wood = cost.Wood - 1, Food = cost.Food, Iron = cost.Iron };
             Assert.That(broke.CanAfford(cost), Is.False, "a wallet short by one wood cannot afford it");
             Assert.That(broke.TrySpend(cost), Is.False, "and TrySpend refuses (no mutation)");
-            Assert.That(broke.Wood, Is.EqualTo(149), "a failed spend deducts nothing");
+            Assert.That(broke.Wood, Is.EqualTo(cost.Wood - 1), "a failed spend deducts nothing");
         }
 
         [Test]

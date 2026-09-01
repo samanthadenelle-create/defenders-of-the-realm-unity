@@ -15,21 +15,30 @@ namespace DeNelle.Editor
 
             if (!vm.Contains("CountPlacedThisTown()") || !vm.Contains("BuildVisibleTabs()"))
                 failures.Add("categories are not derived from authoritative current-town placements");
-            if (!vm.Contains("VisibleTabs.Add(ManageTab.Defense)") ||
-                !vm.Contains("VisibleTabs.Add(ManageTab.Buildings)"))
-                failures.Add("absent-before-placement / visible-after-placement category gate is missing");
+            if (!panel.Contains("ManageTab.Defense, ManageTab.Buildings, ManageTab.Troops, ManageTab.Research"))
+                failures.Add("the stable four-card Manage launcher is missing or reordered");
+            if (!panel.Contains("BarracksUnlock.IsUnlocked") ||
+                !panel.Contains("Build a Barracks to unlock") ||
+                !panel.Contains("ActivateLauncherCard"))
+                failures.Add("locked Troops card is not sourced from BarracksUnlock with explicit feedback");
+            int rebuild = panel.IndexOf("_vm.Rebuild();", StringComparison.Ordinal);
+            int launcher = panel.IndexOf("RenderLauncherCards();", rebuild, StringComparison.Ordinal);
+            if (rebuild < 0 || launcher < rebuild)
+                failures.Add("launcher cards are not rendered after the VM populates availability");
             int upgrade = panel.IndexOf("UPGRADABLE TOWERS", StringComparison.Ordinal);
-            int queue = panel.IndexOf("IN QUEUE - ", StringComparison.Ordinal);
-            if (upgrade < 0 || queue < 0 || upgrade > queue)
-                failures.Add("selected structure actions are not authored above queue history");
+            if (upgrade < 0 || !panel.Contains("BuildQueueDrawer(well)") ||
+                panel.Contains("AddSectionHeader(\"IN QUEUE - \""))
+                failures.Add("upgrade browsing does not lead cleanly with queue history isolated in the opt-in drawer");
             if (!panel.Contains("Showing \" + (first + 1)") ||
                 !panel.Contains("Previous page") || !panel.Contains("Next page"))
                 failures.Add("overflow has no visible count and bidirectional paging affordance");
-            if (!panel.Contains("Need something that is not placed here?") || !panel.Contains("Build new"))
-                failures.Add("absent categories have no secondary Build-new route");
+            if (!panel.Contains("Need another town structure?") ||
+                !panel.Contains("\"Open build\", OpenTownBuilder") ||
+                !panel.Contains("EnterBuildMode(DeNelle.Core.Catalog.BuildType.Town)"))
+                failures.Add("absent building categories have no real secondary Town-build route");
 
             reason = failures.Count == 0
-                ? "Manage categories follow live placements; actions lead; overflow count/paging and Build-new route are visible."
+                ? "Manage keeps four stable worded cards, derives availability from live placements, renders after VM population, and preserves actions/paging/Build-new."
                 : "Manage progressive disclosure regression failed: " + string.Join("; ", failures);
             return failures.Count == 0;
         }

@@ -48,7 +48,11 @@ namespace DeNelle.Village
         {
             if (_stageRoot == null) return;
             for (int i = _stageRoot.transform.childCount - 1; i >= 0; i--)
-                Destroy(_stageRoot.transform.GetChild(i).gameObject);
+            {
+                var child = _stageRoot.transform.GetChild(i);
+                child.SetParent(null, false);
+                Destroy(child.gameObject);
+            }
 
             if (_railIndex == RailGear)  { BuildGearSection(_stageRoot.transform); return; }
             if (_railIndex == RailSkills)
@@ -135,9 +139,16 @@ namespace DeNelle.Village
         private void BuildWornSlot(Transform stage, WornSlot slot, Vector2 min, Vector2 max)
         {
             // D4: the worn-gear plate is the kit slot art (slot_armor), not a hand-rolled frame.
-            var plate = ElarionUiKit.Slot(stage, 0, min, max);
-            if (plate == null) return;
+            var plate = AddImage(stage, "WornSlot", min, max, Color.white);
             plate.name = "WornSlot";
+            var plateImage = plate.GetComponent<Image>();
+            var panelSprite = Resources.Load<Sprite>("UI/ElarionMedieval/frames/content-panel");
+            if (plateImage != null && panelSprite != null)
+            {
+                plateImage.sprite = panelSprite;
+                plateImage.type = Image.Type.Simple;
+                plateImage.color = Color.white;
+            }
 
             // A worn row is useful navigation, not a dead summary plate: tapping it opens the
             // matching pile where replacements can be inspected. This changes no equip semantics.
@@ -288,32 +299,63 @@ namespace DeNelle.Village
                 Vector2.one, new Color(0f, 0f, 0f, 0f));
             NoRaycast(scrollHost);
             var zone = ElarionUiKit.MakeScrollZone(scrollHost.transform, GridGapPx, (int)GridPadPx);
+
+            // WO-1293 (device seq 4077): an NRE inside this method blanked the peek strip while
+            // SafeRun let the rest of the Bag survive. The stack could not say WHICH reference
+            // was null, so every kit-handle lookup is probed and named here BEFORE any
+            // dereference -- the next capture pinpoints the dead piece from data (CLAUDE.md
+            // section 12), and each use below is guarded so a missing piece degrades the strip
+            // instead of killing it.
+            if (zone == null || zone.content == null || zone.scroll == null)
+            {
+                FlowTrace.Fail("Inventory",
+                    "BuildPeekStrip: MakeScrollZone handle incomplete -- zone=" +
+                    (zone == null ? "NULL" : "ok") +
+                    " content=" + (zone == null || zone.content == null ? "NULL" : "ok") +
+                    " scroll=" + (zone == null || zone.scroll == null ? "NULL" : "ok") +
+                    "; cannot build the peek strip.");
+                return;
+            }
             zone.content.gameObject.name = "PeekContent";
+
+            var column = zone.content.GetComponent<VerticalLayoutGroup>();
+            var fitter = zone.content.GetComponent<ContentSizeFitter>();
+            var scrollbarRt = zone.scrollbar != null ? zone.scrollbar.transform as RectTransform : null;
+            FlowTrace.Step("Inventory",
+                "BuildPeekStrip probes: portrait=" + _portraitLayout +
+                " column=" + (column == null ? "NULL" : "ok") +
+                " fitter=" + (fitter == null ? "NULL" : "ok") +
+                " scrollbar=" + (zone.scrollbar == null ? "NULL" : "ok") +
+                " scrollbarRt=" + (scrollbarRt == null ? "NULL" : "ok") +
+                " viewport=" + (zone.viewport == null ? "NULL" : "ok"));
+            if (column == null || fitter == null || zone.scrollbar == null || scrollbarRt == null || zone.viewport == null)
+            {
+                FlowTrace.Warn("Inventory",
+                    "BuildPeekStrip: a kit scroll-zone piece is missing (probe line above names it). " +
+                    "MakeScrollZone's contract builds all of them -- a NULL here is the WO-1293 dead " +
+                    "reference. Continuing on the hardened path.");
+            }
 
             if (_portraitLayout)
             {
-                var column = zone.content.GetComponent<VerticalLayoutGroup>();
-                column.padding.bottom = Mathf.CeilToInt(portraitRow * 0.40f);
+                if (column != null) column.padding.bottom = Mathf.CeilToInt(portraitRow * 0.40f);
                 zone.scroll.horizontal = false;
                 zone.scroll.vertical = true;
                 zone.scroll.verticalScrollbar = zone.scrollbar;
             }
             else
             {
-                var column = zone.content.GetComponent<VerticalLayoutGroup>();
                 if (column != null) column.enabled = false;
-                var row = zone.content.gameObject.AddComponent<HorizontalLayoutGroup>();
-                row.spacing = GridGapPx;
-                row.padding = new RectOffset((int)GridPadPx,
-                    Mathf.CeilToInt(landscapeCard * 0.40f), (int)GridPadPx, (int)GridPadPx);
-                row.childAlignment = TextAnchor.MiddleLeft;
-                row.childControlWidth = false;
-                row.childControlHeight = false;
-                row.childForceExpandWidth = false;
-                row.childForceExpandHeight = false;
-                var fitter = zone.content.GetComponent<ContentSizeFitter>();
-                fitter.horizontalFit = ContentSizeFitter.FitMode.PreferredSize;
-                fitter.verticalFit = ContentSizeFitter.FitMode.Unconstrained;
+                // A GameObject may own only one LayoutGroup. The old code disabled the kit's
+                // VerticalLayoutGroup and then attempted to AddComponent<HorizontalLayoutGroup>
+                // on the SAME object; Unity rejects that combination and the stocked Bag renders
+                // an empty stage. Place cards explicitly along X instead. This is deterministic,
+                // avoids a deferred component swap, and keeps MakeScrollZone's mask/track intact.
+                if (fitter != null)
+                {
+                    fitter.horizontalFit = ContentSizeFitter.FitMode.Unconstrained;
+                    fitter.verticalFit = ContentSizeFitter.FitMode.Unconstrained;
+                }
                 zone.content.anchorMin = new Vector2(0f, 0f);
                 zone.content.anchorMax = new Vector2(0f, 1f);
                 zone.content.pivot = new Vector2(0f, 0.5f);
@@ -321,13 +363,17 @@ namespace DeNelle.Village
                 zone.scroll.vertical = false;
                 zone.scroll.verticalScrollbar = null;
                 zone.scroll.horizontalScrollbar = zone.scrollbar;
-                zone.scrollbar.direction = Scrollbar.Direction.LeftToRight;
-                var srt = zone.scrollbar.transform as RectTransform;
-                srt.anchorMin = new Vector2(0f, 0f);
-                srt.anchorMax = new Vector2(1f, 0f);
-                srt.pivot = new Vector2(0.5f, 0f);
-                srt.offsetMin = Vector2.zero;
-                srt.offsetMax = new Vector2(0f, 10f);
+                if (zone.scrollbar != null) zone.scrollbar.direction = Scrollbar.Direction.LeftToRight;
+                if (scrollbarRt != null)
+                {
+                    // `as RectTransform` returns null SILENTLY on a mismatch -- that cast is one
+                    // of the WO-1293 candidates, which is why srt is probed above, never assumed.
+                    scrollbarRt.anchorMin = new Vector2(0f, 0f);
+                    scrollbarRt.anchorMax = new Vector2(1f, 0f);
+                    scrollbarRt.pivot = new Vector2(0.5f, 0f);
+                    scrollbarRt.offsetMin = Vector2.zero;
+                    scrollbarRt.offsetMax = new Vector2(0f, 10f);
+                }
             }
 
             BuildCellsFromVM(zone.content);
@@ -336,19 +382,38 @@ namespace DeNelle.Village
             {
                 var child = zone.content.GetChild(i) as RectTransform;
                 if (child == null) continue;
-                child.sizeDelta = _portraitLayout
-                    ? new Vector2(0f, portraitRow)
-                    : new Vector2(landscapeCard, landscapeCard);
+                if (_portraitLayout)
+                {
+                    child.sizeDelta = new Vector2(0f, portraitRow);
+                }
+                else
+                {
+                    child.anchorMin = new Vector2(0f, 0.5f);
+                    child.anchorMax = new Vector2(0f, 0.5f);
+                    child.pivot = new Vector2(0f, 0.5f);
+                    child.sizeDelta = new Vector2(landscapeCard, landscapeCard);
+                    child.anchoredPosition = new Vector2(
+                        GridPadPx + i * (landscapeCard + GridGapPx), 0f);
+                }
+            }
+            if (!_portraitLayout)
+            {
+                float width = GridPadPx + zone.content.childCount * landscapeCard +
+                              Mathf.Max(0, zone.content.childCount - 1) * GridGapPx +
+                              landscapeCard * 0.40f;
+                zone.content.sizeDelta = new Vector2(width, 0f);
             }
 
             Canvas.ForceUpdateCanvases();
             LayoutRebuilder.ForceRebuildLayoutImmediate(zone.content);
-            var viewportExtent = _portraitLayout ? zone.viewport.rect.height : zone.viewport.rect.width;
+            float viewportExtent = zone.viewport != null
+                ? (_portraitLayout ? zone.viewport.rect.height : zone.viewport.rect.width)
+                : 0f;
             int visible = Mathf.Max(1, Mathf.FloorToInt(
                 (viewportExtent - GridPadPx * 2f) / (itemExtent + GridGapPx)));
             int overflow = Mathf.Max(0, _vm.Slots.Count - visible);
             bool hasOverflow = overflow > 0;
-            zone.scrollbar.gameObject.SetActive(hasOverflow);
+            if (zone.scrollbar != null) zone.scrollbar.gameObject.SetActive(hasOverflow);
             if (_portraitLayout)
                 zone.scroll.verticalScrollbarVisibility = ScrollRect.ScrollbarVisibility.Permanent;
             else
@@ -537,6 +602,24 @@ namespace DeNelle.Village
                     TMPro.TextAlignmentOptions.Center, 0.10f, 0.90f, bold: true);
                 glyphLbl.raycastTarget = false;
             }
+
+            // Identity must remain readable even when the icon is unfamiliar. The old rarity
+            // slot discarded its `name` argument completely, leaving a picture-only potion with
+            // no visible stack count. Reserve a backed lower caption; consumable names already
+            // carry their authoritative "xN" suffix from InventoryVM.
+            var namePlate = AddImage(slot.root.transform, "ItemNamePlate",
+                new Vector2(0.03f, 0.02f), new Vector2(0.97f, 0.24f),
+                new Color(0.015f, 0.012f, 0.018f, 0.94f));
+            NoRaycast(namePlate);
+            var itemName = AddLabel(namePlate.transform, ElarionUiKit.SpacedDisplayName(name ?? ""),
+                0f, 1f, Ink, ElarionUi.FontMicro, TMPro.TextAlignmentOptions.Center,
+                0.04f, 0.96f, bold: true);
+            itemName.raycastTarget = false;
+            itemName.enableAutoSizing = true;
+            itemName.fontSizeMin = 16f;
+            itemName.fontSizeMax = ElarionUi.FontMicro;
+            itemName.textWrappingMode = TMPro.TextWrappingModes.Normal;
+            itemName.overflowMode = TMPro.TextOverflowModes.Ellipsis;
 
             // SELECTED = gold inner rim + lit plate (shape + brightness — never colour alone;
             // the pane also names the selection, which is the third, unmissable tell).

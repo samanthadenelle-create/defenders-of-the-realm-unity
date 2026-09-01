@@ -57,6 +57,7 @@ namespace DeNelle.Core.UI
         public const string RoleButton = "button";
         public const string RolePanel  = "panel";
         public const string RoleSlot   = "slot";
+        public const string RoleTroop  = "troop";  // canonical troop-id portraits (WO-1294)
         // Blink "OBSIDIAN UI" roles (mirrored by RpgUiImporter from Assets/Blink):
         public const string RoleFrame      = "frame";       // full ornate obsidian panel backgrounds
         public const string RoleSilhouette = "silhouette";  // paper-doll body silhouettes

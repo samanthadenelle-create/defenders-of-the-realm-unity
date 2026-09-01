@@ -63,6 +63,9 @@ namespace DeNelle.HUD
         private bool _pixelBandsApplied;
         private float _maxBodyPx = 460f;   // recomputed from the original rect height on first paint
         private float _lastPanelH = -1f;
+        private bool _compactPresentation;
+        private float _regularHeaderXMin;
+        private float _regularHeaderXMax;
 
         // -- WO-1030 option-band metrics (owner screenshot 2026-08-16: 'Repair structures'
         // sliced by the panel edge). Options are NOT OPTIONAL -- an unreachable choice is a
@@ -70,6 +73,19 @@ namespace DeNelle.HUD
         private const float OptionRowGapPx = 8f;   // spacing between option rows (kit scroll column)
         private const float OptionsPadPx = 6f;     // MakeScrollZone padding (top+bottom each)
         private const float OptionsGapPx = 12f;    // gap between the text well and the option band
+
+        // Full dialogue geometry contract. EchoEngageDialogueRegression reads these constants
+        // directly to prove the standard (non-compact) surface fits every capture aspect. The
+        // compact helper variant derives smaller locals in ResizeToContent, but must not erase
+        // the measurable baseline contract from source.
+        private const float TopPad = 18f;
+        private const float HeaderPx = 108f;
+        private const float Gap = 10f;
+        private const float BottomMarginPx = 24f;
+        // Two wrapped 30px prose lines plus the scroll well's 20px vertical padding. The old
+        // 54px floor could only hold one line and visibly sliced the opening sentence whenever
+        // a four-choice node reserved most of the body for touch rows.
+        private const float MinBodyPx = 96f;
         private bool _reserveCloseBand;    // set per-Repaint: true only when the shared Close is visible
 
         // F8 2026-07-06 (t=328): the dialogue now routes through the modal arbiter
@@ -124,6 +140,7 @@ namespace DeNelle.HUD
         // version-cheaply each Update. On modal close the panel re-shows, re-notifies
         // the arbiter, and the conversation resumes exactly where it was.
         private bool _hiddenForModal;
+        private bool _hiddenForCombat;
 
         private void OnOpened(DialogueViewModel vm)
         {
@@ -142,6 +159,10 @@ namespace DeNelle.HUD
             // dialogue riding a Rumor Board accept): start HIDDEN -- no overlap flash,
             // no arbiter registration yet; the reshow Repaint registers on modal close.
             _hiddenForModal = PanelManager.AnyOpen && !_arbiterNotified;
+            _hiddenForCombat = DeNelle.Core.Combat.BattleLock.IsInBattle();
+            if (_hiddenForCombat)
+                DeNelle.Core.Diagnostics.FlowTrace.Step("Dialogue",
+                    "opened during combat -- starting hidden at current line; resumes after combat.");
             if (_hiddenForModal)
                 DeNelle.Core.Diagnostics.FlowTrace.Step("UI",
                     "Dialogue suppressed - modal open ('" + (PanelManager.OpenPanelName ?? "?") +
@@ -171,6 +192,7 @@ namespace DeNelle.HUD
         {
             Unbind();
             _hiddenForModal = false;   // WO-795: a truce never outlives its conversation
+            _hiddenForCombat = false;
             _portrait = null;
             if (_ui != null) { Destroy(_ui); _ui = null; }
             if (_arbiterNotified) { PanelManager.NotifyClosed(_handle); _arbiterNotified = false; }
@@ -230,12 +252,38 @@ namespace DeNelle.HUD
             // thumb clusters with margin; y 0.20 clears the action bar by 0.05; y 0.62
             // stays under TargetInfo. Both HUD areas and this panel anchor by fraction of
             // screen, so the clearance holds at 16:9 and 19.5:9 alike.
+            // Choice conversations are decisions, not transient HUD callouts. Give the regular
+            // presentation a true mobile reading canvas so four touch-sized choices can remain
+            // visible together. The compact townsfolk/helper presentation retains the smaller
+            // HUD-safe footprint.
+            Vector2 dialogueMin = _compactPresentation
+                ? new Vector2(0.29f, 0.20f) : new Vector2(0.18f, 0.10f);
+            Vector2 dialogueMax = _compactPresentation
+                ? new Vector2(0.71f, 0.62f) : new Vector2(0.82f, 0.90f);
             var chrome = ElarionUiKit.BuildObsidianPanel(_ui.transform, "",
-                new Vector2(0.29f, 0.20f), new Vector2(0.71f, 0.62f),
+                dialogueMin, dialogueMax,
                 () => _vm?.Close(), withBackdrop: false, frameName: RpgUiCatalog.FrameCore);
+            MedievalUiSkin.ApplyShell(chrome, compact: _compactPresentation);
             _box = chrome.root.GetComponent<RectTransform>();
+            // The entire visible frame is the advance surface. Previously only the prose
+            // viewport carried a Button, so tapping the title, lower chrome, or empty reading
+            // space appeared broken to players. Child choice/Close buttons still win their own
+            // raycasts; OnBoxTapped is also state-gated and never chooses an option.
+            var panelTap = _box.GetComponent<Button>() ?? _box.gameObject.AddComponent<Button>();
+            panelTap.targetGraphic = _box.GetComponent<Image>();
+            panelTap.transition = Selectable.Transition.None;
+            panelTap.onClick.AddListener(OnBoxTapped);
 
             var contentRoot = chrome.content.transform;
+
+            // FrameCore supplies ornamental transparent chrome. Paint one continuous
+            // black-iron field behind every dialogue band so the world never shows
+            // through between the header, prose well and lower rail.
+            var dialogueFill = ElarionUiKit.AddImage(contentRoot, "DialogueBodyFill",
+                Vector2.zero, Vector2.one, ElarionUiKit.ObsidianFill, rounded: false);
+            dialogueFill.transform.SetAsFirstSibling();
+            var dialogueFillImage = dialogueFill.GetComponent<Image>();
+            if (dialogueFillImage != null) dialogueFillImage.raycastTarget = false;
 
             // Kit drop-zones (the protected class — the factory's close-band reservation only
             // guards content INSIDE layout.*; laying custom fractions on chrome.content is the
@@ -268,6 +316,8 @@ namespace DeNelle.HUD
             // Content-fit hooks: cache the zone rects so ResizeToContent can re-pin them to
             // fixed-pixel bands (decoupling them from the now-variable panel height).
             _headerZone = headerZone; _bodyZone = bodyZone; _footerZone = footerZone; _portraitHost = portraitHost;
+            _regularHeaderXMin = headerZone.anchorMin.x;
+            _regularHeaderXMax = headerZone.anchorMax.x;
 
             // The medallion socket hosts the SPEAKER PORTRAIT (refreshed per Repaint), not the
             // factory's generic crest emblem — hide the fallback emblem so the two never stack.
@@ -300,10 +350,10 @@ namespace DeNelle.HUD
             // them to 13/12 in the thin header band. Authoring on the ladder lets auto-size use
             // the room; the guard's FontHardFloor(20) is now the readable last resort, never 12.
             _speaker = MakeLabel(headerZone, "Speaker", new Vector2(0f, 0.45f), Vector2.one,
-                36, ElarionUi.Gilt, TMPro.FontStyles.Bold, TMPro.TextAlignmentOptions.BottomLeft);
+                36, ElarionUi.Gilt, TMPro.FontStyles.Bold, TMPro.TextAlignmentOptions.Bottom);
             ElarionUiKit.FitSingleLine(_speaker);
             _affiliation = MakeLabel(headerZone, "Affiliation", Vector2.zero, new Vector2(1f, 0.45f),
-                26, ElarionUi.ParchmentDim, TMPro.FontStyles.Italic, TMPro.TextAlignmentOptions.TopLeft);
+                26, ElarionUi.ParchmentDim, TMPro.FontStyles.Italic, TMPro.TextAlignmentOptions.Top);
             ElarionUiKit.FitSingleLine(_affiliation);
             // SCROLLABLE BODY (owner 2026-07-06: "in case there is more text, scrollable"):
             // the body zone hosts the §1.14 kit scroll zone (vertical, clamped, auto-hide
@@ -319,7 +369,7 @@ namespace DeNelle.HUD
             var scrollZone = ElarionUiKit.MakeScrollZone(wellGo.transform, spacing: 0f, padding: 8);
 
             _body = MakeLabel(scrollZone.content, "Body", Vector2.zero, Vector2.one,
-                30, ElarionUi.Parchment, TMPro.FontStyles.Normal, TMPro.TextAlignmentOptions.TopLeft);
+                30, ElarionUi.Parchment, TMPro.FontStyles.Normal, TMPro.TextAlignmentOptions.Center);
             // The scroll column deliberately does NOT control child height (§1.14 kit note —
             // the captured PartyShop collapse, runs 9400/9401), so the label carries its own:
             // a vertical ContentSizeFitter grows it with its text, and the column's own
@@ -447,8 +497,10 @@ namespace DeNelle.HUD
         private void Update()
         {
             TickBuilderTruce();
+            TickCombatTruce();
             TickModalTruce();
             if (_vm != null && _vm.HiddenForBuilder) return;   // WO-702: no any-key advance on an invisible dialogue
+            if (_hiddenForCombat) return;
             if (_hiddenForModal) return;                       // WO-795: same law while a modal owns the screen
             if (_vm == null || !_vm.IsOpen || _vm.ShowingOptions) return;
             if (Time.unscaledTime - _openedAt < AdvanceMinHold) return;
@@ -458,6 +510,34 @@ namespace DeNelle.HUD
                 !UnityEngine.Input.GetMouseButtonDown(2))
             {
                 _vm.Advance();
+            }
+        }
+
+        // A combat start temporarily yields the whole screen to the combat HUD. The dialogue VM
+        // remains open at the same line: no Ended event, no tutorial step falsely completed.
+        // WaveManager's PanelManager.CloseAll reaches OnArbiterClose; that path sets this flag too.
+        private void TickCombatTruce()
+        {
+            if (_vm == null) return;
+            bool combat = DeNelle.Core.Combat.BattleLock.IsInBattle();
+            if (combat == _hiddenForCombat) return;
+            _hiddenForCombat = combat;
+            if (_vm.IsOpen && _ui != null)
+            {
+                if (combat)
+                {
+                    if (_arbiterNotified) PanelManager.NotifyClosed(_handle);
+                    _arbiterNotified = false;
+                    DeNelle.Core.Diagnostics.FlowTrace.Step("Dialogue",
+                        "hidden for combat -- panel off, VM paused at current line, Ended NOT fired.");
+                }
+                else
+                {
+                    _openedAt = Time.unscaledTime;
+                    DeNelle.Core.Diagnostics.FlowTrace.Step("Dialogue",
+                        "restored after combat -- current tutorial line resumed.");
+                }
+                Repaint();
             }
         }
 
@@ -523,6 +603,7 @@ namespace DeNelle.HUD
         private void OnBoxTapped()
         {
             if (_vm == null) return;
+            if (Time.unscaledTime - _openedAt < AdvanceMinHold) return;
             if (!_vm.ShowingOptions) _vm.Advance();   // tapping the box advances lines, not choices
         }
 
@@ -538,6 +619,15 @@ namespace DeNelle.HUD
         // real dismissal and never routes through this.
         private void OnArbiterClose()
         {
+            if (_vm != null && _vm.IsOpen && DeNelle.Core.Combat.BattleLock.IsInBattle())
+            {
+                _arbiterNotified = false;
+                _hiddenForCombat = true;
+                DeNelle.Core.Diagnostics.FlowTrace.Step("Dialogue",
+                    "combat CloseAll converted to truce -- dialogue hidden, VM remains open at current line.");
+                Repaint();
+                return;
+            }
             if (_vm != null && _vm.IsOpen && PanelManager.AnyOpen)
             {
                 _arbiterNotified = false;   // the arbiter now tracks the other modal; re-notify on restore
@@ -562,8 +652,8 @@ namespace DeNelle.HUD
             // isOpen-verify false-Fail; it fires on the reshow Repaint instead.
             // WO-795: the modal truce hides by the same law — NotifyOpened while another
             // modal is up would swap-close that modal; it fires on the reshow instead.
-            _ui.SetActive(open && !_vm.HiddenForBuilder && !_hiddenForModal);
-            if (!open || _vm.HiddenForBuilder || _hiddenForModal) return;
+            _ui.SetActive(open && !_vm.HiddenForBuilder && !_hiddenForCombat && !_hiddenForModal);
+            if (!open || _vm.HiddenForBuilder || _hiddenForCombat || _hiddenForModal) return;
 
             // Register + announce to the modal arbiter on the FIRST visible paint.
             // (DialogueService raises Opened BEFORE vm.Begin(), so IsOpen is still false
@@ -588,7 +678,16 @@ namespace DeNelle.HUD
                 _affiliation.gameObject.SetActive(!string.IsNullOrEmpty(aff));
             }
             if (_body != null) _body.text = _vm.Text;
+            // Short, linear helper lines are moment-to-moment guidance, not story cards.  Give
+            // them a compact speaker strip and reading line instead of reserving a portrait-sized
+            // header and leaving a large black void. Choices and longer passages retain the full
+            // portrait composition.
+            _compactPresentation = !_vm.ShowingOptions &&
+                !string.IsNullOrWhiteSpace(_vm.Speaker) &&
+                !string.IsNullOrWhiteSpace(_vm.Text) &&
+                _vm.Text.Length <= 140;
             RefreshPortrait();
+            if (_portraitHost != null) _portraitHost.gameObject.SetActive(!_compactPresentation);
 
             BuildOptions();
 
@@ -644,13 +743,15 @@ namespace DeNelle.HUD
             // the bands sat empty. Trim both to the minimum that still seats their content (header:
             // 36 speaker + 26 affiliation + letterboxed portrait; footer: the 120px shared Close +
             // margin) so the BODY is the dominant zone of the box.
-            const float TopPad = 18f, HeaderPx = 108f, Gap = 10f;
+            float TopPad = _compactPresentation ? 36f : 18f;
+            float HeaderPx = _compactPresentation ? 68f : 108f;
+            float Gap = _compactPresentation ? 8f : 10f;
             const float BottomBandPx = 132f;   // clears the fixed 120px shared Close band + 12px margin (Close SHOWN)
             // OWNER F8 2026-07-17 ("still scroll issue in window" + big empty box): for a normal
             // passage the Close is HIDDEN (action arb close=False), so the 132px band below the text
             // was an empty black void (~39% of a 336px box). Collapse it to a thin border margin when
             // the Close is not shown so the text well fills the box.
-            const float BottomMarginPx = 24f;  // clears the frame's bottom border art (~5% of panel)
+            float BottomMarginPx = _compactPresentation ? 20f : 24f;
             // OWNER F8 2026-07-17 ("still scroll issue"): the scroll WELL's content is the raw text
             // PLUS the kit scroll column's own vertical padding (MakeScrollZone padding:8 -> 8 top +
             // 8 bottom = 16px). Sizing the viewport to the bare text left the content 16px taller than
@@ -658,7 +759,7 @@ namespace DeNelle.HUD
             // contentH=68 -> 68px viewport while the well content was ~84px). Add the pad (+4px so the
             // content can never equal/exceed the viewport -> the auto-hide scrollbar stays hidden).
             const float BodyWellPadPx = 20f;   // 16px MakeScrollZone padding + 4px no-overflow margin
-            const float MinBodyPx = 54f;       // one 30px reading line + padding
+            float MinBodyPx = _compactPresentation ? 52f : 96f;
             // OWNER F8 2026-07-16 ("the text box should use the FULL dialog box"): the kit FrameCore
             // body zone is inset ~5.5% each side (0.055..0.945), so the text/plate read as a small
             // box floating inside the frame. Widen the body to the frame's INNER border and keep only
@@ -731,6 +832,34 @@ namespace DeNelle.HUD
 
                 _pixelBandsApplied = true;
                 Canvas.ForceUpdateCanvases();
+            }
+
+            // Presentation can change as the same VM advances from a short helper line into a
+            // longer passage or a choice. Re-seat the fixed bands on every paint so that switch
+            // is reversible and never inherits stale compact geometry.
+            if (_headerZone != null)
+            {
+                _headerZone.anchorMin = new Vector2(
+                    _compactPresentation ? BodyInsetX : _regularHeaderXMin, _headerZone.anchorMin.y);
+                _headerZone.anchorMax = new Vector2(
+                    _compactPresentation ? 1f - BodyInsetX : _regularHeaderXMax, _headerZone.anchorMax.y);
+                PinTopBand(_headerZone, TopPad, HeaderPx);
+            }
+            if (_portraitHost != null) PinTopBand(_portraitHost, TopPad, HeaderPx);
+            if (_bodyZone != null)
+                _bodyZone.offsetMax = new Vector2(_bodyZone.offsetMax.x, -(TopPad + HeaderPx + Gap));
+
+            // The compact strip has no portrait/affiliation composition, so seat the speaker
+            // name comfortably inside the upper iron rail.  Leaving the stock header label at
+            // y=0.45..1 makes its ascenders ride across the ornate top edge after the panel hugs
+            // a one-line reply.  Use offsets (not a font shrink) so the 36px mobile reading size
+            // stays intact, and restore the authored geometry for full dialogue cards.
+            if (_speaker != null)
+            {
+                var speakerRt = _speaker.rectTransform;
+                float compactInset = _compactPresentation ? 16f : 0f;
+                speakerRt.offsetMin = new Vector2(speakerRt.offsetMin.x, -compactInset);
+                speakerRt.offsetMax = new Vector2(speakerRt.offsetMax.x, -compactInset);
             }
 
             // Measure the body's preferred height at its (height-independent) current width, then add
@@ -938,15 +1067,24 @@ namespace DeNelle.HUD
                 var ort = (RectTransform)go.transform;
                 ort.sizeDelta = new Vector2(0f, ElarionUiKit.MinTouchPx);
                 go.GetComponent<LayoutElement>().minHeight = ElarionUiKit.MinTouchPx;
-                var b = ElarionUi.PanelStone;
-                go.GetComponent<Image>().color = new Color(b.r, b.g, b.b, 0.96f);
-                go.GetComponent<Button>().onClick.AddListener(() => _vm?.Choose(idx));
+                var optionButton = go.GetComponent<Button>();
+                optionButton.onClick.AddListener(() => _vm?.Choose(idx));
+                // Choices are first-class actions, not raw black list rows. Use the same scalable
+                // black-iron/gold control family as the rest of the reskin; runtime text remains
+                // separate and the full row stays the touch target.
+                MedievalUiSkin.ApplyButton(optionButton, primary: false);
+                var optionFace = go.GetComponent<Image>();
+                if (optionFace != null)
+                {
+                    optionFace.type = Image.Type.Simple;
+                    optionFace.color = Color.white;
+                }
 
                 // Mobile-readable option text (was 15 — sub-legible; F8 2026-07-08). The row's
                 // MinTouchPx height seats a 26px line with room; FitBlock wraps + the guard's
                 // readable floor keeps a long option legible rather than shrinking it into the plate.
-                var lbl = MakeLabel(go.transform, "L", new Vector2(0.04f, 0f), new Vector2(0.96f, 1f),
-                    26, ElarionUi.Parchment, TMPro.FontStyles.Normal, TMPro.TextAlignmentOptions.Left);
+                var lbl = MakeLabel(go.transform, "L", new Vector2(0.08f, 0.08f), new Vector2(0.94f, 0.92f),
+                    26, ElarionUi.Parchment, TMPro.FontStyles.Normal, TMPro.TextAlignmentOptions.MidlineLeft);
                 lbl.text = labels[i];
                 lbl.raycastTarget = false;
                 ElarionUiKit.FitBlock(lbl, minSize: 20f, maxSize: 26f);

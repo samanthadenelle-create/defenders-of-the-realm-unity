@@ -69,7 +69,7 @@ namespace DeNelle.Core.UI
 
         /// <summary>The text box spans these fractions of the plate width (set in
         /// <see cref="Build"/>); a wrap must be measured against that, not the plate.</summary>
-        private const float TextAnchorMinX = 0.02f;
+        private const float TextAnchorMinX = 0.06f;
         private const float TextAnchorMaxX = 0.80f;
 
         /// <summary>Ceiling on a wrapped plate, in measured LINES - not in pixels, so it
@@ -121,10 +121,15 @@ namespace DeNelle.Core.UI
             b._baseText = text ?? "";
             b._count = Mathf.Max(0, count);
             b._done = 0;
-            b.RefreshLabel();
+            bool hasSkip = onSkip != null || onSkipAll != null;
             // D16: one control — per-step skip when the step supplies it, else skip-all.
-            if (b._skipHost != null) b._skipHost.SetActive(onSkip != null || onSkipAll != null);
+            if (b._skipHost != null) b._skipHost.SetActive(hasSkip);
             if (b._skipLabel != null) b._skipLabel.text = onSkip != null ? "Skip >" : "Skip Tutorial";
+            // Maintenance has no action, so its message may use the full authored plate.
+            // Reserve the narrower lane only while the integrated Skip control is live.
+            if (b._label != null)
+                b._label.rectTransform.anchorMax = new Vector2(hasSkip ? TextAnchorMaxX : 0.94f, 0.88f);
+            b.RefreshLabel();
         }
 
         /// <summary>Update progress on a counted objective (e.g. 1 of 1 towers).</summary>
@@ -177,6 +182,8 @@ namespace DeNelle.Core.UI
             if (_label == null) return;
 
             _label.textWrappingMode = _wrap ? TextWrappingModes.Normal : TextWrappingModes.NoWrap;
+            _label.alignment = _wrap ? TextAlignmentOptions.Center : TextAlignmentOptions.MidlineLeft;
+            _label.fontSize = _wrap ? 15f : 20f;
 
             if (_plate == null) return;
 
@@ -187,7 +194,8 @@ namespace DeNelle.Core.UI
                 return;
             }
 
-            float textWidth = BannerWidth * (TextAnchorMaxX - TextAnchorMinX);
+            var labelRt = _label.rectTransform;
+            float textWidth = BannerWidth * (labelRt.anchorMax.x - labelRt.anchorMin.x);
             try
             {
                 // The plate's built-in breathing room, DERIVED rather than assumed: the
@@ -200,7 +208,10 @@ namespace DeNelle.Core.UI
                         " - no usable font metrics, keeping the fixed " + BannerHeight + "px plate.");
                     return;
                 }
-                float padding = Mathf.Max(0f, BannerHeight - oneLine);
+                // The authored gold frame consumes real vertical ink at both edges. Preserve
+                // a minimum inner gutter even when TMP's one-line metrics nearly fill the old
+                // raw 46px rectangle; otherwise the second wrapped line crosses the frame.
+                float padding = Mathf.Max(36f, BannerHeight - oneLine);
                 float needed = _label.GetPreferredValues(_label.text, textWidth, 0f).y;
                 float height = Mathf.Clamp(needed + padding, BannerHeight, oneLine * MaxWrapLines + padding);
 
@@ -259,10 +270,20 @@ namespace DeNelle.Core.UI
             prt.sizeDelta = new Vector2(BannerWidth, BannerHeight);
             _plate = prt;   // WO-1245: held so a wrapped line can grow it to a measured height
             var pimg = plate.GetComponent<Image>();
-            // Obsidian plate: the single ObsidianFill hue at a translucent alpha so the
-            // strip reads as the kit's black-panel language (play area shows through).
-            pimg.color = new Color(ElarionUiKit.ObsidianFill.r, ElarionUiKit.ObsidianFill.g,
-                                   ElarionUiKit.ObsidianFill.b, 0.86f);
+            // Use the authored black-iron/gold action plate. The retired presentation was a
+            // raw black rectangle with a detached gold line, visibly outside the reskin.
+            var plateSprite = Resources.Load<Sprite>("UI/ElarionMedieval/buttons/button-normal-empty");
+            if (plateSprite != null)
+            {
+                pimg.sprite = plateSprite;
+                pimg.type = Image.Type.Simple;
+                pimg.color = Color.white;
+            }
+            else
+            {
+                pimg.color = new Color(ElarionUiKit.ObsidianFill.r, ElarionUiKit.ObsidianFill.g,
+                                       ElarionUiKit.ObsidianFill.b, 0.96f);
+            }
             pimg.raycastTarget = false;
 
             // Gold accent rule along the bottom edge (kit chrome vocabulary).
@@ -274,19 +295,24 @@ namespace DeNelle.Core.UI
             rrt.pivot = new Vector2(0.5f, 0f);
             rrt.sizeDelta = new Vector2(0f, 2f);
             var rimg = rule.GetComponent<Image>();
-            rimg.color = new Color(ElarionUi.Gold.r, ElarionUi.Gold.g, ElarionUi.Gold.b, 0.85f);
+            // The authored plate owns its edge. Keep the procedural rule only as fallback.
+            rimg.color = plateSprite == null
+                ? new Color(ElarionUi.Gold.r, ElarionUi.Gold.g, ElarionUi.Gold.b, 0.85f)
+                : new Color(0f, 0f, 0f, 0f);
             rimg.raycastTarget = false;
 
             // Objective text.
             var textGo = new GameObject("Text", typeof(RectTransform));
             textGo.transform.SetParent(prt, false);
             var trt = (RectTransform)textGo.transform;
-            trt.anchorMin = new Vector2(TextAnchorMinX, 0f);
+            trt.anchorMin = new Vector2(TextAnchorMinX, 0.12f);
             // 0.80, not the old 0.86: the D16 skip control's visible face now reaches
             // ~0.83 of the plate, and an ellipsized objective must not run under it.
-            trt.anchorMax = new Vector2(TextAnchorMaxX, 1f);
-            trt.offsetMin = Vector2.zero;
-            trt.offsetMax = Vector2.zero;
+            trt.anchorMax = new Vector2(TextAnchorMaxX, 0.88f);
+            // TMP's visual baseline sits low inside its measured line box; lift the complete
+            // text lane slightly so two-line notices have equal optical air above and below.
+            trt.offsetMin = new Vector2(0f, 6f);
+            trt.offsetMax = new Vector2(0f, 6f);
             _label = textGo.AddComponent<TextMeshProUGUI>();
             ElarionUiKit.EnsureFont(_label);
             _label.fontSize = 20f;

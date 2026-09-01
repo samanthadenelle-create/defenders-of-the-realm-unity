@@ -164,6 +164,7 @@ namespace DeNelle.HUD
                 new Vector2(0.06f, 0.12f), new Vector2(0.94f, 0.88f),
                 onClose: () => { _visible = false; ApplyVisibility(); },
                 withBackdrop: false, frameName: RpgUiCatalog.FrameQuest, medallionIcon: "quest");
+            MedievalUiSkin.ApplyShell(_chrome);
 
             // Drop-zones only (canon §4): split wells when the frame resolves; graceful
             // fallback zones on the procedural path (frame art absent — never blank).
@@ -329,13 +330,13 @@ namespace DeNelle.HUD
             vlg.spacing = EmptyGapPx;
 
             var head = ElarionUiKit.Label(EmptyBand(block.transform, "EmptyHeadline", EmptyHeadlinePx),
-                empty.Headline, 0f, 1f, ElarionUiKit.ParchmentInkDim, ElarionUi.FontBody,
+                empty.Headline, 0f, 1f, ElarionUi.Gold, ElarionUi.FontBody,
                 TextAlignmentOptions.Center, 0f, 1f, bold: true);
             ElarionUiKit.FitSingleLine(head, ElarionUi.FontFloorMobile);
 
             if (!hasDetail) return;
             var body = ElarionUiKit.Label(EmptyBand(block.transform, "EmptyDetail", EmptyDetailPx),
-                empty.Detail, 0f, 1f, ElarionUiKit.ParchmentInkDim, ElarionUi.FontLabel,
+                empty.Detail, 0f, 1f, ElarionUi.ParchmentDim, ElarionUi.FontLabel,
                 TextAlignmentOptions.Center, 0f, 1f);
             body.fontStyle = FontStyles.Italic;
             ElarionUiKit.FitSingleLine(body, ElarionUi.FontFloorMobile);
@@ -362,6 +363,15 @@ namespace DeNelle.HUD
             if (_collapsedForEmpty == empty && _listRt != null &&
                 _listRt.gameObject.activeSelf == !empty) return;
             _collapsedForEmpty = empty;
+
+            // The populated detail well deliberately uses parchment for long-form quest copy.
+            // An empty state spans the whole body, where that same fill became a giant beige
+            // slab. Switch only the empty presentation to the shared near-black surface.
+            var backing = _detailRt.Find("ZoneBacking")?.GetComponent<Image>();
+            if (backing != null)
+                backing.color = empty
+                    ? new Color(0.035f, 0.035f, 0.045f, 0.98f)
+                    : new Color(0.827f, 0.760f, 0.576f, 1f);
 
             if (_listRt != null) _listRt.gameObject.SetActive(!empty);
 

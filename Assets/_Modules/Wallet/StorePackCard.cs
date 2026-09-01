@@ -280,9 +280,9 @@ namespace DeNelle.Wallet
         public const float MinCardWidthPx = 300f;
 
         // Glow alphas (§R3). Named so the greyscale oracle can cite them.
-        private const float GlowAlpha         = 0.20f;
-        private const float GlowAlphaSelected = 0.35f;
-        private const float ArtRadialAlpha    = 0.28f;
+        private const float GlowAlpha         = 0.08f;
+        private const float GlowAlphaSelected = 0.16f;
+        private const float ArtRadialAlpha    = 0.12f;
         private const float BorderAlpha       = 0.50f;
 
         /// <summary>How far the bloom bleeds OUTSIDE the card rect, reference px. The glow is a
@@ -290,8 +290,11 @@ namespace DeNelle.Wallet
         private const float GlowBleedPx = 34f;
 
         // The dark vertical gradient behind every card (§R3): #1A1424 -> #110D19.
-        private static readonly Color CardTop    = Hex(0x1A, 0x14, 0x24);
-        private static readonly Color CardBottom = Hex(0x11, 0x0D, 0x19);
+        // Cards share the public black-iron substrate. Band identity remains in the
+        // labelled eyebrow, luminance-stepped rail, border and art bloom; flooding the
+        // whole card violet made the Market read as a separate legacy UI family.
+        private static readonly Color CardTop    = Hex(0x18, 0x17, 0x14);
+        private static readonly Color CardBottom = Hex(0x0B, 0x0C, 0x0D);
 
         // Text floors, reference px. UI-001 §8 states the screen-px floors at 2340x1080
         // (legal >=30 / body >=40 / names >=44 / CTA price >=54); at the kit's scale 1.104
@@ -533,7 +536,9 @@ namespace DeNelle.Wallet
                     if (contents != null)
                     {
                         contents.textWrappingMode = TextWrappingModes.Normal;
-                        ElarionUiKit.FitBlock(contents, ElarionUi.FontFloorMobile, bodyFont);
+                        float contentsFloor = variant == StorePackCardVariant.LandscapeStandard
+                            ? 20f : ElarionUi.FontFloorMobile;
+                        ElarionUiKit.FitBlock(contents, contentsFloor, bodyFont);
                     }
                     y += contentsH + BlockGapPx;
                     budget -= contentsH + BlockGapPx;
@@ -590,7 +595,12 @@ namespace DeNelle.Wallet
             // ⛔ THE MAJOR TAKES THE WHOLE ROW WHEN THERE IS NO MINOR TO SHARE IT WITH. Reserving
             // the fiat band on a card that draws no fiat is how "Price unavailable" - the string
             // EVERY card prints while the store has no server quote - got 210px for 267px of text.
-            bool hasMinor = !string.IsNullOrEmpty(model.PriceMinor);
+            bool priceUnavailable = string.Equals(model.PriceMajor, "Price unavailable",
+                System.StringComparison.OrdinalIgnoreCase);
+            // A floating fiat reference beside an unavailable authoritative quote creates
+            // the broken-looking "Price una... ~ $19..." row. Preserve the required state
+            // sentence at full width; the estimate returns when a quote is actually live.
+            bool hasMinor = !priceUnavailable && !string.IsNullOrEmpty(model.PriceMinor);
             float priceMajorX1 = hasMinor ? PriceMajorX1WithMinor : PriceRowX1;
             handle.PriceLabel = BottomAnchoredText(card, model.PriceMajor, Mathf.RoundToInt(priceFont), ElarionUi.Gilt,
                 FontStyles.Bold, TextAlignmentOptions.BottomLeft, BottomPadPx, priceBlock,
@@ -670,7 +680,7 @@ namespace DeNelle.Wallet
             // "art has not landed yet", not as "this pack is empty". The two tones are derived from
             // the pack's own authored tint, so no per-pack texture and no per-SKU branch is needed.
             var well = wellGo.GetComponent<Image>();
-            well.color = Darken(accent, 0.22f);
+            well.color = CardTop;
             ElarionUiKit.ApplyRounded(well, CornerRadiusPx);
             well.raycastTarget = false;
 

@@ -3892,7 +3892,12 @@ namespace DeNelle.Village
                 () => RequestUiRotateQuarter(-1),   // Rotate Left  (CCW 90 deg)
                 () => RequestUiRotateQuarter(+1),   // Rotate Right (CW 90 deg)
                 RequestUiPlaceConfirm,               // PLACE (the only commit latch)
-                RequestUiCancel,                     // Cancel (back out arm/move)
+                // Owner felt-test 2026-09-01: the visible Cancel action is an EXIT from
+                // Build, not a hidden "disarm but remain in Build Mode" state. Routing it
+                // through Exit also tears down the armed ghost, palette, Build HUD, camera
+                // override and wave pause atomically. Desktop secondary-cancel remains the
+                // lightweight back-to-browser gesture through CancelRequestedThisFrame.
+                Exit,
                 Exit);                               // X Done (exit build mode)
         }
 

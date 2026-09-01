@@ -55,7 +55,7 @@
           "wo": "WO-1243",
           "title": "Operator kill switches - the seal as the player reads it",
           "kind": "headless",
-          "image": "img/wo1243-maintenance-banner.png",
+          "image": "proof/img/wo1243-maintenance-banner.png",
           "why": "A server-shaped payload goes in through MaintenanceCatalog.ApplyPayload - the same seam the live /api/maintenance response uses - and the text shot is whatever MaintenanceBannerDriver decides to say about it. Nothing here is hand-typed.",
           "evidence": "UI_CAPTURE_OK on Builds/w10-cap3. Line under the shot: 'MAINTENANCE ON RAIDS - Raids are closed while we fix the reward payout. Back shortly.'"
         },
@@ -63,7 +63,7 @@
           "wo": "WO-1245",
           "title": "The same screenshot found two defects the green gates could not",
           "kind": "headless",
-          "image": "img/wo1243-maintenance-banner.png",
+          "image": "proof/img/wo1243-maintenance-banner.png",
           "why": "Read the image, not the marker: the operator message truncates to '...whil...', so the player learns an area is shut and never learns why. It also exposed that the regression asserts MaintenanceCatalog.BannerText(), which has NO runtime caller - the player sees a different producer entirely.",
           "evidence": "Ticket minted as WO-1245 with both defects and a grep proving BannerText() is production-dead."
         }
@@ -77,7 +77,7 @@
           "wo": "WO-1244",
           "title": "The console gate, served from api/admin/console.js",
           "kind": "editor",
-          "image": "img/wo1244-console-gate.png",
+          "image": "proof/img/wo1244-console-gate.png",
           "why": "One self-contained ASCII page, no framework and no build step, with the key held in memory only - never localStorage, never a cookie, never the URL. The gate says in WORDS that writes need a SECOND key, because the owner is red/green colourblind and a hue cannot carry that.",
           "evidence": "Rendered from the real handler on 127.0.0.1:8791 and shot with headless Edge. LIMIT, stated rather than glossed: headless Edge on Windows enforces a ~500px minimum window, so this is NOT a true 390px phone viewport. A first attempt at 390 LOOKED like a responsive bug - the card clipped - but the card's left edge was identical at 360 and 390, proving the layout viewport never changed. .gate{max-width:440px} is correct. The genuine phone-width check is the owner's, per acceptance 5."
         },
@@ -98,7 +98,7 @@
           "wo": "WO-1245",
           "title": "The operator message now reads in full",
           "kind": "headless",
-          "image": "img/wo1245-banner-wrapped.png",
+          "image": "proof/img/wo1245-banner-wrapped.png",
           "why": "Same capture, same real wire payload through the real catalog. Before: MAINTENANCE ON RAIDS - Raids are closed whil... After: the whole sentence, wrapped to two lines.",
           "evidence": "Line under the shot: MAINTENANCE ON RAIDS - Raids are closed while we fix the reward payout. Back shortly."
         }

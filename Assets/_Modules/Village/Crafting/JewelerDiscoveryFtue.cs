@@ -61,6 +61,7 @@ namespace DeNelle.Village.Crafting
             _hold = WorldHold.Acquire("jeweler-discovery");
             _modal = ElarionUiKit.BuildObsidianModal("JewelerDiscoveryUI", "JEWELER DISCOVERED",
                 ElarionUiKit.ModalArchetype.Compact, Close, sortingOrder: 31030);
+            MedievalUiSkin.ApplyShell(_modal.chrome, compact: true);
             _panel = PanelManager.Register("Jeweler Discovery", Close,
                 () => _modal != null && _modal.canvas != null && _modal.canvas.activeInHierarchy);
             if (!PanelManager.NotifyOpened(_panel)) { Close(); return; }
@@ -72,8 +73,9 @@ namespace DeNelle.Village.Crafting
             body.enableWordWrapping = true;
             body.overflowMode = TextOverflowModes.Overflow;
             ElarionUiKit.FitBlock(body, ElarionUi.FontFloorMobile, ElarionUi.FontBody);
-            ElarionUiKit.Button(content, "Open Crafting: Jeweler", ElarionUiKit.ButtonKind.Gold,
+            var open = ElarionUiKit.Button(content, "Open Crafting: Jeweler", ElarionUiKit.ButtonKind.Gold,
                 new Vector2(0.08f, 0.10f), new Vector2(0.92f, 0.29f), OpenJeweler);
+            MedievalUiSkin.ApplyButton(open, primary: true);
         }
 
         private void OpenJeweler()

@@ -158,7 +158,7 @@ namespace DeNelle.Village.Crafting
             }
             else
             {
-                const float rowH = 0.105f, gap = 0.015f;
+                const float rowH = 0.245f, gap = 0.025f;
                 float top = 0.98f;
                 foreach (var row in rows)
                 {
@@ -236,7 +236,7 @@ namespace DeNelle.Village.Crafting
                 ElarionUiKit.ObsidianButtonStyle.Style1,
                 canCraft ? ElarionUiKit.ObsidianButtonColor.Green
                          : ElarionUiKit.ObsidianButtonColor.Gray,
-                new Vector2(0.28f, 0.03f), new Vector2(0.72f, 0.13f),
+                new Vector2(0.24f, 0.03f), new Vector2(0.76f, 0.275f),
                 () => _vm.Craft());
             btn.interactable = canCraft;
         }

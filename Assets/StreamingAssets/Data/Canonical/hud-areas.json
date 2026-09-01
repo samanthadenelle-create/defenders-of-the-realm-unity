@@ -34,9 +34,7 @@
         },
         {
           "area": "system",
-          "widgets": [
-            "settingsButton"
-          ]
+          "widgets": []
         },
         {
           "area": "queueStatus",
@@ -54,12 +52,7 @@
         {
           "area": "actionBar",
           "widgets": [
-            "buildButton",
-            "talkButton",
-            "bagButton",
-            "raidsButton",
-            "questButton",
-            "upgradeButton"
+            "peacefulDock"
           ]
         },
         {
@@ -87,9 +80,7 @@
       "areas": [
         {
           "area": "system",
-          "widgets": [
-            "settingsButton"
-          ]
+          "widgets": []
         }
       ]
     },
@@ -131,8 +122,7 @@
         {
           "area": "actionBar",
           "widgets": [
-            "talkButton",
-            "bagButton"
+            "peacefulDock"
           ]
         },
         {
@@ -174,7 +164,8 @@
         {
           "area": "status",
           "widgets": [
-            "compass"
+            "compass",
+            "waveBlock"
           ]
         },
         {
@@ -186,17 +177,12 @@
         },
         {
           "area": "actionRail",
-          "widgets": [
-            "abilityRow"
-          ]
+          "widgets": []
         },
         {
           "area": "actionBar",
           "widgets": [
-            "buildButton",
-            "assignableSkillRow",
-            "hpPotionSlot",
-            "manaPotionSlot"
+            "combatDock"
           ]
         },
         {
@@ -232,7 +218,8 @@
         {
           "area": "status",
           "widgets": [
-            "compass"
+            "compass",
+            "waveBlock"
           ]
         },
         {
@@ -252,18 +239,12 @@
         },
         {
           "area": "actionRail",
-          "widgets": [
-            "abilityRow",
-            "attackButton"
-          ]
+          "widgets": []
         },
         {
           "area": "actionBar",
           "widgets": [
-            "buildButton",
-            "assignableSkillRow",
-            "hpPotionSlot",
-            "manaPotionSlot"
+            "combatDock"
           ]
         },
         {

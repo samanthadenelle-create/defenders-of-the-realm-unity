@@ -353,11 +353,10 @@ namespace DeNelle.Editor
             {
                 if (!File.Exists(p)) { failures.Add("hud-areas.json missing: " + p); continue; }
                 string j = File.ReadAllText(p);
-                // WO-911 (Q10+Q13) — INVERTED, not deleted. The queue's bar row is REQUIRED now,
-                // and it is the re-pointed "upgradeButton" (no new widget id was minted). A
-                // separate workQueueButton row would be the phantom widget, so it stays banned.
+                // The single Manage/Queues door now lives inside the approved four-medallion
+                // peacefulDock. A separate workQueueButton remains a phantom duplicate.
                 if (j.IndexOf("workQueueButton") >= 0) failures.Add("hud-areas.json carries a workQueueButton row — WO-911 re-points the EXISTING upgradeButton face instead of minting a new widget: " + p);
-                if (j.IndexOf("upgradeButton") < 0) failures.Add("hud-areas.json missing the upgradeButton row — the Manage/Queues bar face would never render (occupancy oracle, WO-911): " + p);
+                if (j.IndexOf("peacefulDock") < 0) failures.Add("hud-areas.json missing peacefulDock — the Manage/Queues medallion would never render (occupancy oracle): " + p);
                 // Map left the bar for a tab inside Bag (ruling Q10+Q13). A returning row = regression.
                 if (j.IndexOf("mapButton") >= 0) failures.Add("hud-areas.json still carries the mapButton bar row — WO-911 moved Map into Bag as a tab (bar is 6 faces): " + p);
                 if (j.IndexOf("queueStatusChip") < 0) failures.Add("hud-areas.json missing queueStatusChip row: " + p);

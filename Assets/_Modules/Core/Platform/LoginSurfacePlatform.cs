@@ -29,6 +29,10 @@ using System;
 using System.Threading.Tasks;
 using DeNelle.Core.Auth;
 using DeNelle.Core.Diagnostics;
+#if GOOGLE_PLAY
+using DeNelle.Core.Payments;
+using DeNelle.Core.State;
+#endif
 
 namespace DeNelle.Core.Platform
 {
@@ -57,6 +61,23 @@ namespace DeNelle.Core.Platform
         /// </summary>
         public static async Task<AuthOutcome> ConnectAsync()
         {
+#if GOOGLE_PLAY
+            bool signedIn;
+            try { signedIn = await GooglePlayIdentityBridge.EnsureSignedInAsync(); }
+            catch (Exception e)
+            {
+                FlowTrace.Fail("Auth", "Google Play identity handler threw: " + e.Message);
+                return AuthOutcome.Fail("Google sign-in failed. Please try again.");
+            }
+
+            string playerId = GameStateService.Instance?.State?.BoundWallet;
+            if (!signedIn || !GameStateService.IsGooglePlayIdentity(playerId))
+            {
+                FlowTrace.Warn("Auth", "Google Play identity did not produce a verified play-* identity.");
+                return AuthOutcome.Fail("Google sign-in was not completed. Please try again.");
+            }
+            return new AuthOutcome { Success = true, UserId = playerId, Error = string.Empty };
+#else
             var handler = ConnectHandler;
             if (handler == null)
             {
@@ -79,6 +100,7 @@ namespace DeNelle.Core.Platform
                 FlowTrace.Fail("Auth", "login wallet-connect handler threw: " + e.Message);
                 return AuthOutcome.Fail("Wallet connect failed. Please try again.");
             }
+#endif
         }
     }
 }

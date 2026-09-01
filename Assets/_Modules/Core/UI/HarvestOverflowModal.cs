@@ -28,16 +28,21 @@ namespace DeNelle.Core.UI
         {
             _hold = WorldHold.Acquire("harvest-overflow-result");
             _modal = ElarionUiKit.BuildObsidianModal("HarvestOverflowUI", "HARVEST RESULT",
-                ElarionUiKit.ModalArchetype.Compact, Close, sortingOrder: 31020);
+                new Vector2(0.16f, 0.08f), new Vector2(0.84f, 0.92f), Close,
+                sortingOrder: 31020);
+            MedievalUiSkin.ApplyShell(_modal.chrome, compact: false);
             _panel = PanelManager.Register("Harvest Result", Close,
                 () => _modal != null && _modal.canvas != null && _modal.canvas.activeInHierarchy);
             if (!PanelManager.NotifyOpened(_panel)) { Close(); return; }
 
             var content = _modal.chrome.content.transform;
             string body = BuildBody(results);
-            var label = ElarionUiKit.Label(content, body, 0.22f, 0.88f, ElarionUi.Parchment,
-                ElarionUi.FontBody, TextAlignmentOptions.TopLeft, 0.07f, 0.93f, bold: false);
+            var label = ElarionUiKit.Label(content, body, 0.27f, 0.84f, ElarionUi.Parchment,
+                ElarionUi.FontBody, TextAlignmentOptions.TopLeft, 0.09f, 0.91f, bold: false);
             ElarionUiKit.FitBlock(label, ElarionUi.FontFloorMobile, ElarionUi.FontBody);
+            var close = ElarionUiKit.Button(content, "Close", ElarionUiKit.ButtonKind.Quiet,
+                new Vector2(0.34f, 0.09f), new Vector2(0.66f, 0.22f), Close);
+            MedievalUiSkin.ApplyButton(close, primary: false);
             FlowTrace.Step("Bank", $"harvest-result modal OPEN with {results.Count} aggregated resource row(s).");
         }
 
@@ -47,12 +52,12 @@ namespace DeNelle.Core.UI
             for (int i = 0; i < results.Count; i++)
             {
                 var s = results[i];
-                lines.Add($"{s.ResourceName}\nCollected: {s.Granted} of {s.Requested}\nUncollected: {s.Lost}");
+                lines.Add($"{s.ResourceName}\nCollected: {s.Granted} of {s.Requested}   |   Uncollected: {s.Lost}");
                 lines.Add(s.OverCap
-                    ? $"Storage: {s.Current} / {s.Max}. You are already above capacity; earned {s.ResourceName.ToLowerInvariant()} resumes after you spend below {s.Max}."
-                    : $"Storage capacity: {s.Current} / {s.Max}. Build or upgrade a {s.ContainerName}, or spend {s.ResourceName.ToLowerInvariant()}, before collecting again.");
+                    ? $"Storage: {s.Current} / {s.Max}. Above capacity; earned {s.ResourceName.ToLowerInvariant()} resumes after you spend below {s.Max}."
+                    : $"Storage: {s.Current} / {s.Max}. Upgrade a {s.ContainerName}, or spend {s.ResourceName.ToLowerInvariant()}, before collecting again.");
             }
-            lines.Add("The uncollected amount was not added to storage.");
+            lines.Add("Each uncollected amount was not added to storage.");
             return string.Join("\n\n", lines);
         }
 

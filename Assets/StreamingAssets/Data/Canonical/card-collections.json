@@ -6,7 +6,7 @@
       "collectionId": "build-gathering",
       "context": "build",
       "title": "Gathering",
-      "subtitle": "Bring the realm's raw materials home.",
+      "subtitle": "Gather raw materials.",
       "iconKey": "UI/BuildCollections/Resources",
       "active": true,
       "items": [
@@ -20,7 +20,7 @@
       "collectionId": "build-realm",
       "context": "build",
       "title": "Realm",
-      "subtitle": "Grow the people and power of Elarion.",
+      "subtitle": "Grow Elarion.",
       "iconKey": "UI/BuildCollections/Realm",
       "active": true,
       "items": [
@@ -33,7 +33,7 @@
       "collectionId": "build-defenses",
       "context": "build",
       "title": "Defenses",
-      "subtitle": "Hold the line against every threat.",
+      "subtitle": "Build towers and walls.",
       "iconKey": "UI/BuildCollections/Defense",
       "active": true,
       "items": [
@@ -48,7 +48,7 @@
       "collectionId": "build-crafting",
       "context": "build",
       "title": "Crafting",
-      "subtitle": "Turn gathered materials into lasting strength.",
+      "subtitle": "Forge useful goods.",
       "iconKey": "UI/BuildCollections/Crafting",
       "active": true,
       "items": [
@@ -60,7 +60,7 @@
       "collectionId": "build-storage",
       "context": "build",
       "title": "Storage",
-      "subtitle": "Keep the realm's reserves protected.",
+      "subtitle": "Protect reserves.",
       "iconKey": "UI/BuildCollections/Storage",
       "active": true,
       "items": [
@@ -73,7 +73,7 @@
       "collectionId": "build-protection",
       "context": "build",
       "title": "Protection",
-      "subtitle": "Shape the walls and recovery line.",
+      "subtitle": "Strengthen walls.",
       "iconKey": "UI/BuildCollections/Protection",
       "active": true,
       "items": [
@@ -86,7 +86,7 @@
       "collectionId": "build-trade",
       "context": "build",
       "title": "Trade",
-      "subtitle": "Visit the realm's shops and outfitters.",
+      "subtitle": "Visit shops.",
       "iconKey": "UI/BuildCollections/Trade",
       "active": true,
       "items": [

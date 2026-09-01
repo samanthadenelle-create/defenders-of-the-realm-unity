@@ -83,7 +83,7 @@
     },
     {
       "sku": "folks-thanks",
-      "band": "basket",
+      "band": "patronage",
       "compareTo": "starters-hand",
       "tier": 3,
       "storeVisible": true,
@@ -119,11 +119,11 @@
     {
       "sku": "patron-of-elarion",
       "storeBadge": "BEST VALUE",
-      "band": "patronage",
+      "band": "basket",
       "compareTo": "folks-thanks",
       "tier": 4,
       "storeVisible": true,
-      "name": "Patron of Elarion",
+      "name": "Resource Pack I",
       "tagline": "A patron's gift to Elarion — a meaningful headstart for the Heart.",
       "theme": "Heavyweight cosmetic suite + meaningful economy headstart.",
       "pricing": {
@@ -154,11 +154,11 @@
     },
     {
       "sku": "founders-vow",
-      "band": "patronage",
+      "band": "basket",
       "compareTo": "patron-of-elarion",
       "tier": 5,
       "storeVisible": true,
-      "name": "Founder's Vow",
+      "name": "Resource Pack II",
       "tagline": "A thank-you to early believers — a vow kept, not a flex.",
       "theme": "One-time only, available v1 launch only — special founder cosmetic + permanent in-village banner.",
       "founderOnly": true,
@@ -305,7 +305,7 @@
     },
     {
       "sku": "starters-hand",
-      "band": "basket",
+      "band": "patronage",
       "compareTo": "hearth-spark",
       "tier": 9,
       "storeSection": "featured",
@@ -866,7 +866,7 @@
 
     {
       "sku": "permanent-builder",
-      "band": "patronage",
+      "band": "basket",
       "tier": 26,
       "storeVisible": true,
       "name": "Permanent Builder",

@@ -1931,16 +1931,14 @@ namespace DeNelle.Village
                 Free = false,
             };
 
-            // Troops have NO portraits on disk (measured 0/7) but every TroopDef carries an
-            // iconId that DOES exist under RpgUi/icons — that route is the only thing that
-            // gets a troop card any art at all.
+            // WO-1294: troop IconId is the canonical portrait filename under RpgUi/troop.
             string troopId = TroopIdOfJob(job);
             if (!string.IsNullOrEmpty(troopId))
             {
                 var def = TroopCatalog.Find(troopId);
                 if (def != null && !string.IsNullOrEmpty(def.IconId))
                 {
-                    e.IconRole = DeNelle.Core.UI.RpgUiCatalog.RoleIcons;
+                    e.IconRole = DeNelle.Core.UI.RpgUiCatalog.RoleTroop;
                     e.IconKey = def.IconId;
                 }
             }

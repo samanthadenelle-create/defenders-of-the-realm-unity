@@ -55,17 +55,13 @@ namespace DeNelle.Editor.Regression
         private const float WellXMin = 0.055f, WellXMax = 0.945f;
         private const float WellYMin = 0.075f, WellYMax = 0.835f;
         private const float CarouselYMin = 0.500f;
-        private const float PrevXMin = 0.012f, PrevXMax = 0.148f;
-        private const float NextXMin = 0.852f, NextXMax = 0.988f;
-        private const float SideLXMin = 0.2591f, SideRXMax = 0.7409f;
+        private const float PrevXMin = 0.012f, PrevXMax = 0.215f;
+        private const float NextXMin = 0.785f, NextXMax = 0.988f;
+        private const float SideLXMin = 0.225f, SideRXMax = 0.775f;
         private const float CarArrowYMin = 0.42f, CarArrowYMax = 0.90f;
-        private const float RotateWordX0 = 0.06f, RotateWordX1 = 0.94f;
-        private const float RotateWordYMin = 0.04f, RotateWordYMax = 0.32f;
-        private const float RotateChevronYMin = 0.34f, RotateChevronYMax = 0.96f;
-        private const string PrevWord = "PREV";
+        private const float SharedButtonLabelInset = 0.92f;
+        private const string PrevWord = "PREVIOUS";
         private const string NextWord = "NEXT";
-        private const string PrevChevron = "<<";
-        private const string NextChevron = ">>";
 
         // ── the PRE-FIX box (WO-1138 ratchet). Quoted from HeroSelectController
         //    before WO-1248: PrevXMin = 0.148f, PrevXMax = 0.216f, kit inset 0.04-0.96.
@@ -111,8 +107,8 @@ namespace DeNelle.Editor.Regression
             string noteStr = notes.Count > 0 ? " [notes: " + string.Join("; ", notes.ToArray()) + "]" : "";
             if (failures.Count == 0)
             {
-                reason = "HERO SELECT CAROUSEL OK - designed PREV/NEXT + chevron MEASURES inside its " +
-                         "plate at the authored size on four surfaces, both rotate plates clear " +
+                reason = "HERO SELECT CAROUSEL OK - canonical PREVIOUS/NEXT shared buttons measure inside " +
+                         "their plates on four surfaces, both rotate plates clear " +
                          "MinTouchPx(" + ElarionUiKit.MinTouchPx.ToString("0") + ") as authored, and " +
                          "the pre-fix 0.068-lane + 'Previous' geometry still measures RED" + noteStr;
                 return true;
@@ -136,22 +132,16 @@ namespace DeNelle.Editor.Regression
             string src = ReadSrc(Src);
             if (src == null) { failures.Add("[boxes-pinned] cannot read " + Src); return; }
 
-            RequireLiteral(failures, src, "private const float PrevXMin = 0.012f, PrevXMax = 0.148f;",
+            RequireLiteral(failures, src, "private const float PrevXMin = 0.012f, PrevXMax = 0.215f;",
                 "the rotate-prev lane this suite measures");
-            RequireLiteral(failures, src, "private const float NextXMin = 0.852f, NextXMax = 0.988f;",
+            RequireLiteral(failures, src, "private const float NextXMin = 0.785f, NextXMax = 0.988f;",
                 "the rotate-next lane this suite measures");
             RequireLiteral(failures, src, "private const float CarArrowYMin = 0.42f, CarArrowYMax = 0.90f;",
                 "the rotate plate height");
-            RequireLiteral(failures, src, "private const string RotatePrevWord = \"PREV\";",
-                "the designed prev word");
-            RequireLiteral(failures, src, "private const string RotateNextWord = \"NEXT\";",
-                "the designed next word");
-            RequireLiteral(failures, src, "private const string RotatePrevChevron = \"<<\";",
-                "the designed prev chevron");
-            RequireLiteral(failures, src, "private const string RotateNextChevron = \">>\";",
-                "the designed next chevron");
-            RequireLiteral(failures, src, "private const float RotateWordX0 = 0.06f, RotateWordX1 = 0.94f;",
-                "the word/chevron x inset");
+            RequireLiteral(failures, src, "private const string RotatePrevLabel = \"PREVIOUS\";",
+                "the canonical previous label");
+            RequireLiteral(failures, src, "private const string RotateNextLabel = \"NEXT\";",
+                "the canonical next label");
             RequireLiteral(failures, src, "new Vector2(0.015f, 0.02f), new Vector2(0.985f, 0.98f)",
                 "the panel anchors the well is a fraction of");
             RequireLiteral(failures, src, "private const float WellXMin = 0.055f, WellXMax = 0.945f;",
@@ -170,7 +160,7 @@ namespace DeNelle.Editor.Regression
 
             notes.Add("rotate lanes x[" + PrevXMin.ToString("0.000") + "," + PrevXMax.ToString("0.000") +
                       "] / [" + NextXMin.ToString("0.000") + "," + NextXMax.ToString("0.000") +
-                      "], word inset " + ((RotateWordX1 - RotateWordX0) * 100f).ToString("0") + "%");
+                      "], shared label inset " + (SharedButtonLabelInset * 100f).ToString("0") + "%");
         }
 
         // =====================================================================
@@ -190,20 +180,11 @@ namespace DeNelle.Editor.Regression
                 failures.Add("[recipe-class] HeroSelectController still passes \"NEXT >\" as a kit " +
                              "button label - the other half of the truncated word-button pair");
             if (src.IndexOf("BuildRotateControl", StringComparison.Ordinal) < 0)
-                failures.Add("[recipe-class] BuildRotateControl is gone - the designed ICON+word " +
-                             "control this suite measures against is no longer the thing that builds");
-            if (src.IndexOf("ArmRotateGlyph", StringComparison.Ordinal) < 0)
-                failures.Add("[recipe-class] ArmRotateGlyph is gone - without it the rotate labels " +
-                             "fall back to FitLine / FitSingleLine and 'PREV' becomes 'Pr...' again");
-            if (src.IndexOf("t.richText = false", StringComparison.Ordinal) < 0)
-                failures.Add("[recipe-class] rotate glyphs no longer disable TMP richText - a " +
-                             "chevron starting with '<' is parsed as a tag");
-            if (src.IndexOf("t.overflowMode = TextOverflowModes.Overflow", StringComparison.Ordinal) < 0)
-                failures.Add("[recipe-class] rotate glyphs no longer use Overflow - Ellipsis is the " +
-                             "silent 'Pr...' path. A miss must be visible, not truncated");
-            if (src.IndexOf("t.enableAutoSizing = false", StringComparison.Ordinal) < 0)
-                failures.Add("[recipe-class] rotate glyphs autosize again - the geometry oracle " +
-                             "would be measuring a different size than the player sees");
+                failures.Add("[recipe-class] BuildRotateControl is gone");
+            if (src.IndexOf("prev ? RotatePrevLabel : RotateNextLabel", StringComparison.Ordinal) < 0)
+                failures.Add("[recipe-class] rotate controls no longer feed PREVIOUS/NEXT through the shared button label");
+            if (src.IndexOf("ApplyHeroSelectButton(btn, primary: false)", StringComparison.Ordinal) < 0)
+                failures.Add("[recipe-class] rotate controls no longer receive the shared medieval button skin");
 
             string kit = ReadSrc(KitSrc);
             if (kit != null && kit.IndexOf("FitSingleLine(tt)", StringComparison.Ordinal) < 0)
@@ -216,10 +197,8 @@ namespace DeNelle.Editor.Regression
         // =====================================================================
         private static void Case2_DesignedCopyFits(List<string> failures, List<string> notes)
         {
-            float wordSize = ElarionUi.FontMicro;
-            float chevronSize = ElarionUi.FontHead;
+            float wordSize = ElarionUiKit.FontFloor;
             string[] words = { PrevWord, NextWord };
-            string[] chevrons = { PrevChevron, NextChevron };
 
             foreach (var a in Aspects)
             {
@@ -232,19 +211,9 @@ namespace DeNelle.Editor.Regression
                     float needed = wordSize * LineHeightFactor;
                     if (needed > wordH + 0.5f)
                         failures.Add("[label-fits] at " + a.Name + " the word '" + word + "' needs " +
-                                     needed.ToString("0.0") + " ref px of height at FontMicro(" +
+                                     needed.ToString("0.0") + " ref px of height at FontFloor(" +
                                      wordSize.ToString("0") + ") but the word band is only " +
                                      wordH.ToString("0.0") + " px - the line would clip");
-                }
-                foreach (string ch in chevrons)
-                {
-                    AssertFits(failures, a.Name, "chevron", ch, chevronSize, labelW);
-                    float needed = chevronSize * LineHeightFactor;
-                    if (needed > chevronH + 0.5f)
-                        failures.Add("[label-fits] at " + a.Name + " the chevron '" + ch + "' needs " +
-                                     needed.ToString("0.0") + " ref px of height at FontHead(" +
-                                     chevronSize.ToString("0") + ") but the chevron band is only " +
-                                     chevronH.ToString("0.0") + " px");
                 }
                 notes.Add("rotate plate at " + a.Name + ": " + btnW.ToString("0") + "x" +
                           btnH.ToString("0") + " ref px, label " + labelW.ToString("0") + " px");
@@ -357,9 +326,9 @@ namespace DeNelle.Editor.Regression
             float carH = wellH * (1f - CarouselYMin);
             btnW = wellW * (PrevXMax - PrevXMin);
             btnH = carH * (CarArrowYMax - CarArrowYMin);
-            labelW = btnW * (RotateWordX1 - RotateWordX0);
-            wordH = btnH * (RotateWordYMax - RotateWordYMin);
-            chevronH = btnH * (RotateChevronYMax - RotateChevronYMin);
+            labelW = btnW * SharedButtonLabelInset;
+            wordH = btnH;
+            chevronH = 0f;
         }
 
         private static float OldLabelBoxW(Aspect a)

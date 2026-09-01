@@ -56,6 +56,8 @@ namespace DeNelle.Village
         private int   _enemyMask;
         private float _nearMissProbeTimer;   // WO-792: throttles the adjacent-but-out-of-sphere probe
         private bool  _isDead;
+        private bool  _hudBlocking;
+        private const float HudBlockDamageMultiplier = 0.45f;
         private readonly Collider[] _buf = new Collider[24];
 
         // ── v2 talent behavioural state (WO-566 effect interpreter) ───────────────
@@ -261,7 +263,27 @@ namespace DeNelle.Village
             _spawnPosition = transform.position;
         }
 
-        private void OnDestroy() { if (Instance == this) Instance = null; }
+        private void OnDestroy()
+        {
+            SetBlocking(false);
+            if (Instance == this) Instance = null;
+        }
+
+        /// <summary>Mobile press-and-hold guard state. The HUD owns gesture lifetime; health owns
+        /// the authoritative mitigation and animation verb. Releasing, disabling, or destroying
+        /// the input surface always calls this with false.</summary>
+        public bool IsBlocking => _hudBlocking;
+
+        public void SetBlocking(bool blocking)
+        {
+            bool next = blocking && !_isDead && _hp > 0f;
+            if (_hudBlocking == next) return;
+            _hudBlocking = next;
+            if (_actor == null) TryGetComponent(out _actor);
+            _actor?.SetBlocking(_hudBlocking);
+            DeNelle.Core.Diagnostics.FlowTrace.Step("HeroHealth",
+                "mobile block " + (_hudBlocking ? "HELD" : "RELEASED"));
+        }
 
         private void Start()
         {
@@ -558,6 +580,17 @@ namespace DeNelle.Village
                     DeNelle.Core.Diagnostics.FlowTrace.Throttle("HeroTalents", "dmg-shield", 1f,
                         $"damage shield active: incoming x{shieldMult:0.##} (ability timed mitigation).");
                 }
+            }
+
+            // Mobile Block is a deliberate held guard, not a random talent proc. It composes
+            // multiplicatively with armor and timed shields and never fully negates a hit; the
+            // perfect-parry seam above remains the only skill-timed full negate.
+            if (_hudBlocking)
+            {
+                amount *= HudBlockDamageMultiplier;
+                DeNelle.Core.Diagnostics.FlowTrace.Throttle("HeroHealth", "mobile-block", 0.5f,
+                    "held Block reduced incoming damage to 45%. Release restores normal damage.");
+                VFXManager.Play(VFXType.Impact_Physical, transform.position + Vector3.up * 1.0f);
             }
 
             // v2 talents (Knight V1): Guardian Stance can fully BLOCK a hit; Iron Resolve /

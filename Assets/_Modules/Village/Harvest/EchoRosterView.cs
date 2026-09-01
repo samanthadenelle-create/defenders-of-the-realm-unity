@@ -80,7 +80,9 @@ namespace DeNelle.Village
         /// <summary>Pixels of a card reserved for its two text lines plus their pads.</summary>
         public const float CardTextStackPx = 4f + CardTextPx + 4f + CardTextPx + 6f;  // 93
         /// <summary>Every card is a tap target, so a row is never shorter than the kit floor.</summary>
-        public const float CardRowMinPx = ElarionUiKit.MinTouchPx;              // 112
+        public const float CardRowMinPx = 170f;
+        /// <summary>Inset that keeps the two text bands inside the visible card artwork.</summary>
+        public const float CardVisualInsetPx = 26f;
         /// <summary>Gap between stacked fixed bands.</summary>
         public const float BandGapPx = 8f;
         /// <summary>Gap between the two card rows.</summary>
@@ -190,6 +192,11 @@ namespace DeNelle.Village
                 onClose: Close, sortingOrder: 31000,
                 frameName: RpgUiCatalog.FrameCore);
             _modal = built.canvas;
+
+            MedievalUiSkin.ApplyShell(built.chrome);
+            var closeImage = built.chrome != null && built.chrome.close != null
+                ? built.chrome.close.targetGraphic as Image : null;
+            if (closeImage != null) closeImage.type = Image.Type.Simple;
 
             // Chrome title stays the product name ONLY (never "Echoes 1/6 - ..." which collided).
             if (built.chrome.title != null)
@@ -407,12 +414,19 @@ namespace DeNelle.Village
             crt.offsetMin = Vector2.zero; crt.offsetMax = Vector2.zero;
             PinBandFromTop(crt, topPx, rowPx);
             var cbg = cardGo.GetComponent<Image>();
-            cbg.color = owned ? OwnedGlass : LockedGlass;
+            var cardFrame = Resources.Load<Sprite>("UI/ElarionMedieval/frames/content-panel");
+            if (cardFrame != null)
+            {
+                cbg.sprite = cardFrame;
+                cbg.type = Image.Type.Simple;
+            }
+            cbg.color = owned ? Color.white : new Color(.38f, .38f, .40f, .88f);
             if (owned)
             {
                 cbg.raycastTarget = true;
                 var tapBtn = cardGo.AddComponent<UnityEngine.UI.Button>();
                 tapBtn.targetGraphic = cbg;
+                ElarionUiKit.StyleButtonColors(tapBtn);
                 int tapIndex = card.Index;
                 tapBtn.onClick.AddListener(() =>
                 {
@@ -438,18 +452,26 @@ namespace DeNelle.Village
             var sprite = card.Portrait;
             if (sprite != null)
             {
-                var pg = new GameObject("Portrait", typeof(Image));
+                var pg = new GameObject("PortraitMedallion", typeof(Image));
                 pg.transform.SetParent(cardT, false);
                 var prt = pg.GetComponent<RectTransform>();
-                prt.anchorMin = new Vector2(0.14f, 0f);
-                prt.anchorMax = new Vector2(0.86f, 1f);
-                prt.offsetMin = new Vector2(0f, CardTextStackPx);
+                prt.anchorMin = new Vector2(0.30f, 0f);
+                prt.anchorMax = new Vector2(0.70f, 1f);
+                prt.offsetMin = new Vector2(0f, CardTextStackPx + CardVisualInsetPx);
                 prt.offsetMax = new Vector2(0f, -4f);
                 var pimg = pg.GetComponent<Image>();
-                pimg.sprite = sprite;
+                pimg.sprite = Resources.Load<Sprite>(
+                    "UI/ElarionMedieval/frames/circular-bezel-four-point");
                 pimg.preserveAspect = true;
                 pimg.raycastTarget = false;
                 pimg.color = owned ? Color.white : new Color(0.12f, 0.12f, 0.14f, 0.95f);
+                var portrait = ElarionUiKit.AddImage(pg.transform, "Portrait",
+                    new Vector2(0.23f, 0.23f), new Vector2(0.77f, 0.77f), Color.white, rounded: false);
+                var portraitImage = portrait.GetComponent<Image>();
+                portraitImage.sprite = sprite;
+                portraitImage.preserveAspect = true;
+                portraitImage.raycastTarget = false;
+                portraitImage.color = owned ? Color.white : new Color(0.12f, 0.12f, 0.14f, 0.95f);
             }
             else
             {
@@ -459,20 +481,21 @@ namespace DeNelle.Village
                     ElarionUi.ParchmentDim, (int)ElarionUi.FontFloorMobile,
                     TextAlignmentOptions.Center, 0.05f, 0.95f, bold: true);
                 ElarionUiKit.FitSingleLine(fb);
-                PinBandFromBottom(fb.rectTransform, CardTextStackPx, FloorLinePx);
+                PinBandFromBottom(fb.rectTransform, CardTextStackPx + CardVisualInsetPx, FloorLinePx);
             }
 
             var nameLabel = ElarionUiKit.Label(cardT, card.DisplayName, 0f, 1f,
                 owned ? ElarionUi.Gilt : ElarionUi.ParchmentDim, (int)ElarionUi.FontFloorMobile,
                 TextAlignmentOptions.Center, 0.03f, 0.97f, bold: true);
             ElarionUiKit.FitSingleLine(nameLabel);
-            PinBandFromBottom(nameLabel.rectTransform, 4f + CardTextPx + 4f, CardTextPx);
+            PinBandFromBottom(nameLabel.rectTransform,
+                CardVisualInsetPx + 4f + CardTextPx + 4f, CardTextPx);
 
             var statusLabel = ElarionUiKit.Label(cardT, card.StatusText, 0f, 1f,
-                owned ? LifeGreen : ElarionUi.Disabled, (int)ElarionUi.FontFloorMobile,
+                owned ? LifeGreen : ElarionUi.ParchmentDim, (int)ElarionUi.FontFloorMobile,
                 TextAlignmentOptions.Center, 0.03f, 0.97f, bold: false);
             ElarionUiKit.FitSingleLine(statusLabel);
-            PinBandFromBottom(statusLabel.rectTransform, 4f, CardTextPx);
+            PinBandFromBottom(statusLabel.rectTransform, CardVisualInsetPx, CardTextPx);
         }
 
         private void OnDestroy()

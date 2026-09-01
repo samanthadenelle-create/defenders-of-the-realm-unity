@@ -45,7 +45,9 @@ namespace DeNelle.Editor
             EditorSceneManager.OpenScene(HubScene, OpenSceneMode.Single);
             Directory.CreateDirectory(OutputDir);
 
-            float lift = CastleHubBuilder.CastleFootprintLiftY;
+            // Main_Castle_Overworld is the flat merged world; the retired island lift
+            // would aim every proof camera three metres above the grounded perimeter.
+            const float lift = 0f;
 
             // Framed off the MEASURED ring: extent +-39m, wall 5m + 1.38m battlement.
             var shots = new[]

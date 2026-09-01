@@ -96,7 +96,8 @@ namespace DeNelle.Core.Tests
             Assert.That(reloaded.BestWave, Is.EqualTo(0));
             Assert.That(reloaded.Resources.Crystals, Is.EqualTo(250));
             Assert.That(reloaded.Resources.Food, Is.EqualTo(80));
-            Assert.That(reloaded.Resources.Coins, Is.EqualTo(15));
+            Assert.That(reloaded.Resources.Coins, Is.EqualTo(StartingBudget.StrategicGold),
+                "reset/relaunch preserves the owner-ruled founding gold seed");
             Assert.That(reloaded.Voidshards, Is.EqualTo(5));
             // WO-1212: GameState.Stone is retired. The live Stone slot (Resources.Food = 80)
             // is asserted above and is deliberately UNCHANGED by the retirement.

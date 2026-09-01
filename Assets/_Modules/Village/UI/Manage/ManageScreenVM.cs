@@ -185,6 +185,8 @@ namespace DeNelle.Village.UI
     /// <summary>One row in the "UPGRADES" browse section — the WO-905 affordability answer.</summary>
     public sealed class BrowseRowVM
     {
+        /// <summary>Stable subject id for destination-specific grouping (for example a troop id).</summary>
+        public string SubjectId;
         /// <summary>What it is, ASCII ("Arrow Tower -&gt; L3").</summary>
         public string Label;
         /// <summary>Its cost, ASCII ("400 wood, 200 food"), or "" when the cost lives in the panel.</summary>
@@ -199,6 +201,18 @@ namespace DeNelle.Village.UI
         public Action Activate;
         /// <summary>ASCII verb for the drill-in control ("Open" / "Upgrade").</summary>
         public string ActionText;
+    }
+
+    /// <summary>One authoritative troop selector entry for Manage → Troops.</summary>
+    public sealed class TroopChoiceVM
+    {
+        public string Id;
+        public string Name;
+        public string Description;
+        public string IconId;
+        public int Level;
+        public bool Unlocked;
+        public string Requirement;
     }
 
     /// <summary>
@@ -220,6 +234,9 @@ namespace DeNelle.Village.UI
 
         /// <summary>The selected tab's upgrade browse list, affordable-first.</summary>
         public readonly List<BrowseRowVM> BrowseRows = new List<BrowseRowVM>(32);
+
+        /// <summary>All authored troops, including locked entries, for explicit selector disclosure.</summary>
+        public readonly List<TroopChoiceVM> TroopChoices = new List<TroopChoiceVM>(12);
 
         /// <summary>Categories earned by structures standing in the current town. Defense is the
         /// one intentional empty-state exception: it remains visible before the first placement
@@ -317,6 +334,7 @@ namespace DeNelle.Village.UI
                 Channels.Clear();
                 QueueRows.Clear();
                 BrowseRows.Clear();
+                TroopChoices.Clear();
 
                 BuildVisibleTabs();
                 if (VisibleTabs.Count > 0 && !VisibleTabs.Contains(Tab))
@@ -620,8 +638,25 @@ namespace DeNelle.Village.UI
             BrowseRows.Sort((a, b) =>
             {
                 if (a.Affordable != b.Affordable) return a.Affordable ? -1 : 1;
+                // Troops has two actions on the same unit. Training is the primary reason this
+                // destination exists and must not be paged behind zero-cost upgrade rows. The
+                // approved hierarchy leads with TRAIN, then exposes upgrade options; keep that
+                // verb order while preserving affordable-first within each action family.
+                if (Tab == ManageTab.Troops)
+                {
+                    int ap = TroopActionPriority(a.ActionText);
+                    int bp = TroopActionPriority(b.ActionText);
+                    if (ap != bp) return ap.CompareTo(bp);
+                }
                 return a.CostWeight.CompareTo(b.CostWeight);
             });
+        }
+
+        private static int TroopActionPriority(string action)
+        {
+            if (string.Equals(action, "Train", StringComparison.OrdinalIgnoreCase)) return 0;
+            if (string.Equals(action, "Upgrade", StringComparison.OrdinalIgnoreCase)) return 1;
+            return 2;
         }
 
         private void BuildDefenseBrowse()
@@ -923,24 +958,36 @@ namespace DeNelle.Village.UI
                     // service will refuse. They are filters, not a defect.
                     bool unlocked = BarracksService.IsTroopUnlocked(def.Id);
                     bool trainable = TroopUnlock.IsTrainable(def);
+                    string id = def.Id;
+                    string name = NameOfTroop(def);
+                    int level = BarracksService.TroopLevel(id);
+                    TroopChoices.Add(new TroopChoiceVM
+                    {
+                        Id = id,
+                        Name = name,
+                        Description = Ascii(def.ShortDescription ?? ""),
+                        IconId = def.IconId,
+                        Level = Mathf.Max(1, level),
+                        Unlocked = unlocked && trainable,
+                        Requirement = unlocked && trainable
+                            ? "Available"
+                            : "Requires Barracks Tier " + Mathf.Max(1, def.UnlockBarracksTier),
+                    });
                     if (!unlocked || !trainable)
                     {
                         locked++;
                         return;
                     }
 
-                    string id = def.Id;
-                    string name = NameOfTroop(def);
-
                     // ── TRAIN ──────────────────────────────────────────────────
                     // Cost is the authored per-unit build cost (TroopDef.costWood/Food/Iron) —
                     // the SAME numbers BarracksService.EnqueueTraining charges. No balance is
                     // decided here; this only displays and routes.
                     AddGoldBrowseRow("Train " + name, default, def.CostGold, "Train", () => TrainTroop(id));
+                    BrowseRows[BrowseRows.Count - 1].SubjectId = id;
                     trainRows++;
 
                     // ── UPGRADE (unchanged path) ───────────────────────────────
-                    int level = BarracksService.TroopLevel(id);
                     if (!BarracksProgression.HasNextTroopLevel(id, level)) return;
 
                     var econCost = BarracksProgression.TroopUpgradeCost(id, level + 1);
@@ -953,6 +1000,7 @@ namespace DeNelle.Village.UI
                     };
                     AddBrowseRow("Upgrade " + name + " -> L" + (level + 1), cost, "Upgrade",
                                  () => UpgradeTroop(id));
+                    BrowseRows[BrowseRows.Count - 1].SubjectId = id;
                     upgradeRows++;
                 });
             }

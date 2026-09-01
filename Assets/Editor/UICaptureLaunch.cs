@@ -134,12 +134,18 @@ using UnityEngine.UI;
 using TMPro;
 using DeNelle.Core.UI;    // PanelManager / PanelHandle (lore-modal arbiter teardown)
 using DeNelle.Core.Diagnostics;   // FlowTrace / ITraceSink (WO-952 EndState fit tap)
+using DeNelle.Core.State; // deterministic Manage destination capture fixture
+using DeNelle.Core.Jobs;  // ObsidianQueueState for deterministic Manage capture
+using DeNelle.Core.Catalog; // authoritative structure fixture for build-preview evidence
+using DeNelle.Core.Economy; // harvest-overflow worst-case capture fixture
 using DeNelle.Core.Quests;   // QuestDef/QuestStage/QuestReward (rumor-board worst-case fixture)
 using DeNelle.Dungeons;   // LoreReadingModal, LoreReadRequest, LoreFragmentSet (WO-795)
 using DeNelle.Village;    // EchoUnlockDialogue, EchoRosterCatalog, EchoRosterEntry, Tower, BuildMenu
 using DeNelle.Village.Hero; // RumorBoardPanel, RumorBoardVM, IRumorBoardBackend (WO-810 board capture)
 using DeNelle.Village.UI; // TowerManagerPanel, PlacedTowerListVM (WO-795)
 using DeNelle.Village.Talents; // HeroSkillTreePanelMvvm (tree + hot-swap rail capture)
+using DeNelle.Village.Crafting; // disclosure/confirmation modal capture
+using DeNelle.Village.Monetization; // Daily Chest production modal capture
 
 namespace DeNelle.Editor
 {
@@ -573,13 +579,17 @@ namespace DeNelle.Editor
                 count += CaptureTowerManagerPanel();
                 count += CaptureBuildMenuUpgradeTower();
                 count += CaptureRumorBoard();
-                count += CaptureRealmMap();
+                // Realm Map is deliberately retired from every public navigation surface.
+                // Keep its dedicated forensic helper below for development, but do not emit
+                // it as current public-reskin evidence (same policy as the retired Raids face).
                 count += CaptureNightMarketStore();  // UI-001 / WO-1060: THE MONEY SCREEN. Was not
                                                      // in this list, so the geometry oracle was
                                                      // structurally blind to the one screen that
                                                      // takes money -- see CaptureNightMarketStore.
                 count += CaptureHeroSkillTree();
-                count += CaptureQueueRail();         // WO-864: the CoC queue card rail
+                // The standalone CoC queue rail was retired from the HUD; Manage owns the
+                // reachable queue presentation and has separate live-state captures. Keep the
+                // forensic helper, but do not count obsolete chrome as public reskin evidence.
                 count += CaptureBuildGhostChips();   // WO-1010 P1: chips on the ghost
                 count += CapturePaletteCollapsed();  // WO-1010 P2: dock open + collapsed w/ restore tab
                 count += CaptureEndStateWaveClear(); // WO-952: the wave-clear banner's fit, MEASURED
@@ -591,9 +601,14 @@ namespace DeNelle.Editor
                 // run away.
                 count += CaptureRaidSelection();     // the grid that was hard-refusing to open
                 count += CaptureRaidDeploy();        // the pre-raid deploy screen (never shot before)
-                count += CaptureRaidsFaceStates();   // WO-1008: the bar face live / 0-of-cap / partial
+                // WO-1286: the conditional Raids bar face is retired; Raids is a stable Journey
+                // card. Keep the legacy helper below for forensic comparison, but never emit it
+                // as current UI evidence.
                 count += CaptureMaintenanceBanner(); // WO-1243: the operator seal, as the player reads it
                 count += CaptureHeroSelect();        // WO-1248: carousel rotate control, words fully readable
+                count += CapturePlayerDecks();       // WO-1286: Realm/Hero/Journey mobile card workspaces
+                count += CaptureManageWorkspace();   // WO-1286: Manage category launcher
+                count += CaptureBuildCollections();  // WO-1286: Build category card launcher
 
                 Debug.Log("[UICap-HL] done -> " + Path.GetFullPath(OutDir));
             }
@@ -629,8 +644,45 @@ namespace DeNelle.Editor
             _touchFailures.Clear();
             _touchPanelsChecked = 0;
             _touchPanelsClean = 0;
+            ProveGeometryMoves();
             int count = CaptureNightMarketStore();
             Debug.Log("NIGHT_MARKET_CAPTURE_OK " + count + "/" + NightMarketTargets.Length + " frames");
+        }
+
+        /// <summary>WO-1286 scoped visual gate: only the five migrated navigation workspaces.</summary>
+        public static void RunNavigationCaptureHeadless()
+        {
+            Directory.CreateDirectory(OutDir);
+            _fidelityOk = 0;
+            _fidelityDegraded = 0;
+            _fidelityReasons.Clear();
+            _screenStuckBuilds = 0;
+            _screenStuckAt = null;
+            _geoMoveProof = null;
+            _geoMoveFailure = null;
+            _geoFailures.Clear();
+            _geoCanvasesChecked = 0;
+            _touchFailures.Clear();
+            _touchPanelsChecked = 0;
+            _touchPanelsClean = 0;
+
+            ProveGeometryMoves();
+            int count = CapturePlayerDecks() + CaptureManageWorkspace() + CaptureBuildCollections();
+            ReportFidelity();
+            ReportGeometry();
+            ReportTouchOracle();
+
+            const int expected = 15; // five workspaces x three landscape device targets
+            if (count == expected && _fidelityDegraded == 0 && _geoFailures.Count == 0 &&
+                _touchFailures.Count == 0 && _touchPanelsChecked == expected)
+                Debug.Log("NAVIGATION_CAPTURE_OK " + count + "/" + expected +
+                          " frames; geometry=clean; touch=clean");
+            else
+                Debug.LogError("NAVIGATION_CAPTURE_FAIL frames=" + count + "/" + expected +
+                               " fidelityDegraded=" + _fidelityDegraded +
+                               " geometryFindings=" + _geoFailures.Count +
+                               " touchFindings=" + _touchFailures.Count +
+                               " measured=" + _touchPanelsChecked);
         }
 
         // ---------------------------------------------------------------------
@@ -946,9 +998,8 @@ namespace DeNelle.Editor
         // ---------------------------------------------------------------------
         //  Panel: the founding / Echo unlock card (EchoUnlockDialogue) at its
         //  LONGEST copy -- the founding echo Aldwin. This is the panel with the
-        //  just-fixed text/button overlap the owner cares about. We render both
-        //  the flavor state and the "Tell me more" LORE state (the worst-case
-        //  copy), at EVERY capture target (including the Seeker's real 2670x1200),
+        //  just-fixed text/button overlap the owner cares about. We render the
+        //  sole acknowledgement state at EVERY target (including Seeker 2670x1200),
         //  so any overlap shows as it does on device.
         //
         //  BUILT ONCE PER TARGET (2026-08-05). This card is the exact panel the old
@@ -991,7 +1042,7 @@ namespace DeNelle.Editor
                 // EMERGENCE state is GONE -- its headline, arrival line, artwork and fade are
                 // folded into the single awakening card. So there is no _emergenceCanvas to
                 // capture and no OnEmergenceContinue advance to drive; Show() lands directly on
-                // the one screen. Two states remain to capture: flavor and lore.
+                // the one acknowledgement screen. Lore remains in the roster.
                 bool shown = EchoUnlockDialogue.Show(entry, 1);
                 dlg = UnityEngine.Object.FindAnyObjectByType<EchoUnlockDialogue>();
                 if (dlg == null)
@@ -1008,17 +1059,9 @@ namespace DeNelle.Editor
                     return saved;
                 }
 
-                // -- FLAVOR state (the default awaken copy) --
+                // -- SOLE acknowledgement state --
                 if (RenderCanvasToPng(canvasGo,
-                    OutDir + "EchoUnlockDialogue_Aldwin_flavor_" + target.Tag + ".png",
-                    target.W, target.H)) saved++;
-
-                // -- LORE state (the LONGEST copy, swapped in by "Tell me more") --
-                // OnTellMore is private; invoking it mirrors the real button so we capture
-                // exactly what the owner sees after tapping "Tell me more".
-                InvokePrivate(dlg, "OnTellMore");
-                if (RenderCanvasToPng(canvasGo,
-                    OutDir + "EchoUnlockDialogue_Aldwin_lore_" + target.Tag + ".png",
+                    OutDir + "EchoUnlockDialogue_Aldwin_acknowledge_" + target.Tag + ".png",
                     target.W, target.H)) saved++;
             }
             catch (Exception e)
@@ -1075,6 +1118,28 @@ namespace DeNelle.Editor
             return saved;
         }
 
+        private static DeNelle.Core.Dialogue.DialogueDef BuildCompactHelperProbeDef()
+        {
+            var def = new DeNelle.Core.Dialogue.DialogueDef
+            {
+                Id = "uicap_dialogue_compact_helper",
+                StartNode = "root",
+            };
+            def.Nodes.Add(new DeNelle.Core.Dialogue.DialogueNode
+            {
+                Id = "root",
+                Lines = new List<DeNelle.Core.Dialogue.DialogueLine>
+                {
+                    new DeNelle.Core.Dialogue.DialogueLine
+                    {
+                        Speaker = "Aldwin",
+                        Text = "I can farm. I can mend. Put me to work, Keeper.",
+                    },
+                },
+            });
+            return def;
+        }
+
         /// <summary>An n-option probe node (WO-1030 acceptance: 2 options fit scroll-free;
         /// a 4-option node either fits or scrolls with a visible affordance). One builder so
         /// the two shots differ ONLY by option count. Speaker is a catalog speaker, never an
@@ -1114,7 +1179,8 @@ namespace DeNelle.Editor
         }
 
         private static int CaptureDialogueDefOnce(CaptureTarget target,
-            DeNelle.Core.Dialogue.DialogueDef def, string shotName)
+            DeNelle.Core.Dialogue.DialogueDef def, string shotName,
+            bool advanceToOptions = true)
         {
             int saved = 0;
             GameObject tempEventSystem = null;
@@ -1123,6 +1189,11 @@ namespace DeNelle.Editor
             Component view = null;
             try
             {
+                // Every probe must own a clean modal slot. Earlier capture families can leave
+                // their panel registered even after their canvas is destroyed; DialogueView
+                // correctly suppresses itself in that state, which used to produce six blank
+                // PNG attempts while the aggregate UI_CAPTURE_OK marker still went green.
+                DeNelle.Core.UI.PanelManager.CloseAll();
                 Type viewType = ResolveType("DeNelle.HUD.DialogueView");
                 if (viewType == null)
                 {
@@ -1152,8 +1223,8 @@ namespace DeNelle.Editor
                 // The prompt is line -> OPTIONS; advance once so the CHOICE LIST (the WO-1030
                 // defect surface) is the state in the png.
                 var vm = DeNelle.Core.Dialogue.DialogueService.ActiveVm;
-                if (vm != null && !vm.ShowingOptions) vm.Advance();
-                if (vm == null || !vm.ShowingOptions)
+                if (advanceToOptions && vm != null && !vm.ShowingOptions) vm.Advance();
+                if (advanceToOptions && (vm == null || !vm.ShowingOptions))
                 {
                     Debug.LogWarning("[UICap-HL] dialogue VM never reached ShowingOptions -- " +
                                      shotName + " captures the non-options state instead.");
@@ -1452,6 +1523,1428 @@ namespace DeNelle.Editor
             return ForEachTarget("PauseMenu", CapturePauseMenuOnce);
         }
 
+        /// <summary>Fast visual iteration entry point for the approved pause reference.</summary>
+        public static void RunPauseCaptureHeadless()
+        {
+            Directory.CreateDirectory(OutDir);
+            int count = CapturePauseMenu();
+            if (count == 3) Debug.Log("PAUSE_CAPTURE_OK 3/3");
+            else Debug.LogError("PAUSE_CAPTURE_FAIL " + count + "/3");
+        }
+
+        /// <summary>Fast visual iteration entry point for the combat Item picker.</summary>
+        public static void RunCombatItemPickerCaptureHeadless()
+        {
+            Directory.CreateDirectory(OutDir);
+            int count = ForEachTarget("CombatItemPicker", CaptureCombatItemPickerOnce);
+            if (count == 3) Debug.Log("COMBAT_ITEM_PICKER_CAPTURE_OK 3/3");
+            else Debug.LogError("COMBAT_ITEM_PICKER_CAPTURE_FAIL " + count + "/3");
+        }
+
+        /// <summary>Fast visual iteration entry point for the full Settings surface.</summary>
+        public static void RunSettingsCaptureHeadless()
+        {
+            Directory.CreateDirectory(OutDir);
+            int count = ForEachTarget("Settings", CaptureSettingsOnce);
+            if (count == 3) Debug.Log("SETTINGS_CAPTURE_OK 3/3");
+            else Debug.LogError("SETTINGS_CAPTURE_FAIL " + count + "/3");
+        }
+
+        /// <summary>Fast visual iteration for the live operator-maintenance status strip.</summary>
+        public static void RunMaintenanceBannerCaptureHeadless()
+        {
+            Directory.CreateDirectory(OutDir);
+            int count = CaptureMaintenanceBanner();
+            if (count == 3) Debug.Log("MAINTENANCE_BANNER_CAPTURE_OK 3/3");
+            else Debug.LogError("MAINTENANCE_BANNER_CAPTURE_FAIL " + count + "/3");
+        }
+
+        /// <summary>Fast visual iteration for the production Monthly Ledger route.</summary>
+        public static void RunMonthlyLedgerCaptureHeadless()
+        {
+            Directory.CreateDirectory(OutDir);
+            _fidelityOk = _fidelityDegraded = 0;
+            _fidelityReasons.Clear();
+            _geoFailures.Clear();
+            _touchFailures.Clear();
+            _geoCanvasesChecked = _touchPanelsChecked = _touchPanelsClean = 0;
+
+            int count = CaptureReflectedSecondary(
+                "MonthlyLedger", "DeNelle.Wallet.MonthlyLedgerPanel", "OnEnable", null, true);
+            ReportFidelity();
+            ReportGeometry();
+            ReportTouchOracle();
+            if (count == 3 && _fidelityDegraded == 0 && _geoFailures.Count == 0 &&
+                _touchFailures.Count == 0)
+                Debug.Log("MONTHLY_LEDGER_CAPTURE_OK 3/3; fidelity=clean; geometry=clean; touch=clean");
+            else
+                Debug.LogError("MONTHLY_LEDGER_CAPTURE_FAIL frames=" + count + "/3 fidelity=" +
+                    _fidelityDegraded + " geometry=" + _geoFailures.Count + " touch=" +
+                    _touchFailures.Count);
+        }
+
+        /// <summary>
+        /// Matched adaptive-HUD evidence: the real kit is built once per target and forced through
+        /// calm-town and active-battle postures on the same canvas. This proves persistent anchor
+        /// stability and catches posture-specific geometry/touch regressions.
+        /// </summary>
+        public static void RunAdaptiveHudCaptureHeadless()
+        {
+            Directory.CreateDirectory(OutDir);
+            int count = ForEachTarget("AdaptiveHud", CaptureAdaptiveHudOnce);
+            if (count == 9) Debug.Log("ADAPTIVE_HUD_CAPTURE_OK 9/9");
+            else Debug.LogError("ADAPTIVE_HUD_CAPTURE_FAIL " + count + "/9");
+        }
+
+        /// <summary>Focused proof that a one-line tutorial/townsfolk helper uses the compact
+        /// composition while retaining the full dialogue interaction contract.</summary>
+        public static void RunCompactDialogueCaptureHeadless()
+        {
+            Directory.CreateDirectory(OutDir);
+            int count = ForEachTarget("CompactDialogue", target =>
+                CaptureDialogueDefOnce(target, BuildCompactHelperProbeDef(),
+                    "DialogueCompact_Aldwin", advanceToOptions: false));
+            bool interaction = VerifyDialogueFrameTapAndCombatTruce();
+            if (count == 3 && interaction) Debug.Log("COMPACT_DIALOGUE_CAPTURE_OK 3/3 + INTERACTION_OK");
+            else Debug.LogError("COMPACT_DIALOGUE_CAPTURE_FAIL " + count + "/3 interaction=" + interaction);
+        }
+
+        /// <summary>Focused two/four-choice dialogue evidence. Kept separate from the broad
+        /// registry so a prose/choice balance correction can be iterated without rebuilding all
+        /// public surfaces, while still exercising the production DialogueView and modal arbiter.</summary>
+        public static void RunDialogueOptionsCaptureHeadless()
+        {
+            Directory.CreateDirectory(OutDir);
+            int count = CaptureDialogueOptions();
+            if (count == 6) Debug.Log("DIALOGUE_OPTIONS_CAPTURE_OK 6/6");
+            else Debug.LogError("DIALOGUE_OPTIONS_CAPTURE_FAIL " + count + "/6");
+        }
+
+        private static bool VerifyDialogueFrameTapAndCombatTruce()
+        {
+            GameObject viewGo = null;
+            Component view = null;
+            Func<bool> combatProbe = null;
+            bool combat = false;
+            try
+            {
+                Type viewType = ResolveType("DeNelle.HUD.DialogueView");
+                if (viewType == null) return false;
+                viewGo = new GameObject("~UICapDialogueInteraction");
+                view = viewGo.AddComponent(viewType);
+                InvokePrivate(view, "OnEnable");
+
+                var def = new DeNelle.Core.Dialogue.DialogueDef
+                {
+                    Id = "uicap_dialogue_interaction",
+                    StartNode = "root",
+                };
+                def.Nodes.Add(new DeNelle.Core.Dialogue.DialogueNode
+                {
+                    Id = "root",
+                    Lines = new List<DeNelle.Core.Dialogue.DialogueLine>
+                    {
+                        new DeNelle.Core.Dialogue.DialogueLine { Speaker = "Aldwin", Text = "First helper line." },
+                        new DeNelle.Core.Dialogue.DialogueLine { Speaker = "Aldwin", Text = "Second helper line." },
+                    },
+                });
+                if (!DeNelle.Core.Dialogue.DialogueService.PlayDef(def)) return false;
+                var vm = DeNelle.Core.Dialogue.DialogueService.ActiveVm;
+                if (vm == null || vm.Text != "First helper line.") return false;
+
+                // Bypass only the opening debounce; invoke the Button attached to the FRAME,
+                // proving the modal surface itself owns advancement.
+                SetPrivateField(view, "_openedAt", -1000f);
+                var box = GetPrivateFieldValue(view, "_box") as RectTransform;
+                var frameButton = box != null ? box.GetComponent<Button>() : null;
+                if (frameButton == null) return false;
+                frameButton.onClick.Invoke();
+                if (vm.Text != "Second helper line." || !vm.IsOpen) return false;
+
+                combatProbe = () => combat;
+                DeNelle.Core.Combat.BattleLock.RegisterProbe(combatProbe);
+                combat = true;
+                // This is the production hostile-posture path. The dialogue close callback must
+                // convert it into a truce rather than fire Ended/advance the tutorial.
+                PanelManager.CloseAll();
+                var ui = GetPrivateGameObject(view, "_ui");
+                if (ui == null || ui.activeSelf || !vm.IsOpen || vm.Text != "Second helper line.") return false;
+
+                combat = false;
+                InvokePrivate(view, "TickCombatTruce");
+                if (!ui.activeSelf || !vm.IsOpen || vm.Text != "Second helper line.") return false;
+                Debug.Log("DIALOGUE_INTERACTION_OK frame-tap advanced; combat hid/paused; post-combat resumed same line");
+                return true;
+            }
+            catch (Exception e)
+            {
+                Debug.LogError("[UICap-HL] dialogue interaction contract threw: " + e);
+                return false;
+            }
+            finally
+            {
+                if (combatProbe != null) DeNelle.Core.Combat.BattleLock.UnregisterProbe(combatProbe);
+                try
+                {
+                    if (view != null) SetPrivateField(view, "_ui", null);
+                    DeNelle.Core.Dialogue.DialogueService.Stop();
+                    if (view != null) InvokePrivate(view, "OnDisable");
+                }
+                catch { }
+                PanelManager.CloseAll();
+                if (viewGo != null) UnityEngine.Object.DestroyImmediate(viewGo);
+            }
+        }
+
+        private static int CaptureFoundingChoiceOnce(CaptureTarget target)
+        {
+            GameObject host = null;
+            GameObject canvas = null;
+            Component controller = null;
+            try
+            {
+                Type type = ResolveType("DeNelle.Onboarding.FoundingChoiceController");
+                if (type == null)
+                {
+                    Debug.LogWarning("[UICap-HL] FoundingChoiceController type not found -- skipped.");
+                    return 0;
+                }
+                host = new GameObject("~UICapFoundingChoice");
+                controller = host.AddComponent(type);
+                InvokePrivate(controller, "Build");
+                canvas = GetPrivateGameObject(controller, "_canvas");
+                if (canvas == null)
+                {
+                    Debug.LogWarning("[UICap-HL] FoundingChoiceController._canvas was null -- skipped.");
+                    return 0;
+                }
+                return RenderCanvasToPng(canvas,
+                    OutDir + "FoundingChoice_" + target.Tag + ".png", target.W, target.H) ? 1 : 0;
+            }
+            catch (Exception e)
+            {
+                Debug.LogError("[UICap-HL] founding choice capture threw: " + e);
+                return 0;
+            }
+            finally
+            {
+                // Avoid the runtime Destroy path in edit-mode capture; tear down the owned
+                // canvas and host immediately after the pixels are committed.
+                if (controller != null) SetPrivateField(controller, "_canvas", null);
+                if (canvas != null) UnityEngine.Object.DestroyImmediate(canvas);
+                if (host != null) UnityEngine.Object.DestroyImmediate(host);
+            }
+        }
+
+        /// <summary>Focused three-ratio evidence for the mandatory fresh-save founding choice.</summary>
+        public static void RunFoundingChoiceCaptureHeadless()
+        {
+            Directory.CreateDirectory(OutDir);
+            int count = ForEachTarget("FoundingChoice", CaptureFoundingChoiceOnce);
+            if (count == 3) Debug.Log("FOUNDING_CHOICE_CAPTURE_OK 3/3");
+            else Debug.LogError("FOUNDING_CHOICE_CAPTURE_FAIL " + count + "/3");
+        }
+
+        /// <summary>Focused evidence loop for the Hero navigation family.</summary>
+        public static void RunHeroFamilyCaptureHeadless()
+        {
+            Directory.CreateDirectory(OutDir);
+            int count = ForEachTarget("HeroEquipment", CaptureHeroEquipmentOnce) +
+                        CaptureHeroSkillTree();
+            if (count == 9) Debug.Log("HERO_FAMILY_CAPTURE_OK 9/9");
+            else Debug.LogError("HERO_FAMILY_CAPTURE_FAIL " + count + "/9");
+        }
+
+        /// <summary>Focused proof for the first-build category launcher.</summary>
+        public static void RunBuildCollectionsCaptureHeadless()
+        {
+            Directory.CreateDirectory(OutDir);
+            int count = CaptureBuildCollections();
+            if (count == 3) Debug.Log("BUILD_COLLECTIONS_CAPTURE_OK 3/3");
+            else Debug.LogError("BUILD_COLLECTIONS_CAPTURE_FAIL " + count + "/3");
+        }
+
+        /// <summary>Focused proof for the build placement confirmation/orientation modal.</summary>
+        public static void RunBuildPreviewCaptureHeadless()
+        {
+            Directory.CreateDirectory(OutDir);
+            int count = ForEachTarget("BuildPreview", CaptureBuildPreviewOnce);
+            if (count == 3) Debug.Log("BUILD_PREVIEW_CAPTURE_OK 3/3");
+            else Debug.LogError("BUILD_PREVIEW_CAPTURE_FAIL " + count + "/3");
+        }
+
+        /// <summary>Focused proof for the highest-risk player warning: random jewel re-polish.</summary>
+        public static void RunJewelPolishConfirmCaptureHeadless()
+        {
+            Directory.CreateDirectory(OutDir);
+            int count = ForEachTarget("JewelPolishConfirm", CaptureJewelPolishConfirmOnce);
+            if (count == 3) Debug.Log("JEWEL_POLISH_CONFIRM_CAPTURE_OK 3/3");
+            else Debug.LogError("JEWEL_POLISH_CONFIRM_CAPTURE_FAIL " + count + "/3");
+        }
+
+        /// <summary>Focused two-state proof for normal loading and first-run connection recovery.</summary>
+        public static void RunLoadingOverlayCaptureHeadless()
+        {
+            Directory.CreateDirectory(OutDir);
+            int count = ForEachTarget("LoadingOverlay", CaptureLoadingOverlayOnce);
+            if (count == 6) Debug.Log("LOADING_OVERLAY_CAPTURE_OK 6/6");
+            else Debug.LogError("LOADING_OVERLAY_CAPTURE_FAIL " + count + "/6");
+        }
+
+        /// <summary>Focused three-ratio proof for the real offline-haul acknowledgement.</summary>
+        public static void RunWelcomeBackCaptureHeadless()
+        {
+            Directory.CreateDirectory(OutDir);
+            int count = ForEachTarget("WelcomeBack", CaptureWelcomeBackOnce);
+            if (count == 3) Debug.Log("WELCOME_BACK_CAPTURE_OK 3/3");
+            else Debug.LogError("WELCOME_BACK_CAPTURE_FAIL " + count + "/3");
+        }
+
+        /// <summary>
+        /// Focused proof for the remaining shared system-modal family. These use the
+        /// production builders and worst-case copy, not screenshot-only replicas.
+        /// </summary>
+        public static void RunSystemModalCaptureHeadless()
+        {
+            Directory.CreateDirectory(OutDir);
+            int count = ForEachTarget("SystemModals", CaptureSystemModalsOnce);
+            if (count == 12) Debug.Log("SYSTEM_MODAL_CAPTURE_OK 12/12");
+            else Debug.LogError("SYSTEM_MODAL_CAPTURE_FAIL " + count + "/12");
+        }
+
+        private static int CaptureSystemModalsOnce(CaptureTarget target)
+        {
+            int saved = 0;
+            PanelManager.CloseAll();
+            saved += CaptureBuiltModal<AdConsentPanel>("AdConsent", target, "Build");
+            saved += CaptureBuiltModal<OfflineOptInPanel>("OfflineOptIn", target, "Build");
+            saved += CaptureBuiltModal<DailyChestController>("DailyChest", target, "Build");
+
+            GameObject host = null;
+            GameObject canvas = null;
+            try
+            {
+                host = new GameObject("~UICapHarvestOverflow");
+                var panel = host.AddComponent<HarvestOverflowModal>();
+                var rows = new List<BankOverflowStatus>
+                {
+                    new BankOverflowStatus
+                    {
+                        Available = true, Resource = BankResource.Wood,
+                        ResourceName = "Wood", ContainerName = "Lumberyard",
+                        Requested = 920, Granted = 180, Lost = 740,
+                        Current = 9820, Max = 10000, Source = "OfflineHarvest"
+                    },
+                    new BankOverflowStatus
+                    {
+                        Available = true, Resource = BankResource.Iron,
+                        ResourceName = "Iron", ContainerName = "Warehouse",
+                        Requested = 480, Granted = 0, Lost = 480,
+                        Current = 11250, Max = 10000, OverCap = true,
+                        Source = "OfflineHarvest"
+                    }
+                };
+                InvokePrivate(panel, "Open", rows);
+                var modal = GetPrivateFieldValue(panel, "_modal") as ElarionUiKit.ObsidianModal;
+                canvas = modal != null ? modal.canvas : null;
+                if (canvas != null && RenderCanvasToPng(canvas,
+                    OutDir + "HarvestOverflow_" + target.Tag + ".png", target.W, target.H)) saved++;
+            }
+            catch (Exception e)
+            {
+                Debug.LogError("[UICap-HL] HarvestOverflow @" + target.Tag + " threw: " + e);
+            }
+            finally
+            {
+                if (canvas != null) UnityEngine.Object.DestroyImmediate(canvas);
+                if (host != null) UnityEngine.Object.DestroyImmediate(host);
+                PanelManager.CloseAll();
+            }
+            return saved;
+        }
+
+        private static int CaptureBuiltModal<T>(string fileStem, CaptureTarget target, string buildMethod)
+            where T : MonoBehaviour
+        {
+            GameObject host = null;
+            GameObject canvas = null;
+            try
+            {
+                host = new GameObject("~UICap" + fileStem);
+                var panel = host.AddComponent<T>();
+                InvokePrivate(panel, buildMethod);
+                var modal = GetPrivateFieldValue(panel, "_modal") as ElarionUiKit.ObsidianModal;
+                canvas = modal != null ? modal.canvas : null;
+                return canvas != null && RenderCanvasToPng(canvas,
+                    OutDir + fileStem + "_" + target.Tag + ".png", target.W, target.H) ? 1 : 0;
+            }
+            catch (Exception e)
+            {
+                Debug.LogError("[UICap-HL] " + fileStem + " @" + target.Tag + " threw: " + e);
+                return 0;
+            }
+            finally
+            {
+                if (canvas != null) UnityEngine.Object.DestroyImmediate(canvas);
+                if (host != null) UnityEngine.Object.DestroyImmediate(host);
+                PanelManager.CloseAll();
+            }
+        }
+
+        private static int CaptureWelcomeBackOnce(CaptureTarget target)
+        {
+            WelcomeBackPopup popup = null;
+            GameObject canvas = null;
+            try
+            {
+                var result = new OfflineHarvestResult
+                {
+                    AwaySeconds = 9.5 * 3600.0,
+                    WasCapped = true,
+                    AetherCrystals = 240,
+                    Food = 610,
+                    Iron = 480,
+                    Wood = 920,
+                    Mend = new EchoMendReport
+                    {
+                        Repairs = 2,
+                        HealthFraction = 0.35f,
+                        SpentWood = 120,
+                        SpentIron = 80,
+                        StalledResource = "Wood"
+                    }
+                };
+                WelcomeBackPopup.Show(result);
+                popup = UnityEngine.Object.FindAnyObjectByType<WelcomeBackPopup>();
+                var modal = popup != null
+                    ? GetPrivateFieldValue(popup, "_modal") as ElarionUiKit.ObsidianModal : null;
+                canvas = modal != null ? modal.canvas : null;
+                return canvas != null && RenderCanvasToPng(canvas,
+                    OutDir + "WelcomeBack_" + target.Tag + ".png", target.W, target.H) ? 1 : 0;
+            }
+            finally
+            {
+                if (popup != null) InvokePrivate(popup, "Dismiss");
+                else if (canvas != null) UnityEngine.Object.DestroyImmediate(canvas);
+            }
+        }
+
+        /// <summary>Focused three-ratio proof for the player-facing title and login gate.</summary>
+        public static void RunFrontDoorCaptureHeadless()
+        {
+            Directory.CreateDirectory(OutDir);
+            _loginCaptureStem = "Login";
+            int count = ForEachTarget("Title", CaptureTitleOnce) +
+                        ForEachTarget("Login", CaptureLoginOnce);
+            if (count == 6) Debug.Log("FRONT_DOOR_CAPTURE_OK 6/6");
+            else Debug.LogError("FRONT_DOOR_CAPTURE_FAIL " + count + "/6");
+        }
+
+        /// <summary>
+        /// Builds the production LoginPanelController through its editor-only
+        /// presentation seam with GOOGLE_PLAY wording. This is visual evidence,
+        /// not a substitute for scanning the eventual AAB.
+        /// </summary>
+        public static void RunGooglePlayLoginCaptureHeadless()
+        {
+            Directory.CreateDirectory(OutDir);
+            _fidelityOk = 0;
+            _fidelityDegraded = 0;
+            _fidelityReasons.Clear();
+            _screenStuckBuilds = 0;
+            _screenStuckAt = null;
+            _geoMoveProof = null;
+            _geoMoveFailure = null;
+            _geoFailures.Clear();
+            _geoCanvasesChecked = 0;
+            _touchFailures.Clear();
+            _touchPanelsChecked = 0;
+            _touchPanelsClean = 0;
+            ProveGeometryMoves();
+
+            Type loginType = ResolveType("DeNelle.Onboarding.LoginPanelController");
+            PropertyInfo overrideProperty = loginType?.GetProperty(
+                "EditorGooglePlayPresentationOverride",
+                BindingFlags.Public | BindingFlags.Static);
+            if (overrideProperty == null)
+            {
+                Debug.LogError("GOOGLE_PLAY_LOGIN_CAPTURE_FAIL 0/3; production presentation seam missing");
+                return;
+            }
+
+            int count = 0;
+            _loginCaptureStem = "GooglePlayLogin";
+            try
+            {
+                overrideProperty.SetValue(null, (bool?)true);
+                count = ForEachTarget("GooglePlayLogin", CaptureLoginOnce);
+            }
+            finally
+            {
+                overrideProperty.SetValue(null, null);
+                _loginCaptureStem = "Login";
+            }
+
+            ReportFidelity();
+            ReportGeometry();
+            ReportTouchOracle();
+            bool clean = count == LandscapeTargets.Length
+                         && _fidelityDegraded == 0
+                         && _geoMoveProof != null
+                         && _geoMoveFailure == null
+                         && _geoCanvasesChecked == LandscapeTargets.Length
+                         && _geoFailures.Count == 0
+                         && _touchPanelsChecked == LandscapeTargets.Length
+                         && _touchPanelsClean == _touchPanelsChecked
+                         && _touchFailures.Count == 0;
+            if (clean)
+                Debug.Log("GOOGLE_PLAY_LOGIN_CAPTURE_OK 3/3; fidelity=clean; geometry=clean; touch=clean");
+            else
+                Debug.LogError("GOOGLE_PLAY_LOGIN_CAPTURE_FAIL " + count + "/3; fidelityDegraded=" +
+                               _fidelityDegraded + "; geometryFailures=" + _geoFailures.Count +
+                               "; touchFailures=" + _touchFailures.Count);
+        }
+
+        /// <summary>Focused profile/hero-selection proof after front-door migration.</summary>
+        public static void RunHeroSelectCaptureHeadless()
+        {
+            Directory.CreateDirectory(OutDir);
+            int count = CaptureHeroSelect();
+            if (count == 3) Debug.Log("HERO_SELECT_CAPTURE_OK 3/3");
+            else Debug.LogError("HERO_SELECT_CAPTURE_FAIL " + count + "/3");
+        }
+
+        private static int CaptureTitleOnce(CaptureTarget target)
+        {
+            GameObject host = null, canvas = null;
+            try
+            {
+                host = new GameObject("~UICapTitle");
+                var type = ResolveType("DeNelle.Onboarding.TitleController");
+                if (type == null) return 0;
+                var controller = host.AddComponent(type) as MonoBehaviour;
+                InvokePrivate(controller, "BuildTitleMenu");
+                canvas = GetPrivateGameObject(controller, "_canvas");
+                if (canvas == null) return 0;
+                Canvas.ForceUpdateCanvases();
+                return RenderCanvasToPng(canvas,
+                    OutDir + "Title_" + target.Tag + ".png", target.W, target.H) ? 1 : 0;
+            }
+            catch (Exception e)
+            {
+                Debug.LogError("[UICap-HL] Title capture threw: " + e);
+                return 0;
+            }
+            finally
+            {
+                if (canvas != null) UnityEngine.Object.DestroyImmediate(canvas);
+                if (host != null) UnityEngine.Object.DestroyImmediate(host);
+            }
+        }
+
+        private static string _loginCaptureStem = "Login";
+
+        private static int CaptureLoginOnce(CaptureTarget target)
+        {
+            GameObject host = null, canvas = null;
+            try
+            {
+                PanelManager.CloseAll();
+                host = new GameObject("~UICapLogin");
+                var type = ResolveType("DeNelle.Onboarding.LoginPanelController");
+                if (type == null) return 0;
+                var controller = host.AddComponent(type) as MonoBehaviour;
+                InvokePrivate(controller, "Build");
+                canvas = GetPrivateGameObject(controller, "_canvas");
+                if (canvas == null) return 0;
+                Canvas.ForceUpdateCanvases();
+                return RenderCanvasToPng(canvas,
+                    OutDir + _loginCaptureStem + "_" + target.Tag + ".png", target.W, target.H) ? 1 : 0;
+            }
+            catch (Exception e)
+            {
+                Debug.LogError("[UICap-HL] Login capture threw: " + e);
+                return 0;
+            }
+            finally
+            {
+                PanelManager.CloseAll();
+                if (canvas != null) UnityEngine.Object.DestroyImmediate(canvas);
+                if (host != null) UnityEngine.Object.DestroyImmediate(host);
+            }
+        }
+
+        private static int CaptureLoadingOverlayOnce(CaptureTarget target)
+        {
+            int saved = 0;
+            LoadingOverlay normal = null, barrier = null;
+            try
+            {
+                var normalGo = new GameObject("~UICapLoadingOverlay");
+                normal = normalGo.AddComponent<LoadingOverlay>();
+                typeof(LoadingOverlay).GetMethod("Build", BindingFlags.NonPublic | BindingFlags.Instance)
+                    ?.Invoke(normal, new object[] { "Preparing your realm...", null });
+                var barFill = GetPrivateFieldValue(normal, "_barFill") as RectTransform;
+                if (barFill != null) barFill.anchorMax = new Vector2(0.62f, 1f);
+                if (normal != null && RenderCanvasToPng(normal.gameObject,
+                    OutDir + "LoadingOverlay_" + target.Tag + ".png", target.W, target.H)) saved++;
+                if (normal != null) UnityEngine.Object.DestroyImmediate(normal.gameObject);
+                normal = null;
+
+                var barrierGo = new GameObject("~UICapConnectionRequired");
+                barrier = barrierGo.AddComponent<LoadingOverlay>();
+                typeof(LoadingOverlay).GetField("_connectionRequired",
+                    BindingFlags.NonPublic | BindingFlags.Instance)?.SetValue(barrier, true);
+                typeof(LoadingOverlay).GetMethod("Build", BindingFlags.NonPublic | BindingFlags.Instance)
+                    ?.Invoke(barrier, new object[] {
+                        "Internet is needed once to prepare game content. Your connection may still be working for other apps.",
+                        "RETRY CONNECTION" });
+                if (barrier != null && RenderCanvasToPng(barrier.gameObject,
+                    OutDir + "ConnectionRequired_" + target.Tag + ".png", target.W, target.H)) saved++;
+                return saved;
+            }
+            catch (Exception e)
+            {
+                Debug.LogError("[UICap-HL] LoadingOverlay capture threw: " + e);
+                return saved;
+            }
+            finally
+            {
+                if (normal != null) UnityEngine.Object.DestroyImmediate(normal.gameObject);
+                if (barrier != null) UnityEngine.Object.DestroyImmediate(barrier.gameObject);
+            }
+        }
+
+        private static int CaptureJewelPolishConfirmOnce(CaptureTarget target)
+        {
+            try
+            {
+                PanelManager.CloseAll();
+                bool opened = JewelPolishConfirmPanel.Show(
+                    DungeonExclusiveItems.EmberCrystalId, () => { });
+                if (!opened) return 0;
+                var canvasField = typeof(JewelPolishConfirmPanel).GetField("s_canvas",
+                    BindingFlags.NonPublic | BindingFlags.Static);
+                var canvas = canvasField != null ? canvasField.GetValue(null) as GameObject : null;
+                if (canvas == null) return 0;
+                Canvas.ForceUpdateCanvases();
+                return RenderCanvasToPng(canvas,
+                    OutDir + "JewelPolishConfirm_" + target.Tag + ".png", target.W, target.H) ? 1 : 0;
+            }
+            catch (Exception e)
+            {
+                Debug.LogError("[UICap-HL] JewelPolishConfirm capture threw: " + e);
+                return 0;
+            }
+            finally
+            {
+                typeof(JewelPolishConfirmPanel).GetMethod("CloseCancelled",
+                    BindingFlags.NonPublic | BindingFlags.Static)?.Invoke(null, null);
+                PanelManager.CloseAll();
+            }
+        }
+
+        private static int CaptureBuildPreviewOnce(CaptureTarget target)
+        {
+            GameObject host = null;
+            try
+            {
+                typeof(CatalogBootstrap).GetMethod("Register",
+                    BindingFlags.NonPublic | BindingFlags.Static)?.Invoke(null, null);
+                CatalogEntry entry = null;
+                var all = CatalogRegistry.All();
+                for (int i = 0; i < all.Count; i++)
+                    if (all[i] != null && !string.IsNullOrEmpty(all[i].displayName))
+                    { entry = all[i]; break; }
+                entry ??= new CatalogEntry { id = "capture-tower", displayName = "Watchtower" };
+
+                host = new GameObject("~UICapBuildPreview");
+                var modal = host.AddComponent<BuildPreviewModal>();
+                modal.Show(entry, _ => { }, () => { });
+                var previewCamera = GetPrivateFieldValue(modal, "_previewCam") as Camera;
+                if (previewCamera != null) previewCamera.Render();
+                Canvas.ForceUpdateCanvases();
+                return RenderCanvasToPng(host,
+                    OutDir + "BuildPreview_" + target.Tag + ".png", target.W, target.H) ? 1 : 0;
+            }
+            catch (Exception e)
+            {
+                Debug.LogError("[UICap-HL] BuildPreview capture threw: " + e);
+                return 0;
+            }
+            finally
+            {
+                if (host != null) UnityEngine.Object.DestroyImmediate(host);
+            }
+        }
+
+        /// <summary>Focused three-ratio proof for the shared Realm/Hero/Journey card deck.</summary>
+        public static void RunPlayerDeckCaptureHeadless()
+        {
+            Directory.CreateDirectory(OutDir);
+            int count = CapturePlayerDecks();
+            if (count == 9) Debug.Log("PLAYER_DECK_CAPTURE_OK 9/9");
+            else Debug.LogError("PLAYER_DECK_CAPTURE_FAIL " + count + "/9");
+        }
+
+        /// <summary>Focused three-ratio proof for the Journey raid camp selector.</summary>
+        public static void RunRaidSelectionCaptureHeadless()
+        {
+            Directory.CreateDirectory(OutDir);
+            int count = CaptureRaidSelection();
+            if (count == 3) Debug.Log("RAID_SELECTION_CAPTURE_OK 3/3");
+            else Debug.LogError("RAID_SELECTION_CAPTURE_FAIL " + count + "/3");
+        }
+
+        /// <summary>Focused two-page, three-ratio proof for the Journey quest board.</summary>
+        public static void RunRumorBoardCaptureHeadless()
+        {
+            Directory.CreateDirectory(OutDir);
+            int count = CaptureRumorBoard();
+            if (count == 6) Debug.Log("RUMOR_BOARD_CAPTURE_OK 6/6");
+            else Debug.LogError("RUMOR_BOARD_CAPTURE_FAIL " + count + "/6");
+        }
+
+        /// <summary>Focused three-ratio proof for both reachable Echo surfaces.</summary>
+        public static void RunEchoFamilyCaptureHeadless()
+        {
+            Directory.CreateDirectory(OutDir);
+            int count = CaptureEchoRosterPanel() + CaptureEchoCard();
+            if (count == 6) Debug.Log("ECHO_FAMILY_CAPTURE_OK 6/6");
+            else Debug.LogError("ECHO_FAMILY_CAPTURE_FAIL " + count + "/6");
+        }
+
+        /// <summary>Focused three-ratio proof for the one-action Echo unlock acknowledgement.</summary>
+        public static void RunEchoUnlockCaptureHeadless()
+        {
+            Directory.CreateDirectory(OutDir);
+            int count = CaptureFoundingEchoCard();
+            if (count == 3) Debug.Log("ECHO_UNLOCK_CAPTURE_OK 3/3");
+            else Debug.LogError("ECHO_UNLOCK_CAPTURE_FAIL " + count + "/3");
+        }
+
+        /// <summary>Focused three-ratio proof for the persistent Echo HUD chip.</summary>
+        public static void RunEchoChipCaptureHeadless()
+        {
+            Directory.CreateDirectory(OutDir);
+            int count = CaptureEchoRoster();
+            if (count == 3) Debug.Log("ECHO_CHIP_CAPTURE_OK 3/3");
+            else Debug.LogError("ECHO_CHIP_CAPTURE_FAIL " + count + "/3");
+        }
+
+        /// <summary>Focused three-ratio proof for the one FTUE skip affordance.</summary>
+        public static void RunTutorialSkipCaptureHeadless()
+        {
+            Directory.CreateDirectory(OutDir);
+            int count = ForEachTarget("TutorialSkip", CaptureTutorialSkipOnce);
+            if (count == 3) Debug.Log("TUTORIAL_SKIP_CAPTURE_OK 3/3");
+            else Debug.LogError("TUTORIAL_SKIP_CAPTURE_FAIL " + count + "/3");
+        }
+
+        /// <summary>Focused three-ratio proof for the public Bag workspace.</summary>
+        public static void RunBagCaptureHeadless()
+        {
+            Directory.CreateDirectory(OutDir);
+            int count = CaptureBag();
+            if (count == 3) Debug.Log("BAG_CAPTURE_OK 3/3");
+            else Debug.LogError("BAG_CAPTURE_FAIL " + count + "/3");
+        }
+
+        /// <summary>Focused three-ratio proof for the ordinary gold-currency storefront.</summary>
+        public static void RunRealmGoldStoreCaptureHeadless()
+        {
+            Directory.CreateDirectory(OutDir);
+            int count = ForEachTarget("RealmGoldStore", CaptureRealmGoldStoreOnce);
+            if (count == 3) Debug.Log("REALM_GOLD_STORE_CAPTURE_OK 3/3");
+            else Debug.LogError("REALM_GOLD_STORE_CAPTURE_FAIL " + count + "/3");
+        }
+
+        /// <summary>Focused three-ratio proof for Hero Skills/Talents.</summary>
+        public static void RunHeroSkillTreeCaptureHeadless()
+        {
+            Directory.CreateDirectory(OutDir);
+            int count = CaptureHeroSkillTree() +
+                ForEachTarget("HeroSkillTreeStates", CaptureHeroSkillTreeStatesOnce);
+            if (count == 9) Debug.Log("HERO_SKILL_TREE_CAPTURE_OK 9/9");
+            else Debug.LogError("HERO_SKILL_TREE_CAPTURE_FAIL " + count + "/9");
+        }
+
+        private static int CaptureHeroSkillTreeStatesOnce(CaptureTarget target)
+        {
+            const string pref = DeNelle.Core.State.GameStateService.TalentPrefKey;
+            string skillPref = AssignableSkillBar.PrefsKeyFor(AbilityCatalog.DefaultClass);
+            bool hadPref = PlayerPrefs.HasKey(pref);
+            string oldPref = hadPref ? PlayerPrefs.GetString(pref) : null;
+            bool hadSkillPref = PlayerPrefs.HasKey(skillPref);
+            string oldSkillPref = hadSkillPref ? PlayerPrefs.GetString(skillPref) : null;
+            GameObject eventSystem = null, serviceGo = null, heroGo = null, hostGo = null, canvasGo = null;
+            HeroSkillTreePanelMvvm panel = null;
+            int saved = 0;
+            try
+            {
+                if (WisdomCurrencyService.Instance != null)
+                {
+                    Debug.LogWarning("[UICap-HL] live Wisdom service present; reversible skill-state fixture skipped.");
+                    return 0;
+                }
+                if (UnityEngine.Object.FindAnyObjectByType<UnityEngine.EventSystems.EventSystem>() == null)
+                {
+                    eventSystem = new GameObject("~UICapEventSystem");
+                    eventSystem.AddComponent<UnityEngine.EventSystems.EventSystem>();
+                }
+                PlayerPrefs.DeleteKey(pref);
+                serviceGo = new GameObject("~UICapWisdom");
+                var wisdom = serviceGo.AddComponent<WisdomCurrencyService>();
+                wisdom.ResetForNewGame();
+                wisdom.Grant(999);
+
+                heroGo = new GameObject("~UICapSkillHero");
+                heroGo.tag = "Player";
+                heroGo.AddComponent<AssignableSkillBar>();
+
+                hostGo = new GameObject("~UICapHeroSkillStates");
+                panel = hostGo.AddComponent<HeroSkillTreePanelMvvm>();
+                panel.Open();
+                canvasGo = GetPrivateGameObject(panel, "_ui");
+                var vm = GetPrivateFieldValue(panel, "_vm") as HeroSkillTreeVM;
+                if (canvasGo == null || vm == null) return 0;
+
+                SkillNodeVM? live = null;
+                foreach (var track in vm.Tracks)
+                    foreach (var seat in track.Nodes)
+                        if (seat.State == SkillNodeState.Next || seat.State == SkillNodeState.Available ||
+                            seat.State == SkillNodeState.Inert) { live = seat.Node; break; }
+                if (!live.HasValue)
+                    foreach (var track in vm.Tracks)
+                        if (track.Nodes.Count > 0) { live = track.Nodes[0].Node; break; }
+                if (!live.HasValue) return 0;
+
+                vm.Select(live.Value.Id);
+                if (RenderCanvasToPng(canvasGo,
+                    OutDir + "HeroSkillTree_Popup_" + target.Tag + ".png", target.W, target.H)) saved++;
+
+                // Prefer an honestly owned active. If this catalog has no live reachable active,
+                // populate the class-valid bar directly to exercise the slot presentation only;
+                // the popup capture above remains truthful about the talent's actual state.
+                SkillNodeVM? active = null;
+                for (int pass = 0; pass < 8 && !active.HasValue; pass++)
+                {
+                    bool advanced = false;
+                    foreach (var node in vm.Nodes)
+                    {
+                        if (node.Owned && node.Kind == SkillNodeKind.Skill && node.EffectLive &&
+                            !string.IsNullOrEmpty(node.AbilityId)) { active = node; break; }
+                        if (node.CanUnlock && node.EffectLive && wisdom.Unlock(node.Id)) advanced = true;
+                    }
+                    if (!advanced && !active.HasValue) break;
+                }
+                if (!active.HasValue)
+                    foreach (var node in vm.Nodes)
+                        if (node.Kind == SkillNodeKind.Skill && !string.IsNullOrEmpty(node.AbilityId) &&
+                            AbilityCatalog.FindById(node.AbilityId) != null &&
+                            AbilityCatalog.IsUsableByClass(node.AbilityId, AbilityCatalog.DefaultClass))
+                        { active = node; break; }
+                string assignedId = active.HasValue ? active.Value.AbilityId : null;
+                if (string.IsNullOrEmpty(assignedId))
+                {
+                    var defaults = AbilityCatalog.GetLoadout(AbilityCatalog.DefaultClass);
+                    if (defaults.Count > 0) assignedId = defaults[0].Id;
+                }
+                if (!string.IsNullOrEmpty(assignedId))
+                {
+                    bool assigned = AssignableSkillBarAccess.Assign(0, assignedId);
+                    if (!assigned)
+                        Debug.LogWarning("[UICap-HL] could not populate assigned skill-state fixture: " +
+                                         assignedId);
+                }
+                vm.ClearSelection();
+                if (RenderCanvasToPng(canvasGo,
+                    OutDir + "HeroSkillTree_Assigned_" + target.Tag + ".png", target.W, target.H)) saved++;
+            }
+            catch (Exception e) { Debug.LogError("[UICap-HL] skill state capture threw: " + e); }
+            finally
+            {
+                if (panel != null)
+                {
+                    var handle = GetPrivateFieldValue(panel, "_panelHandle") as PanelHandle;
+                    if (handle != null) PanelManager.NotifyClosed(handle);
+                }
+                if (canvasGo != null) UnityEngine.Object.DestroyImmediate(canvasGo);
+                if (hostGo != null) UnityEngine.Object.DestroyImmediate(hostGo);
+                if (heroGo != null) UnityEngine.Object.DestroyImmediate(heroGo);
+                if (serviceGo != null) UnityEngine.Object.DestroyImmediate(serviceGo);
+                if (hadPref) PlayerPrefs.SetString(pref, oldPref); else PlayerPrefs.DeleteKey(pref);
+                if (hadSkillPref) PlayerPrefs.SetString(skillPref, oldSkillPref);
+                else PlayerPrefs.DeleteKey(skillPref);
+                PlayerPrefs.Save();
+                if (eventSystem != null) UnityEngine.Object.DestroyImmediate(eventSystem);
+            }
+            return saved;
+        }
+
+        private static int CaptureRealmGoldStoreOnce(CaptureTarget target)
+        {
+            GameObject eventSystem = null;
+            GameObject host = null;
+            GameObject canvas = null;
+            try
+            {
+                if (UnityEngine.Object.FindAnyObjectByType<UnityEngine.EventSystems.EventSystem>() == null)
+                {
+                    eventSystem = new GameObject("~UICapEventSystem");
+                    eventSystem.AddComponent<UnityEngine.EventSystems.EventSystem>();
+                }
+                PanelManager.CloseAll();
+                host = new GameObject("~UICapRealmGoldStore");
+                var panel = host.AddComponent<ShopPanel>();
+                panel.Open("", "REALM STORE");
+                canvas = GetPrivateGameObject(panel, "_ui");
+                if (canvas == null) return 0;
+                return RenderCanvasToPng(canvas, OutDir + "RealmGoldStore_" + target.Tag + ".png",
+                    target.W, target.H) ? 1 : 0;
+            }
+            catch (Exception e)
+            {
+                Debug.LogError("[UICap-HL] realm gold store capture threw: " + e);
+                return 0;
+            }
+            finally
+            {
+                if (canvas != null) UnityEngine.Object.DestroyImmediate(canvas);
+                if (host != null) UnityEngine.Object.DestroyImmediate(host);
+                if (eventSystem != null) UnityEngine.Object.DestroyImmediate(eventSystem);
+            }
+        }
+
+        /// <summary>
+        /// Stateful Realm Store proof. Opens the real Market catalog with an affordable wallet,
+        /// selects the canonical healing draught, raises quantity to three through ShopVM, and
+        /// executes Buy. Evidence is accepted only when gold falls by exactly total price and
+        /// persisted inventory rises by exactly three.
+        /// </summary>
+        public static void RunRealmGoldStorePurchaseCaptureHeadless()
+        {
+            Directory.CreateDirectory(OutDir);
+            _fidelityOk = _fidelityDegraded = 0;
+            _fidelityReasons.Clear();
+            _geoFailures.Clear();
+            _touchFailures.Clear();
+            _geoCanvasesChecked = _touchPanelsChecked = _touchPanelsClean = 0;
+
+            int frames = ForEachTarget("RealmGoldStorePurchase", CaptureRealmGoldStorePurchaseOnce);
+            ReportFidelity();
+            ReportGeometry();
+            ReportTouchOracle();
+            if (frames == 6 && _fidelityDegraded == 0 && _geoFailures.Count == 0 &&
+                _touchFailures.Count == 0)
+                Debug.Log("REALM_STORE_PURCHASE_CAPTURE_OK 6/6 frames; quantity=3; gold+inventory asserted; touch=clean");
+            else
+                Debug.LogError("REALM_STORE_PURCHASE_CAPTURE_FAIL frames=" + frames + "/6 fidelity=" +
+                    _fidelityDegraded + " geometry=" + _geoFailures.Count + " touch=" +
+                    _touchFailures.Count);
+        }
+
+        private static int CaptureRealmGoldStorePurchaseOnce(CaptureTarget target)
+        {
+            const string potionId = "minor-heal-potion";
+            GameStateService priorState = GameStateService.Instance;
+            VillageInventory priorInventory = VillageInventory.Instance;
+            EconomyService priorEconomy = EconomyService.Instance;
+            GameObject stateHost = null, inventoryHost = null, economyHost = null, panelHost = null, canvas = null;
+            GameState fixture = null;
+            ShopPanel panel = null;
+            try
+            {
+                PanelManager.CloseAll();
+                fixture = ScriptableObject.CreateInstance<GameState>();
+                fixture.Onboarded = true;
+                fixture.GearInventory = new Dictionary<string, int>();
+                var wallet = fixture.Resources;
+                wallet.Coins = 100;
+                fixture.Resources = wallet;
+                stateHost = new GameObject("~UICapRealmStoreState");
+                if (!InstallCaptureState(stateHost.AddComponent<GameStateService>(), fixture))
+                    throw new InvalidOperationException("GameStateService capture seam unavailable");
+
+                inventoryHost = new GameObject("~UICapRealmStoreInventory");
+                var inventory = inventoryHost.AddComponent<VillageInventory>();
+                InstallCaptureVillageInventory(inventory);
+                economyHost = new GameObject("~UICapRealmStoreEconomy");
+                var economy = economyHost.AddComponent<EconomyService>();
+                InstallCaptureEconomy(economy);
+
+                panelHost = new GameObject("~UICapRealmStorePanel");
+                panel = panelHost.AddComponent<ShopPanel>();
+                panel.Open("market", "REALM STORE");
+                var vm = GetPrivateFieldValue(panel, "_vm") as ShopVM;
+                if (vm == null) throw new InvalidOperationException("Realm Store built without ShopVM");
+                bool stocked = false;
+                foreach (var item in vm.Items)
+                    if (string.Equals(item.Id, potionId, StringComparison.Ordinal)) { stocked = true; break; }
+                if (!stocked) throw new InvalidOperationException("Market stock omitted " + potionId);
+
+                vm.Select(potionId);
+                vm.ChangeQuantity(2);
+                if (vm.Quantity != 3 || vm.SelectedUnitPrice <= 0 || !vm.CanExecuteSelected)
+                    throw new InvalidOperationException("quantity fixture unavailable: qty=" + vm.Quantity +
+                        " unit=" + vm.SelectedUnitPrice + " canBuy=" + vm.CanExecuteSelected);
+                int coinsBefore = economy.Coins;
+                int countBefore = inventory.Get(potionId);
+                int expectedCost = vm.TotalPrice;
+                Canvas.ForceUpdateCanvases();
+                canvas = GetPrivateGameObject(panel, "_ui");
+                if (canvas == null) throw new InvalidOperationException("Realm Store built no public canvas");
+
+                int saved = RenderCanvasToPng(canvas,
+                    OutDir + "RealmStorePurchase_Quantity3_" + target.Tag + ".png", target.W, target.H) ? 1 : 0;
+                vm.Buy();
+                Canvas.ForceUpdateCanvases();
+                int coinsAfter = economy.Coins;
+                int countAfter = inventory.Get(potionId);
+                if (coinsAfter != coinsBefore - expectedCost || countAfter != countBefore + 3 ||
+                    vm.Quantity != 1 || string.IsNullOrEmpty(vm.Status) ||
+                    vm.Status.IndexOf("Purchased", StringComparison.OrdinalIgnoreCase) < 0)
+                    throw new InvalidOperationException("production Store purchase assertion failed: gold " +
+                        coinsBefore + "->" + coinsAfter + " expectedCost=" + expectedCost + ", count " +
+                        countBefore + "->" + countAfter + ", qtyAfter=" + vm.Quantity + ", status='" +
+                        (vm.Status ?? "<null>") + "'");
+                Debug.Log("[UICap-RealmStore] production assertion OK target=" + target.Tag +
+                    " gold=" + coinsBefore + "->" + coinsAfter + " count=" + countBefore + "->" + countAfter);
+                if (RenderCanvasToPng(canvas,
+                    OutDir + "RealmStorePurchase_Bought3_" + target.Tag + ".png", target.W, target.H)) saved++;
+                return saved;
+            }
+            catch (Exception e)
+            {
+                Debug.LogError("[UICap-RealmStore] purchase capture threw: " + e);
+                return 0;
+            }
+            finally
+            {
+                try { if (panel != null) InvokePrivate(panel, "Close"); } catch { }
+                if (canvas != null) UnityEngine.Object.DestroyImmediate(canvas);
+                if (panelHost != null) UnityEngine.Object.DestroyImmediate(panelHost);
+                RestoreCaptureEconomy(priorEconomy);
+                if (economyHost != null) UnityEngine.Object.DestroyImmediate(economyHost);
+                RestoreCaptureVillageInventory(priorInventory);
+                if (inventoryHost != null) UnityEngine.Object.DestroyImmediate(inventoryHost);
+                RestoreCaptureState(priorState);
+                if (stateHost != null) UnityEngine.Object.DestroyImmediate(stateHost);
+                if (fixture != null) UnityEngine.Object.DestroyImmediate(fixture);
+                PanelManager.CloseAll();
+            }
+        }
+
+        /// <summary>
+        /// Populated Forge proof for the party equipment storefront. Unlike the generic
+        /// secondary-route inventory this creates a real player/economy/inventory context and
+        /// selects a real catalog row, so the party rail, merchandise, preview, price and actions
+        /// must all render their exercised state.
+        /// </summary>
+        public static void RunPartyShopPopulatedCaptureHeadless()
+        {
+            Directory.CreateDirectory(OutDir);
+            _fidelityOk = _fidelityDegraded = 0;
+            _fidelityReasons.Clear();
+            _geoFailures.Clear();
+            _touchFailures.Clear();
+            _geoCanvasesChecked = _touchPanelsChecked = _touchPanelsClean = 0;
+
+            int frames = ForEachTarget("PartyShopPopulated", CapturePartyShopPopulatedOnce);
+            ReportFidelity();
+            ReportGeometry();
+            ReportTouchOracle();
+            if (frames == 3 && _geoFailures.Count == 0 && _touchFailures.Count == 0)
+                Debug.Log("PARTY_SHOP_POPULATED_CAPTURE_OK 3/3 frames; real Forge stock selected; touch=clean");
+            else
+                Debug.LogError("PARTY_SHOP_POPULATED_CAPTURE_FAIL frames=" + frames + "/3 geometry=" +
+                    _geoFailures.Count + " touch=" + _touchFailures.Count);
+        }
+
+        private static int CapturePartyShopPopulatedOnce(CaptureTarget target)
+        {
+            GameStateService priorState = GameStateService.Instance;
+            VillageInventory priorInventory = VillageInventory.Instance;
+            EconomyService priorEconomy = EconomyService.Instance;
+            GameObject stateHost = null, inventoryHost = null, economyHost = null, hero = null, panelHost = null, canvas = null;
+            GameState fixture = null;
+            PartyShopPanelMvvm panel = null;
+            try
+            {
+                PanelManager.CloseAll();
+                fixture = ScriptableObject.CreateInstance<GameState>();
+                fixture.Onboarded = true;
+                fixture.GearInventory = new Dictionary<string, int>();
+                var wallet = fixture.Resources;
+                wallet.Coins = 500;
+                fixture.Resources = wallet;
+                stateHost = new GameObject("~UICapPartyShopState");
+                if (!InstallCaptureState(stateHost.AddComponent<GameStateService>(), fixture))
+                    throw new InvalidOperationException("GameStateService capture seam unavailable");
+                inventoryHost = new GameObject("~UICapPartyShopInventory");
+                InstallCaptureVillageInventory(inventoryHost.AddComponent<VillageInventory>());
+                economyHost = new GameObject("~UICapPartyShopEconomy");
+                InstallCaptureEconomy(economyHost.AddComponent<EconomyService>());
+
+                hero = new GameObject("~UICapPartyShopHero");
+                hero.tag = "Player";
+                hero.AddComponent<GearLoadout>();
+                hero.AddComponent<HeroAbilities>().SetHeroClass("knight");
+
+                panelHost = new GameObject("~UICapPartyShopPanel");
+                panel = panelHost.AddComponent<PartyShopPanelMvvm>();
+                panel.Open("forge", "THE FORGE");
+                var vm = GetPrivateFieldValue(panel, "_vm") as PartyShopVM;
+                if (vm == null || vm.Items == null || vm.Items.Count == 0)
+                    throw new InvalidOperationException("Forge built without populated production stock");
+                vm.Select(vm.Items[0].Id);
+                canvas = GetPrivateGameObject(panel, "_ui");
+                if (canvas == null) throw new InvalidOperationException("Party Shop built no public canvas");
+                Canvas.ForceUpdateCanvases();
+                return RenderCanvasToPng(canvas, OutDir + "PartyShopPopulated_" + target.Tag + ".png",
+                    target.W, target.H) ? 1 : 0;
+            }
+            catch (Exception e)
+            {
+                Debug.LogError("[UICap-PartyShop] populated capture threw: " + e);
+                return 0;
+            }
+            finally
+            {
+                try { if (panel != null) InvokePrivate(panel, "Close"); } catch { }
+                if (canvas != null) UnityEngine.Object.DestroyImmediate(canvas);
+                if (panelHost != null) UnityEngine.Object.DestroyImmediate(panelHost);
+                if (hero != null) UnityEngine.Object.DestroyImmediate(hero);
+                RestoreCaptureEconomy(priorEconomy);
+                if (economyHost != null) UnityEngine.Object.DestroyImmediate(economyHost);
+                RestoreCaptureVillageInventory(priorInventory);
+                if (inventoryHost != null) UnityEngine.Object.DestroyImmediate(inventoryHost);
+                RestoreCaptureState(priorState);
+                if (stateHost != null) UnityEngine.Object.DestroyImmediate(stateHost);
+                if (fixture != null) UnityEngine.Object.DestroyImmediate(fixture);
+                PanelManager.CloseAll();
+            }
+        }
+
+        /// <summary>Focused current-state proof for the approved Night Market handoff.</summary>
+        public static void RunNightMarketCaptureHeadless()
+        {
+            Directory.CreateDirectory(OutDir);
+            _fidelityOk = 0;
+            _fidelityDegraded = 0;
+            _fidelityReasons.Clear();
+            _screenStuckBuilds = 0;
+            _screenStuckAt = null;
+            _geoMoveProof = null;
+            _geoMoveFailure = null;
+            _geoFailures.Clear();
+            _geoCanvasesChecked = 0;
+            _touchFailures.Clear();
+            _touchPanelsChecked = 0;
+            _touchPanelsClean = 0;
+            ProveGeometryMoves();
+            int count = CaptureNightMarketStore();
+            ReportFidelity();
+            ReportGeometry();
+            ReportTouchOracle();
+            bool clean = count == NightMarketTargets.Length
+                         && _fidelityDegraded == 0
+                         && _geoMoveProof != null
+                         && _geoMoveFailure == null
+                         && _geoCanvasesChecked == NightMarketTargets.Length
+                         && _geoFailures.Count == 0
+                         && _touchPanelsChecked == NightMarketTargets.Length
+                         && _touchPanelsClean == _touchPanelsChecked
+                         && _touchFailures.Count == 0;
+            if (clean)
+                Debug.Log("NIGHT_MARKET_CAPTURE_OK " + count + "/" + NightMarketTargets.Length +
+                          "; fidelity=clean; geometry=clean; touch=clean");
+            else
+                Debug.LogError("NIGHT_MARKET_CAPTURE_FAIL " + count + "/" + NightMarketTargets.Length +
+                               "; fidelityDegraded=" + _fidelityDegraded +
+                               "; geometryFailures=" + _geoFailures.Count +
+                               "; touchFailures=" + _touchFailures.Count);
+        }
+
+        private static int CaptureHeroEquipmentOnce(CaptureTarget target)
+        {
+            GameObject tempEventSystem = null;
+            GameObject hostGo = null;
+            GameObject canvasGo = null;
+            GameObject heroFixture = null;
+            GameObject inventoryFixture = null;
+            EquipmentPanel panel = null;
+            try
+            {
+                if (UnityEngine.Object.FindAnyObjectByType<UnityEngine.EventSystems.EventSystem>() == null)
+                {
+                    tempEventSystem = new GameObject("~UICapEventSystem");
+                    tempEventSystem.AddComponent<UnityEngine.EventSystems.EventSystem>();
+                }
+                PanelManager.CloseAll();
+
+                // Truthful representative state: the production panel discovers its target from
+                // the Player-tagged hero and the VM unions currently equipped gear into owned
+                // inventory. This exercises identity, vitals, a filled slot, item selection, and
+                // the contextual REMOVE state without hard-coding any display values in the View.
+                heroFixture = new GameObject("Sylas Swift");
+                heroFixture.tag = "Player";
+                var loadout = heroFixture.AddComponent<GearLoadout>();
+                var abilities = heroFixture.AddComponent<HeroAbilities>();
+                abilities.SetHeroClass("ranger");
+                heroFixture.AddComponent<HeroHealth>();
+                heroFixture.AddComponent<HeroProgression>();
+                var weapon = GearCatalog.BestWeapon("ranger", 2);
+                var armor = GearCatalog.BestArmor("ranger", 2);
+                if (weapon != null) loadout.EquipWeaponById(weapon.id);
+                if (armor != null) loadout.EquipArmorById(armor.id);
+                inventoryFixture = new GameObject("~UICapVillageInventory");
+                var inventory = inventoryFixture.AddComponent<DeNelle.Village.Crafting.VillageInventory>();
+                // Ordinary MonoBehaviour Awake is not guaranteed for a non-ExecuteAlways component
+                // in this synchronous edit-mode harness. Invoke it so VillageInventory.Instance is
+                // the exact production singleton EquipVM.CreateDefault resolves.
+                InvokePrivate(inventory, "Awake");
+                var candidate = GearCatalog.FindWeapon("ranger_arrow_fire");
+                if (candidate != null && candidate.id != weapon?.id) inventory.Add(candidate.id, 1);
+
+                hostGo = new GameObject("~UICapHeroEquipment");
+                panel = hostGo.AddComponent<EquipmentPanel>();
+                panel.Open();
+                canvasGo = GetPrivateGameObject(panel, "_ui");
+                if (canvasGo == null) return 0;
+
+                int saved = 0;
+                if (RenderCanvasToPng(canvasGo,
+                    OutDir + "HeroEquipment_Compare_" + target.Tag + ".png", target.W, target.H)) saved++;
+
+                // The approved contract has two distinct contextual-action states. Select the
+                // item that is actually equipped through EquipVM (not by mutating view text), then
+                // capture REMOVE as independent evidence beside the candidate/EQUIP comparison.
+                object vm = GetPrivateFieldValue(panel, "_vm");
+                MethodInfo selectItem = vm?.GetType().GetMethod("SelectItem",
+                    BindingFlags.Public | BindingFlags.Instance);
+                if (selectItem != null && weapon != null)
+                {
+                    selectItem.Invoke(vm, new object[] { weapon.id });
+                    Canvas.ForceUpdateCanvases();
+                    if (RenderCanvasToPng(canvasGo,
+                        OutDir + "HeroEquipment_Equipped_" + target.Tag + ".png", target.W, target.H)) saved++;
+                }
+                return saved;
+            }
+            catch (Exception e)
+            {
+                Debug.LogError("[UICap-HL] hero equipment capture threw: " + e);
+                return 0;
+            }
+            finally
+            {
+                if (canvasGo != null) UnityEngine.Object.DestroyImmediate(canvasGo);
+                if (hostGo != null) UnityEngine.Object.DestroyImmediate(hostGo);
+                if (inventoryFixture != null) UnityEngine.Object.DestroyImmediate(inventoryFixture);
+                if (heroFixture != null) UnityEngine.Object.DestroyImmediate(heroFixture);
+                if (tempEventSystem != null) UnityEngine.Object.DestroyImmediate(tempEventSystem);
+                PanelManager.CloseAll();
+            }
+        }
+
+        private static int CaptureAdaptiveHudOnce(CaptureTarget target)
+        {
+            GameObject tempEventSystem = null;
+            GameObject ownerGo = null;
+            GameObject hostGo = null;
+            object hudModelFixture = null;
+            Type coreServicesType = null;
+            try
+            {
+                Type ownerType = ResolveType("DeNelle.HUD.VillageHudController");
+                Type kitType = ResolveType("DeNelle.HUD.Kit.HudKitController");
+                Type postureType = ResolveType("DeNelle.HUD.Kit.HudPosture");
+                if (ownerType == null || kitType == null || postureType == null) return 0;
+                coreServicesType = ResolveType("DeNelle.Core.CoreServices");
+                Type hudModelType = ResolveType("DeNelle.Core.HudModel.HudModel");
+                if (coreServicesType != null && hudModelType != null)
+                {
+                    hudModelFixture = Activator.CreateInstance(hudModelType);
+                    coreServicesType.GetMethod("RegisterHudModel", BindingFlags.Public | BindingFlags.Static)
+                        ?.Invoke(null, new[] { hudModelFixture });
+                }
+                if (UnityEngine.Object.FindAnyObjectByType<UnityEngine.EventSystems.EventSystem>() == null)
+                {
+                    tempEventSystem = new GameObject("~UICapEventSystem");
+                    tempEventSystem.AddComponent<UnityEngine.EventSystems.EventSystem>();
+                }
+
+                ownerGo = new GameObject("~UICapAdaptiveHudOwner");
+                Component owner = ownerGo.AddComponent(ownerType);
+                var create = kitType.GetMethod("Create", BindingFlags.Public | BindingFlags.Static);
+                Component kit = create != null ? create.Invoke(null, new object[] { owner }) as Component : null;
+                if (kit == null) return 0;
+                hostGo = kit.gameObject;
+
+                object models = GetPrivateFieldValue(kit, "_models");
+                object wave = models?.GetType().GetProperty("Wave",
+                    BindingFlags.Public | BindingFlags.Instance)?.GetValue(models);
+                MethodInfo setWave = wave?.GetType().GetMethod("Set", BindingFlags.Public | BindingFlags.Instance);
+                Type wavePhaseType = wave?.GetType().GetProperty("Phase")?.PropertyType;
+                object vitals = models?.GetType().GetProperty("HeroVitals",
+                    BindingFlags.Public | BindingFlags.Instance)?.GetValue(models);
+                vitals?.GetType().GetMethod("Set", BindingFlags.Public | BindingFlags.Instance)
+                    ?.Invoke(vitals, new object[] { 92, 120, 38, 60, 240, 500, 2, "knight", 0,
+                        38f, 60f, "Focus" });
+                object economy = models?.GetType().GetProperty("Economy",
+                    BindingFlags.Public | BindingFlags.Instance)?.GetValue(models);
+                economy?.GetType().GetMethod("Set", BindingFlags.Public | BindingFlags.Instance)
+                    ?.Invoke(economy, new object[] { 227, 480, 320, 260, 18 });
+                object world = models?.GetType().GetProperty("World",
+                    BindingFlags.Public | BindingFlags.Instance)?.GetValue(models);
+                world?.GetType().GetMethod("SetMetrics", BindingFlags.Public | BindingFlags.Instance)
+                    ?.Invoke(world, new object[] { 840, 1000, 0.84f, 4, 12, 6, 3.5f, 2, 0,
+                        2, 4, "2 of 4 wards lit" });
+
+                var apply = kitType.GetMethod("ApplyPosture", BindingFlags.NonPublic | BindingFlags.Instance);
+                if (apply == null) return 0;
+
+                int saved = 0;
+                object peaceful = Enum.Parse(postureType, "CalmTown");
+                if (setWave != null && wavePhaseType != null)
+                    setWave.Invoke(wave, new object[] { Enum.Parse(wavePhaseType, "Countdown"),
+                        2, 20, 849f, true, "", 18, 18, "" });
+                kitType.GetMethod("SetStartWaveAvailable", BindingFlags.Public | BindingFlags.Instance)
+                    ?.Invoke(kit, new object[] { true });
+                apply.Invoke(kit, new[] { peaceful });
+                // The edit-mode capture scene has no hub name, so the production scene gate
+                // correctly hides HeartStatus. Reveal that already-bound widget here to capture
+                // the approved hub state rather than treating a harness limitation as UI truth.
+                var allHudTransforms = hostGo.GetComponentsInChildren<Transform>(true);
+                for (int i = 0; i < allHudTransforms.Length; i++)
+                    if (allHudTransforms[i].name == "Widget_heartStatus")
+                        allHudTransforms[i].gameObject.SetActive(true);
+                Canvas.ForceUpdateCanvases();
+                if (RenderCanvasToPng(hostGo,
+                    OutDir + "AdaptiveHudPeaceful_" + target.Tag + ".png", target.W, target.H)) saved++;
+
+                // The collapsed HUD shot cannot prove the gear drawer's material, row spacing,
+                // or obsolete-route cleanup. Capture the same peaceful posture with the actual
+                // shared SlideDock expanded so this player-facing state is a visual gate too.
+                object slideDock = GetPrivateFieldValue(kit, "_slideDock");
+                slideDock?.GetType().GetMethod("SetExpanded", BindingFlags.Public | BindingFlags.Instance)
+                    ?.Invoke(slideDock, new object[] { true });
+                Canvas.ForceUpdateCanvases();
+                if (RenderCanvasToPng(hostGo,
+                    OutDir + "AdaptiveHudGearOpen_" + target.Tag + ".png", target.W, target.H)) saved++;
+                slideDock?.GetType().GetMethod("SetExpanded", BindingFlags.Public | BindingFlags.Instance)
+                    ?.Invoke(slideDock, new object[] { false });
+
+                object combat = Enum.Parse(postureType, "HostileActiveBattle");
+                if (setWave != null && wavePhaseType != null)
+                    setWave.Invoke(wave, new object[] { Enum.Parse(wavePhaseType, "Active"),
+                        2, 20, 0f, false, "", 18, 18, "" });
+                apply.Invoke(kit, new[] { combat });
+                allHudTransforms = hostGo.GetComponentsInChildren<Transform>(true);
+                for (int i = 0; i < allHudTransforms.Length; i++)
+                    if (allHudTransforms[i].name == "Widget_heartStatus")
+                        allHudTransforms[i].gameObject.SetActive(true);
+                Canvas.ForceUpdateCanvases();
+                if (RenderCanvasToPng(hostGo,
+                    OutDir + "AdaptiveHudCombat_" + target.Tag + ".png", target.W, target.H)) saved++;
+                return saved;
+            }
+            catch (Exception e)
+            {
+                Debug.LogError("[UICap-HL] adaptive HUD capture threw: " + e);
+                return 0;
+            }
+            finally
+            {
+                if (hostGo != null) UnityEngine.Object.DestroyImmediate(hostGo);
+                if (ownerGo != null) UnityEngine.Object.DestroyImmediate(ownerGo);
+                if (tempEventSystem != null) UnityEngine.Object.DestroyImmediate(tempEventSystem);
+                if (coreServicesType != null && hudModelFixture != null)
+                    coreServicesType.GetMethod("UnregisterHudModel", BindingFlags.Public | BindingFlags.Static)
+                        ?.Invoke(null, new[] { hudModelFixture });
+            }
+        }
+
+        private static int CaptureSettingsOnce(CaptureTarget target)
+        {
+            GameObject tempEventSystem = null;
+            GameObject hostGo = null;
+            GameObject canvasGo = null;
+            Component controller = null;
+            try
+            {
+                Type controllerType = ResolveType("DeNelle.Settings.SettingsController");
+                if (controllerType == null) return 0;
+                if (UnityEngine.Object.FindAnyObjectByType<UnityEngine.EventSystems.EventSystem>() == null)
+                {
+                    tempEventSystem = new GameObject("~UICapEventSystem");
+                    tempEventSystem.AddComponent<UnityEngine.EventSystems.EventSystem>();
+                }
+
+                hostGo = new GameObject("~UICapSettings");
+                controller = hostGo.AddComponent(controllerType);
+                InvokePrivate(controller, "EnsureBuilt");
+                object modal = GetPrivateFieldValue(controller, "_modal");
+                canvasGo = modal != null ? GetFieldValue(modal, "canvas") as GameObject : null;
+                if (canvasGo == null) return 0;
+                canvasGo.SetActive(true);
+                return RenderCanvasToPng(canvasGo,
+                    OutDir + "Settings_" + target.Tag + ".png", target.W, target.H) ? 1 : 0;
+            }
+            catch (Exception e)
+            {
+                Debug.LogError("[UICap-HL] Settings capture threw: " + e);
+                return 0;
+            }
+            finally
+            {
+                if (controller != null) SetPrivateField(controller, "_modal", null);
+                if (canvasGo != null) UnityEngine.Object.DestroyImmediate(canvasGo);
+                if (hostGo != null) UnityEngine.Object.DestroyImmediate(hostGo);
+                if (tempEventSystem != null) UnityEngine.Object.DestroyImmediate(tempEventSystem);
+            }
+        }
+
+        private static int CaptureCombatItemPickerOnce(CaptureTarget target)
+        {
+            GameObject tempEventSystem = null;
+            GameObject hostGo = null;
+            GameObject canvasGo = null;
+            Component controller = null;
+            try
+            {
+                Type controllerType = ResolveType("DeNelle.HUD.Kit.HudKitController");
+                if (controllerType == null) return 0;
+                if (UnityEngine.Object.FindAnyObjectByType<UnityEngine.EventSystems.EventSystem>() == null)
+                {
+                    tempEventSystem = new GameObject("~UICapEventSystem");
+                    tempEventSystem.AddComponent<UnityEngine.EventSystems.EventSystem>();
+                }
+
+                hostGo = new GameObject("~UICapCombatItemPicker");
+                controller = hostGo.AddComponent(controllerType);
+                InvokePrivate(controller, "OpenItemPicker");
+                object modal = GetPrivateFieldValue(controller, "_itemPicker");
+                canvasGo = modal != null ? GetFieldValue(modal, "canvas") as GameObject : null;
+                if (canvasGo == null) return 0;
+                return RenderCanvasToPng(canvasGo,
+                    OutDir + "CombatItemPicker_" + target.Tag + ".png", target.W, target.H) ? 1 : 0;
+            }
+            catch (Exception e)
+            {
+                Debug.LogError("[UICap-HL] combat Item picker capture threw: " + e);
+                return 0;
+            }
+            finally
+            {
+                if (controller != null) InvokePrivate(controller, "CloseItemPicker");
+                if (canvasGo != null) UnityEngine.Object.DestroyImmediate(canvasGo);
+                if (hostGo != null) UnityEngine.Object.DestroyImmediate(hostGo);
+                if (tempEventSystem != null) UnityEngine.Object.DestroyImmediate(tempEventSystem);
+            }
+        }
+
         private static int CapturePauseMenuOnce(CaptureTarget target)
         {
             int saved = 0;
@@ -1556,6 +3049,31 @@ namespace DeNelle.Editor
         //  private builders Start calls -- BuildPip (creates _pipCanvas) then
         //  BuildPetBoxButton (adds the right-edge Pets button onto it).
         // ---------------------------------------------------------------------
+        private static int CaptureTutorialSkipOnce(CaptureTarget target)
+        {
+            TutorialSkipUi skip = null;
+            try
+            {
+                TutorialSkipUi.Show(() => { });
+                skip = UnityEngine.Object.FindAnyObjectByType<TutorialSkipUi>();
+                if (skip == null) return 0;
+                var group = skip.GetComponent<CanvasGroup>();
+                if (group != null) group.alpha = 1f;
+                return RenderCanvasToPng(skip.gameObject,
+                    OutDir + "TutorialSkip_" + target.Tag + ".png", target.W, target.H) ? 1 : 0;
+            }
+            catch (Exception e)
+            {
+                Debug.LogError("[UICap-HL] tutorial Skip capture threw: " + e);
+                return 0;
+            }
+            finally
+            {
+                TutorialSkipUi.Hide();
+                if (skip != null) UnityEngine.Object.DestroyImmediate(skip.gameObject);
+            }
+        }
+
         private static int CaptureEchoRoster()
         {
             return ForEachTarget("EchoPetButton", CaptureEchoRosterOnce);
@@ -2308,6 +3826,11 @@ namespace DeNelle.Editor
 
                 // WO-1060 Assert A: clear the ring so any growth recorded below is THIS panel's.
                 ElarionUiKit.ClearClampGrowths();
+                var wordmarkSprite = Resources.Load<Sprite>("UI/NightMarket/night-market-wordmark");
+                var wordmarkTexture = Resources.Load<Texture2D>("UI/NightMarket/night-market-wordmark");
+                Debug.Log("[UICap-HL] NightMarket art probe sprite=" +
+                          (wordmarkSprite != null ? wordmarkSprite.name : "null") +
+                          " texture=" + (wordmarkTexture != null ? wordmarkTexture.name : "null"));
 
                 // Left ACTIVE (the RealmMap pattern). Edit mode does not call Awake/OnEnable on a
                 // plain MonoBehaviour, so there is no race to dodge -- and an INACTIVE host would
@@ -2335,6 +3858,18 @@ namespace DeNelle.Editor
                 }
 
                 canvasGo.SetActive(true);       // EnsureBuilt leaves it hidden for OnEnable to show
+                int artCount = 0;
+                foreach (var tr in canvasGo.GetComponentsInChildren<Transform>(true))
+                {
+                    if (!tr.name.StartsWith("art-", StringComparison.Ordinal)) continue;
+                    artCount++;
+                    var rt = tr as RectTransform;
+                    Debug.Log("[UICap-HL] NightMarket composed art " + tr.name +
+                              " active=" + tr.gameObject.activeInHierarchy +
+                              " rect=" + (rt != null ? rt.rect.ToString() : "n/a") +
+                              " sibling=" + tr.GetSiblingIndex());
+                }
+                Debug.Log("[UICap-HL] NightMarket composed art count=" + artCount);
 
                 // Render() fills the priced bands from PackCatalog. Guarded separately: a catalogue
                 // failure must still leave the CHROME shot, because "the store opened empty" and
@@ -2460,7 +3995,7 @@ namespace DeNelle.Editor
         }
 
         // ---------------------------------------------------------------------
-        //  Hero talent graph + persistent four-slot hot-swap rail. This is built
+        //  Hero talent graph + persistent three-slot hot-swap rail. This is built
         //  from the real live-class VM; the edit-mode fallback is Knight, matching
         //  first-run behavior when no gameplay GameState exists.
         // ---------------------------------------------------------------------
@@ -2710,6 +4245,64 @@ namespace DeNelle.Editor
         private static int CaptureEchoCard()
         {
             return ForEachTarget("EchoCard", CaptureEchoCardOnce);
+        }
+
+        private sealed class CaptureEchoWorkforce : IEchoWorkforce
+        {
+            public bool Available => true;
+            public int EchoCount => 3;
+            public int MaxEchoes => 6;
+            public int WavesPerEcho => 3;
+            public int WavesUntilNextEcho => 2;
+            public float NextEchoProgress => 0.34f;
+            public double GlobalHarvestMultiplier => 1.45d;
+            public float FillFraction => 0.42f;
+            public int PendingCollect => 180;
+            public float CollectorMaxFill => 0.62f;
+            public int CollectAll() => 180;
+            public event Action Changed { add { } remove { } }
+            public event Action<int> EchoUnlocked { add { } remove { } }
+        }
+
+        private static int CaptureEchoRosterPanel()
+        {
+            return ForEachTarget("EchoRoster", CaptureEchoRosterPanelOnce);
+        }
+
+        private static int CaptureEchoRosterPanelOnce(CaptureTarget target)
+        {
+            GameObject hostGo = null;
+            GameObject modal = null;
+            EchoRosterVM vm = null;
+            try
+            {
+                hostGo = new GameObject("~UICapEchoRoster");
+                var view = hostGo.AddComponent<EchoRosterView>();
+                vm = new EchoRosterVM(new CaptureEchoWorkforce(), _ => { }, null);
+                SetPrivateField(view, "_vm", vm);
+                SetPrivateField(view, "_open", true);
+                InvokePrivate(view, "Build");
+                modal = GetPrivateGameObject(view, "_modal");
+                if (modal == null)
+                {
+                    Debug.LogWarning("[UICap-HL] EchoRosterView._modal null after Build -- roster skipped.");
+                    return 0;
+                }
+                modal.SetActive(true);
+                return RenderCanvasToPng(modal, OutDir + "EchoRoster_" + target.Tag + ".png",
+                    target.W, target.H) ? 1 : 0;
+            }
+            catch (Exception e)
+            {
+                Debug.LogError("[UICap-HL] echo roster capture threw: " + e);
+                return 0;
+            }
+            finally
+            {
+                vm?.Dispose();
+                if (modal != null) UnityEngine.Object.DestroyImmediate(modal);
+                if (hostGo != null) UnityEngine.Object.DestroyImmediate(hostGo);
+            }
         }
 
         private static int CaptureEchoCardOnce(CaptureTarget target)
@@ -4839,6 +6432,814 @@ namespace DeNelle.Editor
             return saved;
         }
 
+        private static int CapturePlayerDecks()
+        {
+            int saved = 0;
+            string[] pages = { "OpenRealm", "OpenHero", "OpenJourney" };
+            string[] names = { "RealmWorkspace", "HeroWorkspace", "JourneyWorkspace" };
+            for (int p = 0; p < pages.Length; p++)
+            {
+                int pageIndex = p;
+                saved += ForEachTarget(names[p], target => CapturePlayerDeckOnce(
+                    target, pages[pageIndex], names[pageIndex]));
+            }
+            return saved;
+        }
+
+        private static int CaptureBag()
+        {
+            return ForEachTarget("Bag", CaptureBagOnce);
+        }
+
+        /// <summary>
+        /// Stateful Bag proof: the selected potion is rendered, then the real production Use
+        /// command heals a damaged HeroHealth and consumes exactly one persisted inventory unit.
+        /// This is intentionally separate from the broad empty-state capture so a pretty empty
+        /// shell can never be mistaken for evidence that the player-facing verb works.
+        /// </summary>
+        public static void RunBagUseCaptureHeadless()
+        {
+            Directory.CreateDirectory(OutDir);
+            _fidelityOk = _fidelityDegraded = 0;
+            _fidelityReasons.Clear();
+            _geoFailures.Clear();
+            _touchFailures.Clear();
+            _geoCanvasesChecked = _touchPanelsChecked = _touchPanelsClean = 0;
+
+            int frames = ForEachTarget("BagUse", CaptureBagUseOnce);
+            ReportFidelity();
+            ReportGeometry();
+            ReportTouchOracle();
+            if (frames == 6 && _fidelityDegraded == 0 && _geoFailures.Count == 0 &&
+                _touchFailures.Count == 0)
+                Debug.Log("BAG_USE_CAPTURE_OK 6/6 frames; production effect; hp+inventory asserted; touch=clean");
+            else
+                Debug.LogError("BAG_USE_CAPTURE_FAIL frames=" + frames + "/6 fidelity=" +
+                    _fidelityDegraded + " geometry=" + _geoFailures.Count + " touch=" +
+                    _touchFailures.Count);
+        }
+
+        private static int CaptureBagUseOnce(CaptureTarget target)
+        {
+            const string potionId = "minor-heal-potion";
+            GameStateService priorState = GameStateService.Instance;
+            VillageInventory priorInventory = VillageInventory.Instance;
+            GameObject stateHost = null, inventoryHost = null, hero = null, panelHost = null, canvas = null;
+            GameState fixture = null;
+            HeroInventoryController panel = null;
+            try
+            {
+                PanelManager.CloseAll();
+                fixture = ScriptableObject.CreateInstance<GameState>();
+                fixture.Onboarded = true;
+                fixture.GearInventory = new Dictionary<string, int> { { potionId, 3 } };
+                stateHost = new GameObject("~UICapBagUseState");
+                if (!InstallCaptureState(stateHost.AddComponent<GameStateService>(), fixture))
+                    throw new InvalidOperationException("GameStateService capture seam unavailable");
+
+                // AddComponent invokes Awake and installs the production singleton over the
+                // temporary persisted state. The previous singleton is restored in finally.
+                inventoryHost = new GameObject("~UICapBagUseInventory");
+                var inventory = inventoryHost.AddComponent<VillageInventory>();
+                InstallCaptureVillageInventory(inventory);
+
+                hero = new GameObject("~UICapBagUseHero");
+                hero.tag = "Player";
+                var health = hero.AddComponent<HeroHealth>();
+                SetPrivateFieldValue(health, "_hp", 45f);
+                float hpBefore = health.Hp;
+                int countBefore = inventory.Get(potionId);
+
+                // The service owns a runtime cooldown dictionary. Clear only the capture id so
+                // each independently built ratio starts in the same authoritative ready state.
+                ClearConsumableCaptureCooldown(potionId);
+
+                panelHost = new GameObject("~UICapBagUsePanel");
+                panel = panelHost.AddComponent<HeroInventoryController>();
+                panel.Open();
+                var vm = GetPrivateFieldValue(panel, "_vm") as InventoryVM;
+                if (vm == null) throw new InvalidOperationException("Bag built without InventoryVM");
+                // Exercise the same rail command as the POTIONS tap. Calling SelectTab directly
+                // changes VM data but deliberately does not leave the pseudo Gear destination,
+                // producing an impossible screenshot (Gear stage + potion detail).
+                InvokePrivate(panel, "SelectRail", 5); // HeroInventoryController.RailPotions
+                vm.SelectById(potionId);
+                Canvas.ForceUpdateCanvases();
+                canvas = GetPrivateGameObject(panel, "_ui");
+                if (canvas == null) throw new InvalidOperationException("Bag built no public canvas");
+
+                int saved = RenderCanvasToPng(canvas,
+                    OutDir + "BagUse_Selected_" + target.Tag + ".png", target.W, target.H) ? 1 : 0;
+                vm.Use();
+                Canvas.ForceUpdateCanvases();
+                float hpAfter = health.Hp;
+                int countAfter = inventory.Get(potionId);
+                if (!(hpAfter > hpBefore) || countAfter != countBefore - 1 ||
+                    string.IsNullOrEmpty(vm.Status) || !vm.Status.StartsWith("Used ", StringComparison.Ordinal))
+                    throw new InvalidOperationException("production Bag use assertion failed: hp " +
+                        hpBefore + "->" + hpAfter + ", count " + countBefore + "->" + countAfter +
+                        ", status='" + (vm.Status ?? "<null>") + "'");
+                Debug.Log("[UICap-BagUse] production assertion OK target=" + target.Tag +
+                    " hp=" + hpBefore + "->" + hpAfter + " count=" + countBefore + "->" + countAfter);
+                if (RenderCanvasToPng(canvas,
+                    OutDir + "BagUse_Used_" + target.Tag + ".png", target.W, target.H)) saved++;
+                return saved;
+            }
+            catch (Exception e)
+            {
+                Debug.LogError("[UICap-BagUse] capture threw: " + e);
+                return 0;
+            }
+            finally
+            {
+                try { panel?.Close(); } catch { }
+                if (canvas != null) UnityEngine.Object.DestroyImmediate(canvas);
+                if (panelHost != null) UnityEngine.Object.DestroyImmediate(panelHost);
+                if (hero != null) UnityEngine.Object.DestroyImmediate(hero);
+                RestoreCaptureVillageInventory(priorInventory);
+                if (inventoryHost != null) UnityEngine.Object.DestroyImmediate(inventoryHost);
+                RestoreCaptureState(priorState);
+                if (stateHost != null) UnityEngine.Object.DestroyImmediate(stateHost);
+                if (fixture != null) UnityEngine.Object.DestroyImmediate(fixture);
+                ClearConsumableCaptureCooldown(potionId);
+                PanelManager.CloseAll();
+            }
+        }
+
+        /// <summary>
+        /// Route-census proof for registered public destinations that are intentionally outside
+        /// the broad story-state harness. These are the real runtime components and real Open
+        /// methods; the helper only supplies the edit-mode lifecycle tick that Unity normally
+        /// supplies in play mode.
+        /// </summary>
+        public static void RunRegisteredSecondaryCaptureHeadless()
+        {
+            Directory.CreateDirectory(OutDir);
+            _fidelityOk = _fidelityDegraded = 0;
+            _fidelityReasons.Clear();
+            _geoFailures.Clear();
+            _touchFailures.Clear();
+            _geoCanvasesChecked = _touchPanelsChecked = _touchPanelsClean = 0;
+
+            int count = 0;
+            count += CaptureReflectedSecondary("Benefactors", "DeNelle.HUD.BenefactorsWallPanel", "Open");
+            count += CaptureReflectedSecondary("CosmeticShop", "DeNelle.HUD.CosmeticShopPanel", "OpenOverlay");
+            count += CaptureReflectedSecondary("BuildingUpgrade", "DeNelle.Village.Buildings.Progression.BuildingUpgradePanelMvvm", "Open", new object[] { null });
+            count += CaptureReflectedSecondary("Workshop", "DeNelle.Village.Crafting.VillageCraftingPanel", "Open");
+            count += CaptureReflectedSecondary("PartyShop", "DeNelle.Village.Hero.PartyShopPanelMvvm", "Open", new object[] { null, "VILLAGE SHOP" });
+            count += CaptureReflectedSecondary("Alchemy", "DeNelle.Village.Items.CraftingPanelMvvm", "Open");
+            count += CaptureReflectedSecondary("Jeweler", "DeNelle.Village.Items.JewelerPanelMvvm", "Open");
+            count += CaptureReflectedSecondary("HeroLoadout", "DeNelle.Village.Talents.HeroLoadoutPanelMvvm", "Open");
+            count += CaptureReflectedSecondary("DefenseReport", "DeNelle.Village.UI.DefenseReportPanel", "Open");
+            count += CaptureReflectedSecondary("GameGuide", "DeNelle.Village.GameGuidePanel", "Open");
+            count += CaptureReflectedSecondary("MonthlyLedger", "DeNelle.Wallet.MonthlyLedgerPanel", "OnEnable", null, true);
+
+            ReportFidelity();
+            ReportGeometry();
+            ReportTouchOracle();
+            const int expected = 33;
+            if (count == expected && _fidelityDegraded == 0 && _geoFailures.Count == 0 && _touchFailures.Count == 0)
+                Debug.Log("REGISTERED_SECONDARY_CAPTURE_OK 33/33 frames; routes=11; touch=clean");
+            else
+                Debug.LogError("REGISTERED_SECONDARY_CAPTURE_FAIL frames=" + count + "/" + expected +
+                    " fidelity=" + _fidelityDegraded + " geometry=" + _geoFailures.Count +
+                    " touch=" + _touchFailures.Count);
+        }
+
+        private static int CaptureReflectedSecondary(string shotName, string typeName, string openMethod,
+                                                      object[] arguments = null, bool privateMethod = false)
+        {
+            return ForEachTarget(shotName, target =>
+            {
+                GameObject eventSystem = null, host = null, canvas = null;
+                Component panel = null;
+                GameStateService priorState = null;
+                GameObject stateHost = null;
+                GameState stateFixture = null;
+                try
+                {
+                    PanelManager.CloseAll();
+                    if (UnityEngine.Object.FindAnyObjectByType<UnityEngine.EventSystems.EventSystem>() == null)
+                    {
+                        eventSystem = new GameObject("~UICapEventSystem");
+                        eventSystem.AddComponent<UnityEngine.EventSystems.EventSystem>();
+                    }
+                    Type type = ResolveType(typeName);
+                    if (type == null) throw new TypeLoadException(typeName);
+                    if (shotName == "Jeweler")
+                    {
+                        priorState = GameStateService.Instance;
+                        stateFixture = ScriptableObject.CreateInstance<GameState>();
+                        stateFixture.MarkEverAcquired(DungeonExclusiveItems.RoughStoneId);
+                        stateHost = new GameObject("~UICapJewelerState");
+                        if (!InstallCaptureState(stateHost.AddComponent<GameStateService>(), stateFixture))
+                            throw new InvalidOperationException("Jeweler progression fixture unavailable");
+                    }
+                    host = new GameObject("~UICap" + shotName);
+                    panel = host.AddComponent(type);
+                    InvokePrivate(panel, "Awake");
+                    if (privateMethod)
+                        InvokePrivate(panel, openMethod);
+                    else
+                    {
+                        object[] args = arguments ?? Array.Empty<object>();
+                        MethodInfo selected = null;
+                        foreach (var candidate in type.GetMethods(BindingFlags.Public | BindingFlags.Instance))
+                            if (candidate.Name == openMethod && candidate.GetParameters().Length == args.Length)
+                            { selected = candidate; break; }
+                        if (selected == null) throw new MissingMethodException(typeName, openMethod);
+                        selected.Invoke(panel, args);
+                    }
+                    Canvas.ForceUpdateCanvases();
+                    canvas = GetSecondaryCanvas(panel);
+                    if (canvas == null) throw new InvalidOperationException(shotName + " built no public canvas");
+                    return RenderCanvasToPng(canvas, OutDir + shotName + "_" + target.Tag + ".png",
+                        target.W, target.H) ? 1 : 0;
+                }
+                catch (Exception e)
+                {
+                    Debug.LogError("[UICap-HL] registered secondary '" + shotName + "' threw: " + e);
+                    return 0;
+                }
+                finally
+                {
+                    if (canvas != null) UnityEngine.Object.DestroyImmediate(canvas);
+                    if (host != null) UnityEngine.Object.DestroyImmediate(host);
+                    if (stateHost != null)
+                    {
+                        RestoreCaptureState(priorState);
+                        UnityEngine.Object.DestroyImmediate(stateHost);
+                    }
+                    if (stateFixture != null) UnityEngine.Object.DestroyImmediate(stateFixture);
+                    if (eventSystem != null) UnityEngine.Object.DestroyImmediate(eventSystem);
+                    PanelManager.CloseAll();
+                }
+            });
+        }
+
+        private static GameObject GetSecondaryCanvas(object panel)
+        {
+            if (panel == null) return null;
+            for (Type t = panel.GetType(); t != null; t = t.BaseType)
+            {
+                foreach (string fieldName in new[] { "_ui", "_canvas" })
+                {
+                    var field = t.GetField(fieldName, BindingFlags.NonPublic | BindingFlags.Instance |
+                        BindingFlags.DeclaredOnly);
+                    var direct = field != null ? field.GetValue(panel) as GameObject : null;
+                    if (direct != null) return direct;
+                }
+                var modalField = t.GetField("_modal", BindingFlags.NonPublic | BindingFlags.Instance |
+                    BindingFlags.DeclaredOnly);
+                object modal = modalField != null ? modalField.GetValue(panel) : null;
+                var canvasField = modal?.GetType().GetField("canvas", BindingFlags.Public | BindingFlags.Instance);
+                var nested = canvasField != null ? canvasField.GetValue(modal) as GameObject : null;
+                if (nested != null) return nested;
+            }
+            return null;
+        }
+
+        private static int CaptureBagOnce(CaptureTarget target)
+        {
+            GameObject host = null;
+            GameObject canvas = null;
+            HeroInventoryController panel = null;
+            try
+            {
+                PanelManager.CloseAll();
+                host = new GameObject("~UICapBag");
+                panel = host.AddComponent<HeroInventoryController>();
+                panel.Open();
+                Canvas.ForceUpdateCanvases();
+                canvas = GetPrivateGameObject(panel, "_ui");
+                if (canvas == null)
+                {
+                    Debug.LogWarning("[UICap-HL] HeroInventoryController built no canvas; Bag skipped.");
+                    return 0;
+                }
+                return RenderCanvasToPng(canvas, OutDir + "Bag_" + target.Tag + ".png",
+                    target.W, target.H) ? 1 : 0;
+            }
+            catch (Exception e)
+            {
+                Debug.LogError("[UICap-HL] Bag capture threw: " + e);
+                return 0;
+            }
+            finally
+            {
+                try { panel?.Close(); } catch { }
+                if (canvas != null) UnityEngine.Object.DestroyImmediate(canvas);
+                if (host != null) UnityEngine.Object.DestroyImmediate(host);
+                PanelManager.CloseAll();
+            }
+        }
+
+        private static int CapturePlayerDeckOnce(CaptureTarget target, string openMethod, string shotName)
+        {
+            GameObject host = null;
+            GameObject canvas = null;
+            Action captureDoor = () => { };
+            PanelId[] fixtureDoors =
+            {
+                PanelId.Inventory, PanelId.EquipmentPanel, PanelId.HeroSkillTree, PanelId.HeroLoadout,
+                PanelId.RumorBoard, PanelId.RealmMap, PanelId.BattlePass, PanelId.RealmStore,
+                PanelId.DefenseReport, PanelId.MonthlyLedger, PanelId.GameGuide
+            };
+            try
+            {
+                PanelManager.CloseAll();
+                foreach (var id in fixtureDoors) PanelRouter.Register(id, captureDoor);
+                Type type = ResolveType("DeNelle.HUD.PlayerDeckWorkspace");
+                if (type == null)
+                {
+                    Debug.LogWarning("[UICap-HL] PlayerDeckWorkspace type not found; " + shotName + " skipped.");
+                    return 0;
+                }
+                host = new GameObject("~UICap" + shotName);
+                var workspace = host.AddComponent(type);
+                InvokePrivate(workspace, "Awake");
+                InvokePrivate(workspace, openMethod);
+                Canvas.ForceUpdateCanvases();
+                canvas = GetPrivateFieldValue(workspace, "_canvas") as GameObject;
+                if (canvas == null)
+                {
+                    Debug.LogWarning("[UICap-HL] " + shotName + " built no canvas; skipped.");
+                    return 0;
+                }
+                return RenderCanvasToPng(canvas, OutDir + shotName + "_" + target.Tag + ".png",
+                    target.W, target.H) ? 1 : 0;
+            }
+            catch (Exception e)
+            {
+                Debug.LogError("[UICap-HL] " + shotName + " capture threw: " + e);
+                return 0;
+            }
+            finally
+            {
+                if (canvas != null) UnityEngine.Object.DestroyImmediate(canvas);
+                if (host != null) UnityEngine.Object.DestroyImmediate(host);
+                foreach (var id in fixtureDoors) PanelRouter.Unregister(id, captureDoor);
+                PanelManager.CloseAll();
+            }
+        }
+
+        private static int CaptureManageWorkspace()
+        {
+            return ForEachTarget("ManageWorkspace", target =>
+            {
+                GameObject host = null;
+                GameObject canvas = null;
+                try
+                {
+                    PanelManager.CloseAll();
+                    host = new GameObject("~UICapManageWorkspace");
+                    var panel = host.AddComponent<ManageScreenPanel>();
+                    InvokePrivate(panel, "Awake");
+                    panel.Open();
+                    Canvas.ForceUpdateCanvases();
+                    canvas = GetPrivateFieldValue(panel, "_ui") as GameObject;
+                    return canvas != null && RenderCanvasToPng(canvas,
+                        OutDir + "ManageWorkspace_" + target.Tag + ".png", target.W, target.H) ? 1 : 0;
+                }
+                catch (Exception e)
+                {
+                    Debug.LogError("[UICap-HL] ManageWorkspace capture threw: " + e);
+                    return 0;
+                }
+                finally
+                {
+                    if (canvas != null) UnityEngine.Object.DestroyImmediate(canvas);
+                    if (host != null) UnityEngine.Object.DestroyImmediate(host);
+                    PanelManager.CloseAll();
+                }
+            });
+        }
+
+        /// <summary>Focused three-ratio visual gate for the approved Manage launcher.</summary>
+        public static void RunManageHubCaptureHeadless()
+        {
+            Directory.CreateDirectory(OutDir);
+            _fidelityOk = _fidelityDegraded = 0;
+            _fidelityReasons.Clear();
+            _geoFailures.Clear();
+            _touchFailures.Clear();
+            _geoCanvasesChecked = _touchPanelsChecked = _touchPanelsClean = 0;
+            int count = CaptureManageWorkspace();
+            ReportFidelity();
+            ReportGeometry();
+            ReportTouchOracle();
+            if (count == 3 && _fidelityDegraded == 0 && _geoFailures.Count == 0 && _touchFailures.Count == 0)
+                Debug.Log("MANAGE_HUB_CAPTURE_OK " + count + "/3 frames; touch=clean");
+            else
+                Debug.LogError("MANAGE_HUB_CAPTURE_FAIL frames=" + count + "/3 fidelity=" +
+                    _fidelityDegraded + " geometry=" + _geoFailures.Count + " touch=" + _touchFailures.Count);
+        }
+
+        /// <summary>F8 2026-08-31 visual gate for the default, drawer-collapsed Defense workspace.</summary>
+        public static void RunManageDefenseCaptureHeadless()
+        {
+            Directory.CreateDirectory(OutDir);
+            _fidelityOk = _fidelityDegraded = 0;
+            _fidelityReasons.Clear();
+            _geoFailures.Clear();
+            _touchFailures.Clear();
+            _geoCanvasesChecked = _touchPanelsChecked = _touchPanelsClean = 0;
+            int count = CaptureManageDefense();
+            ReportFidelity();
+            ReportGeometry();
+            ReportTouchOracle();
+            if (count == 3 && _fidelityDegraded == 0 && _geoFailures.Count == 0 && _touchFailures.Count == 0)
+                Debug.Log("MANAGE_DEFENSE_CAPTURE_OK " + count + "/3 frames; drawer=collapsed; touch=clean");
+            else
+                Debug.LogError("MANAGE_DEFENSE_CAPTURE_FAIL frames=" + count + "/3 fidelity=" +
+                    _fidelityDegraded + " geometry=" + _geoFailures.Count + " touch=" + _touchFailures.Count);
+        }
+
+        private static int CaptureManageDefense()
+        {
+            return ForEachTarget("ManageDefense", target =>
+            {
+                GameObject host = null;
+                GameObject canvas = null;
+                try
+                {
+                    PanelManager.CloseAll();
+                    host = new GameObject("~UICapManageDefense");
+                    var panel = host.AddComponent<ManageScreenPanel>();
+                    InvokePrivate(panel, "Awake");
+                    panel.Open("Defense");
+                    Canvas.ForceUpdateCanvases();
+                    canvas = GetPrivateFieldValue(panel, "_ui") as GameObject;
+                    return canvas != null && RenderCanvasToPng(canvas,
+                        OutDir + "ManageDefense_" + target.Tag + ".png", target.W, target.H) ? 1 : 0;
+                }
+                catch (Exception e)
+                {
+                    Debug.LogError("[UICap-HL] ManageDefense capture threw: " + e);
+                    return 0;
+                }
+                finally
+                {
+                    if (canvas != null) UnityEngine.Object.DestroyImmediate(canvas);
+                    if (host != null) UnityEngine.Object.DestroyImmediate(host);
+                    PanelManager.CloseAll();
+                }
+            });
+        }
+
+        /// <summary>
+        /// Focused three-ratio gate for every operational Manage destination. Unlike the empty-town
+        /// Defense capture, this installs a throwaway founded-town state so Buildings, Troops, and
+        /// Research are genuinely disclosed by the same authoritative BaseLayout rules used at runtime.
+        /// The prior singleton is restored after every frame; capture cannot mutate the editor save.
+        /// </summary>
+        public static void RunManageOperationalCaptureHeadless()
+        {
+            Directory.CreateDirectory(OutDir);
+            _fidelityOk = _fidelityDegraded = 0;
+            _fidelityReasons.Clear();
+            _geoFailures.Clear();
+            _touchFailures.Clear();
+            _geoCanvasesChecked = _touchPanelsChecked = _touchPanelsClean = 0;
+
+            int count = 0;
+            count += CaptureManageOperational(ManageTab.Defense);
+            count += CaptureManageOperational(ManageTab.Buildings);
+            count += CaptureManageOperational(ManageTab.Troops);
+            count += CaptureManageOperational(ManageTab.Research);
+
+            ReportFidelity();
+            ReportGeometry();
+            ReportTouchOracle();
+            if (count == 12 && _fidelityDegraded == 0 && _geoFailures.Count == 0 && _touchFailures.Count == 0)
+                Debug.Log("MANAGE_OPERATIONAL_CAPTURE_OK " + count + "/12 frames; four destinations; touch=clean");
+            else
+                Debug.LogError("MANAGE_OPERATIONAL_CAPTURE_FAIL frames=" + count + "/12 fidelity=" +
+                    _fidelityDegraded + " geometry=" + _geoFailures.Count + " touch=" + _touchFailures.Count);
+        }
+
+        /// <summary>
+        /// Focused evidence for the expanded queue state. Each production line contains two real
+        /// running jobs plus one real pending job; the drawer is opened through the same private
+        /// command used by its player-facing button before capture.
+        /// </summary>
+        public static void RunManageLiveQueueCaptureHeadless()
+        {
+            Directory.CreateDirectory(OutDir);
+            _fidelityOk = _fidelityDegraded = 0;
+            _fidelityReasons.Clear();
+            _geoFailures.Clear();
+            _touchFailures.Clear();
+            _geoCanvasesChecked = _touchPanelsChecked = _touchPanelsClean = 0;
+
+            int count = CaptureManageLiveQueue(ManageTab.Defense) +
+                        CaptureManageLiveQueue(ManageTab.Troops) +
+                        CaptureManageLiveQueue(ManageTab.Research);
+            ReportFidelity();
+            ReportGeometry();
+            ReportTouchOracle();
+            if (count == 9 && _fidelityDegraded == 0 && _geoFailures.Count == 0 && _touchFailures.Count == 0)
+                Debug.Log("MANAGE_LIVE_QUEUE_CAPTURE_OK 9/9 frames; running+pending; touch=clean");
+            else
+                Debug.LogError("MANAGE_LIVE_QUEUE_CAPTURE_FAIL frames=" + count + "/9 fidelity=" +
+                    _fidelityDegraded + " geometry=" + _geoFailures.Count + " touch=" + _touchFailures.Count);
+        }
+
+        private static int CaptureManageLiveQueue(ManageTab tab)
+        {
+            return ForEachTarget("ManageQueue" + tab, target =>
+            {
+                GameStateService prior = GameStateService.Instance;
+                BuildTimerService priorQueue = BuildTimerService.Instance;
+                GameObject stateHost = null, queueHost = null, panelHost = null, canvas = null;
+                GameState fixture = null;
+                try
+                {
+                    PanelManager.CloseAll();
+                    fixture = ScriptableObject.CreateInstance<GameState>();
+                    fixture.Onboarded = true;
+                    fixture.BarracksLevel = 3;
+                    fixture.BaseLayout = new List<PlacedStructureData>
+                    {
+                        new PlacedStructureData("tower_ground_archer", 3, 7, 0, 1),
+                        new PlacedStructureData("barracks", 2, 2, 0, 4),
+                        new PlacedStructureData("arcane-tower", 6, 3, 0, 4),
+                    };
+                    fixture.Wood = fixture.Iron = 100000;
+                    var balances = fixture.Resources;
+                    balances.Food = balances.Crystals = balances.Coins = 100000;
+                    fixture.Resources = balances;
+                    fixture.ObsidianQueue = ObsidianQueueState.Empty();
+                    fixture.BuildingTiers["barracks"] = 3;
+                    fixture.BuildingTiers["arcane-tower"] = 3;
+                    fixture.VillageTier = 4;
+
+                    stateHost = new GameObject("~UICapManageQueueState");
+                    if (!InstallCaptureState(stateHost.AddComponent<GameStateService>(), fixture))
+                        throw new InvalidOperationException("GameStateService capture seam is unavailable");
+                    queueHost = new GameObject("~UICapManageQueueService");
+                    var queue = queueHost.AddComponent<BuildTimerService>();
+                    if (!InstallCaptureQueue(queue))
+                        throw new InvalidOperationException("BuildTimerService capture seam is unavailable");
+                    SeedManageCaptureQueue(queue);
+
+                    panelHost = new GameObject("~UICapManageQueue" + tab);
+                    var panel = panelHost.AddComponent<ManageScreenPanel>();
+                    InvokePrivate(panel, "Awake");
+                    panel.Open();
+                    InvokePrivate(panel, "ShowOperational", tab);
+                    InvokePrivate(panel, "ToggleQueueDrawer");
+                    Canvas.ForceUpdateCanvases();
+                    canvas = GetPrivateFieldValue(panel, "_ui") as GameObject;
+                    return canvas != null && RenderCanvasToPng(canvas,
+                        OutDir + "ManageQueue" + tab + "_" + target.Tag + ".png", target.W, target.H) ? 1 : 0;
+                }
+                catch (Exception e)
+                {
+                    Debug.LogError("[UICap-HL] ManageQueue" + tab + " capture threw: " + e);
+                    return 0;
+                }
+                finally
+                {
+                    if (canvas != null) UnityEngine.Object.DestroyImmediate(canvas);
+                    if (panelHost != null) UnityEngine.Object.DestroyImmediate(panelHost);
+                    RestoreCaptureQueue(priorQueue);
+                    if (queueHost != null) UnityEngine.Object.DestroyImmediate(queueHost);
+                    RestoreCaptureState(prior);
+                    if (stateHost != null) UnityEngine.Object.DestroyImmediate(stateHost);
+                    if (fixture != null) UnityEngine.Object.DestroyImmediate(fixture);
+                    PanelManager.CloseAll();
+                }
+            });
+        }
+
+        private static int CaptureManageOperational(ManageTab tab)
+        {
+            string shotName = "Manage" + tab;
+            return ForEachTarget(shotName, target =>
+            {
+                GameStateService prior = GameStateService.Instance;
+                BuildTimerService priorQueue = BuildTimerService.Instance;
+                GameObject stateHost = null;
+                GameObject queueHost = null;
+                GameState fixture = null;
+                GameObject panelHost = null;
+                GameObject canvas = null;
+                try
+                {
+                    PanelManager.CloseAll();
+                    fixture = ScriptableObject.CreateInstance<GameState>();
+                    fixture.Onboarded = true;
+                    fixture.BarracksLevel = 3;
+                    fixture.BaseLayout = new List<PlacedStructureData>
+                    {
+                        new PlacedStructureData("tower_ground_archer", 3, 7, 0, 1),
+                        new PlacedStructureData("barracks", 2, 2, 0, 4),
+                        new PlacedStructureData("arcane-tower", 6, 3, 0, 4),
+                    };
+                    fixture.Wood = 100000;
+                    fixture.Iron = 100000;
+                    var balances = fixture.Resources;
+                    balances.Food = 100000;
+                    balances.Crystals = 100000;
+                    balances.Coins = 100000;
+                    fixture.Resources = balances;
+                    fixture.ObsidianQueue = ObsidianQueueState.Empty();
+                    fixture.BuildingTiers["barracks"] = 3;
+                    fixture.BuildingTiers["arcane-tower"] = 3;
+                    fixture.VillageTier = 4;
+
+                    stateHost = new GameObject("~UICapManageState");
+                    var stateService = stateHost.AddComponent<GameStateService>();
+                    if (!InstallCaptureState(stateService, fixture))
+                        throw new InvalidOperationException("GameStateService capture seam is unavailable");
+
+                    queueHost = new GameObject("~UICapManageQueue");
+                    var queueService = queueHost.AddComponent<BuildTimerService>();
+                    if (!InstallCaptureQueue(queueService))
+                        throw new InvalidOperationException("BuildTimerService capture seam is unavailable");
+
+                    // Exercise the real durable queue, not a display-only screenshot prop. Two jobs
+                    // occupy each production line and a third is forced through the production
+                    // Enqueue path into its pending FIFO. ManageScreenVM then derives every label,
+                    // countdown, progress bar and occupancy value from BuildTimerService exactly as
+                    // it does in a player session.
+                    SeedManageCaptureQueue(queueService);
+
+                    panelHost = new GameObject("~UICap" + shotName);
+                    var panel = panelHost.AddComponent<ManageScreenPanel>();
+                    InvokePrivate(panel, "Awake");
+                    panel.Open();
+                    InvokePrivate(panel, "ShowOperational", tab);
+                    Canvas.ForceUpdateCanvases();
+                    canvas = GetPrivateFieldValue(panel, "_ui") as GameObject;
+                    return canvas != null && RenderCanvasToPng(canvas,
+                        OutDir + shotName + "_" + target.Tag + ".png", target.W, target.H) ? 1 : 0;
+                }
+                catch (Exception e)
+                {
+                    Debug.LogError("[UICap-HL] " + shotName + " capture threw: " + e);
+                    return 0;
+                }
+                finally
+                {
+                    if (canvas != null) UnityEngine.Object.DestroyImmediate(canvas);
+                    if (panelHost != null) UnityEngine.Object.DestroyImmediate(panelHost);
+                    RestoreCaptureQueue(priorQueue);
+                    if (queueHost != null) UnityEngine.Object.DestroyImmediate(queueHost);
+                    RestoreCaptureState(prior);
+                    if (stateHost != null) UnityEngine.Object.DestroyImmediate(stateHost);
+                    if (fixture != null) UnityEngine.Object.DestroyImmediate(fixture);
+                    PanelManager.CloseAll();
+                }
+            });
+        }
+
+        private static void SeedManageCaptureQueue(BuildTimerService queue)
+        {
+            if (queue == null) throw new ArgumentNullException(nameof(queue));
+
+            queue.Enqueue(JobKind.TowerUpgrade, ChannelId.Builder, "tower_ground_archer:7:0", 420d, 2);
+            queue.Enqueue(JobKind.Upgrade, ChannelId.Builder, "barracks:2:0", 660d, 4);
+            queue.Enqueue(JobKind.Repair, ChannelId.Builder, "gate:4:1", 180d);
+
+            queue.Enqueue(JobKind.TrainTroop, ChannelId.Train, "train:militia:capture-a", 240d);
+            queue.Enqueue(JobKind.TrainTroop, ChannelId.Train, "train:archer:capture-b", 360d);
+            queue.Enqueue(JobKind.TrainTroop, ChannelId.Train, "train:militia:capture-c", 240d);
+
+            queue.Enqueue(JobKind.BuildingResearch, ChannelId.Research,
+                "building-research:arcane-tower:warding", 540d);
+            queue.Enqueue(JobKind.TroopUpgrade, ChannelId.Research, "troop-upgrade:militia", 720d, 2);
+            queue.Enqueue(JobKind.LearnMagic, ChannelId.Research, "magic:frost-nova", 480d);
+        }
+
+        private static bool InstallCaptureState(GameStateService service, GameState state)
+        {
+            var stateField = typeof(GameStateService).GetField("_state", BindingFlags.NonPublic | BindingFlags.Instance);
+            var instanceField = typeof(GameStateService).GetField("_instance", BindingFlags.NonPublic | BindingFlags.Static);
+            if (stateField == null || instanceField == null) return false;
+            stateField.SetValue(service, state);
+            instanceField.SetValue(null, service);
+            return true;
+        }
+
+        private static void RestoreCaptureState(GameStateService prior)
+        {
+            var instanceField = typeof(GameStateService).GetField("_instance", BindingFlags.NonPublic | BindingFlags.Static);
+            if (instanceField != null) instanceField.SetValue(null, prior);
+        }
+
+        private static void InstallCaptureVillageInventory(VillageInventory inventory)
+        {
+            var field = typeof(VillageInventory).GetField("<Instance>k__BackingField",
+                BindingFlags.NonPublic | BindingFlags.Static);
+            if (field == null) throw new MissingFieldException(typeof(VillageInventory).FullName, "Instance backing field");
+            field.SetValue(null, inventory);
+        }
+
+        private static void RestoreCaptureVillageInventory(VillageInventory prior)
+        {
+            var field = typeof(VillageInventory).GetField("<Instance>k__BackingField",
+                BindingFlags.NonPublic | BindingFlags.Static);
+            if (field != null) field.SetValue(null, prior);
+        }
+
+        private static void InstallCaptureEconomy(EconomyService economy)
+        {
+            var field = typeof(EconomyService).GetField("<Instance>k__BackingField",
+                BindingFlags.NonPublic | BindingFlags.Static);
+            if (field == null) throw new MissingFieldException(typeof(EconomyService).FullName, "Instance backing field");
+            field.SetValue(null, economy);
+        }
+
+        private static void RestoreCaptureEconomy(EconomyService prior)
+        {
+            var field = typeof(EconomyService).GetField("<Instance>k__BackingField",
+                BindingFlags.NonPublic | BindingFlags.Static);
+            if (field != null) field.SetValue(null, prior);
+        }
+
+        private static void SetPrivateFieldValue(object target, string fieldName, object value)
+        {
+            if (target == null) throw new ArgumentNullException(nameof(target));
+            for (Type type = target.GetType(); type != null; type = type.BaseType)
+            {
+                var field = type.GetField(fieldName, BindingFlags.NonPublic | BindingFlags.Instance |
+                    BindingFlags.DeclaredOnly);
+                if (field == null) continue;
+                field.SetValue(target, value);
+                return;
+            }
+            throw new MissingFieldException(target.GetType().FullName, fieldName);
+        }
+
+        private static void ClearConsumableCaptureCooldown(string id)
+        {
+            var field = typeof(DeNelle.Village.Items.ConsumableUseService).GetField("_nextReadyAt",
+                BindingFlags.NonPublic | BindingFlags.Static);
+            var map = field != null ? field.GetValue(null) as IDictionary<string, float> : null;
+            map?.Remove(id);
+        }
+
+        private static bool InstallCaptureQueue(BuildTimerService service)
+        {
+            var property = typeof(BuildTimerService).GetProperty("Instance",
+                BindingFlags.Public | BindingFlags.Static);
+            var setter = property != null ? property.GetSetMethod(true) : null;
+            if (setter == null) return false;
+            setter.Invoke(null, new object[] { service });
+            return ReferenceEquals(BuildTimerService.Instance, service);
+        }
+
+        private static void RestoreCaptureQueue(BuildTimerService prior)
+        {
+            var property = typeof(BuildTimerService).GetProperty("Instance",
+                BindingFlags.Public | BindingFlags.Static);
+            var setter = property != null ? property.GetSetMethod(true) : null;
+            if (setter != null) setter.Invoke(null, new object[] { prior });
+        }
+
+        private static int CaptureBuildCollections()
+        {
+            return ForEachTarget("BuildCollections", target =>
+            {
+                GameObject host = null;
+                GameObject canvas = null;
+                try
+                {
+                    PanelManager.CloseAll();
+                    // RuntimeInitializeOnLoad bootstraps do not execute in an editor
+                    // -executeMethod session. Hydrate the same authoritative registry the player
+                    // receives before judging category visibility; otherwise every collection is
+                    // filtered as "definition missing" and a blank screenshot falsely passes.
+                    typeof(CatalogBootstrap).GetMethod("Register",
+                        BindingFlags.NonPublic | BindingFlags.Static)?.Invoke(null, null);
+                    host = new GameObject("~UICapBuildCollections");
+                    var browser = host.AddComponent<BuildCollectionBrowser>();
+                    InvokePrivate(browser, "Awake");
+                    InvokePrivate(browser, "OnEnable");
+                    browser.Show(_ => { });
+                    Canvas.ForceUpdateCanvases();
+                    canvas = GetPrivateFieldValue(browser, "_canvas") as GameObject;
+                    if (canvas == null) return 0;
+                    int saved = RenderCanvasToPng(canvas,
+                        OutDir + "BuildCollections_" + target.Tag + ".png", target.W, target.H) ? 1 : 0;
+                    return saved;
+                }
+                catch (Exception e)
+                {
+                    Debug.LogError("[UICap-HL] BuildCollections capture threw: " + e);
+                    return 0;
+                }
+                finally
+                {
+                    if (canvas != null) UnityEngine.Object.DestroyImmediate(canvas);
+                    if (host != null) UnityEngine.Object.DestroyImmediate(host);
+                    PanelManager.CloseAll();
+                }
+            });
+        }
+
         // ---------------------------------------------------------------------
         //  Small reflection helpers (private access into the runtime card).
         // ---------------------------------------------------------------------
@@ -4852,9 +7253,35 @@ namespace DeNelle.Editor
         private static void InvokePrivate(object target, string methodName)
         {
             if (target == null) return;
-            var m = target.GetType().GetMethod(methodName, BindingFlags.NonPublic | BindingFlags.Instance);
-            if (m != null) m.Invoke(target, null);
-            else Debug.LogWarning("[UICap-HL] private method '" + methodName + "' not found -- lore state skipped.");
+            for (Type t = target.GetType(); t != null; t = t.BaseType)
+            {
+                var m = t.GetMethod(methodName, BindingFlags.NonPublic | BindingFlags.Instance |
+                    BindingFlags.DeclaredOnly);
+                if (m == null) continue;
+                m.Invoke(target, null);
+                return;
+            }
+            Debug.LogWarning("[UICap-HL] private method '" + methodName + "' not found -- state skipped.");
+        }
+
+        private static void InvokePrivate(object target, string methodName, object argument)
+        {
+            if (target == null) return;
+            for (Type t = target.GetType(); t != null; t = t.BaseType)
+            {
+                var methods = t.GetMethods(BindingFlags.NonPublic | BindingFlags.Instance |
+                    BindingFlags.DeclaredOnly);
+                for (int i = 0; i < methods.Length; i++)
+                {
+                    var method = methods[i];
+                    var parameters = method.GetParameters();
+                    if (!string.Equals(method.Name, methodName, StringComparison.Ordinal) || parameters.Length != 1)
+                        continue;
+                    method.Invoke(target, new[] { argument });
+                    return;
+                }
+            }
+            Debug.LogWarning("[UICap-HL] private method '" + methodName + "' with one argument not found -- state skipped.");
         }
 
         /// <summary>Find a type by full name across the loaded assemblies (the pause menu lives in
@@ -4876,8 +7303,13 @@ namespace DeNelle.Editor
         private static object GetPrivateFieldValue(object target, string fieldName)
         {
             if (target == null) return null;
-            var f = target.GetType().GetField(fieldName, BindingFlags.NonPublic | BindingFlags.Instance);
-            return f != null ? f.GetValue(target) : null;
+            for (Type t = target.GetType(); t != null; t = t.BaseType)
+            {
+                var f = t.GetField(fieldName, BindingFlags.NonPublic | BindingFlags.Instance |
+                    BindingFlags.DeclaredOnly);
+                if (f != null) return f.GetValue(target);
+            }
+            return null;
         }
 
         /// <summary>Read a public-or-private instance field's value as a boxed object (nulls are safe).</summary>

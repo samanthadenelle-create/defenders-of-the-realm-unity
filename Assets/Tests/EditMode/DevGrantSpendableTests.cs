@@ -13,8 +13,8 @@
 // Wood/Iron was unspendable in the upgrade flow; writing GameState directly filled
 // only the upgrade wallet, so the shop + HUD saw nothing.
 //
-// EconomyService.GrantSpendable is the dev-grant seam BOTH dev panels now use
-// (DevPanelController.GiveBuildMaterials + AdminOverlay.OnLoadResources). It MUST
+// EconomyService.GrantSpendableUncapped is the explicit dev-grant seam both dev panels use
+// (the ordinary GrantSpendable path is correctly town-bank-capped). The dev seam MUST
 // land Wood/Iron in BOTH wallets. These tests assert exactly that — they fail if
 // the grant stops reaching either spendable store.
 //
@@ -53,7 +53,7 @@ namespace DeNelle.Tests.EditMode
             SetPrivateField(_service, "_state", _state);
             SetPrivateField(_service, "_loadOnAwake", false);
             // EditMode skips Awake, so set the public singleton handle by reflection
-            // so EconomyService.GrantSpendable resolves GameStateService.Instance.
+            // so EconomyService.GrantSpendableUncapped resolves GameStateService.Instance.
             SetGameStateInstance(_service);
 
             // EconomyService component (serialized defaults: Wood 200, Iron 80).
@@ -82,7 +82,7 @@ namespace DeNelle.Tests.EditMode
             int wood0 = _econ.Wood;
             int iron0 = _econ.Iron;
 
-            _econ.GrantSpendable(wood: 50000, iron: 50000);
+            _econ.GrantSpendableUncapped(wood: 50000, iron: 50000);
 
             Assert.That(_econ.Wood, Is.EqualTo(wood0 + 50000),
                 "in-session Wood (ShopPanel + HUD bar wallet) must grow by the grant");
@@ -96,7 +96,7 @@ namespace DeNelle.Tests.EditMode
             int wood0 = _state.Wood;
             int iron0 = _state.Iron;
 
-            _econ.GrantSpendable(wood: 50000, iron: 50000);
+            _econ.GrantSpendableUncapped(wood: 50000, iron: 50000);
 
             Assert.That(_state.Wood, Is.EqualTo(wood0 + 50000),
                 "GameState.Wood (the building-upgrade / ResourceLedger wallet) must grow by the grant");
@@ -111,7 +111,7 @@ namespace DeNelle.Tests.EditMode
             var bigCost = new ResourceCost(wood: 50000, iron: 50000);
             Assert.That(_econ.CanAfford(bigCost), Is.False, "precondition: starter can't afford 50k/50k");
 
-            _econ.GrantSpendable(wood: 50000, iron: 50000);
+            _econ.GrantSpendableUncapped(wood: 50000, iron: 50000);
 
             Assert.That(_econ.CanAfford(bigCost), Is.True,
                 "after the dev grant the economy must report the 50k/50k cost affordable (shop can spend)");
@@ -123,7 +123,7 @@ namespace DeNelle.Tests.EditMode
             int food0 = _state.Resources.Food;
             int crystals0 = _state.Resources.Crystals;
 
-            _econ.GrantSpendable(food: 25000, crystals: 25000);
+            _econ.GrantSpendableUncapped(food: 25000, crystals: 25000);
 
             Assert.That(_state.Resources.Food, Is.EqualTo(food0 + 25000),
                 "Food is GameState-backed; the dev grant must land it there");
@@ -169,7 +169,7 @@ namespace DeNelle.Tests.EditMode
             int food0 = _state.Resources.Food, crystals0 = _state.Resources.Crystals;
 
             // The exact full-base load both dev buttons fire.
-            _econ.GrantSpendable(wood: 50000, food: 25000, iron: 50000, crystals: 25000);
+            _econ.GrantSpendableUncapped(wood: 50000, food: 25000, iron: 50000, crystals: 25000);
 
             // Shop / HUD wallet.
             Assert.That(_econ.Wood, Is.EqualTo(wood0 + 50000));

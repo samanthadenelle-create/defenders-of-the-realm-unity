@@ -46,11 +46,12 @@ namespace DeNelle.Wallet
         /// <summary>Basket — aether. Crystal, premium, the wallet. Luma ~113.</summary>
         public static readonly Color Basket = Hex(0x8B, 0x5C, 0xF6);
 
-        /// <summary>The ground: violet-biased black, not a neutral grey.</summary>
-        public static readonly Color Ground = Hex(0x0A, 0x08, 0x10);
+        /// <summary>The shared near-black iron ground. Merchant-band colour belongs in
+        /// marks, art bloom and state rails -- never in the full-screen substrate.</summary>
+        public static readonly Color Ground = Hex(0x07, 0x08, 0x09);
 
-        /// <summary>The raised ground (band strips, card plates).</summary>
-        public static readonly Color GroundRaised = Hex(0x16, 0x11, 0x1F);
+        /// <summary>Raised black-iron leather used by stalls, strips and cards.</summary>
+        public static readonly Color GroundRaised = Hex(0x12, 0x12, 0x11);
 
         /// <summary>
         /// The minimum rec.709 greyscale separation, of 255, between any two band lights.

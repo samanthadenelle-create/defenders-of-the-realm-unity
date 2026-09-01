@@ -160,6 +160,8 @@ namespace DeNelle.Core.UI
                 return;
             }
 
+            MedievalUiSkin.ApplyShell(_modal.chrome, compact: false);
+
             var body = _modal.chrome.content.transform;
 
             // --- The honest PREVIEW stamp (owner directive: clearly labeled, not live) ---
@@ -183,14 +185,16 @@ namespace DeNelle.Core.UI
             // View the read-only stake-rewards perk surface (already-built StakeRewardsPanel).
             // Seed a real-looking Genesis-holder stake so the perk list reads populated for the
             // capture — a MOCK read only (no wallet, custodies nothing).
-            ElarionUiKit.BuildObsidianButton(body, "View Stake Rewards",
+            var rewards = ElarionUiKit.BuildObsidianButton(body, "View Stake Rewards",
                 ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Yellow,
                 new Vector2(0.06f, 0.255f), new Vector2(0.49f, 0.335f), OnViewStakeRewards);
 
             // Connect-wallet — deliberate NO-OP. Calls NO wallet; shows a "coming soon" toast.
-            ElarionUiKit.BuildObsidianButton(body, ConnectActionLabel,
+            var connect = ElarionUiKit.BuildObsidianButton(body, ConnectActionLabel,
                 ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Gray,
                 new Vector2(0.51f, 0.255f), new Vector2(0.94f, 0.335f), OnConnectWalletComingSoon);
+            MedievalUiSkin.ApplyButton(rewards, primary: true);
+            MedievalUiSkin.ApplyButton(connect, primary: false);
 
             // --- Honest footer (no wallet, no live crypto) ---
             ElarionUiKit.Label(body, HonestFooter, 0.140f, 0.245f, ElarionUi.Parchment, 15,

@@ -367,3 +367,202 @@ powershell -File .\run-unity-method.ps1 -Method DeNelle.Editor.DataRegression.Ru
 ```
 
 **Always pass `-ExpectMarker`.** Without it the runner prints `PASS-UNASSERTED` and proves nothing.
+
+## 7.10 — CODEX INTEGRATION REVIEW (2026-09-01)
+
+Read in full and inspected against the live `Map` in `Assets/Editor/SyntyStructureRetheme.cs`.
+The current checkout is already `feat/synty-art-retheme` at `ca4bf5821`; do **not** cherry-pick the
+eight commits back into this same worktree or represent them as a separate integrated copy.
+
+### Pairing ruling
+
+The dictionary is structurally safe (stable Addressable addresses, stable save IDs, wrapper collider,
+`Structure` layer), but it is **not visually approved**. The purchased pack exposes only 26 complete
+building presets; filenames alone cannot prove silhouette, entrance orientation, footprint, or whether
+two roles read as distinct on a phone. Therefore no blind remap was made during handover review.
+
+- **Provisionally coherent, still requiring runtime proof:** Blacksmith/Armorer, Tavern/Shop and
+  Crafting, Farm/Hut, houses, pet hut, Windmill, arcane tiers, defense tiers, walls/gate, siege, well,
+  torch, and caravan.
+- **Rejected as final consumer semantics:** `barracks -> Stables`, `lumbermill -> House_06`, and
+  `Watermill_Medieval -> House_Windmill`. These may remain temporary wrappers but cannot pass final
+  art parity under those identities.
+- **Distinctness gate:** `armorer` and `Forge` currently share one preset. That preserves function but
+  does not yet prove the player can visually distinguish the two destinations.
+- **Still unmapped:** `CrystalMine`, `IronMine`, `GenericContainer`. The pack contains crystal, ore,
+  ingot, crate, and environmental-structure pieces, so the likely correct solution is a composed
+  wrapper, not a misleading one-prefab substitution.
+- **Still outside the Addressable swap:** all eight hand-placed storefronts listed in §7.8.
+
+### Integration and release ruling
+
+- WO-1289 is accepted from its measured chroma and regression evidence.
+- WO-1290 and WO-1291 remain **in progress**; their green structural oracles do not satisfy visual
+  approval. The short/proud corner tower, provisional pairings, unmapped addresses, storefronts, and
+  runtime building capture remain open.
+- WO-1292 remains untouched.
+- No screenshot under `docs/ui-evidence/wo1290_synty_perimeter/` proves the Addressable building swap.
+- No Windows/APK/AAB release may be approved until a fresh content build is pushed and the same run
+  emits both `R2_PUSH_OK` and `R2_PARITY_OK`; read the parity log as UTF-16LE.
+- PROD-021 must close the single-target verification hole before a multi-platform release is trusted.
+  Android parity cannot be used as evidence for the Windows catalog.
+- The UI-reskin lane remains logically separate even though its current uncommitted work is present in
+  this checkout. Final acceptance requires one integrated compile/regression/geometry/touch/screenshot
+  pass after the Synty lane and UI lane are both complete.
+
+## 7.11 — FOLDED REVIEW AND BUILD-GATE RESULT (2026-09-01)
+
+The UI completion review and the Synty lane review are now folded into this handover. Fresh checks on
+the combined working tree passed:
+
+- `Builds/fold-review-compile.log` — `COMPILE_GATE_OK :: scripts compiled clean`.
+- `Builds/fold-review-regression.log` — `REGRESSION_OK 339/339 suites -- 339 green, 0 red, 0 skipped`.
+
+These results prove code/data health only. They do not override the owner's earlier rule that player
+builds wait until all Ready work is RCA'd and implemented. The Windows EXE and Android APK were
+therefore **not built** in this pass because the same reviewed checkout still has the following open:
+
+- WO-1290 and WO-1291 remain in progress and lack final runtime visual approval.
+- WO-1292 environment dressing is untouched.
+- `CrystalMine`, `IronMine`, and `GenericContainer` remain unmapped; eight hand-placed storefronts
+  remain on the legacy art.
+- The corner bastion/tower presentation and three rejected provisional semantic mappings remain open.
+- PROD-021 still leaves single-target Windows/Android R2 verification incomplete.
+- No fresh content publication has emitted both `R2_PUSH_OK` and `R2_PARITY_OK` for this combined tree.
+
+Build authorization resumes only after those items are closed and a fresh integrated
+compile/regression/visual/content-parity pass is green. Do not label an older artifact under
+`Builds/Windows` or `Builds/Android` as containing this review.
+
+## 7.12 — OWNER-AUTHORIZED DIAGNOSTIC WINDOWS BUILD (2026-09-01)
+
+The owner expressly authorized a diagnostic build to inspect the current state despite the open
+acceptance items in §7.11. This authorization permits review; it does not mark the artifact release
+approved.
+
+- Prior output archived recoverably at `Builds/Windows-before-review-20260901-125725` to avoid the
+  known stale executable stub failure.
+- Build command used `DeNelle.Editor.DesktopBuild.BuildWindows` with `-BuildTarget Win64` and asserted
+  the fresh `[DesktopBuild] SUCCEEDED` marker.
+- Evidence: `Builds/owner-review-windows-build.log` — 2,066 MB reported in `00:01:37.7619925`.
+- Executable: `Builds/Windows/DefendersOfTheRealm.exe`, 667,648 bytes, SHA-256
+  `157DCCDAF52EBCA0E0759FAF35DD53A6985ED577698CA33603047F0F2004CE7E`.
+- Companion `level3` and `DeNelle.Village.dll` were freshly emitted in the same build, ruling out a
+  stale EXE paired with newer scene data.
+
+This is the development/player-test Windows configuration, preserving the deliberate F8/test tools
+without changing normal gameplay behavior. The unresolved Synty visual and R2 parity findings in
+§7.11 still apply.
+
+## 7.13 — HARD-REBOOT CHECKPOINT: UI QA BUILD + INTERNET-GATE RCA (2026-09-01)
+
+Owner requested this durable checkpoint immediately before a hard reboot. Unity and the Windows
+player were both closed when this section was written.
+
+### Current UI/build state
+
+- Fixed the skill-tree horizontal-progression compile collision by renaming its local source bounds
+  in `HeroSkillTreePanelMvvm.cs`; behavior is unchanged by that correction.
+- Fresh asserted compile evidence: `Builds/ui-current-compile-20260901-pass2.log` contains
+  `COMPILE_GATE_OK` and the runner verdict is PASS.
+- Fresh owner-authorized Windows QA build evidence:
+  `Builds/ui-current-windows-build-20260901.log` contains `[DesktopBuild] SUCCEEDED`; 28 scenes,
+  2,066 MB, `00:01:27.0500391`.
+- Test executable remains `Builds/Windows/DefendersOfTheRealm.exe`; SHA-256
+  `157DCCDAF52EBCA0E0759FAF35DD53A6985ED577698CA33603047F0F2004CE7E`.
+- Unity 6.0.4.8f1 emits a shutdown-only Lifecycle Management `NullReferenceException` after the
+  success marker, but exits code 0. The asserted compile and build markers are present and there are
+  no compiler errors.
+
+### New icon inputs and decision
+
+- Formal implementation specification: `WorkOrders/WORK_ORDER_1294_blink_skill_tree_hotswap_and_troop_portraits.md`.
+  It supersedes stale four-slot presentation language while preserving older gameplay contracts.
+- `C:\Users\Elden\Downloads\Elarion_Troop_Icons.zip` contains all nine canonical troop portraits,
+  named exactly for their troop IDs. The 3x3 mobile preview is visually approved as the troop source.
+- Blink `Assets/Blink/Art/Icons` is the correct source for skill-tree nodes and the three hot-swap
+  combat slots, not troop portraits. It is already imported as Sprite art with mobile 128px overrides
+  and already mirrored/data-routed through `RpgUiCatalog` plus `concept-icons.json`.
+- Neither the new troop archive nor any expanded Blink skill mappings were folded into the QA build
+  above; they are the next UI integration pass.
+
+### Active blocker: false first-run internet-required screen
+
+The owner launched the new Windows build and received the internet-required error despite having
+working internet. This is an active RCA, not resolved yet.
+
+- Exact current player log:
+  `C:\Users\Elden\AppData\LocalLow\DeNelle\Echoes of Elarion\Player.log`
+  (last observed 2026-09-01 14:10:28, about 2.9 MB).
+- Likely gate is `OfflineContentService.ResolveContentSource` in
+  `Assets/_Modules/Core/Addressables/OfflineContentService.cs` around lines 420 onward.
+- It currently treats `Application.internetReachability == NotReachable` as authoritative and, on a
+  first run without a completed offline pull for this build, immediately sets `ContentSource.Unavailable`
+  and displays `offlineFirstRunInternetRequired`. Unity reachability is only a coarse interface flag and
+  can be a false negative on Windows.
+- The online branch can also produce the same modal when `CheckForCatalogUpdates` cannot prove the
+  remote catalog usable and no current-build offline stamp exists. Resume by extracting the latest
+  `OfflineContent`, Addressables, catalog, HTTP, and exception lines from the exact Player.log before
+  changing code. Determine which branch fired; do not guess from the modal text.
+- Required fix direction: prove real shipped/local catalog usability and/or perform a bounded endpoint
+  probe; never equate Unity's reachability enum with definitive internet failure. Preserve the honest
+  first-install failure when neither shipped/local content nor remote content is usable.
+
+After reboot: inspect the exact log evidence, implement the smallest source-selection correction,
+run the relevant offline/content regression plus compile gate, then rebuild the Windows QA player.
+
+## 7.14 — WO-1294 BLINK/TROOPS + WINDOWS/R2 TEST BUILD (2026-09-01)
+
+- Imported the owner's nine canonical troop portraits under `Assets/Resources/RpgUi/troop` and
+  routed Barracks, Manage, Raid Deploy, and queue cards through the shared `RpgUiCatalog.RoleTroop`.
+- Every one of the 42 authored ability definitions now has a direct concept-ID mapping. The
+  assignable tree skills use the same owner-tagged Blink source as their talent node, and the
+  importer now mirrors every referenced Blink class family. The quick-swap contract is three slots
+  in runtime, VM copy, layout oracle, and capture wording.
+- Removed the final HUD view-side onboarding read; `StartWaveHudBridge` remains the predicate owner
+  and the view renders its already-gated availability.
+- Fresh evidence: `Builds/wo1294-compile-pass2.log` has `COMPILE_GATE_OK`; fresh
+  `Builds/wo1294-regression-pass2.log` has `REGRESSION_OK 339/339 suites`.
+- Fresh Windows development/QA build: `Builds/wo1294-windows-build.log` has
+  `[DesktopBuild] SUCCEEDED`, 2,071 MB in `00:01:18.3249081`.
+- Test executable: `Builds/Windows/DefendersOfTheRealm.exe`, 667,648 bytes, SHA-256
+  `157DCCDAF52EBCA0E0759FAF35DD53A6985ED577698CA33603047F0F2004CE7E`.
+- The prior false internet screen was not a reachability false negative. Exact `Player.log` evidence
+  showed a reachable network followed by HTTP 404 for Windows catalog
+  `catalog_2026.09.01.350657.hash` and its content-hashed bundles. The source-selection gate was
+  correctly refusing unavailable first-run content; the R2 deployment was incomplete.
+- Fixed operationally with the matching content push: `R2_PUSH_OK 52 uploaded (94.1 MB), 474
+  unchanged`; `R2_PARITY_OK targets=Android,StandaloneWindows64,WebGL objects=192`. Public HEAD
+  requests now return HTTP 200 for that exact Windows catalog plus the exact well and watermill
+  bundles that previously returned 404.
+- Previous player output is recoverable at
+  `Builds/Windows-before-wo1294-20260901-144031`. The new player was not launched; owner tests next.
+
+## 7.15 — FINAL VISUAL BATCH + OPEN GATES + WINDOWS/R2 TEST BUILD (2026-09-01)
+
+- Extended the founding-choice modal body fill horizontally so it reaches the wider frame.
+- Reworked the shared build-collection card contract: Gathering, Realm, Defenses, and every other
+  collection now place the action button in a dedicated footer below the information card instead
+  of covering the card's status/cost text.
+- Talent Tree now presents the spendable currency as `WISDOM` in the right header plate and removes
+  the duplicate adjacent chip. Its three quick-swap slots use centered circular bezels with concept
+  art overlays.
+- The tutorial's scripted town battle now waits for its intro dialogue/modal to close before spawning
+  the wave, so modal posture can no longer suppress the battle HUD when combat starts.
+- Rebuilt the Synty castle perimeter against merged-world y=0 using measured prefab bounds. Walls,
+  gates, and towers meet the ground. All four gate leaves are authored visibly open, the portcullis
+  is removed from the permanent passage, and the existing bidirectional GateTraversal crossing stays
+  as the NavMesh safety net.
+- Fresh visual evidence: `Builds/final-visual-batch-perimeter-open2-proof.log` contains
+  `PERIMETER_PROOF_OK`; captures are under `docs/ui-evidence/wo1290_synty_perimeter`.
+- Fresh code evidence: `Builds/final-visual-batch-compile3.log` contains `COMPILE_GATE_OK` and
+  `Builds/final-visual-batch-regression2.log` contains `REGRESSION_OK 340/340 suites`.
+- Fresh clean Windows build: `Builds/build.log` contains `[DesktopBuild] SUCCEEDED`.
+  `Builds/Windows/DefendersOfTheRealm.exe` is 667,648 bytes, SHA-256
+  `157DCCDAF52EBCA0E0759FAF35DD53A6985ED577698CA33603047F0F2004CE7E`.
+- R2 content is current: `R2_PUSH_OK 0 uploaded, 526 unchanged` and
+  `R2_PARITY_OK targets=Android,StandaloneWindows64,WebGL objects=192`. Anonymous CDN access passed
+  `R2_CHECK_OK`; the exact Windows catalog `catalog_2026.09.01.350657.hash` returns HTTP 200.
+  This directly covers the earlier Windows first-run "no internet" symptom, whose root cause was
+  missing remote catalog/content rather than a Windows networking regression.
+- Previous Windows output is recoverable at `Builds/previous/Windows-20260901-152746`.

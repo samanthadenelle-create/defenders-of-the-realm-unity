@@ -71,6 +71,29 @@ namespace DeNelle.Onboarding
         private Button _connectWallet;
         private bool _busy;
 
+#if UNITY_EDITOR
+        /// <summary>
+        /// Capture-only presentation seam. It lets editor evidence build the exact
+        /// production layout with GOOGLE_PLAY copy without changing player defines.
+        /// Player builds do not contain this property.
+        /// </summary>
+        public static bool? EditorGooglePlayPresentationOverride { get; set; }
+#endif
+
+        private static bool IsGooglePlayPresentation
+        {
+            get
+            {
+#if GOOGLE_PLAY
+                return true;
+#elif UNITY_EDITOR
+                return EditorGooglePlayPresentationOverride ?? false;
+#else
+                return false;
+#endif
+            }
+        }
+
         /// <summary>
         /// Show the login surface, then run <paramref name="onContinue"/> once the player
         /// gets in (wallet connect / guest). Always presents; the caller decides when to
@@ -196,10 +219,14 @@ namespace DeNelle.Onboarding
             // MinTouchPx-floored controls; on the shortest live canvas (post-scale height ~970,
             // landscape web / Seeker) the old rect cannot hold them without the touch floor
             // forcing overlap ("stacked", owner screenshot 2026-07-30).
-            var chrome = ElarionUiKit.BuildObsidianPanel(_canvas.transform, "YOUR WALLET",
-                new Vector2(0.10f, 0.06f), new Vector2(0.90f, 0.94f), onClose: null,
-                withBackdrop: false);
+            var chrome = ElarionUiKit.BuildObsidianPanel(_canvas.transform,
+                IsGooglePlayPresentation ? "WELCOME" : "YOUR WALLET",
+                new Vector2(0.22f, 0.12f), new Vector2(0.78f, 0.88f), onClose: null,
+                withBackdrop: false, frameName: RpgUiCatalog.FrameCore);
+            MedievalUiSkin.ApplyShell(chrome, compact: true);
             if (chrome.close != null) chrome.close.gameObject.SetActive(false);
+            if (chrome.layout != null && chrome.layout.medallion != null)
+                chrome.layout.medallion.gameObject.SetActive(false);
 
             // WO-787 Part A: lay out on the FULL-rect chrome.content, NOT chrome.layout.body.
             // BuildObsidianPanel (WO-714 P6) raises Zone_Body's floor by the close-band +
@@ -230,30 +257,43 @@ namespace DeNelle.Onboarding
             // MinTouch clamp floor from the WO-787 geometry analysis, so ClampMinTouch
             // can grow both rows collision-free on every live canvas.
             var intro = ElarionUiKit.Label(body,
-                "Your wallet is your save. Connect now (one-time on this device). Guest progress stays here until you connect.",
-                0.78f, 0.92f, ElarionUi.Parchment, ElarionUi.FontLabel,
+                IsGooglePlayPresentation
+                    ? "Continue with Google to protect your progress across devices, or play as a guest on this device."
+                    : "Your wallet is your save. Connect now (one-time on this device). Guest progress stays here until you connect.",
+                0.68f, 0.80f, ElarionUi.Parchment, ElarionUi.FontLabel,
                 TextAlignmentOptions.Center, 0.06f, 0.94f);
             intro.textWrappingMode = TextWrappingModes.Normal;
             intro.raycastTarget = false;
             ElarionUiKit.FitBlock(intro);
 
-            _status = ElarionUiKit.Label(body, "", 0.62f, 0.68f,
+            _status = ElarionUiKit.Label(body, "", 0.57f, 0.64f,
                 ElarionUi.Parchment, ElarionUi.FontMicro,
                 TextAlignmentOptions.Center, 0.06f, 0.94f);
             _status.raycastTarget = false;
 
             _connectWallet = ElarionUiKit.BuildObsidianButton(body,
-#if GOOGLE_PLAY
-                "Continue with Google",
-#else
-                "Connect Wallet",
-#endif
+                IsGooglePlayPresentation ? "Continue with Google" : "Connect Wallet",
                 ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Yellow,
-                new Vector2(0.08f, 0.38f), new Vector2(0.92f, 0.56f), OnConnectWallet);
+                new Vector2(0.08f, 0.38f), new Vector2(0.92f, 0.54f), OnConnectWallet);
+            MedievalUiSkin.ApplyButton(_connectWallet, primary: true);
+            ApplyFrontDoorButtonFrame(_connectWallet);
 
             _guest = ElarionUiKit.BuildObsidianButton(body, "Play as Guest",
                 ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Gray,
-                new Vector2(0.08f, 0.14f), new Vector2(0.92f, 0.30f), OnPlayAsGuest);
+                new Vector2(0.08f, 0.16f), new Vector2(0.92f, 0.34f), OnPlayAsGuest);
+            MedievalUiSkin.ApplyButton(_guest, primary: false);
+            ApplyFrontDoorButtonFrame(_guest);
+        }
+
+        private static void ApplyFrontDoorButtonFrame(Button button)
+        {
+            if (button == null || !(button.targetGraphic is Image image)) return;
+            var frame = Resources.Load<Sprite>("UI/ElarionMedieval/frames/content-panel");
+            if (frame != null) image.sprite = frame;
+            image.type = Image.Type.Simple;
+            image.color = Color.white;
+            var label = button.GetComponentInChildren<TextMeshProUGUI>(true);
+            if (label != null) ElarionUiKit.FitSingleLine(label, 24f, 36f);
         }
 
         // =====================================================================
@@ -279,7 +319,11 @@ namespace DeNelle.Onboarding
         {
             if (_busy || _routed) return;
             SetBusy(true);
+#if GOOGLE_PLAY
+            SetStatus("Opening Google sign-in... you can still tap Play as Guest.", info: true);
+#else
             SetStatus("Opening your wallet... you can still tap Play as Guest.", info: true);
+#endif
 
             Task<AuthOutcome> attempt = _vm.ConnectWalletAsync();
             AuthOutcome outcome;
@@ -310,7 +354,11 @@ namespace DeNelle.Onboarding
                 if (_routed) return;
                 FlowTrace.Fail("Auth", "wallet connect threw at the panel: " + e.Message);
                 SetBusy(false);
+#if GOOGLE_PLAY
+                SetStatus("Google sign-in failed. Try again, or tap Play as Guest to start now.", info: false);
+#else
                 SetStatus("Wallet connect failed. Try again, or tap Play as Guest to start now.", info: false);
+#endif
                 return;
             }
             HandleOutcome(outcome);

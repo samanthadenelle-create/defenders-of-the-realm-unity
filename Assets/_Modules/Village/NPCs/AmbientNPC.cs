@@ -622,6 +622,12 @@ namespace DeNelle.Village
             var wm = WaveManager.Instance;
             if (wm != null)
             {
+                // F8 2026-08-31: a sparse subset of random townsfolk teach the two hard-to-find
+                // tower paths using the UI's exact labels. Stop after the opening waves so this
+                // remains onboarding help rather than permanent repetitive chatter.
+                if (TownsfolkDialogue.ShouldOfferBuildHelp(wm.CurrentWaveId, _archetype, _lineCursor))
+                    return TownsfolkDialogue.BuildHelpFor(_archetype, _lineCursor);
+
                 // A dragon actually aloft forces the most urgent tier outright.
                 bool apexLive = wm.LiveApexBoss != null && !wm.LiveApexBoss.IsDead;
                 TownsfolkDialogue.DragonHintTier tier = apexLive

@@ -482,8 +482,121 @@ Transform:
   - {fileID: 1107984975}
   - {fileID: 1370031213}
   - {fileID: 1961083885}
+  - {fileID: 919326035}
+  - {fileID: 1165180744}
+  - {fileID: 754596127}
+  - {fileID: 2123563948}
+  - {fileID: 1143910328}
+  - {fileID: 590961462}
+  - {fileID: 881641194}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!1001 &80746880
+PrefabInstance:
+  m_ObjectHideFlags: 0
+  serializedVersion: 2
+  m_Modification:
+    serializedVersion: 3
+    m_TransformParent: {fileID: 919326035}
+    m_Modifications:
+    - target: {fileID: -8679921383154817045, guid: 75cfceef55b21364b8ba2c1fb7e74574, type: 3}
+      propertyPath: m_LocalScale.x
+      value: 1.9440681
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: 75cfceef55b21364b8ba2c1fb7e74574, type: 3}
+      propertyPath: m_LocalScale.y
+      value: 1.9440681
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: 75cfceef55b21364b8ba2c1fb7e74574, type: 3}
+      propertyPath: m_LocalScale.z
+      value: 1.9440681
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: 75cfceef55b21364b8ba2c1fb7e74574, type: 3}
+      propertyPath: m_LocalPosition.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: 75cfceef55b21364b8ba2c1fb7e74574, type: 3}
+      propertyPath: m_LocalPosition.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: 75cfceef55b21364b8ba2c1fb7e74574, type: 3}
+      propertyPath: m_LocalPosition.z
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: 75cfceef55b21364b8ba2c1fb7e74574, type: 3}
+      propertyPath: m_LocalRotation.w
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: 75cfceef55b21364b8ba2c1fb7e74574, type: 3}
+      propertyPath: m_LocalRotation.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: 75cfceef55b21364b8ba2c1fb7e74574, type: 3}
+      propertyPath: m_LocalRotation.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: 75cfceef55b21364b8ba2c1fb7e74574, type: 3}
+      propertyPath: m_LocalRotation.z
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: 75cfceef55b21364b8ba2c1fb7e74574, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: 75cfceef55b21364b8ba2c1fb7e74574, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.y
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: -8679921383154817045, guid: 75cfceef55b21364b8ba2c1fb7e74574, type: 3}
+      propertyPath: m_LocalEulerAnglesHint.z
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: -4331639297157858613, guid: 75cfceef55b21364b8ba2c1fb7e74574, type: 3}
+      propertyPath: m_LocalRotation.w
+      value: 0.76186466
+      objectReference: {fileID: 0}
+    - target: {fileID: -4331639297157858613, guid: 75cfceef55b21364b8ba2c1fb7e74574, type: 3}
+      propertyPath: m_LocalRotation.y
+      value: -0.101004265
+      objectReference: {fileID: 0}
+    - target: {fileID: 919132149155446097, guid: 75cfceef55b21364b8ba2c1fb7e74574, type: 3}
+      propertyPath: m_Name
+      value: HeroBody
+      objectReference: {fileID: 0}
+    - target: {fileID: 1245099550184387528, guid: 75cfceef55b21364b8ba2c1fb7e74574, type: 3}
+      propertyPath: m_LocalRotation.x
+      value: 0.060518615
+      objectReference: {fileID: 0}
+    - target: {fileID: 1245099550184387528, guid: 75cfceef55b21364b8ba2c1fb7e74574, type: 3}
+      propertyPath: m_LocalRotation.z
+      value: 0.21701404
+      objectReference: {fileID: 0}
+    - target: {fileID: 5866666021909216657, guid: 75cfceef55b21364b8ba2c1fb7e74574, type: 3}
+      propertyPath: m_Controller
+      value: 
+      objectReference: {fileID: 9100000, guid: 81b26d16babb74a4e976ce6ed97a8799, type: 2}
+    - target: {fileID: 5866666021909216657, guid: 75cfceef55b21364b8ba2c1fb7e74574, type: 3}
+      propertyPath: m_ApplyRootMotion
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 5872573893285028303, guid: 75cfceef55b21364b8ba2c1fb7e74574, type: 3}
+      propertyPath: m_LocalRotation.x
+      value: 0.032428276
+      objectReference: {fileID: 0}
+    - target: {fileID: 5872573893285028303, guid: 75cfceef55b21364b8ba2c1fb7e74574, type: 3}
+      propertyPath: m_LocalRotation.z
+      value: -0.04749852
+      objectReference: {fileID: 0}
+    m_RemovedComponents: []
+    m_RemovedGameObjects: []
+    m_AddedGameObjects: []
+    m_AddedComponents: []
+  m_SourcePrefab: {fileID: 100100000, guid: 75cfceef55b21364b8ba2c1fb7e74574, type: 3}
+--- !u!4 &80746881 stripped
+Transform:
+  m_CorrespondingSourceObject: {fileID: -8679921383154817045, guid: 75cfceef55b21364b8ba2c1fb7e74574, type: 3}
+  m_PrefabInstance: {fileID: 80746880}
+  m_PrefabAsset: {fileID: 0}
 --- !u!1 &90467652
 GameObject:
   m_ObjectHideFlags: 0
@@ -2293,6 +2406,117 @@ MeshFilter:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 590240507}
   m_Mesh: {fileID: 10202, guid: 0000000000000000e000000000000000, type: 0}
+--- !u!1 &590961461
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 590961462}
+  - component: {fileID: 590961464}
+  - component: {fileID: 590961463}
+  m_Layer: 0
+  m_Name: WaveManager
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &590961462
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 590961461}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 72478676}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &590961463
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 590961461}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ca1a5fd712023ab4cbb812c552185f3a, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: DeNelle.Village::DeNelle.Village.WaveHudBridge
+  _wave: {fileID: 590961464}
+--- !u!114 &590961464
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 590961461}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 10f1241a6ca92b84388c8f9447ba8bbd, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: DeNelle.Village::DeNelle.Village.WaveManager
+  _heart: {fileID: 0}
+  _spawnPoints: []
+  _enemyRoot: {fileID: 881641194}
+  _enemyPrefab: {fileID: 4400444975981662405, guid: 127bcc0e8b8beb347a02d735a4becad5, type: 3}
+  _apexBossPrefab: {fileID: 0}
+  _scalingCurve: {fileID: 0}
+  _groupSpawner: {fileID: 0}
+  _waveGroupSequence: []
+  _composeFamilyGroups: 1
+  _composedFormation: 1
+  _smartComposition: 1
+  _soWaves: []
+  _innerRingRadius: 9
+  _breachArmDelay: 0.5
+  _autoStart: 0
+  _startWave: 1
+  _awardResourcesOnWaveClear: 1
+  _woodRewardBase: 20
+  _woodRewardSpread: 10
+  _woodRewardPerWave: 0
+  _woodRewardInterval: 3
+  _ironRewardBase: 15
+  _ironRewardSpread: 10
+  _ironRewardPerWave: 0
+  _ironRewardInterval: 4
+  _foodRewardBase: 30
+  _foodRewardSpread: 20
+  _foodRewardInterval: 2
+  _rewardScalePerStep: 0.2
+  _rewardScaleWaveStep: 5
+  _rewardScalingStepCap: 0
+  _awardResourcesPerKill: 1
+  _woodPerKill: 1
+  _ironPerKill: 0
+  _maxSimultaneousEnemies: 8
+  OnCountdownTick:
+    m_PersistentCalls:
+      m_Calls: []
+  OnWaveStarted:
+    m_PersistentCalls:
+      m_Calls: []
+  OnWaveCleared:
+    m_PersistentCalls:
+      m_Calls: []
+  OnBreach:
+    m_PersistentCalls:
+      m_Calls: []
+  OnApexBossSpawned:
+    m_PersistentCalls:
+      m_Calls: []
+  OnDefeat:
+    m_PersistentCalls:
+      m_Calls: []
 --- !u!1 &703644327
 GameObject:
   m_ObjectHideFlags: 0
@@ -2418,6 +2642,54 @@ MonoBehaviour:
   m_IgnoreFromBuild: 0
   m_ApplyToChildren: 1
   m_AffectedAgents: ffffffff
+--- !u!1 &754596126
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 754596127}
+  - component: {fileID: 754596128}
+  m_Layer: 0
+  m_Name: WaveSpawnPoint-S
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &754596127
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 754596126}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: -45}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 72478676}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &754596128
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 754596126}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 19a9b4c5313391d4e9953210644d97eb, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: DeNelle.Village::DeNelle.Village.WaveSpawnPoint
+  _spawnId: spawn-1
+  _gateIndex: 1
+  _direction: S
+  _gatePosition: {x: 0, y: 0, z: -33}
 --- !u!1 &756493748
 GameObject:
   m_ObjectHideFlags: 0
@@ -3015,6 +3287,159 @@ MonoBehaviour:
   m_IgnoreFromBuild: 0
   m_ApplyToChildren: 1
   m_AffectedAgents: ffffffff
+--- !u!1 &881641193
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 881641194}
+  m_Layer: 0
+  m_Name: WaveEnemies
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &881641194
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 881641193}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 72478676}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!1 &919326034
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 919326035}
+  - component: {fileID: 919326040}
+  - component: {fileID: 919326039}
+  - component: {fileID: 919326038}
+  - component: {fileID: 919326037}
+  - component: {fileID: 919326036}
+  m_Layer: 0
+  m_Name: Hero (Blaise)
+  m_TagString: Player
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &919326035
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 919326034}
+  serializedVersion: 2
+  m_LocalRotation: {x: -0, y: 1, z: -0, w: -0.00000004371139}
+  m_LocalPosition: {x: 0, y: 0, z: 11}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children:
+  - {fileID: 80746881}
+  m_Father: {fileID: 72478676}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &919326036
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 919326034}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: c6bc575fd65d8324195807a90b89464b, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: DeNelle.Village::DeNelle.Village.HeroAbilityInput
+--- !u!114 &919326037
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 919326034}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 77ca57545b674e645bcb73ed7c880fb0, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: DeNelle.Village::DeNelle.Village.HeroAbilities
+  _heroClass: mage
+  _maxMana: 10
+  _manaRegenPerSecond: 0.9
+  _manaRegenMultiplier: 1
+  _heart: {fileID: 0}
+  _enemyMask:
+    serializedVersion: 2
+    m_Bits: 256
+  _castVfxPrefab: {fileID: 0}
+  _enemyHitRadius: 0.85
+--- !u!114 &919326038
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 919326034}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: c4906ad940e32934da1a5bac38ac1e35, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: DeNelle.Village::DeNelle.Village.HeroLocomotion
+  _moveSpeed: 4
+  _rotationSpeed: 12
+  _accelMetresPerSec2: 22
+  _decelMetresPerSec2: 28
+--- !u!114 &919326039
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 919326034}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 3e6116da246ef1f46b9b4e93dc94f2ab, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: DeNelle.Village::DeNelle.Village.HeroBodySwapper
+--- !u!136 &919326040
+CapsuleCollider:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 919326034}
+  m_Material: {fileID: 0}
+  m_IncludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_ExcludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_LayerOverridePriority: 0
+  m_IsTrigger: 0
+  m_ProvidesContacts: 0
+  m_Enabled: 1
+  serializedVersion: 2
+  m_Radius: 0.4
+  m_Height: 2
+  m_Direction: 1
+  m_Center: {x: 0, y: 1, z: 0}
 --- !u!1001 &925633455
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -3735,6 +4160,102 @@ Transform:
   - {fileID: 836197471}
   m_Father: {fileID: 72478676}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!1 &1143910327
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1143910328}
+  - component: {fileID: 1143910329}
+  m_Layer: 0
+  m_Name: WaveSpawnPoint-W
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &1143910328
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1143910327}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: -54, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 72478676}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &1143910329
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1143910327}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 19a9b4c5313391d4e9953210644d97eb, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: DeNelle.Village::DeNelle.Village.WaveSpawnPoint
+  _spawnId: spawn-3
+  _gateIndex: 3
+  _direction: W
+  _gatePosition: {x: -42, y: 0, z: 0}
+--- !u!1 &1165180743
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1165180744}
+  - component: {fileID: 1165180745}
+  m_Layer: 0
+  m_Name: WaveSpawnPoint-N
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &1165180744
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1165180743}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 45}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 72478676}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &1165180745
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1165180743}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 19a9b4c5313391d4e9953210644d97eb, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: DeNelle.Village::DeNelle.Village.WaveSpawnPoint
+  _spawnId: spawn-0
+  _gateIndex: 0
+  _direction: N
+  _gatePosition: {x: 0, y: 0, z: 33}
 --- !u!1 &1175231713
 GameObject:
   m_ObjectHideFlags: 0
@@ -6656,6 +7177,54 @@ Material:
     - _SpecColor: {r: 0.19999996, g: 0.19999996, b: 0.19999996, a: 1}
   m_BuildTextureStacks: []
   m_AllowLocking: 1
+--- !u!1 &2123563947
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 2123563948}
+  - component: {fileID: 2123563949}
+  m_Layer: 0
+  m_Name: WaveSpawnPoint-E
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &2123563948
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2123563947}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 54, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 72478676}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &2123563949
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2123563947}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 19a9b4c5313391d4e9953210644d97eb, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: DeNelle.Village::DeNelle.Village.WaveSpawnPoint
+  _spawnId: spawn-2
+  _gateIndex: 2
+  _direction: E
+  _gatePosition: {x: 42, y: 0, z: 0}
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0

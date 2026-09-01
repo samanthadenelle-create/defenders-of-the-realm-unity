@@ -204,11 +204,10 @@ namespace DeNelle.Village
             return new[]
             {
                 new Beat("Three waves came against Elarion. Three waves broke.", 4.6f, true),
-                new Beat("They left their plans behind in the wreck of the third -- " +
-                         "the Arcane Spire, drawn out stone by stone. It is yours now, " +
-                         "and the stores to raise the first one came with it.", 6.0f),
-                new Beat("\"Do not rest on this, Keeper. What comes next has learned from " +
-                         "what we buried. Raise the Spire now, while the hour is still ours.\"",
+                new Beat("You recovered the Castle Defense Plans. They unlock the Arcane " +
+                         "Spire, and include enough resources to build your first one.", 6.0f),
+                new Beat("\"Open Build, choose Defenses, and place the Arcane Spire now. " +
+                         "It will protect Elarion from the stronger waves ahead.\"",
                          6.4f, false, true),
             };
         }
@@ -448,6 +447,22 @@ namespace DeNelle.Village
                 new Vector2(0.78f, 0.925f), new Vector2(0.97f, 0.985f),
                 () => { _skipRequested = true; _advanceRequested = true; });
             if (skip != null) skip.gameObject.name = "CloseButton";
+
+            // Optional one-time safety net. This is a repair offer, not a reassignment:
+            // Echo repairs remain passive/count-driven, and the entitlement is persisted
+            // before the shared repair backend restores current damage for no materials.
+            var repair = ElarionUiKit.BuildObsidianButton(_canvas.transform, "LET ECHOES REPAIR - FREE",
+                ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Green,
+                new Vector2(0.25f, 0.055f), new Vector2(0.75f, 0.13f),
+                () =>
+                {
+                    int repaired = EchoRepairService.ClaimComplimentaryPlansRepair();
+                    if (_lineLabel != null)
+                        _lineLabel.text = repaired > 0
+                            ? "The Echoes restored " + repaired + " damaged structure" + (repaired == 1 ? "." : "s.")
+                            : "Your structures are already fully repaired.";
+                });
+            if (repair != null) repair.gameObject.name = "ComplimentaryEchoRepairButton";
 
             // Stamp the grace window from BUILD as well as from show: the canvas exists
             // (and blocks raycasts) before the arbiter has said yes, and an unstamped

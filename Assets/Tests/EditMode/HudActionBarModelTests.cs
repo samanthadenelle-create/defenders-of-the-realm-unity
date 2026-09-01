@@ -70,19 +70,17 @@ namespace DeNelle.Tests.EditMode
         }
 
         [Test]
-        public void talk_packs_in_when_npc_in_range_and_out_when_gone()
+        public void talk_proximity_does_not_mutate_the_locked_four_slot_dock()
         {
             var (model, src) = TownModel();
             src.Talk = true;
             model.Tick();
-            CollectionAssert.Contains(Ids(model), ActionBarButtonId.Talk, "Talk must appear when an NPC is in range");
-            Assert.AreEqual(1, System.Array.IndexOf(Ids(model), ActionBarButtonId.Talk),
-                "Talk keeps its canonical slot right after Build (ordered array)");
+            CollectionAssert.DoesNotContain(Ids(model), ActionBarButtonId.Talk,
+                "Talk is contextual world interaction, not a fifth persistent dock face");
 
             src.Talk = false;
             model.Tick();
-            CollectionAssert.DoesNotContain(Ids(model), ActionBarButtonId.Talk,
-                "Talk must repack OUT (hide, not dim) when the NPC leaves range");
+            Assert.AreEqual(4, model.Active.Count);
         }
 
         // ── Raids: hide when not capable; dim (visible) when capable but army not full ──
@@ -105,7 +103,7 @@ namespace DeNelle.Tests.EditMode
         // ── WO-1008: the two dim reasons are DISTINCT, and both speak in words ──
 
         [Test]
-        public void barracks_with_zero_troops_dims_with_a_no_troops_reason_not_a_hidden_face()
+        public void barracks_with_zero_troops_does_not_create_a_duplicate_raids_face()
         {
             var (model, src) = TownModel();
             src.Capable = true;        // barracks built + flag on
@@ -113,54 +111,41 @@ namespace DeNelle.Tests.EditMode
             src.Deployable = 0; src.Queued = 0; src.Cap = 5;
             model.Tick();
 
-            CollectionAssert.Contains(Ids(model), ActionBarButtonId.Raids,
-                "a built Barracks with ZERO troops must show a greyed Raids face, never hide it " +
-                "(owner 2026-08-16: 'I do not see a way to start a raid')");
-            Assert.IsTrue(model.RaidsDimmed, "zero troops greys the face");
-            Assert.AreEqual(HudActionBarModel.RaidDimReason.NoTroops, model.RaidsDimReason);
-            Assert.AreNotEqual(HudActionBarModel.RaidsBaseLabel, model.RaidsFaceLabel,
-                "the greyed face must differ from the live face in TEXT, not hue alone " +
-                "(the owner is red/green colourblind)");
-            StringAssert.Contains("Barracks", model.RaidsDimMessage,
-                "the no-troops reason must name the fix");
+            CollectionAssert.DoesNotContain(Ids(model), ActionBarButtonId.Raids,
+                "WO-1286: Journey is the stable Raids door; readiness cannot add a duplicate bar face");
+            Assert.IsFalse(model.RaidsDimmed);
+            Assert.AreEqual(HudActionBarModel.RaidDimReason.None, model.RaidsDimReason);
         }
 
         [Test]
-        public void the_two_dim_reasons_do_not_share_copy()
+        public void raid_army_changes_do_not_change_the_primary_destination_set()
         {
             var (model, src) = TownModel();
             src.Capable = true; src.ArmyReady = false;
             src.Deployable = 0; src.Queued = 0; src.Cap = 5;
             model.Tick();
-            string noTroopsLabel = model.RaidsFaceLabel;
-            string noTroopsMsg = model.RaidsDimMessage;
+            var before = Ids(model);
 
             src.Deployable = 3;
             model.Tick();
-            Assert.AreEqual(HudActionBarModel.RaidDimReason.ArmyNotFull, model.RaidsDimReason,
-                "some troops but under cap is the WO-820 full-army gate, a different reason");
-            Assert.AreNotEqual(noTroopsLabel, model.RaidsFaceLabel,
-                "a single generic grey tells the player nothing - the face text must differ");
-            Assert.AreNotEqual(noTroopsMsg, model.RaidsDimMessage,
-                "the two dim reasons must not share their message");
+            CollectionAssert.AreEqual(before, Ids(model));
+            CollectionAssert.DoesNotContain(Ids(model), ActionBarButtonId.Raids);
         }
 
         [Test]
-        public void raids_present_and_dimmed_when_capable_but_army_not_full()
+        public void raid_capability_does_not_pack_a_second_navigation_face()
         {
             var (model, src) = TownModel();
             src.Capable = true;
             src.ArmyReady = false;
             model.Tick();
-            CollectionAssert.Contains(Ids(model), ActionBarButtonId.Raids,
-                "capable (building + >=1 troop) => Raids visible even when the army is not full");
-            Assert.IsTrue(model.RaidsDimmed,
-                "WO-820 semantics preserved: capable but not-full army DIMS the visible face");
+            CollectionAssert.DoesNotContain(Ids(model), ActionBarButtonId.Raids);
+            Assert.IsFalse(model.RaidsDimmed);
 
             src.ArmyReady = true;
             model.Tick();
             Assert.IsFalse(model.RaidsDimmed, "full army restores the face");
-            CollectionAssert.Contains(Ids(model), ActionBarButtonId.Raids);
+            CollectionAssert.DoesNotContain(Ids(model), ActionBarButtonId.Raids);
         }
 
         // ── Map: OFF THE BAR ENTIRELY (WO-911 ruling Q10+Q13) ────────────────
@@ -204,7 +189,7 @@ namespace DeNelle.Tests.EditMode
         }
 
         [Test]
-        public void all_signals_on_yields_the_full_six_in_canonical_order()
+        public void all_signals_on_yields_the_four_locked_destinations_in_canonical_order()
         {
             var (model, src) = TownModel();
             src.Talk = true; src.Capable = true; src.Onboarded = true; src.Focused = true;
@@ -212,11 +197,11 @@ namespace DeNelle.Tests.EditMode
             Assert.AreEqual(
                 new[]
                 {
-                    ActionBarButtonId.Build, ActionBarButtonId.Talk, ActionBarButtonId.Bag,
-                    ActionBarButtonId.Raids, ActionBarButtonId.Quests, ActionBarButtonId.Upgrade,
+                    ActionBarButtonId.Build, ActionBarButtonId.Bag,
+                    ActionBarButtonId.Quests, ActionBarButtonId.Upgrade,
                 },
                 Ids(model),
-                "the 6-face MAX renders in enum order regardless of activation sequence (WO-911)");
+                "adaptive HUD: Build/Hero/Journey/Manage render in stable order");
             Assert.LessOrEqual(model.Active.Count, HudActionBarModel.MaxVisibleFaces,
                 "the View sizes a bar slot from MaxVisibleFaces; more faces than that would overflow the zone");
         }
@@ -224,17 +209,18 @@ namespace DeNelle.Tests.EditMode
         // ── posture layer: explore subset; non-calm postures drop the bar ────
 
         [Test]
-        public void explore_shows_only_bag_plus_talk_when_available()
+        public void explore_keeps_the_same_four_persistent_destinations()
         {
             var src = new FakeSource { Onboarded = true, Capable = true, Focused = true };
             var model = new HudActionBarModel(src);
             model.SetPosture(HudActionBarModel.PostureExplore);
-            Assert.AreEqual(new[] { ActionBarButtonId.Bag }, Ids(model),
-                "explore ignores town-only faces even with their signals on (occupancy row parity)");
+            Assert.AreEqual(new[] { ActionBarButtonId.Build, ActionBarButtonId.Bag,
+                ActionBarButtonId.Quests, ActionBarButtonId.Upgrade }, Ids(model));
 
             src.Talk = true;
             model.Tick();
-            Assert.AreEqual(new[] { ActionBarButtonId.Talk, ActionBarButtonId.Bag }, Ids(model));
+            Assert.AreEqual(new[] { ActionBarButtonId.Build, ActionBarButtonId.Bag,
+                ActionBarButtonId.Quests, ActionBarButtonId.Upgrade }, Ids(model));
         }
 
         [Test]
@@ -261,8 +247,7 @@ namespace DeNelle.Tests.EditMode
             model.Tick();
             Assert.AreEqual(0, events, "no input change => no event (the View must never relayout per-frame)");
 
-            src.Talk = true;
-            model.Tick();
+            model.SetPosture("build");
             Assert.AreEqual(1, events, "one set change => exactly one event");
 
             model.Tick();
@@ -270,7 +255,7 @@ namespace DeNelle.Tests.EditMode
         }
 
         [Test]
-        public void raids_dim_event_is_edge_triggered_and_separate_from_the_set()
+        public void raid_readiness_changes_are_silent_when_the_duplicate_face_is_retired()
         {
             var (model, src) = TownModel();
             src.Capable = true;
@@ -284,10 +269,10 @@ namespace DeNelle.Tests.EditMode
             src.ArmyReady = false;
             model.Tick();
             Assert.AreEqual(0, setEvents, "a dim flip alone must not repack the bar");
-            Assert.AreEqual(1, dimEvents);
+            Assert.AreEqual(0, dimEvents);
 
             model.Tick();
-            Assert.AreEqual(1, dimEvents, "dim event is edge-triggered");
+            Assert.AreEqual(0, dimEvents, "a dormant face publishes no presentation event");
         }
     }
 }

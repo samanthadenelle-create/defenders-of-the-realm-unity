@@ -60,9 +60,15 @@ namespace DeNelle.Onboarding
         /// </summary>
         public async Task<AuthOutcome> ConnectWalletAsync()
         {
+#if GOOGLE_PLAY
+            FlowTrace.Step("Auth", "Google sign-in requested from the Play login surface.");
+#else
             FlowTrace.Step("Auth", "wallet connect requested from the login surface.");
+#endif
             AuthOutcome outcome = await LoginWalletBridge.ConnectAsync();
+#if !GOOGLE_PLAY
             if (outcome.Success && !string.IsNullOrEmpty(outcome.UserId)) BindPlayer(outcome.UserId);
+#endif
             return outcome;
         }
 

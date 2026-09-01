@@ -10,6 +10,17 @@ using DeNelle.Core.UI;
 
 namespace DeNelle.Core.Platform
 {
+#if GOOGLE_PLAY
+    /// <summary>Non-crypto Play-channel compatibility seam. The Pi runtime, UI,
+    /// endpoints, and labels are not compiled into a Google Play player.</summary>
+    public static class PiSignInController
+    {
+        public static string SignedInUid => null;
+        public static string SignedInUsername => null;
+        public static bool IsSignedIn => false;
+        public static event Action<string, string> OnSignedIn { add { } remove { } }
+    }
+#else
     /// <summary>
     /// Pi Network sign-in. Inside Pi Browser it AUTO-triggers on load and also shows a
     /// manual "Sign in with Pi" button. Flow: Pi.init (awaited) → Pi.authenticate(['username'])
@@ -413,4 +424,5 @@ namespace DeNelle.Core.Platform
             if (_button != null) _button.interactable = interactable;
         }
     }
+#endif
 }

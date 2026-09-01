@@ -41,7 +41,11 @@ namespace DeNelle.Village
         {
             if (_paneRoot == null) return;
             for (int i = _paneRoot.transform.childCount - 1; i >= 0; i--)
-                Destroy(_paneRoot.transform.GetChild(i).gameObject);
+            {
+                var child = _paneRoot.transform.GetChild(i);
+                child.SetParent(null, false);
+                Destroy(child.gameObject);
+            }
             if (_vm == null) return;
 
             // The pane sits in its own carved well so it reads as a separate surface from the
@@ -140,7 +144,7 @@ namespace DeNelle.Village
             ElarionUiKit.FitSingleLine(title, 0f, ElarionUi.FontBody);
 
             var guide = AddLabel(host, InventoryStrings.Get(InventoryStrings.KeyGearPaneGuide),
-                0.58f, 0.80f, Ink, ElarionUi.FontMicro,
+                0.56f, 0.78f, Ink, ElarionUi.FontMicro,
                 TMPro.TextAlignmentOptions.TopLeft, 0.08f, 0.92f);
             guide.raycastTarget = false;
 
@@ -154,16 +158,12 @@ namespace DeNelle.Village
             string gapTitle = vacant.Count == 0
                 ? InventoryStrings.Get(InventoryStrings.KeyGearPaneComplete)
                 : InventoryStrings.Format(InventoryStrings.KeyGearPaneOpenSlots, vacant.Count);
-            var gaps = AddLabel(host, gapTitle, 0.42f, 0.53f, InkMicro, ElarionUi.FontMicro,
+            var gaps = AddLabel(host, gapTitle, 0.35f, 0.49f, InkMicro, ElarionUi.FontMicro,
                 TMPro.TextAlignmentOptions.MidlineLeft, 0.08f, 0.92f, spacing: 2f, bold: true);
             gaps.raycastTarget = false;
 
-            if (vacant.Count > 0)
-            {
-                var names = AddLabel(host, string.Join("\n", vacant), 0.12f, 0.40f, InkDim,
-                    ElarionUi.FontLabel, TMPro.TextAlignmentOptions.TopLeft, 0.08f, 0.92f);
-                names.raycastTarget = false;
-            }
+            // The count is actionable; repeating five slot names already visible in the stage
+            // wastes the narrow pane and previously overflowed into the wallet strip.
 
             FlowTrace.Step("Inventory", $"Gear guidance pane: no duplicated loadout rows; vacancies={vacant.Count}; worn rows route to item tabs.");
         }
@@ -173,6 +173,12 @@ namespace DeNelle.Village
         {
             // Name. A raw itemId ("BoneFragment" / "bone_fragment") must never reach the player.
             string displayName = ElarionUiKit.SpacedDisplayName(d.Name ?? "");
+            bool isConsumable = d.CanUse && !d.CanEquip;
+            if (isConsumable)
+            {
+                BuildConsumableSelection(host, d, displayName);
+                return;
+            }
             var nmLbl = AddLabel(host, displayName, 0.88f, 0.98f, GiltInk, ElarionUi.FontBody,
                      TMPro.TextAlignmentOptions.MidlineLeft, 0.06f, 0.94f, bold: true);
             nmLbl.raycastTarget = false;
@@ -180,6 +186,10 @@ namespace DeNelle.Village
 
             bool isWorn = SelectedIsEquipped();
             bool comparisonContext = CanOfferComparisonGuidance(isWorn);
+
+            var descLbl = AddLabel(host, d.Description ?? "", 0.78f, 0.87f, InkDim,
+                ElarionUi.FontMicro, TMPro.TextAlignmentOptions.TopLeft, 0.06f, 0.94f);
+            descLbl.raycastTarget = false;
             if (isWorn)
             {
                 // The WORD carries the state (D5), plus a plate — never a green tint.
@@ -221,14 +231,14 @@ namespace DeNelle.Village
             ElarionUiKit.Rule(host, 0.685f, 0.06f, 0.94f);
 
             // "This" — the candidate's own stats, which the model DOES expose.
-            var stLbl = AddLabel(host, d.Stats ?? "", 0.44f, 0.67f, Ink, ElarionUi.FontMicro,
+            var stLbl = AddLabel(host, d.Stats ?? "", isConsumable ? 0.60f : 0.64f, isConsumable ? 0.76f : 0.685f, Ink, ElarionUi.FontMicro,
                      comparisonContext ? TMPro.TextAlignmentOptions.TopRight : TMPro.TextAlignmentOptions.TopLeft,
                      comparisonContext ? 0.52f : 0.06f, 0.94f);
             stLbl.raycastTarget = false;
 
             // "Worn" — stated as absent, never faked. See the file header.
             var wornLbl = AddLabel(host, InventoryStrings.Get(InventoryStrings.KeyPaneNothingToCompare),
-                     0.44f, 0.67f, InkDim, ElarionUi.FontMicro,
+                     0.64f, 0.685f, InkDim, ElarionUi.FontMicro,
                      TMPro.TextAlignmentOptions.TopLeft, 0.06f, 0.48f);
             wornLbl.raycastTarget = false;
             wornLbl.gameObject.SetActive(comparisonContext);
@@ -239,17 +249,16 @@ namespace DeNelle.Village
             string verdict = isWorn
                 ? InventoryStrings.Get(InventoryStrings.KeyVerdictWearing)
                 : (comparisonContext ? InventoryStrings.Get(InventoryStrings.KeyNextCompareHint) : "");
-            var vLbl = AddLabel(host, verdict, 0.30f, 0.42f, InkDim, ElarionUi.FontMicro,
+            var vLbl = AddLabel(host, verdict, 0.53f, 0.62f, InkDim, ElarionUi.FontMicro,
                      TMPro.TextAlignmentOptions.TopLeft, 0.06f, 0.94f);
             vLbl.raycastTarget = false;
 
             // ── The action, under the right thumb (D6). A crafting MATERIAL is neither usable nor
             //    equippable; it used to get a live "Use" button that could only ever fail, so the
             //    pane now states what the row IS instead of offering a verb it does not have.
-            bool isConsumable = d.CanUse && !d.CanEquip;
             if (!d.CanUse && !d.CanEquip)
             {
-                var noteLbl = AddLabel(host, ElarionUiKit.SpacedDisplayName(d.Rarity ?? ""), 0.06f, 0.18f,
+                var noteLbl = AddLabel(host, ElarionUiKit.SpacedDisplayName(d.Rarity ?? ""), 0.06f, 0.40f,
                          InkDim, ElarionUi.FontMicro, TMPro.TextAlignmentOptions.Center, 0.06f, 0.94f);
                 noteLbl.raycastTarget = false;
                 return;
@@ -262,7 +271,7 @@ namespace DeNelle.Village
                 // Already equipped is a status, not a disabled CTA. Device testing showed the
                 // button-shaped Worn control looked tappable and made its correct no-op feel broken.
                 var state = AddLabel(host, InventoryStrings.Get(InventoryStrings.KeyActionWorn),
-                    0.06f, 0.20f, GiltInk, ElarionUi.FontLabel,
+                    0.06f, 0.44f, GiltInk, ElarionUi.FontLabel,
                     TMPro.TextAlignmentOptions.Center, 0.06f, 0.94f, bold: true);
                 state.raycastTarget = false;
             }
@@ -270,7 +279,7 @@ namespace DeNelle.Village
             {
                 var cta = ElarionUiKit.ButtonPack(host, InventoryStrings.Get(ctaKey),
                     ElarionUiKit.ButtonKind.Gold,
-                    new Vector2(0.06f, 0.06f), new Vector2(0.94f, 0.20f),
+                    new Vector2(0.06f, 0.04f), new Vector2(0.94f, 0.44f),
                     BuildEquipAction(isConsumable));
                 if (cta != null) ElarionUiKit.ClampMinTouch(cta);
             }
@@ -283,11 +292,35 @@ namespace DeNelle.Village
                 var rep = AddLabel(host,
                          InventoryStrings.Format(InventoryStrings.KeyNextReplaces,
                                                  ElarionUiKit.SpacedDisplayName(replaced)),
-                         0.21f, 0.27f, InkDim, ElarionUi.FontMicro,
+                         0.45f, 0.52f, InkDim, ElarionUi.FontMicro,
                          TMPro.TextAlignmentOptions.Center, 0.06f, 0.94f);
                 rep.raycastTarget = false;
                 ElarionUiKit.FitSingleLine(rep, 0f, ElarionUi.FontMicro);
             }
+        }
+
+        private void BuildConsumableSelection(Transform host, InventoryDetail d, string displayName)
+        {
+            string heading = displayName + (d.StackCount > 1 ? "   x" + d.StackCount : "");
+            var title = AddLabel(host, heading, 0.82f, 0.96f, GiltInk, ElarionUi.FontBody,
+                TMPro.TextAlignmentOptions.MidlineLeft, 0.06f, 0.94f, bold: true);
+            title.raycastTarget = false;
+            ElarionUiKit.FitSingleLine(title, 20f, ElarionUi.FontBody);
+
+            var description = AddLabel(host, d.Description ?? "", 0.72f, 0.81f, InkDim,
+                ElarionUi.FontMicro, TMPro.TextAlignmentOptions.TopLeft, 0.06f, 0.94f);
+            description.raycastTarget = false;
+
+            ElarionUiKit.Rule(host, 0.69f, 0.06f, 0.94f);
+            var effect = AddLabel(host, d.Stats ?? "", 0.48f, 0.67f, Ink,
+                ElarionUi.FontMicro, TMPro.TextAlignmentOptions.TopLeft, 0.06f, 0.94f);
+            effect.raycastTarget = false;
+
+            var cta = ElarionUiKit.ButtonPack(host,
+                InventoryStrings.Get(InventoryStrings.KeyActionUse), ElarionUiKit.ButtonKind.Gold,
+                new Vector2(0.06f, 0.04f), new Vector2(0.94f, 0.44f),
+                BuildEquipAction(isConsumable: true));
+            if (cta != null) ElarionUiKit.ClampMinTouch(cta);
         }
 
         private bool CanOfferComparisonGuidance(bool isWorn)

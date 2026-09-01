@@ -78,8 +78,9 @@ namespace DeNelle.Editor
             var mappedClasses = new System.Collections.Generic.HashSet<string>(
                 System.StringComparer.OrdinalIgnoreCase)
             {
-                "Guardian", "Paladin", "Hunter", "Barbarian",
-                "Deathknight", "Electromancer", "Pyromancer", "Arcanist",
+                "Guardian", "Paladin", "Priest", "Hunter", "Ranger", "Rogue",
+                "Barbarian", "Berserker", "Deathknight", "Electromancer",
+                "Pyromancer", "Cryomancer", "Arcanist", "Cultist",
             };
             string classesRoot = PackRoot + "/Classes";
             if (Directory.Exists(classesRoot))
@@ -117,6 +118,20 @@ namespace DeNelle.Editor
                     Mirror(src, ResRoot + "/" + RoleClassSlot, maxSize: 512, border: 40, ref copied, ref failed);
             }
             else Debug.LogWarning("[BlinkIconImporter] missing " + slotsRoot + " — skipped slot frames.");
+
+            // ── 4) Owner-approved Elarion troop portraits ──
+            // These are committed runtime inputs rather than part of the Blink pack, but this
+            // importer is the one batch-safe UI-sprite normalization pass. Keep their canonical
+            // troop IDs as filenames so every troop surface asks the shared catalog by data ID.
+            string troopRoot = ResRoot + "/troop";
+            if (Directory.Exists(troopRoot))
+            {
+                foreach (string src in Directory.GetFiles(troopRoot, "troop-*.png"))
+                {
+                    ForceSpriteImport(src.Replace('\\', '/'), maxSize: 256, border: 0);
+                }
+            }
+            else Debug.LogWarning("[BlinkIconImporter] missing " + troopRoot + " — skipped troop portraits.");
 
             AssetDatabase.Refresh();
             Debug.Log("[BlinkIconImporter] done — mirrored " + copied + " sprite(s) into " + ResRoot +

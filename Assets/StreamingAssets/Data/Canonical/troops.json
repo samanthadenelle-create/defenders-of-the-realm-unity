@@ -21,7 +21,7 @@
       "buildSeconds": 45,
       "unlockBarracksTier": 1,
       "shortDescription": "Front-line melee bruiser. Day-one workhorse.",
-      "iconId": "icon_sword",
+      "iconId": "troop-footman",
       "animator": "Knight"
     },
     {
@@ -43,7 +43,7 @@
       "buildSeconds": 60,
       "unlockBarracksTier": 1,
       "shortDescription": "Back-line ranged DPS. Fragile but hits hard.",
-      "iconId": "icon_combat",
+      "iconId": "troop-archer",
       "animator": "Ranger"
     },
     {
@@ -65,7 +65,7 @@
       "buildSeconds": 120,
       "unlockBarracksTier": 2,
       "shortDescription": "Reach melee. Anti-clump front fighter.",
-      "iconId": "icon_sword",
+      "iconId": "troop-spearman",
       "animator": "Knight"
     },
     {
@@ -86,7 +86,7 @@
       "buildSeconds": 240,
       "unlockBarracksTier": 3,
       "shortDescription": "Squad healer. Sustains wounded allies but needs a tank screen.",
-      "iconId": "icon_heal",
+      "iconId": "troop-field-cleric",
       "animator": "Cleric"
     },
     {
@@ -109,7 +109,7 @@
       "buildSeconds": 180,
       "unlockBarracksTier": 3,
       "shortDescription": "Heavy tank. Holds the choke and soaks damage.",
-      "iconId": "icon_shield",
+      "iconId": "troop-shieldguard",
       "animator": "Knight"
     },
     {
@@ -131,7 +131,7 @@
       "buildSeconds": 270,
       "unlockBarracksTier": 4,
       "shortDescription": "Fast flanker. Runs down towers and stragglers.",
-      "iconId": "icon_compass",
+      "iconId": "troop-outrider",
       "animator": "Knight"
     },
     {
@@ -155,7 +155,7 @@
       "buildSeconds": 600,
       "unlockBarracksTier": 4,
       "shortDescription": "Standoff siege. Peels towers from range. One owned. Fragile and slow - escort it.",
-      "iconId": "icon_combat"
+      "iconId": "troop-catapult"
     },
     {
       "id": "troop-battlemage",
@@ -176,7 +176,7 @@
       "buildSeconds": 360,
       "unlockBarracksTier": 5,
       "shortDescription": "High-damage ranged caster. Very fragile.",
-      "iconId": "icon_energy_sword",
+      "iconId": "troop-battlemage",
       "animator": "Mage"
     },
     {
@@ -199,7 +199,7 @@
       "buildSeconds": 600,
       "unlockBarracksTier": 6,
       "shortDescription": "Elite flex unit of the Legion of Elarion. Expensive.",
-      "iconId": "icon_tree",
+      "iconId": "troop-echo-legionnaire",
       "animator": "Knight"
     }
   ]

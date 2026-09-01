@@ -128,7 +128,9 @@ namespace DeNelle.Core.UI
         {
             if (_instance != null) return _instance;
             var go = new GameObject("TutorialSkip");
-            DontDestroyOnLoad(go);
+            // Runtime persistence only. Edit-mode screenshot/evidence builders create the
+            // exact same view but Unity forbids DontDestroyOnLoad outside play mode.
+            if (Application.isPlaying) DontDestroyOnLoad(go);
             _instance = go.AddComponent<TutorialSkipUi>();
             _instance.Build();
             return _instance;
@@ -173,6 +175,51 @@ namespace DeNelle.Core.UI
                     "SkipControl BUILD FAILED - ElarionUiKit.BuildObsidianButton returned no button; " +
                     "the FTUE has no skip affordance this session");
                 return;
+            }
+            // The legacy gray Blink face disappears against the world and reads as raw
+            // floating text. Preserve its quiet semantics but use the coherent black-iron /
+            // antique-gold empty state art, with runtime text layered separately.
+            var medievalFace = Resources.Load<Sprite>("UI/ElarionMedieval/buttons/button-normal-empty");
+            if (medievalFace != null)
+            {
+                // Imported Blink button prefabs may wrap the actual Button in additional
+                // silver decorative Images. Suppress all inherited shells and install one
+                // deterministic sibling face owned by this control.
+                var inherited = _mount.GetComponentsInChildren<Image>(true);
+                for (int i = 0; i < inherited.Length; i++)
+                    if (inherited[i] != null) inherited[i].enabled = false;
+                var faceGo = new GameObject("SkipMedievalFace", typeof(RectTransform),
+                    typeof(CanvasRenderer), typeof(Image));
+                faceGo.transform.SetParent(_mount, false);
+                faceGo.transform.SetAsFirstSibling();
+                var faceRt = (RectTransform)faceGo.transform;
+                faceRt.anchorMin = Vector2.zero;
+                faceRt.anchorMax = Vector2.one;
+                faceRt.offsetMin = faceRt.offsetMax = Vector2.zero;
+                var face = faceGo.GetComponent<Image>();
+                face.sprite = medievalFace;
+                face.type = Image.Type.Simple;
+                face.color = Color.white;
+                face.raycastTarget = false;
+                _button.targetGraphic = face;
+                _button.transition = Selectable.Transition.ColorTint;
+                _button.colors = new ColorBlock
+                {
+                    normalColor = Color.white,
+                    highlightedColor = new Color(1f, .94f, .78f, 1f),
+                    pressedColor = new Color(.82f, .67f, .40f, 1f),
+                    selectedColor = Color.white,
+                    disabledColor = new Color(.55f, .55f, .55f, .75f),
+                    colorMultiplier = 1f,
+                    fadeDuration = .08f
+                };
+            }
+            var label = _button.GetComponentInChildren<TMPro.TMP_Text>();
+            if (label != null)
+            {
+                label.color = ElarionUi.Parchment;
+                label.fontStyle |= TMPro.FontStyles.Bold;
+                ElarionUiKit.FitSingleLine(label, ElarionUiKit.FontFloor, ElarionUi.FontLabel);
             }
             _button.gameObject.name = "SkipTutorialButton";
             Diagnostics.FlowTrace.Step("Tutorial",

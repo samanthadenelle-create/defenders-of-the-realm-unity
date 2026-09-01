@@ -43,7 +43,7 @@ namespace DeNelle.Tests.EditMode
             id = "raider_camp_small",
             displayName = "Raider Camp",
             difficulty = "Regular",
-            sceneName = "Raid_RaiderCamp",
+            sceneName = "RaidBase_raider_camp_small",
             recommendedClearTime = 90f,
             twoStarTime = 70f,
         };

@@ -244,9 +244,9 @@ namespace DeNelle.Editor.Regression
             if (topPad < 0f || headerPx < 0f || gap < 0f || bottomBandPx < 0f || bottomMarginPx < 0f ||
                 minBodyPx < 0f || optionRowGapPx < 0f || optionsPadPx < 0f || optionsGapPx < 0f) return;
 
-            // The authored panel band (BuildObsidianPanel y 0.20..0.62) and the HUD-safe rails
-            // (under TargetInfo 0.655, above the action bar 0.155) as DialogueView derives them.
-            const float anchorY0 = 0.20f, anchorY1 = 0.62f;
+            // The regular decision-dialogue band. It deliberately occupies the focus layer over
+            // HUD rails; the compact helper presentation retains the old HUD-safe footprint.
+            const float anchorY0 = 0.10f, anchorY1 = 0.90f;
             const float safeTop = 0.655f, safeBottom = 0.155f;
             float cyFrac = (anchorY0 + anchorY1) * 0.5f;
             float halfSafe = Mathf.Min(safeTop - cyFrac, cyFrac - safeBottom);

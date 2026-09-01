@@ -62,7 +62,8 @@ namespace DeNelle.Tests.EditMode
             // display name). WO-830 (2026-08-02): the roster readout now LEADS WITH THE ASSIGNED
             // RESOURCE ("<Resource> - Lv N - +X% ..."); with no GameState the starter default is the
             // echo's affinity resource at Lv 1 — index 0 = Aldwin -> Food.
-            Assert.That(card.StatusText, Does.StartWith("Food - Lv 1"));
+            Assert.That(card.StatusText, Does.StartWith("Stone - "),
+                "the former internal Food resource is player-facing Stone");
             Assert.That(card.StatusText, Does.Not.Contain("\n"),
                 "the Element + newline prefix is gone — status is a single readout line.");
         }

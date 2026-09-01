@@ -43,7 +43,7 @@ namespace DeNelle.Editor.Regression
 
                 string browser = File.ReadAllText("Assets/_Modules/Village/BuildMode/BuildCollectionBrowser.cs");
                 if (!browser.Contains("BuildFirstUseGuide.CategorySelected();") ||
-                    !browser.Contains("BuildFirstUseGuide.ItemSelected();"))
+                    !browser.Contains("Done(BuildFirstUseGuide.ItemSelected"))
                     failures.Add("collection browser lost category/item action emitters");
                 if (BuildFirstUseGuide.Copy.Contains("...") || BuildFirstUseGuide.Copy.Contains("…"))
                     failures.Add("guide copy contains forbidden ellipsis");

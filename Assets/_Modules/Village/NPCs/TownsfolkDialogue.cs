@@ -264,6 +264,31 @@ namespace DeNelle.Village
             "Look UP, Keeper! Loose everything skyward — the Devourer is upon us!",
         };
 
+        // Early-game, diegetic UI help. These use the exact labels on the mobile surfaces so a
+        // villager never teaches a path the player cannot follow. Kept separate from flavour:
+        // AmbientNPC deliberately offers them only from a subset of townsfolk before wave 3.
+        private static readonly string[] _buildHelp =
+        {
+            "Need a tower? Tap Build, choose Defense, then select a tower card.",
+            "To improve a tower, open Manage, choose Defense, then tap Upgrade beside that tower.",
+            "Tower cards choose what to place. Manage is where you upgrade towers already in town.",
+        };
+
+        /// <summary>True for a sparse, deterministic subset of early-game approaches.</summary>
+        public static bool ShouldOfferBuildHelp(int currentWaveId, Archetype archetype, int approachIndex)
+        {
+            if (currentWaveId >= 3) return false;
+            int slot = ((int)archetype + Math.Max(0, approachIndex)) % 4;
+            return slot == 0;
+        }
+
+        /// <summary>Returns an exact-label Build/Manage helper; modulo-safe and never null.</summary>
+        public static string BuildHelpFor(Archetype archetype, int approachIndex)
+        {
+            int i = ((int)archetype + Math.Max(0, approachIndex)) % _buildHelp.Length;
+            return _buildHelp[i];
+        }
+
         /// <summary>
         /// Maps the current wave to a foreshadow tier from how close the dragon
         /// (apex) wave is: 2+ waves out = Far, then Mid, Near, and the dragon wave

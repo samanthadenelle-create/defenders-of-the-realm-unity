@@ -754,6 +754,9 @@ namespace DeNelle.Editor.Regression
                     if (arm < 0 || code.IndexOf("TutorialBandRepelled", StringComparison.Ordinal) < 0)
                         failures.Add("[arc-shape] TutorialFlow does not key StartScriptedTownWave/TickScriptedWave on " +
                                      "TutorialSignals.TutorialBandRepelled - the ENEMIES beat's band never spawns or never completes");
+                    if (!code.Contains("while (_townWaveArmed && CoreDialogue.DialogueService.IsRunning)"))
+                        failures.Add("[arc-shape] the scripted tutorial wave no longer waits for its intro dialogue to close - " +
+                                     "combat can begin while Modal posture suppresses the entire battle HUD");
                 }
             }
 

@@ -245,6 +245,16 @@ namespace DeNelle.Village.Talents
             int rows = Mathf.Clamp(Mathf.CeilToInt(n / (float)cols), 2, 4);
             int visible = Mathf.Min(n, cols * rows);
 
+            if (n <= 0)
+            {
+                var empty = ElarionUiKit.Label(_gridRoot.transform,
+                    "No unlocked skills yet. Unlock SKILL nodes in the tree.",
+                    0.42f, 0.58f, ElarionUi.Parchment, ElarionUi.FontLabel,
+                    TMPro.TextAlignmentOptions.Center, 0.05f, 0.95f, bold: true);
+                empty.raycastTarget = false;
+                return;
+            }
+
             var handles = ElarionUiKit.BuildSparseSlotGrid(_gridRoot.transform, cols, rows,
                 visible,
                 rarityOf: i => 0,
@@ -256,16 +266,6 @@ namespace DeNelle.Village.Talents
                         _vm.SelectSkill(list[i].AbilityId);
                 },
                 gapFrac: 0.02f);
-
-            if (n <= 0)
-            {
-                var empty = ElarionUiKit.Label(_gridRoot.transform,
-                    "No unlocked skills yet. Unlock SKILL nodes in the tree.",
-                    0.42f, 0.58f, ElarionUi.Parchment, ElarionUi.FontLabel,
-                    TMPro.TextAlignmentOptions.Center, 0.05f, 0.95f, bold: true);
-                empty.raycastTarget = false;
-                return;
-            }
 
             for (int i = 0; i < visible && i < handles.Length; i++)
                 DressChoice(handles[i], choices[i]);

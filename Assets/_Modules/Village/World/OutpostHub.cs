@@ -25,6 +25,7 @@ using UnityEngine;
 using DeNelle.Core.World;
 using DeNelle.Core.Combat;
 using DeNelle.Village; // for EconomyService + ResourceCost
+using DeNelle.Core.UI;
 
 namespace DeNelle.Village.World
 {
@@ -164,7 +165,10 @@ namespace DeNelle.Village.World
             bgRect.anchorMin = Vector2.zero;
             bgRect.anchorMax = Vector2.one;
             bgRect.sizeDelta = Vector2.zero;
-            bg.GetComponent<UnityEngine.UI.Image>().color = new Color(0.1f, 0.1f, 0.12f, 0.85f);
+            var bgImage = bg.GetComponent<UnityEngine.UI.Image>();
+            bgImage.sprite = Resources.Load<Sprite>("UI/ElarionMedieval/frames/content-panel");
+            bgImage.type = UnityEngine.UI.Image.Type.Sliced;
+            bgImage.color = Color.white;
 
             // Title
             CreateText(_recruitUI.transform, "Recruit Defenders", new Vector2(0f, 0.65f), 18, Color.white);
@@ -201,6 +205,7 @@ namespace DeNelle.Village.World
             tmp.color = Color.white;
             var tRect = txtGO.GetComponent<RectTransform>();
             tRect.anchorMin = Vector2.zero; tRect.anchorMax = Vector2.one; tRect.sizeDelta = Vector2.zero;
+            MedievalUiSkin.ApplyButton(btn, primary: role == DefenderRole.DPS);
         }
 
         private void CreateText(Transform parent, string text, Vector2 anchored, int size, Color c)

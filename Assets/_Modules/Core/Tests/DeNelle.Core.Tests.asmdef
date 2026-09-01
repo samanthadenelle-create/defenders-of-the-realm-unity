@@ -4,6 +4,7 @@
     "references": [
         "DeNelle.Core",
         "DeNelle.Data",
+        "UniTask",
         "UnityEngine.TestRunner",
         "UnityEditor.TestRunner"
     ],

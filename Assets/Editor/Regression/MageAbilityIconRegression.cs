@@ -55,18 +55,7 @@ namespace DeNelle.Editor.Regression
         /// authored; the suite tells you when that has happened.
         /// </summary>
         private static readonly Dictionary<string, string> KnownGaps =
-            new Dictionary<string, string>(System.StringComparer.OrdinalIgnoreCase)
-        {
-            { "mage.drain",     "effect 'drainshot' maps to nothing, so it paints the icon_combat default. " +
-                                "No mirrored icon literally depicts life-drain - every candidate is an " +
-                                "interpretation, so the pick is the owner's." },
-            { "mage.manaweave", "effect 'manaweave' maps to nothing, so it paints the icon_combat default. " +
-                                "Arcanist6 is the owner's existing Manaweave TALENT tag but is already bound " +
-                                "to arcane-bolt here; sharing it is a call only she should make." },
-            { "mage.thunder",   "effect 'strike' -> abilities/attack_sword. Electromancer9 (knight.thunderbolt) " +
-                                "is the obvious look-alike and abilities.json rules VERBATIM that reusing that " +
-                                "ability's keys 'is exactly the creative pick the rule forbids'." },
-        };
+            new Dictionary<string, string>(System.StringComparer.OrdinalIgnoreCase);
 
         public static bool Run(out string report)
         {

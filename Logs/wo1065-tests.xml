@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="utf-8"?>
+<test-run id="2" testcasecount="4" result="Passed" total="4" passed="4" failed="0" inconclusive="0" skipped="0" asserts="0" engine-version="3.5.0.0" clr-version="4.0.30319.42000" start-time="2026-08-23 04:23:21Z" end-time="2026-08-23 04:23:21Z" duration="0.0483495">
+  <test-suite type="TestSuite" id="1000" name="Echoes of Elarion" fullname="Echoes of Elarion" runstate="Runnable" testcasecount="971" result="Passed" start-time="2026-08-23 04:23:21Z" end-time="2026-08-23 04:23:21Z" duration="0.048350" total="4" passed="4" failed="0" inconclusive="0" skipped="0" asserts="0">
+    <properties>
+      <property name="platform" value="EditMode" />
+    </properties>
+    <test-suite type="Assembly" id="2052" name="DeNelle.Tests.EditMode.dll" fullname="D:/EoA/Library/ScriptAssemblies/DeNelle.Tests.EditMode.dll" runstate="Runnable" testcasecount="685" result="Passed" start-time="2026-08-23 04:23:21Z" end-time="2026-08-23 04:23:21Z" duration="0.037392" total="4" passed="4" failed="0" inconclusive="0" skipped="0" asserts="0">
+      <properties>
+        <property name="_PID" value="60544" />
+        <property name="_APPDOMAIN" value="Unity Child Domain" />
+        <property name="platform" value="EditMode" />
+        <property name="EditorOnly" value="True" />
+      </properties>
+      <test-suite type="TestSuite" id="2053" name="DeNelle" fullname="DeNelle" runstate="Runnable" testcasecount="675" result="Passed" start-time="2026-08-23 04:23:21Z" end-time="2026-08-23 04:23:21Z" duration="0.033534" total="4" passed="4" failed="0" inconclusive="0" skipped="0" asserts="0">
+        <properties />
+        <test-suite type="TestSuite" id="2054" name="Tests" fullname="DeNelle.Tests" runstate="Runnable" testcasecount="675" result="Passed" start-time="2026-08-23 04:23:21Z" end-time="2026-08-23 04:23:21Z" duration="0.030169" total="4" passed="4" failed="0" inconclusive="0" skipped="0" asserts="0">
+          <properties />
+          <test-suite type="TestSuite" id="2055" name="EditMode" fullname="DeNelle.Tests.EditMode" runstate="Runnable" testcasecount="675" result="Passed" start-time="2026-08-23 04:23:21Z" end-time="2026-08-23 04:23:21Z" duration="0.026702" total="4" passed="4" failed="0" inconclusive="0" skipped="0" asserts="0">
+            <properties />
+            <test-suite type="TestFixture" id="1577" name="ElementalDamageResolverTests" fullname="DeNelle.Tests.EditMode.ElementalDamageResolverTests" classname="DeNelle.Tests.EditMode.ElementalDamageResolverTests" runstate="Runnable" testcasecount="4" result="Passed" start-time="2026-08-23 04:23:21Z" end-time="2026-08-23 04:23:21Z" duration="0.020877" total="4" passed="4" failed="0" inconclusive="0" skipped="0" asserts="0">
+              <properties />
+              <test-case id="1579" name="Authored_vulnerability_is_exactly_twenty_five_percent" fullname="DeNelle.Tests.EditMode.ElementalDamageResolverTests.Authored_vulnerability_is_exactly_twenty_five_percent" methodname="Authored_vulnerability_is_exactly_twenty_five_percent" classname="DeNelle.Tests.EditMode.ElementalDamageResolverTests" runstate="Runnable" seed="1929510181" result="Passed" start-time="2026-08-23 04:23:21Z" end-time="2026-08-23 04:23:21Z" duration="0.009995" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1580" name="Matching_affinity_resists_without_immunity" fullname="DeNelle.Tests.EditMode.ElementalDamageResolverTests.Matching_affinity_resists_without_immunity" methodname="Matching_affinity_resists_without_immunity" classname="DeNelle.Tests.EditMode.ElementalDamageResolverTests" runstate="Runnable" seed="1944994996" result="Passed" start-time="2026-08-23 04:23:21Z" end-time="2026-08-23 04:23:21Z" duration="0.001620" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1578" name="Neutral_damage_is_unchanged" fullname="DeNelle.Tests.EditMode.ElementalDamageResolverTests.Neutral_damage_is_unchanged" methodname="Neutral_damage_is_unchanged" classname="DeNelle.Tests.EditMode.ElementalDamageResolverTests" runstate="Runnable" seed="1498360104" result="Passed" start-time="2026-08-23 04:23:21Z" end-time="2026-08-23 04:23:21Z" duration="0.000142" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+              </test-case>
+              <test-case id="1581" name="Physical_never_uses_elemental_affinity" fullname="DeNelle.Tests.EditMode.ElementalDamageResolverTests.Physical_never_uses_elemental_affinity" methodname="Physical_never_uses_elemental_affinity" classname="DeNelle.Tests.EditMode.ElementalDamageResolverTests" runstate="Runnable" seed="846408160" result="Passed" start-time="2026-08-23 04:23:21Z" end-time="2026-08-23 04:23:21Z" duration="0.000173" asserts="0">
+                <properties>
+                  <property name="retryIteration" value="0" />
+                  <property name="repeatIteration" value="0" />
+                </properties>
+                <output><![CDATA[Saving results to: C:/Users/Elden/AppData/LocalLow/DeNelle/Echoes of Elarion\TestResults.xml
+]]></output>
+              </test-case>
+            </test-suite>
+          </test-suite>
+        </test-suite>
+      </test-suite>
+    </test-suite>
+  </test-suite>
+</test-run>

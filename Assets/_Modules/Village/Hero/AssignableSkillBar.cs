@@ -69,7 +69,7 @@ namespace DeNelle.Village
         private string PrefsKey => PrefsKeyFor(ResolveClass());
 
         /// <summary>Number of assignable slots on the bar.</summary>
-        public const int SlotCount = 4;
+        public const int SlotCount = 3;
 
         // index -> equipped abilityId (null/empty = an open "+" slot).
         private readonly string[] _slots = new string[SlotCount];

@@ -85,6 +85,7 @@ namespace DeNelle.Core.UI
                 "AdConsentUI", "Ads and Your Privacy",
                 new Vector2(0.08f, 0.18f), new Vector2(0.92f, 0.82f),
                 onClose: null, sortingOrder: 31020);   // no close X: this is a question, not a notice
+            MedievalUiSkin.ApplyShell(_modal.chrome, compact: true);
 
             var content = _modal.chrome.content.transform;
 
@@ -94,13 +95,16 @@ namespace DeNelle.Core.UI
                 "May we use your advertising ID to show ads matched to your interests?\n\n" +
                 "If you say no, you will still see ads and still get the rewards - they just will " +
                 "not be matched to you. You can change this any time in Settings.",
-                0.34f, 0.88f, ElarionUi.Parchment, 32, TextAlignmentOptions.TopLeft);
+                0.38f, 0.82f, ElarionUi.Parchment, 32, TextAlignmentOptions.TopLeft,
+                0.06f, 0.94f);
 
-            ElarionUiKit.Button(content, "Yes, personalise ads", ElarionUiKit.ButtonKind.Gold,
-                new Vector2(0.06f, 0.10f), new Vector2(0.48f, 0.26f), () => Answer(true));
+            var yes = ElarionUiKit.Button(content, "Yes, personalise ads", ElarionUiKit.ButtonKind.Gold,
+                new Vector2(0.06f, 0.20f), new Vector2(0.48f, 0.35f), () => Answer(true));
 
-            ElarionUiKit.Button(content, "No, keep them generic", ElarionUiKit.ButtonKind.Quiet,
-                new Vector2(0.52f, 0.10f), new Vector2(0.94f, 0.26f), () => Answer(false));
+            var no = ElarionUiKit.Button(content, "No, keep them generic", ElarionUiKit.ButtonKind.Quiet,
+                new Vector2(0.52f, 0.20f), new Vector2(0.94f, 0.35f), () => Answer(false));
+            MedievalUiSkin.ApplyButton(yes, primary: true);
+            MedievalUiSkin.ApplyButton(no, primary: false);
         }
 
         private void Answer(bool granted)

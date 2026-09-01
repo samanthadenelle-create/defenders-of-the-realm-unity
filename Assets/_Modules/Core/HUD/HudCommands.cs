@@ -24,6 +24,7 @@ namespace DeNelle.Core.HUD
     public static class HudCommands
     {
         private static Action _attack;
+        private static Action<bool> _block;
         private static Action _flee;
         private static Action<string> _cycleSelect;
         private static Action _potion;
@@ -41,6 +42,9 @@ namespace DeNelle.Core.HUD
 
         /// <summary>Basic-attack swing (PlayerAttackController registers).</summary>
         public static void RegisterAttack(Action handler) { _attack = handler; }
+
+        /// <summary>Press-and-hold mobile block. True on pointer-down, false on every release/cancel.</summary>
+        public static void RegisterBlock(Action<bool> handler) { _block = handler; }
 
         /// <summary>Flee the current battle (BattleArenaHud forwards BattleArena's handler;
         /// null on battle teardown).</summary>
@@ -75,6 +79,16 @@ namespace DeNelle.Core.HUD
 
         /// <summary>Fire the basic-attack handler.</summary>
         public static void Attack() => Fire(_attack, "attack");
+
+        public static void Block(bool held)
+        {
+            if (_block == null)
+            {
+                FlowTrace.Warn("HudKit", "command 'block' fired with NO registered handler");
+                return;
+            }
+            Guard.Try("HudKit", "command block", () => { _block(held); return true; }, false);
+        }
 
         /// <summary>Fire the flee handler.</summary>
         public static void Flee() => Fire(_flee, "flee");

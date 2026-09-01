@@ -177,7 +177,9 @@ namespace DeNelle.Village.World.Camps
             var btnGo = new GameObject("ClaimPrompt");
             btnGo.transform.SetParent(_canvas.transform, false);
             var img = btnGo.AddComponent<Image>();
-            img.color = new Color(0.10f, 0.30f, 0.16f, 0.92f);
+            img.sprite = Resources.Load<Sprite>("UI/ElarionMedieval/buttons/button-normal-empty");
+            img.type = Image.Type.Sliced;
+            img.color = Color.white;
             _promptRect = img.rectTransform;
             _promptRect.sizeDelta = new Vector2(280f, 64f);
 
@@ -202,7 +204,9 @@ namespace DeNelle.Village.World.Camps
             _menuRoot = new GameObject("BuildMenu");
             _menuRoot.transform.SetParent(_canvas.transform, false);
             var bg = _menuRoot.AddComponent<Image>();
-            bg.color = new Color(0.04f, 0.05f, 0.08f, 0.92f);
+            bg.sprite = Resources.Load<Sprite>("UI/ElarionMedieval/frames/content-panel");
+            bg.type = Image.Type.Sliced;
+            bg.color = Color.white;
             var bgRt = bg.rectTransform;
             bgRt.anchorMin = new Vector2(0.30f, 0.28f);
             bgRt.anchorMax = new Vector2(0.70f, 0.72f);
@@ -235,7 +239,9 @@ namespace DeNelle.Village.World.Camps
             var go = new GameObject("Btn_" + type);
             go.transform.SetParent(_menuRoot.transform, false);
             var img = go.AddComponent<Image>();
-            img.color = color;
+            img.sprite = Resources.Load<Sprite>("UI/ElarionMedieval/buttons/button-disabled-empty");
+            img.type = Image.Type.Sliced;
+            img.color = Color.white;
             var rt = img.rectTransform;
             rt.anchorMin = new Vector2(0.08f, yMin); rt.anchorMax = new Vector2(0.92f, yMax);
             rt.offsetMin = Vector2.zero; rt.offsetMax = Vector2.zero;

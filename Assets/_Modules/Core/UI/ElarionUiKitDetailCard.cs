@@ -137,7 +137,7 @@ namespace DeNelle.Core.UI
         private const float CardSectionH  = 40f;
         private const float CardRowH      = 52f;
         private const float CardChipRowH  = 64f;
-        private const float CardCtaH      = 104f;
+        private const float CardCtaH      = 128f;
         private const float CardBottomPad = 12f;
 
         /// <summary>

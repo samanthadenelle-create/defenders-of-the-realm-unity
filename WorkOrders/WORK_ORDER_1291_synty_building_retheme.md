@@ -75,6 +75,26 @@ on screen. This has already happened three times (2026-08-18 / -19 / -20).
 - [ ] `RunCaptureHeadless` screenshots of the town from the standard angles, opened and looked at.
 - [ ] Build-mode placement still seats every structure on the ground at the right height.
 
+## PROGRESS NOTES
+
+- **2026-09-01 (edit-only agent, ungated — lead gates + commits):** owner-approved re-picks landed
+  in `Assets/Editor/SyntyStructureRetheme.cs`: armorer -> House_05 (Forge keeps Blacksmith),
+  barracks -> House_07, lumbermill -> Shelter_02, arcane tower -> Church_01_A (ArcaneSpire_1 keeps
+  Tower_01, now unique; safe vs the A3 tower-aspect floor because the arcane-tower row is type
+  Resource / heightMul 1, read at source). Watermill_Medieval is now a COMPOSED wrapper (House_08 +
+  Castle/SM_Bld_Waterwheel_01) via new minimal composition support; the wheel mount is a
+  **PLACEHOLDER** (computed bounds-based wall hang, +X face, 0.10 m embed, 0.05 m ground clearance)
+  pending screenshot verify. The three unmapped addresses are closed: GenericContainer ->
+  KayKit Pallet_Wood_Covered_A.fbx (owner ruling: wood pallet), CrystalMine + IronMine ->
+  KayKit building_mine_green.fbx (IronMine differentiation deferred to WO-1292). Expect
+  swapped 30 -> 33, unmapped 3 -> 0 on the next run. Also added: a purge pass — the group held
+  68 entries over 38 addresses (every swapped address duplicated: old source entry + wrapper,
+  because CreateOrMoveEntry cannot remove the old entry); the run now removes superseded/dangling
+  entries for addresses it re-pointed, group-only, assets untouched. NOTE for gate time: the
+  reported dangling GUID 33233eb1... is the group's own m_GUID (its identity field), not an entry —
+  nothing to purge there. Re-run `SyntyStructureRetheme.Run` to apply; needs the full gate ladder +
+  r2-ship per SHIP GATE above.
+
 ## DO NOT TOUCH
 
 - `Assets/Generated/Terrain/**` (WO-1289). Castle perimeter geometry (WO-1290).

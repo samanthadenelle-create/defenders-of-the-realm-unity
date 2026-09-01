@@ -127,7 +127,13 @@ async function readDeployed(sql, tableNames) {
                 .map(v => v.trim().replace(/::text/g, '').replace(/^'|'$/g, ''))
                 .filter(Boolean);
         } else {
-            const one = /\(\(?([a-z_]+)\s*=\s*'([^']*)'(?:::[a-z ]+)?\)?\)/i.exec(r.def);
+            // Match ONLY a whole single-value CHECK. A compound invariant such as
+            // `CHECK ((state='active' AND revoked_at IS NULL) OR
+            //         (state='revoked' AND revoked_at IS NOT NULL))` contains the
+            // same equality token, but it does not narrow state to the first value.
+            // The old unanchored regex parsed that fragment and overwrote the real
+            // state=ANY(active,revoked) enum check, producing a false red parity gate.
+            const one = /^CHECK\s*\(\(+\s*([a-z_]+)\s*=\s*'([^']*)'(?:::[a-z ]+)?\s*\)+\s*\)$/i.exec(r.def);
             if (one) { col = one[1]; vals = [one[2]]; }
         }
 

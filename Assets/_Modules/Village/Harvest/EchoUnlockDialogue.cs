@@ -176,8 +176,6 @@ namespace DeNelle.Village
         private EchoRosterEntry _entry;
         private int _newCount;
         private TextMeshProUGUI _flavorLabel;
-        private Button _tellMoreBtn;
-        private bool _showingLore;
         private PanelHandle _panelHandle;   // HUD-1: modal arbiter registration (one Echo modal at a time)
         private bool _open;
 
@@ -303,14 +301,21 @@ namespace DeNelle.Village
             _canvas = built.canvas;
             var content = built.chrome.content.transform;
 
-            // -- BUTTON #3 RETIRED (owner ruling 2026-08-05: "two buttons is fine") ---
-            // The kit's shared bottom-centre Close is a DUPLICATE of "I accept your power"
-            // (identical outcome), and the 2026-08-05 Seeker review caught it sitting BETWEEN
-            // the two positive actions. Hidden LOCALLY for this card only -- the kit's Close is
-            // canon for ~19 other panels and must not move. Tap-outside (the scrim) and the
-            // PanelManager arbiter both still route to Close.
-            if (built.chrome.close != null)
-                built.chrome.close.gameObject.SetActive(false);
+            // The approved medieval frame is ornamental/border art with a transparent centre.
+            // Zone_Body backs only the content well, which left a visibly unstyled moat between
+            // that well and the frame in the live capture.  Give this modal one continuous inner
+            // obsidian surface beneath every zone; the ornate frame remains the top-level chrome.
+            var innerSurface = ElarionUiKit.AddImage(content, "ContinuousInnerSurface",
+                new Vector2(0.035f, 0.055f), new Vector2(0.965f, 0.925f),
+                ElarionUiKit.ObsidianFill, rounded: false);
+            var innerImage = innerSurface.GetComponent<Image>();
+            if (innerImage != null) innerImage.raycastTarget = false;
+            innerSurface.transform.SetAsFirstSibling();
+
+            // Owner ruling 2026-08-31: this is a reward acknowledgement, not a lore reader.
+            // One visible action only: the shared Close. The roster remains the deliberate
+            // place to inspect an Echo later; awakening must never stop onboarding with prose.
+            ApplyMedievalRevealChrome(built.chrome);
 
             // -- REFERENCE-PIXEL BUDGET FOR THIS BUILD -------------------------------
             // PostScaleCanvasHeight replicates the CanvasScaler's own math, so it is correct on
@@ -396,7 +401,7 @@ namespace DeNelle.Village
             // This is the "you have earned an Echo" beat in words, and it is the line that
             // carries the canon (memory echo-is-essence-of-guarded-person): a soul the Heart
             // has been keeping is waking, not a monster being granted.
-            var arrival = ElarionUiKit.Label(well, EmergeLineFor(entry), 0f, 1f,
+            var arrival = ElarionUiKit.Label(well, entry.DisplayName + " joined your Echoes.", 0f, 1f,
                 ElarionUi.Gilt, ElarionUi.FontLabel, TextAlignmentOptions.Center,
                 0.03f, 0.97f, bold: false);
             ElarionUiKit.FitSingleLine(arrival);
@@ -466,35 +471,27 @@ namespace DeNelle.Village
             ElarionUiKit.FitBlock(elemLabel, 26f, ElarionUi.FontLabel);
             PinBandFromTop(elemLabel.rectTransform, cursor + portraitPx + BandGapPx, CaptionBandPx);
 
-            // RIGHT COLUMN -- name, then the flavor block.
+            // RIGHT COLUMN -- identity plus one practical acknowledgement. The unlock
+            // moment is deliberately not a lore reader: the roster owns biography/lore.
             var nameLabel = ElarionUiKit.Label(well, entry.DisplayName, 0f, 1f,
                 ElarionUi.Gilt, ElarionUi.FontHead, TextAlignmentOptions.Left,
                 RightX0, RightX1, bold: true);
             ElarionUiKit.FitSingleLine(nameLabel);
             PinBandFromTop(nameLabel.rectTransform, cursor, NameBandPx);
 
-            // FLAVOR: SHRINK-TO-FIT, NEVER TRUNCATE (owner F8 2026-07-19: the founding teach line
-            // "...wood, iron, or grain -- and it is done" was CUT to "...and it is d"). So this is
-            // deliberately NOT FitBlock (which forces Truncate): the label WRAPS and AUTO-SIZES
-            // DOWN within [FlavorFontMin..FontBody] with Overflow mode, so a tail can never be cut.
-            // The rect is plate-local and sized from the measured budget above (~815 x ~295 ref px
-            // at the tightest landscape target), where the ~310-char founding flavor settles at
-            // ~30-32 px over 6-7 lines -- inside the owner's 28-34 legible band, with a line of
-            // slack. And because the plate now carries a RectMask2D, even an unbudgeted overflow
-            // stops at the black panel's edge instead of landing on the metal frame.
-            _flavorLabel = ElarionUiKit.Label(well, entry.Flavor, 0f, 1f,
-                ElarionUi.Parchment, ElarionUi.FontBody, TextAlignmentOptions.TopLeft,
+            _flavorLabel = ElarionUiKit.Label(well,
+                "Ready to help your realm. Manage this Echo from the Echoes menu.", 0f, 1f,
+                ElarionUi.Parchment, ElarionUi.FontBody, TextAlignmentOptions.MidlineLeft,
                 RightX0, RightX1, bold: false);
-            _flavorLabel.textWrappingMode = TextWrappingModes.Normal;   // wrap, don't spill wide
-            _flavorLabel.overflowMode = TextOverflowModes.Overflow;     // NEVER cut the tail
-            _flavorLabel.enableAutoSizing = true;                       // shrink-to-fit the rect
-            _flavorLabel.fontSizeMin = FlavorFontMin;                   // legible mobile floor
-            _flavorLabel.fontSizeMax = ElarionUi.FontBody;              // never grow past body
+            _flavorLabel.textWrappingMode = TextWrappingModes.Normal;
+            _flavorLabel.overflowMode = TextOverflowModes.Truncate;
+            _flavorLabel.enableAutoSizing = true;
+            _flavorLabel.fontSizeMin = FlavorFontMin;
+            _flavorLabel.fontSizeMax = ElarionUi.FontBody;
             PinBandFromTop(_flavorLabel.rectTransform, cursor + NameBandPx + BandGapPx, flavorPx);
 
-            // =====================================================================
-            //  THE BOTTOM ROW -- TWO buttons, ONE treatment (owner ruling 2026-08-05)
-            // =====================================================================
+            // The shared medieval Close is the sole action. No Accept alias and no
+            // Tell-more toggle: both added choice without changing the outcome.
             // Panel-local by design (they sit BELOW the plate, whose floor was dropped to clear
             // them). Both come from the SAME builder at the SAME Style1 -- ButtonKind is a
             // back-compat shim that maps Confirm->(Style2,Green) and Quiet->(Style1,Gray), and
@@ -502,29 +499,6 @@ namespace DeNelle.Village
             // exactly how this card used to ship one rounded and one square face. Style carries
             // no meaning here (the LABEL does), so both are Style1 and colour alone never has to
             // be read (the owner is red/green colourblind).
-            float ctaW = CtaWidthPx;
-            if (2f * ctaW + CtaGapPx > panelWpx)
-            {
-                // Narrow pane (portrait phone): shrink BOTH equally rather than let one overhang.
-                // Still far above the ~310 px the longest label needs at the font floor.
-                ctaW = Mathf.Max(ElarionUiKit.MinTouchPx, (panelWpx - 3f * CtaGapPx) * 0.5f);
-                FlowTrace.Warn("Echo", $"unlock card: panel is {panelWpx:F0} ref px wide -- CTA pair "
-                    + $"narrowed from {CtaWidthPx:F0} to {ctaW:F0} px each (still one shared box).");
-            }
-            float halfStep = (ctaW + CtaGapPx) * 0.5f / panelWpx;
-
-            var acceptBtn = ElarionUiKit.BuildObsidianButton(content, "I accept your power",
-                ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Green,
-                new Vector2(0.5f - halfStep, CtaBottomFrac), new Vector2(0.5f - halfStep, CtaBottomFrac),
-                OnAccept);
-            SeatCta(acceptBtn, 0.5f - halfStep, ctaW);
-
-            _tellMoreBtn = ElarionUiKit.BuildObsidianButton(content, "Tell me more",
-                ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Gray,
-                new Vector2(0.5f + halfStep, CtaBottomFrac), new Vector2(0.5f + halfStep, CtaBottomFrac),
-                OnTellMore);
-            SeatCta(_tellMoreBtn, 0.5f + halfStep, ctaW);
-
             // -- the WO-831 emergence polish, PRESERVED on the merged card: a soft fade/scale-in
             //    so the spirit still "emerges" instead of popping (CanvasGroup coroutine on
             //    unscaled time -- no tween lib, no Timeline, no video).
@@ -583,24 +557,40 @@ namespace DeNelle.Village
             if (contentRoot != null) contentRoot.localScale = baseScale;
         }
 
-        // -- button handlers --------------------------------------------------------
-        private void OnAccept()
+        private static void ApplyMedievalRevealChrome(ElarionUiKit.PanelChrome chrome)
         {
-            FlowTrace.Step("Echo", $"unlock card: 'I accept your power' id={_entry?.Id} count={_newCount}");
-            Close();
-        }
-
-        private void OnTellMore()
-        {
-            _showingLore = !_showingLore;
-            if (_flavorLabel != null && _entry != null)
-                _flavorLabel.text = _showingLore ? _entry.Lore : _entry.Flavor;
-            if (_tellMoreBtn != null)
+            if (chrome == null) return;
+            var frame = chrome.root != null ? chrome.root.GetComponent<Image>() : null;
+            var frameSprite = Resources.Load<Sprite>("UI/ElarionMedieval/frames/modal-frame-16x9");
+            if (frame != null && frameSprite != null)
             {
-                var t = _tellMoreBtn.GetComponentInChildren<TextMeshProUGUI>();
-                if (t != null) t.text = _showingLore ? "Show less" : "Tell me more";
+                frame.sprite = frameSprite;
+                frame.type = Image.Type.Simple;
+                frame.color = Color.white;
             }
-            FlowTrace.Step("Echo", $"unlock card: 'Tell me more' -> {(_showingLore ? "lore" : "flavor")} id={_entry?.Id}");
+            if (chrome.close == null) return;
+            chrome.close.gameObject.SetActive(true);
+            // The Blink prefab face carries baked placeholder lettering. Swap only the
+            // face to the kit's EMPTY state art, then retain the data-bound label below.
+            // This yields one localizable CLOSE instead of baked + runtime duplicates.
+            var image = chrome.close.GetComponent<Image>();
+            var emptyFace = Resources.Load<Sprite>("UI/ElarionMedieval/buttons/button-normal-empty");
+            if (image != null && emptyFace != null)
+            {
+                image.sprite = emptyFace;
+                image.type = Image.Type.Simple;
+                image.color = Color.white;
+            }
+            // Close is a semantic action, never an unlabeled ornament.  The prior reskin
+            // explicitly hid this label and shipped a blank gold plate on the only exit.
+            var label = chrome.close.GetComponentInChildren<TMP_Text>(true);
+            if (label != null)
+            {
+                label.gameObject.SetActive(true);
+                label.text = "CLOSE";
+                label.color = ElarionUi.Parchment;
+                ElarionUiKit.FitSingleLine(label, ElarionUiKit.FontFloor, ElarionUi.FontLabel);
+            }
         }
 
         private void Close()

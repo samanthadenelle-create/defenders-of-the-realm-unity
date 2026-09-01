@@ -142,6 +142,8 @@ namespace DeNelle.Core.UI
                 return;
             }
 
+            MedievalUiSkin.ApplyShell(_modal.chrome, compact: false);
+
             var body = _modal.chrome.content.transform;
 
             // --- Active stake (the headline number) ---

@@ -54,22 +54,26 @@ namespace DeNelle.Village
         {
             if (_headerRoot == null) return;
             for (int i = _headerRoot.transform.childCount - 1; i >= 0; i--)
-                Destroy(_headerRoot.transform.GetChild(i).gameObject);
+            {
+                var child = _headerRoot.transform.GetChild(i);
+                child.SetParent(null, false);
+                Destroy(child.gameObject);
+            }
 
             string job = HeroJob;
             int level = HeroLevel();
 
             // LEFT — identity. Name on top, class + level beneath, both fit-or-ellipsize inside
             // their own band so neither can bleed into the vitals (§1.14).
-            var nameLbl = AddLabel(_headerRoot.transform, HeroDisplayName(job), 0.46f, 1f, GiltInk,
-                     ElarionUi.FontHead, TMPro.TextAlignmentOptions.MidlineLeft, 0.00f, 0.24f,
+            var nameLbl = AddLabel(_headerRoot.transform, HeroDisplayName(job), 0.50f, 1f, GiltInk,
+                     ElarionUi.FontBody, TMPro.TextAlignmentOptions.MidlineLeft, 0.15f, 0.34f,
                      spacing: 1f, bold: true);
             ElarionUiKit.FitSingleLine(nameLbl, 0f, ElarionUi.FontHead);
 
             var classLbl = AddLabel(_headerRoot.transform,
                      Cap(job).ToUpperInvariant() + "   LV " + level, 0.02f, 0.46f,
                      InkMicro, ElarionUi.FontMicro, TMPro.TextAlignmentOptions.MidlineLeft,
-                     0.00f, 0.24f, spacing: 2f);
+                     0.15f, 0.34f, spacing: 2f);
             ElarionUiKit.FitSingleLine(classLbl, 0f, ElarionUi.FontMicro);
 
             // Vitals are a presentation read of the live hero's components (the same resolve
@@ -83,12 +87,14 @@ namespace DeNelle.Village
                      : (vitalsHero != null ? vitalsHero.GetComponentInChildren<HeroProgression>() : null);
 
             var hpBar = ElarionUiKit.BuildObsidianBar(_headerRoot.transform, ElarionUiKit.ObsidianBarKind.Health,
-                new Vector2(0.28f, 0.52f), new Vector2(0.62f, 0.94f), withValue: true);
+                new Vector2(0.36f, 0.56f), new Vector2(0.60f, 0.90f), withValue: true);
+            RestyleHeaderBar(hpBar, new Color(0.42f, 0.055f, 0.075f, 1f));
             if (hh != null) hpBar.SetImmediate(hh.Hp, hh.MaxHp);
             else { hpBar.SetImmediate(1f, 1f); hpBar.ResetLabel(); }
 
             var mpBar = ElarionUiKit.BuildObsidianBar(_headerRoot.transform, ElarionUiKit.ObsidianBarKind.Mana,
-                new Vector2(0.28f, 0.06f), new Vector2(0.62f, 0.48f), withValue: true);
+                new Vector2(0.36f, 0.10f), new Vector2(0.60f, 0.44f), withValue: true);
+            RestyleHeaderBar(mpBar, new Color(0.055f, 0.16f, 0.34f, 1f));
             if (ha != null) mpBar.SetImmediate(ha.Mana, ha.MaxMana);
             else { mpBar.SetImmediate(1f, 1f); mpBar.ResetLabel(); }
 
@@ -96,7 +102,7 @@ namespace DeNelle.Village
             // badge is never the only place the number lives) + a thin XP strip beside it.
             var badgeSp = RpgUiCatalog.Get(RpgUiCatalog.RoleBadge, RpgUiCatalog.BadgeLevel);
             var badgeGo = AddImage(_headerRoot.transform, "LevelBadge",
-                                   new Vector2(0.66f, 0.10f), new Vector2(0.735f, 0.90f),
+                                   new Vector2(0.61f, 0.12f), new Vector2(0.68f, 0.88f),
                                    badgeSp != null ? Color.white : new Color(0f, 0f, 0f, 0.35f),
                                    rounded: badgeSp == null);
             NoRaycast(badgeGo);
@@ -110,7 +116,8 @@ namespace DeNelle.Village
             ElarionUiKit.FitSingleLine(lvLbl, 0f, ElarionUi.FontMicro);
 
             var xpBar = ElarionUiKit.BuildObsidianBar(_headerRoot.transform, ElarionUiKit.ObsidianBarKind.Xp,
-                new Vector2(0.705f, 0.30f), new Vector2(0.75f, 0.70f), withValue: false);
+                new Vector2(0.68f, 0.32f), new Vector2(0.75f, 0.68f), withValue: false);
+            RestyleHeaderBar(xpBar, new Color(0.48f, 0.31f, 0.075f, 1f));
             if (prog != null) xpBar.SetImmediate(prog.Xp, prog.XpToNext);
             else xpBar.SetImmediate(0f, 1f);
 
@@ -121,19 +128,36 @@ namespace DeNelle.Village
                 ElarionUiKit.ButtonKind.Quiet,
                 new Vector2(0.755f, 0f), new Vector2(0.87f, 1f), OpenSkillTree);
             if (talents != null) ElarionUiKit.ClampMinTouch(talents);
-
-            bool mapOn = DeNelle.Core.FeatureFlags.MapTab;
-            string mapLabel = InventoryStrings.Get(InventoryStrings.KeyRailMap);
-            if (!mapOn) mapLabel += " " + InventoryStrings.Get(InventoryStrings.KeyRailMapSoon);
-            var map = ElarionUiKit.ButtonPack(_headerRoot.transform, mapLabel,
-                ElarionUiKit.ButtonKind.Quiet,
-                new Vector2(0.88f, 0f), Vector2.one, mapOn ? (System.Action)OpenRealmMap : null);
-            if (map != null) ElarionUiKit.ClampMinTouch(map);
+            if (talents != null)
+            {
+                MedievalUiSkin.ApplyButton(talents, primary: true);
+                var talentsImage = talents.targetGraphic as Image;
+                if (talentsImage != null) talentsImage.type = Image.Type.Simple;
+            }
 
             FlowTrace.Step("Inventory",
                 $"Header built: job='{job}' lv={level} hero={(vitalsHero != null ? "found" : "MISSING")} " +
                 $"hp={(hh != null ? "live" : "none")} mp={(ha != null ? "live" : "none")} xp={(prog != null ? "live" : "none")} " +
-                $"Talents=header Map={(mapOn ? "header-live" : "header-soon")}");
+                "Talents=header RealmMap=retired");
+        }
+
+        // Bag identity bars use the same quiet native treatment as Equipment. The Obsidian
+        // source art carries saturated gradients which read as a second, legacy UI family.
+        private static void RestyleHeaderBar(ElarionUiKit.BarHandle bar, Color fillColor)
+        {
+            if (bar == null) return;
+            if (bar.fill != null)
+            {
+                bar.fill.sprite = ElarionUiKit.SolidSprite;
+                bar.fill.type = Image.Type.Simple;
+                bar.fill.color = fillColor;
+            }
+            if (bar.frame != null)
+            {
+                bar.frame.sprite = ElarionUiKit.SolidSprite;
+                bar.frame.type = Image.Type.Simple;
+                bar.frame.color = new Color(0.50f, 0.37f, 0.14f, 0.72f);
+            }
         }
 
         // WO-573 — load the active hero's portrait art for the frame's medallion socket. The

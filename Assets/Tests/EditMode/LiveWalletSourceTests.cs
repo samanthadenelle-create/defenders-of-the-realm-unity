@@ -29,7 +29,8 @@ namespace DeNelle.Tests.EditMode
             Assert.That(entries[0].Amount, Is.EqualTo(5));
             Assert.That(entries[1].CurrencyId, Is.EqualTo("iron"));
             Assert.That(entries[1].Amount, Is.EqualTo(3));
-            Assert.That(entries[2].CurrencyId, Is.EqualTo("food"));
+            Assert.That(entries[2].CurrencyId, Is.EqualTo("stone"));
+            Assert.That(entries[2].IconName, Is.EqualTo("S"));
             Assert.That(entries[2].Amount, Is.EqualTo(7));
             Assert.That(entries[3].CurrencyId, Is.EqualTo("crystals"));
             Assert.That(entries[3].Amount, Is.EqualTo(9));

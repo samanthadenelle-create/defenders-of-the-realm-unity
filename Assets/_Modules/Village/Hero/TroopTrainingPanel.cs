@@ -60,10 +60,10 @@ namespace DeNelle.Village.Hero
         private const string DetailHint = "Train troops to defend Elarion and raid enemy camps.";
 
         // Dark ink for text sitting ON the parchment detail well (family convention).
-        private static readonly Color Ink     = new Color(0.16f, 0.12f, 0.08f, 1f);
-        private static readonly Color InkDim  = new Color(0.34f, 0.28f, 0.20f, 1f);
-        private static readonly Color InkGood = new Color(0.10f, 0.42f, 0.16f, 1f);
-        private static readonly Color InkBad  = new Color(0.55f, 0.12f, 0.10f, 1f);
+        private static readonly Color Ink     = ElarionUi.Parchment;
+        private static readonly Color InkDim  = ElarionUi.ParchmentDim;
+        private static readonly Color InkGood = new Color(0.48f, 0.88f, 0.48f, 1f);
+        private static readonly Color InkBad  = new Color(1.00f, 0.42f, 0.36f, 1f);
 
         // Row plate state tints (dark list well). Selected = warm gold; unlocked = neutral
         // steel; locked = neutral * LockedTint (mirrors BuildingUpgradePanelMvvm.LockedTint).
@@ -101,6 +101,15 @@ namespace DeNelle.Village.Hero
             var chrome = ElarionUiKit.BuildObsidianPanel(_ui.transform, "Barracks - Train",
                 new Vector2(0.10f, 0.08f), new Vector2(0.90f, 0.92f), Close,
                 frameName: RpgUiCatalog.FrameCrafting, medallionIcon: "sword");
+            MedievalUiSkin.ApplyShell(chrome);
+            if (chrome.content != null)
+            {
+                var fill = ElarionUiKit.AddImage(chrome.content.transform, "BarracksBodyFill",
+                    Vector2.zero, Vector2.one, ElarionUiKit.ObsidianFill, rounded: false);
+                var fillImage = fill != null ? fill.GetComponent<Image>() : null;
+                if (fillImage != null) fillImage.raycastTarget = false;
+                if (fill != null) fill.transform.SetAsFirstSibling();
+            }
 
             var layout = chrome.layout;
             _troopHost = layout != null && layout.bodyLeft != null
@@ -147,17 +156,20 @@ namespace DeNelle.Village.Hero
             // icon + tag + CompactNumber owned by the chip; no hand-formatted string).
             var footHost = layout != null && layout.footer != null
                 ? (Transform)layout.footer : chrome.content.transform;
-            _wallet = ElarionUiKit.BuildWalletRow(footHost, new[]
-            {
-                ElarionUiKit.CurrencyKind.Wood,
-                ElarionUiKit.CurrencyKind.Iron,
-                ElarionUiKit.CurrencyKind.Food,
-                ElarionUiKit.CurrencyKind.Crystal,
-            });
+            var walletZone = new GameObject("TrainingGoldZone", typeof(RectTransform));
+            walletZone.transform.SetParent(footHost, false);
+            var walletRt = (RectTransform)walletZone.transform;
+            walletRt.anchorMin = new Vector2(0.02f, 0.08f);
+            walletRt.anchorMax = new Vector2(0.48f, 0.92f);
+            walletRt.offsetMin = walletRt.offsetMax = Vector2.zero;
+            _wallet = ElarionUiKit.BuildWalletRow(walletZone.transform,
+                new[] { ElarionUiKit.CurrencyKind.Gold });
 
             // WO-934: Armies loadout bank is one tap from Barracks (discoverable, not Yarn-only).
-            var armiesBtn = ElarionUiKit.Button(footHost, "Armies", ElarionUiKit.ButtonKind.Gold,
-                new Vector2(0.72f, 0.08f), new Vector2(0.98f, 0.92f), () =>
+            var armiesBtn = ElarionUiKit.BuildObsidianButton(footHost, "Armies",
+                ElarionUiKit.ObsidianButtonStyle.Style1,
+                ElarionUiKit.ObsidianButtonColor.Yellow,
+                new Vector2(0.56f, 0.08f), new Vector2(0.98f, 0.92f), () =>
                 {
                     Close();
                     ArmyMusterPanel.Show();
@@ -529,11 +541,8 @@ namespace DeNelle.Village.Hero
         // read from the VM's live wallet projection (no direct economy read).
         private void UpdateWallet()
         {
-            if (_wallet == null || _wallet.Length < 4 || _vm == null) return;
-            if (_wallet[0] != null) _wallet[0].SetAmount(_vm.Wood);
-            if (_wallet[1] != null) _wallet[1].SetAmount(_vm.Iron);
-            if (_wallet[2] != null) _wallet[2].SetAmount(_vm.Food);
-            if (_wallet[3] != null) _wallet[3].SetAmount(_vm.Crystals);
+            if (_wallet == null || _wallet.Length < 1 || _vm == null) return;
+            if (_wallet[0] != null) _wallet[0].SetAmount(_vm.Gold);
         }
 
         // WO-778: live countdown — the strip repaints ~1/s while the panel is open, so
@@ -632,7 +641,7 @@ namespace DeNelle.Village.Hero
         {
             if (!string.IsNullOrEmpty(iconId))
             {
-                var s = RpgUiCatalog.Get(RpgUiCatalog.RoleIcons, iconId);
+                var s = RpgUiCatalog.Get(RpgUiCatalog.RoleTroop, iconId);
                 if (s != null) return s;
             }
             string roleIcon = role == "ranged" ? "icon_combat" : "icon_sword";

@@ -55,16 +55,20 @@ namespace DeNelle.Village
         private const float DefaultHeight = 4.2f;
 
         // Plate sizing (world units). Small + readable; tuned to the bronze icon art.
-        private const float PlateWidth  = 0.95f;
-        private const float PlateHeight = 0.95f;
-        private const float RimPad      = 0.12f;   // gold rim extends this far past the glass
-        private const float IconInset   = 0.18f;   // icon sits this far inside the glass
+        private const float PlateWidth  = 0.78f;
+        private const float PlateHeight = 0.78f;
+        private const float RimPad      = 0.10f;
+        private const float IconInset   = 0.16f;
+        private const float RevealDistance = 10f;
+        private const float HideDistance = 12f;
 
         // Town-HUD palette (dark glass + gold), matching the proximity bubble's gold rim.
         private static readonly Color GlassColor = new Color(0.06f, 0.05f, 0.10f, 0.92f); // dark glass
         private static readonly Color GoldColor  = new Color(1f, 0.78f, 0.32f, 1f);       // bright gold rim
 
         private Camera _camera;
+        private Renderer[] _renderers;
+        private bool _shown;
 
         // ── Type → icon table (the single source of truth for T-034) ──────────────
         // Maps an interactable's TYPE to an icon role+name in RpgUiCatalog. If a type
@@ -191,7 +195,9 @@ namespace DeNelle.Village
             _camera = Camera.main;
 
             // Gold rim (back-most, slightly larger) → dark glass → icon (front-most).
-            BuildQuad("Rim",   PlateWidth + RimPad, PlateHeight + RimPad, GoldColor,  0,  null);
+            Sprite bezel = Resources.Load<Sprite>("UI/ElarionMedieval/frames/circular-bezel-four-point");
+            BuildQuad("Rim", PlateWidth + RimPad, PlateHeight + RimPad,
+                bezel != null ? Color.white : GoldColor, 0, bezel);
             BuildQuad("Glass", PlateWidth,          PlateHeight,          GlassColor, 1,  null);
 
             Sprite icon = RpgUiCatalog.Get(RpgUiCatalog.RoleIcons, IconNameFor(kind));
@@ -209,6 +215,8 @@ namespace DeNelle.Village
                 Debug.Log($"[InteractableSign] icon '{IconNameFor(kind)}' for {kind} not in pack — " +
                           "plate shown without icon (run Defenders/Art/Import RPG UI Pack).");
             }
+            _renderers = GetComponentsInChildren<Renderer>(true);
+            SetShown(false);
         }
 
         /// <summary>
@@ -234,9 +242,21 @@ namespace DeNelle.Village
         private void LateUpdate()
         {
             if (_camera == null) { _camera = Camera.main; if (_camera == null) return; }
+            float distance = Vector3.Distance(_camera.transform.position, transform.position);
+            if (_shown ? distance > HideDistance : distance < RevealDistance)
+                SetShown(!_shown);
+            if (!_shown) return;
             // Face the camera as a flat plate (look along the camera's forward so the
             // sign stays upright + readable, not tilted toward the camera position).
             transform.rotation = _camera.transform.rotation;
+        }
+
+        private void SetShown(bool shown)
+        {
+            _shown = shown;
+            if (_renderers == null) return;
+            for (int i = 0; i < _renderers.Length; i++)
+                if (_renderers[i] != null) _renderers[i].enabled = shown;
         }
 
         // ── Shared 1x1 white sprite for solid-colour quads (built once, cached) ───

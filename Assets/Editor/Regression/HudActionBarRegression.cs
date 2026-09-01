@@ -99,7 +99,7 @@ namespace DeNelle.Editor
 
             src.Talk = true; model.Tick();
             ExpectSet(model, failures, "NPC in range",
-                ActionBarButtonId.Build, ActionBarButtonId.Talk, ActionBarButtonId.Bag,
+                ActionBarButtonId.Build, ActionBarButtonId.Bag,
                 ActionBarButtonId.Quests, ActionBarButtonId.Upgrade);
             src.Talk = false; model.Tick();
             if (model.Active.Contains(ActionBarButtonId.Talk))
@@ -114,10 +114,10 @@ namespace DeNelle.Editor
             if (model.RaidsDimmed)
                 failures.Add("RaidsDimmed true while the face is absent");
             src.Capable = true; model.Tick();
-            if (!model.Active.Contains(ActionBarButtonId.Raids))
-                failures.Add("Raids absent while capable — capability must show the face");
-            if (!model.RaidsDimmed)
-                failures.Add("capable-but-not-full army did not DIM the visible Raids face (WO-820/823 semantics lost)");
+            if (model.Active.Contains(ActionBarButtonId.Raids))
+                failures.Add("Raids returned as a duplicate bottom-bar face; Journey is its stable door");
+            if (model.RaidsDimmed)
+                failures.Add("a dormant Raids face reported presentation state");
             src.ArmyReady = true; model.Tick();
             if (model.RaidsDimmed)
                 failures.Add("full army did not restore the Raids face");
@@ -146,9 +146,9 @@ namespace DeNelle.Editor
 
             // Canonical order at the 6-face MAX (WO-911: Build, Talk, Bag, Raids, Quests, Manage).
             src.Talk = true; model.Tick();
-            ExpectSet(model, failures, "6-face MAX order",
-                ActionBarButtonId.Build, ActionBarButtonId.Talk, ActionBarButtonId.Bag,
-                ActionBarButtonId.Raids, ActionBarButtonId.Quests, ActionBarButtonId.Upgrade);
+            ExpectSet(model, failures, "four stable destinations order",
+                ActionBarButtonId.Build, ActionBarButtonId.Bag,
+                ActionBarButtonId.Quests, ActionBarButtonId.Upgrade);
             if (model.Active.Count > HudActionBarModel.MaxVisibleFaces)
                 failures.Add($"the bar renders {model.Active.Count} faces but the View sizes slots from " +
                              $"MaxVisibleFaces = {HudActionBarModel.MaxVisibleFaces} — the group would overflow its zone");
@@ -158,9 +158,13 @@ namespace DeNelle.Editor
             // correct one-face MASK, not a layout failure. Adding dungeon faces is an owner ruling.
             model.SetPosture(HudActionBarModel.PostureExplore);
             src.Talk = false; model.Tick();
-            ExpectSet(model, failures, "dungeon explore mask 0x04", ActionBarButtonId.Bag);
+            ExpectSet(model, failures, "peaceful explore dock",
+                ActionBarButtonId.Build, ActionBarButtonId.Bag,
+                ActionBarButtonId.Quests, ActionBarButtonId.Upgrade);
             src.Talk = true; model.Tick();
-            ExpectSet(model, failures, "explore (talk on)", ActionBarButtonId.Talk, ActionBarButtonId.Bag);
+            ExpectSet(model, failures, "explore (talk contextual)",
+                ActionBarButtonId.Build, ActionBarButtonId.Bag,
+                ActionBarButtonId.Quests, ActionBarButtonId.Upgrade);
             model.SetPosture("build");
             if (model.Active.Count != 0)
                 failures.Add("build posture did not empty the bar set");
@@ -172,7 +176,7 @@ namespace DeNelle.Editor
             model.Tick(); model.Tick();
             if (events != 0)
                 failures.Add($"ActiveButtonsChanged fired {events}x with no input change — per-frame relayout risk");
-            src.Talk = false; model.Tick();
+            model.SetPosture("build");
             if (events != 1)
                 failures.Add($"one set change raised {events} events (expected exactly 1)");
 
@@ -281,15 +285,16 @@ namespace DeNelle.Editor
                     failures.Add("RaidCapabilityHudBridge never publishes SetRaidCapable");
             }
 
-            // Occupancy rows: upgradeButton in BOTH dual copies; copies identical
-            // (CanonicalJson law — the Work-button-dark lesson).
+            // Occupancy rows: the approved four-medallion peacefulDock in BOTH dual copies;
+            // copies identical (CanonicalJson law — the Work-button-dark lesson).
             string resJson = Path.Combine(Application.dataPath, "Resources/Data/Canonical/hud-areas.json");
             string samJson = Path.Combine(Application.dataPath, "StreamingAssets/Data/Canonical/hud-areas.json");
             foreach (var p in new[] { resJson, samJson })
             {
                 if (!File.Exists(p)) { failures.Add("hud-areas.json missing: " + p); continue; }
-                if (File.ReadAllText(p).IndexOf("upgradeButton") < 0)
-                    failures.Add("hud-areas.json missing the upgradeButton row (face would be code-present, behavior-absent): " + p);
+                string json = File.ReadAllText(p);
+                if (json.IndexOf("peacefulDock") < 0)
+                    failures.Add("hud-areas.json missing peacefulDock (approved four-action HUD would be behavior-absent): " + p);
             }
             if (File.Exists(resJson) && File.Exists(samJson) &&
                 File.ReadAllText(resJson) != File.ReadAllText(samJson))

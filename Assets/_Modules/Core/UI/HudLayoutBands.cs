@@ -68,16 +68,16 @@ namespace DeNelle.Core.UI
 
         /// <summary>Vitals mount - holds TWO exclusive bands: the hero plate on top and the
         /// SKILL (Wisdom) chip beneath it. They are separate sub-rects, never a shared box.</summary>
-        public static readonly Rect VitalsMount = Rect.MinMaxRect(0.011f, 0.818f, 0.240f, 0.983f);
+        public static readonly Rect VitalsMount = Rect.MinMaxRect(0.011f, 0.800f, 0.240f, 0.983f);
 
         /// <summary>Heart of Elarion bar mount.</summary>
-        public static readonly Rect HeartMount = Rect.MinMaxRect(0.011f, 0.748f, 0.240f, 0.805f);
+        public static readonly Rect HeartMount = Rect.MinMaxRect(0.011f, 0.700f, 0.240f, 0.790f);
 
         /// <summary>Minimap mount - holds TWO exclusive bands: the square plate hanging from
         /// the mount's top-left, and the region STATUS LINE in its own band BELOW the plate.
         /// ⛔ The status line is never drawn ACROSS the plate and never beside it: the owner
         /// captured "Elarion - Safe - N threats" competing with both the map and the gear.</summary>
-        public static readonly Rect MinimapMount = Rect.MinMaxRect(0.011f, 0.484f, 0.240f, 0.735f);
+        public static readonly Rect MinimapMount = Rect.MinMaxRect(0.011f, 0.420f, 0.240f, 0.685f);
 
         /// <summary>Dock mount - the gear + Store row (side by side, never stacked) and the
         /// slide-out drawer that opens to the right of both.</summary>
@@ -88,19 +88,7 @@ namespace DeNelle.Core.UI
 
         /// <summary>Hero nameplate, as a fraction of <see cref="VitalsMount"/>. Screen band
         /// 0.011..0.240 x, 0.883..0.983 y.</summary>
-        public static readonly Rect HeroPlateInVitals = Rect.MinMaxRect(0f, 0.394f, 1f, 1f);
-
-        /// <summary>The SKILL (Wisdom) chip, as a fraction of <see cref="VitalsMount"/>. Screen
-        /// band 0.011..0.124 x, 0.818..0.870 y.
-        ///
-        /// ⭐ WIDTH IS THE FIX, NOT A SHORTER STRING (owner ruling, WO-1219 addendum). The device
-        /// captured "SK... 177": FitSingleLine had ellipsised the word down to two glyphs. The
-        /// chip is now ~243 reference units wide at 2670x1200 (was ~220) and ~50 units tall (was
-        /// ~29), so the kit's tag band (0.05..0.55 of the chip = ~121 units) clears the ~93 units
-        /// "SKILL" needs at FontMicro and the ~87 it needs at the FontFloor autoshrink floor,
-        /// with the amount keeping 0.57..0.94 (~90 units) - room for six digits before the
-        /// compact form even engages. A truncated money-adjacent readout is worse than none.</summary>
-        public static readonly Rect SkillChipInVitals = Rect.MinMaxRect(0f, 0f, 0.4934f, 0.3152f);
+        public static readonly Rect HeroPlateInVitals = Rect.MinMaxRect(0f, 0.180f, 1f, 1f);
 
         // ── FIXED-PIXEL occupants (reference units, never fractions) ────────────
 
@@ -184,7 +172,6 @@ namespace DeNelle.Core.UI
             float uy = refSize.y > 0f ? 1f / refSize.y : 0f;   // one reference unit, as a y-fraction
 
             var heroPlate = SubRect(VitalsMount, HeroPlateInVitals);
-            var skillChip = SubRect(VitalsMount, SkillChipInVitals);
 
             // The minimap plate hangs from the mount's TOP-LEFT at a fixed square size, and the
             // status line takes its own band immediately BELOW it. Both are pixels, so both are
@@ -208,13 +195,13 @@ namespace DeNelle.Core.UI
             var gear  = Rect.MinMaxRect(gearX,  rowBottom, gearX + ctrlW,  rowTop);
             var store = Rect.MinMaxRect(storeX, rowBottom, storeX + ctrlW, rowTop);
 
-            return new[] { heroPlate, skillChip, HeartMount, minimapPlate, statusLine, gear, store };
+            return new[] { heroPlate, HeartMount, minimapPlate, statusLine, gear, store };
         }
 
         /// <summary>Human names for <see cref="ResolveLeftColumn"/>, same order.</summary>
         public static readonly string[] LeftColumnNames =
         {
-            "hero plate", "SKILL chip", "Heart bar", "minimap plate", "status line", "gear", "Store",
+            "hero plate", "Heart objective", "minimap plate", "status line", "gear", "Store",
         };
 
         /// <summary>Project a sub-rect expressed as a fraction of a parent band into screen

@@ -57,7 +57,9 @@ namespace DeNelle.Settings
         private Toggle _muteToggle, _shakeToggle, _musicToggle;
         private Transform _qualityRow, _difficultyRow;
         private TextMeshProUGUI _difficultyBlurb, _audioSeam;
+#if !GOOGLE_PLAY
         private Button _walletConnectButton, _walletDisconnectButton;
+#endif
 
         private static readonly QualityTier[] Tiers =
         {
@@ -101,12 +103,16 @@ namespace DeNelle.Settings
             // Resources lookup. Null is fine: the bridge resolves lazily.
             if (_audioMixer != null)
                 AudioMixerBridge.SetMixer(_audioMixer);
+#if !GOOGLE_PLAY
             CurrencySkinResolver.WalletConnectionChanged += OnWalletConnectionChanged;
+#endif
         }
 
         private void OnDestroy()
         {
+#if !GOOGLE_PLAY
             CurrencySkinResolver.WalletConnectionChanged -= OnWalletConnectionChanged;
+#endif
             // Don't leak the arbiter slot if destroyed while open (scene unload).
             if (_panelHandle != null) PanelManager.NotifyClosed(_panelHandle);
             if (_modal != null && _modal.canvas != null) Destroy(_modal.canvas);
@@ -156,6 +162,7 @@ namespace DeNelle.Settings
                 new Vector2(0.08f, 0.05f), new Vector2(0.92f, 0.95f), Close,
                 sortingOrder: 32000,   // settings sits above every other modal
                 frameName: RpgUiCatalog.FrameSettings, medallionIcon: "settings");
+            MedievalUiSkin.ApplyShell(_modal.chrome);
 
             // Register with the single-modal arbiter (battle-allowed — a system settings screen
             // must be openable from pause mid-combat and never rejected). Arbiter close = Close.
@@ -164,24 +171,12 @@ namespace DeNelle.Settings
 
             var layout = _modal.chrome.layout;
 
-            // FRESH-CAPTURE FIX (2026-07-06): the FrameSettings header band (y 0.905–0.995,
-            // the art's top-centre TAB) renders ABOVE the visible slab at this panel stretch —
-            // the "Settings" title read as a plate floating outside the panel. Re-seat the
-            // chrome's header zone INSIDE the panel top and back it with an obsidian plate so
-            // the title always reads on chrome (the title label is a child of the zone).
+            // The approved medieval shell carries its own top structure. Seat the runtime title
+            // inside it; the retired silver design's floating black title plate is not rebuilt.
             if (layout != null && layout.header != null)
             {
-                layout.header.anchorMin = new Vector2(0.28f, 0.885f);
-                layout.header.anchorMax = new Vector2(0.72f, 0.945f);
-                var backing = new GameObject("TitleBacking", typeof(Image));
-                backing.transform.SetParent(layout.header, false);
-                var bkRt = (RectTransform)backing.transform;
-                bkRt.anchorMin = Vector2.zero; bkRt.anchorMax = Vector2.one;
-                bkRt.offsetMin = Vector2.zero; bkRt.offsetMax = Vector2.zero;
-                var bkImg = backing.GetComponent<Image>();
-                bkImg.color = ElarionUiKit.ObsidianFill;
-                bkImg.raycastTarget = false;
-                backing.transform.SetAsFirstSibling();
+                layout.header.anchorMin = new Vector2(0.30f, 0.885f);
+                layout.header.anchorMax = new Vector2(0.70f, 0.955f);
             }
 
             var bodyZone = layout != null && layout.body != null
@@ -249,6 +244,7 @@ namespace DeNelle.Settings
             // ownership. The Wallet assembly stays behind CurrencySkinResolver's Core seam.
             // Two explicit controls make the available action legible without relying on colour;
             // the inapplicable one remains visible but disabled so players can discover both.
+#if !GOOGLE_PLAY
             y = Caption(body, "Wallet", y);
             _walletConnectButton = ElarionUiKit.BuildObsidianButton(body, "Connect Wallet",
                 ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Yellow,
@@ -259,6 +255,7 @@ namespace DeNelle.Settings
                 new Vector2(0.52f, y - Frac(120f)), new Vector2(0.94f, y),
                 CurrencySkinResolver.RequestWalletDisconnect);
             y -= Frac(132f);
+#endif
 
             // ── Help + Reset (WO-588) ────────────────────────────────────────
             y = Caption(body, "Help", y);
@@ -366,7 +363,61 @@ namespace DeNelle.Settings
             }
 
             BuildSelectorButtons();
+            ApplyMedievalPresentation();
             _modal.canvas.SetActive(false);   // built hidden; Open shows it
+        }
+
+        private void ApplyMedievalPresentation()
+        {
+            if (_modal == null || _modal.chrome == null) return;
+            MedievalUiSkin.ApplyShell(_modal.chrome);
+
+            var buttons = _modal.canvas.GetComponentsInChildren<Button>(true);
+            foreach (var button in buttons)
+            {
+                if (button == null || button == _modal.chrome.close ||
+                    string.Equals(button.gameObject.name, "Scrim", StringComparison.Ordinal)) continue;
+                bool selected = button.gameObject.name.StartsWith("SelectedSettingOption", StringComparison.Ordinal);
+                MedievalUiSkin.ApplyButton(button, primary: selected);
+                if (selected) InkButtonLabel(button);
+            }
+            MedievalUiSkin.ApplyClose(_modal.chrome.close);
+
+            var sliders = _modal.canvas.GetComponentsInChildren<Slider>(true);
+            var trackSprite = Resources.Load<Sprite>("UI/ElarionMedieval/progress/progress-track-empty");
+            var bezelSprite = Resources.Load<Sprite>("UI/ElarionMedieval/frames/circular-bezel-four-point");
+            foreach (var slider in sliders)
+            {
+                var track = slider.transform.Find("Track")?.GetComponent<Image>();
+                if (track != null && trackSprite != null)
+                {
+                    track.sprite = trackSprite;
+                    track.type = Image.Type.Sliced;
+                    track.color = Color.white;
+                }
+                var handle = slider.handleRect != null ? slider.handleRect.GetComponent<Image>() : null;
+                if (handle != null && bezelSprite != null)
+                {
+                    handle.sprite = bezelSprite;
+                    handle.type = Image.Type.Simple;
+                    handle.preserveAspect = true;
+                    handle.color = Color.white;
+                    handle.rectTransform.sizeDelta = new Vector2(52f, 52f);
+                }
+            }
+
+            var toggleFrame = Resources.Load<Sprite>("UI/ElarionMedieval/frames/square-icon-frame");
+            var toggles = _modal.canvas.GetComponentsInChildren<Toggle>(true);
+            foreach (var toggle in toggles)
+            {
+                var box = toggle.targetGraphic as Image;
+                if (box != null && toggleFrame != null)
+                {
+                    box.sprite = toggleFrame;
+                    box.type = Image.Type.Sliced;
+                    box.color = Color.white;
+                }
+            }
         }
 
         // Rebuilt whole so the active selection re-colors (Yellow = active).
@@ -393,6 +444,8 @@ namespace DeNelle.Settings
                              : ElarionUiKit.ObsidianButtonColor.Gray,
                     new Vector2(x0, 0.05f), new Vector2(x1, 0.95f),
                     () => OnQualityTierClicked(captured));
+                b.gameObject.name = selected ? "SelectedSettingOption_Quality" : "SettingOption_Quality";
+                MedievalUiSkin.ApplyButton(b, primary: selected);
                 FitChipLabel(b, tierText);
                 if (selected) InkButtonLabel(b);
             }
@@ -407,14 +460,16 @@ namespace DeNelle.Settings
                              : ElarionUiKit.ObsidianButtonColor.Gray,
                     new Vector2(x0, 0.05f), new Vector2(x1, 0.95f),
                     () => OnDifficultyClicked(captured));
+                b.gameObject.name = selected ? "SelectedSettingOption_Difficulty" : "SettingOption_Difficulty";
+                MedievalUiSkin.ApplyButton(b, primary: selected);
                 FitChipLabel(b, null);
                 if (selected) InkButtonLabel(b);
             }
         }
 
         // SWEEP 9413 R2 (#2): the selected (gold) chip rendered GOLD text on the GOLD face —
-        // near invisible (luminance law). The kit's constructed mode inks Yellow labels, but the
-        // PREFAB mode keeps the prefab's gold label color, so force dark Ink on the selected
+        // near invisible (luminance law). Selected controls now use the shared black-iron/gold
+        // skin, so force warm ivory (not the old dark-on-gold Ink treatment) for contrast.
         // chip's label wherever the build mode put it (children, else the prefab root).
         // FRESH-CAPTURE FIX (2026-07-06): selector-chip labels clipped ("(Desktop (60 FP…").
         // Resolve the chip's label wherever the build mode put it (constructed child / prefab
@@ -438,7 +493,25 @@ namespace DeNelle.Settings
             if ((labels == null || labels.Length == 0) && b.transform.parent != null)
                 labels = b.transform.parent.GetComponentsInChildren<TMPro.TMP_Text>(true);
             if (labels == null) return;
-            foreach (var t in labels) t.color = ElarionUi.Ink;
+            foreach (var t in labels) t.color = ElarionUi.Parchment;
+
+            // Selection must remain explicit at rest and cannot depend on a barely different
+            // tint. A short gold rule is the shared tab grammar's non-colour-only carrier.
+            var existing = b.transform.Find("SelectedSettingUnderline");
+            if (existing == null)
+            {
+                var marker = new GameObject("SelectedSettingUnderline", typeof(RectTransform), typeof(Image));
+                marker.transform.SetParent(b.transform, false);
+                var rt = marker.GetComponent<RectTransform>();
+                rt.anchorMin = new Vector2(0.16f, 0.08f);
+                rt.anchorMax = new Vector2(0.84f, 0.13f);
+                rt.offsetMin = Vector2.zero;
+                rt.offsetMax = Vector2.zero;
+                var image = marker.GetComponent<Image>();
+                image.color = ElarionUi.Gold;
+                image.raycastTarget = false;
+                marker.transform.SetAsLastSibling();
+            }
         }
 
         // =====================================================================
@@ -463,7 +536,9 @@ namespace DeNelle.Settings
                     _difficultyBlurb.text = DifficultyTuning.Blurb(SettingsModel.Difficulty);
                 if (_audioSeam != null)
                     _audioSeam.gameObject.SetActive(!AudioMixerBridge.HasMixer);
+#if !GOOGLE_PLAY
                 RefreshWalletControls();
+#endif
             }
             finally
             {
@@ -471,6 +546,7 @@ namespace DeNelle.Settings
             }
         }
 
+#if !GOOGLE_PLAY
         private void OnWalletConnectionChanged(bool connected, string shortAddress)
         {
             RefreshWalletControls();
@@ -494,6 +570,7 @@ namespace DeNelle.Settings
             }
         }
 
+#endif
         private void UpdateVolumeLabels()
         {
             if (_masterValue != null && _masterSlider != null) _masterValue.text = FormatPercent(_masterSlider.value);

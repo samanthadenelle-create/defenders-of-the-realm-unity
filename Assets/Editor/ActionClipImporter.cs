@@ -60,6 +60,16 @@ namespace DeNelle.Editor
             if (!IsActionAsset) return;
 
             var importer = (ModelImporter)assetImporter;
+            // Preserve reviewed per-clip events before rebuilding from Unity's default takes.
+            // Without this, any SaveAndReimport (including the explicit HitFrame manifest
+            // pipeline) reports success and this postprocessor silently deletes the event.
+            var priorEvents = new System.Collections.Generic.Dictionary<string, AnimationEvent[]>(
+                System.StringComparer.Ordinal);
+            var priorClips = importer.clipAnimations;
+            if (priorClips != null)
+                for (int i = 0; i < priorClips.Length; i++)
+                    if (!string.IsNullOrEmpty(priorClips[i].name) && priorClips[i].events != null && priorClips[i].events.Length > 0)
+                        priorEvents[priorClips[i].name] = priorClips[i].events;
             var clips = importer.defaultClipAnimations;
             if (clips == null || clips.Length == 0) return;
 
@@ -73,6 +83,8 @@ namespace DeNelle.Editor
             {
                 var c = clips[i];
                 if (IsBindOrTPoseClipName(c.name)) continue;
+                if (priorEvents.TryGetValue(c.name, out var preservedEvents))
+                    c.events = preservedEvents;
 
                 c.loopTime = looping;
                 // Loop Pose (loopBlend): offset the clip so its END pose matches its START,
