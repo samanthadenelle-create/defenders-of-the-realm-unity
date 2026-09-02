@@ -402,6 +402,20 @@ namespace DeNelle.Core
         {
             using var _ = FlowTrace.Enter(Sys, "ResolveContentSource");
 
+#if DEVELOPMENT_BUILD
+            // The headed gate proof isolates one-scene locomotion geometry. Its runner may
+            // execute in a network-restricted shell; do not let the intentional first-run
+            // CDN barrier cover every evidence frame. This flag is absent from release builds.
+            if (Array.Exists(Environment.GetCommandLineArgs(), a =>
+                string.Equals(a, "-gateProofDir", StringComparison.OrdinalIgnoreCase)))
+            {
+                Source = ContentSource.Online;
+                FlowTrace.Step(Sys, "headed gate proof -> native CDN barrier bypassed for capture isolation");
+                onDone?.Invoke(Source);
+                yield break;
+            }
+#endif
+
             // A WebGL player has already reached its web host and downloaded the shipped
             // catalog before this coroutine can run. Browser cache lifetime is controlled by
             // the browser, not by the native opt-in/offline contract below. Re-probing the

@@ -1,0 +1,1 @@
+GATE_TRAVERSAL_PROOF_FAIL: north: failed to reach outside radius after 40 physical moves

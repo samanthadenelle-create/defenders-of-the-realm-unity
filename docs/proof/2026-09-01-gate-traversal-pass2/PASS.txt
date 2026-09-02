@@ -1,0 +1,1 @@
+GATE_TRAVERSAL_PROOF_OK 4/4 continuous exits; zero gate links/warps.

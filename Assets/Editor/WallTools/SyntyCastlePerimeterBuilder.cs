@@ -439,6 +439,9 @@ namespace DeNelle.Editor
             if (axisMax <= axisMin + 0.05f) return;
             Vector3 min = source.min;
             Vector3 max = source.max;
+            // Sink the wall-owned collision slightly into the terrain. Exact y=0
+            // bottoms exposed a precision lip at the threshold on mobile agents.
+            min.y = Mathf.Min(min.y, MergedWorldGroundY - 0.25f);
             if (axisIsX) { min.x = axisMin; max.x = axisMax; }
             else { min.z = axisMin; max.z = axisMax; }
 

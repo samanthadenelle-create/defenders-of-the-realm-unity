@@ -32,20 +32,21 @@ namespace DeNelle.Editor.Regression
                 Require(src, "GATE_CLEARANCE_OK 4/4 gates");
                 Require(src, "GetComponentsInChildren<Collider>(true)");
                 Require(src, "clearWidth >= 3.95f");
+                Require(src, "MergedWorldGroundY - 0.25f");
                 string carve = File.ReadAllText("Assets/_Modules/Village/World/CastleWallNavObstacleInstaller.cs");
                 Require(carve, "if (!col.enabled || col.isTrigger) continue;");
                 string traversal = File.ReadAllText("Assets/_Modules/Village/World/GateTraversalInjector.cs");
-                Require(traversal, "NavMeshLink");
-                Require(traversal, "bidirectional = true");
-                Require(traversal, "agentTypeID = 0");
-                Require(traversal, "InnerRadius = 37f");
-                Require(traversal, "OuterRadius = 41f");
-                string flags = File.ReadAllText("Assets/_Modules/Core/FeatureFlags.cs");
-                Require(flags, "Get(\"gatetraversal\", defaultOn: true)");
+                // NOTE: do NOT re-add a Require() on a doc-comment phrase here. A comment
+                // assertion breaks on a rename while a real behaviour change slips past it.
+                // The two IndexOf guards below are the actual re-introduction guard.
+                Require(traversal, "zero NavMeshLinks and zero hero warps authored");
+                if (traversal.IndexOf("AddComponent<NavMeshLink>", StringComparison.Ordinal) >= 0 ||
+                    traversal.IndexOf("class GateWarp", StringComparison.Ordinal) >= 0)
+                    throw new InvalidOperationException("merged-world gates reintroduced a runtime nav link or hero warp");
                 if (src.IndexOf("CastleHubBuilder.CastleFootprintLiftY", StringComparison.Ordinal) >= 0)
                     throw new InvalidOperationException("merged perimeter reads the retired +3m island lift and can float above y=0 again");
 
-                reason = "SYNTY_PERIMETER_GROUNDING_OK: walls/gates ground, source corner towers are corrected, and short hero + bidirectional NavMesh gate traversal is default-on.";
+                reason = "SYNTY_PERIMETER_GROUNDING_OK: walls/gates ground, source corner towers are corrected, and all four openings are continuous with no gate nav link/warp.";
                 return true;
             }
             catch (Exception ex)
