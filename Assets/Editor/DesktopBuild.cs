@@ -72,11 +72,34 @@ namespace DeNelle.Editor
             };
 
             Debug.Log($"[DesktopBuild] WebGL build -> {dir} ({scenes.Length} scenes). This can take many minutes.");
+
+            // WO-1315 (2026-09-02): switch the ACTIVE target before building content.
+            // Addressables builds for the active editor target, NOT for the target named in
+            // BuildPlayerOptions. This site was found by ContentBuildTargetRegression as
+            // occurrence SIX of the CLAUDE.md sec.16 class, on the same day WO-1315 fixed the
+            // identical hole in WebGLBuild.cs (occurrence five) and WO-1124 fixed it in
+            // AndroidBuild.cs (occurrence two). Without the switch, this path builds a WebGL
+            // player against whatever platform's bundles happen to be current, and reports
+            // ADDRESSABLES_CONTENT_OK while doing it.
+            if (EditorUserBuildSettings.activeBuildTarget != BuildTarget.WebGL)
+            {
+                Debug.Log($"[DesktopBuild] active target is '{EditorUserBuildSettings.activeBuildTarget}' - " +
+                          "switching to WebGL BEFORE the content build (WO-1315).");
+                if (!EditorUserBuildSettings.SwitchActiveBuildTarget(BuildTargetGroup.WebGL, BuildTarget.WebGL))
+                {
+                    Debug.LogError("[DesktopBuild] WebGL ABORTED - could not switch the active build target. " +
+                                   "Building content now would produce the wrong platform's bundles (WO-1315).");
+                    EditorApplication.Exit(1);
+                    return;
+                }
+            }
+
             // WO-974: build Addressables content EXPLICITLY (see AddressablesContentBuild).
             // Content failure must fail the player build — a green player with empty aa is a hollow ship.
-            if (!AddressablesContentBuild.EnsureBuilt("DesktopBuild.WebGL"))
+            // Target passed EXPLICITLY (WO-1315) so EnsureBuilt can REFUSE a mismatch.
+            if (!AddressablesContentBuild.EnsureBuilt("DesktopBuild.WebGL", BuildTarget.WebGL))
             {
-                Debug.LogError("[DesktopBuild] WebGL ABORTED — Addressables content build failed (WO-974).");
+                Debug.LogError("[DesktopBuild] WebGL ABORTED - Addressables content build failed (WO-974/WO-1315).");
                 EditorApplication.Exit(1);
                 return;
             }
@@ -247,10 +270,32 @@ namespace DeNelle.Editor
                 options = development ? BuildOptions.Development : BuildOptions.None,
             };
 
-            // WO-974: build Addressables content EXPLICITLY (see AddressablesContentBuild).
-            if (!AddressablesContentBuild.EnsureBuilt("DesktopBuild.Windows"))
+            // WO-1315 (2026-09-02): switch the ACTIVE target before building content.
+            // This is the path build-windows.ps1 drives. It was correct by LUCK - the editor is
+            // usually already on Win64 - which is precisely the failure mode of this class: it
+            // works until the previous run left the target on Android or WebGL, and then it
+            // silently ships the wrong platform's bundles with every marker green. The known
+            // "desktop build after an Android build needs -buildTarget Win64" trap is this exact
+            // hazard; with an explicit target it becomes a LOUD refusal instead of a silent swap.
+            if (EditorUserBuildSettings.activeBuildTarget != BuildTarget.StandaloneWindows64)
             {
-                Debug.LogError("[DesktopBuild] Windows ABORTED — Addressables content build failed (WO-974).");
+                Debug.Log($"[DesktopBuild] active target is '{EditorUserBuildSettings.activeBuildTarget}' - " +
+                          "switching to StandaloneWindows64 BEFORE the content build (WO-1315).");
+                if (!EditorUserBuildSettings.SwitchActiveBuildTarget(BuildTargetGroup.Standalone,
+                                                                    BuildTarget.StandaloneWindows64))
+                {
+                    Debug.LogError("[DesktopBuild] Windows ABORTED - could not switch the active build target. " +
+                                   "Building content now would produce the wrong platform's bundles (WO-1315).");
+                    EditorApplication.Exit(1);
+                    return;
+                }
+            }
+
+            // WO-974: build Addressables content EXPLICITLY (see AddressablesContentBuild).
+            // Target passed EXPLICITLY (WO-1315) so EnsureBuilt can REFUSE a mismatch.
+            if (!AddressablesContentBuild.EnsureBuilt("DesktopBuild.Windows", BuildTarget.StandaloneWindows64))
+            {
+                Debug.LogError("[DesktopBuild] Windows ABORTED - Addressables content build failed (WO-974/WO-1315).");
                 EditorApplication.Exit(1);
                 return;
             }

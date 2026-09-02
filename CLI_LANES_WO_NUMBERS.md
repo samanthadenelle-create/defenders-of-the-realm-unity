@@ -167,7 +167,18 @@
 > fine as history. A copied number is the bug **even when it was right the day it was written** -
 > that is exactly how the retired 860-899 UI block kept re-seeding collisions from CLAUDE.md sec.2.
 
-> ## ⚠ RECONCILED 2026-09-02 (CLI, tenth pass): main line next free = **1315**.
+> ## ⚠ RECONCILED 2026-09-02 (CLI, eleventh pass): main line next free = **1316**.
+> *(CLI minted **WO-1315** — the WebGL build built **StandaloneWindows64** Addressables content.
+> Captured verbatim: `ADDRESSABLES_CONTENT_OK 751 locations :: WebGLBuild target=StandaloneWindows64`,
+> and `ServerData/WebGL` was still on the Aug 30 catalog while Windows had regenerated that morning.
+> `WebGLBuild.cs:130` called the target-less `EnsureBuilt(string)` — **the back-compat overload whose
+> own XML doc warns against it, written by WO-1124**, which fixed this exact hole on the Android path
+> on 08-19 and left WebGL open. Occurrence FIVE of the sec.16 class. FIXED (switch first, explicit
+> target, mirroring AndroidBuild). ⛔ The real hole is still open: nothing FAILS when a build entry
+> point uses the target-less overload — that guard is the WO's follow-up.
+> Bumped 1315 -> 1316 in this SAME edit.)*
+>
+> ### superseded: RECONCILED 2026-09-02 (CLI, tenth pass): main line next free = **1315**.
 > *(CLI minted **WO-1314** answering the owner's "why does it break whenever it touches the cdn".
 > Her R2 hypothesis is RULED OUT with data — fresh `R2_PARITY_OK`, live 200s, `ACAO: *`, and the
 > `catalog.json` 404 is EXPECTED. What the measurement DOES show: `webGLMemorySize: 512` against

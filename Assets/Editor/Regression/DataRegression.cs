@@ -1233,6 +1233,12 @@ namespace DeNelle.Editor
             // name where the model belongs, so every skeleton/orc/large humanoid asked for a
             // label that does not exist - an InvalidKeyException per spawn and no family fetch.
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "enemy-family-label suite", () => { if (!DeNelle.Editor.Regression.EnemyFamilyLabelRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[enemy-family-label] " + r); });
+            // WO-1315 follow-up: NO player-build entry point may call the target-less
+            // EnsureBuilt overload. Addressables builds for the ACTIVE editor target, so a
+            // call that cannot name its platform ships another platform's catalog with every
+            // marker green - five occurrences of that class between 2026-08-18 and 2026-09-02.
+            // Source-only, so it catches the sixth without building anything.
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "content-build-target suite", () => { if (!DeNelle.Editor.Regression.ContentBuildTargetRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[content-build-target] " + r); });
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "npc-idle-controller suite", () => { if (!DeNelle.Editor.Regression.NpcIdleControllerRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[npc-idle-controller] " + r); });
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "spawn-area-enemy-ids suite", () => { if (!DeNelle.Editor.Regression.SpawnAreaEnemyIdRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[spawn-area-enemy-ids] " + r); });
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "regression-marker suite", () => { if (!DeNelle.Editor.Regression.RegressionMarkerRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[regression-marker] " + r); });

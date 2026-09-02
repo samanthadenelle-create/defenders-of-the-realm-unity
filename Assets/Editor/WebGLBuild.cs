@@ -124,12 +124,46 @@ namespace DeNelle.Editor
                 options = devBuild ? BuildOptions.Development : BuildOptions.None,
             };
 
+            // WO-1315 (2026-09-02): SWITCH THE ACTIVE TARGET BEFORE BUILDING CONTENT.
+            //
+            // Addressables builds for the ACTIVE editor target, not for the target in
+            // BuildPlayerOptions. This path called EnsureBuilt with NO target and NO prior
+            // switch, so it inherited whatever the editor happened to be on. Measured on
+            // 2026-09-02, straight after a Windows player build:
+            //
+            //   ADDRESSABLES_CONTENT_OK 751 locations :: WebGLBuild target=StandaloneWindows64
+            //     (-> Library/com.unity.addressables/aa/Windows/settings.json)
+            //
+            // ServerData/WebGL was therefore never regenerated, and the WebGL player shipped
+            // against a THREE-DAY-OLD catalog while every marker stayed green. That is
+            // occurrence FIVE of the CLAUDE.md sec.16 class and the exact shape of WO-1124,
+            // which fixed this same hole in AndroidBuild and left the WebGL path open.
+            //
+            // The switch lives HERE rather than in build-webgl.ps1 for the reason AndroidBuild
+            // records: the whole failure class is assuming a human step. In-method, it holds
+            // for the menu item, batchmode, CI and the ship chain alike. No-op when already on
+            // WebGL, so the fast path stays fast.
+            if (EditorUserBuildSettings.activeBuildTarget != BuildTarget.WebGL)
+            {
+                Debug.Log($"[WebGLBuild] active target is '{EditorUserBuildSettings.activeBuildTarget}' - " +
+                          "switching to WebGL BEFORE the content build (WO-1315).");
+                if (!EditorUserBuildSettings.SwitchActiveBuildTarget(BuildTargetGroup.WebGL, BuildTarget.WebGL))
+                {
+                    Debug.LogError("[WebGLBuild] ABORTED - could not switch the active build target to WebGL. " +
+                                   "Building content now would produce the wrong platform's bundles (WO-1315/WO-1124).");
+                    EditorApplication.Exit(1);
+                    return;
+                }
+            }
+
             // WO-974: build Addressables content EXPLICITLY (see AddressablesContentBuild).
             // Matters most here: the web payload is served remotely, so an absent catalog is
             // invisible until a player loads the deployed build and nothing resolves.
-            if (!AddressablesContentBuild.EnsureBuilt("WebGLBuild"))
+            // The target is now passed EXPLICITLY (WO-1315) so EnsureBuilt can refuse a
+            // mismatch rather than silently building for whatever is active.
+            if (!AddressablesContentBuild.EnsureBuilt("WebGLBuild", BuildTarget.WebGL))
             {
-                Debug.LogError("[WebGLBuild] ABORTED — Addressables content build failed (WO-974).");
+                Debug.LogError("[WebGLBuild] ABORTED - Addressables content build failed (WO-974/WO-1315).");
                 EditorApplication.Exit(1);
                 return;
             }
