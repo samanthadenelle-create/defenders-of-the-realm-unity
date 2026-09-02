@@ -167,7 +167,29 @@
 > fine as history. A copied number is the bug **even when it was right the day it was written** -
 > that is exactly how the retired 860-899 UI block kept re-seeding collisions from CLAUDE.md sec.2.
 
-> ## ⚠ RECONCILED 2026-09-02 (CLI, thirteenth pass): main line next free = **1318**.
+> ## ⚠ RECONCILED 2026-09-02 (CLI, fifteenth pass): main line next free = **1320**.
+> *(CLI minted **WO-1319** from an owner screenshot: the bottom action-bar face labels render as one
+> unbroken overlapping run (`BUILDTALKHERO...QUEUE MANAGE`) at a narrow aspect. The OTHER clipping in
+> that shot is expected — the UI is authored for landscape — but text running into its neighbour is a
+> layout failure at ANY width; the correct degradation is ellipsis / a size floor / icon-only. Likely
+> mechanism: the face count is VARIABLE at runtime (five in open town, six only with an NPC in range)
+> so a width divided for a fixed count collides. ⛔ Do NOT renumber `ActionBarButtonId` or change
+> `ButtonCount` (7), and do NOT re-add a sixth always-on face to make the maths even.
+> Bumped 1319 -> 1320 in this SAME edit.)*
+>
+> ### superseded: RECONCILED 2026-09-02 (CLI, fourteenth pass): main line next free = **1319**.
+> *(CLI minted **WO-1318** on the owner's direct instruction — **Pi U2A payments, ONE sku**
+> (`Hearth Spark`, $4.99). Her rulings: one pack first (no purchase has EVER completed in this game,
+> so proving the rail on one sku beats shipping 28 that fail identically), and *"just like with SKR
+> we're gonna do the floor of 24 hour window"* = CoinGecko **`low_24h`**. ⛔ REUSE the existing
+> USD-anchored rail (`purchase-catalog.js` + `purchases/quote.js` + `verify.js`) — do NOT grow a
+> second store. Verified `ids=pi-network` returns `low_24h` on the SAME endpoint SKR uses
+> (0.091171 -> $4.99 = 54.73 Pi). ⚠ The SKR fetcher FAILS CLOSED ("never a stale or invented price")
+> and Pi must too — I had proposed a static fallback and the house pattern is better; corrected.
+> `PI_NETWORK_API_KEY` is set Encrypted/Production on BOTH Vercel projects and must never enter the
+> repo. Bumped 1318 -> 1319 in this SAME edit.)*
+>
+> ### superseded: RECONCILED 2026-09-02 (CLI, thirteenth pass): main line next free = **1318**.
 > *(CLI minted **WO-1317** — P0, diagnosed from the LIVE `web_trace` sink, not from reading code.
 > Captured 09-01: `PiInit(sandbox=True)` + `Signed in as samanthadenelle`. The published app
 > authenticated against the Pi **TESTNET SANDBOX** while the owner's portal app is **MAINNET** (she
