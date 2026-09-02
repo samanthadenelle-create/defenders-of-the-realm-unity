@@ -1150,6 +1150,13 @@ namespace DeNelle.Village
             int changes = 0;
             bool reported = false;
             float elapsed = 0f;
+            // NAME THE COLLIDING STATES (2026-09-02). The first cut of this watch reported only a
+            // COUNT, and its suggested fix (the DeathDir != N guard on the generic fallback) was
+            // ALREADY LIVE in every built controller — so seq 4647 pointed the next seat at code that
+            // was already correct. The real collision was death-vs-ACTION (the killing blow's own Hit
+            // trigger re-entering the base layer), and a count can never say that. The watch now
+            // records the actual state SEQUENCE, so the capture names both sides of the collision.
+            var visited = new System.Collections.Generic.List<string>(8) { ResolveBaseStateName(lastHash) };
             while (elapsed < 1.5f)
             {
                 yield return null;
@@ -1160,6 +1167,7 @@ namespace DeNelle.Village
                 {
                     lastHash = hash;
                     changes++;
+                    if (visited.Count < 8) visited.Add(ResolveBaseStateName(hash));
                 }
                 if (changes >= 3 && !reported)
                 {
@@ -1168,10 +1176,14 @@ namespace DeNelle.Village
                         "DEATH ANIMATION IS RE-ENTERING: " + changes + " base-layer state changes in " +
                         elapsed.ToString("F2") + "s on ctrl='" +
                         (anim.runtimeAnimatorController != null ? anim.runtimeAnimatorController.name : "NONE") +
-                        "' -> two AnyState death transitions are simultaneously satisfiable while Dead " +
+                        "' | state sequence = " + string.Join(" -> ", visited) +
+                        " | two AnyState transitions are simultaneously satisfiable while Dead " +
                         "and DeathDir stay latched, so each death clip restarts at frame 0 and the body " +
-                        "reads as a SHAKE. Fix is in HeroAnimatorFactory: the generic Death fallback must " +
-                        "carry a DeathDir != N guard for every directional death state that exists.");
+                        "reads as a SHAKE. READ THE SEQUENCE ABOVE before theorising: if it names two " +
+                        "DEATH states the generic Death fallback is missing a DeathDir != N guard for a " +
+                        "directional state; if it names an ACTION state (Hit/Cast/Cast_q..r/Attack*/" +
+                        "Victory) then that state's AnyState transition is missing its Dead == false " +
+                        "guard. Both guards are authored in HeroAnimatorFactory.");
                 }
             }
             var st = anim != null ? anim.GetCurrentAnimatorStateInfo(0) : default;
@@ -1180,6 +1192,35 @@ namespace DeNelle.Village
                 st.normalizedTime.ToString("F2") + " -> " +
                 (changes <= 1 ? "death clip played through and holds its final frame." : "UNSTABLE death state."));
         }
+
+        /// <summary>
+        /// Maps a base-layer fullPathHash back to a readable state name. Animator exposes no
+        /// hash->name lookup at runtime, so this hashes the known "Base Layer.&lt;name&gt;" paths that
+        /// HeroAnimatorFactory / KnightPackageControllerBuilder actually author and matches. An
+        /// unknown hash reports as "state#&lt;hash&gt;" rather than throwing — a partially-named
+        /// sequence still beats a bare count.
+        /// </summary>
+        private static string ResolveBaseStateName(int fullPathHash)
+        {
+            for (int i = 0; i < BaseLayerStateNames.Length; i++)
+            {
+                if (Animator.StringToHash("Base Layer." + BaseLayerStateNames[i]) == fullPathHash)
+                    return BaseLayerStateNames[i];
+            }
+            return "state#" + fullPathHash;
+        }
+
+        // Every base-layer state name HeroAnimatorFactory can build (plus the mocap-only extras).
+        // Additive only: a name missing here degrades to "state#N", it never breaks the watch.
+        private static readonly string[] BaseLayerStateNames =
+        {
+            "Death", "DeathLeft", "DeathRight", "DeathFront", "DeathBack",
+            "Hit", "Cast", "Cast_q", "Cast_w", "Cast_e", "Cast_r",
+            "Attack", "Attack0", "Attack1", "Attack2",
+            "Locomotion", "CombatLocomotion", "InjuredLocomotion",
+            "Block", "Victory", "Unsheathe",
+            "TurnLeft", "TurnRight", "TurnLeft180", "TurnRight180",
+        };
 
         private static string ForceKnightDeathState(Animator anim, DeathDirection dir)
         {

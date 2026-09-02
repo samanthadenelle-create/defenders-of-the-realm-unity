@@ -56,6 +56,34 @@ namespace DeNelle.Editor
         // -body version. Idle/near-idle (< this) still plays the clean full-body attack.
         private const float StandingSpeedMax = 2.0f;
 
+        // ── DEATH IS TERMINAL ON THE BASE LAYER (F8 seq 4647, 2026-09-02) ────────────
+        // The 2026-08-30 fix made the DEATH transitions mutually exclusive with each other
+        // (the generic fallback carries DeathDir != N for every directional state actually
+        // built — see the Death block in Build). That landed and is live in every built
+        // controller. It was NOT sufficient, and the captured line proves it: the re-entry
+        // detector still fired 3 base-layer state changes in 0.25s on ctrl='Mage'.
+        //
+        // The remaining collision is NOT death-vs-death, it is death-vs-ACTION. Every other
+        // AnyState transition on the base layer (Cast, Cast_q/w/e/r, Attack{N}, Hit, Victory)
+        // carried NO Dead guard, and each is standing-gated on Speed < StandingSpeedMax —
+        // which a dead, pinned hero satisfies permanently (Speed == 0). So a Hit trigger from
+        // the killing blow, an overkill hit, a lingering AoE tick, or a wave-clear Victory
+        // fires WHILE Dead is latched:
+        //   Death -> (Any->Hit matches) -> Hit -> AddActionReturn exits at 0.28 -> Locomotion
+        //         -> (Any->Death matches again, Dead still latched) -> Death restarts frame 0
+        // three base-layer changes inside a quarter second, the death clip never advances past
+        // its opening frames, and the body reads as a SHAKE — the exact signature the detector
+        // describes.
+        //
+        // FIX: once Dead latches, NOTHING but a death state may be entered. Every non-death
+        // AnyState transition (base layer AND the upper-body overlay, which shares the same
+        // Cast/Attack triggers and would otherwise swing a corpse's arms) now carries
+        // Dead == false. Combined with the death-vs-death guards this makes the base layer's
+        // AnyState set totally mutually exclusive for every (Dead, DeathDir) combination.
+        // Do NOT remove this guard to "let the death flinch play" — the flinch IS the shake.
+        private static void AddNotDead(AnimatorStateTransition t) =>
+            t.AddCondition(AnimatorConditionMode.IfNot, 0f, "Dead");
+
         // Shared locomotion clips (all classes) — canonical WO-283 Shared/ basenames.
         private const string IdleClip      = "Shared_Idle";
         private const string WalkClip      = "Shared_Walk_Forward";
@@ -553,6 +581,7 @@ namespace DeNelle.Editor
                 toCast.hasExitTime = false; toCast.duration = 0.05f;
                 toCast.AddCondition(AnimatorConditionMode.If, 0f, "Cast");
                 toCast.AddCondition(AnimatorConditionMode.Less, StandingSpeedMax, "Speed"); // WO-218: standing only
+                AddNotDead(toCast);   // F8 4647: death is terminal — a corpse never casts
                 AddActionReturn(castState, locoState, combatLocoState, actionExit, CastExitDur);
             }
             else
@@ -576,6 +605,7 @@ namespace DeNelle.Editor
                 var toVic = sm.AddAnyStateTransition(vicState);
                 toVic.hasExitTime = false; toVic.duration = 0.1f;
                 toVic.AddCondition(AnimatorConditionMode.If, 0f, "Victory");
+                AddNotDead(toVic);    // F8 4647: a wave clear must not yank a dead hero out of Death
                 var vicBack = vicState.AddTransition(locoState);
                 vicBack.hasExitTime = true; vicBack.exitTime = 0.95f; vicBack.duration = 0.15f;
             }
@@ -605,6 +635,11 @@ namespace DeNelle.Editor
                 // Locomotion so the legs keep walking/running; captured proof was vel=6 with
                 // m-ss-damage-01 w=1.0 on baseState. Idle/near-idle still plays the clean flinch.
                 toHit.AddCondition(AnimatorConditionMode.Less, StandingSpeedMax, "Speed");
+                // F8 4647 (THE death-shake vector): a dead hero is pinned, so Speed==0 satisfies the
+                // standing gate forever. Without this guard the killing blow's own Hit trigger — and
+                // every overkill/AoE tick after it — kicked the base layer Death -> Hit -> Locomotion
+                // -> Death, restarting the death clip at frame 0 each lap.
+                AddNotDead(toHit);
                 // Exit early (0.28 of the sped-up clip ≈ 0.37s) then return combat-aware (braced loco if
                 // still InCombat) so a standing flinch snaps back cleanly instead of holding the stagger.
                 AddActionReturn(hitState, locoState, combatLocoState, 0.28f, 0.1f);
@@ -999,6 +1034,7 @@ namespace DeNelle.Editor
                 toAttack.AddCondition(AnimatorConditionMode.Less, StandingSpeedMax, "Speed");
                 if (combo)
                     toAttack.AddCondition(AnimatorConditionMode.Equals, i, "Combo");
+                AddNotDead(toAttack);   // F8 4647: death is terminal — a corpse never swings
 
                 AddActionReturn(state, locoState, combatLocoState, actionExit, CastExitDur);
                 built++;
@@ -1071,6 +1107,7 @@ namespace DeNelle.Editor
                 toState.AddCondition(AnimatorConditionMode.If, 0f, "Cast");
                 toState.AddCondition(AnimatorConditionMode.Equals, v, "CastVariant");
                 toState.AddCondition(AnimatorConditionMode.Less, StandingSpeedMax, "Speed");
+                AddNotDead(toState);   // F8 4647: death is terminal — a corpse never casts
 
                 AddActionReturn(state, locoState, combatLocoState, actionExit, CastExitDur);
                 built++;
@@ -1136,6 +1173,10 @@ namespace DeNelle.Editor
             toCast.hasExitTime = false; toCast.duration = 0.05f;
             toCast.canTransitionToSelf = false;
             toCast.AddCondition(AnimatorConditionMode.If, 0f, "Cast");
+            // F8 4647: the overlay listens to the SAME Cast/Attack triggers as the base layer, on an
+            // Override layer at weight 1 masked to arms+torso. Guarding only the base layer would leave
+            // a corpse's arms swinging over the held death pose. Death is terminal on BOTH layers.
+            AddNotDead(toCast);
 
             // WO-285: the same overlay also fires on the melee Attack trigger, so a
             // Knight swing plays on the upper body while the legs keep walking/running.
@@ -1143,6 +1184,7 @@ namespace DeNelle.Editor
             toAttack.hasExitTime = false; toAttack.duration = 0.05f;
             toAttack.canTransitionToSelf = false;
             toAttack.AddCondition(AnimatorConditionMode.If, 0f, "Attack");
+            AddNotDead(toAttack);
 
             var back = upperCast.AddTransition(empty);
             back.hasExitTime = true;
@@ -1168,6 +1210,7 @@ namespace DeNelle.Editor
                     toV.canTransitionToSelf = false;
                     toV.AddCondition(AnimatorConditionMode.If, 0f, "Cast");
                     toV.AddCondition(AnimatorConditionMode.Equals, v, "CastVariant");
+                    AddNotDead(toV);
 
                     var vBack = st.AddTransition(empty);
                     vBack.hasExitTime = true; vBack.exitTime = CastExitTime; vBack.duration = CastExitDur;
