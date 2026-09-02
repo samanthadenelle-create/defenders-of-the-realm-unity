@@ -52,6 +52,19 @@ namespace DeNelle.Village.UI
         /// halves ellipsised ("Archer Tow..." / "Repair..."), so it read as a BROKEN resource row
         /// rather than a different kind of row. The row declares its own shape here; the view
         /// never sniffs string lengths to guess it.
+        ///
+        /// TWO further contracts hang off this flag as of the 2026-09-02 re-capture, and both are
+        /// load-bearing:
+        ///   * COLUMN SPLIT — a wide row's plate is split in proportion to its two MEASURED
+        ///     strings, not at a fixed fraction, and every wide row on one screen renders at one
+        ///     shared font size (EndStateView.WideLabelShare / SolveWideRowFontPx). A fixed split
+        ///     is what left "DESTROYED, looted ..." ellipsised beside a full-size "damaged".
+        ///   * ICON — a wide row is NEVER handed the view's generic loot fallback (the chest,
+        ///     RpgUiCatalog.IconInventory). It shows the icon its MODEL chose or none at all,
+        ///     because a chest on a row reporting a LOSS states the opposite of the truth (owner
+        ///     F8 2026-09-02 defect #3: the two damage rows drew a money bag). A wide row that
+        ///     genuinely wants the chest — the combined spoils tail, "Plans Recovered" — sets
+        ///     <see cref="Icon"/> explicitly.
         /// </summary>
         public bool Wide;
     }
@@ -735,8 +748,15 @@ namespace DeNelle.Village.UI
             }
             vm.Spoils.Add(new SpoilRowVM
             {
-                // No Icon: the combined label resolves no single concept, so BuildSpoilRow's
-                // generic kit fallback (a chest) stands in — apt for "mixed spoils".
+                // The combined label ("Food + Crystals") resolves no single concept, and the chest
+                // is the right stand-in for "mixed spoils" — but it must now be asked for HERE.
+                // OWNER F8 2026-09-02 defect #3: EndStateView's generic kit fallback IS the chest,
+                // and it was painting a MONEY BAG on structure-DAMAGE rows, which state the
+                // opposite of loot. That fallback is no longer offered to a Wide row (see
+                // EndStateView.ResolveRowIcon), so this row — a Wide row that genuinely wants it —
+                // names it explicitly instead of inheriting it. Model-side, like every other icon
+                // decision in this file.
+                Icon = RpgUiCatalog.Get(RpgUiCatalog.RoleIcons, RpgUiCatalog.IconInventory),
                 Label = tailLabel.ToString(),
                 Amount = tailAmount.ToString(),
                 // "Food + Crystals" / "+80, +12" is a COMBINED line - two resources' worth of

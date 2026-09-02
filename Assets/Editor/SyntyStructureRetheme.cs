@@ -105,10 +105,41 @@ namespace DeNelle.Editor
             { "ArcaneSpire_2",        "Castle/SM_Bld_Castle_Wall_Tower_L_01.prefab" },
             { "ArcaneSpire_3",        "Buildings/Presets/SM_Bld_Preset_Church_01_B_Optimized.prefab" },
 
-            // ── defence: towers escalate S -> M -> L with the tier ─────────────
-            { "Tower_Wooden_Watchtower",    "Castle/SM_Bld_Castle_Wall_Tower_S_01.prefab" },
-            { "Tower_Wooden_Watchtower_L2", "Castle/SM_Bld_Castle_Wall_Tower_M_01.prefab" },
-            { "Tower_Wooden_Watchtower_L3", "Castle/SM_Bld_Castle_Wall_Tower_L_01.prefab" },
+            // ── defence: the archer tower is the OWNER'S OWN ART. DO NOT RE-THEME IT. ──
+            //
+            // ⛔ THE THREE ROWS THAT USED TO LIVE HERE ARE DELETED ON AN OWNER RULING, and
+            // re-adding them silently reverts her art. They were:
+            //     Tower_Wooden_Watchtower    -> Castle/SM_Bld_Castle_Wall_Tower_S_01.prefab
+            //     Tower_Wooden_Watchtower_L2 -> Castle/SM_Bld_Castle_Wall_Tower_M_01.prefab
+            //     Tower_Wooden_Watchtower_L3 -> Castle/SM_Bld_Castle_Wall_Tower_L_01.prefab
+            //
+            // OWNER RULING 2026-09-02, verbatim: "one thing i hate is the changes to the archer
+            // towers. can you bring my wooden towers i created in tripo?" and, on the replacements
+            // specifically: "yes i hate those round towers".
+            //
+            // Tower_Wooden_Watchtower{,_L2,_L3} are HER assets - Tripo-authored, each .fbx carrying
+            // a sibling .fbx.tripo-extracted marker. This table mapped them onto a Synty stone
+            // castle WALL TOWER size ladder, and because the generated wrapper prefabs reused her
+            // filenames verbatim, the swap was invisible: Structure_Art.asset ended up with the
+            // SAME address claimed twice (her prefab and the stone wrapper), so Addressables
+            // resolved to whichever the built catalog listed first. That is precisely how a stone
+            // tower shipped wearing her wooden tower's name.
+            //
+            // ⚠ THIS FILE IS THE SOURCE OF THAT DEFECT, NOT A VICTIM OF IT. Re-running
+            // SyntyStructureRetheme.Run with those rows present re-creates the wrappers and undoes
+            // the fix in structures-catalog.json + Structure_Art.asset, with no error and no gate
+            // failure - the owner would find it herself in a felt-test, which is the outcome the
+            // whole F8/oracle apparatus exists to prevent.
+            //
+            // The catalog now points tower_ground_archer at Structures/Tower_Wooden_Watchtower{,_L2,
+            // _L3}, and FoundingReachabilityRegression asserts that in BOTH directions - it fails if
+            // her ladder goes missing AND fails if the Polyperfect stone family reappears. The three
+            // Synty stone towers survive under their own honest addresses
+            // (Structures/Synty_Tower_Castle_Wall_S/_M/_L) and remain available to anything that
+            // genuinely wants a stone wall tower.
+            //
+            // ⭐ Her ruling of the same day - "the other synty were on purpose" - means the REST of
+            // this table stands. This is a single-row exception, not a retreat from the re-theme.
 
             // ── perimeter pieces (same kit as the WO-1290 castle ring) ─────────
             { "Wall_Medieval_Stone",  "Castle/SM_Bld_Castle_Wall_01.prefab" },

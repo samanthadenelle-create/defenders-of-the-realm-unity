@@ -45,3 +45,51 @@ instances (`Rock_1_A` .. `Rock_6_G`), `Tree_Of_Life`, `DistantMountainPeak`, `Ca
 
 - `Assets/Generated/Terrain/**` (WO-1289) · castle perimeter (WO-1290) · `structures-catalog.json` (WO-1291).
 - The Heart of Elarion at world origin. Village name is **Elarion**, never "Avalon".
+
+---
+
+## ⭐ OWNER DIRECTION 2026-09-02 (added by CLI from a live browsing session)
+
+She reviewed the Synty environment content in-editor and ruled, verbatim:
+
+- **"the enviornment stuff i love"** / **"it looks amazing"** — the environment direction is APPROVED,
+  not merely permitted. Proceed with confidence on this lane.
+- **"follow your guidance on Synty. LEts use as much as we can cohesively"** — the operative word is
+  COHESIVELY. The audit's finding is that a MIXED-pack look reads worse than either pack alone; the
+  hub still carries ~140 Polyperfect `Rock_*` instances sitting beside now-Synty buildings. Replacing
+  a scatter of them piecemeal is worse than either finishing a region or leaving it. Dress by
+  coherent AREA, not by asset count.
+- **"id love to get some type of coblestone or castle floor"** — a NAMED, concrete ask. Highest
+  priority within this ticket.
+
+### The floor/ground inventory that exists (measured 2026-09-02, do not re-derive)
+
+Castle floors, `Assets/Synty/PolygonFantasyKingdom/`:
+`SM_Bld_Castle_Floor_Stone_01` .. `_04` · `_Stone_Gap_01/_02` · `_Stone_Pool_01` ·
+`_Stone_Round_S/_M/_L_01` · and the wood twins `SM_Bld_Castle_Floor_Wood_01`..`_04`,
+`_Wood_Hatch_01`, `_Wood_Round_S/_M/_L_01`. Also `SM_Bld_Base_Floor_*` (Half, Hole, Round, 45,
+Combined) and `SM_Bld_House_Floor_Stone_01`.
+
+Counts by token across the Synty tree: **floor 49 · tile 48 · path 43 · ground 85 · road 26 ·
+street 10**. The Round S/M/L set plus Gap pieces means a courtyard can have a proper centre inset and
+clean edges rather than a tiled rectangle.
+
+### Constraints that bind this work
+
+- ⛔ **The hub scene is `Main_Castle_Overworld` and is NEVER hand-edited** (CLAUDE.md sec.3,
+  resave-corruption history). Dress via the builder / a runtime injector, not by dragging in the
+  editor. Never bake with the editor open.
+- ⛔ **461 MB of raw pack must not enter the APK.** Anything used goes through Addressables/remote.
+  Note the 5 existing perimeter prefabs are DIRECT scene instances, i.e. in-build - do not follow that
+  precedent for new dressing.
+- ⛔ **Any Addressables addition re-hashes bundles**: content build + `tools\r2-ship.ps1`, judged by
+  `R2_PUSH_OK` + `R2_PARITY_OK` on a FRESH log. A prior push never covers a new build (CLAUDE.md
+  sec.16 - four incidents).
+- ⛔ **Do NOT run the Polyperfect URP repair over Synty.** Synty is already URP-native with atlas-shared
+  materials; rebinding would break it.
+- ⚠ Give any new Synty entry a DISTINCT address. Re-wraps reusing original filenames are what let a
+  stone castle tower masquerade as her Tripo watchtower; 27 addresses still carry that ambiguity
+  (WO-1305 Part B). Do not add a 28th.
+- The owner is red/green colourblind - ground/path readability must not depend on hue contrast alone.
+
+Full inventory, usage method and ranked opportunities: `docs/reference/SYNTY_PACK_REGISTRY.md`.

@@ -252,10 +252,76 @@ namespace DeNelle.Village.UI
         /// was already known not to fit the canonical box). Unchanged, just named.</summary>
         private const float BannerCtaMinWidthPx  = 680f;
 
+        // ── THE FRAME ART IS A 9-SLICE, SO ITS BORDER IS PIXELS — NEVER A FRACTION ────────
+        // (owner F8 2026-09-02, defect #2: "WAVE 7 CLEARED! extends past the ornate gold border
+        // on BOTH sides", capture Builds/ui-capture/EndStateWaveClear_repairAll_1920x1080.png.)
+        //
+        // MedievalUiSkin.ApplyShell (MedievalUiSkin.cs:19-27) re-points the panel background at
+        // the Synty shell — Resources/.../frames/content-panel (compact) or modal-frame-16x9
+        // (full) — and draws it Image.Type.Sliced. A nine-slice renders its border ring and its
+        // corner ornaments at a FIXED reference-pixel size no matter how large the rect solves.
+        // Every title/header number in this file and in the kit is a FRACTION of the panel, so
+        // the taller or wider the panel solves, the further a fraction-anchored headline climbs
+        // over art that did not scale with it. Reserve the border in the unit the nine-slice
+        // actually uses.
+        //
+        // The two numbers below are MEASURED off that capture, not picked:
+        //   panel top edge -> the top rail's inner edge   = ~60 ref px  (rail 255..284 px plus
+        //                                                   the sprite's ~30 px transparent margin)
+        //   vertical edge  -> the end of a corner ornament = ~132 ref px (ornament x 309..420 px)
+        // Rounded up so the headline never lands exactly on the art.
+
+        /// <summary>Reference px the shell's TOP border rail (plus the sprite's own transparent
+        /// margin) occupies inside the panel rect.</summary>
+        private const float FrameBorderTopPx  = 64f;
+        /// <summary>Reference px the shell's CORNER ornaments run in from each vertical edge —
+        /// the art the headline was overprinting at both ends.</summary>
+        private const float FrameBorderSidePx = 148f;
+        /// <summary>Clear air between the border art and the headline's box.</summary>
+        private const float TitleClearPx      = 12f;
+        /// <summary>Never invert or crush the title rect: if less than this survives, the band is
+        /// left EXACTLY as the kit built it and the trace says so. A zero-height title band is the
+        /// 2026-07-08 "0 visible glyphs" defect, which is strictly worse than an overhanging one.</summary>
+        private const float MinTitleBandFrac  = 0.05f;
+        /// <summary>ElarionUiKit.Header hangs its gilt hairline 0.008 under the title band; it has
+        /// to travel with the band or the rule is left drawn across the frame's border.</summary>
+        private const float TitleRuleDropFrac = 0.008f;
+
+        // ── WIDE-ROW COLUMN BUDGET (owner F8 2026-09-02, defects #1 and #4) ──────────────
+        // #1: the LABEL column was widened for a wide row (0.62 -> 0.70) and the VALUE column
+        //     was not, so "DESTROYED, looted 120" — 21 characters of PROSE, ~500 ref px at
+        //     FontBody 50 — was handed the same ~274 px cell a "+240" gets, and FitSingleLine's
+        //     autosize floor (FontFloor 30) bottoms out at ~315 px. Past the floor it ellipsises,
+        //     which is exactly the "DESTROYED, looted ..." in the capture.
+        // #4: and it is ALSO why the two damage rows disagreed in size — "damaged" fits at the
+        //     full 50, "DESTROYED, looted 120" was pinned at the 30 floor. Two rows of the same
+        //     kind rendered 40% apart because each was fitted in isolation.
+        // THE FIX for both is one idea: a wide row is PROSE against PROSE, so split its plate in
+        // proportion to the MEASURED words (never a fixed fraction, never a string-length sniff —
+        // see MeasureTextPx on why this file does not estimate), and give every wide row on the
+        // screen ONE shared font size solved across all of them.
+
+        /// <summary>Clear air between a wide row's two text columns, reference px.</summary>
+        private const float WideRowGutterPx      = 24f;
+        /// <summary>The amount column is drawn BOLD (BuildSpoilRow), which measures wider than the
+        /// regular face <see cref="MeasureTextPx"/> samples. Same idea as CtaBoldWidthFactor,
+        /// smaller because the row face carries no extra character spacing.</summary>
+        private const float WideAmountBoldFactor = 1.08f;
+        /// <summary>Bounds on a wide row's LABEL share of the plate's text region. An unbounded
+        /// proportional split lets one nearly-empty cell swallow the plate, which reads as a
+        /// broken row just as surely as an ellipsis does.</summary>
+        private const float WideLabelMinShare    = 0.28f;
+        private const float WideLabelMaxShare    = 0.74f;
+
         // ── COMPACT BANNER GEOMETRY (the wave-clear / outpost variant) ────────────
         /// <summary>Compact body-well TOP as a fraction of the banner panel — pulled below the
         /// tall splash header band so the headline and the content can never overlap.</summary>
         private const float CompactBodyTopY = 0.785f;
+        /// <summary>Compact SPLASH header band, bottom edge (fraction of the banner panel). Named
+        /// so <see cref="SeatTitleInsideFrame"/> and the compact geometry branch read the SAME
+        /// number — it was a bare literal in one place, which is the duplicated-state class this
+        /// file keeps paying for.</summary>
+        private const float CompactHeaderY0 = 0.800f;
         /// <summary>Compact body-well FLOOR. This is FrameCore's OWN art-measured well floor
         /// (ElarionUiKit ZonesFor, case FrameCore: z.body = (0.055, 0.075, 0.945, 0.835)) — it
         /// clears the frame's ornate bottom border. WO-952: the owned compact solve reclaims
@@ -549,7 +615,7 @@ namespace DeNelle.Village.UI
             {
                 // Compact banner (and any layout without a footer zone): unchanged splash header.
                 var hdr = chrome.layout.header;
-                hdr.anchorMin = new Vector2(hdr.anchorMin.x, 0.800f);   // body now owns the reclaimed band below
+                hdr.anchorMin = new Vector2(hdr.anchorMin.x, CompactHeaderY0);   // body now owns the reclaimed band below
                 hdr.anchorMax = new Vector2(hdr.anchorMax.x, 0.985f);   // was ~0.972
                 if (chrome.layout.body != null && chrome.layout.body.anchorMax.y > CompactBodyTopY)
                     chrome.layout.body.anchorMax =                       // body top clears the band
@@ -874,6 +940,11 @@ namespace DeNelle.Village.UI
                 }
             }
 
+            // The panel's FINAL size is known here (the owned solves stamped it, and the
+            // procedural-fallback growth block above is the last thing that can move it), so this
+            // is the only point at which the frame's fixed-pixel border can be reserved correctly.
+            SeatTitleInsideFrame(chrome, vm.Compact ? CompactHeaderY0 : HeaderY0);
+
             BuildBody(vm, rewardWell);
             if (btn != null)   // F8-43: compact banners build no CTA
                 Track(btn.gameObject, 0.25f + vm.Spoils.Count * 0.05f + 0.08f, 0.92f);
@@ -1057,6 +1128,140 @@ namespace DeNelle.Village.UI
         /// old weights divided whatever space survived the close-band reservation + CTA
         /// floor-raise, so a 5-reward victory squeezed every row to ~13px and all the
         /// labels/values overprinted (owner capture flag_20260708-085151_03.png).</summary>
+        /// <summary>
+        /// Seat the panel TITLE inside the frame art's inner well, on BOTH axes.
+        ///
+        /// OWNER F8 2026-09-02, defect #2: "WAVE 7 CLEARED!" overhung the ornate gold border at
+        /// both ends and rode across the top rail. MECHANISM, read at source rather than inferred:
+        ///
+        ///   * On the PROCEDURAL panel path the title is NOT in <c>chrome.layout.header</c> at all.
+        ///     ElarionUiKit.cs:815 builds it as a DIRECT CHILD of chrome.content, stamped by
+        ///     ElarionUiKit.Header at x 0.06..0.94, y 0.92..0.98 OF THE PANEL — plus a shadow copy
+        ///     and a gilt rule beside it. This view's owned geometry pass stamps
+        ///     chrome.layout.header (see Bind) and therefore moves NOTHING about the title. The
+        ///     header band this file reasons about and the headline the player sees were two
+        ///     different objects.
+        ///   * On the FRAME path the title IS in the header zone, and that zone is stamped up to
+        ///     <see cref="HeaderY1"/> = 0.985 — i.e. deliberately flush with the panel's top edge,
+        ///     which was harmless when the frame drew no border there.
+        ///   * Either way MedievalUiSkin.ApplyShell then draws the shell Image.Type.Sliced, so the
+        ///     border and corner ornaments occupy FIXED reference pixels (see FrameBorderTopPx).
+        ///
+        /// So a fraction that was inside the art at one panel size is outside it at another, and
+        /// the 2026-09-02 spacing pass (BandGapPx 8 -> 18 plus the SpoilsLeadGapPx band) grew the
+        /// solved panel enough to push it out. Reserve the border in PIXELS and re-fit the
+        /// headline into what is left. The panel is NOT narrowed and no pixels are taken from the
+        /// body well — the title simply stops being the one element that never learned where the
+        /// frame is.
+        /// </summary>
+        /// <param name="bandBottomFrac">Bottom edge of the band the title may occupy, as a
+        /// fraction of the panel — the same number the geometry pass gave the header band, so the
+        /// title can never reach down into the body well.</param>
+        private void SeatTitleInsideFrame(ElarionUiKit.PanelChrome chrome, float bandBottomFrac)
+        {
+            if (chrome == null || chrome.title == null || chrome.root == null) return;
+
+            var rootRt = chrome.root.transform as RectTransform;
+            if (rootRt == null) return;
+            // Deterministic panel size (ElarionUiKit.cs:1014-1018): a live rect read on the
+            // canvas's creation frame returns RAW SCREEN pixels. Derive from the anchors instead,
+            // exactly as the geometry passes above do.
+            float panelPx  = _canvasH * Mathf.Max(0.05f, rootRt.anchorMax.y - rootRt.anchorMin.y);
+            float panelWpx = PostScaleCanvasWidth(_canvasH)
+                             * Mathf.Max(0.05f, rootRt.anchorMax.x - rootRt.anchorMin.x);
+            if (panelPx < 50f || panelWpx < 50f) return;
+
+            float topFrac = Mathf.Clamp01(1f - (FrameBorderTopPx + TitleClearPx) / panelPx);
+            float botFrac = Mathf.Clamp(bandBottomFrac, 0f, 1f);
+            if (topFrac - botFrac < MinTitleBandFrac)
+            {
+                // §12 no silent failure: say we declined rather than crushing the headline.
+                FlowTrace.Warn("EndState",
+                    $"title band left AS BUILT: reserving the frame's {FrameBorderTopPx:0}px top border " +
+                    $"on a {panelPx:0}px panel leaves only {(topFrac - botFrac):0.###} of panel " +
+                    $"(min {MinTitleBandFrac:0.###}) - a crushed title renders zero glyphs, which is worse " +
+                    "than an overhanging one");
+                return;
+            }
+            float x0 = Mathf.Clamp(FrameBorderSidePx / panelWpx, 0.04f, 0.30f);
+            float x1 = 1f - x0;
+
+            var titleRt = (RectTransform)chrome.title.transform;
+            bool inHeaderZone = chrome.layout != null && chrome.layout.header != null
+                                && titleRt.parent == chrome.layout.header;
+
+            if (inHeaderZone)
+            {
+                // The title fills its zone 0..1, so moving the ZONE moves the headline and keeps
+                // every other consumer of that band (none today) consistent with it.
+                var hdr = chrome.layout.header;
+                hdr.anchorMin = new Vector2(x0, botFrac);
+                hdr.anchorMax = new Vector2(x1, topFrac);
+                hdr.offsetMin = Vector2.zero; hdr.offsetMax = Vector2.zero;
+            }
+            else
+            {
+                // PROCEDURAL path: the title, its shadow copy and the gilt rule are three loose
+                // siblings on chrome.content sharing ONE authored box. Move them together or the
+                // pair separates — the kit already paid for that once (its own "DOUBLE-DRAWN TITLE
+                // FIX" note at ElarionUiKit.cs:1543).
+                Vector2 oldMin = titleRt.anchorMin, oldMax = titleRt.anchorMax;
+                var newMin = new Vector2(x0, botFrac);
+                var newMax = new Vector2(x1, topFrac);
+                var parent = titleRt.parent;
+                for (int i = 0; parent != null && i < parent.childCount; i++)
+                {
+                    var child = parent.GetChild(i) as RectTransform;
+                    if (child == null) continue;
+                    bool isTitlePair = child == titleRt
+                        || (child.GetComponent<TMPro.TMP_Text>() != null
+                            && (child.anchorMin - oldMin).sqrMagnitude < 1e-6f
+                            && (child.anchorMax - oldMax).sqrMagnitude < 1e-6f);
+                    if (isTitlePair)
+                    {
+                        // Anchors ONLY: the shadow carries its 1.5px offset in offsetMin/Max
+                        // (Header applies it via anchoredPosition), and zeroing those would weld
+                        // the shadow onto the title.
+                        child.anchorMin = newMin;
+                        child.anchorMax = newMax;
+                        continue;
+                    }
+                    if (child.gameObject.name == "Rule"
+                        && child.anchorMin.y <= oldMin.y + 0.001f
+                        && child.anchorMin.y >= oldMin.y - 0.03f)
+                    {
+                        float ruleY = Mathf.Max(0f, botFrac - TitleRuleDropFrac);
+                        child.anchorMin = new Vector2(x0, ruleY);
+                        child.anchorMax = new Vector2(x1, ruleY);
+                    }
+                }
+            }
+
+            // Re-fit against the NEW box, with EXPLICIT bounds. Never re-fit with the default
+            // maxSize: it reads the label's CURRENT fontSize, which auto-sizing has already
+            // written down, so a second bare call ratchets the headline smaller every time
+            // (the kit documents this exact hazard at ElarionUiKit.cs:817-819).
+            Canvas.ForceUpdateCanvases();
+            ElarionUiKit.FitSingleLine(chrome.title, 0f, ElarionUi.FontTitle);
+            var titleParent = titleRt.parent;
+            for (int i = 0; titleParent != null && i < titleParent.childCount; i++)
+            {
+                var sib = titleParent.GetChild(i) as RectTransform;
+                if (sib == null || sib == titleRt) continue;
+                var txt = sib.GetComponent<TMPro.TMP_Text>();
+                if (txt == null) continue;
+                if ((sib.anchorMin - titleRt.anchorMin).sqrMagnitude > 1e-6f) continue;
+                ElarionUiKit.FitSingleLine(txt, 0f, ElarionUi.FontTitle);   // the shadow copy
+            }
+
+            FlowTrace.Step("EndState",
+                $"title seated INSIDE the frame art: panel={panelPx:0}x{panelWpx:0}px, band " +
+                $"y {botFrac:0.###}-{topFrac:0.###} x {x0:0.###}-{x1:0.###} " +
+                $"(reserved {FrameBorderTopPx:0}px top rail + {FrameBorderSidePx:0}px corner ornaments, " +
+                $"9-sliced so they never scale with the panel; path=" +
+                (inHeaderZone ? "header zone" : "procedural title+shadow+rule") + ")");
+        }
+
         private void BuildBody(EndStateVM vm, RectTransform body)
         {
             // (pixel height, builder) bands, top to bottom.
@@ -1123,6 +1328,12 @@ namespace DeNelle.Village.UI
             int spoilCols = SpoilColumns(vm, _canvasH);
             float spoilBodyPx = SpoilsBodyWidthPx(_canvasH, PanelWidthFracFor(vm));
             var spoilPlan = SpoilBandPlan(vm, spoilCols);
+            // ONE font size for EVERY wide row on this screen, solved before any of them is built
+            // (owner F8 2026-09-02 defect #4: "DESTROYED, looted ..." rendered at the 30px autosize
+            // floor while "damaged" rendered at the full 50, so two rows of the SAME KIND were 40%
+            // apart). Fitting each row in isolation is what made them disagree; solving the whole
+            // set once is what makes them agree.
+            _wideRowFontPx = SolveWideRowFontPx(vm, spoilBodyPx);
             // The separator band — same test, same order as RequiredBodyPx's (`spoilBands > 0
             // && n > 0`), so the two agree band-for-band. Empty builder: it exists to hold space.
             if (spoilPlan.Count > 0 && bands.Count > 0)
@@ -1257,6 +1468,106 @@ namespace DeNelle.Village.UI
         private const float SpoilIconGapPx   = 14f;   // icon -> label
         private const float SpoilEdgeInsetPx = 18f;   // amount's right inset inside the plate
 
+        /// <summary>The ONE font size every <see cref="SpoilRowVM.Wide"/> row on this screen
+        /// renders at, in reference px. Solved once in <see cref="BuildBody"/> across ALL of them
+        /// so two rows of the same kind can never resolve to different sizes; 0 until solved.</summary>
+        private float _wideRowFontPx;
+
+        /// <summary>
+        /// THE ONE icon resolution for a spoils row. Called by BOTH the wide-row column solve and
+        /// <see cref="BuildSpoilRow"/>, so they can never disagree about whether an icon is eating
+        /// 72 ref px of the plate (a solve that budgets a different plate than the layout draws is
+        /// the desync class this whole file is a monument to).
+        ///
+        /// OWNER F8 2026-09-02, defect #3: the "North Gate" and "Wall x3" DAMAGE rows both drew a
+        /// MONEY BAG. Mechanism: their model set no Icon, the label resolved no concept
+        /// ("north gate" is in no icon table), and the last line here handed every unresolved row
+        /// the generic loot fallback — RpgUiCatalog.IconInventory, which is a treasure chest
+        /// (RpgUiCatalog.cs:220). That fallback exists so a REWARD row never blanks its slot; on a
+        /// row reporting a LOSS it states the opposite of the truth, which is worse than a blank.
+        ///
+        /// So the generic chest is now offered only to rows that are NOT
+        /// <see cref="SpoilRowVM.Wide"/> — Wide being the model's own declaration that this row is
+        /// prose, not a resource line. A wide row therefore shows the icon its MODEL chose (the
+        /// live damage rows carry RpgUiCatalog.IconShield, EndStateVM.FromWaveClear; the combined
+        /// spoils tail and "Plans Recovered" carry IconInventory explicitly) or none at all. No
+        /// icon name is chosen here and no string is sniffed.
+        /// </summary>
+        private static Sprite ResolveRowIcon(SpoilRowVM row)
+        {
+            if (row == null) return null;
+            // WO-894: the reward CONCEPT gets first refusal via the resolver's designed OPT-IN
+            // path (`override:true` in concept-icons.json), so any wrong reward icon is repointable
+            // with ONE data entry and no C# change.
+            var s = ConceptIconResolver.ResolveAnyOverride(RowConcepts(row));
+            if (s == null) s = row.Icon;
+            // The row LABEL is offered to the icon table (plural AND singular — see RowConcepts).
+            if (s == null) s = ConceptIconResolver.ResolveAny(RowConcepts(row));
+            if (s == null && !row.Wide)
+                s = RpgUiCatalog.Get(RpgUiCatalog.RoleIcons, RpgUiCatalog.IconInventory);
+            return s;
+        }
+
+        /// <summary>Reference px of a wide row's plate that is actually available to TEXT: the
+        /// plate (0.88 of the cell) less the fixed furniture and the inter-column gutter.</summary>
+        private static float WideRowTextPx(float cellWidthPx, bool hasIcon)
+        {
+            float platePx = Mathf.Max(200f, cellWidthPx * 0.88f);
+            float furniture = (hasIcon ? SpoilIconInsetPx + SpoilIconPx + SpoilIconGapPx
+                                       : SpoilIconInsetPx)
+                              + SpoilEdgeInsetPx + WideRowGutterPx;
+            return Mathf.Max(120f, platePx - furniture);
+        }
+
+        /// <summary>A wide row's LABEL share of its text region, in proportion to the MEASURED
+        /// words on both sides. A wide row carries two different grammars depending on who built
+        /// it — the live wave report puts the whole sentence in the LABEL ("North Gate - DESTROYED,
+        /// looted 120") and the cost in the AMOUNT, while other producers put a short name left and
+        /// the prose right — so no fixed split can serve both, and a string-LENGTH test is the
+        /// estimate this file already learned not to trust (see <see cref="MeasureTextPx"/>).
+        /// Measure both, split in proportion, bound it so one empty cell cannot eat the plate.</summary>
+        private static float WideLabelShare(SpoilRowVM row)
+        {
+            if (row == null) return 0.5f;
+            float lw = MeasureTextPx(row.Label ?? string.Empty, ElarionUi.FontBody);
+            float aw = MeasureTextPx(row.Amount ?? string.Empty, ElarionUi.FontBody) * WideAmountBoldFactor;
+            float total = lw + aw;
+            if (total < 1f) return 0.5f;
+            return Mathf.Clamp(lw / total, WideLabelMinShare, WideLabelMaxShare);
+        }
+
+        /// <summary>The shared wide-row font size (reference px): the largest size at which EVERY
+        /// wide row's two columns still seat their measured words, floored at the kit's own
+        /// legibility floor. Returns FontBody when the screen carries no wide row.</summary>
+        private static float SolveWideRowFontPx(EndStateVM vm, float bodyWidthPx)
+        {
+            if (vm == null) return ElarionUi.FontBody;
+            float scale = 1f;
+            bool any = false;
+            foreach (var row in vm.Spoils)
+            {
+                if (row == null || !row.Wide) continue;
+                any = true;
+                // A wide row always takes a band ALONE at the full body width (SpoilBandPlan), so
+                // its cell IS the body well.
+                float textPx = WideRowTextPx(bodyWidthPx, ResolveRowIcon(row) != null);
+                float share  = WideLabelShare(row);
+                float lw = MeasureTextPx(row.Label ?? string.Empty, ElarionUi.FontBody);
+                float aw = MeasureTextPx(row.Amount ?? string.Empty, ElarionUi.FontBody) * WideAmountBoldFactor;
+                if (lw > 1f) scale = Mathf.Min(scale, textPx * share / lw);
+                if (aw > 1f) scale = Mathf.Min(scale, textPx * (1f - share) / aw);
+            }
+            if (!any) return ElarionUi.FontBody;
+            float solved = Mathf.Clamp(ElarionUi.FontBody * scale,
+                                       ElarionUiKit.FontFloor, ElarionUi.FontBody);
+            FlowTrace.Step("EndState",
+                $"wide spoils rows share ONE font: {solved:0.#}px (body column {bodyWidthPx:0}px, " +
+                $"raw fit {ElarionUi.FontBody * scale:0.#}px, floor {ElarionUiKit.FontFloor:0})" +
+                (ElarionUi.FontBody * scale < ElarionUiKit.FontFloor
+                    ? " - AT THE FLOOR, a wide row may still ellipsise" : string.Empty));
+            return solved;
+        }
+
         /// <summary>One spoils row: kit slot plate + icon (null-safe) + label + amount.
         /// <paramref name="cellWidthPx"/> is the row's own cell width in reference px (a full
         /// body well in one column, half of it in two) — it converts the pixel insets above into
@@ -1306,24 +1617,11 @@ namespace DeNelle.Village.UI
             // code. That is the lever for "Wisdom" (see the RESULT notes: it currently shows
             // icon_tree, which RpgUiCatalog.cs:226 itself documents as a campfire stand-in, and
             // Resources holds no sprite that reads as wisdom to swap it for).
-            var iconSprite = ConceptIconResolver.ResolveAnyOverride(RowConcepts(row));
-            if (iconSprite == null) iconSprite = row.Icon;
-            // SWEEP 9413 R2 (#7): the generic IconInventory fallback painted a plain yellow
-            // square beside every art-less reward line. Resolve the reward CONCEPT icon first
-            // (concept-icons.json maps gold/wood/iron → the currency sprites) from the row label;
-            // only then the generic kit fallback — never a bare placeholder square.
-            // WO-894 (owner F8 "reward icons are broken/missing"): the row LABEL is a plural
-            // display string — FromRaidVictory sets Label = "Crystals" (EndStateVM.cs:302) — but
-            // concept-icons.json is keyed SINGULAR ("crystal", concept-icons.json:209). "crystals"
-            // therefore missed the table outright and fell through to the generic fallback, which
-            // is icon_inventory — a CHEST (RpgUiCatalog.cs:220). That is the broken icon: not
-            // missing art (currency_crystal.png is committed and imported as a Sprite), a missed
-            // LOOKUP. Offer the singular as a second CANDIDATE; ResolveAny exists precisely for
-            // "let the DATA decide which of these ids resolves", so no icon name is chosen in C#.
-            if (iconSprite == null)
-                iconSprite = ConceptIconResolver.ResolveAny(RowConcepts(row));
-            if (iconSprite == null)
-                iconSprite = RpgUiCatalog.Get(RpgUiCatalog.RoleIcons, RpgUiCatalog.IconInventory);
+            // SWEEP 9413 R2 (#7) / WO-894 / F8 2026-09-02 defect #3: the whole ladder — concept
+            // override, the model's own sprite, the label's concept (plural AND singular), and the
+            // generic fallback that a WIDE row is deliberately never offered — lives in ONE place
+            // now, because the wide-row column solve has to budget the SAME plate this draws.
+            var iconSprite = ResolveRowIcon(row);
             // Icon size first: the label's left inset is measured from the icon's REAL right
             // edge, so a band-clamped (compressed) icon does not leave a hole beside itself.
             float iconPx = Mathf.Min(SpoilIconPx, host.rect.height * 0.80f);
@@ -1361,22 +1659,50 @@ namespace DeNelle.Village.UI
             // "Equipped" wrapped to "Equipp/d" and long gear names spilled into the value
             // column at the fixed FontBody size. FitSingleLine (§1.14) shrinks-to-fit with
             // ellipsis so neither side can ever wrap or cross the column split again.
-            // COLUMN SPLIT (owner F8 2026-09-02). A resource row is a short noun against a short
-            // "+180", so the 0.62/0.64 split is right for it. A WIDE row is a SENTENCE against a
-            // materials list, and on that shape the identity — the structure's NAME — is the half
-            // that must survive, so it gets the larger share. This is why the row must declare its
-            // kind (SpoilRowVM.Wide) rather than being detected from its string length.
-            float labelRightFrac  = row.Wide ? 0.70f : 0.62f;
-            float amountLeftFrac  = row.Wide ? 0.72f : 0.64f;
+            // COLUMN SPLIT. A resource row is a short noun against a short "+180", so the fixed
+            // 0.62/0.64 split is right for it and is unchanged.
+            //
+            // OWNER F8 2026-09-02, defects #1 and #4. The wide row's FIXED 0.70/0.72 split — which
+            // widened the LABEL column and left the VALUE column at 0.26 of the plate — is what
+            // survived the first pass: "DESTROYED, looted 120" is ~500 ref px of PROSE at FontBody
+            // 50 into a ~274 px cell, and FitSingleLine's autosize bottoms out at FontFloor 30
+            // (~315 px) and then ELLIPSISES. That produced BOTH the surviving truncation and the
+            // size disagreement with the "damaged" row beside it, which needed no shrink at all.
+            //
+            // A wide row is prose against prose, and which SIDE carries the long string depends on
+            // who built the row (see WideLabelShare). So split it in proportion to the measured
+            // words, and render every wide row on the screen at the ONE size solved across all of
+            // them (SolveWideRowFontPx) so same-kind rows can never disagree again.
+            float labelRightFrac, amountLeftFrac;
+            float rowFontPx = ElarionUi.FontBody;
+            if (row.Wide)
+            {
+                float gutterFrac = WideRowGutterPx / platePx;
+                float colsFrac = Mathf.Max(0.10f, amountRightFrac - labelLeftFrac - gutterFrac);
+                labelRightFrac = labelLeftFrac + colsFrac * WideLabelShare(row);
+                amountLeftFrac = labelRightFrac + gutterFrac;
+                rowFontPx = _wideRowFontPx > 1f ? _wideRowFontPx : ElarionUi.FontBody;
+            }
+            else
+            {
+                labelRightFrac = 0.62f;
+                amountLeftFrac = 0.64f;
+            }
+            // ElarionUiKit.Label takes an INT size (ElarionUiKit.cs:1889); the fitter below keeps
+            // the float bound, so the rounding costs at most half a reference pixel.
+            int rowFontInt = Mathf.Max(Mathf.RoundToInt(ElarionUiKit.FontFloor),
+                                       Mathf.RoundToInt(rowFontPx));
             var label = ElarionUiKit.Label(plate.transform, row.Label ?? "", 0f, 1f,
-                ElarionUi.Parchment, ElarionUi.FontBody, TMPro.TextAlignmentOptions.MidlineLeft,
+                ElarionUi.Parchment, rowFontInt, TMPro.TextAlignmentOptions.MidlineLeft,
                 labelLeftFrac, labelRightFrac);
-            ElarionUiKit.FitSingleLine(label);
+            // EXPLICIT max: the solved size IS the answer for a wide row, so the fitter may only
+            // act as the last-resort net below it (never as a second, per-row opinion).
+            ElarionUiKit.FitSingleLine(label, 0f, rowFontInt);
             label.raycastTarget = false;
             var amount = ElarionUiKit.Label(plate.transform, row.Amount ?? "", 0f, 1f,
-                ElarionUi.Gilt, ElarionUi.FontBody, TMPro.TextAlignmentOptions.MidlineRight,
+                ElarionUi.Gilt, rowFontInt, TMPro.TextAlignmentOptions.MidlineRight,
                 amountLeftFrac, amountRightFrac, bold: true);
-            ElarionUiKit.FitSingleLine(amount);
+            ElarionUiKit.FitSingleLine(amount, 0f, rowFontInt);
             amount.raycastTarget = false;
             Track(plate, revealDelay, 0.96f);
         }
