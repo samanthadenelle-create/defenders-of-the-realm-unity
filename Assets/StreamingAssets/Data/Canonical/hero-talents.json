@@ -1,5 +1,6 @@
 {
   "version": 2,
+  "_ownerRuling": "Owner ruling 2026-09-02, verbatim: \"Correct it the best way you can. making this decision but the lens is that we want them to unlocka few items that can go in the quick swap bar fast, why because our retention number is very low and people are not returning\" -- RESOLVED as follows. (1) 'tier' in this file is a COST/POWER BAND, not a prerequisite depth: cost == tierCosts[tier] on ALL 83 nodes, and the node id itself encodes the tier (<hero>.t<tier>n<slot>, branch nodes s/b). Re-labelling 'tier' to match graph depth was therefore REJECTED - it would desync every relabelled id from its own tier (ids are live save keys and cannot be renamed to follow), and it would RAISE the cost of the cheap shallow nodes (mage.t1n4, mage.t1n5) that the retention lens actually wants, or force cost overrides that break the one invariant currently holding perfectly. Knight also has depth-5 chains against 4 tiers, so a depth==tier mapping is not even expressible. Tier is consumed ONLY for capstone detection (tier4), track reading order, and a fallback y when the lattice solver fails - never for cost and never for gating. (2) The REAL retention defect was the mage's distance to a hot-swap-bar ability: knight 2 points, ranger 1 point, mage 3 points. An attempt to fix the mage by swapping the graph seats of mage.t2n5 (Blink Mastery) and mage.t1n3 (Warded Flesh) was made and then REVERTED the same day - see item (6). The mage remains at 3. (3) NOTE for the record: the SHARED universal strip (shared.n9 Arcane Bolt / n10 Mend / n11 Dash) is cost 1, no prerequisites, ungated, and available to EVERY hero - so a player's very FIRST Wisdom point already buys a castable for all three classes today. The per-class numbers above are the class-tree path only. (4) SECOND PASS, owner-approved 2026-09-02 under the same verbatim lens (\"we want them to unlocka few items that can go in the quick swap bar fast, why because our retention number is very low and people are not returning\"): the KNIGHT was taken from 2 points to 1 by swapping the graph seats of knight.t1n1 (Iron Resolve, stat) and knight.t1n2 (Thunderbolt, skill). Both are tier1/cost1, so the swap is COST-NEUTRAL and TIER-NEUTRAL - see the _note on each of the six touched nodes. The knight is the V1 north-star hero (only KNIGHT talent effects are wired at runtime), so this is the highest-retention-leverage edit in the file. Final class-tree points-to-first-bar-ability: knight 1, ranger 1, mage 3, shared 1. (5) RULED AND CLOSED, do not re-litigate: the four mage-pool abilities with no talent node granting them (mage.frost-nova, mage.heal, mage.meteor, mage.thunder) are deliberately left alone; they are granted by Cathedral of Magic tiers. (6) THE MAGE PROMOTION WAS REVERTED, 2026-09-02, owner ruling \"Revert the mage, keep the knight.\" TWO OF THE OWNER'S OWN RULINGS COLLIDED and the older one wins. The 2026-08-16 base-row law (owner, verbatim: \"common or specialty should still start from a few simple then really refine to the playstyle of the user\") is pinned by Assets/Editor/Regression/TalentTreeShapeRegression.cs rule 2 [base]: the bottom row holds at most three nodes, every one a ROOT, and every one priced at the tree's CHEAPEST cost - a base is the simple entry-level pick, never a mid-tier node dragged down. Promoting 2-cost Blink Mastery onto the mage base row while the mage still has 1-cost tier1 nodes violates that law, and the regression failed it: \"[base] bottom-row node 'mage.t2n5' costs 2 while 'mage' has a 1-cost tier\". The collision hits the MAGE ONLY, because the mage is the one class with no cost-1 castable to promote - the knight swap satisfies BOTH laws (Thunderbolt is tier1/cost1) and STANDS. The mage's real fix is DESIGN work - authoring a cost-1 castable base node for the mage - not a seat shuffle, and not loosening the oracle (the owner declined to loosen it). Until that design work happens the mage is 3 points in-tree and relies on the shared strip's Arcane Bolt on turn one.",
   "respecCostCrystals": 300,
   "sharedNodeCost": 2,
   "tierCosts": {
@@ -28,9 +29,12 @@
             "type": "damageReduction",
             "value": 0.18
           },
-          "x": 0.2,
-          "y": 0.68,
-          "prerequisites": []
+          "_note": "WO-retention 2026-09-02 (owner-approved): SWAPPED graph seats with knight.t1n2 (Thunderbolt). Iron Resolve moved from the bottom-row base into Thunderbolt's old seat; the WAR branch now roots at Thunderbolt, so the knight's FIRST Wisdom point buys a castable instead of an invisible stat. Cost-neutral and tier-neutral - both nodes are tier1/cost1, so id, tier, slot, cost, kind, iconPath, name and effect are UNCHANGED on both; only x/y and prerequisites moved. Iron Resolve now costs 2 points to reach instead of 1 (the only reach regression, and it is a stat node - exactly the trade the retention lens wants). knight.t2n2 + knight.t2n6 were re-pointed onto Iron Resolve so they STILL sit transitively under Thunderbolt, which their effects reference by ability id.",
+          "x": 0.06,
+          "y": 0.52,
+          "prerequisites": [
+            "knight.t1n2"
+          ]
         },
         {
           "id": "knight.t1n2",
@@ -46,11 +50,10 @@
             "type": "unlockAbility",
             "ability": "knight.thunderbolt"
           },
-          "x": 0.06,
-          "y": 0.52,
-          "prerequisites": [
-            "knight.t1n1"
-          ]
+          "_note": "WO-retention 2026-09-02 (owner-approved): PROMOTED to the WAR branch's bottom-row base (SWAPPED graph seats with knight.t1n1 Iron Resolve). Thunderbolt is the knight's wired signature ability and was already tier1/cost1, so this is a COST-NEUTRAL and TIER-NEUTRAL swap - nothing about id, tier, slot, cost, kind, abilityId, iconPath, name or effect changed on either node; only x/y and prerequisites moved. Knight points-to-first-bar-ability: 2 -> 1. The knight is the V1 north-star hero (only KNIGHT effects are wired), so this is the highest-leverage node in the file for the retention lens. knight.t1n3/t1n4/t1n5 re-point onto Thunderbolt (still 2 points to reach, unchanged); knight.t1n1/t2n2/t2n6 chain below it.",
+          "x": 0.2,
+          "y": 0.68,
+          "prerequisites": []
         },
         {
           "id": "knight.t1n3",
@@ -65,10 +68,11 @@
             "type": "blockChance",
             "value": 0.25
           },
+          "_note": "WO-retention 2026-09-02: prerequisite re-pointed knight.t1n1 -> knight.t1n2 (those two swapped seats). Still 2 Wisdom to reach. Position, cost, tier and effect UNCHANGED.",
           "x": 0.18,
           "y": 0.52,
           "prerequisites": [
-            "knight.t1n1"
+            "knight.t1n2"
           ]
         },
         {
@@ -85,10 +89,11 @@
             "type": "unlockAbility",
             "ability": "knight.mending-salve"
           },
+          "_note": "WO-retention 2026-09-02: prerequisite re-pointed knight.t1n1 -> knight.t1n2 (those two swapped seats). Still 2 Wisdom to reach. Position, cost, tier and effect UNCHANGED.",
           "x": 0.3,
           "y": 0.52,
           "prerequisites": [
-            "knight.t1n1"
+            "knight.t1n2"
           ]
         },
         {
@@ -105,10 +110,11 @@
             "type": "unlockAbility",
             "ability": "knight.ranged-poke"
           },
+          "_note": "WO-retention 2026-09-02: prerequisite re-pointed knight.t1n1 -> knight.t1n2 (those two swapped seats). Still 2 Wisdom to reach. Position, cost, tier and effect UNCHANGED.",
           "x": 0.42,
           "y": 0.52,
           "prerequisites": [
-            "knight.t1n1"
+            "knight.t1n2"
           ]
         },
         {
@@ -145,10 +151,11 @@
             "type": "unlockAbility",
             "ability": "knight.emberbrand-throw"
           },
+          "_note": "WO-retention 2026-09-02: prerequisite re-pointed knight.t1n2 -> knight.t1n1 (those two swapped seats). Iron Resolve now sits directly under Thunderbolt, so this node is STILL transitively gated behind Thunderbolt and still costs 4 Wisdom to reach - unchanged. Position, cost, tier and effect UNCHANGED.",
           "x": 0.05,
           "y": 0.36,
           "prerequisites": [
-            "knight.t1n2"
+            "knight.t1n1"
           ]
         },
         {
@@ -434,10 +441,11 @@
             "targets": 2,
             "note": "(poison rider \u2014 wired WO-676; VFX follow-up: distinct green DRIP trail + drip icon, never color-only)"
           },
+          "_note": "WO-retention 2026-09-02: prerequisite re-pointed knight.t1n2 -> knight.t1n1 (those two swapped seats). CRITICAL and verified: this node's effect modifies 'knight.thunderbolt,knight.ranged-poke' by ability id, and Iron Resolve now sits directly under Thunderbolt, so Venombrand is STILL transitively gated behind Thunderbolt - it can never be owned without its target ability. Still 4 Wisdom to reach, unchanged. Position, cost, tier and effect UNCHANGED.",
           "x": 0.16,
           "y": 0.36,
           "prerequisites": [
-            "knight.t1n2"
+            "knight.t1n1"
           ]
         },
         {
@@ -1078,7 +1086,7 @@
       "heroSlug": "mage",
       "displayName": "Thrain (Mage)",
       "_title": "Aetherweaver",
-      "_comment": "WO-861 A1 (owner-approved 2026-08-02) \u2014 Thrain, the ranged glass cannon. Four branches: MANA CONSERVATION + RECOVERY (Mana Flow, Aether Surge, Manaweave, Aether Form, Eternal Arcana \u2014 mana IS the survival mechanic) \u2014 SPELL POWER (Arcane Focus, Flame Mastery, Runic Overload, Aetherweaver Ascension) \u2014 SURVIVABILITY (Warded Flesh +20% HP, Blink Mastery +15% HP, Arcane Shield strengthens the Shell) \u2014 LEARNABLE SPELLS (mage.void-rift, mage.cataclysm, mage.blink, mage.manaweave; mage.frost-nova + mage.arcane-bolt are unlocked by the Cathedral of Magic instead, per A3). Node ids, tiers, slots, costs, icons and the prerequisite graph are UNCHANGED so no save-side unlock is orphaned. Slug stays 'mage'; art sheet = Wizard.",
+      "_comment": "WO-861 A1 (owner-approved 2026-08-02) \u2014 Thrain, the ranged glass cannon. Four branches: MANA CONSERVATION + RECOVERY (Mana Flow, Aether Surge, Manaweave, Aether Form, Eternal Arcana \u2014 mana IS the survival mechanic) \u2014 SPELL POWER (Arcane Focus, Flame Mastery, Runic Overload, Aetherweaver Ascension) \u2014 SURVIVABILITY (Warded Flesh +20% HP, Blink Mastery +15% HP, Arcane Shield strengthens the Shell) \u2014 LEARNABLE SPELLS (mage.void-rift, mage.cataclysm, mage.blink, mage.manaweave; mage.frost-nova + mage.arcane-bolt are unlocked by the Cathedral of Magic instead, per A3). Node ids, tiers, slots, costs, icons and the prerequisite graph are UNCHANGED so no save-side unlock is orphaned. (A 2026-09-02 reversal of the SURVIVABILITY branch was attempted and REVERTED the same day for violating the 2026-08-16 base-row law; see the top-level _ownerRuling item (6). The branch reads Warded Flesh -> Arcane Shield -> Blink Mastery, as originally authored.) Slug stays 'mage'; art sheet = Wizard.",
       "nodes": [
         {
           "id": "mage.t1n1",
@@ -1127,6 +1135,7 @@
             "type": "maxHpPct",
             "value": 0.2
           },
+          "_note": "WO-retention 2026-09-02: this node was briefly swapped to the survivability-branch leaf and has been REVERTED to its original bottom-row base seat. Warded Flesh is a 1-cost root, which is what the 2026-08-16 base-row law requires; the swap had put 2-cost Blink Mastery here instead and TalentTreeShapeRegression rule 2 [base] correctly failed it. Current state is the pre-2026-09-02 original.",
           "x": 0.8,
           "y": 0.64,
           "prerequisites": []
@@ -1270,6 +1279,7 @@
             "ability": "mage.blink",
             "note": "unlock rides kind=skill+abilityId; the effect payload carries the A1 +15% HP"
           },
+          "_note": "WO-retention 2026-09-02: this node was briefly PROMOTED to the mage's bottom-row base to shorten the path to a hot-swap-bar ability, and has been REVERTED. Blink Mastery costs 2, and the owner's 2026-08-16 base-row law requires every bottom-row node to be a root priced at the tree's CHEAPEST cost - the mage still has 1-cost tier1 nodes, so a 2-cost base is forbidden. TalentTreeShapeRegression rule 2 [base] caught it: \"bottom-row node 'mage.t2n5' costs 2 while 'mage' has a 1-cost tier\". Current state is the pre-2026-09-02 original. DO NOT re-promote this node; the mage's real fix is design work - authoring a cost-1 castable base node - not a seat shuffle.",
           "x": 0.84,
           "y": 0.24,
           "prerequisites": [
