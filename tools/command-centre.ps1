@@ -25,7 +25,15 @@ param(
     [string]$Area,
     [switch]$Seal,
     [switch]$Open,
-    [string]$Message
+    [string]$Message,
+    # PROD-022 remote knobs. -Tunables runs the knob surface and EXITS; it never
+    # touches the ship chain below. The whole point is flipping a candidate
+    # mitigation without paying a 30-minute WebGL rebuild, so it gates on
+    # DATABASE_URL and nothing else - the same reasoning as -Maintenance.
+    [switch]$Tunables,
+    [string]$Key,
+    [string]$Value,
+    [switch]$Clear
 )
 
 $ErrorActionPreference = 'Stop'
@@ -192,6 +200,59 @@ if ($Maintenance) {
     }
 
     Write-Run "COMMAND_CENTRE_MAINTENANCE_OK log=$toggleLog"
+    exit 0
+}
+
+# =============================================================================
+# PROD-022 - THE REMOTE KNOBS. Runs and EXITS; the ship chain below is never
+# reached from here.
+#
+# Owner ruling 2026-09-02, verbatim: "make the testing as robust as possible with
+# as many solutions as possible... all we really have to do is just flip a flag
+# and possibly redeploy". So this path gates on NOTHING but DATABASE_URL - no
+# compile, no regression, no R2, no deploy. Requiring a green release train to
+# flip a diagnostic knob would defeat the reason the knobs exist.
+#
+#   tools\command-centre.ps1 -Tunables
+#   tools\command-centre.ps1 -Tunables -Key pi.awaitInitBeforeFirstLoad -Value 1
+#   tools\command-centre.ps1 -Tunables -Key pi.awaitInitBeforeFirstLoad -Clear
+#
+# -Clear REMOVES the override, returning that knob to the value the BUILD
+# hardcodes. That is NOT the same as -Value 0.
+#
+# Judge by the MARKER on a fresh log, never the exit code (CLAUDE.md section 8).
+# =============================================================================
+if ($Tunables) {
+    if ([string]::IsNullOrWhiteSpace($env:DATABASE_URL)) {
+        Refuse 3 'DATABASE_URL_SET' 'environment' 'DATABASE_URL_MISSING'
+    }
+    if ($Clear -and -not [string]::IsNullOrWhiteSpace($Value)) {
+        Refuse 9 'TUNABLES_CLEAR_OK' 'arguments' 'CLEAR_AND_VALUE_BOTH_GIVEN'
+    }
+    if (($Clear -or -not [string]::IsNullOrWhiteSpace($Value)) -and [string]::IsNullOrWhiteSpace($Key)) {
+        Refuse 9 'TUNABLES_SET_OK' 'arguments' 'KEY_REQUIRED'
+    }
+
+    $tunableScript = Join-Path $root 'tools\client-tunables.mjs'
+    $tunableLog = Join-Path $builds 'client-tunables.log'
+    $started = Get-Date
+
+    if ($Clear) {
+        Write-Run "TUNABLES_INTENT action=clear key=$Key"
+        Invoke-Captured { node $tunableScript clear $Key } $tunableLog | Out-Null
+        Assert-FreshMarker 9 'TUNABLES_CLEAR_OK' $tunableLog $started
+    }
+    elseif (-not [string]::IsNullOrWhiteSpace($Value)) {
+        Write-Run "TUNABLES_INTENT action=set key=$Key value=$Value"
+        Invoke-Captured { node $tunableScript set $Key $Value } $tunableLog | Out-Null
+        Assert-FreshMarker 9 'TUNABLES_SET_OK' $tunableLog $started
+    }
+    else {
+        Invoke-Captured { node $tunableScript list } $tunableLog | Out-Null
+        Assert-FreshMarker 9 'TUNABLES_LIST_OK' $tunableLog $started
+    }
+
+    Write-Run "COMMAND_CENTRE_TUNABLES_OK log=$tunableLog"
     exit 0
 }
 

@@ -66,6 +66,7 @@
 
 const crypto = require('crypto');
 const { AREAS, isKnownArea } = require('./maintenance');
+const { TUNABLE_KEYS, isKnownKey, normalizeValue, setTunable, clearTunable } = require('./tunables');
 const { logApiEvent } = require('./audit');
 
 /** The allowlisted things this file may do. */
@@ -75,6 +76,12 @@ const OPS_ACTIONS = [
     'promo.create',
     'promo.set_active',
     'purchase.alert_acknowledge',
+    // PROD-022. The phone-reachable half of the knob surface; tools/client-tunables.mjs
+    // is the primary one. `clear` is a separate action because clearing an override is
+    // NOT the same as setting it to 0 - it returns the knob to the build's default,
+    // which for pi.requestTimeoutSeconds is 20, not 0.
+    'tunable.set',
+    'tunable.clear',
 ];
 
 /** Event name for the durable history row. */
@@ -177,6 +184,36 @@ function validateSeal(payload) {
         throw new OpsError('MESSAGE_TOO_LONG', 'max ' + MESSAGE_MAX_LEN + ' chars; it scrolls past');
     }
     return { area: area, message: message };
+}
+
+/**
+ * Validate a knob write (PROD-022). Refuses an unregistered key and a value the
+ * client could not parse - both would otherwise be accepted and then silently
+ * ignored by every client, which during an incident reads as "the flag did
+ * nothing" and sends the owner chasing a build.
+ */
+function validateTunableSet(payload) {
+    const key = String((payload && payload.key) || '').trim();
+    if (!isKnownKey(key)) {
+        throw new OpsError('UNKNOWN_TUNABLE_KEY',
+            'key must be one of ' + TUNABLE_KEYS.map(function (k) { return k.key; }).join(', '));
+    }
+    const value = normalizeValue(key, payload && payload.value);
+    if (value === null) {
+        throw new OpsError('BAD_TUNABLE_VALUE',
+            'bools take 0/1, ints take a whole number');
+    }
+    return { key: key, value: value };
+}
+
+/** Validate a knob clear. Clearing returns the knob to the SHIPPING DEFAULT. */
+function validateTunableClear(payload) {
+    const key = String((payload && payload.key) || '').trim();
+    if (!isKnownKey(key)) {
+        throw new OpsError('UNKNOWN_TUNABLE_KEY',
+            'key must be one of ' + TUNABLE_KEYS.map(function (k) { return k.key; }).join(', '));
+    }
+    return { key: key };
 }
 
 /** Validate an open. Opening clears the banner text along with the seal. */
@@ -466,7 +503,11 @@ module.exports = {
     recordOpsWrite,
     setMaintenance,
     setPromoActive,
+    setTunable,
+    clearTunable,
     validateOpen,
+    validateTunableSet,
+    validateTunableClear,
     validatePromoDraft,
     validateSeal,
     validatePurchaseAlertAcknowledgement,

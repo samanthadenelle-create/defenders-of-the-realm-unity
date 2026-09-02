@@ -87,6 +87,7 @@ using System.Collections.Generic;
 // `System.X` member access here binds the const and fails to compile.
 using System.Text;
 using DeNelle.Core.Diagnostics;
+using DeNelle.Core.Ops;
 using DeNelle.Core.Platform;
 using UnityEngine;
 using UnityEngine.AddressableAssets;
@@ -146,8 +147,10 @@ namespace DeNelle.Core
 
         // Addresses with an in-flight async request (dedupe — a skipped skin re-asks every reapply).
         private static readonly HashSet<string> s_inFlight = new HashSet<string>();
+        // The residency queue. Named "pi" historically because Pi Browser was the only host that
+        // used it; PROD-022's concurrency knob lets ANY host route through it, so read the name as
+        // "the serialised queue" rather than as a platform claim.
         private static readonly Queue<string> s_piQueue = new Queue<string>();
-        private static bool s_piRequestActive;
 
         // Addresses that resolved to nothing even asynchronously; stop re-requesting them.
         private static readonly HashSet<string> s_deadAddresses = new HashSet<string>();
@@ -171,17 +174,83 @@ namespace DeNelle.Core
         // (CLAUDE.md §12 — the whole point is that giving up says so).
         private static readonly Dictionary<string, int> s_attempts = new Dictionary<string, int>();
 
+        // =====================================================================
+        //  PROD-022 — THE REMOTELY TUNABLE KNOBS.
+        // ---------------------------------------------------------------------
+        //  ⭐ EVERY ONE OF THESE RESOLVES TO ITS OLD HARDCODED VALUE WHEN THERE IS NO
+        //  DATABASE ROW, NO NETWORK, OR NO SERVER. RemoteTunables.Registry holds the
+        //  defaults and they are the values this file shipped with; the owner-facing
+        //  list is docs/PROD022_TUNABLE_FLAGS.md. A build with an empty client_tunables
+        //  table behaves exactly like the build before PROD-022 touched it.
+        //
+        //  These are PROPERTIES, not consts, so a flip in the database takes effect on
+        //  the next read rather than at the next 30-minute WebGL rebuild. That is the
+        //  entire point (owner ruling 2026-09-02: "all we really have to do is just
+        //  flip a flag and possibly redeploy").
+        // =====================================================================
+
+        /// <summary>The value <see cref="MaxRequestAttempts"/> had before it was tunable, mirrored
+        /// here so a reader can see the shipping number without opening the registry.</summary>
+        public const int DefaultMaxRequestAttempts = 3;
+
+        /// <summary>The value <see cref="PiRequestTimeoutSeconds"/> had before it was tunable.</summary>
+        public const int DefaultPiRequestTimeoutSeconds = 20;
+
         /// <summary>How many async fetches a single address may be given before it is retired for
-        /// this launch. 3 = one cold attempt plus two recoveries from a transient webview stall.</summary>
-        public const int MaxRequestAttempts = 3;
+        /// this launch. Default 3 = one cold attempt plus two recoveries from a transient webview
+        /// stall. Clamped to at least 1: a budget of zero would retire every address on sight and
+        /// there is no diagnosis in a town with no art and no fetches.</summary>
+        public static int MaxRequestAttempts =>
+            Mathf.Max(1, RemoteTunables.Int(RemoteTunables.KeyAssetsMaxRequestAttempts));
 
         /// <summary>
-        /// The Pi Browser Addressables request timeout, in seconds. UNCHANGED at 20 by PROD-022 —
-        /// it is named here only so the trace line and the value cannot drift apart, and so a reader
-        /// classifying a TIMEOUT cause can see which number produced it. ⛔ Do not tune this as a
-        /// "fix" for PROD-022: the root is not proven and a timeout change would bake in a guess.
+        /// The Pi Browser Addressables request timeout, in seconds. Default 20 — UNCHANGED by
+        /// PROD-022, deliberately: the root is not proven and picking a new constant would bake in
+        /// a guess. It is tunable so the number can be moved by DATA instead. Clamped to at least 1
+        /// because a timeout of zero means "no timeout" to UnityWebRequest, which is the captive-
+        /// portal hang this project has already been bitten by.
         /// </summary>
-        public const int PiRequestTimeoutSeconds = 20;
+        public static int PiRequestTimeoutSeconds =>
+            Mathf.Max(1, RemoteTunables.Int(RemoteTunables.KeyPiRequestTimeoutSeconds));
+
+        /// <summary>Ceiling on residency fetches in flight at once. 0 = today (Pi serialises through
+        /// its own latch; desktop is unbounded).</summary>
+        private static int ConcurrencyCap =>
+            Mathf.Max(0, RemoteTunables.Int(RemoteTunables.KeyAssetsMaxConcurrentRequests));
+
+        /// <summary>ON = issue no remote structure request at all on Pi. Default OFF.</summary>
+        private static bool RemoteStructureArtDisabled =>
+            WebGLPiPlatform.IsPiBrowserEnvironment &&
+            RemoteTunables.Bool(RemoteTunables.KeyPiDisableRemoteStructureArt);
+
+        /// <summary>ON = Pi runs the full desktop warm pass instead of on-demand. Default OFF.</summary>
+        private static bool PiEagerWarm =>
+            RemoteTunables.Bool(RemoteTunables.KeyPiEagerStructureWarm);
+
+        /// <summary>ON = Pi awaits Addressables init + harvests keys before the first load. Default OFF.</summary>
+        private static bool PiAwaitInitBeforeFirstLoad =>
+            RemoteTunables.Bool(RemoteTunables.KeyPiAwaitInitBeforeFirstLoad);
+
+        /// <summary>
+        /// Narration gate for this file's Step lines. ⛔ Warn and Fail NEVER route through here —
+        /// CLAUDE.md §12 is binding and a failure that stops being logged is the bug this whole
+        /// system exists to avoid. Only the success narration is dimmable.
+        /// </summary>
+        private static void TraceStep(int minVerbosity, string message)
+        {
+            if (RemoteTunables.Int(RemoteTunables.KeyTraceAssetVerbosity) < minVerbosity) return;
+            FlowTrace.Step(System, message);
+        }
+
+        // PROD-022 — the shared residency queue. On Pi with no cap set this behaves EXACTLY like
+        // the old `s_piRequestActive` latch (one at a time); with a cap of N it admits N. On any
+        // other host with no cap set the queue is bypassed entirely, which is today's unbounded
+        // desktop behaviour. s_activeRequests replaces the old bool.
+        private static int s_activeRequests;
+
+        // PROD-022 knob 2 — the await-init gate. Only ever armed on Pi, only when the knob is ON.
+        private static bool s_piPrewarmStarted;
+        private static bool s_piPrewarmDone;
 
         // PROD-022 Lane B: how many transport-level requests this launch has issued, and the last URL
         // Addressables asked for. On Pi this is the ONLY place the real URL is observable from managed
@@ -341,6 +410,30 @@ namespace DeNelle.Core
         {
             if (string.IsNullOrWhiteSpace(address)) return;
 
+            // PROD-022 knob 3 — THE STREAMING KILL SWITCH (pi.disableRemoteStructureArt).
+            // Default OFF, so this branch does not exist in a build with no database row.
+            //
+            // ⭐ WHY IT DEGRADES CLEANLY AND CANNOT BLANK THE TOWN: returning here is
+            // INDISTINGUISHABLE, to every caller, from an address that has simply not arrived
+            // yet — which is a state they all already handle and have handled since this file
+            // was written. StructureAssetLoader returns null, HubStructureVisualInjector
+            // re-enables the baked renderers and keeps the baked twin, and the Structure keeps
+            // its visible pending-art proxy. Nothing waits, nothing stalls, nothing is hidden.
+            //
+            // It is the BIG HAMMER and it is decisive in BOTH directions: if the crash loop
+            // stops with this on, asset streaming is implicated beyond argument; if it
+            // continues, streaming is exonerated and the cause is elsewhere.
+            if (RemoteStructureArtDisabled)
+            {
+                FlowTrace.Throttle(System, "req-killswitch-" + address, 5f,
+                    $"on-demand SUPPRESSED '{address}': the PROD-022 streaming kill switch " +
+                    $"({RemoteTunables.KeyPiDisableRemoteStructureArt}) is ON, so NO remote structure " +
+                    "request is issued on this host. The caller keeps its baked twin / pending-art " +
+                    "proxy — this is a deliberate fidelity-for-signal trade, not a failure. Set the " +
+                    "row to 0 to restore streaming; no rebuild is needed.");
+                return;
+            }
+
             // PROD-022 Lane B — SAY WHY WE DID NOT ASK. Every one of these three returns used to be
             // silent, so a reader watching the same address repeat "model not found" could not tell
             // whether we were re-asking the CDN every frame or had stopped asking entirely on the
@@ -364,8 +457,8 @@ namespace DeNelle.Core
             {
                 FlowTrace.Throttle(System, "req-inflight-" + address, 5f,
                     $"on-demand SKIP '{address}': a fetch is ALREADY IN FLIGHT " +
-                    $"(inFlight={s_inFlight.Count}, piQueueDepth={s_piQueue.Count}, " +
-                    $"piRequestActive={s_piRequestActive}, waited={SecondsWaiting(address):F1}s). " +
+                    $"(inFlight={s_inFlight.Count}, queueDepth={s_piQueue.Count}, " +
+                    $"activeRequests={s_activeRequests}, waited={SecondsWaiting(address):F1}s). " +
                     "The caller keeps its proxy; this is the expected shape while a bundle downloads.");
                 return;
             }
@@ -388,34 +481,65 @@ namespace DeNelle.Core
                     $"RETRY CAP: '{address}' has now failed {MaxRequestAttempts} async fetch attempt(s) — " +
                     "retiring it for the rest of this launch; the caller keeps its pending-art proxy or " +
                     $"baked twin and will NOT ask again. Last cause: {LastFailureCause(address) ?? "unrecorded"}");
-                // ⚠ Deliberately does NOT touch s_piRequestActive: nothing was ever dequeued for this
-                // address on this pass, so clearing the Pi serialisation latch here would release a
-                // DIFFERENT request that is genuinely still in flight and run two multi-MB downloads
-                // at once — the exact concurrency the Pi policy exists to prevent.
+                // ⚠ Deliberately does NOT touch s_activeRequests: nothing was ever dequeued for this
+                // address on this pass, so releasing a slot here would admit a DIFFERENT request
+                // while one is genuinely still in flight and run two multi-MB downloads at once —
+                // the exact concurrency the Pi policy exists to prevent.
                 MaybeNotifySettled();
                 return;
             }
 
             EnsureHost();
 
-            if (WebGLPiPlatform.IsPiBrowserEnvironment)
+            // PROD-022 — ROUTE THROUGH THE SERIALISED QUEUE?
+            //   * Pi Browser, always: today's behaviour, unchanged (one at a time).
+            //   * Any host with assets.maxConcurrentRequests >= 1: the knob is armed.
+            //   * Otherwise (desktop, knob at its default 0): straight through, unbounded —
+            //     which is byte-for-byte today's desktop path.
+            int cap = ConcurrencyCap;
+            if (WebGLPiPlatform.IsPiBrowserEnvironment || cap >= 1)
             {
                 s_piQueue.Enqueue(address);
-                StartNextPiRequest();
+                StartNextQueued();
                 return;
             }
 
-            StartRequest(address);
+            StartRequest(address, queued: false);
         }
 
-        private static void StartNextPiRequest()
+        /// <summary>
+        /// Admit as many queued addresses as the ceiling allows.
+        /// <para>
+        /// ⭐ WITH THE KNOB AT ITS DEFAULT 0 THE CEILING IS 1, which is precisely the old
+        /// <c>s_piRequestActive</c> latch this replaced — one request at a time on Pi, and the
+        /// queue untouched on every other host because Request() never enqueues there. A cap of
+        /// N admits N, which is the concurrency hypothesis made testable without a rebuild.
+        /// </para>
+        /// </summary>
+        private static void StartNextQueued()
         {
-            if (s_piRequestActive || s_piQueue.Count == 0) return;
-            s_piRequestActive = true;
-            StartRequest(s_piQueue.Dequeue());
+            // PROD-022 knob 2 — hold everything while the await-init prewarm is running. Nothing
+            // is dropped; the queue drains the moment init lands (or its deadline passes).
+            if (s_piPrewarmStarted && !s_piPrewarmDone) return;
+
+            int cap = ConcurrencyCap;
+            int ceiling = cap >= 1 ? cap : 1;
+
+            while (s_piQueue.Count > 0 && s_activeRequests < ceiling)
+            {
+                s_activeRequests++;
+                StartRequest(s_piQueue.Dequeue(), queued: true);
+            }
         }
 
-        private static void StartRequest(string address)
+        /// <summary>Give back one concurrency slot and admit whatever that lets through.</summary>
+        private static void ReleaseSlotAndPump()
+        {
+            if (s_activeRequests > 0) s_activeRequests--;
+            StartNextQueued();
+        }
+
+        private static void StartRequest(string address, bool queued)
         {
             // PROD-022 Lane B — the on-demand branch's own decision points, traced. Desktop never
             // reaches here for structures (its warm pass has already made them resident), so every
@@ -424,9 +548,10 @@ namespace DeNelle.Core
             // which address, whether the catalog can even be expected to know it yet, how deep the
             // Pi serialisation queue is, and how many attempts this address has already spent.
             float startedAt = Now();
-            FlowTrace.Step(System,
+            TraceStep(RemoteTunables.VerbosityVerbose,
                 $"on-demand START '{address}' attempt={AttemptsFor(address)}/{MaxRequestAttempts} " +
-                $"piQueueDepth={s_piQueue.Count} inFlight={s_inFlight.Count} resident={s_resident.Count} " +
+                $"queueDepth={s_piQueue.Count} activeRequests={s_activeRequests} " +
+                $"inFlight={s_inFlight.Count} resident={s_resident.Count} " +
                 $"state={State} registeredKeysHarvested={s_registeredKeys.Count} " +
                 $"webRequestsSoFar={s_webRequests}.");
 
@@ -437,11 +562,11 @@ namespace DeNelle.Core
                 // the very next line means the catalog answered synchronously (no location) — a
                 // completely different defect from a handle that stays None for 20s and then times
                 // out, and the two were indistinguishable before this line existed.
-                FlowTrace.Step(System,
+                TraceStep(RemoteTunables.VerbosityVerbose,
                     $"on-demand HANDLE '{address}': valid={handle.IsValid()} status={handle.Status} " +
                     $"isDone={handle.IsDone} pctComplete={handle.PercentComplete:0.00} " +
                     $"issuedIn={(Now() - startedAt) * 1000f:0.0}ms.");
-                handle.Completed += h => OnRequestCompleted(address, h);
+                handle.Completed += h => OnRequestCompleted(address, h, queued);
             });
 
             if (!started)
@@ -459,15 +584,11 @@ namespace DeNelle.Core
                     "LoadAssetAsync call itself threw — typically InvalidKeyException: no location " +
                     "for this address in the loaded catalog). See the Guard Fail line immediately " +
                     "above for the exception text. | classified=KEY-MISSING";
-                if (WebGLPiPlatform.IsPiBrowserEnvironment)
-                {
-                    s_piRequestActive = false;
-                    StartNextPiRequest();
-                }
+                if (queued) ReleaseSlotAndPump();
             }
         }
 
-        private static void OnRequestCompleted(string address, AsyncOperationHandle<Object> handle)
+        private static void OnRequestCompleted(string address, AsyncOperationHandle<Object> handle, bool queued)
         {
             s_inFlight.Remove(address);
 
@@ -476,7 +597,7 @@ namespace DeNelle.Core
                 s_resident[Key(typeof(Object), address)] = handle.Result;
                 s_retained.Add(handle);          // ⛔ retained for the process; see header (B)
                 float waited = SecondsWaiting(address);
-                FlowTrace.Step(System,
+                TraceStep(RemoteTunables.VerbosityNormal,
                     $"'{address}' arrived ASYNC after {waited:F1}s and is now RESIDENT " +
                     $"(retained={s_retained.Count}) — the next skin attempt will use it. " +
                     "It is never released, so the dungeon->town cycle cannot evict it.");
@@ -512,11 +633,7 @@ namespace DeNelle.Core
             }
 
             MaybeNotifySettled();
-            if (WebGLPiPlatform.IsPiBrowserEnvironment)
-            {
-                s_piRequestActive = false;
-                StartNextPiRequest();
-            }
+            if (queued) ReleaseSlotAndPump();
         }
 
         // =====================================================================
@@ -565,6 +682,13 @@ namespace DeNelle.Core
             if (!IsSettled) return;
             if (s_inFlight.Count > 0) return;
 
+            // PROD-022 knob 2 — while the await-init prewarm is pending, "settled" is a lie: the
+            // Pi branch reports Degraded from frame one, so IsSettled is TRUE before the catalog
+            // has produced a single location and a WhenSettled retry would fire into nothing.
+            // Holding here is the third of the three divergences the on-demand branch's Warn names.
+            // With the knob at its default OFF, s_piPrewarmStarted is false and this line is inert.
+            if (s_piPrewarmStarted && !s_piPrewarmDone) return;
+
             var due = s_settleCallbacks.ToArray();
             s_settleCallbacks.Clear();
             foreach (var cb in due)
@@ -582,14 +706,88 @@ namespace DeNelle.Core
             // memory ceiling than desktop WebGL. Loading and retaining all 35 prefabs at
             // boot can kill the renderer, which the host recreates as an apparent game
             // reset. On Pi, leave structures strictly on-demand and serialize requests.
+            // PROD-022 — say WHICH configuration produced this session, at the moment the policy
+            // is chosen. A felt-test capture whose configuration cannot be reconstructed is a
+            // wasted felt-test, and this is the line that makes it reconstructable.
+            RemoteTunables.LogConfiguration("StructureContentWarmer.Boot");
+
             if (WebGLPiPlatform.IsPiBrowserEnvironment)
             {
+                // The Pi request timeout override is installed on EVERY Pi path, eager or not:
+                // it is a transport bound and a transport instrument, and neither belongs to the
+                // residency policy.
+                Addressables.WebRequestOverride = InstrumentedPiWebRequest;
+
+                // PROD-022 knob 1 — pi.eagerStructureWarm. Default OFF, so this branch does not
+                // exist in a build with no database row and the on-demand policy below is what
+                // runs, unchanged.
+                //
+                // ⛔ WO-PROD-022 forbids re-enabling eager residency on Pi WITHOUT PROOF, and this
+                // is how the proof gets gathered rather than assumed: the eager path is the SAME
+                // desktop WarmRoutine, reached through the same StartWarm, so there is no second
+                // implementation to drift.
+                if (PiEagerWarm)
+                {
+                    FlowTrace.Warn(System,
+                        "Pi Browser policy OVERRIDDEN by " + RemoteTunables.KeyPiEagerStructureWarm +
+                        "=ON: running the FULL desktop warm pass (await Addressables init, harvest " +
+                        "keys, download dependencies, load and retain every structure prefab) on a " +
+                        "memory-capped webview. This is a PROD-022 experiment, not the shipping " +
+                        "policy — set the row to 0 to restore on-demand streaming, no rebuild needed.");
+                    EnsureHost();
+                    StartWarm();
+                    return;
+                }
+
                 s_warmStarted = true;
                 State = StructureContentState.Degraded;
-                Addressables.WebRequestOverride = InstrumentedPiWebRequest;
                 FlowTrace.Step(System,
                     "Pi Browser policy: eager structure download/residency disabled; " +
                     $"{PiRequestTimeoutSeconds}s Addressables request timeout installed; assets load on demand.");
+
+                // PROD-022 knob 2 — pi.awaitInitBeforeFirstLoad. Default OFF, so the divergence
+                // Warn below still describes this build truthfully when no row is set.
+                //
+                // ⭐ THIS IS THE PRIME SUSPECT AND IT IS DELIBERATELY NARROW. It changes ONE thing:
+                // the catalog is initialised and the key set harvested BEFORE the first on-demand
+                // load is issued. Residency policy is untouched — nothing is downloaded eagerly and
+                // nothing is retained that would not have been. Requests raised meanwhile are
+                // QUEUED, not dropped, and drain the instant init lands or its deadline passes.
+                if (PiAwaitInitBeforeFirstLoad)
+                {
+                    FlowTrace.Warn(System,
+                        "Pi on-demand policy AUGMENTED by " + RemoteTunables.KeyPiAwaitInitBeforeFirstLoad +
+                        "=ON: Addressables.InitializeAsync will be awaited and every registered key " +
+                        "harvested BEFORE the first on-demand load is issued. Requests raised in the " +
+                        "meantime are queued, never dropped. Residency policy is UNCHANGED — this is " +
+                        "not the eager warm.");
+                    EnsureHost();
+                    s_piPrewarmStarted = true;
+                    if (s_host == null)
+                    {
+                        // No player loop to host the coroutine (edit mode / batchmode). Do not hold
+                        // the queue hostage to a coroutine that can never run.
+                        s_piPrewarmDone = true;
+                        FlowTrace.Warn(System,
+                            "await-init prewarm requested but there is NO coroutine host (edit mode / " +
+                            "batchmode). The gate is released immediately and behaviour falls back to " +
+                            "the on-demand default — the knob cannot stall a hostless process.");
+                    }
+                    else if (!Guard.Try(System, "start Pi await-init prewarm",
+                                        () => { s_host.StartCoroutine(PiPrewarmRoutine()); }))
+                    {
+                        // ⛔ THE GATE MUST NEVER OUTLIVE ITS COROUTINE. If StartCoroutine threw,
+                        // nothing will ever set s_piPrewarmDone, and StartNextQueued would hold
+                        // every residency request for the life of the launch — a NEW failure mode
+                        // introduced by a diagnostic knob, which is exactly what a crash-loop
+                        // ticket must not ship. Release it here and say so.
+                        s_piPrewarmDone = true;
+                        FlowTrace.Fail(System,
+                            "await-init prewarm FAILED TO START (see the Guard line above). The gate " +
+                            "has been released so residency requests proceed exactly as they do with " +
+                            "the knob OFF. Nothing is held.");
+                    }
+                }
 
                 // PROD-022 Lane B — NAME WHAT THIS BRANCH SKIPS. Desktop reaches residency through
                 // WarmRoutine, which awaits Addressables.InitializeAsync, harvests every registered
@@ -598,15 +796,33 @@ namespace DeNelle.Core
                 // ever touches Addressables. Desktop Chrome on the identical build showed ZERO
                 // "not resident" lines; Pi is the only host on this path, so the divergence is worth
                 // stating in the trace rather than inferring from two files later.
-                FlowTrace.Warn(System,
-                    "Pi on-demand branch DIVERGES from the desktop warm path in three ways, recorded " +
-                    "here so a trace reader does not have to derive them: (1) Addressables.InitializeAsync " +
-                    "is NOT awaited — the first on-demand request is the first touch of the catalog; " +
-                    "(2) no key harvest, so IsRegisteredAddress() answers false for EVERY address this " +
-                    "launch and any 'is it registered' report from this host is meaningless; " +
-                    "(3) State is reported Degraded from frame one, so IsSettled is TRUE immediately and " +
-                    "every WhenSettled retry fires as soon as the in-flight count reaches zero — " +
-                    "possibly before the catalog has produced a single location.");
+                // ⚠ THE WORDING IS CONDITIONAL, AND IT HAS TO BE. This Warn asserts three concrete
+                // facts about the running build; knob 2 changes all three. A trace line that
+                // describes the OTHER configuration is worse than no line at all, because it is the
+                // line a future seat will quote as evidence.
+                if (!s_piPrewarmStarted)
+                {
+                    FlowTrace.Warn(System,
+                        "Pi on-demand branch DIVERGES from the desktop warm path in three ways, recorded " +
+                        "here so a trace reader does not have to derive them: (1) Addressables.InitializeAsync " +
+                        "is NOT awaited — the first on-demand request is the first touch of the catalog; " +
+                        "(2) no key harvest, so IsRegisteredAddress() answers false for EVERY address this " +
+                        "launch and any 'is it registered' report from this host is meaningless; " +
+                        "(3) State is reported Degraded from frame one, so IsSettled is TRUE immediately and " +
+                        "every WhenSettled retry fires as soon as the in-flight count reaches zero — " +
+                        "possibly before the catalog has produced a single location. " +
+                        "ALL THREE ARE ADDRESSED BY " + RemoteTunables.KeyPiAwaitInitBeforeFirstLoad +
+                        "=1, which is OFF in this session.");
+                }
+                else
+                {
+                    FlowTrace.Warn(System,
+                        "Pi on-demand branch is running WITH " + RemoteTunables.KeyPiAwaitInitBeforeFirstLoad +
+                        "=ON, so the usual three divergences are CLOSED for this session: init IS awaited " +
+                        "before the first load, keys ARE harvested (IsRegisteredAddress is meaningful), and " +
+                        "WhenSettled is HELD until the prewarm finishes instead of firing at frame one. " +
+                        "Residency policy is otherwise unchanged — assets still load on demand.");
+                }
 
                 MaybeNotifySettled();
                 return;
@@ -616,6 +832,93 @@ namespace DeNelle.Core
             // of bug this file exists to end.
             EnsureHost();
             StartWarm();
+        }
+
+        /// <summary>
+        /// PROD-022 knob 2 — await Addressables init and harvest the key set BEFORE the first
+        /// on-demand load. Runs ONLY on Pi Browser and ONLY when
+        /// <c>pi.awaitInitBeforeFirstLoad</c> is ON; the default build never enters here.
+        /// <para>
+        /// ⛔ IT CANNOT HANG. The wait is bounded by <see cref="WarmDeadlineSeconds"/> and the gate
+        /// is released in EVERY exit path, including the deadline path and the "init would not even
+        /// start" path. Nothing downstream awaits this coroutine; the queue simply drains later.
+        /// </para>
+        /// <para>
+        /// It deliberately does NOT download or load anything. The only difference from the
+        /// default is WHEN the first request is issued and whether the key set is known — which is
+        /// precisely the divergence the on-demand branch's own Warn has been naming since PROD-022
+        /// Lane B, now made testable.
+        /// </para>
+        /// </summary>
+        private static IEnumerator PiPrewarmRoutine()
+        {
+            float t0 = Now();
+
+            AsyncOperationHandle<IResourceLocator> init = default;
+            bool initStarted = Guard.Try(System, "Addressables.InitializeAsync (Pi prewarm)",
+                () => { init = Addressables.InitializeAsync(false); });
+
+            if (initStarted)
+            {
+                while (!init.IsDone && Now() - t0 < WarmDeadlineSeconds) yield return null;
+
+                if (!init.IsDone)
+                {
+                    // Deliberately NOT released while it is still running, and deliberately NOT
+                    // waited on. Leaking one handle beats blocking, and beats cancelling the very
+                    // initialisation the on-demand loads are about to need.
+                    FlowTrace.Warn(System,
+                        $"Pi prewarm: Addressables init still running after {Now() - t0:F1}s " +
+                        $"(deadline {WarmDeadlineSeconds}s) — releasing the request gate anyway. " +
+                        "Behaviour from here is the knob-OFF default; the init is neither cancelled " +
+                        "nor waited on.");
+                }
+                else
+                {
+                    TraceStep(RemoteTunables.VerbosityNormal,
+                        $"Pi prewarm: Addressables init {init.Status} in {Now() - t0:F1}s.");
+                    Guard.Try(System, "release Pi prewarm init handle", () => Addressables.Release(init));
+
+                    // Harvest the key set. This is the second half of the divergence: without it
+                    // IsRegisteredAddress answers false for EVERY address on this host, so any
+                    // "is it registered" report from a Pi session is meaningless.
+                    Guard.Try(System, "harvest registered keys (Pi prewarm)", () =>
+                    {
+                        foreach (var locator in Addressables.ResourceLocators)
+                        {
+                            if (locator?.Keys == null) continue;
+                            foreach (var k in locator.Keys)
+                                if (k is string s) s_registeredKeys.Add(s);
+                        }
+                    });
+
+                    int structureKeys = 0;
+                    foreach (var k in s_registeredKeys)
+                        if (k.StartsWith(AddressPrefix, StringComparison.Ordinal)) structureKeys++;
+
+                    FlowTrace.Warn(System,
+                        $"Pi prewarm COMPLETE in {Now() - t0:F1}s: {s_registeredKeys.Count} registered " +
+                        $"key(s) harvested, {structureKeys} of them under '{AddressPrefix}'. " +
+                        (structureKeys == 0
+                            ? "⛔ ZERO structure addresses are in the loaded catalog. That is the answer " +
+                              "to PROD-022's 'model not found' storm and it is a CATALOG problem, not a " +
+                              "transport one — the bytes were never findable, so no timeout, retry budget " +
+                              "or concurrency cap could have helped."
+                            : "The catalog knows these addresses, so a later 'model not found' is a " +
+                              "TRANSPORT failure and its CAUSE line names which one."));
+                }
+            }
+            else
+            {
+                FlowTrace.Fail(System,
+                    "Pi prewarm: Addressables.InitializeAsync would not even start (see the Guard line " +
+                    "above). Releasing the request gate — behaviour is the knob-OFF default.");
+            }
+
+            // EVERY path lands here. The gate is released exactly once.
+            s_piPrewarmDone = true;
+            StartNextQueued();
+            MaybeNotifySettled();
         }
 
         /// <summary>Start the warm pass if it has not run. Safe to call repeatedly.</summary>

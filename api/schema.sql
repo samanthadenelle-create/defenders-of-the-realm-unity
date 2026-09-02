@@ -1821,5 +1821,56 @@ CREATE INDEX IF NOT EXISTS idx_showcase_category_votes_count
     ON showcase_contest_category_votes (contest_id, category_id, showcase_id);
 
 -- =============================================================================
+-- client_tunables - PROD-022. THE REMOTE KNOBS THE Pi CRASH LOOP IS BISECTED WITH.
+--
+--   Owner ruling 2026-09-02, verbatim:
+--     "make the testing as robust as possible with as many solutions as
+--      possible... all we really have to do is just flip a flag and possibly
+--      redeploy"
+--
+--   A WebGL rebuild costs about thirty minutes. PROD-022 is a P0 crash loop that
+--   reproduces only inside Pi Browser on the owner's iPhone. So every candidate
+--   mitigation ships in ONE build behind its OWN key, all defaulting to today's
+--   behaviour, and the bisect becomes flag flips against THIS table.
+--
+-- WHY A SEPARATE TABLE AND NOT maintenance_toggles (asked and answered, WO PROD-022):
+--   maintenance_toggles is PK-CHECK-constrained to exactly six area ids, its
+--   payload shape is boolean + operator prose, and its six-id domain is
+--   source-linted three ways (MaintenanceArea enum / AREAS array / this CHECK) by
+--   MaintenanceTogglesRegression. Putting knobs there would force that CHECK open
+--   - defeating the lint that exists to keep the six honest - and would overload
+--   `closed` and `message` as a value field. Different domain, different shape,
+--   different failure semantics. The PATTERN is reused end to end (public
+--   unauthenticated GET, short edge cache, fail-to-safe, writes only through the
+--   two-key admin endpoint and the operator CLI); only the table is new.
+--
+-- FAIL-TO-DEFAULT, and it is neither fail-open nor fail-closed because nothing
+--   here is a seal. An unreachable table, a timeout, a malformed row or a missing
+--   key leaves the CLIENT at its SHIPPING DEFAULT, i.e. today's behaviour. The
+--   defaults live in the build (DeNelle.Core.Ops.RemoteTunables.Registry); this
+--   table only ever carries OVERRIDES. An EMPTY table is the correct resting
+--   state and is exactly what ships.
+--
+-- ⛔ NO ROWS ARE SEEDED. Deliberate: a seeded knob is a knob already flipped, and
+--   the whole invariant is that an untouched database means an untouched build.
+--
+--   key   - matches RemoteTunables.Registry. An unknown key is IGNORED by the
+--           client (forward compatibility) and REFUSED by the operator tools.
+--   value - TEXT. Bools are '0'/'1'; ints are decimal. Parsed leniently by the
+--           client, and a value it cannot parse falls back to the default and
+--           says so in the trace rather than poisoning the knob.
+--
+-- Written by : tools/client-tunables.mjs (DATABASE_URL) or api/admin/ops.js.
+-- Read by    : api/client-tunables.js (public GET).
+-- Owner list : docs/PROD022_TUNABLE_FLAGS.md
+-- =============================================================================
+CREATE TABLE IF NOT EXISTS client_tunables (
+    key        TEXT        PRIMARY KEY,
+    value      TEXT        NOT NULL,
+    updated_by TEXT,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- =============================================================================
 -- END OF SCHEMA
 -- =============================================================================

@@ -1355,6 +1355,11 @@ namespace DeNelle.Editor
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "cost-row-fit suite", () => { if (!DeNelle.Editor.Regression.CostRowFitRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[cost-row-fit] " + r); });
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "first-raid-soft-gate suite", () => { if (!DeNelle.Editor.Regression.FirstRaidSoftGateRegression.Run(out var firstRaidReason)) failures.Add(firstRaidReason); else log.AppendLine("[first-raid-soft-gate] " + firstRaidReason); });
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "maintenance-toggles suite", () => { if (!DeNelle.Editor.Regression.MaintenanceTogglesRegression.Run(out var rMaint)) failures.Add(rMaint); else log.AppendLine("[maintenance-toggles] " + rMaint); });
+            // PROD-022 - THE INVARIANT EVERY OFFLINE PLAYER DEPENDS ON: with no database
+            // row and no reachable backend, all 8 remote knobs resolve to their SHIPPING
+            // DEFAULTS, i.e. today's behaviour byte for byte. A break here is INVISIBLE
+            // (nothing crashes; the build just stops behaving the way it says it does).
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "tunable-defaults suite", () => { if (!DeNelle.Editor.Regression.RemoteTunablesDefaultsRegression.Run(out var rTun)) failures.Add(rTun); else log.AppendLine("[tunable-defaults] " + rTun); });
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "troop-strike-vfx suite", () => { if (!DeNelle.Editor.Regression.TroopStrikeVfxRegression.Run(out var troopVfxReason)) failures.Add(troopVfxReason); else log.AppendLine("[troop-strike-vfx] " + troopVfxReason); });
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "starter-armour suite", () => { if (!DeNelle.Editor.Regression.StarterArmourOwnershipRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[starter-armour] " + r); });
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "armour-catalog-job suite", () => { if (!DeNelle.Editor.Regression.ArmourCatalogJobRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[armour-catalog-job] " + r); });

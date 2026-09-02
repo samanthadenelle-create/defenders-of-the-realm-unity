@@ -164,7 +164,17 @@ namespace DeNelle.Village
         //   attempt  MissLogCap + 1  -> one Fail saying the cap is reached and what happens next
         //   thereafter               -> a throttled Fail-equivalent, ~1 per 10s per address
         // CLAUDE.md §12 is binding: instrumentation is permanent and a failure never becomes silent.
-        private const int MissLogCap = 3;
+        //
+        // PROD-022 (owner ruling 2026-09-02) — the cap is now REMOTELY TUNABLE, defaulting to the
+        // 3 it has always been. A build with no `visuals.missLogCap` row behaves exactly as before;
+        // the value can be moved from the database without a 30-minute WebGL rebuild. The registry
+        // and the owner-facing list live in DeNelle.Core.Ops.RemoteTunables /
+        // docs/PROD022_TUNABLE_FLAGS.md. Clamped to at least 1: a cap of zero would skip straight
+        // to the throttle and lose the first, most informative Fail of every address.
+        private const int DefaultMissLogCap = 3;
+        private static int MissLogCap => Mathf.Max(1,
+            DeNelle.Core.Ops.RemoteTunables.Int(DeNelle.Core.Ops.RemoteTunables.KeyVisualsMissLogCap));
+
         private static readonly Dictionary<string, int> s_missLogCounts = new Dictionary<string, int>();
 
         /// <summary>
@@ -217,7 +227,19 @@ namespace DeNelle.Village
         /// under <paramref name="host"/>. Returns null (caller falls back) if absent.</summary>
         public static GameObject Skin(Transform host, string resourcesPath, SkinOptions opts)
         {
-            using var _ = FlowTrace.Enter("VisualFactory", $"Skin('{resourcesPath}')");
+            // PROD-022 — the `-> Skin(...)` / `<- Skin(...)` pair is the single loudest thing in a
+            // Pi Browser capture: a hub re-apply drives several attempts per address per second and
+            // the observed final seconds were nothing but this pair cycling. It is NARRATION, so it
+            // is dimmable by `trace.assetVerbosity` — default 2, which is today's behaviour, every
+            // scope printed. At a lower level the scope is `default(FlowScope)`, whose Dispose is a
+            // documented no-op (FlowTrace.cs:322 — `_active` is false), so nothing changes but the
+            // volume. ⛔ Warn and Fail below are NEVER gated: CLAUDE.md §12 is binding and a failure
+            // that stops being logged is the exact bug this instrumentation exists to prevent.
+            using var _ = DeNelle.Core.Ops.RemoteTunables.Int(
+                              DeNelle.Core.Ops.RemoteTunables.KeyTraceAssetVerbosity)
+                          >= DeNelle.Core.Ops.RemoteTunables.VerbosityVerbose
+                ? FlowTrace.Enter("VisualFactory", $"Skin('{resourcesPath}')")
+                : default;
 
             // ⛔ RESOLVES THROUGH StructureAssetLoader, NOT Resources.Load.
             // This is the SINGLE point every structure visual flows through — StructureFactory.Create,

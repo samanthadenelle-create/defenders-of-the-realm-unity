@@ -64,6 +64,10 @@ const {
     validatePromoDraft,
     validateSeal,
     validatePurchaseAlertAcknowledgement,
+    validateTunableSet,
+    validateTunableClear,
+    setTunable,
+    clearTunable,
 } = require('../_lib/ops');
 
 /** Bodies here are a handful of short fields. Anything larger is not our client. */
@@ -185,6 +189,48 @@ module.exports = async (req, res) => {
                 message: row.message || null,
                 updated_by: row.updated_by,
                 updated_at: row.updated_at,
+            });
+        }
+
+        // ---------------------------------------------------------------------
+        // PROD-022 - the remote knobs. Flipping one changes CLIENT behaviour on the
+        // next poll (about 40 s: 10 s edge cache + 30 s client poll) with no rebuild
+        // and no deploy. Every knob's default lives in the BUILD, so clearing a row
+        // is the one-word way back to today's behaviour.
+        // ---------------------------------------------------------------------
+        if (action === 'tunable.set') {
+            const v = validateTunableSet(body);
+            const row = await setTunable(sql, v.key, v.value, operator);
+            await recordOpsWrite(sql, {
+                action: action, operator: operator, target: v.key, outcome: 'set',
+                detail: { value: v.value },
+            });
+            return res.status(200).json({
+                ok: true, action: action, at: at, by: operator,
+                key: row.key,
+                value: row.value,
+                updated_by: row.updated_by,
+                updated_at: row.updated_at,
+                note: 'Clients pick this up within about 40s (10s edge cache + 30s poll). ' +
+                      'Clear the row to return this knob to the value the BUILD hardcodes - ' +
+                      'setting it to 0 is not the same thing.',
+            });
+        }
+
+        if (action === 'tunable.clear') {
+            const v = validateTunableClear(body);
+            const result = await clearTunable(sql, v.key);
+            await recordOpsWrite(sql, {
+                action: action, operator: operator, target: v.key,
+                outcome: result.existed ? 'cleared' : 'already_default', detail: {},
+            });
+            return res.status(200).json({
+                ok: true, action: action, at: at, by: operator,
+                key: result.key,
+                // In WORDS. The owner is red/green colourblind and no state in this
+                // system may live in a colour.
+                state: 'DEFAULT (the value this build hardcodes)',
+                had_override: result.existed,
             });
         }
 
