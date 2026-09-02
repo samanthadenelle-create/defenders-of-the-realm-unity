@@ -148,6 +148,38 @@ namespace DeNelle.Wallet
         public const string KeyTrustNeverPower = "storeTrustNeverPower";
         public const string KeyCovenant        = "storeCovenant";
 
+        // =====================================================================
+        //  WO-1323 — THE PI SKIN'S STORE COPY
+        // ---------------------------------------------------------------------
+        //  ⛔ THESE ARE WHAT THE STORE SAYS INSTEAD OF A NUMBER. Under the Pi skin
+        //  the client is not allowed to price anything: every Pi figure on the shelf
+        //  came back from /api/pi/quote (server-side, CoinGecko low_24h, fail-closed).
+        //  When there is no server figure the answer is one of these SENTENCES —
+        //  never a converted USD anchor, never a cached figure, and never the SKR
+        //  amount, which is a token this game has never held and the Pi player cannot
+        //  spend. Keys only, as everywhere above.
+        // =====================================================================
+
+        /// <summary>Replaces the SKR wallet/balance chip in the header under the Pi skin.</summary>
+        public const string KeyPiHeaderNotice = "storePiHeaderNotice";
+        /// <summary>The pack is Pi-purchasable but no server quote has been taken yet.</summary>
+        public const string KeyPiPriceAtCheckout = "storePiPriceAtCheckout";
+        /// <summary>This pack is not on the Pi rail at all (the server would refuse to quote it).</summary>
+        public const string KeyPiNotOnSale = "storePiNotOnSale";
+        /// <summary>Pi itself is not reachable, so nothing here can be priced or bought.</summary>
+        public const string KeyPiRailUnavailable = "storePiRailUnavailable";
+        /// <summary>{0} = PurchaseGate.WalletRequiredAboveUsd. The guest ceiling, reworded for Pi.</summary>
+        public const string KeyPiWalletGate = "storePiWalletGate";
+        /// <summary>NOTHING on the shelf is Pi-purchasable — shown as the honest state it is.</summary>
+        public const string KeyPiShelfEmpty = "storePiShelfEmpty";
+
+        /// <summary>Every Pi-skin key, so the oracle can prove each resolves and is ASCII-clean.</summary>
+        public static readonly string[] PiSkinKeys =
+        {
+            KeyPiHeaderNotice, KeyPiPriceAtCheckout, KeyPiNotOnSale,
+            KeyPiRailUnavailable, KeyPiWalletGate, KeyPiShelfEmpty,
+        };
+
         /// <summary>Every Night Market key, so an oracle can prove each one resolves to a real sentence.</summary>
         public static readonly string[] NightMarketKeys =
         {

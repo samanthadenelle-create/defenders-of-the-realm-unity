@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 
 namespace DeNelle.Core.Payments
 {
@@ -72,6 +73,35 @@ namespace DeNelle.Core.Payments
         bool CanBuy(string sku, out string reason);
         void Purchase(string sku, Action<ProviderPurchaseResult> onComplete);
         void RestorePurchases(Action<bool, string> onComplete);
+    }
+
+    /// <summary>
+    /// WO-1323 - OPTIONAL companion to <see cref="IPaymentProvider"/>: a rail whose shelf price is
+    /// only knowable by ASKING THE SERVER can pre-fetch those prices so the storefront has something
+    /// honest to draw BEFORE the player taps Buy.
+    ///
+    /// <para>⛔ IT IS A REFRESH, NEVER A CALCULATOR. The implementation's only sanctioned move is to
+    /// ask its own backend and cache what comes back; a provider that DERIVES a price here (from a
+    /// USD anchor, a cached rate, anything local) has become a second pricing authority, which is
+    /// precisely the failure WO-1318's server-side quote exists to prevent. A refusal must CLEAR the
+    /// cached figure, never leave the last one standing.</para>
+    ///
+    /// <para>⛔ AND IT MAY NEVER PROMPT. This runs on store OPEN, unattended: anything that raises a
+    /// consent sheet, a wallet dialog or a payment sheet from here would put a modal in front of a
+    /// player who only browsed. Read whatever identity is already established, or send none.</para>
+    ///
+    /// <para>Separate from <see cref="IPaymentProvider"/> on purpose: it is additive, and the two
+    /// rails that do not need it (Google Play prices locally through the billing client; the
+    /// Solana rail quotes through PurchaseQuoteService) are untouched by its existence.</para>
+    /// </summary>
+    public interface IDisplayPriceRefresher
+    {
+        /// <summary>
+        /// Refreshes the cached <see cref="IPaymentProvider.GetDisplayPrice"/> answer for each sku it
+        /// can price, then reports whether ANY answer changed (so the caller can repaint once rather
+        /// than per sku). Never throws; a failure reports false.
+        /// </summary>
+        void RefreshDisplayPrices(IReadOnlyList<string> skus, Action<bool> onComplete);
     }
 
     /// <summary>Exactly one provider may own the active channel. Missing/mismatched rails fail closed.</summary>

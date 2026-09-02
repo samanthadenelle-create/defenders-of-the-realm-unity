@@ -18,6 +18,22 @@ CLAUDE.md §8). Store scene-wiring currently DISABLED pending own PanelSettings.
   `AmountFor(CurrencyKind)`, `AmountLabel(CurrencyKind)`, `UsdApprox()`. They could not go to
   Commerce because `CurrencyKind` *is* the rail. ⚠ `pack.UsdApprox` is now `pack.UsdApprox()` —
   C# has no extension properties.
+- ⛔ **`PackStore` HAS TWO SEPARATE QUESTIONS ABOUT PI AND BOTH MUST SURVIVE (WO-1323).**
+  `PiDisplay` (**who is LOOKING** — read off `CurrencySkinResolver.Active`, skin id `pi` +
+  `SkinAuthMode.PiSdk`) decides what the shelf may **say**; `PiRailOwnsTheStore` (**who takes the
+  money** — `PaymentProviders.Current.Channel`) decides what may be **charged**. They are not the
+  same fact: on 2026-09-02 the owner's real Pi Browser session resolved the **skin** to Pi while the
+  **channel** never registered, so every price label fell through to the `$SKR` branch and a Pi
+  player was quoted a token this game has never held. Every SKR figure and every piece of Solana
+  wallet furniture in `PackStore` now sits behind `PiDisplay`; the SKR skin is unchanged because the
+  predicate is false there. **Never collapse the two** — one way quotes SKR at a Pi player, the
+  other offers a Buy the rail cannot settle.
+- ⛔ **The Pi price is NEVER computed here.** The shelf's Pi figures come from `/api/pi/quote`
+  (server-side, CoinGecko `low_24h`, fail-closed) through `IDisplayPriceRefresher`, implemented by
+  `PiBrowserPaymentProvider` over the one Pi endpoint client (`PiPaymentEndpoints`). There is no
+  rate on this side, no USD→Pi converter, and a refused or expired quote **clears** the cached
+  figure rather than leaving it on the shelf. No `pi` price is authored in `packs.json` and none may
+  be. Pinned by `[store-pi-skin]` (`StorePiSkinCurrencyRegression`).
 - `WalletService`, `WalletRegistry`, `WalletEndpoints` — wallet abstraction
 - `SolanaWalletProvider`, `StubWalletProvider` — providers (stub for dev/tests)
 - `MwaSessionStore` — the MWA `auth_token` sealed under an AndroidKeyStore AES-GCM key and bound to

@@ -1523,6 +1523,13 @@ namespace DeNelle.HUD.Kit
             ElarionUiKit.BuildActionBarHousing(_peacefulDockRoot.transform,
                 new Vector2(0f, 0f), new Vector2(1f, 1f));
 
+            // WO-1319 — the five faces are laid out in REFERENCE PIXELS by a live solver, not
+            // by 1/5 fractions of a mount that is only 46% of a canvas whose local width
+            // collapses with the aspect. See HudDockSlotLayout / DeNelle.Core.UI.HudDockLayout.
+            _peacefulDockLayout = _peacefulDockRoot.AddComponent<HudDockSlotLayout>();
+            _peacefulDockLayout.Configure(rootRt, PeacefulDockSlotY0, PeacefulDockSlotY1,
+                HudAreasHost.ActionBarRightHeadroomRatio, HudDockLayout.GapFraction);
+
             BuildPeacefulDockSlot(0, "BUILD", UiStyle.Icon("build", "hammer"), () =>
             {
                 if (_owner != null) _owner.BuildRequested?.Invoke();
@@ -1543,21 +1550,44 @@ namespace DeNelle.HUD.Kit
             Register("peacefulDock", WrapAsWidget("peacefulDock", _peacefulDockRoot));
         }
 
+        // WO-1319 — the peaceful dock's vertical band, named once and shared with the live
+        // solver. (The horizontal 1/5 slicing that used to sit beside them is GONE: it is what
+        // collapsed under ElarionUiKit's touch floor at a narrow aspect and printed the five
+        // captions as one overlapping run. HudDockSlotLayout owns x now.)
+        private const float PeacefulDockSlotY0 = 0.08f;
+        private const float PeacefulDockSlotY1 = 0.94f;
+        private HudDockSlotLayout _peacefulDockLayout;
+
         private void BuildPeacefulDockSlot(int index, string caption, Sprite icon, Action command)
         {
+            // Build-time seed only: an equal share of the mount, so a dock that somehow never
+            // gets a layout pass still renders in a sane shape. HudDockSlotLayout overwrites
+            // these x anchors with absolute reference-pixel positions on the first LateUpdate
+            // and on every surface change after (a browser window drag is a shipping event).
             const int count = 5;
-            const float gap = 0.018f;
+            const float gap = HudDockLayout.GapFraction;
             float width = (1f - gap * (count + 1)) / count;
             float x0 = gap + index * (width + gap);
             var slot = ElarionUiKit.BuildActionSlot(_peacefulDockRoot.transform,
-                new Vector2(x0, 0.08f), new Vector2(x0 + width, 0.94f), command);
+                new Vector2(x0, PeacefulDockSlotY0), new Vector2(x0 + width, PeacefulDockSlotY1), command);
             // Keep the slot as an equal-width quarter of the shared dock.  Only its medallion
             // artwork is square; constraining the slot itself makes Unity centre all four roots
             // on the same point and the last one (MANAGE) visually covers the others.
             ElarionUiKit.StyleAsRoundMedallion(slot);
             slot.SetIcon(icon);
             slot.SetCaption(caption);
+            // WO-1319 acceptance 2 — the caption's degradation is AUTHORED, not incidental.
+            // SetCaption leaves the kit default (word-wrap on, autosize floor 6f), so a caption
+            // that outgrew its face either re-flowed or shrank to an illegible smear. The shared
+            // kit's own single-line fitter is the right answer and already exists: NoWrap +
+            // bounded autosize + Ellipsis, floored at FontHardFloor(20) so "JOURNEY" becomes
+            // "JOUR..." rather than 6pt mush or a word painted over its neighbour. The label can
+            // now never be wider than its slot, whatever the solver hands it.
+            if (slot.caption != null)
+                ElarionUiKit.FitSingleLine(slot.caption, ElarionUiKit.FontHardFloor, ElarionUi.FontMicro);
             if (slot.button != null) ElarionUiKit.ClampMinTouch(slot.button);
+            if (_peacefulDockLayout != null)
+                _peacefulDockLayout.AddSlot((RectTransform)slot.root.transform, slot.caption);
         }
 
         /// <summary>Approved active-combat dock: Attack, held Block, three live assignable skills,
@@ -1571,6 +1601,13 @@ namespace DeNelle.HUD.Kit
             rootRt.anchorMax = Vector2.one;
             rootRt.offsetMin = rootRt.offsetMax = Vector2.zero;
             ElarionUiKit.BuildActionBarHousing(_combatDockRoot.transform, Vector2.zero, Vector2.one);
+
+            // WO-1319 — the combat dock sits in the SAME ActionBar mount and sliced it into SIX
+            // fractions, so at the owner's aspect it carried the identical defect one posture
+            // away (six 91px slots is worse than five). Same solver, same ladder, its own gap.
+            _combatDockLayout = _combatDockRoot.AddComponent<HudDockSlotLayout>();
+            _combatDockLayout.Configure(rootRt, CombatDockSlotY0, CombatDockSlotY1,
+                HudAreasHost.ActionBarRightHeadroomRatio, HudDockLayout.CombatGapFraction);
 
             _adaptiveCombatSlots = new ElarionUiKit.ActionSlotHandle[6];
             _adaptiveCombatSlots[0] = BuildCombatDockSlot(0, "ATTACK",
@@ -1596,19 +1633,31 @@ namespace DeNelle.HUD.Kit
             Register("combatDock", WrapAsWidget("combatDock", _combatDockRoot));
         }
 
+        // WO-1319 — the combat dock's vertical band + live solver, exactly as the peaceful one.
+        private const float CombatDockSlotY0 = 0.06f;
+        private const float CombatDockSlotY1 = 0.95f;
+        private HudDockSlotLayout _combatDockLayout;
+
         private ElarionUiKit.ActionSlotHandle BuildCombatDockSlot(int index, string caption,
             Sprite icon, Action command)
         {
+            // Build-time seed only — HudDockSlotLayout owns x from the first LateUpdate on.
             const int count = 6;
-            const float gap = 0.010f;
+            const float gap = HudDockLayout.CombatGapFraction;
             float width = (1f - gap * (count + 1)) / count;
             float x0 = gap + index * (width + gap);
             var slot = ElarionUiKit.BuildActionSlot(_combatDockRoot.transform,
-                new Vector2(x0, 0.06f), new Vector2(x0 + width, 0.95f), command);
+                new Vector2(x0, CombatDockSlotY0), new Vector2(x0 + width, CombatDockSlotY1), command);
             ElarionUiKit.StyleAsRoundMedallion(slot);
             slot.SetIcon(icon);
             slot.SetCaption(caption);
+            // Same authored caption degradation as the peaceful dock: NoWrap + bounded autosize
+            // + Ellipsis, floored at FontHardFloor. "SKILL III" can shorten, never spill.
+            if (slot.caption != null)
+                ElarionUiKit.FitSingleLine(slot.caption, ElarionUiKit.FontHardFloor, ElarionUi.FontMicro);
             if (slot.button != null) ElarionUiKit.ClampMinTouch(slot.button);
+            if (_combatDockLayout != null)
+                _combatDockLayout.AddSlot((RectTransform)slot.root.transform, slot.caption);
             return slot;
         }
 

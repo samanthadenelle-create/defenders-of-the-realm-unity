@@ -417,8 +417,12 @@ namespace DeNelle.Wallet
         private static string PrimaryRail() => SkrMintResolvable() ? "SKR" : "USDC/SOL";
 
         /// <summary>Invariant-culture "$4.99" for the refusal sentence's {0}. Never the device
-        /// locale: the price on the card is authored in USD, so the threshold must read the same.</summary>
-        private static string FormatUsd(double usd) =>
+        /// locale: the price on the card is authored in USD, so the threshold must read the same.
+        /// <para>⚠ WIDENED private -> internal by WO-1323, and ONLY the accessor moved: the rule, the
+        /// threshold and every caller behave identically. PackStore words the SAME refusal for the Pi
+        /// skin (storePiWalletGate), and a second copy of this one-line formatter is exactly the
+        /// duplicated state that lets one of the two drift into a device locale.</para></summary>
+        internal static string FormatUsd(double usd) =>
             "$" + usd.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture);
 
         // Bounded ring so the ledger cannot grow without limit on a device.

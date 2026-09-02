@@ -385,6 +385,9 @@ namespace DeNelle.Wallet
             Render();
             RefreshWalletMirror().Forget();
             RefreshQuotedPrices().Forget();
+            // WO-1323 — the Pi shelf's figures come from /api/pi/quote, and this is the one place
+            // that asks. No-op on every non-Pi surface.
+            RefreshPiDisplayPrices();
             RestorePendingPresentation();
 
             if (_panelHandle != null) PanelManager.NotifyOpened(_panelHandle);
@@ -1113,8 +1116,63 @@ namespace DeNelle.Wallet
             else
                 FlowTrace.Step("Store", $"Render: built {built} pack card(s) across the four bands.");
 
+            BuildPiShelfNoticeIfNothingIsBuyable();
+
             FocusPack(ResolveFocusSku(), scale, animate: false);
         }
+
+        /// <summary>
+        /// WO-1323 — when a PI player is looking at a shelf on which NOTHING is Pi-purchasable, say
+        /// so, in words, at the bottom of the shelf.
+        ///
+        /// <para>⛔ THIS IS THE HONEST ANSWER TO THE WO'S OPEN QUESTION, AND IT IS DELIBERATELY NOT
+        /// THE CONVENIENT ONE. Exactly one sku is Pi-quotable today (<c>hearth-spark</c>) and it
+        /// carries <c>storeVisible:false</c> from WO-1069, so the Pi shelf can genuinely have nothing
+        /// on it that a Pi player may buy. The two shortcuts both had to be refused: flipping
+        /// <c>storeVisible</c> would reverse a pricing ruling with a display change, and falling back
+        /// to the SKR figures is the defect this whole work order exists to remove. So the empty
+        /// state is SHOWN as an empty state. The cards above it stay fully browsable and fully priced
+        /// in USD — nothing is hidden, and nothing is required to play.</para>
+        ///
+        /// <para>Never built under the SKR skin: <see cref="PiDisplay"/> is false there and this
+        /// method returns on its first line, which is why that shelf is unchanged.</para>
+        /// </summary>
+        private void BuildPiShelfNoticeIfNothingIsBuyable()
+        {
+            if (!PiDisplay || _shelfContent == null) return;
+
+            int buyable = 0;
+            foreach (var pack in PackCatalog.Packs)
+            {
+                if (pack == null || !PackCatalog.IsOnBrowsableShelf(pack)) continue;
+                if (PiCanSell(pack)) buyable++;
+            }
+            if (buyable > 0)
+            {
+                FlowTrace.Step("Store", $"Pi shelf: {buyable} browsable sku(s) are on the Pi rail — no empty-shelf notice.");
+                return;
+            }
+
+            FlowTrace.Warn("Store",
+                "Pi shelf: NOTHING on the browsable shelf can be bought with Pi (the Pi rail sells only " +
+                $"'{PiEnabledSkuHint}', which is storeVisible:false by WO-1069, or no Pi rail is registered " +
+                "at all). Saying so on the shelf rather than falling back to the SKR prices (WO-1323).");
+
+            var go = new GameObject("pi-shelf-empty", typeof(RectTransform), typeof(LayoutElement));
+            go.transform.SetParent(_shelfContent, false);
+            go.GetComponent<LayoutElement>().preferredHeight = 76f;
+            MakeText(go.transform, StoreStrings.Get(StoreStrings.KeyPiShelfEmpty), 30,
+                ElarionUi.ParchmentDim, FontStyles.Italic, TextAlignmentOptions.Center,
+                new Vector2(0.03f, 0.06f), new Vector2(0.97f, 0.94f));
+        }
+
+        /// <summary>
+        /// Names the one Pi-enabled sku in the trace above WITHOUT reaching into the Pi provider
+        /// assembly (DeNelle.Wallet does not reference it, and must not grow a reference for a log
+        /// line). It is a diagnostic hint, never a decision — every actual gate answer comes from
+        /// <see cref="IPaymentProvider.CanBuy"/>.
+        /// </summary>
+        private const string PiEnabledSkuHint = "hearth-spark";
 
         /// <summary>
         /// The browsable rows of one band, in catalogue order.
@@ -1997,7 +2055,12 @@ namespace DeNelle.Wallet
             // ⚠ AND ONLY WHEN THE HOST HAS A LINE BOX TO SPARE ABOVE THE BUTTON (WO-1162 FIX 2's
             // rule, applied to the commerce rail): required is the Buy control and its price; the
             // balance-after preview is the qualifier and it is the thing that gives.
-            if (roomForBalance && _balanceState == BalanceState.Known && pack.AmountFor(CurrencyKind.Skr) > 0d)
+            // ⚠ AND NEVER UNDER THE PI SKIN (WO-1323): its copy is "Wallet after: {0} SKR", which is
+            // a promise about a rail the Pi player does not pay on. The state test alone would
+            // already exclude it (the mirror never reaches Known under Pi), but this screen takes
+            // money — the string is excluded by NAME, not by a state that happens to be right today.
+            if (!PiDisplay && roomForBalance && _balanceState == BalanceState.Known &&
+                pack.AmountFor(CurrencyKind.Skr) > 0d)
             {
                 double after = _balanceSkr - pack.AmountFor(CurrencyKind.Skr);
                 MakeText(host, StoreStrings.Format(StoreStrings.KeyBalanceAfter, after.ToString("N0")),
@@ -2069,6 +2132,24 @@ namespace DeNelle.Wallet
                 string blockedLabel = PurchaseGate.BlockedCtaLabel(pack);
                 bool walletIsTheBlocker = PurchaseGate.WalletIsTheBlocker(pack);
 
+                // ⛔ WO-1323 — THE "CONNECT WALLET" DOOR IS A SOLANA DOOR AND MUST NOT OPEN FOR A PI
+                // PLAYER. PurchaseGate is UNTOUCHED: the rule (the $4.99 guest ceiling) still refuses
+                // exactly the same packs for exactly the same reason, and nothing about walletAllowed
+                // or the SKR charge path moves. What changes is only the FACE this store puts on that
+                // refusal — a plate that names the Pi truth, instead of a button that would send a Pi
+                // player into a Solana wallet-connect flow they have no use for. A refusal is a PLATE
+                // (UI-002); this is that rule applied to an audience the button was never written for.
+                if (walletIsTheBlocker && PiDisplay)
+                {
+                    string piGate = StoreStrings.Format(StoreStrings.KeyPiWalletGate,
+                        PurchaseGate.FormatUsd(PurchaseGate.WalletRequiredAboveUsd));
+                    FitInto(MakeText(host, piGate, 30, ElarionUi.ParchmentDim, FontStyles.Italic,
+                        TextAlignmentOptions.Center, ctaMin, ctaMax), 30);
+                    FlowTrace.Step("Store", $"BuildSpotlightCta '{pack.Sku}': wallet-rule refusal, PI wording — " +
+                                            "the Solana connect button is withheld under the Pi skin (WO-1323).");
+                    return;
+                }
+
                 if (!walletIsTheBlocker)
                 {
                     // A refusal is a PLATE, never a button (UI-002): nothing here invites a tap that
@@ -2115,6 +2196,25 @@ namespace DeNelle.Wallet
             // so this is never blank and never a bare code.
             var paymentProvider = PaymentProviders.Current;
             bool usesProviderRail = OwnsTheRail(paymentProvider);
+
+            // ⛔ WO-1323 — A PI PLAYER WITH NO PI RAIL GETS NO BUY CONTROL AT ALL, and this is the
+            // line that guarantees it. Everything below assumes one of two rails owns the charge; a
+            // Pi-skinned session where the provider never registered (which is EXACTLY the state the
+            // owner hit on 2026-09-02) would otherwise fall through to the SOLANA path — a Buy button
+            // that opens a wallet-connect flow a Pi player has no use for, priced on a rail they do
+            // not hold. A refusal is a PLATE, never a button (UI-002), and the shelf card above still
+            // shows the pack and its USD anchor: browsable, honest, not purchasable here.
+            if (PiDisplay && !PiRailOwnsTheStore)
+            {
+                FitInto(MakeText(host, StoreStrings.Get(StoreStrings.KeyPiRailUnavailable), 30,
+                    ElarionUi.ParchmentDim, FontStyles.Italic,
+                    TextAlignmentOptions.Center, ctaMin, ctaMax), 30);
+                FlowTrace.Warn("Store", $"BuildSpotlightCta '{pack.Sku}': the PI SKIN is active but NO Pi payment " +
+                                        "rail is registered, so no Buy control is built. The Solana path below is " +
+                                        "NOT offered as a substitute (WO-1323).");
+                return;
+            }
+
             if (!usesProviderRail && !PurchaseQuoteService.IsSellable(pack.Sku))
             {
                 string notSellable = PurchaseQuoteService.SellableReasonFor(pack.Sku);
@@ -2153,11 +2253,14 @@ namespace DeNelle.Wallet
                 return;
             }
 
-            if (roomForNetwork && _wallet != null && _wallet.Network == WalletNetwork.Devnet)
+            // WO-1323: the devnet marker describes the SOLANA network this purchase would settle on.
+            // Under the Pi skin no Solana transaction is contemplated, so the marker is not drawn —
+            // it would label a Pi payment with a Solana network.
+            if (!PiDisplay && roomForNetwork && _wallet != null && _wallet.Network == WalletNetwork.Devnet)
                 MakeText(host, "DEVNET - TEST TOKEN", 30, ElarionUi.Gold,
                     FontStyles.Bold, TextAlignmentOptions.Center,
                     new Vector2(ctaMin.x, netY0), new Vector2(ctaMax.x, netY1));
-            else if (!roomForNetwork && _wallet != null && _wallet.Network == WalletNetwork.Devnet)
+            else if (!PiDisplay && !roomForNetwork && _wallet != null && _wallet.Network == WalletNetwork.Devnet)
                 FlowTrace.Warn("Store", "BuildCommerce: no room above the Buy control for the DEVNET " +
                                         "marker in this composition (" + NightMarketComposition.Describe(_plan) +
                                         ") - the network label is DROPPED rather than drawn over the button.");
@@ -2203,6 +2306,90 @@ namespace DeNelle.Wallet
             provider != null &&
             (provider.Channel == PaymentChannel.GooglePlay || provider.Channel == PaymentChannel.PiBrowser);
 
+        // =====================================================================
+        //  WO-1323 — THE PI DISPLAY HINGE, AND WHY IT IS THE SKIN AND NOT THE RAIL
+        // ---------------------------------------------------------------------
+        //  ⛔ THE PROVIDER CHANNEL IS THE WRONG QUESTION FOR A LABEL. WO-1318 made
+        //  the price labels ask `PaymentProviders.Current.Channel == PiBrowser`, and
+        //  on 2026-09-02 the owner opened the Night Market in REAL Pi Browser and read
+        //  "1022 SKR / 2555 SKR / BUY - 255 SKR" off the shelf. Her session log says
+        //  exactly why:
+        //
+        //      Currency skin resolved: 'pi' (auth=PiSdk, symbol=pi, identity=PiUid)
+        //
+        //  The SKIN resolved to Pi. The PROVIDER did not register — PaymentChannel is
+        //  resolved from WebGLPiPlatform.IsPiBrowserEnvironment and PiPlatform.Current,
+        //  either of which can be absent while the player is unmistakably a Pi player.
+        //  So the rail answered "no Pi here" and every label fell through to the $SKR
+        //  branch, which is the ONE audience that must never see it.
+        //
+        //  ⛔ THE TWO QUESTIONS ARE GENUINELY DIFFERENT AND BOTH ARE KEPT:
+        //     WHO IS LOOKING  -> the SKIN  (PiDisplay)  -> what the shelf may SAY
+        //     WHO TAKES MONEY -> the RAIL  (OwnsTheRail) -> what may be CHARGED
+        //  A Pi player with no Pi rail must see Pi wording and NO purchase; collapsing
+        //  the two either quotes SKR at a Pi player (what happened) or offers a Buy the
+        //  rail cannot settle. Never merge them.
+        //
+        //  ⛔ AND IT IS SKIN ID "pi", NOT MERELY SkinAuthMode.PiSdk. The V1 generic
+        //  "wallet" skin also carries PiSdk auth (see CurrencySkinResolver.WalletDefault
+        //  — auth mirrors the Pi defaults so ONLY presentation changes), so testing the
+        //  auth mode alone would drag the wallet skin into Pi wording it never asked for.
+        // =====================================================================
+
+        /// <summary>The Pi rail is registered and will actually take the money.</summary>
+        private static bool PiRailOwnsTheStore
+        {
+            get
+            {
+                var provider = PaymentProviders.Current;
+                return provider != null && provider.Channel == PaymentChannel.PiBrowser;
+            }
+        }
+
+        /// <summary>The player in front of this store is a PI player. See the block above.</summary>
+        private static bool PiSkinActive
+        {
+            get
+            {
+                var skin = CurrencySkinResolver.Active;
+                return skin != null &&
+                       skin.AuthMode == SkinAuthMode.PiSdk &&
+                       string.Equals(skin.SkinId, "pi", StringComparison.Ordinal);
+            }
+        }
+
+        /// <summary>
+        /// The one predicate every price, chip and refusal in this file asks before it may print a
+        /// $SKR figure or wallet furniture. True for the Pi skin OR the Pi rail; false everywhere
+        /// else, which is why the SKR skin is byte-for-byte the store it was.
+        /// </summary>
+        private static bool PiDisplay => PiSkinActive || PiRailOwnsTheStore;
+
+        /// <summary>
+        /// The SERVER's Pi figure for this sku, or empty. Empty is the honest answer and it has three
+        /// causes that all mean the same thing to the player: no Pi rail, the rail cannot sell this
+        /// sku, or the server refused/expired the quote.
+        /// <para>⛔ THERE IS NO ELSE-BRANCH THAT COMPUTES ONE. The client has no rate and must never
+        /// acquire one (WO-1318's security model). If this returns empty, the caller says WHERE the
+        /// price comes from — it does not derive it.</para>
+        /// </summary>
+        private static string PiQuotedAmount(PackDef pack)
+        {
+            if (pack == null || !PiRailOwnsTheStore) return string.Empty;
+            var provider = PaymentProviders.Current;
+            if (provider == null) return string.Empty;
+            DisplayPrice price = provider.GetDisplayPrice(pack.Sku);
+            return price.Available ? price.LocalizedText : string.Empty;
+        }
+
+        /// <summary>True when the Pi rail will sell THIS sku right now (its own gate, asked once).</summary>
+        private static bool PiCanSell(PackDef pack)
+        {
+            if (pack == null || !PiRailOwnsTheStore) return false;
+            var provider = PaymentProviders.Current;
+            return provider != null && provider.CanBuy(pack.Sku, out _);
+        }
+
         private string StorePriceMajor(PackDef pack)
         {
             var provider = PaymentProviders.Current;
@@ -2211,12 +2398,17 @@ namespace DeNelle.Wallet
                 var price = provider.GetDisplayPrice(pack != null ? pack.Sku : string.Empty);
                 return price.Available ? price.LocalizedText : "Price unavailable";
             }
-            // WO-1318 Pi rail: the PI amount is SERVER-quoted at checkout and is genuinely not known
-            // yet, so the face carries the USD ANCHOR — a real authored number — rather than either an
-            // invented Pi figure or the $SKR label, which is meaningless inside Pi Browser. The exact
-            // Pi amount appears on Pi's own payment sheet, which is the surface that binds.
-            if (provider != null && provider.Channel == PaymentChannel.PiBrowser)
+
+            // WO-1323: the Pi player's headline number is the SERVER's Pi amount when one exists, and
+            // the USD ANCHOR — a real authored number — when it does not. It is NEVER the $SKR label,
+            // which is meaningless inside Pi Browser and names a token this game has never held.
+            if (PiDisplay)
+            {
+                string pi = PiQuotedAmount(pack);
+                if (!string.IsNullOrEmpty(pi)) return pi;
                 return pack != null ? pack.UsdReference : string.Empty;
+            }
+
             return pack != null ? pack.AmountLabel(_defaultCurrency) : string.Empty;
         }
 
@@ -2224,14 +2416,57 @@ namespace DeNelle.Wallet
         {
             var provider = PaymentProviders.Current;
             if (provider != null && provider.Channel == PaymentChannel.GooglePlay) return string.Empty;
-            if (provider != null && provider.Channel == PaymentChannel.PiBrowser)
+
+            if (PiDisplay)
             {
-                // Once a quote has been taken this session we can show the real Pi figure; before that
-                // we say WHERE the price comes from instead of guessing one.
-                var price = provider.GetDisplayPrice(pack != null ? pack.Sku : string.Empty);
-                return price.Available ? price.LocalizedText : "Priced in Pi at checkout";
+                // Pi amount on top -> the USD anchor sits under it, exactly as the WO asks ("Pi
+                // amounts from the server quote, ALONGSIDE the USD anchor it already displays").
+                if (!string.IsNullOrEmpty(PiQuotedAmount(pack)))
+                    return pack != null ? pack.UsdReference : string.Empty;
+
+                // No server figure. Say WHY, in the player's own terms — never guess one.
+                if (!PiRailOwnsTheStore) return StoreStrings.Get(StoreStrings.KeyPiRailUnavailable);
+                return PiCanSell(pack)
+                    ? StoreStrings.Get(StoreStrings.KeyPiPriceAtCheckout)
+                    : StoreStrings.Get(StoreStrings.KeyPiNotOnSale);
             }
+
             return pack != null ? pack.UsdApprox() : string.Empty;
+        }
+
+        /// <summary>
+        /// Asks the Pi rail to pull the shelf's Pi figures FROM THE SERVER, then repaints once.
+        /// <para>⛔ TRANSPORT ONLY, exactly like <see cref="RefreshQuotedPrices"/> on the SKR side:
+        /// this method has no rate, no conversion and no fallback. A refusal repaints nothing and the
+        /// cards keep the WORDS they had.</para>
+        /// </summary>
+        private void RefreshPiDisplayPrices()
+        {
+            if (!PiDisplay) return;
+
+            var refresher = PaymentProviders.Current as IDisplayPriceRefresher;
+            if (refresher == null)
+            {
+                FlowTrace.Step("Store",
+                    "Pi display prices: no Pi rail is registered on this artifact, so there is nothing to " +
+                    "ask. The shelf shows the USD anchor and says Pi purchasing is unavailable - it does " +
+                    "NOT fall back to the SKR figures (WO-1323).");
+                return;
+            }
+
+            var skus = new List<string>();
+            foreach (var pack in PackCatalog.Packs)
+            {
+                if (pack == null || !PackCatalog.IsOnBrowsableShelf(pack)) continue;
+                skus.Add(pack.Sku);
+            }
+
+            FlowTrace.Step("Store", $"Pi display prices: asking the server for up to {skus.Count} shelf sku(s).");
+            refresher.RefreshDisplayPrices(skus, changed =>
+            {
+                if (!changed || this == null || !isActiveAndEnabled) return;
+                Render();
+            });
         }
 
         // =====================================================================
@@ -2257,6 +2492,20 @@ namespace DeNelle.Wallet
         {
             using var _ = FlowTrace.Enter("Store", "RefreshWalletMirror (read-only)");
             _hasFiat = false;
+
+            // ⛔ WO-1323 — A PI PLAYER HAS NO SOLANA WALLET TO MIRROR, so this whole read is skipped
+            // rather than run and then hidden. The owner's Pi Browser session showed "Connect a
+            // wallet to see your balance" and a "Mainnet  SKR" chip beside it: both are Solana
+            // furniture, and the second names a token the game has never held. RenderBalanceLabel
+            // paints the Pi notice instead; nothing here is disabled for the SKR skin.
+            if (PiDisplay)
+            {
+                FlowTrace.Step("Store",
+                    "wallet mirror SKIPPED: the Pi skin is active, so there is no Solana wallet to read " +
+                    "and no SKR balance to mirror. The header carries the Pi notice instead (WO-1323).");
+                SetBalanceState(BalanceState.NoWallet);
+                return;
+            }
 
             if (_wallet == null || !_wallet.IsConnected)
             {
@@ -2357,6 +2606,16 @@ namespace DeNelle.Wallet
         private void RenderBalanceLabel()
         {
             if (_balanceLabel == null) return;
+
+            // ⛔ WO-1323 — FIRST LINE, BEFORE THE SWITCH, ON PURPOSE. Every balance state below is a
+            // sentence about a SOLANA wallet, and the tail of this method prints a literal "SKR"
+            // chip. Under the Pi skin there is exactly one honest thing to say here, and putting the
+            // test at the top means no future state can be added past it and reach the SKR text.
+            if (PiDisplay)
+            {
+                _balanceLabel.text = StoreStrings.Get(StoreStrings.KeyPiHeaderNotice);
+                return;
+            }
 
             switch (_balanceState)
             {

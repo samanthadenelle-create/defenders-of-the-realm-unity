@@ -40,13 +40,15 @@
 // =============================================================================
 
 using System;
+using System.Collections.Generic;
 using Cysharp.Threading.Tasks;
+using UnityEngine;
 using DeNelle.Core.Diagnostics;
 using DeNelle.Core.Platform;
 
 namespace DeNelle.Core.Payments.Providers
 {
-    public sealed class PiBrowserPaymentProvider : IPaymentProvider
+    public sealed class PiBrowserPaymentProvider : IPaymentProvider, IDisplayPriceRefresher
     {
         private const string TraceSystem = PiPaymentEndpoints.TraceSystem;
 
@@ -78,9 +80,37 @@ namespace DeNelle.Core.Payments.Providers
         // Uid from the most recent payments-scoped authenticate, used for the quote request.
         private string _lastAuthUid;
 
-        // Last server quote, kept only so the store can show what the player is about to pay.
-        private string _lastQuoteSku;
-        private string _lastQuoteAmountText;
+        // =====================================================================
+        //  WO-1323 - the SHELF's Pi figures. SERVER-SOURCED, PER SKU, AND PERISHABLE.
+        // ---------------------------------------------------------------------
+        //  ⛔ EVERY ENTRY HERE ARRIVED FROM /api/pi/quote AND NOTHING ELSE PUTS ONE IN.
+        //  There is no converter, no USD-anchor fallback and no rate on this side; the
+        //  only writer is a quote the server issued (a purchase quote, or the display
+        //  refresh below, which is the SAME call).
+        //
+        //  ⛔ AND IT EXPIRES. A Pi amount is a derivation of a moving rate, so a figure
+        //  kept past DisplayQuoteTtlSeconds is a STALE number - which the WO-1318 ruling
+        //  ranks with an invented one ("never a stale or invented price"). Past the TTL
+        //  GetDisplayPrice reports UNAVAILABLE and the store says where the price comes
+        //  from instead of printing an old one.
+        // =====================================================================
+        private readonly struct DisplayQuote
+        {
+            public readonly string AmountText;
+            public readonly float AtRealtime;
+            public DisplayQuote(string amountText, float atRealtime)
+            {
+                AmountText = amountText; AtRealtime = atRealtime;
+            }
+        }
+
+        /// <summary>How long a shelf-displayed Pi figure may stand before it is dropped.</summary>
+        private const float DisplayQuoteTtlSeconds = 300f;
+
+        private readonly Dictionary<string, DisplayQuote> _displayQuotes =
+            new Dictionary<string, DisplayQuote>(StringComparer.Ordinal);
+
+        private bool _displayRefreshInFlight;
 
         public PiBrowserPaymentProvider(IPiPlatform pi)
         {
@@ -102,11 +132,117 @@ namespace DeNelle.Core.Payments.Providers
         public DisplayPrice GetDisplayPrice(string sku)
         {
             if (!string.IsNullOrEmpty(sku) &&
-                string.Equals(sku, _lastQuoteSku, StringComparison.Ordinal) &&
-                !string.IsNullOrEmpty(_lastQuoteAmountText))
-                return DisplayPrice.Ready(_lastQuoteAmountText + " Pi", "PI");
+                _displayQuotes.TryGetValue(sku, out var cached) &&
+                !string.IsNullOrEmpty(cached.AmountText))
+            {
+                float age = Time.realtimeSinceStartup - cached.AtRealtime;
+                if (age >= 0f && age <= DisplayQuoteTtlSeconds)
+                    return DisplayPrice.Ready(cached.AmountText + " Pi", "PI");
+
+                // Dropped rather than shown old. See the TTL note on _displayQuotes.
+                _displayQuotes.Remove(sku);
+                FlowTrace.Step(TraceSystem,
+                    $"display price for '{sku}' EXPIRED after {age:0}s - dropping it. The store shows where " +
+                    "the price comes from rather than a figure the rate has moved past.");
+            }
 
             return DisplayPrice.Unavailable("Priced in Pi when you tap Buy.");
+        }
+
+        // -----------------------------------------------------------------
+        //  IDisplayPriceRefresher - WO-1323
+        // -----------------------------------------------------------------
+
+        /// <summary>
+        /// Asks the SERVER for the shelf's Pi figures, so the Night Market can print a real Pi amount
+        /// beside the USD anchor instead of a rail the Pi player does not hold.
+        ///
+        /// <para>⛔ IT IS THE SAME CALL THE PURCHASE MAKES - <see cref="PiPaymentEndpoints.RequestQuoteAsync"/>,
+        /// the one and only Pi endpoint client. Nothing here converts, interpolates or remembers a
+        /// rate, and a refusal CLEARS the cached figure so the shelf falls back to words rather than
+        /// standing on the previous number.</para>
+        ///
+        /// <para>⛔ AND IT NEVER RAISES A PI SHEET. <see cref="EnsurePaymentsScope"/> is deliberately
+        /// NOT called: this runs on store OPEN, and asking for the payments scope to draw a price
+        /// would put a consent dialog in front of a player who has only browsed - the exact reason
+        /// the scope is requested lazily at purchase time (see the class header). The uid is whatever
+        /// sign-in already established, or none.</para>
+        ///
+        /// <para>Only <see cref="EnabledSku"/> is asked for, because it is the only sku the SERVER
+        /// will quote (owner ruling, one sku first). Asking for the other 27 would mint 27 refusals
+        /// per store open and teach nobody anything.</para>
+        /// </summary>
+        public void RefreshDisplayPrices(IReadOnlyList<string> skus, Action<bool> onComplete)
+        {
+            RefreshDisplayPricesAsync(skus, onComplete).Forget();
+        }
+
+        private async UniTaskVoid RefreshDisplayPricesAsync(IReadOnlyList<string> skus, Action<bool> onComplete)
+        {
+            bool changed = false;
+            try
+            {
+                if (_displayRefreshInFlight)
+                {
+                    FlowTrace.Step(TraceSystem, "display price refresh already running - this request is skipped.");
+                    return;
+                }
+                if (_inFlight)
+                {
+                    FlowTrace.Step(TraceSystem,
+                        "display price refresh skipped: a purchase is in flight, and its own quote is the " +
+                        "binding one. Nothing on the shelf may re-quote underneath it.");
+                    return;
+                }
+                if (_pi == null || !_pi.IsAvailable)
+                {
+                    FlowTrace.Once(TraceSystem, "display-refresh-no-pi",
+                        "display price refresh skipped: the Pi platform reports unavailable (window.Pi missing). " +
+                        "The store shows the USD anchor and says Pi is not purchasable here - never a substitute rail.");
+                    return;
+                }
+
+                _displayRefreshInFlight = true;
+                string uid = ResolveUid();
+
+                for (int i = 0; skus != null && i < skus.Count; i++)
+                {
+                    string sku = skus[i];
+                    if (string.IsNullOrEmpty(sku)) continue;
+                    if (!string.Equals(sku, EnabledSku, StringComparison.Ordinal)) continue;
+
+                    var attempt = await PiPaymentEndpoints.RequestQuoteAsync(sku, uid);
+                    if (!attempt.Ok)
+                    {
+                        // FAIL CLOSED ON THE SHELF TOO: forget the old figure rather than keep drawing it.
+                        if (_displayQuotes.Remove(sku)) changed = true;
+                        FlowTrace.Warn(TraceSystem,
+                            $"display price for '{sku}' REFUSED by the server (code={attempt.Code}). Any cached " +
+                            "figure is dropped; the shelf shows words, never a price we made up.");
+                        continue;
+                    }
+
+                    _displayQuotes[sku] = new DisplayQuote(attempt.Quote.AmountText, Time.realtimeSinceStartup);
+                    changed = true;
+                    FlowTrace.Step(TraceSystem,
+                        $"display price for '{sku}' = {attempt.Quote.AmountText} Pi (rateSource={attempt.Quote.RateSource}).");
+                }
+            }
+            catch (Exception e)
+            {
+                FlowTrace.Fail(TraceSystem,
+                    $"display price refresh threw: {e.GetType().Name}: {e.Message}. The shelf keeps whatever " +
+                    "honest state it had.");
+            }
+            finally
+            {
+                _displayRefreshInFlight = false;
+                try { onComplete?.Invoke(changed); }
+                catch (Exception e)
+                {
+                    FlowTrace.Fail(TraceSystem, $"display price callback threw: {e.GetType().Name}: {e.Message}");
+                }
+            }
         }
 
         // -----------------------------------------------------------------
@@ -203,8 +339,8 @@ namespace DeNelle.Core.Payments.Providers
 
                 var quote = attempt.Quote;
                 _quoteId = quote.QuoteId;
-                _lastQuoteSku = quote.Sku;
-                _lastQuoteAmountText = quote.AmountText;
+                // The purchase quote is also the freshest DISPLAY figure - same server, same call.
+                _displayQuotes[quote.Sku] = new DisplayQuote(quote.AmountText, Time.realtimeSinceStartup);
 
                 string memo = string.IsNullOrEmpty(quote.Memo) ? FallbackMemo : quote.Memo;
                 if (string.IsNullOrEmpty(quote.Memo))

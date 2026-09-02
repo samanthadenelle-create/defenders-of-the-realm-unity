@@ -140,7 +140,35 @@ namespace DeNelle.Onboarding
         /// </summary>
         public static bool ShouldContinueWithoutLogin(bool walletConnected, bool walletIdentityBound,
                                                       bool legacySignedIn)
-            => walletConnected || walletIdentityBound || legacySignedIn;
+            => ShouldContinueWithoutLogin(walletConnected, walletIdentityBound, legacySignedIn, false);
+
+        /// <summary>
+        /// THE GATE DECISION with the Pi identity input (WO-1322). Identical to the
+        /// three-input overload except for <paramref name="piIdentitySignedIn"/>.
+        /// <para>
+        /// WO-1322 DEFECT (owner-captured in REAL Pi Browser, 2026-09-02): the skin resolved to
+        /// 'pi' (auth=PiSdk, identity=PiUid), <c>[Flow:Pi] Signed in as ...</c> succeeded, and the
+        /// CHOOSE YOUR WALLET surface was presented anyway. <see cref="PresentOrContinue"/> sampled
+        /// only the two WALLET inputs and hardcoded the third, so the gate was SKIN-BLIND.
+        /// </para>
+        /// <para>
+        /// <paramref name="piIdentitySignedIn"/> is a SEPARATE, NAMED input on purpose — it is NOT
+        /// folded into <paramref name="legacySignedIn"/>. Under <c>SkinAuthMode.PiSdk</c> THE WALLET
+        /// IS NOT THE IDENTITY: the server-verified Pi uid is (it is established only after the
+        /// access token is verified against api.minepi.com). Hiding a live, correct
+        /// identity source behind a parameter documented as "permanently dead" is how the next
+        /// reader deletes it. <paramref name="legacySignedIn"/> stays dead; this one is alive.
+        /// </para>
+        /// <para>
+        /// ⛔ THE SKR / SOLANA SKIN IS UNCHANGED. Off the Pi skin the caller passes false here
+        /// (see PresentOrContinue: the input is AND-ed with <c>AuthMode == SkinAuthMode.PiSdk</c>),
+        /// so the SKR truth table is byte-for-byte what WO-1249 pinned — a first run with every
+        /// input false still PRESENTS, on a tester APK exactly as on the store build.
+        /// </para>
+        /// </summary>
+        public static bool ShouldContinueWithoutLogin(bool walletConnected, bool walletIdentityBound,
+                                                      bool legacySignedIn, bool piIdentitySignedIn)
+            => walletConnected || walletIdentityBound || legacySignedIn || piIdentitySignedIn;
 
         /// <summary>
         /// Boot entry: if the player is ALREADY IN — a connected wallet or an attested
@@ -155,6 +183,13 @@ namespace DeNelle.Onboarding
         /// site on the whole surface — in service of an identity source that binds nothing. Removing
         /// it makes this method synchronous, so there is no longer any await between app start and
         /// the first screen. Do not reintroduce a network call here.</para>
+        /// <para>WO-1322 (owner felt-test in REAL Pi Browser, 2026-09-02): the gate was SKIN-BLIND.
+        /// It sampled the two WALLET inputs only, so a player who had just signed in with Pi
+        /// (skin 'pi', auth=PiSdk, identity=PiUid) was shown CHOOSE YOUR WALLET anyway. A FOURTH
+        /// input is now sampled - <c>PiSignInController.IsSignedIn</c> AND-ed with
+        /// <c>CurrencySkinResolver.Active.AuthMode == SkinAuthMode.PiSdk</c> - both static and
+        /// synchronous, so this method stays await-free. The SKR/Solana skin is untouched: off the
+        /// Pi skin the new input is false and the WO-1249 truth table is bit-identical.</para>
         /// </summary>
         public static void PresentOrContinue(Action onContinue)
         {
@@ -171,8 +206,34 @@ namespace DeNelle.Onboarding
                 walletIdentityBound = svc != null && svc.HasAttestedWalletIdentity;
             });
 
+            // WO-1322: the FOURTH input, and the reason the gate is no longer skin-blind.
+            //   * piIdentitySignedIn - under SkinAuthMode.PiSdk the WALLET IS NOT THE IDENTITY;
+            //     the server-verified Pi uid is. Only the BOOLEAN is read here - never the uid or
+            //     the username, which must never reach Player.log (same rule as the wallet address,
+            //     WO-1249). The owner signed
+            //     in successfully in real Pi Browser on 2026-09-02 and was shown CHOOSE YOUR WALLET
+            //     anyway, because this file sampled only the two wallet inputs.
+            //
+            // BOTH halves are required, and the AuthMode half is what keeps the SKR skin exactly as
+            // it was: off the Pi skin this is false, so ShouldContinueWithoutLogin sees the same
+            // three inputs WO-1249 pinned. PiSignInController.IsSignedIn is a STATIC BOOL - free and
+            // synchronous. There is deliberately NO await and NO network call here (WO-837-B removed
+            // a blocking 12s Firebase probe from this exact spot: "the worst softlock site on the
+            // whole surface"). Do not reintroduce one to "confirm" the session.
+            bool piSkin = false, piSignedIn = false;
+            string authMode = "unknown";
+            Guard.Try("Auth", "sample Pi identity state for the login gate", () =>
+            {
+                var skin = CurrencySkinResolver.Active;
+                piSkin = skin?.AuthMode == SkinAuthMode.PiSdk;
+                authMode = skin != null ? skin.AuthMode.ToString() : "unknown";
+                piSignedIn = PiSignInController.IsSignedIn;
+            });
+            bool piIdentitySignedIn = piSkin && piSignedIn;
+
             // Third input is permanently false in a wallet-only build (WO-837-B) — see the
-            // legacySignedIn note on ShouldContinueWithoutLogin.
+            // legacySignedIn note on ShouldContinueWithoutLogin. The Pi input is NOT passed
+            // through it: it is a live identity source and gets its own named parameter.
             //
             // WO-1249 (owner 2026-08-27): this is the PRODUCTION gate. A first run with
             // every input false PRESENTS -- that is the one-time connect, not a bug, and
@@ -180,15 +241,19 @@ namespace DeNelle.Onboarding
             // decision on a tester define: a build that skips the connect cannot validate
             // production. Extra native wallet sheets AFTER CONTINUE are session minting
             // (WO-1157), not this panel.
-            bool continueIn = ShouldContinueWithoutLogin(walletConnected, walletIdentityBound, false);
+            bool continueIn = ShouldContinueWithoutLogin(walletConnected, walletIdentityBound,
+                                                         false, piIdentitySignedIn);
 
             // §1.4b: the decision AND every input it was made from, so the next reader never has to
             // guess WHY the panel appeared. A trace that cannot report the wrong outcome is decoration.
-            // WO-1249: never log a wallet address; the booleans are enough.
+            // WO-1249: never log a wallet address; the booleans are enough. WO-1322: never log the Pi
+            // uid or username either - the skin's auth mode plus the boolean say everything needed.
             FlowTrace.Step("Auth",
                 "login gate decision=" + (continueIn ? "CONTINUE" : "PRESENT") +
                 " (walletConnected=" + walletConnected +
                 ", walletIdentityBound=" + walletIdentityBound +
+                ", piIdentitySignedIn=" + piIdentitySignedIn +
+                " [authMode=" + authMode + ", piSkin=" + piSkin + ", piSignedIn=" + piSignedIn + "]" +
                 ", legacySignedIn=false [wallet-only build, WO-837-B]).");
 
             if (continueIn)

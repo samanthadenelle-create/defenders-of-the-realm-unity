@@ -59,6 +59,28 @@ namespace DeNelle.HUD.Kit
     {
         private readonly Dictionary<HudArea, RectTransform> _mounts = new Dictionary<HudArea, RectTransform>();
 
+        // ── WO-1319: the ActionBar band's x edges, named ONCE ────────────────────────
+        // They were two literals inside Build(). The narrow-aspect dock has to know how much
+        // free width sits beside the mount, and a second copy of "0.730" living in the dock
+        // would be the same duplicated-state drift CLAUDE.md keeps calling out. So the band
+        // is authored here and the headroom is DERIVED, never re-typed.
+        /// <summary>ActionBar mount LEFT edge. This is also the MoveCluster's RIGHT edge — the
+        /// dock may never grow past it, or the bar sits under the movement stick.</summary>
+        public const float ActionBarMinX = 0.270f;
+        /// <summary>ActionBar mount RIGHT edge (WO-835 widened 0.720 -> 0.730).</summary>
+        public const float ActionBarMaxX = 0.730f;
+        /// <summary>The canvas-safe right edge every right-hand mount stops at (System /
+        /// ActionRail / QueueStatus all end here). Nothing occupies the bottom band between
+        /// <see cref="ActionBarMaxX"/> and this, so the dock's overflow width comes from here.</summary>
+        public const float SafeRightX = 0.995f;
+
+        /// <summary>Free width to the RIGHT of the ActionBar mount, as a MULTIPLE of the mount's
+        /// own width. WO-1319 tier 2 grows the peaceful dock into exactly this and no further.</summary>
+        public static float ActionBarRightHeadroomRatio
+        {
+            get { return (SafeRightX - ActionBarMaxX) / (ActionBarMaxX - ActionBarMinX); }
+        }
+
         /// <summary>The host canvas.</summary>
         public Canvas Canvas { get; private set; }
 
@@ -110,7 +132,7 @@ namespace DeNelle.HUD.Kit
             // MoveCluster right edge at 0.270 and the ActionRail left edge at 0.780) so the
             // 7-face applicability MAX (Build/Talk/Bag/Raids/Map/Quests/Upgrade) keeps each
             // face near the previous 6-face touch size at the constant per-button width.
-            Add(HudArea.ActionBar,   new Vector2(0.270f, 0.015f), new Vector2(0.730f, 0.150f));
+            Add(HudArea.ActionBar,   new Vector2(ActionBarMinX, 0.015f), new Vector2(ActionBarMaxX, 0.150f));
             Add(HudArea.MoveCluster, new Vector2(0.010f, 0.030f), new Vector2(0.270f, 0.330f));
             // ⭐ WO-1219 - THE LEFT COLUMN IS NO LONGER AUTHORED HERE.
             // Vitals / HeartStatus / Minimap / Dock are read from DeNelle.Core.UI.HudLayoutBands,

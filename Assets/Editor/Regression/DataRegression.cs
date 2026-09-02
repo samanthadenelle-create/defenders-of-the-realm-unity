@@ -578,6 +578,8 @@ namespace DeNelle.Editor
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "backend-save-auth suite", () => { if (!DeNelle.Editor.Regression.BackendSaveAuthRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[backend-save-auth] " + r); });
             // --- login gate (2026-08-18): her wallet auto-resumed at boot and the SIGN IN wall was presented anyway 5s later. The gate read Firebase ONLY on a wallet-first build; it must continue for connected OR attested-bound OR signed-in, and still present on a genuine first run ---
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "login-gate suite", () => { if (!DeNelle.Editor.Regression.LoginGateRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[login-gate] " + r); });
+            // --- WO-1322 pi login gate (2026-09-02): she signed in with Pi in real Pi Browser ([Flow:Pi] Signed in as ..., skin auth=PiSdk) and the CHOOSE YOUR WALLET modal was presented anyway - the gate sampled only the two WALLET inputs and was skin-blind. Pins (a) Pi skin + signed in => CONTINUE, (b) Pi skin + not signed in => unchanged, (c) the SKR/Solana truth table byte-for-byte identical ---
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "pi-login-gate suite", () => { if (!DeNelle.Editor.Regression.PiLoginGateRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[pi-login-gate] " + r); });
             // --- promo redeem door: the Realm Store's ungated Redeem-a-Code entry routes through PromoCodeService, never logs the code, gives every failure its own canon sentence in both copies, and grants on the uncapped pack seam ---
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "promo-redeem-entry suite", () => { if (!PromoRedeemEntryRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[promo-redeem-entry] " + r); });
             // --- WO-835 action bar: Core applicability model invariants + View purity ---
@@ -782,6 +784,15 @@ namespace DeNelle.Editor
             // word/name fits at the FontFloor; and the source laws (RectMask2D, top-left pivot,
             // band pins, reserved section row, no 1/n slicing, no green ButtonConfirm overlay) ---
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "skills-panel-layout suite", () => { if (!DeNelle.Editor.Regression.SkillsPanelLayoutRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[skills-panel-layout] " + r); });
+
+            // --- HUD DOCK LAYOUT (WO-1319, owner web capture "BUILDTALKHERO...QUEUE MANAGE"):
+            // the bottom action dock sliced a mount that is 46% of a canvas whose LOCAL width
+            // collapses with the aspect into 1/5 fractions; the fractions fell under MinTouchPx
+            // and the touch clamp then grew every face into its neighbour. Replays the SHIPPING
+            // solver (HudDockLayout.Solve) across an aspect ladder at 5 AND 6 faces and pins:
+            // no overlap, no growth into the MoveCluster column, landscape geometry unchanged,
+            // and the source laws (solver still wired, caption still fitted, clamp still called).
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "dock-layout suite", () => { if (!DeNelle.Editor.Regression.HudDockLayoutRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[dock-layout] " + r); });
 
             // --- TALENT FOCUS SINGLETON (WO-1021 sec 2.1d, owner "Still Messy" at WIS 252):
             // SkillNodeState.Next is a PER-TRACK signal, so a view that renders it oversized
@@ -1266,6 +1277,14 @@ namespace DeNelle.Editor
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "monetization-activation suite", () => { if (!DeNelle.Editor.Regression.MonetizationActivationRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[monetization-activation] " + r); });
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "mainnet-canary suite", () => { if (!DeNelle.Editor.Regression.MainnetCanaryRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[mainnet-canary] " + r); });
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "store-commerce-state suite", () => { if (!DeNelle.Editor.Regression.StoreCommerceStateRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[store-commerce-state] " + r); });
+            // --- WO-1323: the owner opened the Night Market signed in as Pi, in real Pi Browser, and
+            //     was quoted "1022 SKR / 2555 SKR / BUY - 255 SKR" plus a Solana wallet chip. SKR is
+            //     Solana Mobile's token - never minted, never held, and unspendable by a Pi player.
+            //     This pins BOTH halves: no SKR string is reachable under the Pi skin, AND the SKR
+            //     skin's own paths and copy are still present (a pass earned by deleting them would
+            //     fail). It also pins that no static 'pi' price was authored into packs.json and that
+            //     hearth-spark's storeVisible was not flipped to paper over an empty Pi shelf. ---
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "store-pi-skin suite", () => { if (!DeNelle.Editor.Regression.StorePiSkinCurrencyRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[store-pi-skin] " + r); });
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "structure-orientation suite", () => { if (!DeNelle.Editor.StructureOrientationOracle.Run(out var r)) failures.Add(r); else log.AppendLine("[structure-orientation] " + r); });
             // Registered 2026-08-22 in the same breath as the marker failure that caught it: this
             // oracle exposed Run(out string) and was referenced by NOTHING, which the marker suite
