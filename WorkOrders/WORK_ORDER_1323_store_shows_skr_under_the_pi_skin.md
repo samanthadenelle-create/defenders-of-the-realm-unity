@@ -73,3 +73,37 @@ or extend Pi quoting to the visible skus — **that choice is the owner's, and i
 Only `hearth-spark` is Pi-quotable today, and it is off the shelf. Does Pi pricing extend to the
 visible packs (`starters-hand`, the Resource Packs, the cosmetic bundles), or does the Pi shelf show
 just the one spotlighted starter until the rail is proven by a real purchase?
+
+---
+
+# OWNER RULING 2026-09-02 — spotlight `hearth-spark`, do NOT widen Pi pricing yet
+
+Asked directly, given that a Pi player currently sees every pack in USD with **no buy control
+anywhere**, she chose: **surface the one Pi-priced pack through the existing `StoreFocusRequest`
+latch, without touching `storeVisible`.**
+
+Her reasoning, and the reason this is the right call: **no purchase has ever completed in this game.**
+Proving `quote -> approve -> complete -> grant` on ONE sku is worth more than a full shelf where a
+single rail bug hits all 28 at once. Widening afterwards is a server-side list change, not code.
+
+## What this authorises
+
+- Use the EXISTING `StoreFocusRequest` spotlight latch to make `hearth-spark` reachable and buyable
+  under the Pi skin.
+- ⛔ **`storeVisible: false` on `hearth-spark` STAYS.** It is a WO-1069 pricing ruling (dominated by
+  `starters-hand` at the same $4.99) and this does not reverse it. The pack is spotlighted, not shelved.
+- ⛔ Do NOT add other skus to the server's Pi-quotable list.
+- The honest empty-shelf copy the implementation added stays for every OTHER pack — it is correct.
+
+## What must still be proven before widening
+
+A real Pi purchase completing end to end, evidenced by `[Flow:PiPay] purchase COMPLETE` in the live
+trace sink plus a `pi_payments` row at `state='granted'`. Not by reasoning.
+
+## ⚠ Carry-over risk flagged by the implementation, still open
+
+`/api/pi/quote` is called for DISPLAY without `EnsurePaymentsScope` (deliberate — browsing must never
+raise a Pi consent sheet). It takes `{sku, uid}` and the uid falls back to
+`PiSignInController.SignedInUid`, which may be empty. **If the server requires a scoped uid, the shelf
+degrades to the words "Priced in Pi at checkout" and the Pi figure never appears** — honest, but the
+spotlight would show no price. Verify this against the live endpoint before calling the spotlight done.
