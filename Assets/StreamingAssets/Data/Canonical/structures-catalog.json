@@ -17,8 +17,8 @@
    "_heightNote": "THE CADENCE ANCHOR - DO NOT CHANGE heightMul HERE without a new owner ruling. 1.2 is owner-ruled (commit 0ac59581) and MEASURED: 4.8 m tall, 2.778 m across = 49.9 percent of a House_Medieval_Medium's 5.562 m fitted diameter, a 1x1 claim at the 3 m cell. Every other tower is pinned to this number, and the whole family in the top-level _heightCadence is expressed against it.",
    "type": "Tower",
    "kind": "Cell",
-   "_ownerArtRuling": "2026-09-01: owner rejected the wooden-watchtower look. Archer Tower uses the prior castle ladder again: Round at L1, Square at L2, Medieval Big at L3. Stable id, gameplay stats, cost, footprint, and saved placements are unchanged.",
-   "visualPrefabPath": "Structures/Tower_Castle_Round",
+   "_ownerArtRuling": "2026-09-02 OWNER RULING, VERBATIM: \"one thing i hate is the changes to the archer towers. can you bring my wooden towers i created in tripo? please\" -- THIS SUPERSEDES THE 2026-09-01 LINE BELOW. The Archer Tower ladder points back at the owner's own Tripo-authored wooden watchtowers: Structures/Tower_Wooden_Watchtower at L1, _L2 at L2, _L3 at L3 (Assets/StructureContent/Tower_Wooden_Watchtower{,_L2,_L3}.fbx, each with a sibling .fbx.tripo-extracted marker proving Tripo authorship). ART RE-POINT ONLY: stable id, gameplay stats, cost, footprint, heightMul 1.2 (the cadence anchor) and saved placements are all unchanged. SUPERSEDED HISTORY, KEPT NOT DELETED (CLAUDE.md section 15) -- 2026-09-01: \"owner rejected the wooden-watchtower look. Archer Tower uses the prior castle ladder again: Round at L1, Square at L2, Medieval Big at L3.\" That 09-01 line named the Polyperfect castle prefabs (Assets/polyperfect/Low Poly Ultimate Pack), which are NOT the owner's art; the 09-02 ruling reverses it.",
+   "visualPrefabPath": "Structures/Tower_Wooden_Watchtower",
    "repo": {
     "behaviorId": "DefenseTower",
     "buildCost": 400,
@@ -44,11 +44,11 @@
      }
     ],
     "upgradeVisualPath": [
-     "Structures/Tower_Castle_Square",
-     "Structures/Tower_Medieval_Big"
+     "Structures/Tower_Wooden_Watchtower_L2",
+     "Structures/Tower_Wooden_Watchtower_L3"
     ],
     "preservePrefabRotation": false,
-    "_preservePrefabRotationNote": "False for the restored upright castle tower prefabs; runtime may normalize their root rotation.",
+    "_preservePrefabRotationNote": "STAYS FALSE under the 2026-09-02 wooden-watchtower re-point, and the reason changed -- read it before flipping it. All three Tripo watchtower prefabs bake their Tripo X correction on the CHILD FBX instance, not on the prefab ROOT (measured off the .prefab YAML this session: L1 m_LocalRotation w 0.7187333 / x -0.69528586, L2 w 0.7071068 / x -0.7071068, L3 w 0.7071068 / x +0.7071068, all on the nested instance whose parent is the identity root). VisualFactory.Skin's identity reset only touches the CLONE ROOT, so the baked child upright survives with this flag false. Setting it true would preserve a root that is already identity and buy nothing, while opting the row out of the reset the whole structure family relies on.",
     "navSurface": "Blocker",
     "heightMul": 1.2,
     "range": 14,
@@ -64,7 +64,7 @@
      "checkAffordable": true
     },
     "upgradeTexturePath": [],
-    "_upgradeTextureNote": "Restored castle tier prefabs carry their own materials; no wooden-watchtower texture override applies."
+    "_upgradeTextureNote": "Left EMPTY on purpose under the 2026-09-02 wooden-watchtower re-point. Each Tripo tier prefab already carries its own authored materials (Tower_Wooden_Watchtower.mat, Tower_Wooden_Watchtower_L2_part_0..8.mat, Tower_Wooden_Watchtower_L3.mat, all beside the FBXs in Assets/StructureContent/), so no per-tier texture override is needed. Do not re-add one to \"fix\" a tier that renders untextured -- that would be a material-assignment bug in the prefab, not a missing override here."
    },
    "orientation": {
     "corrected": false,
@@ -80,7 +80,7 @@
      0
     ],
     "scale": 1,
-    "note": "Restored castle tower prefabs are upright; zero manual correction. Player placement yaw remains authoritative."
+    "note": "Zero manual correction under the 2026-09-02 wooden-watchtower re-point: the Tripo X correction is BAKED INTO THE PREFABS on their child FBX instances (see _preservePrefabRotationNote), so the row needs no euler here and manual stays false. Player placement yaw remains authoritative."
    },
    "canHitAir": false
   },

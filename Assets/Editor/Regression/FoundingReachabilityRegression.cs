@@ -144,10 +144,37 @@ namespace DeNelle.Editor
                 failures.Add("[founding-reach] starter-settlement-layout.json Resources/StreamingAssets copies diverged");
             string structuresRes = Path.Combine(Application.dataPath, "Resources/Data/Canonical/structures-catalog.json");
             string structures = File.Exists(structuresRes) ? File.ReadAllText(structuresRes) : "";
-            if (!structures.Contains("Structures/Tower_Castle_Round") ||
-                !structures.Contains("Structures/Tower_Castle_Square") ||
-                !structures.Contains("Structures/Tower_Medieval_Big"))
-                failures.Add("[founding-reach] Archer Tower no longer uses the owner-approved legacy stone tower family");
+            // ⭐ OWNER RULING 2026-09-02, verbatim: "one thing i hate is the changes to the archer
+            // towers. can you bring my wooden towers i created in tripo?"
+            //
+            // THIS ASSERTION WAS INVERTED ON THAT RULING. It previously required the catalog to
+            // contain Tower_Castle_Round / _Castle_Square / _Medieval_Big and called that family
+            // "owner-approved" on the strength of a 2026-09-01 note in structures-catalog.json
+            // claiming she had REJECTED the wooden watchtower look. She asked for the exact
+            // opposite the next day, so that note was either mis-recorded or reversed - either way
+            // a recorded art ruling in a data file is NOT automatically current, and this oracle
+            // was enforcing the superseded half.
+            //
+            // The three Tower_Castle_* prefabs are POLYPERFECT pack assets. Hers are
+            // Assets/StructureContent/Tower_Wooden_Watchtower{,_L2,_L3}.fbx - each carries a
+            // sibling .fbx.tripo-extracted marker proving Tripo authorship.
+            //
+            // ⚠ AND NOTE WHY THE SWAP WAS INVISIBLE: a Synty re-wrap under
+            // Assets/StructureContent/Synty/ reused her filenames verbatim while actually wrapping
+            // SM_Bld_Castle_Wall_Tower_S/M/L_01 - stone castle wall towers wearing her asset's name -
+            // which duplicated the Addressables address so resolution could pick either. That is
+            // repaired (the Synty entries re-addressed to Structures/Synty_Tower_Castle_Wall_*), and
+            // WO-1305 Part B covers the other 27 addresses with the same shape.
+            if (!structures.Contains("Structures/Tower_Wooden_Watchtower") ||
+                !structures.Contains("Structures/Tower_Wooden_Watchtower_L2") ||
+                !structures.Contains("Structures/Tower_Wooden_Watchtower_L3"))
+                failures.Add("[founding-reach] Archer Tower no longer uses the owner's Tripo wooden watchtower ladder (ruling 2026-09-02) - L1/L2/L3 must be Structures/Tower_Wooden_Watchtower{,_L2,_L3}");
+            // Falsifiable in the other direction too: a silent revert to the Polyperfect stone
+            // family must FAIL rather than pass by omission.
+            if (structures.Contains("Structures/Tower_Castle_Round") ||
+                structures.Contains("Structures/Tower_Castle_Square") ||
+                structures.Contains("Structures/Tower_Medieval_Big"))
+                failures.Add("[founding-reach] the Polyperfect stone tower family is back in the structures catalog - the owner reverted the Archer Tower to her Tripo wooden towers on 2026-09-02");
             log.AppendLine("  recommended starter settlement default + scratch secondary path checked");
         }
 
