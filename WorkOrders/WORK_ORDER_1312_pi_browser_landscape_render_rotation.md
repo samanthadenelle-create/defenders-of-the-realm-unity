@@ -95,3 +95,37 @@ validator will click. Removing the blocking gate may fix validation as a side ef
   change there re-hashes every bundle and mandates a fresh `tools\r2-ship.ps1` push (CLAUDE.md sec.16).
 - Do NOT delete the escape hatch until criterion 1 is proven; it is the only thing standing between a
   misreported viewport and a permanently unbootable game.
+
+---
+
+# ⚠ CORRECTION 2026-09-02 — the validator hypothesis in this ticket is WRONG. Measured, not argued.
+
+This ticket speculated that Pi's validator was blocked by the landscape gate modal.
+**Production does not have the gate.** Fetched from `https://echoes-of-elarion.vercel.app/index.html`:
+
+| | bytes | `pi-landscape-gate` | `pi-rotated` | `sdk.minepi.com` |
+|---|---|---|---|---|
+| **production (live now)** | **7,396** | **NO** | NO | yes |
+| this branch's template | 26,443 | yes | yes | yes |
+
+The deployed Pi build predates the gate entirely — it is built from a revision older than the gate
+work, and `Builds/Distribution/(Pi)/index.html` + the pre-rebuild `Builds/WebGL/index.html` (both
+Aug 30) match that shape.
+
+**Consequences, stated plainly:**
+1. **Do not claim this ticket fixes Pi validation.** The gate was never in the validator's way, so
+   removing it cannot be the fix. The rotation work stands on its own merit — the owner asked for
+   landscape directly — but the validator link is severed.
+2. **The Pi validation failure is still UNDIAGNOSED.** What is now ruled out with data: the
+   validation key (correct and served 200 from prod, WO-1313), R2/CORS (WO-1314), and the gate
+   (this note). What remains open is the WebGL memory shape in **WO-1314** — `webGLMemorySize: 512`
+   against a 95 MB remote payload with single bundles of 24.5 MB. That is now the leading candidate
+   for *"breaks whenever it touches the cdn"*, and it still needs a captured Pi Browser log.
+3. **This branch's build has never been on production.** Promoting it changes the Pi app from
+   "no landscape handling at all" to "rotated with an unproven input shim". That is a real trade,
+   and it is the owner's call — see the fail-safe below before making it.
+
+**The fail-safe that makes promotion defensible:** if `Touch`/`TouchEvent` cannot be constructed the
+rotation disables itself entirely and the old gate + escape hatch runs. So the worst case is the gate
+appearing, not dead input. That is reasoning from the code, **not** a device observation - it does not
+substitute for the harness run this ticket requires.

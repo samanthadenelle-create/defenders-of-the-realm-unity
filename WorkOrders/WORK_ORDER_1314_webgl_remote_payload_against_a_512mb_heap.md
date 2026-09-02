@@ -91,3 +91,29 @@ already wrong on 2026-08-20 before one device log named the real cause in a sing
 - ⛔ Do NOT "fix" the `catalog.json` 404. It is expected.
 - ⛔ Do NOT touch `Assets/WebGLTemplates/Pi/validation-key.txt` — corrected under WO-1313.
 - ⛔ Do not conflate this with WO-1312 (Pi landscape). Different failure, different evidence.
+
+---
+
+# UPDATE 2026-09-02 06:10 — this is now the LEADING candidate, by elimination
+
+Three of the four candidate causes for the owner's *"breaks whenever it touches the cdn"* have been
+ruled out **with measurements** tonight:
+
+| candidate | verdict | evidence |
+|---|---|---|
+| R2 out of sync / wrong bytes | **RULED OUT** | `R2_PARITY_OK targets=Android,StandaloneWindows64,WebGL objects=261`, fresh log 06:07 |
+| CORS blocking the browser | **RULED OUT** | `Access-Control-Allow-Origin: *`; `R2_CORS_OK public GET/HEAD enabled for WebGL CDN assets` |
+| the Pi validation key | **RULED OUT** | prod serves `79ec2d03...` HTTP 200, and all four in-repo copies now match (WO-1313) |
+| the landscape gate blocking the validator | **RULED OUT** | production runs a PRE-GATE template (7,396 bytes, no `pi-landscape-gate`) — see WO-1312's correction |
+| **WebGL memory shape** | **STILL OPEN — now the leading candidate** | `webGLMemorySize: 512` vs a 95 MB remote payload, single bundles at 24.5 / 18.2 / 17.4 MB |
+
+⚠ **Elimination raises a hypothesis's rank; it does not promote it to a diagnosis.** CLAUDE.md sec.12
+still applies, and this ticket still forbids a fix without a capture. On 2026-08-20 two static
+theories were wrong before one device log named the cause in a single line.
+
+**Also newly relevant:** the WebGL content that was live until tonight was built from the WRONG
+PLATFORM (WO-1315 — `ServerData/WebGL` went from 61 files on an Aug 30 catalog to 112 on the 09-01
+one once the target bug was fixed). So the web build the owner was testing against was **missing
+roughly half its content**, and any "it breaks on the CDN" observation taken before 2026-09-02 06:00
+was taken against a materially different, broken payload. **Re-observe before measuring memory** —
+the symptom may have changed or gone.
