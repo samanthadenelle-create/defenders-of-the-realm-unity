@@ -18,13 +18,32 @@ namespace DeNelle.Core.Platform
     /// </summary>
     public static class PiEnvironment
     {
-        /// <summary>True = Pi Testnet sandbox. Build-driven; never assign, never override at runtime.</summary>
-        public const bool Sandbox =
-#if UNITY_EDITOR || DEVELOPMENT_BUILD
-            true;
-#else
-            false;
-#endif
+        // ⛔ WO-1325 (owner, 2026-09-02, verbatim: "im on testnet"): THIS APP IS REGISTERED ON PI
+        // TESTNET. Not build-driven any more - TESTNET IN EVERY BUILD, including a ship build.
+        //
+        // How we got here, so nobody re-litigates it:
+        //   - WO-1317 flipped this to mainnet-in-ship-builds on the owner's answer "Mainnet" to a
+        //     direct question, after the published client had shipped a hardcoded sandbox=true.
+        //   - Nine captured Pi Browser sessions then showed `PiInit(sandbox=False)` followed by
+        //     "Signed in as samanthadenelle" with zero failures, which read as proof of mainnet.
+        //   - It was not proof. AUTHENTICATION IS NETWORK-TOLERANT; a Pioneer is the same Pioneer on
+        //     either network. PAYMENTS ARE NOT. The Developer Portal badges this app `Testnet`, and
+        //     the owner confirmed it directly.
+        //
+        // So a successful mainnet SIGN-IN says nothing about which network a PAYMENT settles on. A
+        // payment created with sandbox=false against a Testnet-registered app does not settle where
+        // the portal is looking - and the outstanding Developer Portal checklist item is precisely
+        // "process a transaction on your app", which must happen ON TESTNET.
+        //
+        // ⚠ THE LESSON, because it cost two reversals in one day: a green auth capture is evidence
+        // about AUTH ONLY. Do not generalise one subsystem's success into a claim about another.
+        //
+        // WHEN THE APP MOVES TO MAINNET: Pi documents the network as FIXED AT REGISTRATION ("once you
+        // register the app, this option cannot be changed"), so that move means a NEW portal project
+        // and a new API key - not an edit here alone. Change this line in the same commit as that
+        // migration, never before it. See docs/reference/PI_AD_NETWORK_APPROVAL.md.
+        /// <summary>True = Pi Testnet sandbox. The app is registered on Testnet (WO-1325).</summary>
+        public const bool Sandbox = true;
 
         /// <summary>ASCII label for trace lines. TMP renders non-ASCII as tofu, so keep it plain.</summary>
         public static string Label => Sandbox ? "sandbox(testnet)" : "mainnet";

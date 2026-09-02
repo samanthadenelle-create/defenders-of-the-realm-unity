@@ -167,7 +167,20 @@
 > fine as history. A copied number is the bug **even when it was right the day it was written** -
 > that is exactly how the retired 860-899 UI block kept re-seeding collisions from CLAUDE.md sec.2.
 
-> ## ⚠ RECONCILED 2026-09-02 (CLI, nineteenth pass): main line next free = **1325**.
+> ## ⚠ RECONCILED 2026-09-02 (CLI, twentieth pass): main line next free = **1326**.
+> *(CLI minted **WO-1325** on the owner's direct statement **"im on testnet"** — the portal badges the
+> app `Testnet` and the ONE outstanding checklist item is "process a transaction", which must settle
+> on Testnet. `PiEnvironment.Sandbox` was build-driven (mainnet in a ship build, WO-1317) and is now a
+> flat `true`. ⚠ THE LESSON, and it cost TWO reversals in one day: **nine** captured Pi Browser
+> sessions showing `PiInit(sandbox=False)` -> `Signed in as samanthadenelle` were read as proving the
+> app is mainnet. They proved only that AUTH works on mainnet. **Authentication is network-tolerant;
+> payments are not** — a Pioneer is the same Pioneer either way, but a payment under `sandbox=false`
+> does not settle where a Testnet portal is looking. A green capture is evidence about the subsystem
+> it came from; do not generalise it. ⛔ Moving to mainnet later needs a NEW portal project and API key
+> (Pi: "once you register the app, this option cannot be changed") — flip the constant in THAT commit,
+> never before. Bumped 1325 -> 1326 in this SAME edit.)*
+>
+> ### superseded: RECONCILED 2026-09-02 (CLI, nineteenth pass): main line next free = **1325**.
 > *(CLI minted **WO-1324** after an owner crash the trace COULD NOT EXPLAIN — *"when I tried adding
 > archer tower it crashed and unity restarted"*. The sink caught a **128,792 ms frozen frame**
 > ("a stall from outside the VFX pool") and then NOTHING: `WebTrace` flushes every 5 s and drops the
