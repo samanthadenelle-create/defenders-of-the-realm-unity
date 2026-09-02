@@ -972,6 +972,20 @@
             "isLoop": false,
             "scale": 1.0,
             "manual": true
+        },
+        {
+            "key": "thundercast_Cast",
+            "prefabPath": "Assets/Hovl Studio/AAA Projectiles Vol 1/Prefabs/Projectiles with logic/Projectile 2 electro.prefab",
+            "isLoop": false,
+            "scale": 1.0,
+            "manual": true
+        },
+        {
+            "key": "thundercast_Projectile",
+            "prefabPath": "Assets/Hovl Studio/AAA Projectiles Vol 1/Prefabs/Projectiles with logic/Projectile 2 electro.prefab",
+            "isLoop": false,
+            "scale": 1.0,
+            "manual": true
         }
     ]
 }

@@ -1105,3 +1105,17 @@ MonoBehaviour:
     DefaultLifetime: 0
     Recolorable: 1
     IsLoop: 0
+  - Key: thundercast_Cast
+    Prefab: {fileID: 1032096471364102, guid: 084af1218a1e0ee41a43bdf9d52aea29, type: 3}
+    PoolSize: 6
+    DefaultScale: 1
+    DefaultLifetime: 0
+    Recolorable: 1
+    IsLoop: 0
+  - Key: thundercast_Projectile
+    Prefab: {fileID: 1032096471364102, guid: 084af1218a1e0ee41a43bdf9d52aea29, type: 3}
+    PoolSize: 6
+    DefaultScale: 1
+    DefaultLifetime: 0
+    Recolorable: 1
+    IsLoop: 0

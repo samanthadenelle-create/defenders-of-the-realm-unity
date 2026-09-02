@@ -167,7 +167,55 @@
 > fine as history. A copied number is the bug **even when it was right the day it was written** -
 > that is exactly how the retired 860-899 UI block kept re-seeding collisions from CLAUDE.md sec.2.
 
-> ## ⚠ RECONCILED 2026-09-02 (CLI, fourth pass): main line next free = **1307**.
+> ## ⚠ RECONCILED 2026-09-02 (CLI, ninth pass): main line next free = **1314**.
+> *(CLI minted **WO-1312 + WO-1313** from the owner's Pi asks, overnight. **1312** = Pi Browser will
+> not honour `screen.orientation.lock` (it is a portrait-locked WebView, so NO web API we call can
+> force landscape); stop asking the player to rotate and RENDER the game rotated — shipped together
+> with a pointer-coordinate shim, because a bare CSS rotate breaks all touch input SILENTLY.
+> **1313** = DONE: the Pi validation key lived in FOUR uncoordinated copies and the TRACKED one
+> (`Assets/WebGLTemplates/Pi/`) was 7 weeks stale, while `Builds/WebGL/` held the live key — so the
+> next WebGL build would have clobbered the working key with the July one and the rebuild-to-fix-Pi
+> would itself have broken Pi. Ruled OUT as the cause: R2 (fresh `R2_PARITY_OK
+> targets=Android,StandaloneWindows64,WebGL objects=228`, live 200s, `ACAO: *`).
+> Bumped 1312 -> 1314 in this SAME edit.)*
+>
+> ### superseded: RECONCILED 2026-09-02 (CLI, eighth pass): main line next free = **1312**.
+> *(CLI minted **WO-1311** — wire the owner's illustrated HERO DECK cards. She supplied the art and
+> asked "can you use these for the hero screen ones?". Part A: the four Hero routes pass NO ArtKey
+> (`PlayerDeckWorkspace.cs:229-232`), unlike Realm's, so they fall back to an empty frame. Part B, the
+> reason it is not a one-liner: the deck unconditionally applies a RectMask2D + over-scale to crop an
+> "editor checkerboard packaging margin" out of the DELIVERED card PNGs — a workaround for a source-art
+> defect, which becomes the defect once clean art arrives. Bumped 1311 -> 1312 in this SAME edit.)*
+>
+> ### superseded: RECONCILED 2026-09-02 (CLI, seventh pass): main line next free = **1311**.
+> *(CLI minted **WO-1310** — the TALENT TREE PANEL clips its content, truncates node names, overlaps
+> labels on icons and leaves half the panel empty. Owner screenshot, verbatim "tree looks wrong." It
+> also answers her earlier "one is middle of a skill tree": the DATA is sound (base rows already share
+> a y; all five shape rules pass) — the VIEW is the bug. Root gate defect: `TalentTreeShapeRegression`
+> MEASURES the implied content height at `MinNodePitchPx` and deliberately never FAILS on it, so a tree
+> that cannot fit its viewport passes. Bumped 1310 -> 1311 in this SAME edit.)*
+>
+> ### superseded: RECONCILED 2026-09-02 (CLI, sixth pass): main line next free = **1310**.
+> *(CLI minted **WO-1308** and **WO-1309**, both from owner flags in one live felt-test.
+> **1308** = a retreat leaves the battle-lock HELD: the quiescence gate named the survivor by name
+> (`WaveManager.<OnEnable>b__106_0` held while `_phase == WavePhase.Active`) after the self-heal
+> released `PursuitBattleProbe.Probe`. Owner: "somehow the wolf is still here and sitting in fight".
+> **1309** = the wave-clear TOAST duplicates the modal AND lands outside its own reserved zone; the
+> zone defect affects EVERY toast in the game, and is the second illegible toast she has reported
+> from it. Owner: "this yellow box makes no sense ... i cannot see it".
+> Bumped 1308 -> 1310 in this SAME edit.)*
+>
+> ### superseded: RECONCILED 2026-09-02 (CLI, fifth pass): main line next free = **1308**.
+> *(CLI minted **WO-1307** — `FamilyOf` is a naming HEURISTIC (text before the first `_`), not a
+> lookup, so the game's LARGEST enemy family never pre-fetches: authored family `hollow` has models
+> `Skeleton_*`, which derive `enemyfam-skeleton` — a label that does not exist. Only `orc`/`troll`/
+> `Hollow_Walker` line up by accident. Found while fixing WO-1303, which had explicitly assumed the
+> two remaining call sites were correct; they pass the right KIND of value and still resolve the wrong
+> family. CONFIRMED LIVE minutes later by owner captures seq 4657-4659 from `EnemyLateSkinner.cs:92`.
+> The authority `EnemyDef.Family` already exists and `UpcomingWaveWarmPlanner` uses it correctly.
+> Bumped 1307 -> 1308 in this SAME edit.)*
+>
+> ### superseded: RECONCILED 2026-09-02 (CLI, fourth pass): main line next free = **1307**.
 > *(CLI minted **WO-1306** — the mage needs a cost-1 CASTABLE base node. Filed as SPEC, not READY:
 > it is blocked on an owner design call, because two of her own rulings collide on exactly one class.
 > Her retention lens (2026-09-02) wants a bar-equippable unlock on point one; her talent SHAPE LAW
