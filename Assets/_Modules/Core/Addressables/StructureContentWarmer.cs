@@ -83,6 +83,7 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using DeNelle.Core.Diagnostics;
+using DeNelle.Core.Platform;
 using UnityEngine;
 using UnityEngine.AddressableAssets;
 using UnityEngine.AddressableAssets.ResourceLocators;
@@ -141,6 +142,8 @@ namespace DeNelle.Core
 
         // Addresses with an in-flight async request (dedupe — a skipped skin re-asks every reapply).
         private static readonly HashSet<string> s_inFlight = new HashSet<string>();
+        private static readonly Queue<string> s_piQueue = new Queue<string>();
+        private static bool s_piRequestActive;
 
         // Addresses that resolved to nothing even asynchronously; stop re-requesting them.
         private static readonly HashSet<string> s_deadAddresses = new HashSet<string>();
@@ -261,6 +264,26 @@ namespace DeNelle.Core
 
             EnsureHost();
 
+            if (WebGLPiPlatform.IsPiBrowserEnvironment)
+            {
+                s_piQueue.Enqueue(address);
+                StartNextPiRequest();
+                return;
+            }
+
+            StartRequest(address);
+        }
+
+        private static void StartNextPiRequest()
+        {
+            if (s_piRequestActive || s_piQueue.Count == 0) return;
+            s_piRequestActive = true;
+            StartRequest(s_piQueue.Dequeue());
+        }
+
+        private static void StartRequest(string address)
+        {
+
             bool started = Guard.Try(System, $"async request '{address}'", () =>
             {
                 var handle = Addressables.LoadAssetAsync<Object>(address);
@@ -274,6 +297,11 @@ namespace DeNelle.Core
                 // reapply loop cannot spin on it.
                 s_inFlight.Remove(address);
                 s_deadAddresses.Add(address);
+                if (WebGLPiPlatform.IsPiBrowserEnvironment)
+                {
+                    s_piRequestActive = false;
+                    StartNextPiRequest();
+                }
             }
         }
 
@@ -303,6 +331,11 @@ namespace DeNelle.Core
             }
 
             MaybeNotifySettled();
+            if (WebGLPiPlatform.IsPiBrowserEnvironment)
+            {
+                s_piRequestActive = false;
+                StartNextPiRequest();
+            }
         }
 
         // =====================================================================
@@ -364,6 +397,21 @@ namespace DeNelle.Core
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void Boot()
         {
+            // Pi Browser runs inside an Android WebView with a much tighter practical
+            // memory ceiling than desktop WebGL. Loading and retaining all 35 prefabs at
+            // boot can kill the renderer, which the host recreates as an apparent game
+            // reset. On Pi, leave structures strictly on-demand and serialize requests.
+            if (WebGLPiPlatform.IsPiBrowserEnvironment)
+            {
+                s_warmStarted = true;
+                State = StructureContentState.Degraded;
+                Addressables.WebRequestOverride = request => request.timeout = 20;
+                FlowTrace.Step(System,
+                    "Pi Browser policy: eager structure download/residency disabled; " +
+                    "20s Addressables request timeout installed; assets load on demand.");
+                MaybeNotifySettled();
+                return;
+            }
             // AfterSceneLoad, matching OfflineContentBootstrap: coroutines need a live scene.
             // This is deliberately NOT a barrier — blocking the boot on content is the family
             // of bug this file exists to end.

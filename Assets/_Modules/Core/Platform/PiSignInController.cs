@@ -102,7 +102,13 @@ namespace DeNelle.Core.Platform
             // Only the Pi skin auto-triggers Pi sign-in. Under the Solana/$SKR skin the corner
             // button is a wallet-connect entry (see BuildButton) and Pi polling never runs.
             if (_skin != null && _skin.AuthMode == SkinAuthMode.PiSdk)
-                WaitForPiThenAutoSignIn().Forget();
+            {
+                // Pi Browser authentication can background its WebView for native consent.
+                // Do not overlap that with Unity/catalog startup. The visible Title button
+                // is the user-gesture boundary and remains retryable.
+                SetButton("Sign in with Pi", true);
+                FlowTrace.Step("Pi", "Pi authentication deferred until the player taps Sign in on Title.");
+            }
         }
 
         private void OnDestroy()
