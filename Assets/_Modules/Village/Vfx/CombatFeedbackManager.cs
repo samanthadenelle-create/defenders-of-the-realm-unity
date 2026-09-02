@@ -45,10 +45,33 @@
 //   * No per-frame Find / allocation. Static caches only.
 //   * Time.timeScale is always restored in a finally block so a script exception
 //     cannot permanently freeze the game.
+//
+// ⛔ AMENDED 2026-09-02 — THE finally IS NOT A GUARANTEE. READ BEFORE TOUCHING A RESTORE.
+// The bullet above is true and INSUFFICIENT, and the gap is not theoretical: a `finally`
+// covers a THROWN exception, and the way these dips actually leak is that Unity DROPS the
+// coroutine when its host is deactivated or destroyed. That throws nothing, so the finally
+// never runs, and whatever scale it had already written stays on the engine global forever.
+//
+// WaveCelebrationManager was caught doing exactly that on 2026-09-02 (owner F8 seq 4656:
+// `WorldHold ACQUIRE 'pause-menu' -> timeScale 0 (captured 0.28)` — the clock was already
+// at 28% speed before the menu opened). This class's two dips had the IDENTICAL shape and
+// had simply not been hit yet. They are contained the same way, on the same pattern as
+// HitStopManager (fixed 2026-09-02) — deliberately not a second mechanism:
+//   * ownership of the engine-global clock is CLASS state (s_ourScale), never per-host,
+//     and every exit funnels through ONE check (ReleaseOurClock) that restores 1.00 only
+//     while the clock still reads OUR value, and otherwise releases WITHOUT stamping and
+//     SAYS SO;
+//   * an UNSCALED deadline sweep driven by BOTH LateUpdate and Application.onBeforeRender,
+//     so a disabled or destroyed host cannot strand the clock;
+//   * registration with the EXISTING BattleSessionEnd unwind ladder.
+//
+// ⛔ THE EFFECT IS NOT THE BUG, THE LEAK IS (owner ruling 2026-09-02). Nothing below
+// shortens, weakens, gates or disables the hit stop or the kill slow-mo.
 // =============================================================================
 
 using System.Collections;
 using UnityEngine;
+using DeNelle.Core.Diagnostics;
 using DeNelle.Village.Arena;   // BattleArena — gate home-scene combat feel during a staged battle
 
 namespace DeNelle.Village
@@ -159,24 +182,253 @@ namespace DeNelle.Village
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
         private static void Bootstrap()
         {
+            // THE HOST-INDEPENDENT WATCHDOG (2026-09-02). Every restore path this class had was
+            // keyed to the HOST: the two coroutines, their finallys, OnDestroy. All of them stop
+            // dead the moment the host is deactivated or destroyed, and a dropped coroutine throws
+            // nothing, so no try/finally could ever have covered it. Application.onBeforeRender is
+            // a plain static per-frame event that keeps firing regardless of any MonoBehaviour's
+            // enabled state. LateUpdate drives the same sweep because headless batchmode renders
+            // nothing and therefore never raises onBeforeRender — together they cover both a live
+            // device and the regression fleet. Idempotent: -= before += so a second play-mode entry
+            // cannot double-subscribe.
+            Application.onBeforeRender -= HostIndependentWatchdog;
+            Application.onBeforeRender += HostIndependentWatchdog;
+
             if (Instance != null) return;
             var go = new GameObject("[CombatFeedbackManager]");
             DontDestroyOnLoad(go);
             Instance = go.AddComponent<CombatFeedbackManager>();
         }
 
+        /// <summary>
+        /// Reset the CLASS-LEVEL clock record and drop the host-independent subscription on every
+        /// play-mode entry. Statics survive a play-mode restart when domain reload is disabled, so
+        /// without this a dip in flight when the editor left play mode would come back as a phantom
+        /// deadline against a clock nobody had touched.
+        /// </summary>
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+        private static void ResetStaticClockState()
+        {
+            Application.onBeforeRender -= HostIndependentWatchdog;
+            s_ourScale = -1f;
+            s_dipDeadlineUnscaled = 0f;
+        }
+
         private void Awake()
         {
-            if (Instance != null && Instance != this) { Destroy(gameObject); return; }
+            if (Instance != null && Instance != this)
+            {
+                // A duplicate host. It must NOT register (the ladder is keyed by NAME) and, above
+                // all, its teardown must not UNregister the live instance's unwind — see OnDestroy.
+                FlowTrace.Warn("CombatFeedback",
+                    "duplicate CombatFeedbackManager destroyed in Awake - the live singleton keeps " +
+                    "the battle-end unwind.");
+                Destroy(gameObject);
+                return;
+            }
             Instance = this;
+
+            // THE BATTLE-END UNWIND. Registered by OWNER NAME on the EXISTING ladder, so a
+            // re-created singleton replaces rather than stacks. See EndDipNow.
+            DeNelle.Core.Combat.BattleSessionEnd.RegisterUnwind("combat-feedback", EndDipNow);
         }
 
         private void OnDestroy()
         {
-            // Guarantee timeScale is sane if this object is torn down mid-dip.
-            Time.timeScale = 1f;
-            if (Instance == this) Instance = null;
+            // ⛔ ONLY THE LIVE SINGLETON MAY DETACH THE LADDER. BattleSessionEnd keys unwinds by
+            // NAME, so an unconditional unregister from a DUPLICATE's teardown would silently
+            // remove the LIVE instance's unwind while every source lint still reads the
+            // RegisterUnwind call and reports it wired.
+            if (Instance != this) return;
+
+            DeNelle.Core.Combat.BattleSessionEnd.UnregisterUnwind("combat-feedback");
+
+            // Restore the clock if this host is torn down mid-dip — routed through the ONE
+            // ownership check. It used to be a bare `Time.timeScale = 1f`, which is the Nth-owner
+            // stamp: a teardown here would wipe out a live wave-celebration / hit-stop / death
+            // slow-mo owned by somebody else.
+            if (_hitStopRoutine != null || _killSloMoRoutine != null || s_ourScale >= 0f)
+                ReleaseOurClock("combat-feedback host DESTROYED mid-dip");
+
+            _hitStopRoutine   = null;
+            _killSloMoRoutine = null;
+            Instance = null;
         }
+
+        private void OnDisable()
+        {
+            // A coroutine dies on deactivation and OnDestroy does NOT fire for it, so without this
+            // a mid-dip SetActive(false) leaves the global pinned. Cheap half of the same fix as
+            // the deadline sweep; both exist because either alone can be out-raced.
+            if (Instance != this) return;
+            if (_hitStopRoutine != null || _killSloMoRoutine != null || s_ourScale >= 0f)
+                ReleaseOurClock("combat-feedback host DISABLED mid-dip; the deactivation has just " +
+                                "killed the restore coroutine and OnDestroy will not fire");
+            _hitStopRoutine   = null;
+            _killSloMoRoutine = null;
+        }
+
+        // =====================================================================
+        //  CLOCK OWNERSHIP (2026-09-02) — see the file header
+        // =====================================================================
+
+        /// <summary>
+        /// The scale the ACTIVE dip (hit stop OR kill slow-mo) has applied, or -1 when none is in
+        /// flight. <b>STATIC</b>: Time.timeScale is an ENGINE GLOBAL, so the record of who owns it
+        /// is CLASS state. A per-instance field dies with the host, which is precisely the object
+        /// whose death strands the clock.
+        /// </summary>
+        private static float s_ourScale = -1f;
+
+        /// <summary>Unscaled deadline the active dip must have finished by.</summary>
+        private static float s_dipDeadlineUnscaled;
+
+        /// <summary>How close the observed clock must be to our record to still count as ours.</summary>
+        private const float ScaleMatchEpsilon = 0.001f;
+
+        /// <summary>Grace past the deadline before a still-applied scale is called a leak.</summary>
+        private const float DeadlineGraceSeconds = 0.25f;
+
+        /// <summary>Apply a scale and RECORD it as ours in the same breath, so the record of who
+        /// owns the global can never drift from the write that created it.</summary>
+        private static void ApplyOurClock(float scale)
+        {
+            Time.timeScale = scale;
+            s_ourScale = scale;
+        }
+
+        /// <summary>
+        /// Give up ownership of the world clock, restoring 1.00 ONLY if the clock still reads the
+        /// value THIS class wrote. Three cases, and the third is the whole point:
+        ///   * clock still reads our value -> restore 1.00;
+        ///   * clock already reads 1.00    -> somebody restored it first, nothing to do;
+        ///   * clock reads someone ELSE's  -> release WITHOUT stamping, and NAME the value.
+        /// The old unconditional `Time.timeScale = 1f` in both finallys performed case three as a
+        /// stamp: a dip ending while another owner held the clock wiped out that owner's live
+        /// slow-mo. Stamping makes this class an Nth writer of the global, which is the shape of
+        /// the defect; doing it in silence is how the 0.28 leak went unexplained (CLAUDE.md §12).
+        /// </summary>
+        private static void ReleaseOurClock(string why)
+        {
+            if (s_ourScale < 0f) return;
+
+            float ours     = s_ourScale;
+            float observed = Time.timeScale;
+
+            s_ourScale = -1f;
+            s_dipDeadlineUnscaled = 0f;
+
+            if (Mathf.Abs(observed - ours) < ScaleMatchEpsilon)
+            {
+                Time.timeScale = 1f;
+                FlowTrace.Step("CombatFeedback",
+                    $"combat dip ({ours:F2}) released - {why}. timeScale restored to 1.00.");
+                return;
+            }
+
+            if (Mathf.Abs(observed - 1f) < ScaleMatchEpsilon)
+            {
+                FlowTrace.Step("CombatFeedback",
+                    $"combat dip ({ours:F2}) released - {why}. The clock was already back at 1.00; " +
+                    "another owner restored it first.");
+                return;
+            }
+
+            FlowTrace.Warn("CombatFeedback",
+                $"combat dip ({ours:F2}) released - {why} - but the clock reads {observed:F2} " +
+                $"({observed * 100f:F0}% speed), which is NOT the value we wrote. We deliberately do NOT " +
+                "stamp 1.00 over another owner's live slow-mo, so the remaining restore for this clock " +
+                $"belongs to whoever wrote {observed:F2}. If the world is still slow after this line, " +
+                "that owner is the leak - not the combat feedback. Non-1 writers in the tree: " +
+                "HitStopManager, WaveCelebrationManager (wave-clear dip 0.28), HeroHitReaction " +
+                "(death 0.30), ArenaDeathCam, WorldHold.");
+        }
+
+        /// <summary>
+        /// End any in-flight dip RIGHT NOW because the battle session that produced it is over.
+        /// Registered on the EXISTING BattleSessionEnd ladder (the same one HitStopManager uses)
+        /// rather than as a second recovery mechanism — a cosmetic beat must never outlive the
+        /// fight, and every other restore this class has is keyed to the HOST's lifetime, not the
+        /// BATTLE's. Safe to run unconditionally: it only ever reverts a scale this class applied.
+        /// </summary>
+        public void EndDipNow(string context)
+        {
+            if (_hitStopRoutine != null)   { StopCoroutine(_hitStopRoutine);   _hitStopRoutine   = null; }
+            if (_killSloMoRoutine != null) { StopCoroutine(_killSloMoRoutine); _killSloMoRoutine = null; }
+
+            if (s_ourScale < 0f)
+            {
+                // Said out loud rather than returned in silence: when the town is left slow and
+                // this line reads "clock 0.28", the next question ("then who owns 0.28?") is
+                // answered by elimination instead of by a second capture.
+                FlowTrace.Step("CombatFeedback",
+                    $"battle end ({context}): no combat dip of ours in flight, nothing to unwind. " +
+                    $"Clock reads {Time.timeScale:F2}.");
+                return;
+            }
+
+            ReleaseOurClock($"ENDED by battle end ({context})");
+        }
+
+        /// <summary>
+        /// Restore the clock if OUR dip outlived its deadline, and SAY SO when it has been taken
+        /// over by someone else. Idempotent and cheap — it returns on the first line whenever no dip
+        /// of ours is in flight, so both drivers can call it every frame.
+        /// </summary>
+        private static void SweepDeadline()
+        {
+            if (s_ourScale < 0f) return;
+            if (Time.unscaledTime <= s_dipDeadlineUnscaled + DeadlineGraceSeconds) return;
+
+            float ours      = s_ourScale;
+            float leaked    = Time.timeScale;
+            float overdue   = Time.unscaledTime - s_dipDeadlineUnscaled;
+            bool  stillOurs = Mathf.Abs(leaked - ours) < ScaleMatchEpsilon;
+
+            var host = Instance;
+            if (host != null)
+            {
+                if (host._hitStopRoutine != null)   { host.StopCoroutine(host._hitStopRoutine);   host._hitStopRoutine   = null; }
+                if (host._killSloMoRoutine != null) { host.StopCoroutine(host._killSloMoRoutine); host._killSloMoRoutine = null; }
+            }
+
+            s_ourScale = -1f;
+            s_dipDeadlineUnscaled = 0f;
+
+            if (stillOurs)
+            {
+                Time.timeScale = 1f;
+                FlowTrace.Fail("CombatFeedback",
+                    $"COMBAT DIP LEAK RECOVERED: timeScale was still {leaked:F2} {overdue:F2}s past its " +
+                    "deadline - the restore never completed (the host was almost certainly deactivated " +
+                    "or destroyed, which kills coroutines without firing OnDestroy and without throwing, " +
+                    $"so the finally could not have caught it). Restored to 1.00. The world was running " +
+                    $"at {leaked * 100f:F0}% speed, which reads to the player as everything slowed.");
+                return;
+            }
+
+            if (Mathf.Abs(leaked - 1f) < ScaleMatchEpsilon) return;   // benign: already back to normal
+
+            FlowTrace.Warn("CombatFeedback",
+                $"COMBAT DIP SUPERSEDED, NOT RESTORED: our {ours:F2} dip is {overdue:F2}s past its " +
+                $"deadline but the clock reads {leaked:F2} ({leaked * 100f:F0}% speed), which is NOT our " +
+                "value. We release ownership WITHOUT stamping 1.00, because that scale belongs to " +
+                "another owner. READ THIS AS A LEAD, NOT AS OUR LEAK: if the world is still slow after " +
+                $"this line, whoever wrote {leaked:F2} failed to restore it. Non-1 writers: " +
+                "HitStopManager, WaveCelebrationManager, HeroHitReaction, ArenaDeathCam, WorldHold.");
+        }
+
+        /// <summary>LateUpdate driver for the sweep. Covers headless batchmode, which renders
+        /// nothing and therefore never raises onBeforeRender.</summary>
+        private void LateUpdate() => SweepDeadline();
+
+        /// <summary>
+        /// The SAME sweep, driven by <c>Application.onBeforeRender</c> — a static per-frame event
+        /// that keeps firing no matter which MonoBehaviours are enabled. This is the driver that
+        /// closes the dropped-coroutine hole a try/finally cannot reach.
+        /// </summary>
+        private static void HostIndependentWatchdog()
+            => Guard.Try("CombatFeedback", "host-independent deadline sweep", SweepDeadline);
 
         // ── Update — decay timers (unscaled so they work during hit stop) ─────
 
@@ -322,35 +574,44 @@ namespace DeNelle.Village
             if (_killSloMoShake > 0f) CameraShakeBridge.Shake(_killSloMoShake, _killSloMoShakeDuration);
         }
 
+        // THE EFFECT IS UNCHANGED — same scale, same duration. What changed on 2026-09-02 is that
+        // the write is RECORDED as ours and the dip carries an unscaled DEADLINE, and the restore
+        // goes through the ONE ownership check instead of stamping 1.00 unconditionally.
+        //
+        // The finally is KEPT (it still covers StopCoroutine and a throw, and it is the cheapest
+        // path) but it is no longer trusted as the guarantee: Unity DROPS a coroutine when its host
+        // is deactivated or destroyed, which throws nothing, so the finally simply never runs. The
+        // deadline sweep is the path that covers that, and it is why this dip arms a deadline
+        // BEFORE its first clock write.
         private IEnumerator HitStopRoutine()
         {
-            Time.timeScale = _hitStopTimescale;
+            s_dipDeadlineUnscaled = Time.unscaledTime + _hitStopDurationSeconds;
+            ApplyOurClock(_hitStopTimescale);
             try
             {
                 yield return new WaitForSecondsRealtime(_hitStopDurationSeconds);
             }
             finally
             {
-                // Restores timeScale even if the coroutine is interrupted (StopCoroutine,
-                // MonoBehaviour destruction, scene unload).
-                Time.timeScale = 1f;
                 _hitStopRoutine = null;
+                ReleaseOurClock("hit stop duration elapsed (or the routine was stopped)");
             }
         }
 
-        // The deeper/longer slow-time dip for a finishing blow (see RegisterKill). Same
-        // safe pattern as HitStopRoutine — timeScale always restored in the finally.
+        // The deeper/longer slow-time dip for a finishing blow (see RegisterKill). Same containment
+        // as HitStopRoutine above — recorded ownership, an unscaled deadline, one restore check.
         private IEnumerator KillSloMoRoutine()
         {
-            Time.timeScale = _killSloMoTimescale;
+            s_dipDeadlineUnscaled = Time.unscaledTime + _killSloMoDurationSeconds;
+            ApplyOurClock(_killSloMoTimescale);
             try
             {
                 yield return new WaitForSecondsRealtime(_killSloMoDurationSeconds);
             }
             finally
             {
-                Time.timeScale = 1f;
                 _killSloMoRoutine = null;
+                ReleaseOurClock("kill slow-mo duration elapsed (or the routine was stopped)");
             }
         }
     }

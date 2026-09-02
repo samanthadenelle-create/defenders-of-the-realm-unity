@@ -40,6 +40,35 @@
 // already frozen the clock — the WO-1016 permanent-invisible-freeze signature), so it
 // degrades to 1.
 //
+// ⛔ ...BUT A CAPTURED NON-1 SCALE HAS A SHELF LIFE (2026-09-02 — THE AMPLIFIER FIX).
+// CAPTURED DEFECT, owner F8 seq 4656:
+//     [Flow:Pause] WorldHold ACQUIRE 'pause-menu' -> timeScale 0 (captured 0.28).
+//     timeScale=0.28 dt=0.0047 inputSuppressed=False
+// The world clock was ALREADY 0.28 before the menu opened — WaveCelebrationManager's
+// wave-clear dip (_slowMoScale = 0.28f) had leaked. The guard above only ever asked "is
+// the observed scale <= 0"; it had NOTHING to say about a leaked POSITIVE one. So this
+// class faithfully captured a dead value and faithfully restored it, and a transient
+// cosmetic dip became PERMANENT the instant the player opened a menu. That is the
+// difference between a bug the player shrugs off and the owner's long-standing "in town
+// everything slowed" — this file was the amplifier, not the source.
+//
+// The discriminator is TIME, and it is exact. Every non-1 writer in the tree is a BOUNDED
+// cosmetic transient — HitStopManager 0.02-0.05 (<0.1 s), CombatFeedbackManager hit stop
+// 0.05 / kill slow-mo 0.30 (0.45 s), WaveCelebrationManager 0.28 (0.9 s + 0.3 s ease),
+// HeroHitReaction 0.30 (1.2 s ramp), ArenaDeathCam (saves + restores its own). Verified by
+// reading every `Time.timeScale =` assignment under Assets/_Modules/ on 2026-09-02: there
+// is NO persistent slow-motion mode and NO dev time-skip in this project, so NOTHING
+// legitimately holds a non-1 scale for longer than ~1.2 unscaled seconds. Every one of
+// those dips also runs on UNSCALED time, so it finishes DURING our freeze and its captured
+// value is stale before the player has finished reading the menu.
+//
+// Hence: a captured non-1 baseline is restored only while it is still PLAUSIBLY LIVE
+// (SuspectBaselineGraceSeconds). Held longer than that, we restore 1.0 and say — loudly,
+// with the number and the candidate owners — that we refused to launder it. The legitimate
+// case the WO-1149 acceptance protects (a menu opened on top of a real slow-motion beat and
+// closed again promptly) round-trips exactly as before; only the case that CANNOT be
+// legitimate is corrected, and it is NAMED rather than swallowed (CLAUDE.md §12).
+//
 // ⛔ A HOLD THAT FAILS TO RELEASE IS WORSE THAN NO HOLD — a frozen game after a completed
 // purchase is a support ticket AND a refund. Two structures make that unreachable:
 //   1. Acquire() returns an IDisposable, so callers use `using` and the C# compiler
@@ -85,6 +114,17 @@ namespace DeNelle.Core.UI
         /// </summary>
         public const float StuckHoldSeconds = 180f;
 
+        /// <summary>
+        /// Unscaled seconds a captured NON-1 baseline stays restorable. Past this the capture is
+        /// treated as a leaked transient and the release restores 1.0 with a loud warning.
+        /// <para>Sized from the tree, not from taste: the longest deliberate non-1 beat in the
+        /// project is HeroHitReaction's 1.2 s death ramp, and every dip runs on unscaled time so it
+        /// completes while we are frozen. 2 s clears the longest legitimate beat with margin and is
+        /// far below any human menu dwell, which is what makes it a clean discriminator rather than
+        /// a tuning knob.</para>
+        /// </summary>
+        public const float SuspectBaselineGraceSeconds = 2f;
+
         /// <summary>Disposable hold token. Idempotent: double-dispose is a no-op, never a
         /// double-release that could unfreeze the world while another hold is outstanding.</summary>
         public sealed class Handle : IDisposable
@@ -115,6 +155,12 @@ namespace DeNelle.Core.UI
         // The scale observed at the moment the FIRST hold engaged — the value a full
         // release restores. Never assumed to be 1 (see the header).
         private static float s_scaleBeforeHold = 1f;
+
+        // Unscaled time the baseline above was captured. Only meaningful when the capture is
+        // non-1; it is what turns "is this scale still plausibly live?" into an answerable
+        // question instead of a guess. See SuspectBaselineGraceSeconds.
+        private static float s_capturedAtUnscaled;
+
         private static bool s_frozen;
         private static bool s_applicationBackgrounded;
         private static float s_backgroundedAtUnscaled;
@@ -159,12 +205,31 @@ namespace DeNelle.Core.UI
             {
                 float observed = Time.timeScale;
                 s_scaleBeforeHold = observed > 0f ? observed : 1f;
+                s_capturedAtUnscaled = Time.unscaledTime;
                 Time.timeScale = 0f;
                 s_frozen = true;
                 FlowTrace.Step("Pause",
                     $"WorldHold ACQUIRE '{handle.Reason}' -> timeScale 0 (captured {observed:F2}" +
                     (observed > 0f ? "" : " <= 0, ALREADY FROZEN by another owner - restoring to 1 instead") +
                     $"). Full release will restore {s_scaleBeforeHold:F2}.");
+
+                // THE LEAD LINE (2026-09-02). Capturing a non-1 scale is legal but it is never
+                // ROUTINE: it means a cosmetic dip was live at the exact instant a menu opened. If
+                // the world is slow after this hold, this line is where the investigation starts,
+                // so it names the number and the owners that can write it rather than leaving the
+                // next capture to start from zero.
+                if (observed > 0f && !Mathf.Approximately(observed, 1f))
+                {
+                    FlowTrace.Warn("Pause",
+                        $"WorldHold captured a NON-1 baseline of {observed:F2} ({observed * 100f:F0}% speed) " +
+                        $"for '{handle.Reason}'. Somebody's slow-motion beat was live when this hold opened. " +
+                        $"It will be restored ONLY if this hold releases within {SuspectBaselineGraceSeconds:F0}s; " +
+                        "held longer, that scale cannot still be a live beat (the longest in the tree is 1.2s) " +
+                        "and we restore 1.00 instead of making a transient dip permanent. Owners that write a " +
+                        "non-1 scale: HitStopManager, CombatFeedbackManager (hit stop / kill slow-mo), " +
+                        "WaveCelebrationManager, HeroHitReaction, ArenaDeathCam.");
+                }
+
                 EnsureWatchdog();
             }
             else
@@ -225,6 +290,7 @@ namespace DeNelle.Core.UI
         {
             s_holds.Clear();
             s_scaleBeforeHold = 1f;
+            s_capturedAtUnscaled = 0f;
             s_frozen = false;
             s_applicationBackgrounded = false;
             s_backgroundedAtUnscaled = 0f;
@@ -257,7 +323,35 @@ namespace DeNelle.Core.UI
         {
             // Belt-and-braces with the capture guard: a restore is the LAST place a frozen world
             // can be re-armed, so it can never write a non-positive scale.
-            Time.timeScale = s_scaleBeforeHold > 0f ? s_scaleBeforeHold : 1f;
+            float restore = s_scaleBeforeHold > 0f ? s_scaleBeforeHold : 1f;
+
+            // ⛔ THE AMPLIFIER GUARD (owner F8 seq 4656). The capture guard above rejects a
+            // non-POSITIVE scale; nothing rejected a leaked POSITIVE one, so a dead 0.28 from a
+            // wave-clear dip was captured, held across the whole pause menu, and then written back
+            // as if it were the world's true resting speed. Restoring a slow-motion beat that ended
+            // seconds ago is not fidelity, it is laundering — and it is what turned a transient bug
+            // into the owner's permanent "in town everything slowed".
+            if (!Mathf.Approximately(restore, 1f))
+            {
+                float heldFor = Mathf.Max(0f, Time.unscaledTime - s_capturedAtUnscaled);
+                if (heldFor > SuspectBaselineGraceSeconds)
+                {
+                    FlowTrace.Warn("Pause",
+                        $"WorldHold REFUSED TO RESTORE a stale baseline: it captured {restore:F2} " +
+                        $"({restore * 100f:F0}% speed) {heldFor:F1}s ago, which is past the " +
+                        $"{SuspectBaselineGraceSeconds:F0}s shelf life for a live slow-motion beat (the " +
+                        "longest deliberate dip in the tree is 1.2s, and every one of them runs on " +
+                        "UNSCALED time so it finished while we were frozen). Restoring 1.00 instead. " +
+                        "READ THIS AS A LEAD: the clock was ALREADY slow before this hold opened, so " +
+                        $"whoever wrote {restore:F2} leaked it - candidates are HitStopManager, " +
+                        "CombatFeedbackManager (hit stop 0.05 / kill slow-mo 0.30), WaveCelebrationManager " +
+                        "(wave-clear dip 0.28), HeroHitReaction (death 0.30), ArenaDeathCam.");
+                    restore = 1f;
+                    s_scaleBeforeHold = 1f;
+                }
+            }
+
+            Time.timeScale = restore;
             s_frozen = false;
         }
 
@@ -360,6 +454,7 @@ namespace DeNelle.Core.UI
         {
             s_holds.Clear();
             s_scaleBeforeHold = 1f;
+            s_capturedAtUnscaled = 0f;
             s_frozen = false;
             s_watchdog = null;
             s_applicationBackgrounded = false;

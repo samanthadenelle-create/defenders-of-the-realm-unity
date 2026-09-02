@@ -99,9 +99,31 @@ namespace DeNelle.Editor.Regression
             if (!Regex.IsMatch(holdSrc,
                     @"ReassertTick\s*\(\s*\)[\s\S]{0,800}?Time\.timeScale\s*=\s*0f"))
                 failures.Add("[pause-owner] WorldHold.ReassertTick no longer re-zeroes a stolen clock.");
+            // ⚠ REPOINTED 2026-09-02 (owner flag 4656, the 0.28 clock leak), NOT WEAKENED.
+            // This used to require the literal `Time.timeScale = s_scaleBeforeHold > 0f ? ... : 1f`
+            // as ONE adjacent expression. The 0.28 fix hoisted the guard into a local `restore` and
+            // applies it a few lines later, so the regex went red against a tree whose safety
+            // property was fully intact - and the "fix" it invited was to inline the assignment
+            // again and drop the new leak guard. The PROPERTY, not the spelling, is what matters:
+            // the restored value must be provably positive on every branch.
             if (!Regex.IsMatch(holdSrc,
-                    @"Time\.timeScale\s*=\s*s_scaleBeforeHold\s*>\s*0f\s*\?\s*s_scaleBeforeHold\s*:\s*1f"))
-                failures.Add("[pause-restore] the release no longer restores the captured positive scale safely.");
+                    @"s_scaleBeforeHold\s*>\s*0f\s*\?\s*s_scaleBeforeHold\s*:\s*1f"))
+                failures.Add("[pause-restore] the release no longer restores the captured positive scale safely. " +
+                             "Some branch of the release can now write a non-positive timeScale, which is the " +
+                             "WO-1016 permanent-invisible-freeze shape.");
+            if (!Regex.IsMatch(holdSrc, @"Time\.timeScale\s*=\s*restore\s*;"))
+                failures.Add("[pause-restore] the guarded 'restore' local is no longer what feeds Time.timeScale, " +
+                             "so the positive guard above may be computed and then bypassed.");
+
+            // ADDED 2026-09-02: pin the leak fix itself. WaveCelebrationManager's SlowMoDip was an
+            // untracked coroutine that Unity dropped on host deactivation, stranding timeScale at
+            // 0.28; WorldHold then LAUNDERED that leaked positive into its restore value, so every
+            // later hold re-applied the slow motion. The grace window is what stops a stale baseline
+            // being trusted forever. Without this assertion the whole fix can be reverted silently.
+            if (!holdSrc.Contains("SuspectBaselineGraceSeconds"))
+                failures.Add("[pause-restore] the suspect-baseline grace window is GONE. WorldHold will again " +
+                             "trust an arbitrarily old captured timeScale and re-apply a leaked slow-motion " +
+                             "value forever (owner flag 4656, 2026-09-02).");
             if (!Regex.IsMatch(src, @"void\s+Resume\s*\(\s*\)[\s\S]{0,600}?_hold\s*\.\s*Dispose\s*\(\s*\)"))
                 failures.Add("[pause-restore] PauseController.Resume no longer releases its WorldHold, so the " +
                              "pause menu can close over a still-frozen world.");
