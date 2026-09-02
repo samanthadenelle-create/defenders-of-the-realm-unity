@@ -27,11 +27,31 @@
 //     steady frame. Round trip ~7.5s x 13 battles in one session = ~90s of loading.
 // She ruled for the contract over the swap. This is the contract.
 //
-// WHAT IT IS NOT. It is not a repair mechanism and it is not an eighth owner of
-// Time.timeScale (there are already seven: HitStopManager, CombatFeedbackManager,
-// ArenaDeathCam, WaveCelebrationManager, PauseController, HeroHitReaction,
-// GameOverScreen). It OBSERVES and REPORTS. A gate that quietly fixes things trains
+// WHAT IT IS NOT. It is not a repair mechanism and it is not one more owner of
+// Time.timeScale. It OBSERVES and REPORTS. A gate that quietly fixes things trains
 // everyone to stop reading it and hides the real owner of the bug.
+//
+// ⚠ THE OWNER LIST WAS STALE AND IS CORRECTED (2026-09-02, CLAUDE.md §15). It read
+// "seven: HitStopManager, CombatFeedbackManager, ArenaDeathCam, WaveCelebrationManager,
+// PauseController, HeroHitReaction, GameOverScreen" — wrong in BOTH directions, which
+// is worse than no list, because attribution is this gate's entire job and a reader
+// chasing a leaked clock would have hunted a file that does not write it and never
+// opened three that do.
+//   * PauseController DOES NOT WRITE Time.timeScale. WO-1149 moved the freeze into
+//     DeNelle.Core.UI.WorldHold and converted the pause menu into a CLIENT of it
+//     (PauseController.cs:67-79, :260 — it takes WorldHold.Acquire(ReasonPauseMenu)).
+//     The only "timeScale" left in that file is prose.
+//   * MISSING: WorldHold (Core/UI — the ref-counted freeze owner every pause/purchase
+//     hold routes through), BreakCaptureHarness (Core/Diagnostics — the F8 note freeze),
+//     BugReportView (HUD).
+// Verified by reading every `Time.timeScale =` assignment under Assets/_Modules/. The
+// live RUNTIME writers are NINE:
+//     WorldHold, BreakCaptureHarness, BugReportView, HitStopManager,
+//     CombatFeedbackManager, ArenaDeathCam, WaveCelebrationManager, HeroHitReaction,
+//     GameOverScreen
+// plus this gate's own last-resort restore at the bottom of Arm (which is a safety net,
+// not an owner) and the dev-only DevTools/GateTraversalProof + VfxParade tools.
+// KEEP THIS LIST HONEST OR DELETE IT — grep `Time.timeScale =` under Assets/_Modules/.
 //
 // ⚠ AMENDED 2026-08-30 (WO-1233b) — IT NOW SELF-HEALS, AND THE ORDER IS THE POINT.
 // "Reports and does not repair" left the player at 4% speed with a stuck lock while
