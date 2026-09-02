@@ -122,6 +122,15 @@ namespace DeNelle.Core
         /// <summary>Every enemy address carries this prefix (see EnemyAssetLoader).</summary>
         public const string AddressPrefix = "Enemies/";
 
+        /// <summary>
+        /// Prefix of the per-family Addressables LABEL. A family token becomes a label by
+        /// concatenation, so this is the ONE place the label grammar is written down.
+        /// <para>The declared set is authored in AddressableAssetSettings.asset and is NOT derived
+        /// from <see cref="FamilyOf"/> — a derived token ("skeleton", "ogremage") is only a
+        /// CANDIDATE. <see cref="IsDeclaredFamilyLabel"/> is how a caller finds out.</para>
+        /// </summary>
+        public const string FamilyLabelPrefix = "enemyfam-";
+
         /// <summary>Wall-clock budget for the discovery pass. A REPORTING deadline, not a timeout
         /// on a blocking call — nothing is blocked, so exceeding it costs a log line, never a frame.</summary>
         public const float WarmDeadlineSeconds = 45f;
@@ -164,6 +173,12 @@ namespace DeNelle.Core
         // Just the enemy ones, so a family sweep does not re-walk every locator.
         private static readonly List<string> s_enemyKeys = new List<string>();
 
+        // Every DECLARED per-family label ("enemyfam-*"), harvested from the same locator walk.
+        // Labels are catalog KEYS, so they arrive for free with the address harvest — no probe,
+        // no network, and no hand-kept table that could drift from the settings asset.
+        private static readonly HashSet<string> s_familyLabels =
+            new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
         private static Host s_host;
         private static bool s_warmStarted;
 
@@ -196,6 +211,34 @@ namespace DeNelle.Core
         /// <summary>True when this family's bundles have finished downloading (or were already local).</summary>
         public static bool IsFamilyLocal(string family) =>
             !string.IsNullOrEmpty(family) && s_familiesLocal.Contains(family);
+
+        /// <summary>The per-family Addressables label for a family token. Pure string work.</summary>
+        public static string LabelFor(string family) =>
+            string.IsNullOrWhiteSpace(family)
+                ? string.Empty
+                : FamilyLabelPrefix + family.Trim().ToLowerInvariant();
+
+        /// <summary>
+        /// True when this family's label is DECLARED in the catalog, i.e. asking Addressables for
+        /// it will resolve instead of throwing InvalidKeyException.
+        /// <para>⛔ Answers TRUE when discovery has not harvested any family label at all
+        /// (<see cref="DeclaredFamilyLabelCount"/> == 0). That is deliberate: an empty harvest means
+        /// "we do not know", and refusing every warm on a not-knowing would silently disable the
+        /// whole 2026-08-20 per-family pre-fetch. Absence of evidence is not a refusal.</para>
+        /// </summary>
+        public static bool IsDeclaredFamilyLabel(string family)
+        {
+            if (string.IsNullOrWhiteSpace(family)) return false;
+            if (s_familyLabels.Count == 0) return true;
+            return s_familyLabels.Contains(LabelFor(family));
+        }
+
+        /// <summary>How many "enemyfam-*" labels discovery found in the catalog (0 = not harvested).</summary>
+        public static int DeclaredFamilyLabelCount => s_familyLabels.Count;
+
+        /// <summary>The declared family labels, comma-joined, for diagnostics.</summary>
+        public static string DeclaredFamilyLabels =>
+            s_familyLabels.Count == 0 ? "<none harvested>" : string.Join(", ", s_familyLabels);
 
         /// <summary>True when this family's bundles have been asked for and have not landed yet.</summary>
         public static bool IsFamilyDownloading(string family) =>
@@ -365,7 +408,7 @@ namespace DeNelle.Core
 
             EnsureHost();
 
-            string label = "enemyfam-" + family;
+            string label = LabelFor(family);
             if (State != EnemyContentState.Ready)
             {
                 // Not a defect on its own: discovery may not have run yet (a spawn in the first
@@ -378,6 +421,26 @@ namespace DeNelle.Core
                     $"(label='{label}', discovered={s_enemyKeys.Count}, " +
                     $"state={State}) — no family pre-fetch, falling back to per-address requests. " +
                     "Expected before discovery settles; a DEFECT afterwards.");
+                return;
+            }
+
+            // ⛔ UNDECLARED LABEL = a NAMED DEFECT, NOT AN ENGINE EXCEPTION (WO-1303).
+            // DownloadDependenciesAsync throws InvalidKeyException on a key with no location, and
+            // Guard.Try turns that into a red error every time an enemy of that family spawns —
+            // which is how four F8 captures on 2026-09-02 read as content breakage when the real
+            // fault was a caller passing the wrong string. The declared set is known here, so say
+            // WHAT was asked for and WHAT exists, once per bad family, and do not throw.
+            if (!IsDeclaredFamilyLabel(family))
+            {
+                s_familiesRequested.Remove(family);   // allow a retry if the catalog grows
+                FlowTrace.Throttle(System, "fam-undeclared-" + family, 5f,
+                    $"family '{family}' has NO declared label: '{label}' is not in the catalog. " +
+                    $"Declared enemy family labels are [{DeclaredFamilyLabels}]. NOTHING was downloaded " +
+                    "and NOTHING threw - the bodies still arrive via per-address requests, they just " +
+                    "forgo the family head start. This is almost always a CALLER passing the wrong " +
+                    "string (a controller name, or a model whose prefix is not its family - e.g. " +
+                    "'Skeleton_Warrior' is family 'hollow', not 'skeleton'), NOT missing content. " +
+                    "Fix the caller; do NOT add a label, which re-hashes every bundle (CLAUDE.md s16).");
                 return;
             }
 
@@ -522,6 +585,10 @@ namespace DeNelle.Core
                         s_registeredKeys.Add(s);
                         if (s.StartsWith(AddressPrefix, StringComparison.Ordinal) && !s_enemyKeys.Contains(s))
                             s_enemyKeys.Add(s);
+                        // Labels are catalog keys too. Harvesting them here is what lets WarmFamily
+                        // REFUSE an undeclared label instead of letting Addressables throw.
+                        if (s.StartsWith(FamilyLabelPrefix, StringComparison.OrdinalIgnoreCase))
+                            s_familyLabels.Add(s);
                     }
                 }
             });

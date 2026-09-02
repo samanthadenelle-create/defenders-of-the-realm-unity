@@ -1229,6 +1229,10 @@ namespace DeNelle.Editor
             // it sees the fully-built registry above it (it reads SOURCE, not runtime
             // state, so its own registration line is what satisfies its self-reference).
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "enemy-warm-order suite", () => { if (!DeNelle.Editor.Regression.EnemyWarmOrderRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[enemy-warm-order] " + r); });
+            // WO-1303: the family PRE-FETCH key. EnemyAnimatorLateBinder passed the controller
+            // name where the model belongs, so every skeleton/orc/large humanoid asked for a
+            // label that does not exist - an InvalidKeyException per spawn and no family fetch.
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "enemy-family-label suite", () => { if (!DeNelle.Editor.Regression.EnemyFamilyLabelRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[enemy-family-label] " + r); });
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "npc-idle-controller suite", () => { if (!DeNelle.Editor.Regression.NpcIdleControllerRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[npc-idle-controller] " + r); });
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "spawn-area-enemy-ids suite", () => { if (!DeNelle.Editor.Regression.SpawnAreaEnemyIdRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[spawn-area-enemy-ids] " + r); });
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "regression-marker suite", () => { if (!DeNelle.Editor.Regression.RegressionMarkerRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[regression-marker] " + r); });

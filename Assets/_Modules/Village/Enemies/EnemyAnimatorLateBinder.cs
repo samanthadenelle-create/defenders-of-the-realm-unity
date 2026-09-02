@@ -41,6 +41,9 @@ namespace DeNelle.Village
         private Animator _animator;
         private string _model;
         private string _ctrlName;
+        /// <summary>The family token the prewarm was issued for — recorded so the timeout line can
+        /// name the family that failed to land, not just the controller (WO-1303).</summary>
+        private string _family;
         private float _armedAt;
         private float _nextPollAt;
 
@@ -62,12 +65,24 @@ namespace DeNelle.Village
             binder._armedAt = Time.realtimeSinceStartup;
             binder._nextPollAt = 0f;
 
-            EnemyAssetLoader.PrewarmFamily(ctrlName);
+            // ⛔ PREWARM BY THE **MODEL**, NEVER BY THE CONTROLLER (WO-1303).
+            // PrewarmFamily's parameter is a model slug or a full "Enemies/..." address: it feeds
+            // EnemyContentWarmer.FamilyOf, which takes the text before the first '_'. A CONTROLLER
+            // name has no '_' to cut at, so 'SkeletonHumanoid' became the whole family and asked
+            // Addressables for the label 'enemyfam-skeletonhumanoid', which has no location — four
+            // InvalidKeyExceptions in the owner's 2026-09-02 session (seq 4359/4369/4377/4639), one
+            // per spawn, for a family pre-fetch that then never happened. The two other call sites
+            // (EnemyFactory.PrewarmForIds, EnemyLateSkinner.Arm) both pass the model; this was the
+            // outlier. Still fire-and-forget — see the header on why nothing here may wait.
+            string family = EnemyContentWarmer.FamilyOf(modelName);
+            if (!string.IsNullOrEmpty(modelName)) EnemyAssetLoader.PrewarmFamily(modelName);
+            binder._family = family;
 
             FlowTrace.Once("EnemyAnim", "late-bind-armed-" + ctrlName,
-                $"controller '{address}' for model '{modelName}' is NOT YET DOWNLOADED — the enemy spawns and " +
-                "slides for now, and a late bind is armed. Deliberately not waiting: waiting on this seam is " +
-                "what deadlocked the game on 2026-08-20.");
+                $"controller '{address}' for model '{modelName}' (family '{family}', label " +
+                $"'{EnemyContentWarmer.LabelFor(family)}', declared={EnemyContentWarmer.IsDeclaredFamilyLabel(family)}) " +
+                "is NOT YET DOWNLOADED — the enemy spawns and slides for now, and a late bind is armed. " +
+                "Deliberately not waiting: waiting on this seam is what deadlocked the game on 2026-08-20.");
         }
 
         private void Update()
@@ -98,7 +113,9 @@ namespace DeNelle.Village
                 {
                     FlowTrace.Once("EnemyAnim", "late-bind-timeout-" + _ctrlName,
                         $"late bind of controller '{address}' has waited {now - _armedAt:F0}s " +
-                        $"(catalogState={EnemyContentWarmer.State}, pending={EnemyContentWarmer.PendingRequests}) — " +
+                        $"(catalogState={EnemyContentWarmer.State}, pending={EnemyContentWarmer.PendingRequests}, " +
+                        $"family='{_family}', familyLocal={EnemyContentWarmer.IsFamilyLocal(_family)}, " +
+                        $"familyDownloading={EnemyContentWarmer.IsFamilyDownloading(_family)}) — " +
                         "giving up polling. The enemy keeps sliding. Check CDN reachability for this bundle. " +
                         "Nothing hung.");
                     Destroy(this);
