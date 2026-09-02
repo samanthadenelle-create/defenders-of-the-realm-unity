@@ -364,6 +364,13 @@ namespace DeNelle.Editor
             if (!RaidScoringRegression.Run(out var raidScoringReason)) failures.Add(raidScoringReason); else log.AppendLine("[raid-scoring] " + raidScoringReason);
             // --- WO-912 sec.10.5: the ad provider stays BEHIND IAdService (registered BEFORE any SDK) ---
             if (!AdServiceSeamRegression.Run(out var adSeamReason)) failures.Add(adSeamReason); else log.AppendLine("[ad-seam] " + adSeamReason);
+            // --- WO-1320: a Pi rewarded ad pays out ONLY after /api/pi/ads-verify answers
+            //     mediator_ack_status == "granted". Pins the two cases that matter: an unverified
+            //     client-side AD_REWARDED grants nothing, and AD_CLOSED grants nothing (the latent
+            //     always-true defect this WO was minted for). ---
+            //     Namespace is DeNelle.Editor (NOT DeNelle.Editor.Regression) - read from the suite
+            //     file itself, not from a neighbour line; this folder holds both conventions. ---
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "pi-ad-reward suite", () => { if (!DeNelle.Editor.PiAdRewardVerificationRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[pi-ad-reward] " + r); });
             if (!AndroidContentTargetRegression.Run(out var androidTargetReason)) failures.Add(androidTargetReason); else log.AppendLine("[android-content-target] " + androidTargetReason);
             // --- WO-1187: every repo .ps1 is ASCII-or-BOM and parses non-vacuously (a BOM-less
             //     non-ASCII script is read as ANSI by PS 5.1 and can silently never run) ---

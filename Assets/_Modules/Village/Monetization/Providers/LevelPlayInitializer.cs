@@ -55,6 +55,7 @@ using DeNelle.Core;
 using DeNelle.Core.Ads;
 using DeNelle.Core.Diagnostics;
 using DeNelle.Core.Monetization;
+using DeNelle.Core.Platform;   // WO-1320: WebGLPiPlatform.IsPiBrowserEnvironment (the one-provider gate)
 using DeNelle.Core.UI;
 using DeNelle.Core.Analytics;
 
@@ -137,6 +138,25 @@ namespace DeNelle.Village.Monetization
             {
                 FlowTrace.Step(Sys, "ads are flagged OFF (ff.rewardedadskip) - LevelPlay not initialised " +
                                     "and no consent prompt shown. Flip the flag to bring the path up.");
+                return;
+            }
+
+            // ⛔ WO-1320 — THE OTHER HALF OF THE ONE-PROVIDER RULE.
+            // AdServices holds exactly ONE Current. Inside Pi Browser the Pi Developer Ad Network
+            // is the provider (PiAdProvider), and two initialisers both calling AdServices.Register
+            // would make the winner a matter of RuntimeInitializeOnLoadMethod ordering — which is
+            // undefined, so the game would serve whichever network happened to finish last. Worse,
+            // LevelPlay is an Android-native mediator and there is no LevelPlay inventory inside a
+            // Pi Browser WebView at all: it would win the race and then serve nothing.
+            //
+            // So the two gates are made mutually exclusive rather than arbitrated: PiAdProvider
+            // refuses OUTSIDE Pi Browser, and this refuses INSIDE it. Neither can win a race that
+            // cannot start, and neither needs to know the other's registration state.
+            if (WebGLPiPlatform.IsPiBrowserEnvironment)
+            {
+                FlowTrace.Step(Sys, "inside Pi Browser - LevelPlay is NOT initialised. The Pi Developer " +
+                                    "Ad Network (PiAdProvider) owns AdServices.Current here; two providers " +
+                                    "registering would be decided by init order, i.e. by nothing.");
                 return;
             }
 

@@ -167,7 +167,31 @@
 > fine as history. A copied number is the bug **even when it was right the day it was written** -
 > that is exactly how the retired 860-899 UI block kept re-seeding collisions from CLAUDE.md sec.2.
 
-> ## ⚠ RECONCILED 2026-09-02 (CLI, fifteenth pass): main line next free = **1320**.
+> ## ⚠ RECONCILED 2026-09-02 (CLI, seventeenth pass): main line next free = **1322**.
+> *(CLI minted **WO-1321** on the owner's ruling *"Build it to try both"*. Pi sign-in now tries the
+> declared environment and RETRIES ONCE on the opposite one, tracing both by name, so ONE Pi Browser
+> session settles a question three sources disagreed about: the captured 09-01 trace shows
+> `PiInit(sandbox=True)` -> `Signed in as samanthadenelle` (**a TESTNET init that AUTHENTICATED**),
+> the owner answered **Mainnet** when asked directly, and later recalled reading **testnet**.
+> ⚠ I shipped WO-1317's `sandbox=false` on the verbal answer WITHOUT weighting the contradicting
+> capture — if the app is testnet that made auth worse, and the WO records that rather than quietly
+> correcting it. ⛔ The fallback is a DIAGNOSTIC, not the permanent answer: once a capture proves the
+> environment, set `PiEnvironment.Sandbox` and reference WO-1321 in that commit.
+> Bumped 1321 -> 1322 in this SAME edit.)*
+>
+> ### superseded: RECONCILED 2026-09-02 (CLI, sixteenth pass): main line next free = **1321**.
+> *(CLI minted **WO-1320** — Pi rewarded ads behind the EXISTING `IAdService` seam, from FETCHED Pi
+> SDK docs (cited in the WO). ⛔ Contains a LATENT P0: `PiBridge.jslib:192-207` +
+> `WebGLPiPlatform.cs:145-147` resolve `true` for EVERY ad outcome — `AD_CLOSED`, `ADS_NOT_SUPPORTED`
+> and a dismissed ad all read as "rewarded", and `PiCallbackData` declares no `result`/`adId` so
+> JsonUtility silently drops both. Only dead code (nothing calls `ShowAd`) has kept it from paying
+> free rewards. Rewarded ads REQUIRE server verification —
+> `GET /v2/ads_network/status/:adId`, grant only on `mediator_ack_status === "granted"`. Confirmed the
+> owner's app URL: **`https://echoesofelarions6578.pinet.com`**, which validates the WO-1317
+> `.pinet.com` host check. ⚠ Result strings are NOT exhaustively documented — four confirmed; do not
+> write an enum that pretends otherwise. Bumped 1320 -> 1321 in this SAME edit.)*
+>
+> ### superseded: RECONCILED 2026-09-02 (CLI, fifteenth pass): main line next free = **1320**.
 > *(CLI minted **WO-1319** from an owner screenshot: the bottom action-bar face labels render as one
 > unbroken overlapping run (`BUILDTALKHERO...QUEUE MANAGE`) at a narrow aspect. The OTHER clipping in
 > that shot is expected — the UI is authored for landscape — but text running into its neighbour is a

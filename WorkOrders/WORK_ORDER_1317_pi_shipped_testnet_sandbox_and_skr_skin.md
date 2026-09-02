@@ -96,3 +96,44 @@ and this runs in whatever WebView Pi ships). Verified against 10 cases including
 - ⛔ Do not widen the host match to a substring. `pinet.com.evil.tld` must not match.
 - ⛔ Do not change `CurrencySkinResolver`'s WO-787 routing itself; the routing is right, its input
   signal was too narrow.
+
+---
+
+# ✅ PROVEN 2026-09-02 — acceptance criterion 4 MET by a live capture
+
+Session `wt-1454dc8bfaa4`, build `2026.09.02.352005@echoes-of-elarion.vercel.app`, in REAL Pi Browser
+(`device='Unknown browser Unknown version'` — the same signature as the 09-01 Pi sessions):
+
+```
+[Flow:Skin] Pi Browser host detected - resolving the Pi skin.
+[Flow:Skin] Currency skin resolved: 'pi' (auth=PiSdk, symbol=pi, identity=PiUid).
+[Flow:Pi]   PiInit(sandbox=False)
+[Flow:Pi]   PiAuthenticate(scopes=username)
+[Flow:Pi]   Signed in as samanthadenelle (uid bound to session).
+```
+
+559 lines, **zero** Pi failures after sign-in. Both halves of this WO are now proven, not reasoned:
+1. **The mainnet flip is CORRECT.** `PiInit(sandbox=False)` authenticated.
+2. **The `.pinet.com` host signal works.** Skin resolved to `pi` / `PiUid`, not `$SKR`.
+
+## ⛔ DO NOT "FIX" THIS BACK TO SANDBOX ON THE STRENGTH OF THE PORTAL BADGE
+
+The Pi Developer Portal shows this app with a **`Testnet`** badge (owner screenshot, 2026-09-02,
+alongside URL `https://echoes-of-elarion.vercel.app`, slug `echos-of-elarion-r9c5`, 8/10 steps).
+
+**That badge and this capture disagree, and the CAPTURE WINS.** A mainnet init authenticated, live, in
+Pi Browser, minutes after the badge was read. The badge evidently describes the app's LISTING /
+ecosystem status, not the environment the SDK authenticates against.
+
+I was one edit from reverting `PiEnvironment.Sandbox` to `true` on the strength of that label when
+this capture landed. **Reverting it would have broken working authentication.** That is the whole
+CLAUDE.md sec.12 lesson arriving on a label instead of a stack trace: a plausible-looking source of
+truth is not evidence.
+
+`PiEnvironment.Sandbox` stays build-driven (`false` in a ship build). **WO-1321's fallback is now
+belt-and-braces, not the mechanism** — the first attempt wins, and the second never runs.
+
+## What this closes and what it does not
+
+CLOSED: Pi sign-in on the published build; the SKR-inside-Pi skin defect.
+STILL OPEN: nothing in this WO. Payments (WO-1318) and ads (WO-1320) have their own proofs to earn.

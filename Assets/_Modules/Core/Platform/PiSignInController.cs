@@ -237,20 +237,45 @@ namespace DeNelle.Core.Platform
                 // hangs with no user action). Bound every SDK await with a timeout so sign-in ALWAYS
                 // resolves to a retryable state instead of a dead screen. Proven from data: client traces
                 // flow but ZERO /api/pi/verify calls -> the flow dies at Init/Authenticate before verify.
-                bool inited;
-                try { inited = await _pi.Init(sandbox).Timeout(TimeSpan.FromSeconds(20)); }
-                catch (TimeoutException)
+                // WO-1321 (owner ruling 2026-09-02): TRY THE DECLARED ENVIRONMENT, THEN THE OTHER ONE.
+                //
+                // Why this exists. Sandbox and mainnet are DIFFERENT Pi environments and an app is
+                // registered in exactly one; initialising against the wrong one fails authentication
+                // with no message that names the cause. We had contradictory evidence about which one
+                // this app is:
+                //   - captured web_trace, 2026-09-01: three sessions did `PiInit(sandbox=True)` and
+                //     each reached "Signed in as samanthadenelle" -- a TESTNET init that AUTHENTICATED,
+                //     which is evidence the app is testnet;
+                //   - the owner, asked directly on 2026-09-02, answered MAINNET, and WO-1317 shipped
+                //     sandbox=false on that answer;
+                //   - the owner then recalled reading that the app is on testnet.
+                //
+                // Rather than keep guessing and burning a device test per guess, the flow now tries the
+                // build's declared environment and, if that round fails, RETRIES ONCE on the opposite
+                // one. Both attempts are traced with their environment, so a single real Pi Browser
+                // session answers the question for good -- and the player signs in either way.
+                //
+                // This is a DIAGNOSTIC + RESILIENCE measure, not a licence to stop knowing. Once a
+                // capture proves which environment is real, set PiEnvironment.Sandbox accordingly; the
+                // fallback then costs nothing because the first attempt always wins.
+                var attempt = await TryInitAndAuthenticate(sandbox);
+                if (!attempt.Ok)
                 {
-                    FlowTrace.Warn("Pi", "Pi.init timed out after 20s (SDK never signalled ready).");
+                    FlowTrace.Warn("Pi", $"sign-in failed on {EnvName(sandbox)} ({attempt.Reason}) - " +
+                                         $"retrying once on {EnvName(!sandbox)} (WO-1321).");
+                    attempt = await TryInitAndAuthenticate(!sandbox);
+                    if (attempt.Ok)
+                        FlowTrace.Warn("Pi", $"ENVIRONMENT MISMATCH PROVEN: sign-in succeeded on " +
+                                             $"{EnvName(!sandbox)} after failing on {EnvName(sandbox)}. " +
+                                             $"Set PiEnvironment.Sandbox to {(!sandbox).ToString().ToLowerInvariant()}.");
+                }
+                if (!attempt.Ok)
+                {
+                    FlowTrace.Warn("Pi", $"Pi sign-in failed on BOTH environments. Last: {attempt.Reason}");
                     SetButton("Sign in with Pi", true);
                     return;
                 }
-                if (!inited)
-                {
-                    FlowTrace.Warn("Pi", "Pi.init failed/unavailable.");
-                    SetButton("Sign in with Pi", true);
-                    return;
-                }
+                PiAuthResult auth = attempt.Auth;
 
                 // ⛔ WO-1318 - SIGN-IN DELIBERATELY STILL ASKS FOR `username` ONLY. Do not add
                 // `payments` here.
@@ -270,21 +295,6 @@ namespace DeNelle.Core.Platform
                 // Pi.authenticate is idempotent and additive, so the second call simply widens the
                 // grant. It also re-registers onIncompletePaymentFound (see PiBridge.jslib), which is
                 // how a stranded payment gets a second chance to settle.
-                PiAuthResult auth;
-                try { auth = await _pi.Authenticate(new[] { "username" }).Timeout(TimeSpan.FromSeconds(30)); }
-                catch (TimeoutException)
-                {
-                    FlowTrace.Warn("Pi", "Pi.authenticate timed out after 30s (consent not completed).");
-                    SetButton("Sign in with Pi", true);
-                    return;
-                }
-                if (!auth.Ok || string.IsNullOrEmpty(auth.AccessToken))
-                {
-                    FlowTrace.Warn("Pi", $"Pi auth failed: {auth.Error}");
-                    SetButton("Sign in with Pi", true);
-                    return;
-                }
-
                 bool verified = await VerifyWithBackend(auth.AccessToken);
                 if (!verified)
                 {
@@ -320,6 +330,70 @@ namespace DeNelle.Core.Platform
             {
                 _signingIn = false;
             }
+        }
+
+        // WO-1321: the outcome of ONE environment's init+authenticate round.
+        private struct SignInAttempt
+        {
+            public bool Ok;
+            public PiAuthResult Auth;
+            public string Reason;   // never null on failure - it is what the trace prints
+        }
+
+        /// <summary>ASCII-only environment label for traces (TMP renders non-ASCII as tofu).</summary>
+        private static string EnvName(bool useSandbox) => useSandbox ? "TESTNET/sandbox" : "MAINNET";
+
+        /// <summary>
+        /// One full init+authenticate round against a SPECIFIC Pi environment (WO-1321).
+        ///
+        /// Every SDK await stays bounded exactly as before (WO 2026-07-01 root cause): the Pi SDK
+        /// resolves only through a JS promise callback, so an unbounded await on a dismissed consent
+        /// popup or a stalled SDK hangs FOREVER and leaves the button dead. A timeout here is a
+        /// FAILED ATTEMPT, not a dead screen - which is also what lets the caller try the other
+        /// environment instead of giving up.
+        /// </summary>
+        private async UniTask<SignInAttempt> TryInitAndAuthenticate(bool useSandbox)
+        {
+            string env = EnvName(useSandbox);
+
+            bool inited;
+            try { inited = await _pi.Init(useSandbox).Timeout(TimeSpan.FromSeconds(20)); }
+            catch (TimeoutException)
+            {
+                return new SignInAttempt { Ok = false, Reason = $"Pi.init timed out after 20s on {env}" };
+            }
+            if (!inited)
+                return new SignInAttempt { Ok = false, Reason = $"Pi.init failed/unavailable on {env}" };
+
+            FlowTrace.Step("Pi", $"Pi.init OK on {env}.");
+
+            // ⛔ WO-1318 - SIGN-IN DELIBERATELY ASKS FOR `username` ONLY. Do not add `payments` here.
+            //
+            // The Pi payment path needs the `payments` scope, and the obvious edit is to widen this
+            // array. That edit is REFUSED, on WO-1318 acceptance criterion 6: every existing player
+            // granted this app `username` alone. Widening the scope on the SIGN-IN path re-prompts
+            // each of them at the one moment they have no context for it (app launch, before they
+            // asked to buy anything) and turns a dismissed or failed consent into a FAILED SIGN-IN -
+            // i.e. the whole game becomes unreachable for an existing player because of a purchase
+            // feature they never touched.
+            //
+            // Instead `payments` is requested LAZILY, immediately before Pi.createPayment, by
+            // PiBrowserPaymentProvider.EnsurePaymentsScope(). A player who never buys is never asked;
+            // a player who does buy is asked when the request makes sense; and a refusal there costs a
+            // purchase, never a session. Pi.authenticate is idempotent and additive, so the second
+            // call simply widens the grant. It also re-registers onIncompletePaymentFound (see
+            // PiBridge.jslib), which is how a stranded payment gets a second chance to settle.
+            PiAuthResult auth;
+            try { auth = await _pi.Authenticate(new[] { "username" }).Timeout(TimeSpan.FromSeconds(30)); }
+            catch (TimeoutException)
+            {
+                return new SignInAttempt { Ok = false, Reason = $"Pi.authenticate timed out after 30s on {env} (consent not completed)" };
+            }
+            if (!auth.Ok || string.IsNullOrEmpty(auth.AccessToken))
+                return new SignInAttempt { Ok = false, Reason = $"Pi auth failed on {env}: {auth.Error}" };
+
+            FlowTrace.Step("Pi", $"Pi.authenticate OK on {env}.");
+            return new SignInAttempt { Ok = true, Auth = auth, Reason = null };
         }
 
         // Server-side token validation is the trust boundary — never trust the frontend identity.

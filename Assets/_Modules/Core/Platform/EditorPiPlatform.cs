@@ -39,10 +39,33 @@ namespace DeNelle.Core.Platform
             return UniTask.FromResult(PiPaymentResult.Fail(paymentId, "Pi unavailable (not in Pi Browser)"));
         }
 
-        public UniTask<bool> ShowAd(string adType)
+        // WO-1320 — the ad seam. Off Pi Browser there is no ad network, so every answer here is
+        // the honest "no": no result string, no adId, no features. The provider refuses to
+        // register on any of them, so a stub answer can never reach a grant.
+        public UniTask<PiAdResult> ShowAd(string adType)
         {
-            FlowTrace.Step("Pi", "ShowAd called off Pi Browser — no-op (stub).");
+            FlowTrace.Step("PiAds", "ShowAd called off Pi Browser - no ad, no adId, no grant (stub).");
+            return UniTask.FromResult(PiAdResult.Fail("Pi unavailable (not in Pi Browser)"));
+        }
+
+        public UniTask<bool> IsAdReady(string adType)
+        {
+            FlowTrace.Step("PiAds", "IsAdReady called off Pi Browser - false (stub).");
             return UniTask.FromResult(false);
+        }
+
+        public UniTask<PiAdResult> RequestAd(string adType)
+        {
+            FlowTrace.Step("PiAds", "RequestAd called off Pi Browser - no-op (stub).");
+            return UniTask.FromResult(PiAdResult.Fail("Pi unavailable (not in Pi Browser)"));
+        }
+
+        public UniTask<string[]> NativeFeatures()
+        {
+            // EMPTY, never null: callers test for "ad_network" membership, and a null here would
+            // turn a clean "feature absent" into a NullReferenceException on the gating path.
+            FlowTrace.Step("PiAds", "NativeFeatures called off Pi Browser - empty list (stub).");
+            return UniTask.FromResult(Array.Empty<string>());
         }
     }
 }

@@ -2,11 +2,16 @@
 // Spec: PI_INTEGRATION_SPEC.md §2. The Pi SDK (window.Pi) is page-level JS injected by
 // pi-sdk.js in the WebGL template's index.html; it exists ONLY inside Pi Browser.
 //
-// C# → JS via [DllImport("__Internal")]:  PiInit, PiAuthenticate, PiCreatePayment, PiShowAd, PiIsAvailable.
+// C# → JS via [DllImport("__Internal")]:  PiInit, PiAuthenticate, PiCreatePayment, PiIsAvailable,
+//   PiIsPiBrowser, and the WO-1320 ad set: PiShowAd, PiIsAdReady, PiRequestAd, PiNativeFeatures.
 // JS → C# via SendMessage("PiBridge","OnPiCallback", <json>):
-//   { "type": "ready"|"auth"|"approvalReady"|"completionReady"|"adReady"|"error"|"cancelled"
-//           |"incompletePaymentFound",
+//   { "type": "ready"|"auth"|"approvalReady"|"completionReady"|"error"|"cancelled"
+//           |"incompletePaymentFound"|"adShown"|"adReadyCheck"|"adRequested"|"nativeFeatures",
 //     "paymentId": "<id-or-empty>", "data": { ... } }
+//
+// ⚠ EVERY VALUE INSIDE `data` MUST BE A FLAT string / bool / number. UnityEngine.JsonUtility
+// cannot deserialise a nested dynamic object and drops it WITHOUT ERROR — that is exactly how
+// the ad result and adId went missing for the whole life of the ad path (WO-1320).
 // A persistent GameObject named "PiBridge" (DontDestroyOnLoad) receives OnPiCallback.
 
 var PiBridgeLib = {
@@ -19,6 +24,54 @@ var PiBridgeLib = {
       } catch (e) {
         // Unity instance not ready yet — swallow; the C# side times out gracefully.
         console.warn('[PiBridge] SendMessage failed: ' + e);
+      }
+    },
+
+    // WO-1320 — SETTLE-ONCE + A LOCAL TIMEOUT, for every ad call.
+    //
+    // WHY THIS EXISTS. WO-678 recorded that OUTSIDE Pi Browser the SDK's host channel never
+    // answers and the promise sits unrejected for ~120s before the SDK gives up. PiShowAd had
+    // NO timeout at all, so a C# caller awaiting it simply never resumed — a rewarded button
+    // that hangs forever rather than degrading to "no ads right now". Every ad entry point
+    // below therefore takes a guard: whichever arrives first (resolve, reject, or the timer)
+    // wins, and the later ones are dropped rather than sending a second, contradictory
+    // callback into a TCS that has already settled.
+    //
+    // A timeout reports itself as a plain `error` with a `where` of '<call>-timeout'. It does
+    // NOT invent an ad result string: the confirmed SDK vocabulary is AD_LOADED / AD_REWARDED /
+    // AD_CLOSED / ADS_NOT_SUPPORTED and nothing local may masquerade as one of them.
+    guard: function (where, timeoutMs) {
+      var state = { done: false, timer: null };
+      state.finish = function (obj) {
+        if (state.done) return;
+        state.done = true;
+        if (state.timer !== null) {
+          try { clearTimeout(state.timer); } catch (e) { }
+          state.timer = null;
+        }
+        PiBridgeState.send(obj);
+      };
+      var ms = (typeof timeoutMs === 'number' && timeoutMs > 0) ? timeoutMs : 30000;
+      state.timer = setTimeout(function () {
+        state.finish({
+          type: 'error', paymentId: '',
+          data: {
+            where: where + '-timeout',
+            message: 'local timeout after ' + ms + 'ms - the Pi SDK never settled ' + where
+          }
+        });
+      }, ms);
+      return state;
+    },
+
+    // The Pi Ads namespace, or null. Checked per call rather than once at load: pi-sdk.js is
+    // injected asynchronously by the template, so an early probe proves nothing about a later one.
+    ads: function () {
+      try {
+        if (typeof window === 'undefined' || typeof window.Pi === 'undefined') return null;
+        return window.Pi.Ads || null;
+      } catch (e) {
+        return null;
       }
     }
   },
@@ -189,21 +242,140 @@ var PiBridgeLib = {
     }
   },
 
-  // Pi.Ads.showAd("rewarded" | "interstitial").
-  PiShowAd: function (adTypePtr) {
+  // Pi.Ads.showAd("rewarded" | "interstitial") -> { result, adId? }.
+  //
+  // ⛔ WO-1320 — THE PAYLOAD IS FLATTENED, AND THAT IS THE WHOLE FIX.
+  // This used to send `data: { adType, result: result }`, i.e. the SDK's RESULT OBJECT nested
+  // inside `data`. UnityEngine.JsonUtility cannot deserialise a dynamic/unknown object, and
+  // WebGLPiPlatform.PiCallbackData declared neither `result` nor `adId`, so BOTH were dropped
+  // in silence — after which the C# side did `_adTcs.TrySetResult(true)` unconditionally and
+  // every outcome, AD_CLOSED and ADS_NOT_SUPPORTED included, read as "rewarded". Nothing has
+  // ever called ShowAd, which is the only reason that never paid out a free reward.
+  //
+  // So the result string and the adId travel as FLAT STRING FIELDS that JsonUtility can
+  // actually see, and the C# side decides the outcome from `adResult` rather than from the
+  // mere arrival of a callback.
+  //
+  // `adId` is documented as present on REWARDED ads only, and it is the token the backend
+  // verifies at /api/pi/ads-verify. '' means "not rewarded, or the SDK told us nothing" — the
+  // grant path treats an empty adId as ungrantable.
+  PiShowAd: function (adTypePtr, timeoutMs) {
+    var g = null;
     try {
       var adType = UTF8ToString(adTypePtr) || 'rewarded';
-      if (typeof window === 'undefined' || typeof window.Pi === 'undefined' || !window.Pi.Ads) {
-        PiBridgeState.send({ type: 'error', paymentId: '', data: { where: 'showAd', message: 'Pi.Ads unavailable' } });
+      g = PiBridgeState.guard('showAd', timeoutMs);
+      var ads = PiBridgeState.ads();
+      if (!ads || typeof ads.showAd !== 'function') {
+        g.finish({ type: 'error', paymentId: '', data: { where: 'showAd', message: 'Pi.Ads unavailable' } });
         return;
       }
-      window.Pi.Ads.showAd(adType).then(function (result) {
-        PiBridgeState.send({ type: 'adReady', paymentId: '', data: { adType: adType, result: result } });
+      Promise.resolve(ads.showAd(adType)).then(function (r) {
+        r = r || {};
+        g.finish({
+          type: 'adShown', paymentId: '',
+          data: {
+            adType: adType,
+            adResult: (typeof r.result === 'string') ? r.result : '',
+            adId: (typeof r.adId === 'string') ? r.adId : ''
+          }
+        });
       }).catch(function (err) {
-        PiBridgeState.send({ type: 'error', paymentId: '', data: { where: 'showAd', message: '' + err } });
+        g.finish({ type: 'error', paymentId: '', data: { where: 'showAd', message: '' + err } });
       });
     } catch (e) {
-      PiBridgeState.send({ type: 'error', paymentId: '', data: { where: 'showAd', message: '' + e } });
+      var payload = { type: 'error', paymentId: '', data: { where: 'showAd', message: '' + e } };
+      if (g) { g.finish(payload); } else { PiBridgeState.send(payload); }
+    }
+  },
+
+  // Pi.Ads.isAdReady(type) -> { ready: boolean }.
+  // IAdService.IsRewardedReady is a SYNCHRONOUS property, and no synchronous answer exists on
+  // this side of a promise — so the provider polls this and caches the last answer.
+  PiIsAdReady: function (adTypePtr, timeoutMs) {
+    var g = null;
+    try {
+      var adType = UTF8ToString(adTypePtr) || 'rewarded';
+      g = PiBridgeState.guard('isAdReady', timeoutMs);
+      var ads = PiBridgeState.ads();
+      if (!ads || typeof ads.isAdReady !== 'function') {
+        g.finish({ type: 'error', paymentId: '', data: { where: 'isAdReady', message: 'Pi.Ads.isAdReady unavailable' } });
+        return;
+      }
+      Promise.resolve(ads.isAdReady(adType)).then(function (r) {
+        r = r || {};
+        g.finish({ type: 'adReadyCheck', paymentId: '', data: { adType: adType, adReady: !!r.ready } });
+      }).catch(function (err) {
+        g.finish({ type: 'error', paymentId: '', data: { where: 'isAdReady', message: '' + err } });
+      });
+    } catch (e) {
+      var payload = { type: 'error', paymentId: '', data: { where: 'isAdReady', message: '' + e } };
+      if (g) { g.finish(payload); } else { PiBridgeState.send(payload); }
+    }
+  },
+
+  // Pi.Ads.requestAd(type) -> { result: "AD_LOADED" | "ADS_NOT_SUPPORTED" | ... }.
+  // The documented ADVANCED path. Pi Browser preloads internally, so this is an optimisation
+  // rather than a precondition for showAd.
+  PiRequestAd: function (adTypePtr, timeoutMs) {
+    var g = null;
+    try {
+      var adType = UTF8ToString(adTypePtr) || 'rewarded';
+      g = PiBridgeState.guard('requestAd', timeoutMs);
+      var ads = PiBridgeState.ads();
+      if (!ads || typeof ads.requestAd !== 'function') {
+        g.finish({ type: 'error', paymentId: '', data: { where: 'requestAd', message: 'Pi.Ads.requestAd unavailable' } });
+        return;
+      }
+      Promise.resolve(ads.requestAd(adType)).then(function (r) {
+        r = r || {};
+        g.finish({
+          type: 'adRequested', paymentId: '',
+          data: {
+            adType: adType,
+            adResult: (typeof r.result === 'string') ? r.result : '',
+            adId: (typeof r.adId === 'string') ? r.adId : ''
+          }
+        });
+      }).catch(function (err) {
+        g.finish({ type: 'error', paymentId: '', data: { where: 'requestAd', message: '' + err } });
+      });
+    } catch (e) {
+      var payload = { type: 'error', paymentId: '', data: { where: 'requestAd', message: '' + e } };
+      if (g) { g.finish(payload); } else { PiBridgeState.send(payload); }
+    }
+  },
+
+  // Pi.nativeFeatures() -> string[]. "ad_network" in the list is the documented feature check
+  // for the Pi Ad Network. Marshalled as a COMMA-SEPARATED STRING, not an array: JsonUtility's
+  // nested-array support is the same fragile ground that lost `result` above, and a CSV cannot
+  // be silently dropped.
+  PiNativeFeatures: function (timeoutMs) {
+    var g = null;
+    try {
+      g = PiBridgeState.guard('nativeFeatures', timeoutMs);
+      if (typeof window === 'undefined' || typeof window.Pi === 'undefined' ||
+          typeof window.Pi.nativeFeaturesList !== 'function') {
+        g.finish({ type: 'error', paymentId: '', data: { where: 'nativeFeatures', message: 'Pi.nativeFeaturesList unavailable' } });
+        return;
+      }
+      Promise.resolve(window.Pi.nativeFeaturesList()).then(function (list) {
+        var csv = '';
+        try {
+          if (list && list.length) {
+            var parts = [];
+            for (var i = 0; i < list.length; i++) {
+              if (typeof list[i] === 'string') parts.push(list[i]);
+            }
+            csv = parts.join(',');
+          }
+        } catch (e2) { csv = ''; }
+        g.finish({ type: 'nativeFeatures', paymentId: '', data: { featuresCsv: csv } });
+      }).catch(function (err) {
+        g.finish({ type: 'error', paymentId: '', data: { where: 'nativeFeatures', message: '' + err } });
+      });
+    } catch (e) {
+      var payload = { type: 'error', paymentId: '', data: { where: 'nativeFeatures', message: '' + e } };
+      if (g) { g.finish(payload); } else { PiBridgeState.send(payload); }
     }
   }
 };
