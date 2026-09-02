@@ -17,7 +17,26 @@ namespace DeNelle.Core.HUD
         void SetResources(int wood, int iron, int food, int gems);
         void SetAttackDirections(bool north, bool east, bool south, bool west);
         void SetWaveImminent(bool imminent);
+        /// <summary>
+        /// ⚠ WO-1309 — DELIBERATELY CALLER-LESS AS OF 2026-09-02. NOT DEAD BY ACCIDENT.
+        ///
+        /// The wave-clear announcement is the END-STATE MODAL (WaveCelebrationManager ->
+        /// EndStateView.Show(EndStateVM.FromWaveClear)), which carries the spoils rows, the
+        /// damage rows and the Repair CTA. This push seam raised a SECOND, thinner
+        /// announcement of the same WaveManager.OnWaveCleared event, and its one caller
+        /// (WaveFeedbackDirector.OnWaveCleared) was passing the player's CRYSTAL BALANCE as
+        /// `enemiesDefeated` — the owner's felt-test screenshot read "400 foes defeated" over
+        /// her 400 crystals. That caller is cut; see the block comment there.
+        ///
+        /// The member is KEPT rather than removed because it is a published contract on a
+        /// Core interface and removing it is a wider architectural change than this ticket
+        /// was scoped for (owner not consulted). Nothing calls it today. Before wiring
+        /// anything new to it, settle the duplicate-announcement question first, and NEVER
+        /// pass a wallet balance into `enemiesDefeated`.
+        /// </summary>
         void ShowWaveClearBanner(int waveNumber, int enemiesDefeated, string flavourLine);
+
+        /// <summary>Paired dismiss for <see cref="ShowWaveClearBanner"/>; likewise caller-less (WO-1309).</summary>
         void HideWaveClearBanner();
         void ShowRepairPrompt(string wallLabel, float damagePercent);
 

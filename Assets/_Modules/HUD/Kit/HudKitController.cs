@@ -453,7 +453,16 @@ namespace DeNelle.HUD.Kit
                       message ?? "");
         }
 
-        /// <summary>Wave-clear push adapter — routes the old no-op banner through the shared toast.</summary>
+        /// <summary>
+        /// Wave-clear push adapter — routes the old no-op banner through the shared toast.
+        /// ⚠ WO-1309: REACHABLE ONLY FROM VillageHudController.ShowWaveClearBanner, which is
+        /// itself caller-less on purpose — the wave-clear announcement is the end-state modal.
+        /// The `enemiesDefeated` sentence below is what rendered the owner's crystal balance as
+        /// "400 foes defeated"; the lie was at the CALL SITE, not here, and that call site is
+        /// cut (WaveFeedbackDirector.OnWaveCleared). Left intact, not deleted, so the seam is
+        /// available if a real per-wave kill count is ever authored — sourced from
+        /// WaveManager's payout record, never from a wallet.
+        /// </summary>
         public void ShowWaveClearToast(int waveNumber, int enemiesDefeated, string flavourLine)
         {
             string line = "Wave " + waveNumber + " cleared! " +

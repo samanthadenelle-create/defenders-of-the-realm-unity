@@ -177,7 +177,13 @@ namespace DeNelle.HUD
             if (_kit != null) _kit.HideRepairPrompt();
         }
 
-        /// <summary>Wave-clear banner push — shared toast (kills the old :2670 no-op).</summary>
+        /// <summary>
+        /// Wave-clear banner push — shared toast (kills the old :2670 no-op).
+        /// ⚠ WO-1309: CALLER-LESS ON PURPOSE. This is only a RELAY; the origin
+        /// (WaveFeedbackDirector.OnWaveCleared) was cut because it duplicated the end-state
+        /// modal AND fed the player's crystal balance in as `enemiesDefeated`. Kept as a
+        /// forwarder so the IVillageHud contract still compiles — see the interface comment.
+        /// </summary>
         public void ShowWaveClearBanner(int waveNumber, int enemiesDefeated, string flavourLine)
         {
             if (_kit != null) _kit.ShowWaveClearToast(waveNumber, enemiesDefeated, flavourLine);

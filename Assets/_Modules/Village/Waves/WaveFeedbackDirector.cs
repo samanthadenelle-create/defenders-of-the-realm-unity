@@ -118,12 +118,32 @@ namespace DeNelle.Village
         private void OnWaveCleared(int waveId)
         {
             AbilityAudioBridge.PlayMusic("Victory");
-            // WO-38: show the player's current crystal balance on the banner so the
-            // "+N diamond" line actually renders (was hard-coded to 0). The wave reward is
-            // credited by the wave/reward path before this fires, so the balance is
-            // the freshest number we have without a per-wave reward field.
-            int crystals = CurrentCrystals();
-            CoreServices.Hud?.ShowWaveClearBanner(waveId, crystals, string.Empty);
+            // ⛔ WO-1309 — THE WAVE-CLEAR TOAST LEG IS CUT HERE, AND ON PURPOSE.
+            //
+            // TWO defects lived on this one line, both proven at source:
+            //
+            // 1. THE NUMBER WAS A LIE. The old call passed CurrentCrystals() — the player's
+            //    CRYSTAL WALLET BALANCE — into the `enemiesDefeated` parameter, which
+            //    HudKitController.ShowWaveClearToast formats verbatim as "N foes defeated".
+            //    The owner's felt-test screenshot read "400 foes defeated"; that 400 was her
+            //    crystal balance. The stale WO-38 comment that used to sit here admitted the
+            //    value was only ever filling a "+N diamond" line on a banner that has since
+            //    been deleted (VillageHudController's banner became a no-op in WO-563), so the
+            //    number was re-purposed into a sentence it was never true for.
+            //
+            // 2. IT WAS THE SECOND ANNOUNCEMENT OF THE SAME EVENT. WaveManager.OnWaveCleared
+            //    has TWO uncoordinated listeners: WaveCelebrationManager (-> EndStateView.Show
+            //    (EndStateVM.FromWaveClear), the RICH surface: spoils rows, damage rows, Repair
+            //    CTA) and this director (-> the toast). The modal is the announcement and it
+            //    survives; this leg is the duplicate and it goes. Cutting here, at the ORIGIN,
+            //    rather than at the VillageHudController relay, is deliberate — the relay is
+            //    just a forwarder and cutting it would leave a live call chain behind it.
+            //
+            // ⛔ Do NOT "restore" this as a toast in the arena-suppressed case: the arena
+            //    victory summary IS the announcement there, and that collision is exactly what
+            //    WaveCelebrationManager's suppression branch exists to prevent.
+            //
+            // The music sting + heart pulse below stay — they are FEEL, not a second sentence.
             PulseHeart();
 
             // ── Per-wave soft-currency income (tunables in one place) ────────────
@@ -161,14 +181,13 @@ namespace DeNelle.Village
 
         private void ReturnToVillageMusic() => AbilityAudioBridge.PlayMusic("Village");
 
-        // WO-38: the player's current crystal balance for the wave-clear banner.
-        private static int CurrentCrystals()
-        {
-            var svc = GameStateService.Instance;
-            if (svc != null && svc.State != null)
-                return Mathf.Max(0, svc.State.Resources.Crystals);
-            return 0;
-        }
+        // WO-1309: the old `CurrentCrystals()` helper lived here and fed the crystal WALLET
+        // BALANCE into the wave-clear toast's `enemiesDefeated` slot ("400 foes defeated" was
+        // the owner's crystal count). Its only caller was that one line in OnWaveCleared, which
+        // is now cut, so the helper is deleted rather than left warm for someone to re-wire the
+        // same lie. The wave's REAL payout numbers already have an owner —
+        // WaveManager's s_lastPayout record, read by EndStateVM.FromWaveClear for the modal.
+        // If a per-wave kill count is ever wanted on screen, source it there, not from a wallet.
 
         private void PulseHeart()
         {
