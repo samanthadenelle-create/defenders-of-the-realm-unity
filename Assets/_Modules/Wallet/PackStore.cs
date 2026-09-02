@@ -382,6 +382,12 @@ namespace DeNelle.Wallet
 
             AdoptLiveWalletIfBetter("open");
 
+            // WO-1323 OWNER RULING (2026-09-02) - point the EXISTING focus latch at the one
+            // Pi-priced pack BEFORE the first Render, because Render is where the latch is consumed
+            // (ResolveFocusSku). Latched per OPEN, never per Render: a repaint driven by a returning
+            // quote must not yank the spotlight back off a card the player just tapped.
+            LatchPiSpotlightOnOpen();
+
             Render();
             RefreshWalletMirror().Forget();
             RefreshQuotedPrices().Forget();
@@ -1153,6 +1159,21 @@ namespace DeNelle.Wallet
                 return;
             }
 
+            // ⛔ WO-1323 OWNER RULING — THE SPOTLIGHT COUNTS AS REACHABLE, SO THE NOTICE MUST STAND
+            // DOWN. Saying "nothing here can be bought with Pi" beside a live Buy control in the
+            // spotlight column would be the store contradicting itself on the same screen, which is
+            // worse than either state alone. The two answers come from ONE method
+            // (ResolvePiSpotlightPack) so they cannot drift apart: the same object that earns the
+            // spotlight is the object that silences this notice.
+            var spotlight = ResolvePiSpotlightPack();
+            if (spotlight != null)
+            {
+                FlowTrace.Step("Store",
+                    $"Pi shelf: nothing on the browsable shelf is on the Pi rail, but the spotlight carries " +
+                    $"'{spotlight.Sku}' and it IS buyable - the empty-shelf notice is suppressed (WO-1323 ruling).");
+                return;
+            }
+
             FlowTrace.Warn("Store",
                 "Pi shelf: NOTHING on the browsable shelf can be bought with Pi (the Pi rail sells only " +
                 $"'{PiEnabledSkuHint}', which is storeVisible:false by WO-1069, or no Pi rail is registered " +
@@ -1167,12 +1188,119 @@ namespace DeNelle.Wallet
         }
 
         /// <summary>
-        /// Names the one Pi-enabled sku in the trace above WITHOUT reaching into the Pi provider
-        /// assembly (DeNelle.Wallet does not reference it, and must not grow a reference for a log
-        /// line). It is a diagnostic hint, never a decision — every actual gate answer comes from
-        /// <see cref="IPaymentProvider.CanBuy"/>.
+        /// Names the one Pi-enabled sku WITHOUT reaching into the Pi provider assembly
+        /// (DeNelle.Wallet does not reference it, and must not grow a reference for a log line).
+        ///
+        /// <para>⚠ WO-1323 OWNER RULING — IT IS NOW ALSO THE SPOTLIGHT CANDIDATE, AND THAT IS STILL
+        /// NOT A DECISION. This constant only says WHICH sku to ASK about; whether it may be sold is
+        /// answered, every time, by <see cref="IPaymentProvider.CanBuy"/> plus
+        /// <see cref="PurchaseGate.CanBuy(PackDef, out string)"/> in
+        /// <see cref="ResolvePiSpotlightPack"/>. There is deliberately ONE copy of the string in this
+        /// file: a second one (a "spotlight sku" beside a "hint sku") is the duplicated state that
+        /// drifts the day the rail widens.</para>
         /// </summary>
         private const string PiEnabledSkuHint = "hearth-spark";
+
+        // =====================================================================
+        //  WO-1323 OWNER RULING (2026-09-02) — THE PI SPOTLIGHT
+        // ---------------------------------------------------------------------
+        //  THE PROBLEM IT SOLVES, in the owner's words: a Pi player currently sees
+        //  every pack priced in USD with NO BUY CONTROL ANYWHERE, because the only
+        //  Pi-quotable sku (hearth-spark) carries storeVisible:false from WO-1069.
+        //
+        //  ⛔ THE FIX IS THE SPOTLIGHT, NOT THE SHELF FLAG. Flipping storeVisible
+        //     would reverse a PRICING ruling (hearth-spark is strictly dominated by
+        //     starters-hand at the same $4.99) with a DISPLAY change — the shortcut
+        //     BuildPiShelfNoticeIfNothingIsBuyable already refuses in writing. The
+        //     pack is SPOTLIGHTED, not shelved: it never joins a band, never appears
+        //     in PacksInBand, never enters BuildLedgerScale, and the browsable shelf
+        //     is byte-for-byte the shelf it was.
+        //
+        //  ⛔ AND IT REUSES THE EXISTING LATCH (DeNelle.Commerce.StoreFocusRequest),
+        //     which already honours ANY sku in the catalogue — ResolveFocusSku asks
+        //     PackCatalog.Find, never PackCatalog.IsOnBrowsableShelf — so "spotlight
+        //     something that is off the browsable shelf" is a capability the latch
+        //     already had. No second focus mechanism was invented for this.
+        //
+        //  ⚠ KNOWN, ACCEPTED LIMIT: the latch is consumed once per store OPEN. If the
+        //    player taps a shelf card the spotlight moves off the Pi pack and comes
+        //    back on the next open. That is the latch's designed lifetime; a re-latch
+        //    on every Render would fight the player for the spotlight every time a
+        //    quote returned.
+        // =====================================================================
+
+        /// <summary>
+        /// The one pack the Pi spotlight may open on, or <c>null</c>. Asked by BOTH the open-time
+        /// latch and the empty-shelf notice, so the two can never disagree about whether a Pi player
+        /// has something to buy.
+        ///
+        /// <para>⛔ IT ASKS THE REAL GATES, NOT A FLAG. <see cref="PiCanSell"/> is the rail's own
+        /// answer (a registered Pi provider that will sell THIS sku right now) and
+        /// <see cref="PurchaseGate.CanBuy(PackDef, out string)"/> is the build-wide + wallet-ceiling
+        /// answer — the SAME two questions <see cref="BuildSpotlightCta"/> asks before it builds a Buy
+        /// control. If either refuses there is no purchase to reach, so there is nothing to spotlight
+        /// and nothing to silence the honest empty-shelf notice with.</para>
+        ///
+        /// <para>⛔ AND IT RETURNS NULL FOR ANYTHING ALREADY ON THE SHELF. The spotlight exists to
+        /// reach a pack the shelf cannot show; a Pi-sellable sku that IS browsable needs no rescue and
+        /// the ordinary buyable-count above already covers it. This is why widening the Pi rail later
+        /// requires no edit here.</para>
+        /// </summary>
+        private static PackDef ResolvePiSpotlightPack()
+        {
+            if (!PiDisplay) return null;
+
+            var pack = PackCatalog.Find(PiEnabledSkuHint);
+            if (pack == null) return null;
+
+            // Already reachable through a band - the shelf, not the spotlight, is its home.
+            if (PackCatalog.IsOnBrowsableShelf(pack)) return null;
+
+            if (!PiCanSell(pack)) return null;
+            if (!PurchaseGate.CanBuy(pack, out _)) return null;
+
+            return pack;
+        }
+
+        /// <summary>
+        /// WO-1323 owner ruling — on store OPEN, point <see cref="StoreFocusRequest"/> at the one
+        /// Pi-priced pack so a Pi player can actually reach a purchase.
+        ///
+        /// <para>⛔ IT NEVER OVERWRITES A CALLER'S REQUEST. A latch already carrying a sku (the
+        /// Manage "Buy builder" route, WO-1253) or a pending shortfall remedy is a deliberate act by
+        /// someone who knows what the player just asked for; this is a DEFAULT, and a default that
+        /// beats an explicit request is a bug. Both cases return, loudly.</para>
+        ///
+        /// <para>No-op on every non-Pi surface: <see cref="ResolvePiSpotlightPack"/> returns null the
+        /// moment <see cref="PiDisplay"/> is false, which is why the SKR skin's open is unchanged.</para>
+        /// </summary>
+        private void LatchPiSpotlightOnOpen()
+        {
+            var pack = ResolvePiSpotlightPack();
+            if (pack == null) return;
+
+            if (StoreFocusRequest.HasPending)
+            {
+                FlowTrace.Step("Store",
+                    "Pi spotlight: a caller already latched a focus SKU for this open - theirs wins, " +
+                    "the Pi default stands down (WO-1323).");
+                return;
+            }
+
+            if (!string.IsNullOrEmpty(_pendingShortfallLabel) && _pendingShortfallMissing > 0)
+            {
+                FlowTrace.Step("Store",
+                    $"Pi spotlight: a shortfall offer owns this open ({_pendingShortfallMissing} " +
+                    $"{_pendingShortfallLabel} short) - the remedy wins, the Pi default stands down.");
+                return;
+            }
+
+            StoreFocusRequest.RequestFocusSku(pack.Sku);
+            FlowTrace.Step("Store",
+                $"Pi spotlight: latched '{pack.Sku}' - the ONE Pi-priced pack, reached through the " +
+                "existing focus latch. storeVisible stays FALSE (WO-1069 pricing ruling is untouched); " +
+                "the pack is spotlighted, not shelved.");
+        }
 
         /// <summary>
         /// The browsable rows of one band, in catalogue order.
@@ -2460,6 +2588,16 @@ namespace DeNelle.Wallet
                 if (pack == null || !PackCatalog.IsOnBrowsableShelf(pack)) continue;
                 skus.Add(pack.Sku);
             }
+
+            // ⛔ WO-1323 OWNER RULING — THE SPOTLIGHT SKU IS ASKED FOR TOO, AND WITHOUT THIS LINE THE
+            // WHOLE FEATURE IS SILENT. This walk is the browsable shelf, and the one Pi-quotable sku
+            // is deliberately NOT on it (storeVisible:false, WO-1069) - so before this line the
+            // server was never asked for the only figure it can actually give, and the spotlight
+            // would have shown "Priced in Pi at checkout" forever while /api/pi/quote sat live and
+            // answering. The provider still filters to its own EnabledSku, so this adds at most one
+            // request and can never widen the rail from the client.
+            var spotlight = ResolvePiSpotlightPack();
+            if (spotlight != null && !skus.Contains(spotlight.Sku)) skus.Add(spotlight.Sku);
 
             FlowTrace.Step("Store", $"Pi display prices: asking the server for up to {skus.Count} shelf sku(s).");
             refresher.RefreshDisplayPrices(skus, changed =>

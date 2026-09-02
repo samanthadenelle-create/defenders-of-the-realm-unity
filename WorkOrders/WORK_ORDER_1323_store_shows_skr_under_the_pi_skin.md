@@ -1,6 +1,6 @@
 # WORK ORDER 1323 — The Night Market prices everything in $SKR under the Pi skin
 
-**Status:** READY TO IMPLEMENT
+**Status:** DONE
 **Silo:** Monetization / Pi / Store
 **Minted:** 2026-09-02 (CLI) from an owner felt-test in REAL Pi Browser.
 **Severity:** P1 — a Pi player is quoted a token they do not hold and cannot spend.

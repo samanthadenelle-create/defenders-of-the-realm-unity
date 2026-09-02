@@ -33,6 +33,14 @@
 //      only Pi-quotable sku and it is storeVisible:false by WO-1069; this suite pins
 //      that flag DOWN, so nobody can resolve an empty Pi shelf by reversing a pricing
 //      ruling with a display change.
+//   E. THE SPOTLIGHT REACHES IT ANYWAY (owner ruling 2026-09-02, section 6 below).
+//      Asked directly, she chose to surface the ONE Pi-priced pack through the EXISTING
+//      StoreFocusRequest latch rather than widen Pi pricing - proving quote -> approve ->
+//      complete -> grant on one sku beats a full shelf where one rail bug hits all 28.
+//      So this suite now pins BOTH halves at once, and they are the halves that pull in
+//      opposite directions: the pack is REACHABLE (a latch, the real gates, a Pi price
+//      requested, the empty-shelf notice stood down) and STILL NOT SHELVED (storeVisible
+//      present and false, in both canonical copies, one sku literal in the store).
 //
 // Marker: STORE_PI_SKIN_OK / STORE_PI_SKIN_FAIL (unique repo-wide).
 // =============================================================================
@@ -285,7 +293,17 @@ namespace DeNelle.Editor.Regression
                         {
                             sawHearthSpark = true;
                             var visible = pack["storeVisible"];
-                            if (visible != null && (bool)visible)
+                            // ⛔ PRESENT **AND** FALSE. The old assertion passed when the field was
+                            // ABSENT, and absence is not the ruling - PackDef's own default decides
+                            // what a missing flag means, so a row that quietly lost the field would
+                            // have read as green here while the pack walked onto the shelf. WO-1323's
+                            // spotlight makes this pack reachable WITHOUT the flag, so the flag has
+                            // to be pinned harder, not softer.
+                            if (visible == null)
+                                fail.Add("hearth-spark has NO storeVisible field in " +
+                                         Path.GetFileName(packsPath) + " - WO-1069 shelved it explicitly, " +
+                                         "and the WO-1323 spotlight is built on that flag staying FALSE");
+                            else if ((bool)visible)
                                 fail.Add("hearth-spark storeVisible was flipped TRUE - WO-1069 shelved it as " +
                                          "dominated by starters-hand, and an empty Pi shelf must not be " +
                                          "resolved by reversing a pricing ruling");
@@ -299,7 +317,115 @@ namespace DeNelle.Editor.Regression
                     checks += 2;
                 }
 
-                if (checks < 30)
+                // =============================================================
+                //  6. THE PI SPOTLIGHT (owner ruling 2026-09-02)
+                // -------------------------------------------------------------
+                //  She was shown that a Pi player sees 28 packs priced in USD with NO BUY
+                //  CONTROL ANYWHERE, and chose: surface the ONE Pi-priced pack through the
+                //  EXISTING StoreFocusRequest latch, WITHOUT touching storeVisible. Proving
+                //  quote -> approve -> complete -> grant on one sku is worth more than a full
+                //  shelf where one rail bug hits all 28. This section pins that shape.
+                // =============================================================
+
+                // (a) ONE SKU, ONE COPY OF ITS NAME. A second literal is the duplicated state that
+                // drifts the day the rail widens - and it is also how a "spotlight everything"
+                // regression would enter without anyone noticing.
+                checks++;
+                if (CountOf(store, "\"hearth-spark\"") != 1)
+                    fail.Add("PackStore.cs holds " + CountOf(store, "\"hearth-spark\"") + " copies of the " +
+                             "\"hearth-spark\" literal - there must be exactly ONE (PiEnabledSkuHint). A second " +
+                             "copy is a second opinion about which sku the Pi rail sells");
+
+                Require(store, "private static PackDef ResolvePiSpotlightPack()",
+                    "the single oracle that decides the Pi spotlight is gone or renamed - the latch and the " +
+                    "empty-shelf notice would then answer 'can a Pi player buy anything' separately",
+                    fail, ref checks);
+                Require(store, "var pack = PackCatalog.Find(PiEnabledSkuHint);",
+                    "the spotlight no longer resolves its pack from the one Pi sku constant", fail, ref checks);
+
+                // (b) THE SPOTLIGHT IS EARNED BY THE REAL GATES, not by a display flag. These are the
+                // SAME two questions BuildSpotlightCta asks before it builds a Buy control, so a
+                // spotlighted pack is always a genuinely buyable one.
+                RequireOrdered(store,
+                    "private static PackDef ResolvePiSpotlightPack()",
+                    "if (!PiCanSell(pack)) return null;",
+                    "return pack;",
+                    "the Pi spotlight no longer asks the RAIL whether it will sell this sku", fail, ref checks);
+                RequireOrdered(store,
+                    "private static PackDef ResolvePiSpotlightPack()",
+                    "if (!PurchaseGate.CanBuy(pack, out _)) return null;",
+                    "return pack;",
+                    "the Pi spotlight no longer asks PurchaseGate - it could spotlight a pack the gate " +
+                    "(kill switch, feature flag, wallet ceiling) refuses, which is a Buy face over a refusal",
+                    fail, ref checks);
+
+                // (c) THE SKR SKIN IS UNCHANGED, and the proof is the FIRST line of the oracle: with
+                // PiDisplay false there is no spotlight, no latch write and no notice suppression, so
+                // every SKR-skin open behaves exactly as before.
+                RequireOrdered(store,
+                    "private static PackDef ResolvePiSpotlightPack()",
+                    "if (!PiDisplay) return null;",
+                    "PackCatalog.Find(PiEnabledSkuHint)",
+                    "the Pi spotlight is not gated on PiDisplay FIRST - it would reach into the SKR skin's " +
+                    "store open, which this work order must leave byte-for-byte alone", fail, ref checks);
+
+                // (d) A PACK ALREADY ON THE SHELF NEEDS NO RESCUE. This is what makes widening the Pi
+                // rail later a server-side change with no edit here.
+                Require(store, "if (PackCatalog.IsOnBrowsableShelf(pack)) return null;",
+                    "the spotlight would fire for a pack the shelf already shows - the spotlight exists only " +
+                    "to reach a pack the browsable shelf cannot", fail, ref checks);
+
+                // (e) IT USES THE EXISTING LATCH. No second focus mechanism, and the latch is written
+                // BEFORE the Render that consumes it.
+                Require(store, "StoreFocusRequest.RequestFocusSku(pack.Sku);",
+                    "the Pi spotlight does not go through the existing StoreFocusRequest latch", fail, ref checks);
+                RequireOrdered(store,
+                    "AdoptLiveWalletIfBetter(\"open\");",
+                    "LatchPiSpotlightOnOpen();",
+                    "Render();",
+                    "the Pi spotlight is not latched BEFORE the first Render - Render is where " +
+                    "ResolveFocusSku consumes the latch, so a latch written after it is never honoured",
+                    fail, ref checks);
+
+                // (f) A DEFAULT NEVER BEATS AN EXPLICIT REQUEST. The Manage 'Buy builder' route and a
+                // shortfall remedy both name a sku the player just asked about.
+                Require(store, "if (StoreFocusRequest.HasPending)",
+                    "the Pi spotlight would overwrite a caller's own focus request", fail, ref checks);
+                RequireOrdered(store,
+                    "private void LatchPiSpotlightOnOpen()",
+                    "_pendingShortfallMissing > 0",
+                    "StoreFocusRequest.RequestFocusSku(pack.Sku);",
+                    "the Pi spotlight would overwrite a pending shortfall remedy", fail, ref checks);
+
+                // (g) THE EMPTY-SHELF NOTICE STANDS DOWN WHEN THE SPOTLIGHT IS LIVE. Otherwise the
+                // store says 'nothing here can be bought with Pi' beside a live Buy control.
+                RequireOrdered(store,
+                    "private void BuildPiShelfNoticeIfNothingIsBuyable()",
+                    "var spotlight = ResolvePiSpotlightPack();",
+                    "StoreStrings.KeyPiShelfEmpty",
+                    "the empty-Pi-shelf notice is still drawn when the spotlight carries a buyable pack - " +
+                    "the store would contradict itself on one screen", fail, ref checks);
+
+                // (h) AND THE SPOTLIGHT SKU IS ACTUALLY QUOTED. The display refresh walks the
+                // BROWSABLE shelf, which by construction excludes the one Pi-quotable sku; without
+                // this line the spotlight shows 'Priced in Pi at checkout' forever while
+                // /api/pi/quote sits live and answering.
+                RequireOrdered(store,
+                    "private void RefreshPiDisplayPrices()",
+                    "skus.Add(spotlight.Sku);",
+                    "refresher.RefreshDisplayPrices(skus,",
+                    "the spotlight sku is never added to the Pi display-price request, so the one pack a " +
+                    "Pi player can buy would never show a Pi price", fail, ref checks);
+
+                // (i) THE RAIL STILL SELLS EXACTLY ONE SKU, and the CLIENT cannot widen it. The
+                // provider filters both its quote loop and its gate to its own EnabledSku.
+                Require(pi, "public const string EnabledSku = \"hearth-spark\";",
+                    "the Pi rail's one-sku allowlist moved or widened - widening is a reviewed server+client " +
+                    "change, never a side effect of a display work order", fail, ref checks);
+                Require(pi, "if (!string.Equals(sku, EnabledSku, StringComparison.Ordinal)) continue;",
+                    "the Pi display refresh no longer filters to the one enabled sku", fail, ref checks);
+
+                if (checks < 45)
                     fail.Add("only " + checks + " assertions ran - the suite degenerated into a hollow pass");
             }
             catch (Exception e)
@@ -316,13 +442,30 @@ namespace DeNelle.Editor.Regression
 
             reason = checks + " assertions: Pi skin reaches no SKR string in the store surface; " +
                      "prices come from /api/pi/quote and expire; SKR skin paths and copy intact; " +
-                     "no authored 'pi' price and no flipped storeVisible.";
+                     "no authored 'pi' price and no flipped storeVisible; the WO-1323 spotlight " +
+                     "makes exactly ONE sku buyable under Pi through the existing focus latch, is " +
+                     "quoted by the server, and stands the empty-shelf notice down.";
             return true;
         }
 
         // -----------------------------------------------------------------
         //  helpers
         // -----------------------------------------------------------------
+
+        /// <summary>How many times <paramref name="needle"/> occurs in <paramref name="body"/>.
+        /// Used where the COUNT is the assertion: one sku literal, not two.</summary>
+        private static int CountOf(string body, string needle)
+        {
+            if (string.IsNullOrEmpty(body) || string.IsNullOrEmpty(needle)) return 0;
+            int count = 0;
+            int at = body.IndexOf(needle, StringComparison.Ordinal);
+            while (at >= 0)
+            {
+                count++;
+                at = body.IndexOf(needle, at + needle.Length, StringComparison.Ordinal);
+            }
+            return count;
+        }
 
         private static void Require(string body, string needle, string why, List<string> fail, ref int checks)
         {
