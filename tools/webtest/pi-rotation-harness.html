@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="en-us">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+    <title>WO-1312 Pi rotation + input shim harness</title>
+    <style>
+      html, body { margin: 0; padding: 0; height: 100%; background: #0d0a14; color: #f4e5b5;
+        touch-action: none; overscroll-behavior: none; overflow: hidden;
+        -webkit-user-select: none; user-select: none; -webkit-tap-highlight-color: transparent;
+        font: 12px/1.35 monospace; }
+      #unity-container { position: absolute; width: 100%; height: 100%; }
+      /* IDENTICAL to Assets/WebGLTemplates/Pi/index.html - keep the two in step. */
+      #unity-container.pi-rotated { position: fixed; top: 0; left: 0;
+        transform-origin: top left; transform: rotate(90deg) translateY(-100%); }
+      #unity-canvas { width: 100%; height: 100%; background: #17102a; display: block;
+        touch-action: none; -ms-touch-action: none; }
+      #hud { position: fixed; left: 0; bottom: 0; z-index: 10; padding: 6px 8px;
+        background: rgba(0,0,0,0.72); white-space: pre; pointer-events: none; }
+      #ctl { position: fixed; right: 6px; top: 6px; z-index: 11; }
+      #ctl button { min-height: 44px; padding: 8px 12px; font: 700 13px monospace;
+        color: #17100a; background: #d9ad38; border: 2px solid #f4d16b; border-radius: 6px; }
+    </style>
+  </head>
+  <body>
+    <div id="unity-container">
+      <canvas id="unity-canvas" tabindex="-1"></canvas>
+    </div>
+    <div id="ctl"><button id="toggle" type="button">ROTATION: ?</button></div>
+    <div id="hud">booting...</div>
+    <script>
+      // =================================================================================
+      // WO-1312 harness. NOT shipped - a throwaway proof page.
+      //
+      // It reproduces, byte-for-byte in behaviour, the rotated wrapper + input shim from
+      // Assets/WebGLTemplates/Pi/index.html, and then plays the part of Unity: it reads the
+      // pointer position out of the event using EXACTLY Unity WebGL's formula
+      //     canvasX = (clientX - rect.left) * (canvas.width  / rect.width)
+      //     canvasY = (clientY - rect.top ) * (canvas.height / rect.height)
+      // with rect = canvas.getBoundingClientRect(), and draws a crosshair there.
+      //
+      // HOW TO JUDGE IT (this is the whole test):
+      //   The crosshair must land UNDER YOUR FINGER, and the label you touch must be the
+      //   label that lights up. If the shim's mapping is wrong the crosshair goes somewhere
+      //   else - which is precisely the failure a screenshot of the game could never show.
+      //   Run it once with ROTATION ON in a portrait window, and once OFF (or in a real
+      //   landscape window) where it must behave like an ordinary unrotated page.
+      // =================================================================================
+      var piCanvas = document.querySelector('#unity-canvas');
+      var piContainer = document.querySelector('#unity-container');
+      var piGateEl = document.querySelector('#ctl');  // never let the shim eat the harness control
+      var hud = document.querySelector('#hud');
+      var piRotationActive = false;
+      var piRotW = 0;
+      var piRotH = 0;
+      var PI_SHIM_TOUCH = ['touchstart', 'touchmove', 'touchend', 'touchcancel'];
+      var PI_SHIM_MOUSE = ['mousedown', 'mousemove', 'mouseup'];
+      var PI_SHIM_POINTER = ['pointerdown', 'pointermove', 'pointerup', 'pointercancel'];
+
+      var piSynthTouchOk = (function () {
+        try {
+          if (typeof window.Touch !== 'function' || typeof window.TouchEvent !== 'function') return false;
+          var t = new window.Touch({ identifier: 0, target: document.body, clientX: 0, clientY: 0 });
+          var probe = new window.TouchEvent('touchstart', { touches: [t], targetTouches: [t], changedTouches: [t] });
+          return !!probe && probe.touches.length === 1;
+        } catch (err) { return false; }
+      })();
+      var piSynthPointerOk = (typeof window.PointerEvent === 'function');
+
+      function piLogicalRect() {
+        return { x: 0, y: 0, left: 0, top: 0, right: piRotH, bottom: piRotW,
+                 width: piRotH, height: piRotW, toJSON: function () { return this; } };
+      }
+      function piMapTouches(list) {
+        var out = [];
+        for (var i = 0; i < list.length; i++) {
+          var t = list[i];
+          var u = t.clientY;
+          var v = piRotW - t.clientX;
+          out.push(new window.Touch({
+            identifier: t.identifier, target: piCanvas,
+            clientX: u, clientY: v, pageX: u, pageY: v, screenX: u, screenY: v,
+            radiusX: (typeof t.radiusY === 'number') ? t.radiusY : 1,
+            radiusY: (typeof t.radiusX === 'number') ? t.radiusX : 1,
+            rotationAngle: 0,
+            force: (typeof t.force === 'number') ? t.force : 1
+          }));
+        }
+        return out;
+      }
+      function piShimHandler(e) {
+        if (!piRotationActive) return;
+        if (e.piShim) return;
+        if (piGateEl && e.target && piGateEl.contains(e.target)) return;
+        var synth = null;
+        try {
+          if (e.touches) {
+            if (e.type === 'touchmove' && e.touches.length > 1 && e.cancelable) e.preventDefault();
+            var target = (e.targetTouches && e.targetTouches.length) ? e.targetTouches : e.touches;
+            synth = new window.TouchEvent(e.type, {
+              bubbles: true, cancelable: e.cancelable, composed: true,
+              touches: piMapTouches(e.touches),
+              targetTouches: piMapTouches(target),
+              changedTouches: piMapTouches(e.changedTouches),
+              ctrlKey: e.ctrlKey, altKey: e.altKey, shiftKey: e.shiftKey, metaKey: e.metaKey
+            });
+          } else {
+            var mu = e.clientY;
+            var mv = piRotW - e.clientX;
+            var init = {
+              bubbles: true, cancelable: e.cancelable, composed: true, view: window,
+              detail: e.detail, clientX: mu, clientY: mv, screenX: mu, screenY: mv,
+              button: e.button, buttons: e.buttons,
+              ctrlKey: e.ctrlKey, altKey: e.altKey, shiftKey: e.shiftKey, metaKey: e.metaKey
+            };
+            if (piSynthPointerOk && typeof e.pointerId === 'number') {
+              init.pointerId = e.pointerId; init.pointerType = e.pointerType;
+              init.isPrimary = e.isPrimary; init.pressure = e.pressure;
+              init.width = e.height; init.height = e.width;
+              synth = new window.PointerEvent(e.type, init);
+            } else {
+              synth = new window.MouseEvent(e.type, init);
+            }
+          }
+        } catch (err) { return; }
+        e.stopImmediatePropagation();
+        synth.piShim = true;
+        piCanvas.dispatchEvent(synth);
+      }
+      function piEachShimType(fn) {
+        PI_SHIM_TOUCH.forEach(fn); PI_SHIM_MOUSE.forEach(fn);
+        if (piSynthPointerOk) PI_SHIM_POINTER.forEach(fn);
+      }
+      function piAddShim() { piEachShimType(function (t) { window.addEventListener(t, piShimHandler, { capture: true, passive: false }); }); }
+      function piRemoveShim() { piEachShimType(function (t) { window.removeEventListener(t, piShimHandler, { capture: true }); }); }
+      function piActivateRotation() {
+        piRotW = window.innerWidth;
+        piRotH = window.innerHeight;
+        piContainer.style.width = piRotH + 'px';
+        piContainer.style.height = piRotW + 'px';
+        if (piRotationActive) return;
+        piRotationActive = true;
+        piContainer.classList.add('pi-rotated');
+        piCanvas.getBoundingClientRect = piLogicalRect;
+        piAddShim();
+      }
+      function piDeactivateRotation() {
+        if (!piRotationActive) return;
+        piRotationActive = false;
+        piContainer.classList.remove('pi-rotated');
+        piContainer.style.width = '';
+        piContainer.style.height = '';
+        try { delete piCanvas.getBoundingClientRect; }
+        catch (err) { piCanvas.getBoundingClientRect = Element.prototype.getBoundingClientRect; }
+        piRemoveShim();
+      }
+
+      // ---------------- the "Unity" side: read coords, draw where it thinks you touched -------
+      var ctx = piCanvas.getContext('2d');
+      var dpr = window.devicePixelRatio || 1;
+      var marks = [];          // [{x,y,id}] in CANVAS (device) px
+      var lastReport = '';
+      var TARGETS = [
+        { k: 'TL', fx: 0.08, fy: 0.12 }, { k: 'TR', fx: 0.92, fy: 0.12 },
+        { k: 'BL', fx: 0.08, fy: 0.88 }, { k: 'BR', fx: 0.92, fy: 0.88 },
+        { k: 'C',  fx: 0.50, fy: 0.50 }
+      ];
+      function sizeCanvas() {
+        dpr = window.devicePixelRatio || 1;
+        piCanvas.width = Math.max(1, Math.round(piCanvas.clientWidth * dpr));
+        piCanvas.height = Math.max(1, Math.round(piCanvas.clientHeight * dpr));
+        draw();
+      }
+      function unityCoords(clientX, clientY) {
+        // EXACTLY Unity WebGL's mapping. If our shim + rect override are right this returns the
+        // point the player actually touched, in canvas backing-store pixels.
+        var r = piCanvas.getBoundingClientRect();
+        return {
+          x: (clientX - r.left) * (piCanvas.width / r.width),
+          y: (clientY - r.top) * (piCanvas.height / r.height),
+          rect: r
+        };
+      }
+      function draw() {
+        var w = piCanvas.width, h = piCanvas.height;
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        ctx.fillStyle = '#17102a';
+        ctx.fillRect(0, 0, w, h);
+        // orientation legend: the game's own top-left, so a wrong rotation is obvious
+        ctx.fillStyle = '#6b5a2e';
+        ctx.font = (14 * dpr) + 'px monospace';
+        ctx.fillText('GAME TOP-LEFT', 8 * dpr, 20 * dpr);
+        ctx.fillText('surface ' + w + 'x' + h + ' px  dpr=' + dpr.toFixed(2), 8 * dpr, 40 * dpr);
+        // targets
+        TARGETS.forEach(function (t) {
+          var cx = t.fx * w, cy = t.fy * h;
+          var hit = marks.some(function (m) { return Math.hypot(m.x - cx, m.y - cy) < 44 * dpr; });
+          ctx.strokeStyle = hit ? '#f4e5b5' : '#4a3f6b';
+          ctx.lineWidth = (hit ? 4 : 2) * dpr;
+          ctx.beginPath(); ctx.arc(cx, cy, 40 * dpr, 0, Math.PI * 2); ctx.stroke();
+          ctx.fillStyle = hit ? '#f4e5b5' : '#4a3f6b';
+          ctx.font = (16 * dpr) + 'px monospace';
+          ctx.fillText(t.k, cx - 10 * dpr, cy + 6 * dpr);
+        });
+        // crosshairs where "Unity" thinks each active pointer is
+        marks.forEach(function (m) {
+          ctx.strokeStyle = '#d9ad38';
+          ctx.lineWidth = 2 * dpr;
+          ctx.beginPath();
+          ctx.moveTo(m.x - 34 * dpr, m.y); ctx.lineTo(m.x + 34 * dpr, m.y);
+          ctx.moveTo(m.x, m.y - 34 * dpr); ctx.lineTo(m.x, m.y + 34 * dpr);
+          ctx.stroke();
+          ctx.beginPath(); ctx.arc(m.x, m.y, 12 * dpr, 0, Math.PI * 2); ctx.stroke();
+          ctx.fillStyle = '#d9ad38';
+          ctx.font = (13 * dpr) + 'px monospace';
+          ctx.fillText('#' + m.id, m.x + 16 * dpr, m.y - 16 * dpr);
+        });
+      }
+      function report(kind, rawPoints, mapped) {
+        var r = piCanvas.getBoundingClientRect();
+        var lines = [];
+        lines.push('rotation=' + (piRotationActive ? 'ON' : 'OFF') +
+          '  viewport=' + window.innerWidth + 'x' + window.innerHeight +
+          '  synthTouch=' + piSynthTouchOk + ' synthPointer=' + piSynthPointerOk);
+        lines.push('canvas rect (as Unity sees it) left=' + r.left.toFixed(1) + ' top=' + r.top.toFixed(1) +
+          ' w=' + r.width.toFixed(1) + ' h=' + r.height.toFixed(1) +
+          '   backing=' + piCanvas.width + 'x' + piCanvas.height);
+        lines.push(kind + '  points=' + rawPoints.length);
+        for (var i = 0; i < rawPoints.length; i++) {
+          lines.push('  #' + rawPoints[i].id +
+            ' RAW client=(' + rawPoints[i].x.toFixed(0) + ',' + rawPoints[i].y.toFixed(0) + ')' +
+            ' -> SHIM client=(' + mapped[i].sx.toFixed(0) + ',' + mapped[i].sy.toFixed(0) + ')' +
+            ' -> CANVAS=(' + mapped[i].x.toFixed(0) + ',' + mapped[i].y.toFixed(0) + ')');
+        }
+        lastReport = lines.join('\n');
+        hud.textContent = lastReport;
+      }
+
+      // The canvas listener stands in for Unity's own. It sees ONLY what the shim hands it.
+      var rawSeen = [];
+      window.addEventListener('touchstart', function (e) { rawSeen = rawFrom(e); }, { capture: true, passive: false });
+      window.addEventListener('touchmove', function (e) { rawSeen = rawFrom(e); }, { capture: true, passive: false });
+      window.addEventListener('mousedown', function (e) { rawSeen = rawFrom(e); }, { capture: true, passive: false });
+      window.addEventListener('mousemove', function (e) { rawSeen = rawFrom(e); }, { capture: true, passive: false });
+      function rawFrom(e) {
+        if (e.piShim) return rawSeen;   // only record TRUE input
+        var out = [];
+        if (e.touches) {
+          for (var i = 0; i < e.touches.length; i++)
+            out.push({ id: e.touches[i].identifier, x: e.touches[i].clientX, y: e.touches[i].clientY });
+        } else {
+          out.push({ id: 'm', x: e.clientX, y: e.clientY });
+        }
+        return out;
+      }
+      function onCanvasPointer(e) {
+        var mapped = [];
+        marks = [];
+        if (e.touches) {
+          for (var i = 0; i < e.touches.length; i++) {
+            var c = unityCoords(e.touches[i].clientX, e.touches[i].clientY);
+            marks.push({ x: c.x, y: c.y, id: e.touches[i].identifier });
+            mapped.push({ sx: e.touches[i].clientX, sy: e.touches[i].clientY, x: c.x, y: c.y });
+          }
+        } else {
+          var m = unityCoords(e.clientX, e.clientY);
+          marks.push({ x: m.x, y: m.y, id: 'm' });
+          mapped.push({ sx: e.clientX, sy: e.clientY, x: m.x, y: m.y });
+        }
+        draw();
+        report(e.type, rawSeen.length === mapped.length ? rawSeen : mapped.map(function (p, i) {
+          return { id: i, x: NaN, y: NaN };
+        }), mapped);
+      }
+      ['touchstart', 'touchmove', 'mousedown', 'mousemove', 'pointerdown', 'pointermove']
+        .forEach(function (t) { piCanvas.addEventListener(t, onCanvasPointer, { passive: false }); });
+      ['touchend', 'touchcancel', 'mouseup', 'pointerup', 'pointercancel']
+        .forEach(function (t) { piCanvas.addEventListener(t, function () { marks = []; draw(); }, { passive: false }); });
+
+      // ---------------- boot / controls -------------------------------------------------
+      var forced = null;   // null = auto (portrait rotates), true/false = forced
+      function apply() {
+        var wantRotate = (forced === null) ? (window.innerWidth < window.innerHeight) : forced;
+        if (wantRotate && piSynthTouchOk) piActivateRotation(); else piDeactivateRotation();
+        document.querySelector('#toggle').textContent =
+          'ROTATION: ' + (piRotationActive ? 'ON' : 'OFF') + (forced === null ? ' (auto)' : ' (forced)');
+        sizeCanvas();
+        report('idle', [], []);
+      }
+      document.querySelector('#toggle').addEventListener('click', function () {
+        forced = (forced === null) ? !piRotationActive : (forced ? null : true);
+        apply();
+      });
+      window.addEventListener('resize', apply);
+      window.addEventListener('orientationchange', apply);
+      apply();
+    </script>
+  </body>
+</html>
