@@ -573,10 +573,29 @@ namespace DeNelle.Village
                     if (parent != null) go.transform.SetParent(parent, true);
                     go.SetActive(true);
                     VerifyHasParticles(go, type, "oneshot");
+                    // The row says ONESHOT - make the instance obey before it is measured or
+                    // played, so an ambient-looping prefab cannot emit for its whole pooled
+                    // lifetime (owner F8 seq 4644). MUST precede DetectDuration + PlayAllParticles.
+                    EnforceOneshotEmission(go, type.ToString());
                     PlayAllParticles(go);
                     float lifetime = entry.LifetimeOverride > 0f
                         ? entry.LifetimeOverride
                         : DetectDuration(go) + 0.3f;   // 0.3 s buffer after last particle
+                    // A wind-up is bounded by the cast, never by the art pack's authored length.
+                    if (IsCastBeat(type) && lifetime > CAST_BEAT_MAX_SECONDS)
+                    {
+                        FlowTrace.Once("VFXManager", "cast-beat-clamp:" + type,
+                            $"cast beat '{type}' measured {lifetime:0.00}s - CLAMPED to " +
+                            $"{CAST_BEAT_MAX_SECONDS:0.00}s (a Cast_* wind-up must finish inside the " +
+                            "cast that spawned it; see CAST_BEAT_MAX_SECONDS).");
+                        lifetime = CAST_BEAT_MAX_SECONDS;
+                    }
+                    // §12 (owner F8 seq 4644 'casts at me'): name WHERE a beat resolved. The
+                    // spawn point is unparented world space, so this is the world position the
+                    // player actually sees the effect sitting at, plus how long it will sit there.
+                    FlowTrace.Throttle("VFXManager", $"oneshot-at:{type}", 1f,
+                        $"PlayOneshot('{type}') at {position} parent=" +
+                        $"'{(parent != null ? parent.name : "<none, world-space>")}' lifetime={lifetime:0.00}s.");
                     // Leak-proof: register the checked-out oneshot in the live set + a hard deadline
                     // (instead of a raw ++), so a host destroyed before ReturnAfterSeconds runs cannot
                     // pin the count - SweepOneshots reclaims the orphaned slot.
@@ -1418,6 +1437,14 @@ namespace DeNelle.Village
         /// Auto-detect the longest total duration among all particle systems on the
         /// prefab so we know when it's safe to return to the pool.
         /// </summary>
+        /// <remarks>
+        /// ⚠ THIS READS <c>duration + startLifetime</c> AND HAS NEVER CONSULTED <c>main.loop</c>.
+        /// For a LOOPING system that number is not an end at all - the system keeps emitting for
+        /// the whole window and the figure is merely when the pool reclaims it. That is safe only
+        /// because <see cref="EnforceOneshotEmission"/> now clears the loop flag on every oneshot
+        /// instance BEFORE this is measured, so by the time we get here nothing is looping and the
+        /// arithmetic is the true end. Do not call this on a host whose systems still loop.
+        /// </remarks>
         private static float DetectDuration(GameObject go)
         {
             float max = 0f;
@@ -1429,6 +1456,79 @@ namespace DeNelle.Village
             }
             return Mathf.Max(max, 0.5f);
         }
+
+        /// <summary>
+        /// THE CATALOG'S <c>IsLoop</c> FLAG IS AUTHORITATIVE ON THE INSTANCE. Clears
+        /// <c>main.loop</c> on every ParticleSystem of a host checked out through a ONESHOT row,
+        /// so a prefab authored as an endless ambient loop cannot emit for its entire pool
+        /// lifetime when a oneshot row plays it. Returns the number of systems corrected.
+        /// </summary>
+        /// <remarks>
+        /// <para>WHY THIS EXISTS - owner F8 2026-09-02 seq 4644, verbatim: <i>"the fire spell is
+        /// wrong. casts at me and stays at me."</i> The mage's Fireball cast beat resolves to
+        /// <see cref="VFXType.Cast_FireCharge"/>, whose catalogued prefab
+        /// (Resources/VFX/Projectiles/Casting_Fire.prefab) carries FOUR ParticleSystems that are
+        /// all <c>looping: 1</c>, lengthInSec 5, startLifetime up to 5 - while the catalog row
+        /// declares <c>IsLoop: 0</c> with no LifetimeOverride. <see cref="DetectDuration"/> then
+        /// returned 5 + 5 + 0.3 = 10.3s and, because nothing stopped the emitters, the effect
+        /// BURNED CONTINUOUSLY on the caster for those 10.3 seconds. Fireball's authored cooldown
+        /// is 0.6s, so up to seventeen of them overlapped on the hero - which is precisely the
+        /// "stays at me" the owner reported, and it matches the captured
+        /// <c>[Flow:VFX] live systems=35</c> against an idle ability pool in that same session.</para>
+        /// <para>The fix is deliberately at the LIFECYCLE OWNER and not in the art: no prefab is
+        /// re-authored, no effect is substituted (choosing a different fire effect is the owner's
+        /// creative call, never the CLI's). Clearing the flag makes a oneshot behave the way its
+        /// row already claims it does. A row that genuinely wants a continuous effect declares
+        /// <c>IsLoop: 1</c> and never reaches this path.</para>
+        /// <para>Idempotent, and safe across pool cycles: a pooled host is only ever checked out
+        /// for the one key/type it was built for, so the cleared flag can never leak onto an
+        /// effect that is supposed to loop.</para>
+        /// </remarks>
+        private static int EnforceOneshotEmission(GameObject go, string what)
+        {
+            if (go == null) return 0;
+            int fixedCount = 0;
+            foreach (var ps in go.GetComponentsInChildren<ParticleSystem>(true))
+            {
+                var m = ps.main;
+                if (!m.loop) continue;
+                m.loop = false;
+                fixedCount++;
+            }
+            if (fixedCount > 0)
+                FlowTrace.Once("VFXManager", "oneshot-loop-clamp:" + what,
+                    $"ONESHOT ROW PLAYING A LOOPING PREFAB: '{what}' has {fixedCount} ParticleSystem(s) " +
+                    "authored looping while its catalog row declares IsLoop=0. Loop CLEARED on the " +
+                    "instance so it emits one cycle and ends (it would otherwise burn for the whole " +
+                    "pooled lifetime - owner F8 seq 4644 'casts at me and stays at me'). Set IsLoop=1 " +
+                    "on the row if a continuous effect was intended.");
+            return fixedCount;
+        }
+
+        /// <summary>
+        /// Ceiling on how long a <c>Cast_*</c> WIND-UP beat may live. Cast_* is defined by
+        /// <see cref="VFXType"/>'s own contract as a "charge/wind-up on the caster that plays
+        /// BEFORE the release" - it is bounded by the cast, not by whatever length an art pack
+        /// happened to author into an ambient prefab. DERIVATION, not taste: the longest authored
+        /// hero <c>castSeconds</c> in abilities.json is 0.5s (mage.poison / mage.meteor /
+        /// mage.cataclysm), and the shortest authored cooldown that re-fires the beat is
+        /// mage.fireball's 0.6s - so a wind-up must be finished well inside the following cast or
+        /// it stacks on itself. 0.5s of charge + a 0.75s tail for the release to read.
+        /// Impacts, deaths, auras and every other category are UNAFFECTED.
+        /// </summary>
+        private const float CAST_BEAT_MAX_SECONDS = 1.25f;
+
+        /// <summary>True when <paramref name="type"/> is a Cast_* wind-up beat (see the
+        /// VFXType naming convention: Category_Descriptor).</summary>
+        private static bool IsCastBeat(VFXType type)
+            => type == VFXType.Cast_MageCharge
+            || type == VFXType.Cast_FireCharge
+            || type == VFXType.Cast_KnightSlam
+            || type == VFXType.Cast_RangerDraw
+            || type == VFXType.Cast_Heal
+            || type == VFXType.Cast_FrostNova
+            || type == VFXType.Cast_NecromancerSummon
+            || type == VFXType.Cast_EnemyCaster;
 
         // ─────────────────────────────────────────────────────────────────────
         // ── PROCEDURAL FALLBACK ───────────────────────────────────────────────

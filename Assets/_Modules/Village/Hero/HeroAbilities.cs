@@ -1473,6 +1473,37 @@ namespace DeNelle.Village
                             if (focusOnHit > 0f) RestoreMana(focusOnHit);
                             // WO-VFX-003: Hovl impact key at the connection point (element-tinted).
                             PlayImpactVfxKey(hitDef, hitFoe.WorldPosition);
+                            // ⭐ THE ELEMENT ROUTER'S OTHER HALF - owner F8 2026-09-02 seq 4644,
+                            // verbatim: "the fire spell is wrong. casts at me and stays at me."
+                            //
+                            // WO-875 wired SpellVfxFactory.PlayCast at the CASTER (see CastAbility)
+                            // and never wired its PlayImpact twin anywhere in the hero path - the
+                            // impact half existed and was only ever called from CombatCast (troops).
+                            // For the mage's Fireball that made the caster flash the ONLY fire in the
+                            // entire cast: the registry lookup resolves keyword "skill1" against
+                            // RegistryTarget "knight", whose skill1 row carries an EMPTY vfxKey and no
+                            // vfxProjectile, so PlayCastVfxKey is silent-by-design, LaunchProjectile
+                            // gets a null Hovl key and flies the generic AETHER orb, and the only
+                            // authored impact is that row's melee "Melee_Impact". Fire bloomed on her
+                            // and nothing fiery ever reached the target - exactly what she reported.
+                            //
+                            // Additive and symmetric with the cast beat (whose own comment rules the
+                            // two beats additive): the element lands where the shot lands. It is NOT a
+                            // creative pick - the element, the type map and the pooling are all the
+                            // existing SpellVfxFactory -> VFXManager owner, unchanged; this only stops
+                            // calling half of it. No second spawner, no second pool.
+                            if (hitDef != null)
+                                SpellVfxFactory.PlayImpact(hitDef.EffectEnum, _heroClass,
+                                                           hitDef.UnityColor, hitFoe.WorldPosition);
+                            // §12: prove WHERE the beats resolved. The caster position and the impact
+                            // position are printed together so the next "it plays on me" flag is
+                            // settled by one line instead of a theory.
+                            DeNelle.Core.Diagnostics.FlowTrace.Throttle("Vfx",
+                                "ability-impact-at:" + (hitDef?.Id ?? "<null>"), 1f,
+                                $"'{hitDef?.Id}' element beat: cast played at caster " +
+                                $"{(heroTf != null ? heroTf.position.ToString() : "<hero gone>")}, " +
+                                $"impact played at target {hitFoe.WorldPosition} " +
+                                $"(separation {(heroTf != null ? (hitFoe.WorldPosition - heroTf.position).magnitude : -1f):0.0}m).");
                             onDealt?.Invoke(dealt);   // WO-861 drainshot: heal == damage DEALT
                         }, def.VfxProjectile, def.UnityColor);
                     }

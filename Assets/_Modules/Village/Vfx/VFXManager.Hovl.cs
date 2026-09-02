@@ -390,6 +390,12 @@ namespace DeNelle.Village
                 ApplyStartColor(go, color.Value);
 
             VerifyHovlHasParticles(go, key);
+            // A row that is NOT a true endless loop must not emit like one. Clear main.loop
+            // BEFORE the systems start, so a pack prefab authored as a continuous effect under an
+            // isLoop:false row cannot burn for its whole pooled lifetime (owner F8 seq 4644 - the
+            // VFXType twin of this defect put a 10.3s fire on the caster after every Fireball).
+            // A genuine IsLoop row keeps looping: it is excluded below.
+            if (!row.IsLoop) EnforceOneshotEmission(go, "hovl:" + key);
             PlayAllParticles(go);
 
             // Follow a moving transform (projectile/trail) without parenting.
@@ -437,6 +443,11 @@ namespace DeNelle.Village
             float life = lifetime > 0f ? lifetime
                        : row.DefaultLifetime > 0f ? row.DefaultLifetime
                        : DetectDuration(go) + 0.3f;
+            // §12: name the resolved world position of a Hovl oneshot + how long it holds it.
+            FlowTrace.Throttle("VFXManager", $"hovl-at:{key}", 1f,
+                $"PlayKey('{key}') oneshot at {position} parent=" +
+                $"'{(parent != null ? parent.name : "<none, world-space>")}' follow=" +
+                $"'{(follow != null ? follow.name : "<none, static>")}' lifetime={life:0.00}s.");
             // Leak-proof: register the checked-out Hovl oneshot in the shared live set + a deadline
             // (instead of a raw ++), so a host destroyed on enemy-death / scene-change before
             // ReturnHovlToPool runs cannot pin _activeOneshots at cap. SweepOneshots reclaims it.
