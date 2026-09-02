@@ -40,6 +40,20 @@ namespace DeNelle.Village.UI
         public string Amount;
         /// <summary>Rarity index for the kit slot plate frame (1 = common).</summary>
         public int Rarity = 1;
+
+        /// <summary>
+        /// This row is a SENTENCE + a cost, not a short noun + a short number — so it takes a
+        /// whole band to itself at the full body width, and its label column is widened
+        /// (EndStateView.SpoilBandPlan / BuildSpoilRow).
+        ///
+        /// OWNER F8 2026-09-02, defect #4: on a wave-clear panel the three resource rows read
+        /// icon + "Wood" + "+180", and the structure-damage row crammed "Archer Tower - damaged
+        /// 40%" and "Repair 40 wood, 12 iron" into a half-width cell of the same grid. BOTH
+        /// halves ellipsised ("Archer Tow..." / "Repair..."), so it read as a BROKEN resource row
+        /// rather than a different kind of row. The row declares its own shape here; the view
+        /// never sniffs string lengths to guess it.
+        /// </summary>
+        public bool Wide;
     }
 
     /// <summary>
@@ -497,6 +511,9 @@ namespace DeNelle.Village.UI
                     Label = "Plans Recovered",
                     Amount = unlockedName,
                     Rarity = 3,
+                    // The amount is a BUILDING NAME, not a number — same wide grammar as the
+                    // damage rows (owner F8 2026-09-02).
+                    Wide = true,
                 });
                 rewardRows++;
             }
@@ -536,6 +553,9 @@ namespace DeNelle.Village.UI
                         ? (e.Destroyed ? "Rebuild " : "Repair ") +
                           WallRepairController.DescribeMaterials(e.RepairCost)
                         : string.Empty,
+                    // A damage line is a sentence + a materials cost, never a resource row —
+                    // owner F8 2026-09-02. See SpoilRowVM.Wide.
+                    Wide = true,
                 });
             }
 
@@ -593,6 +613,17 @@ namespace DeNelle.Village.UI
         }
 
         // ── THE COMPACT BANNER'S ROW BUDGET (derived, not picked) ─────────────────────
+        //
+        // ⚠ THE ARITHMETIC BELOW IS FROZEN AT ITS 2026-08-08 CONSTANTS. Two of them moved on
+        // 2026-09-02 (owner F8 "spacing tight and ..."): EndStateView.BandGapPx 8 -> 18, and a
+        // new 16px SpoilsLeadGapPx band sits between the copy and the spoils grid. Re-solving
+        // the L=2 worst case with those: 64 + 120 + 16 + 64R + 18(R+2) <= 504 -> R <= 3.6, so a
+        // strict re-derivation would read THREE. It is deliberately NOT lowered here, because
+        // this ceiling only ever binds a COMPACT banner (see the `vm.Compact ?` tests at the two
+        // call sites) and the wave-clear screen this WO is about runs as the FULL modal, whose
+        // panel SOLVES to its content instead of clamping. Read this as the shape of the
+        // reasoning, not as live numbers — and re-derive from EndStateView at source before
+        // trusting any figure in it.
         //
         // Canon issue #28 is real and it fires on THIS template: EndStateView.BuildBody
         // uniform-compresses every band when the content is taller than the body well, and
@@ -708,6 +739,9 @@ namespace DeNelle.Village.UI
                 // generic kit fallback (a chest) stands in — apt for "mixed spoils".
                 Label = tailLabel.ToString(),
                 Amount = tailAmount.ToString(),
+                // "Food + Crystals" / "+80, +12" is a COMBINED line - two resources' worth of
+                // string in one cell. It takes a full band like the other wide rows.
+                Wide = true,
             });
             FlowTrace.Step("EndState",
                 $"wave {waveNumber} clear banner: {lines.Count} paid resources folded into {budget} row(s) " +

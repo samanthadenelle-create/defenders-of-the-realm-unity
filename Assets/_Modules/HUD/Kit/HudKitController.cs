@@ -2281,10 +2281,23 @@ namespace DeNelle.HUD.Kit
                 string heroName = string.IsNullOrEmpty(v.ClassId)
                     ? "Hero"
                     : DeNelle.Core.State.HeroCanonNames.ForJob(v.ClassId);
-                // WO-999: append resource identity (Mana / Vigor / Focus) so the bar reads
-                // as a class economy, not generic "MP".
-                string res = string.IsNullOrEmpty(v.ResourceDisplayName) ? "" : (" · " + v.ResourceDisplayName);
-                _vitals.NameLabel.text = heroName + "  Lv " + Mathf.Max(1, v.Level) + res;
+                // OWNER RULING 2026-09-02 (verbatim: "see how it says THrain Mana? Why is MAna
+                // there"): the resource word is GONE from the nameplate. The plate is identity
+                // only - name + level.
+                //
+                // WHY IT WAS HERE, so nobody re-adds it by reflex: WO-999 appended the class
+                // resource identity (Mana / Vigor / Focus) "so the bar reads as a class economy,
+                // not generic MP". That intent was sound; the ATTACHMENT POINT was wrong. It
+                // labelled the MP BAR while living on the NAME line, so the plate read
+                // "Thrain  Lv 2 - Mana", as if Mana were part of who he is.
+                //
+                // KNOWN AND ACCEPTED TRADE-OFF: with the word gone, the only thing separating the
+                // two bars is that one is red and one is blue - meaning carried by COLOUR ALONE,
+                // which this project otherwise forbids (the owner is red/green colourblind). She
+                // was shown that trade-off explicitly and chose deletion anyway; her call stands.
+                // If it ever needs to come back, put it ON THE BAR, never back on this line.
+                // v.ResourceDisplayName is still produced by the model and is unused HERE only.
+                _vitals.NameLabel.text = heroName + "  Lv " + Mathf.Max(1, v.Level);
             }
             // Owner 07-06: in-plate XP strip — fillAmount = xp/xpToNext, mirroring the HP/MP
             // fill-binding contract (§1.1). XpToNext<=0 = no HeroProgression data yet (the model

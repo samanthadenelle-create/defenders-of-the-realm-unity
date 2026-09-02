@@ -158,7 +158,19 @@ namespace DeNelle.Village.UI
                 // documented 0.03..0.97 at IDENTICAL height. Costs 3% of downward drift toward the
                 // bottom HUD band; a screen touching the top edge is the worse defect.
                 chrome = ElarionUiKit.BuildObsidianPanel(canvas.transform, vm.Title,
-                    new Vector2(0.22f, 0.50f - half), new Vector2(0.78f, 0.50f + half),   // WO-433: narrower victory panel (was 0.08/0.92)
+                    // OWNER F8 2026-09-02 ("spacing tight and ..."): the CONTENT COLUMN was the
+                    // root cause of all three captured truncations. WO-433 narrowed the modal to
+                    // 0.22..0.78 = 0.56 of the canvas; FrameCore's ornate border then eats
+                    // 0.055..0.945 of THAT, and a two-column spoils band halves what is left — so
+                    // a damage row's label column resolved to ~220 ref px and FitSingleLine's
+                    // Ellipsis chopped "Archer Tower - damaged 40%" to "Archer Tow...". The frame
+                    // was consuming a large share of a panel that had horizontal room to spare.
+                    // 0.14..0.86 = 0.72 of the canvas gives the body ~29% more column at the SAME
+                    // solved height (the height solve is width-aware: PanelWidthFrac below feeds
+                    // SubtitleLines, so a wider panel wraps LESS and the panel gets no taller).
+                    // Portrait is unaffected in column count (0.72 x 1080 x 0.89 / 2 = 346 px,
+                    // still under MinSpoilColumnPx, so portrait stays single-column as ruled).
+                    new Vector2(0.14f, 0.50f - half), new Vector2(0.86f, 0.50f + half),   // was 0.22/0.78 (WO-433), and 0.08/0.92 before that
                     onClose: null,   // no second way out
                     frameName: RpgUiCatalog.FrameCore,
                     medallionIcon: "crest");   // explicit: the socket seats the crest family, never blank
@@ -221,6 +233,24 @@ namespace DeNelle.Village.UI
         /// 0.06..1.00 — the top edge flush with the screen edge.</summary>
         private const float MaxPanelHalf = 0.47f;
         private const float MinPanelHalf = 0.14f;
+
+        // ── CTA CONTENT-WIDTH CONSTANTS (owner F8 2026-09-02: "PREPARE FOR W...") ──────
+        /// <summary>Bold + the kit's 1px character spacing widen a measured run by roughly this
+        /// much over the regular face MeasureTextPx samples. Deliberately generous: over-reserving
+        /// costs a few px of gold face, under-reserving costs the ellipsis this exists to kill.</summary>
+        private const float CtaBoldWidthFactor   = 1.12f;
+        /// <summary>The kit seats a button label at 0.04..0.96 of the face
+        /// (ElarionUiKitObsidian.BuildObsidianButton), so the label column is this much of the box.</summary>
+        private const float CtaLabelInsetFrac    = 0.92f;
+        /// <summary>Extra ref px for the framed face's own shoulders, so the words never sit on
+        /// the 9-sliced border even when the measurement lands exactly.</summary>
+        private const float CtaFacePaddingPx     = 72f;
+        /// <summary>A grown CTA may span at most this much of the BODY column — it is a button,
+        /// not a bar, and it must stay clear of the frame's ornate edge.</summary>
+        private const float CtaMaxWidthOfBodyFrac = 0.92f;
+        /// <summary>The compact banner CTA's pre-existing floor ("Repair All - 40 wood, 12 iron"
+        /// was already known not to fit the canonical box). Unchanged, just named.</summary>
+        private const float BannerCtaMinWidthPx  = 680f;
 
         // ── COMPACT BANNER GEOMETRY (the wave-clear / outpost variant) ────────────
         /// <summary>Compact body-well TOP as a fraction of the banner panel — pulled below the
@@ -317,11 +347,15 @@ namespace DeNelle.Village.UI
 
         // The deterministic width chain down to the subtitle's own text column. Every link is a
         // constant already in the tree, cited so a future reader can re-verify without measuring:
-        //   panel      x 0.22..0.78 of the canvas        (Show, above — WO-433)
+        //   panel      x 0.14..0.86 of the canvas        (Show, above — F8 2026-09-02)
         //   body zone  x 0.055..0.945 of the panel       (ElarionUiKit ZonesFor, case FrameCore:
         //                                                 z.body = (0.055, 0.075, 0.945, 0.835))
         //   subtitle   x 0.04..0.96 of its band          (BuildBody, below)
-        private const float PanelWidthFrac    = 0.78f - 0.22f;     // 0.560
+        // ⛔ THIS MUST TRACK Show's ANCHORS. It is the ONE number the subtitle/spoils width chain
+        // measures against; if it says 0.56 while the panel is built at 0.72 the solve over-counts
+        // wrapped lines and the columns are mis-sized (that desync is what WO-952 fixed for the
+        // banner). Widened with the panel on 2026-09-02.
+        private const float PanelWidthFrac    = 0.86f - 0.14f;     // 0.720
         private const float BodyZoneWidthFrac = 0.945f - 0.055f;   // 0.890 (FrameCore)
         private const float SubtitleInsetFrac = 0.96f - 0.04f;     // 0.920
 
@@ -665,13 +699,42 @@ namespace DeNelle.Village.UI
                 // screen (matches the shared Close). The anchors above only centre it in the
                 // footer band; the canonical size is stamped here.
                 ElarionUiKit.PinCanonicalCtaSize(btn);
-                if (hasBannerCta)
+                // ── THE CTA SIZES TO ITS OWN WORDS (owner F8 2026-09-02) ──────────────────
+                // CAPTURED DEFECT: the primary CTA read "PREPARE FOR W...". PinCanonicalCtaSize
+                // stamps a FIXED CanonCtaWidth (360 ref px) box, and the kit fits the button
+                // label with FitSingleLine -> TextOverflowModes.Ellipsis. "Prepare for Wave 2"
+                // is simply wider than 360 px of face, so the ONE control the player is meant
+                // to press could not state what it does. The canonical size exists so buttons
+                // never drift SMALLER or inconsistent between screens; it was never a licence
+                // to amputate the label — so treat 360 as a FLOOR and grow to the measured
+                // words. Height stays exactly canonical (132 >= MinTouchPx 112), so the
+                // one-handed thumb target and the cross-screen height match are untouched.
+                // The banner CTA keeps its own 680 floor (a "Repair All - 40 wood, 12 iron"
+                // string was already known not to fit).
                 {
-                    var bannerCtaRect = (RectTransform)btn.transform;
-                    bannerCtaRect.sizeDelta = new Vector2(
-                        Mathf.Max(680f, bannerCtaRect.sizeDelta.x), bannerCtaRect.sizeDelta.y);
-                    var bannerCtaLabel = btn.GetComponentInChildren<TMPro.TextMeshProUGUI>(true);
-                    if (bannerCtaLabel != null) ElarionUiKit.FitSingleLine(bannerCtaLabel);
+                    var ctaRect = (RectTransform)btn.transform;
+                    string ctaText = hasCta ? vm.PrimaryLabel : vm.CtaLabel;
+                    // Measured from the body font's real glyph advances (the same measurement
+                    // the subtitle wrap uses), + BoldWidthFactor for the bold face and the kit's
+                    // 1px character spacing, + the label's own 0.04/0.96 inset and the framed
+                    // face's shoulders. A character-count estimate is what this file already
+                    // learned not to trust (see MeasureTextPx).
+                    float labelPx = MeasureTextPx(ctaText, ElarionUi.FontBody) * CtaBoldWidthFactor;
+                    float wantPx = labelPx / CtaLabelInsetFrac + CtaFacePaddingPx;
+                    // Never wider than the panel's own body column can seat.
+                    float maxPx = PostScaleCanvasWidth(_canvasH) * PanelWidthFracFor(vm)
+                                  * BodyZoneWidthFrac * CtaMaxWidthOfBodyFrac;
+                    float floorPx = hasBannerCta ? BannerCtaMinWidthPx : ElarionUiKit.CanonCtaWidth;
+                    float ctaW = Mathf.Clamp(wantPx, floorPx, Mathf.Max(floorPx, maxPx));
+                    ctaRect.sizeDelta = new Vector2(ctaW, ctaRect.sizeDelta.y);
+                    // Re-arm the fitter against the NEW box: FitSingleLine's autosize bounds
+                    // were computed against the 360px rect.
+                    var ctaLabel = btn.GetComponentInChildren<TMPro.TextMeshProUGUI>(true);
+                    if (ctaLabel != null) ElarionUiKit.FitSingleLine(ctaLabel);
+                    FlowTrace.Step("EndState",
+                        $"CTA '{ctaText}' sized to content: label={labelPx:0}px -> box {ctaW:0}x{ctaRect.sizeDelta.y:0}px " +
+                        $"(floor {floorPx:0}, max {maxPx:0})" +
+                        (wantPx > maxPx ? " - CLAMPED to the body column, the label may still ellipsise" : string.Empty));
                 }
                 Canvas.ForceUpdateCanvases();
                 var bRt = (RectTransform)btn.transform;
@@ -870,7 +933,20 @@ namespace DeNelle.Village.UI
         private const float StarsPx   = 72f;   // 48 -> 72: 56px hero star + the 1.15x spin overshoot
         private const float TimePx    = 48f;   // 44 -> 48: FontLabel 40 bold line box is ~46px
         private const float RowPx     = 64f;   // 56 -> 64: seats the fixed 40px icon + plate inset
-        private const float BandGapPx = 8f;
+        // OWNER F8 2026-09-02 ("spacing tight"): 8 -> 18. 8 ref px is ~3.5 screen px on the
+        // owner's desktop — below the plate's own 0.04 vertical inset, so consecutive reward
+        // plates read as one welded slab and the subtitle sat on the row grid. 18 clears the
+        // plate insets on both sides and still costs the panel nothing it cannot afford: the
+        // gap is counted in RequiredBodyPx, so the SOLVE grows the panel to pay for it (wave
+        // banner: 5 bands -> +40 px of need -> +54 px of panel, a 0.36 half against the 0.47
+        // clamp). Never bypass RequiredBodyPx when changing this — an uncounted gap is the
+        // 2026-08-05 compaction class all over again.
+        private const float BandGapPx = 18f;
+        /// <summary>EXTRA breathing room between the narrative bands (emblem / subtitle / stars /
+        /// time) and the SPOILS GRID below them — the copy and the ledger are two different kinds
+        /// of content and the capture showed them welded together. Laid out as an empty BAND so
+        /// it costs exactly one entry in both <see cref="RequiredBodyPx"/> and BuildBody.</summary>
+        private const float SpoilsLeadGapPx = 16f;
 
         /// <summary>Total body-well pixels the VM's bands demand (drives the panel solve).
         /// <paramref name="canvasH"/> is the post-scale canvas height — the subtitle's wrapped
@@ -883,6 +959,10 @@ namespace DeNelle.Village.UI
             if (vm.Stars >= 0) { px += StarsPx; n++; }
             if (vm.TimeSeconds >= 0f) { px += TimePx; n++; }
             int spoilBands = SpoilBandCount(vm, canvasH);
+            // The SEPARATOR band (owner F8 2026-09-02: the subtitle sat straight on the row
+            // grid). Budgeted as a real band so the solve and BuildBody count the SAME thing —
+            // an unbudgeted spacer is the desync class this file keeps re-learning.
+            if (spoilBands > 0 && n > 0) { px += SpoilsLeadGapPx; n++; }
             px += spoilBands * RowPx; n += spoilBands;
             if (n > 1) px += BandGapPx * (n - 1);
             return px;
@@ -931,11 +1011,45 @@ namespace DeNelle.Village.UI
             return SpoilsBodyWidthPx(canvasH, PanelWidthFracFor(vm)) * 0.5f >= MinSpoilColumnPx ? 2 : 1;
         }
 
+        /// <summary>THE ONE spoils band plan — (first index, how many cells) per band, top to
+        /// bottom. Both the panel SOLVE (via <see cref="SpoilBandCount"/>) and the LAYOUT (via
+        /// BuildBody) call this, so they can never disagree about the band count.
+        ///
+        /// OWNER F8 2026-09-02, defect #4 ("row-shape inconsistency"): a resource row is
+        /// icon + short noun + right-aligned "+180". A structure-damage row is a SENTENCE plus a
+        /// COST ("Archer Tower - damaged 40%" / "Repair 40 wood, 12 iron") — a different kind of
+        /// thing that was wearing a resource row's clothes, and in a half-width cell both halves
+        /// ellipsised, so it read as a BROKEN resource row rather than a different one.
+        /// <see cref="SpoilRowVM.Wide"/> is the row saying so: a wide row always takes a band to
+        /// itself, at the full body width, and therefore reads as its own grammar.</summary>
+        private static List<(int first, int count)> SpoilBandPlan(EndStateVM vm, int cols)
+        {
+            var plan = new List<(int, int)>();
+            if (vm == null || vm.Spoils.Count == 0) return plan;
+            if (cols < 1) cols = 1;
+            int i = 0;
+            while (i < vm.Spoils.Count)
+            {
+                var row = vm.Spoils[i];
+                if (cols == 1 || (row != null && row.Wide)) { plan.Add((i, 1)); i++; continue; }
+                int n = 1;
+                while (n < cols && i + n < vm.Spoils.Count)
+                {
+                    var next = vm.Spoils[i + n];
+                    if (next != null && next.Wide) break;   // a wide row never shares a band
+                    n++;
+                }
+                plan.Add((i, n));
+                i += n;
+            }
+            return plan;
+        }
+
         /// <summary>How many BANDS the spoils occupy — the number the panel solve must budget.</summary>
         private static int SpoilBandCount(EndStateVM vm, float canvasH)
         {
             if (vm == null || vm.Spoils.Count == 0) return 0;
-            return Mathf.CeilToInt(vm.Spoils.Count / (float)SpoilColumns(vm, canvasH));
+            return SpoilBandPlan(vm, SpoilColumns(vm, canvasH)).Count;
         }
 
         /// <summary>Stack the VM's content top-down inside the body zone. F8-35: bands are
@@ -1008,11 +1122,15 @@ namespace DeNelle.Village.UI
             // solve and the layout can never disagree about how many bands there are.
             int spoilCols = SpoilColumns(vm, _canvasH);
             float spoilBodyPx = SpoilsBodyWidthPx(_canvasH, PanelWidthFracFor(vm));
-            int spoilBands = SpoilBandCount(vm, _canvasH);
-            for (int b = 0; b < spoilBands; b++)
+            var spoilPlan = SpoilBandPlan(vm, spoilCols);
+            // The separator band — same test, same order as RequiredBodyPx's (`spoilBands > 0
+            // && n > 0`), so the two agree band-for-band. Empty builder: it exists to hold space.
+            if (spoilPlan.Count > 0 && bands.Count > 0)
+                bands.Add((SpoilsLeadGapPx, _ => { }));
+            foreach (var band in spoilPlan)
             {
-                int bandIdx = b;
-                bands.Add((RowPx, host => BuildSpoilBand(host, vm, bandIdx, spoilCols, spoilBodyPx)));
+                var b = band;   // captured per band — never the loop variable
+                bands.Add((RowPx, host => BuildSpoilBand(host, vm, b.first, b.count, spoilCols, spoilBodyPx)));
             }
 
             // Lay the bands out top-down at their OWN pixel heights. Only when the well is
@@ -1075,14 +1193,20 @@ namespace DeNelle.Village.UI
         /// cell beside an empty one. An empty cell reads as a reward that failed to load — the
         /// exact "icons are missing" complaint this WO is already fixing. A full-width capstone
         /// reads as deliberate, and on an arena win the odd tail IS the gear drop, the most
-        /// notable line on the screen. So 5 rewards lay out as [1][2] / [3][4] / [ 5 ].</summary>
-        private void BuildSpoilBand(RectTransform host, EndStateVM vm, int bandIdx, int cols, float bodyWidthPx)
+        /// notable line on the screen. So 5 rewards lay out as [1][2] / [3][4] / [ 5 ].
+        ///
+        /// 2026-09-02: the band's membership is no longer derived from a band INDEX (which
+        /// assumed every band held exactly <paramref name="cols"/> cells). It is handed in by
+        /// <see cref="SpoilBandPlan"/>, the one plan the panel solve also counts — that is what
+        /// lets a <see cref="SpoilRowVM.Wide"/> damage row take a whole band without the solve
+        /// and the layout disagreeing about how many bands exist.</summary>
+        private void BuildSpoilBand(RectTransform host, EndStateVM vm, int first, int count,
+                                    int cols, float bodyWidthPx)
         {
             if (vm == null || cols < 1) return;
-            int first = bandIdx * cols;
             int remaining = vm.Spoils.Count - first;
-            if (remaining <= 0) return;
-            int inBand = Mathf.Min(cols, remaining);
+            if (first < 0 || remaining <= 0) return;
+            int inBand = Mathf.Clamp(count, 1, Mathf.Min(cols, remaining));
             bool fullWidth = inBand == 1;
 
             for (int c = 0; c < inBand; c++)
@@ -1237,14 +1361,21 @@ namespace DeNelle.Village.UI
             // "Equipped" wrapped to "Equipp/d" and long gear names spilled into the value
             // column at the fixed FontBody size. FitSingleLine (§1.14) shrinks-to-fit with
             // ellipsis so neither side can ever wrap or cross the column split again.
+            // COLUMN SPLIT (owner F8 2026-09-02). A resource row is a short noun against a short
+            // "+180", so the 0.62/0.64 split is right for it. A WIDE row is a SENTENCE against a
+            // materials list, and on that shape the identity — the structure's NAME — is the half
+            // that must survive, so it gets the larger share. This is why the row must declare its
+            // kind (SpoilRowVM.Wide) rather than being detected from its string length.
+            float labelRightFrac  = row.Wide ? 0.70f : 0.62f;
+            float amountLeftFrac  = row.Wide ? 0.72f : 0.64f;
             var label = ElarionUiKit.Label(plate.transform, row.Label ?? "", 0f, 1f,
                 ElarionUi.Parchment, ElarionUi.FontBody, TMPro.TextAlignmentOptions.MidlineLeft,
-                labelLeftFrac, 0.62f);
+                labelLeftFrac, labelRightFrac);
             ElarionUiKit.FitSingleLine(label);
             label.raycastTarget = false;
             var amount = ElarionUiKit.Label(plate.transform, row.Amount ?? "", 0f, 1f,
                 ElarionUi.Gilt, ElarionUi.FontBody, TMPro.TextAlignmentOptions.MidlineRight,
-                0.64f, amountRightFrac, bold: true);
+                amountLeftFrac, amountRightFrac, bold: true);
             ElarionUiKit.FitSingleLine(amount);
             amount.raycastTarget = false;
             Track(plate, revealDelay, 0.96f);
