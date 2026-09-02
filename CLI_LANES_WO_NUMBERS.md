@@ -167,7 +167,19 @@
 > fine as history. A copied number is the bug **even when it was right the day it was written** -
 > that is exactly how the retired 860-899 UI block kept re-seeding collisions from CLAUDE.md sec.2.
 
-> ## ⚠ RECONCILED 2026-09-02 (CLI, eleventh pass): main line next free = **1316**.
+> ## ⚠ RECONCILED 2026-09-02 (CLI, twelfth pass): main line next free = **1317**.
+> *(CLI minted **WO-1316** while promoting the Pi build on the owner's word. **FOUR Vercel projects
+> serve this game and the repo deploys to ONE of them.** `.vercel/project.json` points at
+> `defenders-of-the-realm-v2`; **`echoes-of-elarion` is a SEPARATE project** — so a successful
+> `vercel deploy --prod` from this repo left `echoes-of-elarion.vercel.app` serving the 7,396-byte
+> PRE-GATE index while the repo's own project served the new 26,443-byte one. `defenders-webgl` is
+> the proof it already bit: it still serves the **July** validation key WO-1313 retired, 28 days
+> stale, unnoticed. Both main projects were deployed BY HAND today — a manual step, not a fix.
+> ⚠ OPEN AND OWNER-ONLY: which URL is in the Pi Developer Portal? Both serve the correct key, so the
+> key does not discriminate. Do not delete any project until she says.
+> Bumped 1316 -> 1317 in this SAME edit.)*
+>
+> ### superseded: RECONCILED 2026-09-02 (CLI, eleventh pass): main line next free = **1316**.
 > *(CLI minted **WO-1315** — the WebGL build built **StandaloneWindows64** Addressables content.
 > Captured verbatim: `ADDRESSABLES_CONTENT_OK 751 locations :: WebGLBuild target=StandaloneWindows64`,
 > and `ServerData/WebGL` was still on the Aug 30 catalog while Windows had regenerated that morning.
