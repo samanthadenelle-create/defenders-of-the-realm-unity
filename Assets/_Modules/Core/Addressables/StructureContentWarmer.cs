@@ -82,6 +82,10 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+// ⚠ `using System.Text;` rather than a qualified `System.Text.StringBuilder`: this class declares
+// `public const string System`, which shadows the System NAMESPACE inside the class body, so any
+// `System.X` member access here binds the const and fails to compile.
+using System.Text;
 using DeNelle.Core.Diagnostics;
 using DeNelle.Core.Platform;
 using UnityEngine;
@@ -147,6 +151,62 @@ namespace DeNelle.Core
 
         // Addresses that resolved to nothing even asynchronously; stop re-requesting them.
         private static readonly HashSet<string> s_deadAddresses = new HashSet<string>();
+
+        // PROD-022 Lane B — WHY did it fail, not just THAT it failed.
+        // The old failure line printed `handle.Status` and nothing else. `Failed` is an effect;
+        // "HTTP 404", "request timeout after 20s", "Cannot connect to destination host" are causes,
+        // and on Pi Browser (iPhone) the whole open question is WHICH of those the webview produced
+        // while the R2 objects were verified 200-and-public from the open internet the same hour.
+        // Addressables parks the real story in AsyncOperationHandle.OperationException — usually a
+        // RemoteProviderException whose message carries the URL, the UnityWebRequest.result and the
+        // HTTP status. We flatten that chain ONCE per address and keep it, so every downstream
+        // "model not found" line can name the cause instead of restating the effect.
+        private static readonly Dictionary<string, string> s_failureCause = new Dictionary<string, string>();
+
+        // PROD-022 Lane B — bound the residency retry storm.
+        // A miss re-requests on the next skin attempt, and a hub re-apply can drive several skin
+        // attempts per address per second. On Pi that turned into the same address cycling
+        // -> Skin / not found / <- Skin through a session's final seconds with no upper bound.
+        // Each address now gets a fixed budget of async attempts; the cap is LOGGED, never silent
+        // (CLAUDE.md §12 — the whole point is that giving up says so).
+        private static readonly Dictionary<string, int> s_attempts = new Dictionary<string, int>();
+
+        /// <summary>How many async fetches a single address may be given before it is retired for
+        /// this launch. 3 = one cold attempt plus two recoveries from a transient webview stall.</summary>
+        public const int MaxRequestAttempts = 3;
+
+        /// <summary>
+        /// The Pi Browser Addressables request timeout, in seconds. UNCHANGED at 20 by PROD-022 —
+        /// it is named here only so the trace line and the value cannot drift apart, and so a reader
+        /// classifying a TIMEOUT cause can see which number produced it. ⛔ Do not tune this as a
+        /// "fix" for PROD-022: the root is not proven and a timeout change would bake in a guess.
+        /// </summary>
+        public const int PiRequestTimeoutSeconds = 20;
+
+        // PROD-022 Lane B: how many transport-level requests this launch has issued, and the last URL
+        // Addressables asked for. On Pi this is the ONLY place the real URL is observable from managed
+        // code — the address is ours, the URL is the catalog's, and a 404-vs-timeout argument cannot be
+        // settled without seeing which one was fetched.
+        private static int s_webRequests;
+        private static string s_lastRequestUrl;
+
+        // PROD-022 Lane B (coordinator addendum, owner-supplied WebGL domain knowledge): a HANDLE on the
+        // most recent UnityWebRequest, kept so the failure path can read its responseCode + result.
+        //
+        // ⛔ WHY A TEXT-ONLY CLASSIFIER IS NOT ENOUGH, and this is the whole reason the reference is kept:
+        // on WebGL a CORS / preflight rejection surfaces as responseCode == 0 with NO distinctive message
+        // text at all. Classified by text alone it lands in CONNECTION or UNCLASSIFIED — i.e. the trace
+        // says "the socket dropped it" when the truth is "the browser refused to hand the response to the
+        // page". Those two have OPPOSITE fixes, so conflating them sends the next seat the wrong way.
+        // The numeric code is the only thing that separates them, and it lives on the request, not on the
+        // exception.
+        //
+        // ⚠ CORRELATION CAVEAT, stated rather than assumed: this is the LAST request issued, not
+        // necessarily the one belonging to the failing address. On Pi it is very likely the same one —
+        // the Pi policy serialises requests, so only one is active at a time — but a single asset load
+        // can issue several (bundle + dependencies). Every line built from it prints the URL as well, so
+        // a reader can check the correlation instead of trusting it.
+        private static UnityEngine.Networking.UnityWebRequest s_lastRequest;
 
         // First time each address was asked for and could not be served. Powers the
         // "how long did it wait" number in the Warn/Fail lines.
@@ -226,6 +286,28 @@ namespace DeNelle.Core
             return false;
         }
 
+        /// <summary>
+        /// PROD-022: the flattened UNDERLYING reason this address last failed to fetch — HTTP status,
+        /// <c>UnityWebRequest.result</c>, timeout-vs-protocol-error, and the RemoteProviderException
+        /// text when Addressables supplied one. Null when the address has never failed.
+        /// <para>Downstream loggers (StructureAssetLoader, VisualFactory) append this so the line the
+        /// reader actually finds — "model not found" — states the CAUSE. Before PROD-022 that line was
+        /// emitted after the fact and carried no network detail at all, which is why a Pi Browser
+        /// session's final seconds proved only that something had gone wrong.</para>
+        /// </summary>
+        public static string LastFailureCause(string address)
+        {
+            if (string.IsNullOrEmpty(address)) return null;
+            return s_failureCause.TryGetValue(address, out var cause) ? cause : null;
+        }
+
+        /// <summary>How many async fetches this address has already been given (PROD-022 retry cap).</summary>
+        public static int AttemptsFor(string address)
+        {
+            if (string.IsNullOrEmpty(address)) return 0;
+            return s_attempts.TryGetValue(address, out int n) ? n : 0;
+        }
+
         /// <summary>True when this address has already been proven absent from Addressables.</summary>
         public static bool IsKnownAbsent(string address) =>
             !string.IsNullOrEmpty(address) && s_deadAddresses.Contains(address);
@@ -258,9 +340,61 @@ namespace DeNelle.Core
         public static void Request(string address)
         {
             if (string.IsNullOrWhiteSpace(address)) return;
-            if (s_deadAddresses.Contains(address)) return;
-            if (s_resident.ContainsKey(Key(typeof(Object), address))) return;
-            if (!s_inFlight.Add(address)) return;
+
+            // PROD-022 Lane B — SAY WHY WE DID NOT ASK. Every one of these three returns used to be
+            // silent, so a reader watching the same address repeat "model not found" could not tell
+            // whether we were re-asking the CDN every frame or had stopped asking entirely on the
+            // first failure. Throttled to ~1 line per address per 5s: bounded, but never absent.
+            if (s_deadAddresses.Contains(address))
+            {
+                FlowTrace.Throttle(System, "req-dead-" + address, 5f,
+                    $"on-demand SKIP '{address}': address is RETIRED for this launch " +
+                    $"(attempts={AttemptsFor(address)}/{MaxRequestAttempts}) — no further fetch will be " +
+                    $"issued. Last cause: {LastFailureCause(address) ?? "unrecorded"}");
+                return;
+            }
+            if (s_resident.ContainsKey(Key(typeof(Object), address)))
+            {
+                FlowTrace.Throttle(System, "req-resident-" + address, 5f,
+                    $"on-demand SKIP '{address}': already RESIDENT — a caller is still reporting a miss, " +
+                    "so the miss is a TYPE mismatch in TryGet, not a fetch failure.");
+                return;
+            }
+            if (!s_inFlight.Add(address))
+            {
+                FlowTrace.Throttle(System, "req-inflight-" + address, 5f,
+                    $"on-demand SKIP '{address}': a fetch is ALREADY IN FLIGHT " +
+                    $"(inFlight={s_inFlight.Count}, piQueueDepth={s_piQueue.Count}, " +
+                    $"piRequestActive={s_piRequestActive}, waited={SecondsWaiting(address):F1}s). " +
+                    "The caller keeps its proxy; this is the expected shape while a bundle downloads.");
+                return;
+            }
+
+            // PROD-022 Lane B — THE RETRY BUDGET. Spend one attempt, and retire the address once the
+            // budget is gone. This is deliberately AFTER the in-flight dedupe (a re-ask while one is
+            // already running is not an attempt) and BEFORE any work is started, so the cap bounds
+            // network + decompression, not merely the logging.
+            s_attempts.TryGetValue(address, out int attempts);
+            attempts++;
+            s_attempts[address] = attempts;
+
+            if (attempts > MaxRequestAttempts)
+            {
+                s_inFlight.Remove(address);
+                s_deadAddresses.Add(address);
+                // ⛔ LOUD, NEVER SILENT. Giving up quietly is how the Pi trace ended with nothing but
+                // an effect line repeating. This says the budget is spent, and names the last cause.
+                FlowTrace.Fail(System,
+                    $"RETRY CAP: '{address}' has now failed {MaxRequestAttempts} async fetch attempt(s) — " +
+                    "retiring it for the rest of this launch; the caller keeps its pending-art proxy or " +
+                    $"baked twin and will NOT ask again. Last cause: {LastFailureCause(address) ?? "unrecorded"}");
+                // ⚠ Deliberately does NOT touch s_piRequestActive: nothing was ever dequeued for this
+                // address on this pass, so clearing the Pi serialisation latch here would release a
+                // DIFFERENT request that is genuinely still in flight and run two multi-MB downloads
+                // at once — the exact concurrency the Pi policy exists to prevent.
+                MaybeNotifySettled();
+                return;
+            }
 
             EnsureHost();
 
@@ -283,10 +417,30 @@ namespace DeNelle.Core
 
         private static void StartRequest(string address)
         {
+            // PROD-022 Lane B — the on-demand branch's own decision points, traced. Desktop never
+            // reaches here for structures (its warm pass has already made them resident), so every
+            // line below describes a code path ONLY Pi Browser executes. What it prints is what a
+            // reader needs to separate "we never asked" from "we asked and it did not come back":
+            // which address, whether the catalog can even be expected to know it yet, how deep the
+            // Pi serialisation queue is, and how many attempts this address has already spent.
+            float startedAt = Now();
+            FlowTrace.Step(System,
+                $"on-demand START '{address}' attempt={AttemptsFor(address)}/{MaxRequestAttempts} " +
+                $"piQueueDepth={s_piQueue.Count} inFlight={s_inFlight.Count} resident={s_resident.Count} " +
+                $"state={State} registeredKeysHarvested={s_registeredKeys.Count} " +
+                $"webRequestsSoFar={s_webRequests}.");
 
             bool started = Guard.Try(System, $"async request '{address}'", () =>
             {
                 var handle = Addressables.LoadAssetAsync<Object>(address);
+                // The handle identity + its state AT ISSUE TIME. A handle that is already Failed on
+                // the very next line means the catalog answered synchronously (no location) — a
+                // completely different defect from a handle that stays None for 20s and then times
+                // out, and the two were indistinguishable before this line existed.
+                FlowTrace.Step(System,
+                    $"on-demand HANDLE '{address}': valid={handle.IsValid()} status={handle.Status} " +
+                    $"isDone={handle.IsDone} pctComplete={handle.PercentComplete:0.00} " +
+                    $"issuedIn={(Now() - startedAt) * 1000f:0.0}ms.");
                 handle.Completed += h => OnRequestCompleted(address, h);
             });
 
@@ -297,6 +451,14 @@ namespace DeNelle.Core
                 // reapply loop cannot spin on it.
                 s_inFlight.Remove(address);
                 s_deadAddresses.Add(address);
+                // PROD-022: record a cause even here, so the downstream "model not found" line is
+                // never the only thing a reader finds. This branch is a THROW from the call itself
+                // (no handle exists to interrogate) — a different failure shape from a completed-but-
+                // failed operation, and the trace now says which of the two happened.
+                s_failureCause[address] = "Addressables refused the request synchronously (the " +
+                    "LoadAssetAsync call itself threw — typically InvalidKeyException: no location " +
+                    "for this address in the loaded catalog). See the Guard Fail line immediately " +
+                    "above for the exception text. | classified=KEY-MISSING";
                 if (WebGLPiPlatform.IsPiBrowserEnvironment)
                 {
                     s_piRequestActive = false;
@@ -321,12 +483,31 @@ namespace DeNelle.Core
             }
             else
             {
-                s_deadAddresses.Add(address);
+                // PROD-022 Lane B: read the CAUSE off the handle before releasing it. The old line
+                // printed handle.Status ("Failed") and stopped there, so a Pi Browser session could
+                // only prove that something went wrong — never whether it was the 20s request
+                // timeout, an HTTP 404, or the webview refusing the connection outright. Those three
+                // point at three completely different fixes.
+                string cause = DescribeFailure(handle);
+                s_failureCause[address] = cause;
+
+                int attempts = AttemptsFor(address);
+                bool budgetSpent = attempts >= MaxRequestAttempts;
+
+                // Retire only when the budget is spent. Before PROD-022 the FIRST failure retired the
+                // address permanently, which meant one transient webview stall cost that building its
+                // art for the whole launch. The budget is what makes a retry meaningful AND bounded.
+                if (budgetSpent) s_deadAddresses.Add(address);
+
                 FlowTrace.Fail(System,
-                    $"async load of '{address}' FAILED ({handle.Status}) after {SecondsWaiting(address):F1}s — " +
-                    "this structure will keep its baked twin for the rest of the launch. " +
-                    "Check the address exists in the Structure_Art group. NOTE: this is a visual " +
-                    "defect only; the game did NOT stall, which is the whole point of this path.");
+                    $"async load of '{address}' FAILED ({handle.Status}) after {SecondsWaiting(address):F1}s " +
+                    $"on attempt {attempts}/{MaxRequestAttempts}. CAUSE: {cause}. " +
+                    (budgetSpent
+                        ? "Retry budget SPENT — retiring this address for the rest of the launch; the " +
+                          "caller keeps its baked twin / pending-art proxy."
+                        : "Retry budget remains — the next skin attempt may re-request it.") +
+                    " NOTE: this is a visual defect only; the game did NOT stall, which is the whole " +
+                    "point of this path.");
                 Guard.Try(System, $"release failed handle '{address}'", () => Addressables.Release(handle));
             }
 
@@ -405,10 +586,28 @@ namespace DeNelle.Core
             {
                 s_warmStarted = true;
                 State = StructureContentState.Degraded;
-                Addressables.WebRequestOverride = request => request.timeout = 20;
+                Addressables.WebRequestOverride = InstrumentedPiWebRequest;
                 FlowTrace.Step(System,
                     "Pi Browser policy: eager structure download/residency disabled; " +
-                    "20s Addressables request timeout installed; assets load on demand.");
+                    $"{PiRequestTimeoutSeconds}s Addressables request timeout installed; assets load on demand.");
+
+                // PROD-022 Lane B — NAME WHAT THIS BRANCH SKIPS. Desktop reaches residency through
+                // WarmRoutine, which awaits Addressables.InitializeAsync, harvests every registered
+                // key into s_registeredKeys, and only then loads. This branch does NONE of that: it
+                // returns immediately and lets the first on-demand Request() be the first thing that
+                // ever touches Addressables. Desktop Chrome on the identical build showed ZERO
+                // "not resident" lines; Pi is the only host on this path, so the divergence is worth
+                // stating in the trace rather than inferring from two files later.
+                FlowTrace.Warn(System,
+                    "Pi on-demand branch DIVERGES from the desktop warm path in three ways, recorded " +
+                    "here so a trace reader does not have to derive them: (1) Addressables.InitializeAsync " +
+                    "is NOT awaited — the first on-demand request is the first touch of the catalog; " +
+                    "(2) no key harvest, so IsRegisteredAddress() answers false for EVERY address this " +
+                    "launch and any 'is it registered' report from this host is meaningless; " +
+                    "(3) State is reported Degraded from frame one, so IsSettled is TRUE immediately and " +
+                    "every WhenSettled retry fires as soon as the in-flight count reaches zero — " +
+                    "possibly before the catalog has produced a single location.");
+
                 MaybeNotifySettled();
                 return;
             }
@@ -612,6 +811,208 @@ namespace DeNelle.Core
         // =====================================================================
 
         private static string Key(Type t, string address) => t.Name + ":" + address;
+
+        /// <summary>The last URL Addressables asked the webview to fetch (PROD-022 diagnostics).</summary>
+        public static string LastRequestUrl => s_lastRequestUrl;
+
+        /// <summary>How many transport-level Addressables requests this launch has issued (PROD-022).</summary>
+        public static int WebRequestCount => s_webRequests;
+
+        /// <summary>
+        /// PROD-022 Lane B — the Pi Browser <c>Addressables.WebRequestOverride</c>. It applies the SAME
+        /// unchanged <see cref="PiRequestTimeoutSeconds"/> the policy always applied, and additionally
+        /// TRACES the request.
+        /// <para>⛔ WHY THE URL MATTERS ENOUGH TO LOG: the failing addresses' bundles were measured 200
+        /// and publicly readable from the open internet on the same day the device could not load them.
+        /// That leaves exactly two possibilities — the device asked for a DIFFERENT url than the one we
+        /// verified, or it asked for the right one and the webview did not complete it. Nothing in the
+        /// trace could separate those, because the URL was never printed. It is printed now, once per
+        /// distinct url, alongside the timeout that will bound it.</para>
+        /// </summary>
+        private static void InstrumentedPiWebRequest(UnityEngine.Networking.UnityWebRequest request)
+        {
+            if (request == null) return;
+
+            // The policy itself — byte-identical to what shipped. Set FIRST so a throw in the
+            // instrumentation below can never cost the request its bound.
+            request.timeout = PiRequestTimeoutSeconds;
+
+            Guard.Try(System, "trace Pi Addressables web request", () =>
+            {
+                s_webRequests++;
+                s_lastRequestUrl = request.url;
+                s_lastRequest = request;   // read back on the failure path for responseCode + result
+                FlowTrace.Once(System, "piurl-" + request.url,
+                    $"Pi transport request #{s_webRequests}: {request.method} {request.url} " +
+                    $"(timeout={PiRequestTimeoutSeconds}s). This is the URL the WEBVIEW was asked for — " +
+                    "compare it against the object verified readable on the CDN before blaming either side.");
+            });
+        }
+
+        /// <summary>
+        /// PROD-022 Lane B — read the TRANSPORT outcome (HTTP status + <c>UnityWebRequest.Result</c>) off
+        /// the most recent request. Returns false when nothing is readable.
+        /// <para>⛔ NEVER THROWS AND NEVER ASSUMES THE OBJECT IS ALIVE. Addressables disposes its
+        /// UnityWebRequest once the operation completes, and touching a disposed one throws — on the
+        /// failure path, where a diagnostic that can itself fail is worse than no diagnostic. Guarded,
+        /// and a failed read is reported as "unavailable" rather than as a zero, because a REAL zero is
+        /// the single most diagnostically loaded value here and must never be manufactured.</para>
+        /// </summary>
+        private static bool TryReadLastTransport(out long responseCode, out string result, out string url)
+        {
+            long code = -1;
+            string res = null;
+            string u = null;
+
+            bool ok = Guard.Try(System, "read last UnityWebRequest outcome", () =>
+            {
+                var req = s_lastRequest;
+                if (req == null) return;
+                u = req.url;
+                code = req.responseCode;
+                res = req.result.ToString();
+            });
+
+            responseCode = code;
+            result = res;
+            url = u;
+            return ok && res != null;
+        }
+
+        // =====================================================================
+        //  PROD-022 Lane B — turning an Addressables failure into a NAMED CAUSE
+        // =====================================================================
+
+        /// <summary>
+        /// Flatten <see cref="AsyncOperationHandle.OperationException"/> into one line a reader can act
+        /// on: every exception in the inner chain, plus a classification of what the transport actually
+        /// did (timeout / HTTP status / connection refused / key not in catalog).
+        /// <para>⛔ WHY THIS IS NOT "just log ex.Message": Addressables wraps the real story. The outer
+        /// exception is a generic ChainOperation/GroupOperation failure; the RemoteProviderException that
+        /// carries the URL, the <c>UnityWebRequest.result</c> and the HTTP status is one or two
+        /// InnerExceptions down. Logging only the outer one is how "Failed" became the entire record of a
+        /// P0 on a device we cannot attach a debugger to.</para>
+        /// <para>Never throws: this runs on a failure path, and a diagnostic that can itself fail is
+        /// worse than no diagnostic.</para>
+        /// </summary>
+        private static string DescribeFailure(AsyncOperationHandle handle)
+        {
+            string flat = null;
+            Guard.Try(System, "describe Addressables failure", () =>
+            {
+                var sb = new StringBuilder();
+                Exception ex = handle.OperationException;
+                if (ex == null)
+                {
+                    sb.Append("no OperationException was attached to the handle (status=")
+                      .Append(handle.Status)
+                      .Append("). The operation completed without a result and without an exception — " +
+                              "usually a catalog entry whose provider produced nothing.");
+                }
+                else
+                {
+                    int depth = 0;
+                    while (ex != null && depth < 6)
+                    {
+                        if (depth > 0) sb.Append("  <- ");
+                        sb.Append(ex.GetType().Name).Append(": ").Append(Flatten(ex.Message));
+                        ex = ex.InnerException;
+                        depth++;
+                    }
+                }
+                string all = sb.ToString();
+
+                // PROD-022 Lane B (coordinator addendum): the TRANSPORT numbers, printed verbatim and
+                // ALWAYS — even when the text classifier already succeeded. A real HTTP status and a
+                // zero must never be indistinguishable in the trace, because on WebGL the zero is the
+                // whole tell. "unavailable" is printed as itself and is NEVER collapsed to 0.
+                bool haveTransport = TryReadLastTransport(out long code, out string result, out string url);
+                sb.Append(" | responseCode=")
+                  .Append(haveTransport ? code.ToString() : "unavailable")
+                  .Append(" result=")
+                  .Append(haveTransport ? result : "unavailable")
+                  .Append(" transportUrl=")
+                  .Append(url ?? "(none)");
+
+                sb.Append(" | classified=").Append(Classify(all, code, haveTransport));
+                flat = sb.ToString();
+            });
+            return string.IsNullOrEmpty(flat) ? "cause could not be read off the handle" : flat;
+        }
+
+        /// <summary>Collapse newlines/tabs so one failure is one trace line (the web sink is line-oriented).</summary>
+        private static string Flatten(string s)
+        {
+            if (string.IsNullOrEmpty(s)) return "(no message)";
+            s = s.Replace("\r", " ").Replace("\n", " ").Replace("\t", " ");
+            return s.Length > 600 ? s.Substring(0, 600) + "…(truncated)" : s;
+        }
+
+        /// <summary>
+        /// Name the transport verdict in ONE word so a session can be swept with a single grep, and so
+        /// the three candidate roots for PROD-022 are separable without reading prose:
+        /// <c>TIMEOUT</c> (the 20s Pi request override fired — the fetch never completed),
+        /// <c>HTTP-4xx/5xx</c> (the CDN answered and refused — a §16 push/parity question),
+        /// <c>CONNECTION</c> (the webview would not or could not open the socket — a Pi Browser
+        /// question, not a CDN one), <c>KEY-MISSING</c> (the catalog has no such address — a build
+        /// question), <c>CORS-OR-NETWORK</c> (responseCode 0 — see below), <c>UNCLASSIFIED</c> (say so
+        /// rather than guess).
+        /// <para>⛔ THE NUMERIC CODE IS NOT OPTIONAL, and it is why this takes more than a message string.
+        /// On WebGL a CORS / preflight rejection arrives as <c>responseCode == 0</c> carrying NO
+        /// distinctive text, so a text-only classifier reads it as CONNECTION or UNCLASSIFIED — "the
+        /// socket dropped it" when the truth is "the browser blocked it". Opposite fixes. The zero branch
+        /// therefore sits AHEAD of CONNECTION, and every other branch keeps its original wording and
+        /// order: text evidence that is actually specific (a timeout, a 404) still wins, because a
+        /// genuine timeout also reports responseCode 0 and must not be re-labelled.</para>
+        /// </summary>
+        /// <param name="message">the flattened exception chain.</param>
+        /// <param name="responseCode">the transport's HTTP status, when one could be read.</param>
+        /// <param name="codeKnown">false when the request was already disposed — in that case the zero
+        /// branch is SKIPPED rather than guessed at, because an unread code is not a zero.</param>
+        private static string Classify(string message, long responseCode, bool codeKnown)
+        {
+            if (string.IsNullOrEmpty(message)) return "UNCLASSIFIED";
+            string m = message.ToLowerInvariant();
+
+            if (m.Contains("timeout") || m.Contains("timed out"))
+                return "TIMEOUT (the request never completed — on Pi Browser this is the 20s " +
+                       "Addressables WebRequestOverride firing, NOT a CDN refusal)";
+            if (m.Contains("invalidkey") || m.Contains("no location found") || m.Contains("unknown key"))
+                return "KEY-MISSING (Addressables has no location for this address — a content-build " +
+                       "question, not a network one)";
+            if (m.Contains("404") || m.Contains("not found"))
+                return "HTTP-404 (the CDN answered and has no such object — CLAUDE.md §16 push/parity)";
+            if (m.Contains("403") || m.Contains("forbidden"))
+                return "HTTP-403 (the object exists but is not publicly readable)";
+            if (m.Contains("500") || m.Contains("502") || m.Contains("503") || m.Contains("504"))
+                return "HTTP-5xx (the CDN/edge failed the request)";
+            // ── responseCode 0, AHEAD of CONNECTION (coordinator addendum, owner WebGL knowledge) ──
+            if (codeKnown && responseCode == 0)
+                return "CORS-OR-NETWORK (responseCode=0: the browser never delivered a response to the " +
+                       "page. On WebGL this is the signature of a CORS/preflight rejection OR a request " +
+                       "the webview refused/aborted outright — it is NOT a CDN status. Note: the R2 " +
+                       "objects were measured on 2026-09-02 as publicly readable WITH " +
+                       "`Access-Control-Allow-Origin: *` and a 204 preflight answering `GET, HEAD`, so " +
+                       "CORS POLICY IS THE LEAST LIKELY READING OF THIS LINE. And iOS memory jettison " +
+                       "is RULED OUT: the owner's device Analytics on 2026-09-02 carried JetsamEvent " +
+                       "reports for 08-28 through 09-01 and NONE for 09-02, across a window in which " +
+                       "the app died 10+ times - so nothing was killed for memory. Read this as the " +
+                       "webview refusing or abandoning the request for some OTHER reason, and pair it " +
+                       "with the PiLifecycle navigation= crumb: if the page RELOADED rather than " +
+                       "crashed, an in-flight fetch is cancelled and reports exactly this.)";
+
+            if (m.Contains("cannot connect") || m.Contains("connection") || m.Contains("dns") ||
+                m.Contains("unable to complete ssl") || m.Contains("curl"))
+                return "CONNECTION (the socket never carried the request — the host/webview refused " +
+                       "or dropped it; the CDN was never reached)";
+            if (m.Contains("protocolerror"))
+                return "PROTOCOL-ERROR (an HTTP status the transport treats as failure)";
+            if (m.Contains("datareceived") || m.Contains("checksum") || m.Contains("crc") ||
+                m.Contains("decompress"))
+                return "PAYLOAD (bytes arrived but did not survive verification/decompression — the " +
+                       "candidate signature of a memory-capped webview aborting a bundle mid-inflate)";
+            return "UNCLASSIFIED";
+        }
 
         private static float Now() => Time.realtimeSinceStartup;
 

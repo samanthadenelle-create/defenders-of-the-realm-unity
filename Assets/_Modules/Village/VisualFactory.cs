@@ -22,6 +22,7 @@
 // this mirrors that logic for the runtime side rather than forcing a dependency).
 // =============================================================================
 
+using System.Collections.Generic;
 using UnityEngine;
 using DeNelle.Core.Diagnostics;
 
@@ -153,6 +154,65 @@ namespace DeNelle.Village
 
     public static class VisualFactory
     {
+        // PROD-022 Lane B — BOUND THE MISS-LOG STORM, WITHOUT EVER GOING SILENT.
+        // The Fail below fires on EVERY Skin attempt, and a hub re-apply plus save replay can drive
+        // several attempts per address per second. A Pi Browser session's final seconds were nothing
+        // but the same four addresses cycling -> Skin / not found / <- Skin, which buries every other
+        // line in the capture and costs bandwidth on a device that is already the suspect.
+        // The shape here is deliberately ESCALATE-THEN-THROTTLE, never suppress:
+        //   attempts 1..MissLogCap   -> full Fail, with the underlying network cause
+        //   attempt  MissLogCap + 1  -> one Fail saying the cap is reached and what happens next
+        //   thereafter               -> a throttled Fail-equivalent, ~1 per 10s per address
+        // CLAUDE.md §12 is binding: instrumentation is permanent and a failure never becomes silent.
+        private const int MissLogCap = 3;
+        private static readonly Dictionary<string, int> s_missLogCounts = new Dictionary<string, int>();
+
+        /// <summary>
+        /// The one place a resolve-miss is reported. Escalates for the first few attempts, announces its
+        /// own cap, then throttles — and always carries the UNDERLYING fetch cause when the warmer has
+        /// one, so the reader is told WHY the bytes never arrived rather than merely that they did not.
+        /// </summary>
+        private static void ReportResolveMiss(string resourcesPath)
+        {
+            s_missLogCounts.TryGetValue(resourcesPath, out int n);
+            n++;
+            s_missLogCounts[resourcesPath] = n;
+
+            // Cross-module read, null-conditional per CLAUDE.md §10. Non-structure addresses (enemies,
+            // props, hero bodies) simply have no warmer record and report "none".
+            string cause = DeNelle.Core.StructureContentWarmer.LastFailureCause(resourcesPath);
+            int attempts = DeNelle.Core.StructureContentWarmer.AttemptsFor(resourcesPath);
+            string detail =
+                $"model not found via Addressables OR Resources: '{resourcesPath}' — returning null " +
+                "(caller falls back). UNDERLYING FETCH CAUSE: " +
+                (cause ?? "none recorded — no async fetch has FAILED for this address, so the bytes were " +
+                          "either never requested or are still in flight") +
+                $" [fetchAttempts={attempts}/{DeNelle.Core.StructureContentWarmer.MaxRequestAttempts}, " +
+                $"resolveAttempts={n}, warmerState={DeNelle.Core.StructureContentWarmer.State}, " +
+                $"resident={DeNelle.Core.StructureContentWarmer.ResidentCount}, " +
+                $"pending={DeNelle.Core.StructureContentWarmer.PendingRequests}, " +
+                $"lastTransportUrl={DeNelle.Core.StructureContentWarmer.LastRequestUrl ?? "(none)"}]";
+
+            if (n <= MissLogCap)
+            {
+                FlowTrace.Fail("VisualFactory", detail);
+                return;
+            }
+
+            if (n == MissLogCap + 1)
+            {
+                FlowTrace.Fail("VisualFactory",
+                    $"RESOLVE-LOG CAP: '{resourcesPath}' has now missed {n} times. Further misses for this " +
+                    "address are THROTTLED to roughly one line every 10s for the rest of the launch — they " +
+                    "are NOT suppressed and the address is NOT abandoned here (the fetch retry budget in " +
+                    "StructureContentWarmer owns that decision). " + detail);
+                return;
+            }
+
+            FlowTrace.Throttle("VisualFactory", "miss-" + resourcesPath, 10f,
+                $"(throttled, miss #{n}) " + detail);
+        }
+
         /// <summary>Loads <paramref name="resourcesPath"/> from Resources and skins it
         /// under <paramref name="host"/>. Returns null (caller falls back) if absent.</summary>
         public static GameObject Skin(Transform host, string resourcesPath, SkinOptions opts)
@@ -178,10 +238,12 @@ namespace DeNelle.Village
                 // ⚠ Post-CDN this line NAMES THE ADDRESS that failed, which is the whole benefit of
                 // resolving by address rather than by path: a remote miss says exactly which asset
                 // and which key, instead of leaving a silently empty spot in the world.
-                FlowTrace.Fail("VisualFactory",
-                    $"model not found via Addressables OR Resources: '{resourcesPath}' — returning null " +
-                    "(caller falls back). Check the address exists in the Structure_Art group and that " +
-                    "its bundle is uploaded to the CDN.");
+                // PROD-022 Lane B: routed through ReportResolveMiss so the line NAMES THE CAUSE
+                // (UnityWebRequest result / HTTP status / timeout-vs-protocol, from the warmer) and so
+                // the same address repeating cannot flood a session's final seconds. The wording
+                // "model not found via Addressables OR Resources: '<addr>'" is preserved verbatim
+                // because existing triage docs, greps and the WO's acceptance criterion match on it.
+                ReportResolveMiss(resourcesPath);
                 return null;
             }
             FlowTrace.Step("VisualFactory", $"resolved Resources model '{resourcesPath}' -> '{prefab.name}'.");

@@ -1,6 +1,19 @@
 # Lanes â€” Work-Order Numbers Only (for CLI)  Â·  reconciled 2026-06-12 (nightly refill)
 
-> ## PROD SERIES (post-launch): next free = **PROD-022**.
+> ## PROD SERIES (post-launch): next free = **PROD-023**.
+> *(CLI minted **PROD-022** 2026-09-02, RE-SCOPED same hour: Pi Browser (iPhone) CRASH-LOOPS -
+> Unity cold-boots every 30-60s unprovoked. First written as 'tapping BUY on
+> hearth-spark resets the app'; that premise was WRONG - owner then reset while *"simply standing
+> there"* and 25 sessions show cold boots every 30-60s with NO purchase attempt in any. Desktop
+> Chrome lived 3738s on the SAME build; Pi Browser dies in 30-60s. Unity heap FLAT at 247MB with no
+> error = the tab is killed from OUTSIDE. Owner's CDN hunch is supported: structure bundles retry-
+> storm ('model not found ... Check ... its bundle is uploaded to the CDN'), likely s16 occurrence
+> FIVE, same family as open PROD-021. Instrument the PiLifecycle crumb FIRST - it is console-only
+> and never reaches /api/trace, which is why the log goes silent.
+> Game is UNPLAYABLE on the published Pi build - blocks everything, purchases included.
+> Bumped 022 -> 023 in this SAME edit.)*
+>
+> ### superseded: PROD SERIES next free = **PROD-022**.
 > *(CLI minted **PROD-021** 2026-09-01 from the F8 backlog: the R2 catalog for the shipped build
 > was NEVER PUSHED - the exe 404s on StandaloneWindows64/catalog_2026.08.31.349579.hash while that
 > file sits in ServerData/ on disk. Occurrence FOUR of the CLAUDE.md s16 class, and it covers 93 of

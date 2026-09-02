@@ -213,6 +213,13 @@ namespace DeNelle.Core
                         $"knownAbsent={knownAbsent}, resident={StructureContentWarmer.ResidentCount}, " +
                         $"pending={StructureContentWarmer.PendingRequests}). Check repo.visualPrefabPath " +
                         "against the assets on disk, and that the grouper registered this exact address. " +
+                        // PROD-022 Lane B: state the CAUSE here, not just the effect. This line used to
+                        // list only our own bookkeeping, so a reader had to correlate it by hand with a
+                        // warmer line that might be hundreds of lines earlier — or, on Pi Browser, might
+                        // have been in the previous (killed) session entirely.
+                        $"UNDERLYING FETCH CAUSE: {StructureContentWarmer.LastFailureCause(address) ?? "none recorded — no async fetch has failed for this address"}. " +
+                        $"attempts={StructureContentWarmer.AttemptsFor(address)}/{StructureContentWarmer.MaxRequestAttempts}, " +
+                        $"lastTransportUrl={StructureContentWarmer.LastRequestUrl ?? "(none)"}. " +
                         "NOTE: this is a VISUAL defect. The game did not stall — that is deliberate.");
                 }
             }
