@@ -142,3 +142,21 @@ The badge evidently describes the LISTING status, not the SDK auth environment.
 The CLI was one edit from reverting `PiEnvironment.Sandbox` to `true` on the strength of that label
 when the first successful capture landed. **That revert would have broken working authentication.**
 Do not make it. See WO-1317's PROVEN section and WO-1321.
+
+### Minor finding (P3, not ticketed) — ad-consent buttons are authored under the touch floor
+
+Captured repeatedly across the Pi Browser sessions:
+```
+[touch-oracle] CLAMP FIRED AdConsentUI/ObsidianPanel/PanelFill/ObsBtn_Yes, personalise ads:
+  authored 701.9x98.8 -> grown 701.9x112 (1.0x on W, 1.13x on H). Author the b[utton]...
+```
+Both consent buttons (`ObsBtn_Yes` / `ObsBtn_No`) are authored at **98.8 px** high against the
+`MinTouchPx = 112` floor, and the runtime clamp rescues them by growing 1.13x on H.
+
+Not a player-facing defect — the clamp is the safety net working as designed, and the trace names the
+offender by path, which is why this was even visible. But a surface that relies on the net every time
+is authored wrong, and the growth changes the layout the designer actually laid out. Fix by authoring
+the buttons at >= 112 px.
+
+⚠ Recorded rather than ticketed deliberately: three lanes were mid-flight and a P3 authoring nit does
+not earn a WO number ahead of them. Mint one when the Pi lane settles.
