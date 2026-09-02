@@ -30,6 +30,7 @@ namespace DeNelle.Village.Monetization
         private AdFace _adFace = AdFace.Unknown;
         private bool _offeredThisSession;
         private bool _claiming;
+        private Coroutine _offerRoutine;
 
         // -- canon-strings keys (WO-1051 section 4). No player-facing sentence is typed inline. --
         private const string KeyTitle          = "chestTitle";
@@ -115,28 +116,46 @@ namespace DeNelle.Village.Monetization
         public static void NotifyTutorialFinished()
         {
             s_tutorialJustFinished = true;
-            if (s_instance != null) s_instance.StartCoroutine(s_instance.OfferAfterDelay());
+            if (s_instance != null) s_instance.QueueOffer();
         }
 
         private void OnEnable()
         {
             SceneManager.sceneLoaded += OnSceneLoaded;
-            StartCoroutine(OfferAfterDelay());
+            QueueOffer();
         }
 
-        private void OnDisable() => SceneManager.sceneLoaded -= OnSceneLoaded;
+        private void OnDisable()
+        {
+            SceneManager.sceneLoaded -= OnSceneLoaded;
+            if (_offerRoutine != null) StopCoroutine(_offerRoutine);
+            _offerRoutine = null;
+        }
 
         private void OnSceneLoaded(Scene scene, LoadSceneMode mode)
         {
             _offeredThisSession = false;
-            StartCoroutine(OfferAfterDelay());
+            QueueOffer();
         }
 
-        private IEnumerator OfferAfterDelay()
+        private void QueueOffer()
+        {
+            if (_offerRoutine != null) StopCoroutine(_offerRoutine);
+            _offerRoutine = StartCoroutine(OfferWhenUiClear());
+        }
+
+        private IEnumerator OfferWhenUiClear()
         {
             yield return new WaitForSecondsRealtime(s_tutorialJustFinished ? 0.75f : 1.25f);
             s_tutorialJustFinished = false;
+            int clearFrames = 0;
+            while (clearFrames < 2)
+            {
+                clearFrames = PanelManager.AnyOpen ? 0 : clearFrames + 1;
+                yield return null;
+            }
             TryOffer();
+            _offerRoutine = null;
         }
 
         private void Update()
@@ -195,9 +214,12 @@ namespace DeNelle.Village.Monetization
             var state = GameStateService.Instance?.State;
             if (state == null || !state.Onboarded || string.Equals(state.DailyChestDayKey, TodayKey(), StringComparison.Ordinal)) return;
 
-            _offeredThisSession = true;
             Build();
-            AdServices.Current.PreloadRewarded(PlacementId);
+            if (_modal != null)
+            {
+                _offeredThisSession = true;
+                AdServices.Current.PreloadRewarded(PlacementId);
+            }
         }
 
         private void Build()

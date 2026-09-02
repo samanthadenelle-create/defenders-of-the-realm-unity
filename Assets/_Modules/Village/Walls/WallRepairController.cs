@@ -462,7 +462,7 @@ namespace DeNelle.Village
             if (!target.NeedsRepair)
             {
                 ClearSelection();
-                FeedbackShown?.Invoke(WallRepairStrings.IntactMessage, false);
+                FlowTrace.Step("Repair", $"ignored intact structure tap: '{target.DisplayName}'.");
                 return;
             }
 
@@ -1307,7 +1307,7 @@ namespace DeNelle.Village
 
             if (!_selected.NeedsRepair)
             {
-                FeedbackShown?.Invoke(WallRepairStrings.IntactMessage, false);
+                FlowTrace.Step("Repair", $"repair confirmation became a no-op because '{_selected.DisplayName}' is intact.");
                 ClearSelection();
                 return;
             }

@@ -350,11 +350,36 @@ namespace DeNelle.Village
 
         private void EnsureVfxAnchor()
         {
-            if (_vfxAnchor != null) return;
-            var go = new GameObject("[StructureBurnFire]");
-            go.transform.SetParent(transform, false);
-            go.transform.localPosition = new Vector3(0f, _fireVfxYOffset, 0f);
-            _vfxAnchor = go.transform;
+            if (_vfxAnchor == null)
+            {
+                var go = new GameObject("[StructureBurnFire]");
+                go.transform.SetParent(transform, false);
+                _vfxAnchor = go.transform;
+            }
+
+            var renderers = GetComponentsInChildren<Renderer>(true);
+            Bounds visible = default;
+            bool found = false;
+            for (int i = 0; i < renderers.Length; i++)
+            {
+                var r = renderers[i];
+                if (r == null || !r.enabled || r is ParticleSystemRenderer) continue;
+                if (r.transform == _vfxAnchor || r.transform.IsChildOf(_vfxAnchor)) continue;
+                if (!r.gameObject.activeInHierarchy) continue;
+                if (!found) { visible = r.bounds; found = true; }
+                else visible.Encapsulate(r.bounds);
+            }
+
+            if (found)
+            {
+                float bodyY = Mathf.Lerp(visible.min.y, visible.max.y, 0.58f);
+                _vfxAnchor.position = new Vector3(visible.center.x,
+                    bodyY + Mathf.Max(0f, _fireVfxYOffset), visible.center.z);
+            }
+            else
+            {
+                _vfxAnchor.localPosition = new Vector3(0f, _fireVfxYOffset, 0f);
+            }
         }
 
         // Never leak the loop if the component/structure is disabled or destroyed.
