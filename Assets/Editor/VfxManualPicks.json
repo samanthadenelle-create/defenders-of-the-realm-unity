@@ -351,6 +351,13 @@
             "manual": true
         },
         {
+            "key": "Lightningspellmaybe_Cast",
+            "prefabPath": "Assets/Hovl Studio/AOE Magic spells Vol.1/Prefabs/Lightning strike.prefab",
+            "isLoop": false,
+            "scale": 1.0,
+            "manual": true
+        },
+        {
             "key": "LongCastSpell_Cast",
             "prefabPath": "Assets/Hovl Studio/RPG VFX Bundle/Random effect prefabs/Buff chain.prefab",
             "isLoop": false,
@@ -806,6 +813,13 @@
             "manual": true
         },
         {
+            "key": "ShieldBuff_Aura",
+            "prefabPath": "Assets/Lana Studio/Casual RPG VFX/Prefabs/Shields/Shield_gold.prefab",
+            "isLoop": false,
+            "scale": 1.0,
+            "manual": true
+        },
+        {
             "key": "ShieldBuff_Cast",
             "prefabPath": "Assets/Spells Pack/Particles/Prefabs/Projectiles/Casting/Casting_Arcane.prefab",
             "isLoop": false,
@@ -899,6 +913,13 @@
         {
             "key": "Weaponskillsword_Impact",
             "prefabPath": "Assets/Hovl Studio/AAA Projectiles Vol 1/Prefabs/Flash and hits/Hit 5 red.prefab",
+            "isLoop": false,
+            "scale": 1.0,
+            "manual": true
+        },
+        {
+            "key": "firespell_Cast",
+            "prefabPath": "Assets/Spells Pack/Particles/Prefabs/Spells/Spell_Fire_9.prefab",
             "isLoop": false,
             "scale": 1.0,
             "manual": true

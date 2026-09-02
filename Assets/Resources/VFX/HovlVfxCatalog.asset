@@ -482,6 +482,13 @@ MonoBehaviour:
     DefaultLifetime: 0
     Recolorable: 1
     IsLoop: 0
+  - Key: Lightningspellmaybe_Cast
+    Prefab: {fileID: 1604970523841052, guid: dfabbd05c7735314e97de47b3d7695c4, type: 3}
+    PoolSize: 6
+    DefaultScale: 1
+    DefaultLifetime: 0
+    Recolorable: 1
+    IsLoop: 0
   - Key: LongCastSpell_Cast
     Prefab: {fileID: 1761614549529672, guid: 7ee7aea814e67034c991de25882a040b, type: 3}
     PoolSize: 6
@@ -937,6 +944,13 @@ MonoBehaviour:
     DefaultLifetime: 0
     Recolorable: 1
     IsLoop: 0
+  - Key: ShieldBuff_Aura
+    Prefab: {fileID: 4631137236932131032, guid: fc9d2d55dc8168c48b7c5483555d92f9, type: 3}
+    PoolSize: 6
+    DefaultScale: 1
+    DefaultLifetime: 0
+    Recolorable: 1
+    IsLoop: 0
   - Key: ShieldBuff_Cast
     Prefab: {fileID: 13531440185366499, guid: 19be04178a7a6d542b5543b52eaacea4, type: 3}
     PoolSize: 6
@@ -1030,6 +1044,13 @@ MonoBehaviour:
     IsLoop: 0
   - Key: Weaponskillsword_Impact
     Prefab: {fileID: 1120835270511274, guid: 33cfc2755a55b7e4c86c9d7018efbaaa, type: 3}
+    PoolSize: 6
+    DefaultScale: 1
+    DefaultLifetime: 0
+    Recolorable: 1
+    IsLoop: 0
+  - Key: firespell_Cast
+    Prefab: {fileID: 5360962108930817432, guid: 9d050a758c1b52a4498c7cfa292f025a, type: 3}
     PoolSize: 6
     DefaultScale: 1
     DefaultLifetime: 0
