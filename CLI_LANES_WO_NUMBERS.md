@@ -167,7 +167,21 @@
 > fine as history. A copied number is the bug **even when it was right the day it was written** -
 > that is exactly how the retired 860-899 UI block kept re-seeding collisions from CLAUDE.md sec.2.
 
-> ## ⚠ RECONCILED 2026-09-02 (CLI, eighteenth pass): main line next free = **1324**.
+> ## ⚠ RECONCILED 2026-09-02 (CLI, nineteenth pass): main line next free = **1325**.
+> *(CLI minted **WO-1324** after an owner crash the trace COULD NOT EXPLAIN — *"when I tried adding
+> archer tower it crashed and unity restarted"*. The sink caught a **128,792 ms frozen frame**
+> ("a stall from outside the VFX pool") and then NOTHING: `WebTrace` flushes every 5 s and drops the
+> ring on teardown (`:81-83`, `:33`), so **the one window we need is the only window guaranteed to be
+> lost**. Same class as a gate that reports success without proving it — an instrument blind to
+> exactly the event it exists to record. Fix = flush on `pagehide`/`beforeunload` via `sendBeacon`
+> (the only send that survives teardown) + force a flush on a hitch; NOT a lower global cadence.
+> ⚠ RULED OUT with data, so the archer-tower RCA does not re-walk it: the watchtower content is
+> present and correct on WebGL — all 4 objects the catalog names verified on R2, 2.35/0.96/0.96/0.06
+> MB. Android's 11 watchtower bundles are the SAME assets at stale hashes, not extra content; I
+> briefly read that as WebGL missing two-thirds of it and corrected before it misled anyone.
+> Bumped 1324 -> 1325 in this SAME edit.)*
+>
+> ### superseded: RECONCILED 2026-09-02 (CLI, eighteenth pass): main line next free = **1324**.
 > *(CLI minted **WO-1322 + WO-1323** from an owner felt-test in REAL Pi Browser, where Pi sign-in
 > WORKED (Title chip "Pi: samanthadenelle") and two surfaces then ignored it.
 > **1322** = P0: after a successful Pi sign-in the game still demands a Solana wallet.
