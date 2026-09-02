@@ -93,3 +93,52 @@ back, it goes ON THE BAR, never back on the name line.
 | Enemy family prewarm | 4 bad keys observed live (`largehumanoid`, `orchumanoid`, `skeletonhumanoid`, `skeleton`). WO-1303 routed. |
 | Thunderbolt | Bound and committed; not yet felt. |
 | Pi | Validation-key mismatch unresolved — needs the portal value. Deployed site ~5 days stale. |
+
+---
+
+## Pi Browser session — 2026-09-02 ~10:20 (owner, real device)
+
+The first genuine Pi Browser felt-test of the published build. Every line below is from the live
+`web_trace` sink, not from a report.
+
+### PASSED — proven by capture
+
+**Pi sign-in on MAINNET.** Sessions `wt-1454dc8bfaa4`, `wt-ea6bc0d7b98f`, `wt-2129a836dcdd`,
+`wt-e8606cf213fa` — reproduced four times, zero failures:
+```
+[Flow:Pi] PiInit(sandbox=False)
+[Flow:Pi] PiAuthenticate(scopes=username)
+[Flow:Pi] Signed in as samanthadenelle (uid bound to session).
+```
+Closes the owner's 2026-09-02 report *"it did before but now i cant get the authentication to work"*.
+Root cause was WO-1317: the published client ran `PiInit(sandbox=True)` against a mainnet-authenticating
+app.
+
+**The Pi currency skin.** `Currency skin resolved: 'pi' (auth=PiSdk, symbol=pi, identity=PiUid)` —
+closes her *"make sure the market lists as pi not as SKR"* at the skin level. The `.pinet.com` host
+signal added in WO-1317 is what catches it; the UA check alone returned 0 in her WebView.
+
+**Landscape rendering.** Her screenshots show the game rendered rotated in a portrait Pi Browser —
+WO-1312's rotation is active in the field. ⚠ The INPUT SHIM is still unproven: she navigated menus, so
+taps clearly land, but no systematic check was done and the harness was never run.
+
+**Title identity chip** reads `Pi: samanthadenelle`.
+
+### FAILED — two defects found, both ticketed
+
+- **WO-1322 (P0)** — after a successful Pi sign-in the game still presents
+  *"CHOOSE YOUR WALLET / Your wallet is your save"*. The login gate never consults
+  `PiSignInController`; it reads two wallet booleans and a hardcoded `false`.
+- **WO-1323 (P1)** — the Night Market prices everything in **$SKR** under the Pi skin
+  (1022 SKR / 2555 SKR / 511 SKR, *"Connect a wallet to see your balance"*). No `pi` key exists on any
+  of the 28 packs, and `PackStore` defaults to `CurrencyKind.Skr`.
+
+### ⚠ A CORRECTION THE NEXT SESSION MUST NOT UNDO
+
+The Pi Developer Portal shows this app badged **`Testnet`**. **The capture disagrees and the capture
+wins** — a `sandbox=False` (mainnet) init authenticated four times, minutes after that badge was read.
+The badge evidently describes the LISTING status, not the SDK auth environment.
+
+The CLI was one edit from reverting `PiEnvironment.Sandbox` to `true` on the strength of that label
+when the first successful capture landed. **That revert would have broken working authentication.**
+Do not make it. See WO-1317's PROVEN section and WO-1321.

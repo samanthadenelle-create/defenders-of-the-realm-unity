@@ -167,7 +167,23 @@
 > fine as history. A copied number is the bug **even when it was right the day it was written** -
 > that is exactly how the retired 860-899 UI block kept re-seeding collisions from CLAUDE.md sec.2.
 
-> ## ⚠ RECONCILED 2026-09-02 (CLI, seventeenth pass): main line next free = **1322**.
+> ## ⚠ RECONCILED 2026-09-02 (CLI, eighteenth pass): main line next free = **1324**.
+> *(CLI minted **WO-1322 + WO-1323** from an owner felt-test in REAL Pi Browser, where Pi sign-in
+> WORKED (Title chip "Pi: samanthadenelle") and two surfaces then ignored it.
+> **1322** = P0: after a successful Pi sign-in the game still demands a Solana wallet.
+> `LoginPanelController.PresentOrContinue` (`:159-183`) samples `walletConnected` +
+> `walletIdentityBound` and HARDCODES the third input false — *"wallet-only build, WO-837-B"* — and
+> never references `PiSignInController`. That `false` was TRUE when written and the Pi skin outgrew
+> it. ⛔ Do NOT weaken the gate for the SKR skin (WO-1249) and do NOT reintroduce an await there
+> (WO-837-B removed a 12s blocking probe it calls "the worst softlock site on the whole surface").
+> **1323** = the Night Market prices everything in $SKR under the Pi skin. Measured: packs.json
+> pricing keys are `['skr','sol','usd','usdc']` — **no `pi` on any of 28 packs** — and
+> `PackStore.cs:81` defaults to `CurrencyKind.Skr`. WO-1318 wired the Pi QUOTE endpoint for one sku;
+> it never touched the shelf DISPLAY. ⛔ Do NOT author static `pi` prices — the price is a live
+> `low_24h` server derivation, and the client must never compute one.
+> Bumped 1322 -> 1324 in this SAME edit.)*
+>
+> ### superseded: RECONCILED 2026-09-02 (CLI, seventeenth pass): main line next free = **1322**.
 > *(CLI minted **WO-1321** on the owner's ruling *"Build it to try both"*. Pi sign-in now tries the
 > declared environment and RETRIES ONCE on the opposite one, tracing both by name, so ONE Pi Browser
 > session settles a question three sources disagreed about: the captured 09-01 trace shows
