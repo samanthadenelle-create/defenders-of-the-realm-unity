@@ -400,6 +400,50 @@ namespace DeNelle.Village
         private float _countdownRemaining;
         private bool  _forceSpawnNow;   // dev/bot "jump to wave": zero the countdown on the next BeginLoop
 
+        // ---------------------------------------------------------------------
+        // WO-1308 INSTRUMENTATION - the last phase transition, recorded centrally.
+        //
+        // WHY: _phase is private with no external writer, and once it reaches Active the ONLY
+        // routine exit is TickActiveWave -> CompleteWave -> EnterCountdown. TickActiveWave is
+        // reached from exactly ONE place (the switch at the bottom of Update), which sits behind
+        // two early returns (the FTUE stand-down and the TownSuspension stand-down). If Update
+        // cannot reach that switch, Active is PERMANENT and the battle-lock probe registered in
+        // OnEnable holds the lock forever - which is the owner's "the wolf is still here and
+        // sitting in fight" (F8 seq 4663/4665).
+        //
+        // These fields answer "who set Active, when, and has the loop ticked since" without
+        // changing a single behaviour. Per CLAUDE.md sec.12 this instrumentation is PERMANENT.
+        private WavePhase _lastPhaseFrom      = WavePhase.Idle;
+        private WavePhase _lastPhaseTo        = WavePhase.Idle;
+        private string    _lastPhaseSite      = "<none since load>";
+        private float     _lastPhaseUnscaled  = -1f;
+        private int       _lastPhaseFrame     = -1;
+
+        // The frame/unscaled-time of the last Update that actually REACHED the phase switch,
+        // i.e. that got past BOTH early returns. A stale value here while _phase == Active is
+        // direct proof that an early return is eating the tick that would clear the wave.
+        private int   _lastSwitchFrame    = -1;
+        private float _lastSwitchUnscaled = -1f;
+
+        /// <summary>
+        /// WO-1308: the SINGLE writer of <see cref="_phase"/>. Every one of the nine assignment
+        /// sites routes through here so the last transition is always on the record when the
+        /// battle-quiescence gate asks why the lock is still held.
+        ///
+        /// It is a pure recorder: the assignment is identical to the one it replaced, no site is
+        /// gated, refused or reordered, and no trace is emitted here (the sites keep their own
+        /// FlowTrace lines). Behaviour is unchanged by construction.
+        /// </summary>
+        private void SetPhase(WavePhase next, string site)
+        {
+            _lastPhaseFrom     = _phase;
+            _lastPhaseTo       = next;
+            _lastPhaseSite     = string.IsNullOrEmpty(site) ? "<unnamed site>" : site;
+            _lastPhaseUnscaled = Time.unscaledTime;
+            _lastPhaseFrame    = Time.frameCount;
+            _phase             = next;
+        }
+
         // ENDLESS MODE (owner ruling 2026-07-11: "after 20 rounds continue to allow the user to
         // start waves manually and increase difficulty and mobs every level up"). Past the last
         // authored wave the loop does NOT auto-run the prepare countdown — it parks in phase
@@ -658,6 +702,160 @@ namespace DeNelle.Village
             if (_waveBattleProbe == null)
                 _waveBattleProbe = () => isActiveAndEnabled && Instance == this && _phase == WavePhase.Active;
             BattleLock.RegisterProbe(_waveBattleProbe);
+
+            // WO-1308: hand the battle-quiescence gate the ONE thing it could not see - WHY the
+            // wave probe above is returning true. BattleQuiescenceGate.Register replaces by name,
+            // so re-enabling (or a second WaveManager enabling) cannot accumulate duplicates, and
+            // the delegate is STATIC so it never binds to one instance and then goes stale.
+            RegisterWavePhaseQuiescenceProbe();
+        }
+
+        // =====================================================================
+        //  WO-1308 - the "wave-phase" quiescence probe
+        // =====================================================================
+        //
+        // THE CAPTURE THIS EXISTS FOR (owner felt-test 2026-09-02, F8 seq 4663-4665):
+        //   BATTLE_QUIESCENCE_FAIL (retreat) - battle-lock: still HELD ...
+        //     HOLDER(S): PursuitBattleProbe.Probe, WaveManager.<OnEnable>b__106_0
+        //   battle-lock STILL HELD after the self-heal (retreat): [WaveManager.<OnEnable>b__106_0]
+        // PursuitBattleProbe released; the wave probe did not, because _phase was still Active.
+        //
+        // ⛔ THE PROBE ABOVE IS NOT THE BUG AND IS NOT TO BE "FIXED". A live village siege genuinely
+        // IS combat, and a retreat from an overworld wolf must NOT cancel a siege. Making it return
+        // false during a real wave would trade a stuck lock for a combat state the game does not
+        // know it is in - strictly worse, and invisible. The open question is whether _phase was
+        // Active with NO LIVE WAVE BEHIND IT, and that is a question only DATA can answer
+        // (CLAUDE.md sec.12). This probe captures that data and changes nothing else.
+        //
+        // ⚠ DELIBERATE SCOPE, recorded loudly because the owner is mid-felt-test and could not be
+        // asked: this probe reports ONLY when a WaveManager satisfies the EXACT holder predicate
+        // (isActiveAndEnabled && Instance == wm && _phase == Active). That is the same predicate as
+        // the battle-lock probe, so the gate's battle-lock invariant is ALREADY failing whenever
+        // this speaks. It therefore CANNOT manufacture a new BATTLE_QUIESCENCE_FAIL on a clean
+        // battle - it only annotates one that was going to fail anyway. The cost of that choice: a
+        // phase stranded Active on a NON-canonical (loser) WaveManager stays silent. The RCA rates
+        // that direction inert precisely because the lock probe's `Instance == this` clause
+        // neutralises it, and the live-instance count printed below still surfaces the Q4 shape.
+
+        /// <summary>
+        /// WO-1308. Registers the "wave-phase" <see cref="QuiescenceProbe"/> with
+        /// <see cref="BattleQuiescenceGate"/> so the wave loop's state prints INSIDE the same
+        /// BATTLE_QUIESCENCE_FAIL block that names the lock holder.
+        ///
+        /// Core cannot reference DeNelle.Village (the gate's own header says so), so the knowledge
+        /// arrives as a delegate through the existing registration seam - exactly the way
+        /// BattleArena registers "arena-actors" / "hero-owner". No new assembly reference, no new
+        /// registry, no second gate.
+        /// </summary>
+        private static void RegisterWavePhaseQuiescenceProbe()
+        {
+            BattleQuiescenceGate.Register(new QuiescenceProbe
+            {
+                Name  = "wave-phase",
+                Check = CheckWavePhaseQuiescence
+            });
+        }
+
+        /// <summary>
+        /// Returns null unless a WaveManager is holding the battle lock through
+        /// <see cref="WavePhase.Active"/>; otherwise returns the full latched-phase dump.
+        /// Static and Find-based on purpose: it must survive an instance being destroyed and it
+        /// must be able to SEE a second WaveManager rather than assume there is one.
+        /// </summary>
+        private static string CheckWavePhaseQuiescence()
+        {
+            var all = Guard.Try("Quiescence", "wave-phase enumerate WaveManagers",
+                () => FindObjectsByType<WaveManager>(FindObjectsInactive.Include, FindObjectsSortMode.None),
+                System.Array.Empty<WaveManager>());
+            if (all == null || all.Length == 0) return null;
+
+            WaveManager holder = null;
+            for (int i = 0; i < all.Length; i++)
+            {
+                WaveManager wm = all[i];
+                if (wm == null) continue;
+                if (wm.isActiveAndEnabled && Instance == wm && wm._phase == WavePhase.Active)
+                {
+                    holder = wm;
+                    break;
+                }
+            }
+            if (holder == null) return null;   // no wave is holding the lock; nothing to report
+
+            return Guard.Try("Quiescence", "wave-phase dump",
+                () => holder.DescribeLatchedWavePhase(all.Length),
+                "phase=Active but the state dump itself threw - see the Guard line above.");
+        }
+
+        /// <summary>
+        /// WO-1308: the diagnostic sentence the gate prints. Every value the RCA named, in one
+        /// line, with the reading key appended so the next occurrence is self-diagnosing and does
+        /// not cost another felt-test to reproduce.
+        /// </summary>
+        private string DescribeLatchedWavePhase(int waveManagerCount)
+        {
+            // Count non-null enemies WITHOUT mutating _liveEnemies. A probe must observe, never
+            // edit: pruning here would change what TickActiveWave sees on the very next frame and
+            // could clear the wave as a SIDE EFFECT of looking at it - destroying the evidence.
+            int liveEnemies = 0;
+            for (int i = 0; i < _liveEnemies.Count; i++)
+                if (_liveEnemies[i] != null) liveEnemies++;
+            int nulls = _liveEnemies.Count - liveEnemies;
+
+            bool apexUp = _liveApexBoss != null && !_liveApexBoss.IsDead;
+
+            string sceneName = "?";
+            try { sceneName = gameObject.scene.name; } catch { sceneName = "<torn-down>"; }
+            string activeScene = "?";
+            try { activeScene = SceneManager.GetActiveScene().name; } catch { activeScene = "<none>"; }
+
+            int   frameNow   = Time.frameCount;
+            float unscaledNow = Time.unscaledTime;
+
+            string lastTransition = _lastPhaseFrame < 0
+                ? "NONE RECORDED since load (the phase has never moved through SetPhase - a serialized/default Active would look like this)"
+                : $"{_lastPhaseFrom} -> {_lastPhaseTo} at '{_lastPhaseSite}' " +
+                  $"(t={_lastPhaseUnscaled:F2}s unscaled, frame {_lastPhaseFrame}, " +
+                  $"{unscaledNow - _lastPhaseUnscaled:F2}s / {frameNow - _lastPhaseFrame} frames ago)";
+
+            string lastSwitch = _lastSwitchFrame < 0
+                ? "NEVER - Update has not reached the phase switch once since load"
+                : $"frame {_lastSwitchFrame} (t={_lastSwitchUnscaled:F2}s unscaled, " +
+                  $"{frameNow - _lastSwitchFrame} frames / {unscaledNow - _lastSwitchUnscaled:F2}s ago)";
+
+            bool suspendedForMe = Guard.Try("Quiescence", "wave-phase SuspendedFor",
+                () => TownSuspension.SuspendedFor(this), false);
+
+            return
+                "the wave loop is LATCHED at phase=Active, which is the whole reason the battle-lock " +
+                "is still held (the lock probe is WaveManager.OnEnable's lambda and it is CORRECT: a " +
+                "live siege is combat). The question is whether a live wave is really behind it. " +
+                $"phase={_phase} wave={_currentWaveId} awaitingPlayerStart={_awaitingPlayerStart} " +
+                $"countdownRemaining={_countdownRemaining:F2}s | " +
+                $"liveEnemies={liveEnemies} (+{nulls} null slot(s) not yet pruned) apexBossAlive={apexUp} " +
+                $"heart={(_heart == null ? "NULL" : "present")} | " +
+                $"heldSmartReinforcements={_heldSmartReinforcements} | " +
+                $"lastPhaseTransition: {lastTransition} | " +
+                $"lastUpdateReachedSwitch: {lastSwitch} | " +
+                $"townSuspension: IsSuspended={TownSuspension.IsSuspended} reason='{TownSuspension.Reason}' " +
+                $"graceRemaining={TownSuspension.ReturnGraceRemaining:F2}s held={TownSuspension.Held} " +
+                $"suspendedForThisManager={suspendedForMe} | " +
+                $"scene='{sceneName}' activeScene='{activeScene}' isCanonicalInstance={(Instance == this)} " +
+                $"isActiveAndEnabled={isActiveAndEnabled} liveWaveManagers={waveManagerCount} | " +
+                "HOW TO READ THIS (WO-1308 RCA): " +
+                "heldSmartReinforcements>0 with liveEnemies==0 => the dropped-async wedge - an " +
+                "exception inside the fire-and-forget DrainSmartReinforcements left the counter " +
+                "non-zero, so TickActiveWave returns before the clear test and the wave can NEVER " +
+                "complete. " +
+                "liveEnemies>0 with heart=NULL => the stuck-enemy failsafe is heart-gated and can " +
+                "never cull the survivor. " +
+                "held==0 and liveEnemies==0 and suspendedForThisManager=true with a grace around " +
+                "2.7s and a STALE lastUpdateReachedSwitch => the TownSuspension early return is " +
+                "eating the tick; this one self-clears once the return grace elapses. " +
+                "A stale lastUpdateReachedSwitch with suspendedForThisManager=false points at the " +
+                "FTUE stand-down instead. " +
+                "scene != activeScene, or liveWaveManagers>1 => the two-manager shape is also in " +
+                "play and the Instance claim needs reading alongside the above.";
         }
 
         private void OnDestroy()
@@ -795,7 +993,7 @@ namespace DeNelle.Village
                     "retracting the kickoff watchdogs (this Idle is deliberate, not a stall).");
                 _countdownRemaining = 0f;
                 _awaitingPlayerStart = false;
-                _phase = WavePhase.Idle;
+                SetPhase(WavePhase.Idle, "Update/FTUE-stand-down");
 
                 // RETRACT THE KICKOFF WATCHDOGS -- otherwise this stand-down manufactures a FALSE
                 // P0 in the owner's first-ever run.
@@ -861,7 +1059,7 @@ namespace DeNelle.Village
                         FlowTrace.Warn("Wave",
                             $"town suspended ({TownSuspension.Reason}) with wave {_currentWaveId} ACTIVE - " +
                             "policy=CancelOnEntry, returning the loop to Idle (the in-flight wave is abandoned).");
-                        _phase = WavePhase.Idle;
+                        SetPhase(WavePhase.Idle, "Update/town-suspend-CancelOnEntry");
                         _countdownRemaining = 0f;
                         OnCountdownTick.Invoke(0f);
                         WaveCountdownUI.Instance?.StartCountdown(0f);
@@ -877,6 +1075,14 @@ namespace DeNelle.Village
                 }
                 return;
             }
+
+            // WO-1308 INSTRUMENTATION: stamp the frame that got PAST both early returns above.
+            // This is the only line in Update that proves the loop is still being ticked. While
+            // _phase == Active, a _lastSwitchFrame far behind Time.frameCount means an early
+            // return (FTUE or TownSuspension) is eating the tick, and Active can never be lowered
+            // because TickActiveWave is reached from nowhere else. Two ints; no behaviour change.
+            _lastSwitchFrame    = Time.frameCount;
+            _lastSwitchUnscaled = Time.unscaledTime;
 
             switch (_phase)
             {
@@ -974,7 +1180,7 @@ namespace DeNelle.Village
             {
                 FlowTrace.Fail("Wave", $"wave data null — loop cannot run (schedule={_schedule != null}, catalog={_enemyCatalog != null}) — phase forced to Idle — {StallStateDump(-1)}");
                 Debug.LogError("[WaveManager] Wave data failed to load — the wave loop cannot run.");
-                _phase = WavePhase.Idle;
+                SetPhase(WavePhase.Idle, "BeginLoop/wave-data-null");
                 return;
             }
 
@@ -1253,7 +1459,7 @@ namespace DeNelle.Village
 
                 // No such wave and endless couldn't resolve (empty/degenerate schedule, or a
                 // gap INSIDE the authored range) — the schedule is exhausted.
-                _phase = WavePhase.Complete;
+                SetPhase(WavePhase.Complete, "EnterCountdown/schedule-exhausted");
                 FlowTrace.Step("Wave", $"EnterCountdown: no WaveDef for waveId={waveId} — schedule exhausted, phase->Complete");
                 Debug.Log($"[WaveManager] All {_schedule.Waves.Count} waves cleared — schedule complete.");
                 return;
@@ -1279,7 +1485,7 @@ namespace DeNelle.Village
             // async BeginLoop setting the countdown above).
             bool zeroedByForce = _forceSpawnNow;
             if (_forceSpawnNow) { _forceSpawnNow = false; _countdownRemaining = 0f; }
-            _phase = WavePhase.Countdown;
+            SetPhase(WavePhase.Countdown, "EnterCountdown");
             FlowTrace.Step("Wave", $"EnterCountdown -> phase=Countdown wave={_currentWaveId} countdown={_countdownRemaining:F2}s zeroedByForceSpawn={zeroedByForce}");
             OnCountdownTick.Invoke(_countdownRemaining);
             WaveCountdownUI.Instance?.StartCountdown(_countdownRemaining);
@@ -1320,7 +1526,7 @@ namespace DeNelle.Village
             // blank (it only renders while CountdownRemaining > 0). No horn yet — the calm
             // build phase is open-ended; the lookout horn blows when the wave actually starts.
             _countdownRemaining = 0f;
-            _phase = WavePhase.Countdown;
+            SetPhase(WavePhase.Countdown, "TryArmEndlessWave");
             FlowTrace.Step("Wave",
                 $"endless wave {waveId}: def={sourceWaveId} countScale=x{countScale:F2} " +
                 (zeroedByForce ? "force-spawning now (bot/jump)" : "awaiting player start"));
@@ -1529,7 +1735,9 @@ namespace DeNelle.Village
             }
             if (wave == null) { FlowTrace.Step("Wave", $"StartWave: no WaveDef for {waveId} — rolling to next countdown"); EnterCountdown(waveId + 1); return; }
 
-            _phase = WavePhase.Active;
+            // WO-1308: THE ONLY WRITER OF Active in the whole class. If a stuck battle-lock is
+            // ever traced back to a latched Active phase, this line is where it was raised.
+            SetPhase(WavePhase.Active, "StartWave");
             FlowTrace.Step("Wave", $"StartWave({waveId}) -> phase=Active (spawning begins)");
 
             // Prep screens may be open during the countdown. At Active they must yield
@@ -3211,7 +3419,7 @@ namespace DeNelle.Village
         private void HandleHeartDestroyed()
         {
             if (_phase == WavePhase.Defeated) return;   // already lost — idempotent
-            _phase = WavePhase.Defeated;
+            SetPhase(WavePhase.Defeated, "HandleHeartDestroyed");
 
             // Stop the apex boss mid-encounter — a dead Heart should not keep taking
             // swoop/breath hits, and the boss's death-fall would otherwise read oddly.
@@ -3241,7 +3449,7 @@ namespace DeNelle.Village
         /// </summary>
         private void TriggerBreach()
         {
-            _phase = WavePhase.Breached;
+            SetPhase(WavePhase.Breached, "TriggerBreach");
             OnBreach.Invoke(_currentWaveId);
             if (_heart != null) _heart.SetState(HeartState.Critical);
 

@@ -66,7 +66,25 @@ namespace DeNelle.Editor.Regression
                     @"_waveBattleProbe\s*=\s*\(\)\s*=>[\s\S]{0,180}?Instance\s*==\s*this[\s\S]{0,120}?_phase\s*==\s*WavePhase\.Active"))
                 failures.Add("[wave-lock] the probe is not canonical-instance, enabled, Active-only combat.");
 
-            int phase = src.IndexOf("_phase = WavePhase.Active", StringComparison.Ordinal);
+            // ⚠ REPOINTED 2026-09-02 (WO-1308), NOT WEAKENED. This used to look for the literal
+            // `_phase = WavePhase.Active`. WO-1308 routed ALL NINE phase assignments through a
+            // single recorder, `SetPhase(WavePhase, string site)`, so the last transition (from ->
+            // to, site, unscaled time, frame) is always on the record when the battle-quiescence
+            // gate asks why the battle-lock is still held - the owner's "the wolf is still here and
+            // sitting in fight" (F8 seq 4663-4665) could not be diagnosed without it.
+            //
+            // The ORDERING PROPERTY this suite pins is untouched and is still asserted verbatim
+            // below: ordinary modals must be closed AFTER the phase turns Active and BEFORE
+            // OnWaveStarted/spawn work, so a siege can never damage the Heart behind a modal. Only
+            // the address of "the phase turns Active" moved. An oracle left aimed at the old
+            // spelling would have gone red against a correct tree and invited someone to "fix" it
+            // by re-inlining the assignment - which would delete the transition record and put the
+            // next stuck lock straight back to zero evidence.
+            //
+            // StartWave remains the ONLY writer of Active in WaveManager, so this still resolves to
+            // exactly one site. Comments are stripped above, so the surrounding WO-1308 commentary
+            // in WaveManager.cs cannot produce a false match.
+            int phase = src.IndexOf("SetPhase(WavePhase.Active", StringComparison.Ordinal);
             int close = src.IndexOf("PanelManager.CloseAll()", phase >= 0 ? phase : 0, StringComparison.Ordinal);
             int eventAt = src.IndexOf("OnWaveStarted.Invoke", phase >= 0 ? phase : 0, StringComparison.Ordinal);
             if (phase < 0 || close < phase || eventAt < 0 || close > eventAt)
