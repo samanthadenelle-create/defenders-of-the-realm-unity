@@ -167,7 +167,21 @@
 > fine as history. A copied number is the bug **even when it was right the day it was written** -
 > that is exactly how the retired 860-899 UI block kept re-seeding collisions from CLAUDE.md sec.2.
 
-> ## ⚠ RECONCILED 2026-09-02 (CLI, twelfth pass): main line next free = **1317**.
+> ## ⚠ RECONCILED 2026-09-02 (CLI, thirteenth pass): main line next free = **1318**.
+> *(CLI minted **WO-1317** — P0, diagnosed from the LIVE `web_trace` sink, not from reading code.
+> Captured 09-01: `PiInit(sandbox=True)` + `Signed in as samanthadenelle`. The published app
+> authenticated against the Pi **TESTNET SANDBOX** while the owner's portal app is **MAINNET** (she
+> confirmed). `PiSignInController.cs:51` was `[SerializeField] bool sandbox = true` — and NOTHING
+> serializes it: the component is in no scene and no prefab, so the hardcoded initializer WAS
+> production. The `[SerializeField]` made it look configurable and hid that. Now build-driven.
+> Second half, her words *"make sure the market lists as pi not as SKR"*: `PiIsPiBrowser()` matched
+> ONLY the UA token and its own comment concedes "an unrecognised UA returns 0" — which routes
+> `CurrencySkinResolver`'s whole skin to **$SKR inside Pi**. Added the `*.pinet.com` HOST signal the
+> repo already relies on in five api/ files. ⚠ The same query CLEARED an innocent suspect: zero
+> 09-02 trace sessions exist, so the WO-1312 shim was never loaded and cannot be this regression —
+> that was my first theory and it was wrong. Bumped 1317 -> 1318 in this SAME edit.)*
+>
+> ### superseded: RECONCILED 2026-09-02 (CLI, twelfth pass): main line next free = **1317**.
 > *(CLI minted **WO-1316** while promoting the Pi build on the owner's word. **FOUR Vercel projects
 > serve this game and the repo deploys to ONE of them.** `.vercel/project.json` points at
 > `defenders-of-the-realm-v2`; **`echoes-of-elarion` is a SEPARATE project** — so a successful

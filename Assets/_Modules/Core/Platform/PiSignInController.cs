@@ -47,8 +47,29 @@ namespace DeNelle.Core.Platform
         /// </summary>
         private const float FramedCornerMarginXPx = 240f;
 
-        [Tooltip("Develop entirely on Testnet/Sandbox; flip off for mainnet go-live.")]
-        [SerializeField] private bool sandbox = true;
+        // WO-1317 (owner ruling 2026-09-02): BUILD-DRIVEN, no longer a flat true.
+        //
+        // RCA: this field is a [SerializeField], but NOTHING carries a serialized override --
+        // grep proves no scene or prefab holds a PiSignInController; the component is added at
+        // runtime, so THIS INITIALIZER IS WHAT SHIPS. The initializer was `true`, so the
+        // published app authenticated against the Pi TESTNET SANDBOX while the owner's app is
+        // registered as MAINNET/production in the Pi Developer Portal. Sandbox and mainnet are
+        // different environments, so authentication that had worked (captured web_trace,
+        // 2026-09-01: "PiInit(sandbox=True)" followed by "Signed in as samanthadenelle") stopped
+        // once the portal app moved to production. The tooltip had said "flip off for mainnet
+        // go-live" since the field was written; nothing enforced it.
+        //
+        // Editor and DEVELOPMENT builds keep sandbox so testnet stays testable without a code
+        // edit; a SHIP build is mainnet. Deliberately NOT a runtime flag or PlayerPrefs -- the
+        // environment must be decided by the artifact, not by state a device can carry over.
+        [Tooltip("Testnet/Sandbox. Build-driven (WO-1317): sandbox in Editor/dev builds, MAINNET " +
+                 "in ship builds. Do not hardcode true again - that ships testnet to production.")]
+        [SerializeField] private bool sandbox =
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+            true;
+#else
+            false;
+#endif
 
         public static string SignedInUid { get; private set; }
         public static string SignedInUsername { get; private set; }

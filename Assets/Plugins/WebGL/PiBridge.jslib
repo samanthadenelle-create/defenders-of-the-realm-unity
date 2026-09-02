@@ -33,10 +33,33 @@ var PiBridgeLib = {
   // ships the token "PiBrowser" in its user agent (case-insensitive match to be safe).
   // Conservative by design — an unrecognised UA returns 0, which only skips AUTO
   // sign-in; the manual "Sign in with Pi" button still works everywhere.
+  // WO-1317 (owner 2026-09-02: "make sure the market lists as pi not as SKR"): the UA token
+  // is no longer the ONLY signal. CurrencySkinResolver routes the whole currency skin off this
+  // one boolean -- real Pi Browser = Pi skin, anything else = SKR (WO-787 Part C) -- and the
+  // UA-only check is "conservative by design", i.e. an unrecognised UA silently returns 0 and
+  // the player is shown $SKR inside Pi. That is what the owner reported.
+  //
+  // The second signal is the HOST, and this repo already treats it as load-bearing fact in five
+  // places: the published app is served under <app>.pinet.com, Pi's proxy (see api/pi/verify.js,
+  // api/trace.js, api/events/track.js, api/bug-report.js, api/game/save.js -- every one of them
+  // sets CORS for exactly that origin). If we are being served from pinet.com we ARE the Pi
+  // deployment, whatever the WebView calls itself.
+  //
+  // Matched as an exact host or a dotted suffix, never a substring: a bare indexOf('pinet.com')
+  // would also match an attacker-ish host like "pinet.com.evil.tld".
   PiIsPiBrowser: function () {
     try {
       var ua = (typeof navigator !== 'undefined' && navigator.userAgent) ? navigator.userAgent : '';
-      return /pibrowser/i.test(ua) ? 1 : 0;
+      if (/pibrowser/i.test(ua)) return 1;
+      var host = (typeof location !== 'undefined' && location.hostname) ? location.hostname : '';
+      host = host.toLowerCase();
+      var suffix = '.pinet.com';
+      // Length derived from the literal, never hand-counted, and endsWith() is avoided because
+      // it is ES6 and this runs in whatever WebView Pi ships.
+      if (host === 'pinet.com') return 1;
+      if (host.length > suffix.length &&
+          host.indexOf(suffix, host.length - suffix.length) !== -1) return 1;
+      return 0;
     } catch (e) {
       return 0;
     }
