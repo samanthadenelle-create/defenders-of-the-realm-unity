@@ -167,7 +167,46 @@
 > fine as history. A copied number is the bug **even when it was right the day it was written** -
 > that is exactly how the retired 860-899 UI block kept re-seeding collisions from CLAUDE.md sec.2.
 
-> ## ⚠ RECONCILED 2026-09-01 (CLI): main line next free = **1294**.
+> ## ⚠ RECONCILED 2026-09-02 (CLI, fourth pass): main line next free = **1307**.
+> *(CLI minted **WO-1306** — the mage needs a cost-1 CASTABLE base node. Filed as SPEC, not READY:
+> it is blocked on an owner design call, because two of her own rulings collide on exactly one class.
+> Her retention lens (2026-09-02) wants a bar-equippable unlock on point one; her talent SHAPE LAW
+> (2026-08-16, pinned by `TalentTreeShapeRegression` rule 2 `[base]`) requires every bottom-row node
+> to be a root priced at the tree's cheapest cost. The mage is the only class with no cost-1 castable
+> to promote — all three of its cost-1 tier1 nodes are `kind: "stat"`. A seat-swap fix was tried and
+> REVERTED on her ruling "Revert the mage, keep the knight"; she explicitly declined to relax the law.
+> The real fix changes what a base node DOES, which is hers to decide. Bumped 1306 -> 1307 in this
+> SAME edit.)*
+>
+> ### superseded: RECONCILED 2026-09-02 (CLI, third pass): main line next free = **1306**.
+> *(CLI minted **WO-1305** from the owner's live VFX Caster browsing session. Part A = `Spell_Fire_9`
+> as a MARQUEE spell (her ruling: it authors its own wind-up/flight/bounce, so it cannot be a
+> Cast/Projectile/Impact role) with both of her flagged watch-outs — town bouncing, Point Light mobile
+> cost — carried as requirements. Part B = the 27 duplicate Addressables addresses in
+> `Structure_Art.asset`, fenced by her ruling "the other synty were on purpose": RE-ADDRESS, never
+> delete. Bumped 1305 -> 1306 in this SAME edit.)*
+>
+> ### superseded: RECONCILED 2026-09-02 (CLI, second pass): main line next free = **1305**.
+> *(CLI minted **WO-1304** — animator builders missing the `Dead` guard. Found while fixing the owner's
+> death-animation shake: `HeroAnimatorFactory` was repaired, but `KnightPackageControllerBuilder.cs` has
+> the identical unguarded-AnyState hole and `BuildOrcHumanoidController.cs` is the un-audited enemy twin.
+> A found defect with no ticket is a lost defect. Bumped 1304 -> 1305 in this SAME edit.)*
+>
+> *(Also reconciling the F8 triage sweep: **WO-1298 through WO-1303** were minted from the 405-capture
+> backlog — owner flag verification, MusicDirector NRE, founding-tutorial step-stuck, Combat Item Picker
+> false positive, DependencyClosureTrace blind to Synty `_Albedo_Map`, EnemyAnimatorLateBinder prewarming
+> by controller name. Those six were written to disk without a banner bump; this row absorbs them.)*
+>
+> ### superseded: RECONCILED 2026-09-02 (CLI): main line next free = **1298**.
+> *(Banner repair, not a mint. The dev seat (Codex) minted **WO-1295, 1296 and 1297** on 2026-09-01
+> (continuous castle gate traversal · modal and world feedback ownership · world clock and Pi runtime
+> stability) and **did NOT bump this banner in the same edit** — the exact collision-seeding failure
+> CLAUDE.md sec.2 exists to prevent, and the one that cost five collisions in a day on 2026-08-02.
+> The three WOs are on disk and referenced, so first-on-disk-and-referenced-wins: they keep their
+> numbers, 1294 is CONSUMED by WORK_ORDER_1294_blink_skill_tree_hotswap_and_troop_portraits.md, and
+> the next free number is **1298**. Bumped 1294 -> 1298 in this SAME edit.)*
+>
+> ### superseded: RECONCILED 2026-09-01 (CLI): main line next free = **1294**.
 > *(CLI minted **WO-1293** from F8 device capture seq 4077: BuildPeekStrip NRE blanks the Bag peek
 > strip on a gear-tab tap. The method MOVED to InventoryGrid.cs:290 in d6d3146b2, so grepping
 > HeroInventoryController.cs finds nothing - the ticket says so. Three unguarded derefs located,
