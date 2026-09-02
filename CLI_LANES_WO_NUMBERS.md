@@ -167,7 +167,18 @@
 > fine as history. A copied number is the bug **even when it was right the day it was written** -
 > that is exactly how the retired 860-899 UI block kept re-seeding collisions from CLAUDE.md sec.2.
 
-> ## ⚠ RECONCILED 2026-09-02 (CLI, ninth pass): main line next free = **1314**.
+> ## ⚠ RECONCILED 2026-09-02 (CLI, tenth pass): main line next free = **1315**.
+> *(CLI minted **WO-1314** answering the owner's "why does it break whenever it touches the cdn".
+> Her R2 hypothesis is RULED OUT with data — fresh `R2_PARITY_OK`, live 200s, `ACAO: *`, and the
+> `catalog.json` 404 is EXPECTED. What the measurement DOES show: `webGLMemorySize: 512` against
+> enemy bundles of 24.5 / 18.2 / 17.4 MB compressed, whose decompressed footprint is several times
+> that — a plausible mobile-WebView OOM, which presents as "the CDN broke" because touching the CDN
+> is when the memory is allocated. ⚠ NOT PROVEN: no Pi Browser log captured, so the ticket demands
+> instrumentation FIRST (sec.12). Note WO-1307 tonight made `hollow` pre-fetch for the FIRST time
+> (+24.5 MB the WebGL client never used to request), so any pre-tonight baseline is invalid.
+> Bumped 1314 -> 1315 in this SAME edit.)*
+>
+> ### superseded: RECONCILED 2026-09-02 (CLI, ninth pass): main line next free = **1314**.
 > *(CLI minted **WO-1312 + WO-1313** from the owner's Pi asks, overnight. **1312** = Pi Browser will
 > not honour `screen.orientation.lock` (it is a portrait-locked WebView, so NO web API we call can
 > force landscape); stop asking the player to rotate and RENDER the game rotated — shipped together
