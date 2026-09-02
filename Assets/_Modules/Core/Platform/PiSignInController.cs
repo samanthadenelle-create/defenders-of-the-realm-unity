@@ -62,14 +62,13 @@ namespace DeNelle.Core.Platform
         // Editor and DEVELOPMENT builds keep sandbox so testnet stays testable without a code
         // edit; a SHIP build is mainnet. Deliberately NOT a runtime flag or PlayerPrefs -- the
         // environment must be decided by the artifact, not by state a device can carry over.
+        //
+        // WO-1318: the expression MOVED to PiEnvironment.Sandbox (byte-identical semantics) so the
+        // payment path reads the SAME answer as sign-in. A second copy of this boolean would let a
+        // player authenticate on mainnet and be asked to pay on testnet.
         [Tooltip("Testnet/Sandbox. Build-driven (WO-1317): sandbox in Editor/dev builds, MAINNET " +
                  "in ship builds. Do not hardcode true again - that ships testnet to production.")]
-        [SerializeField] private bool sandbox =
-#if UNITY_EDITOR || DEVELOPMENT_BUILD
-            true;
-#else
-            false;
-#endif
+        [SerializeField] private bool sandbox = PiEnvironment.Sandbox;
 
         public static string SignedInUid { get; private set; }
         public static string SignedInUsername { get; private set; }
@@ -253,6 +252,24 @@ namespace DeNelle.Core.Platform
                     return;
                 }
 
+                // ⛔ WO-1318 - SIGN-IN DELIBERATELY STILL ASKS FOR `username` ONLY. Do not add
+                // `payments` here.
+                //
+                // The Pi payment path needs the `payments` scope, and the obvious edit is to widen
+                // this array. That edit is REFUSED, on the WO's own acceptance criterion 6: every
+                // existing player granted this app `username` alone. Widening the scope on the
+                // SIGN-IN path re-prompts each of them for consent at the one moment they have no
+                // context for it (app launch, before they asked to buy anything) and turns a dismissed
+                // or failed consent into a FAILED SIGN-IN - i.e. the whole game becomes unreachable
+                // for an existing player because of a purchase feature they never touched.
+                //
+                // Instead the `payments` scope is requested LAZILY, immediately before
+                // Pi.createPayment, by PiBrowserPaymentProvider.EnsurePaymentsScope(). A player who
+                // never buys is never asked; a player who does buy is asked at the exact moment the
+                // request makes sense; and a refusal there costs a purchase, never a session.
+                // Pi.authenticate is idempotent and additive, so the second call simply widens the
+                // grant. It also re-registers onIncompletePaymentFound (see PiBridge.jslib), which is
+                // how a stranded payment gets a second chance to settle.
                 PiAuthResult auth;
                 try { auth = await _pi.Authenticate(new[] { "username" }).Timeout(TimeSpan.FromSeconds(30)); }
                 catch (TimeoutException)

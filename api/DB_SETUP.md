@@ -485,6 +485,36 @@ save / load / nonce / bug-report that were broken.
    and `auth/nonce.js` / `auth/session.js` / `verifyWallet` / `verifySession` are
    untouched by it.
 
+5. **Pi (U2A) payment rail (WO-1318) — DORMANT until the key is set.**
+
+   ⛔ **APPLY THE MIGRATION BEFORE THE FIRST PI PAYMENT, NOT AFTER.**
+   `POST /api/pi/complete` runs with the Pioneer's Pi **already moved** and there is
+   no refund route, so a schema fault on that path is found with the money gone —
+   the WO-1173 lesson (a real 391 SKR payment settled and could not be recorded)
+   arriving on a new rail.
+
+   ```bash
+   psql "$DATABASE_URL" -f api/migrations/20260902_0017_pi_payments.sql
+   node tools/schema-parity.mjs          # must print SCHEMA_PARITY_OK
+   ```
+
+   It is additive and idempotent: it widens `purchase_entitlements.rail` to
+   `('solana','pi')` (plus `network`/`currency`), widens `purchase_quotes` the same
+   way, drops NOT NULL from the three **Solana-only** quote columns
+   (`mint`, `recipient`, `recipient_ata`), and creates `pi_payments` — the rail's
+   lifecycle ledger, the Pi twin of `google_play_purchases`. **There is no second
+   quote table and no second grant path:** a Pi purchase quotes out of
+   `purchase_quotes` and grants into `purchase_entitlements`, exactly like SKR.
+
+   | Env var | Required | What it is |
+   |---|---|---|
+   | `PI_NETWORK_API_KEY` | yes, to arm | The Pi app's server API key. **Server-only.** Sent solely as `Authorization: Key <key>` to `api.minepi.com`; never returned, never logged, never committed. While unset, `/api/pi/quote`, `/api/pi/approve` and `/api/pi/complete` all answer **503 `PI_NOT_CONFIGURED`** and no Pi payment can be approved. |
+
+   ⛔ **There is deliberately NO fallback Pi price.** The amount is derived
+   server-side from the USD anchor and CoinGecko's `low_24h` for `pi-network` (the
+   owner's ruling, same as SKR). Oracle down ⇒ **503 `PURCHASE_RATE_UNAVAILABLE`**
+   and nothing is sold. Charging a made-up number is worse than refusing to sell.
+
 ### Reading the failures (the new read paths)
 
 Every auth refusal now returns a **stable code + a `ref`** to the player and

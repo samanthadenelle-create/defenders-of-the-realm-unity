@@ -1014,7 +1014,15 @@ CREATE TABLE IF NOT EXISTS purchase_entitlements (
     tx_signature        TEXT NOT NULL UNIQUE,
     wallet              TEXT NOT NULL,
     sku                 TEXT NOT NULL,
-    rail                TEXT NOT NULL CHECK (rail IN ('solana')),
+    -- ⭐ WO-1318: 'pi' joins 'solana'. Pi is a SECOND RAIL INTO THE SAME LEDGER,
+    -- not a second ledger: revenue reporting, patronage totals and the replay
+    -- guard all read this one table, and a rail that kept its own grant rows
+    -- would silently sit outside every one of them.
+    -- MIGRATION on a live table (api/migrations/20260902_0017_pi_payments.sql):
+    --   ALTER TABLE purchase_entitlements DROP CONSTRAINT purchase_entitlements_rail_check;
+    --   ALTER TABLE purchase_entitlements ADD  CONSTRAINT purchase_entitlements_rail_check
+    --       CHECK (rail IN ('solana','pi'));
+    rail                TEXT NOT NULL CHECK (rail IN ('solana','pi')),
     -- ⚠ 'mainnet-beta' IS THE SPELLING THE CODE SENDS. api/purchases/verify.js takes
     -- `network` straight off the wire, where it is 'devnet' | 'mainnet-beta' (the
     -- Solana cluster name; PurchaseEntitlementVerifier.WireNetwork). This CHECK
@@ -1025,8 +1033,14 @@ CREATE TABLE IF NOT EXISTS purchase_entitlements (
     --   ALTER TABLE purchase_entitlements DROP CONSTRAINT purchase_entitlements_network_check;
     --   ALTER TABLE purchase_entitlements ADD  CONSTRAINT purchase_entitlements_network_check
     --       CHECK (network IN ('devnet','mainnet','mainnet-beta'));
-    network             TEXT NOT NULL CHECK (network IN ('devnet','mainnet','mainnet-beta')),
-    currency            TEXT NOT NULL CHECK (currency IN ('SOL','USDC','SKR')),
+    -- 'pi' added WO-1318. Pi has ONE network from our side: testnet vs mainnet is
+    -- a property of the API KEY and the Pi Browser, never of a request field, so
+    -- there is deliberately no 'pi-testnet' value a client could ask for.
+    network             TEXT NOT NULL CHECK (network IN ('devnet','mainnet','mainnet-beta','pi')),
+    currency            TEXT NOT NULL CHECK (currency IN ('SOL','USDC','SKR','PI')),
+    -- ⚠ THE NAME IS LEGACY, THE MEANING IS "BASE UNITS OF WHATEVER WAS PAID".
+    -- SKR at 6 or 9 decimals, Pi at 7 (WO-1318). Read `currency` + the rail before
+    -- interpreting this number; never assume lamports.
     expected_lamports   BIGINT NOT NULL CHECK (expected_lamports > 0),
     observed_lamports   BIGINT NOT NULL CHECK (observed_lamports > 0),
     recipient           TEXT NOT NULL,
@@ -1214,8 +1228,10 @@ CREATE TABLE IF NOT EXISTS purchase_quotes (
     quote_ref           TEXT NOT NULL UNIQUE,
     wallet              TEXT NOT NULL,          -- the PROVEN wallet the quote was issued to
     sku                 TEXT NOT NULL,
-    network             TEXT NOT NULL CHECK (network IN ('devnet','mainnet-beta')),
-    currency            TEXT NOT NULL CHECK (currency IN ('SKR')),
+    -- 'pi' + 'PI' added WO-1318: the Pi rail issues its price out of THIS table.
+    -- One quote table, one TTL, one single-use rule, two rails.
+    network             TEXT NOT NULL CHECK (network IN ('devnet','mainnet-beta','pi')),
+    currency            TEXT NOT NULL CHECK (currency IN ('SKR','PI')),
     -- ⛔ THE EXACT INTEGER THE CLIENT MUST TRANSFER. Stored as NUMERIC(40,0), not
     -- BIGINT, because base units at 9 decimals leave far less headroom than they
     -- look like they do and no price should ever be capped by its column.
@@ -1224,9 +1240,15 @@ CREATE TABLE IF NOT EXISTS purchase_quotes (
     -- is 9, mainnet SKR is 6. Persisted per-quote so a later decimals change can
     -- never retro-reinterpret an already-issued amount.
     decimals            SMALLINT NOT NULL CHECK (decimals >= 0 AND decimals <= 18),
-    mint                TEXT NOT NULL,
-    recipient           TEXT NOT NULL,
-    recipient_ata       TEXT NOT NULL,
+    -- ⚠ NULLABLE SINCE WO-1318 — these three are SOLANA facts. A Pi quote has no
+    -- mint and no associated token account; its payee is the app's own Pi wallet,
+    -- which Pi resolves from the API key and reports back as the payment's
+    -- `to_address`. They remain NOT-NULL-in-practice on the Solana rail, where
+    -- purchases/quote.js always writes all three, and contractFromQuoteRow()
+    -- refuses a row that is missing them.
+    mint                TEXT,
+    recipient           TEXT,
+    recipient_ata       TEXT,
     usd_anchor          NUMERIC(12,4) NOT NULL,     -- the authored ladder price (2.99, 4.99, ...)
     usd_rate            NUMERIC(24,12) NOT NULL,    -- USD per SKR at issue time
     rate_source         TEXT NOT NULL,              -- WHICH oracle produced usd_rate
@@ -1258,6 +1280,52 @@ CREATE INDEX IF NOT EXISTS idx_purchase_quotes_expiry
 -- rows can ever be the answer.
 CREATE INDEX IF NOT EXISTS idx_purchase_quotes_discount
     ON purchase_quotes (wallet, issued_at DESC) WHERE discount_bps IS NOT NULL;
+
+-- =============================================================================
+-- 16b. pi_payments — WO-1318. The Pi rail's LIFECYCLE ledger.
+-- -----------------------------------------------------------------------------
+-- ⛔ THIS IS NOT AN ENTITLEMENT AND IT GRANTS NOTHING. It is the Pi twin of
+-- google_play_purchases: a per-rail record of approve -> complete, keyed by the
+-- payment id the platform owns. The GRANT still lands in purchase_entitlements,
+-- with rail = 'pi', so there is exactly one grant path in this project.
+--
+-- WHY IT EXISTS AT ALL: Pi's onReadyForServerCompletion / onIncompletePayment
+-- Found can fire more than once, in different sessions, for the same payment. A
+-- replay is only recognisable as a replay if the FIRST one was written down.
+-- state = 'granted' is the short-circuit that stops a second grant before Pi is
+-- even called.
+--
+-- 'manual_review' is the row that must never be missing: it means the money moved
+-- and we could NOT match it to a quote. Dropping that case is a player who paid
+-- and got nothing.
+-- =============================================================================
+CREATE TABLE IF NOT EXISTS pi_payments (
+    payment_id          TEXT PRIMARY KEY,       -- Pi's own payment identifier
+    player_id           TEXT NOT NULL,          -- 'pi-<uid>' — never a bare uid
+    pi_uid              TEXT NOT NULL,
+    sku                 TEXT NOT NULL,
+    quote_ref           TEXT NOT NULL,          -- the purchase_quotes row it is bound to
+    -- The amount the SERVER quoted, in base units, copied at approve time so the
+    -- ledger can be read without re-joining a quote that may later be swept.
+    amount_base_units   NUMERIC(40,0) NOT NULL CHECK (amount_base_units > 0),
+    decimals            SMALLINT NOT NULL CHECK (decimals >= 0 AND decimals <= 18),
+    state               TEXT NOT NULL CHECK (state IN
+        ('approved','completed','granted','rejected','manual_review')),
+    txid                TEXT,                   -- the Pi blockchain transaction
+    to_address          TEXT,                   -- payee as Pi reported it
+    reject_reason       TEXT,
+    approved_at         TIMESTAMPTZ,
+    completed_at        TIMESTAMPTZ,
+    granted_at          TIMESTAMPTZ,
+    created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at          TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_pi_payments_player
+    ON pi_payments (player_id, created_at DESC);
+-- The rows a human has to look at.
+CREATE INDEX IF NOT EXISTS idx_pi_payments_attention
+    ON pi_payments (updated_at) WHERE state IN ('approved','completed','manual_review');
 
 -- =============================================================================
 -- 17. patronage_benefactors - WO-1073. THE BENEFACTORS OF THE REALM WALL.

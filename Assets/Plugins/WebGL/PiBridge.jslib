@@ -4,7 +4,8 @@
 //
 // C# → JS via [DllImport("__Internal")]:  PiInit, PiAuthenticate, PiCreatePayment, PiShowAd, PiIsAvailable.
 // JS → C# via SendMessage("PiBridge","OnPiCallback", <json>):
-//   { "type": "ready"|"auth"|"approvalReady"|"completionReady"|"adReady"|"error"|"cancelled",
+//   { "type": "ready"|"auth"|"approvalReady"|"completionReady"|"adReady"|"error"|"cancelled"
+//           |"incompletePaymentFound",
 //     "paymentId": "<id-or-empty>", "data": { ... } }
 // A persistent GameObject named "PiBridge" (DontDestroyOnLoad) receives OnPiCallback.
 
@@ -87,6 +88,16 @@ var PiBridgeLib = {
   },
 
   // Pi.authenticate(scopes, onIncompletePaymentFound). scopesPtr = comma-separated, e.g. "username,payments".
+  //
+  // WO-1318: onIncompletePaymentFound is MANDATORY and is the ONLY place the Pi SDK ever hands us a
+  // payment the player already paid for but never got. It used to be marshalled as type
+  // 'approvalReady' with the Pi payment id in the `paymentId` slot -- which is OUR correlation id
+  // slot on the C# side, so the resume fired OnApprovalReady against a correlation id that never
+  // existed and the recovery silently did nothing. It now has its OWN callback type, and the C#
+  // side drives approve-then-complete against the backend from it.
+  //
+  // NOTE: the callback is registered on EVERY authenticate call, whatever scopes were asked for,
+  // so the payments-scoped re-auth at purchase time also re-surfaces any stranded payment.
   PiAuthenticate: function (scopesPtr) {
     try {
       var scopes = UTF8ToString(scopesPtr).split(',').map(function (s) { return s.trim(); }).filter(Boolean);
@@ -95,7 +106,24 @@ var PiBridgeLib = {
         return;
       }
       var onIncomplete = function (payment) {
-        PiBridgeState.send({ type: 'approvalReady', paymentId: (payment && payment.identifier) || '', data: { incomplete: true, payment: payment } });
+        try {
+          var md = (payment && payment.metadata) || {};
+          var tx = (payment && payment.transaction) || {};
+          PiBridgeState.send({
+            type: 'incompletePaymentFound',
+            paymentId: '', // OUR correlation id is unknown here; it travels in metadata below.
+            data: {
+              piPaymentId: (payment && payment.identifier) || '',
+              txid: tx.txid || '',
+              sku: md.sku || '',
+              quoteId: md.quoteId || '',
+              correlationId: md.correlationId || '',
+              where: 'onIncompletePaymentFound'
+            }
+          });
+        } catch (e2) {
+          PiBridgeState.send({ type: 'error', paymentId: '', data: { where: 'onIncompletePaymentFound', message: '' + e2 } });
+        }
       };
       window.Pi.authenticate(scopes, onIncomplete).then(function (authResult) {
         PiBridgeState.send({ type: 'auth', paymentId: '', data: {
@@ -137,7 +165,22 @@ var PiBridgeLib = {
             PiBridgeState.send({ type: 'cancelled', paymentId: paymentId, data: { piPaymentId: piPaymentId } });
           },
           onError: function (error, payment) {
-            PiBridgeState.send({ type: 'error', paymentId: paymentId, data: { where: 'createPayment', message: '' + error } });
+            // WO-1318: surface everything the SDK gave us. A bare '' + error on some Pi SDK builds
+            // stringifies to "[object Object]", which is unreadable in the web_trace sink -- and
+            // that sink is the ONLY way this flow gets diagnosed on a phone.
+            var msg = '';
+            try {
+              msg = (error && (error.message || error.name)) ? ((error.name || 'Error') + ': ' + (error.message || '')) : ('' + error);
+            } catch (e2) { msg = 'unstringifiable error'; }
+            PiBridgeState.send({
+              type: 'error',
+              paymentId: paymentId,
+              data: {
+                where: 'createPayment',
+                message: msg,
+                piPaymentId: (payment && payment.identifier) || ''
+              }
+            });
           }
         }
       );

@@ -14,6 +14,9 @@ namespace DeNelle.Core.Platform
 #pragma warning disable 67 // events are part of the seam; never raised in the stub.
         public event Action<string, string> OnApprovalReady;
         public event Action<string, string, string> OnCompletionReady;
+        // WO-1318: the incomplete-payment seam. Never raised off Pi Browser -- there is no Pi SDK
+        // to report a stranded payment, so an unfired event here is correct, not a gap.
+        public event Action<PiIncompletePayment> OnIncompletePaymentFound;
 #pragma warning restore 67
 
         public bool IsAvailable => false;

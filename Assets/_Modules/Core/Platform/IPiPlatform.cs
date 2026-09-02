@@ -38,6 +38,33 @@ namespace DeNelle.Core.Platform
 
         /// <summary>Raised on onReadyForServerCompletion — the orchestrator must POST /complete. (correlationId, piPaymentId, txid)</summary>
         event Action<string, string, string> OnCompletionReady;
+
+        /// <summary>
+        /// WO-1318 — MANDATORY Pi SDK callback. Raised on Pi.authenticate's onIncompletePaymentFound:
+        /// the player HAS ALREADY PAID for a payment we never finished settling. The orchestrator must
+        /// drive it to completion through the backend (approve if it has no txid yet, then complete).
+        /// Never ignore it: a dropped incomplete payment is a player who paid and got nothing.
+        /// It fires on EVERY authenticate, so both sign-in and the payments-scoped re-auth surface it.
+        /// </summary>
+        event Action<PiIncompletePayment> OnIncompletePaymentFound;
+    }
+
+    /// <summary>
+    /// A Pi payment the SDK reports as still in flight from a previous session. `Txid` is empty when
+    /// the payment never reached the blockchain (needs server APPROVAL first); non-empty means it was
+    /// submitted and only the server COMPLETION is missing. `QuoteId`/`Sku` come from the metadata we
+    /// attached at createPayment, so the backend can re-validate the amount it originally quoted.
+    /// </summary>
+    [Serializable]
+    public struct PiIncompletePayment
+    {
+        public string PiPaymentId;
+        public string Txid;
+        public string Sku;
+        public string QuoteId;
+        public string CorrelationId;
+
+        public bool HasTxid => !string.IsNullOrEmpty(Txid);
     }
 
     public enum PiPaymentStatus { Completed, Cancelled, Error, Pending }

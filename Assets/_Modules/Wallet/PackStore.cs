@@ -2114,8 +2114,7 @@ namespace DeNelle.Wallet
             // SellableReasonFor already substitutes a worded fallback when the row carried none —
             // so this is never blank and never a bare code.
             var paymentProvider = PaymentProviders.Current;
-            bool usesProviderRail = paymentProvider != null &&
-                                    paymentProvider.Channel == PaymentChannel.GooglePlay;
+            bool usesProviderRail = OwnsTheRail(paymentProvider);
             if (!usesProviderRail && !PurchaseQuoteService.IsSellable(pack.Sku))
             {
                 string notSellable = PurchaseQuoteService.SellableReasonFor(pack.Sku);
@@ -2186,6 +2185,24 @@ namespace DeNelle.Wallet
             return _selectedCurrency.TryGetValue(sku, out var c) ? c : _defaultCurrency;
         }
 
+        /// <summary>
+        /// WO-1318 — does an IPaymentProvider OWN the charge on this artifact? True for the Google Play
+        /// rail (as before) and now also for the Pi Browser rail.
+        ///
+        /// <para>⛔ IT REPLACED FOUR COPIES OF <c>Channel == PaymentChannel.GooglePlay</c>. Those four
+        /// sites are not independent opinions — they are one fact (who takes the money) asked four
+        /// times, and the CTA builder disagreeing with <see cref="Purchase"/> about it is the exact
+        /// shape of "a price beside a live Buy button and a refusal only after the player committed".
+        /// One method, four callers.</para>
+        ///
+        /// <para>What it deliberately does NOT do is claim the SKR/Solana path changed. When no
+        /// provider owns the rail this returns false and every line below behaves byte-identically to
+        /// before — Pi is additive (WO-1318 "What NOT to touch").</para>
+        /// </summary>
+        private static bool OwnsTheRail(IPaymentProvider provider) =>
+            provider != null &&
+            (provider.Channel == PaymentChannel.GooglePlay || provider.Channel == PaymentChannel.PiBrowser);
+
         private string StorePriceMajor(PackDef pack)
         {
             var provider = PaymentProviders.Current;
@@ -2194,15 +2211,27 @@ namespace DeNelle.Wallet
                 var price = provider.GetDisplayPrice(pack != null ? pack.Sku : string.Empty);
                 return price.Available ? price.LocalizedText : "Price unavailable";
             }
+            // WO-1318 Pi rail: the PI amount is SERVER-quoted at checkout and is genuinely not known
+            // yet, so the face carries the USD ANCHOR — a real authored number — rather than either an
+            // invented Pi figure or the $SKR label, which is meaningless inside Pi Browser. The exact
+            // Pi amount appears on Pi's own payment sheet, which is the surface that binds.
+            if (provider != null && provider.Channel == PaymentChannel.PiBrowser)
+                return pack != null ? pack.UsdReference : string.Empty;
             return pack != null ? pack.AmountLabel(_defaultCurrency) : string.Empty;
         }
 
         private string StorePriceMinor(PackDef pack)
         {
             var provider = PaymentProviders.Current;
-            return provider != null && provider.Channel == PaymentChannel.GooglePlay
-                ? string.Empty
-                : pack != null ? pack.UsdApprox() : string.Empty;
+            if (provider != null && provider.Channel == PaymentChannel.GooglePlay) return string.Empty;
+            if (provider != null && provider.Channel == PaymentChannel.PiBrowser)
+            {
+                // Once a quote has been taken this session we can show the real Pi figure; before that
+                // we say WHERE the price comes from instead of guessing one.
+                var price = provider.GetDisplayPrice(pack != null ? pack.Sku : string.Empty);
+                return price.Available ? price.LocalizedText : "Priced in Pi at checkout";
+            }
+            return pack != null ? pack.UsdApprox() : string.Empty;
         }
 
         // =====================================================================
@@ -2502,8 +2531,12 @@ namespace DeNelle.Wallet
 
             using var sharedConfirmation = _sharedCardSession?.EnterConfirmation();
 
-            if (PaymentProviders.Current != null &&
-                PaymentProviders.Current.Channel == PaymentChannel.GooglePlay)
+            // WO-1318: widened from GooglePlay-only to "a provider owns this rail" (OwnsTheRail), so
+            // the Pi Browser rail takes the same early exit. That exit is load-bearing: everything
+            // below it — PurchaseGate's SKR-shaped checks, WalletService.Connect, the SKR quote and
+            // the Solana settlement poll — is the SOLANA rail and would veto or dead-end a Pi payment
+            // that is perfectly fine. Returning here is what keeps Pi ADDITIVE rather than a rewrite.
+            if (OwnsTheRail(PaymentProviders.Current))
                 return await PurchaseThroughProvider(pack, currency);
 
 #if MAINNET_CANARY_TEST
@@ -2802,8 +2835,8 @@ namespace DeNelle.Wallet
         private async UniTask<PaymentResult> PurchaseThroughProvider(PackDef pack, CurrencyKind legacyCurrency)
         {
             var provider = PaymentProviders.Current;
-            if (provider == null || provider.Channel != PaymentChannel.GooglePlay)
-                return PaymentResult.Failure(pack.Sku, legacyCurrency, "Google Play payment provider unavailable.");
+            if (!OwnsTheRail(provider))
+                return PaymentResult.Failure(pack.Sku, legacyCurrency, "Payment provider unavailable.");
             if (_purchaseInFlight)
                 return PaymentResult.Failure(pack.Sku, legacyCurrency, "Purchase already in progress.");
             if (_vm.IsOwned(pack.Sku))
@@ -2823,7 +2856,14 @@ namespace DeNelle.Wallet
                 var result = await completion.Task;
                 if (result.Pending)
                 {
-                    const string pending = "Google Play is processing this purchase. Do not buy it again.";
+                    // WO-1318: the sentence names the rail that is actually holding the purchase. On
+                    // Pi it must ALSO say what happens next, because the recovery is automatic
+                    // (onIncompletePaymentFound settles it on the next launch) and a player told only
+                    // "do not buy it again" would reasonably assume their money is gone.
+                    string pending = provider.Channel == PaymentChannel.PiBrowser
+                        ? "Pi is still settling this payment. Do not buy it again - reopen the game and " +
+                          "it will finish automatically."
+                        : "Google Play is processing this purchase. Do not buy it again.";
                     SetCommerceState(CommerceState.Delayed, pending);
                     return PaymentResult.Indeterminate(pack.Sku, legacyCurrency, 0d,
                         result.ProviderTransactionId, pending);
@@ -2836,7 +2876,19 @@ namespace DeNelle.Wallet
 
                 // Success is emitted only after authenticated server verification and durable
                 // transaction recording. The local grant remains exactly-once by SKU ownership.
-                _vm.ApplyPackContents(pack);
+                //
+                // ⛔ WO-1318 — THE PI RAIL HAS ALREADY GRANTED, AND CALLING THIS AGAIN WOULD DOUBLE IT.
+                // PackStoreVM.ApplyPackContents is NOT idempotent for the ECONOMY half: it records
+                // ownership once, but it routes wood/iron/food/crystals/coins through
+                // EconomyService.GrantSpendable EVERY time it runs, so a second call on the same
+                // payment silently doubles the resources. PiBrowserPaymentProvider settles through
+                // PiGrantApplier.ApplyExactlyOnce (write-ahead journal keyed by the Pi paymentId)
+                // BEFORE it reports success, because the same grant must also happen with no store
+                // open at all — onIncompletePaymentFound can fire at sign-in. So on the Pi rail this
+                // call is SKIPPED, and the ownership assertion below still guards delivery.
+                // The Google Play path is untouched.
+                if (provider.Channel != PaymentChannel.PiBrowser)
+                    _vm.ApplyPackContents(pack);
                 if (!_vm.IsOwned(pack.Sku))
                     return PaymentResult.Failure(pack.Sku, legacyCurrency,
                         "Purchase verified, but local delivery is still pending.");

@@ -17,6 +17,7 @@ namespace DeNelle.Core.Platform
     {
         public event Action<string, string> OnApprovalReady;
         public event Action<string, string, string> OnCompletionReady;
+        public event Action<PiIncompletePayment> OnIncompletePaymentFound;
 
 #if UNITY_WEBGL && !UNITY_EDITOR
         [DllImport("__Internal")] private static extern int  PiIsAvailable();
@@ -122,18 +123,30 @@ namespace DeNelle.Core.Platform
                     });
                     break;
                 case "approvalReady":
+                    FlowTrace.Step("PiPay", $"onReadyForServerApproval corr={cb.paymentId} piPaymentId={d.piPaymentId}");
                     OnApprovalReady?.Invoke(cb.paymentId, d.piPaymentId);
                     break;
                 case "completionReady":
+                    FlowTrace.Step("PiPay", $"onReadyForServerCompletion corr={cb.paymentId} piPaymentId={d.piPaymentId} txid={d.txid}");
                     OnCompletionReady?.Invoke(cb.paymentId, d.piPaymentId, d.txid);
                     ResolvePayment(cb.paymentId, new PiPaymentResult {
                         Status = PiPaymentStatus.Completed, PaymentId = cb.paymentId,
                         PiPaymentId = d.piPaymentId, Txid = d.txid });
                     break;
+                case "incompletePaymentFound":
+                    // WO-1318: the player already paid; nothing was granted. This is the ONLY signal
+                    // we ever get for it. Warn (not Step) so it is visible at a glance in a capture --
+                    // it always means a previous session dropped a settled payment.
+                    FlowTrace.Warn("PiPay", $"onIncompletePaymentFound piPaymentId={d.piPaymentId} txid={(string.IsNullOrEmpty(d.txid) ? "<none>" : d.txid)} sku={d.sku} quoteId={d.quoteId}");
+                    OnIncompletePaymentFound?.Invoke(new PiIncompletePayment {
+                        PiPaymentId = d.piPaymentId, Txid = d.txid, Sku = d.sku,
+                        QuoteId = d.quoteId, CorrelationId = d.correlationId });
+                    break;
                 case "adReady":
                     _adTcs?.TrySetResult(true);
                     break;
                 case "cancelled":
+                    FlowTrace.Warn("PiPay", $"onCancel corr={cb.paymentId} piPaymentId={d.piPaymentId} (player dismissed the Pi payment sheet)");
                     ResolvePayment(cb.paymentId, new PiPaymentResult {
                         Status = PiPaymentStatus.Cancelled, PaymentId = cb.paymentId, PiPaymentId = d.piPaymentId });
                     break;
@@ -182,6 +195,8 @@ namespace DeNelle.Core.Platform
             public string accessToken; public string uid; public string username;
             public string piPaymentId; public string txid; public string message;
             public string where; // jslib always sends it; 'sdk-global' = template-forwarded benign rejection (WO-678)
+            // WO-1318 — carried on 'incompletePaymentFound' only (read off the payment's metadata).
+            public string sku; public string quoteId; public string correlationId;
         }
 
         /// <summary>The persistent "PiBridge" GameObject that Unity SendMessage targets.</summary>

@@ -22,7 +22,11 @@ test('promo packs are loaded and atomically snapshotted from Neon', () => {
 
 test('client advertises inline capability and never falls back to PackCatalog.Find', () => {
   const client = read('Assets/_Modules/Core/Promo/PromoCodeService.cs');
-  const vm = read('Assets/_Modules/Wallet/PackStoreVM.cs');
+  // Path corrected 2026-09-02: PackStoreVM.cs MOVED to _Modules/Commerce (commit 13770a912,
+  // the Google Play storefront rail). This test kept the old _Modules/Wallet path and had been
+  // failing ENOENT ever since -- a red suite that reads as "the assertion broke" when in fact
+  // the file it asserts over was never being read at all.
+  const vm = read('Assets/_Modules/Commerce/PackStoreVM.cs');
   assert.match(client, /supportsInlinePackRewards = true/);
   assert.match(client, /JObject Contents/);
   assert.match(client, /TryApplyInlinePack/);
