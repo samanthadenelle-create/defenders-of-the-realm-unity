@@ -2,13 +2,17 @@
 # Colourblind-safe by construction: ONE flat light-grey material + luminance-only
 # Workbench studio lighting. No hue anywhere, so differences read as SHAPE only.
 # Usage:
-#   blender -b --factory-startup --python tools/mesh/render_fbx_views.py -- <in.fbx> <outdir> <label> [framing.json]
+#   blender -b --factory-startup --python tools/mesh/render_fbx_views.py -- <in.fbx> <outdir> <label> [framing.json] [standup]
+# <standup> overrides the "is this file Y-up?" guess: auto (default) | yes | no.
+# The auto guess reads the SMALLEST bounds axis as depth, which is wrong for a
+# character carrying a long horizontal prop (Mage's staff) -- pass "yes" there.
 import bpy, sys, os, json, math
 from mathutils import Vector
 
 argv = sys.argv[sys.argv.index("--") + 1:]
 src, outdir, label = argv[0], argv[1], argv[2]
 framing_path = argv[3] if len(argv) > 3 else None
+standup = (argv[4].lower() if len(argv) > 4 else "auto")
 os.makedirs(outdir, exist_ok=True)
 
 bpy.ops.wm.read_factory_settings(use_empty=True)
@@ -31,7 +35,7 @@ def world_bounds():
 
 _lo, _hi = world_bounds()
 _ext = _hi - _lo
-if _ext.z == min(_ext):
+if standup == "yes" or (standup == "auto" and _ext.z == min(_ext)):
     # depth landed on Z => file is Y-up. Stand it up so the render views are sane.
     for o in bpy.data.objects:
         if o.parent is None:
@@ -41,10 +45,49 @@ if _ext.z == min(_ext):
 
 # --- world-space bounds, so every density is framed IDENTICALLY -------------
 lo, hi = world_bounds()
+
+def slab_centroid(z_lo_frac, z_hi_frac):
+    """Mean X/Y of the vertices in a horizontal slab of the bounds.
+
+    The close-up views used to aim at the BOUNDS CENTRE, which a long horizontal
+    prop drags away from the body -- the Mage's staff spans 1.85 m in X and
+    1.16 m in Y, so the bounds centre sits ~0.5 m off his actual head and the
+    head close-up rendered empty space. Aiming at where the geometry actually is
+    fixes it for every character, propped or not.
+    """
+    zl = lo.z + (hi.z - lo.z) * z_lo_frac
+    zh = lo.z + (hi.z - lo.z) * z_hi_frac
+    sx = sy = 0.0; n = 0
+    # Must read the EVALUATED mesh. `o.data.vertices` holds pre-modifier REST
+    # coords, which for these FBX rigs sit ~0.35 m off the posed mesh -- reading
+    # them put every vertex outside the slab and silently fell back to the
+    # bounds centre, which is the very thing this function exists to avoid.
+    dg = bpy.context.evaluated_depsgraph_get()
+    for o in bpy.data.objects:
+        if o.type != 'MESH':
+            continue
+        ev = o.evaluated_get(dg)
+        me = ev.to_mesh()
+        mw = ev.matrix_world
+        for v in me.vertices:
+            w = mw @ v.co
+            if zl <= w.z <= zh:
+                sx += w.x; sy += w.y; n += 1
+        ev.to_mesh_clear()
+    if not n:
+        return (lo.x + hi.x) / 2.0, (lo.y + hi.y) / 2.0
+    return sx / n, sy / n
+
+_head_xy = slab_centroid(0.86, 1.0)
+_hand_xy = slab_centroid(0.45, 0.65)
 if framing_path and os.path.exists(framing_path):
-    f = json.load(open(framing_path)); lo = Vector(f["lo"]); hi = Vector(f["hi"])
+    f = json.load(open(framing_path))
+    lo = Vector(f["lo"]); hi = Vector(f["hi"])
+    _head_xy = tuple(f["head_xy"]); _hand_xy = tuple(f["hand_xy"])
 elif framing_path:
-    json.dump({"lo": list(lo), "hi": list(hi)}, open(framing_path, "w"))
+    json.dump({"lo": list(lo), "hi": list(hi),
+               "head_xy": list(_head_xy), "hand_xy": list(_hand_xy)},
+              open(framing_path, "w"))
 ctr = (lo + hi) / 2.0
 size = hi - lo
 print(f"[RENDER] {label} bounds lo={tuple(round(v,4) for v in lo)} hi={tuple(round(v,4) for v in hi)}")
@@ -88,9 +131,9 @@ def shoot(fname, yaw_deg, pitch_deg, focus, ortho_h):
 
 aspect = sc.render.resolution_y / float(sc.render.resolution_x)
 body_h = max(size.z, max(size.x, size.y) * aspect) * 1.10
-head = Vector((ctr.x, ctr.y, lo.z + size.z * 0.90))
+head = Vector((_head_xy[0], _head_xy[1], lo.z + size.z * 0.90))
 head_h = size.z * 0.26
-hands = Vector((ctr.x, ctr.y, lo.z + size.z * 0.55))
+hands = Vector((_hand_xy[0], _hand_xy[1], lo.z + size.z * 0.55))
 
 # NOTE: Workbench WIREFRAME shading is viewport-only -- it renders BLANK offscreen.
 # Topology loss is read instead from faceting in the solid+cavity render, which is

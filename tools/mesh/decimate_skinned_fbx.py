@@ -1,20 +1,56 @@
 # Blender headless mesh decimation for SKINNED / RIGGED FBX characters.
 # Usage (see docs/MESH_DECIMATION_PROCESS.md):
-#   blender -b --factory-startup --python tools/mesh/decimate_skinned_fbx.py -- <src.fbx> <outdir> <tris1> [tris2 ...]
+#   blender -b --factory-startup --python tools/mesh/decimate_skinned_fbx.py -- <src.fbx> <outdir> <tris1> [tris2 ...] [root=<NodeName>]
+#
+# root=<NodeName> -- REQUIRED when the output is going to REPLACE a shipping FBX.
+# Blender's FBX importer does not keep the source root node's name: it always
+# calls the armature object "Armature", so a plain round-trip renames the rig
+# root. Unity's cached HumanDescription in the .fbx.meta lists every transform
+# by name, so the re-import then fails with
+#     Rig Error: Avatar creation failed: Transform 'Armature' not found in
+#     HumanDescription.
+# and the Humanoid avatar is not built at all. Pass the original root name --
+# read it off the FIRST `- name:` under `skeleton:` in that asset's .fbx.meta
+# (e.g. root=Ranger(Clone)) -- and the hierarchy matches again.
 # Writes <outdir>/<name>_<tris>k.fbx plus <outdir>/decimate-report.csv
 # NEVER point <src.fbx> at a shipping asset. Work on a copy.
 import bpy, sys, os, csv
 
 argv = sys.argv[sys.argv.index("--") + 1:]
 src, outdir = argv[0], argv[1]
-targets = [int(x) for x in argv[2:]]
+root_name = None
+rest = []
+bone_orient = "exact"
+for a in argv[2:]:
+    if a.startswith("root="):
+        root_name = a[len("root="):]
+    elif a.startswith("bone_orient="):
+        bone_orient = a[len("bone_orient="):]
+    else:
+        rest.append(a)
+targets = [int(x) for x in rest]
 os.makedirs(outdir, exist_ok=True)
 name = os.path.splitext(os.path.basename(src))[0]
 rows = []
 
 def import_src():
     bpy.ops.wm.read_factory_settings(use_empty=True)
-    bpy.ops.import_scene.fbx(filepath=src, automatic_bone_orientation=True)
+    # bone_orient=exact keeps the FBX's own bone axes. automatic_bone_orientation
+    # re-aims every bone at its child, which is fine for a look-at-it PoC and
+    # WRONG for a replacement asset: Unity's cached HumanDescription in the
+    # .fbx.meta stores each bone's rest transform, and the re-aimed rest pose
+    # misses it by up to 435 mm ("Avatar Rig Configuration mis-match. Bone length
+    # in configuration does not match position in animation file"). The originals
+    # import with zero rig errors, so any such error is round-trip damage.
+    bpy.ops.import_scene.fbx(filepath=src,
+                             automatic_bone_orientation=(bone_orient == "auto"))
+    if root_name:
+        # Restore the source root node's name (see the header note) so the
+        # exported hierarchy still matches the shipping .fbx.meta skeleton.
+        arms = [o for o in bpy.data.objects if o.type == 'ARMATURE']
+        if len(arms) != 1:
+            raise SystemExit(f"[DECIM] ABORT: root= given but found {len(arms)} armatures")
+        arms[0].name = root_name
 
 def meshes():
     return [o for o in bpy.data.objects if o.type == 'MESH']

@@ -1,10 +1,29 @@
 # Hero Mesh Decimation — repeatable process
 
-**Status:** PROVEN on a copy of `Ranger.fbx` (2026-09-03). **Nothing shipping has been changed.**
-**Owner ruling this serves:** *"for right now to push to live let's leave those alone, but let's
-definitely decimate them and get that process going."*
+**Status:** **ADOPTED (2026-09-03).** `Assets/HeroContent/Ranger.fbx` and `Mage.fbx` now ship at
+**~50,000 triangles** — see §10. Knight is deliberately untouched (§9).
+**Owner ruling this serves:** *"50k looks good"*, given after comparing the densities in
+`Builds/decimate-poc/COMPARE.html`. (Superseding the earlier *"for right now to push to live let's
+leave those alone, but let's definitely decimate them and get that process going."*)
 
 This doc is the process. It is written so the **next** character needs no rediscovery.
+
+> ## ⛔ REPLACING A SHIPPING ASSET NEEDS TWO ARGUMENTS THE PoC DID NOT
+> A ratio-1.0 round-trip through Blender is **not** byte-faithful to Unity's cached rig. Two
+> defaults silently break the Humanoid avatar, and **both fail on the round-trip CONTROL too** —
+> which is how you tell rig damage apart from decimation damage. Always pass:
+>
+> | argument | without it Unity logs | why |
+> |---|---|---|
+> | `root=<NodeName>` | `Rig Error: Avatar creation failed: Transform 'Armature' not found in HumanDescription.` | Blender's importer **discards the source root node's name** and always calls the armature `Armature`. The `.fbx.meta` `humanDescription.skeleton` lists all 103 transforms **by name**, so the rename orphans the whole rig. Read the value off the FIRST `- name:` under `skeleton:` — `Ranger(Clone)`, `Mage(Clone)`. |
+> | `bone_orient=exact` (now the DEFAULT) | `Rig Error: Avatar Rig Configuration mis-match. Bone length in configuration does not match position in animation file:` with per-bone errors up to **435 mm** | `automatic_bone_orientation=True` re-aims every bone at its child. Harmless for a look-at-it PoC, wrong for a replacement: the cached rest pose no longer matches. |
+>
+> **The oracle is Unity, not Blender.** A Blender→Blender round-trip measured **0.000 mm** of bone
+> displacement under *both* settings, so Blender cannot see this class of damage at all — it is
+> self-consistent while diverging from the source. The proving control is the reverse one:
+> **the pristine originals import with ZERO rig errors**, so *any* `Rig Error` on a re-imported
+> FBX is round-trip damage you introduced. Grep the gate log for it; the marker alone will not
+> catch it, because `COMPILE_GATE_OK` is emitted regardless.
 
 ---
 
@@ -49,12 +68,16 @@ NAME=Ranger                       # character to process
 POC=D:/eoa/Builds/decimate-poc    # scratch, gitignored
 
 # (1) COPY the shipping asset. NEVER point the tool at Assets/.
+#     Heroes live in Assets/HeroContent/ (migrated out of Assets/Resources/Heroes 2026-09-03,
+#     which now holds only the controllers + the deliberately-local Knight set).
 mkdir -p $POC/source $POC/out $POC/renders
-cp "Assets/Resources/Heroes/$NAME.fbx" "$POC/source/${NAME}_COPY.fbx"
+cp "Assets/HeroContent/$NAME.fbx" "$POC/source/${NAME}_COPY.fbx"
 
 # (2) Decimate. The first output is always a ratio-1.0 ROUND-TRIP CONTROL.
+#     root= is MANDATORY if the output will replace the shipping asset -- see the
+#     banner at the top of this doc. Harmless to pass always, so pass it always.
 "$BL" -b --factory-startup --python tools/mesh/decimate_skinned_fbx.py -- \
-      "$POC/source/${NAME}_COPY.fbx" "$POC/out" 50000 25000 10000
+      "$POC/source/${NAME}_COPY.fbx" "$POC/out" 50000 25000 10000 "root=${NAME}(Clone)"
 
 # (3) Evidence renders. framing.json is written once then REUSED, which is what
 #     guarantees every density is framed identically.
@@ -62,6 +85,12 @@ for tag in orig-roundtrip 50k 25k 10k; do
   "$BL" -b --factory-startup --python tools/mesh/render_fbx_views.py -- \
         "$POC/out/${NAME}_COPY_${tag}.fbx" "$POC/renders" "$tag" "$POC/renders/framing.json"
 done
+#     A 5th arg forces the up-axis guess: auto (default) | yes | no. Pass "yes" for a
+#     character carrying a long horizontal prop -- the guess reads the SMALLEST bounds
+#     axis as depth, and the Mage's staff makes that the wrong one, so he renders lying
+#     down. The close-ups aim at the top-slab / mid-slab vertex centroid, NOT the bounds
+#     centre, for the same reason: that staff drags the bounds centre ~0.5 m off his head
+#     and the head shot came back empty.
 
 # (4) Open $POC/COMPARE.html to judge the densities side by side.
 ```
@@ -89,6 +118,21 @@ number, not against the source** — otherwise you credit decimation with ~1.25 
 3. **Framing identical**: every render logs its bounds; they must match across densities.
 4. **Look at the renders.** `COMPARE.html`, head close-up first — that is where loss concentrates.
 5. **In motion** — see §7. Not optional, and not provable from these stills.
+
+**If the output is REPLACING a shipping asset, four more, all mandatory:**
+
+6. **`.fbx.meta` byte-identical before and after** (`sha256sum`) — it carries the GUID every prefab,
+   controller and Addressables entry resolves through, plus this asset's `meshCompression`. Replace
+   the FBX bytes *beside* it; never regenerate it. `git status` must show the `.fbx` modified and
+   **not** the `.meta`.
+7. **Zero `Rig Error` in the gate log** — `grep -c -i "Rig Error" Builds/compile-gate.log` must be
+   `0`. `COMPILE_GATE_OK` is emitted even when the avatar failed to build, so the marker does not
+   cover this. See the banner at the top of this doc for the two arguments that cause it.
+8. **Originals backed up outside `Assets/`, gitignored, with hashes** — `Backups/` is gitignored, so
+   `Backups/mesh-decimation-<date>/` with a `SHA256.txt`. One `cp` reverts.
+9. **The bundles RE-HASH.** Addressables bundle names are content-hashed, so a decimated hero needs
+   its own `tools\r2-ship.ps1` push before any build reaches a device — a previous push cannot cover
+   it (CLAUDE.md §16).
 
 ## 5. Measured result — Ranger
 
@@ -200,11 +244,52 @@ dominated by data that compresses well.
 - ⛔ **Never point the tool at a shipping asset.** Always copy to `Builds/decimate-poc/source/` first.
   The shipping `.fbx.meta` files are owned by other lanes.
 - ⛔ Adopting a decimated mesh into the game is a **separate, owner-approved** change. This process
-  produces evidence, not a shipped asset.
-- Keep intermediates in `Builds/decimate-poc/` (gitignored). Only the two scripts and this doc are
-  tracked.
+  produces evidence, not a shipped asset. (Ranger + Mage at 50k **were** so approved — §10.)
+- ⛔ **Knight is off-limits.** `Knight.fbx`, `Knight.fbm/` and `KnightV3.fbx` stay LOCAL and
+  undecimated: `TroopFactory` resolves troop bodies through a path with no Addressables arm in a
+  player build, so touching them turns `troop-shieldguard` and `troop-echo-legionnaire` into
+  capsules. KnightV3 is 9,808 tris anyway — there is nothing to win.
+- Keep intermediates in `Builds/decimate-poc/` (PoC) or `Builds/decimate-ship/` (an adoption pass) —
+  both gitignored. Only the two scripts and this doc are tracked.
 - This process must not edit any character's `.fbx.meta`. Re-import settings are a different
   decision.
 - Known limitation: Workbench **wireframe** shading is viewport-only and renders blank offscreen.
   Topology loss is read from faceting in the solid+cavity render instead. Do not re-add a wireframe
   pass expecting it to work.
+
+---
+
+## 10. Adoption record — Ranger + Mage at 50k (2026-09-03)
+
+Owner ruling **"50k looks good"**. The shipping FBX bytes in `Assets/HeroContent/` were replaced;
+both `.fbx.meta` files are untouched, so both GUIDs, both `meshCompression: 1` settings and the
+`Hero_Ranger` / `Hero_Mage` Addressables Remote groups are intact.
+
+| | tris before | tris after | FBX bytes before | FBX bytes after | saved |
+|---|---:|---:|---:|---:|---:|
+| Ranger | 314,892 | 50,000 | 12,631,756 *(round-trip)* | 2,381,532 | −81.1% |
+| Mage | 169,110 | 49,999 | 7,106,844 *(round-trip)* | 2,397,900 | −66.3% |
+
+Mage's ratio cut is smaller because he started at half Ranger's density — **do not assume Ranger's
+81% transfers to the next character.** Against the *source* bytes (13,946,976 / 8,565,536) the two
+together drop **~17.7 MB** of FBX, but the honest wire number is §8's: mesh compresses at only
+**1.07x**, so the saving lands on the wire nearly 1:1 — roughly **14–18 MB off a ~157 MB payload,
+about 10%**. Real, and **not** the fix for the 65% stall. Textures at 98.9 MB remain the largest
+block.
+
+Rig integrity, measured at both densities: **Ranger 101 bones / 60 vertex groups / 1 UV set**,
+**Mage 101 / 61 / 1** — identical to their originals. Unity re-imports both with **zero rig errors**.
+
+- Originals: `Backups/mesh-decimation-2026-09-03/` (gitignored) + `SHA256.txt`.
+- Working files and fresh renders: `Builds/decimate-ship/`, incl. its own `COMPARE.html`.
+- Gates on the installed assets: `COMPILE_GATE_OK`, `REGRESSION_OK 354/354 suites`, with
+  `[hero-remote-content]` and `[addressable-troop-visual]` both green.
+- Two scripts gained arguments this pass: `root=` and `bone_orient=` on the decimator (see the
+  banner), and a `standup` override plus centroid-aimed close-ups on the renderer (see §3).
+
+**Still open, and only the owner can close it:** every render is a T-pose still, and Collapse
+averages bone weights across merged vertices, so a mesh can be perfect standing and distort in
+motion. `Ranger.fbx` carries no animation (clips live in the `.controller`) and the avatar rebuilds
+clean, so the rig survives *structurally* — deformation quality does not follow from that. Check on
+a device: **face/jaw on a head-turn, fingers and wrist gripping a weapon, shoulder and hip at full
+rotation, cloak tatters in locomotion, weapon attach alignment.**
