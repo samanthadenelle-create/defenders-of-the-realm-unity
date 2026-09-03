@@ -138,6 +138,7 @@ namespace DeNelle.Editor.Regression
                 Case(failures, "wave-band",        () => Case4_WaveBand(failures, notes));
                 Case(failures, "tier-stamp",       () => Case5_TierStamp(failures, notes));
                 Case(failures, "deck-card-labels", () => Case6_DeckCardSingleProducer(failures, notes));
+                Case(failures, "deck-card-packaging", () => Case7_DeckCardPackagingMargin(failures, notes));
             }
             catch (Exception ex)
             {
@@ -632,6 +633,211 @@ namespace DeNelle.Editor.Regression
             }
 
             notes.Add("Hero deck: 4 text-free cards, one live producer per label, format read from Manage");
+        }
+
+        // =====================================================================
+        // CASE 7  [deck-card-packaging]  A DECK CARD MAY NEVER DRAW ITS OWN
+        //         PACKAGING MARGIN (owner F8 2026-09-03, "the journey raids
+        //         button is wrong").
+        // ---------------------------------------------------------------------
+        // WHAT WAS CAPTURED: the owner's phone photo of the JOURNEY panel. The
+        // RAIDS card carried a pale near-white FILLED band right around its ornate
+        // frame, spilling to the cell edge, while the QUESTS card beside it - the
+        // same art family, the same 1774x887 - was clean. That band is the
+        // authoring tool's CHECKERBOARD: cards/raids.png was flattened onto it
+        // instead of being exported with alpha, so its border pixels are OPAQUE.
+        //
+        // WHY THE EXISTING FIX DID NOT COVER IT: WO-1311 derives each card's
+        // packaging margin from the sprite's alpha-built TIGHT MESH. That can only
+        // see a margin that is TRANSPARENT. For raids.png the mesh honestly reports
+        // "no margin at all", the card renders 1:1, and the checkerboard is drawn.
+        // Every one of that ticket's own pins stayed green through the defect.
+        //
+        // HOW THIS CASE IS HONEST - IT OPENS THE PNG. It does not read a constant
+        // back at itself and it does not trust the fit code's arithmetic. For every
+        // card art key the deck actually mounts it decodes the file, finds the
+        // alpha bounds and the INK bounds, and asks the one question the source
+        // cannot answer: does this image have a pale border that alpha cannot see?
+        //   * a transparent margin  -> the alpha route owns it, no table row wanted
+        //   * an opaque pale margin -> PlayerDeckWorkspace.OpaqueMargins MUST carry
+        //                              a row for it, with the measured numbers
+        //   * a row for a card that no longer has one -> the art was re-exported
+        //                              and the row is now a stale crop; delete it
+        // Re-export raids.png properly and this case turns RED until the row goes,
+        // which is the only way a hardcoded margin is made self-retiring.
+        //
+        // PROVEN RED: with the OpaqueMargins row for "raids" removed, this case
+        // fails with "card art 'raids' has an OPAQUE packaging margin L49 T63 R48
+        // B78 ... and NO row" - it names the exact card in the photo, from pixels.
+        private static void Case7_DeckCardPackagingMargin(List<string> failures, List<string> notes)
+        {
+            string deck = ReadSrc(DeckSrc);
+            if (deck == null) { failures.Add("[deck-card-packaging] cannot read " + DeckSrc); return; }
+
+            // The plumbing must still be wired, or every measurement below is moot.
+            if (deck.IndexOf("TryOpaqueMargin(key, rect", StringComparison.Ordinal) < 0)
+                failures.Add("[deck-card-packaging] " + DeckSrc + " no longer calls TryOpaqueMargin " +
+                             "from the fit measurement - an opaque packaging margin is invisible to " +
+                             "the alpha route, so with that call gone the RAIDS defect is back");
+            if (deck.IndexOf("alphaSawNoMargin && !opaqueMargin", StringComparison.Ordinal) < 0)
+                failures.Add("[deck-card-packaging] " + DeckSrc + " no longer guards its 'render 1:1' " +
+                             "early-return on !opaqueMargin, so an authored margin is measured and " +
+                             "then thrown away");
+
+            if (!Directory.Exists(CardArtDir))
+            { failures.Add("[deck-card-packaging] card art directory is gone: " + CardArtDir); return; }
+
+            int checkedCards = 0, corrected = 0;
+            foreach (string file in Directory.GetFiles(CardArtDir, "*.png"))
+            {
+                string key = Path.GetFileNameWithoutExtension(file);
+                // Only cards the deck actually mounts. An unused PNG's packaging is nobody's bug.
+                if (deck.IndexOf("\"" + key + "\"", StringComparison.Ordinal) < 0) continue;
+                checkedCards++;
+
+                int w, h, aL, aT, aR, aB, iL, iT, iR, iB;
+                if (!MeasureCardPng(file, out w, out h, out aL, out aT, out aR, out aB,
+                                    out iL, out iT, out iR, out iB))
+                { failures.Add("[deck-card-packaging] cannot decode " + file); continue; }
+
+                bool transparentMargin = aL > 0 || aT > 0 || aR > 0 || aB > 0;
+                // A pale border that alpha cannot see. 8px sits well under the ~50px these
+                // deliveries carry and well over any single-pixel authoring slop.
+                bool opaqueMargin = !transparentMargin && (iL >= 8 || iT >= 8 || iR >= 8 || iB >= 8);
+                bool hasRow = HasOpaqueMarginRow(deck, key);
+
+                if (opaqueMargin && !hasRow)
+                {
+                    failures.Add("[deck-card-packaging] card art '" + key + "' has an OPAQUE packaging " +
+                        "margin L" + iL + " T" + iT + " R" + iR + " B" + iB + " (" + w + "x" + h + ") and " +
+                        "NO row in PlayerDeckWorkspace.OpaqueMargins. Its border pixels are not " +
+                        "transparent, so the WO-1311 alpha route cannot see them and the card draws that " +
+                        "pale band around its own frame - the Journey RAIDS defect exactly. Add the row " +
+                        "with these measured numbers, or have the PNG re-exported with alpha");
+                }
+                else if (!opaqueMargin && hasRow)
+                {
+                    failures.Add("[deck-card-packaging] PlayerDeckWorkspace.OpaqueMargins still carries a " +
+                        "row for '" + key + "', but that PNG no longer has an opaque packaging margin " +
+                        "(alpha margin L" + aL + " T" + aT + " R" + aR + " B" + aB + "). The art was " +
+                        "re-exported; the row is now a hardcoded crop of real artwork. DELETE the row");
+                }
+                else if (opaqueMargin)
+                {
+                    corrected++;
+                    RequireOpaqueMarginNumbers(failures, deck, key, w, h, iL, iT, iR, iB);
+                }
+            }
+
+            if (checkedCards == 0)
+                failures.Add("[deck-card-packaging] matched NO card art to " + DeckSrc + " - the deck's " +
+                             "art keys were renamed and this case is measuring nothing");
+            else
+                notes.Add("deck card packaging: " + checkedCards + " mounted card PNGs opened, " +
+                          corrected + " carry an opaque margin corrected by an authored row");
+        }
+
+        /// <summary>Decode a PNG off disk and return its size plus TWO margins, both in pixels off
+        /// each edge in IMAGE space (top-left origin): the ALPHA margin (fully transparent border)
+        /// and the INK margin (border that is opaque but pale - what the alpha route cannot see).
+        /// Reads the file bytes, so the importer's isReadable setting is irrelevant.</summary>
+        private static bool MeasureCardPng(string path, out int w, out int h,
+                                           out int aL, out int aT, out int aR, out int aB,
+                                           out int iL, out int iT, out int iR, out int iB)
+        {
+            w = h = 0; aL = aT = aR = aB = 0; iL = iT = iR = iB = 0;
+            Texture2D tex = null;
+            try
+            {
+                tex = new Texture2D(2, 2, TextureFormat.RGBA32, false);
+                if (!tex.LoadImage(File.ReadAllBytes(path))) return false;
+                w = tex.width; h = tex.height;
+                if (w < 8 || h < 8) return false;
+                var px = tex.GetPixels32();
+
+                int axMin = w, axMax = -1, ayMin = h, ayMax = -1;   // any non-transparent pixel
+                int ixMin = w, ixMax = -1, iyMin = h, iyMax = -1;   // non-transparent AND not pale
+                for (int y = 0; y < h; y++)
+                {
+                    int row = y * w;
+                    for (int x = 0; x < w; x++)
+                    {
+                        var c = px[row + x];
+                        if (c.a <= 8) continue;
+                        if (x < axMin) axMin = x;
+                        if (x > axMax) axMax = x;
+                        if (y < ayMin) ayMin = y;
+                        if (y > ayMax) ayMax = y;
+                        // 170/255 sits above every authored parchment tone in these cards and
+                        // below the ~200+ checkerboard - that is what separates ink from packaging.
+                        if ((c.r + c.g + c.b) / 3 >= 170) continue;
+                        if (x < ixMin) ixMin = x;
+                        if (x > ixMax) ixMax = x;
+                        if (y < iyMin) iyMin = y;
+                        if (y > iyMax) iyMax = y;
+                    }
+                }
+                if (axMax < 0 || ixMax < 0) return false;
+
+                // GetPixels32 is bottom-left origin; report TOP-LEFT origin margins.
+                aL = axMin; aR = w - 1 - axMax; aT = h - 1 - ayMax; aB = ayMin;
+                iL = ixMin; iR = w - 1 - ixMax; iT = h - 1 - iyMax; iB = iyMin;
+                return true;
+            }
+            catch { return false; }
+            finally { if (tex != null) UnityEngine.Object.DestroyImmediate(tex); }
+        }
+
+        /// <summary>True when PlayerDeckWorkspace.OpaqueMargins declares a row for this art key.
+        /// The anchor carries the row's NEXT field on purpose: the card table one screen away
+        /// writes 'ArtKey = "raids"', which contains 'Key = "raids"' as a substring and made the
+        /// first draft of this case report a row that was not there.</summary>
+        private static bool HasOpaqueMarginRow(string deck, string key)
+        {
+            return deck.IndexOf(RowAnchor(key), StringComparison.Ordinal) >= 0;
+        }
+
+        private static string RowAnchor(string key)
+        {
+            return "Key = \"" + key + "\", Width";
+        }
+
+        /// <summary>The authored row must equal what the PNG actually measures - within 2px, which
+        /// is authoring slop, not a licence to drift.</summary>
+        private static void RequireOpaqueMarginNumbers(List<string> failures, string deck, string key,
+                                                       int w, int h, int l, int t, int r, int b)
+        {
+            int at = deck.IndexOf(RowAnchor(key), StringComparison.Ordinal);
+            if (at < 0) return;
+            // Bound the row at the NEXT row's constructor rather than at a closing brace: a bare
+            // brace literal in this file would unbalance the repo's C# brace-count gate.
+            int next = deck.IndexOf("new OpaqueMargin", at, StringComparison.Ordinal);
+            int end = next > at ? next : Math.Min(deck.Length, at + 400);
+            string row = deck.Substring(at, end - at);
+            MarginField(failures, key, row, "Width", w);
+            MarginField(failures, key, row, "Height", h);
+            MarginField(failures, key, row, "Left", l);
+            MarginField(failures, key, row, "Top", t);
+            MarginField(failures, key, row, "Right", r);
+            MarginField(failures, key, row, "Bottom", b);
+        }
+
+        private static void MarginField(List<string> failures, string key, string row,
+                                        string name, int measured)
+        {
+            int at = row.IndexOf(name + " = ", StringComparison.Ordinal);
+            if (at < 0)
+            { failures.Add("[deck-card-packaging] OpaqueMargins row '" + key + "' has no " + name); return; }
+            int i = at + name.Length + 3;
+            var digits = new StringBuilder();
+            while (i < row.Length && char.IsDigit(row[i])) digits.Append(row[i++]);
+            int authored;
+            if (digits.Length == 0 || !int.TryParse(digits.ToString(), out authored))
+            { failures.Add("[deck-card-packaging] OpaqueMargins row '" + key + "' has an unreadable " + name); return; }
+            if (Math.Abs(authored - measured) > 2)
+                failures.Add("[deck-card-packaging] OpaqueMargins row '" + key + "' declares " + name + " = " +
+                             authored + " but the PNG measures " + measured + ". The authored margin is a " +
+                             "claim about that file's pixels - re-measure it, or the card is cropped wrong");
         }
 
         private const string CardArtDir = "Assets/Resources/UI/ElarionMedieval/cards/";

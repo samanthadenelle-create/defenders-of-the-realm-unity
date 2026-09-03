@@ -2637,7 +2637,17 @@ namespace DeNelle.Core.UI
             go.transform.SetAsLastSibling();
         }
 
-        /// <summary>A 1px inner rim hugging an element's edges — crisp framed depth.</summary>
+        /// <summary>A 1px inner rim hugging an element's edges — crisp framed depth.
+        /// <para>⚠ IT IS NOT A RIM AND IT IS NOT BEHIND THE HOST. This is a FULL-RECT filled
+        /// rounded quad at a 1px inset, and a parent's own Graphic draws BEFORE all of its
+        /// children — so SetAsFirstSibling orders it first among SIBLINGS while still drawing
+        /// ON TOP of the host's face. It only reads as a rim because the fill is half-alpha, so
+        /// on an ornate plate it VEILS the art rather than framing it. Two things keep that off
+        /// screen today: it is skipped entirely while <c>BlinkChromeActive</c> (flag ON and the
+        /// Blink art present, i.e. the shipping build), and BuildActionBarHousing already says
+        /// so in its own header. Raise the alpha, or ship with the art absent, and every host
+        /// that calls this gets a translucent slab over its face. A real rim is thin INSET edge
+        /// bars in an image-less container — see HeroSkillTreePanelMvvm.BuildSpendPopup.</para></summary>
         public static void AddInnerRim(GameObject host, Color color)
         {
             if (host == null || BlinkChromeActive) return;   // chrome: skip the gilt inner rim (WO-714 P9: art-presence gated)
@@ -3117,7 +3127,15 @@ namespace DeNelle.Core.UI
             var hubRimImg = hubRim.GetComponent<Image>();
             hubRimImg.sprite = CircleSprite; hubRimImg.type = Image.Type.Simple;
             hubRimImg.color = ObsidianTrim; hubRimImg.raycastTarget = false;
-            hubRim.transform.SetAsFirstSibling();   // rim behind the hub face
+            hubRim.transform.SetAsFirstSibling();
+            // ⚠ THE LINE ABOVE DOES NOT PUT THE RIM BEHIND THE HUB FACE (audited 2026-09-03,
+            // the Journey RAIDS sweep). hubRim is a CHILD of hub, and a parent's own Graphic
+            // draws BEFORE all of its children - so this OPAQUE CircleSprite disc, grown 3px
+            // past the hub on every edge, paints over hubImg's dark face and the hub reads as a
+            // solid trim-coloured dot. Deliberately NOT changed on ship eve: it is a ~20px
+            // compass detail with no capture behind it and no owner report. The fix when it is
+            // wanted is a HOLLOW ring sprite here, or building the rim as a SIBLING of hub -
+            // never a re-parent of hub itself (FTUE highlights resolve rects BY NAME).
 
             void Chevron(string name, Vector2 pos, Vector2 dir)
             {

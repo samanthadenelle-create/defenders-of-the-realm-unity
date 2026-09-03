@@ -703,6 +703,15 @@ namespace DeNelle.Village
 
         // A thin circular rim AROUND a circular host: a slightly larger disc rendered
         // BEHIND the host so a gilt ring peeks out past its edge.
+        //
+        // ⚠ IT WOULD NOT BE BEHIND THE HOST - THIS HAS NO CALLERS, AND MUST NOT GAIN ONE AS
+        // WRITTEN. AddCircle here builds a FILLED disc (CircleSprite, or ApplyRounded's filled
+        // quad), grown to radius 0.54 against the host's 0.5, parented UNDER the host. A
+        // parent's own Graphic draws BEFORE all of its children, so SetAsFirstSibling orders it
+        // first among SIBLINGS and it still paints over the host's face - an 85%-alpha gilt wash
+        // across the whole circle, not a ring peeking past its edge. Same defect as the skills
+        // ConfirmRing and the Journey RAIDS card. To make it real: give it a HOLLOW ring sprite,
+        // or build the rim as a SIBLING of the host rather than a child.
         private void AddCircleRim(GameObject host, Color color)
         {
             var rim = AddCircle(host.transform, "CircleRim", 0.5f, 0.5f, 0.54f,

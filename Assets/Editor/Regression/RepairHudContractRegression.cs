@@ -78,6 +78,8 @@ namespace DeNelle.Editor
                     RequireUnityEvent(hud, "RepairConfirmRequested", failures, log);
                     RequireUnityEvent(hud, "RepairCancelRequested", failures, log);
                 }
+
+                CheckNeedsRepairBothDirections(failures, log);
             }
             catch (Exception ex)
             {
@@ -86,7 +88,9 @@ namespace DeNelle.Editor
 
             if (failures.Count == 0)
             {
-                reason = "repair HUD contract intact (3 methods + 2 command events resolve by reflection)";
+                reason = "repair HUD contract intact (3 methods + 2 command events resolve by reflection); " +
+                         "needs-repair oracle green in BOTH directions (pristine offers nothing, " +
+                         "60%-HP building still repairable, full repair clears it)";
                 log.AppendLine("PASS: " + reason);
                 Debug.Log(log.ToString());
                 return true;
@@ -96,6 +100,140 @@ namespace DeNelle.Editor
             log.AppendLine("FAIL: " + reason);
             Debug.LogError(log.ToString());
             return false;
+        }
+
+        // =====================================================================
+        //  NEEDS-REPAIR ORACLE — BOTH DIRECTIONS
+        // ---------------------------------------------------------------------
+        //  Added 2026-09-03 alongside the WO-1296 recurrence ("yellow item not
+        //  damaged is still showing up"). The tempting one-sided fix for that
+        //  report is to make the repair affordance stop appearing — and a
+        //  one-sided test would happily certify it, because "an undamaged
+        //  structure offers nothing" passes just as well when NOTHING is ever
+        //  offered. So this pins the pair:
+        //
+        //    1. a PRISTINE structure must NOT be repairable  (the report), and
+        //    2. a genuinely DAMAGED one must STILL be repairable  (the feature).
+        //
+        //  ⚠ These two cases are GREEN as written today, deliberately: the
+        //  recurrence is a THRESHOLD-RECONCILIATION ruling, not a logic error.
+        //  RepairTarget.NeedsRepair trips at DamageFraction > 0.0001 while the
+        //  first visible damage tell is the smolder loop at HP <= 0.5
+        //  (damage-states.json), so HP 50%..99.99% is repairable-and-pristine and
+        //  the code is doing exactly what it says. Whichever threshold the owner
+        //  moves, direction 2 is the one that must not be collateral damage.
+        //
+        //  EditMode-safe: Awake/Start do not run on AddComponent outside play
+        //  mode, so this leans only on Building's serialized field initialisers
+        //  (_hp = _maxHp = 100) and on ApplyDamage/Repair, which are pure state.
+        // =====================================================================
+        private static void CheckNeedsRepairBothDirections(List<string> failures, StringBuilder log)
+        {
+            GameObject go = null;
+            try
+            {
+                Type targetType = ResolveVillageType("DeNelle.Village.RepairTarget");
+                Type buildingType = ResolveVillageType("DeNelle.Village.Building");
+                if (targetType == null || buildingType == null)
+                {
+                    failures.Add("needs-repair oracle: could not resolve DeNelle.Village.RepairTarget / " +
+                                 "Building — the repair predicate cannot be verified.");
+                    return;
+                }
+
+                go = new GameObject("~RepairOracleBuilding") { hideFlags = HideFlags.HideAndDontSave };
+                go.AddComponent<BoxCollider>();
+                var building = go.AddComponent(buildingType) as Component;
+                if (building == null)
+                {
+                    failures.Add("needs-repair oracle: Building component could not be added.");
+                    return;
+                }
+
+                var tryWrap = targetType.GetMethod("TryWrap",
+                    BindingFlags.Public | BindingFlags.Static, null, new[] { typeof(Component) }, null);
+                var needsRepair = targetType.GetProperty("NeedsRepair",
+                    BindingFlags.Public | BindingFlags.Instance);
+                var damageFraction = targetType.GetProperty("DamageFraction",
+                    BindingFlags.Public | BindingFlags.Instance);
+                var applyDamage = buildingType.GetMethod("ApplyDamage",
+                    BindingFlags.Public | BindingFlags.Instance, null, new[] { typeof(float) }, null);
+                var repair = buildingType.GetMethod("Repair",
+                    BindingFlags.Public | BindingFlags.Instance, null, new[] { typeof(float) }, null);
+
+                if (tryWrap == null || needsRepair == null || damageFraction == null ||
+                    applyDamage == null || repair == null)
+                {
+                    failures.Add("needs-repair oracle: RepairTarget.TryWrap/NeedsRepair/DamageFraction " +
+                                 "or Building.ApplyDamage/Repair moved — the oracle cannot bind.");
+                    return;
+                }
+
+                // ── Direction 1: PRISTINE offers nothing ──────────────────────
+                object wrapped = tryWrap.Invoke(null, new object[] { building });
+                if (wrapped == null)
+                {
+                    failures.Add("needs-repair oracle: RepairTarget.TryWrap returned null for a plain " +
+                                 "Building — the repair loop cannot reach any building at all.");
+                    return;
+                }
+                bool pristineNeeds = (bool)needsRepair.GetValue(wrapped);
+                float pristineFrac = (float)damageFraction.GetValue(wrapped);
+                if (pristineNeeds)
+                    failures.Add($"needs-repair oracle DIRECTION 1: an UNDAMAGED building reports " +
+                                 $"NeedsRepair=true (damageFraction={pristineFrac:0.0000}) — a repair / " +
+                                 "rebuild prompt would be offered on a pristine structure.");
+                else
+                    log.AppendLine($"  OK   undamaged building -> NeedsRepair=false (frac {pristineFrac:0.0000})");
+
+                // ── Direction 2: genuinely DAMAGED still offers ───────────────
+                applyDamage.Invoke(building, new object[] { 40f });   // 100 -> 60 hp
+                object wrappedDamaged = tryWrap.Invoke(null, new object[] { building });
+                bool damagedNeeds = wrappedDamaged != null && (bool)needsRepair.GetValue(wrappedDamaged);
+                float damagedFrac = wrappedDamaged != null ? (float)damageFraction.GetValue(wrappedDamaged) : 0f;
+                if (!damagedNeeds)
+                    failures.Add($"needs-repair oracle DIRECTION 2: a building at 60% HP reports " +
+                                 $"NeedsRepair=false (damageFraction={damagedFrac:0.0000}) — the repair " +
+                                 "feature has been suppressed, not corrected. A one-sided 'stop showing " +
+                                 "the prompt' fix is exactly what this case exists to catch.");
+                else
+                    log.AppendLine($"  OK   damaged building -> NeedsRepair=true (frac {damagedFrac:0.0000})");
+
+                // ── And a full repair returns it to direction 1 ───────────────
+                repair.Invoke(building, new object[] { 1000f });
+                object wrappedHealed = tryWrap.Invoke(null, new object[] { building });
+                bool healedNeeds = wrappedHealed != null && (bool)needsRepair.GetValue(wrappedHealed);
+                if (healedNeeds)
+                    failures.Add("needs-repair oracle: a FULLY repaired building still reports " +
+                                 "NeedsRepair=true — the affordance would never clear after a repair.");
+                else
+                    log.AppendLine("  OK   fully repaired building -> NeedsRepair=false");
+            }
+            catch (Exception ex)
+            {
+                failures.Add($"needs-repair oracle threw: {ex.GetType().Name}: {ex.Message}");
+            }
+            finally
+            {
+                if (go != null) UnityEngine.Object.DestroyImmediate(go);
+            }
+        }
+
+        /// <summary>
+        /// Resolves a DeNelle.Village type by name. DeNelle.Editor does reference the Village
+        /// assembly, but this suite is deliberately reflection-only end to end so a moved type
+        /// is a readable FAILURE line rather than a compile break in the gate itself.
+        /// </summary>
+        private static Type ResolveVillageType(string fullName)
+        {
+            foreach (var asm in AppDomain.CurrentDomain.GetAssemblies())
+            {
+                Type t;
+                try { t = asm.GetType(fullName, false); }
+                catch (Exception) { continue; }
+                if (t != null) return t;
+            }
+            return null;
         }
 
         /// <summary>

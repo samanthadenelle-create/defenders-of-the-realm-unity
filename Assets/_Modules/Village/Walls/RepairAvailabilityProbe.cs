@@ -83,6 +83,7 @@ namespace DeNelle.Village
         // Last-reported line per structure, so the log carries TRANSITIONS and not a
         // poll-rate firehose. The flooded seq=2153 harvest is exactly what this avoids.
         private readonly Dictionary<Object, string> _lastLine = new Dictionary<Object, string>();
+        private readonly Dictionary<Object, string> _lastInvisibleLine = new Dictionary<Object, string>();
         private string _lastSurfaceLine;
 
         // ── Self-install (mirrors StructureDamageVisuals / HubRepairAffordance) ──
@@ -124,16 +125,28 @@ namespace DeNelle.Village
         {
             var burning = new List<Row>();
             CollectBurning(burning);
-            if (burning.Count == 0)
+
+            // WO-1296 RECURRENCE (owner felt-test 2026-09-03, verbatim: "And yellow item not
+            // damaged is still showing up"). The pass below answers the OPPOSITE question to the
+            // burning pass, and until now NOTHING answered it - which is why that report arrived
+            // with no data behind it. See ReportInvisiblyDamaged for the full reasoning.
+            var invisible = new List<InvisibleRow>();
+            CollectInvisiblyDamaged(invisible);
+
+            if (burning.Count == 0 && invisible.Count == 0)
             {
-                // Nothing is on fire - stay silent so the log is not padded, but drop
-                // the transition memory so the NEXT fire re-reports in full.
+                // Nothing is on fire and nothing is invisibly damaged - stay silent so the log is
+                // not padded, but drop the transition memory so the NEXT event re-reports in full.
                 if (_lastLine.Count > 0) _lastLine.Clear();
+                if (_lastInvisibleLine.Count > 0) _lastInvisibleLine.Clear();
                 _lastSurfaceLine = null;
                 return;
             }
 
             ReportSurfaces();
+            ReportInvisiblyDamaged(invisible);
+
+            if (burning.Count == 0) return;
 
             var repair = FindAnyObjectByType<WallRepairController>();
             string setLine = repair != null
@@ -277,6 +290,211 @@ namespace DeNelle.Village
                 into.Add(BuildRow(c, typeof(T).Name, c.gameObject.name, f, isBroken));
             }
         }
+
+        // =====================================================================
+        //  INVISIBLY-DAMAGED pass - the INVERSE of the burning pass
+        // ---------------------------------------------------------------------
+        //  OWNER, felt-test 2026-09-03, verbatim: "And yellow item not damaged is
+        //  still showing up". "STILL" points at WO-1296 (commit a8811ec7), which
+        //  silenced the "That structure is undamaged" toast on an intact-structure
+        //  tap. That fix cannot cover this report, because the two are DIFFERENT
+        //  predicates:
+        //
+        //    WO-1296 covered  DamageFraction == 0        (truly pristine, tap ignored)
+        //    THIS covers      0 < DamageFraction < 0.5   (damaged to the CODE,
+        //                                                 pristine to the PLAYER)
+        //
+        //  The mismatch is between two thresholds that were never reconciled:
+        //    * RepairTarget.NeedsRepair  => DamageFraction > 0.0001f
+        //      (RepairTarget.cs) - so 99.99% HP already counts as repairable, is
+        //      collected into the Repair-All set, is priced, and offers a prompt.
+        //    * The first VISIBLE damage tell is the SMOLDER loop, which arms at
+        //      HP <= damage-states.json 'smolder' (default 0.5), with fire at 0.25
+        //      (StructureDamageVisuals.DamageStatesCatalog.DefaultsDef).
+        //
+        //  Everything between those two lines - HP 50%..99.99% - looks PRISTINE and
+        //  is nonetheless offered, priced and charged for. That is exactly the
+        //  player-side sentence "not damaged ... is still showing up".
+        //
+        //  ⚠ THIS PROBE DOES NOT DECIDE WHICH THRESHOLD IS WRONG. Suppressing the
+        //  affordance above smolder would remove a real feature (a 60%-HP structure
+        //  could no longer be repaired at all); showing a tell from the first point
+        //  of damage is an art-lane change. Both are owner rulings. The probe's job
+        //  is to make the NEXT occurrence name itself instead of arriving as prose.
+        //
+        //  ⛔ The burning pass could NEVER have caught this: Poll() used to return
+        //  early whenever nothing was on fire, and an invisibly-damaged structure is
+        //  BY DEFINITION not on fire. So the previous capture carried no repair lines
+        //  at all - not because the path was quiet, but because the probe was.
+        // =====================================================================
+
+        /// <summary>One invisibly-damaged structure's read-only snapshot.</summary>
+        private struct InvisibleRow
+        {
+            public Object Key;
+            public string Name;
+            public string TypeName;
+            public string TypeKey;
+            public float Hp;             // 0..1 HP fraction
+            public float VisibleAt;      // HP fraction at/below which the player first SEES damage
+            public bool OptOut;          // this type carries a bespoke tell instead of the shared one
+            public bool TapRepairable;
+            public bool Placed;
+            public Component Component;
+        }
+
+        /// <summary>
+        /// Collects every structure that the repair predicate calls DAMAGED while the
+        /// damage-tell catalog says the player can see NOTHING - i.e.
+        /// <c>smolder &lt; hp &lt; 1.0</c>. Mirrors <see cref="CollectBurning"/>'s surface
+        /// list exactly so the two passes cover the same objects from opposite ends.
+        /// Read-only: it never repairs, never spawns UI, never mutates a structure.
+        /// </summary>
+        private void CollectInvisiblyDamaged(List<InvisibleRow> into)
+        {
+            AddIfInvisiblyDamaged<WallSegment>(into, "wall", c => HpOf(c), c => BrokenOf(c));
+            AddIfInvisiblyDamaged<Building>(into, "building",
+                c => c is Building b ? b.HpFraction : 1f,
+                c => c is Building b && b.IsDestroyed);
+            AddIfInvisiblyDamaged<Gate>(into, "gate", c => HpOf(c), c => BrokenOf(c));
+            AddIfInvisiblyDamaged<Tower>(into, "tower",
+                c => c is Tower t ? t.HpFraction : 1f,
+                c => c is Tower t && t.IsBroken);
+            AddIfInvisiblyDamaged<DefenseTower>(into, "defensetower",
+                c => c is DefenseTower t ? t.HpFraction : 1f,
+                c => c is DefenseTower t && t.IsBroken);
+            AddIfInvisiblyDamaged<ArcaneTower>(into, "arcanetower",
+                c => c is ArcaneTower t ? t.HpFraction : 1f,
+                c => c is ArcaneTower t && t.IsBroken);
+            AddIfInvisiblyDamaged<DeNelle.Village.World.HarvestSite>(into, "harvestsite",
+                c => c is DeNelle.Village.World.HarvestSite h ? h.HpFraction : 1f,
+                c => c is DeNelle.Village.World.HarvestSite h && h.IsBroken);
+
+            float collectorVisible = DamageStatesCatalog.Smolder("collector");
+            bool collectorOptOut = DamageStatesCatalog.OptOut("collector");
+            foreach (var c in ResourceCollectorRegistry.All)
+            {
+                if (c == null || c.IsBroken) continue;
+                float hp = c.HpFraction;
+                if (!IsInvisiblyDamaged(hp, collectorVisible)) continue;
+                into.Add(BuildInvisibleRow(c, "ResourceCollector", c.BuildingId, hp,
+                                           collectorVisible, "collector", collectorOptOut));
+            }
+        }
+
+        private void AddIfInvisiblyDamaged<T>(List<InvisibleRow> into, string typeKey,
+            System.Func<Component, float> hp, System.Func<Component, bool> broken) where T : Component
+        {
+            float visibleAt = DamageStatesCatalog.Smolder(typeKey);
+            bool optOut = DamageStatesCatalog.OptOut(typeKey);
+            foreach (var c in FindObjectsByType<T>(FindObjectsSortMode.None))
+            {
+                if (c == null || broken(c)) continue;
+                float f = hp(c);
+                if (!IsInvisiblyDamaged(f, visibleAt)) continue;
+                into.Add(BuildInvisibleRow(c, typeof(T).Name, c.gameObject.name, f,
+                                           visibleAt, typeKey, optOut));
+            }
+        }
+
+        /// <summary>
+        /// The whole finding in one expression: the repair predicate's own lower bound
+        /// (<c>DamageFraction &gt; 0.0001</c>, i.e. <c>hp &lt; 0.9999</c>) is tripped while
+        /// the structure is still ABOVE the HP at which any damage tell arms.
+        /// </summary>
+        private static bool IsInvisiblyDamaged(float hp, float visibleAt)
+            => hp < 0.9999f && hp > visibleAt;
+
+        private static InvisibleRow BuildInvisibleRow(Component c, string typeName, string name,
+            float hp, float visibleAt, string typeKey, bool optOut)
+        {
+            return new InvisibleRow
+            {
+                Key = c,
+                Name = string.IsNullOrEmpty(name) ? typeName : name,
+                TypeName = typeName,
+                TypeKey = typeKey,
+                Hp = hp,
+                VisibleAt = visibleAt,
+                OptOut = optOut,
+                TapRepairable = RepairTarget.TryWrap(c) != null,
+                Placed = c.GetComponentInParent<PlacedStructure>() != null,
+                Component = c,
+            };
+        }
+
+        /// <summary>
+        /// One line per invisibly-damaged structure, on change. Every number the next
+        /// triage needs is ON the line: which structure, its live HP fraction, the damage
+        /// fraction the repair predicate reads, the HP at which the player would first SEE
+        /// damage, whether the repair backend is pricing it, and WHAT it is charging.
+        /// </summary>
+        private void ReportInvisiblyDamaged(List<InvisibleRow> rows)
+        {
+            if (rows == null || rows.Count == 0)
+            {
+                if (_lastInvisibleLine.Count > 0) _lastInvisibleLine.Clear();
+                return;
+            }
+
+            var repair = FindAnyObjectByType<WallRepairController>();
+            string setLine = repair != null
+                ? Guard.Try("RepairProbe", "describe repair-all set",
+                            () => repair.DescribeRepairAllSet(), "<threw>")
+                : "<no WallRepairController>";
+
+            foreach (var row in rows)
+            {
+                bool inSet = repair != null && setLine != null && !string.IsNullOrEmpty(row.Name) &&
+                             setLine.IndexOf(row.Name, System.StringComparison.OrdinalIgnoreCase) >= 0;
+
+                float damageFraction = 1f - row.Hp;
+                string price = "<unpriced - no WallRepairController>";
+                if (repair != null)
+                    price = Guard.Try("RepairProbe", "price invisibly-damaged structure",
+                        () => DescribeCost(repair.CostForStructure(row.Component, damageFraction)),
+                        "<threw>");
+
+                string line =
+                    $"INVISIBLY-DAMAGED '{row.Name}' type={row.TypeName} key={row.TypeKey} " +
+                    $"hp={row.Hp:0.000} damageFraction={damageFraction:0.000} " +
+                    $"needsRepairAbove=0.0001 firstVisibleTellAtHp={row.VisibleAt:0.00} " +
+                    $"optOutOfSharedTell={row.OptOut} placed={row.Placed} " +
+                    $"tapRepairable={row.TapRepairable} inRepairAllSet={inSet} price={price}";
+
+                if (_lastInvisibleLine.TryGetValue(row.Key, out string prev) && prev == line) continue;
+                _lastInvisibleLine[row.Key] = line;
+
+                if (!inSet)
+                {
+                    // Damaged, invisible, and NOT offered. Harmless to the player, but it means
+                    // the two predicates disagree in the other direction too - worth the line.
+                    FlowTrace.Step("RepairProbe",
+                        $"{line} -> damaged below the visible-tell line and NOT in the Repair-All " +
+                        "set, so no affordance can be showing for this one.");
+                    continue;
+                }
+
+                FlowTrace.Warn("RepairProbe",
+                    $"{line} -> THIS IS THE 'not damaged but the repair prompt shows' SHAPE. " +
+                    "The structure is above its first visible damage tell " +
+                    $"(hp {row.Hp:0.000} > {row.VisibleAt:0.00}), so the player sees a PRISTINE " +
+                    "structure, while RepairTarget.NeedsRepair (DamageFraction > 0.0001) has it in " +
+                    "the Repair-All set and is charging " + price + " for it. Two thresholds that " +
+                    "were never reconciled - NOT a highlight/marker bug, and NOT the WO-1296 " +
+                    "intact-tap toast (that path is a different predicate and is already silent). " +
+                    "Which threshold moves is an OWNER RULING: suppress the affordance above the " +
+                    "tell, or show a tell from the first point of damage.");
+            }
+        }
+
+        /// <summary>
+        /// Compact materials rendering for a probe line. Uses the SAME struct the repair
+        /// backend prices in (<c>DeNelle.Core.Catalog.ResourceCost</c>, whose slots are the
+        /// lower-case JSON field names) so the number on the line is the number charged.
+        /// </summary>
+        private static string DescribeCost(DeNelle.Core.Catalog.ResourceCost cost)
+            => $"wood={cost.wood} iron={cost.iron} food={cost.food} crystals={cost.crystals}";
 
         private static Row BuildRow(Component c, string typeName, string name, float hp, bool broken)
         {

@@ -1533,7 +1533,14 @@ namespace DeNelle.Village.Talents
             raw.texture = texture;
             raw.color = Color.white;
             raw.raycastTarget = false;
-            patch.transform.SetAsFirstSibling();  // behind rings/plate/art - never occludes them
+            // ⚠ "behind rings" is true; "behind plate/art" is NOT. nodeRoot owns the node's own
+            // Image, and a parent's Graphic draws BEFORE all of its children - so this quad,
+            // grown 25-35% past the node, draws OVER the plate. It reads correctly only while
+            // the VFX render texture stays largely transparent; a camera clear that fills the
+            // RT would black out every focused/owned node. Left as-is (WO-1310 is awaiting the
+            // owner's felt-verify and this is the shipped look), but it is the same trap as the
+            // skills ConfirmRing and the Journey RAIDS card, not a separate one.
+            patch.transform.SetAsFirstSibling();  // behind rings; see the note above re: plate/art
         }
 
         private void Update()
@@ -1747,6 +1754,18 @@ namespace DeNelle.Village.Talents
 
         // A quiet circular state glow behind the one canonical bezel. This deliberately uses
         // no second ornamental frame, avoiding the doubled legacy-ring appearance.
+        //
+        // ⚠ THIS IS NOT "BEHIND" ANYTHING, AND IT SURVIVES ONLY BECAUSE ITS SPRITE IS HOLLOW.
+        // nodeRoot carries the node's OWN Image (BuildNode sets btn.targetGraphic = img), and in
+        // uGUI a parent's Graphic draws BEFORE every one of its children - so SetAsFirstSibling
+        // orders this first among SIBLINGS while still drawing ON TOP OF THE PLATE. What keeps
+        // that harmless is ElarionUiKit.RingSprite being a genuine ring with a transparent
+        // centre; swap it for a filled sprite, or drop the sprite so ApplyRounded's filled quad
+        // stands in, and this becomes a coloured slab over the node art grown past its rect.
+        // That is the defect chain already seen three times: the skills ConfirmRing, the Journey
+        // RAIDS card, and this. If a filled highlight is ever wanted here, build it the way
+        // BuildSpendPopup now does - an image-less container on the exact target rect holding
+        // thin INSET edge bars - never a full-rect fill, never grown outside the rect.
         private static void BuildOuterRing(Transform nodeRoot, float grow, Color color)
         {
             var ring = new GameObject("StateGlow", typeof(Image));

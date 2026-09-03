@@ -174,6 +174,9 @@ namespace DeNelle.Editor.Regression
                 }
             }
 
+            // ---- BEHAVIOURAL CASE: the lint's own defect class, proven by CALLING it. ----
+            CaseGroundFixerReachesLiveHub(failures, log);
+
             // ---- HOLLOW-PASS GUARDS: finding nothing is never a pass. --------------------
             if (rootsFound == 0)
                 failures.Add("NO scan root resolved on disk - this suite asserted against zero files and would " +
@@ -205,6 +208,122 @@ namespace DeNelle.Editor.Regression
                      " outside the " + Allowed.Length + "-entry justified allowlist";
             Debug.Log(log.ToString() + "HUB_SCENE_LITERAL_OK");
             return true;
+        }
+
+        // =====================================================================
+        //  BEHAVIOURAL CASE (WO-1301) — GroundZFightFixer reaches the LIVE hub
+        // ---------------------------------------------------------------------
+        //  WHY IT LIVES IN THIS SUITE: the lint above proves no gate CONTAINS a
+        //  stale hub literal. GroundZFightFixer proved that is not sufficient — it
+        //  held no hub literal at all. It held a stale hub PREFIX
+        //  (StartsWith("MainCastle") / StartsWith("Castle")), which the string scan
+        //  cannot see, and which the WO-608 rename to the live merged hub silently
+        //  falsified: that name begins "Main_", so it matched neither prefix. The
+        //  entire floor z-fight fixer became a no-op in the only town the player
+        //  stands in, and nothing went red.
+        //
+        //  PROOF IT WAS REAL, not inferred (CLAUDE.md sec.12): 35 MB of the owner's
+        //  Player.log, thick with scene='<the live hub>' gameplay, contains ZERO
+        //  "GroundZFightFixer" lines, while other [Flow:*] tags from that same scene
+        //  appear in the thousands. The fixer never ran. The owner, 2026-09-03:
+        //  "It was fixed and now it's back."
+        //
+        //  So this case does what a string scan structurally cannot: it CALLS the
+        //  live routing decision and asserts it says YES for every scene the router
+        //  can send the player home to. A prefix, a Contains, a switch, or a fourth
+        //  copy of the name all fail this the moment they drift.
+        //
+        //  RED-FIRST (the mutation this case is built to catch): restore the old
+        //  allow-list gate --
+        //      return n.StartsWith("Village") || n.StartsWith("MainCastle") ||
+        //             n.StartsWith("Castle")  || n.StartsWith("Garrison");
+        //  and this case FAILS on SceneRouter.CastleCandidates[0], naming it.
+        // =====================================================================
+        private static void CaseGroundFixerReachesLiveHub(List<string> failures, StringBuilder log)
+        {
+            // Every scene the router can send the player HOME to, both ff.MergedWorld
+            // branches. Resolved from canon, never typed here (that is this file's whole point).
+            string[] homes = SceneRouter.CastleCandidates;
+            string[] hubs = HubScenes.Names;
+
+            if (homes == null || homes.Length == 0 || hubs == null || hubs.Length == 0)
+            {
+                failures.Add("ground-fixer routing: SceneRouter.CastleCandidates or HubScenes.Names is EMPTY, " +
+                             "so this case would assert against nothing and pass hollow. Zero targets is a FAILURE.");
+                return;
+            }
+
+            int asserted = 0;
+            foreach (var scene in homes)
+            {
+                if (string.IsNullOrEmpty(scene)) continue;
+                asserted++;
+                if (!GroundZFightFixer.WouldRunInScene(scene))
+                    failures.Add("GroundZFightFixer.WouldRunInScene('" + scene + "') is FALSE, but SceneRouter can " +
+                                 "route the player home to that scene. The floor z-fight fixer would be a SILENT " +
+                                 "no-op in the town the player lives in - which is the exact WO-608 regression this " +
+                                 "case exists for. Gate the fixer by EXCLUSION + geometry, never by a hub-name prefix.");
+            }
+            foreach (var scene in hubs)
+            {
+                if (string.IsNullOrEmpty(scene)) continue;
+                asserted++;
+                if (!GroundZFightFixer.WouldRunInScene(scene))
+                    failures.Add("GroundZFightFixer.WouldRunInScene('" + scene + "') is FALSE for a canonical hub " +
+                                 "listed in HubScenes.Names. Adding a hub there must never require a second edit " +
+                                 "inside the fixer.");
+            }
+
+            // The exclusions the fixer must KEEP. These are not hub names and cannot go stale
+            // the way a hub name does; a dungeon is resolved through HubScenes.IsDungeon.
+            //
+            // "RaidBase_IronBastion" is the TEMPORARY one (2026-09-03, lead ruling): raid
+            // scenes are held out of the widened gate for felt-test scope containment while
+            // the owner verifies four unrelated fixes on device, NOT because raids are judged
+            // not to need the floor fix. See GroundZFightFixer.IsTemporarilyExcludedScene for
+            // the full reasoning and the lift procedure. WHEN THAT EXCLUSION IS LIFTED, THIS
+            // ENTRY MOVES OUT IN THE SAME EDIT - a suite asserting an exclusion the code no
+            // longer applies is precisely the code/oracle drift this ticket exists to kill.
+            var mustNotRun = new[] { "Title", "HeroSelect", "PetSelect", "ATBBattle", "dg_starter_loop", "Dungeon_Demo",
+                                     "RaidBase_IronBastion" };
+            foreach (var scene in mustNotRun)
+            {
+                asserted++;
+                if (GroundZFightFixer.WouldRunInScene(scene))
+                    failures.Add("GroundZFightFixer.WouldRunInScene('" + scene + "') is TRUE - the fixer must never " +
+                                 "touch front-end, battle-box or dungeon floors (those scenes own their own).");
+            }
+
+            // A REAL separation, not merely 'not exactly equal'. A 0.0001 m offset satisfies
+            // 'not coplanar' and still z-fights on device, so the constant itself is pinned:
+            // the terrain render mesh is LOD-simplified and deviates several cm from its
+            // heightmap, which is why the shipped sink is half a metre.
+            asserted++;
+            if (GroundZFightFixer.CoplanarSinkBelow < 0.1f)
+                failures.Add("GroundZFightFixer.CoplanarSinkBelow is " + GroundZFightFixer.CoplanarSinkBelow +
+                             " m - too small to clear LOD deviation in the terrain RENDER mesh. A token offset " +
+                             "passes a 'not equal' test and still z-fights on the device. Keep it >= 0.1 m.");
+            asserted++;
+            if (GroundZFightFixer.CoplanarEpsilon <= 0f)
+                failures.Add("GroundZFightFixer.CoplanarEpsilon is " + GroundZFightFixer.CoplanarEpsilon +
+                             " - a non-positive epsilon detects only EXACT coplanarity, so two surfaces 1 mm apart " +
+                             "(which z-fight just as badly) would never be repaired.");
+
+            log.AppendLine("ground-fixer routing: " + asserted + " assertion(s) over " + homes.Length +
+                           " router home(s) + " + hubs.Length + " canonical hub(s) + " + mustNotRun.Length +
+                           " excluded scene(s) + 2 separation constant(s)");
+
+            // [PARTIAL-SKIP] [device-only] HONEST LIMIT, stated rather than faked:
+            //   The SHIMMER cannot be asserted here. Batchmode runs no render pass, so no suite
+            //   can observe z-fighting; and the coplanar sweep operates on a LOADED scene's
+            //   renderers and Terrain, which this EditMode lint does not stand up. What is
+            //   pinned above is the half that is real: the fixer REACHES the live hub, keeps its
+            //   exclusions, and applies a separation big enough to matter. That the ground stops
+            //   shimmering is the owner's felt-verify on device (docs/TICKET_PIPELINE.md: PO closes).
+            //   Do NOT add an assertion here that gestures at the visual and always passes.
+            log.AppendLine("ground-fixer routing: [PARTIAL-SKIP] [device-only] the z-fight itself is not " +
+                           "observable in batchmode (no render pass); routing + separation are pinned, the " +
+                           "visual is the owner's felt-verify");
         }
 
         // =====================================================================

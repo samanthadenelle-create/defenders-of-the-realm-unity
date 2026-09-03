@@ -277,6 +277,88 @@ namespace DeNelle.HUD
         }
 
         /// <summary>
+        /// One delivered card PNG whose packaging margin is OPAQUE, so the alpha route in
+        /// <see cref="MeasureArtFit"/> cannot see it. Margins are in pixels off each edge of the
+        /// authored image, measured from that PNG's own pixels.
+        /// </summary>
+        private struct OpaqueMargin
+        {
+            public string Key;
+            public int Width, Height, Left, Top, Right, Bottom;
+        }
+
+        // ── OPAQUE PACKAGING MARGIN (owner F8 2026-09-03, "the journey raids button is wrong") ──
+        // WO-1311 derives a card's packaging margin from the sprite's alpha-built tight mesh. That
+        // works only while the margin is TRANSPARENT. Two delivered cards were flattened onto the
+        // authoring tool's CHECKERBOARD instead of being exported with alpha, so every pixel of
+        // their border is opaque: the tight mesh honestly reports "no margin", the card renders 1:1
+        // and the pale checkerboard draws as a near-white slab around the ornate frame. That is
+        // exactly the Journey RAIDS card in the owner's photo, and the same defect sits unreported
+        // on the Realm deck's GAME GUIDE card.
+        //
+        // Nothing at RUNTIME can tell that apart from real art - these importers ship
+        // isReadable:0, so Texture2D.GetPixels is not available to fall back on, and a wrong crop
+        // is worse than an uncropped margin. So the margin is AUTHORED here, measured once from
+        // each delivered PNG, and it is GUARDED twice so it can never outlive the bad export:
+        //
+        //   1. It is consulted ONLY when the alpha route found no transparent margin AT ALL. A
+        //      re-exported, properly-alpha'd PNG takes the measured route and never reaches this
+        //      table (that is why quests.png - the same art family, exported correctly, margins
+        //      L47 T62 R47 B74 - is absent from it and renders right today).
+        //   2. Each row is keyed to that PNG's exact pixel dimensions. Re-author the card at any
+        //      other size and it falls through to 1:1 rather than being cropped by a stale number.
+        //
+        // ⚠ DO NOT add a row here for a card that merely "looks a bit off". A row is a claim that
+        // the PNG's border pixels are packaging, and the only proof of that is opening the file.
+        // Re-export raids.png / game-guide.png with a transparent margin and the matching row
+        // becomes dead - delete it THEN, not before.
+        private static readonly OpaqueMargin[] OpaqueMargins =
+        {
+            // cards/raids.png      1774x887 - checkerboard border, art bbox (49,63)-(1726,809)
+            new OpaqueMargin { Key = "raids", Width = 1774, Height = 887,
+                               Left = 49, Top = 63, Right = 48, Bottom = 78 },
+            // cards/game-guide.png 1821x864 - checkerboard border, art bbox (53,65)-(1769,776)
+            new OpaqueMargin { Key = "game-guide", Width = 1821, Height = 864,
+                               Left = 53, Top = 65, Right = 52, Bottom = 88 }
+        };
+
+        /// <summary>
+        /// Fills the rect-local opaque fractions from <see cref="OpaqueMargins"/> when this art key
+        /// is a known opaque-margin delivery AND the sprite still has the exact dimensions that row
+        /// was measured against. Returns false (leaving the fractions untouched) otherwise.
+        /// </summary>
+        private static bool TryOpaqueMargin(string key, Rect rect,
+                                            ref float fx0, ref float fx1, ref float fy0, ref float fy1)
+        {
+            if (string.IsNullOrEmpty(key)) return false;
+            for (int i = 0; i < OpaqueMargins.Length; i++)
+            {
+                var m = OpaqueMargins[i];
+                if (!string.Equals(key, m.Key, System.StringComparison.OrdinalIgnoreCase)) continue;
+                // quests.png ships at the SAME 1774x887 as raids.png, so the key match above is
+                // what keeps a correctly-exported sibling out of this table, not the size check.
+                if (Mathf.RoundToInt(rect.width) != m.Width || Mathf.RoundToInt(rect.height) != m.Height)
+                {
+                    FlowTrace.Warn("HUD", "card art fit: '" + key + "' has an authored opaque margin " +
+                        "for " + m.Width + "x" + m.Height + " but the sprite is " +
+                        Mathf.RoundToInt(rect.width) + "x" + Mathf.RoundToInt(rect.height) +
+                        " - re-authored art, rendering 1:1");
+                    return false;
+                }
+                // Sprite space is bottom-left origin; the measurements above are image space
+                // (top-left origin), so Top and Bottom swap on the way in.
+                fx0 = Mathf.Clamp01(m.Left / rect.width);
+                fx1 = Mathf.Clamp01((rect.width - m.Right) / rect.width);
+                fy0 = Mathf.Clamp01(m.Bottom / rect.height);
+                fy1 = Mathf.Clamp01((rect.height - m.Top) / rect.height);
+                FlowTrace.Step("HUD", "card art fit: '" + key + "' opaque packaging margin (authored) L" +
+                    m.Left + " T" + m.Top + " R" + m.Right + " B" + m.Bottom);
+                return true;
+            }
+            return false;
+        }
+
+        /// <summary>
         /// Derives the packaging margin from the sprite's OWN geometry.
         /// <para>ROUTE CHOSEN (WO-1311): the sprite's TIGHT MESH, not a pixel read. These card
         /// importers ship <c>isReadable: 0</c>, so <c>Texture2D.GetPixels</c> would throw; flipping
@@ -337,6 +419,15 @@ namespace DeNelle.HUD
             float fx1 = Mathf.Clamp01(x1 / rect.width);
             float fy0 = Mathf.Clamp01(y0 / rect.height);
             float fy1 = Mathf.Clamp01(y1 / rect.height);
+
+            // The alpha route above can only see a margin that is TRANSPARENT. If it found none,
+            // the card may still be carrying an OPAQUE packaging margin - see the OpaqueMargins table.
+            bool alphaSawNoMargin = x0 <= 1f && y0 <= 1f &&
+                                    (rect.width - x1) <= 1f && (rect.height - y1) <= 1f;
+            bool opaqueMargin = false;
+            if (alphaSawNoMargin && TryOpaqueMargin(key, rect, ref fx0, ref fx1, ref fy0, ref fy1))
+                opaqueMargin = true;
+
             float spanX = fx1 - fx0;
             float spanY = fy1 - fy0;
 
@@ -351,7 +442,7 @@ namespace DeNelle.HUD
 
             // Sub-pixel slack on every edge means the art is already tight. Render it 1:1 and add
             // no mask - this is the case the retired fixed offset was cropping for no reason.
-            if (x0 <= 1f && y0 <= 1f && (rect.width - x1) <= 1f && (rect.height - y1) <= 1f)
+            if (alphaSawNoMargin && !opaqueMargin)
             {
                 FlowTrace.Step("HUD", "card art fit: '" + key + "' is tight - 1:1, no correction");
                 return IdentityFit;
@@ -365,9 +456,12 @@ namespace DeNelle.HUD
                 AnchorMax = new Vector2(-fx0 * scaleX + scaleX, -fy0 * scaleY + scaleY),
                 Corrected = true
             };
+            // Report the margin from the FRACTIONS, not from the mesh bounds: on the opaque
+            // route the mesh legitimately spans the whole rect, and logging x0/x1 here would
+            // print "margin L0 T0 R0 B0" beside a corrected anchor set - a trace that lies.
             FlowTrace.Step("HUD", "card art fit: '" + key + "' margin L" +
-                Mathf.RoundToInt(x0) + " T" + Mathf.RoundToInt(rect.height - y1) +
-                " R" + Mathf.RoundToInt(rect.width - x1) + " B" + Mathf.RoundToInt(y0) +
+                Mathf.RoundToInt(fx0 * rect.width) + " T" + Mathf.RoundToInt((1f - fy1) * rect.height) +
+                " R" + Mathf.RoundToInt((1f - fx1) * rect.width) + " B" + Mathf.RoundToInt(fy0 * rect.height) +
                 " -> anchors " + fit.AnchorMin.ToString("F3") + ".." + fit.AnchorMax.ToString("F3"));
             return fit;
         }

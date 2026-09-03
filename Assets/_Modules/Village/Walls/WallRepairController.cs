@@ -508,6 +508,23 @@ namespace DeNelle.Village
             string action = destroyed ? WallRepairStrings.RebuildLabel : WallRepairStrings.ConfirmLabel;
             string details = ComposePromptDetails(name, _selected.DamageFraction, costText,
                 DescribeMaterials(shortfall), MaterialsZero(shortfall), action);
+
+            // §12 — WO-1296 RECURRENCE (owner 2026-09-03: "yellow item not damaged is still
+            // showing up"). Say, at the moment the prompt is raised, whether the structure it is
+            // raised over shows the player ANY damage at all. NeedsRepair trips at DamageFraction
+            // > 0.0001 (RepairTarget), but the first visible tell is the smolder loop at
+            // HP <= damage-states.json 'smolder' (default 0.5). A prompt raised in the gap between
+            // them is a prompt on a structure the player correctly reads as pristine — which is
+            // the whole report, and until now nothing wrote it down. Reported, never acted on:
+            // which of the two thresholds moves is an owner ruling.
+            float promptHp = 1f - _selected.DamageFraction;
+            float visibleAt = DamageStatesCatalog.Smolder(DamageTellKeyFor(_selected.Kind));
+            if (promptHp > visibleAt)
+                FlowTrace.Warn("Repair",
+                    $"repair prompt raised on '{name}' while it shows NO damage tell: " +
+                    $"hp={promptHp:0.000} > firstVisibleTellAtHp={visibleAt:0.00} " +
+                    $"(damageFraction={_selected.DamageFraction:0.000}, cost={costText}). " +
+                    "The player sees a pristine structure and is being asked to pay for it.");
             PromptShown?.Invoke(new RepairPromptInfo
             {
                 StructureName = name,
@@ -520,6 +537,21 @@ namespace DeNelle.Village
                 DamageFraction = _selected.DamageFraction,
                 Destroyed = destroyed,
             });
+        }
+
+        /// <summary>
+        /// The damage-states.json type key for a repair target's kind, so the prompt trace above
+        /// reads the SAME per-type threshold StructureDamageVisuals uses rather than assuming the
+        /// shared default. Keys mirror RepairAvailabilityProbe's scan exactly.
+        /// </summary>
+        private static string DamageTellKeyFor(RepairTargetKind kind)
+        {
+            switch (kind)
+            {
+                case RepairTargetKind.Wall: return "wall";
+                case RepairTargetKind.Gate: return "gate";
+                default: return "building";
+            }
         }
 
         /// <summary>Phone-safe, complete repair copy. Newlines are intentional layout structure.</summary>

@@ -28,7 +28,9 @@
 //   • [RuntimeInitializeOnLoadMethod(AfterSceneLoad)] + SceneManager.sceneLoaded
 //     re-arm — the player boots into Title and reaches Village2 LATER, so a one-shot
 //     check would miss the town; we re-run on every scene load.
-//   • Village*-scene-gated — never touches Title / HeroSelect / DTT / dungeons.
+//   • Scene-gated by EXCLUSION + GEOMETRY — never touches Title / HeroSelect / DTT /
+//     dungeons. See the "SCENE ROUTING" region below for why it is no longer gated by
+//     a hardcoded scene-name prefix.
 //   • WEBGL-SAFE (WO-331): an uncaught exception in a sceneLoaded handler HALTS the
 //     WebGL player, so every entry point is wrapped in try/catch. No File I/O, no
 //     scene-mesh-ref dependency — just transform reads/writes.
@@ -122,7 +124,7 @@ namespace DeNelle.Core
             // The outpost (Garrison_troll_outpost / _frost_keep / _ruined_keep / hill_fort)
             // loads ADDITIVELY over the hub/merged world and is NEVER SetActive'd, so
             // GetActiveScene() still reports "MainCastle_*" / "Village*" while the outpost
-            // floor is live. InFixableScene()/InHubScene() therefore can never route to it.
+            // floor is live. InFixableScene() therefore can never route to it.
             // Run the Garrison pass whenever ANY Garrison_* scene is loaded (cheap +
             // idempotent), independent of which scene is active.
             if (AnyGarrisonSceneLoaded())
@@ -132,19 +134,48 @@ namespace DeNelle.Core
                 // while the outpost is additively layered on top.
             }
 
-            if (!InFixableScene()) return;
-
-            // CASTLE HUB path: the plaza floor is a 5x5 GRID of small tiles named
-            // "CourtyardFloor_{x}_{z}" (~8 m each) at Y=0.01, coplanar with the
-            // terrain in the merged world at Y=0 → flashing floor. The big
-            // single-plane logic below never matches these (no >60m footprint, and the
-            // hub has no "Ground" plane), so the hub gets its OWN pass.
-            if (InHubScene())
+            string sceneName = ActiveSceneName();
+            if (!InFixableScene())
             {
-                FixHubFloorTiles();
-                EnsureHubOpaqueFloor();
+                // WO-1301: a fixer that silently does not run looks IDENTICAL to one that
+                // runs and fails. Say which it was, every load, by name.
+                FlowTrace.Step("GroundZFightFixer",
+                    "gate SKIP scene='" + sceneName + "' — excluded (menu/battle/dungeon); no floor pass runs here.");
                 return;
             }
+
+            FlowTrace.Step("GroundZFightFixer",
+                "gate MATCH scene='" + sceneName + "' (hub=" + HubScenes.IsHub(sceneName) +
+                " overworld=" + HubScenes.IsOverworld(sceneName) + ") — running floor passes.");
+
+            // CASTLE HUB plaza pass: the legacy hub's plaza floor is a 5x5 GRID of small
+            // tiles named "CourtyardFloor_{x}_{z}" (~8 m each) at Y=0.01, coplanar with the
+            // terrain at Y=0 → flashing floor. The big single-plane logic below never
+            // matches these (no >60m footprint, no "Ground" plane), so they get their OWN
+            // pass. GATED BY GEOMETRY, not by scene name: a scene with no plaza tiles
+            // simply gets 0 here and falls through.
+            int tiles = FixHubFloorTiles();
+
+            // The runtime opaque floor exists ONLY because the legacy hub had a plaza with
+            // ~1% coverage over terrain depressed to Y=-3 (see EnsureHubOpaqueFloor).
+            // ⛔ It must NEVER fire in a scene that already HAS a terrain floor under the
+            // plaza — the merged world does, and a 90x90 grey stone slab dropped into a
+            // grass town is a far worse defect than the one we came to fix.
+            if (tiles > 0 && !TerrainCoversPlaza())
+            {
+                EnsureHubOpaqueFloor();
+            }
+            else if (tiles > 0)
+            {
+                FlowTrace.Step("GroundZFightFixer",
+                    "hub opaque floor SKIPPED in '" + sceneName + "' — a Terrain already covers the " +
+                    "plaza, so the scene has a real floor and needs no injected slab.");
+            }
+
+            // Property-based coplanar sweep — the generalisation of this whole component.
+            // Catches any large flat VISIBLE surface sitting on the terrain, whatever it is
+            // named and whatever scene it lives in.
+            FixCoplanarGroundSurfaces(sceneName);
 
             GameObject ground = FindBakedGroundPlane();
             if (ground == null) return;
@@ -169,14 +200,19 @@ namespace DeNelle.Core
         // and lower EACH still-high tile to TargetY so the merged terrain wins the
         // depth test. Idempotent: a tile already at/below TargetY (re-load) is skipped,
         // so repeated loads never drift it down. Small tiles → no >60m footprint guard.
-        private static void FixHubFloorTiles()
+        private static int FixHubFloorTiles()
         {
             var all = Object.FindObjectsByType<MeshRenderer>();
             int lowered = 0;
+            int matched = 0;
             foreach (var mr in all)
             {
                 if (mr == null) continue;
                 if (!NameIsHubFloorTile(mr.name)) continue;
+                // A DISABLED renderer is invisible: it cannot z-fight, and moving it only
+                // shifts a raycast/nav collider for no visual gain. Skip it.
+                if (!mr.enabled || !mr.gameObject.activeInHierarchy) continue;
+                matched++;
 
                 Transform t = mr.transform;
                 float y = t.position.y;
@@ -197,6 +233,10 @@ namespace DeNelle.Core
                           " CourtyardFloor tiles to Y=" + HubTargetY +
                           " (plaza is the castle floor; wins over coplanar terrain; no float).");
             }
+            FlowTrace.Step("GroundZFightFixer",
+                "plaza pass: " + matched + " visible plaza tile(s) matched, " + lowered + " seated to Y=" +
+                HubTargetY + ".");
+            return matched;
         }
 
         // Name of the runtime opaque floor we inject under the castle hub. Used as the
@@ -319,7 +359,35 @@ namespace DeNelle.Core
         {
             if (string.IsNullOrEmpty(n)) return false;
             string lower = n.ToLowerInvariant();
+            // ⛔ "CourtyardFloor_Nav" is the 130x130 NAV/raycast plane, NOT a plaza tile —
+            // it is renderer-disabled by design and must never be moved by this pass.
+            // The plain StartsWith below used to swallow it (verified in
+            // Main_Castle_Overworld.unity: CourtyardFloor_Nav, scale 13 = 130 m, renderer
+            // m_Enabled: 0). Excluded by name AS WELL AS by the enabled-renderer guard in
+            // FixHubFloorTiles, because either one alone is a single point of failure.
+            if (lower.Contains("_nav") || lower.EndsWith("nav")) return false;
             return lower.StartsWith("courtyardfloor") || lower.StartsWith("qfloorwood");
+        }
+
+        /// <summary>
+        /// True when an active Terrain's footprint covers the plaza centre — i.e. the scene
+        /// ALREADY has a real ground surface there and needs no injected opaque slab.
+        /// </summary>
+        private static bool TerrainCoversPlaza()
+        {
+            var terrains = Object.FindObjectsByType<Terrain>(FindObjectsSortMode.None);
+            if (terrains == null || terrains.Length == 0) return false;
+            Vector3 centre = HubFloorCentreXZ();
+            for (int i = 0; i < terrains.Length; i++)
+            {
+                var t = terrains[i];
+                if (t == null || t.terrainData == null || !t.gameObject.activeInHierarchy) continue;
+                Vector3 o = t.transform.position;
+                Vector3 sz = t.terrainData.size;
+                if (centre.x >= o.x && centre.x <= o.x + sz.x &&
+                    centre.z >= o.z && centre.z <= o.z + sz.z) return true;
+            }
+            return false;
         }
 
         // True when ANY Garrison_* scene is currently loaded (additively or single).
@@ -400,25 +468,221 @@ namespace DeNelle.Core
             return "Garrison_?";
         }
 
-        // True when the active scene is fixable by this component: one of the playable
-        // towns (Village2 canonical, Village3, Village), the castle hub
-        // (MainCastle_Hall / any Castle* scene), OR the garrison troll outpost
-        // (Garrison_troll_outpost / any Garrison* scene). Keeps this off Title /
-        // HeroSelect / DTT / dungeons that this RuntimeInitialize hook also fires in.
-        private static bool InFixableScene()
+        // ─────────────────────────────────────────────────────────────────────
+        //  SCENE ROUTING — ONE gate, and it is an EXCLUSION gate (WO-1301)
+        // ---------------------------------------------------------------------
+        //  THE DEFECT THIS SHAPE EXISTS FOR (data-proven 2026-09-03):
+        //    This component used to decide "may I run here?" with an ALLOW-list of
+        //    hardcoded scene-name prefixes:
+        //        n.StartsWith("Village") || n.StartsWith("MainCastle") ||
+        //        n.StartsWith("Castle")  || n.StartsWith("Garrison")
+        //    and a second copy of two of those in InHubScene(). WO-608 (MergedWorld)
+        //    then made the home hub `Main_Castle_Overworld`. That name starts with
+        //    "Main_" — so it matches NEITHER "MainCastle" NOR "Castle", and the whole
+        //    fixer became a silent no-op in the only town the player ever stands in.
+        //    PROOF, not theory: 35 MB of owner Player.log full of
+        //    scene='Main_Castle_Overworld' contains ZERO "GroundZFightFixer" lines,
+        //    while [Flow:FloorDiag]/[Flow:HUD] from that same scene appear in the
+        //    thousands. The last commit to touch this file (4afd7f658, "remove
+        //    OuterWorld references (WO-608)") is the very rename that orphaned it and
+        //    left the gate untouched. The owner's words: "It was fixed and now it's back."
+        //
+        //  WHY AN EXCLUSION GATE INSTEAD OF ONE MORE PREFIX:
+        //    An ALLOW-list fails CLOSED and SILENTLY on a rename — the fixer stops
+        //    running and nothing says so. An EXCLUSION list fails OPEN: a renamed or
+        //    brand-new world scene keeps getting the floor passes, and each pass is
+        //    already gated on finding the GEOMETRY it repairs (plaza tiles / a big
+        //    "Ground" plane / a surface coplanar with a Terrain), so "running" in a
+        //    scene with nothing to fix costs one FindObjectsByType and changes nothing.
+        //    Names drift; the geometry a floor fixer repairs does not.
+        //    The scenes we must NEVER touch are a SHORT, STABLE, KNOWN set, and
+        //    dungeons are resolved from the canonical DeNelle.Core.HubScenes.IsDungeon
+        //    rather than from a copy typed in here.
+        //
+        //  ⛔ DO NOT re-add a hub/village/castle name to this file. If a new hub scene
+        //     appears, it belongs in HubScenes.Names — the one place — and this gate
+        //     needs no edit at all.
+        // ─────────────────────────────────────────────────────────────────────
+
+        private static string ActiveSceneName()
         {
-            string n = UnityEngine.SceneManagement.SceneManager.GetActiveScene().name;
-            if (string.IsNullOrEmpty(n)) return false;
-            return n.StartsWith("Village") || n.StartsWith("MainCastle") ||
-                   n.StartsWith("Castle") || n.StartsWith("Garrison");
+            return UnityEngine.SceneManagement.SceneManager.GetActiveScene().name;
         }
 
-        // True when the active scene is the castle hub (grid-tile plaza), which uses the
-        // separate FixHubFloorTiles pass rather than the single-big-plane Village logic.
-        private static bool InHubScene()
+        /// <summary>
+        /// May this component touch floors in the active scene? TRUE for every WORLD
+        /// scene; FALSE only for the front-end / battle-box / dungeon scenes that own
+        /// their own floors. Preserves the original exclusions (Title / HeroSelect /
+        /// DTT / dungeons) without an allow-list that a rename can silently empty.
+        /// </summary>
+        private static bool InFixableScene()
         {
-            string n = UnityEngine.SceneManagement.SceneManager.GetActiveScene().name;
-            return !string.IsNullOrEmpty(n) && (n.StartsWith("MainCastle") || n.StartsWith("Castle"));
+            return WouldRunInScene(ActiveSceneName());
+        }
+
+        /// <summary>
+        /// ORACLE SEAM (WO-1301) — the routing decision as a PURE function of a scene name,
+        /// so a regression can prove "this fixer reaches the live hub" without loading a
+        /// scene or rendering a frame. InFixableScene() is nothing but this applied to the
+        /// active scene, so the oracle and the shipping path cannot diverge.
+        /// </summary>
+        public static bool WouldRunInScene(string sceneName)
+        {
+            if (string.IsNullOrEmpty(sceneName)) return false;
+            // Dungeons resolve from the CANONICAL scene-family source, never a local copy.
+            if (HubScenes.IsDungeon(sceneName)) return false;
+            if (IsTemporarilyExcludedScene(sceneName)) return false;
+            return !IsNonWorldScene(sceneName);
+        }
+
+        /// <summary>
+        /// ⚠ DELIBERATE AND TEMPORARY (2026-09-03, lead ruling) — felt-test SCOPE CONTAINMENT.
+        /// </summary>
+        /// <remarks>
+        /// ⛔ THIS IS NOT A JUDGEMENT THAT RAID SCENES DO NOT NEED THE FLOOR FIX, AND IT MUST
+        /// NOT BE INHERITED AS CANON. Read this before deleting it OR before keeping it.
+        ///
+        /// RaidBase_* scenes were excluded by the OLD hub-prefix allow-list purely as a side
+        /// effect of not being named "Village"/"Castle"/"Garrison". The new exclusion gate
+        /// (see SCENE ROUTING above) would have swept them in — a correct WIDENING, and one
+        /// this file stands behind on the merits: raids either have the coplanar defect or
+        /// they do not.
+        ///
+        /// It is held back for a REASON OF TIMING, not of design. The owner is felt-testing
+        /// on a device continuously and the build in flight exists to verify four unrelated
+        /// fixes. A behaviour change she did not ask for, in scenes she is actively testing,
+        /// costs more tonight than it gains, and finding out whether raids z-fight deserves
+        /// its own run rather than riding along in someone else's verification build.
+        ///
+        /// TO LIFT IT: delete this method and its call in WouldRunInScene, then run the raid
+        /// scenes once and read the "coplanar census" FlowTrace lines — they name every large
+        /// flat visible surface and its separation from the terrain, so the answer arrives as
+        /// data, not as a theory. The oracle case in HubSceneLiteralRegression asserts this
+        /// exclusion set and MUST be updated in the same edit; a suite that disagrees with the
+        /// code is the exact drift class this whole ticket was about.
+        ///
+        /// Resolved through the canonical DeNelle.Core.HubScenes.IsRaid — never a fresh
+        /// "RaidBase" prefix typed in here, which would re-seed the original defect.
+        /// </remarks>
+        private static bool IsTemporarilyExcludedScene(string n)
+        {
+            return HubScenes.IsRaid(n);
+        }
+
+        /// <summary>
+        /// Front-end, mockup and battle-box scenes: no world floor, nothing to repair, and
+        /// historically the scenes this RuntimeInitialize hook must stay out of. These names
+        /// are safe to hold here in a way hub names are not: they are not the moving target
+        /// (a hub gets renamed as the world evolves; "Title" does not), and a MISS here is
+        /// harmless — the geometry gate below simply finds nothing.
+        /// </summary>
+        private static bool IsNonWorldScene(string n)
+        {
+            const System.StringComparison OIC = System.StringComparison.OrdinalIgnoreCase;
+            return n.StartsWith("Title", OIC)
+                || n.StartsWith("HeroSelect", OIC)
+                || n.StartsWith("PetSelect", OIC)
+                || n.StartsWith("ATBBattle", OIC)
+                || n.StartsWith("BattleHUD", OIC)
+                || n.StartsWith("HUD_", OIC)
+                || n.StartsWith("VfxGallery", OIC);
+        }
+
+        // ─────────────────────────────────────────────────────────────────────
+        //  PROPERTY PASS — offset any large VISIBLE flat surface that is coplanar
+        //  with the Terrain it sits on. This is the whole component generalised:
+        //  it matches the DEFECT (two opaque surfaces at the same depth) instead of
+        //  matching a scene name or an object name, so it keeps working through a
+        //  rename, a rebake, or a re-authored floor.
+        // ─────────────────────────────────────────────────────────────────────
+
+        /// <summary>Two surfaces within this distance z-fight on device.</summary>
+        public const float CoplanarEpsilon = 0.05f;
+
+        /// <summary>How far BELOW the terrain surface a coplanar duplicate is sunk. Matches
+        /// TargetY's rationale: the terrain RENDER mesh is LOD-simplified, so a few cm is not
+        /// enough — its visible surface deviates from the heightmap and the plane pokes back
+        /// through as a mottled checkerboard.</summary>
+        public const float CoplanarSinkBelow = 0.5f;
+
+        private static void FixCoplanarGroundSurfaces(string sceneName)
+        {
+            var terrains = Object.FindObjectsByType<Terrain>(FindObjectsSortMode.None);
+            if (terrains == null || terrains.Length == 0)
+            {
+                FlowTrace.Step("GroundZFightFixer",
+                    "coplanar sweep: scene '" + sceneName + "' has NO Terrain — nothing to be coplanar " +
+                    "WITH; sweep skipped (this is normal for the legacy tile-plaza hub).");
+                return;
+            }
+
+            var all = Object.FindObjectsByType<MeshRenderer>(FindObjectsSortMode.None);
+            int examined = 0, sunk = 0;
+            foreach (var mr in all)
+            {
+                if (mr == null) continue;
+                // Invisible geometry cannot z-fight. This is what keeps the nav plane,
+                // and every other renderer-disabled helper, out of the sweep.
+                if (!mr.enabled || !mr.gameObject.activeInHierarchy) continue;
+                // Never sweep the floor we ourselves injected.
+                if (mr.name == HubOpaqueFloorName) continue;
+
+                Bounds b = mr.bounds;
+                // Only a BIG, FLAT thing can be a floor. A prop, a wall or a roof is not.
+                if (b.size.x < MinFootprint || b.size.z < MinFootprint) continue;
+                if (b.size.y > 1f) continue;
+
+                float surfaceY;
+                if (!TryTerrainSurfaceY(terrains, b.center, out surfaceY)) continue;
+
+                float separation = b.center.y - surfaceY;
+                examined++;
+                FlowTrace.Step("GroundZFightFixer",
+                    "coplanar census '" + mr.name + "' scene='" + sceneName + "' y=" +
+                    b.center.y.ToString("0.###") + " terrainY=" + surfaceY.ToString("0.###") +
+                    " separation=" + separation.ToString("0.####") + " size=" +
+                    b.size.x.ToString("0.#") + "x" + b.size.z.ToString("0.#") + " m");
+
+                if (Mathf.Abs(separation) <= CoplanarEpsilon)
+                {
+                    Transform t = mr.transform;
+                    Vector3 p = t.position;
+                    // Move by the DELTA, not to an absolute Y: the renderer bounds centre and
+                    // the transform origin are not the same point on a child-nested mesh.
+                    p.y += (surfaceY - CoplanarSinkBelow) - b.center.y;
+                    t.position = p;
+                    sunk++;
+                    FlowTrace.Warn("GroundZFightFixer",
+                        "coplanar FIX '" + mr.name + "' was " + separation.ToString("0.####") +
+                        " m from the terrain surface (z-fighting) — sunk to " +
+                        CoplanarSinkBelow.ToString("0.##") + " m BELOW it so the terrain is the " +
+                        "single visible floor.");
+                }
+            }
+
+            FlowTrace.Step("GroundZFightFixer",
+                "coplanar sweep done: scene='" + sceneName + "' terrains=" + terrains.Length +
+                " large-flat-visible-surfaces=" + examined + " sunk=" + sunk + ".");
+        }
+
+        /// <summary>World-space Y of the terrain surface under <paramref name="worldPos"/>,
+        /// for the first terrain whose footprint contains it. False when no terrain covers it.</summary>
+        private static bool TryTerrainSurfaceY(Terrain[] terrains, Vector3 worldPos, out float surfaceY)
+        {
+            surfaceY = 0f;
+            for (int i = 0; i < terrains.Length; i++)
+            {
+                var t = terrains[i];
+                if (t == null || t.terrainData == null || !t.gameObject.activeInHierarchy) continue;
+                Vector3 o = t.transform.position;
+                Vector3 sz = t.terrainData.size;
+                if (worldPos.x < o.x || worldPos.x > o.x + sz.x) continue;
+                if (worldPos.z < o.z || worldPos.z > o.z + sz.z) continue;
+                // SampleHeight is terrain-LOCAL; add the terrain's own world Y.
+                surfaceY = t.SampleHeight(worldPos) + o.y;
+                return true;
+            }
+            return false;
         }
 
         // Find the large ground plane named "Ground" centred near the village origin at
