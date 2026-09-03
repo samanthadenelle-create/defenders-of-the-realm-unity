@@ -63,6 +63,29 @@ namespace DeNelle.Editor.Regression
         private const string HudSrc   = "Assets/_Modules/HUD/Kit/HudKitController.cs";
         private const string TierSrc  = "Assets/_Modules/Village/Progression/TierSystem.cs";
         private const string AreasRes = "Assets/Resources/Data/Canonical/hud-areas.json";
+        /// <summary>The Hero/Realm/Journey card deck - the file under test in Case 6 (WO-1341).</summary>
+        private const string DeckSrc  = "Assets/_Modules/HUD/PlayerDeckWorkspace.cs";
+        /// <summary>THE REFERENCE IMPLEMENTATION for a kit card face. Owner ruling 2026-09-03:
+        /// "should match font and format of Manage screen". Case 6 reads its numbers OUT of this
+        /// file rather than restating them, so Manage stays the standard by construction: restyle
+        /// Manage and the deck must follow or the suite fails.</summary>
+        private const string ManageSrc = "Assets/_Modules/Village/UI/Manage/ManageScreenPanel.cs";
+
+        /// <summary>
+        /// Card art that has a TITLE AND A TAGLINE PAINTED INTO THE PNG, verified by eye on
+        /// 2026-09-03 under Assets/Resources/UI/ElarionMedieval/cards/. These four are the only
+        /// ones in the kit that do: buildings.png (Manage), quests.png (Journey) and
+        /// realm-store.png (Realm) are all illustration-left with an EMPTY text plate right,
+        /// which is the standard ManageScreenPanel.cs:606 states outright ("the approved kit
+        /// cards are text-safe layered faces: illustration and border are art, while title,
+        /// purpose, count and interaction remain live").
+        /// <para>Mounting one of these as a card face gives that card TWO producers for one
+        /// string. On device build 2026.09.03.353742 that printed every Hero label twice, in two
+        /// fonts, with two different wordings ("Manage your items" over "Browse every carried
+        /// item by category", and "LOAD OUT" over "Loadout"). Re-authoring them text-free is the
+        /// owner's call; until then no card may mount them.</para>
+        /// </summary>
+        private static readonly string[] BakedLabelCardArt = { "bag", "equipment", "skills", "loadout" };
 
         // ── the boxes, each pinned by a source lint in Case 0 ────────────────
         /// <summary>Collectors/Echoes/Resources rail chip, fixed reference px (HudKitController
@@ -114,6 +137,7 @@ namespace DeNelle.Editor.Regression
                 Case(failures, "manage-face",      () => Case3_ManageFace(failures, notes));
                 Case(failures, "wave-band",        () => Case4_WaveBand(failures, notes));
                 Case(failures, "tier-stamp",       () => Case5_TierStamp(failures, notes));
+                Case(failures, "deck-card-labels", () => Case6_DeckCardSingleProducer(failures, notes));
             }
             catch (Exception ex)
             {
@@ -475,6 +499,187 @@ namespace DeNelle.Editor.Regression
                 failures.Add("[tier-stamp] TierSystem no longer announces the milestone through CombatText - " +
                              "a tier-up that says nothing is worse than one that says it too loudly");
             notes.Add("TIER UP routed through the CombatText stamp layer");
+        }
+
+        // =====================================================================
+        //  CASE 6 - ONE STRING, ONE PRODUCER, IN MANAGE'S FORMAT  (WO-1341)
+        // =====================================================================
+        // WHAT WAS CAPTURED (owner device screenshot, build 2026.09.03.353742, the HERO deck):
+        // every label on the screen drawn TWICE, overlapping, in two fonts, disagreeing on the
+        // words - "BAG / Manage your items" (serif gold, baked into cards/bag.png) under
+        // "BAG / Browse every carried item by category" (the live TMP text), and "LOAD OUT"
+        // against "Loadout". The live purpose was additionally ellipsised mid-word.
+        //
+        // NOT A DOUBLED MOUNT. ObsidianNavigationWorkspace.RenderCurrent destroys every content
+        // child before it renders and BuildShell is idempotent, so nothing builds twice. The
+        // second producer was the TEXTURE. That is why this case lints an ART REFERENCE and a
+        // FORMAT, and does not go looking for a duplicate Build call.
+        //
+        // HOW THIS CASE STAYS HONEST: the format numbers are not restated here, they are READ
+        // OUT OF ManageScreenPanel.cs and the deck is required to equal them. Manage is the
+        // standard per the owner's ruling, so if Manage is restyled this fails until the deck
+        // follows - it cannot pass by recomputing the deck's own constants back at itself.
+        private static void Case6_DeckCardSingleProducer(List<string> failures, List<string> notes)
+        {
+            string deck = ReadSrc(DeckSrc);
+            if (deck == null) { failures.Add("[deck-card-labels] cannot read " + DeckSrc); return; }
+            string manage = ReadSrc(ManageSrc);
+            if (manage == null) { failures.Add("[deck-card-labels] cannot read " + ManageSrc); return; }
+
+            // ---- 6a  exactly ONE producer per Hero card label ------------------------------
+            // Anchor inside CardsFor FIRST. PlayerDeckWorkspace.SubtitleFor switches on the same
+            // enum earlier in the file, so slicing from the first 'case PlayerDeckKind.Hero:'
+            // lands on a block with no Route( in it and this case would pass on nothing. That is
+            // the silent-pass shape this suite's header calls banned - it was caught by running
+            // the oracle RED against HEAD before shipping it.
+            int cardsFor = deck.IndexOf("List<Card> CardsFor(", StringComparison.Ordinal);
+            if (cardsFor < 0)
+            {
+                failures.Add("[deck-card-labels] no 'List<Card> CardsFor(' in " + DeckSrc +
+                             " - the deck card table was renamed and 6a is measuring nothing");
+                return;
+            }
+            string hero = SliceCase(deck.Substring(cardsFor), "case PlayerDeckKind.Hero:");
+            if (hero == null)
+            {
+                failures.Add("[deck-card-labels] no 'case PlayerDeckKind.Hero:' block in " + DeckSrc +
+                             " - the Hero deck is the screen the FTUE teaches (Hero -> Skills); this " +
+                             "case cannot silently pass because the block was renamed");
+                return;
+            }
+
+            int routes = 0;
+            foreach (string raw in hero.Split('\n'))
+            {
+                string line = raw.Trim();
+                if (line.StartsWith("//", StringComparison.Ordinal)) continue;
+                if (line.IndexOf("Route(", StringComparison.Ordinal) < 0) continue;
+                routes++;
+                // Route(title, purpose, concept, panelId[, artKey]) - three quoted literals is a
+                // text-free card whose ONLY label producer is the live TMP text. A fourth is an
+                // art key, i.e. a second producer painted into the same plate.
+                int quotes = 0;
+                for (int i = 0; i < line.Length; i++) if (line[i] == '"') quotes++;
+                if (quotes != 6)
+                    failures.Add("[deck-card-labels] Hero route has " + (quotes / 2) + " string literals, " +
+                                 "expected 3 (title, purpose, concept): '" + line + "'. A 4th is an ART KEY, " +
+                                 "and a Hero card that mounts illustrated art gets its title and tagline a " +
+                                 "SECOND time from the PNG - that is the WO-1341 defect exactly");
+            }
+            if (routes != 4)
+                failures.Add("[deck-card-labels] found " + routes + " Hero deck routes, expected 4 " +
+                             "(Bag, Equipment, Skills, Loadout)");
+
+            // ---- 6b  the label-baked PNGs are mounted by NOTHING in the deck ---------------
+            foreach (string key in BakedLabelCardArt)
+            {
+                string art = CardArtDir + key + ".png";
+                if (!File.Exists(art))
+                    notes.Add("card art '" + key + "' is gone from disk - if it was re-authored " +
+                              "text-free, drop it from BakedLabelCardArt and the art key may return");
+                if (deck.IndexOf("\"" + key + "\"", StringComparison.Ordinal) >= 0)
+                    failures.Add("[deck-card-labels] " + DeckSrc + " references card art key \"" + key +
+                                 "\" as a string literal. " + art + " has a TITLE AND TAGLINE BAKED INTO " +
+                                 "THE PNG, so mounting it puts a second producer under the live text. " +
+                                 "Re-author the art text-free (owner's call) before restoring this key");
+            }
+
+            // ---- 6c  FORMAT PARITY, with the expectation read out of Manage ----------------
+            Parity(failures, "card title size",  deck, manage, "face.fontSize", ";");
+            Parity(failures, "card title align", deck, manage, "face.alignment", ";");
+            Parity(failures, "card title fit",   deck, manage, "FitSingleLine(face,", ")");
+            string manageFit = ArgsOf(manage, "FitSingleLine(description,", ")");
+            string deckFit   = ArgsOf(deck,   "FitSingleLine(purpose,", ")");
+            if (manageFit == null || deckFit == null)
+                failures.Add("[deck-card-labels] cannot read the card purpose fit call from " +
+                             (manageFit == null ? ManageSrc : DeckSrc));
+            else if (!string.Equals(manageFit, deckFit, StringComparison.Ordinal))
+                failures.Add("[deck-card-labels] card purpose fit floors drifted from the Manage " +
+                             "reference: Manage fits '" + manageFit + "', the deck fits '" + deckFit + "'");
+            if (deck.IndexOf("(int)ElarionUi.FontMicro, TextAlignmentOptions.Center", StringComparison.Ordinal) < 0)
+                failures.Add("[deck-card-labels] the deck card purpose is no longer FontMicro/Centred - " +
+                             "Manage authors its card description at (int)ElarionUi.FontMicro centred " +
+                             "(ManageScreenPanel.cs:632-634) and the owner ruled Manage is the standard");
+
+            // ---- 6d  the truncation may not come back --------------------------------------
+            // "Choose the abilities equipped for bat..." in the capture was TMP inserting U+2026
+            // at RENDER time because the purpose label hard-set TextOverflowModes.Ellipsis with
+            // wrapping off. Manage sets neither. The one legitimate ellipsis on a card is the
+            // fixed-width "[ LOCKED ]" badge, which cannot truncate.
+            string purposeBlock = Between(deck, "available ? spec.Purpose", "FitSingleLine(purpose,");
+            if (purposeBlock == null)
+                failures.Add("[deck-card-labels] cannot find the deck card purpose label block in " + DeckSrc);
+            else
+            {
+                if (purposeBlock.IndexOf("TextOverflowModes.Ellipsis", StringComparison.Ordinal) >= 0)
+                    failures.Add("[deck-card-labels] the deck card purpose hard-sets " +
+                                 "TextOverflowModes.Ellipsis again. That is what printed 'Choose the " +
+                                 "abilities equipped for bat...' on device - and the inserted glyph is " +
+                                 "U+2026, which the tofu oracle will not forgive. Manage lets it wrap");
+                if (purposeBlock.IndexOf("enableWordWrapping = false", StringComparison.Ordinal) >= 0)
+                    failures.Add("[deck-card-labels] the deck card purpose disables word wrapping again; " +
+                                 "Manage does not, and a card plate is too narrow to guarantee one line");
+            }
+
+            // ---- 6e  ASCII ONLY in the authored Hero copy -----------------------------------
+            for (int i = 0; i < hero.Length; i++)
+            {
+                if (hero[i] <= 126) continue;
+                failures.Add("[deck-card-labels] non-ASCII U+" + ((int)hero[i]).ToString("X4") +
+                             " in the Hero deck block - player-facing copy is ASCII-only (no em dash, " +
+                             "ellipsis glyph or smart quotes) or the tofu oracle fails on it");
+                break;
+            }
+
+            notes.Add("Hero deck: 4 text-free cards, one live producer per label, format read from Manage");
+        }
+
+        private const string CardArtDir = "Assets/Resources/UI/ElarionMedieval/cards/";
+
+        /// <summary>Assert the deck's literal for <paramref name="anchor"/> equals the MANAGE
+        /// reference's - so the reference file, not this suite, owns the number.</summary>
+        private static void Parity(List<string> failures, string what, string deck, string manage,
+                                   string anchor, string terminator)
+        {
+            string want = ArgsOf(manage, anchor, terminator);
+            string got  = ArgsOf(deck, anchor, terminator);
+            if (want == null) { failures.Add("[deck-card-labels] '" + anchor + "' is gone from the Manage reference " + ManageSrc); return; }
+            if (got == null)  { failures.Add("[deck-card-labels] '" + anchor + "' is gone from " + DeckSrc); return; }
+            if (!string.Equals(want, got, StringComparison.Ordinal))
+                failures.Add("[deck-card-labels] " + what + " drifted from the Manage reference: " +
+                             "Manage has '" + anchor + " " + want + "', the deck has '" + got + "'");
+        }
+
+        /// <summary>Text between the first <paramref name="anchor"/> and the next
+        /// <paramref name="terminator"/>, trimmed. Null when either is absent.</summary>
+        private static string ArgsOf(string src, string anchor, string terminator)
+        {
+            int a = src.IndexOf(anchor, StringComparison.Ordinal);
+            if (a < 0) return null;
+            a += anchor.Length;
+            int b = src.IndexOf(terminator, a, StringComparison.Ordinal);
+            if (b < 0) return null;
+            return src.Substring(a, b - a).Replace("=", "").Trim();
+        }
+
+        private static string Between(string src, string from, string to)
+        {
+            int a = src.IndexOf(from, StringComparison.Ordinal);
+            if (a < 0) return null;
+            int b = src.IndexOf(to, a, StringComparison.Ordinal);
+            return b < 0 ? null : src.Substring(a, b - a);
+        }
+
+        /// <summary>The body of one switch case, up to the next 'case ' / 'default:' label.</summary>
+        private static string SliceCase(string src, string label)
+        {
+            int a = src.IndexOf(label, StringComparison.Ordinal);
+            if (a < 0) return null;
+            a += label.Length;
+            int next = src.IndexOf("case PlayerDeckKind.", a, StringComparison.Ordinal);
+            int def  = src.IndexOf("default:", a, StringComparison.Ordinal);
+            int end  = next < 0 ? def : def < 0 ? next : Math.Min(next, def);
+            return end < 0 ? src.Substring(a) : src.Substring(a, end - a);
         }
 
         // =====================================================================

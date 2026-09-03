@@ -136,6 +136,101 @@ namespace DeNelle.Village.Talents
         /// <summary>Right column: the state / "Requires ..." band (FontMicro 32 -> line ~40).</summary>
         public const float DetailStatePx = 42f;
 
+        // =====================================================================
+        // WO-1342 SPEND-POPUP GEOMETRY (device capture 2026-09-03, Seeker
+        // 2670x1200, `Mend` tapped). Two DISTINCT defects, both numeric, both
+        // pinned by SkillsPanelLayoutRegression case 6 [popup]:
+        //
+        // (a) THE DESCRIPTION LOST HALF ITS SENTENCE. The authored string is
+        //     "Unlocks Mend - a small self-heal (25 HP, 12s cd). Assignable to
+        //     the hot-swap bar." and the device rendered it up to "Assignable
+        //     to" with NO ellipsis. Not a wrap bug -- FitBlock already wraps
+        //     (textWrappingMode Normal); a HEIGHT bug. The desc band was
+        //     0.48..0.90 of a body zone that resolves to ~149 local units, i.e.
+        //     ~63 units of label, which seats TWO line boxes at the 24 px floor.
+        //     RenderSpendPopup prepends the gold talent name + "\n", so line 1
+        //     is the name, line 2 is the first wrapped line, and TMP's Truncate
+        //     overflow CULLS line 3 SILENTLY (Truncate draws no "..."). The
+        //     dialog had ~56 units of authored EMPTY band (0.34..0.48 and
+        //     0.00..0.16) sitting under it the whole time. Fix = give the
+        //     description the room, do not shrink and do not ellipsize.
+        //
+        // (e) THE FRAME DID NOT ENCLOSE THE MODAL (owner: "the frame around the
+        //     modal"). The gold border and the black plate are the SAME rect --
+        //     the frame is ONE 9-sliced sprite on chrome.root
+        //     (MedievalUiSkin.ApplyShell, "UI/ElarionMedieval/frames/content-panel",
+        //     Image.Type.Sliced, border 96/96/96/96) and the plate is the kit's
+        //     ZoneBacking(layout.body, ObsidianFill) at Zone_Body fractions of
+        //     that same rect, so enclosure looks guaranteed. It is not, because
+        //     THE ART DOES NOT PAINT AT THE RECT'S TOP EDGE: content-panel.png
+        //     is 1672x941 whose alpha bbox starts at row 94 -- the ENTIRE 96 px
+        //     top slice is transparent, so the gold top edge paints ~96 units
+        //     BELOW the rect top. Zone_Body's top (0.835) sits 0.165 * ~356
+        //     units = ~59 units below the rect top. 59 < 96, so the black plate
+        //     began ~37 units (~46 device px) ABOVE the painted frame -- the
+        //     capture measures the plate top at y=472 and the gold top edge at
+        //     y=517, a 45 px overhang. That is the whole defect, and it is
+        //     INDEPENDENT of (a): nothing about the text drives it, and growing
+        //     the popup cannot fix it (0.165 * H >= 96 needs H >= ~582 units,
+        //     i.e. essentially the whole workspace).
+        //     Fix = inset chrome.content by the frame's PAINTED margin, so every
+        //     zone the factory hangs off it -- header, body (and its backing
+        //     plate), footer -- lands inside the visible border. No rect is
+        //     renamed or re-parented (WO-1340 highlights resolve by name).
+        //
+        // ⛔ The tree's own solver / lattice / node plates are WO-1310's lane and
+        //    are NOT touched by any constant below.
+        // =====================================================================
+
+        /// <summary>Spend-popup rect, fraction of the talent workspace. Grown from the
+        /// original 0.20..0.80 so the wrapped description has somewhere to go AFTER the
+        /// frame-inset below eats the top 96 units.</summary>
+        public const float PopupAnchorY0 = 0.10f;
+        /// <inheritdoc cref="PopupAnchorY0"/>
+        public const float PopupAnchorY1 = 0.90f;
+
+        /// <summary>MEASURED from the art, not guessed: content-panel.png (1672x941, 9-slice
+        /// border 96) has 94 fully transparent rows above its gold border, so its 96 px TOP
+        /// slice paints nothing and the visible frame starts this many units below its rect's
+        /// top edge. Any content anchored to the rect's own top overhangs the border by
+        /// exactly (this - the zone's own top gap).</summary>
+        public const float PopupFrameArtTopMarginPx = 96f;
+
+        /// <summary>Inset applied to the popup's content layer so the factory zones sit inside
+        /// the PAINTED frame. Must be >= <see cref="PopupFrameArtTopMarginPx"/> (case 6 pins it);
+        /// the art reaches its own bottom edge, so only the top needs the full margin.</summary>
+        public const float PopupContentTopInsetPx = 96f;
+        /// <summary>Side inset for the popup content layer -- the frame's left/right border art
+        /// carries ~20 units of transparent margin before the gold pilaster.</summary>
+        public const float PopupContentSideInsetPx = 20f;
+        /// <summary>Bottom inset for the popup content layer (the art paints to its bottom edge).</summary>
+        public const float PopupContentBottomInsetPx = 8f;
+
+        /// <summary>Description band, fraction of the popup BODY zone. Takes the whole upper
+        /// body (the old 0.48..0.90 left 0.34..0.48 and 0.00..0.16 authored EMPTY while the
+        /// sentence was being culled).</summary>
+        public const float PopupDescBandY0 = 0.30f;
+        /// <inheritdoc cref="PopupDescBandY0"/>
+        public const float PopupDescBandY1 = 1.00f;
+        /// <summary>State / spend-prompt band, fraction of the popup BODY zone. Disjoint from
+        /// the description band by construction.</summary>
+        public const float PopupPromptBandY0 = 0.02f;
+        /// <inheritdoc cref="PopupPromptBandY0"/>
+        public const float PopupPromptBandY1 = 0.26f;
+
+        /// <summary>Description auto-size range. EXPLICIT floor: FitBlock's minSize:0 silently
+        /// resolves to ElarionUiKit.FontFloor (30), NOT FontHardFloor (20).</summary>
+        public const float PopupDescFontMin = 24f;
+        /// <inheritdoc cref="PopupDescFontMin"/>
+        public const float PopupDescFontMax = 30f;
+        /// <summary>State-line auto-size range (explicit floor, same trap).</summary>
+        public const float PopupPromptFontMin = 22f;
+        /// <inheritdoc cref="PopupPromptFontMin"/>
+        public const float PopupPromptFontMax = 28f;
+        /// <summary>The description must seat at least this many whole line boxes at its own
+        /// floor: 1 for the prepended gold talent name + 3 for the longest authored sentence.</summary>
+        public const int PopupDescMinLineBoxes = 4;
+
         /// <summary>Ability tile: the slot numeral line box -- a WHOLE line box at the kit
         /// FontFloor (30 x 1.25 = 37.5), never the 34 px that only just misses it.</summary>
         public const float SlotKeyBandPx = 38f;
@@ -1931,7 +2026,7 @@ namespace DeNelle.Village.Talents
             var chrome = ElarionUiKit.BuildObsidianPanel(
                 _popupRoot.transform,
                 "Talent",
-                new Vector2(0.24f, 0.20f), new Vector2(0.76f, 0.80f),
+                new Vector2(0.24f, PopupAnchorY0), new Vector2(0.76f, PopupAnchorY1),
                 () => { if (_vm != null) _vm.ClearSelection(); },
                 headerX0: 0.14f, headerX1: 0.86f,
                 withBackdrop: false,
@@ -1941,6 +2036,21 @@ namespace DeNelle.Village.Talents
             // Nested popup: Cancel is the labeled dismiss; hide the shared bottom Close
             // so we don't stack two "leave" affordances under the buttons.
             if (chrome.close != null) chrome.close.gameObject.SetActive(false);
+
+            // WO-1342 (e) — SEAT THE CONTENT INSIDE THE PAINTED FRAME.
+            // chrome.content is the factory's full-rect (0..1) transparent layer and EVERY
+            // zone (header / body + its ObsidianFill backing plate / footer) is a fraction
+            // OF IT, so one inset here moves the whole modal inside the border art. The top
+            // needs the full PopupFrameArtTopMarginPx because content-panel.png's 96 px top
+            // slice is transparent (see the constant's proof); the other three edges only
+            // carry the art's thin margin. Offsets, never anchors: no rect is renamed or
+            // re-parented, so a WO-1340 FTUE highlight still resolves by name.
+            if (chrome.content != null)
+            {
+                var contentRt = (RectTransform)chrome.content.transform;
+                contentRt.offsetMin = new Vector2(PopupContentSideInsetPx, PopupContentBottomInsetPx);
+                contentRt.offsetMax = new Vector2(-PopupContentSideInsetPx, -PopupContentTopInsetPx);
+            }
 
             _popupName = chrome.title;
             if (_popupName != null)
@@ -1955,14 +2065,27 @@ namespace DeNelle.Village.Talents
             var footer = (chrome.layout != null) ? chrome.layout.footer : null;
 
             // Body: description + spend prompt (chrome-less labels into the frame well).
+            // WO-1342 (a): the description owns the WHOLE upper body so the authored sentence
+            // WRAPS instead of being culled. FitBlock wraps (textWrappingMode Normal) and
+            // truncates SILENTLY, so the band -- not the wrap flag -- is what has to be right.
+            // Floors are passed EXPLICITLY: FitBlock's minSize:0 resolves to
+            // ElarionUiKit.FontFloor (30), not FontHardFloor (20).
             const float tx0 = 0.06f, tx1 = 0.94f;
-            _popupDesc = ElarionUiKit.Label(body, "", 0.48f, 0.90f, ElarionUi.Parchment,
+            _popupDesc = ElarionUiKit.Label(body, "", PopupDescBandY0, PopupDescBandY1, ElarionUi.Parchment,
                 ElarionUi.FontLabel, TMPro.TextAlignmentOptions.Top, tx0, tx1);
-            ElarionUiKit.FitBlock(_popupDesc, 24f, 34f);
+            ElarionUiKit.FitBlock(_popupDesc, PopupDescFontMin, PopupDescFontMax);
 
-            _popupPrompt = ElarionUiKit.Label(body, "", 0.16f, 0.34f, ElarionUi.Affordable,
+            // WO-1342 (c) COLOURBLIND LAW: the state line is NEUTRAL parchment, not
+            // ElarionUi.Affordable green. This ONE label carries every state
+            // (HeroSkillTreeVM.SelectedSpendPrompt -> "Spend N Wisdom for X?" / "Owned -
+            // Active skill" / "Owned - Passive - always active" / "Planned - -N Wisdom" /
+            // "Costs N Wisdom" / "NO EFFECT YET - ..." / a lock reason) and its colour was
+            // set ONCE at build, so green was not distinguishing states -- it was painting an
+            // "affordable" cue over lock and no-effect copy. Every state already reads as a
+            // distinct WORD; colour stays out of it.
+            _popupPrompt = ElarionUiKit.Label(body, "", PopupPromptBandY0, PopupPromptBandY1, ElarionUi.Parchment,
                 ElarionUi.FontBody, TMPro.TextAlignmentOptions.Center, tx0, tx1, bold: true);
-            ElarionUiKit.FitBlock(_popupPrompt, 22f, 30f);
+            ElarionUiKit.FitBlock(_popupPrompt, PopupPromptFontMin, PopupPromptFontMax);
 
             // Footer (or body floor fallback): Cancel | CONFIRM — kit ButtonPack + touch floor.
             RectTransform btnHost;

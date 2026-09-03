@@ -116,6 +116,7 @@ namespace DeNelle.Editor.Regression
                 Case(failures, "grid", () => Case3_GridContainment(failures, notes));
                 Case(failures, "truncation", () => Case4_Truncation(failures, notes));
                 Case(failures, "source", () => Case5_SourceLaws(failures, notes));
+                Case(failures, "popup", () => Case6_SpendPopup(failures, notes));
             }
             catch (Exception ex)
             {
@@ -127,8 +128,9 @@ namespace DeNelle.Editor.Regression
             {
                 reason = "SKILLS PANEL LAYOUT OK - full-bleed graph body (owner 2026-08-15), " +
                          "spend-popup action band clears the kit touch floor, text floors hold a line box, " +
-                         "the node graph is padded + clipped on a fixed-pixel lattice, and no catalog " +
-                         "label is forced to ellipsize at 2340x1080" + noteStr;
+                         "the node graph is padded + clipped on a fixed-pixel lattice, no catalog " +
+                         "label is forced to ellipsize at 2340x1080, and the spend popup wraps its full " +
+                         "ASCII-only description inside a frame that encloses it (WO-1342)" + noteStr;
                 return true;
             }
             reason = "skills-panel-layout FAIL x" + failures.Count + ": " + string.Join(" | ", failures) + noteStr;
@@ -638,6 +640,216 @@ namespace DeNelle.Editor.Regression
                              "(mount-garble, CLAUDE.md Sec.0) - the compile gate rejects this");
 
             notes.Add("source laws checked on " + ViewSrc);
+        }
+
+        // =====================================================================
+        //  CASE 6 - the SPEND POPUP: the sentence, the frame, the state colour
+        //  (WO-1342, device capture 2026-09-03 Seeker 2670x1200, `Mend` tapped)
+        // =====================================================================
+        // The capture showed the dialog rendering
+        //   "Unlocks Mend <em dash> a small self-heal (25 HP, 12s cd). Assignable to"
+        // and then STOPPING, with no ellipsis, while the authored string in
+        // hero-talents.json continues "... Assignable to the hot-swap bar." Three
+        // separate, separately-pinnable facts came out of that one screenshot:
+        //
+        //   [ascii] the string shipped a real U+2014 EM DASH. Player-facing strings are
+        //           ASCII-only (a device without the glyph draws tofu mid-sentence), and
+        //           every talent description lives in ONE file, so the scan is that file
+        //           (both the Resources and the StreamingAssets copy - they must stay
+        //           byte-identical or the build and the editor disagree).
+        //   [wrap]  the description was CULLED, not wrapped-and-shrunk: FitBlock already
+        //           wraps, but its overflowMode is Truncate, which draws NO "...". So the
+        //           guard is a HEIGHT budget - the band must seat a whole line box per
+        //           line the longest authored sentence needs, plus one for the gold talent
+        //           name RenderSpendPopup prepends.
+        //   [frame] the ornate border did not enclose the modal (owner: "the frame around
+        //           the modal"). Frame and plate are the SAME rect - one 9-sliced
+        //           content-panel sprite on chrome.root, and the kit's
+        //           ZoneBacking(layout.body) plate at a fraction of it - but
+        //           content-panel.png's 96 px TOP slice is fully transparent (alpha bbox
+        //           starts at row 94 of 941), so the gold edge paints ~96 units BELOW the
+        //           rect top while Zone_Body's top sits only ~59 units below it. The plate
+        //           overhung the border by ~45 device px, measured in the capture. The fix
+        //           is an inset on the content layer, and THIS is the numeric pin on it.
+        //   [hue]   the state line was ElarionUi.Affordable GREEN for every state, so a
+        //           lock reason and "NO EFFECT YET" were painted in the affordable cue.
+        //           The owner is red/green colourblind: state is carried by the WORD.
+        private const string TalentsJsonStreaming = "Assets/StreamingAssets/Data/Canonical/hero-talents.json";
+
+        /// <summary>Reference panel height at 2340x1080 (derived in the header: 0.90 of the
+        /// post-scale canvas). The spend popup is anchored to the talent WORKSPACE, which is
+        /// 0.10..0.84 of this, so the popup's own rect has to be replayed through it.</summary>
+        private const float RefPanelHeightPx = 880.5f;
+        /// <summary>Workspace band inside the panel (HeroSkillTreePanelMvvm.BuildChrome seats
+        /// TalentWorkspace at 0.035..0.965 x 0.10..0.84 of chrome.content).</summary>
+        private const float RefWorkspaceY0 = 0.10f, RefWorkspaceY1 = 0.84f;
+        /// <summary>FrameCore's BODY zone, as it resolves AFTER BuildObsidianPanel's shared-Close
+        /// band reservation: authored y 0.075..0.835, and the reservation raises the floor to
+        /// footer.w + 0.015 = 0.417 on this canvas. Restated here as the numbers the popup band
+        /// arithmetic is replayed against - a DEVICE/kit fact, to be re-derived if the frame's
+        /// zones change, never relaxed.</summary>
+        private const float RefPopupBodyY0 = 0.417f, RefPopupBodyY1 = 0.835f;
+
+        private static void Case6_SpendPopup(List<string> failures, List<string> notes)
+        {
+            Type view = FindType(ViewType);
+            Type kit = FindType(KitType);
+            if (view == null || kit == null)
+            {
+                failures.Add("[popup] " + ViewType + " / " + KitType + " not found - re-point this oracle");
+                return;
+            }
+
+            // ── [ascii] no non-ASCII codepoint in ANY talent-tree player-facing string ──
+            AsciiOnly(failures, TalentsJson);
+            AsciiOnly(failures, TalentsJsonStreaming);
+            string resJson = ReadText(TalentsJson, failures, "[popup]");
+            string strJson = ReadText(TalentsJsonStreaming, failures, "[popup]");
+            if (resJson != null && strJson != null && !string.Equals(resJson, strJson, StringComparison.Ordinal))
+                failures.Add("[popup] the Resources and StreamingAssets copies of hero-talents.json have " +
+                             "DIVERGED - the editor and the build would render different talent copy");
+
+            // ── [frame] the painted border must enclose the content on all four edges ──
+            float artTop = ConstFloat(view, "PopupFrameArtTopMarginPx", failures, "[popup]");
+            float insetTop = ConstFloat(view, "PopupContentTopInsetPx", failures, "[popup]");
+            float insetSide = ConstFloat(view, "PopupContentSideInsetPx", failures, "[popup]");
+            float insetBottom = ConstFloat(view, "PopupContentBottomInsetPx", failures, "[popup]");
+            if (artTop > 0f && insetTop < artTop)
+                failures.Add("[popup] the spend popup's content layer is inset " + insetTop.ToString("F0") +
+                             " px from the top but content-panel.png does not paint its border until " +
+                             artTop.ToString("F0") + " px down (its 96 px top 9-slice is transparent) - the black " +
+                             "ZoneBacking plate and the description overhang the gold frame, which is the owner's " +
+                             "\"the frame around the modal\" (capture 2026-09-03: plate top y=472 vs frame top y=517)");
+            if (insetSide <= 0f)
+                failures.Add("[popup] PopupContentSideInsetPx is 0 - the content plate runs to the frame's outer " +
+                             "edge and paints over its pilasters");
+            if (insetBottom < 0f)
+                failures.Add("[popup] PopupContentBottomInsetPx is negative - the footer would paint below the frame");
+
+            // ── [wrap] the description band must seat every line the sentence needs ──
+            float y0 = ConstFloat(view, "PopupAnchorY0", failures, "[popup]");
+            float y1 = ConstFloat(view, "PopupAnchorY1", failures, "[popup]");
+            float dy0 = ConstFloat(view, "PopupDescBandY0", failures, "[popup]");
+            float dy1 = ConstFloat(view, "PopupDescBandY1", failures, "[popup]");
+            float py0 = ConstFloat(view, "PopupPromptBandY0", failures, "[popup]");
+            float py1 = ConstFloat(view, "PopupPromptBandY1", failures, "[popup]");
+            float descMin = ConstFloat(view, "PopupDescFontMin", failures, "[popup]");
+            float hardFloor = ConstFloat(FindType(ObsidianType), "FontHardFloor", failures, "[popup]");
+            int minLines = (int)ConstFloat(view, "PopupDescMinLineBoxes", failures, "[popup]");
+            if (y1 <= y0 || dy1 <= dy0 || descMin <= 0f || minLines <= 0) return;
+
+            if (descMin < hardFloor)
+                failures.Add("[popup] PopupDescFontMin " + descMin.ToString("F0") + " is below the kit " +
+                             "FontHardFloor " + hardFloor.ToString("F0") + " - sub-legible phone text");
+            if (py1 > dy0 + 0.0001f)
+                failures.Add("[popup] the description band (" + dy0.ToString("F2") + ".." + dy1.ToString("F2") +
+                             ") and the state band (" + py0.ToString("F2") + ".." + py1.ToString("F2") +
+                             ") OVERLAP - the wrapped sentence would paint over the state line");
+
+            float workspaceH = (RefWorkspaceY1 - RefWorkspaceY0) * RefPanelHeightPx;
+            float popupH = (y1 - y0) * workspaceH;
+            float contentH = popupH - insetTop - insetBottom;
+            float bodyH = (RefPopupBodyY1 - RefPopupBodyY0) * contentH;
+            float descH = (dy1 - dy0) * bodyH;
+            float lineBox = descMin * LineBoxMul;
+            int seats = (int)Math.Floor(descH / lineBox);
+            notes.Add("popup desc band = " + descH.ToString("F0") + " px of a " + bodyH.ToString("F0") +
+                      " px body (popup " + popupH.ToString("F0") + " px, inset " + insetTop.ToString("F0") +
+                      ") = " + seats + " line boxes at " + descMin.ToString("F0") + " px");
+            if (seats < minLines)
+                failures.Add("[popup] the description band seats only " + seats + " line box(es) at the " +
+                             descMin.ToString("F0") + " px floor but needs " + minLines +
+                             " (one for the gold talent name RenderSpendPopup prepends, three for the sentence). " +
+                             "FitBlock's overflowMode is Truncate, so the tail is CULLED WITH NO ELLIPSIS - " +
+                             "exactly the capture's \"... Assignable to\" (WO-1342 defect a)");
+
+            // The longest authored description must fit the band once WRAPPED - i.e. the
+            // rendered length can equal the authored length, so a future one-line regression
+            // (or a re-shrunk band) is caught by arithmetic and not by the owner's eyes.
+            if (resJson != null)
+            {
+                string longest = "";
+                foreach (Match m in Regex.Matches(resJson, "\"description\"\\s*:\\s*\"([^\"]*)\""))
+                {
+                    string s = m.Groups[1].Value;
+                    if (s.Length > longest.Length) longest = s;
+                }
+                if (longest.Length > 0)
+                {
+                    // Body well width at the reference rect, minus the label's 0.06..0.94 inset.
+                    float bodyW = RefBodyWidthPx * (0.965f - 0.055f) * 0.88f;
+                    float perLine = Math.Max(1f, bodyW / (descMin * AvgAdvanceEm));
+                    // +1 line for the prepended gold talent name.
+                    int need = 1 + (int)Math.Ceiling(longest.Length / perLine);
+                    notes.Add("longest authored description = " + longest.Length + " chars -> ~" + need +
+                              " wrapped lines at " + descMin.ToString("F0") + " px");
+                    if (need > seats)
+                        failures.Add("[popup] the longest authored talent description (" + longest.Length +
+                                     " chars) needs ~" + need + " wrapped lines but the band seats " + seats +
+                                     " - part of the sentence would be culled silently");
+                    if (minLines < need)
+                        failures.Add("[popup] PopupDescMinLineBoxes (" + minLines + ") is below what the longest " +
+                                     "authored description needs (~" + need + ") - the guard would certify a band " +
+                                     "that still truncates");
+                }
+            }
+
+            // ── [hue] the state line must not carry state in GREEN alone ──
+            string src = ReadText(ViewSrc, failures, "[popup]");
+            if (src != null)
+            {
+                string code = StripComments(src);
+                var promptCall = Regex.Match(code,
+                    @"_popupPrompt\s*=\s*ElarionUiKit\.Label\s*\([^;]*?;", RegexOptions.Singleline);
+                if (!promptCall.Success)
+                    failures.Add("[popup] the spend popup's state-line label is gone - the dialog would state " +
+                                 "no cost, no lock reason and no NO-EFFECT-YET warning before a spend");
+                else if (promptCall.Value.IndexOf("ElarionUi.Affordable", StringComparison.Ordinal) >= 0)
+                    failures.Add("[popup] the spend popup's state line is built in ElarionUi.Affordable GREEN. " +
+                                 "That ONE label carries EVERY state (Owned / Costs N Wisdom / Planned / " +
+                                 "NO EFFECT YET / a lock reason) and its colour is set once at build, so green " +
+                                 "is not distinguishing states - it paints an affordable cue over lock copy. " +
+                                 "The owner is red/green colourblind: the WORD carries the state (COLOURBLIND LAW)");
+            }
+        }
+
+        /// <summary>Fail on any codepoint above ASCII, naming file:line:col and the codepoint -
+        /// a tofu box mid-sentence on a device without the glyph.</summary>
+        private static void AsciiOnly(List<string> failures, string path)
+        {
+            string text = ReadText(path, failures, "[popup]");
+            if (text == null) return;
+            var lines = text.Replace("\r\n", "\n").Split('\n');
+            int hits = 0;
+            for (int i = 0; i < lines.Length; i++)
+            {
+                for (int c = 0; c < lines[i].Length; c++)
+                {
+                    if (lines[i][c] <= 127) continue;
+                    hits++;
+                    if (hits <= 6)
+                        failures.Add("[popup] non-ASCII U+" + ((int)lines[i][c]).ToString("X4") + " in " +
+                                     path + ":" + (i + 1) + ":" + (c + 1) +
+                                     " - player-facing talent copy is ASCII-only (a device without the glyph " +
+                                     "draws a tofu box mid-sentence)");
+                }
+            }
+            // The JSON may also carry the codepoint as a \uXXXX ESCAPE, which is the same
+            // glyph on screen and is how the em dash hid from a raw-byte scan.
+            foreach (Match m in Regex.Matches(text, @"\\u([0-9a-fA-F]{4})"))
+            {
+                int cp = Convert.ToInt32(m.Groups[1].Value, 16);
+                if (cp <= 127) continue;
+                hits++;
+                int line = 1;
+                for (int k = 0; k < m.Index; k++) if (text[k] == '\n') line++;
+                if (hits <= 6)
+                    failures.Add("[popup] non-ASCII escape \\u" + m.Groups[1].Value + " (U+" +
+                                 cp.ToString("X4") + ") in " + path + ":" + line +
+                                 " - an escaped em dash renders the SAME tofu box as a raw one");
+            }
+            if (hits > 6)
+                failures.Add("[popup] ... and " + (hits - 6) + " more non-ASCII codepoints in " + path);
         }
 
         private static void Law(List<string> failures, string code, string token, string why)

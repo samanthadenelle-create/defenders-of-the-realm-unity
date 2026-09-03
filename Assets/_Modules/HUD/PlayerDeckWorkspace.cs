@@ -93,7 +93,10 @@ namespace DeNelle.HUD
         private void BuildCard(RectTransform grid, Card spec)
         {
             bool available = spec.Available == null || spec.Available();
-            var button = ElarionUiKit.BuildObsidianButton(grid, spec.Title,
+            // Uppercased AT CONSTRUCTION, exactly as Manage does it (ManageScreenPanel.cs:587),
+            // so the card face has ONE writer. Never re-assign face.text further down - that is
+            // how a screen ends up with two producers for one string (WO-1341).
+            var button = ElarionUiKit.BuildObsidianButton(grid, spec.Title.ToUpperInvariant(),
                 ElarionUiKit.ObsidianButtonStyle.Style1,
                 available ? ElarionUiKit.ObsidianButtonColor.Yellow : ElarionUiKit.ObsidianButtonColor.Gray,
                 Vector2.zero, Vector2.one, () => OpenCard(spec));
@@ -153,18 +156,28 @@ namespace DeNelle.HUD
                 }
             }
 
+            // WO-1341, owner ruling: "should match font and format of Manage screen". The
+            // reference implementation is ManageScreenPanel.BuildLauncherCards
+            // (ManageScreenPanel.cs:620-635) and every number below is copied from it rather
+            // than invented here, so the two card surfaces cannot drift again:
+            //   title  - anchors x TextPlateX0..0.96, y 0.55..0.90, 36px, CENTRED, Gold
+            //            (ParchmentDim when locked), FitSingleLine(30, 40)
+            //   purpose- y 0.26..0.52, FontMicro, CENTRED, FitSingleLine(24, 30)
+            // The old deck format was 34px BOLD LEFT with a 22px floor and a hard
+            // TextOverflowModes.Ellipsis - which is what printed the truncated
+            // "Choose the abilities equipped for bat..." in the device capture. Manage neither
+            // disables wrapping nor sets an overflow mode, so neither do we.
             var face = button.GetComponentInChildren<TMP_Text>();
             if (face != null)
             {
                 var rt = face.rectTransform;
-                rt.anchorMin = new Vector2(illustratedCard != null ? 0.48f : 0.27f, 0.56f);
-                rt.anchorMax = new Vector2(0.93f, 0.86f);
+                rt.anchorMin = new Vector2(TextPlateX0(illustratedCard != null), 0.55f);
+                rt.anchorMax = new Vector2(0.96f, 0.90f);
                 rt.offsetMin = rt.offsetMax = Vector2.zero;
-                face.alignment = TextAlignmentOptions.Left;
+                face.fontSize = 36f;
+                face.alignment = TextAlignmentOptions.Center;
                 face.color = available ? ElarionUi.Gold : ElarionUi.ParchmentDim;
-                face.fontSize = 34f;
-                face.fontStyle = FontStyles.Bold;
-                ElarionUiKit.FitSingleLine(face, 22f, 34f);
+                ElarionUiKit.FitSingleLine(face, 30f, 40f);
             }
 
             if (illustratedCard == null)
@@ -199,7 +212,7 @@ namespace DeNelle.HUD
                 // WO-1311 acceptance 3. The gray tint is a COLOUR-ONLY signal and the owner is
                 // red/green colourblind, so unavailability also carries a NON-COLOUR partner: a
                 // literal word badge on a dark plate. Text reads identically under any hue loss.
-                float badgeX0 = illustratedCard != null ? 0.48f : 0.27f;
+                float badgeX0 = TextPlateX0(illustratedCard != null);
                 var badgePlate = ElarionUiKit.AddImage(button.transform, "LockedBadgePlate",
                     new Vector2(badgeX0, 0.87f), new Vector2(0.93f, 0.99f),
                     new Color(0f, 0f, 0f, .62f), false);
@@ -214,14 +227,22 @@ namespace DeNelle.HUD
             }
 
             var purpose = ElarionUiKit.Label(button.transform,
-                available ? spec.Purpose : "Unavailable - complete its requirement first",
-                0.16f, 0.52f, available ? ElarionUi.Parchment : ElarionUi.ParchmentDim,
-                (int)ElarionUi.FontLabel, TextAlignmentOptions.Left,
-                illustratedCard != null ? 0.48f : 0.28f, 0.92f);
-            purpose.enableWordWrapping = false;
-            purpose.overflowMode = TextOverflowModes.Ellipsis;
-            ElarionUiKit.FitSingleLine(purpose, 16f, ElarionUi.FontLabel);
+                available ? spec.Purpose : "Complete its requirement first",
+                0.26f, 0.52f, available ? ElarionUi.Parchment : ElarionUi.ParchmentDim,
+                (int)ElarionUi.FontMicro, TextAlignmentOptions.Center,
+                TextPlateX0(illustratedCard != null), 0.96f);
+            purpose.gameObject.name = "DeckCardPurpose_" + spec.Title;
+            ElarionUiKit.FitSingleLine(purpose, 24f, 30f);
         }
+
+        /// <summary>
+        /// Left edge of a card's text plate. An illustrated card's art fills its left half, so the
+        /// plate starts at Manage's authored 0.49 (ManageScreenPanel.cs:624). A text-free card
+        /// carries only the concept medallion (x 0.055..0.245), so its plate starts just clear of
+        /// that instead of leaving a dead band. Both are CENTRED inside their own plate, which is
+        /// the format half of the owner's "match Manage" ruling.
+        /// </summary>
+        private static float TextPlateX0(bool illustrated) => illustrated ? 0.49f : 0.27f;
 
         /// <summary>
         /// The anchor rectangle an illustrated card's art surface must occupy INSIDE its button so
@@ -376,12 +397,38 @@ namespace DeNelle.HUD
             switch (kind)
             {
                 case PlayerDeckKind.Hero:
+                    // WO-1341. THESE FOUR CARDS DELIBERATELY CARRY NO ArtKey, and that is the
+                    // whole fix - do not "restore the missing art" without reading this.
+                    //
+                    // Every label on the Hero deck rendered TWICE on device (build
+                    // 2026.09.03.353742): once as the live TMP text built below, and once as
+                    // words BAKED INTO THE PNG. cards/bag.png, cards/equipment.png,
+                    // cards/skills.png and cards/loadout.png each have a title and a tagline
+                    // painted into the very text-safe plate BuildCard draws into, so the two
+                    // copies overlapped in two fonts - and they did not even agree on the words
+                    // ("Manage your items" vs "Browse every carried item by category";
+                    // "LOAD OUT" vs "Loadout"). One string, two producers.
+                    //
+                    // The kit standard is EXPLICIT and every other card already follows it -
+                    // ManageScreenPanel.cs:606 "the approved kit cards are text-safe layered
+                    // faces: illustration and border are art, while title, purpose, count and
+                    // interaction remain live". cards/buildings.png (Manage), cards/quests.png
+                    // (Journey) and cards/realm-store.png (Realm) are all illustration-left with
+                    // an EMPTY plate right. The four Hero PNGs are the only ones in the kit that
+                    // break it, so the ART is the duplicate producer and the live text survives.
+                    //
+                    // Re-authoring those four PNGs text-free is the OWNER'S call, not this
+                    // ticket's. When they are re-delivered to the buildings.png standard, add the
+                    // art key back as the 5th argument here (one word per line) and nothing else
+                    // needs to change. Until then these render through the text-free branch
+                    // (card-frame-empty + the concept medallion), which is the same treatment
+                    // every other non-illustrated card in the game gets.
                     return new List<Card>
                     {
-                        Route("Bag", "Browse every carried item by category", "inventory", PanelId.Inventory, "bag"),
-                        Route("Equipment", "Review worn gear on your hero", "armor", PanelId.EquipmentPanel, "equipment"),
-                        Route("Skills", "Learn and improve hero talents", "skill", PanelId.HeroSkillTree, "skills"),
-                        Route("Loadout", "Choose the abilities equipped for battle", "magic", PanelId.HeroLoadout, "loadout")
+                        Route("Bag", "Every item you carry", "inventory", PanelId.Inventory),
+                        Route("Equipment", "Gear worn by your hero", "armor", PanelId.EquipmentPanel),
+                        Route("Skills", "Learn and improve talents", "skill", PanelId.HeroSkillTree),
+                        Route("Loadout", "Abilities equipped for battle", "magic", PanelId.HeroLoadout)
                     };
                 case PlayerDeckKind.Journey:
                     return new List<Card>
