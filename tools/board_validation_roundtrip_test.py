@@ -25,6 +25,7 @@ THE RED PROOF (stage 4)
 """
 from __future__ import annotations
 
+import glob
 import json
 import os
 import shutil
@@ -33,6 +34,8 @@ import sys
 import tempfile
 import time
 import types
+import contextlib
+import io
 
 TOOLS = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(TOOLS)
@@ -53,6 +56,11 @@ def main() -> int:
     out = os.path.join(tmp, "BOARD.html")
     os.environ["EOA_VALIDATIONS_PATH"] = rec
     os.environ["EOA_BOARD_OUT"] = out
+    # An ordinary board build now AUTO-INGESTS the newest eoa-validations-*.json drop file
+    # (WO-1356 follow-up). Pinned OFF for the whole suite: a test whose input depends on
+    # whatever is sitting in the operator's ~/Downloads proves nothing. Stage 12 opts back
+    # in explicitly, always against a throwaway EOA_SUBMIT_DIR.
+    os.environ["EOA_BOARD_SUBMIT"] = "0"
 
     sys.path.insert(0, TOOLS)
     import board_build as bb          # noqa: E402  (env must be set before import)
@@ -583,6 +591,292 @@ def main() -> int:
     now10b = {n: open(os.path.join(wodir, n), encoding="utf-8").read() for n in FIXTURES}
     check(now10b == base10b, "not one **Status:** line was touched")
 
+    # == stage 11: THE HEADLINE COUNTS ONLY WHAT IS SAVED ========================
+    # Owner ruling 2026-09-03: "Count only what is saved." The board read "43 / 78
+    # verified" from localStorage while proof/owner-validations.json held ZERO and the
+    # close pass reported "closed 0" - so she reasonably expected 43 tickets to have
+    # moved. The headline must be the DURABLE record, never the browser overlay.
+    #
+    # The page's counting functions are pure and fenced with [ORACLE:counts]; this stage
+    # extracts THAT EXACT BLOCK out of the shipped HTML and runs it under node, so what
+    # is tested is what she reads - not a Python re-implementation of it.
+    print("stage 11 - the headline counter reads the RECORD, never the browser overlay")
+    page11 = bb.build_html(rows)
+    b0 = page11.find("/* [ORACLE:counts]")
+    b1 = page11.find("/* [/ORACLE:counts] */")
+    check(b0 > 0 and b1 > b0, "the page carries the fenced [ORACLE:counts] block")
+    counts_js = page11[b0:b1] if (b0 > 0 and b1 > b0) else ""
+    check("vprogress').textContent=`${vDurableDone(vtickets,disk)}"
+          in page11.replace("\n", ""),
+          "the headline is assigned from vDurableDone(tickets, disk) - the disk map only")
+    check("`${done}" not in page11,
+          "no effective-state counter is left assigning the headline")
+
+    # SERVER-RENDERED half (no JS at all): the durable count is already in the HTML.
+    disk_now = ov.entries()
+    fixed_now = [r["file"] for r in rows if r["bucket"] == "Fixed" and r["is_wo"]]
+    exp_disk = sum(1 for f in fixed_now if disk_now.get(f, {}).get("validated"))
+    check('id="vprogress">%d /' % exp_disk in page11,
+          "no-JS: the server-rendered headline is the record's count (%d)" % exp_disk)
+    check('id="vpending"' in page11,
+          "no-JS: the pending line renders with a default that is true with JS off")
+
+    node = shutil.which("node")
+    if not node:
+        print("  --   node not on PATH: the browser-side count assertions are SKIPPED")
+    else:
+        def run_counts(js, disk_map, local_map, tickets):
+            driver = (js + "\nconst LOCAL=" + json.dumps(local_map) + ";\n"
+                      + "const D=" + json.dumps(disk_map) + ", T=" + json.dumps(tickets) + ";\n"
+                      + "console.log(JSON.stringify({d:vDurableDone(T,D),"
+                        "p:vPending(T,D,LOCAL)}));\n")
+            f = os.path.join(tmp, "counts.js")
+            with open(f, "w", encoding="utf-8", newline="\n") as fh:
+                fh.write(driver)
+            r = subprocess.run([node, f], capture_output=True, text=True,
+                               encoding="utf-8", errors="replace")
+            try:
+                return json.loads((r.stdout or "").strip().splitlines()[-1])
+            except Exception:
+                return {"d": None, "p": None, "err": (r.stdout or "") + (r.stderr or "")}
+
+        T = ["t1", "t2", "t3", "t4", "t5"]
+        MARK = {"validated": True, "verdict": "Pass"}
+        # N saved, M in the browser: the headline must read N. Never M, never N+M.
+        rec_2 = {"t1": MARK, "t2": MARK}
+        loc_3 = {"t3": MARK, "t4": {"verdict": "Fail"}, "t5": {"note": "flickers"}}
+        a = run_counts(counts_js, rec_2, loc_3, T)
+        check(a["d"] == 2, "record 2 + browser 3 -> headline 2 (got %r; M=3 and N+M=5 are "
+                           "the two wrong answers)" % (a["d"],))
+        check(a["p"] == 3, "...and 3 marks are reported as pending (got %r)" % (a["p"],))
+        # THE CASE THAT MATTERS RIGHT NOW: record EMPTY, browser full.
+        b = run_counts(counts_js, {}, loc_3, T)
+        check(b["d"] == 0, "record EMPTY + browser marks -> headline 0 (got %r)" % (b["d"],))
+        check(b["p"] == 3, "...and the 3 unsaved marks are counted as pending (got %r)"
+              % (b["p"],))
+        # A mark identical to the record is NOT pending (submitted, ingested, done).
+        c = run_counts(counts_js, rec_2, {"t1": MARK}, T)
+        check(c["d"] == 2 and c["p"] == 0,
+              "a browser mark that already matches the record is not 'pending' (%r)" % (c,))
+
+        # -- RED PROOF: restore the old behaviour, demand the oracle catch it -----
+        print("stage 11b - RED proof: make the headline count the browser overlay again")
+        mut = counts_js.replace("if((diskMap[t]||{}).validated) n++;",
+                                "if((diskMap[t]||{}).validated||(LOCAL[t]||{}).validated) n++;")
+        check(mut != counts_js, "the RED mutation applied (anchor found)")
+        m1 = run_counts(mut, {}, loc_3, T)
+        check(m1["d"] != 0, "mutation caught: the empty-record case now reads %r, not 0"
+              % (m1["d"],))
+        m2 = run_counts(mut, rec_2, loc_3, T)
+        check(m2["d"] != 2, "mutation caught: record 2 + browser 3 now reads %r, not 2"
+              % (m2["d"],))
+        c2 = run_counts(counts_js, {}, loc_3, T)
+        check(c2["d"] == 0, "and the UNmutated counter reads 0 again (success path proven)")
+
+    # == stage 12: THE AUTO-INGEST IS PART OF AN ORDINARY BUILD ==================
+    # Owner 2026-09-03: "i would expect you to do this everytime you build the board. CAn
+    # you add it to the rebuild script". A flag the CLI must remember is the same failure
+    # as a second command it must remember. Everything below runs against a throwaway drop
+    # dir, record and WorkOrders/ - never the operator's Downloads, never the real tickets.
+    print("stage 12 - a PLAIN board build ingests her newest drop file by itself")
+    drop2 = os.path.join(tmp, "drop-auto")
+    os.makedirs(drop2, exist_ok=True)
+    rec4 = os.path.join(tmp, "auto-record.json")
+    out4 = os.path.join(tmp, "BOARD-auto.html")
+
+    def drop_file(name, payload):
+        f = os.path.join(drop2, name)
+        with open(f, "w", encoding="utf-8", newline="\n") as fh:
+            json.dump(payload, fh)
+        return f
+
+    def plain_build(env_extra=None, args=()):
+        e = dict(os.environ, EOA_WO_DIR=wodir, EOA_VALIDATIONS_PATH=rec4,
+                 EOA_BOARD_OUT=out4, EOA_SUBMIT_DIR=drop2, EOA_BOARD_SUBMIT="1")
+        e.pop("EOA_BOARD_CLOSE", None)
+        e.update(env_extra or {})
+        r = subprocess.run([sys.executable, os.path.join(TOOLS, "board_build.py")] + list(args),
+                           cwd=ROOT, capture_output=True, text=True,
+                           encoding="utf-8", errors="replace", env=e)
+        return (r.stdout or "") + (r.stderr or "")
+
+    # An OLDER submission carrying a mark she has since changed - the stale-file risk.
+    stale = drop_file("eoa-validations-20260101T000000Z.json",
+                      {"validations": {"WORK_ORDER_9008_fixed_needswork.md":
+                                       {"validated": True, "verdict": "Pass",
+                                        "at": "2026-01-01T00:00:00", "build": "old"}}})
+    fresh = drop_file("eoa-validations-20260903T220802Z.json", {"validations": marks()})
+    # mtime deliberately makes the STALE file look newest: the filename stamp must win.
+    os.utime(stale, (time.time() + 5, time.time() + 5))
+    base12 = seed_wos(wodir)
+    log12 = plain_build()
+    check("VALIDATIONS_SUBMIT_FILE" in log12 and os.path.basename(fresh) in log12,
+          "a plain build (no --submit) names and takes the drop file")
+    check(os.path.basename(stale) not in log12.split("VALIDATIONS_SUBMIT_OK")[0],
+          "the NEWEST by filename stamp wins, even with a newer mtime on the stale one")
+    check("VALIDATIONS_SUBMIT_OK" in log12 and "VALIDATIONS_INGEST_OK" in log12,
+          "it says what it did and folded the marks into the record")
+    check("BOARD_CLOSE_OK closed 1" in log12 and "BOARD_BOUNCE_OK bounced 4" in log12,
+          "the same plain command then closed and bounced - no flag to remember")
+    check(not close_assertions(wodir, base12, UNTOUCHED_BOTH)
+          and not bounce_assertions(wodir, base12),
+          "and the work-order files match the full close+bounce contract")
+
+    print("stage 12b - the SAME file is never ingested twice")
+    rec_after = open(rec4, encoding="utf-8").read()
+    base12b = seed_wos(wodir)
+    log12b = plain_build()
+    check("VALIDATIONS_SUBMIT_ALREADY" in log12b,
+          "the second plain build says it has already taken that file")
+    check("VALIDATIONS_INGEST_OK" not in log12b, "and does NOT re-ingest it")
+    check(open(rec4, encoding="utf-8").read() == rec_after,
+          "the record is byte-identical after the second build")
+    check(os.path.basename(stale) not in log12b,
+          "S1: it does not fall back to the OLDER file once the newest is consumed "
+          "(a stale drop can never resurrect a mark she has changed)")
+
+    print("stage 12c - no drop file at all: a clean, LOUD no-op")
+    empty2 = os.path.join(tmp, "drop-auto-empty")
+    os.makedirs(empty2, exist_ok=True)
+    base12c = seed_wos(wodir)
+    log12c = plain_build({"EOA_SUBMIT_DIR": empty2})
+    check("VALIDATIONS_SUBMIT_NONE" in log12c,
+          "it says there was nothing to ingest rather than staying silent")
+    check("BOARD.html written" in log12c, "and the board still rebuilt")
+
+    print("stage 12d - a MALFORMED drop file reports, does not consume, does not block")
+    bad_dir = os.path.join(tmp, "drop-bad")
+    os.makedirs(bad_dir, exist_ok=True)
+    with open(os.path.join(bad_dir, "eoa-validations-20260904T010101Z.json"), "w",
+              encoding="utf-8", newline="\n") as fh:
+        fh.write('{"validations": {"WORK_ORDER_9008')      # a half-written download
+    log12d = plain_build({"EOA_SUBMIT_DIR": bad_dir})
+    check("VALIDATIONS_SUBMIT_UNREADABLE" in log12d or "VALIDATIONS_INGEST_FAIL" in log12d,
+          "a malformed drop file is reported, never silently skipped")
+    check("BOARD.html written" in log12d,
+          "and the board still rebuilt (a half-written download cannot freeze the board)")
+    log12d2 = plain_build({"EOA_SUBMIT_DIR": bad_dir})
+    check("VALIDATIONS_SUBMIT_UNREADABLE" in log12d2 or "VALIDATIONS_INGEST_FAIL" in log12d2,
+          "it was NOT marked consumed, so it complains again on the next build")
+
+    print("stage 12e - the opt-OUT holds (and --check implies it, pinning the gate)")
+    log12e = plain_build({"EOA_BOARD_SUBMIT": "0"})
+    check("VALIDATIONS_SUBMIT_SKIPPED" in log12e and "VALIDATIONS_SUBMIT_FILE" not in log12e,
+          "EOA_BOARD_SUBMIT=0 reads no Downloads folder and says so")
+    log12f = plain_build(args=("--no-submit",))
+    check("VALIDATIONS_SUBMIT_SKIPPED" in log12f, "--no-submit does the same")
+    drop_file("eoa-validations-20260905T010101Z.json", {"validations": marks()})
+    log12g = plain_build(args=("--check",))
+    check("VALIDATIONS_SUBMIT_SKIPPED" in log12g and "VALIDATIONS_SUBMIT_FILE" not in log12g,
+          "--check implies the opt-out, so checkin_gate.ps1 stage 1b can never ingest "
+          "from a developer's Downloads folder")
+
+    # -- stage 12f: RED PROOF - four mutations of the auto-ingest, each must bite --
+    # In-process: exec a mutated copy of board_build.py as its own module and drive
+    # auto_submit() directly. The real file on disk is never touched.
+    print("stage 12f - RED proof: four mutations of the auto-ingest, each must be caught")
+    src_bb = open(os.path.join(TOOLS, "board_build.py"), encoding="utf-8").read()
+
+    def load_bb(text):
+        mod = types.ModuleType("board_build_mutant")
+        mod.__file__ = os.path.join(TOOLS, "board_build.py")
+        exec(compile(text, mod.__file__, "exec"), mod.__dict__)
+        return mod
+
+    def auto_log(mod, drop_dir, record, env_extra=None):
+        """Run auto_submit() against a throwaway drop dir + record; return its output."""
+        saved_path, saved_env = ov.PATH, dict(os.environ)
+        buf = io.StringIO()
+        try:
+            ov.PATH = record
+            os.environ["EOA_SUBMIT_DIR"] = drop_dir
+            os.environ["EOA_BOARD_SUBMIT"] = "1"
+            os.environ.update(env_extra or {})
+            with contextlib.redirect_stdout(buf):
+                mod.auto_submit()
+        finally:
+            ov.PATH = saved_path
+            os.environ.clear()
+            os.environ.update(saved_env)
+        return buf.getvalue()
+
+    MUTANTS = [
+        ('    if _consumed_has(entries, digest):                          # S2',
+         '    if False:                                                   # S2',
+         "S2 - forget that a file was already ingested"),
+        ('    path = cands[0]                                             # S1',
+         '    path = cands[-1]                                            # S1',
+         "S1 - let an OLDER drop file win"),
+        ('    if rc != 0:                                                 # S3',
+         '    if False:                                                   # S3',
+         "S3 - treat an unreadable drop file as ingested"),
+        ('    if os.environ.get("EOA_BOARD_SUBMIT", "1") == "0":',
+         '    if os.environ.get("EOA_BOARD_SUBMIT", "1") == "never-set-by-anyone":',
+         "S4 - ignore the opt-out"),
+    ]
+
+    def auto_assertions(mod, tag):
+        """The auto-ingest contract, reused verbatim by the RED proof."""
+        bad = []
+        d = os.path.join(tmp, "red-" + tag)
+        r = os.path.join(tmp, "red-" + tag + ".json")
+        os.makedirs(d, exist_ok=True)
+        for f in glob.glob(os.path.join(d, "*")):
+            os.remove(f)
+        for f in (r, r + ".consumed.json"):
+            if os.path.exists(f):
+                os.remove(f)
+        old_marks = {"WORK_ORDER_9008_fixed_needswork.md":
+                     {"validated": True, "verdict": "Pass", "at": "2026-01-01T00:00:00",
+                      "build": "old"}}
+        with open(os.path.join(d, "eoa-validations-20260101T000000Z.json"), "w",
+                  encoding="utf-8", newline="\n") as fh:
+            json.dump({"validations": old_marks}, fh)
+        with open(os.path.join(d, "eoa-validations-20260903T220802Z.json"), "w",
+                  encoding="utf-8", newline="\n") as fh:
+            json.dump({"validations": marks()}, fh)
+        l1 = auto_log(mod, d, r)
+        if "20260903T220802Z" not in l1:
+            bad.append("S1: the newest drop file was not the one taken: " + repr(l1[:120]))
+        l2 = auto_log(mod, d, r)
+        if "VALIDATIONS_INGEST_OK" in l2:
+            bad.append("S2: the same file was ingested a SECOND time")
+        # S3: a malformed file reports and is not consumed.
+        d2 = d + "-bad"
+        r2 = r + ".bad.json"
+        os.makedirs(d2, exist_ok=True)
+        for f in glob.glob(os.path.join(d2, "*")):
+            os.remove(f)
+        for f in (r2, r2 + ".consumed.json"):
+            if os.path.exists(f):
+                os.remove(f)
+        with open(os.path.join(d2, "eoa-validations-20260904T010101Z.json"), "w",
+                  encoding="utf-8", newline="\n") as fh:
+            fh.write('{"validations": {"WORK_ORDER_9008')
+        l3 = auto_log(mod, d2, r2)
+        if "VALIDATIONS_SUBMIT_OK" in l3:
+            bad.append("S3: a malformed drop file was reported as ingested")
+        l4 = auto_log(mod, d2, r2)
+        if "VALIDATIONS_INGEST_FAIL" not in l4 and "UNREADABLE" not in l4:
+            bad.append("S3: the malformed file stopped being reported (it was consumed)")
+        # S4: the opt-out.
+        l5 = auto_log(mod, d, r, {"EOA_BOARD_SUBMIT": "0"})
+        if "VALIDATIONS_SUBMIT_SKIPPED" not in l5:
+            bad.append("S4: EOA_BOARD_SUBMIT=0 did not stop the auto-ingest")
+        return bad
+
+    real_bb = load_bb(src_bb)
+    check(not auto_assertions(real_bb, "clean"),
+          "the UNmutated auto-ingest satisfies S1-S4 (the success path, proven first)")
+    for find, repl, what in MUTANTS:
+        if src_bb.count(find) != 1:
+            check(False, "RED proof could not apply mutation (" + what + "): anchor not unique")
+            continue
+        broke = auto_assertions(load_bb(src_bb.replace(find, repl)),
+                                what.split()[0].strip("-"))
+        check(bool(broke), "mutation caught (" + what + ") -> "
+              + (broke[0] if broke else "NOTHING"))
+
     print(f"record: {rec}")
     if failures:
         print("VALIDATION_ROUNDTRIP_FAIL " + "; ".join(failures))
@@ -591,8 +885,10 @@ def main() -> int:
           "closes only Pass+validated FIXED tickets and BOUNCES Fail / Needs Work back to "
           "READY with her note verbatim (empty note included), idempotently, with the "
           "status body preserved on both paths; --submit ingests the newest drop file and "
-          "runs both passes in one command; guards proven red (read path + 4 close-pass + "
-          "4 bounce mutations)")
+          "runs both passes in one command, and an ORDINARY build does the same by itself "
+          "(newest-stamp wins, never twice, malformed reports and continues, opt-OUT "
+          "only); the headline counts ONLY what is saved; guards proven red (read path "
+          "+ 4 close-pass + 4 bounce + 1 headline + 4 auto-ingest mutations)")
     return 0
 
 

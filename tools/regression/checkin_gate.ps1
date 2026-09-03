@@ -159,7 +159,13 @@ $staticOk = ($results | Where-Object { $_.Stage -eq 'Static gate' }).Status -eq 
 # but does not short-circuit the code stages - it is a docs defect, not a compile one.
 if ($python) {
     Write-Host "`n[gate] board check (board_build.py --check)..."
+    # The board build AUTO-INGESTS the owner's newest eoa-validations-*.json drop file on an
+    # ordinary run (WO-1356 follow-up). --check already implies the opt-out in board_build.py
+    # itself; this env var is the second lock, so the gate can never start reading a
+    # developer's ~/Downloads and writing the shared record as a side effect of a check-in.
+    $env:EOA_BOARD_SUBMIT = '0'
     & $python.Source (Join-Path $proj 'tools\board_build.py') --check
+    Remove-Item Env:\EOA_BOARD_SUBMIT -ErrorAction SilentlyContinue
     if ($LASTEXITCODE -eq 0) { Add-Result 'Board check' 'PASS' 'BOARD_CHECK_OK 0 unlabeled' }
     else { Add-Result 'Board check' 'FAIL' "board_build.py --check exit $LASTEXITCODE (Unlabeled WOs listed above)" }
 } else {

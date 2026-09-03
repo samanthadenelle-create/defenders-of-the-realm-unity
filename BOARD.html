@@ -1,5 +1,5 @@
 <!DOCTYPE html><html><head><meta charset="utf-8">
-<title>EoA Board - 2026-09-03 18:14</title>
+<title>EoA Board - 2026-09-03 18:27</title>
 <style>
  body{background:#14151a;color:#ddd;font:14px/1.5 'Segoe UI',sans-serif;margin:0;padding:24px}
  h1{color:#e0b341;font-size:22px;margin:0 0 4px}
@@ -60,9 +60,9 @@
 </style></head><body>
 <h1>Echoes of Elarion — Work Order Board</h1>
 <p style="margin:6px 0 16px"><a href="PROOF.html" style="color:#e0b341;font-weight:600">&#9654; PROOF &mdash; screenshots and gate evidence for every completed item</a></p>
-<div class="sub">Generated <b>2026-09-03 18:14</b> from the repo (WorkOrders/*.md) — the repo is the source of
+<div class="sub">Generated <b>2026-09-03 18:27</b> from the repo (WorkOrders/*.md) — the repo is the source of
  truth, this page is a view. Regenerate: <b>python tools/board_build.py</b>
- &nbsp;|&nbsp; Next mint &mdash; CLI: <b>1357</b>, UI seat: <b>1084</b></div>
+ &nbsp;|&nbsp; Next mint &mdash; CLI: <b>1358</b>, UI seat: <b>1084</b></div>
 <div class="canon"><a href="SESSION_CANON_LOADER.md">Canon loader</a><a href="docs/HANDOVER.md">Handover</a><a href="docs/MASTER_CATALOG.md">Master catalog</a><a href="PIPELINE_STATE.md">Pipeline state</a><a href="CLI_LANES_WO_NUMBERS.md">WO numbers (authority)</a><a href="KEY_FACTS.md">Key facts</a><a href="docs/README.md">Docs index</a><a href="PROJECT_INDEX.md">Project index</a></div>
 <section class="validation"><h2>Owner Validation</h2>
 <div class="vmeta">
@@ -72,6 +72,8 @@
  commit and every rebuild, and is <b>NOT</b> tied to a build.
  <br>This page shows <b>0</b> mark(s) already in that record (rendered from disk, no
  JavaScript needed) plus anything you have marked on this device since.
+ <br>The <b>N / M verified</b> count below is <b>the saved record only</b> - it never counts a
+ mark that is still sitting in this browser. Those are counted on their own line underneath it.
  <br>What your verdict does on the next board build: <b>Pass + Validated</b> flips the ticket from
  Fixed to <b>CLOSED</b> (WO-1355); <b>Fail</b> or <b>Needs Work</b> sends it back to <b>READY</b>
  carrying your note into the ticket (WO-1356). Current APK <b>2026.09.03.354093</b>
@@ -79,6 +81,8 @@
 </div>
 <div class="vtoolbar"><span id="vprogress">0 / 36 verified</span><button id="needsFelt" type="button">Needs Felt-Test</button></div>
 <div class="vtoolbar"><button id="vsubmit" type="button">Submit marks to the CLI</button></div>
+<div id="vpending" class="vhint">Any marks you make on this device are not counted in
+ the number above until you tap Submit. They stay safe in this browser until then.</div>
 <div id="vsubmitstat" class="vhint">Not submitted yet on this device.</div>
 <div id="vmigrated" class="vhint"></div>
 <details class="vexport"><summary>Export for the CLI &mdash; the manual fallback, if Submit did not produce a file</summary>
@@ -1483,13 +1487,39 @@ document.querySelectorAll('.vgroup').forEach(g=>{
  const a=g.dataset.area; if(vopen[a]) g.open=true;
  g.addEventListener('toggle',()=>{vopen[a]=g.open;
   try{localStorage.setItem(vopenKey,JSON.stringify(vopen))}catch(_e){}});});
-function renderValidation(){let done=0;
+/* [ORACLE:counts] Pure, argument-only. tools/board_validation_roundtrip_test.py extracts
+   THIS EXACT BLOCK and runs it under node against fixture inputs, so the number the owner
+   reads is the number the oracle tests - not a re-implementation of it.
+   THE RULING (owner 2026-09-03): "Count only what is saved." The headline counts ONLY marks
+   that have reached proof/owner-validations.json - the same bytes the close and bounce passes
+   read. A mark still sitting in this browser has NOT reached it and must NEVER inflate that
+   number: the defect was a board reading '43 / 78 verified' while the record held ZERO and the
+   pass reported BOARD_CLOSE_OK closed 0, so she reasonably expected 43 tickets to have moved.
+   Pending marks are counted separately and said in WORDS (she is red/green colourblind, so a
+   state is never carried by hue). */
+function vMarked(s){return !!(s&&(s.validated||s.verdict||s.note));}
+function vDurableDone(tickets,diskMap){let n=0;
+ tickets.forEach(t=>{if((diskMap[t]||{}).validated) n++;}); return n;}
+function vPending(tickets,diskMap,localMap){let n=0;
+ tickets.forEach(t=>{const l=localMap[t]; if(!vMarked(l)) return; const d=diskMap[t]||{};
+  if(!!l.validated!==!!d.validated||(l.verdict||'')!==(d.verdict||'')||(l.note||'')!==(d.note||''))
+   n++;}); return n;}
+/* [/ORACLE:counts] */
+function renderValidation(){
  document.querySelectorAll('.vitem').forEach(item=>{const state=eff(item.dataset.ticket);
   item.querySelector('.verdict').value=state.verdict||'';item.querySelector('.vnote').value=state.note||'';
   item.classList.toggle('isvalidated',!!state.validated);item.style.display=(needsOnly&&state.validated)?'none':'';
-  item.querySelector('.validated').textContent=state.validated?'Validated':'Validate';if(state.validated)done++;});
+  item.querySelector('.validated').textContent=state.validated?'Validated':'Validate';});
  document.querySelectorAll('.vgroup').forEach(g=>{const xs=[...g.querySelectorAll('.vitem')],n=xs.filter(x=>eff(x.dataset.ticket).validated).length;g.querySelector('.gcount').textContent=`${n} / ${xs.length}`;});
- document.getElementById('vprogress').textContent=`${done} / 36 verified`;
+ const vtickets=[...document.querySelectorAll('.vitem')].map(i=>i.dataset.ticket);
+ document.getElementById('vprogress').textContent=`${vDurableDone(vtickets,disk)} / 36 verified`;
+ const vpend=document.getElementById('vpending');
+ if(vpend){const p=vPending(vtickets,disk,validation);
+  vpend.textContent = p
+   ? p+' mark'+(p===1?'':'s')+' on this device '+(p===1?'is':'are')+' waiting to be submitted. '
+    +'Nothing is lost - '+(p===1?'it is':'they are')+' safe in this browser. Tap "Submit marks '
+    +'to the CLI" above and '+(p===1?'it':'they')+' will be saved and counted in the number above.'
+   : 'Nothing waiting - every mark on this device is already in the saved record.';}
  const ta=document.getElementById('vjson');
  if(ta){ta.value=exportPayload();
   const dl=document.getElementById('vdl');
@@ -1554,9 +1584,9 @@ if(vsubmit) vsubmit.addEventListener('click',()=>{
   a.style.display='none';document.body.appendChild(a);a.click();
   setTimeout(()=>{a.remove();if(revoke){try{URL.revokeObjectURL(url)}catch(_e){}}},4000);
   say('SUBMITTED '+n+' mark'+(n===1?'':'s')+' as '+name+' - check your Downloads folder. '
-   +'Next: the CLI runs  python tools/board_build.py --submit  which reads the newest '
-   +'eoa-validations-*.json, folds it into proof/owner-validations.json, CLOSES the '
-   +'Pass+Validated tickets and sends the Fail / Needs Work ones back to READY with your note. '
+   +'The next board build picks it up on its own (python tools/board_build.py - no flag to '
+   +'remember): it folds the file into proof/owner-validations.json, CLOSES the Pass+Validated '
+   +'tickets and sends the Fail / Needs Work ones back to READY with your note. '
    +'IF NO FILE APPEARED IN DOWNLOADS, this did NOT work - open "Export for the CLI" below instead.');
  }catch(err){
   say('NOT SUBMITTED - the browser refused to save the file ('+((err&&err.name)||'unknown error')

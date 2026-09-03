@@ -11,7 +11,7 @@ Reads:  WorkOrders/*.md  (status line, title, RESULT markers)
         CLI_LANES_WO_NUMBERS.md  (next-free mint numbers per seat)
 Writes: BOARD.html (repo root) - open in any browser; links open the md files.
 """
-import os, re, glob, html, json, time, datetime, sys, subprocess
+import os, re, glob, html, json, time, datetime, sys, subprocess, hashlib
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import owner_validations  # the DURABLE owner-validation record - see that module's header
@@ -878,6 +878,8 @@ def build_html(rows):
  commit and every rebuild, and is <b>NOT</b> tied to a build.
  <br>This page shows <b>{disk_done}</b> mark(s) already in that record (rendered from disk, no
  JavaScript needed) plus anything you have marked on this device since.
+ <br>The <b>N / M verified</b> count below is <b>the saved record only</b> - it never counts a
+ mark that is still sitting in this browser. Those are counted on their own line underneath it.
  <br>What your verdict does on the next board build: <b>Pass + Validated</b> flips the ticket from
  Fixed to <b>CLOSED</b> (WO-1355); <b>Fail</b> or <b>Needs Work</b> sends it back to <b>READY</b>
  carrying your note into the ticket (WO-1356). Current APK <b>{html.escape(apk_build)}</b>
@@ -885,6 +887,8 @@ def build_html(rows):
 </div>
 <div class="vtoolbar"><span id="vprogress">{disk_done} / {len(fixed_rows)} verified</span><button id="needsFelt" type="button">Needs Felt-Test</button></div>
 <div class="vtoolbar"><button id="vsubmit" type="button">Submit marks to the CLI</button></div>
+<div id="vpending" class="vhint">Any marks you make on this device are not counted in
+ the number above until you tap Submit. They stay safe in this browser until then.</div>
 <div id="vsubmitstat" class="vhint">Not submitted yet on this device.</div>
 <div id="vmigrated" class="vhint"></div>
 <details class="vexport"><summary>Export for the CLI &mdash; the manual fallback, if Submit did not produce a file</summary>
@@ -995,13 +999,39 @@ document.querySelectorAll('.vgroup').forEach(g=>{{
  const a=g.dataset.area; if(vopen[a]) g.open=true;
  g.addEventListener('toggle',()=>{{vopen[a]=g.open;
   try{{localStorage.setItem(vopenKey,JSON.stringify(vopen))}}catch(_e){{}}}});}});
-function renderValidation(){{let done=0;
+/* [ORACLE:counts] Pure, argument-only. tools/board_validation_roundtrip_test.py extracts
+   THIS EXACT BLOCK and runs it under node against fixture inputs, so the number the owner
+   reads is the number the oracle tests - not a re-implementation of it.
+   THE RULING (owner 2026-09-03): "Count only what is saved." The headline counts ONLY marks
+   that have reached proof/owner-validations.json - the same bytes the close and bounce passes
+   read. A mark still sitting in this browser has NOT reached it and must NEVER inflate that
+   number: the defect was a board reading '43 / 78 verified' while the record held ZERO and the
+   pass reported BOARD_CLOSE_OK closed 0, so she reasonably expected 43 tickets to have moved.
+   Pending marks are counted separately and said in WORDS (she is red/green colourblind, so a
+   state is never carried by hue). */
+function vMarked(s){{return !!(s&&(s.validated||s.verdict||s.note));}}
+function vDurableDone(tickets,diskMap){{let n=0;
+ tickets.forEach(t=>{{if((diskMap[t]||{{}}).validated) n++;}}); return n;}}
+function vPending(tickets,diskMap,localMap){{let n=0;
+ tickets.forEach(t=>{{const l=localMap[t]; if(!vMarked(l)) return; const d=diskMap[t]||{{}};
+  if(!!l.validated!==!!d.validated||(l.verdict||'')!==(d.verdict||'')||(l.note||'')!==(d.note||''))
+   n++;}}); return n;}}
+/* [/ORACLE:counts] */
+function renderValidation(){{
  document.querySelectorAll('.vitem').forEach(item=>{{const state=eff(item.dataset.ticket);
   item.querySelector('.verdict').value=state.verdict||'';item.querySelector('.vnote').value=state.note||'';
   item.classList.toggle('isvalidated',!!state.validated);item.style.display=(needsOnly&&state.validated)?'none':'';
-  item.querySelector('.validated').textContent=state.validated?'Validated':'Validate';if(state.validated)done++;}});
+  item.querySelector('.validated').textContent=state.validated?'Validated':'Validate';}});
  document.querySelectorAll('.vgroup').forEach(g=>{{const xs=[...g.querySelectorAll('.vitem')],n=xs.filter(x=>eff(x.dataset.ticket).validated).length;g.querySelector('.gcount').textContent=`${{n}} / ${{xs.length}}`;}});
- document.getElementById('vprogress').textContent=`${{done}} / {len(fixed_rows)} verified`;
+ const vtickets=[...document.querySelectorAll('.vitem')].map(i=>i.dataset.ticket);
+ document.getElementById('vprogress').textContent=`${{vDurableDone(vtickets,disk)}} / {len(fixed_rows)} verified`;
+ const vpend=document.getElementById('vpending');
+ if(vpend){{const p=vPending(vtickets,disk,validation);
+  vpend.textContent = p
+   ? p+' mark'+(p===1?'':'s')+' on this device '+(p===1?'is':'are')+' waiting to be submitted. '
+    +'Nothing is lost - '+(p===1?'it is':'they are')+' safe in this browser. Tap "Submit marks '
+    +'to the CLI" above and '+(p===1?'it':'they')+' will be saved and counted in the number above.'
+   : 'Nothing waiting - every mark on this device is already in the saved record.';}}
  const ta=document.getElementById('vjson');
  if(ta){{ta.value=exportPayload();
   const dl=document.getElementById('vdl');
@@ -1066,9 +1096,9 @@ if(vsubmit) vsubmit.addEventListener('click',()=>{{
   a.style.display='none';document.body.appendChild(a);a.click();
   setTimeout(()=>{{a.remove();if(revoke){{try{{URL.revokeObjectURL(url)}}catch(_e){{}}}}}},4000);
   say('SUBMITTED '+n+' mark'+(n===1?'':'s')+' as '+name+' - check your Downloads folder. '
-   +'Next: the CLI runs  python tools/board_build.py --submit  which reads the newest '
-   +'eoa-validations-*.json, folds it into proof/owner-validations.json, CLOSES the '
-   +'Pass+Validated tickets and sends the Fail / Needs Work ones back to READY with your note. '
+   +'The next board build picks it up on its own (python tools/board_build.py - no flag to '
+   +'remember): it folds the file into proof/owner-validations.json, CLOSES the Pass+Validated '
+   +'tickets and sends the Fail / Needs Work ones back to READY with your note. '
    +'IF NO FILE APPEARED IN DOWNLOADS, this did NOT work - open "Export for the CLI" below instead.');
  }}catch(err){{
   say('NOT SUBMITTED - the browser refused to save the file ('+((err&&err.name)||'unknown error')
@@ -1113,19 +1143,169 @@ def submit_dirs():
     return out
 
 
-def newest_submission():
-    """The most recently modified eoa-validations-*.json across submit_dirs(), or None."""
-    best = None
+SUBMIT_STAMP = re.compile(r"eoa-validations-(\d{8}T\d{6}Z)", re.I)
+
+
+def _submit_rank(path):
+    """Sort key for a drop file. NEWEST FIRST when reversed.
+
+    ORDER: the UTC stamp the page put in the FILENAME wins; mtime only breaks a tie;
+    the name breaks a tie after that. The stamp is authoritative because it is what the
+    owner's browser wrote at the moment she tapped Submit, while mtime is whatever the
+    filesystem / copy / sync did to the bytes afterwards - and the whole risk here is a
+    STALE submission resurrecting marks she has since changed. Two files carrying the
+    SAME stamp (a re-download Chrome renamed "... (1).json") fall to mtime, then to the
+    greater filename - deterministic either way, and if their bytes are identical the
+    consumed ledger makes the second one a no-op regardless.
+    """
+    m = SUBMIT_STAMP.search(os.path.basename(path))
+    return (m.group(1).upper() if m else "", os.path.getmtime(path), os.path.basename(path))
+
+
+def submission_candidates():
+    """Every eoa-validations-*.json across submit_dirs(), NEWEST FIRST."""
+    found = []
     for d in submit_dirs():
         if not os.path.isdir(d):
             continue
-        for p in glob.glob(os.path.join(d, SUBMIT_GLOB)):
-            if not os.path.isfile(p):
-                continue
-            m = os.path.getmtime(p)
-            if best is None or m > best[0]:
-                best = (m, p)
-    return best
+        for f in glob.glob(os.path.join(d, SUBMIT_GLOB)):
+            if os.path.isfile(f):
+                found.append(f)
+    return sorted(found, key=_submit_rank, reverse=True)
+
+
+def newest_submission():
+    """(mtime, path) of the newest drop file, or None. Stamp-first (see _submit_rank)."""
+    cands = submission_candidates()
+    if not cands:
+        return None
+    return (os.path.getmtime(cands[0]), cands[0])
+
+
+# -- The CONSUMED LEDGER (auto-submit) ------------------------------------------
+# The ordinary build now ingests her latest submission by itself (owner 2026-09-03:
+# "i would expect you to do this everytime you build the board"), and the ordinary
+# build runs many times a day. So "have I already taken this file?" has to be a FACT
+# on disk, not an assumption about merge semantics.
+#
+# Identity is the SHA-256 of the BYTES; name and mtime are kept only as human
+# provenance. Hash-first because the same payload can arrive under a second name
+# (Chrome's " (1)" rename, a copy into inbox/) and that is still the same submission.
+#
+# Lives beside the record and follows EOA_VALIDATIONS_PATH, so the temp-dir harness
+# gets its own ledger and can never consume - or be confused by - the real one.
+def consumed_path():
+    return owner_validations.PATH + ".consumed.json"
+
+
+def _sha256(path):
+    h = hashlib.sha256()
+    with open(path, "rb") as f:
+        for chunk in iter(lambda: f.read(65536), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def _consumed_load():
+    try:
+        with open(consumed_path(), encoding="utf-8") as f:
+            data = json.load(f)
+        return [e for e in data.get("consumed", []) if isinstance(e, dict)]
+    except FileNotFoundError:
+        return []
+    except Exception as e:
+        # A corrupt ledger must never block the board: say so and treat it as empty,
+        # which is the SAFE direction - a repeat ingest of an identical payload is a
+        # proven no-op (roundtrip stage 11b), a blocked board is not.
+        print("VALIDATIONS_CONSUMED_UNREADABLE %s: %s (treated as empty; re-ingesting the "
+              "same file is a no-op)" % (type(e).__name__, e))
+        return []
+
+
+def _consumed_has(entries, digest):
+    return any(e.get("sha256") == digest for e in entries)
+
+
+def _consumed_remember(entries, path, digest):
+    entries = [e for e in entries if e.get("sha256") != digest]
+    entries.append({"sha256": digest, "name": os.path.basename(path),
+                    "mtime": round(os.path.getmtime(path), 3),
+                    "at": time.strftime("%Y-%m-%dT%H:%M:%S")})
+    entries = entries[-100:]          # bounded; only the recent past can repeat
+    try:
+        with open(consumed_path(), "w", encoding="utf-8", newline="\n") as f:
+            json.dump({"_readme": "Drop files already folded into the owner-validation "
+                                  "record. Identity is sha256; name/mtime/at are "
+                                  "provenance. Safe to delete: the worst case is one "
+                                  "no-op re-ingest.",
+                       "consumed": entries}, f, indent=1)
+            f.write("\n")
+    except Exception as e:
+        print("VALIDATIONS_CONSUMED_WRITE_FAIL %s: %s (the ingest DID happen; the next "
+              "build may re-ingest the same file, which is a no-op)"
+              % (type(e).__name__, e))
+
+
+def auto_submit():
+    """Take her newest un-consumed submission on an ORDINARY build. Never fatal.
+
+    Owner ruling 2026-09-03: "i would expect you to do this everytime you build the
+    board. CAn you add it to the rebuild script". Same reasoning that put the close
+    pass inside the build (CLAUDE.md 16): a FLAG the CLI has to remember is the same
+    failure as a second COMMAND it has to remember. She taps Submit; the next board
+    build - whenever it happens, for whatever reason - picks it up.
+
+    RULES, each answering one way this could go wrong:
+      S1 ONLY THE SINGLE NEWEST candidate is ever considered, ranked stamp-first. If it
+         is already consumed the pass STOPS - it never falls back to an older file. That
+         is what stops a stale drop still sitting in Downloads from resurrecting marks
+         she has since changed in the browser.
+      S2 Already consumed (by sha256) -> say so and skip. Silence on a routine path is
+         how "did my Submit work?" becomes unanswerable.
+      S3 A malformed / unreadable drop file REPORTS AND CONTINUES: the board still
+         renders (a half-written download must not freeze the board) and the file is NOT
+         marked consumed, so the complaint repeats on EVERY build until it is dealt with.
+         It is never silently skipped.
+      S4 Opt-OUT only: EOA_BOARD_SUBMIT=0 / --no-submit / --check. An opt-IN would
+         rebuild the exact hole this closes.
+    """
+    if os.environ.get("EOA_BOARD_SUBMIT", "1") == "0":
+        print("VALIDATIONS_SUBMIT_SKIPPED auto-ingest opted out (EOA_BOARD_SUBMIT=0 / "
+              "--no-submit / --check); nothing was read from any Downloads folder")
+        return
+    cands = submission_candidates()
+    if not cands:
+        print("VALIDATIONS_SUBMIT_NONE no " + SUBMIT_GLOB + " to ingest in: "
+              + ", ".join(submit_dirs()))
+        return
+    path = cands[0]                                             # S1
+    others = len(cands) - 1
+    try:
+        digest = _sha256(path)
+    except Exception as e:                                      # S3
+        print("VALIDATIONS_SUBMIT_UNREADABLE %s: %s: %s (the board still rebuilt; nothing "
+              "was ingested from it)" % (path, type(e).__name__, e))
+        return
+    entries = _consumed_load()
+    age_min = (time.time() - os.path.getmtime(path)) / 60.0
+    if _consumed_has(entries, digest):                          # S2
+        print("VALIDATIONS_SUBMIT_ALREADY %s  (saved %.0f min ago) - already ingested, "
+              "skipping. Newer marks reach the record when she taps Submit again."
+              % (path, age_min))
+        return
+    print("VALIDATIONS_SUBMIT_FILE %s  (saved %.0f min ago)%s"
+          % (path, age_min,
+             ("  [newest of %d; the %d older one(s) are ignored]" % (others + 1, others))
+             if others else ""))
+    rc, _changed, _merged = _ingest_path(path)
+    if rc != 0:                                                 # S3
+        print("VALIDATIONS_SUBMIT_UNREADABLE the submitted file could not be ingested; it "
+              "was NOT marked consumed, so this reports again on the next build. The board "
+              "was still rebuilt and nothing was closed or bounced from it.")
+        return
+    _consumed_remember(entries, path, digest)
+    print("VALIDATIONS_SUBMIT_OK ingested on an ordinary build; the close and bounce "
+          "passes below act on it")
 
 
 def _ingest_path(src_path):
@@ -1180,6 +1360,14 @@ def main():
     # opt-IN flag would rebuild the "a human remembers a second command" hole WO-1355 shut.
     if "--no-close" in sys.argv:
         os.environ["EOA_BOARD_CLOSE"] = "0"
+    # --no-submit / EOA_BOARD_SUBMIT=0 is the auto-ingest OPT-OUT (see auto_submit S4).
+    #
+    # --check IMPLIES IT, and that is the pin, not a nicety: tools/regression/checkin_gate.ps1
+    # stage 1b runs `board_build.py --check` on a developer's machine. A gate that started
+    # reading whoever's ~/Downloads and writing the shared record as a side effect would be a
+    # new failure surface of its own. --check is report-only, structurally.
+    if "--no-submit" in sys.argv or check:
+        os.environ["EOA_BOARD_SUBMIT"] = "0"
 
     # ── --ingest: the ONLY writer of the owner-validation record ─────────────────
     # A browser cannot write to the repo, so this is the hand-off half of the loop:
@@ -1220,8 +1408,28 @@ def main():
         if rc != 0:
             print("VALIDATIONS_SUBMIT_FAIL the submitted file could not be ingested")
             return rc
+        # The EXPLICIT form deliberately ingests even if the ledger already holds this
+        # file - a seat that typed --submit is asking for it - but it still RECORDS the
+        # consumption, so the ordinary auto-ingest does not pick the same file up again
+        # on the next build and print a second, confusing report of the same marks.
+        try:
+            _consumed_remember(_consumed_load(), path, _sha256(path))
+        except Exception as e:
+            print(f"VALIDATIONS_CONSUMED_WRITE_FAIL {type(e).__name__}: {e}")
         print("VALIDATIONS_SUBMIT_OK ingested; continuing into the board build, which "
               "closes the Pass+Validated tickets and bounces the Fail / Needs Work ones")
+
+    # -- WO-1356 follow-up: THE AUTO-INGEST, on the ORDINARY build ---------------
+    # Owner 2026-09-03: "i would expect you to do this everytime you build the board. CAn
+    # you add it to the rebuild script". `--submit` above is now only the EXPLICIT form
+    # (it still fails loudly when there is no file, because a seat that typed it is
+    # asking a question and deserves an answer); the default path below takes the same
+    # newest un-consumed drop file and is never fatal. Rules + risks: auto_submit().
+    #
+    # BEFORE the record is read, so the page written by THIS run already renders the marks
+    # it just took in, and the close/bounce passes below act on them in the same command.
+    if "--submit" not in sys.argv:
+        auto_submit()
 
     # Loaded BEFORE anything is rendered. An unreadable record must ABORT the rebuild:
     # writing a board that shows "0 verified" over a corrupt file looks completely

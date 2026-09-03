@@ -180,7 +180,18 @@
 > fine as history. A copied number is the bug **even when it was right the day it was written** -
 > that is exactly how the retired 860-899 UI block kept re-seeding collisions from CLAUDE.md sec.2.
 
-> ## ⚠ RECONCILED 2026-09-03 (CLI, forty-second pass): main line next free = **1357**.
+> ## ⚠ RECONCILED 2026-09-03 (CLI, forty-third pass): main line next free = **1358**.
+> *(CLI minted **WO-1357** on an owner felt-test ruling: *"Raid button under journey should fail
+> gracefully, it works great if there is a barracks but should show locked if doesnt have one yet or
+> its destroyed"*. ⭐ STRONG LEAD, not a conclusion: `HudActionBarModel.ComputeMask` already gates the
+> bar's Raids face on **`RaidCapable`** (CLAUDE.md s7), so the CONCEPT exists - the Journey card may
+> simply not consult it. If so this is the duplicated-state class again: one rule, two surfaces, one of
+> them ignoring it. ⚠ "or its destroyed" is the half most likely to be missed - a destroyed structure
+> is NOT repaired, it is rebuilt fresh at full cost, so "has a barracks" and "has a WORKING barracks"
+> are different predicates. Locked must read in WORDS (she is red/green colourblind) and must say WHY,
+> not merely refuse. Bumped 1357 -> 1358 in this SAME edit.)*
+>
+> ### superseded: RECONCILED 2026-09-03 (CLI, forty-second pass): main line next free = **1357**.
 > *(CLI minted **WO-1356** on a direct owner ruling: *"add a submit button so you run a script to close
 > the ones passed. move the needs work and failed back to ready with a note"*. Two halves - a SUBMIT
 > control on `BOARD.html` that gets her sign-offs off the browser and into

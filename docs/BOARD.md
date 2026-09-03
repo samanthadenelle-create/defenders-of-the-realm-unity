@@ -219,9 +219,23 @@ to close the ones passed"*):
 
 ```
 BOARD.html > Owner Validation > [ Submit marks to the CLI ]      # one tap; saves a file
-python tools/board_build.py --submit    # takes the newest eoa-validations-*.json, ingests it,
-                                        # then closes the Passes and bounces the rest, in ONE run
+python tools/board_build.py             # ANY ordinary build takes the newest eoa-validations-*.json,
+                                        # ingests it, closes the Passes and bounces the rest
 ```
+
+**The ingest is part of the ORDINARY build** (owner ruling 2026-09-03: *"i would expect you to do
+this everytime you build the board. CAn you add it to the rebuild script"*). Same reasoning that put
+the close pass inside the build: **a flag the CLI has to remember is the same failure as a second
+command it has to remember.** `--submit` still exists as the EXPLICIT form (it fails loudly when
+there is no file, because a seat that typed it asked a question); the default path is never fatal.
+
+| Guard | Behaviour |
+|---|---|
+| Never twice | Each consumed drop file is recorded by **sha256** in `<record>.consumed.json`; a second build prints `VALIDATIONS_SUBMIT_ALREADY` and does not re-ingest |
+| Never a stale resurrection | **Only the single newest candidate is ever considered**, ranked by the **UTC stamp in the filename** first (mtime only breaks a tie, then the name). If that one is already consumed the pass STOPS - it never falls back to an older file still sitting in Downloads |
+| Malformed drop file | **Reports and continues**: `VALIDATIONS_SUBMIT_UNREADABLE` / `VALIDATIONS_INGEST_FAIL`, the board still renders, and the file is **not** marked consumed - so it complains again on every build until it is dealt with. Never silently skipped |
+| Says what it did, always | `VALIDATIONS_SUBMIT_FILE <path> (saved N min ago)` on ingest, `VALIDATIONS_SUBMIT_ALREADY`, `VALIDATIONS_SUBMIT_NONE` when there is nothing, `VALIDATIONS_SUBMIT_SKIPPED` when opted out |
+| Opt-OUT only | `EOA_BOARD_SUBMIT=0`, `--no-submit`, and **`--check` implies it** - so `tools/regression/checkin_gate.ps1` stage 1b can never ingest from a developer's `~/Downloads` as a side effect of a check-in. An opt-IN would rebuild the hole |
 
 ⛔ **The constraint that shapes this: she opens the board over `file://` and there is no server.**
 A `file://` page cannot write into the repo and has nothing to POST to. What it *can* do is hand
@@ -252,8 +266,25 @@ which a write endpoint reachable from a phone browser could not match without ne
 secure. Marks that have not reached the record live only in that browser, and the page says so in
 those words: *"A mark you make here is NOT saved yet."*
 
-- `--ingest` (and `--submit`, which calls it) is the **only** writer of the record. A rebuild has
-  **no write path** to it at all.
+⭐ **COUNT ONLY WHAT IS SAVED** (owner ruling 2026-09-03). The `N / M verified` headline is derived
+from **the record on disk** - the same bytes the close and bounce passes read - and is
+**server-rendered**, so it is right with JavaScript off. Marks still sitting in the browser get
+their **own line underneath**, in words: *"43 marks on this device are waiting to be submitted.
+Nothing is lost - they are safe in this browser. Tap Submit..."*, and *"Nothing waiting - every mark
+on this device is already in the saved record."* when there are none. The per-row `[X] VALIDATED`
+badge is unchanged and still shows local marks, and so does the **Needs Felt-Test** filter (a
+to-do filter: a ticket she just marked is one she has tested, so it hides on the spot).
+*Why this is written this hard:* the headline used to be computed from `localStorage`, so the board
+read **43 / 78 verified** while `proof/owner-validations.json` held **zero** and the pass reported
+`BOARD_CLOSE_OK closed 0`. She reasonably expected 43 tickets to have moved. A headline may never
+overstate what is durable.
+
+- The record is written **only** by an ingest - `--ingest`, `--submit`, or the ordinary build's
+  auto-ingest, all through the same `_ingest_path()`. Nothing else in a rebuild can write it, and
+  no rebuild can ever *lose* a mark.
+  *(This bullet used to read "a rebuild has no write path to it at all". That stopped being true on
+  2026-09-03 when the auto-ingest landed - a rebuild now writes the record when, and only when, it
+  takes in a drop file she submitted.)*
 - Newest `at` wins on merge, so a stale paste from a second device cannot overwrite a newer mark.
 - An **unreadable** record ABORTS the rebuild (`VALIDATIONS_PARSE_FAIL`) rather than rendering
   "0 verified" over corrupt bytes — which would look normal and invite her to redo signed-off work.

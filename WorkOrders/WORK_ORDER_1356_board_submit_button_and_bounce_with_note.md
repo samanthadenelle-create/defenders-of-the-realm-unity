@@ -264,3 +264,188 @@ warning. Fixed, with the reason written above the mutant table in the test.
 
 *Provenance: implemented 2026-09-03 by the CLI seat under WO-1356 (number minted from the
 `CLI_LANES_WO_NUMBERS.md` banner).*
+---
+
+# FOLLOW-UP (2026-09-03) - "count only what is saved", and the ingest joins the ordinary build
+
+*Appended to WO-1356 rather than minted as a new number: same owner loop, same files, same session.*
+
+## F1. The defect - two sources of truth for one number
+
+`BOARD.html`'s Owner Validation header read **"43 / 78 verified"** out of the browser's
+`localStorage`, while the close and bounce passes read `proof/owner-validations.json` **on disk** -
+and that file held **zero**. So the page showed a confident verified count with green
+`[X] VALIDATED` badges while the pass reported `BOARD_CLOSE_OK closed 0`.
+
+> Her words: *"just still shows as 79 fixed. I would expect you to move those to closed"*
+
+She was right, and the board was the thing lying. Same duplicated-state failure this repo keeps
+paying for (CLAUDE.md 2's stale WO block, 5's retired dependency table, 16's copy-pasted push).
+
+### The ruling she chose
+
+> **"Count only what is saved."** The `N / M verified` headline counts ONLY marks that have reached
+> the durable record. Unsubmitted marks still show their per-row badge, but they must never inflate
+> the headline number.
+
+### What now renders
+
+```
+Owner Validation
+  0 / 36 verified                                   <- the RECORD, server-rendered
+  43 marks on this device are waiting to be submitted. Nothing is lost - they are safe in
+  this browser. Tap "Submit marks to the CLI" above and they will be saved and counted
+  in the number above.
+```
+
+and when nothing is outstanding:
+
+```
+  Nothing waiting - every mark on this device is already in the saved record.
+```
+
+Never a bare empty line, never a red-flavoured word: the pending state reads as *waiting* and
+*safe*, and it names the action. The owner is red/green colourblind, so the state is carried by the
+WORDS - no hue anywhere in it.
+
+### Where the number comes from now
+
+| Half | Source | File:line |
+|---|---|---|
+| Headline, no-JS load | `disk_done`, computed from `owner_validations.entries()` | `tools/board_build.py:730` (accumulate) -> `:888` (`<span id="vprogress">{disk_done} / ... verified</span>`) |
+| Headline, with JS | `vDurableDone(vtickets, disk)` - **the `disk` map only**, which is built from each row's server-rendered `data-disk` | `tools/board_build.py:1027` (assignment), `:1013-1014` (the function) |
+| Pending line | `vPending(vtickets, disk, validation)` - a ticket counts when its local mark DIFFERS from disk on `validated` / `verdict` / `note` | `tools/board_build.py:1028-1033`, function at `:1015-1018` |
+| Per-row `[X] VALIDATED` badge | unchanged - `eff()` (record overlaid with local) | `tools/board_build.py:737, :1021-1024` |
+
+The counting functions are fenced with `/* [ORACLE:counts] ... [/ORACLE:counts] */` and are **pure,
+argument-only**, precisely so the oracle can extract that exact block out of the shipped HTML and
+run it under node. What is tested is what she reads, not a Python re-implementation of it.
+
+**The no-JS path is intact and is the *better* half here:** the durable count is the one thing
+`board_build.py` already knows at render time, so the headline is correct on a cold load with
+JavaScript off entirely. Only the pending count genuinely needs JS (only the browser knows what is
+in that browser), and its server-rendered default says something true without JS:
+*"Any marks you make on this device are not counted in the number above until you tap Submit. They
+stay safe in this browser until then."*
+
+### The `Needs Felt-Test` filter - checked, and deliberately LEFT on local state
+
+It filters on `eff()` - the record **overlaid with the local marks** (`board_build.py:1023`,
+`item.style.display=(needsOnly&&state.validated)?'none':''`). That is the right read and it is not
+the same question as the headline: the filter answers *"what have I still not tested?"*, and a
+ticket she marked ten seconds ago on this device is one she HAS tested, so it should sink out of
+her way immediately - even before the file reaches disk. The headline answers *"what is safely
+recorded?"*, which is a claim about durability. **They read different state on purpose, and the
+page now labels both.** No silent pick was made: the two are named here so a later seat does not
+"unify" them and re-break one of them.
+
+## F2. SCOPE ADDITION - the ingest is part of the ORDINARY build
+
+> Her words: *"i would expect you to do this everytime you build the board. CAn you add it to the
+> rebuild script"*
+
+`--submit` was opt-in. **A flag the CLI has to remember is the same failure as a second command it
+has to remember** - the exact reasoning that put the close pass inside the build (CLAUDE.md 16). So
+the default path is now: **auto-ingest the newest drop file -> close -> bounce -> render**, and
+`--submit` remains only as the explicit form (still `VALIDATIONS_SUBMIT_FAIL` + exit when there is
+no file, because a seat that typed it asked a question and deserves an answer).
+
+Implemented in `tools/board_build.py`: `auto_submit()` plus `submission_candidates()` /
+`_submit_rank()` / `consumed_path()` / `_sha256()` / `_consumed_load()` / `_consumed_has()` /
+`_consumed_remember()`. Called from `main()` on every run that is not `--submit`, **before** the
+record is read, so the page written by THIS run already renders the marks it just took in.
+
+### The five risks, each answered by a rule (not by hand-waving)
+
+| | Rule | How it is honoured |
+|---|---|---|
+| S1 | **A stale drop must never resurrect old marks** | Candidates are ranked by the **UTC stamp in the FILENAME** first; mtime only breaks a tie, then the filename. The stamp is what her browser wrote at the moment she tapped Submit; mtime is whatever a copy or a sync did afterwards. **Only the single newest candidate is ever considered** - if it is already consumed the pass STOPS rather than falling back to an older file. Two files with the SAME stamp (Chrome's `" (1)"` rename) fall to mtime, then to the greater filename - deterministic, and identical bytes are a no-op anyway |
+| S2 | **Never re-ingest the same file** | Recorded by **sha256 of the bytes** in `<record>.consumed.json` (name/mtime/at kept only as provenance; bounded to 100). Hash-first because the same payload can arrive under a second name. `VALIDATIONS_SUBMIT_ALREADY` on a repeat. This is *proven*, not assumed - stage 12b asserts the record is byte-identical after the second build |
+| S3 | **A malformed drop file must not break the build** | **Chosen behaviour: report loudly and CONTINUE rendering.** A half-written download must not freeze the board. It is **not** marked consumed, so the complaint repeats on every single build until it is dealt with - it can never be silently skipped into "I thought my marks landed" |
+| S4 | **Say what it did, every time** | `VALIDATIONS_SUBMIT_FILE <path> (saved N min ago)` (plus `[newest of K; the K-1 older one(s) are ignored]`), `VALIDATIONS_SUBMIT_ALREADY`, `VALIDATIONS_SUBMIT_NONE`, `VALIDATIONS_SUBMIT_SKIPPED`, `VALIDATIONS_SUBMIT_UNREADABLE`. Silence on a routine path is how "did my Submit work?" becomes unanswerable |
+| S5 | **Escape hatch, opt-OUT only** | `EOA_BOARD_SUBMIT=0` and `--no-submit`, matching the existing `EOA_BOARD_CLOSE=0` shape. An opt-IN would restore the hole |
+| S6 | **It must not fire in the gate** | `tools/regression/checkin_gate.ps1` stage 1b runs `board_build.py --check`. **`--check` now IMPLIES the opt-out inside `board_build.py` itself** (`main()`), which is the structural pin - any CI path using `--check` is safe by construction. The gate ALSO sets `$env:EOA_BOARD_SUBMIT='0'` around the call as a second lock. A check-in must never read a developer's `~/Downloads` or write the shared record as a side effect |
+
+The consumed ledger sits beside the record and follows `EOA_VALIDATIONS_PATH`, so the temp-dir
+harness gets its own and can never consume - or be confused by - the real one. A corrupt ledger is
+reported (`VALIDATIONS_CONSUMED_UNREADABLE`) and treated as empty: that is the safe direction,
+because a repeat ingest of an identical payload is a proven no-op while a blocked board is not.
+
+## F3. Oracle - `tools/board_validation_roundtrip_test.py`, now **85/85** assertions
+
+`VALIDATION_ROUNDTRIP_OK`. New stages:
+
+- **11** - the headline. The `[ORACLE:counts]` block is extracted from the built page and run under
+  **node** with fixture inputs: record 2 + browser 3 -> **2** (never 3, never 5); **record EMPTY +
+  browser marks -> 0** (the case that matters right now) with 3 reported pending; a local mark that
+  already matches the record is **not** pending. Plus the no-JS half asserted straight off the HTML:
+  the server-rendered `id="vprogress">N /` equals the record's count, and `id="vpending"` renders.
+- **11b** - RED proof for the headline.
+- **12 / 12b / 12c / 12d / 12e** - the ordinary build: it ingests the drop file with **no flag**
+  and then closes 1 / bounces 4 in the same command; the **stamp beats a deliberately newer mtime**
+  on the stale file; the same file is **never taken twice** and the record is byte-identical after
+  the second build; **no drop file is a loud no-op** (`VALIDATIONS_SUBMIT_NONE`, board still built);
+  a **malformed** file reports, does not block, and is **not consumed** so it reports again; the
+  **opt-out** holds for `EOA_BOARD_SUBMIT=0`, `--no-submit` and `--check`.
+- **12f** - RED proof for the auto-ingest, in-process against mutated copies of `board_build.py`
+  (the real file is never touched), with the **unmutated** pass asserted green FIRST
+  (memory `prove-the-success-path-not-just-the-refusal`).
+- The whole suite now pins `EOA_BOARD_SUBMIT=0` at start-up: a test whose input depends on whatever
+  is sitting in the operator's `~/Downloads` proves nothing. Stage 12 opts back in explicitly,
+  always against a throwaway `EOA_SUBMIT_DIR`.
+
+### RED first, against the CODE AS SHIPPED - not only against mutants
+
+Built the page from **`git show HEAD:tools/board_build.py`** and ran stage 11's contract against it:
+
+```
+RED vs HEAD - failures found: 4
+  RED  HEAD carries no fenced [ORACLE:counts] block - nothing to test under node
+  RED  HEAD does not assign the headline from the disk map
+  RED  HEAD assigns the headline from `done` - the EFFECTIVE (browser-overlaid) count.
+       THIS IS THE DEFECT: 43 / 78 verified over an empty record.
+  RED  HEAD renders no pending line at all
+RED_PROOF_OK
+```
+
+### Mutation report (every one caught)
+
+| Mutation | Caught by |
+|---|---|
+| headline counts the browser overlay again (`\|\|(LOCAL[t]\|\|{}).validated`) | `mutation caught: the empty-record case now reads 1, not 0` / `record 2 + browser 3 now reads 3, not 2` |
+| S2 - forget that a file was already ingested | `S2: the same file was ingested a SECOND time` |
+| S1 - let an OLDER drop file win (`cands[0]` -> `cands[-1]`) | `S1: the newest drop file was not the one taken` |
+| S3 - treat an unreadable drop file as ingested | `S3: a malformed drop file was reported as ingested` |
+| S4 - ignore the opt-out | `S4: EOA_BOARD_SUBMIT=0 did not stop the auto-ingest` |
+
+## F4. Other gates
+
+- **`node --check`** on the JS extracted from the shipped `BOARD.html`: **passes** (`NODE_CHECK_OK`).
+- **No-JS**: the headline, the `[X] VALIDATED` badges, the row sinking, the per-group counts and the
+  pending line's default all render from disk. Live page now reads `0 / 36 verified` - the record's
+  own count, over an empty `validations: {}`.
+- **ASCII-only** in every added line (0 non-ASCII characters in the diff), 44px tap targets
+  unchanged, no hue-carried state.
+- `BOARD.html` regenerated with `EOA_BOARD_CLOSE=0 EOA_BOARD_SUBMIT=0`, printing
+  `VALIDATIONS_SUBMIT_SKIPPED` + `BOARD_CLOSE_SKIPPED` + `BOARD_BOUNCE_SKIPPED` - so the page ships
+  with the fix while **no live `**Status:**` line was touched and no Downloads folder was read**.
+  Every test ran through the `EOA_WO_DIR` / `EOA_VALIDATIONS_PATH` / `EOA_BOARD_OUT` /
+  `EOA_SUBMIT_DIR` temp harness.
+- **PowerShell 5.1**: `tools/regression/checkin_gate.ps1` gained two lines (an env assignment and a
+  `Remove-Item Env:\EOA_BOARD_SUBMIT`), no new syntax, and neither touches `$LASTEXITCODE` between
+  the board call and its check.
+- Canon updated in the same breath (CLAUDE.md 15): `docs/BOARD.md` - the ordinary-build ingest with
+  its guard table, the "count only what is saved" rule, and a correction of the now-false bullet
+  *"a rebuild has no write path to it at all"*.
+
+## F5. Not done, deliberately
+
+- The per-group `<area> N / M` counts still show **effective** state (record + local), matching the
+  per-row badges rather than the headline. Left alone on purpose - the ruling and the brief both
+  scope the change to the HEADLINE, and those counts sit inline with the badges they summarise.
+  Flagged here so it is a decision on the record, not an oversight.
+- `<repo>/inbox/` is still in the search order and still not created (unchanged from the original
+  WO); pointing the browser's download directory at it would remove the "check Downloads" sentence.
+
+*Provenance: follow-up implemented 2026-09-03 by the CLI seat under WO-1356. No new WO number minted
+(same loop, same files). Not committed by this agent - the lead commits.*
