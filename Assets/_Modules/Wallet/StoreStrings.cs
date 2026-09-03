@@ -118,14 +118,24 @@ namespace DeNelle.Wallet
         // class that got keepers-satchel hidden. The game NEVER holds SKR; this is a read-only
         // mirror of the player's own wallet, which is why the copy says "your wallet".
         public const string KeyBalanceNoWallet    = "storeBalanceNoWallet";
-        /// <summary>{0}=the shortened bound address. UI-002: identity is bound, authorization is not.</summary>
+        /// <summary>A live account is attached but not authorized. UI-002: identity is bound,
+        /// authorization is not.
+        /// <para>⛔ WO-1334 - NO {0}, AND THAT IS THE POINT. This sentence used to carry the
+        /// shortened base58 address. Owner ruling 2026-09-03: <i>"they dont need address"</i> - a
+        /// player does not verify base58 by eye, and on the device it was the biggest single
+        /// contributor to the unreadable header clump. Callers use Get, not Format.</para></summary>
         public const string KeyBalanceBoundAddress  = "storeBalanceBoundAddress";
         /// <summary>A durable identity exists but no live account is attached to read a balance from.</summary>
         public const string KeyBalanceBoundIdentity = "storeBalanceBoundIdentity";
         public const string KeyBalanceChecking    = "storeBalanceChecking";
         public const string KeyBalanceUnavailable = "storeBalanceUnavailable";
         public const string KeyBalanceValue       = "storeBalanceValue";
-        /// <summary>{0}=approximate USD, from a LIVE Jupiter quote. Keeps its tilde; dropped if stale.</summary>
+        /// <summary>{0}=approximate USD, from a LIVE Jupiter quote. Keeps its tilde; dropped if stale.
+        /// <para>⚠ WO-1334 - CURRENTLY UNRENDERED. Its one reader was the header chip's `~$12.40`
+        /// tail, and the owner ruled the connected chip is <c>SKR: &lt;balance&gt;</c> and nothing
+        /// else. The KEY and its canon row are kept deliberately - the sentence is still correct,
+        /// and a surface with room for it (a wallet detail sheet) can adopt it without re-authoring
+        /// copy. Do NOT re-add it to the header chip.</para></summary>
         public const string KeyBalanceFiat        = "storeBalanceFiat";
 
         // UI-002 commerce lifecycle. ASCII state words are deliberately distinct so

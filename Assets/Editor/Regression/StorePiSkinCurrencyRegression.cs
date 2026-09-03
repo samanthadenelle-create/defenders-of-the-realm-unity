@@ -163,8 +163,54 @@ namespace DeNelle.Editor.Regression
                     "the Pi header notice never replaces the SKR wallet chip", fail, ref checks);
 
                 // ...and the SKR chip itself is still there for the SKR skin.
-                Require(store, "_wallet.NetworkLabel + \"  SKR\"",
-                    "the SKR wallet chip was DELETED rather than guarded - that breaks the SKR skin", fail, ref checks);
+                //
+                // ⚠ RE-POINTED 2026-09-03 (WO-1334 owner ruling), AND THIS IS A STRENGTHENING, NOT
+                // A RELAXATION - read the whole note before touching it.
+                //
+                // This law used to require the SOURCE LITERAL:
+                //         _wallet.NetworkLabel + "  SKR"
+                // which was the old chip's identity line, e.g. `GHKK...sfkC  Devnet  SKR`. The owner
+                // then ruled the connected chip is one line and NOTHING else - no address,
+                // no "Your Wallet", no "Ready" pill - so that exact expression cannot be written in
+                // this file any more without rendering a string she ruled out. The two SKR-skin
+                // facts the law was actually protecting are both still true and are now pinned
+                // where they LIVE, one apiece, instead of by one literal that happened to contain
+                // both:
+                //   (1) the chip still NAMES SKR, and it does so through the canon sentence
+                //       storeBalanceValue - which the RequireCanon above already pins
+                //       by name, in BOTH shipped copies;
+                //   (2) the LIVE network word still reaches the chip.
+                //
+                // ⛔ WHY THIS IS STRICTER THAN WHAT IT REPLACES: the old Require was an unordered
+                // substring test - it passed on a chip line sitting ANYWHERE in the file, including
+                // one moved above the PiDisplay guard. Both replacements are ORDERED from the
+                // method anchor, so an SKR chip that escapes the guard now fails, which is the
+                // defect this whole section exists to prevent and which the retired literal could
+                // not have caught.
+                //
+                // ⛔ AND THE DELETION-PASS IS STILL CLOSED. A seat that deletes the chip to make a
+                // Pi test green fails on the guarded line being MISSING (RequireOrdered reports
+                // exactly that), and a seat that deletes the network word fails the second one.
+                RequireOrdered(store,
+                    "private void RenderBalanceLabel()",
+                    "if (PiDisplay)",
+                    "StoreStrings.Format(StoreStrings.KeyBalanceValue",
+                    "the SKR wallet chip was DELETED rather than guarded - that breaks the SKR skin. " +
+                    "The connected chip must still render storeBalanceValue ('Balance: {0} SKR') and the " +
+                    "PiDisplay test must still precede it", fail, ref checks);
+                RequireOrdered(store,
+                    "private void RenderBalanceLabel()",
+                    "if (PiDisplay)",
+                    "_wallet.NetworkLabel.ToUpperInvariant()",
+                    "the LIVE network word was DELETED from the SKR chip rather than guarded. On " +
+                    "devnet the SKR is free and a purchase settles for nothing, so this is a " +
+                    "money-safety signal, not polish - and it must stay behind the Pi guard, " +
+                    "because a Pi player has no Solana network to be told about", fail, ref checks);
+                Require(store, "_wallet.Network != WalletNetwork.Mainnet",
+                    "the network word is no longer conditioned on the LIVE network. Silence must " +
+                    "mean mainnet and the WORD must mean 'these tokens are free' - an unconditional " +
+                    "label is the baked network-frame.png plate all over again, which printed " +
+                    "'Mainnet' over a DEVNET session", fail, ref checks);
 
                 // The async read that produces it.
                 RequireOrdered(store,

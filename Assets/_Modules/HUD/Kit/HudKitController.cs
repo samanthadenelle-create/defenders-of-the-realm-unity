@@ -920,11 +920,153 @@ namespace DeNelle.HUD.Kit
             // cost zero, and an unregistered id is simply absent from every occupancy row.
             // Locked adaptive-HUD ruling: no minimap is constructed on the player HUD.
 
+            // ── the Night Market card: the store's PERMANENT face (WO-1335) ──
+            BuildNightMarketCard(pool);
+
             // ── feedback: the CombatTextLayer marker (its own capped/pooled canvas) ──
             var fb = new GameObject("FeedbackLayerMarker", typeof(RectTransform));
             fb.transform.SetParent(pool, false);
             if (Application.isPlaying) { var _ = CombatTextLayer.Instance; }   // ensure the layer exists
             Register("feedbackLayer", fb);
+        }
+
+        // =====================================================================
+        //  WO-1335 — THE NIGHT MARKET CARD: the store's PERMANENT face on the HUD.
+        // ---------------------------------------------------------------------
+        //  Owner ruling 2026-09-03, twice, in her own words:
+        //    "the realm store is hidden away needs a permanent face on hud"
+        //    "can you take the realm store card from settings > night market and anchor it
+        //     smaller to left side on hud"
+        //
+        //  ⭐ THIS IS THE EXISTING CARD, RE-SITED - NOT A SECOND STORE WIDGET. She named it, so
+        //  it is taken rather than reinterpreted: the same authored art key `realm-store` and the
+        //  same obsidian card treatment PlayerDeckWorkspace.BuildCard gives the "Realm Store"
+        //  route inside settings > Night Market. What "smaller" removes is the deck card's
+        //  secondary purpose line ("Browse clearly priced realm offers"): on a 272 x 132 HUD
+        //  element a second line of body copy is decoration that costs the title its size, and
+        //  the title is the part that carries the meaning.
+        //
+        //  ⛔ ONE DESTINATION, TWO DOORWAYS (WO-1164). This opens PanelId.RealmStore - the SAME
+        //  door RealmStoreVendor walks the player through and the same one PackStoreBootstrap
+        //  registers. It is a second CALLER, never a second store. PanelRouter.Open returns FALSE
+        //  when no opener is registered, so the refusal is reported rather than swallowed: an
+        //  unchecked call looks to the player like a broken store and to us like nothing happened.
+        //
+        //  ⛔ THE BOTTOM ACTION BAR IS NOT TOUCHED. ButtonCount stays 7, no ordinal is renumbered
+        //  and the dormant Map ordinal is left alone (CLAUDE.md §7 - the face arrays are indexed
+        //  by ordinal). The owner explicitly chose a left-side CARD over a bar face.
+        //
+        //  ⛔ AND IT DOES NOT TOUCH THE MOVEMENT STICK. Its band comes from
+        //  HudLayoutBands.ResolveNightMarketCard - the column's one authority - which seats it in
+        //  the Minimap mount, bottoming out at y 0.548 of screen against the MoveCluster mount's
+        //  top edge at 0.330. Covering the stick would break the game's only movement control, so
+        //  the seat is DERIVED from the shared table and asserted by the oracle, never eyeballed.
+        // =====================================================================
+        private void BuildNightMarketCard(Transform pool)
+        {
+            var root = new GameObject("NightMarketCard", typeof(RectTransform));
+            root.transform.SetParent(pool, false);
+            var rt = (RectTransform)root.transform;
+
+            // Hung from the mount's TOP-LEFT at a FIXED reference size, which is the same shape
+            // ResolveNightMarketCard resolves. ⚠ Fixed pixels, never a fraction of the mount: a
+            // fraction changes its aspect with the device, and both the card art's 2.055:1 ratio
+            // and the 112-unit touch floor are stated in pixels (HudLayoutBands' own header rule).
+            rt.anchorMin = new Vector2(0f, 1f);
+            rt.anchorMax = new Vector2(0f, 1f);
+            rt.pivot = new Vector2(0f, 1f);
+            rt.anchoredPosition = Vector2.zero;
+            rt.sizeDelta = new Vector2(HudLayoutBands.NightMarketCardWidthPx,
+                                       HudLayoutBands.NightMarketCardHeightPx);
+
+            var button = ElarionUiKit.BuildObsidianButton(root.transform, "Night Market",
+                ElarionUiKit.ObsidianButtonStyle.Style1, ElarionUiKit.ObsidianButtonColor.Yellow,
+                Vector2.zero, Vector2.one, OpenNightMarket);
+            if (button == null)
+            {
+                FlowTrace.Warn("Store", "HUD Night Market card: the obsidian button factory returned " +
+                                        "null - the permanent store face is absent this session.");
+                Register("nightMarketCard", WrapAsWidget("nightMarketCard", root));
+                return;
+            }
+            button.gameObject.name = "NightMarketCardButton";
+
+            // The authored card face, exactly as the deck card loads it.
+            var art = Resources.Load<Sprite>("UI/ElarionMedieval/cards/realm-store");
+            var cardImage = button.GetComponent<Image>();
+            if (art != null && cardImage != null)
+            {
+                cardImage.sprite = null;
+                cardImage.color = Color.clear;
+                var surface = ElarionUiKit.AddImage(button.transform, "NightMarketCardSurface",
+                    Vector2.zero, Vector2.one, Color.white, false);
+                surface.transform.SetAsFirstSibling();
+                var artImage = surface.GetComponent<Image>();
+                artImage.sprite = art;
+                artImage.type = Image.Type.Simple;
+                artImage.preserveAspect = false;   // the band already carries the art's own aspect
+                artImage.raycastTarget = false;
+                button.targetGraphic = artImage;
+                // An illustrated card is a complete surface: never SpriteSwap it to a blank face.
+                button.transition = Selectable.Transition.ColorTint;
+            }
+            else if (art == null)
+            {
+                // Never silent (CLAUDE.md §12). The card still works as a worded button.
+                FlowTrace.Warn("Store", "HUD Night Market card: UI/ElarionMedieval/cards/realm-store " +
+                                        "did not load - falling back to the plain obsidian face.");
+            }
+
+            // ⛔ THE WORD, ON ITS OWN PLATE. The owner is red/green colourblind (CLAUDE.md §7), so
+            // the card may never be identifiable by its artwork's hue alone. "Night Market" is the
+            // same name she used for it and the same name the drawer row carries, on a dark plate
+            // so it reads over any part of the illustration.
+            var face = button.GetComponentInChildren<TMP_Text>(true);
+            if (face != null)
+            {
+                var plate = ElarionUiKit.AddImage(button.transform, "NightMarketCardLabelPlate",
+                    new Vector2(0.36f, 0.46f), new Vector2(0.97f, 0.92f),
+                    new Color(0f, 0f, 0f, .66f), false);
+                var plateImage = plate.GetComponent<Image>();
+                if (plateImage != null) plateImage.raycastTarget = false;
+
+                var faceRt = face.rectTransform;
+                faceRt.SetParent(plate.transform, false);
+                faceRt.anchorMin = new Vector2(0.04f, 0.02f);
+                faceRt.anchorMax = new Vector2(0.96f, 0.98f);
+                faceRt.offsetMin = faceRt.offsetMax = Vector2.zero;
+                face.alignment = TextAlignmentOptions.Center;
+                face.color = ElarionUi.Gold;
+                face.fontStyle = FontStyles.Bold;
+                face.fontSize = 26f;
+                face.textWrappingMode = TextWrappingModes.NoWrap;
+                face.overflowMode = TextOverflowModes.Ellipsis;
+                // ⚠ THE FLOOR IS PASSED EXPLICITLY. FitSingleLine's `minSize: 0` default resolves
+                // to ElarionUiKit.FontFloor (30), NOT FontHardFloor (20) - a default that has
+                // already ellipsised a label in this project. 20 is the kit's hard readability
+                // floor and is stated here so nobody has to re-derive which floor the default meant.
+                ElarionUiKit.FitSingleLine(face, 20f, 26f);
+            }
+
+            Register("nightMarketCard", WrapAsWidget("nightMarketCard", root));
+        }
+
+        /// <summary>
+        /// The HUD Night Market card's command. Shaped after RealmStoreVendor.Open deliberately:
+        /// PanelRouter.Open returns FALSE when no opener is registered, and an unchecked call would
+        /// look to the player like the store is broken and to us like nothing happened.
+        /// </summary>
+        private void OpenNightMarket()
+        {
+            Guard.Try("Store", "open the Night Market from the HUD card", () =>
+            {
+                if (PanelRouter.Open(PanelId.RealmStore))
+                    FlowTrace.Step("Store", "HUD Night Market card opened PanelId.RealmStore.");
+                else
+                    FlowTrace.Fail("Store",
+                        "PanelRouter.Open(PanelId.RealmStore) returned FALSE from the HUD card - the " +
+                        "PackStoreBootstrap opener is not registered in this scene.");
+            });
         }
 
         // Wire the compass' presentation-only world readers. DeNelle.HUD keeps its

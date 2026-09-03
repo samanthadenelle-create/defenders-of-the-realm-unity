@@ -16,7 +16,8 @@
         {
           "area": "minimap",
           "widgets": [
-            "minimap"
+            "minimap",
+            "nightMarketCard"
           ]
         },
         {

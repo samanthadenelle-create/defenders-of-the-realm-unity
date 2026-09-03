@@ -109,6 +109,65 @@ namespace DeNelle.Core.UI
         /// <summary>Left breathing margin for the dock row (SafeAreaInset.EdgeMarginPx).</summary>
         public const float DockEdgePx = SafeAreaInset.EdgeMarginPx;
 
+        // ── WO-1335 — THE NIGHT MARKET CARD'S OWN BAND ──────────────────────────
+        //
+        // Owner ruling 2026-09-03: *"the realm store is hidden away needs a permanent face on
+        // hud"* / *"can you take the realm store card from settings > night market and anchor it
+        // smaller to left side on hud"*. So the card that already exists inside the Realm deck
+        // (PlayerDeckWorkspace's "Realm Store" route, art key `realm-store`) gets a permanent
+        // seat in this column, and it gets it HERE rather than by being drawn across somebody
+        // else's band - the mistake this whole file exists to stop.
+        //
+        // ⭐ WHY IT SITS IN THE MINIMAP MOUNT, MEASURED RATHER THAN GUESSED. The column has room
+        // for exactly one more control and only in one place. At the owner's device (2670x1200,
+        // canvas 2147.9 x 965.4 reference units) the clear vertical between the region status
+        // line's bottom edge and the MoveCluster mount's top edge is
+        //     0.4426 - 0.330 = 0.1126 of screen height = 108.7 reference units,
+        // which is 3.3 units UNDER the 112-unit touch floor. So a second control CANNOT be added
+        // beside or below the gear without moving a neighbour. The Minimap mount, by contrast, is
+        // 491.9 x 255.8 units and is EMPTY at runtime: HudKitController constructs no
+        // HudMinimapWidget ("Locked adaptive-HUD ruling: no minimap is constructed on the player
+        // HUD"), so MinimapPlatePx / StatusLinePx above currently describe a plate and a status
+        // line that nothing draws.
+        //
+        // ⚠ THEREFORE THIS BAND TAKES THE PLATE'S SEAT, AND THAT CONFLICT IS STATED, NOT HIDDEN.
+        // If the minimap plate is ever constructed again, these two collide and MUST be re-split
+        // in this file - and the seat to move the card to is already measured: the pocket to the
+        // RIGHT of the plate inside the same mount is 291.7 x 200 units
+        // (x from MinimapMount.xMin + MinimapPlatePx, y the plate's own band), which still holds
+        // a 272 x 132 card. Do not resolve that day by drawing the card across the plate.
+        //
+        // ⛔ CLEAR OF THE MOVEMENT STICK BY CONSTRUCTION, WHICH IS THE ONE NON-NEGOTIABLE. The
+        // card's band bottoms out at y 0.548 of screen; the MoveCluster mount tops out at 0.330.
+        // Covering the stick breaks the game's only movement control, so the oracle asserts this
+        // rather than trusting the arithmetic above to stay true.
+
+        /// <summary>Night Market card width in reference units. 272 x 132 keeps the 1798x875
+        /// `realm-store` card art at its authored 2.055:1 aspect, fits the Minimap mount's
+        /// 491.9-unit width with room to spare, and clears the touch floor on BOTH axes.</summary>
+        public const float NightMarketCardWidthPx = 272f;
+        /// <summary>See <see cref="NightMarketCardWidthPx"/>. 132 = 272 / 2.055, the card art's
+        /// own aspect - never an independently chosen number.</summary>
+        public const float NightMarketCardHeightPx = 132f;
+
+        /// <summary>
+        /// The Night Market card's screen band, hung from the TOP-LEFT of
+        /// <see cref="MinimapMount"/> at a fixed reference size (pixels, never a fraction of the
+        /// mount - see this file's header: a fraction changes its aspect with the device and a
+        /// touch floor is stated in pixels).
+        /// </summary>
+        public static Rect ResolveNightMarketCard(float screenW, float screenH)
+        {
+            var refSize = CanvasReferenceSize(screenW, screenH);
+            float ux = refSize.x > 0f ? 1f / refSize.x : 0f;
+            float uy = refSize.y > 0f ? 1f / refSize.y : 0f;
+            return Rect.MinMaxRect(
+                MinimapMount.xMin,
+                MinimapMount.yMax - NightMarketCardHeightPx * uy,
+                MinimapMount.xMin + NightMarketCardWidthPx * ux,
+                MinimapMount.yMax);
+        }
+
         // ── THE ONE RESERVED TOAST ZONE ─────────────────────────────────────────
 
         /// <summary>
@@ -184,24 +243,33 @@ namespace DeNelle.Core.UI
             var statusLine = Rect.MinMaxRect(MinimapMount.xMin + StatusLineGapPx * ux, lineBottom,
                                              MinimapMount.xMax - StatusLineGapPx * ux, lineTop);
 
-            // The gear/Store pair is a fixed-pixel row centred on the Dock band. It is WIDER than
-            // the band is tall at this aspect, which is fine and deliberate - what matters is that
-            // its resolved extent still clears the status line above and the thumb stick below.
+            // The gear is a fixed-pixel control centred on the Dock band.
+            //
+            // ⚠ WO-1335 - THE SECOND SEAT IN THIS ROW IS GONE, AND ITS REMOVAL IS A CORRECTION.
+            // This resolver used to return a 112-unit "Store" band beside the gear. No such
+            // control has existed since HudKitController folded secondary navigation into the one
+            // menu handle ("The former persistent 'Realm' face was actually the Store/Night
+            // Market"), so the table was reserving a seat for a widget that is not built - a
+            // phantom occupant is worse than a missing one, because the next reader budgets
+            // around it. The store face is back as of WO-1335, but as the NIGHT MARKET CARD in
+            // its own band (ResolveNightMarketCard), not as a square beside the gear: 108.7 of
+            // the 112 units that seat needs are all the column has left there.
             float ctrlH = DockControlPx * uy, ctrlW = DockControlPx * ux;
             float rowMidY = (DockMount.yMin + DockMount.yMax) * 0.5f;
             float rowBottom = rowMidY - ctrlH * 0.5f, rowTop = rowMidY + ctrlH * 0.5f;
             float gearX = DockMount.xMin + DockEdgePx * ux;
-            float storeX = gearX + (DockControlPx + DockGapPx) * ux;
-            var gear  = Rect.MinMaxRect(gearX,  rowBottom, gearX + ctrlW,  rowTop);
-            var store = Rect.MinMaxRect(storeX, rowBottom, storeX + ctrlW, rowTop);
+            var gear = Rect.MinMaxRect(gearX, rowBottom, gearX + ctrlW, rowTop);
 
-            return new[] { heroPlate, HeartMount, minimapPlate, statusLine, gear, store };
+            var nightMarketCard = ResolveNightMarketCard(screenW, screenH);
+
+            return new[] { heroPlate, HeartMount, minimapPlate, statusLine, gear, nightMarketCard };
         }
 
         /// <summary>Human names for <see cref="ResolveLeftColumn"/>, same order.</summary>
         public static readonly string[] LeftColumnNames =
         {
-            "hero plate", "Heart objective", "minimap plate", "status line", "gear", "Store",
+            "hero plate", "Heart objective", "minimap plate", "status line", "gear",
+            "Night Market card",
         };
 
         /// <summary>Project a sub-rect expressed as a fraction of a parent band into screen

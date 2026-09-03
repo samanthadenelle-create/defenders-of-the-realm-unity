@@ -40,6 +40,7 @@ using System.Text.RegularExpressions;
 using UnityEditor;
 using UnityEngine;
 using DeNelle.Wallet;   // WO-1162: the composition + card template are the live authority now
+using DeNelle.Core.UI;  // WO-1335: HudLayoutBands is the left column's ONE authority - resolved, not retyped
 
 namespace DeNelle.Editor.Regression
 {
@@ -49,6 +50,7 @@ namespace DeNelle.Editor.Regression
         private const string CardRel   = "/_Modules/Wallet/StorePackCard.cs";
         private const string FooterRel = "/_Modules/Wallet/StoreLegalFooter.cs";
         private const string HudRel    = "/_Modules/HUD/Kit/HudKitController.cs";
+        private const string AreasRel  = "/_Modules/HUD/Kit/HudAreasHost.cs";
         private const string DeckRel   = "/_Modules/HUD/PlayerDeckWorkspace.cs";
         private const string CompositionRel = "/_Modules/Wallet/NightMarketComposition.cs";
         private const string KitRel    = "/_Modules/Core/UI/ElarionUiKit.cs";
@@ -77,6 +79,7 @@ namespace DeNelle.Editor.Regression
             string card   = Read(Application.dataPath + CardRel,   failures);
             string footer = Read(Application.dataPath + FooterRel, failures);
             string hud    = Read(Application.dataPath + HudRel,    failures);
+            string areas  = Read(Application.dataPath + AreasRel,  failures);
             string deck   = Read(Application.dataPath + DeckRel,   failures);
             string kit    = Read(Application.dataPath + KitRel,    failures);
             string ui     = Read(Application.dataPath + UiRel,     failures);
@@ -93,6 +96,9 @@ namespace DeNelle.Editor.Regression
             CheckCommerceCta(store, minTouch, ctaWidth, failures);
             CheckOneTitleAndOneLegalOwner(store, footer, ctaWidth, failures);
             CheckHudDoor(hud, deck, failures);
+            CheckWalletChip(store, failures);
+            CheckHudStoreCard(hud, areas, minTouch, failures);
+            CheckGapPacksAlwaysBuyable(store, failures);
 
             if (failures.Count > 0)
             {
@@ -407,8 +413,15 @@ namespace DeNelle.Editor.Regression
         // =====================================================================
         private static void CheckHudDoor(string hud, string deck, List<string> failures)
         {
+            // ⚠ THE LEGACY FACE, NOT THE NEW CARD. `RealmHudButton` was the retired two-control
+            // island over the world that mislabeled its own route ("Realm" opening the Store).
+            // WO-1335's permanent face is the NIGHT MARKET CARD (CheckHudStoreCard below) and is a
+            // different widget with a different name, so this law is unchanged by that ruling - what
+            // is retired is the mislabeled button, never the idea of a permanent door.
             if (hud.Contains("RealmHudButton"))
-                failures.Add("legacy persistent Realm face remains; Night Market belongs in the menu drawer.");
+                failures.Add("the legacy mislabeled 'Realm' HUD face is back. The permanent store " +
+                             "door is the Night Market card (WO-1335); this button named a route it " +
+                             "did not open and is retired.");
             Require(hud, "AddDockTab(_slideDock.panel, dockRow++, \"Night Market\", OpenRealmStore)",
                 "Night Market drawer destination is absent or not bound to its route", failures);
             Require(hud, "DockTabCount = 6",
@@ -427,6 +440,512 @@ namespace DeNelle.Editor.Regression
 
             Require(hud, "Register(\"chatDock\"",
                 "Night Market/Menu drawer is not posture-owned with the dock", failures);
+        }
+
+        // =====================================================================
+        //  WO-1334 — THE HEADER WALLET CHIP, on the surface that takes real money.
+        // ---------------------------------------------------------------------
+        //  Owner ruling 2026-09-03, from a device capture of the Night Market:
+        //    "the white text top right needs moved left and simplified connected
+        //     they dont need address"  ... "or even better SKR: balance"
+        //
+        //  ⭐ WHY EACH BOUND BELOW IS A BOUND, so none of them is "helpfully" relaxed:
+        //
+        //  [one-line]  The defect was FIVE elements stacked into one rect. A "\n" in the
+        //              connected branch is the whole clump growing back, so the newline is
+        //              banned in the render method rather than the visual re-judged by eye.
+        //  [no-address] "they dont need address" is a RULING, not a size complaint. The
+        //              address must be ABSENT from the chip, so the shortener may not be
+        //              reached from RenderBalanceLabel at all - shrinking it would satisfy
+        //              a layout test and violate the instruction.
+        //  [words]     ⛔ THE ONE THAT MATTERS MOST. The owner is RED/GREEN COLOURBLIND
+        //              (CLAUDE.md §7): a greyed-out number, a dimmed chip or a coloured dot
+        //              is NOT a message to her. Every DISCONNECTED state must therefore
+        //              carry letters. This is checked against canon-strings.json, both
+        //              shipped copies, because that is where the sentences live.
+        //  [network]   Mainnet-vs-Testnet is a MONEY-SAFETY signal: on devnet the SKR is
+        //              free and a purchase completes for nothing (the matched-pair invariant
+        //              MonetizationActivationRegression pins). The old carrier was authored
+        //              ART that baked the word "Mainnet" into a texture and so said "Mainnet"
+        //              on devnet. The chip must read the LIVE network instead, and the baked
+        //              plate must stay gone.
+        //  [top-left]  ⛔ SUPERSEDES [left] (WO-1334b, same day). WO-1334 moved the chip from
+        //              x 0.70-1.00 to 0.62-0.955 and pinned it there - still the right-hand side,
+        //              and the pin REQUIRED it to stay there. The owner then ruled without
+        //              ambiguity: "in the top left put their balance ... it shouldn't be on the
+        //              top right hand side". The rect is now bounded on BOTH sides so neither
+        //              drift is silent, and the vertical half ("top") is pinned by the label
+        //              still being built in BuildHeader, which owns the top bar.
+        //  [balance-word] The chip leads with the WORD "Balance", then the SKR total. This
+        //              RETIRES the same day's "SKR: <balance>" - she reconsidered out loud and
+        //              gave the reason: it is the storefront convention, and the word is what
+        //              makes the digits legible as "what I can afford".
+        //  [ground]    ⛔ A READABILITY DEFECT SHE STATED IN WORDS: "white where it's over top
+        //              of everything else ... you can't read it". The carrier is a dark plate
+        //              behind the label - a LUMINANCE contrast, the only kind that survives
+        //              red/green colour blindness. Re-tinting the text is not a fix.
+        // =====================================================================
+        private static void CheckWalletChip(string store, List<string> failures)
+        {
+            string render = Slice(store, "private void RenderBalanceLabel", "//  Contents description", failures);
+            if (string.IsNullOrEmpty(render)) return;
+            string renderCode = Code(render);
+
+            // [one-line] — the connected chip is ONE line.
+            if (render.Contains("\\n"))
+                failures.Add("[one-line] RenderBalanceLabel still composes a newline - the header wallet chip " +
+                             "is stacking labels again. Owner ruling WO-1334: the connected chip is one line, " +
+                             "'SKR: <balance>'.");
+
+            // [no-address] — the base58 address is ABSENT, not shrunk.
+            if (renderCode.Contains("Account.Address"))
+                failures.Add("[no-address] RenderBalanceLabel reads the wallet address again. Owner ruling " +
+                             "WO-1334: 'they dont need address' - it is REMOVED from the chip, not resized.");
+            if (renderCode.Contains("Shorten("))
+                failures.Add("[no-address] RenderBalanceLabel calls Shorten() - the only thing it shortened " +
+                             "here was the address the owner removed.");
+
+            // [network] — the baked plate stays gone and the live network is read.
+            // ⚠ MATCHED ON THE RAW SOURCE AND ON THE CALL SHAPE, NOT ON THE BARE NAME. Code()
+            // blanks string LITERALS, so it can never see an asset name; and the bare name appears
+            // in the comment that explains why the plate was removed, which a substring test would
+            // report as the defect it is documenting.
+            if (Regex.IsMatch(store, @"AddArt\s*\(\s*host\s*,\s*""network-frame"""))
+                failures.Add("[network] the network-frame plate is back in the header. It BAKES the word " +
+                             "'Mainnet' plus a green dot into a texture, so it printed 'Mainnet' over a DEVNET " +
+                             "session - a confident lie about whether real money is at stake, carried partly " +
+                             "by a hue the owner cannot see.");
+            if (!renderCode.Contains("WalletNetwork.Mainnet"))
+                failures.Add("[network] RenderBalanceLabel no longer tests the LIVE network. Mainnet-vs-devnet " +
+                             "is a money-safety signal: on devnet the tokens are free and a purchase completes " +
+                             "for nothing. Removing it to reduce clutter is not a cleanup.");
+            if (!renderCode.Contains("NetworkLabel"))
+                failures.Add("[network] the chip does not render a network word at all - the safety signal has " +
+                             "no carrier left on this screen.");
+
+            // [top-left] — WO-1334b. TIGHTENED, NOT RELAXED, and the direction matters.
+            //
+            // ⛔ THE OLD BOUND HERE WAS THE DEFECT. It asserted `chip.max.x >= 0.75` - i.e. it
+            // REQUIRED the chip to stay on the right-hand side, because WO-1334 read "needs moved
+            // left" as a nudge. The owner then said it in words that admit no nudge: *"in the top
+            // left put their balance ... it shouldn't be on the top right hand side"*. An oracle
+            // that pins the rejected placement is worse than no oracle: it makes the correct fix
+            // fail the suite. Both directions are now bounded so neither drift is silent.
+            var chip = AnchorsAfter(store, "_balanceLabel = MakeText(", failures);
+            if (chip.max.x > 0.5f)
+                failures.Add($"[top-left] the wallet chip's right edge is at x={chip.max.x:0.###} - past the " +
+                             "half-way line, so the chip is not in the top LEFT. Owner ruling 2026-09-03: " +
+                             "\"in the top left put their balance of what they have just in SKR so they know " +
+                             "what they can afford immediately\" and \"it shouldn't be on the top right hand " +
+                             "side\". This is the bound that a re-drift to the right trips first.");
+            if (chip.min.x > 0.10f)
+                failures.Add($"[top-left] the wallet chip starts at x={chip.min.x:0.###} - it has floated off " +
+                             "the panel's left margin. The balance is the first thing the eye lands on when " +
+                             "the store opens; it belongs AT the corner, not near it.");
+            // The chip must be in the TOP bar. BuildHeader IS the top bar (it is handed _topBar,
+            // a region pinned to the panel's top edge), so the pin is that the label is still built
+            // there rather than having been re-parented into the body while nobody was looking.
+            string header = Slice(store, "private void BuildHeader", "private static void SeatWordmark", failures);
+            if (!string.IsNullOrEmpty(header) && !header.Contains("_balanceLabel = MakeText("))
+                failures.Add("[top-left] the wallet chip is no longer built in BuildHeader - it has left the " +
+                             "top bar. 'Top left' is two constraints and this is the vertical one.");
+
+            // [balance-word] — the word "Balance" LEADS the chip. Owner ruling 2026-09-03:
+            // *"Maybe we could put the word balance and then put their SKR total ... I see every
+            // other site in the world does it."* This RETIRES the same day's earlier `SKR: <balance>`
+            // form, which is why the canon check below tests for the new lead rather than the old.
+            // Pinned in canon-strings.json (both copies) by CheckDisconnectedWords.
+
+            // [ground] — READABILITY IS A STATED DEFECT, NOT A NICETY.
+            // *"white where it's over top of everything else, because that's just ugly, it doesn't
+            // make sense and you can't read it."* The fix is a dark plate behind the label - a
+            // LUMINANCE contrast, which is the only kind that survives the owner's red/green colour
+            // blindness (CLAUDE.md §7). Re-tinting the text would satisfy nothing.
+            if (!Regex.IsMatch(header ?? string.Empty, @"PlateBehind\s*\(\s*_balanceLabel"))
+                failures.Add("[ground] the wallet chip has no plate behind it. Owner ruling 2026-09-03: " +
+                             "white text over the panel art is unreadable (\"you can't read it\"). The ground " +
+                             "is what makes it legible, and it is a brightness contrast rather than a hue - " +
+                             "the owner is red/green colourblind, so a re-tint is not a fix.");
+
+            // [words] — every DISCONNECTED state says its state in letters, in canon.
+            CheckDisconnectedWords(failures);
+        }
+
+        /// <summary>
+        /// The four non-connected wallet sentences, read from canon-strings.json itself.
+        /// <para>⛔ BOTH SHIPPED COPIES ARE CHECKED. Resources/ and StreamingAssets/ each carry a
+        /// canon-strings.json and they are meant to be identical; editing one is a real and repeated
+        /// failure mode, and a chip that reads correctly in the editor and blankly on the device is
+        /// exactly what a single-copy check would miss.</para>
+        /// </summary>
+        private static void CheckDisconnectedWords(List<string> failures)
+        {
+            string[] copies =
+            {
+                Application.dataPath + "/Resources/Data/Canonical/canon-strings.json",
+                Application.dataPath + "/StreamingAssets/Data/Canonical/canon-strings.json",
+            };
+            string[] disconnected =
+            {
+                "storeBalanceNoWallet", "storeBalanceBoundAddress",
+                "storeBalanceBoundIdentity", "storeBalanceChecking", "storeBalanceUnavailable",
+            };
+
+            foreach (string path in copies)
+            {
+                if (!File.Exists(path)) { failures.Add("[words] missing canon copy: " + path); continue; }
+                string json = File.ReadAllText(path);
+
+                foreach (string key in disconnected)
+                {
+                    string value = CanonValue(json, key);
+                    if (value == null)
+                    {
+                        failures.Add($"[words] '{key}' is absent from {Path.GetFileName(path)} - a wallet " +
+                                     "state with no sentence renders as an EMPTY chip, which is the " +
+                                     "colour-only failure in its purest form.");
+                        continue;
+                    }
+                    int letters = 0;
+                    foreach (char c in value) if (char.IsLetter(c)) letters++;
+                    if (letters < 8)
+                        failures.Add($"[words] '{key}' = \"{value}\" carries {letters} letters. The owner is " +
+                                     "red/green colourblind: a disconnected wallet must SAY it is disconnected. " +
+                                     "A dimmed number, a dash or a dot is not a message.");
+                    foreach (char c in value)
+                        if (c > 127)
+                        {
+                            failures.Add($"[words] '{key}' contains a non-ASCII glyph - it renders as a tofu box " +
+                                         "on the device font.");
+                            break;
+                        }
+                }
+
+                // The connected sentence is the owner's exact form. ⛔ RE-POINTED 2026-09-03
+                // (WO-1334b), NOT WEAKENED: this used to require the sentence to START WITH "SKR",
+                // pinning the form she retired hours later. Her re-ruling: *"Maybe we could put the
+                // word balance and then put their SKR total ... I see every other site in the world
+                // does it."* So the WORD leads and the token trails - `Balance: {0} SKR`. Both
+                // halves are still bound, because dropping either loses something real: without
+                // "Balance" the number has no job, and without "SKR" it has no unit.
+                string connected = CanonValue(json, "storeBalanceValue");
+                if (connected == null)
+                    failures.Add("[one-line] 'storeBalanceValue' is absent - the connected chip has no sentence.");
+                else
+                {
+                    if (!connected.StartsWith("Balance", StringComparison.Ordinal))
+                        failures.Add($"[balance-word] 'storeBalanceValue' = \"{connected}\" - the owner ruled " +
+                                     "the chip leads with the WORD 'Balance', then the SKR total. The earlier " +
+                                     "'SKR: <balance>' form is RETIRED; a bare token name does not tell the " +
+                                     "player what the number is for.");
+                    if (!connected.Contains("SKR"))
+                        failures.Add($"[balance-word] 'storeBalanceValue' = \"{connected}\" - the unit is gone. " +
+                                     "The figure mirrors the player's OWN wallet in SKR and must say so; an " +
+                                     "unlabelled number on a money screen reads as an in-game currency, which " +
+                                     "is precisely the thing this game never holds.");
+                    if (!connected.Contains("{0}"))
+                        failures.Add("[one-line] 'storeBalanceValue' has no {0} - the chip would print a " +
+                                     "label with no balance, and the balance IS the proof of connection.");
+                }
+
+                // ⛔ AND THE ADDRESS SENTENCE MUST NO LONGER TAKE ONE. A surviving {0} means a caller
+                // can still pour an address back in without touching PackStore.
+                string bound = CanonValue(json, "storeBalanceBoundAddress");
+                if (bound != null && bound.Contains("{0}"))
+                    failures.Add("[no-address] 'storeBalanceBoundAddress' still takes a {0} - the slot the " +
+                                 "removed address used to fill. Owner ruling WO-1334: 'they dont need address'.");
+            }
+        }
+
+        // =====================================================================
+        //  WO-1335 RULING 1 — THE NIGHT MARKET CARD IS A PERMANENT FACE ON THE HUD.
+        // ---------------------------------------------------------------------
+        //  Owner ruling 2026-09-03:
+        //    "the realm store is hidden away needs a permanent face on hud"
+        //    "can you take the realm store card from settings > night market and anchor it
+        //     smaller to left side on hud"
+        //
+        //  ⭐ WHY EACH BOUND IS A BOUND:
+        //
+        //  [stick]  ⛔ THE ONE THAT CANNOT BE NEGOTIATED. The virtual movement stick is the game's
+        //           only locomotion control on a phone. A card drawn over it does not degrade the
+        //           HUD, it removes the player's ability to move. This is asserted as GEOMETRY at
+        //           the owner's real device size against HudAreasHost's own MoveCluster row - not
+        //           by eye, and not by trusting a comment.
+        //  [reuse]  She picked the card BY NAME ("the realm store card from settings > night
+        //           market"). Authoring a second store-entry widget, or swapping the art for
+        //           something new, answers a question she did not ask. The art key is pinned.
+        //  [door]   One destination, two doorways (WO-1164): this card and the walk-up building
+        //           open the SAME PanelId.RealmStore. A second store surface is the failure.
+        //  [left]   "anchor it smaller to LEFT side" - so the band must actually be on the left.
+        //  [touch]  Phone-first: >= MinTouchPx on BOTH axes, parsed from the kit, never retyped.
+        //  [seat]   The seat is DERIVED from HudLayoutBands. A HUD element that hardcodes its own
+        //           rect is how the left column came to hold seven elements positioned in four
+        //           files with nobody owning the sum (that file's own header).
+        //  [posture] It is a permanent TOWN face, so it must be in the calm(town) occupancy rows
+        //           of BOTH shipped hud-areas.json copies - a widget registered but never listed
+        //           is built, hidden, and invisible forever.
+        // =====================================================================
+        private static void CheckHudStoreCard(string hud, string areas, float minTouch, List<string> failures)
+        {
+            string hudCode = Code(hud);
+
+            // [reuse] the EXISTING card, taken rather than reinterpreted.
+            Require(hud, "BuildNightMarketCard(pool)",
+                "[reuse] the permanent Night Market card is never built. Owner ruling WO-1335: the " +
+                "store is the one verb in the game with no permanent door.", failures);
+            Require(hud, "UI/ElarionMedieval/cards/realm-store",
+                "[reuse] the HUD card no longer loads the authored `realm-store` card art. The owner " +
+                "picked this card BY NAME from settings > night market; a different sprite is a " +
+                "second widget wearing its label.", failures);
+
+            // [door] one destination, two doorways.
+            if (!hudCode.Contains("PanelRouter.Open(PanelId.RealmStore)"))
+                failures.Add("[door] the HUD card does not open PanelId.RealmStore - the door the " +
+                             "walk-up Realm Store building already opens. WO-1164 rules ONE store, " +
+                             "two doorways; a second store surface is the defect.");
+
+            // [seat] derived from the column's one authority, never hardcoded here or there.
+            Require(hud, "HudLayoutBands.NightMarketCardWidthPx",
+                "[seat] the HUD card sizes itself instead of reading HudLayoutBands. The left column " +
+                "has ONE owner precisely because seven elements positioned in four files is how it " +
+                "came to overlap without anyone being able to see it.", failures);
+
+            // [touch] the authored card clears the kit floor on both axes.
+            if (minTouch > 0f)
+            {
+                if (HudLayoutBands.NightMarketCardWidthPx < minTouch)
+                    failures.Add($"[touch] the Night Market card is {HudLayoutBands.NightMarketCardWidthPx:0}px " +
+                                 $"wide, under the {minTouch:0}px touch floor.");
+                if (HudLayoutBands.NightMarketCardHeightPx < minTouch)
+                    failures.Add($"[touch] the Night Market card is {HudLayoutBands.NightMarketCardHeightPx:0}px " +
+                                 $"tall, under the {minTouch:0}px touch floor.");
+            }
+
+            // ── the GEOMETRY, resolved at real device sizes rather than asserted in prose ──
+            var sizes = new[]
+            {
+                new Vector2(HudLayoutBands.DeviceWidth, HudLayoutBands.DeviceHeight),   // the owner's Seeker
+                new Vector2(2400f, 1080f),
+                new Vector2(1920f, 1080f),
+            };
+            Rect moveCluster;
+            bool haveStick = TryParseAreaRect(areas, "MoveCluster", out moveCluster);
+            if (!haveStick)
+                failures.Add("[stick] could not read HudAreasHost's MoveCluster row, so the card " +
+                             "cannot be PROVEN clear of the movement stick. An unverifiable seat over " +
+                             "the only locomotion control is not an acceptable unknown.");
+
+            foreach (var size in sizes)
+            {
+                var card = HudLayoutBands.ResolveNightMarketCard(size.x, size.y);
+
+                if (haveStick && HudLayoutBands.Intersects(card, moveCluster))
+                    failures.Add($"[stick] at {size.x:0}x{size.y:0} the Night Market card " +
+                                 $"({card.xMin:0.###}..{card.xMax:0.###} x, {card.yMin:0.###}..{card.yMax:0.###} y) " +
+                                 $"overlaps the MoveCluster band " +
+                                 $"({moveCluster.xMin:0.###}..{moveCluster.xMax:0.###} x, " +
+                                 $"{moveCluster.yMin:0.###}..{moveCluster.yMax:0.###} y). That band holds the " +
+                                 "virtual movement stick - covering it removes the player's ability to move.");
+
+                // [left] it is a LEFT-side element, not a floater that drifted inboard.
+                if (card.xMax > 0.30f)
+                    failures.Add($"[left] at {size.x:0}x{size.y:0} the card's right edge is at " +
+                                 $"x={card.xMax:0.###}. The owner asked for it anchored to the LEFT side.");
+                if (card.xMin > 0.05f)
+                    failures.Add($"[left] at {size.x:0}x{size.y:0} the card's left edge is at " +
+                                 $"x={card.xMin:0.###} - it has drifted off the left margin.");
+
+                // Clear of the other things that are actually DRAWN in this column.
+                var bands = HudLayoutBands.ResolveLeftColumn(size.x, size.y);
+                var names = HudLayoutBands.LeftColumnNames;
+                for (int i = 0; i < bands.Length && i < names.Length; i++)
+                {
+                    if (string.Equals(names[i], "Night Market card", StringComparison.Ordinal)) continue;
+                    // The minimap plate and its status line are NOT constructed today (the locked
+                    // adaptive-HUD ruling), and the card deliberately takes the plate's seat - that
+                    // conflict is recorded in HudLayoutBands rather than asserted here, because
+                    // asserting it would fail on a band nothing draws.
+                    if (string.Equals(names[i], "minimap plate", StringComparison.Ordinal)) continue;
+                    if (string.Equals(names[i], "status line", StringComparison.Ordinal)) continue;
+                    if (HudLayoutBands.Intersects(card, bands[i]))
+                        failures.Add($"[seat] at {size.x:0}x{size.y:0} the Night Market card overlaps the " +
+                                     $"'{names[i]}' band. Each element in the left column gets its OWN band; " +
+                                     "it does not get drawn across one that is already spoken for.");
+                }
+            }
+
+            // [posture] listed in calm(town) in BOTH shipped occupancy copies.
+            string[] areaCopies =
+            {
+                Application.dataPath + "/Resources/Data/Canonical/hud-areas.json",
+                Application.dataPath + "/StreamingAssets/Data/Canonical/hud-areas.json",
+            };
+            foreach (string path in areaCopies)
+            {
+                if (!File.Exists(path)) { failures.Add("[posture] missing hud-areas copy: " + path); continue; }
+                string json = File.ReadAllText(path);
+                int town = json.IndexOf("\"calm(town)\"", StringComparison.Ordinal);
+                int nextPosture = town >= 0 ? json.IndexOf("\"posture\"", town + 12, StringComparison.Ordinal) : -1;
+                string townBlock = town < 0 ? null
+                    : (nextPosture > town ? json.Substring(town, nextPosture - town) : json.Substring(town));
+                if (townBlock == null)
+                    failures.Add("[posture] no calm(town) posture in " + Path.GetFileName(path) + ".");
+                else if (townBlock.IndexOf("\"nightMarketCard\"", StringComparison.Ordinal) < 0)
+                    failures.Add("[posture] 'nightMarketCard' is not in the calm(town) occupancy rows of " +
+                                 Path.GetFileName(path) + ". A widget that is registered but never listed " +
+                                 "is built, switched off, and invisible forever - which is exactly what " +
+                                 "'hidden away' meant in the owner's report.");
+            }
+        }
+
+        /// <summary>Parse an <c>Add(HudArea.&lt;name&gt;, new Vector2(a,b), new Vector2(c,d));</c> row
+        /// out of HudAreasHost source into a screen-fraction Rect.</summary>
+        private static bool TryParseAreaRect(string src, string area, out Rect rect)
+        {
+            rect = default(Rect);
+            if (string.IsNullOrEmpty(src)) return false;
+            var m = Regex.Match(src, @"Add\s*\(\s*HudArea\." + Regex.Escape(area) +
+                                     @"\s*,\s*new\s+Vector2\s*\(\s*([\d.]+)f?\s*,\s*([\d.]+)f?\s*\)\s*,\s*" +
+                                     @"new\s+Vector2\s*\(\s*([\d.]+)f?\s*,\s*([\d.]+)f?\s*\)");
+            if (!m.Success) return false;
+            var ci = System.Globalization.CultureInfo.InvariantCulture;
+            float a, b, c, d;
+            if (!float.TryParse(m.Groups[1].Value, System.Globalization.NumberStyles.Float, ci, out a)) return false;
+            if (!float.TryParse(m.Groups[2].Value, System.Globalization.NumberStyles.Float, ci, out b)) return false;
+            if (!float.TryParse(m.Groups[3].Value, System.Globalization.NumberStyles.Float, ci, out c)) return false;
+            if (!float.TryParse(m.Groups[4].Value, System.Globalization.NumberStyles.Float, ci, out d)) return false;
+            rect = Rect.MinMaxRect(a, b, c, d);
+            return true;
+        }
+
+        // =====================================================================
+        //  WO-1335 RULING 2 — THE "CLOSE THE GAP" PACKS ARE ALWAYS BUYABLE.
+        // ---------------------------------------------------------------------
+        //  Asked directly whether the WO-1037 shortfall gating should stand, the owner chose:
+        //  "They should always be buyable."
+        //
+        //  ⛔ THIS OVERTURNS A PRIOR OWNER RULING, DELIBERATELY. It is recorded, not treated as a
+        //  bug fix - and this oracle is what stops the retired rule creeping back in as a
+        //  "restored guardrail".
+        //
+        //  ⭐ AND IT IS NOT A PRICING TICKET. Every one of the three is already in USD_ANCHORS in
+        //  api/_lib/purchase-catalog.js and the server has always quoted it. No price, SKU,
+        //  entitlement or grant is asserted here, on purpose: this file must never become a place
+        //  where a money value can be changed to make a test pass.
+        //
+        //  [offerable] The strongest available bound, and it asks the RUNTIME helper rather than
+        //              re-deriving shelf membership: PackCatalog.IsOnBrowsableShelf is the same
+        //              predicate PackStore.PacksInBand asks, so a SKU cannot be buyable here and
+        //              gated there.
+        //  [one-key]   ⛔ NOT OVERTURNED. WO-947 s12c: each grants exactly ONE economy key and
+        //              nothing else. The surfacing changed; the guardrail did not.
+        //  [note]      A `theme` note that still asserts the retired gate is a live contradiction
+        //              between the data and the shipped behaviour, which is how this repo's most
+        //              expensive bugs start.
+        //  [no-gate]   The catch-up rail may not re-acquire a shortfall precondition. "Always
+        //              buyable" is a property of the RAIL, not just of the rows.
+        //  [twins]     Resources/ wins at load, so a StreamingAssets-only edit ships a build whose
+        //              editor and device disagree.
+        // =====================================================================
+        private static readonly string[] GapSkus =
+            { "impulse-wood-medium", "impulse-iron-medium", "impulse-stone-medium" };
+
+        private const string RetiredGateSentence = "Surfaced ONLY against a real shortfall";
+
+        private static void CheckGapPacksAlwaysBuyable(string store, List<string> failures)
+        {
+            foreach (string sku in GapSkus)
+            {
+                PackDef pack = null;
+                try { pack = PackCatalog.Find(sku); }
+                catch (Exception ex)
+                {
+                    failures.Add($"[offerable] PackCatalog.Find('{sku}') threw {ex.GetType().Name} - " +
+                                 "the catch-up shelf cannot be verified.");
+                    continue;
+                }
+                if (pack == null)
+                {
+                    failures.Add($"[offerable] '{sku}' is gone from packs.json. The owner ruled these " +
+                                 "three permanent storefront rows on 2026-09-03.");
+                    continue;
+                }
+
+                // [offerable] — buyable with NO shortfall present. Nothing in this call knows about
+                // a shortfall, which is the entire point: the row's visibility is unconditional.
+                if (!PackCatalog.IsOnBrowsableShelf(pack))
+                    failures.Add($"[offerable] '{sku}' is not on the browsable shelf, so it is reachable " +
+                                 "only through a shortfall offer. Owner ruling WO-1335: 'They should " +
+                                 "always be buyable.'");
+                if (PackCatalog.BandOf(pack) != StoreBand.Gap)
+                    failures.Add($"[offerable] '{sku}' left the Gap band, so it no longer appears under " +
+                                 "CLOSE THE GAP at all.");
+
+                // [one-key] — the WO-947 s12c guarantee, which this ruling did NOT overturn.
+                int keys = 0;
+                foreach (string key in PackCatalog.LedgerEconomyKeys)
+                    if (pack.EconomyAmount(key) > 0) keys++;
+                if (keys != 1)
+                    failures.Add($"[one-key] '{sku}' now grants {keys} economy keys. WO-947 s12c: a " +
+                                 "single-resource impulse pack grants exactly ONE, and making these rows " +
+                                 "permanent did not relax that.");
+                if (pack.Contents != null && pack.Contents.Cosmetics != null && pack.Contents.Cosmetics.Count > 0)
+                    failures.Add($"[one-key] '{sku}' carries cosmetics. It grants one resource and nothing else.");
+                if (pack.Contents != null && pack.Contents.Convenience != null && pack.Contents.Convenience.Count > 0)
+                    failures.Add($"[one-key] '{sku}' carries convenience items. It grants one resource and " +
+                                 "nothing else.");
+            }
+
+            // [note] + [twins] — read the shipped DATA, both copies.
+            string[] copies =
+            {
+                Application.dataPath + "/Resources/Data/Canonical/packs.json",
+                Application.dataPath + "/StreamingAssets/Data/Canonical/packs.json",
+            };
+            string first = null;
+            foreach (string path in copies)
+            {
+                if (!File.Exists(path)) { failures.Add("[twins] missing packs copy: " + path); continue; }
+                string json = File.ReadAllText(path);
+                if (first == null) first = json;
+                else if (!string.Equals(first, json, StringComparison.Ordinal))
+                    failures.Add("[twins] the two canonical packs.json copies differ. Resources/ wins at " +
+                                 "load, so a StreamingAssets-only edit ships a build whose editor and " +
+                                 "device disagree about the shelf.");
+
+                foreach (string sku in GapSkus)
+                {
+                    int at = json.IndexOf("\"" + sku + "\"", StringComparison.Ordinal);
+                    if (at < 0) continue;   // absence is already reported by [offerable]
+                    int next = json.IndexOf("\"sku\":", at + sku.Length + 2, StringComparison.Ordinal);
+                    string block = next > at ? json.Substring(at, next - at) : json.Substring(at);
+                    if (block.IndexOf(RetiredGateSentence, StringComparison.Ordinal) >= 0)
+                        failures.Add($"[note] '{sku}' still authors \"{RetiredGateSentence}...\" in " +
+                                     Path.GetFileName(path) + ". That gate was RETIRED by the owner on " +
+                                     "2026-09-03 and the row is a permanent storefront row now. A note " +
+                                     "that contradicts shipped behaviour is how this repo's most " +
+                                     "expensive bugs start.");
+                }
+            }
+
+            // [no-gate] — the rail itself asks for no shortfall before drawing the offers.
+            string rail = Slice(store, "private void BuildLandscapeGapOffers", "private static void BuildUtilityHeading",
+                                failures);
+            if (!string.IsNullOrEmpty(rail) && Code(rail).IndexOf("Shortfall", StringComparison.OrdinalIgnoreCase) >= 0)
+                failures.Add("[no-gate] BuildLandscapeGapOffers consults a shortfall again before building " +
+                             "the CLOSE THE GAP rail. The owner ruled these offers unconditional; a rail " +
+                             "that only appears against a real shortfall is the retired gate rebuilt one " +
+                             "level up from the rows.");
+        }
+
+        /// <summary>One canon string by key, or null. Deliberately not a JSON parser: this file is a
+        /// flat one-line-per-key object and a regex keeps the oracle independent of the loader it
+        /// is testing.</summary>
+        private static string CanonValue(string json, string key)
+        {
+            var m = Regex.Match(json, "\"" + Regex.Escape(key) + "\"\\s*:\\s*\"((?:[^\"\\\\]|\\\\.)*)\"");
+            return m.Success ? m.Groups[1].Value : null;
         }
 
         // =====================================================================

@@ -157,6 +157,18 @@ namespace DeNelle.Wallet
 
             internal const float EdgePadPx        = 18f;
 
+            // ── WO-1334 defect #2 — the utility rails' OWN measurements, stated ONCE ──────
+            // ⛔ THESE ARE CONSUMED, NOT RESTATED. BuildUtilityHeading sets its LayoutElement from
+            // UtilityHeadingPx and BuildScrollColumn sets its VerticalLayoutGroup from
+            // UtilityRowSpacingPx / UtilityColumnPadPx. They are named here because the
+            // ACTIONS / CLOSE-THE-GAP vertical budget is arithmetic over exactly these numbers, and
+            // that arithmetic (written out at the LandscapeActions region in BuildCommerce) is what
+            // showed the column is 59 px OVERSUBSCRIBED rather than mis-split. A measurement that
+            // only exists inside a layout call cannot be reasoned about by the next person.
+            internal const float UtilityHeadingPx    = 64f;
+            internal const float UtilityRowSpacingPx = 6f;
+            internal const int   UtilityColumnPadPx  = 8;
+
             // ⛔ THE CLOSE KEEP-OUT IS NOT HERE. It moved to StoreLegalFooter.CloseKeepOutPx with
             // the copy it protects — a keep-out authored in one file and consumed by the layout in
             // another is the duplicated-measurement shape this file's own comments keep warning
@@ -309,16 +321,17 @@ namespace DeNelle.Wallet
         private enum BalanceState { NoWallet, Checking, Unavailable, Known }
         private BalanceState _balanceState = BalanceState.NoWallet;
         private double _balanceSkr;
-        private double _fiatUsd;
-        private bool _hasFiat;
-        private float _fiatAtRealtime;
 
-        /// <summary>
-        /// How long a Jupiter quote may sit on screen. A quote is a MOVING PRICE; past this the fiat
-        /// half is dropped rather than left to rot, and the next open re-asks. A wrong dollar figure
-        /// beside a real balance is worse than no dollar figure.
-        /// </summary>
-        private const float FiatStaleSeconds = 120f;
+        // ⛔ WO-1334 — THE `~$12.40` FIAT TAIL AND ITS JUPITER QUOTE ARE REMOVED FROM THIS CHIP.
+        // The owner ruled the connected chip is `SKR: <balance>` and *"that is the whole chip"*.
+        // The fields (_fiatUsd/_hasFiat/_fiatAtRealtime), the FiatStaleSeconds window and
+        // RefreshFiatApproximation() went with the tail rather than being left assigned-but-unread,
+        // because a live quote nobody renders is a network call and a staleness rule that can only
+        // rot. NOTHING ELSE consumed them — the fiat half had exactly one reader, the header text.
+        // This is a DISPLAY removal only: no price, SKU, quote-for-purchase or grant is touched;
+        // shelf pricing still comes from PurchaseQuoteService, server-side, as before.
+        // `StoreStrings.KeyBalanceFiat` / `storeBalanceFiat` are deliberately LEFT IN PLACE so the
+        // sentence and its canon row survive if the tail is ever wanted somewhere with room for it.
 
         /// <summary>Raised when a pack purchase confirms — carries the pack and the tx result.</summary>
         public event Action<PackDef, PaymentResult> PackPurchased;
@@ -790,6 +803,39 @@ namespace DeNelle.Wallet
 
             if (landscapeRail)
             {
+                // ── WO-1334 defect #2 — MEASURED, NOT FIXED. READ THIS BEFORE RE-SPLITTING. ──
+                //
+                // The owner photographed "CLOSE THE GAP" apparently overlapping "MONTHLY LEDGER",
+                // hiding about half its label.
+                //
+                // ⛔ IT IS NOT AN OVERLAP, AND TREATING IT AS ONE IS THE TRAP. Both rails are
+                // RectMask2D scroll columns and these two regions are DISJOINT (0.64-1.00 and
+                // 0.02-0.63): nothing is drawn on top of anything. The ACTIONS rail is simply
+                // SHORTER THAN ITS OWN CONTENT, so its last row is cut by its own mask - and what
+                // the eye reads directly under a cut-off row is the next rail's heading.
+                //
+                // ⛔ AND THE COLUMN IS OVERSUBSCRIBED, SO NO RE-SPLIT CAN FIX IT. Measured against
+                // NightMarketLayout (978 - 100 - 132 = 746 body px, of which 0.02..1.00 = 731 is
+                // available) and the rails' own layout numbers (64 px heading, MinTouchPx+8 rows,
+                // 6 px spacing, 8 px padding):
+                //     ACTIONS       = 64 + 2*120 + 2*6 + 16 = 332 px   (rail has 268 - 64 SHORT)
+                //     CLOSE THE GAP = 64 + 3*120 + 3*6 + 16 = 458 px   (rail has 455 - 3 short)
+                //     total 790 px into 731 px = 59 px OVERSUBSCRIBED
+                // The three catch-up rows are real: packs.json carries THREE "band": "gap" rows.
+                // Widening ACTIONS therefore only moves the clipping onto the third catch-up offer
+                // - which is the exact regression the `utilityFloor` comment above records as
+                // already having been fixed once. A re-split trades a clipped nav door for a
+                // clipped offer and reports itself as a fix.
+                //
+                // ⭐ THE TWO CANDIDATE FIXES, both needing an owner/design call this WO did not have:
+                //   (a) DROP THE "ACTIONS" HEADING. It labels two buttons that already read REDEEM
+                //       and MONTHLY LEDGER, and it frees 64+6 = 70 px - which closes the 59 px gap
+                //       exactly, with nothing else moved. Cheapest, but it deletes a word the owner
+                //       did not ask to lose.
+                //   (b) ONE scroll column for both rails, headings inline. Then the only mask edge
+                //       is the bottom of the column, nothing is ever cut mid-rail, and the list
+                //       scrolls as one. Structurally right; touches _utilityContent /
+                //       _gapUtilityContent / _persistentUtilityChildren and Render()'s clear rule.
                 var actionsHost = Region(_commerceHost, "LandscapeActions",
                     new Vector2(0f, 0.64f), Vector2.one, Vector2.zero, Vector2.zero);
                 var gapHost = Region(_commerceHost, "LandscapeGap",
@@ -845,10 +891,31 @@ namespace DeNelle.Wallet
         {
             if (host == null) return;
 
-            AddArt(host, "covenant-plaque", new Vector2(0f, 0f), new Vector2(0.19f, 1f));
+            // ⛔ WO-1334b — THE COVENANT PLAQUE AND THE BALANCE CHIP SWAPPED ENDS, and the plaque is
+            // the one that moved because the owner named the other one by position: *"in the top
+            // left put their balance of what they have just in SKR so they know what they can
+            // afford immediately"*. The top-left corner is where a storefront puts the spendable
+            // figure, for the reason she gave herself (*"I see every other site in the world does
+            // it"*) — it is the first thing the eye lands on when the panel opens, and "what can I
+            // afford" is the question the player arrives with. Nothing else on this screen has a
+            // stronger claim to that corner, so the plaque — decorative, fixed, read second — takes
+            // the right end the chip vacated. It keeps its 0.19 WIDTH so its authored aspect is
+            // untouched; only its x offset changed. The wordmark spans x 0.25-0.68 and is not
+            // disturbed in either direction.
+            AddArt(host, "covenant-plaque", new Vector2(0.795f, 0f), new Vector2(0.985f, 1f));
             AddArt(host, "night-market-wordmark", new Vector2(0.25f, -0.18f), new Vector2(0.68f, 1.20f));
-            AddArt(host, "wallet-frame", new Vector2(0.69f, 0.02f), new Vector2(0.84f, 0.98f));
-            AddArt(host, "network-frame", new Vector2(0.85f, 0.02f), new Vector2(1f, 0.98f));
+            // ⛔ WO-1334 — THE TWO HEADER "CHIP" PLATES ARE GONE, AND network-frame IS A SAFETY FIX,
+            // NOT A DECLUTTER. `network-frame.png` is AUTHORED ART that bakes the words "Mainnet",
+            // a green dot and a "[READY] Ready" pill straight into the texture — so it printed
+            // "Mainnet" over a DEVNET session, where the tokens are free and a purchase settles for
+            // nothing. A network label that cannot be wrong is worse than no label: it is a
+            // confident lie on the one surface that takes real money. The live network now comes
+            // from `_wallet.NetworkLabel` in RenderBalanceLabel below, where it is READ, not baked.
+            // The green dot went with it: the owner is red/green colourblind and a hue is not a
+            // message (CLAUDE.md §7). `wallet-frame` never had a sprite at all — AddArt returned
+            // false every time — so its only effect was to reserve x 0.69-0.84 for nothing while
+            // the balance text was drawn across the SAME band, which is the overlap the owner
+            // photographed.
 
             // The covenant, first in the reading path (§7's three-second read: 0-1s is wordmark +
             // YOUR balance + the covenant). It is the differentiator against every shop this screen
@@ -864,8 +931,49 @@ namespace DeNelle.Wallet
             // never be one. This label is a READ-ONLY MIRROR of the player's OWN wallet, read
             // through the existing SolanaWalletProvider.GetBalance path. Never written, never
             // granted, never deducted in-game. The copy says "your wallet" for exactly that reason.
-            _balanceLabel = MakeText(host, string.Empty, 30, ElarionUi.Parchment,
-                FontStyles.Normal, TextAlignmentOptions.Center, new Vector2(0.70f, 0.08f), new Vector2(1f, 0.92f));
+            //
+            // ── WO-1334b — ONE LINE, TOP LEFT, ON ITS OWN READABLE GROUND ────
+            //
+            // ⛔ THIS SUPERSEDES THE SAME DAY'S FIRST PLACEMENT. WO-1334 read the owner's *"needs
+            // moved left"* as a nudge and shipped x 0.62-0.955 — still the right-hand side. She then
+            // said it plainly: *"in the top left put their balance of what they have just in SKR so
+            // they know what they can afford immediately ... it shouldn't be on the top right hand
+            // side and white where it's over top of everything else, because that's just ugly, it
+            // doesn't make sense and you can't read it."* Three separate instructions, all binding:
+            //
+            //   1. TOP LEFT — not "left-ish". The rect below starts at x 0.018, the panel's own left
+            //      margin, and ENDS at 0.315: entirely inside the left third, so no future widening
+            //      of the string can walk it back toward the centre, let alone the right.
+            //   2. THE WORD "Balance", then the total: `Balance: 3,817 SKR`. This RETIRES the
+            //      earlier `SKR: <balance>` ruling she gave hours before — she reconsidered out
+            //      loud, and the reason she gave is the one that makes it right: the word is the
+            //      storefront convention (*"I see every other site in the world does it"*), and a
+            //      bare `SKR: 3,817` asks the player to work out what the number is FOR. The
+            //      sentence itself lives in canon-strings.json as `storeBalanceValue`.
+            //   3. READABLE — a STATED DEFECT, not a nicety. Parchment-white text laid straight
+            //      over the panel's busy art is what *"you can't read it"* describes. It now gets a
+            //      ground: the same black ~66%-alpha plate this screen already uses behind its card
+            //      text, so this is the established idiom rather than a new one invented here, and
+            //      the text is GOLD BOLD on it for the same reason. ⛔ The legibility is carried by
+            //      the PLATE (a luminance contrast), never by the hue — the owner is red/green
+            //      colourblind (CLAUDE.md §7) and a gold-on-busy-art chip with no ground would read
+            //      exactly as badly to her as the white one did.
+            //
+            // ⛔ THE PLATE IS DERIVED FROM THE LABEL'S OWN RECT, NEVER TYPED A SECOND TIME. A
+            // hand-copied plate rect drifts off its text the first time anyone nudges either one,
+            // and a half-covered chip is a worse artefact than no plate at all — on the one surface
+            // that takes real money. PlateBehind reads the label's anchors and pads them, so moving
+            // the chip moves its ground for free.
+            //
+            // ⚠ FitSingleLine's floor is passed EXPLICITLY. Its `minSize: 0` default resolves to
+            // ElarionUiKit.FontFloor (30), NOT FontHardFloor (20) — a default that has already
+            // ellipsised one label in this project. The explicit argument is here so nobody has to
+            // re-derive which floor the default meant.
+            _balanceLabel = MakeText(host, string.Empty, 30, ElarionUi.Gold,
+                FontStyles.Bold, TextAlignmentOptions.Left, new Vector2(0.018f, 0.08f), new Vector2(0.315f, 0.92f));
+            ElarionUiKit.FitSingleLine(_balanceLabel, ElarionUi.FontFloorMobile, 30f);
+            PlateBehind(_balanceLabel, Translucent(NightMarketPalette.Ground, 0.66f),
+                        padX: 0.010f, padY: 0.03f);
         }
 
         /// <summary>
@@ -1464,7 +1572,9 @@ namespace DeNelle.Wallet
         {
             var go = new GameObject("utility-heading-" + label, typeof(RectTransform), typeof(LayoutElement));
             go.transform.SetParent(parent, false);
-            go.GetComponent<LayoutElement>().preferredHeight = 64f;
+            // WO-1334: ONE source for this height — the ACTIONS/CLOSE-THE-GAP vertical split is
+            // arithmetic over it, so a heading that grows here grows the rail that holds it.
+            go.GetComponent<LayoutElement>().preferredHeight = NightMarketLayout.UtilityHeadingPx;
             var backing = Plate(go.transform, Color.white);
             var image = backing != null ? backing.GetComponent<Image>() : null;
             var frame = Resources.Load<Sprite>("UI/ElarionMedieval/frames/content-panel");
@@ -2629,7 +2739,6 @@ namespace DeNelle.Wallet
         private async UniTaskVoid RefreshWalletMirror()
         {
             using var _ = FlowTrace.Enter("Store", "RefreshWalletMirror (read-only)");
-            _hasFiat = false;
 
             // ⛔ WO-1323 — A PI PLAYER HAS NO SOLANA WALLET TO MIRROR, so this whole read is skipped
             // rather than run and then hidden. The owner's Pi Browser session showed "Connect a
@@ -2687,52 +2796,12 @@ namespace DeNelle.Wallet
             _balanceSkr = balance.Skr;
             SetBalanceState(BalanceState.Known);
 
-            await RefreshFiatApproximation();
-        }
-
-        /// <summary>
-        /// The APPROXIMATE fiat half, from a live Jupiter quote. Silently absent whenever it cannot
-        /// be trusted — a wrong dollar figure beside a real balance is worse than no dollar figure.
-        ///
-        /// <para>Four documented failure modes, all handled: (1) the quote may be taken against the
-        /// UNSET SKR mint placeholder, which round-trips a number that means nothing — excluded
-        /// transitively, because the fiat half only renders when the BALANCE is Known, and that
-        /// requires a configured <c>WalletEndpoints.SkrMint</c>; (2) Jupiter is MAINNET and the
-        /// wallet may be on devnet, an expected mismatch in testing that must degrade to SKR-only
-        /// quietly, so a null quote is not an error the player sees; (3) it is a network call, so it
-        /// never blocks the open — the SKR half is already on screen by the time this runs; (4) a
-        /// quote is a MOVING PRICE, so it keeps its tilde and is dropped after
-        /// <see cref="FiatStaleSeconds"/> rather than left to rot.</para>
-        ///
-        /// <para><c>GetQuoteAsync</c> already emits its own FlowTrace on entry, warn and failure —
-        /// no parallel trace is added here.</para>
-        /// </summary>
-        private async UniTask RefreshFiatApproximation()
-        {
-            var jupiter = DeNelle.Core.CoreServices.Jupiter;
-            if (jupiter == null) return;
-
-            try
-            {
-                // 1 USDC in, quote out: Rate is "1 input token = N SKR", and USDC is dollar-pegged,
-                // so USD ~= SKR / Rate. One quote covers the whole chip; no per-pack quoting.
-                var task = jupiter.GetQuoteAsync(SwapInputToken.USDC, 1m);
-                if (task == null) return;
-                SwapQuote quote = await task;
-                if (quote == null || quote.Rate <= 0m) return;
-
-                _fiatUsd = _balanceSkr / (double)quote.Rate;
-                _hasFiat = true;
-                _fiatAtRealtime = Time.realtimeSinceStartup;
-                RenderBalanceLabel();
-            }
-            catch (Exception ex)
-            {
-                // Degrade to SKR-only. This is an EXPECTED path (mainnet quote vs devnet wallet), so
-                // it is a Step, not a Fail — but it is never silent.
-                FlowTrace.Step("Store", $"wallet mirror: no fiat approximation ({ex.GetType().Name}) — showing SKR only.");
-                _hasFiat = false;
-            }
+            // ⛔ WO-1334 — NO SECOND AWAIT HERE ANY MORE. This used to chain
+            // `await RefreshFiatApproximation()`, a live Jupiter quote whose ONLY consumer was the
+            // `~$12.40` tail on the header chip. The owner ruled the chip is `SKR: <balance>` and
+            // nothing else, so the quote went with the tail rather than being left to run, fail,
+            // retry and expire against a reader that no longer exists. The balance itself is
+            // unchanged: same read, same never-laundered zero, same four honest states.
         }
 
         private void SetBalanceState(BalanceState state)
@@ -2763,9 +2832,16 @@ namespace DeNelle.Wallet
                     // canon-strings.json, both canonical copies, ASCII only) — and they are UI-002's
                     // wallet-identity wording, which is exactly the class of sentence that must be
                     // reviewable in data rather than buried in a switch on a money screen.
+                    //
+                    // ⛔ WO-1334 — THE ADDRESS IS GONE FROM THIS BRANCH, NOT SHRUNK. Owner ruling
+                    // 2026-09-03: *"they dont need address"*. `storeBalanceBoundAddress` no longer
+                    // carries a {0}, so this is Get, not Format — the shortened base58 is not
+                    // something a player verifies by eye and it was the single biggest contributor
+                    // to the clump. The BRANCH stays, because "a live account is attached" and
+                    // "only a durable identity exists" remain two different facts and each still
+                    // gets its own SENTENCE.
                     if (_wallet != null && _wallet.Account.IsValid)
-                        _balanceLabel.text = StoreStrings.Format(StoreStrings.KeyBalanceBoundAddress,
-                            Shorten(_wallet.Account.Address));
+                        _balanceLabel.text = StoreStrings.Get(StoreStrings.KeyBalanceBoundAddress);
                     else if (PurchaseGate.HasDurableIdentity)
                         _balanceLabel.text = StoreStrings.Get(StoreStrings.KeyBalanceBoundIdentity);
                     else
@@ -2779,15 +2855,37 @@ namespace DeNelle.Wallet
                     return;
             }
 
-            string identity = _wallet != null && _wallet.Account.IsValid
-                ? Shorten(_wallet.Account.Address) + "  " + _wallet.NetworkLabel + "  SKR"
-                : (_wallet != null ? _wallet.NetworkLabel + "  SKR" : "SKR");
-            string text = identity + "\n" + StoreStrings.Format(StoreStrings.KeyBalanceValue, _balanceSkr.ToString("N0"));
-            bool fresh = _hasFiat && (Time.realtimeSinceStartup - _fiatAtRealtime) < FiatStaleSeconds;
-            if (fresh)
-                text += "  " + StoreStrings.Format(StoreStrings.KeyBalanceFiat, _fiatUsd.ToString("N2"));
-            else if (_hasFiat)
-                _hasFiat = false;   // stale: drop it rather than show a price that has moved
+            // ── WO-1334b — THE CONNECTED CHIP IS ONE LINE: `Balance: 3,817 SKR`
+            //
+            // ⛔ THE LEADING WORD IS THE RULING, and it RETIRES the same day's earlier `SKR: 3,817`.
+            // Owner, 2026-09-03: *"Maybe we could put the word balance and then put their SKR total
+            // ... I see every other site in the world does it. All I really care about: in the top
+            // left put their balance of what they have just in SKR so they know what they can
+            // afford immediately."* A bare `SKR: 3,817` names a token; `Balance: 3,817 SKR` answers
+            // the question the player actually opened the store with. The sentence is
+            // `storeBalanceValue` in canon-strings.json, so re-wording it is a data edit, not a
+            // code edit — and both shipped copies are pinned.
+            //
+            //
+            // ⭐ WHY THE WORD "Connected" IS NOT HERE, so it does not get helpfully re-added: a
+            // balance that RENDERS AT ALL already proves the wallet is connected — an unconnected
+            // wallet reaches one of the four sentences above instead and never gets a number. So
+            // "Connected" would be redundant with the digits beside it. The DISCONNECTED states are
+            // where the words must be explicit, and that is exactly where they now are: every
+            // storeBalance* sentence above says its state in WORDS, never by hue, because the owner
+            // is red/green colourblind (CLAUDE.md §7).
+            //
+            // ⛔ THE NETWORK TAIL IS A MONEY-SAFETY SIGNAL AND IS NOT OPTIONAL POLISH. On Devnet
+            // the SKR is free and a purchase completes for nothing (the matched-pair invariant that
+            // MonetizationActivationRegression pins). It is drawn only when the network is NOT
+            // mainnet, which is the smallest form that still carries the warning: on mainnet the
+            // chip is the owner's exact `SKR: <balance>`, and the moment it is anything else the
+            // word appears. Silence therefore means mainnet and a WORD means "this is not real
+            // money" — the loud case is the dangerous one, which is the right way round. This
+            // replaces the old baked "Mainnet" plate that could not tell the two apart at all.
+            string text = StoreStrings.Format(StoreStrings.KeyBalanceValue, _balanceSkr.ToString("N0"));
+            if (_wallet != null && _wallet.Network != WalletNetwork.Mainnet)
+                text += "  " + _wallet.NetworkLabel.ToUpperInvariant();
             _balanceLabel.text = text;
         }
 
@@ -4008,6 +4106,43 @@ namespace DeNelle.Wallet
             return img;
         }
 
+        /// <summary>
+        /// A dark ground drawn UNDER an existing label, sized from that label's own anchors plus a
+        /// stated pad. Never eats a tap.
+        ///
+        /// <para>⛔ IT TAKES THE LABEL, NOT A RECT, AND THAT IS THE WHOLE POINT. The alternative —
+        /// typing the plate's anchors beside the text's — is two copies of one number, which drifts
+        /// the first time either is nudged and leaves a chip half on its ground. Same duplicated-state
+        /// failure class as CLAUDE.md §2's stale WO block. Derive, never re-type.</para>
+        ///
+        /// <para>⛔ AND IT IS A LUMINANCE FIX, NOT A COLOUR ONE. The owner is red/green colourblind
+        /// (CLAUDE.md §7): text made "readable" by re-tinting it is not readable to her. What makes
+        /// a label legible over busy art is a DARK GROUND behind it, which is a brightness contrast
+        /// and survives any colour vision. Owner ruling 2026-09-03 on the wallet chip: *"white where
+        /// it's over top of everything else ... you can't read it"*.</para>
+        /// </summary>
+        private static Image PlateBehind(TextMeshProUGUI label, Color color, float padX, float padY)
+        {
+            if (label == null) return null;
+            var lrt = label.rectTransform;
+            var parent = lrt.parent;
+            if (parent == null) return null;
+
+            var go = new GameObject("plate-behind", typeof(RectTransform));
+            go.transform.SetParent(parent, false);
+            var rt = go.GetComponent<RectTransform>();
+            rt.anchorMin = new Vector2(lrt.anchorMin.x - padX, lrt.anchorMin.y - padY);
+            rt.anchorMax = new Vector2(lrt.anchorMax.x + padX, lrt.anchorMax.y + padY);
+            rt.offsetMin = Vector2.zero; rt.offsetMax = Vector2.zero;
+            var img = go.AddComponent<Image>();
+            img.color = color;
+            img.raycastTarget = false;
+            // Immediately BELOW the label in the sibling order, not first in the band: first-sibling
+            // would put it under every other header child too, and this ground belongs to one label.
+            go.transform.SetSiblingIndex(Mathf.Max(0, lrt.GetSiblingIndex()));
+            return img;
+        }
+
         /// <summary>The card gem. DECORATION: it never carries a state or a meaning by itself.</summary>
         private static void Orb(Transform parent, Color tint)
             => Orb(parent, tint, new Vector2(0.05f, 0.68f), new Vector2(0.20f, 0.94f));
@@ -4075,8 +4210,10 @@ namespace DeNelle.Wallet
             crt.pivot = new Vector2(0.5f, 1f);
             crt.offsetMin = Vector2.zero; crt.offsetMax = Vector2.zero;
             var layout = contentGo.GetComponent<VerticalLayoutGroup>();
-            layout.spacing = 6f;
-            layout.padding = new RectOffset(8, 8, 8, 8);
+            // WO-1334: the same two numbers the utility-rail vertical split is computed from.
+            layout.spacing = NightMarketLayout.UtilityRowSpacingPx;
+            layout.padding = new RectOffset(NightMarketLayout.UtilityColumnPadPx, NightMarketLayout.UtilityColumnPadPx,
+                                            NightMarketLayout.UtilityColumnPadPx, NightMarketLayout.UtilityColumnPadPx);
             // ⛔ TRUE, AND THIS ONE FLAG IS THE P0-3 ROOT CAUSE. With childControlHeight FALSE a
             // VerticalLayoutGroup ignores LayoutElement.preferredHeight entirely and lays children out
             // at their own rect height — which for a code-built row is RectTransform's default 100
