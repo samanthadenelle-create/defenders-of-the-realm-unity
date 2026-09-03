@@ -1039,6 +1039,56 @@ namespace DeNelle.Village
                 _engagedLatched = false;
                 DeNelle.Core.Combat.HeroCombatEngagement.SetEngaged(this, false);
             }
+
+            // =============================================================================
+            // WO-1337 — THE SECOND BATTLE-LOCK CLAIM THIS BODY RAISES, RELEASED THE SAME WAY.
+            // -----------------------------------------------------------------------------
+            // The block directly above releases this enemy's HeroCombatEngagement token on
+            // EVERY exit, and its own comment states the invariant: "a despawned/pooled/
+            // destroyed enemy can never wedge BattleLock.IsInBattle() true". But an enemy
+            // raises the battle-lock through TWO owners, not one — the engagement token, and
+            // the PURSUIT PULSE it stamps every frame while chasing (DriveNav, ~line 1578),
+            // which PursuitBattleProbe returns verbatim as a BattleLock probe. Only the first
+            // was released here. The pursuit pulse was revoked in exactly ONE place — Die()
+            // (~line 2986) — so an enemy removed WITHOUT DYING left a live pulse behind it for
+            // PostureSignals.PursuitTtl (1.5 s) past its own destruction.
+            //
+            // ⛔ THE CAPTURED DEFECT (device SM02G4061955851, build 2026.09.03.353593,
+            //    F8 seq 4677, scene Main_Castle_Overworld):
+            //
+            //      [Flow:Quiescence] BATTLE_QUIESCENCE_FAIL (retreat) - 2 invariant(s) NOT
+            //        restored after the battle:
+            //        - battle-lock: still HELD after the battle ended. … HOLDER(S):
+            //          PursuitBattleProbe.Probe (of 3 registered: PursuitBattleProbe.Probe,
+            //          BattleArena.<Awake>b__84_0, WaveManager.<OnEnable>b__116_0).
+            //
+            // Read against the retreat path, the arithmetic is deterministic and uses only
+            // constants that live in this tree:
+            //   * BattleArena.Resolve announces the session end synchronously, and
+            //     BattleSessionEnd.Release clears the whole pursuit ring there (t=0).
+            //   * The arena's SURVIVORS are not torn down at t=0. Resolve captures them and
+            //     hands them to ReturnHomeWithFade, which despawns them only AFTER
+            //     HomeFadeOutSeconds = 0.35 s (BattleArena.cs:181-184, :2919-2922) — and it
+            //     despawns them with Destroy(e.gameObject), a path that never reaches Die().
+            //   * So every survivor keeps stamping ReportPursuit for 0.35 s past the clear,
+            //     and its LAST pulse then stayed live to t = 0.35 + 1.5 = 1.85 s.
+            //   * BattleQuiescenceGate judges a retreat at SettleSeconds = 0.75 s.
+            //     0.75 < 1.85, every time — which is why WO-1233's own header already recorded
+            //     that "the RETREAT case fails deterministically" while the win case (which
+            //     waits out the reward screen) did not.
+            //
+            // This is the WO-1308 shape exactly, one door over: a release seam that existed
+            // (RevokePursuit) and an owner that never reached for it on the path it mattered.
+            // Fixing it HERE rather than in the arena's despawn loop is deliberate — the pulse
+            // is keyed by this instance id, so this body is its only honest owner, and doing it
+            // in OnDisable covers all three removal paths at once (Destroy, pool release, scene
+            // unload) instead of adding an Nth per-caller release.
+            //
+            // ⚠ IT CANNOT SUPPRESS A REAL CHASE. Pursuit is PULSE-based: a live chaser re-stamps
+            // on its next DriveNav tick, so revoking here only drops the pulse of a body that is
+            // gone. A disabled enemy is not chasing anyone. Idempotent alongside Die()'s revoke.
+            // =============================================================================
+            DeNelle.Core.HudModel.PostureSignals.RevokePursuit(GetInstanceID());
         }
 
         private void EnsureHitReaction()

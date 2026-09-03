@@ -75,6 +75,55 @@ namespace DeNelle.Core.UI
         /// <summary>The display name of the currently open panel, or null when none is open.</summary>
         public static string OpenPanelName => _open != null ? _open.Name : null;
 
+        // =====================================================================
+        //  WO-1337 — ATTRIBUTION FOR THE MODAL INVARIANT.
+        // ---------------------------------------------------------------------
+        //  BattleQuiescenceGate's modal finding said a panel handle was still open and could
+        //  not say WHICH — the identical gap WO-1233 closed for the battle-lock, and it cost
+        //  the same log-archaeology. The gate lives in Core and the handle's own probe was
+        //  `internal`, so the two accessors below expose the attribution WITHOUT exposing the
+        //  handle (nothing outside this file may close or re-point another panel's handle).
+        // =====================================================================
+
+        /// <summary>
+        /// What the OPEN panel's own <c>IsOpen</c> probe says about itself: <c>true</c> = it is
+        /// genuinely up and the player can see and dismiss it; <c>false</c> = it is recorded as
+        /// open while reporting it is NOT (the WO-465 invisible-scrim class — an INVISIBLE GHOST
+        /// HANDLE, which is the softlock, because the back button targets it and world prompts
+        /// stay suppressed under nothing). <c>null</c> = no panel open, or it registered no probe.
+        /// </summary>
+        public static bool? OpenPanelSelfReportsOpen
+        {
+            get
+            {
+                var open = _open;
+                if (open?.IsOpen == null) return null;
+                bool reported = false;
+                // The probe is the CALLER's code — a throwing probe must never take down a
+                // diagnostic read (same guard as the NotifyOpened verify below).
+                bool ran = Guard.Try("UI", "PanelManager.OpenPanelSelfReportsOpen probe '" + open.Name + "'",
+                    () => { reported = open.IsOpen(); });
+                return ran ? (bool?)reported : null;
+            }
+        }
+
+        /// <summary>
+        /// One human-readable line naming the open panel AND whether it is a visible panel or an
+        /// invisible ghost handle. This is the difference between "a modal is stuck" (a debugging
+        /// session) and "'Settings' is recorded open but reports NOT open" (a fix).
+        /// </summary>
+        public static string DescribeOpen()
+        {
+            var open = _open;
+            if (open == null) return "none";
+            bool? self = OpenPanelSelfReportsOpen;
+            if (self == null) return "'" + open.Name + "' (registered NO IsOpen probe - visibility unknown)";
+            return self.Value
+                ? "'" + open.Name + "' (its own IsOpen probe reports VISIBLE - a real panel is on screen)"
+                : "'" + open.Name + "' (its own IsOpen probe reports NOT open - an INVISIBLE GHOST HANDLE: " +
+                  "nothing is on screen, yet world prompts stay suppressed and back targets it)";
+        }
+
         /// <summary>
         /// Create a handle for a panel. <paramref name="close"/> hides the panel;
         /// <paramref name="isOpen"/> reports its current visibility. Both are invoked

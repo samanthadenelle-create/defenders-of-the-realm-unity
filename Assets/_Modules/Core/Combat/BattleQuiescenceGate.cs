@@ -214,9 +214,17 @@ namespace DeNelle.Core.Combat
                 Guard.Try(Sys, "probe modal arbiter", () =>
                 {
                     if (PanelManager.AnyOpen)
+                        // WO-1337: the original sentence is preserved VERBATIM and the HOLDER is
+                        // APPENDED — the same strengthening WO-1233 applied to the battle-lock
+                        // finding, and for the same reason. F8 seq 4677 reported this invariant on
+                        // the owner's device and named no panel, so the capture proved a handle was
+                        // stuck and could not say which one: unactionable by construction. This is
+                        // an addition, never a narrowing — it fires on exactly the condition it
+                        // always did.
                         failures.Add("modal: a panel handle is STILL OPEN after the reward screen closed. " +
                                      "The world interact button stays suppressed underneath and the back " +
-                                     "button targets a panel the player cannot see.");
+                                     "button targets a panel the player cannot see. " +
+                                     $"HOLDER: {PanelManager.DescribeOpen()}.");
                 });
             }
 
@@ -350,6 +358,63 @@ namespace DeNelle.Core.Combat
                         $"(was [{stuckHolders}]). A holder that survives a full session release is either a " +
                         "LIVE chase re-pulsing every aggro tick, or an owner whose probe is latched true with " +
                         "no battle behind it. Read the holder name: it is the owner to fix.");
+            }
+
+            // =================================================================
+            //  MODAL SELF-HEAL (WO-1337). A GHOST handle is closed; a VISIBLE panel is not.
+            // -----------------------------------------------------------------
+            //  The finding above states its own player consequence: "the world interact button
+            //  stays suppressed underneath and the back button targets a panel the player cannot
+            //  see". Both halves of that sentence describe an INVISIBLE handle, and PanelManager
+            //  can now tell the two cases apart by asking the handle's own IsOpen probe:
+            //
+            //    * probe says NOT open  -> a proven ghost (the WO-465 invisible-scrim class).
+            //      Nothing is on screen, so there is nothing for the player to dismiss and no
+            //      way out; this IS the softlock, and closing it cannot take anything away from
+            //      anyone. Healed — through the panel's OWN Close action (PanelManager.CloseAll),
+            //      never by zeroing the arbiter's record, so the panel unwinds by its own door
+            //      exactly as the lock heal above re-drives the owners' own unwinds.
+            //
+            //    * probe says VISIBLE (or the panel registered no probe) -> a real panel is on
+            //      screen and the player can dismiss it, so this is NOT a softlock and force-
+            //      closing it would yank a screen out from under her (the pause menu over a
+            //      just-ended fight is the obvious case). REPORTED BY NAME and left alone —
+            //      which is now enough, because the finding names it.
+            //
+            //  ⚠ Ordered after the lock heal and before the blunt timeScale write for the same
+            //  reason that one is last: attributable recovery gets first refusal.
+            // =================================================================
+            if (PanelManager.AnyOpen)
+            {
+                string modalHolder = PanelManager.DescribeOpen();
+                bool? selfReportsOpen = PanelManager.OpenPanelSelfReportsOpen;
+
+                if (selfReportsOpen == false)
+                {
+                    Guard.Try(Sys, "self-heal: close the ghost panel handle", PanelManager.CloseAll);
+
+                    if (!PanelManager.AnyOpen)
+                        FlowTrace.Warn(Sys,
+                            $"modal SELF-HEALED after {MarkerFail} ({context}): {modalHolder} - it was " +
+                            "recorded open while reporting it was not, so the world interact button was " +
+                            "suppressed under nothing and back had an invisible target. Closed through the " +
+                            "panel's own Close action. This is a SAFETY NET, not a fix - the FAIL above " +
+                            "names the panel, and that panel still failed to call NotifyClosed.");
+                    else
+                        FlowTrace.Fail(Sys,
+                            $"modal STILL OPEN after the self-heal ({context}): {PanelManager.DescribeOpen()} " +
+                            $"(was {modalHolder}). CloseAll ran and the arbiter still holds a handle, so that " +
+                            "panel's own Close action does not clear its registration. Read the panel name: " +
+                            "it is the owner to fix.");
+                }
+                else
+                {
+                    FlowTrace.Warn(Sys,
+                        $"modal left OPEN on purpose after {MarkerFail} ({context}): {modalHolder}. A panel " +
+                        "the player can see is hers to dismiss, and force-closing it would take a live screen " +
+                        "off her - so this is reported, not healed. If this panel should not have been up at " +
+                        "battle end, the fix belongs to whoever opened it.");
+                }
             }
 
             // THE ONE RESTORE. Unsurvivable and unambiguous: there is no legitimate reason for the

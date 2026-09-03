@@ -2751,9 +2751,44 @@ namespace DeNelle.Village.Arena
             // Guarded and fire-and-forget: this is diagnostics and it must never be able to break a
             // battle resolve. It is armed on BOTH outcomes - a retreat tears down the same systems a
             // win does, and a contract with a hole in it is not a contract.
+            // =================================================================================
+            // WO-1337 — A RETREAT HAS AN END-STATE SCREEN TOO, AND THIS LINE USED TO DENY IT.
+            // ---------------------------------------------------------------------------------
+            // The `: null` this replaces told the gate "a retreat presents no reward screen, so
+            // start settling immediately and judge the modal invariant". That is contradicted
+            // ~80 lines up in this same method: the loss/retreat branch sets _pendingLossBanner
+            // to hud.ShowResult(false, …) (BattleArena.cs:2678-2680), BattleArenaHud.ShowResult
+            // routes a defeat through EndStateView.Show (BattleArenaHud.cs:96), and
+            // EndStateView.Show calls PanelManager.NotifyOpened on a registered handle named
+            // "EndState" (EndStateView.cs:200-202). So a retreat DOES open an arbiter panel —
+            // it just opens it LATE, on arrival, at the end of ReturnHomeWithFade (:3016-3021),
+            // which is the t=397 "two death screens" fix and must not be moved back.
+            //
+            // ⛔ THE CAPTURED FINDING this closes (device SM02G4061955851, F8 seq 4677):
+            //      - modal: a panel handle is STILL OPEN after the reward screen closed. The
+            //        world interact button stays suppressed underneath and the back button
+            //        targets a panel the player cannot see.
+            // The gate's own header states the rule it was breaking: "an open reward screen is
+            // correct behaviour, and failing on it is the fastest way to teach everyone to
+            // ignore this gate". A retreat's defeat banner is exactly such a screen.
+            //
+            // ⚠ WHY THE PROBE IS A PENDING-OR-SHOWING PAIR AND NOT JUST IsShowing. At the
+            // instant this arms, the defeat banner has NOT opened yet (it is deferred behind the
+            // fade), so a bare IsShowing reads FALSE, the wait loop exits on its first poll, and
+            // the settle judges straight through the banner's open — the false finding, intact.
+            // _pendingLossBanner is the honest "a screen is coming" flag, and it is nulled in the
+            // same statement block that invokes the banner with no yield between (:3016-3021), so
+            // no poll can ever observe the handover gap.
+            //
+            // This does NOT weaken the gate: a defeat banner that never closes still gets
+            // reported, because Arm's ModalWaitCapSeconds (60 s) breaks the wait and marks the
+            // verdict cappedOut rather than waiting in silence.
+            System.Func<bool> rewardScreenProbe = won
+                ? (System.Func<bool>)(() => EndStateView.IsShowing)
+                : () => _pendingLossBanner != null || EndStateView.IsShowing;
             Guard.Try("BattleArena", "arm battle-end quiescence gate", () =>
                 StartCoroutine(BattleQuiescenceGate.Arm(
-                    won ? (System.Func<bool>)(() => EndStateView.IsShowing) : null,
+                    rewardScreenProbe,
                     won ? "arena win" : "retreat")));
         }
 

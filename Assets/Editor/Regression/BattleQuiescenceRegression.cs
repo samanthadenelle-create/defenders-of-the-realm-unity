@@ -85,6 +85,13 @@ namespace DeNelle.Editor
                 // WO-1308 — a RETREAT must release EVERY battle-lock holder, including the wave loop.
                 RetreatReleasesEveryLockHolder(failures, log);
                 WaveLoopUnwindsItsOwnPhase(failures, log);
+
+                // WO-1337 — a retreat must release every battle-lock holder AND close every
+                // panel handle. Two invariants, two owners, one exit path.
+                RetreatSurvivorPulseDoesNotOutliveTheBody(failures, log);
+                DespawnRevokesPursuitAtSource(failures, log);
+                RetreatClosesEveryPanelHandle(failures, log);
+                RetreatWaitsOutItsOwnDefeatBanner(failures, log);
             }
             finally
             {
@@ -99,6 +106,9 @@ namespace DeNelle.Editor
                     s_latchedHolderProbe = null;
                 }
                 PostureSignals.ClearPursuits();
+                // WO-1337: the modal arbiter is a global too. A suite that leaves a handle
+                // recorded open would fail the modal invariant for every suite after it.
+                DeNelle.Core.UI.PanelManager.CloseAll();
             }
 
             if (failures.Count > 0)
@@ -111,8 +121,10 @@ namespace DeNelle.Editor
             reason = $"{MarkerOk} -- a clean world passes with zero findings; a wrong timeScale, a " +
                      "failing module probe and the 2026-08-20 defect each produce a NAMED failure; " +
                      "an open reward screen is correctly not judged; the gate is wired into " +
-                     "battle resolve; and a RETREAT releases every battle-lock holder, the wave " +
-                     "loop's latched phase included (WO-1308).";
+                     "battle resolve; a RETREAT releases every battle-lock holder, the wave " +
+                     "loop's latched phase included (WO-1308); and a retreat both releases the " +
+                     "pursuit pulse of every body it despawns and closes every panel handle, " +
+                     "naming the panel and healing only an invisible ghost (WO-1337).";
             Debug.Log(log + MarkerOk);
             return true;
         }
@@ -740,6 +752,335 @@ namespace DeNelle.Editor
                              "a field it emptied, and re-registers the lock probe against that claim.");
             else
                 log.AppendLine("  [wo1308-wiring] OnDisable stands the phase down with the roster it clears");
+        }
+
+        // =====================================================================
+        //  WO-1337 — a RETREAT must release every battle-lock holder AND close
+        //  every panel handle.
+        // ---------------------------------------------------------------------
+        //  CAPTURED DEFECT (device SM02G4061955851, build 2026.09.03.353593,
+        //  F8 seq 4677, scene Main_Castle_Overworld):
+        //
+        //    [Flow:Quiescence] BATTLE_QUIESCENCE_FAIL (retreat) - 2 invariant(s)
+        //      NOT restored after the battle:
+        //      - battle-lock: still HELD ... HOLDER(S): PursuitBattleProbe.Probe
+        //        (of 3 registered: PursuitBattleProbe.Probe,
+        //        BattleArena.<Awake>b__84_0, WaveManager.<OnEnable>b__116_0).
+        //      - modal: a panel handle is STILL OPEN after the reward screen closed.
+        //
+        //  Note what changed since WO-1308's seq 4664/4675, where the holder list read
+        //  [PursuitBattleProbe.Probe, WaveManager.<OnEnable>b__116_0]: the WAVE holder
+        //  is GONE, so WO-1308's unwind works and is not to be re-fixed. The probe
+        //  arrived through the other door — it does reach BattleSessionEnd.Release,
+        //  and it RE-LATCHES afterwards, because the arena's SURVIVORS outlive the
+        //  release by HomeFadeOutSeconds (0.35 s) and are then removed with
+        //  Destroy(gameObject), which never reaches Die() and so never revoked their
+        //  pursuit pulse. Last pulse live to 0.35 + PursuitTtl(1.5) = 1.85 s; the gate
+        //  judges a retreat at SettleSeconds 0.75 s. Deterministic, on constants that
+        //  live in the tree - which is why WO-1233's own header already recorded that
+        //  "the RETREAT case fails deterministically".
+        //
+        //  The modal half is a DIFFERENT owner and shares no cause: a retreat DOES
+        //  present an end-state screen (the deferred defeat banner, on arrival), and
+        //  the arm site used to tell the gate a retreat had none.
+        // =====================================================================
+
+        /// <summary>
+        /// Behavioural, both directions, over the real Core statics. Reproduces the retreat
+        /// timeline: the session end clears the pursuit ring, a SURVIVOR that is still alive
+        /// behind the fade re-stamps its pulse, and the lock must come down when that body is
+        /// removed — not 1.5 s later on the TTL, which is past the gate's judge point.
+        /// </summary>
+        private static void RetreatSurvivorPulseDoesNotOutliveTheBody(List<string> failures, StringBuilder log)
+        {
+            const int survivor = 41337;                                      // one staged arena enemy
+            Func<bool> pursuitProbe = () => PostureSignals.PursuitActive;    // PursuitBattleProbe.Probe
+
+            Time.timeScale = 1f;
+            PostureSignals.ClearPursuits();
+            BattleLock.RegisterProbe(pursuitProbe);
+            try
+            {
+                PostureSignals.ReportPursuit(survivor);        // chasing the hero inside the arena
+                BattleSessionEnd.Release("retreat");           // t=0 - Release clears the whole ring
+                PostureSignals.ReportPursuit(survivor);        // ...and the body is STILL ALIVE behind
+                                                               //    the 0.35 s fade, so it re-stamps
+
+                // (a) THE DEFECT. The body is then destroyed WITHOUT dying, so nothing revokes its
+                //     pulse and it stays live for PursuitTtl. Assert the defect reproduces: if the
+                //     lock is already clear here, this case is no longer testing seq 4677.
+                if (!BattleLock.IsInBattle())
+                {
+                    failures.Add("[wo1337] the DEFECT STATE no longer reproduces: a survivor that " +
+                                 "re-stamped its pursuit pulse AFTER BattleSessionEnd.Release is not " +
+                                 "holding the battle-lock. Either PursuitBattleProbe's source changed or " +
+                                 "the pulse TTL did - re-derive this case from a fresh capture before " +
+                                 "trusting the pass below.");
+                    return;
+                }
+                log.AppendLine("  [wo1337] a survivor re-stamping after the release holds the lock (seq 4677)");
+
+                // (b) THE CONTRACT. The body revokes its OWN pulse as it goes down (Enemy.OnDisable),
+                //     so the lock comes down with the body instead of 1.5 s later on the TTL.
+                //     Nothing force-clears BattleLock; the owner stands its own claim down.
+                PostureSignals.RevokePursuit(survivor);
+
+                if (BattleLock.IsInBattle())
+                    failures.Add("[wo1337] the survivor revoked its pursuit pulse and the battle-lock is " +
+                                 "STILL HELD by [" + BattleLock.DescribeHolders() + "]. The retreat then " +
+                                 "leaves combat input suppressed and the HUD pinned out of town - F8 seq " +
+                                 "4677 verbatim.");
+                else
+                    log.AppendLine("  [wo1337] revoking the removed body's own pulse releases the lock immediately");
+            }
+            finally
+            {
+                BattleLock.UnregisterProbe(pursuitProbe);
+                PostureSignals.ClearPursuits();
+                Time.timeScale = 1f;
+            }
+        }
+
+        /// <summary>
+        /// Source-lint on the REAL owner. The case above proves the seam; only this proves that the
+        /// ENEMY reaches it on the path that mattered — and the whole defect was a release seam that
+        /// existed (RevokePursuit) with no caller on the despawn path. An Enemy cannot be driven
+        /// inside a synchronous editor batch, and DeNelle.Village is not referenced from here.
+        /// </summary>
+        private static void DespawnRevokesPursuitAtSource(List<string> failures, StringBuilder log)
+        {
+            string enemy = ReadCode("Assets/_Modules/Village/Enemies/Enemy.cs");
+            if (enemy == null)
+            {
+                failures.Add("[wo1337-wiring] Enemy.cs is MISSING - the pursuit-pulse release cannot be verified.");
+            }
+            else
+            {
+                // The revoke must be reachable from OnDisable, which is the ONE hook that covers all
+                // three removal paths at once (Destroy, pool release, scene unload). Die() alone is
+                // the defect: the arena despawns survivors with Destroy(gameObject).
+                int onDisable = enemy.IndexOf("private void OnDisable()", StringComparison.Ordinal);
+                if (onDisable < 0)
+                {
+                    failures.Add("[wo1337-wiring] Enemy.OnDisable is GONE. It is the hook that releases this " +
+                                 "body's battle-lock claims (the engagement token AND the pursuit pulse) on " +
+                                 "every removal path; without it both leak past the body's own destruction.");
+                }
+                else
+                {
+                    // Bounded window: OnDisable is a short method, and a revoke that only appears
+                    // 2000 characters later is in some other member and proves nothing.
+                    string body = enemy.Substring(onDisable,
+                        Math.Min(3000, enemy.Length - onDisable));
+                    if (body.Contains("PostureSignals.RevokePursuit"))
+                        log.AppendLine("  [wo1337-wiring] Enemy.OnDisable revokes this body's own pursuit pulse");
+                    else
+                        failures.Add("[wo1337-wiring] Enemy.OnDisable no longer revokes this body's pursuit " +
+                                     "pulse. An enemy raises the battle-lock through TWO owners - the " +
+                                     "HeroCombatEngagement token AND the pursuit pulse - and OnDisable " +
+                                     "releases only the first. The arena's retreat teardown removes survivors " +
+                                     "with Destroy(gameObject), which never reaches Die(), so the pulse " +
+                                     "outlives the body by PursuitTtl and the gate judges inside that " +
+                                     "window: F8 seq 4677.");
+                }
+
+                // ⛔ And the pulse must still be revoked on DEATH. The OnDisable revoke is an
+                //    ADDITION covering the non-dying exits, never a replacement: death revokes
+                //    immediately so town chrome returns as the last threat dies, without waiting
+                //    for the corpse's death-hold to disable the body.
+                if (CountOf(enemy, "PostureSignals.RevokePursuit") < 2)
+                    failures.Add("[wo1337-wiring] Enemy revokes its pursuit pulse in fewer than TWO places. " +
+                                 "Die() and OnDisable are BOTH required: dropping the Die() revoke delays the " +
+                                 "return to peaceful chrome by the whole death hold, and dropping the " +
+                                 "OnDisable one restores the seq 4677 defect.");
+                else
+                    log.AppendLine("  [wo1337-wiring] the pursuit pulse is revoked on death AND on every other exit");
+            }
+
+            // The probe itself must NOT have been weakened to make the log clean. A live chase is
+            // combat, and PursuitBattleProbe reporting PursuitActive verbatim is what makes the
+            // hero's abilities work while being chased in the overworld (F8-46).
+            string probe = ReadCode("Assets/_Modules/Core/Combat/PursuitBattleProbe.cs");
+            if (probe == null)
+                failures.Add("[wo1337-wiring] PursuitBattleProbe.cs is MISSING - the holder cannot be verified.");
+            // Match the ASSIGNMENT, not the bare member name: ReadCode strips comments but keeps
+            // string-literal contents, and this file logs its own name in an install message — a
+            // rule matching that would pass a probe rewired to return false.
+            else if (!probe.Contains("bool active = PostureSignals.PursuitActive;"))
+                failures.Add("[wo1337-wiring] PursuitBattleProbe no longer reads PostureSignals.PursuitActive. " +
+                             "Narrowing the probe is the forbidden 'fix': it trades a stuck lock for combat " +
+                             "input that dies during a real chase (F8-46, owner ruling OPTION A).");
+            else
+                log.AppendLine("  [wo1337-wiring] the pursuit battle-probe predicate is intact (a real chase still holds)");
+        }
+
+        /// <summary>
+        /// The MODAL half — a different owner, and asserted separately for that reason. The finding
+        /// must NAME the panel (seq 4677 named none, which is unactionable), and a GHOST handle —
+        /// recorded open while its own probe reports it is not — must be closable through the
+        /// panel's own Close action. A VISIBLE panel is the player's to dismiss and is NOT healed.
+        /// </summary>
+        private static void RetreatClosesEveryPanelHandle(List<string> failures, StringBuilder log)
+        {
+            Time.timeScale = 1f;
+            DeNelle.Core.UI.PanelManager.CloseAll();
+            try
+            {
+                // A GHOST: the arbiter records it open, the panel itself reports it is not. This is
+                // the WO-465 invisible-scrim class and it is exactly the consequence the finding
+                // describes - world prompts suppressed under nothing, back aimed at nothing.
+                bool ghostClosed = false;
+                bool ghostVisible = true;
+                // RegisterBattleAllowed so an unrelated battle-lock state left by an earlier case
+                // can never have NotifyOpened reject the open (WO-437 gate) and turn this case
+                // into a silent no-op. The subject here is the MODAL invariant, not that gate.
+                var ghost = DeNelle.Core.UI.PanelManager.RegisterBattleAllowed(
+                    "wo1337-suite-ghost", () => ghostClosed = true, () => ghostVisible);
+                DeNelle.Core.UI.PanelManager.NotifyOpened(ghost);
+
+                // ...and NOW it stops being open without ever calling NotifyClosed. This is the
+                // real shape of a ghost (a panel torn down or blanked behind the arbiter's back),
+                // and opening it honestly first keeps this case from emitting NotifyOpened's own
+                // invisible-scrim LogError, which would read as a suite error rather than a setup.
+                ghostVisible = false;
+
+                if (!DeNelle.Core.UI.PanelManager.AnyOpen)
+                {
+                    failures.Add("[wo1337-modal] NotifyOpened did not record the handle as open, so nothing " +
+                                 "below can prove anything about the modal invariant.");
+                    return;
+                }
+
+                string line = BattleQuiescenceGate.Evaluate(rewardScreenOpen: false)
+                                                  .FirstOrDefault(f => f.StartsWith("modal:"));
+                if (line == null)
+                {
+                    failures.Add("[wo1337-modal] a panel recorded OPEN produced no modal finding at all.");
+                    return;
+                }
+
+                // The original sentence must survive verbatim - an addition, never a rewrite.
+                if (!line.Contains("a panel handle is STILL OPEN after the reward screen closed"))
+                    failures.Add("[wo1337-modal] the modal finding's original wording was CHANGED. It may be " +
+                                 "added to and never narrowed: it is the only reason this defect was findable.");
+
+                if (line.Contains("HOLDER:") && line.Contains("wo1337-suite-ghost"))
+                    log.AppendLine("  [wo1337-modal] the modal finding names the panel that actually holds the arbiter");
+                else
+                    failures.Add("[wo1337-modal] the modal finding does not name the panel: \"" + line + "\". " +
+                                 "F8 seq 4677 reported this invariant on the owner's device and named nothing, " +
+                                 "so the capture proved a handle was stuck and could not say which - the same " +
+                                 "attribution gap WO-1233 closed for the battle-lock.");
+
+                if (line.Contains("GHOST"))
+                    log.AppendLine("  [wo1337-modal] and it distinguishes an invisible ghost handle from a visible panel");
+                else
+                    failures.Add("[wo1337-modal] the finding does not say whether the panel is VISIBLE or an " +
+                                 "invisible ghost. That is the whole discriminator between a screen the player " +
+                                 "can dismiss and a softlock, and it decides whether the heal may run.");
+
+                // THE HEAL. Through the panel's OWN Close action, never by zeroing the record.
+                if (DeNelle.Core.UI.PanelManager.OpenPanelSelfReportsOpen != false)
+                    failures.Add("[wo1337-modal] a handle whose IsOpen probe returns false is not reported as a " +
+                                 "ghost, so the gate can never tell the healable case from the live one.");
+
+                DeNelle.Core.UI.PanelManager.CloseAll();
+                if (DeNelle.Core.UI.PanelManager.AnyOpen)
+                    failures.Add("[wo1337-modal] CloseAll left the arbiter holding a handle, so the gate's modal " +
+                                 "self-heal cannot clear a ghost and the player keeps the suppressed interact " +
+                                 "button the finding describes.");
+                else if (!ghostClosed)
+                    failures.Add("[wo1337-modal] the arbiter's record was cleared WITHOUT invoking the panel's own " +
+                                 "Close action. The recovery must go through the panel's own door - a cleared " +
+                                 "record over a panel that still thinks it is open is a new bug, not a heal.");
+                else
+                    log.AppendLine("  [wo1337-modal] a ghost handle is healed through the panel's OWN Close action");
+
+                // A VISIBLE panel must still FAIL the invariant (it is not baseline) and must NOT be
+                // force-closed by the gate - reported by name is the whole remedy there.
+                bool visibleOpen = true;
+                var visible = DeNelle.Core.UI.PanelManager.RegisterBattleAllowed(
+                    "wo1337-suite-visible", () => visibleOpen = false, () => visibleOpen);
+                DeNelle.Core.UI.PanelManager.NotifyOpened(visible);
+
+                string visibleLine = BattleQuiescenceGate.Evaluate(rewardScreenOpen: false)
+                                                         .FirstOrDefault(f => f.StartsWith("modal:"));
+                if (visibleLine == null)
+                    failures.Add("[wo1337-modal] a VISIBLE panel left open at battle end produced no finding. " +
+                                 "The invariant must fire on exactly the condition it always did - the ghost " +
+                                 "discrimination decides the HEAL, never the FINDING.");
+                else if (DeNelle.Core.UI.PanelManager.OpenPanelSelfReportsOpen != true)
+                    failures.Add("[wo1337-modal] a visible panel is not reported as visible, so the gate would " +
+                                 "force-close a screen the player is looking at.");
+                else
+                    log.AppendLine("  [wo1337-modal] a visible panel still FAILS the invariant and is reported, not yanked");
+            }
+            finally
+            {
+                DeNelle.Core.UI.PanelManager.CloseAll();
+            }
+        }
+
+        /// <summary>
+        /// Source-lint on the two WIRING halves the behavioural cases cannot reach: the gate must
+        /// heal a ghost through PanelManager's own door, and the arena must stop telling the gate
+        /// that a RETREAT has no end-state screen when it defers exactly one.
+        /// </summary>
+        private static void RetreatWaitsOutItsOwnDefeatBanner(List<string> failures, StringBuilder log)
+        {
+            string gate = ReadCode("Assets/_Modules/Core/Combat/BattleQuiescenceGate.cs");
+            if (gate == null)
+            {
+                failures.Add("[wo1337-wiring] BattleQuiescenceGate.cs is MISSING - the modal heal cannot be verified.");
+            }
+            else
+            {
+                if (gate.Contains("PanelManager.CloseAll") && gate.Contains("PanelManager.OpenPanelSelfReportsOpen"))
+                    log.AppendLine("  [wo1337-wiring] a FAIL heals a GHOST panel handle, and only a ghost");
+                else
+                    failures.Add("[wo1337-wiring] the gate no longer heals a stuck panel handle through " +
+                                 "PanelManager (CloseAll gated on OpenPanelSelfReportsOpen). Reporting alone " +
+                                 "leaves the player with the suppressed interact button and the invisible back " +
+                                 "target the finding itself describes - a softlock that reports itself is " +
+                                 "still a softlock.");
+
+                // The heal must not become a blunt close-everything. A visible panel is the player's.
+                if (gate.Contains("modal left OPEN on purpose"))
+                    log.AppendLine("  [wo1337-wiring] a VISIBLE panel is deliberately left for the player to dismiss");
+                else
+                    failures.Add("[wo1337-wiring] the gate no longer says why it leaves a VISIBLE panel alone. " +
+                                 "An unconditional CloseAll here yanks a live screen (the pause menu over a " +
+                                 "just-ended fight) out from under the player.");
+            }
+
+            string arena = ReadCode("Assets/_Modules/Village/Arena/BattleArena.cs");
+            if (arena == null)
+            {
+                failures.Add("[wo1337-wiring] BattleArena.cs is MISSING - the retreat arm cannot be verified.");
+                return;
+            }
+
+            int armAt = arena.IndexOf("BattleQuiescenceGate.Arm", StringComparison.Ordinal);
+            if (armAt < 0)
+            {
+                failures.Add("[wo1337-wiring] BattleArena no longer arms the gate at all.");
+                return;
+            }
+
+            // The retreat branch must not hand the gate a bare null reward-screen probe. It defers
+            // a defeat end-state (_pendingLossBanner -> BattleArenaHud.ShowResult -> EndStateView
+            // -> PanelManager.NotifyOpened), so a null there judges the modal invariant straight
+            // through that screen's own open - the false finding in seq 4677.
+            int windowStart = Math.Max(0, armAt - 600);
+            string window = arena.Substring(windowStart, Math.Min(900, arena.Length - windowStart));
+            if (window.Contains("_pendingLossBanner != null"))
+                log.AppendLine("  [wo1337-wiring] the retreat arm waits out its own deferred defeat banner");
+            else
+                failures.Add("[wo1337-wiring] the retreat path does not tell the gate about its DEFERRED defeat " +
+                             "end-state (_pendingLossBanner). A retreat presents an arbiter panel on arrival, " +
+                             "so a gate told there is no reward screen judges the modal invariant while that " +
+                             "screen is legitimately opening and reports correct behaviour as a defect - which " +
+                             "is how a gate gets switched off.");
         }
 
         private static int CountOf(string haystack, string needle)
