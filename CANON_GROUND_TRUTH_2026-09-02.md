@@ -201,6 +201,51 @@ stay open.** `tools/payload-texture-parity.py` proved itself RED before being tr
 
 ---
 
+---
+
+## ⛔ THE DEPLOY DOES NOT REACH THE GAME SHE PLAYS. Know this before you promote anything.
+
+Measured 2026-09-02, independently, from the open internet:
+
+```
+defenders-of-the-realm-v2.vercel.app  ->  2026.09.03.352921   (repo deploys HERE)
+echoes-of-elarion.vercel.app          ->  2026.09.02.352005   (SHE PLAYS HERE)
+```
+
+**She plays on `echoes-of-elarion`.** That is not inferred: all 61 PROD-022 crumb rows read
+`build: ...@echoes-of-elarion.vercel.app`. But `.vercel/project.json` links this repo to
+**`defenders-of-the-realm-v2`**, so `tools\command-centre.ps1` promotes THAT project.
+
+⚠ **`PRODUCTION_ALIAS_MATCH` is a TRUE MARKER ABOUT THE WRONG DEPLOYMENT.** The chain ran green end
+to end - `CANDIDATE_CONTENT_MATCH`, `PRODUCTION_ALIAS_MATCH`, `PRODUCTION_DB_WRITE_OK`,
+`COMMAND_CENTRE_OK` - and the game the owner opens did not move a byte. This is the same shape as
+every other defect on the PROD-022 ticket: **an honest gate, pointed one step off.**
+
+**What IS correct on `defenders-of-the-realm-v2`:** `api/`, the tunables endpoint (the client pins it
+at `RemoteTunablesService.cs:93`) and the Command Center console. Those are on the right host and
+work. It is the **WebGL game payload** that diverges.
+
+**Consequence to internalise:** a WebGL/Pi fix is NOT delivered by the command-centre chain. Tonight
+that cost the mission its reach - `echoes-of-elarion` carries the ORIGINAL Lane A instrumentation
+(which is why crumbs landed at all) but NOT the `pageshow persisted=` discriminator and NOT the Lane
+C Worker heartbeat. Both sit one deploy away from being useful.
+
+⛔ There is **no sanctioned script** for deploying `echoes-of-elarion` - the 2026-09-02 17:30 deploy
+was a raw `vercel` command, so it captured **no rollback id** and passed none of the chain's guards.
+Deploying the owner's live game that way is deliberately NOT done unattended. **WO-1316 exists for
+exactly this and is still READY.** Fixing it properly means the chain either promotes both projects
+or refuses, loudly, when the target it proved is not the target the player opens.
+
+**Also found: the chain pushes R2 at STEP 2 and BUILDS at STEP 5.** With
+`m_BuildAddressablesWithPlayerBuild: 1` and `m_overridePlayerVersion: '[PlayerSettings.bundleVersion]'`,
+the build regenerates the catalog named after the version - so the push can only ever prove the
+PREVIOUS build's content. Measured tonight: `WebGL/catalog_2026.09.03.352921.hash` returned **404**
+after a green `R2_PARITY_OK`. Repaired with `tools2-ship.ps1` (2 files, 0.1 MB - bundles were
+unchanged). **Every WebGL deploy this chain has made shipped an unpushed catalog**; it stayed
+invisible only because the version rarely moved between the push and the build. Occurrence FIVE of
+the CLAUDE.md section 16 class, and the first caught by a gate rather than by the owner's eyes.
+
+
 ## LESSONS OF THE NIGHT — the ones worth carrying
 
 **A measurement can be arithmetically correct and mean nothing.** "34 Alduin vs 30 Aldwin" was a real
