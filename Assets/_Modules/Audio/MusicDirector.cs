@@ -338,9 +338,23 @@ namespace DeNelle.Audio
             AudioSource fadeOut = _activeSource;
             _activeSource = fadeIn;
 
-            fadeIn.clip = clip;
-            fadeIn.loop = loop;
-            fadeIn.volume = 0f;
+            // WO-1299 (F8 seq 4364): on scene teardown the native AudioSource is destroyed while
+            // the managed wrapper survives. `fadeIn.clip = clip` then throws inside
+            // AudioSource.set_generatorObject — an NRE nothing observes (this is an async
+            // UniTaskVoid, so it surfaces only via UniTaskScheduler.PublishUnobservedTaskException)
+            // and _fading is left latched TRUE, so the NEXT CrossfadeTo takes the supersede branch
+            // and hard-stops both sources = music cutting out on the transition.
+            //
+            // The check MUST be Unity's overloaded `== null` (fake-null aware). `is null` /
+            // ReferenceEquals see a live managed wrapper and would let the throw through.
+            if (fadeIn == null || clip == null)
+            {
+                FlowTrace.Warn("Audio",
+                    $"Crossfade bailed — {(fadeIn == null ? "fade-in AudioSource destroyed" : "clip is null")} " +
+                    $"(track='{_currentName ?? "(none)"}', scene teardown?). _fading cleared.");
+                _fading = false;
+                return;
+            }
 
             // Guard a clip object whose underlying file failed to load (FMOD
             // "file not found" otherwise crashes on Play).
@@ -351,7 +365,19 @@ namespace DeNelle.Audio
                 return;
             }
 
-            fadeIn.Play();
+            // The source can still be torn down BETWEEN the check above and these native writes
+            // (teardown runs off our frame). Guard.Try logs via FlowTrace.Fail — never silent.
+            if (!Guard.Try("Audio", "crossfade prime fade-in source", () =>
+                {
+                    fadeIn.clip = clip;
+                    fadeIn.loop = loop;
+                    fadeIn.volume = 0f;
+                    fadeIn.Play();
+                }))
+            {
+                _fading = false;
+                return;
+            }
 
             float target = _muted ? 0f : Mathf.Clamp01(targetVol * _volumeScale);
             float secs = Mathf.Max(0.01f, fadeSeconds);
@@ -360,7 +386,20 @@ namespace DeNelle.Audio
 
             while (t < secs)
             {
-                if (token != _fadeToken) return;   // superseded by a newer resolve
+                if (token != _fadeToken) return;   // superseded by a newer resolve (it owns _fading)
+
+                // WO-1299: re-check EVERY iteration, not once at entry — the sources can be
+                // destroyed mid-fade (scene unload) while this UniTask is parked on the yield.
+                // Unity's fake-null `== null` is the only check that sees a destroyed native object.
+                if (fadeIn == null)
+                {
+                    FlowTrace.Warn("Audio",
+                        $"Crossfade unwound mid-fade — fade-in AudioSource destroyed at t={t:F2}/{secs:F2}s " +
+                        $"(track='{_currentName ?? "(none)"}', scene teardown?). _fading cleared.");
+                    _fading = false;
+                    return;
+                }
+
                 t += Time.unscaledDeltaTime;
                 float k = Mathf.Clamp01(t / secs);
                 fadeIn.volume = Mathf.Lerp(0f, target, k);
@@ -369,6 +408,14 @@ namespace DeNelle.Audio
             }
 
             if (token != _fadeToken) return;
+
+            if (fadeIn == null)
+            {
+                FlowTrace.Warn("Audio",
+                    "Crossfade settled onto a destroyed fade-in AudioSource — skipping final volume snap. _fading cleared.");
+                _fading = false;
+                return;
+            }
 
             fadeIn.volume = target;
             if (fadeOut != null) { fadeOut.volume = 0f; fadeOut.Stop(); }
