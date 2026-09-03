@@ -1,15 +1,89 @@
-> ## ▶ REFRESHED 2026-08-21 — the live anchor is `CANON_GROUND_TRUTH_2026-08-21.md`
+> ## ▶ REFRESHED 2026-09-02 — the live anchor is `CANON_GROUND_TRUTH_2026-09-02.md`
 >
-> The **08-21 LIVE THREAD** below is current; every thread under it is SUPERSEDED and kept as history.
-> The 08-18, 08-16 and 08-08 anchors are bannered/frozen; the 08-08 one is additionally **INVERTED**
-> on its two headline sections (the machine block is resolved; the dungeon-stair hunt is closed) — do
-> not act on it. *(This banner has twice sat days stale behind a newer anchor. Re-stamp the banner AND
-> the top LIVE THREAD in the SAME change as any new anchor.)*
+> The **09-02 LIVE THREAD** below is current; every thread under it is SUPERSEDED and kept as history.
+> `CANON_GROUND_TRUTH_2026-08-23.md` exists and was **never threaded here at all** — it is superseded
+> unread; skip it. The 08-21, 08-18, 08-16 and 08-08 anchors are bannered/frozen; the 08-08 one is
+> additionally **INVERTED** on its two headline sections (the machine block is resolved; the
+> dungeon-stair hunt is closed) — do not act on it.
+>
+> ⚠ *(This banner has now sat days stale behind a newer anchor **THREE TIMES** — the third time it was
+> stale by **twelve days AND a whole branch**, naming `wip/village2-and-f8-tickets` while the work was
+> on `feat/synty-art-retheme`, and it skipped an anchor entirely. A seat that trusts a stale loader
+> orients onto a branch that is not the one it is editing. **Re-stamp the banner AND the top LIVE
+> THREAD in the SAME change as any new anchor — the anchor is not minted until this file points at
+> it.**)*
 >
 > Per CLAUDE.md §15 the newest `CANON_GROUND_TRUTH_<date>.md` wins on any conflict with this file.
 # DeNelle Studios — Project Canon Loader
 
-> ## ▶ LIVE THREAD (2026-08-21) — READ BEFORE WORKING
+> ## ▶ LIVE THREAD (2026-09-02) — READ BEFORE WORKING
+> **Reality anchor = `CANON_GROUND_TRUTH_2026-09-02.md`** (08-23 and 08-21 are superseded; 08-23 was
+> never threaded here and can be skipped outright). Branch **`feat/synty-art-retheme`**, **NOTHING
+> PUSHED**. **This block records NO HEAD sha, NO commits-ahead, NO suite count, NO APK size, NO
+> next-free WO number and NO save schema version** — read them off `git status` /
+> `git rev-list origin/feat/synty-art-retheme..HEAD`, the newest MARKER logs under `Builds/`, the
+> `CLI_LANES_WO_NUMBERS.md` banner (sole authority, two disjoint blocks), and
+> `SaveSchema.CurrentVersion` at `Assets/_Modules/Core/State/SaveSchema.cs`. One committer, staged by
+> explicit path, never `git add -A`.
+>
+> **⛔ THE ONE LINE TO CARRY OUT OF THIS BLOCK: "data-driven" in this repo does NOT mean "tunable
+> without a rebuild."** `LocalJsonCatalogSource.Read` resolves `Resources.Load<TextAsset>` **FIRST on
+> every platform** (`Assets/_Modules/Core/Data/LocalJsonCatalogSource.cs:31-36`) and
+> `Assets/Resources/` is **compiled into the player** — so editing a canonical JSON still costs a full
+> build (~10 min APK / ~30 min WebGL), and editing its **StreamingAssets twin does nothing at all**.
+> **Five canonical files advertise "retunes with NO recompile" in their own authoring notes** —
+> `dungeon-balance.json`, `echoes-balance.json`, `kill-rewards.json`, `siege-stakes.json`,
+> `vendors.json`. Those notes are **literally true** (no *recompile* of C#) and **misleading in the
+> only sense that matters** (a full player build is still required). Every past attempt to buy
+> tunability by moving numbers into JSON was working on the wrong axis. `CanonicalJson.Source` has
+> been a settable `ICatalogSource` the whole time and was assigned **nowhere**; **WO-1331 connected
+> it** (`RemoteCatalogOverrides` / `RemoteCatalogSource` / `RemoteCatalogService`), **flag-gated OFF**
+> — `FeatureFlags.RemoteCatalogs` → `ff.catalogremote`, `defaultOn: false`
+> (`FeatureFlags.cs:1361`), five allowlisted catalogs, whole-payload accept-or-reject, and
+> **prices/entitlements/grants denied in code, not in prose**. Invariant: no row / no network / no
+> parse ⇒ today's behaviour exactly.
+>
+> **TWO OWNER RULINGS 2026-09-02, both recorded in `KEY_FACTS.md` — read them there, do not re-copy
+> the detail here.**
+> 1. **The Android APK is the PRIORITY. Pi is PARKED** (`KEY_FACTS.md:40`). Parked, **not cancelled**
+>    — the Pi/WebGL ticket cluster resumes on the owner's word and on nobody else's.
+> 2. **A balance value is a TUNABLE, not a constant — the default answer is YES** (`KEY_FACTS.md:67`).
+>    You do not ask whether a knob is worth exposing; it is, by default. You ask for a ruling only in
+>    the **reverse** direction — if you believe a value must NOT be tunable, say why.
+>    **Contract + worked example: `docs/PROD022_TUNABLE_FLAGS.md`.** Four sources change in the SAME
+>    commit (`RemoteTunables.cs` defaults · `RemoteTunablesService.cs` transport · `TUNABLE_KEYS` in
+>    `api/_lib/tunables.js` · the operator surface) and the `[tunable-defaults]` oracle goes red
+>    naming which two disagree.
+>
+> **⭐ THE LIVE PROCEDURE DOC IS `docs/CLI_OPERATIONS_RUNBOOK.md`** — currently the most accurate
+> operational doc in the repo: startup, the seat model, the board, every gate command and its MARKER,
+> builds, R2, Firebase, Vercel, the DB, F8, commit/push discipline. `CLAUDE.md` is the law; the
+> runbook is the procedure. Read it before inventing a command.
+>
+> **The shape of what landed tonight (a large single-day wave, all unpushed — count it off
+> `git log --oneline`, never off this line).** Five strands:
+> · **the tunables rail** — the `client_tunables` migration that table never had (PROD-022), eight
+>   database flags so PROD-022 bisects without a rebuild, a **Balance tab in the Command Center** so
+>   the knob list stops being copied (WO-1328), and the WO-1331 remote-catalog seam above;
+> · **felt fixes from owner captures** — talent tree axes fed backwards (WO-1310), the founding band's
+>   only publisher could never run (WO-1300), a suppressed-but-moving hero now animates (WO-1298), the
+>   bag peek strip's second `LayoutGroup` returning null (WO-1293), a crossfade guarded against a
+>   destroyed `AudioSource` (WO-1299), `WaveManager` never registering a battle-session unwind
+>   (WO-1308), tree-vs-hot-swap-bar ability art disagreeing (WO-1294);
+> · **combat** — one over-time engine that **cannot be built without a liveness test** (WO-1330), and
+>   the mage's first talent point buying a drain whose strength is a **db call** (WO-1306/1305);
+> · **Pi/PROD-022 before the park** — Brotli served with `Content-Encoding` instead of a JS inflate,
+>   the crash loop instrumented to name its own cause, the `pageshow persisted=` discriminator;
+> · **art + housekeeping** — Alduin's coat and a partial tofu sweep, board regenerated, APK version
+>   bump, Unity-authored `.meta` files.
+> **Two detectors that cried wolf on every healthy case were fixed** (WO-1301/1302) — the §12 lesson
+> again: a gate that fires on healthy input is as useless as one that never fires.
+>
+> **The 08-21 thread below is SUPERSEDED.**
+
+> ## ▶ LIVE THREAD (2026-08-21) — SUPERSEDED (see 09-02 above)
+> ⚠ **FROZEN, do not rewrite.** Its branch (`wip/village2-and-f8-tickets`), gate posture, "shipped
+> tonight" list and OWED queue are a 2026-08-21 snapshot. Live branch is `feat/synty-art-retheme`.
 > **Reality anchor = `CANON_GROUND_TRUTH_2026-08-21.md`** (the 08-18 anchor is now bannered/frozen).
 > Branch `wip/village2-and-f8-tickets`, **NOTHING PUSHED**. **This block records NO HEAD sha, NO
 > commits-ahead, NO suite count, NO APK size and NO next-free WO number** — read them off `git status`
@@ -505,9 +579,15 @@ binding depth lives in `CLAUDE.md`, `docs/ARCHITECTURE_PRINCIPLES.md`, `docs/HAN
   ALL RETIRED; nothing to mirror. Log every hand-off in the WO markdown itself. Full spec:
   `docs/TICKET_PIPELINE.md` · `docs/BOARD.md`.
 
-## Current State (anchored to `CANON_GROUND_TRUTH_2026-08-21.md`; the bullets below are OLDER detail kept for depth — where they disagree with the LIVE THREAD above, the thread wins)
+## Current State (anchored to `CANON_GROUND_TRUTH_2026-09-02.md`; the bullets below are OLDER detail kept for depth — where they disagree with the LIVE THREAD above, the thread wins)
 
-> **Fast reconciliation (re-checked 2026-08-21 — trust these over the older bullets):** home hub =
+> **⚠ BRANCH, first and loudest: the live branch is `feat/synty-art-retheme`, nothing pushed.** Every
+> `wip/village2-and-f8-tickets` line anywhere below this point is **frozen history** — that branch was
+> current through 08-21 and is not current now. Read the branch off `git branch --show-current`, never
+> off a bullet.
+
+> **Fast reconciliation (branch re-checked 2026-09-02; the rest re-checked 2026-08-21 — trust these
+> over the older bullets):** home hub =
 > `Main_Castle_Overworld` (MergedWorld ON, one navmesh; `Village.unity` and `OuterWorld.unity` are
 > DELETED — the "MainCastle_Hall + OuterWorld streams additively" bullet below is stale).
 > **Save schema: read `SaveSchema.CurrentVersion` at `Assets/_Modules/Core/State/SaveSchema.cs` —
@@ -521,7 +601,8 @@ binding depth lives in `CLAUDE.md`, `docs/ARCHITECTURE_PRINCIPLES.md`, `docs/HAN
   Build → Town/Defenses/Walls tabs, movable functional storefronts and the 260w/210i core-kit seed are
   the unconditional path; New Game = the BLANK template (+ one FTUE grace-default Forge record);
   existing saves migrate once via the v30 one-shot writer.
-- **Branch:** `wip/village2-and-f8-tickets` (NOT `feat/tower-core-loop` — stale). *(FROZEN HISTORY: the HEAD sha, push state, save version and "0 reds" gate posture that stood in this bullet were a 2026-08-02 snapshot and are no longer true. Read HEAD/push state off `git status`, the schema off `SaveSchema.CurrentVersion`, and the gate posture off the newest marker log under `Builds/` — see the LIVE THREAD.)*
+- **Branch:** **`feat/synty-art-retheme`**, nothing pushed (2026-09-02). *(`wip/village2-and-f8-tickets`
+  was current through 08-21 and `feat/tower-core-loop` long before it — both stale.)* *(FROZEN HISTORY: the HEAD sha, push state, save version and "0 reds" gate posture that stood in this bullet were a 2026-08-02 snapshot and are no longer true. Read HEAD/push state off `git status`, the schema off `SaveSchema.CurrentVersion`, and the gate posture off the newest marker log under `Builds/` — see the LIVE THREAD.)*
 - **Pi Hackathon WON (2026-07-17)** — the "July-31 deadline / build mode IS the demo" framing is **RETIRED**; there is NO upcoming demo and the roadmap is OPEN. The quality bar (feel-arc/F8, ten-year-old test) still governs. **Prod untouched** (promotion stays the owner's separate call at `defenders-of-the-realm-v2.vercel.app`). **Highest-leverage open lane = the CoC offense loop (WO-724→726, Path A convergence)** now the MVVM + Room Forge foundations have landed; WO-739 generic upgrade panel is the parallel-safe start.
 - **Title:** **"Echoes of Elarion"** (chapter) within the **"Defenders of the Realm"** series; tagline **"Echoes of a Forgotten Civilization"** (owner 2026-07-24; "Hold the last light" retired).
 - **Combat space:** WO-584 consolidation (READY) — one warp-in space primitive, 3 skins (dungeon/outpost/arena), ownership flip; replaces flat ATB dungeon.
@@ -542,7 +623,7 @@ binding depth lives in `CLAUDE.md`, `docs/ARCHITECTURE_PRINCIPLES.md`, `docs/HAN
 ## Key Files to Remember
 - ⭐ `docs/CLI_OPERATIONS_RUNBOOK.md` (**how to actually RUN the machine** — startup + SME facts, the seat model, the board, every gate command and marker, builds, R2, Firebase, Vercel, the DB, F8, commit/push discipline. `CLAUDE.md` is the law; this is the procedure.)
 - ⭐ `docs/ACCESS_AND_SECRETS.md` (**what is public vs secret.** The prod API base, the endpoints and the project ids are NOT secrets — read this before reporting that you cannot reach prod. Also the `.env.local` resolution pattern, and the name-and-length-never-value rule.)
-- `CANON_GROUND_TRUTH_2026-08-21.md` (**the single live anchor of current reality — read FIRST**; a delta over 08-18 → 08-16 → 08-09 → ... → the deep `CANON_GROUND_TRUTH_2026-07-22.md` module anchor. All earlier anchors are SUPERSEDED/frozen — and the **08-08 one is INVERTED** on its machine-blocked and dungeon-stair sections, so do not act on it)
+- `CANON_GROUND_TRUTH_2026-09-02.md` (**the single live anchor of current reality — read FIRST**; a delta over 08-21 → 08-18 → 08-16 → 08-09 → ... → the deep `CANON_GROUND_TRUTH_2026-07-22.md` module anchor. `CANON_GROUND_TRUTH_2026-08-23.md` exists but was never threaded into this loader — superseded unread, skip it. All earlier anchors are SUPERSEDED/frozen — and the **08-08 one is INVERTED** on its machine-blocked and dungeon-stair sections, so do not act on it)
 - `KEY_FACTS.md` (the LIVING fact sheet — its newest `Latest (...)` section tracks this anchor)
 - `docs/reference/WO_TRUE_STATUS_2026-08-08.md` (the WO audit that found **52 of ~91 statuses wrong**; frozen, dated)
 - `docs/reference/SESSION_INDEX_2026-08-06.md` (tonight as a known dictionary: every defect with its proving line, every REFUTED belief with the evidence that killed it, the owner rulings, the open items) · `docs/reference/DEFECT_INDEX_2026-08-05.md` (the same for the earlier half of 08-05; frozen)

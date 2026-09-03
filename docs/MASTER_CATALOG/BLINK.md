@@ -8,6 +8,23 @@
 
 ---
 
+## Census, re-counted at source 2026-09-02 (what is actually IN the warehouse)
+
+- **777 `.prefab` files** under `Assets/Blink` — characters, armour, weapons and UI.
+- ⛔ **ZERO VFX.** Nothing under `Assets/Blink` matches `*vfx*` in any case. **Blink is not a VFX
+  source and never has been** — the VFX packs are Hovl, Unity ParticlePack, Lana Studio and the
+  (gitignored) Spells Pack; see `resources-art.md` §6. A ticket that says "use the Blink VFX" is
+  describing something that does not exist.
+- Four top-level entries: `Art/`, `StylizedArmorBundle2/`, `UltimateBundle/` (+ the folder root).
+  ⚠ **Two of those four bundles are a `README.txt` and nothing else** —
+  `Assets/Blink/StylizedArmorBundle2/README.txt` and `Assets/Blink/UltimateBundle/README.txt` are
+  pointers to Asset Store bundles that were never claimed/downloaded. So the on-disk footprint
+  overstates what is usable: **check for a README before planning work against a Blink bundle.**
+  (Three further READMEs sit deeper under `Art/`: `Characters/LowPoly/`,
+  `Characters/Stylized/Humans/`, `Weapons/LowPoly/MegaWeaponPack1/`.)
+
+---
+
 ## The four truths
 
 1. **Blink is an ART warehouse, and today its live role is the UI RE-SKIN KIT + gear-data source.**

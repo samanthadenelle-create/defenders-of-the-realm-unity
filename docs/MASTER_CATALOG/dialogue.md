@@ -371,6 +371,29 @@ modal-truce + coach banner), `Tutorial` (flow intro/outro), `Portrait` (Portrait
 
 # FLAGS / RISK LEDGER
 
+## ⛔ NAME PIN — `Alduin` and `Aldwin` are TWO DIFFERENT CHARACTERS (recorded 2026-09-02)
+
+They are one letter apart, they both appear in authored copy, and **the mistake has now been minted
+TWICE, in opposite directions** — once by "correcting" Aldwin into Alduin, once the other way. Write
+the pin down so it is not minted a third time.
+
+| Name | Who | Where the canon string lives |
+|---|---|---|
+| **Alduin the Mournful** | the **NECROMANCER boss** — dungeon lore, `Alduin's journal` | `canon-strings.json`; enemy id `alduin` is registered in `EnemyResolver.HollowTable` with **`CombatSpawnable = false`** (a dialogue NPC, never a boss fight) and resolves to the Boss faction (`Enemies/EnemyResolver.cs:180,333`) |
+| **Aldwin, the Ice Echo** | **Echo #1, the founding wolf** — the player's first companion Echo | `EchoRosterCatalog`; harvest affinity **Food** (`economy-meta.md`, `village-systems.md`) |
+
+**TWO regression suites forbid conflating them, and they assert in both directions:**
+- `Assets/Editor/Regression/DungeonLoreReadableRegression.cs` (WO-881) — fails if the lore copy loses
+  `"Alduin's journal"` **or gains "Aldwin"**; fails if `canon-strings.json` loses
+  `"Alduin the Mournful"`; fails if `EchoRosterCatalog` loses `"Aldwin, the Ice Echo"`
+  (header `:12-22`, assertions `:100-110`).
+- `Assets/Editor/Regression/EchoEngageDialogueRegression.cs` (WO-1031) — `:27`
+  *"Aldwin/Alduin are DIFFERENT characters"*, and `:168` carries the instruction verbatim:
+  **"Note Aldwin != Alduin the Mournful - do not correct one into the other"**.
+
+⚠ So a spellcheck-style "fix" to either name **fails the gate by design**. If one of these suites goes
+red on a name, the bug is almost always the edit, not the assertion.
+
 ## Canon corrections (this rewrite)
 - **`DialogueCommandBridge`, `NPCCommandBridge`, YarnSpinner packages, ClassicRPG UI,
   `Assets/Dialogue/*.yarn` (64 nodes), `DialogueSystem.prefab`, `IntroCommandBridge`,

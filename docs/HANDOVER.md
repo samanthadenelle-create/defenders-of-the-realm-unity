@@ -1,4 +1,28 @@
-> ## ▶ REFRESHED 2026-08-21 — read `CANON_GROUND_TRUTH_2026-08-21.md` FIRST
+> ## ▶ REFRESHED 2026-09-02 — read `CANON_GROUND_TRUTH_2026-09-02.md` FIRST
+>
+> The **★★ SESSION HANDOVER — 2026-09-02 ★★** block below is the current one. Every banner and block
+> beneath it is history, kept, not guidance.
+>
+> ⛔ **THE BRANCH CHANGED AND ALMOST NOTHING IN THIS FILE KNOWS IT.** The live branch is
+> **`feat/synty-art-retheme`**. Every block below — including 08-21's — says
+> `wip/village2-and-f8-tickets`, and those lines are frozen history per CLAUDE.md §15, not a
+> correction you should make in their bodies. **Nothing is pushed.** Read branch and push-state off
+> `git status` / `git log`, never off a block in this file.
+>
+> ⛔ **OWNER RULING 2026-09-02 EVENING — THE ANDROID APK IS THE PRIORITY; PI/WebGL IS PARKED, NOT
+> CANCELLED.** Verbatim in `KEY_FACTS.md`. PROD-022 drops to a quiet read-only triage lane. If you are
+> about to pick up a Pi ticket, you are working the parked lane — pick a player-felt APK defect instead.
+>
+> ⛔ **STANDING RULE 2026-09-02 — A BALANCE VALUE IS A TUNABLE, NOT A CONSTANT. DEFAULT ANSWER: YES.**
+> Also verbatim in `KEY_FACTS.md`. The rail exists (`docs/PROD022_TUNABLE_FLAGS.md`); do not build a
+> second one. You ask for a ruling only in the reverse direction — if a value must NOT be tunable, say why.
+>
+> ⚠ **The 08-21 banner immediately below is still RIGHT about one thing and WRONG about another.**
+> Right: the numbers-live-at-source table. Wrong by two supersessions: **the pay path IS activated**
+> (owner 2026-08-23, WO-1159), so an economy removal is no longer a clean purge — and **every unit of
+> revenue so far is the owner's own** (2026-08-25). Both are on the `KEY_FACTS.md` card.
+>
+> ## ⚠ (previous) REFRESHED 2026-08-21 — SUPERSEDED 2026-09-02 — read `CANON_GROUND_TRUTH_2026-09-02.md` FIRST
 >
 > The **★★ SESSION HANDOVER — 2026-08-21 ★★** block below is the current one. Every banner and block
 > beneath it is history, kept, not guidance.
@@ -48,8 +72,12 @@
 # HANDOVER — the one sheet a new session reads to be productive now
 
 > **Read order for a new session:** the newest ★★ SESSION HANDOVER block immediately below (currently
-> **2026-08-21**) → this sheet → `../CANON_GROUND_TRUTH_2026-08-21.md` (the live reality anchor; it deltas
-> 08-18 → 08-16 → 08-09 → 08-08 → 08-07 → 08-06 → 08-05 → 08-03 → 08-02 → 08-01 → 07-26 → 07-22) →
+> **2026-09-02**) → this sheet → `../CANON_GROUND_TRUTH_2026-09-02.md` (the live reality anchor; each
+> anchor deltas the one before it, back through 08-23 → 08-21 → 08-18 → 08-16 → 08-09 → …) →
+> `../KEY_FACTS.md` (the LIVING card — it holds the current owner rulings and beats any dated doc) →
+> **`CLI_OPERATIONS_RUNBOOK.md`** (2026-08-27 — the PROCEDURE doc: startup, gates, ship, deploy, in one
+> file. `CLAUDE.md` is the LAW, that runbook is HOW to run the machine, and this sheet is WHY each rule
+> exists. It is the most accurate operational doc in the repo; read it before you run anything) →
 > `MASTER_CATALOG.md` (mandatory, be the SME) → `ARCHITECTURE.md` (the architecture hub) → the relevant
 > `MASTER_CATALOG/<area>.md` for what you're about to touch. **ALSO** skim the auto-memory index
 > `MEMORY.md` (index lines are pointers — read the file before asserting). The code wins on truth —
@@ -63,7 +91,251 @@
 
 ---
 
-## ★★ SESSION HANDOVER — 2026-08-21 (the gate-sweep night: gates that passed while asserting nothing) ★★
+## ★★ SESSION HANDOVER — 2026-09-02 (the night "data-driven" turned out not to mean what everyone assumed) ★★
+
+**Anchor:** **`../CANON_GROUND_TRUTH_2026-09-02.md`** — minted tonight, supersedes the 08-23 anchor
+(bannered/frozen). Read it before this block; it carries the owner rulings verbatim and the file:line
+citations. Read **`../KEY_FACTS.md`** next: it is the LIVING card, edited in place, and it beats any
+dated doc including this one. This block is the **operator's manual half**: how you work here, and why
+each rule exists — with the incident that forged it, because a rule without its incident gets skipped.
+
+### Where every number actually lives — the 08-21 table still stands, and nothing on it has moved
+
+Do not copy a number into a doc, **including this one**. Every duplicated number in this repo has
+eventually rotted and cost a session: the stale WO block (CLAUDE.md §2), the retired assembly table
+(§5), the hardcoded repo root (§0), the drifted R2 push (§16). Read the 08-21 block's table below —
+save schema off `SaveSchema.CurrentVersion`, next WO number off **your seat's** `CLI_LANES_WO_NUMBERS.md`
+banner row (bumped in the SAME edit as the mint), gate results off the MARKER on a **fresh** log under
+`Builds/`, board status off `python tools/board_build.py`, HEAD and push-state off `git log` / `git status`.
+
+**Tonight added a fresh instance of the same class, and it is worth reading as a warning:** the
+`Builds/overnight-apk-status.txt` stamp said `R2_PARITY_FAILED — DO NOT INSTALL OR DISTRIBUTE` while
+`Builds/r2-parity.log` — the actual proof — verified the exact catalog that APK requests plus every
+bundle it names. The APK was believed unshippable for most of a day because a status file was a second
+copy of a fact that a later push had made obsolete. **Judge R2 by `r2-parity.log`, never by a status stamp.**
+
+### State tonight, in the only form that cannot go stale
+
+Branch **`feat/synty-art-retheme`**. **Nothing is pushed** — the standing cadence is unchanged: commit
+local, push only after the owner retests (felt/gameplay) or a regression proves it (data/logic). Count
+the unpushed commits with `git rev-list --count`; do not trust a number written in a handover.
+
+The APK is the shipping artifact. `.githooks/pre-push` still refuses any push whose `ServerData/` bytes
+postdate the `R2_PARITY_OK` proof, there is deliberately no override flag, and it is wired by
+`git config core.hooksPath .githooks` — **local config, set once per clone, does not travel with the tree.**
+
+### ⛔ THE OWNER RULING THAT REORDERS THE BOARD: the APK is the priority, Pi is PARKED
+
+Verbatim in `../KEY_FACTS.md`: *"we have spent most of today triaging and trying to get Pi to work, but
+have made almost no progress"* / *"so we need to shift back to the apk. thats the real vision so that
+needs to be the priority."*
+
+- The **Android APK / Seeker** path is the active lane. Player-felt gameplay defects and polish outrank
+  every Pi/WebGL ticket.
+- **PROD-022** (the Pi Browser crash loop) drops from P0-active to a **quiet read-only triage lane**.
+  Its Lane A `[PiLifecycle]` instrumentation is deployed to production and gathers evidence on its own —
+  that is the point of instrumenting, and it is why parking costs nothing.
+- The Pi/WebGL cluster is **PARKED, NOT CANCELLED.** It resumes on the owner's word, not on a seat's
+  judgement that Pi looks tractable again.
+
+**The evidence, recorded so nobody re-litigates it:** of the 27 commits made on 2026-09-02 before the
+ruling, exactly ONE was gameplay — and it landed nine minutes after that morning's APK was built, so it
+was not even in the artifact. **A full day of triage produced no player-facing progress.** The cost of
+ignoring this rule is not abstract; it is precisely one day, already paid.
+
+### ⛔ THE STANDING RULE THAT CHANGES HOW YOU WRITE EVERY NUMBER: a balance value is a TUNABLE
+
+Verbatim: *"be smart, dont make it need a code change, make it tweakable from a db call"* — followed by
+**"i have been screaming this for months."**
+
+**Read the second sentence as the actual defect.** The idea was never rejected. It was agreed to in
+conversation, repeatedly, and never written to disk — the failure this canon already named on 08-23:
+*a ruling recorded but not applied is indistinguishable from no ruling.* It is written down now, so no
+seat needs telling again.
+
+**THE RULE:** when you are about to hardcode a number that exists to be TUNED — a drain ratio, a
+cooldown, a cost, a rate, a threshold, a duration, a drop chance — you register it on the remote
+tunables rail instead. **You do not ask whether it is worth it; the answer is yes by default.** Ask for
+a ruling only in the reverse direction: if you believe a value must NOT be tunable, say why.
+
+**DO NOT BUILD A SECOND RAIL — it already exists.** Contract and worked example:
+`PROD022_TUNABLE_FLAGS.md`. Registry/defaults `Assets/_Modules/Core/Ops/RemoteTunables.cs` · transport
+`RemoteTunablesService.cs` · server allowlist `TUNABLE_KEYS` in `api/_lib/tunables.js` · operator surface
+`tools/command-centre.ps1 -Tunables` and the phone via `POST /api/admin/ops` · oracle
+`Assets/Editor/Regression/RemoteTunablesDefaultsRegression.cs`. **All four sources change in the SAME
+commit**; the `[tunable-defaults]` oracle goes red naming which two disagree.
+
+**THE INVARIANT THAT OUTRANKS THE FEATURE:** *no row, no network, no server, no parse ⇒ TODAY'S
+BEHAVIOUR, EXACTLY.* The registered default must equal the value the constant would have had. The remote
+read is an OVERRIDE, never a dependency, and never blocks or delays boot. **An empty `client_tunables`
+table is the correct resting state and is what ships.**
+
+**Why it is worth real effort, in the owner's own economics:** a WebGL rebuild costs ~30 minutes, an APK
+~10. A knob reaches a running client in ~40 seconds. Every value left hardcoded converts one of her
+felt-tests into a half-hour round trip — and she is the only person who can judge feel, so that cost
+lands entirely on the one resource the project cannot buy more of.
+
+⚠ **Scope it honestly:** this is for BALANCE and PRESENTATION levers. It is NOT for anything
+server-authoritative — prices, entitlements, grants — which stay on the quote/verify rail where the
+SERVER is the authority and a client-side override would be an exploit.
+
+### ⛔ THE DISCOVERY OF THE NIGHT — "data-driven" in this repo does NOT mean "tunable without a rebuild"
+
+This is the single most load-bearing thing on the page, because it invalidates an assumption the project
+has operated on for months, and it explains why the screaming never worked.
+
+**`LocalJsonCatalogSource` resolves `Resources.Load<TextAsset>` FIRST, on every platform, and
+`Assets/Resources/` is COMPILED INTO THE PLAYER.** Therefore:
+
+- Editing any of the 71 canonical JSONs costs a **full build** — ~10 min APK, ~30 min WebGL.
+- Editing the **StreamingAssets twin changes nothing at all.** It is not read when the Resources copy
+  resolves.
+- **Five canonical files advertise in their own authoring notes that she "retunes with NO recompile."**
+  That sentence is literally true (no C# recompiles) and false in the only sense she experiences. It is
+  misleading, and it misled everyone — including seats who read it as proof the problem was already solved.
+- **Every past attempt to fix tunability by moving numbers into JSON was working on the wrong axis.**
+  If you catch yourself proposing "make it data-driven" as the answer to a tuning round trip, you are
+  about to repeat that mistake. The axis that matters is *what resolves at runtime*, not *what format the
+  number is written in*.
+
+`CanonicalJson.Source` is a settable `ICatalogSource`, documented in its own comments as a one-line swap
+to a remote source — and it was **assigned nowhere**. **WO-1331 connects it**, shipped **flag-gated and
+OFF** (`FeatureFlags.RemoteCatalogs` ⇒ `Get("catalogremote", defaultOn: false)`). Off was
+non-negotiable: this changes how every catalog in the game loads, the blast radius is the whole product,
+and the game is live on a store with the pay path activated. With the flag off, resolution is exactly as
+before. Scoped deliberately to five allowlisted catalogs (`RemoteCatalogOverrides.Allowlist`), not all
+71; a payload is validated BEFORE it replaces anything, because a half-parsed catalog overwriting a good
+one is strictly worse than no feature at all. New suite: `[catalog-seam] CATALOG SEAM OK`.
+
+**Two findings left deliberately unactioned, both owner decisions, both recorded so they are not lost:**
+
+1. **`heart.json` and `towers.json` have NO RUNTIME READER AT ALL** — only a regression asserting they
+   are *served*. Shipped Heart is 100 HP with 2 HP/s regen; the authored files say 160 HP with zero
+   regen. **The game has been ignoring reviewed, authored balance data.** Wiring them moves live balance
+   in two directions at once, so it is an OWNER RULING, not a cleanup.
+2. **`ServerConfig.cs` is a DEAD SECOND MECHANISM** — 11 fields fully wired client-side and consumed in
+   `WaveManager`, but `api/game/load.js` has never emitted a config key, so none of it has ever been
+   settable. **Retire it or fold its useful keys onto the rail; do NOT build the missing server half** —
+   that would create a second configuration mechanism, the class of duplication this repo pays for most.
+
+The full survey is `reference/TUNABLE_LEVER_INVENTORY.md`: 33 distinct constants, every one opened at
+source, ranked by the owner's real cost — how likely she is to tune it × how expensive the round trip is
+today. Use it as the work queue for the rail.
+
+### What landed tonight, and the transferable lesson each one paid for
+
+Read the commit bodies (`git log --since=2026-09-02`); each carries its RCA and its proving line. The
+lessons outlive the fixes:
+
+1. **A detector that fires on every healthy case is worse than no detector** (WO-1301/1302). It trains
+   every future reader to ignore it, so the one real failure arrives wearing the same face as a thousand
+   false ones. `OpenItemPicker` announced itself to the arbiter three lines before assigning the field
+   the arbiter probes, so the ghost-modal verdict was false **by construction** on every open. And
+   `DependencyClosureTrace` asked two hardcoded texture-property names and read "not those two" as "no
+   albedo", so every fully-textured Synty shader-graph material reported as an untextured grey blob. The
+   fix asks the SHADER for its properties and classifies by token: **a classifier, not a name allowlist**
+   — an allowlist needs a new entry per shader and rots.
+2. **A release seam that exists and an owner that never reaches for it** (WO-1308, the wolf stuck in
+   fight). `WaveManager` raises a global battle-lock through `_phase == Active` and was the one such
+   owner that never registered a battle-session unwind, so a retreat announced the session end and
+   nobody asked the wave loop whether its claim was still true. Same family as the August arena softlock,
+   confirmed rather than assumed. **When you add a global claim, register its unwind in the same change.**
+3. **Guard the write, not the theory** (WO-1299). One unguarded `AudioSource` write inside an unawaited
+   `async UniTaskVoid` threw on scene teardown, surfaced only through the unobserved-task handler, and
+   left `_fading` latched — so the *next* crossfade hard-stopped both sources. That is the audible "music
+   cuts out on a transition". Every bail now clears the latch and emits a `FlowTrace.Warn` naming the
+   reason: **no silent catch, ever** (§12).
+4. **An impossible candidate list means you are reading the wrong file** (WO-1293). All three causes the
+   ticket listed were structurally impossible. The real one was a fourth: a second `LayoutGroup` added to
+   an object that already carried one — and `LayoutGroup` is `[DisallowMultipleComponent]`, so
+   **`AddComponent` returned NULL** and the next line dereferenced it. It fails silently and reads as
+   working software, which is how it survived. The evidence that would have named it instantly is now
+   permanent: the probe line carries a LayoutGroup census.
+5. **Instrumentation is the fix's other half** (WO-1298, WO-1300). A suppressed hero wrote `Speed = 0`
+   into the animator every frame while something else moved the root — "input taken away" is not
+   "standing still". A wedged tutorial walk beat emitted **zero** probe lines, because the probe returned
+   in silence on a null hero, and the founding band's only publisher sat behind a signal that a fault
+   upstream guaranteed could never be raised. Both now trace. **A bug that cannot report itself next time
+   is only half fixed.**
+6. **Correct the premise before writing code** (WO-1330). The CLI grepped, found damage-over-time in
+   `DeNelle.BattleATB`, and reported the mechanic as existing. The owner said *"it doesnt but it wouldnt
+   be too challenging"* and she was right: BattleATB is the **superseded** turn-based path — proven, not
+   assumed, by `ff.dungeonrealtime` defaulting ON and `ATBCombatManager`'s GUID appearing in zero scenes
+   or prefabs. **A DoT living only there is one the shipping game cannot cast.** What actually existed was
+   four unrelated ad-hoc tick loops, none tunable; they are now one over-time engine that cannot be built
+   without a liveness test.
+7. **Three facts, three owners, none written twice** (WO-1328, the Command Center Balance tab). Key, kind
+   and default are **parsed out of `RemoteTunables.cs`** by `tools/gen-tunable-manifest.mjs`, which
+   THROWS on an unresolvable entry rather than silently dropping it; may-this-key-be-written comes from
+   `TUNABLE_KEYS` by direct require; only area, label, prose and safe-range are hand-authored. The oracle
+   re-parses the `.cs` from disk every run and asserts the checked-in JSON is byte-identical to a fresh
+   derivation. **It caught two real drifts unprompted, within the minute** — parallel lanes landed new
+   knobs into the shared tree mid-flight and it went red naming each. That is what a non-duplicated fact
+   looks like in practice; copy the shape.
+8. **The healthy-looking target was the degraded one** (the wolf's coat). The premise was backwards and
+   measurement said so: `wolf_color` is **absent** from the WebGL payload and present in the Android and
+   Windows ones, so Pi looked correct *because the coat map never shipped there* and the species-tint
+   fallback painted a clean pale body. The APK binds the real map — mean saturation 0.091, genuinely a
+   grey coat — and multiplies the pale tint into it. **When one platform looks right and the others look
+   wrong, measure before assuming the right-looking one is the reference.**
+9. **Most of a stale ticket can already be built** (WO-1294) — verify at source before re-implementing.
+   The real remaining defect was invisible because **nothing compared the two files**: the talent tree
+   resolves art through `talent-icon-map.json`, the hot-swap bar through `concept-icons.json`, and only
+   the tree side had an oracle. Three abilities rendered as different icons in the two surfaces.
+10. **Name what the data does NOT prove** (WO-1327). Real misconfiguration was found on the fire spell's
+    emitter and fixed — and the commit says plainly it is **not the proven root** of the owner's two
+    captures, because the instrumented root for one of them landed the same day and the YAML alone cannot
+    settle the other. **Shipping a correct fix while refusing to claim it closes the ticket is the
+    discipline**, not a hedge.
+
+### The build / gate / ship cycle — unchanged, and still the order that matters
+
+1. **Be the SME first.** `MASTER_CATALOG.md` + the `MASTER_CATALOG/<area>.md` for what you will touch.
+   The code wins on truth; comments lie.
+2. **Instrument before you edit (§12).** No code edit on a non-trivial bug until you can cite CAPTURED
+   DATA. Static reading LOCATES candidates; it never CONCLUDES. **Never strip a `FlowTrace` or a
+   `Guard`** — flag it off if you must, the calls stay, because a stripped `Warn` turns a logged failure
+   back into a silent one and the next regression in that system starts from zero evidence.
+3. **Compile gate**, judged by `COMPILE_GATE_OK` on a **fresh** log — never by the exit code. This repo's
+   runners exit 0 on refusals and FAILs. Always pass `-ExpectMarker`; without it you get
+   `VERDICT=PASS-UNASSERTED`, which proves nothing about which run produced the text.
+4. **Data regression** → `REGRESSION_OK <n>/<n> suites`. The three entry points emit DISTINCT markers
+   (`REGRESSION_OK` / `CHECKIN_SUITE_OK` / `SESSION_GUARDS_OK`) so a small suite's pass can never read as
+   the full suite's. **Read the count off the marker; never restate one from a doc.**
+5. **Eyes, for anything visual.** Headless gates cannot see orientation, layout or colour. Open the PNGs
+   or take a device screencap. FlowTrace shows what the code believes; the screenshot shows what the
+   player sees.
+6. **Never bake with the Unity editor open**, and **never hand-edit a curated `.unity`**.
+7. **Ship through `tools\r2-ship.ps1`** — one file, push + verify, marker-judged. Bundle names are
+   content-hashed, so **every content build needs its own push**; "I pushed yesterday" is never an answer
+   and a full-looking bucket proves nothing. A raw `adb install` of a hand-built APK bypasses all of it.
+
+The full procedure — startup order, every command, every marker — is **`CLI_OPERATIONS_RUNBOOK.md`**
+(2026-08-27). `CLAUDE.md` is the LAW, that runbook is the PROCEDURE, this sheet is the WHY. Where the
+runbook and `CLAUDE.md` disagree, `CLAUDE.md` wins and the runbook is the thing that is stale.
+
+### Resume points
+
+1. **Owner felt-test of the current APK** — that is the gate on pushing any of tonight's work.
+2. **Work the APK lane.** Pull player-felt gameplay and polish tickets off the board
+   (`python tools/board_build.py`). Do not open a Pi ticket without an owner word.
+3. **Walk `reference/TUNABLE_LEVER_INVENTORY.md` top-down**, migrating constants onto the rail in its
+   ranked order. Four sources per knob, one commit, or the `[tunable-defaults]` oracle goes red.
+4. **Two owner rulings owed, both from WO-1331:** whether to wire `heart.json` / `towers.json` (it moves
+   live balance in two directions at once), and whether to retire `ServerConfig.cs` or fold its useful
+   keys onto the rail.
+5. **`FeatureFlags.RemoteCatalogs` stays OFF** until the seam is proven. ⚠ A default flip is not a state
+   change on a machine that already answered the question — `FeatureFlags.Get` reads PlayerPrefs FIRST,
+   so clear the pref when testing a default.
+
+---
+
+## ★★ SESSION HANDOVER — 2026-08-21 (the gate-sweep night: gates that passed while asserting nothing) — SUPERSEDED (see 2026-09-02 above) ★★
+
+> ⚠ **FROZEN, NOT REWRITTEN (CLAUDE.md §15).** Two lines in this block are now false and are left
+> standing on purpose: the branch is **`feat/synty-art-retheme`**, not `wip/village2-and-f8-tickets`;
+> and its "nobody has ever bought anything" framing was overturned on 08-23. Its numbers-live-at-source
+> table is still binding.
 
 **Anchor:** **`../CANON_GROUND_TRUTH_2026-08-21.md`** — minted tonight, supersedes the 08-18 anchor
 (bannered/frozen). Read it before this block; it carries the owner rulings verbatim and the file:line

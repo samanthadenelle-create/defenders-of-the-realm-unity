@@ -50,6 +50,17 @@ Verified on disk 2026-08-21.
      on ALL platforms **including WebGL**. Non-empty → returned. **Resources WINS.**
   2. Desktop/editor fallback: `File.ReadAllText(Application.streamingAssetsPath + rel)`,
      wrapped in `Guard.Try` (WebGL has no filesystem — never reached there).
+> ### ⛔ AND THE CONSEQUENCE NOBODY DRAWS FROM THIS LAW (recorded 2026-09-02)
+> Because Resources wins and **`Assets/Resources/` is COMPILED INTO THE PLAYER**, "data-driven" in
+> this repo has **NEVER** meant "tunable without a rebuild". Editing any canonical JSON still costs a
+> full player build (~10 min APK / ~30 min WebGL), and **editing the StreamingAssets twin ALONE
+> changes nothing at runtime** — the compiled copy shadows it, on desktop as well as on web. This is
+> the single most misunderstood fact in the repo, and every past attempt to make the game tunable by
+> moving numbers into JSON was working on the wrong axis. The axis that actually works is the WO-1331
+> remote-catalog seam (`Core/Data/RemoteCatalogSource|Service|Overrides`, which finally assigns
+> `CanonicalJson.Source`) — **flag-gated OFF**, `FeatureFlags.RemoteCatalogs`, `ff.catalogremote`,
+> `defaultOn: false` (`FeatureFlags.cs:1361`). See `docs/MASTER_CATALOG/core.md` DELTA 2026-09-02.
+
 - **The sync rule:** each catalog lives in TWO copies —
   `Assets/Resources/Data/Canonical/` (WebGL-safe, wins at load) and
   `Assets/StreamingAssets/Data/Canonical/` (desktop fallback + authoring source). Keep them
@@ -335,6 +346,18 @@ edited, so they belong here and not only in the VFX docs.*
    registry at `MusicTrack.cs:114`; the others are referenced only in comments). The
    WebGL-null risk is closed, but a change to these files changes NOTHING at runtime —
    don't "tune" them expecting effect; wire a reader first (or retire them).
+   **⚠ RE-VERIFIED 2026-09-02, WITH THE NUMBERS, because "data-inert" understates it — the authored
+   file and the shipped game DISAGREE.** The only reference to `heart.json` / `towers.json` anywhere
+   outside comments is `Assets/Editor/Regression/DataWebRegression.cs:155,158`, which asserts they are
+   SERVED — i.e. the one gate that touches them proves the file is reachable and proves nothing about
+   whether anyone reads it. Concretely, for the Heart:
+   · `heart.json` authors `maxHp: 160` and `regenPerSecondOutOfCombat: 0`;
+   · the shipped `HeartController.cs:97` is `_hp = 100f` with a `[Range(0,100)]` and a clamp to
+     `[0,100]` in `SetHp` (`:218`), and the regen the player actually feels is **2 HP/sec**, hardcoded
+     as `_regenPerSecond = 2f` in a DIFFERENT file, `Assets/_Modules/Village/Heart/HeartRegen.cs:61`.
+   So a designer who "buffs the Heart" in `heart.json` changes the Heart by nothing, twice over: the
+   file has no reader, and the two numbers they would be editing live in two separate scripts. Wire a
+   reader or retire the file — but do not cite `heart.json` as the Heart's balance.
 5. **The `{target}` label contract is easy to re-break.** `daily-quests.json` labels ship
    raw `{target}` tokens; the ONLY substitution point is `DailyQuestVM.ResolveLabel`
    (`DailyQuestVM.cs:213-216`). Any new surface that renders `DailyQuestInstance.Label`

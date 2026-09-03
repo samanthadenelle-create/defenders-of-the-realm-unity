@@ -22,6 +22,116 @@ hero warp (→Village HeroLocomotion, `SceneRouter.cs:350,383`).
 
 ---
 
+## DELTA 2026-09-02 — the REMOTE rails (tunables + catalogs) and the ONE over-time engine
+
+Three new Core clusters landed on 2026-09-02. All three are read-verified at source, and all three
+share one shape, stated identically in each file's own header:
+
+> ⛔ **NO ROW, NO NETWORK, NO SERVER, NO PARSE => TODAY'S BEHAVIOUR, EXACTLY.**
+
+### `Core/Ops/RemoteTunables.cs` + `Core/Ops/RemoteTunablesService.cs` (`DeNelle.Core.Ops`) — PROD-022
+
+The database-backed knob rail: candidate mitigations for the PROD-022 Pi Browser crash loop ship in
+ONE build, each behind its own knob, all defaulting to today's shipping value, so a bisect is a flag
+flip instead of a ~30-minute WebGL rebuild.
+
+- **Split of duties, copied deliberately from `MaintenanceCatalog` / `MaintenanceService`:**
+  `RemoteTunables` is **state + parse only** and knows nothing about transport;
+  `RemoteTunablesService` owns **transport and only transport**. The reason is testability — the knob
+  table stays headlessly drivable by a regression oracle with no network and no PlayMode.
+- **⚠ DO NOT RESTATE THE KNOB COUNT OR THE KEY LIST HERE.** `RemoteTunables.Registry`
+  (`RemoteTunables.cs:325`) is the machine-readable source of truth (key, kind, default, what ON does,
+  which hypothesis it tests); the owner-facing list `docs/PROD022_TUNABLE_FLAGS.md` is WRITTEN FROM IT.
+  The registry changed three times in one evening — read the array, and read the doc for the prose.
+  Key constants start at `RemoteTunables.cs:145` and group as `pi.*` / `assets.*` / `visuals.*` /
+  `trace.*` / `combat.*` / `vfx.*`.
+- **Precedence, and it composes with `FeatureFlags` rather than fighting it:**
+  LOCAL PlayerPrefs `ff.tun.<key>` (a human at the device) beats REMOTE payload (the owner at the
+  database) beats DEFAULT (what this build hardcodes). The prefix is `ff.tun.` and deliberately NOT
+  plain `ff.` so a tunable key and a `FeatureFlags` name can never collide in one PlayerPrefs
+  namespace (`RemoteTunables.LocalPrefix`, `:131`). Every resolve carries a provenance string
+  (`default` / `remote` / `local-playerprefs` / `remote-cached`) and is traced once per key.
+- **Non-blocking is STRUCTURAL, not a comment** — this is a crash-loop ticket, so adding a boot
+  failure mode would be self-defeating. `Bootstrap()` calls `PollForeverAsync().Forget()`; there is no
+  barrier, no `WaitForCompletion`, and nothing anywhere yields on it. `req.timeout` is set, because a
+  captive-portal socket otherwise never completes.
+- **⭐ THIS ONE CACHES, and that is a DELIBERATE divergence from `MaintenanceService`** (which is
+  owner-ruled cache-free, because a stale kill switch is a safety question). The knobs that matter
+  most are read DURING BOOT (`StructureContentWarmer.Boot`, AfterSceneLoad), so a value that only
+  arrived after a round trip would be too late on the very launch it was set for, forever. The cache
+  is read at BeforeSceneLoad and the poll starts at AfterSceneLoad — that ordering is load-bearing.
+  A 404 CLEARS the cache; a fresh payload REPLACES it wholesale, so it can never resurrect a knob the
+  owner turned off.
+- **NO AUTH** — `/api/client-tunables` is public read and must resolve before sign-in (these knobs
+  govern boot-time asset policy, long before any identity exists). Do not call `BackendRequestSigner`
+  from here.
+- **⚠ ONE HONEST EXCEPTION to the invariant, stated in the file rather than hidden (WO-1327):** the
+  two `vfx.*` knobs are BUG FIXES, so their defaults are the CORRECTED values. An empty table gives
+  this build's fixed VFX behaviour, not the art pack's original — and the previous behaviour is one
+  flip away. FlowTrace tag `Tunables`.
+
+### `Core/Data/RemoteCatalogSource.cs` + `RemoteCatalogService.cs` + `RemoteCatalogOverrides.cs` — WO-1331
+
+The seam that finally assigns `CanonicalJson.Source`, converting authored canonical data into
+remotely-updatable content **with no call-site change anywhere in the game**.
+
+- ⛔ **FLAG-GATED OFF.** `FeatureFlags.RemoteCatalogs => Get("catalogremote", defaultOn: false)`
+  (`Assets/_Modules/Core/FeatureFlags.cs:1361`). With the flag off `RemoteCatalogSource` is **never
+  constructed and never installed** — `RemoteCatalogService.Install()` returns before touching
+  `CanonicalJson.Source`, which still holds the `LocalJsonCatalogSource` its own field initializer
+  gave it. The flag-off claim is therefore provable by READING, not only by testing.
+- **`RemoteCatalogSource` is a DECORATOR, not a replacement** — it owns no loading. With no validated
+  override for a catalog (the normal case, and the only case with no database row) it delegates
+  verbatim to the inner `LocalJsonCatalogSource`, so the resolved text is the SAME STRING the game
+  would have got with the file absent. A null inner is replaced with a fresh `LocalJsonCatalogSource`
+  so this type can never be the reason a catalog fails to resolve.
+- **Validation happens BEFORE anything is replaced, and a payload is accepted WHOLE or rejected
+  WHOLE** — never a partial merge, because a half-applied catalog overwriting a good one is strictly
+  worse than no feature at all. Each candidate must (1) name an allowlisted path (deny list checked
+  FIRST) that actually exists in the compiled build, (2) be non-empty and under `MaxCatalogBytes`,
+  (3) parse through `Guard.Try` (which rejects malformed AND truncated text), and (4) have the SAME
+  ROOT KIND as the compiled copy and, for an object root, carry every top-level key it has. One
+  failure rejects the whole payload with `FlowTrace.Fail` and changes nothing.
+- **Server-authoritative data is permanently OUT OF SCOPE and the boundary is enforced here in code,
+  not in prose** — prices, entitlements, grants, base-unit amounts, token decimals and quote TTL stay
+  decided in `api/_lib/purchase-catalog.js`.
+- Serving an override logs a **`FlowTrace.Throttle`, not a `Step`** — an overridden catalog is NOT the
+  shipping catalog and a capture must never let that read as ordinary narration (CLAUDE.md §12).
+  FlowTrace tag `CatalogRemote`.
+
+### `Core/Combat/OverTimeEffects.cs` (`DeNelle.Core.Combat`) — the ONE over-time engine, WO-1330
+
+`OverTimeEngine<TTarget>` + `OverTimePulse<TTarget>` + `OverTimeTuning`. It **replaced four ad-hoc
+tick loops**, and the file records what was actually true at source — which is neither what the CLI
+first reported nor quite what the owner's correction assumed:
+
+- The CLI first said "the DoT already exists" and pointed at `DeNelle.BattleATB`. **Wrong in the way
+  that matters:** BattleATB is the SUPERSEDED turn-based engine and the shipping game cannot cast into
+  it. The live real-time path `HeroAbilities.ResolveEffect` already dispatched `dot` and
+  `healOverTime`, but over **three unrelated loops** — `HeroAbilities.BurnDoT` (coroutine, hardcoded
+  1s tick), `HeroAbilities.PoisonDoT` (a SECOND coroutine, byte-for-byte the same loop), and the
+  `_hpOverTime` per-FRAME drip in `Update`. None tunable; no mage ability able to reach any of them.
+- `Core/Combat/CombatStatusTracker.cs` **is live and was never a candidate for the tick** — it is a
+  HUD TIMER BAG that stores when a status ENDS, with no magnitude, no tick and no sink, so it can
+  record that a foe is burning and can never make the burn hurt. It is the right home for the ROW;
+  the two are used together, exactly as before.
+- ⛔ **LIVENESS IS A REQUIRED CONSTRUCTOR ARGUMENT THAT THROWS ON NULL.**
+  `OverTimeEngine(Func<TTarget,bool> isAlive)` (`:303`) throws `ArgumentNullException` (`:306`). The
+  engine **cannot be built without saying how to test whether the target is still alive** — that is
+  the design point, not a nicety: the classic over-time bug is ticking a corpse.
+- **Pure by construction:** no MonoBehaviour, no coroutine, no `UnityEngine.Time` — the clock is a
+  parameter (`Advance(now, onPulse)`, `:455`). Copied from the `HeroAbilities.TickManaOverTime`
+  precedent: EditMode never runs `Update`, so an over-time effect whose ticking cannot be OBSERVED by
+  a gate is one nobody can prove ticks (CLAUDE.md §12). `OverTimeEffectRegression` drives this type
+  with a fake clock and counts the pulses.
+- **One mechanism, both signs:** generic over the target type, so "damage a foe" and "heal the hero"
+  are two closed generic types over ONE body. **Magnitude is always a POSITIVE quantity and the
+  direction travels in `OverTimeKind`**, so no call site can heal by passing a negative damage (the
+  classic sign bug). Tuning (`OverTimeTuning.TickSeconds` / `MagnitudeScale` / `DurationScale`) reads
+  through the `combat.overTime*` remote tunables above. FlowTrace tag `OverTime`.
+
+---
+
 ## DELTA 2026-08-21 — new Core surfaces (Defense data model, DefenseMapPlate, RaidStrings, RaidCooldownRecord, `AddRawImage`)
 
 Read from source 2026-08-21. Where this block and the 08-02 body disagree, this block wins.
@@ -29,8 +139,10 @@ Read from source 2026-08-21. Where this block and the 08-02 body disagree, this 
 **HEADLINE CORRECTION: `PanelId` no longer stops at 15.** Verified in `Core/UI/PanelRouter.cs` (the
 enum lives in that file, not in a `PanelId.cs`): `DefenseReport = 18`, `BattlePass = 19`,
 `MonthlyLedger = 20`. The 08-02 header line "PanelId 0-15 (RealmMap=15)" is stale.
-Read the save-schema version off `SaveSchema.CurrentVersion` as always — the header line above says
-v36 and is likewise a copied number; the const is the authority.
+Read the save-schema version off `SaveSchema.CurrentVersion` as always — every copied number below is
+stale by construction; the const is the authority. ⛔ **Do not "fix" those numbers by writing today's
+value — delete the number and name the source.** This file has already been caught stale at v36 while
+live was v38, and the index was caught again at v38 while live had moved on (2026-09-02).
 
 ### ⛔ NEW DIRECTORY `Core/Defense/` — **UNTRACKED IN GIT AS OF THIS WRITE.** See the P1 ledger entry in `docs/MASTER_CATALOG.md`.
 
@@ -247,7 +359,7 @@ All 62, actual default, with the **12 XML-summary lies** marked ⚠ (XML states 
 ## State/ (`DeNelle.Core.State`) — the save/persistence spine
 
 ### GameState (ScriptableObject, sealed — `State/GameState.cs`, 567L)
-Pure-data persisted store (~66 fields; asset `State/GameState.asset`). `SchemaVersion = SaveSchema.CurrentVersion` (=36, `:34`).
+Pure-data persisted store (~66 fields; asset `State/GameState.asset`). `SchemaVersion = SaveSchema.CurrentVersion` (`:34` — the field is DERIVED from the const, so there is no second number to keep in sync; read the value off `SaveSchema.CurrentVersion`).
 Field map (line = declaration; ALL append-only at the end per the save law):
 
 - Player: `Onboarded :38`, `BestWave :40`, `HeroClass` (HeroClassOpt `:45`), `BoundWallet :47`.
@@ -309,7 +421,7 @@ claim is DEAD (closed by v34).**
   (`GameStateBootstrap.cs:16`) AND `GameStateService.EnsureInstance` AfterSceneLoad (`GameStateService.cs:167`).
 
 ### SaveSchema (static — `State/SaveSchema.cs`, 914L)
-- `CurrentVersion = 36` (`:36` — the const line doubles as the full v13→v36 changelog),
+- `CurrentVersion` (the const line doubles as the full changelog, one clause per version, newest first — **read the number and the changelog there, never here**),
   `FileFormat = 1` (`:38`), key `dotr-save` (`:42`), legacy settings key (`:44`), `StarterDungeonId "healers_cottage"` (`:48`).
 - `JsonSettings` (`:55–74`): StringEnumConverter + TutorialStepConverter, `MaxDepth = 64` (LB-3 deep-nesting cap).
 - **LB-3 save integrity** (`:76–191`): keyed HMAC-SHA256, key assembled from fragments (`:101–106`,
@@ -357,7 +469,7 @@ newer-than-build / non-finite). Notable steps:
 | `NestedTypes` | `State/NestedTypes.cs` (277L) | PetData, ResourceBalance (Starter {250,80,15}), **`StartingBudget` = 0/0 (`:75–81`, freebies replaced the seed)**, PendingTowerBuild, AtbInventory, ChatContact, `ChatMessage` (1:1 mailbox — **name-collides with `Services.ChatMessage`**), LootStash, ActiveDungeonRun, SeedTree, DungeonProgress, QuestState/Progress, RegionProgress. |
 | `BuildJobData` (struct) + `BuildJobType` | `State/BuildJobData.cs` | WO-172 offline-fair timer record, now + `Kind` + `Channel` (v35, additive default-on-read) — IS the "ObsidianJob". |
 | `PlacedStructureData` / `PlacedDefenderData` (structs) | `State/PlacedStructureData.cs` / `PlacedDefenderData.cs` | Base-layout record (+ v27 `worldY`/`wallMounted`) · Arena-defense twin (WO-389). |
-| `DifficultyTuning` / `ServerConfig` / `BackendAuthConfig` / `HeroClassOpt` / `SerializableDict` / `TutorialStepConverter` / `ArenaProgress` | `State/*` | As before: countdown multipliers · backend remote-config (never null) · WO-121 auth flag default OFF · nullable-HeroClass wrapper · serializable dict · `1..7\|"done"` converter · Arena W/L struct (NOW persisted, v34). |
+| `DifficultyTuning` / `ServerConfig` / `BackendAuthConfig` / `HeroClassOpt` / `SerializableDict` / `TutorialStepConverter` / `ArenaProgress` | `State/*` | As before: countdown multipliers · backend remote-config (never null) **but see the DEAD ROW below** · WO-121 auth flag default OFF · nullable-HeroClass wrapper · serializable dict · `1..7\|"done"` converter · Arena W/L struct (NOW persisted, v34). |
 | `PersistenceBridge` (MonoBehaviour) | `State/PersistenceBridge.cs` | DDOL: wave-clear→SyncAfterWave (reflection to Village.WaveManager), scene-enter→LoadFromBackend, quit→Save. **`_loadOnEnterScenes` still lists dead `"PatriciaLight_TD"`** (`:61`; also mismatches SceneRouter's `"PatriciaLightMode"`). |
 
 ---
@@ -599,7 +711,42 @@ chrome is gated by `FeatureFlags.BlinkChrome`.
 
 ---
 
+### ⛔ `State/ServerConfig.cs` IS DEAD — fully wired client-side, never once settable (verified 2026-09-02)
+
+The file carries its own banner (`ServerConfig.cs:1-4`, WO-1331): **"DORMANT. THIS MECHANISM HAS
+NEVER ONCE BEEN SETTABLE."** Every client half exists — `GameStateService.ServerConfig` defaults to
+`ServerConfig.Default` (`GameStateService.cs:157`), the load response declares
+`[JsonProperty("config")] public ServerConfig Config` (`:2542`) and assigns it (`:1794`), and
+`WaveManager.cs:3591-3592` really does read it for boss-wave crystal drops. The server half does not:
+**`api/game/load.js` has never emitted a `config` key** — its response literal returns
+`{ success, data, ... }` and nothing else, verified by reading the whole file.
+
+So every field resolves to its compiled default on every launch, forever. ⚠ **Do not restate the
+field count here** — the file's own banner says "its eleven fields" while a `[JsonProperty]` grep
+returns 15, so the two disagree and both will rot; read the type. Treat any doc or ticket that
+describes a knob as "server-tunable via ServerConfig" as describing a mechanism that has never run.
+
+---
+
 ## DATA / JSON loaded by Core (dual-copy law: Resources/Data/Canonical wins, StreamingAssets fallback — keep byte-identical)
+
+> ## ⛔ THE SINGLE MOST MISUNDERSTOOD FACT IN THIS REPO (recorded 2026-09-02, verified at source)
+> **`Resources.Load<TextAsset>` resolves FIRST on EVERY platform, and `Assets/Resources/` is COMPILED
+> INTO THE PLAYER.** `LocalJsonCatalogSource.Read` (`Assets/_Modules/Core/Data/LocalJsonCatalogSource.cs:36`)
+> tries `Resources.Load<TextAsset>(resPath)` and returns its text if non-empty; the desktop
+> `StreamingAssets` `File.ReadAllText` is only a `Guard.Try` FALLBACK reached when no Resources copy
+> exists. Its own header says it plainly: "Resources wins."
+>
+> **Therefore "data-driven" in this repo has NEVER meant "tunable without a rebuild."** Editing any
+> canonical JSON still costs a full player build (~10 min APK / ~30 min WebGL), and **editing the
+> `StreamingAssets` twin ALONE changes nothing at runtime** — the compiled Resources copy shadows it.
+> Every past attempt to make the game tunable by moving numbers into JSON was working on the wrong
+> axis; the axis that actually works is the WO-1331 remote-catalog seam (see the 2026-09-02 delta at
+> the top of this file), which is flag-gated OFF by default.
+>
+> Twin counts on disk (2026-09-02): `Assets/Resources/Data/Canonical/` **115** `.json`,
+> `Assets/StreamingAssets/Data/Canonical/` **98** — i.e. they are NOT a mirror, and a file present
+> only in StreamingAssets is WebGL-null (see the six-catalog flag in the index ledger).
 
 `quests.json` (QuestCatalog) · `daily-quests.json` (DailyQuestCatalog) · `chat-phrases.json`
 (ChatPhraseCatalog) · `garrison-recipes.json` (GarrisonRecipeCatalog) · `themes.json` (Theme) ·

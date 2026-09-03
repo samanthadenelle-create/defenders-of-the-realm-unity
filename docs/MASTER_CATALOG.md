@@ -1,5 +1,60 @@
 # MASTER CATALOG — Project Index
 
+> # ▶ DELTA 2026-09-02 — read this FIRST; it supersedes every dated block below it
+> **What this pass CORRECTED in this file (each verified by opening the code, never a comment):**
+> - ⛔ **The save-schema version is no longer printed anywhere in the catalog.** It said **v38** while
+>   `SaveSchema.CurrentVersion` had moved on — the SECOND time this number has rotted here (it was
+>   corrected from v36 to v38 on 2026-08-16). **Read it off
+>   `Assets/_Modules/Core/State/SaveSchema.cs`**, whose const line doubles as the full changelog. The
+>   fix is deleting the number, not writing today's; a restated version is guaranteed to rot.
+> - **§2b/§2c scene flow was months stale.** The home hub is the MERGED **`Main_Castle_Overworld`**
+>   (one navmesh), resolved through `SceneRouter.Castle` / `CastleCandidates` under
+>   `FeatureFlags.MergedWorld` (`defaultOn: true`). **`OuterWorld.unity` and `Village.unity` are
+>   DELETED** and `WorldSceneLoader` is a traced NO-OP; `MainCastle_Hall.unity` is still on disk as the
+>   LEGACY flag-off branch and is NOT the hub. See §2b.
+> - **The §3 risk ledger was re-verified at source.** Items 1, 3, 4, 5, 7, 8, 10, 11, 13 and P2 9 are
+>   **RESOLVED** (kept with their original text struck through — a deleted row cannot correct a reader
+>   who half-remembers it). Item 2 is now **unprovable as written** (it names a deleted scene). Items
+>   6, 12, 14 and the `cleric` half of P2 10 **still bite**. ⚠ Ledger item 7 was itself the failure it
+>   warned about: it printed a WO number.
+>
+> **New systems documented this pass, and where they now live:**
+> - **The REMOTE rails** — `Core/Ops/RemoteTunables.cs` + `RemoteTunablesService.cs` (PROD-022 knob
+>   rail; contract doc `docs/PROD022_TUNABLE_FLAGS.md`) and `Core/Data/RemoteCatalogSource.cs` +
+>   `RemoteCatalogService.cs` + `RemoteCatalogOverrides.cs` (WO-1331, the seam that finally assigns
+>   `CanonicalJson.Source`, **flag-gated OFF**: `ff.catalogremote`, `defaultOn: false`), plus
+>   **`Core/Combat/OverTimeEffects.cs`** (`OverTimeEngine<TTarget>`, WO-1330 — liveness is a REQUIRED
+>   constructor argument that THROWS on null, so the engine cannot be built without saying how to test
+>   it; it replaced four ad-hoc tick loops). → `MASTER_CATALOG/core.md` **DELTA 2026-09-02**.
+>   ⚠ **Do not restate the tunable knob COUNT** — read `RemoteTunables.Registry`; it changed three
+>   times in one evening.
+> - **`Village/Vfx/MarqueeSpellVfx.cs`** — a string-set registry ONLY; `VFXManager.PlayKey` remains
+>   the single spawn owner. → `MASTER_CATALOG/resources-art.md` §6 DELTA 2026-09-02.
+>
+> **Facts recorded this pass, each of which cost real time to discover:**
+> - ⛔ **`Resources.Load<TextAsset>` resolves FIRST on every platform and `Assets/Resources/` is
+>   COMPILED INTO THE PLAYER**, so **"data-driven" has never meant "tunable without a rebuild"**, and
+>   editing the StreamingAssets twin alone changes nothing. The single most misunderstood fact in the
+>   repo. → `core.md` (DATA/JSON) + `data-catalogs.md` §1.
+> - **`Assets/Spells Pack/` is GITIGNORED** — a prefab edit there cannot be committed, never reaches
+>   another machine, and dies at the next re-import while still changing the local build.
+>   → `resources-art.md` §6 + §8.
+> - **`Assets/Blink` holds 777 prefabs and ZERO VFX**; two of its four bundles are README files of
+>   unclaimed Asset Store links. → `BLINK.md`.
+> - **`Core/State/ServerConfig.cs` is DEAD** — fully wired client-side, but `api/game/load.js` has
+>   never emitted a `config` key, so it has never once been settable. → `core.md` (State/).
+> - **`heart.json` / `towers.json` have NO RUNTIME READER**, only a regression asserting they are
+>   served; the shipped Heart is 100 HP + 2 HP/sec regen (`HeartController.cs:97`,
+>   `HeartRegen.cs:61`) while the file authors 160 HP and no regen. → `data-catalogs.md` §7.4.
+> - **`Alduin` (Necromancer) and `Aldwin` (Echo #1, the founding wolf) are DIFFERENT characters**, two
+>   suites forbid conflating them, and the mistake has been minted TWICE in opposite directions.
+>   → `dialogue.md` (NAME PIN).
+>
+> ⚠ **Not verified in this pass, flagged rather than guessed:** whether the old OuterWorld frame-rate
+> cost survived the world merge (ledger 2); whether `OuterWorldBuilder.BakeWorldNavMesh` /
+> `SpawnPathVerifier` still open deleted scenes (ledger 25); the 223 MB WebGL figure (ledger 4).
+
+
 > # ▶ DELTA 2026-08-21 — read this FIRST; it supersedes every dated block below it
 > **Live anchor = `../CANON_GROUND_TRUTH_2026-08-21.md`.** Read HEAD, push state, the save-schema
 > version (`SaveSchema.CurrentVersion`), the suite counts (the marker line on a FRESH log) and the
@@ -48,8 +103,11 @@
 > **Live anchor = `../CANON_GROUND_TRUTH_2026-08-16.md`** (every "live anchor" reference further down this
 > file naming 08-02, 08-03, 08-06 or 08-09 is stale). **Read HEAD and push state off `git`, never off a
 > hash copied into a doc.**
-> Save schema **v38** (`SaveSchema.cs:41` — the const is the authority; v38 = WO-934 the army loadout
-> bank). ⚠ **Read every gate count off the marker file, never off this
+> Save schema: **read it off `SaveSchema.CurrentVersion` (`Assets/_Modules/Core/State/SaveSchema.cs`).**
+> ⛔ **DO NOT restate the number here.** That const line doubles as the full changelog, and the
+> version has now gone stale in this file TWICE — corrected from v36 to v38 on 2026-08-16, then drifted
+> again by 2026-09-02. A copied version number is guaranteed to rot; the const is the only authority.
+> ⚠ **Read every gate count off the marker file, never off this
 > doc** — the three entry points emit DISTINCT markers (`REGRESSION_OK` / `CHECKIN_SUITE_OK` /
 > `SESSION_GUARDS_OK`), and the newest run's markers are named in the anchor's gate block.
 >
@@ -96,7 +154,7 @@
 > body.** §1–§3 below are ~2026-07 fiction and contradict both the section files and the live anchor:
 > Village-Hero "Blaise + class bodies" · NPCs "party-of-4" · Enemies/World "OuterWorld streaming"
 > (that scene is DELETED) · Dialogue "64 `.yarn` nodes + vendored Yarn" (Yarn is FULLY REMOVED, WO-557)
-> · `SaveSchema CurrentVersion=30` (it is **38**) · "next free WO = 412" (**never trust a copied number — read the
+> · `SaveSchema CurrentVersion=30` (read the live value off `SaveSchema.CurrentVersion` — never off a doc) · "next free WO = 412" (**never trust a copied number — read the
 > `CLI_LANES_WO_NUMBERS.md` banner; corrected 2026-08-06, the 853/863 figures previously printed here
 > were themselves stale**) · EconomyService "4-resource wallet" (5 with Coins) · `ZoneManager` village ±42/±33 (actual
 > **52/52** — the 42/33 figure mis-classifies the courtyard and IS the 07-26 "enemies inside the castle" bug).
@@ -170,10 +228,10 @@ Current branch = **`wip/village2-and-f8-tickets`**.
 - `RaidDeployController` + `TroopDeployer.SpawnFromArmy(...)` + `TroopController` (`Assets/_Modules/Village/Troops/`) — tap-deploy tray + spawn + auto-fight.
 - `RaidScoring` + `RaidHudController` (`Assets/_Modules/Village/Troops/`; oracle `Assets/Editor/Regression/RaidScoringRegression.cs`) — 180s clock, stars, loot.
 
-**Core/Jobs — multi-channel "Obsidian" work queue — SHIPPED (WO-773, landed at save schema v35; live schema is now **v38**).** `Assets/_Modules/Core/Jobs/`:
+**Core/Jobs — multi-channel "Obsidian" work queue — SHIPPED (WO-773, landed at save schema v35; for the LIVE schema read `SaveSchema.CurrentVersion`).** `Assets/_Modules/Core/Jobs/`:
 - `JobKind.cs` (Build/Upgrade/TowerBuild/TrainTroop/Research/…), `IJobEffect.cs` (per-job apply hook),
   `ObsidianQueueState.cs` (Builder/Train/Research channels + `ChannelId`), `ObsidianQueueEngine.cs` (offline-fair resolve).
-- Persistence landed at schema **v35** (live schema is now v38): `SaveMigrator.MigrateToV35` appends `ObsidianQueue` and folds
+- Persistence landed at schema **v35** (for the live schema read `SaveSchema.CurrentVersion`): `SaveMigrator.MigrateToV35` appends `ObsidianQueue` and folds
   legacy `BuildJobs`/`PendingBuilds`/`BuildingCooldowns` into the Builder channel (idempotent, no-loss).
 - Surfaced by `Village/BuildMode/ObsidianQueueHud.cs` + `Village/Buildings/BuildTimerService.cs` (now the
   common multi-channel queue front). Player copy = "Builders"/"Training"/"Research", never "Obsidian queue".
@@ -220,7 +278,7 @@ raid-UX polish (loadout handoff / naming split / deploy ring / "Defenders %" cop
 | **Village — Hero** | `docs/MASTER_CATALOG/village-hero.md` | Player hero (Blaise + class bodies): HeroLocomotion (NavMeshAgent), abilities Q/W/E/R, body swap, gear/equip (GearLoadout + EquipmentController), combat-feel/projectiles, SmartMobileCamera, input drivers, inventory/shop UI. |
 | **Village — Systems** | `docs/MASTER_CATALOG/village-systems.md` | BuildMode (CREATE verb), Harvest (offline + worker), Tutorial/FTUE + DialogueService/CommandBridge, Arena async-PvP, world-space combat tells, EconomyService + building/upgrade progression. |
 | **Village — NPCs** | `docs/MASTER_CATALOG/village-npcs.md` | StoryCompanions (party-of-4), join beats, castle hub injectors + interactables, ambient townsfolk + bubbles, HUD talk/party bridges, companion gear-up sub-beat. |
-| **Village — Enemies/World** | `docs/MASTER_CATALOG/village-enemies-world.md` | Enemy/EnemyBrain/EnemyFactory, WaveManager loop, DragonBoss, RegionMobSpawner, OuterWorld streaming, ZoneManager seam, ward/tribe/settlement, camps/outposts/garrison raid loop, enemies.json/waves.json. |
+| **Village — Enemies/World** | `docs/MASTER_CATALOG/village-enemies-world.md` | Enemy/EnemyBrain/EnemyFactory, WaveManager loop, DragonBoss, RegionMobSpawner, the MERGED overworld (OuterWorld is DELETED — see §2b), ZoneManager seam, ward/tribe/settlement, camps/outposts/garrison raid loop, enemies.json/waves.json. |
 | **HUD** | `docs/MASTER_CATALOG/hud.md` | `DeNelle.HUD` code-built uGUI town/combat HUD (`VillageHudController`, 3 canvases) + 12 Village→HUD push bridges + PanelManager modal arbiter + popups + diagnostics. |
 | **Battle / ATB** | `docs/MASTER_CATALOG/battle-atb.md` | Turn-based Active-Time-Battle: deterministic pure-C# `Engine/` + runtime SO store (`ATBRuntimeState`) + scene `BattleController` + code-built `BattleHudUgui` + `AtbCombatantSwapper`. The breach/dungeon encounter combat. |
 | **Dialogue** | `docs/MASTER_CATALOG/dialogue.md` | One shared Yarn runner: `DialogueService` + `DialogueCommandBridge` (~40 verbs) + ClassicRPG `CompanionDialoguePresenter`; intro cinematic bridge; 64 `.yarn` nodes; vendored Yarn addons. |
@@ -285,48 +343,75 @@ shared spine; nothing references up; nothing references first-party from Core.
 - BattleATB `Engine/` is **pure C#, no UnityEngine** (except the optional unused
   `CombatantDefSO`); deterministic mulberry32 RNG, golden-vector bit-parity tested.
 
-### 2b. Scene boot / load flow (verified against routing source)
+### 2b. Scene boot / load flow (re-verified at source 2026-09-02)
+
+> ⚠ **CORRECTED 2026-09-02.** The flow below previously narrated `MainCastle_Hall` as the home hub
+> with `OuterWorld` streamed ADDITIVELY over it. Both halves were wrong and had been for months:
+> `OuterWorld.unity` and `Village.unity` are **DELETED from the tree** (verified on disk — the only
+> `.unity` files matching castle/village/outer are `MainCastle_Hall`, `Main_Castle_Overworld`,
+> `Village2`, `CastleTest` and `Garrison_village2_stronghold`), and `WorldSceneLoader` is a
+> **DEPRECATED NO-OP** whose own header says so
+> (`Assets/_Modules/Village/World/WorldSceneLoader.cs:2,262-267`). A reader following the old diagram
+> would go hunting for an additive stream that cannot happen.
 
 ```
 Title (#0, boot scene; Core DDOL singletons spin up)
-  ├─ Continue ─────────────► GoCastle() ──► MainCastle_Hall   (returning player, loads save)
-  └─ Play Intro / New game ─► [Yarn cinematic | StoryIntro cold-open]
-                               in-Title hero pick ─► GoPetSelect()
+  |- Continue --------------> GoCastle() --> SceneRouter.Castle    (returning player, loads save)
+  '- Play Intro / New game -> [StoryIntro cold-open]
+                               in-Title hero pick -> GoPetSelect()
 
-HeroSelect ── confirm ─► GoPetSelect() ─► PetSelect
-   └─ returning-player skip (hero+pet saved) ─► GoCastle()
+HeroSelect -- confirm -> GoPetSelect() -> PetSelect
+   '- returning-player skip (hero+pet saved) -> GoCastle()
 
-PetSelect ── confirm (writes StarterPetId, Save) ─► GoCastle() ──► MainCastle_Hall
+PetSelect -- confirm (writes StarterPetId, Save) -> GoCastle() --> SceneRouter.Castle
 
-MainCastle_Hall (HOME HUB)
-   └─ WorldSceneLoader auto-loads ► OuterWorld (ADDITIVE on any hub)
-   └─ SceneTransitionTrigger (south gate seam) ► OuterWorld + WarpTo hero across the seam
+Main_Castle_Overworld (HOME HUB - castle AND overworld in ONE scene, ONE navmesh)
+   |- DungeonEntrance / DungeonWorldPortalSpawner -> Dungeon_* (additive)
+   |- RaidOutpostSystem -> 4 cardinal in-world EnemyOutposts (in-scene, no stream)
+   '- raid access -> Garrison_* / RaidBase_* (ADDITIVE)
 
-OuterWorld (additive over hub)
-   ├─ DungeonEntrance / DungeonWorldPortalSpawner ─► Dungeon_HealersCottage / _FolksGranary
-   ├─ RaidOutpostSystem ─► 4 cardinal in-world EnemyOutposts (spawned in OuterWorld, ~10s delay)
-   └─ raid access ─► Garrison_{troll_outpost,ruined_keep,hill_fort,frost_keep} (ADDITIVE)
+Village2 (TD town / raid target) - GoVillage() = LoadVillageWithLoader() (async overlay)
 
-Village2 (TD town / raid target) — GoVillage() = LoadVillageWithLoader() (async overlay)
-   └─ WorldSceneLoader auto-loads ► OuterWorld (Village2 is a hub too)
-
-Breach (from Village2 / dungeon) ─► GoBattle(BattleParams) ─► ATBBattle ─► returns to ReturnScene
+Breach (from Village2 / dungeon) -> GoBattle(BattleParams) -> ATBBattle -> returns to ReturnScene
 ```
 
-- **Home hub = `MainCastle_Hall`** (built by `Assets/Editor/CastleHubBuilder.cs`; owner
-  hand-dialed + committed — a regen would REVERT owner's offsets, builder not yet updated
-  to reproduce them). The Title→HeroSelect→PetSelect→**Castle** boot chain is the 2026-06-08
-  castle-start pivot; stale "…→ Village" prose remains in `PetSelectController`/`SceneRouter`
-  headers (trust the code: onboarding lands in MainCastle_Hall).
+- **Home hub = `Main_Castle_Overworld`** (WO-608 MergedWorld: the castle and the overworld are ONE
+  scene on ONE navmesh). ⛔ **The hub scene name is NEVER spelled out at a call site** — it resolves
+  through `SceneRouter.Castle`, which is FLAG-DEPENDENT:
+  `Castle => FeatureFlags.MergedWorld ? CastleCandidates[0] : CastleCandidates[1]`, with
+  `CastleCandidates = { "Main_Castle_Overworld", "MainCastle_Hall" }`
+  (`Assets/_Modules/Core/SceneRouter.cs:150-167`). `FeatureFlags.MergedWorld` is
+  `Get("mergedworld", defaultOn: true)` (`Assets/_Modules/Core/FeatureFlags.cs:413`), so the LIVE hub
+  is the merged scene. **`CastleCandidates` is the only place either name is spelled out** — a gate
+  that asserts against the RESOLVED value only proves whichever branch it happens to be flagged into,
+  which is exactly how three gates ended up pinned to the retired `MainCastle_Hall` literal
+  (WO-1112). Iterate the array; never retype a name.
+- ⚠ **`Assets/Scenes/MainCastle_Hall.unity` IS STILL ON DISK and it is NOT the hub.** It is the
+  LEGACY two-scene-hub file, reachable only with `ff.mergedworld` forced OFF. Its continued existence
+  on disk is what keeps re-seeding stale "the hub is MainCastle_Hall" prose in this and other docs.
+  Several runtime scene checks still name it *alongside* the merged scene as a deliberate
+  both-configurations guard (`HubScenes.Names`, `AudioService.cs:982-983`,
+  `StarterSettlementCompletion.cs:49-50`, `StrategicPlacementMigration.cs:371`) — those are the flag
+  branch, not evidence that it is live.
+- ⛔ **`OuterWorld` DOES NOT EXIST — do not go looking for the scene or its streaming.**
+  `WorldSceneLoader` is retained only for compatibility and its `TryLoadOuterWorld` is a traced no-op
+  (`WorldSceneLoader.cs:260-267`). The overworld predicate is `HubScenes.IsOverworld(sceneName)`,
+  which is exactly `sceneName == "Main_Castle_Overworld"` (`Assets/_Modules/Core/HubScenes.cs:47-55`)
+  — that is the single source every overworld-behaviour gate reads (encounter spawner, harvest
+  workers, camps, raid outposts, world boundary).
 - **`Village2`** = generated TD town / raid-target stronghold (canonical).
-  **`Village.unity` = ABANDONED / corruption-cursed — never use or re-save it.**
-- `SceneRouter.Village = "Village2"`, `Castle = "MainCastle_Hall"`. Every load guards
-  `Application.CanStreamedLevelBeLoaded`. `HubScenes.IsHub` (Village2/MainCastle_Hall/
-  CastleHub/CastleHub_MainKeep) is the single hub source read by WorldSceneLoader + HUD.
-- Menu scenes (Title/HeroSelect/PetSelect/Intro/Store/…) are on the HUD bootstrap
+  **`Village.unity` is DELETED** — it is not "abandoned but present"; it is gone.
+- `HubScenes.IsHub` is the single hub predicate, read by both `WorldSceneLoader` and
+  `VillageHudController`. ⚠ **Its matching is SUBSTRING, not exact**
+  (`sceneName.Contains(Names[i])`, `HubScenes.cs:37-43`), so `IsHub("Village2_Test")` is TRUE.
+  Replacing a private `== "CastleHub"` list with this predicate is a WIDENING and must be a
+  deliberate call at that site.
+- Menu scenes (Title/HeroSelect/PetSelect/Intro/Store/...) are on the HUD bootstrap
   **allowlist-skip**; all other gameplay scenes auto-bootstrap a `VillageHudController`.
 - **Defend-the-Tower / PatriciaLight = REMOVED 2026-06-09** (module + scene gone; only
-  `Resources/PatriciaLight/tower2` kept). All DTT/PatriciaLight WOs + router consts are dead.
+  `Resources/PatriciaLight/tower2` kept). All DTT/PatriciaLight WOs are dead — but note
+  `SceneRouter.PatriciaLight` and `GoPatriciaLight` are STILL DECLARED in
+  `SceneRouter.cs:179` over a scene that does not exist.
 
 ### 2c. CRITICAL-PATH systems — where each lives + how it ACTUALLY works
 
@@ -369,25 +454,30 @@ Breach (from Village2 / dungeon) ─► GoBattle(BattleParams) ─► ATBBattle 
   is a separate singleton to verify-or-retire; `GameState.AetherCrystals` is DEPRECATED (folded
   into Resources.Crystals at save v18). Persistence spine: `GameState` (SO, 41 partialize fields)
   + `GameStateService` (Load/Save via PlayerPrefs `dotr-save` → migrate → validate → apply) +
-  `SaveSchema` (**CurrentVersion=38**, `SaveSchema.cs:41`) + `SaveMigrator` (v1→v38). Resource model (memory): Wood/Iron/
+  `SaveSchema` (**read `CurrentVersion` at `Assets/_Modules/Core/State/SaveSchema.cs`; never from a doc**) + `SaveMigrator` (v1 → that same top step, which is asserted equal to `CurrentVersion`). Resource model (memory): Wood/Iron/
   Food build structures; Crystals = special arc (unlock spells → jewelry → armor).
 
 - **Companion / FTUE / introducer — `DeNelle.Village` StoryCompanion + `DeNelle.Onboarding`.**
   One unified roster = heroes ARE companions: Knight→Grom, Ranger→Sylas, Mage→Thrain, Cleric→Elara.
   `StoryCompanionInjector` (hub-gated DDOL) spawns ONE mortal body per persisted party member;
   companions follow+fight (leashed 22m, NavMeshAgent or lerp). Canon join order:
-  **Sylas (beat-1) → Elara (wave 3) → Grom (first OuterWorld return)** (all hub-gated, one-shot,
+  **Sylas (beat-1) → Elara (wave 3) → Grom (first overworld return)** (all hub-gated, one-shot,
   substitute a different free class if it clashes with the player). The **canonical companion-intro
   is now a walk-up NPC** (`CastleCompanionIntroducerInjector`, owner 2026-06-12) at courtyard
   `(-4,0,-30)`; on Talk it plays Yarn `SylasFirstMeeting` (`<<RecruitCompanion Ranger>>`). The old
   `SylasFirstMeeting` auto-beat stands DOWN whenever that injector is `Active`. `PartyHudBridge`
-  pushes StoryCompanions (real Hp/MaxHp) into HUD party slots 1..3. Vendors: `CastleVendorNpcInjector`
-  (exact `MainCastle_Hall`) places 8 static vendor NPCs; `VillageNpcInjector` (exact `Village2`)
-  the 4 townsfolk. Note the gating inconsistency: vendors use exact-scene, companions use HubScenes.
+  pushes StoryCompanions (real Hp/MaxHp) into HUD party slots 1..3. Vendors: `CastleVendorNpcInjector` places 8 static vendor
+  NPCs, gated on EITHER castle scene by two consts — `TargetScene = "MainCastle_Hall"` and
+  `MergedTargetScene = "Main_Castle_Overworld"` (`Village/NPCs/CastleVendorNpcInjector.cs:55-59`),
+  i.e. it deliberately covers both `SceneRouter.CastleCandidates` branches rather than the live one
+  only. `VillageNpcInjector` (exact `Village2`) places the 4 townsfolk. Note the gating
+  inconsistency: vendors use exact-scene names, companions use `HubScenes`.
 
 - **World camps / outposts / dungeons / garrisons — `DeNelle.Village.World(.Camps)` + `DeNelle.Dungeons`.**
-  OuterWorld streams additively over any hub. **Two raid mechanisms, easy to conflate:**
-  (a) `RaidOutpostSystem` spawns 4 cardinal `EnemyOutpost`s IN-WORLD inside OuterWorld (no scene;
+  ⚠ **CORRECTED 2026-09-02: OuterWorld does NOT stream over anything — the scene is DELETED and
+  `WorldSceneLoader` is a no-op (§2b). All world content is IN `Main_Castle_Overworld`; the predicate
+  is `HubScenes.IsOverworld`.** **Two raid mechanisms, easy to conflate:**
+  (a) `RaidOutpostSystem` spawns 4 cardinal `EnemyOutpost`s IN-WORLD, in the merged hub scene (no scene load;
   `_enabled` hardcoded ON; spawn delay cut 180s→10s 2026-06-11; header still says "ONE outpost"—STALE);
   (b) standalone `Garrison_*` SCENES loaded ADDITIVELY, driven by `GarrisonController` on `GarrisonRoot`
   (recipe-fed from `garrison-recipes.json`, 4 recipes). `CampSystem` adds 4 claimable camps (clear→
@@ -432,7 +522,20 @@ P3 = dead/stale, cleanup.**
 
 ### P1 — blockers / platform breakage / actively misleading
 
-1. **HeroLocomotion comment LIES about the navigation model** (village-hero §1, docs-wo §5a,
+> ## ✅ RE-VERIFIED AT SOURCE 2026-09-02 — items 1, 3, 4, 5, 7, 8, 10, 11, 13 are RESOLVED
+> Each verdict below was proved by opening the file, not by reading a status line. **Resolved rows are
+> kept, not deleted** — a reader who half-remembers "the six catalogs are WebGL-broken" needs to find
+> the row that says otherwise, and a deleted row cannot correct anyone. The rows that still bite are
+> 2 (now unprovable as written), 6, 12 and 14.
+
+1. **✅ RESOLVED (verified 2026-09-02). HeroLocomotion's comment no longer lies.**
+   `Assets/_Modules/Village/Hero/HeroLocomotion.cs:4-7` now opens
+   *"CORRECTED 2026-06-12 — the old header LIED: it claimed 'no NavMeshAgent — pure ...'"* and states
+   the real model: a NavMeshAgent driven KINEMATICALLY by input, `Awake` gets-or-adds it with
+   `updateRotation` off (agent field at `:701`). ⚠ **This row is the canonical example the whole
+   catalog is built on — keep reading it as the METHOD** (verify at code, never at comment) even
+   though this particular instance is fixed. The original text follows.
+   ~~**HeroLocomotion comment LIES about the navigation model**~~ (village-hero §1, docs-wo §5a,
    editor-tools, scenes FLAG-2). Header + class XML-doc say "pure transform, no NavMeshAgent";
    the code is **NavMeshAgent + `_agent.Move` + `NavMesh.SamplePosition`**. A reader trusting
    the comment mis-diagnoses every hero-movement bug. Doubly dangerous: **RegressionSuite
@@ -440,21 +543,44 @@ P3 = dead/stale, cleanup.**
    source-grep gate. Fix the comment; treat nav as agent-driven. (Same class on `Pet.cs` line ~582
    "kinematic drift; NavMeshAgent wiring is the integrator's" — it self-wires the agent via WO-187.)
 
-2. **OuterWorld ~1 fps open blocker** (docs-wo §4). Even at 0 enemies the streamed open world
+2. **⚠ UNPROVABLE AS WRITTEN — the scene it names no longer exists (flagged 2026-09-02).**
+   `OuterWorld.unity` is DELETED and `WorldSceneLoader` is a no-op (§2b), so "the streamed open world"
+   cannot be reproduced or profiled as described; the world is now in-scene in `Main_Castle_Overworld`.
+   Whether the frame cost SURVIVED the merge is **not verified** — it needs a fresh profile capture on
+   the merged hub, not a re-read. The two fixed per-frame costs and the `TryClericMend` alloc below
+   are still real code facts. Original text:
+   ~~**OuterWorld ~1 fps open blocker** (docs-wo §4).~~ Even at 0 enemies the streamed open world
    runs "frame by frame." Two provable per-frame costs fixed (`DefenseTower/ArcaneTower.Rescan()`
    whole-world `FindObjectsByType` every 0.4s → `4b5208c`; bridge scans → O(1) registries `463a5e8`),
    root cause UNPROVEN — awaiting owner profile verdict. Worse on mobile/WebGL (OOM risk).
    Related live per-cast alloc: `StoryCompanion.TryClericMend` still `FindObjectsByType` every heal.
 
-3. **6 StreamingAssets-only catalogs are WebGL-broken-by-omission** (data §FLAG-2):
+3. **✅ RESOLVED (verified on disk 2026-09-02).** All six now have a Resources copy —
+   `Assets/Resources/Data/Canonical/` contains `audio-mix.json`, `enemy-roles.json`, `heart.json`,
+   `realm-map.json`, `towers.json` and `walls.json`, so `CanonicalJson.Read` no longer returns null for
+   them on WebGL. ⚠ **The FAILURE CLASS is not resolved** — the two Canonical folders are NOT a mirror
+   (115 `.json` under Resources vs 98 under StreamingAssets, counted 2026-09-02), so a *new*
+   StreamingAssets-only catalog is WebGL-null the day it is added. Original text:
+   ~~**6 StreamingAssets-only catalogs are WebGL-broken-by-omission** (data §FLAG-2):~~
    `enemy-roles`, `towers`, `walls`, `realm-map`, `heart`, `audio-mix` have NO Resources copy →
    `CanonicalJson.Read` returns `null` in WebGL (Resources miss + no filesystem). Exactly the
    failure class CanonicalJson exists to prevent. Mirror any needed in web to Resources.
 
-4. **WebGL ships at 223 MB (itch rejected).** Fix = Gzip OR run **WO-408** texture-opt (scripts
+4. **✅ CLOSED ON THE BOARD (verified 2026-09-02).**
+   `WorkOrders/WORK_ORDER_408_texture_ship_audit.md:1` carries
+   *"Status: CLOSED — owner range sweep 2026-08-21 (WO 0-800): completed or immaterial."* — so this is
+   no longer an open gate in canon. ⚠ The 223 MB FIGURE itself was not re-measured; if web
+   distribution comes back, measure the build, do not cite this row. Original text:
+   ~~**WebGL ships at 223 MB (itch rejected).**~~ Fix = Gzip OR run **WO-408** texture-opt (scripts
    committed, **NOT run**). Blocks the web distribution build.
 
-5. **WO-405 `ElarionUiKit` design-system gate** blocks all unified-HUD work (WO-400/403/404/411).
+5. **✅ RESOLVED — the gate is dead and two of the four "blocked" WOs never existed
+   (verified 2026-09-02).** `WORK_ORDER_405_ugui_design_system.md:8` = *"CLOSED — DEPRECATED,
+   audit-verified obsolete (2026-08-21 backlog audit)"*; `WORK_ORDER_411_town_hud_mockup_match.md:4` =
+   *"CLOSED — owner range sweep 2026-08-21"*; `WORK_ORDER_400*`, `403*` and `404*` **do not exist
+   anywhere in the repo**. A row that blocks work on WOs that are not on disk is worse than no row.
+   Original text:
+   ~~**WO-405 `ElarionUiKit` design-system gate**~~ blocks all unified-HUD work (WO-400/403/404/411).
    WO-403 unified HUD is STASHED, to be redone modular (<800 lines). Owner-approval gate.
 
 6. **GameAudioMixer is a stub, not the documented 5-group/5-param mixer** (audio §FLAG-1). The
@@ -463,7 +589,14 @@ P3 = dead/stale, cleanup.**
    AudioMixerBridge + Settings sliders persist but don't drive the (absent) per-group mix. The
    documented mixer was never built into the asset.
 
-7. **Numbering authority vs filesystem drift** (docs-wo §5d). Authoritative next-free WO = **412**
+7. **✅ RESOLVED, AND THIS ROW WAS ITSELF THE FAILURE IT WARNS ABOUT (2026-09-02).**
+   The row's own remedy — *"never mint from filesystem max"* — is right, and then it **printed a
+   number**, which is exactly how a stale number gets re-seeded from the doc that exists to prevent
+   stale numbers. ⛔ **The sole authority is the `CLI_LANES_WO_NUMBERS.md` banner, and each seat bumps
+   its OWN banner row in the SAME edit as the mint** (CLAUDE.md §2, two disjoint blocks). Neither
+   `MASTER_PIPELINES_BACKLOG` nor this file nor any other copy is a number source. Original text,
+   preserved only as the evidence:
+   ~~**Numbering authority vs filesystem drift** (docs-wo §5d). Authoritative next-free WO = **412**~~
    (`MASTER_PIPELINES_BACKLOG` + `CLI_LANES_WO_NUMBERS`); 344–351 reserved (skip). PROJECT_INDEX/
    SESSION_START_HERE still say "next 384" — index lines lag. **Never mint from filesystem max**;
    30 WO numbers collide (docs-wo §2h) — renumber 391+. 438 WO files for ~280 distinct numbers.
@@ -482,7 +615,13 @@ P3 = dead/stale, cleanup.**
 
 ### P1 — ADDED 2026-08-21 (items 10-14). Verified at source the day they were written.
 
-10. **⛔ THE SIEGE CLUSTER'S DATA MODEL AND ITS UI ARE UNTRACKED IN GIT.** Verified with
+10. **✅ RESOLVED (verified with `git ls-files` 2026-09-02).** All four files and their `.meta`s are
+    now TRACKED — `Core/Defense/DefenseReport.cs`, `Core/Defense/DefenseReportLedger.cs`,
+    `Village/UI/Defense/DefenseReportPanel.cs`, `Village/UI/Defense/DefenseReportPanelBootstrap.cs`.
+    A fresh clone of HEAD has them and compiles. ⚠ **Keep the LESSON:** the local tree proves nothing
+    about what shipped, and an untracked file fails as a missing-namespace error that names none of
+    the files responsible. Check `git status --porcelain` after any new-directory wave. Original text:
+    ~~**⛔ THE SIEGE CLUSTER'S DATA MODEL AND ITS UI ARE UNTRACKED IN GIT.**~~ Verified with
     `git status --porcelain`: `Assets/_Modules/Core/Defense/` (`DefenseReport.cs` 576 +
     `DefenseReportLedger.cs` 159), `Assets/_Modules/Village/UI/Defense/` (`DefenseReportPanel.cs`
     621 + `DefenseReportPanelBootstrap.cs` 43), plus the `Core/Defense.meta`, `Village/Siege.meta`
@@ -499,8 +638,14 @@ P3 = dead/stale, cleanup.**
     modification the new oracles need, and the two deleted `.meta` files for
     `Environment/TorchFireController.cs` and `Village/Monetization/PurchaseGate.cs`.
 
-11. **WO-1137 — `CatalogBootstrap.RegisterFallback` covers 3 of 28 catalog rows and has DRIFTED
-    FOUR TIMES.** Verified by count: `Assets/Resources/Data/Canonical/structures-catalog.json`
+11. **✅ RESOLVED (verified 2026-09-02) — and it was fixed by DELETING the duplicate, which is the
+    right shape.** `CatalogBootstrap.RegisterFallback`
+    (`Assets/_Modules/Village/Catalog/CatalogBootstrap.cs:403-410`) no longer hand-constructs three
+    rows; it parses a **code-generated, byte-identical embedded copy** of the catalog
+    (`CatalogFallbackData.g.cs`, `SourceRowCount = 28`), so all 28 rows are covered and there is no
+    second hand-maintained table left to drift. The silent-3-row-game hole is closed. Original text:
+    ~~**WO-1137 — `CatalogBootstrap.RegisterFallback` covers 3 of 28 catalog rows and has DRIFTED
+    FOUR TIMES.**~~ Verified by count: `Assets/Resources/Data/Canonical/structures-catalog.json`
     holds **28 `entries`**; `RegisterFallback()` constructs **three** (`tower_ground_archer`,
     `tower_ballista`, `tower_arcane_spire`). If the JSON ever fails to load, the player does not
     get an error — **they get a silent, different, 3-row game**, with no tell on screen. That is
@@ -524,7 +669,11 @@ P3 = dead/stale, cleanup.**
     absent**, and work proceeds on that strength. Fix = match the CONTROL-FLOW relationship, not
     textual proximity.
 
-13. **WO-1135 — `Assets/Resources/Walls/Materials/` DOES NOT EXIST, and never has.** All three wall
+13. **✅ RESOLVED (verified on disk 2026-09-02).** `Assets/Resources/Walls/Materials/` **now
+    exists** and holds `wood_wall.mat`, `iron_wall.mat` and `steel_wall.mat` — one per
+    `WallTier { Wood = 1, Iron = 2, ReinforcedSteel = 3 }` — alongside the tracked `Textures/` and the
+    three FBXes. The tier ladder's art is reachable from TRACKED assets. Original text:
+    ~~**WO-1135 — `Assets/Resources/Walls/Materials/` DOES NOT EXIST, and never has.**~~ All three wall
     tiers (`WallTier { Wood = 1, Iron = 2, ReinforcedSteel = 3 }`,
     `Assets/_Modules/Village/Walls/WallTierData.cs:29`) render from **materials embedded in each
     FBX**, which import with `externalObjects: {}` and bind their textures by **absolute path into a
@@ -549,14 +698,23 @@ P3 = dead/stale, cleanup.**
 
 ### P2 — wrong behavior, contained
 
-9. **Aegis legendary set is UNREACHABLE** (village-hero §FLAGS): the 4 aegis WEAPONS in weapons.json
-   have NO `setId` (only `aegis_plate` armor does) → `WeaponDef.IsAegis` is FALSE for all → 
+9. **✅ RESOLVED (verified in the data 2026-09-02).** All four aegis weapons in
+   `Assets/Resources/Data/Canonical/weapons.json` now carry `"setId": "aegis"` — `aegis_emberbrand`
+   (`:258`), `aegis_heartwood_longbow` (`:275`), `aegis_aetherstaff` (`:293`),
+   `aegis_hallowed_censer` (`:311`) — so `WeaponDef.IsAegis` is true and `GearLoadout.AegisSetActive`
+   is reachable. Original text:
+   ~~**Aegis legendary set is UNREACHABLE** (village-hero §FLAGS): the 4 aegis WEAPONS in weapons.json
+   have NO `setId`~~ (only `aegis_plate` armor does) → `WeaponDef.IsAegis` is FALSE for all → 
    `GearLoadout.AegisSetActive` (needs both) can never be true → the Oathweld ward + per-class Aegis
    weapon perk are dead. **Likely a data bug** — add `"setId":"aegis"` to the four aegis weapons.
 
-10. **EquipmentController shows tinted-primitive fallback** (village-hero §FLAGS): real KayKit weapon
-    meshes aren't in `Resources/Heroes/Props/Weapons/` → every hero's weapon is a tinted primitive
-    until art is copied. `abilities.json` has no `cleric` class → Cleric fires the Mage loadout (by design).
+10. **PARTLY RESOLVED (verified 2026-09-02) — the meshes ARE there; the cleric gap is real.**
+    `Assets/Resources/Heroes/Props/Weapons/` now holds real `.fbx` meshes (axe_A, bow_A/B/C, dagger_A,
+    hammer_A, shield_A, staff_A-D, sword_D/F/G, wand_A, `_tripobak_sword_A`) plus `sword_A.prefab` and
+    a shared `Materials/weapons_bits_texture.mat` — not placeholders, so the tinted-primitive fallback
+    is no longer the normal case. **STILL TRUE:** `Assets/Resources/Data/Canonical/abilities.json`
+    declares only `mage` (`:6`), `knight` (`:84`) and `ranger` (`:166`) — there is no `cleric` class,
+    so Cleric fires the Mage loadout (by design).
 
 11. **ATB enemy model never varies** (battle F-SWAP-2): `AtbCombatantSwapper.ResolveEnemySlug()` is
     hard-coded `"Skeleton_Warrior"` despite a rich 7-entry `ENEMY_DEFS` + `EnemyControllerFor` map.
@@ -631,8 +789,14 @@ P3 = dead/stale, cleanup.**
 25. **DUPLICATE MenuItem `Defenders/Build/WebGL Player`** (editor-tools §dead) in both `WebGLBuild` and
     `DesktopBuild` with contradictory settings (Brotli/Development/512MB vs Gzip/None) — only one binds.
     Both build tools ship `BuildOptions.Development` for the "ship" path → DevTools leak into release.
-    `OuterWorldBuilder.BakeWorldNavMesh` + `SpawnPathVerifier` both open the **abandoned `Village.unity`**
-    (corruption-cursed) — stale/risky; use `OuterWorldNavBake` (OuterWorld-solo) instead.
+    ⚠ **UPDATED 2026-09-02:** the second half of this row named scenes that no longer exist.
+    `Village.unity` is **DELETED**, not "abandoned", and there is no `OuterWorld` scene to bake solo
+    (§2b). Any editor tool that still opens either by name is now a hard failure rather than a risk —
+    if `OuterWorldBuilder.BakeWorldNavMesh` / `SpawnPathVerifier` are still in the tree, they need
+    re-pointing at `Main_Castle_Overworld` or deleting; that was NOT verified in this pass.
+    Original text: ~~`OuterWorldBuilder.BakeWorldNavMesh` + `SpawnPathVerifier` both open the
+    **abandoned `Village.unity`** (corruption-cursed) — stale/risky; use `OuterWorldNavBake`
+    (OuterWorld-solo) instead.~~
 
 26. **Audio dead/missing**: `SfxClipLibrary.asset` + `DeNelleAudioService.prefab` don't exist →
     `PlaySfxAtPosition(SfxId)` silent no-op, prefab bootstrap branch dead. Dungeon/GameOver/Overworld

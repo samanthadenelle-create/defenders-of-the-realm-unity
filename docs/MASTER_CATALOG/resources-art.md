@@ -386,6 +386,38 @@ the owner's machines — EXCEPT a small force-tracked exception set.
   its own flagged follow-up: promote used prefabs into tracked Resources). **PARTIALLY ADDRESSED
   2026-08-06** — the promote-to-tracked follow-up is what §6-DELTA below actually did.
 
+### DELTA 2026-09-02 — `MarqueeSpellVfx`, and the gitignored-prefab trap under it
+
+**`Assets/_Modules/Village/Vfx/MarqueeSpellVfx.cs` (`DeNelle.Village`, WO-1305 Part A).** The ONE
+declaration of which owner-tagged VFX keys are SELF-CONTAINED ("marquee") spells — prefabs that own
+cast **and** flight **and** impact themselves, so the ability system must SUPPRESS its own projectile
+spawn for that cast. Without the declaration such a prefab produces TWO bodies per cast: the prefab's
+own authored fireballs plus the engine's orb travelling to the real target.
+
+- ⛔ **IT IS A STRING SET AND NOTHING ELSE. `VFXManager.PlayKey` REMAINS THE SINGLE SPAWN OWNER.**
+  The class holds a `HashSet<string>` and answers `IsMarquee(key)`; it **never instantiates
+  anything**, owns no pool, and is not a second spawner. Marquee keys play through the same pooled
+  `PlayKey` path as every other key. (`Assets/_Modules/Village/Vfx` is already scar tissue from a
+  second VFX stack — do not grow one here.)
+- **NOT a creative pick.** A key appears only because the OWNER tagged that prefab to that key in her
+  VFX Caster (`Assets/Editor/VfxManualPicks.json`, `manual:true`) AND ruled the effect a marquee.
+  Never add one from a CLI judgement call (project memory `vfx-map-owner-tags-no-creative-pick`).
+- Declaring a key here does **not** bind it to an ability; the owner still binds it via a
+  `motion-castings.json` row's `vfxKey` or an owner-tagged `abilities.json` `VfxCast`.
+- `TraceRecognised` fires `FlowTrace.Once` per key, deliberately: a suppression that leaves no trace
+  is indistinguishable from a broken projectile (CLAUDE.md §12).
+- The one declared key today is `firespell_Cast`. **Its `IsLoop: 0` catalog row is a HARD
+  PREREQUISITE** — 4 of the prefab's 7 emitters are authored looping, and only an `IsLoop:0` row lets
+  `VFXManager.EnforceOneshotEmission` clear them (see the 08-06 delta below on `IsLoop` being derived,
+  not hand-checked).
+- ⚠ **AND THE TRAP:** that prefab lives at `Assets/Spells Pack/Particles/Prefabs/Spells/Spell_Fire_9.prefab`,
+  and **`Assets/Spells Pack/` is GITIGNORED** (`.gitignore:430-431`, confirmed by
+  `git check-ignore -v`). A prefab edit there **cannot be committed, never reaches another machine,
+  and dies at the next re-import — while still changing what the local build produces.** That is the
+  §16 shape exactly: it works here and proves nothing about what ships. Anything load-bearing about a
+  Spells Pack prefab must be captured in TRACKED files (a catalog row, a mirrored copy under
+  `Assets/Resources/VFX/_Shared/`, or a declaration like this class), never in the prefab alone.
+
 ### DELTA 2026-08-06 - the VFX build-out, the self-containment P0, and what is still open
 
 *Sourced from commits `3db877d2`, `bd532d5b`, `7f3971a3`, `0011b8ba`, `a186c282`, `a12c6d22`,
@@ -505,6 +537,11 @@ From `.gitignore` (line cites) — cross-ref the full how-to-obtain table in
 - `/Assets/polyperfect/` (128, 246MB; `_M` tier only; `docs/polyperfect-asset-catalog.md`)
 - `/Assets/Quaternius/` (288)
 - `/Assets/Hovl Studio/` (218, 236MB — only HovlVfxCatalog keys referenced)
+- ⛔ **`/Assets/Spells Pack/` (430-431)** — verified 2026-09-02 with `git check-ignore -v`; the
+  folder EXISTS on this machine and is ignored in full (the `.meta` too). It is the home of
+  `Spell_Fire_9.prefab`, the first declared marquee VFX (§6 DELTA 2026-09-02). **An edit to a prefab
+  in here cannot be committed and dies at the next re-import, while still changing the local build** —
+  so never let a gitignored prefab be the only place a behaviour is recorded.
 - `Assets/UnityTechnologies/ParticlePack` (392-393, 191MB/886 files — NO fallback, §6)
 - `/Assets/Lana Studio/Casual RPG VFX/Upgrade for URP/` (312) — the base Lana pack IS tracked
   (its 15 demo scenes appear in `git ls-files`)
