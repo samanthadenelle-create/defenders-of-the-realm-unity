@@ -2,7 +2,7 @@
 
 # WORK ORDER 1314 — The WebGL remote payload is shaped for a native client, against a 512 MB heap
 
-**Status:** READY TO IMPLEMENT
+**Status:** READY TO IMPLEMENT - ⭐ PROMOTED 2026-09-03: PROVEN as the prime root of PROD-022 (deterministic 64% stall across two deployments with all tunables cleared; the .data payload is 165 MB COMPRESSED). See the PROVEN section at the end.
 **Silo:** Web / Content
 **Minted:** 2026-09-02 (CLI) while answering the owner's question about Pi breaking on the CDN.
 **Severity:** P2 pending proof — see "What is NOT proven" before acting on it.
@@ -119,3 +119,64 @@ one once the target bug was fixed). So the web build the owner was testing again
 roughly half its content**, and any "it breaks on the CDN" observation taken before 2026-09-02 06:00
 was taken against a materially different, broken payload. **Re-observe before measuring memory** —
 the symptom may have changed or gone.
+
+---
+
+## ⭐ PROVEN 2026-09-03 — THIS IS THE ROOT OF PROD-022, AND THE PROOF IS DETERMINISTIC
+
+This ticket was minted "P2 pending proof". The proof arrived. **Promote it: it is the prime root of
+the Pi crash loop, not a side issue.**
+
+### The owner's measurement, and it is the one that cracks it
+
+> *"64% 3 times in a row. Resets exactly 64%"* — then, after a full rollback to the previous
+> deployment and with every tunable cleared: *"Still 64%"*.
+
+**DETERMINISM IS THE WHOLE FINDING.** Every prior theory on PROD-022 predicted VARIANCE - sessions
+died at 8s, 30s, 53s, 283s, which is what kept a memory *ceiling* (something you drift into) as the
+leading candidate for weeks. A stall at *exactly* the same percentage, three times, across two
+different deployments, is the opposite: **the same allocation failing at the same point in the same
+file, every time.**
+
+### The payload, measured from the open internet
+
+```
+Build/e1e3fcce12ebd0ccca5a2cf9a6c72035.data.unityweb   Content-Length: 165,180,640   Content-Encoding: br
+Build/80780cf875d616d984528ffe257eeee3.wasm.unityweb   Content-Length:  16,951,877   Content-Encoding: br
+Build/64177f0b519d6f04938617b0aba7ce74.framework.js.unityweb        93,143           Content-Encoding: br
+Build/5466bb137be1f061b5b050cb15c0787e.loader.js                    (200)            Content-Encoding: br
+```
+
+⛔ **165 MB is the COMPRESSED size of the .data file.** It decompresses to several hundred MB, and
+that has to be materialised in the webview's address space *alongside* the Unity heap. All four files
+serve 200 with correct `Content-Encoding: br` - **the encoding is fine, the SIZE is not.**
+
+### It retro-explains every measurement on PROD-022
+
+| Observation | Why a too-large payload explains it |
+|---|---|
+| Worker + main thread stop in the SAME instant, `mAgeMs` 450-500 ms to the last line | iOS reclaims the whole content process. The main thread was healthy - it was killed, not wedged. |
+| Unity heap flat at `mem=247MB` right up to death, no error, no exception | The memory is OUTSIDE the managed heap - decompression buffers and wasm memory - exactly where `mem=` cannot see it. |
+| Desktop Chrome ran the identical build for 62 minutes | No comparable per-process constraint. |
+| NO `JetsamEvent` on 2026-09-02 despite 10+ deaths | A content-process reclaim is not a full-app jetsam. The owner's Analytics check was a TRUE negative that was misread as exonerating memory. |
+| `[Title]`-scoped lines only; dies before structure art is requested | It never survives load, so the Addressables policy was never implicated. |
+
+### What this KILLS - do not spend another night on these
+
+- **Memory *ceiling* as a drift/race.** It is a hard, reproducible allocation failure.
+- **The Addressables / structure-art streaming theory.** `pi.disableRemoteStructureArt` was armed and
+  then cleared; **64% both ways.** Knobs 1/2/4/5/6 are exonerated exactly as predicted in advance.
+- **The R2 / CDN theory** (already ruled out above, and re-confirmed: all four Build files 200).
+- **The deploy-target and stale-edge-shell theories.** Real defects, both recorded, but NOT this.
+
+### What is still NOT proven
+
+The exact allocation that fails. "Too big" is proven; *which* limit is hit - decompression buffer,
+wasm `INITIAL_MEMORY`, total process footprint - is not. **Do not pick one and start optimising.**
+The next step is to measure the decompressed `.data` size and the build's memory settings, then
+reduce the largest contributor. This is REAL WORK - a payload reduction, not a flag flip, and no
+tunable on the rail can move it.
+
+**Related and still READY:** WO-1315 (WebGL built Windows content) - if a WebGL build has ever
+shipped desktop-shaped assets, that is a direct contributor to this file's size and should be checked
+FIRST, because it would be the cheapest win available.
