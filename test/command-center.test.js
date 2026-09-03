@@ -224,6 +224,11 @@ test('the write endpoint allowlists acknowledgement, and money tables remain rea
     assert.deepEqual(OPS_ACTIONS, [
         'maintenance.seal', 'maintenance.open', 'promo.create', 'promo.set_active',
         'purchase.alert_acknowledge',
+        // PROD-022 added the knob writes to the endpoint; WO-1328 gave them a
+        // surface. They are here because this list is the AUDITED set of things
+        // the second key can do - a write that is not on it cannot be posted at
+        // all, which is the property the money assertion below leans on.
+        'tunable.set', 'tunable.clear',
     ]);
     // ⛔ The load-bearing one: no admin surface may write the money tables.
     const src = stripComments(readSrc('api/_lib/ops.js')) + stripComments(readSrc('api/admin/ops.js'));

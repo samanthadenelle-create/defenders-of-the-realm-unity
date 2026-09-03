@@ -1,0 +1,76 @@
+{
+    "_generated": "DO NOT HAND-EDIT. Produced by tools/gen-tunable-manifest.mjs from Assets/_Modules/Core/Ops/RemoteTunables.cs - the ONE place a knob default may live. Hand-authored presentation (area, label, plain English, safe range) lives in api/_lib/tunable-manifest.js and is joined onto this spine at require time. test/tunables-manifest.test.js re-derives this and goes RED naming which two sources disagree.",
+    "source": "Assets/_Modules/Core/Ops/RemoteTunables.cs",
+    "knobs": [
+        {
+            "key": "pi.eagerStructureWarm",
+            "kind": "bool",
+            "default": 0
+        },
+        {
+            "key": "pi.awaitInitBeforeFirstLoad",
+            "kind": "bool",
+            "default": 0
+        },
+        {
+            "key": "pi.disableRemoteStructureArt",
+            "kind": "bool",
+            "default": 0
+        },
+        {
+            "key": "assets.maxConcurrentRequests",
+            "kind": "int",
+            "default": 0
+        },
+        {
+            "key": "pi.requestTimeoutSeconds",
+            "kind": "int",
+            "default": 20
+        },
+        {
+            "key": "assets.maxRequestAttempts",
+            "kind": "int",
+            "default": 3
+        },
+        {
+            "key": "visuals.missLogCap",
+            "kind": "int",
+            "default": 3
+        },
+        {
+            "key": "trace.assetVerbosity",
+            "kind": "int",
+            "default": 2
+        },
+        {
+            "key": "combat.drainReturnPct",
+            "kind": "int",
+            "default": 60
+        },
+        {
+            "key": "vfx.particleBouncePct",
+            "kind": "int",
+            "default": 0
+        },
+        {
+            "key": "vfx.maxParticleLights",
+            "kind": "int",
+            "default": 4
+        },
+        {
+            "key": "combat.overTimeTickMs",
+            "kind": "int",
+            "default": 1000
+        },
+        {
+            "key": "combat.overTimeMagnitudePct",
+            "kind": "int",
+            "default": 100
+        },
+        {
+            "key": "combat.overTimeDurationPct",
+            "kind": "int",
+            "default": 100
+        }
+    ]
+}

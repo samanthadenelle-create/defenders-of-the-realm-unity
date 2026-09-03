@@ -345,6 +345,14 @@ Full checklist: `api/DEPLOY.md`. Table/migration detail: `api/DB_SETUP.md`.
   as one player.
 - **The read/write boundary is at the ENDPOINT, not in the UI.** `api/admin/db.js` and
   `api/admin/stats.js` are **SELECT-only by construction**. Never add a write path to them.
+- **Balance is a tab (WO-1328, 2026-09-02).** The **Balance** tab edits the remote tunables
+  (`docs/PROD022_TUNABLE_FLAGS.md`) from a phone: Save writes an override, Reset deletes the row so
+  the knob answers the build default. **Reset is not "set 0"** — the art timeout resets to 20, not 0.
+  Writes go to `POST /api/admin/ops` (`tunable.set` / `tunable.clear`) like every other ops write.
+  The page is driven by a JSON manifest whose spine is **generated** from `RemoteTunables.Registry`;
+  `test/tunables-manifest.test.js` goes red naming which two sources disagree. **Prices,
+  entitlements, grants and purchase amounts are permanently out of scope** — real money, server
+  authority, `api/_lib/purchase-catalog.js`.
 - `tools/command-centre.ps1` is a **different thing that shares the name** — it is the guarded deploy
   chain (WO-1199), not the console.
 

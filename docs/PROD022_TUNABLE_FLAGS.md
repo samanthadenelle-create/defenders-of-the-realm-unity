@@ -23,6 +23,14 @@ never blocks or delays boot.
 
 **An empty `client_tunables` table is the correct resting state, and it is what ships.**
 
+> **⚠ #10 and #11 are the honest exception, and it is stated rather than hidden.** They are BUG FIXES
+> (WO-1327), so their defaults are the FIXED values, not the broken ones — an empty table gives you
+> this build's corrected VFX collision and light budget, not `Spell_Fire_9`'s authored 25 lights and
+> perfectly-elastic fireballs. The invariant still holds in the form that matters: **no row, no
+> network, no server, no parse ⇒ exactly what this build hardcodes**, and the previous behaviour is
+> reachable in one flip (`vfx.particleBouncePct 100`, `vfx.maxParticleLights 25`) if the owner judges
+> the new feel wrong.
+
 ---
 
 ## The flags
@@ -37,7 +45,12 @@ never blocks or delays boot.
 | 6 | `assets.maxRequestAttempts` | int | `3` | Async fetch attempts one address gets before it is retired for the launch. | That the retry budget is mis-sized: too high and the retry storm is itself the load that kills the tab; too low and one transient stall costs a building its art for the session. |
 | 7 | `visuals.missLogCap` | int | `3` | Full resolve-miss `Fail` lines `VisualFactory` emits per address before announcing its cap and dropping to a throttled line. **It never goes silent.** | That trace *volume* is a contributor — the observed final seconds were nothing but four addresses cycling, and every line is a remote trace POST from the suspect device. |
 | 8 | `trace.assetVerbosity` | int | `2` (= today) | Narration level for `[Flow:StructureAssets]` and `[Flow:VisualFactory]`. `2` = today (every Step, including the `-> Skin(...)` / `<- Skin(...)` pair). `1` = lifecycle Steps only. `0` = no Steps. | Same volume hypothesis as #7 but separable: silences the *success* narration while leaving every failure line intact, so a quiet session can be compared against a loud one. |
-| 9 | `combat.drainReturnPct` | int | `100` (= today) | Percent of the damage a **drainshot** ability actually deals that returns to the caster as healing. `100` = today (heal == damage dealt). Applies to **every** drainshot — `mage.siphon`, `mage.drain`, `ranger.healing-shot` — because `HeroAbilities.HealFromDrain` is the single owner of the drain heal. Clamped to `0..1000` at that consumer. | **Not a PROD-022 hypothesis — this is a BALANCE lever (WO-1306).** The owner ruled the mage's first talent point must buy a castable that *sustains* ("the blm needs to get some healing , like drain to stay balanced (early)"), then that its strength must move without a rebuild ("be smart, dont make it need a code change, make it tweakable from a db call"). It rides this rail rather than growing a second configuration mechanism. What it tests is whether the mage's early sustain is at the right level — a question only felt-testing answers, which is exactly why it must move in seconds rather than in a thirty-minute rebuild. |
+| 9 | `combat.drainReturnPct` | int | `60` | Percent of the damage a **drainshot** ability actually deals that returns to the caster as healing. Applies to **every** drainshot - `mage.siphon` (Syphon Essence), `mage.drain`, `ranger.healing-shot` - because `HeroAbilities.HealFromDrain` is the single owner of the drain heal. Clamped to `0..1000` at that consumer. Set the row to `100` for the old heal-equals-damage-dealt behaviour. | **Not a PROD-022 hypothesis - a BALANCE lever (WO-1306, retuned WO-1330).** ⛔ **This default is a RULED VALUE, not the previously-shipped one, and must not be "corrected" back to 100.** Owner ruling 2026-09-02, verbatim: *"keep drain at 60% for now"*, with the governing intent *"drain should help stave off not run the show"* - sustain buys time, it does not win fights. A mage who out-heals incoming damage never has to disengage, which deletes the tension the loop depends on. WO-1306 shipped 100 because that was what the resolver hardcoded; she has since chosen 60. |
+| 10 | `vfx.particleBouncePct` | int | `0` | Percent restitution allowed on a **world-colliding particle** inside any VFX host the pooled spawner checks out. `0` = this build: a particle that hits scene geometry stops there and terminates (bounce 0, dampen 1, lifetime-loss 1). `100` = leave the art pack's authored collision completely alone. The clamp only ever **tightens**, so it can never make an effect bouncier than its author made it. | **Not a PROD-022 hypothesis — a FEEL lever (WO-1327).** `Spell_Fire_9`'s `Fireballs` emitter is authored `bounce 1.0` / `dampen 0` / `minKillSpeed 0` against **all 32 layers** at High quality — perfectly elastic, and no impact ever kills the particle. Cast inside a walled town that is a projectile in a box. The owner reported the fire spell twice (F8 seq 4152, 4644). The offending numbers live in a **gitignored** pack prefab, so the clamp has to live at the spawn owner; this knob is how she moves it without a rebuild, and how she puts the authored behaviour back in one word. |
+| 11 | `vfx.maxParticleLights` | int | `4` | Caps the concurrent real-time point lights **one spawned VFX host** may drive through its ParticleSystem LightsModules, summed across every emitter on that host. `0` turns particle lights off outright; a number at or above a host's authored total leaves that host untouched. The budget is spent evenly across the host's enabled modules and each module's `ratio` scales down with it. It never deletes a light prototype. | **Not a PROD-022 hypothesis — a MOBILE PERF lever (WO-1327).** `Spell_Fire_9` drives **20** lights from its `Fireballs` emitter and **5** more from its `Explosion` sub-emitter: **25 real-time point lights per cast**, intensity 5, range 5, on the Seeker. That is a frame-rate event on every fireball. Same gitignored-prefab problem as #10, same answer. What it tests is how many lights the device can actually carry — which only a device capture answers. |
+| 12 | `combat.overTimeTickMs` | int | `1000` (= today) | Milliseconds between the pulses of **every** over-time effect, damage and healing alike. `1000` = today: exactly the `const float tick = 1f` that both shipped DoT coroutines hardcoded. Magnitude per pulse is derived as `perSecond * interval`, so this moves **cadence only** - total delivery is invariant under it. Clamped to `50..60000` at `OverTimeTuning`. | **Not a PROD-022 hypothesis - a FEEL lever (WO-1330).** How often a DoT ticks *is* the read of the effect: at 1000 ms it is four countable thuds over four seconds; at 250 ms the same total damage becomes a continuous drain. Which one communicates "this is still hurting you" is a question only felt-testing answers - and with the owner red/green colourblind, **rhythm is carrying signal that colour cannot**, so it has to be movable in seconds. |
+| 13 | `combat.overTimeMagnitudePct` | int | `100` (= today) | Percent scale on the magnitude of every over-time pulse, **both signs**. `100` = today: the authored `dotDamage` / heal-per-second, unscaled. `50` halves every DoT and every regen at once; `0` makes them inert without unauthoring anything. Clamped to `0..1000`. | **Not a PROD-022 hypothesis - a BALANCE lever (WO-1330).** One shared knob rather than one per ability, because the first tuning question is always whether over-time damage *as a class* pulls its weight against burst - and that is a single dial. Per-ability numbers stay in `abilities.json`; this scales all of them together. |
+| 14 | `combat.overTimeDurationPct` | int | `100` (= today) | Percent scale on the duration of every over-time effect, **both signs**. `100` = today: the authored `dotSeconds` / `seconds`, unscaled. Raising it **adds pulses**, so unlike #13 it moves TOTAL delivery rather than per-pulse size. Clamped to `0..1000`. | **Not a PROD-022 hypothesis - a BALANCE lever (WO-1330).** Deliberately separate from #13: "each pulse hurts more" and "it lasts longer" feel completely different at the same total, and collapsing them into one dial would make that distinction untestable. This is the knob that decides whether an over-time ability is a commitment or a garnish. |
 
 **⛔ `Warn` and `Fail` are emitted at every verbosity level and cannot be turned off.** CLAUDE.md §12
 is binding: instrumentation is permanent, and a failure line that stops being logged turns a logged
@@ -115,8 +128,41 @@ is a separate verb for exactly that reason.
 ### From the phone
 
 The same two writes exist on `POST /api/admin/ops` as `tunable.set` / `tunable.clear`, behind the same
-two secrets (`ADMIN_DASH_KEY` + `ADMIN_OPS_KEY`) every other ops write uses. The Command Center console
-HTML has **not** been extended with buttons for them — the PowerShell surface above is primary.
+two secrets (`ADMIN_DASH_KEY` + `ADMIN_OPS_KEY`) every other ops write uses.
+
+**⭐ THE PHONE SURFACE IS NOW THE PRIMARY ONE (WO-1328, 2026-09-02).** *(The line that used to sit here
+— "the Command Center console HTML has **not** been extended with buttons for them, the PowerShell
+surface above is primary" — was true when written and is now retired. It was also, in the owner's
+words, the ticket: "should be in command center so you dont need to be a rocket scientist... i have
+been screaming this for months.")*
+
+Open `https://<app>.vercel.app/api/admin/console`, type `ADMIN_DASH_KEY`, and tap **Balance** — it is
+in the primary nav, not behind "More tools". Every knob is a card carrying its plain-English name, what
+moving it actually does, its **current** value, the value the installed build ships with, and the WORD
+`OVERRIDDEN` or `Shipped default`. **Save** writes an override; **Reset** deletes the row. Both verbs
+are 112 px tall and both spell out that reset is not zero. The write key is asked for once per tab and
+is never stored.
+
+The page is **driven by a JSON manifest**, and that manifest is **not a fifth copy of the knob list**:
+
+| Fact | Owner |
+|---|---|
+| key + kind + default | **DERIVED** from `RemoteTunables.Registry` by `tools/gen-tunable-manifest.mjs` into `api/_lib/tunable-manifest.generated.json` |
+| may this key be written | the `TUNABLE_KEYS` allowlist in `api/_lib/tunables.js` |
+| area (Skills / Tiers / Spells / Misc), label, plain English, safe range | `PRESENTATION` in `api/_lib/tunable-manifest.js` |
+
+**Adding a lever later is a data edit, not a UI edit:** add the knob to the registry and the allowlist,
+run `node tools/gen-tunable-manifest.mjs`, add one `PRESENTATION` entry, and the card appears on its own.
+`test/tunables-manifest.test.js` re-derives the spine from `RemoteTunables.cs` on every run and goes RED
+**naming which two sources disagree** — it caught two live drifts within a minute of them landing on the
+day it was written.
+
+**⛔ PRICES, ENTITLEMENTS, GRANTS AND PURCHASE AMOUNTS ARE PERMANENTLY OUT OF SCOPE** for that page and
+for this rail. They are decided server-side in `api/_lib/purchase-catalog.js`; the game takes real money
+on mainnet, so a value a phone could override would be an exploit, not a feature. The boundary is
+printed on the page itself and asserted on the *shape* of the manifest, not on its current contents.
+
+The PowerShell surface above still works and is unchanged.
 
 ### How long until it reaches a client
 
@@ -197,12 +243,38 @@ Safety properties of that cache, all of them load-bearing:
 | Phone write actions | `api/_lib/ops.js`, `api/admin/ops.js` (`tunable.set` / `tunable.clear`) |
 | Operator CLI | `tools/client-tunables.mjs` |
 | Operator surface | `tools/command-centre.ps1 -Tunables` |
+| **Phone surface (WO-1328)** | `api/admin/console.js` — the **Balance** tab |
+| **Manifest join** | `api/_lib/tunable-manifest.js` (areas + labels + safe ranges) |
+| **Manifest spine, GENERATED** | `api/_lib/tunable-manifest.generated.json` via `tools/gen-tunable-manifest.mjs` |
 | **Oracle** | `Assets/Editor/Regression/RemoteTunablesDefaultsRegression.cs` — `[tunable-defaults]`, registered in `DataRegression.RunAll` |
+| **Oracle (manifest, WO-1328)** | `test/tunables-manifest.test.js` — `node --test`, no Unity, no network |
 
-**If you change a default or add a knob, change `RemoteTunables.Registry`, the `TUNABLE_KEYS`
-allowlist in `api/_lib/tunables.js`, this document, and `ExpectedDefaults` in
-`RemoteTunablesDefaultsRegression.cs` in the same commit** — CLAUDE.md §15. You will not forget:
-the `[tunable-defaults]` oracle pins all four against each other and reds naming which two disagree.
+> ## ⚠ CORRECTED 2026-09-02 — IT IS **SIX** SOURCES NOW, NOT FOUR.
+>
+> This paragraph said **four** all evening, and WO-1328 landed the Command Center Balance tab in the
+> middle of that evening, adding **two more**. A WO-1330 seat following the four-source rule literally
+> would have shipped a knob **the owner's console cannot see** — a lever that exists, works, and is
+> invisible to the one person who needs it. It only got caught because that seat checked the tree
+> instead of trusting this line.
+>
+> **That is this repo's signature failure wearing yet another face:** the count was written down, the
+> world moved, and the written count kept being obeyed. Do not restate the number anywhere else — and
+> if you add a seventh source, correct THIS line in the same edit.
+
+**If you change a default or add a knob, change ALL SIX of these in the same commit** — CLAUDE.md §15:
+
+1. `RemoteTunables.Registry` — `Assets/_Modules/Core/Ops/RemoteTunables.cs` (**the source of truth for defaults**)
+2. the `TUNABLE_KEYS` allowlist in `api/_lib/tunables.js` (a key absent here is a key the server **refuses every write to**)
+3. this document
+4. `ExpectedDefaults` in `Assets/Editor/Regression/RemoteTunablesDefaultsRegression.cs`
+5. `api/_lib/tunable-manifest.generated.json` — regenerate with `node tools/gen-tunable-manifest.mjs`
+6. the hand-authored half of `api/_lib/tunable-manifest.js` — area, label, plain-English description, safe range (**a knob with no area does not render on the console**)
+
+You will not forget, because two oracles disagree loudly rather than silently: the
+`[tunable-defaults]` suite pins 1/2/3/4 against each other, and `test/tunables-manifest.test.js`
+re-parses `RemoteTunables.cs` **from disk on every run** and asserts 5 is byte-identical to a fresh
+derivation. Each reds naming which two sources disagree. Sources 1 and 5 are machine-derived from the
+same file on purpose — only 3 and 6 are written by a human, and those are the two that rot.
 
 ### What the oracle pins
 

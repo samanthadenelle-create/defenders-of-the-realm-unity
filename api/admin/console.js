@@ -46,7 +46,14 @@
 // stop at the PAGE template. test/command-center.test.js pins that.
 // =============================================================================
 
-const PAGE = `<!DOCTYPE html>
+// WO-1328. The balance editor's manifest. Its spine is GENERATED from
+// DeNelle.Core.Ops.RemoteTunables.Registry (tools/gen-tunable-manifest.mjs) and
+// joined with hand-authored, owner-facing presentation. Requiring it here is the
+// ONLY thing this page needs in order to grow a new lever later: adding a knob is
+// a data edit, never a UI edit.
+const tunableManifest = require('../_lib/tunable-manifest');
+
+const PAGE_TEMPLATE = `<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -149,6 +156,34 @@ const PAGE = `<!DOCTYPE html>
   .tile .k,.tile .s{overflow-wrap:anywhere;white-space:normal}
   @media (max-width:520px){ .wrap{padding:8px} .tile .v{font-size:22px} .hero-number{font-size:44px}
     .metric-grid{grid-template-columns:1fr 1fr}.metric-grid .tile:first-child{grid-column:1/-1} }
+
+  /* WO-1328 BALANCE EDITOR.
+     --bigtap is 112px because the ticket says so and because the owner will be
+     holding a phone in one hand and a device running the build in the other.
+     Nothing on this surface is smaller than a thumb, and no state on it lives in
+     a colour: every knob prints the WORDS "OVERRIDDEN" or "shipped default". */
+  :root{ --bigtap:112px; }
+  .knob{border:1px solid var(--line);border-radius:12px;padding:14px;margin:12px 0;background:var(--panel2)}
+  .knob h3{margin:0;font-size:17px;line-height:1.3;overflow-wrap:anywhere}
+  .knob .keyname{display:block;color:var(--dim);font-size:11px;margin-top:3px;overflow-wrap:anywhere}
+  .knob .what{color:var(--dim);font-size:14px;margin:8px 0 0;overflow-wrap:anywhere}
+  .knob .risk{color:var(--text);font-size:13px;margin:8px 0 0;border-left:3px solid var(--accent);
+    padding-left:9px;overflow-wrap:anywhere}
+  .knob .now{margin:12px 0 0;font-size:15px;font-weight:700;overflow-wrap:anywhere}
+  .knob .now .num{font-size:30px;letter-spacing:-.02em;display:block;line-height:1.1}
+  .knob .nowstate{display:block;font-weight:700;letter-spacing:.03em;margin-top:2px}
+  .knob .nowstate.overridden{color:var(--accent)}
+  .knob-controls{display:flex;gap:10px;flex-wrap:wrap;margin-top:12px;align-items:stretch}
+  .knob-controls input{min-height:var(--bigtap);font-size:26px;text-align:center;flex:1 1 150px;width:auto}
+  .knob-controls button{min-height:var(--bigtap);flex:1 1 150px;font-size:17px;font-weight:700}
+  .knob-controls .bump{flex:0 0 84px;font-size:30px}
+  .knob-clear{border-color:var(--accent)}
+  .knob-note{color:var(--dim);font-size:12px;margin:9px 0 0;overflow-wrap:anywhere}
+  .bool-row{display:flex;gap:10px;flex-wrap:wrap;margin-top:12px}
+  .bool-row button{min-height:var(--bigtap);flex:1 1 130px;font-size:18px;font-weight:700}
+  .scope{border-color:var(--accent)}
+  .scope h2{color:var(--accent)}
+  .empty-area{color:var(--dim);font-size:14px;margin:8px 0 0}
 </style>
 </head>
 <body>
@@ -183,6 +218,7 @@ const PAGE = `<!DOCTYPE html>
   </header>
   <nav id="tabs">
     <button data-tab="command" aria-pressed="true">Decisions</button>
+    <button data-tab="balance" aria-pressed="false">Balance</button>
     <button id="moreBtn" type="button" aria-expanded="false">More tools</button>
   </nav>
   <nav id="tools" hidden>
@@ -204,6 +240,12 @@ const PAGE = `<!DOCTYPE html>
   var READ_KEY = null;
   var OPS_KEY = null;
 
+  // WO-1328. THE JSON THAT DRIVES THE BALANCE EDITOR, inlined at serve time from
+  // api/_lib/tunable-manifest.js - whose spine is GENERATED from the game's own
+  // RemoteTunables.Registry, so this page cannot show a knob the build does not
+  // have or hide one it does. Adding a lever later is a data edit, not a UI edit.
+  var MANIFEST = __TUNABLE_MANIFEST__;
+
   // WO-1281. tab:'command' is the DECISION surface and it is what the page opens
   // on. The six older tabs still exist, behind the "More tools" disclosure, and
   // are unchanged - this ticket reorders the surface, it does not delete the
@@ -215,7 +257,13 @@ const PAGE = `<!DOCTYPE html>
   // browser-side store (the key rule, see the file header), and an accordion is
   // not a reason to open that door.
   var state = { tab:'command', days:30, open:'sales', tools:false,
-                overview:null, ops:null, money:null, command:null, err:null };
+                overview:null, ops:null, money:null, command:null, err:null,
+                // WO-1328. tun holds the LIVE override table exactly as the game
+                // reads it. tunReadOk is tracked separately and on purpose: an
+                // unreadable table also answers with no values, and rendering that
+                // as "everything is at its default" would be a confident lie of
+                // precisely the kind this console refuses to tell elsewhere.
+                tun:null, tunReadOk:false, tunErr:null };
 
   var $ = function(id){ return document.getElementById(id); };
 
@@ -263,6 +311,34 @@ const PAGE = `<!DOCTYPE html>
       .catch(function(e){ return { status:0, body:{ ok:false, code:'NETWORK', hint:String(e) } }; });
   }
 
+  // WO-1328. The override table, read from the SAME public endpoint the game
+  // reads. Deliberately the same one: what this page shows is then what the
+  // client is actually being told, not a second view of the database that could
+  // disagree with it.
+  //
+  // !! NO ADMIN KEY IS SENT HERE. The endpoint is public and unauthenticated by
+  // design (it must resolve before sign-in), so attaching a secret to it would
+  // spend the key for nothing.
+  //
+  // The cache-buster is load-bearing, not superstition: the endpoint carries a
+  // 10 s edge cache, and without a fresh URL the read straight after a write
+  // would show the OLD value and the owner would think the write failed.
+  function loadTunables(){
+    return fetch('/api/client-tunables?fresh=' + Date.now(), { method:'GET', cache:'no-store' })
+      .then(function(r){ return r.json(); })
+      .then(function(j){
+        state.tunReadOk = !!(j && j.readOk);
+        state.tun = (j && j.values) || {};
+        state.tunErr = state.tunReadOk ? null
+          : ('the override table could not be read (' + ((j && j.reason) || 'unknown') + ')');
+      })
+      .catch(function(e){
+        state.tunReadOk = false;
+        state.tun = null;
+        state.tunErr = 'network: ' + String(e);
+      });
+  }
+
   function load(){
     $('stamp').textContent = 'loading';
     var d = state.days;
@@ -270,7 +346,8 @@ const PAGE = `<!DOCTYPE html>
       getJson('/api/admin/stats?view=overview&days=' + d),
       getJson('/api/admin/stats?view=ops&days=' + d),
       getJson('/api/admin/stats?view=purchases&days=' + d),
-      getJson('/api/admin/stats?view=command&days=' + d)
+      getJson('/api/admin/stats?view=command&days=' + d),
+      loadTunables()
     ]).then(function(res){
       state.err = null;
       state.overview = res[0].status === 200 ? res[0].body : null;
@@ -956,6 +1033,167 @@ const PAGE = `<!DOCTYPE html>
     return h;
   }
 
+  // ---- WO-1328 BALANCE ----------------------------------------------------
+  // "should be in command center so you dont need to be a rocket scientist. a
+  //  area for skills, and tiers of skills or spells or almost anything (misc)
+  //  and they can have a simple UI that rives a json"   - owner, 2026-09-02,
+  // in the same breath as "i have been screaming this for months."
+  //
+  // Every card is built from MANIFEST, which is inlined from
+  // api/_lib/tunable-manifest.js, whose spine is GENERATED from the game's own
+  // RemoteTunables.Registry. Nothing about a knob is typed twice, so nothing
+  // about a knob can rot.
+  //
+  // !! STATE IS A WORD, NEVER A COLOUR. Each knob prints its current number, the
+  // number the installed game ships with, and either "OVERRIDDEN" or "Shipped
+  // default" spelled out. The owner is red/green colourblind; a dot is not an
+  // answer.
+  //
+  // !! RESET IS NOT ZERO, AND THE PAGE SAYS SO TWICE - once at the top of the tab
+  // and once on the button that does it. Clearing removes the override so the
+  // knob answers the installed build (the art timeout goes back to 20 seconds);
+  // typing 0 means zero seconds. It is the easiest way to break a live game from
+  // this page, so it is the sentence that is repeated.
+
+  function step(k){ return (k.max - k.min) > 100 ? 5 : 1; }
+
+  /** The manifest entry for a key, or null. The page never invents a knob. */
+  function knobSpec(key){
+    for (var i = 0; i < MANIFEST.areas.length; i++){
+      var ks = MANIFEST.areas[i].knobs;
+      for (var j = 0; j < ks.length; j++) if (ks[j].key === key) return ks[j];
+    }
+    return null;
+  }
+
+  /**
+   * The ONE place this page writes a knob value. Both the number editor and the
+   * ON/OFF buttons come through here, so there is exactly one call site posting
+   * tunable.set - which is what test/command-center.test.js pins the page's
+   * postable actions against.
+   */
+  function writeKnob(key, value, okText){
+    return postOps({ action:'tunable.set', key:key, value:value })
+      .then(function(r){ opsResult(r, okText); });
+  }
+
+  function knobNow(k){
+    // Absent from the table = no override = the build's own value. That is not an
+    // inference: an empty client_tunables table is the documented resting state.
+    if (!state.tunReadOk || !state.tun) return { known:false };
+    var raw = state.tun[k.key];
+    if (raw === undefined || raw === null || raw === '') return { known:true, overridden:false, value:k.def };
+    var num = parseInt(String(raw), 10);
+    if (!isFinite(num)) return { known:true, overridden:true, value:null, junk:String(raw) };
+    return { known:true, overridden:true, value:num };
+  }
+
+  function boolWord(v){ return v ? 'ON' : 'OFF'; }
+
+  function renderKnob(k){
+    var now = knobNow(k);
+    var isBool = k.kind === 'bool';
+    var shipped = isBool ? boolWord(k.def) : String(k.def);
+
+    var numTxt, stateTxt, stateCls;
+    if (!now.known){
+      numTxt = 'unknown';
+      stateTxt = 'COULD NOT READ the override table - this is NOT proof the knob is at its default';
+      stateCls = '';
+    } else if (now.value === null){
+      numTxt = esc(now.junk);
+      stateTxt = 'OVERRIDDEN with a value the game cannot read, so the game is using ' + shipped +
+                 '. Reset it.';
+      stateCls = ' overridden';
+    } else {
+      numTxt = isBool ? boolWord(now.value) : String(now.value);
+      stateTxt = now.overridden
+        ? ('OVERRIDDEN (the installed game ships with ' + shipped + ')')
+        : 'Shipped default - nothing is overriding it';
+      stateCls = now.overridden ? ' overridden' : '';
+    }
+
+    var h = '<div class="knob" data-key="' + esc(k.key) + '" data-kind="' + esc(k.kind) + '">' +
+      '<h3>' + esc(k.label) + '<span class="keyname">' + esc(k.key) + '</span></h3>' +
+      '<p class="what">' + esc(k.what) + '</p>' +
+      (k.risk ? '<p class="risk">' + esc(k.risk) + '</p>' : '') +
+      '<p class="now">Now<span class="num">' + numTxt + '</span>' +
+      '<span class="nowstate' + stateCls + '">' + esc(stateTxt) + '</span></p>';
+
+    if (isBool){
+      h += '<div class="bool-row">' +
+        '<button class="knob-on" data-key="' + esc(k.key) + '">Turn ON</button>' +
+        '<button class="knob-off" data-key="' + esc(k.key) + '">Turn OFF</button>' +
+        '</div>' +
+        '<div class="bool-row"><button class="knob-clear" data-key="' + esc(k.key) +
+        '" data-shipped="' + esc(shipped) + '">Reset to shipped (' + esc(shipped) + ')</button></div>' +
+        '<p class="knob-note">Reset REMOVES the override so the knob answers the installed ' +
+        'game. That is not the same as turning it off.</p>';
+    } else {
+      var st = step(k);
+      var startVal = (now.known && now.value !== null) ? now.value : k.def;
+      h += '<div class="knob-controls">' +
+        '<button class="bump knob-down" data-key="' + esc(k.key) + '" aria-label="Decrease">-</button>' +
+        '<input class="knob-input" data-key="' + esc(k.key) + '" type="number" inputmode="numeric" ' +
+          'step="' + st + '" min="' + k.min + '" max="' + k.max + '" value="' + startVal + '">' +
+        '<button class="bump knob-up" data-key="' + esc(k.key) + '" aria-label="Increase">+</button>' +
+        '</div>' +
+        '<div class="knob-controls">' +
+        '<button class="primary knob-save" data-key="' + esc(k.key) + '">Save this value</button>' +
+        '<button class="knob-clear" data-key="' + esc(k.key) + '" data-shipped="' + esc(shipped) +
+          '">Reset to shipped (' + esc(shipped) + ')</button>' +
+        '</div>' +
+        '<p class="knob-note">Allowed here: ' + k.min + ' to ' + k.max + '. Reset REMOVES the ' +
+        'override so the knob answers the installed game (' + esc(shipped) + '), which is NOT the ' +
+        'same as saving 0.</p>';
+    }
+    return h + '</div>';
+  }
+
+  function renderBalance(){
+    var h = '';
+
+    // The boundary, stated on the page so no future seat widens it by accident.
+    h += '<div class="card scope"><h2>What this page can and cannot change</h2>' +
+      '<p class="note">' + esc(MANIFEST.notices.outOfScope) + '</p>' +
+      '<p class="note"><strong>Reset is not zero.</strong> ' + esc(MANIFEST.notices.clearIsNotZero) +
+      '</p>' +
+      '<p class="note">A change reaches a running game in about 40 seconds. Two of the Misc ' +
+      'loading knobs are read at startup and take effect the next time the app is launched - ' +
+      'each one says so on its own card.</p></div>';
+
+    if (MANIFEST.defects && MANIFEST.defects.length){
+      // Loud, in words, and never hidden: the manifest disagreeing with the build
+      // means a lever is missing or dead, and the owner must not spend an evening
+      // looking for it.
+      h += '<div class="msg bad">MANIFEST DOES NOT MATCH THE BUILD. ' +
+        MANIFEST.defects.length + ' problem(s):<br>' +
+        MANIFEST.defects.map(function(d){ return esc(d); }).join('<br>') + '</div>';
+    }
+
+    if (!state.tunReadOk){
+      h += '<div class="msg bad">COULD NOT READ the override table' +
+        (state.tunErr ? ' - ' + esc(state.tunErr) : '') +
+        '. Every knob below is shown as "unknown", not as its default: a read that failed must ' +
+        'never render as "nothing is overridden".</div>';
+    }
+
+    MANIFEST.areas.forEach(function(a){
+      h += '<div class="card"><h2>' + esc(a.title) + '</h2>' +
+           '<p class="note">' + esc(a.blurb) + '</p>';
+      if (!a.knobs.length){
+        h += '<p class="empty-area">No levers here yet. Adding one is a data edit, not a UI ' +
+          'change: add the knob to the game\\'s tunables registry and to the server allowlist, ' +
+          'regenerate the manifest, and a card appears here on its own.</p>';
+      } else {
+        a.knobs.forEach(function(k){ h += renderKnob(k); });
+      }
+      h += '</div>';
+    });
+
+    return h;
+  }
+
   function renderBoard(){
     return '<div class="card"><h2>Tickets</h2>' +
       '<p class="note">There are TWO ticket systems and they are deliberately not merged.</p>' +
@@ -973,6 +1211,7 @@ const PAGE = `<!DOCTYPE html>
     if (state.err) h += '<div class="msg bad">' + esc(state.err) + '</div>';
     if (state.flash) h += '<div class="msg' + (state.flashBad ? ' bad' : '') + '">' + esc(state.flash) + '</div>';
     h += state.tab === 'command' ? renderCommand()
+       : state.tab === 'balance' ? renderBalance()
        : state.tab === 'players' ? renderPlayers()
        : state.tab === 'toggles' ? renderToggles()
        : state.tab === 'money' ? renderMoney()
@@ -1116,6 +1355,77 @@ const PAGE = `<!DOCTYPE html>
         .then(function(r){ opsResult(r, 'Acknowledged purchase alert. Source telemetry preserved.'); });
       return;
     }
+    // ---- WO-1328 balance knobs ------------------------------------------
+    // Two verbs, and they are kept visibly apart because confusing them is the
+    // easiest way to break a live game from this page:
+    //   SAVE  writes an override row.
+    //   RESET deletes the row so the knob answers the installed build.
+    var bump = e.target.closest('.knob-down, .knob-up');
+    if (bump){
+      var bk = bump.getAttribute('data-key');
+      var bspec = knobSpec(bk);
+      var binput = $('body').querySelector('.knob-input[data-key="' + bk + '"]');
+      if (bspec && binput){
+        var cur = parseInt(binput.value, 10);
+        if (!isFinite(cur)) cur = bspec.def;
+        var next = cur + (bump.classList.contains('knob-up') ? step(bspec) : -step(bspec));
+        binput.value = Math.max(bspec.min, Math.min(bspec.max, next));
+      }
+      return;
+    }
+    var save = e.target.closest('.knob-save');
+    if (save){
+      var sk = save.getAttribute('data-key');
+      var sspec = knobSpec(sk);
+      var sinput = $('body').querySelector('.knob-input[data-key="' + sk + '"]');
+      if (!sspec || !sinput) return;
+      var want = parseInt(String(sinput.value).trim(), 10);
+      if (!isFinite(want)){
+        flash('REFUSED: that is not a whole number.', true); return;
+      }
+      if (want < sspec.min || want > sspec.max){
+        flash('REFUSED: ' + sspec.label + ' must be between ' + sspec.min + ' and ' + sspec.max +
+              '. Nothing was written.', true);
+        return;
+      }
+      if (!window.confirm('Set "' + sspec.label + '" to ' + want + '? The installed game ships ' +
+          'with ' + sspec.def + '. Players in a running game pick this up in about 40 seconds.')) return;
+      save.disabled = true;
+      writeKnob(sk, String(want), sspec.label + ' set to ' + want + '.');
+      return;
+    }
+    var on = e.target.closest('.knob-on, .knob-off');
+    if (on){
+      var ok2 = on.getAttribute('data-key');
+      var ospec = knobSpec(ok2);
+      if (!ospec) return;
+      var turnOn = on.classList.contains('knob-on');
+      if (!window.confirm((turnOn ? 'Turn ON ' : 'Turn OFF ') + '"' + ospec.label +
+          '"? The installed game ships ' + (ospec.def ? 'ON' : 'OFF') + '.')) return;
+      on.disabled = true;
+      writeKnob(ok2, turnOn ? '1' : '0',
+                ospec.label + ' turned ' + (turnOn ? 'ON' : 'OFF') + '.');
+      return;
+    }
+    var reset = e.target.closest('.knob-clear');
+    if (reset){
+      var rk = reset.getAttribute('data-key');
+      var rspec = knobSpec(rk);
+      if (!rspec) return;
+      var shippedTxt = reset.getAttribute('data-shipped');
+      // The confirm spells out the distinction rather than assuming it is known.
+      if (!window.confirm('Reset "' + rspec.label + '"?\\n\\nThis REMOVES the override, so the ' +
+          'knob answers whatever the installed game says: ' + shippedTxt + '.\\n\\nIt is NOT the ' +
+          'same as saving 0.')) return;
+      reset.disabled = true;
+      postOps({ action:'tunable.clear', key:rk })
+        .then(function(r){
+          opsResult(r, rspec.label + ' reset. It now answers the installed game (' +
+                       shippedTxt + ').');
+        });
+      return;
+    }
+
     if (e.target.id === 'pcreate'){
       var draft = {
         action:'promo.create',
@@ -1137,6 +1447,34 @@ const PAGE = `<!DOCTYPE html>
 </script>
 </body>
 </html>`;
+
+// -----------------------------------------------------------------------------
+// WO-1328. The balance editor is DRIVEN BY JSON, and this is where the JSON gets
+// in. The manifest is built once at module load from api/_lib/tunable-manifest.js,
+// whose spine is GENERATED from the game's own RemoteTunables.Registry, and is
+// inlined into the page as a literal - so the page ships no second copy of the
+// knob list, makes no extra request to render, and cannot show a lever the build
+// does not have.
+//
+// ASCII IS ENFORCED, NOT HOPED FOR. WO-1244 rule 6 makes the whole served page
+// 7-bit ASCII, and test/command-center.test.js pins it. A non-ASCII character
+// authored into a manifest label would otherwise break that rule from a file
+// nobody would think to look in, so it is caught HERE, at the seam, and the
+// substitution refuses rather than serving a page that violates its own contract.
+// -----------------------------------------------------------------------------
+const MANIFEST_JSON = (() => {
+    const json = JSON.stringify(tunableManifest.build());
+    for (let i = 0; i < json.length; i++) {
+        const c = json.charCodeAt(i);
+        if (c > 126 || c < 32) {
+            throw new Error('tunable manifest holds a non-ASCII character at ' + i +
+                            ' - the served console page must be 7-bit ASCII end to end');
+        }
+    }
+    return json;
+})();
+
+const PAGE = PAGE_TEMPLATE.replace('__TUNABLE_MANIFEST__', () => MANIFEST_JSON);
 
 module.exports = async (req, res) => {
     if (req.method !== 'GET') {
