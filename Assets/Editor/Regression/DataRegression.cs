@@ -1375,6 +1375,19 @@ namespace DeNelle.Editor
             // DEFAULTS, i.e. today's behaviour byte for byte. A break here is INVISIBLE
             // (nothing crashes; the build just stops behaving the way it says it does).
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "tunable-defaults suite", () => { if (!DeNelle.Editor.Regression.RemoteTunablesDefaultsRegression.Run(out var rTun)) failures.Add(rTun); else log.AppendLine("[tunable-defaults] " + rTun); });
+            // WO-1330 - THE PROOF THAT AN OVER-TIME EFFECT ACTUALLY TICKS. Not a data
+            // lint: it drives DeNelle.Core.Combat.OverTimeEngine with a fake clock and
+            // COUNTS the pulses (applied -> N ticks -> expires), on both signs. An
+            // over-time effect built the obvious way - a coroutine - is one no gate can
+            // ever observe, because EditMode never runs Update; that is why the engine
+            // takes its clock as a parameter, and this suite is the reason it matters.
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "over-time suite", () => { if (!DeNelle.Editor.Regression.OverTimeEffectRegression.Run(out var rOt)) failures.Add(rOt); else log.AppendLine("[over-time] " + rOt); });
+            // WO-1331 - THE INVARIANT WITH THE WIDEST BLAST RADIUS IN THE GAME: with no
+            // database row and no reachable backend, EVERY canonical catalog resolves the
+            // copy compiled into the player, byte for byte. CanonicalJson is how every
+            // catalog in the game loads, so a break here does not crash - it silently
+            // serves the wrong data, or half a catalog, to a build that is live on a store.
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "catalog-seam suite", () => { if (!DeNelle.Editor.Regression.RemoteCatalogSeamRegression.Run(out var rCat)) failures.Add(rCat); else log.AppendLine("[catalog-seam] " + rCat); });
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "troop-strike-vfx suite", () => { if (!DeNelle.Editor.Regression.TroopStrikeVfxRegression.Run(out var troopVfxReason)) failures.Add(troopVfxReason); else log.AppendLine("[troop-strike-vfx] " + troopVfxReason); });
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "starter-armour suite", () => { if (!DeNelle.Editor.Regression.StarterArmourOwnershipRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[starter-armour] " + r); });
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "armour-catalog-job suite", () => { if (!DeNelle.Editor.Regression.ArmourCatalogJobRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[armour-catalog-job] " + r); });

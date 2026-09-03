@@ -1,9 +1,42 @@
 // =============================================================================
 // ServerConfig — backend-controlled remote configuration record.
+// =============================================================================
+// ⛔⛔ DORMANT. THIS MECHANISM HAS NEVER ONCE BEEN SETTABLE. DO NOT BUILD ON IT,
+//     AND DO NOT BUILD THE MISSING SERVER HALF. (WO-1331, verified 2026-09-02.)
 // -----------------------------------------------------------------------------
-// Deserialized from the "config" field of the api/game/load.js response.
-// All values are set via Vercel environment variables in the backend dashboard —
-// no Unity rebuild or code change needed to adjust live game parameters.
+// EVERY LINE BELOW THIS BANNER DESCRIBES AN INTENTION, NOT THE SYSTEM. The client
+// half is complete and wired — absorbed at GameStateService.cs (`resp.Config`),
+// consumed at WaveManager.cs for boss-wave crystal drops — but
+// `api/game/load.js` NEVER EMITS A `config` KEY. Its whole response is
+// ok/success/serverNowMs/serverLastSeenMs/mode/schemaVersion/updatedAt/data, and
+// a grep of the entire api/ tree for `bossWaveCrystalDropChance` /
+// `BOSS_CRYSTAL_DROP_CHANCE` returns NOTHING. So `resp.Config` is always null,
+// this record is permanently `ServerConfig.Default`, and NOT ONE of its eleven
+// fields has ever been remotely settable by anybody.
+//
+// ⚠ THE SENTENCE THAT USED TO SIT HERE — "All values are set via Vercel
+// environment variables in the backend dashboard — no Unity rebuild or code
+// change needed to adjust live game parameters" — WAS FALSE FOR THE WHOLE LIFE OF
+// THE FILE, and it is exactly the kind of doc that made the owner believe balance
+// was already remotely tunable while she was still waiting on rebuilds. The env
+// var names in the field comments below are ASPIRATIONAL: no backend reads any of
+// them. The shipped values are the literals in `Default` (boss crystal chance
+// 0.45, min 1, max 3, interval 5, empowerment x1.0, crystal refund 0.5).
+//
+// ⛔ WHY THE FIX IS NOT "BUILD THE SERVER HALF": that would resurrect a SECOND
+// live configuration mechanism alongside the tunables rail
+// (Assets/_Modules/Core/Ops/RemoteTunables.cs), which is the exact disease this
+// repo keeps paying for. `MaintenanceMode`/`MaintenanceMessage` here are already
+// SUPERSEDED by the live `maintenance_toggles` rail. THE RECOMMENDATION
+// (owner decision, not a tuning one): RETIRE this record, and if the four
+// boss-drop keys are still wanted, add them to `RemoteTunables.Registry` as
+// ordinary int knobs — one mechanism, one precedence, one oracle.
+//
+// Until that ruling lands the type stays in place, inert and honest: every reader
+// already gets `Default`, so retiring it changes no behaviour whatsoever.
+// -----------------------------------------------------------------------------
+// Deserialized from the "config" field of the api/game/load.js response — a field
+// that does not exist. See the banner above before believing anything below.
 //
 // USAGE (read-only at runtime):
 //   var cfg = GameStateService.Instance.ServerConfig;

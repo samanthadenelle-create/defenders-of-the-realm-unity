@@ -1340,6 +1340,26 @@ namespace DeNelle.Core
             || Application.platform == RuntimePlatform.OSXPlayer
             || Application.platform == RuntimePlatform.LinuxPlayer;
 
+        /// <summary>WO-1331 — arms the REMOTE CANONICAL CATALOG SEAM (CanonicalJson.Source).
+        /// <para>
+        /// ⛔ DEFAULT OFF, AND OFF MEANS ABSENT, NOT IDLE. With this flag unset,
+        /// <see cref="DeNelle.Core.RemoteCatalogService"/>.Install() returns BEFORE assigning
+        /// CanonicalJson.Source and Bootstrap() returns BEFORE starting any fetch, so a default
+        /// build does not merely behave like today — it runs the identical code path, with
+        /// CanonicalJson.Source still holding the LocalJsonCatalogSource from its own field
+        /// initializer. Nothing is constructed, nothing is polled.
+        /// </para>
+        /// <para>
+        /// When ON, the five allowlisted canonical catalogs (RemoteCatalogOverrides.Allowlist)
+        /// may be served from the database instead of the copy compiled into the player — which
+        /// is the only thing that makes "data-driven" mean "tunable without a rebuild"
+        /// (docs/reference/TUNABLE_LEVER_INVENTORY.md §2). Every failure — unreachable, 404,
+        /// malformed, truncated, empty, denied path — falls through to the compiled copy.
+        /// </para>
+        /// PlayerPrefs "ff.catalogremote" = 1. The remote twin of this arm is the tunables-rail
+        /// knob "catalog.remoteEnabled", read only once it is registered.</summary>
+        public static bool RemoteCatalogs => Get("catalogremote", defaultOn: false);
+
         /// <summary>Per-feature resolve: PlayerPrefs override ("ff.&lt;name&gt;" = 0/1) wins, else the default.</summary>
         private static bool Get(string name, bool defaultOn)
         {
