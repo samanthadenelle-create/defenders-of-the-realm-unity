@@ -41,10 +41,26 @@
 //                  rewrite the prereq graph (HeroTalentNodeDef.Hidden's own caution), so
 //                  such a node would read "Requires <invisible thing>" forever.
 //
-// WHAT IS MEASURED AND LOGGED, never failed: the row census per tree and the implied
-// content height at HeroSkillTreePanelMvvm.MinNodePitchPx, so the "does the tree fit the
-// 493 px well without scrolling" question is answered by a number on every gate run
-// instead of by a fresh hand calculation.
+//   6 [viewport]   (WO-1310) every tree, rotated and solved through the VIEW'S OWN
+//                  SolveGraphLatticePx against the reference 1695x493 well, lands inside
+//                  the board: no plate closer to the content origin than half of
+//                  HeroSkillTreePanelMvvm.PlateClearPx (that inset is the plate PLUS its
+//                  hung nameplate PLUS the focus glow, so anything tighter is sliced by
+//                  the RectMask2D), and the resolved board is no more than MaxScrollWide
+//                  viewports across / MaxScrollTall viewports down.
+//
+// !! THE HEADER USED TO CLAIM, RIGHT HERE, that "the implied content height at
+// HeroSkillTreePanelMvvm.MinNodePitchPx" was "measured and logged, never failed - so the
+// 'does the tree fit the 493 px well' question is answered by a number on every gate run".
+// THAT WAS FALSE DOCUMENTATION. This file contained no reference to MinNodePitchPx, to any
+// pitch, or to the 493 px well anywhere; the only note was the row census. So the question
+// was never answered by anything, and a tree that could not fit - or that opened sliced
+// through its top rank, which is what WO-1310 reported - passed this gate silently. Rule 6
+// is the measurement AND the assertion the old sentence only promised. A number that is
+// measured and never failed is exactly how "fits" and "does not fit" read identically.
+//
+// WHAT IS STILL MEASURED AND LOGGED ONLY: the row census per tree, and the resolved board
+// size in viewports, printed on every run so drift is visible before it is a failure.
 //
 // DERIVED, NEVER AUTHORED: this oracle reads x/y/prerequisites/cost/hidden only. Row
 // membership, node state, track shape and pixel geometry are all DERIVED downstream
@@ -71,6 +87,20 @@ namespace DeNelle.Editor.Regression
         /// HeroSkillTreePanelMvvm.RowClusterNorm - two nodes closer than this in y are the
         /// same visual row, which is exactly how the shipped solver groups them.</summary>
         public const float RowClusterNorm = 0.055f;
+
+        /// <summary>Reference graph well in ref px (2340x1080 device), the same rect the
+        /// sibling oracles TalentFocusSingletonRegression / SkillsPanelLayoutRegression replay
+        /// their band arithmetic against. Landscape and SHORT - which is the whole reason the
+        /// board's many axis (the track lanes) has to be the horizontal one.</summary>
+        public const float RefWellWidthPx = 1695f;
+        public const float RefWellHeightPx = 493f;
+
+        /// <summary>How far a resolved board may exceed the well before it stops being a board
+        /// and starts being a corridor. Scrolling is legitimate (WO-1310 acceptance 1); an
+        /// endless scroll is not. The full-tree worst case sits well inside both today - the
+        /// budget exists to fail the NEXT axis mix-up, not to certify the current one.</summary>
+        public const float MaxScrollWide = 3.0f;
+        public const float MaxScrollTall = 6.0f;
 
         private static readonly string[] Slugs = { "knight", "ranger", "mage" };
 
@@ -120,6 +150,19 @@ namespace DeNelle.Editor.Regression
                 foreach (var g in groups) CheckTree(g.Key, g.Value, all, failures, notes);
 
                 CheckHiddenStranding(all, failures);
+
+                // 6 [viewport] - WO-1310. A tree that renders sliced or scrolls forever is a
+                // failed tree even when every authored row is legal, and nothing here used to
+                // look. Each CLASS board is the class nodes PLUS the shared pool, because that
+                // is what the panel actually draws once the shared shelf is engaged.
+                var sharedPool = groups.FirstOrDefault(g => g.Key == "shared").Value;
+                foreach (var g in groups)
+                {
+                    if (g.Key == "shared") continue;
+                    var board = new List<HeroTalentNodeDef>(g.Value);
+                    if (sharedPool != null) board.AddRange(sharedPool);
+                    CheckViewport(g.Key, board, failures, notes);
+                }
             }
             catch (Exception ex)
             {
@@ -132,7 +175,8 @@ namespace DeNelle.Editor.Regression
                 reason = "TALENT TREE SHAPE OK - every tree (common and specialty) starts from at most " +
                          MaxBaseRowNodes + " simple roots and branches wider as it rises; all x/y authored " +
                          "inside 0..1; no orphan, no cycle, nothing unreachable, no visible node stranded " +
-                         "behind a hidden one" + noteStr;
+                         "behind a hidden one; and every board resolves INSIDE the 1695x493 well - no plate " +
+                         "inside the clearance inset, no board past the scroll budget" + noteStr;
                 return true;
             }
             reason = "talent-tree-shape FAIL x" + failures.Count + ": " +
@@ -261,6 +305,109 @@ namespace DeNelle.Editor.Regression
 
             notes.Add(name + " rows " + string.Join("/", rows.Select(r => r.Count.ToString()).ToArray()) +
                       " (bottom first, " + nodes.Count + " nodes)");
+        }
+
+        // =====================================================================
+        //  6 [viewport] - does the board the PLAYER gets fit the board it is drawn on
+        //
+        //  This runs the VIEW'S OWN axis rotation and its OWN public solver, so it measures
+        //  what ships rather than a second copy of the arithmetic. Two things fail:
+        //    (a) a plate inside the clearance inset - it is sliced by the RectMask2D (the
+        //        WO-1310 "AETHER BOND cut in half by the panel's top edge" capture);
+        //    (b) a board past the scroll budget - the WO-1310 defect shape, where the
+        //        progression axis was fed to the COLUMNS and the lanes to the ROWS, giving a
+        //        dozen rows against three columns inside a 1695x493 landscape well.
+        //  Both are numbers, and both are printed pass or fail.
+        // =====================================================================
+        private static void CheckViewport(string name, List<HeroTalentNodeDef> board,
+                                          List<string> failures, List<string> notes)
+        {
+            if (board == null || board.Count == 0) return;
+
+            float minX = float.MaxValue, maxX = float.MinValue;
+            float minY = float.MaxValue, maxY = float.MinValue;
+            foreach (var n in board)
+            {
+                if (n.X < minX) minX = n.X;
+                if (n.X > maxX) maxX = n.X;
+                if (n.Y < minY) minY = n.Y;
+                if (n.Y > maxY) maxY = n.Y;
+            }
+            float spanX = Mathf.Max(0.001f, maxX - minX);
+            float spanY = Mathf.Max(0.001f, maxY - minY);
+
+            // The view's rotation, verbatim (HeroSkillTreePanelMvvm.RebuildTracks): lane on the
+            // WIDE axis, progression inverted onto the short one so the base rank is row 0.
+            var norms = new float[board.Count * 2];
+            for (int i = 0; i < board.Count; i++)
+            {
+                norms[i * 2] = (board[i].X - minX) / spanX;
+                norms[i * 2 + 1] = 1f - (board[i].Y - minY) / spanY;
+            }
+
+            float pad = HeroSkillTreePanelMvvm.GraphPadPx;
+            float boxW = RefWellWidthPx - pad * 2f;
+            float boxH = RefWellHeightPx - pad * 2f - HeroSkillTreePanelMvvm.RankBandPx;
+
+            float[] px;
+            try { px = HeroSkillTreePanelMvvm.SolveGraphLatticePx(norms, boxW, boxH); }
+            catch (Exception ex)
+            {
+                failures.Add("[viewport] '" + name + "': SolveGraphLatticePx THREW " +
+                             ex.GetType().Name + ": " + ex.Message);
+                return;
+            }
+            if (px == null || px.Length != norms.Length)
+            {
+                failures.Add("[viewport] '" + name + "': the solver returned " +
+                             (px == null ? "null" : (px.Length / 2).ToString()) + " centres for " +
+                             board.Count + " nodes - the board cannot be measured");
+                return;
+            }
+
+            float clearHalf = HeroSkillTreePanelMvvm.PlateClearPx * 0.5f;
+            float pxMinX = float.MaxValue, pxMinY = float.MaxValue;
+            float pxMaxX = float.MinValue, pxMaxY = float.MinValue;
+            string worstId = "-";
+            for (int i = 0; i < board.Count; i++)
+            {
+                float x = px[i * 2], y = px[i * 2 + 1];
+                if (x < pxMinX || y < pxMinY) worstId = board[i].Id;
+                if (x < pxMinX) pxMinX = x;
+                if (y < pxMinY) pxMinY = y;
+                if (x > pxMaxX) pxMaxX = x;
+                if (y > pxMaxY) pxMaxY = y;
+            }
+
+            if (pxMinX < clearHalf - 0.5f || pxMinY < clearHalf - 0.5f)
+                failures.Add("[viewport] '" + name + "': plate '" + worstId + "' resolves to (" +
+                             F(pxMinX) + "," + F(pxMinY) + "), inside the " + F(clearHalf) +
+                             " px clearance inset (half of HeroSkillTreePanelMvvm.PlateClearPx - the " +
+                             "plate, its hung nameplate AND the focus ring). It is sliced by the " +
+                             "RectMask2D at the panel edge: half a node, its icon cut");
+
+            // Symmetric extents, exactly as RebuildTracks sizes the content rect.
+            float contentW = Mathf.Max(pxMaxX + pxMinX, pxMaxX + clearHalf + pad);
+            float contentH = Mathf.Max(pxMaxY + pxMinY,
+                                       pxMaxY + clearHalf + pad + HeroSkillTreePanelMvvm.RankBandPx);
+            float wide = contentW / RefWellWidthPx;
+            float tall = contentH / RefWellHeightPx;
+
+            if (wide > MaxScrollWide + 0.001f)
+                failures.Add("[viewport] '" + name + "' resolves to " + F(wide) + " viewports WIDE (budget " +
+                             F(MaxScrollWide) + ") - " + F(contentW) + " px of board inside a " +
+                             F(RefWellWidthPx) + " px well");
+            if (tall > MaxScrollTall + 0.001f)
+                failures.Add("[viewport] '" + name + "' resolves to " + F(tall) + " viewports TALL (budget " +
+                             F(MaxScrollTall) + ") - " + F(contentH) + " px of board inside a " +
+                             F(RefWellHeightPx) + " px well. A landscape well is SHORT: the many axis " +
+                             "(track lanes) belongs on the WIDE side and progression on the short one. " +
+                             "Feeding them the other way round is the WO-1310 defect");
+
+            notes.Add(name + " board " + F(contentW) + "x" + F(contentH) + " px = " + F(wide) + "x" +
+                      F(tall) + " viewports (budget " + F(MaxScrollWide) + "x" + F(MaxScrollTall) +
+                      "), tightest inset " + F(Mathf.Min(pxMinX, pxMinY)) + " px vs clearance " +
+                      F(clearHalf) + " px");
         }
 
         /// <summary>Nodes grouped into visual rows, BOTTOM ROW FIRST (largest y). Same

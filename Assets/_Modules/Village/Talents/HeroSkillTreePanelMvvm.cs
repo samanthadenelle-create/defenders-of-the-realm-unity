@@ -213,6 +213,46 @@ namespace DeNelle.Village.Talents
         /// an ORDERING HINT consumed by the solver, not final geometry (WO-1021 sec 2.1b).</summary>
         public const float RowClusterNorm = 0.055f;
 
+        // -- WO-1310 (owner 2026-09-02: "tree looks wrong", "there should be a starting point
+        // ... they should visually be in same level; one is middle of a skill tree").
+        //
+        // WHAT WAS WRONG: the solver consumed the authored norms for SORT ORDER ONLY. Each row
+        // was then laid out independently and centred, so a plate's x was its INDEX WITHIN ITS
+        // OWN ROW and nothing else - a one-node row landed dead centre regardless of where it
+        // sits in the progression, and every row collapsed into a narrow centred column that
+        // left the right half of the well empty. The authored magnitudes were thrown away.
+        //
+        // WHAT IS TRUE NOW: the PROGRESSION norm picks a BOARD-WIDE COLUMN, so two nodes that
+        // read as the same step of progression land in the same column on every row. That is
+        // exactly the "starting point on one level" the owner asked for, and it is the same
+        // property TalentTreeShapeRegression rule 2 [base] enforces in the data.
+
+        /// <summary>Progression values within this band collapse to ONE COLUMN, board-wide.
+        /// Same tolerance as <see cref="RowClusterNorm"/>, applied to the other axis.</summary>
+        public const float ColClusterNorm = 0.055f;
+
+        /// <summary>How far below its plate the hung nameplate reaches, as a fraction of the
+        /// plate size. MUST match BuildNodeNamePlate's anchorMin.y magnitude: the row pitch and
+        /// the content inset are both derived from it, so a nameplate can never be sliced by
+        /// the mask nor painted over the plate on the row below.</summary>
+        public const float NamePlateHangFrac = 0.62f;
+
+        /// <summary>The footprint one plate actually occupies, hung nameplate included. Every
+        /// content inset is half of THIS, never half of NodeFocusPx - a focus plate also carries
+        /// a BuildOuterRing(0.10) glow, so a NodeFocusPx inset clips the top row's ring and the
+        /// bottom row's nameplate at the RectMask2D edge (the WO-1310 top-clip capture).</summary>
+        public const float PlateClearPx = NodeFocusPx * 1.30f;              // 218.4
+
+        /// <summary>Minimum ROW pitch: half a focus plate, plus the nameplate hung under it,
+        /// plus half the plate on the row below, plus breathing room. Strictly greater than
+        /// MinNodePitchPx, so the WO-1021 Chebyshev pitch law is still met - this TIGHTENS it.</summary>
+        public const float MinRowPitchPx = NodeFocusPx * 1.80f;             // 302.4
+
+        /// <summary>Minimum COLUMN pitch: the nameplate is 1.56 plate-widths wide, so two plates
+        /// at the bare MinNodePitchPx would have overlapping NAMES even with clear art. Also
+        /// strictly greater than MinNodePitchPx.</summary>
+        public const float MinColPitchPx = NodeFocusPx * 1.60f;             // 268.8
+
         /// <summary>Earned path (both ends owned/planned) — solid gold, demo-thick.</summary>
         public const float ConnectorThickPx = 10f;
         /// <summary>Live frontier (parent owned, child not) — solid gold, slightly thinner.</summary>
@@ -233,6 +273,9 @@ namespace DeNelle.Village.Talents
         public const float TrackTitleWpx = 0f;
         public const float NodePitchPx = 200f;
         public const float NodeNextPx = NodeFocusPx;
+        // WO-1310: these two are DEAD track-row leftovers and are NOT the nameplate reservation.
+        // A reader who took them at face value concluded the pitch law reserved zero height for
+        // the hung nameplate; the live reservation is NamePlateHangFrac -> MinRowPitchPx.
         public const float NodeLabelBandPx = 0f;
         public const float NodeLabelGapPx = 0f;
         public const float TrackTopPadPx = 10f;
@@ -442,8 +485,13 @@ namespace DeNelle.Village.Talents
                 // ── WO-896: SPARSE TALENT GRAPH (Obsidian demo) ───────────────────────────
         // Flatten every track seat onto a free-form canvas. Authored x/y drive placement
         // when present; missing seats auto-layout by tier/column (and branch) with room
-        // to breathe. Gold connectors follow real prerequisites (diagonal OK). No name
-        // labels under plates (detail column owns the copy). No "MORE BELOW" cue.
+        // to breathe. Gold connectors follow real prerequisites (diagonal OK). No "MORE
+        // BELOW" cue.
+        //
+        // WO-1310 corrects this header: it used to claim "No name labels under plates (detail
+        // column owns the copy)" while BuildNodeNamePlate hung one under EVERY plate and there
+        // is no detail column at all (the body is full-width graph). The nameplate is the ONE
+        // name per node, and it carries the ACTIVE/PASSIVE/SLOT-N word on its second line.
 
         private void RebuildTracks()
         {
@@ -501,9 +549,20 @@ namespace DeNelle.Village.Talents
 
             // Landscape-mobile composition: authored progression is bottom-to-top, which
             // required opening the graph at a vertical scroll offset and visibly amputated
-            // the upper rank. Rotate the semantic axes once: tracks run top-to-bottom while
-            // progression runs LEFT (basic/default) to RIGHT (advanced). Normalize against
-            // the visible frontier so the rotation consumes the whole measured well.
+            // the upper rank. Rotate the semantic axes once so the ENTRY RANK is the top row
+            // and progression runs DOWNWARD. Normalize against the visible frontier so the
+            // rotation consumes the whole measured well.
+            //
+            // WO-1310 — THE ROTATION USED TO FEED THE AXES THE WRONG WAY ROUND. It emitted
+            // (progressX, trackY): progression became the COLUMN axis and the track lane the
+            // ROW axis. The authored lattice is a TIER GRID - a handful of tiers, five lanes
+            // per tier - so that put 2-3 columns against a dozen rows, i.e. a TALL NARROW
+            // board inside a 1695 x 493 landscape well. That is the owner's "squeezed into a
+            // narrow column with the whole right-hand side dead black". Lanes are the many
+            // axis and belong on the WIDE one; tiers are the few axis and belong on the short
+            // one. Progression still reads base-first because progressX is inverted, so the
+            // no-prerequisite base rank is ROW 0 - the rest position, the entry point the
+            // owner is looking for - and deeper tiers scroll down under it.
             if (norm.Count > 1)
             {
                 float sourceMinX = float.MaxValue, sourceMaxX = float.MinValue;
@@ -520,9 +579,11 @@ namespace DeNelle.Village.Talents
                 var rotated = new Dictionary<string, Vector2>(norm.Count);
                 foreach (var pair in norm)
                 {
-                    float trackY = (pair.Value.x - sourceMinX) / spanX;
-                    float progressX = 1f - (pair.Value.y - sourceMinY) / spanY;
-                    rotated[pair.Key] = new Vector2(progressX, trackY);
+                    float lane = (pair.Value.x - sourceMinX) / spanX;
+                    // Authored y ascends DOWNWARD and the base rank carries the LARGEST y,
+                    // so inverting puts the base at 0 = the top row = the rest position.
+                    float progress = 1f - (pair.Value.y - sourceMinY) / spanY;
+                    rotated[pair.Key] = new Vector2(lane, progress);
                 }
                 norm = rotated;
             }
@@ -558,6 +619,7 @@ namespace DeNelle.Village.Talents
 
             float pad = GraphPadPx;
             float maxX = 0f, maxY = 0f;
+            float minX = float.MaxValue, minY = float.MaxValue;
             var centers = new Dictionary<string, Vector2>(orderIds.Count);
             for (int i = 0; i < orderIds.Count; i++)
             {
@@ -566,10 +628,26 @@ namespace DeNelle.Village.Talents
                 centers[orderIds[i]] = new Vector2(cx, cyDown);
                 if (cx > maxX) maxX = cx;
                 if (cyDown > maxY) maxY = cyDown;
+                if (cx < minX) minX = cx;
+                if (cyDown < minY) minY = cyDown;
             }
+            if (minX > maxX) minX = maxX;
+            if (minY > maxY) minY = maxY;
 
-            float contentW = maxX + NodeFocusPx * 0.5f + pad;
-            float contentH = maxY + NodeFocusPx * 0.5f + pad + RankBandPx;
+            // WO-1310 — SYMMETRIC EXTENTS. The retired sizing was
+            //   contentW = maxX + NodeFocusPx*0.5 + pad
+            // where maxX is the RIGHTMOST CENTRE, so the content rect kept the solver's LEFT
+            // centring margin (baked into minX) and truncated the matching RIGHT one. Mirroring
+            // the leading margin is what stops the board reading as "shoved left with a dead
+            // black half on the right". The floor keeps a half plate + pad even at minX == half.
+            float contentW = Mathf.Max(maxX + minX, maxX + PlateClearPx * 0.5f + pad);
+            float contentH = Mathf.Max(maxY + minY, maxY + PlateClearPx * 0.5f + pad + RankBandPx);
+            // ...and never NARROWER than the well. The content rect is top-left anchored and
+            // pivoted, so a board smaller than the viewport would rest flush LEFT and leave the
+            // remainder as dead black on the right - the defect verbatim. Filling the well means
+            // the solver's own centring is what the player sees.
+            if (wellW > 1f) contentW = Mathf.Max(contentW, wellW);
+            if (wellH > 1f) contentH = Mathf.Max(contentH, wellH);
             _graphContent.sizeDelta = new Vector2(contentW, contentH);
 
             // Connectors FIRST so opaque plates draw over their ends.
@@ -649,8 +727,14 @@ namespace DeNelle.Village.Talents
 
             // Keep scroll place; rest = flush top-left so the first nodes are whole.
             // (wellW / wellH were measured above, before the lattice was solved against them.)
+            //
+            // WO-1310 acceptance 1: the ENTRY POINT is the top-left corner - column 0 is the
+            // no-prerequisite base rank after the rotation. A kept scroll is only ever a
+            // within-board tap; the FIRST draw of a board (a fresh Open, or a different tree)
+            // must rest at that corner, never mid-content. _lastLayoutSig is null exactly then.
             float maxDown = wellH > 1f ? Mathf.Max(0f, contentH - wellH) : 0f;
             float maxRight = wellW > 1f ? Mathf.Max(0f, contentW - wellW) : 0f;
+            if (string.IsNullOrEmpty(_lastLayoutSig)) keptScroll = Vector2.zero;
             _graphContent.anchoredPosition = new Vector2(
                 Mathf.Clamp(keptScroll.x, -maxRight, 0f),
                 Mathf.Clamp(keptScroll.y, 0f, maxDown));
@@ -699,6 +783,26 @@ namespace DeNelle.Village.Talents
                                  ", content " + contentW.ToString("F0") + "x" + contentH.ToString("F0") + " px";
                 if (overlapNormal > 0 || overlapFocus > 0 || pitchBroken) FlowTrace.Warn("SkillTree", spacing);
                 else FlowTrace.Step("SkillTree", spacing);
+
+                // WO-1310 sec.12 probe - THE CLIP QUESTION, answered by a number on every draw
+                // instead of by the owner's eyes. A plate closer to the content origin than half
+                // of PlateClearPx has its focus ring (or its hung nameplate) sliced by the
+                // RectMask2D; a right/bottom margin narrower than the left/top one is the dead
+                // black half the owner reported. Both are LOGGED, and the oracle FAILS on them.
+                float clearHalf = PlateClearPx * 0.5f;
+                float rightMargin = contentW - maxX;
+                float bottomMargin = contentH - maxY;
+                string insets = "graph insets: topLeft=" + minX.ToString("F0") + "/" + minY.ToString("F0") +
+                                "px, bottomRight=" + rightMargin.ToString("F0") + "/" +
+                                bottomMargin.ToString("F0") + "px vs clearance " +
+                                clearHalf.ToString("F0") + "px; well " + wellW.ToString("F0") + "x" +
+                                wellH.ToString("F0") + " shows " + (wellW > 1f && contentW > wellW ? "part" : "all") +
+                                " of the width and " + (wellH > 1f && contentH > wellH ? "part" : "all") +
+                                " of the height (scrolls for the rest, resting at the base column)";
+                if (minX < clearHalf - 0.5f || minY < clearHalf - 0.5f ||
+                    rightMargin < clearHalf - 0.5f || bottomMargin < clearHalf - 0.5f)
+                    FlowTrace.Fail("SkillTree", "CLIPPED: " + insets);
+                else FlowTrace.Step("SkillTree", insets);
             }
         }
 
@@ -851,12 +955,18 @@ namespace DeNelle.Village.Talents
         ///   * PITCH: every pair clears MinNodePitchPx in Chebyshev distance, so no two plates
         ///     can touch and no corner pip can land on a neighbouring plate, at any state.
         ///     Clearance comes from the FOCUS size, never NodeSizePx.
-        ///   * ORDER: rows follow the authored y order, columns the authored x order inside a
-        ///     row. A solve can never reshuffle the authored knight lattice.
-        ///   * SPREAD: rows/columns stretch to fill the box (capped at MaxPitchSpreadMul) and
-        ///     the block is CENTRED on both axes, so no dead bottom third and no dead left
-        ///     column; the first/last row are inset by a FOCUS half-plate, so neither can be
-        ///     clipped by the mask edge even when that plate is the oversized one.
+        ///   * ORDER (WO-1310): the norm MAGNITUDES are consumed, not just their order. Norm
+        ///     index 0 clusters BOARD-WIDE into columns and index 1 into rows, so two nodes
+        ///     with the same reading share a column (or a row) everywhere on the board. The
+        ///     retired shape clustered rows only and then laid each row out independently and
+        ///     centred, so a plate's x was its INDEX INSIDE ITS OWN ROW - which put a one-node
+        ///     row dead centre and squeezed the board into a narrow centred column with the
+        ///     right half of the well empty.
+        ///   * SPREAD: columns/rows stretch to fill the box (capped at MaxPitchSpreadMul) and
+        ///     the block is CENTRED on both axes, so no dead bottom third and no dead right
+        ///     column; every plate is inset by half of PlateClearPx - the plate PLUS its hung
+        ///     nameplate PLUS the focus glow - so no row can be clipped by the mask edge even
+        ///     when that plate is the oversized one.
         ///   * ATTACHMENT: the stretch cap means no node's nearest neighbour is ever further
         ///     than MaxPitchSpreadMul pitches away — nothing can strand.
         /// </summary>
@@ -870,75 +980,109 @@ namespace DeNelle.Village.Talents
             var outXY = new float[n * 2];
             if (n == 0) return outXY;
 
-            float half = NodeFocusPx * 0.5f;
+            float half = PlateClearPx * 0.5f;
             boxW = Mathf.Max(boxW, MinLatticeWpx);
             boxH = Mathf.Max(boxH, MinLatticeHpx);
 
-            // Stable order: authored y, then authored x, then input index — ties never depend
-            // on dictionary iteration order, so the same board always solves identically.
+            // WO-1310. THE SOLVER NOW CONSUMES THE NORM MAGNITUDES, NOT JUST THEIR ORDER.
+            // It is deliberately axis-NEUTRAL: norm index 0 picks the COLUMN, index 1 picks the
+            // ROW, and the CALLER's rotation decides which semantic rides which axis (the panel
+            // sends lanes across and progression down; the oracles send raw authored x/y).
+            //   * Both axes are clustered BOARD-WIDE, so two nodes with the same reading share
+            //     a column (or a row) everywhere on the board - the owner's "starting point ...
+            //     visually in the same level". The retired shape clustered rows only, then laid
+            //     each row out independently and centred it, so a plate's x was its INDEX
+            //     INSIDE ITS OWN ROW: a one-node row landed dead centre and the whole board
+            //     collapsed into a narrow centred column.
+            //   * A column may not seat two nodes on one row, so a collision inside a column
+            //     takes the next free row. Distinct (column,row) seats are what make the
+            //     Chebyshev pitch law hold BY CONSTRUCTION rather than by luck.
+
+            // Stable order: column axis, then row axis, then input index — ties never depend on
+            // dictionary iteration order, so the same board always solves identically.
             var order = new int[n];
             for (int i = 0; i < n; i++) order[i] = i;
             Array.Sort(order, (a, b) =>
+            {
+                int c = normXY[a * 2].CompareTo(normXY[b * 2]);
+                if (c != 0) return c;
+                c = normXY[a * 2 + 1].CompareTo(normXY[b * 2 + 1]);
+                return c != 0 ? c : a.CompareTo(b);
+            });
+
+            // ── COLUMNS: cluster norm index 0, board-wide ──────────────────────────
+            var col = new int[n];
+            int colCount = 1;
+            float anchorX = normXY[order[0] * 2];
+            for (int k = 0; k < n; k++)
+            {
+                int idx = order[k];
+                float x = normXY[idx * 2];
+                if (k > 0 && x - anchorX > ColClusterNorm) { colCount++; anchorX = x; }
+                col[idx] = colCount - 1;
+            }
+
+            // ── ROWS: cluster norm index 1, board-wide ─────────────────────────────────
+            var laneOrder = new int[n];
+            for (int i = 0; i < n; i++) laneOrder[i] = i;
+            Array.Sort(laneOrder, (a, b) =>
             {
                 int c = normXY[a * 2 + 1].CompareTo(normXY[b * 2 + 1]);
                 if (c != 0) return c;
                 c = normXY[a * 2].CompareTo(normXY[b * 2]);
                 return c != 0 ? c : a.CompareTo(b);
             });
-
-            // Cluster into ROWS on the authored-y ordering hint.
-            var rows = new List<List<int>>();
-            var current = new List<int>();
-            float anchorY = normXY[order[0] * 2 + 1];
+            var lane = new int[n];
+            int laneCount = 1;
+            float anchorY = normXY[laneOrder[0] * 2 + 1];
             for (int k = 0; k < n; k++)
             {
-                int idx = order[k];
+                int idx = laneOrder[k];
                 float y = normXY[idx * 2 + 1];
-                if (current.Count > 0 && y - anchorY > RowClusterNorm)
-                {
-                    rows.Add(current);
-                    current = new List<int>();
-                    anchorY = y;
-                }
-                current.Add(idx);
+                if (k > 0 && y - anchorY > RowClusterNorm) { laneCount++; anchorY = y; }
+                lane[idx] = laneCount - 1;
             }
-            if (current.Count > 0) rows.Add(current);
 
-            for (int r = 0; r < rows.Count; r++)
+            // ── SEAT: the row cluster is the WANTED row; a taken seat probes down ──────
+            var columns = new List<List<int>>(colCount);
+            for (int c = 0; c < colCount; c++) columns.Add(new List<int>());
+            for (int k = 0; k < n; k++) columns[col[laneOrder[k]]].Add(laneOrder[k]);
+
+            var row = new int[n];
+            int rowCount = 1;
+            for (int c = 0; c < colCount; c++)
             {
-                var row = rows[r];
-                row.Sort((a, b) =>
+                var members = columns[c];
+                int nextFree = 0;
+                for (int m = 0; m < members.Count; m++)
                 {
-                    int c = normXY[a * 2].CompareTo(normXY[b * 2]);
-                    return c != 0 ? c : a.CompareTo(b);
-                });
+                    int idx = members[m];
+                    int seat = Mathf.Max(lane[idx], nextFree);
+                    row[idx] = seat;
+                    nextFree = seat + 1;
+                    if (seat + 1 > rowCount) rowCount = seat + 1;
+                }
             }
 
-            int rowCount = rows.Count;
-            float rowPitch = 0f;
-            if (rowCount > 1)
-                rowPitch = Mathf.Clamp((boxH - NodeFocusPx) / (rowCount - 1),
-                                       MinNodePitchPx, MinNodePitchPx * MaxPitchSpreadMul);
+            // ── PITCH: fill the measured well, floored by the separation law ─────
+            float colPitch = colCount > 1
+                ? Mathf.Clamp((boxW - PlateClearPx) / (colCount - 1),
+                              MinColPitchPx, MinNodePitchPx * MaxPitchSpreadMul)
+                : 0f;
+            float rowPitch = rowCount > 1
+                ? Mathf.Clamp((boxH - PlateClearPx) / (rowCount - 1),
+                              MinRowPitchPx, MinNodePitchPx * MaxPitchSpreadMul)
+                : 0f;
+
+            float blockW = colPitch * (colCount - 1);
             float blockH = rowPitch * (rowCount - 1);
-            float yTop = half + Mathf.Max(0f, (boxH - NodeFocusPx - blockH) * 0.5f);
+            float xLeft = half + Mathf.Max(0f, (boxW - PlateClearPx - blockW) * 0.5f);
+            float yTop = half + Mathf.Max(0f, (boxH - PlateClearPx - blockH) * 0.5f);
 
-            for (int r = 0; r < rowCount; r++)
+            for (int i = 0; i < n; i++)
             {
-                var row = rows[r];
-                int k = row.Count;
-                float colPitch = 0f;
-                if (k > 1)
-                    colPitch = Mathf.Clamp((boxW - NodeFocusPx) / (k - 1),
-                                           MinNodePitchPx, MinNodePitchPx * MaxPitchSpreadMul);
-                float blockW = colPitch * (k - 1);
-                float xLeft = half + Mathf.Max(0f, (boxW - NodeFocusPx - blockW) * 0.5f);
-                float cy = yTop + rowPitch * r;
-                for (int c = 0; c < k; c++)
-                {
-                    int idx = row[c];
-                    outXY[idx * 2] = xLeft + colPitch * c;
-                    outXY[idx * 2 + 1] = cy;
-                }
+                outXY[i * 2] = xLeft + colPitch * col[i];
+                outXY[i * 2 + 1] = yTop + rowPitch * row[i];
             }
             return outXY;
         }
@@ -1153,24 +1297,28 @@ namespace DeNelle.Village.Talents
             Color rankInk = state == SkillNodeState.Owned ? ElarionUi.Gilt
                           : locked ? new Color(0.75f, 0.72f, 0.68f, 0.75f)
                           : ElarionUi.Parchment;
+            // WO-1310: the rank owns the WHOLE top band now that the type word has moved down
+            // into the nameplate. It used to share x 0.12-0.88 with a type badge pinned across
+            // x 0.02-0.68, so a glyph of "0/1" painted straight through the badge word and the
+            // owner read the pair as one truncated string ("AC1...").
             var rankLbl = ElarionUiKit.Label(go.transform, rank, 0.72f, 0.96f, rankInk,
-                (int)ElarionUiKit.FontFloor, TMPro.TextAlignmentOptions.Center, 0.12f, 0.88f, bold: true);
+                (int)ElarionUiKit.FontFloor, TMPro.TextAlignmentOptions.Center, 0.24f, 0.76f, bold: true);
             rankLbl.raycastTarget = false;
-            ElarionUiKit.FitSingleLine(rankLbl);
+            ElarionUiKit.FitSingleLine(rankLbl, ElarionUiKit.FontHardFloor);
 
             // Mobile-first recognition: icon-only trees force trial-and-error tapping. Keep the
             // art dominant, but state the authoritative talent name in the unused pitch beneath
             // every plate. The dark nameplate is shape-backed, so it stays readable over VFX and
             // does not rely on the node tint.
-            BuildNodeNamePlate(go.transform, node.Name, locked);
-
-            // Type is stated in WORDS, not inferred from colour. Assigned actives name the
-            // same numbered seat shown in the persistent quick-swap rail.
+            //
+            // Type is stated in WORDS, not inferred from colour (the colourblind carrier), and it
+            // rides the SAME plate as the name on its own line. Assigned actives name the same
+            // numbered seat shown in the persistent quick-swap rail.
             string typeBadge = node.Kind == SkillNodeKind.Skill
                 ? (node.EquippedSlot > 0 ? "SLOT " + node.EquippedSlot : "ACTIVE")
                 : "PASSIVE";
-            BuildNodeTypeBadge(go.transform, typeBadge,
-                node.Kind == SkillNodeKind.Skill ? ElarionUi.Gilt : ElarionUi.Parchment);
+            BuildNodeNamePlate(go.transform, node.Name, typeBadge,
+                node.Kind == SkillNodeKind.Skill ? ElarionUi.Gilt : ElarionUi.Parchment, locked);
 
             if (inert) BuildNodeSlash(go.transform, size);
 
@@ -1315,47 +1463,68 @@ namespace DeNelle.Village.Talents
             }
         }
 
-        /// <summary>Top-left word badge: ACTIVE/PASSIVE/SLOT N survives greyscale and makes
-        /// hot-swappability readable without opening every node.</summary>
-        private static void BuildNodeTypeBadge(Transform nodeRoot, string text, Color ink)
-        {
-            var badge = new GameObject("TypeBadge", typeof(Image));
-            badge.transform.SetParent(nodeRoot, false);
-            var rt = (RectTransform)badge.transform;
-            rt.anchorMin = new Vector2(0.02f, 0.72f);
-            rt.anchorMax = new Vector2(0.68f, 0.98f);
-            rt.offsetMin = Vector2.zero; rt.offsetMax = Vector2.zero;
-            var image = badge.GetComponent<Image>();
-            ElarionUiKit.ApplyRounded(image);
-            image.color = new Color(0.04f, 0.035f, 0.05f, 0.90f);
-            image.raycastTarget = false;
-            var label = ElarionUiKit.Label(badge.transform, text, 0.06f, 0.94f, ink,
-                ElarionUi.FontMicro, TMPro.TextAlignmentOptions.Center, 0.04f, 0.96f,
-                spacing: 0.5f, bold: true);
-            label.raycastTarget = false;
-            ElarionUiKit.FitSingleLine(label, 0f, ElarionUi.FontMicro);
-        }
-
-        private static void BuildNodeNamePlate(Transform nodeRoot, string text, bool locked)
+        /// <summary>The ACTIVE/PASSIVE/SLOT N word, seated on the LOWER LINE OF THE NAMEPLATE
+        /// (WO-1310) rather than over the skill art. It survives greyscale and makes
+        /// hot-swappability readable without opening every node.
+        ///
+        /// WHY IT MOVED, and why it was NOT deleted: over the art it had roughly 0.66 x 136 = 90
+        /// ref px, and FitSingleLine's default minimum is ElarionUiKit.FontFloor (30) - not the
+        /// FontHardFloor (20). "PASSIVE" at 30 px bold needs about 115 px, so the badge
+        /// ELLIPSISED to three or four glyphs on every plate ("SLI...", "AC1...", "N..."), on
+        /// top of the skill icon, while the full name repeated below it. The word carries the
+        /// ACTIVE/PASSIVE/SLOT-N state that the colourblind law forbids leaving to colour, so
+        /// deleting it was never the fix - it needed a band wide enough to hold it. The
+        /// nameplate is 1.56 plate-widths, which is that band.</summary>
+        private static void BuildNodeTypeBadge(Transform plateRoot, string text, Color ink)
         {
             if (string.IsNullOrWhiteSpace(text)) return;
+            var badge = new GameObject("TypeBadge", typeof(RectTransform));
+            badge.transform.SetParent(plateRoot, false);
+            var rt = (RectTransform)badge.transform;
+            rt.anchorMin = new Vector2(0.04f, 0.05f);
+            rt.anchorMax = new Vector2(0.96f, 0.38f);
+            rt.offsetMin = Vector2.zero; rt.offsetMax = Vector2.zero;
+            var label = ElarionUiKit.Label(badge.transform, text, 0.02f, 0.98f, ink,
+                ElarionUi.FontMicro, TMPro.TextAlignmentOptions.Center, 0.02f, 0.98f,
+                spacing: 0.5f, bold: true);
+            label.raycastTarget = false;
+            // Explicit hard floor: the default floor is FontFloor(30), which is what ellipsised
+            // this word on the plate. The band is wide enough that the fit will not need it.
+            ElarionUiKit.FitSingleLine(label, ElarionUiKit.FontHardFloor, ElarionUi.FontMicro);
+        }
+
+        /// <summary>The one name per node (WO-1310 acceptance 3), hung UNDER the plate with the
+        /// type word on a second line. NamePlateHangFrac mirrors anchorMin.y here and is what
+        /// the row pitch and the content inset are derived from, so this plate can never be
+        /// sliced by the RectMask2D nor painted over the plate on the row below.</summary>
+        private static void BuildNodeNamePlate(Transform nodeRoot, string text, string typeWord,
+                                               Color typeInk, bool locked)
+        {
+            bool hasName = !string.IsNullOrWhiteSpace(text);
+            bool hasType = !string.IsNullOrWhiteSpace(typeWord);
+            if (!hasName && !hasType) return;
             var plate = new GameObject("NamePlate", typeof(Image));
             plate.transform.SetParent(nodeRoot, false);
             var rt = (RectTransform)plate.transform;
-            rt.anchorMin = new Vector2(-0.28f, -0.40f);
+            rt.anchorMin = new Vector2(-0.28f, -NamePlateHangFrac);
             rt.anchorMax = new Vector2(1.28f, 0.01f);
             rt.offsetMin = Vector2.zero; rt.offsetMax = Vector2.zero;
             var image = plate.GetComponent<Image>();
             ElarionUiKit.ApplyRounded(image);
             image.color = new Color(0.025f, 0.022f, 0.028f, 0.96f);
             image.raycastTarget = false;
-            var label = ElarionUiKit.Label(plate.transform, text.ToUpperInvariant(),
-                0.08f, 0.92f, locked ? ElarionUi.ParchmentDim : ElarionUi.Parchment,
-                18, TMPro.TextAlignmentOptions.Center, 0.04f, 0.96f,
-                spacing: 0.25f, bold: true);
-            label.raycastTarget = false;
-            label.textWrappingMode = TMPro.TextWrappingModes.Normal;
-            ElarionUiKit.FitBlock(label, 14f, 18f);
+            if (hasName)
+            {
+                var label = ElarionUiKit.Label(plate.transform, text.ToUpperInvariant(),
+                    hasType ? 0.42f : 0.08f, 0.95f,
+                    locked ? ElarionUi.ParchmentDim : ElarionUi.Parchment,
+                    18, TMPro.TextAlignmentOptions.Center, 0.04f, 0.96f,
+                    spacing: 0.25f, bold: true);
+                label.raycastTarget = false;
+                label.textWrappingMode = TMPro.TextWrappingModes.Normal;
+                ElarionUiKit.FitBlock(label, 14f, 18f);
+            }
+            if (hasType) BuildNodeTypeBadge(plate.transform, typeWord, typeInk);
         }
 
         /// <summary>Per-track NEXT badge ink / disc (WO-1021 sec 2.1d). PUBLIC so the oracle can
