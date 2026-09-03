@@ -787,6 +787,12 @@ namespace DeNelle.HUD.Kit
                     FlowTrace.Step("HudKit", "Hero tapped -> PanelRouter.Open(HeroDeck)");
                     PanelRouter.Open(PanelId.HeroDeck);
                 });
+            // WO-1340 — hop 1 of the spend-a-talent-point teach. Same registry contract as
+            // hud.build_button above. The face is labelled "Hero" and opens PanelId.HeroDeck;
+            // the highlight id says hero_button for that reason, while the ActionBarButtonId
+            // stays Bag because the ORDINAL is load-bearing (CLAUDE.md §7 - the face arrays
+            // are indexed by ordinal, so the enum member is never renumbered or renamed).
+            TutorialHighlightRegistry.Register("hud.hero_button", (RectTransform)bag.transform);
             RegisterBarButton(ActionBarButtonId.Bag, "bagButton", bag);
 
             // Queues entry (owner 2026-08-01): the bar's Queues button was RETIRED — the
