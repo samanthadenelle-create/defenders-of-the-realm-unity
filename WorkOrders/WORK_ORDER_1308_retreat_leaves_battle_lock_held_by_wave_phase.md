@@ -1,6 +1,6 @@
 # WORK ORDER 1308 — Retreat leaves the battle-lock held; the enemy sits in fight
 
-**Status:** READY TO IMPLEMENT
+**Status:** FIXED — the wave loop now registers its own `BattleSessionEnd` unwind and drives one `TickActiveWave` at battle end, so a retreat releases a latched `_phase == Active` while a genuine siege still holds the lock. See `.RESULT.md`.
 **Silo:** Combat / Quiescence
 **Minted:** 2026-09-02 (CLI) from an owner flag during a live felt-test.
 **Severity:** P1 — player-facing. Combat input stays suppressed and the HUD cannot return to town.

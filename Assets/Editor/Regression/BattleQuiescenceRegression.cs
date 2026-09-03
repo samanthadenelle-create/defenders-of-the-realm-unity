@@ -81,6 +81,10 @@ namespace DeNelle.Editor
                 SessionEpochAdvancesOnEachBattle(failures, log);
                 SupersedeGuardIsWired(failures, log);
                 SelfHealIsWired(failures, log);
+
+                // WO-1308 — a RETREAT must release EVERY battle-lock holder, including the wave loop.
+                RetreatReleasesEveryLockHolder(failures, log);
+                WaveLoopUnwindsItsOwnPhase(failures, log);
             }
             finally
             {
@@ -88,6 +92,12 @@ namespace DeNelle.Editor
                 Time.timeScale = savedScale;
                 BattleQuiescenceGate.Unregister("wo1127-suite-probe");
                 BattleSessionEnd.UnregisterUnwind("wo1233-suite-hitstop");
+                BattleSessionEnd.UnregisterUnwind("wo1308-suite-latched-phase");
+                if (s_latchedHolderProbe != null)
+                {
+                    BattleLock.UnregisterProbe(s_latchedHolderProbe);
+                    s_latchedHolderProbe = null;
+                }
                 PostureSignals.ClearPursuits();
             }
 
@@ -100,8 +110,9 @@ namespace DeNelle.Editor
 
             reason = $"{MarkerOk} -- a clean world passes with zero findings; a wrong timeScale, a " +
                      "failing module probe and the 2026-08-20 defect each produce a NAMED failure; " +
-                     "an open reward screen is correctly not judged; and the gate is wired into " +
-                     "battle resolve.";
+                     "an open reward screen is correctly not judged; the gate is wired into " +
+                     "battle resolve; and a RETREAT releases every battle-lock holder, the wave " +
+                     "loop's latched phase included (WO-1308).";
             Debug.Log(log + MarkerOk);
             return true;
         }
@@ -603,6 +614,132 @@ namespace DeNelle.Editor
                              "and the holder attribution the 2026-08-26 tickets bought would be lost.");
             else
                 log.AppendLine("  [self-heal] the gate still owns no lock state - it re-drives the owners' own unwinds");
+        }
+
+        // =====================================================================
+        //  WO-1308 — a RETREAT must release EVERY battle-lock holder.
+        // ---------------------------------------------------------------------
+        //  CAPTURED DEFECT (2026-09-02, owner felt-test, F8 seq 4663-4665,
+        //  Main_Castle_Overworld — "somehow the wolf is still here and sitting in fight"):
+        //
+        //    [Flow:Quiescence] battle-lock STILL HELD after the self-heal (retreat):
+        //      [WaveManager.<OnEnable>b__106_0]
+        //      (was [PursuitBattleProbe.Probe, WaveManager.<OnEnable>b__106_0]).
+        //
+        //  PursuitBattleProbe released. The WAVE probe did not, because the wave loop's
+        //  _phase was latched at Active and NOTHING at battle end ever asked it. WO-1233
+        //  established the rule that every owner of a global registers its own unwind;
+        //  WaveManager owned one (the lock claim it raises through _phase) and was the one
+        //  owner that had never registered.
+        // =====================================================================
+
+        /// <summary>Kept in a field so the finally can always drop it, even on an early return.</summary>
+        private static Func<bool> s_latchedHolderProbe;
+
+        /// <summary>
+        /// Behavioural, both directions. A holder that registers NO unwind survives a full session
+        /// release — that is the captured defect, and asserting it is what stops this test passing
+        /// for the wrong reason. The SAME holder, once it registers an unwind, is released by the
+        /// same call.
+        /// </summary>
+        private static void RetreatReleasesEveryLockHolder(List<string> failures, StringBuilder log)
+        {
+            bool latched = true;                       // stands in for WaveManager._phase == Active
+            s_latchedHolderProbe = () => latched;
+            BattleLock.RegisterProbe(s_latchedHolderProbe);
+
+            if (!BattleLock.IsInBattle())
+            {
+                failures.Add("[wo1308] a registered probe returning true did not raise the battle-lock, " +
+                             "so this test cannot prove anything about releasing it.");
+                BattleLock.UnregisterProbe(s_latchedHolderProbe);
+                s_latchedHolderProbe = null;
+                return;
+            }
+
+            // (a) THE DEFECT. No unwind registered: a retreat leaves the holder exactly where it was.
+            BattleSessionEnd.Release("wo1308-suite: retreat, holder has NO unwind");
+            if (!BattleLock.IsInBattle())
+            {
+                failures.Add("[wo1308] a latched holder that registered NO battle-end unwind was released " +
+                             "anyway. Either something now force-clears BattleLock from the outside — which " +
+                             "would silently unlock a LIVE fight — or this probe is not really a holder, and " +
+                             "the pass below would then be meaningless.");
+                BattleLock.UnregisterProbe(s_latchedHolderProbe);
+                s_latchedHolderProbe = null;
+                return;
+            }
+            log.AppendLine("  [wo1308] a holder with no unwind survives a session release (the captured defect)");
+
+            // (b) THE CONTRACT. The owner registers an unwind that lowers its OWN claim; the same
+            //     retreat now releases it. Nothing force-clears the lock — the owner stands down.
+            BattleSessionEnd.RegisterUnwind("wo1308-suite-latched-phase", _ => latched = false);
+            BattleSessionEnd.Release("retreat");
+
+            if (BattleLock.IsInBattle())
+                failures.Add("[wo1308] the battle-lock is STILL HELD after a retreat, even though the holder " +
+                             "registered a battle-end unwind. This is F8 seq 4664 verbatim: combat input " +
+                             "stays suppressed and the HUD cannot return to town for the rest of the session.");
+            else
+                log.AppendLine("  [wo1308] a retreat releases a holder that unwinds its own state at session end");
+
+            BattleSessionEnd.UnregisterUnwind("wo1308-suite-latched-phase");
+            BattleLock.UnregisterProbe(s_latchedHolderProbe);
+            s_latchedHolderProbe = null;
+        }
+
+        /// <summary>
+        /// Source-lint on the REAL holder. The stub above proves the seam; only this proves that
+        /// WaveManager uses it — and the whole defect was a seam that existed and an owner that
+        /// never reached for it. Same discipline as the session-wiring group: a live wave loop
+        /// cannot be driven inside a synchronous editor batch.
+        /// </summary>
+        private static void WaveLoopUnwindsItsOwnPhase(List<string> failures, StringBuilder log)
+        {
+            string wave = ReadCode("Assets/_Modules/Village/Waves/WaveManager.cs");
+            if (wave == null)
+            {
+                failures.Add("[wo1308-wiring] WaveManager.cs is MISSING — the wave loop's battle-end unwind " +
+                             "cannot be verified.");
+                return;
+            }
+
+            if (!wave.Contains("BattleSessionEnd.RegisterUnwind"))
+                failures.Add("[wo1308-wiring] WaveManager no longer registers a battle-end unwind. The wave " +
+                             "loop raises the battle-lock through _phase == Active and is the ONLY owner of " +
+                             "that claim; with no unwind, a retreat leaves it held for the rest of the " +
+                             "session — F8 seq 4664, 2026-09-02.");
+            else
+                log.AppendLine("  [wo1308-wiring] the wave loop registers its own battle-end unwind");
+
+            // The unwind must DRIVE the loop's own clear test, not re-decide it. A second copy of
+            // "is this wave over" is a second answer waiting to disagree with TickActiveWave.
+            if (!wave.Contains("ReconcileLatchedWavePhase") || !wave.Contains("TickActiveWave()"))
+                failures.Add("[wo1308-wiring] the battle-end unwind no longer drives TickActiveWave. If it " +
+                             "decides for itself whether the wave is over, that judgement will drift from " +
+                             "the loop's and one of the two will cancel a live siege.");
+            else
+                log.AppendLine("  [wo1308-wiring] the unwind drives the loop's own tick rather than re-deciding");
+
+            // ⛔ The probe itself must NOT have been weakened to make the log clean. A live siege is
+            //    combat, and a retreat from an overworld wolf must never cancel one.
+            if (!wave.Contains("Instance == this && _phase == WavePhase.Active"))
+                failures.Add("[wo1308-wiring] the battle-lock probe predicate changed. It must stay " +
+                             "'isActiveAndEnabled && Instance == this && _phase == WavePhase.Active': " +
+                             "narrowing it hides a genuine siege from the lock, which trades a stuck lock " +
+                             "for a combat state the game does not know it is in — strictly worse, and " +
+                             "invisible.");
+            else
+                log.AppendLine("  [wo1308-wiring] the battle-lock probe predicate is intact (a real siege still holds)");
+
+            // The roster and the phase must come down together. OnDisable clears every live enemy
+            // and the held count; a phase left Active over that empty field is the latch itself.
+            if (!wave.Contains("OnDisable/roster-cleared"))
+                failures.Add("[wo1308-wiring] OnDisable no longer stands the phase down with the roster it " +
+                             "clears. A manager disabled mid-wave then re-enables still claiming Active over " +
+                             "a field it emptied, and re-registers the lock probe against that claim.");
+            else
+                log.AppendLine("  [wo1308-wiring] OnDisable stands the phase down with the roster it clears");
         }
 
         private static int CountOf(string haystack, string needle)

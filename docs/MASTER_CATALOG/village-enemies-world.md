@@ -391,6 +391,21 @@ The village wave loop owner. `[DisallowMultipleComponent]`.
   `CountdownRemaining`, `LiveEnemies`, `LiveApexBoss`, `Heart`. UnityEvents `OnCountdownTick`,
   `OnWaveStarted/Cleared/OnBreach`, `OnApexBossSpawned(DragonBoss)`, `OnDefeat`.
 - **DEFEND-gated start:** `_autoStart` default false (:170) — Idle at load until the HUD button.
+- ⛔ **`_phase == Active` RAISES THE BATTLE-LOCK, and the wave loop now UNWINDS IT ITSELF** (WO-1308,
+  2026-09-02). `OnEnable` registers three things: the `BattleLock` probe
+  (`isActiveAndEnabled && Instance == this && _phase == WavePhase.Active` — **never narrow it**, a
+  live siege genuinely IS combat), the `wave-phase` `QuiescenceProbe`, and — new — a
+  **`BattleSessionEnd.RegisterUnwind("WaveManager.phase")`**. The unwind
+  (`ReconcileLatchedWavePhase`) drives **ONE `TickActiveWave()`** so the loop reaches its own clear
+  test: a live siege keeps the lock, an empty one completes. It **re-decides nothing** — the clear
+  rule stays in `TickActiveWave` alone. It declines while `TownSuspension.SuspendedFor(this)`,
+  because that freeze is deliberate and self-clears.
+  Two latch sources were closed with it: `OnDisable` now stands the phase down to Idle alongside the
+  roster it already cleared (`"OnDisable/roster-cleared"`), and the `_heldSmartReinforcements` clear
+  gate now releases on a **stale drain heartbeat** (`_reinforcementDrainUnscaled`,
+  `ReinforcementDrainStaleSeconds = 20`) — the fire-and-forget `DrainSmartReinforcements` cannot zero
+  its own counter when it throws, and that wedged the wave forever.
+  Pinned by `BattleQuiescenceRegression` groups `[wo1308]` + `[wo1308-wiring]`.
 - **Spawn-path priority** (:1255-1276): `_smartComposition` **default TRUE** (:147, WO-362 —
   generated tiered roster + role placement + rotating gate via SmartEnemySpawner /
   WaveCompositionBuilder) → `_composeFamilyGroups` (:135, WO-316 role-mix squads via

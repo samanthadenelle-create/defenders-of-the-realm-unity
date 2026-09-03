@@ -371,6 +371,29 @@ namespace DeNelle.Village
         // wave is NOT clear even with an empty field — see the clear gate in TickActiveWave.
         private int _heldSmartReinforcements;
 
+        // WO-1308 — THE DRAIN HEARTBEAT. _heldSmartReinforcements is owned entirely by the
+        // fire-and-forget DrainSmartReinforcements(...).Forget(); every bail zeroes it, but an
+        // EXCEPTION inside that UniTask cannot, because nobody is awaiting it. The counter then
+        // stays non-zero forever and TickActiveWave's clear gate returns before the clear test on
+        // every subsequent frame — the wave can never complete, the phase is latched Active, and
+        // the battle-lock probe registered in OnEnable holds the lock for the rest of the session.
+        //
+        // A counter alone cannot tell "the drain is working through a queue" from "the drain is
+        // dead", and that distinction is the whole difference between a wave that must stay open
+        // and a softlock. So the drain stamps this every time round its loop. Stale + held > 0 =>
+        // the task is gone; fresh + held > 0 => reinforcements really are coming.
+        private float _reinforcementDrainUnscaled = -1f;
+
+        /// <summary>
+        /// WO-1308: how long (unscaled) the drain heartbeat may go unstamped before the held count
+        /// is treated as ORPHANED. The drain stamps it from inside its cap-wait PREDICATE as well
+        /// as its loop body, so a long legitimate wait for a free slot keeps stamping every frame
+        /// and can never be mistaken for a dead task: a stale heartbeat means the UniTask is not
+        /// running at all. Still generous, because the cost of being early here is a wave short of
+        /// bodies and the cost of being never is a session-long softlock.
+        /// </summary>
+        private const float ReinforcementDrainStaleSeconds = 20f;
+
         // Failsafe against a stuck enemy freezing the wave's clear gate (the recurring
         // "wave won't advance" bug — clear requires _liveEnemies.Count == 0). Tracks each
         // enemy's best distance toward the Heart; culls one that makes no progress for
@@ -708,6 +731,10 @@ namespace DeNelle.Village
             // so re-enabling (or a second WaveManager enabling) cannot accumulate duplicates, and
             // the delegate is STATIC so it never binds to one instance and then goes stale.
             RegisterWavePhaseQuiescenceProbe();
+
+            // WO-1308: and the wave loop now UNWINDS ITS OWN state at the end of a battle session,
+            // the same way HitStopManager unwinds the clock. See RegisterWavePhaseSessionUnwind.
+            RegisterWavePhaseSessionUnwind();
         }
 
         // =====================================================================
@@ -858,6 +885,143 @@ namespace DeNelle.Village
                 "play and the Instance claim needs reading alongside the above.";
         }
 
+        // =====================================================================
+        //  WO-1308 - THE FIX. The wave loop unwinds its own latched phase at battle end.
+        // =====================================================================
+        //
+        // THE PROVING LINE (owner felt-test 2026-09-02, F8 seq 4664, Main_Castle_Overworld):
+        //
+        //   [Flow:Quiescence] battle-lock STILL HELD after the self-heal (retreat):
+        //     [WaveManager.<OnEnable>b__106_0] (was [PursuitBattleProbe.Probe,
+        //     WaveManager.<OnEnable>b__106_0]).
+        //
+        // Read it exactly: BattleSessionEnd.Release ran, PursuitBattleProbe RELEASED, and the wave
+        // probe did not. So this is not a pursuit-window leak (that was WO-1233) and it is not the
+        // probe misreporting - _phase really was Active. The lock therefore survives a full session
+        // release, for the rest of the session, and the owner is left with a wolf "still here and
+        // sitting in fight".
+        //
+        // ⛔ WHY THE PROBE IS NOT TOUCHED. A live village siege genuinely IS combat and a retreat
+        // from an overworld wolf must NOT cancel it. Making the probe return false during a real
+        // wave, or unregistering it, would trade a stuck lock for a combat state the game does not
+        // know it is in - strictly worse, because it is invisible. The probe is correct; the PHASE
+        // was wrong, and the phase is what this repairs.
+        //
+        // THE STRUCTURAL POINT - this is WO-1233's own lesson applied one layer down. That ticket
+        // found the release hanging off OUTCOMES and moved it to the ONE lifecycle end, with each
+        // owner of a global registering its own unwind. WaveManager owns a global (the battle-lock
+        // claim it raises through _phase) and was the one such owner that had never registered an
+        // unwind - so every battle in a hub that is also running the auto-armed village wave loop
+        // (FeatureFlags.WaveAutoStart is ON and Main_Castle_Overworld IS a hub) ended with nobody
+        // asking the wave loop whether its claim was still true. It does now, by name, through the
+        // same door.
+        //
+        // ⚠ AND IT DRIVES THE LOOP'S OWN TICK RATHER THAN RE-DECIDING. The clear rule lives in
+        // TickActiveWave and must live in exactly one place: a second copy of "is this wave over"
+        // is a second answer waiting to disagree. Active is unreachable-from-here by construction -
+        // one tick either completes the wave through CompleteWave, exactly as the loop would have,
+        // or declines because enemies are alive, exactly as the loop would have. A genuine siege is
+        // preserved for free, and nothing here can end a fight the loop would have kept open.
+
+        private const string WaveSessionUnwindOwner = "WaveManager.phase";
+
+        /// <summary>
+        /// WO-1308. Registers the wave loop's battle-end unwind. Static delegate + name-keyed
+        /// registration (<see cref="BattleSessionEnd.RegisterUnwind"/> REPLACES by owner), so a
+        /// re-enable, a scene reload or a second WaveManager can never accumulate duplicates and
+        /// the delegate can never go stale against a destroyed instance.
+        /// </summary>
+        private static void RegisterWavePhaseSessionUnwind()
+        {
+            BattleSessionEnd.RegisterUnwind(WaveSessionUnwindOwner, ReconcileLatchedWavePhaseOnSessionEnd);
+        }
+
+        /// <summary>
+        /// Runs at every battle-session end. Finds the manager that is actually holding the
+        /// battle-lock - the EXACT predicate the lock probe uses, so we can only ever act on the
+        /// claim that is really raised - and gives the loop the tick it could not take.
+        /// </summary>
+        private static void ReconcileLatchedWavePhaseOnSessionEnd(string context)
+        {
+            var all = Guard.Try("Quiescence", "wave-phase unwind: enumerate WaveManagers",
+                () => FindObjectsByType<WaveManager>(FindObjectsInactive.Include, FindObjectsSortMode.None),
+                System.Array.Empty<WaveManager>());
+            if (all == null) return;
+
+            for (int i = 0; i < all.Length; i++)
+            {
+                WaveManager wm = all[i];
+                if (wm == null) continue;
+                if (!wm.isActiveAndEnabled || Instance != wm || wm._phase != WavePhase.Active) continue;
+
+                Guard.Try("Quiescence", "wave-phase unwind: reconcile latched Active",
+                    () => wm.ReconcileLatchedWavePhase(context));
+                return;
+            }
+        }
+
+        /// <summary>
+        /// WO-1308. The instance half of the unwind: report the state, then drive ONE
+        /// <see cref="TickActiveWave"/> so the loop reaches its own clear test.
+        /// </summary>
+        private void ReconcileLatchedWavePhase(string context)
+        {
+            // The one case we must NOT drive: the town is deliberately suspended for this manager
+            // (the player is away in a dungeon/raid and the owner ruled the town holds still). The
+            // wave is frozen ON PURPOSE there, and TownSuspension owns that decision, not us. It is
+            // also the one shape the RCA rated SELF-CLEARING, because the loop resumes the moment
+            // the return grace elapses - so leaving it is a wait, not a softlock.
+            bool suspended = Guard.Try("Quiescence", "wave-phase unwind: SuspendedFor",
+                () => TownSuspension.SuspendedFor(this), false);
+            if (suspended)
+            {
+                FlowTrace.Warn("Wave",
+                    $"battle session ended ({context}) with wave {_currentWaveId} latched Active, but the " +
+                    $"town is SUSPENDED for this manager ({TownSuspension.Reason}, grace " +
+                    $"{TownSuspension.ReturnGraceRemaining:F2}s). The freeze is deliberate and owned by " +
+                    "TownSuspension, so the loop is NOT driven here; it resumes on its own when the grace " +
+                    "elapses. If the battle-lock is still held after that, this is not the holder.");
+                return;
+            }
+
+            int live = 0;
+            for (int i = 0; i < _liveEnemies.Count; i++)
+                if (_liveEnemies[i] != null && !_liveEnemies[i].IsDead) live++;
+            bool apexUp = _liveApexBoss != null && !_liveApexBoss.IsDead;
+
+            FlowTrace.Warn("Wave",
+                $"battle session ended ({context}) with wave {_currentWaveId} still at phase=Active - the " +
+                $"battle-lock probe is TRUE because of it. State: live={live} apexBossAlive={apexUp} " +
+                $"heldReinforcements={_heldSmartReinforcements} heart=" +
+                $"{(_heart == null ? "NULL" : "present")} lastUpdateReachedSwitch=frame {_lastSwitchFrame} " +
+                $"({Time.frameCount - _lastSwitchFrame} frames ago) lastPhaseTransition='{_lastPhaseFrom} -> " +
+                $"{_lastPhaseTo} at {_lastPhaseSite}'. Driving ONE TickActiveWave so the loop reaches its " +
+                "own clear test: a live siege KEEPS the lock (correct), an empty one completes.");
+
+            WavePhase before = _phase;
+            TickActiveWave();
+
+            if (_phase != before)
+            {
+                FlowTrace.Warn("Wave",
+                    $"wave {_currentWaveId}: the forced tick moved the phase {before} -> {_phase}, so the " +
+                    "battle-lock claim is released. This is a SAFETY NET, not a fix - the loop should have " +
+                    "reached that tick itself, and the state line above says why it could not.");
+                return;
+            }
+
+            int liveAfter = 0;
+            for (int i = 0; i < _liveEnemies.Count; i++)
+                if (_liveEnemies[i] != null && !_liveEnemies[i].IsDead) liveAfter++;
+
+            FlowTrace.Step("Wave",
+                $"wave {_currentWaveId}: the forced tick left the phase at Active - live={liveAfter} " +
+                $"apexBossAlive={_liveApexBoss != null && !_liveApexBoss.IsDead} " +
+                $"heldReinforcements={_heldSmartReinforcements}. A GENUINE siege is " +
+                "still running, so the battle-lock is correctly still held and nothing is cancelled. " +
+                "Retreating from an overworld encounter must never end a village siege.");
+        }
+
         private void OnDestroy()
         {
             if (_waveBattleProbe != null) BattleLock.UnregisterProbe(_waveBattleProbe);
@@ -940,6 +1104,32 @@ namespace DeNelle.Village
             // WO-1113: the drain UniTask outlives this disable; drop the held count so a
             // re-enabled manager can never start with a clear gate wedged by a dead wave.
             _heldSmartReinforcements = 0;
+            _reinforcementDrainUnscaled = -1f;
+
+            // WO-1308 — AND THE PHASE MUST COME DOWN WITH THE ROSTER.
+            //
+            // This block already deletes the wave: every live enemy is unsubscribed and dropped,
+            // the held reinforcement count is zeroed, the apex boss handle is released. What it did
+            // NOT do was lower _phase, so a manager disabled mid-wave came back at OnEnable still
+            // claiming Active over a field it had just emptied — and re-registered the battle-lock
+            // probe against that claim. The only routine exit from Active is
+            // TickActiveWave -> CompleteWave, which is reachable ONLY from the switch at the bottom
+            // of Update, behind two early returns; a phase left describing a wave whose bodies are
+            // gone is therefore a latch that outlives the fight, holds combat input suppressed and
+            // pins the HUD out of town. That is the shape the owner hit (F8 seq 4663-4665).
+            //
+            // Idle, not Complete: nothing was cleared and nothing is owed. The loop re-arms the
+            // normal way (BeginLoop -> EnterCountdown re-derives from the resume seed), exactly as
+            // _awaitingPlayerStart below is dropped for the same reason.
+            if (_phase == WavePhase.Active || _phase == WavePhase.Countdown)
+            {
+                FlowTrace.Warn("Wave",
+                    $"OnDisable with phase={_phase} (wave {_currentWaveId}): the roster this phase " +
+                    "describes has just been cleared, so the phase is stood down to Idle with it. " +
+                    "Leaving it Active is what latches the battle-lock past the end of the fight.");
+                SetPhase(WavePhase.Idle, "OnDisable/roster-cleared");
+                _countdownRemaining = 0f;
+            }
 
             if (_liveApexBoss != null)
             {
@@ -2163,6 +2353,7 @@ namespace DeNelle.Village
             {
                 for (int i = 0; i < composition.Entries.Count; i++) deferred.Add(composition.Entries[i]);
                 _heldSmartReinforcements = CountOf(deferred);
+                _reinforcementDrainUnscaled = Time.unscaledTime;   // WO-1308: a fresh hold is not a stale one
                 FlowTrace.Warn("Wave",
                     $"wave {waveId}: field is already at the concurrency cap " +
                     $"({_liveEnemies.Count}/{_maxSimultaneousEnemies}) — releasing NOTHING now and " +
@@ -2221,6 +2412,7 @@ namespace DeNelle.Village
             {
                 int heldTotal = CountOf(deferred);
                 _heldSmartReinforcements = heldTotal;
+                _reinforcementDrainUnscaled = Time.unscaledTime;   // WO-1308: a fresh hold is not a stale one
                 FlowTrace.Step("Wave",
                     $"wave {waveId}: concurrency cap {_maxSimultaneousEnemies} released {squad.Count} now, " +
                     $"HOLDING {heldTotal} for reinforcement (total roster unchanged at " +
@@ -2298,6 +2490,11 @@ namespace DeNelle.Village
             int released = 0;
             while (deferred.Count > 0)
             {
+                // WO-1308: proof-of-life for the ONE thing that can wedge the clear gate. See the
+                // _reinforcementDrainUnscaled field block — a held count with a stale stamp is an
+                // orphaned drain, and TickActiveWave is allowed to release the wave from it.
+                _reinforcementDrainUnscaled = Time.unscaledTime;
+
                 // The wave moved on under this fire-and-forget task (cleared, then the NEXT wave
                 // started). Releasing here would push wave N's leftovers into wave N+1 AND
                 // clobber N+1's own held count — bail and say so.
@@ -2343,11 +2540,19 @@ namespace DeNelle.Village
                 if (budget <= 0)
                 {
                     // At capacity — wait for a slot (a death, a breach, or the wave ending).
+                    // WO-1308: the predicate is polled every frame while this task is alive, so
+                    // stamping the heartbeat here makes an arbitrarily long legitimate wait
+                    // indistinguishable from an active drain — and a DEAD task the only thing that
+                    // can ever go stale.
                     await UniTask.WaitUntil(
-                        () => _maxSimultaneousEnemies <= 0
-                              || SmartSpawnBudget() > 0
-                              || _phase != WavePhase.Active
-                              || TownSuspension.SuspendedFor(this));
+                        () =>
+                        {
+                            _reinforcementDrainUnscaled = Time.unscaledTime;
+                            return _maxSimultaneousEnemies <= 0
+                                   || SmartSpawnBudget() > 0
+                                   || _phase != WavePhase.Active
+                                   || TownSuspension.SuspendedFor(this);
+                        });
                     continue;
                 }
 
@@ -2865,10 +3070,36 @@ namespace DeNelle.Village
             // which is exactly what it must not be. Held bodies keep the wave open.
             if (_heldSmartReinforcements > 0)
             {
-                FlowTrace.Throttle("Wave", "held-reinforcements", 2f,
-                    $"wave {_currentWaveId}: field has {_liveEnemies.Count} live, " +
-                    $"{_heldSmartReinforcements} still HELD by the concurrency cap — wave stays open.");
-                return;
+                // WO-1308 — THE WEDGE, SELF-HEALED. The held count is owned by a fire-and-forget
+                // UniTask; an exception inside it cannot zero the counter because nobody awaits it,
+                // and from that frame on this early return runs forever. The wave never completes,
+                // the phase stays Active, and the OnEnable battle-lock probe holds combat state for
+                // the rest of the session — the owner's "the wolf is still here and sitting in
+                // fight" (F8 seq 4663-4665). The heartbeat is what makes this decidable: a drain
+                // that is merely WAITING stamps it every frame from inside its own cap-wait
+                // predicate, so only a task that is GONE can go stale.
+                float since = _reinforcementDrainUnscaled < 0f
+                    ? float.PositiveInfinity
+                    : Time.unscaledTime - _reinforcementDrainUnscaled;
+
+                if (since <= ReinforcementDrainStaleSeconds)
+                {
+                    FlowTrace.Throttle("Wave", "held-reinforcements", 2f,
+                        $"wave {_currentWaveId}: field has {_liveEnemies.Count} live, " +
+                        $"{_heldSmartReinforcements} still HELD by the concurrency cap — wave stays open " +
+                        $"(drain alive, last heartbeat {since:F1}s ago).");
+                    return;
+                }
+
+                FlowTrace.Fail("Wave",
+                    $"wave {_currentWaveId}: {_heldSmartReinforcements} reinforcement(s) are held but the " +
+                    $"drain has not stamped its heartbeat for {since:F1}s (limit " +
+                    $"{ReinforcementDrainStaleSeconds:F0}s) — the fire-and-forget DrainSmartReinforcements " +
+                    "UniTask is GONE (an exception inside it cannot zero the counter, because nobody " +
+                    "awaits it). RELEASING the clear gate so the wave can finish: this wave is SHORT " +
+                    "those bodies, which is a visible content bug and is exactly what this line is for. " +
+                    "Do not silence it — find why the drain threw.");
+                _heldSmartReinforcements = 0;
             }
 
             if (_liveEnemies.Count == 0 && !apexBossStillUp)
