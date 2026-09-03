@@ -1014,6 +1014,14 @@ namespace DeNelle.Editor
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "hero-bar-rebind suite", () => { if (!DeNelle.Editor.Regression.HeroBarClassRebindRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[hero-bar-rebind] " + r); });
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "mage-spell-kit suite", () => { if (!DeNelle.Editor.Regression.MageSpellKitAuthoringRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[mage-spell-kit] " + r); });
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "guide-lead-move suite", () => { if (!DeNelle.Editor.Regression.GuideLeadMovementRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[guide-lead-move] " + r); });
+            // WO-1336 (2026-09-03): registered by the COMMITTER, per this file's fencing rule.
+            // Pins that the guide's lead carrot is placed along a REAL NavMesh route rather than a
+            // straight-line projection. Pet.MoveToward calls _agent.Move(), which slides and computes
+            // NO path - so before this, any carving structure on the line stopped the Echo dead
+            // (owner: "there is a tower in his way so gets stuck and doesn't move"). It had been
+            // reproducing for weeks at the same spot; the escort never routed, it just never had
+            // anything in its way. The oracle's dogleg case fails against the old straight-line rule.
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "guide-lead-route suite", () => { if (!DeNelle.Editor.Regression.GuideLeadRoutingRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[guide-lead-route] " + r); });
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "town-movement-floor suite", () => { if (!DeNelle.Editor.Regression.TownMovementFloorRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[town-movement-floor] " + r); });
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "one-guide-body suite", () => { if (!DeNelle.Editor.Regression.OneGuideBodyRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[one-guide-body] " + r); });
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "wall-adjacency suite", () => { if (!DeNelle.Editor.Regression.WallAdjacencyRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[wall-adjacency] " + r); });
