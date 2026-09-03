@@ -152,6 +152,46 @@ the symptom may have changed or gone.
 > navigated-away, teardown-during-boot). Only the positive conclusion is withdrawn.
 >
 > Investigation reopened under the real question: **why is the WebGL build broken in every browser?**
+>
+> ---
+>
+> # ⭐ AND THE RETRACTION ITSELF OVER-CORRECTED — resolved 2026-09-03, same day
+>
+> Minutes later the owner supplied the measurement that reconciles everything:
+>
+> > *"the build does load on the PC but it sticks at 65% for a while so something big is happening —
+> > but when I tried it on my phone, it flat out denied it and crashed."*
+>
+> **THE BUILD IS NOT BROKEN.** It loads and completes on a desktop. So the "broken build" reading
+> that replaced the memory theory is ALSO wrong — a broken build does not finish loading anywhere.
+>
+> **The payload IS the cause. The mechanism is what I got wrong, twice.** Not a hard ceiling hit
+> instantly, and not corruption:
+>
+> | | what happens at 65% |
+> |---|---|
+> | **Desktop** | 165 MB of Brotli downloads and decompresses. Has the RAM and the patience. Stalls VISIBLY, then finishes. |
+> | **iPhone webview** | Does not survive the same stretch. The content process is reclaimed mid-decompression. |
+>
+> This reconciles every prior measurement instead of discarding them:
+> - Worker and main thread stopping in the SAME instant with `mAgeMs` 450-500 ms to the last line =
+>   **reclaimed from outside while healthy**. Not wedged, not crashed.
+> - Unity heap flat at `mem=247MB` = the cost is in decompression buffers and wasm memory, **outside
+>   the managed heap**, exactly where `mem=` cannot see it.
+> - The `t.subarray` screenshot is a **SEPARATE artifact** — her phone held a cached `index.html`
+>   pointing at build files a rollback had removed (404 -> undefined -> subarray). Do not conflate it
+>   with the 65% stall.
+>
+> ⭐ **THE LESSON, and it is the expensive one:** the same evidence supported three different
+> mechanisms in one day — hard ceiling, broken build, and heavy-but-survivable payload — and the CLI
+> committed to each in turn. Determinism, a desktop failure, and a desktop success each looked
+> decisive in isolation. **What settled it was not a better theory but a fuller measurement: the
+> owner reporting what happens on BOTH platforms in the SAME sentence.** A single-platform
+> observation could not have distinguished these, and three were made before anyone asked for both.
+>
+> **THE FIX IS UNCHANGED AND IS THIS TICKET'S ORIGINAL SCOPE: make the payload smaller.** Cheapest
+> first — **WO-1315** (whether a WebGL build ever shipped Windows-shaped content) is free weight if
+> real. Then measure the top contributors by category before optimising anything.
 
 ## ⛔ SUPERSEDED — the section below is preserved unrewritten (CLAUDE.md §15) and its CONCLUSION is retracted above
 
