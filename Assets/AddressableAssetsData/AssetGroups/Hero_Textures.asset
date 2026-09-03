@@ -1,0 +1,133 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: bbb281ee3bf0b054c82ac2347e9e782c, type: 3}
+  m_Name: Hero_Textures
+  m_EditorClassIdentifier: Unity.Addressables.Editor::UnityEditor.AddressableAssets.Settings.AddressableAssetGroup
+  m_GroupName: Hero_Textures
+  m_GUID: 52ab4e066bd1d7142a8f00451a7b04e9
+  m_SerializeEntries:
+  - m_GUID: 06acba29223f1cc46a285581431e21df
+    m_Address: Heroes/Textures/fantasywitch3dmodel_basecolor
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 07935bf0a6e326c43beb75da5b96ae1a
+    m_Address: Heroes/Textures/ranger_basecolor
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 1383528b7e0b33640941878dd6999078
+    m_Address: Heroes/Textures/medievalknight3dmodel_basecolor
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 1cb112efe99e5e34e8bd4e376dba8641
+    m_Address: Heroes/Textures/raggedfantasydwarf3dmodel_basecolor
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 2b5748238d9c42cab7f7efb76735a846
+    m_Address: Heroes/Textures/KnightArmored_metallic
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 2cc9f263eff74788a052c95daa9d0322
+    m_Address: Heroes/Textures/KnightArmored_basecolor
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 3b1007e743e30c6498ca590db445f3c5
+    m_Address: Heroes/Textures/knight_basecolor
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 4a343e3fcbcd32f42b5ed88d2735233a
+    m_Address: Heroes/Textures/Material_Pbr_Diffuse
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 6d671aeae3e71284eb13215e63cf4153
+    m_Address: Heroes/Textures/HumanTank_basecolor
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 7c6e4d4f40e4f5b4290d288d51788d27
+    m_Address: Heroes/Textures/tripo_mat_9b343081_Pbr_Normal
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 86bc0ae35a16f464ba1e6b61334e590a
+    m_Address: Heroes/Textures/tripo_mat_1afe2e5e_001_Pbr_Diffuse
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: 97a4ee09e2820aa45b07b7c27eae7edf
+    m_Address: Heroes/Textures/mage_basecolor
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: a17e34c9b2d04f10a8c3e5d716fb9c20
+    m_Address: Heroes/Textures/HeroTank_Diffuse
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: a8661c3532394df5b003e4d3ed6248c8
+    m_Address: Heroes/Textures/KnightArmored_normal
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: b01f2da91b3648947899514bd3566150
+    m_Address: Heroes/Textures/remesh_12_combined_Bake_Metallic
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: b28f45dac3e15f21b9d4f6e82730d31a
+    m_Address: Heroes/Textures/HeroTank_Normal
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: b6bec13de0e786e4cb7f8691d6af15b9
+    m_Address: Heroes/Textures/tripo_mat_1afe2e5e_001_Pbr_Normal
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: bc451562ef854055bf066a666cd14859
+    m_Address: Heroes/Textures/KnightArmored_roughness
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: db35fb2a6c1683146aaaad27a4f695eb
+    m_Address: Heroes/Textures/remesh_12_combined_Bake_Diffuse
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: e1d6e8c85684cdd46a2a8619ed529850
+    m_Address: Heroes/Textures/remesh_12_combined_Bake_Normal
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: f65f4b8376fb1e34db564f53fb64244c
+    m_Address: Heroes/Textures/remesh_12_combined_Bake_Reflection
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  - m_GUID: f720c621e777b0e409af1283228a1dbf
+    m_Address: Heroes/Textures/tripo_mat_9b343081_Pbr_Diffuse
+    m_ReadOnly: 0
+    m_SerializedLabels: []
+    FlaggedDuringContentUpdateRestriction: 0
+  m_ReadOnly: 0
+  m_Settings: {fileID: 11400000, guid: 73b1d645ccb43af47916e90d8a1f17d4, type: 2}
+  m_SchemaSet:
+    m_Schemas:
+    - {fileID: 11400000, guid: c8aa8f70717b4434b8632e40ad9df23a, type: 2}
+    - {fileID: 11400000, guid: ae049d885b63a04439b55f5e81e5c5a6, type: 2}

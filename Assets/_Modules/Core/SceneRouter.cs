@@ -28,6 +28,7 @@
 // =============================================================================
 
 using System;
+using System.Collections;          // IEnumerator — the hero-content prewarm pump (WO-1187)
 using Cysharp.Threading.Tasks;
 using UnityEngine;
 using UnityEngine.SceneManagement;
@@ -295,6 +296,21 @@ namespace DeNelle.Core
             if (Fader != null)
                 await Fader.FadeOut(fadeSeconds);
 
+            // ── WO-1187: the chosen hero's REMOTE art is fetched HERE, behind the load screen ──
+            // The owner's ruling: "you're only gonna load one of them, so once they select that one,
+            // while it's going to that load screen, it loads the model and the whole thing."
+            // The screen is already covered (fade-out completed above) and LoadingOverlay is up, so
+            // this is the free wait window; doing it later would stall the main thread mid-gameplay
+            // because HeroAssetLoader resolves synchronously.
+            //
+            // ⛔ AND IT IS A GATE, NOT A BEST-EFFORT WARM. Hero art has NO local copy any more, and
+            // §16 remote art fails SILENTLY — a bundle that was never pushed yields a tinted CAPSULE
+            // with no error on screen. So a hard failure BLOCKS the scene load and holds the player
+            // on a worded barrier. Never downgrade this to a warn-and-continue: that is precisely the
+            // "owner's eyes are the only detector" outcome §14 exists to eliminate.
+            if (!await EnsureHeroContentOrBlock())
+                return;
+
             // RETURN-POINT (return-point feature): if a battle stashed a return point, arm a
             // one-shot sceneLoaded handler BEFORE the load so the hero is warped back to where
             // they fought the instant the destination scene is active. Self-clearing.
@@ -313,6 +329,86 @@ namespace DeNelle.Core
 
             if (Fader != null)
                 await Fader.FadeIn(fadeSeconds);
+        }
+
+        // =====================================================================
+        //  HERO REMOTE CONTENT GATE (WO-1187)
+        // =====================================================================
+
+        /// <summary>
+        /// Download the chosen hero's remote art before the destination scene loads. Returns true
+        /// when it is safe to proceed, false when the player has been held on a WORDED barrier and
+        /// the caller must NOT load the scene.
+        /// <para>
+        /// The failure text comes from <see cref="HeroContentPrewarmer.StatusText"/> and is always a
+        /// SENTENCE — the owner is red/green colourblind, so a colour cue is not a failure state she
+        /// can read (memory: owner-colorblind-delegate-visual-creative).
+        /// </para>
+        /// </summary>
+        private static async UniTask<bool> EnsureHeroContentOrBlock()
+        {
+            bool ok = true;
+            try
+            {
+                await PumpCoroutine(HeroContentPrewarmer.PrewarmChosenHero());
+                ok = HeroContentPrewarmer.State == HeroPrewarmState.Ready;
+            }
+            catch (System.Exception e)
+            {
+                // Never let a fetch exception strand the player with no explanation — the WO-769
+                // lesson one method up. Fall through to the worded barrier below.
+                ok = false;
+                FlowTrace.Fail("SceneRouter", $"hero content prewarm threw — blocking scene load: {e.Message}");
+            }
+
+            if (ok) return true;
+
+            string message = string.IsNullOrEmpty(HeroContentPrewarmer.StatusText)
+                ? "Could not download your hero's artwork. The game has stopped here rather than " +
+                  "dropping you in without it. Check your internet connection and tap Retry."
+                : HeroContentPrewarmer.StatusText;
+
+            // Let the barrier's Retry re-run OUR download, not the offline content probe (which would
+            // report success and dismiss with the hero art still missing).
+            DeNelle.Core.UI.LoadingOverlay.SetRetryOverride(report => RetryHeroContent(report));
+            DeNelle.Core.UI.LoadingOverlay.ShowConnectionRequired(message, "Retry");
+
+            FlowTrace.Fail("SceneRouter",
+                "scene load BLOCKED: the chosen hero's remote art is unavailable. Player is held on the " +
+                "worded connection barrier instead of entering the world as an untextured placeholder. " +
+                "If this fires on a build that has network, the hero bundles were almost certainly never " +
+                "pushed to R2 for THIS build (CLAUDE.md §16 — bundle names are content-hashed).");
+            return false;
+        }
+
+        /// <summary>Retry behaviour handed to the LoadingOverlay barrier: re-run the prewarm and report.</summary>
+        private static IEnumerator RetryHeroContent(System.Action<bool> report)
+        {
+            HeroContentPrewarmer.Reset();
+            yield return HeroContentPrewarmer.PrewarmChosenHero();
+            bool recovered = HeroContentPrewarmer.State == HeroPrewarmState.Ready;
+            report?.Invoke(recovered);
+        }
+
+        /// <summary>
+        /// Drive an <see cref="IEnumerator"/> to completion from async code, one step per frame.
+        /// Handles NESTED coroutines (a step that yields another IEnumerator) recursively — the
+        /// prewarmer yields sub-coroutines, and a non-recursive pump would silently skip them,
+        /// reporting success without ever having downloaded anything.
+        /// </summary>
+        private static async UniTask PumpCoroutine(IEnumerator routine)
+        {
+            if (routine == null) return;
+
+            while (routine.MoveNext())
+            {
+                if (routine.Current is IEnumerator nested)
+                {
+                    await PumpCoroutine(nested);
+                    continue;
+                }
+                await UniTask.Yield();
+            }
         }
 
         // =====================================================================

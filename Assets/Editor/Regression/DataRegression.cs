@@ -1183,6 +1183,18 @@ namespace DeNelle.Editor
             // changed nothing, silently, in a shippable tree.
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "gear-prop-renders suite", () => { if (!DeNelle.Editor.GearPropRendersRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[gear-prop-renders] " + r); });
 
+            // --- HERO REMOTE CONTENT (WO-1187, 2026-09-03): ~100 MB of hero art shipped in the
+            // initial download before the player had even picked a class, because BOTH hero loaders
+            // resolved Resources BEFORE Addressables — making any remote hero group a guaranteed
+            // NO-OP with no error anywhere, and making the move look like it simply did not work.
+            // Pins the loader statement ORDER (a SOURCE oracle on purpose: once both paths resolve,
+            // no runtime assertion can tell "Addressables first" from "Resources first"), that no
+            // hero .fbx/.fbm/atlas is left under Assets/Resources/Heroes outside the documented
+            // local allowlist (Props/, Emotes/, SC_*.prefab, the .controller files), that every
+            // Hero_* group binds Remote.BuildPath/Remote.LoadPath exactly like Enemy_Art, and that
+            // every hero .fbx in Assets/HeroContent is reachable at "Heroes/<slug>".
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "hero-remote-content suite", () => { if (!DeNelle.Editor.Regression.HeroRemoteContentRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[hero-remote-content] " + r); });
+
             // --- ECHO WORLD PRESENCE (WO-1108 Lane B, 2026-08-16): the owner's rule is
             // "it takes you to the gate, gives you your dialogue, then it disappears... The
             // only time it reappears is after your battle." Until this WO there was NO

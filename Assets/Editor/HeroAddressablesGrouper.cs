@@ -22,8 +22,17 @@
 //                                        HeroTextureLoader queries). One shared bundle:
 //                                        84 MB raw / <100 MB after the 2K+compressed
 //                                        import caps → satisfies the Vercel per-file limit.
-//   All groups are LOCAL (default schema = the same Local.BuildPath/LoadPath the
-//   shipping "Gear" bundle uses → they land in StreamingAssets/aa/WebGL/*.bundle).
+//   ⚠ ALL Hero_ GROUPS ARE **REMOTE** AS OF WO-1187 (2026-09-03) — the header above
+//   describing LOCAL groups was the WO-545 design and is RETIRED. They now bind
+//   Remote.BuildPath ('ServerData/[BuildTarget]') + Remote.LoadPath (the R2 bucket),
+//   identical to the live Enemy_Art / Structure_Art groups, so the bytes are written
+//   for the R2 push and NOT into StreamingAssets inside the APK. A LOCAL Hero_ group
+//   is a silent regression: it ships the whole 94 MB in the initial download again
+//   while every marker stays green. PointGroupAtRemote() re-asserts this on every run.
+//
+//   ⚠ AND THE ORDER FIX IS THE OTHER HALF: HeroAssetLoader called Resources.Load
+//   BEFORE its Addressables probe, so running this tool WITHOUT that fix changed
+//   nothing at all. Both halves or neither (fixed in WO-1187).
 //
 // MIGRATION target = Assets/HeroContent/ (NOT under Resources). Moved via
 // AssetDatabase.MoveAsset (GUID- and .meta-preserving → the 2K+compressed import
@@ -81,6 +90,46 @@ namespace DeNelle.Editor
         // Textures sub-folder name (under whichever root is active).
         internal const string TexturesSub = "Textures";
 
+        // ⛔ SLUGS THAT MUST STAY IN Resources/Heroes — DO NOT MIGRATE, DO NOT GROUP.
+        //
+        // WHY THIS SET EXISTS (2026-09-03, the reconciliation after WO-1187's first run):
+        // the migration moved Knight.fbx to HeroContent and DataRegression went red with a real
+        // break — 'troop-shieldguard' and 'troop-echo-legionnaire' both carry model "Knight" in
+        // troops.json, and TroopFactory resolves a troop BODY through
+        // VisualFactory.Skin(host, "Heroes/Knight", ...) -> StructureAssetLoader, whose
+        // Addressables tier is the structure RESIDENT CACHE plus an EDITOR-ONLY synchronous probe.
+        // In a player build that path has no Addressables arm at all: it lands on
+        // Resources.Load("Heroes/Knight"), gets null, and the troop deploys as a tinted CAPSULE.
+        // That is NOT the HeroAssetLoader seam — TroopFactory never calls it.
+        //
+        // The .controller half is the same story and was already known (see the long note in
+        // GroupHeroes): TroopFactory Resources.Loads "Heroes/<cand>" for the animator directly.
+        //
+        // So Knight is BODY-local as well as CONTROLLER-local, and the cost is bounded: Knight.fbx
+        // (1.3 MB) + Knight.fbm (11.5 MB of embedded atlases) + the five controllers (0.3 MB).
+        // The ~81 MB that DOES leave is KnightV3 / knightV2 / Mage / Ranger + Heroes/Textures,
+        // none of which any Resources-resolved call site asks for.
+        //
+        // ⚠ AND THE OTHER HALF OF KEEPING IT LOCAL: a kept-local slug must NOT also be registered
+        // in an Addressables group. An asset present in Resources AND in a bundle SHIPS TWICE —
+        // the build gets BIGGER, not smaller, and every marker stays green while it happens
+        // (CLAUDE.md Sec. 16). Both loops below consult this set for exactly that reason, and
+        // HeroRemoteContentRegression group 6 [no-double-ship] pins it by GUID.
+        //
+        // If a future WO wants Knight remote too, it must re-point TroopFactory's BODY and
+        // CONTROLLER lookups through an Addressables-first seam in the SAME change — never one
+        // without the other.
+        internal static readonly HashSet<string> KeepLocalSlugs =
+            new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "Knight" };
+
+        // REMOTE profile variable names (WO-1187). These are the SAME two variables the live
+        // Enemy_Art / Structure_Art groups bind, i.e. the existing R2 pipeline (CLAUDE.md §16):
+        //   Remote.BuildPath = 'ServerData/[BuildTarget]'
+        //   Remote.LoadPath  = 'https://pub-ab6dfaf1b3d74ca78891876611ccb832.r2.dev/[BuildTarget]'
+        // Bind BY NAME, never by the raw profile id — the ids are settings-asset-local.
+        internal const string RemoteBuildPathVar = "Remote.BuildPath";
+        internal const string RemoteLoadPathVar  = "Remote.LoadPath";
+
         // ── Entry points ────────────────────────────────────────────────────────
 
         [MenuItem("Defenders/Build/Group + Migrate Heroes (WO-545)")]
@@ -116,6 +165,16 @@ namespace DeNelle.Editor
 
             foreach (string slug in EnumerateHeroSlugs(root))
             {
+                // See KeepLocalSlugs: this hero ships from Resources, so grouping it here would
+                // put the SAME asset in the APK and in an R2 bundle at once (double-ship).
+                if (KeepLocalSlugs.Contains(slug))
+                {
+                    Debug.Log($"[HeroAddressablesGrouper] slug '{slug}' is KEEP-LOCAL — not grouped " +
+                              "(it ships from Resources; grouping it too would double-ship it).");
+                    skipped++;
+                    continue;
+                }
+
                 string groupName = GroupPrefix + slug;
                 AddressableAssetGroup group = settings.FindGroup(groupName) ?? CreateBundledGroup(settings, groupName);
                 if (group == null)
@@ -123,6 +182,9 @@ namespace DeNelle.Editor
                     Debug.LogWarning($"[HeroAddressablesGrouper] could not create group '{groupName}' — skipping {slug}.");
                     continue;
                 }
+                // Re-assert Remote even on a pre-existing group: an earlier run of this tool created
+                // LOCAL groups, and a LOCAL Hero_ group silently ships the bytes inside the APK again.
+                PointGroupAtRemote(settings, group);
 
                 string address = HeroAddrPrefix + slug;
                 heroes++;
@@ -139,17 +201,18 @@ namespace DeNelle.Editor
                     Debug.LogWarning($"[HeroAddressablesGrouper] no body prefab '{root}/{slug}.fbx' for '{slug}'.");
                 }
 
-                // Animator controller (<slug>.controller) — SAME address; type disambiguates.
-                string ctrlGuid = AssetDatabase.AssetPathToGUID($"{root}/{slug}.controller");
-                if (!string.IsNullOrEmpty(ctrlGuid))
-                {
-                    if (MarkEntry(settings, group, ctrlGuid, address)) controllers++;
-                    else skipped++;
-                }
-                else
-                {
-                    Debug.LogWarning($"[HeroAddressablesGrouper] no controller '{root}/{slug}.controller' for '{slug}'.");
-                }
+                // ⚠ THE ANIMATOR CONTROLLER IS DELIBERATELY *NOT* GROUPED AND *NOT* MOVED (WO-1187).
+                // Assets/_Modules/Village/Troops/TroopFactory.cs:465 hard-adds "Knight" to its
+                // candidate list and loads it with a RAW Resources.Load<RuntimeAnimatorController>
+                // ("Heroes/" + cand) that does not go through HeroAssetLoader. Moving the .controller
+                // out of Resources therefore returns null there and every troop silently loses its
+                // animation. The controllers are ~275 KB TOTAL, so keeping them local costs nothing
+                // against the ~94 MB of fbx/fbm/atlases that DOES leave — and it is verified that no
+                // controller references Knight/Ranger/Mage.fbx, so keeping them local does not drag
+                // the moved bodies back into the build as clip dependencies.
+                // If a future WO wants them remote too, route TroopFactory through HeroAssetLoader
+                // in the SAME change — never one without the other.
+                controllers += 0;
             }
 
             settings.SetDirty(AddressableAssetSettings.ModificationEvent.BatchModification, null, true, true);
@@ -182,6 +245,7 @@ namespace DeNelle.Editor
                 Debug.LogWarning($"[HeroAddressablesGrouper] could not create '{SharedTexGroup}' group — nothing grouped.");
                 return;
             }
+            PointGroupAtRemote(settings, group); // see GroupHeroes — never leave a Hero_ group LOCAL.
 
             int marked = 0, skipped = 0, dupes = 0;
             var seenAddr = new HashSet<string>(StringComparer.Ordinal);
@@ -228,9 +292,20 @@ namespace DeNelle.Editor
             // Move the per-hero fbx / controller / .fbm for every slug still in Resources.
             foreach (string slug in EnumerateHeroSlugs(HeroesRoot))
             {
-                moved += TryMove($"{HeroesRoot}/{slug}.fbx",        $"{HeroContentRoot}/{slug}.fbx",        ref already, ref failed);
-                moved += TryMove($"{HeroesRoot}/{slug}.controller", $"{HeroContentRoot}/{slug}.controller", ref already, ref failed);
-                moved += TryMove($"{HeroesRoot}/{slug}.fbm",        $"{HeroContentRoot}/{slug}.fbm",        ref already, ref failed);
+                // fbx + its embedded-texture .fbm folder move. The .controller STAYS in Resources —
+                // see the long note in GroupHeroes(): TroopFactory.cs:465 Resources.Loads "Heroes/Knight"
+                // directly, and that file is out of scope for this WO.
+                // See KeepLocalSlugs: moving this body out from under TroopFactory's raw
+                // Resources.Load is the break that turned every "Knight"-model troop into a capsule.
+                if (KeepLocalSlugs.Contains(slug))
+                {
+                    Debug.Log($"[HeroAddressablesGrouper] slug '{slug}' is KEEP-LOCAL — body + .fbm " +
+                              "left in Resources (TroopFactory resolves it by raw Resources path).");
+                    continue;
+                }
+
+                moved += TryMove($"{HeroesRoot}/{slug}.fbx", $"{HeroContentRoot}/{slug}.fbx", ref already, ref failed);
+                moved += TryMove($"{HeroesRoot}/{slug}.fbm", $"{HeroContentRoot}/{slug}.fbm", ref already, ref failed);
             }
 
             // Move the whole Textures/ folder (the atlases the runtime paints on) and the
@@ -326,12 +401,14 @@ namespace DeNelle.Editor
             return true;
         }
 
-        /// <summary>Create a LOCAL bundled group with the standard bundled/content-update schemas
-        /// (mirrors the Default Local Group + the shipping 'Gear' group — Local.BuildPath/LoadPath,
-        /// so the bundle lands in StreamingAssets/aa/&lt;target&gt;/).</summary>
+        /// <summary>Create a REMOTE bundled group (WO-1187) — Remote.BuildPath / Remote.LoadPath, so the
+        /// bundle is written to ServerData/&lt;target&gt;/ for the R2 push instead of into the APK's
+        /// StreamingAssets. Mirrors the live 'Enemy_Art' / 'Structure_Art' groups exactly; those are the
+        /// reference implementation for hero content and the reason we do NOT build a second content path
+        /// (CLAUDE.md §16). Returns null if the group could not be created.</summary>
         private static AddressableAssetGroup CreateBundledGroup(AddressableAssetSettings settings, string groupName)
         {
-            return settings.CreateGroup(
+            AddressableAssetGroup group = settings.CreateGroup(
                 groupName,
                 setAsDefaultGroup: false,
                 readOnly: false,
@@ -339,6 +416,71 @@ namespace DeNelle.Editor
                 schemasToCopy: null,
                 typeof(BundledAssetGroupSchema),
                 typeof(ContentUpdateGroupSchema));
+
+            if (group == null) return null;
+            PointGroupAtRemote(settings, group);
+            return group;
+        }
+
+        /// <summary>
+        /// Bind a group's BundledAssetGroupSchema to the REMOTE profile variables and turn on the
+        /// remote-serving flags the shipping Enemy_Art group uses (bundle cache + CRC + retries).
+        /// Idempotent, and applied to EXISTING Hero_* groups too — a group created by an earlier run of
+        /// this tool was LOCAL, and a local group would quietly put the 100 MB straight back into the APK.
+        /// </summary>
+        internal static void PointGroupAtRemote(AddressableAssetSettings settings, AddressableAssetGroup group)
+        {
+            if (settings == null || group == null) return;
+
+            var schema = group.GetSchema<BundledAssetGroupSchema>() ?? group.AddSchema<BundledAssetGroupSchema>();
+            if (schema == null)
+            {
+                Debug.LogWarning($"[HeroAddressablesGrouper] group '{group.Name}' has no BundledAssetGroupSchema " +
+                                 "— cannot point it at Remote. It would ship LOCALLY inside the APK.");
+                return;
+            }
+
+            schema.BuildPath.SetVariableByName(settings, RemoteBuildPathVar);
+            schema.LoadPath.SetVariableByName(settings, RemoteLoadPathVar);
+
+            // Parity with Enemy_Art: cache the downloaded bundle, verify it, and retry a flaky fetch
+            // twice before the operation is allowed to fail (HeroContentPrewarmer words the failure).
+            schema.UseAssetBundleCache = true;
+            schema.UseAssetBundleCrc = true;
+            schema.RetryCount = 2;
+            schema.IncludeInBuild = true;
+
+            EditorUtility.SetDirty(schema);
+            EditorUtility.SetDirty(group);
+
+            Debug.Log($"[HeroAddressablesGrouper] group '{group.Name}' -> REMOTE " +
+                      $"({RemoteBuildPathVar} / {RemoteLoadPathVar}), cache+crc on, retryCount=2.");
+        }
+
+        /// <summary>Re-point every existing Hero_* group at Remote (repair path for groups an older,
+        /// LOCAL-only run of this tool created). Safe to run any time; changes no asset locations.</summary>
+        [MenuItem("Defenders/Build/Repoint Hero Groups To Remote (WO-1187)")]
+        public static void RepointHeroGroupsToRemote()
+        {
+            AddressableAssetSettings settings = AddressableAssetSettingsDefaultObject.Settings;
+            if (settings == null)
+            {
+                Debug.LogWarning("[HeroAddressablesGrouper] Addressable settings null — nothing re-pointed.");
+                return;
+            }
+
+            int touched = 0;
+            foreach (AddressableAssetGroup group in settings.groups)
+            {
+                if (group == null || group.Name == null) continue;
+                if (!group.Name.StartsWith(GroupPrefix, StringComparison.Ordinal)) continue;
+                PointGroupAtRemote(settings, group);
+                touched++;
+            }
+
+            settings.SetDirty(AddressableAssetSettings.ModificationEvent.BatchModification, null, true, true);
+            AssetDatabase.SaveAssets();
+            Debug.Log($"[HeroAddressablesGrouper] Re-pointed {touched} '{GroupPrefix}*' group(s) at Remote.");
         }
     }
 }

@@ -97,6 +97,28 @@ namespace DeNelle.Core.UI
         /// Retry re-enters <see cref="OfflineContentService.ResolveContentSource"/>;
         /// this overlay never guesses whether content is usable.
         /// </summary>
+        /// <summary>
+        /// A caller-supplied Retry behaviour for the connection barrier (WO-1187). When set, the
+        /// Retry button runs THIS coroutine instead of re-resolving the first-run content source.
+        /// It must yield until its work is finished and return true via <paramref name="_"/>… see
+        /// <see cref="SetRetryOverride"/>. Null = the original OfflineContentService behaviour.
+        /// </summary>
+        private static System.Func<System.Action<bool>, IEnumerator> s_retryOverride;
+
+        /// <summary>
+        /// Install a Retry behaviour for the connection barrier. WHY THIS EXISTS: the barrier's
+        /// built-in Retry re-resolves the offline CONTENT SOURCE, which is the right recovery for a
+        /// first-run cache miss but the WRONG one for "your hero's art failed to download" — that
+        /// retry would report success and dismiss while the hero art was still missing, i.e. a button
+        /// that lies. A caller that raises the barrier for its own reason supplies its own recovery.
+        /// The callback reports whether recovery SUCCEEDED; only then is the barrier dismissed.
+        /// Pass null to restore the default behaviour.
+        /// </summary>
+        public static void SetRetryOverride(System.Func<System.Action<bool>, IEnumerator> retry)
+        {
+            s_retryOverride = retry;
+        }
+
         public static void ShowConnectionRequired(string message, string retryLabel)
         {
             if (s_active != null)
@@ -275,6 +297,19 @@ namespace DeNelle.Core.UI
 
             float elapsed = Time.unscaledTime - _shownAt;
 
+            // WO-1187: do NOT let the failsafe fire while the chosen hero's art is still downloading.
+            // The scene load is deliberately parked behind that download (SceneRouter), and the fade is
+            // already OUT — so dismissing here would uncover a black screen and leave the player staring
+            // at nothing until the fetch finished. A 43 MB first fetch on a slow connection genuinely
+            // exceeds this 30s budget, so the failsafe would fire on a perfectly healthy download.
+            // The prewarm has its own bounded retry + worded failure, so this cannot hang forever.
+            if (HeroContentPrewarmer.State == HeroPrewarmState.Downloading)
+            {
+                if (_messageLabel != null && !string.IsNullOrEmpty(HeroContentPrewarmer.StatusText))
+                    _messageLabel.text = HeroContentPrewarmer.StatusText;
+                return;
+            }
+
             // Hard failsafe — never stick, even if no scene ever loads.
             if (elapsed >= MaxShowSeconds)
             {
@@ -300,6 +335,29 @@ namespace DeNelle.Core.UI
 
         private IEnumerator RetryConnection()
         {
+            // WO-1187: a caller that raised this barrier for its OWN reason (e.g. the hero art
+            // failed to download) supplies its own recovery. Re-resolving the offline content
+            // source here would report success and dismiss with the hero art still missing.
+            if (s_retryOverride != null)
+            {
+                bool recovered = false;
+                yield return s_retryOverride(ok => recovered = ok);
+
+                _retrying = false;
+                if (recovered)
+                {
+                    FlowTrace.Step("LoadingOverlay", "Retry override recovered - dismissing barrier.");
+                    _connectionRequired = false;
+                    s_retryOverride = null;
+                    BeginDismiss();
+                    yield break;
+                }
+
+                if (_retryButton != null) _retryButton.interactable = true;
+                FlowTrace.Warn("LoadingOverlay", "Retry override still failing - barrier remains.");
+                yield break;
+            }
+
             ContentSource resolved = ContentSource.Unknown;
             yield return OfflineContentService.ResolveContentSource(source => resolved = source);
 

@@ -65,16 +65,15 @@ namespace DeNelle.Core
             string address = resourcesRelativePath;
             Texture2D result = null;
 
-            Guard.Try("HeroAssets", $"Resources.Load texture {address}", () =>
-            {
-                result = Resources.Load<Texture2D>(address);
-            });
-            if (result != null) return result;
-
-            // ── Addressables-first (only when the address is actually registered) ──
+            // ── Addressables FIRST (WO-1187) ────────────────────────────────────────
+            // ⚠ Same inverted-order bug as HeroAssetLoader carried: this block used to sit
+            // BELOW the Resources.Load call, so a grouped atlas was never consulted and the
+            // 44 MB of Heroes/Textures kept shipping locally. Do not reorder.
+            bool wasRegistered = false;
             Guard.Try("HeroAssets", $"Addressables resolve texture '{address}'", () =>
             {
-                if (!AddressableRegistered(address)) return; // expected until the grouper runs / on un-migrated paths
+                wasRegistered = AddressableRegistered(address);
+                if (!wasRegistered) return; // non-hero / deliberately-local path — Resources below
 
                 var handle = Addressables.LoadAssetAsync<Texture2D>(address);
                 result = handle.WaitForCompletion();
@@ -85,15 +84,20 @@ namespace DeNelle.Core
             });
             if (result != null) return result;
 
-            // ── Resources fallback (available while the texture still lives under Resources) ──
-            bool wasRegistered = false;
-            Guard.Try("HeroAssets", $"probe texture '{address}' registration", () => wasRegistered = AddressableRegistered(address));
+            // ── Resources fallback (only for atlases that deliberately stay local) ──
+            Guard.Try("HeroAssets", $"Resources.Load texture {address}", () =>
+            {
+                result = Resources.Load<Texture2D>(address);
+            });
+
             if (wasRegistered)
                 FlowTrace.Warn("HeroAssets",
-                    $"Addressables texture '{address}' is registered but resolved null — falling back to Resources.Load.");
+                    $"Addressables texture '{address}' IS registered but resolved null — the bundle is likely " +
+                    $"missing from the CDN (never pushed). Fell back to Resources.Load -> " +
+                    $"{(result == null ? "ALSO NULL" : result.name)}.");
             else
                 FlowTrace.Step("HeroAssets",
-                    $"no Addressables entry for texture '{address}' (expected pre-migration / non-hero path) — using Resources.Load.");
+                    $"no Addressables entry for texture '{address}' (expected on a non-hero path) — using Resources.Load.");
 
             if (result == null)
             {
