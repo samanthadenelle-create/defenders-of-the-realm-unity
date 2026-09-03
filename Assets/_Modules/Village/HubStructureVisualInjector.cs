@@ -53,7 +53,11 @@ namespace DeNelle.Village
             public float  posZ;        // used only with setLocalPos
             public bool   setLocalPos; // true -> SET localPosition to (posX,posY,posZ), overriding the
                                        // seat (for a model that belongs at a specific spot); false -> posY is a nudge.
-            public string texPath;     // OPTIONAL Resources texture to force onto the model when its
+            public string texPath;     // OPTIONAL forced albedo, resolved through StructureAssetLoader
+                                       // (WO-1327 - NOT Resources.Load: Assets/Resources/Structures was
+                                       // deleted by the CDN migration, so a Resources-only load returns
+                                       // null in every player build). Same key string as the addresses
+                                       // in the Structure_Art group. Forced onto the model when its
                                        // embedded material didn't bind one (renders colorless). Default null.
             public float  scaleX;      // OPTIONAL explicit (non-uniform) local scale. When scaleX>0 it
             public float  scaleY;      // OVERRIDES the fit-to-height with (scaleX,scaleY,scaleZ) — for a
@@ -81,7 +85,7 @@ namespace DeNelle.Village
             // untouched. (Jeweler scaleX CLEARED 2026-08-19 — owner upright (90,0,0) + uniform FitHeight;
             // post-Fit non-uniform scale was flipping it upside-down on new-town injector reload.)
             new Swap { bakedName = "EchoHollow_Pets_RoamingArea",   modelPath = "Structures/PetHouse2",    yawDeg = 0f,   pitchDeg = -90f, rollDeg = 270f },   // owner hand-dialed 2026-06-21
-            new Swap { bakedName = "ArcaneTower_MagicUpgrades",     modelPath = "Structures/arcane tower", yawDeg = 0f,   pitchDeg = -90f, posY = -0.6f, texPath = "Structures/ArcaneTower_Albedo" },   // NORMALIZED 2026-08-06 (owner F8: "why is the cathedral of magic so large? Normalize"). heightMul was 1.25f here, hardcoded, which is what she was LOOKING AT - the hub scene injects its own swap, so the catalog row alone would not have moved it and the fix would have read as ineffective. The landmark-tier exception is retired; unset = the uniform 1.0 building base, matching the catalog row. DEF-arcane-white: texture moved OUT of the nested "arcane tower/" folder (its name collided with the sibling "arcane tower.fbx" so Resources.Load<Texture2D> returned null -> forced-texture no-op -> pure-white spire). Flat path resolves.
+            new Swap { bakedName = "ArcaneTower_MagicUpgrades",     modelPath = "Structures/arcane tower", yawDeg = 0f,   pitchDeg = -90f, posY = -0.6f, texPath = "Structures/ArcaneTower_Albedo" },   // NORMALIZED 2026-08-06 (owner F8: "why is the cathedral of magic so large? Normalize"). heightMul was 1.25f here, hardcoded, which is what she was LOOKING AT - the hub scene injects its own swap, so the catalog row alone would not have moved it and the fix would have read as ineffective. The landmark-tier exception is retired; unset = the uniform 1.0 building base, matching the catalog row. DEF-arcane-white: texture moved OUT of the nested "arcane tower/" folder (its name collided with the sibling "arcane tower.fbx" so Resources.Load<Texture2D> returned null -> forced-texture no-op -> pure-white spire). Flat path resolved in Resources at the time - but the CDN migration then DELETED Assets/Resources/Structures, so Resources.Load<Texture2D> went back to returning null (device proof: "[HubStructureVisualInjector] texPath 'Structures/ArcaneTower_Albedo' not found for ArcaneTower_MagicUpgrades", logs/device/2026-08-20-*.log) and the Cathedral was white again. WO-1327 routes it through StructureAssetLoader; the address is registered in Structure_Art.
             // ═══ AXIS-BAKE, SECOND CHANNEL — retired here 2026-08-18 (this injector) ═══
             // Commit f995c4706 set bakeAxisConversion:1 on the Tripo structure FBXs, so the
             // upright correction now lives IN THE MESH. Earlier today the CATALOG channel
@@ -196,6 +200,11 @@ namespace DeNelle.Village
         {
             if (!HubScenes.IsHub(scene.name)) return;
             s_warmReapplies = 0;
+            // WO-1327: the skinned visuals died with the previous scene, so no forced albedo
+            // survives into this load. Clearing here is what lets a hub re-entry re-attempt a
+            // texture that missed last time.
+            s_texBound.Clear();
+            s_texRetryArmed.Clear();
             DeNelle.Core.StructureContentWarmer.Defer(ApplyAll);
         }
 
@@ -205,6 +214,17 @@ namespace DeNelle.Village
         private const int MaxWarmReapplies = 3;
         private static int s_warmReapplies;
         private static bool s_warmReapplyArmed;
+
+        // WO-1327 (Cathedral of Magic renders PURE WHITE on device). Baked names whose forced
+        // albedo has actually been BOUND to a material this session. Separate from the
+        // LightSkin_ marker on purpose: the marker means "the MODEL was skinned", and the two
+        // can succeed independently. Before this, a texture miss was permanently unrecoverable
+        // because SkinStorefront returns early on the marker — so the warm re-apply pass
+        // (armed for exactly this class of miss) walked straight past the white building.
+        private static readonly HashSet<string> s_texBound = new HashSet<string>();
+        // Baked names that already own a one-shot WhenSettled texture retry, so a repeated
+        // ApplyAll cannot stack rival callbacks on the same structure.
+        private static readonly HashSet<string> s_texRetryArmed = new HashSet<string>();
 
         /// <summary>
         /// WO-724: re-surface the baked CastleBarracks LIVE when the unlock flips true
@@ -578,13 +598,160 @@ namespace DeNelle.Village
             return false;
         }
 
+        // =====================================================================
+        //  WO-1327 — FORCED ALBEDO REBIND (the Cathedral of Magic white-building fix)
+        // =====================================================================
+        // ⛔ THE PROVING LINE, from the owner's device (logs/device/2026-08-20-town-freeze.log
+        // and three sibling captures):
+        //     08-20 09:04:34.325 W/Unity (25868): [HubStructureVisualInjector]
+        //         texPath 'Structures/ArcaneTower_Albedo' not found for ArcaneTower_MagicUpgrades.
+        // That was a Debug.LogWarning, so it never reached the errors-only break-log.jsonl the
+        // device pulls — which is exactly why a session was spent looking for StructureFactory's
+        // ApplyForcedTexture lines that CANNOT exist here: the Cathedral is a BAKED HUB TWIN
+        // ("ArcaneTower_MagicUpgrades", CastleHubBuilder.cs:312), re-skinned by THIS injector.
+        // It never routes through StructureFactory.Create at all.
+        //
+        // THE CAUSE: this used Resources.Load<Texture2D>("Structures/ArcaneTower_Albedo"), and
+        // Assets/Resources/Structures WAS DELETED by the CDN migration (StructureAssetLoader's
+        // header records it; the albedo now lives at Assets/StructureContent/ArcaneTower_Albedo.jpg
+        // and is registered in the Structure_Art Addressables group as the address
+        // "Structures/ArcaneTower_Albedo"). So the load returned null on device AND in a player
+        // build, the rebind no-opped, and the Tripo FBX — whose only Color map lives in a .fbm
+        // folder that does not survive a build — rendered PURE WHITE.
+        //
+        // THE FIX IS GENERAL, NOT PER-ID: every texPath row goes through StructureAssetLoader,
+        // the same resident-first / Resources-fallback seam the MODEL paths already use. Same
+        // key strings, so nothing in the swap table or the catalog changes.
+        //
+        // §12: the rebind now REPORTS ITSELF ON EVERY PATH — skipped (no texPath), missed
+        // (address unresolved, with warmer state), bound (slot counts), and property-mismatched.
+        // A rebind that says nothing when it does not run is the defect that cost the session.
+        private static void ApplyForcedAlbedo(Swap s, Transform target, GameObject vis)
+        {
+            if (vis == null || target == null) return;
+
+            if (string.IsNullOrEmpty(s.texPath))
+            {
+                DeNelle.Core.Diagnostics.FlowTrace.Once("Hub", "tex-none-" + s.bakedName,
+                    $"'{s.bakedName}': NO texPath authored — forced-albedo rebind SKIPPED BY DESIGN " +
+                    $"(model '{s.modelPath}' keeps its own embedded materials). If this structure " +
+                    "renders colorless, the swap row needs a texPath; this code did not fail.");
+                return;
+            }
+
+            if (s_texBound.Contains(s.bakedName)) return;   // already bound this scene load
+
+            // ⛔ NEVER Resources.Load here. Assets/Resources/Structures no longer exists, so a
+            // Resources-only load silently returns null in every player build. The loader keeps a
+            // Resources tier internally for anything that never migrated, so this is a superset.
+            var tex = DeNelle.Core.StructureAssetLoader.LoadStructureAsset<Texture2D>(s.texPath);
+            if (tex == null)
+            {
+                DeNelle.Core.Diagnostics.FlowTrace.Fail("Hub",
+                    $"'{s.bakedName}': forced albedo '{s.texPath}' did NOT resolve via " +
+                    $"StructureAssetLoader (registered={DeNelle.Core.StructureContentWarmer.IsRegisteredAddress(s.texPath)}, " +
+                    $"knownAbsent={DeNelle.Core.StructureContentWarmer.IsKnownAbsent(s.texPath)}, " +
+                    $"warmerState={DeNelle.Core.StructureContentWarmer.State}, " +
+                    $"resident={DeNelle.Core.StructureContentWarmer.ResidentCount}) — the model keeps " +
+                    "its embedded materials and a Tripo FBX WILL RENDER WHITE. Arming one retry for " +
+                    "when structure content settles.");
+                ArmForcedAlbedoRetry(s);
+                return;
+            }
+
+            // Bind BOTH the URP name and the built-in one. A URP/Lit material declares _BaseMap;
+            // the legacy path declares _MainTex. Setting only one is silently rejected by the
+            // other shader family — the same mismatch class fixed in UVscroll.cs.
+            int slots = 0, bound = 0, propless = 0;
+            string proplessShader = null;
+            foreach (var r in vis.GetComponentsInChildren<Renderer>(true))
+            {
+                if (r == null) continue;
+                // Play mode uses instance mats (safe to retint a one-off building); edit mode uses
+                // sharedMaterials to avoid the edit-time material-instantiation leak.
+                var mats = Application.isPlaying ? r.materials : r.sharedMaterials;
+                foreach (var m in mats)
+                {
+                    if (m == null) continue;
+                    slots++;
+                    bool hit = false;
+                    if (m.HasProperty("_BaseMap"))   { m.SetTexture("_BaseMap", tex); hit = true; }
+                    if (m.HasProperty("_MainTex"))   { m.SetTexture("_MainTex", tex); hit = true; }
+                    // A map bound under a tinted base color still reads wrong; force it neutral.
+                    if (m.HasProperty("_BaseColor")) m.SetColor("_BaseColor", Color.white);
+                    if (m.HasProperty("_Color"))     m.SetColor("_Color", Color.white);
+                    if (hit) bound++;
+                    else
+                    {
+                        propless++;
+                        if (proplessShader == null)
+                            proplessShader = m.shader != null ? m.shader.name : "(null shader)";
+                    }
+                }
+            }
+
+            if (bound > 0)
+            {
+                s_texBound.Add(s.bakedName);
+                s_texRetryArmed.Remove(s.bakedName);
+                DeNelle.Core.Diagnostics.FlowTrace.Step("Hub",
+                    $"'{s.bakedName}': forced albedo '{s.texPath}' BOUND onto {bound}/{slots} " +
+                    $"material slot(s) via StructureAssetLoader" +
+                    (propless > 0
+                        ? $" ({propless} slot(s) declared neither _BaseMap nor _MainTex; first shader " +
+                          $"'{proplessShader}')."
+                        : "."));
+            }
+            else
+            {
+                DeNelle.Core.Diagnostics.FlowTrace.Fail("Hub",
+                    $"'{s.bakedName}': forced albedo '{s.texPath}' RESOLVED but bound onto ZERO of " +
+                    $"{slots} material slot(s) — no material declares _BaseMap or _MainTex " +
+                    $"(first shader '{proplessShader ?? "(no materials at all)"}'). The structure " +
+                    "will render colorless. This is a SHADER PROPERTY mismatch, not a missing asset.");
+            }
+        }
+
+        /// <summary>
+        /// WO-1327: one-shot re-attempt for a forced albedo that was not resident when the skin
+        /// ran. Mirrors the model-side warm re-apply; capped by <see cref="s_texRetryArmed"/> so a
+        /// genuinely absent address cannot arm rival callbacks every ApplyAll pass.
+        /// </summary>
+        private static void ArmForcedAlbedoRetry(Swap s)
+        {
+            if (s_texRetryArmed.Contains(s.bakedName)) return;
+            s_texRetryArmed.Add(s.bakedName);
+            DeNelle.Core.StructureContentWarmer.WhenSettled(() =>
+            {
+                if (s_texBound.Contains(s.bakedName)) return;
+                var target = FindByName(s.bakedName);
+                if (target == null) return;
+                var vis = target.Find(MarkerPrefix + s.bakedName);
+                if (vis == null) return;
+                DeNelle.Core.Diagnostics.FlowTrace.Step("Hub",
+                    $"'{s.bakedName}': structure content settled — RETRYING the forced albedo " +
+                    $"'{s.texPath}'.");
+                ApplyForcedAlbedo(s, target, vis.gameObject);
+            });
+        }
+
         // The lightweight-skin body of a swap (extracted from TrySwap so ResurfaceStorefront
         // can apply it without re-running the standdown/barracks gates). Idempotent by the
         // LightSkin_ marker child.
         private static void SkinStorefront(Swap s, Transform target)
         {
             string marker = MarkerPrefix + s.bakedName;
-            if (target.Find(marker) != null) return;                // already swapped (idempotent)
+            var existing = target.Find(marker);
+            if (existing != null)
+            {
+                // WO-1327: the MODEL is already skinned, but that says nothing about whether its
+                // forced albedo ever bound. Retry the texture on the existing visual instead of
+                // returning blind — this early-return is why the warm re-apply pass could never
+                // recover a white Cathedral.
+                if (!string.IsNullOrEmpty(s.texPath) && !s_texBound.Contains(s.bakedName))
+                    ApplyForcedAlbedo(s, target, existing.gameObject);
+                return;                                             // already swapped (idempotent)
+            }
 
             // Hide the baked visual (renderers only — NPC point + colliders/logic stay live).
             var bakedRenderers = target.GetComponentsInChildren<Renderer>(true);
@@ -632,26 +799,7 @@ namespace DeNelle.Village
             // Escape hatch: force a texture when the model's embedded material didn't bind one
             // (renders colorless). The Tripo fixer reads the source material's _MainTex/_BaseMap;
             // a model whose FBX material lost that link (e.g. the arcane tower) needs it forced.
-            if (!string.IsNullOrEmpty(s.texPath))
-            {
-                var tex = Resources.Load<Texture2D>(s.texPath);
-                if (tex != null)
-                {
-                    foreach (var r in vis.GetComponentsInChildren<Renderer>(true))
-                    {
-                        if (r == null) continue;
-                        var mats = r.materials;   // instance mats — safe to retint a one-off building
-                        foreach (var m in mats)
-                        {
-                            if (m == null) continue;
-                            if (m.HasProperty("_BaseMap"))   m.SetTexture("_BaseMap", tex);
-                            if (m.HasProperty("_MainTex"))   m.SetTexture("_MainTex", tex);
-                            if (m.HasProperty("_BaseColor")) m.SetColor("_BaseColor", Color.white);
-                        }
-                    }
-                }
-                else Debug.LogWarning("[HubStructureVisualInjector] texPath '" + s.texPath + "' not found for " + s.bakedName + ".");
-            }
+            ApplyForcedAlbedo(s, target, vis);
             // Ticket #10: when the visual was repositioned (setLocalPos), the baked collider is now
             // mislocated (disabled above) — fit a fresh one to the visible mesh so the building is solid
             // where it's seen. Only for setLocalPos: the 6 non-repositioned swaps keep their co-located

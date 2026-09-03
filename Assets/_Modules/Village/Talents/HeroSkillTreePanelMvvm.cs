@@ -231,6 +231,16 @@ namespace DeNelle.Village.Talents
         /// floor: 1 for the prepended gold talent name + 3 for the longest authored sentence.</summary>
         public const int PopupDescMinLineBoxes = 4;
 
+        /// <summary>Thickness of ONE bar of the confirm button's emphasis outline, in px.
+        /// The outline is four bars, never a fill: a filled overlay on a Button draws ABOVE
+        /// the button's own ornate plate (a parent Graphic renders before its children), which
+        /// is the flat gold slab the owner reported on 2026-09-03.</summary>
+        public const float ConfirmOutlinePx = 4f;
+        /// <summary>Inset of that outline from the confirm button's own edges, in px. It must
+        /// stay STRICTLY POSITIVE: the retired overlay grew -5/+5 OUTSIDE the rect and spilled
+        /// toward the popup frame. Emphasis is drawn inside the control, never past it.</summary>
+        public const float ConfirmOutlineInsetPx = 3f;
+
         /// <summary>Ability tile: the slot numeral line box -- a WHOLE line box at the kit
         /// FontFloor (30 x 1.25 = 37.5), never the 34 px that only just misses it.</summary>
         public const float SlotKeyBandPx = 38f;
@@ -2115,17 +2125,47 @@ namespace DeNelle.Village.Talents
             MedievalUiSkin.ApplyButton(_popupConfirmBtn, primary: true);
             _popupConfirmLabel = StyleActionLabel(_popupConfirmBtn, ElarionUi.Gilt);
 
-            var ring = new GameObject("ConfirmRing", typeof(Image));
+            // WO-1343 EMPHASIS OUTLINE (device capture 2026-09-03, owner: "see learn is
+            // selected but that coloring").
+            //
+            // ⛔ THIS CONTAINER CARRIES NO IMAGE OF ITS OWN, AND THAT IS THE WHOLE FIX.
+            // It used to be a SINGLE full-rect Image with ApplyRounded (a FILLED rounded
+            // 9-slice, never an outline) tinted ElarionUi.Gold at a=0.80. A uGUI parent's
+            // own Graphic draws BEFORE all of its children, so SetAsFirstSibling put that
+            // fill ABOVE MedievalUiSkin.ApplyButton's ornate button-normal-empty plate,
+            // not behind it: the "ring" painted a flat gold slab over the entire button
+            // face and the Gilt label on top of it read as darker gold THROUGH the fill.
+            // The -5/+5 growth also pushed it past the button rect toward the frame edge.
+            // Four thin BARS along the inside edges leave the plate art fully visible in
+            // every state and cannot overflow, because they are inset, never grown.
+            //
+            // COLOURBLIND LAW: the emphasis is a BORDER plus the near-white brightness step
+            // below - shape and luminance, never hue. Greyscale the capture and LEARN still
+            // reads as the framed, brighter action next to CANCEL's plain parchment plate.
+            // The affirmative word ("LEARN" / "ASSIGN SLOT n") stays the primary cue.
+            //
+            // The GameObject keeps the name "ConfirmRing" - WO-1340's FTUE highlights
+            // resolve targets BY NAME and RenderSpendPopup toggles it by reference.
+            var ring = new GameObject("ConfirmRing", typeof(RectTransform));
             ring.transform.SetParent(_popupConfirmBtn.transform, false);
-            ring.transform.SetAsFirstSibling();
+            ring.transform.SetAsFirstSibling();   // under the label, over the plate
             var ringRt = (RectTransform)ring.transform;
             ringRt.anchorMin = Vector2.zero; ringRt.anchorMax = Vector2.one;
-            ringRt.offsetMin = new Vector2(-5f, -5f);
-            ringRt.offsetMax = new Vector2(5f, 5f);
-            var ringImg = ring.GetComponent<Image>();
-            ElarionUiKit.ApplyRounded(ringImg);
-            ringImg.color = new Color(ElarionUi.Gold.r, ElarionUi.Gold.g, ElarionUi.Gold.b, 0.80f);
-            ringImg.raycastTarget = false;
+            ringRt.offsetMin = Vector2.zero;
+            ringRt.offsetMax = Vector2.zero;      // inset, never grown - cannot overflow
+            var edge = new Color(1f, 0.97f, 0.86f, 0.95f);   // near-white: a LUMINANCE step
+            ConfirmEdgeBar(ringRt, "Top",    new Vector2(0f, 1f), new Vector2(1f, 1f),
+                new Vector2(ConfirmOutlineInsetPx, -ConfirmOutlineInsetPx - ConfirmOutlinePx),
+                new Vector2(-ConfirmOutlineInsetPx, -ConfirmOutlineInsetPx), edge);
+            ConfirmEdgeBar(ringRt, "Bottom", new Vector2(0f, 0f), new Vector2(1f, 0f),
+                new Vector2(ConfirmOutlineInsetPx, ConfirmOutlineInsetPx),
+                new Vector2(-ConfirmOutlineInsetPx, ConfirmOutlineInsetPx + ConfirmOutlinePx), edge);
+            ConfirmEdgeBar(ringRt, "Left",   new Vector2(0f, 0f), new Vector2(0f, 1f),
+                new Vector2(ConfirmOutlineInsetPx, ConfirmOutlineInsetPx),
+                new Vector2(ConfirmOutlineInsetPx + ConfirmOutlinePx, -ConfirmOutlineInsetPx), edge);
+            ConfirmEdgeBar(ringRt, "Right",  new Vector2(1f, 0f), new Vector2(1f, 1f),
+                new Vector2(-ConfirmOutlineInsetPx - ConfirmOutlinePx, ConfirmOutlineInsetPx),
+                new Vector2(-ConfirmOutlineInsetPx, -ConfirmOutlineInsetPx), edge);
             _popupConfirmRing = ring;
         }
 
@@ -2316,6 +2356,24 @@ namespace DeNelle.Village.Talents
             lbl.fontStyle = TMPro.FontStyles.Bold;
             ElarionUiKit.FitSingleLine(lbl);
             return lbl;
+        }
+
+        /// <summary>One bar of the confirm button's emphasis outline: a thin edge-anchored quad
+        /// with NO sprite, so it can never tint or cover the ornate plate it frames.</summary>
+        private static void ConfirmEdgeBar(Transform parent, string name, Vector2 anchorMin,
+                                           Vector2 anchorMax, Vector2 offsetMin, Vector2 offsetMax,
+                                           Color ink)
+        {
+            var go = new GameObject(name, typeof(Image));
+            go.transform.SetParent(parent, false);
+            var rt = (RectTransform)go.transform;
+            rt.anchorMin = anchorMin;
+            rt.anchorMax = anchorMax;
+            rt.offsetMin = offsetMin;
+            rt.offsetMax = offsetMax;
+            var img = go.GetComponent<Image>();
+            img.color = ink;
+            img.raycastTarget = false;   // the Button under it keeps the whole touch area
         }
 
         private static void SetButtonAlpha(Button btn, float a)

@@ -217,6 +217,16 @@ namespace DeNelle.Village
                 if (!string.IsNullOrEmpty(entry.visualTexturePath))
                     Guard.Try("Structure", $"force texture '{entry.id}'",
                         () => ApplyForcedTexture(visual, entry.visualTexturePath, entry.id));
+                else
+                    // WO-1327 §12: a rebind that never RUNS used to log NOTHING — neither its
+                    // success line nor its failure line — so "the forced texture is broken" and
+                    // "there is no forced texture authored" were indistinguishable in a capture.
+                    // That ambiguity cost a full session on the Cathedral of Magic. Say it.
+                    FlowTrace.Once("Structure", "no-texpath-" + entry.id,
+                        $"'{entry.id}': NO repo visualTexturePath authored — the forced-albedo " +
+                        $"rebind is SKIPPED BY DESIGN and '{entry.visualPrefabPath}' keeps its own " +
+                        "embedded materials. A Tripo FBX with no texPath renders WHITE in a player " +
+                        "build (its only Color map lives in a .fbm folder that does not ship).");
 
                 // V + R: PROVE the skinned structure can render (>=1 enabled renderer with a
                 // sharedMesh) — the grey-foundation / floating-untextured class self-reports here.
@@ -431,10 +441,19 @@ namespace DeNelle.Village
             if (tex == null)
             {
                 FlowTrace.Warn("Structure",
-                    $"'{id}': visualTexturePath '{texPath}' not found in Resources — leaving materials as-is (may render colorless).");
+                    // WO-1327: wording corrected. This said "not found in Resources", which is a
+                    // lie since the CDN migration deleted Assets/Resources/Structures — the load
+                    // is resident-cache-first via StructureAssetLoader and Resources is only a
+                    // residual tier. A reader who believed the old line went looking in a folder
+                    // that does not exist.
+                    $"'{id}': visualTexturePath '{texPath}' did NOT resolve via StructureAssetLoader " +
+                    $"(registered={DeNelle.Core.StructureContentWarmer.IsRegisteredAddress(texPath)}, " +
+                    $"warmerState={DeNelle.Core.StructureContentWarmer.State}) — leaving materials " +
+                    "as-is; a Tripo FBX will render WHITE.");
                 return;
             }
-            int touched = 0;
+            int touched = 0, bound = 0, propless = 0;
+            string proplessShader = null;
             foreach (var r in visual.GetComponentsInChildren<Renderer>(true))
             {
                 if (r == null) continue;
@@ -442,14 +461,40 @@ namespace DeNelle.Village
                 foreach (var m in mats)
                 {
                     if (m == null) continue;
-                    if (m.HasProperty("_BaseMap"))   m.SetTexture("_BaseMap", tex);
-                    if (m.HasProperty("_MainTex"))   m.SetTexture("_MainTex", tex);
+                    // WO-1327: URP/Lit declares _BaseMap, the built-in path declares _MainTex.
+                    // Setting only one is SILENTLY REJECTED by the other shader family (the same
+                    // mismatch class fixed in UVscroll.cs), and "touched" used to count a material
+                    // that took NEITHER — so the success line could report N materials while
+                    // binding zero textures. Count what actually bound.
+                    bool hit = false;
+                    if (m.HasProperty("_BaseMap"))   { m.SetTexture("_BaseMap", tex); hit = true; }
+                    if (m.HasProperty("_MainTex"))   { m.SetTexture("_MainTex", tex); hit = true; }
                     if (m.HasProperty("_BaseColor")) m.SetColor("_BaseColor", Color.white);
+                    if (m.HasProperty("_Color"))     m.SetColor("_Color", Color.white);
                     touched++;
+                    if (hit) bound++;
+                    else
+                    {
+                        propless++;
+                        if (proplessShader == null)
+                            proplessShader = m.shader != null ? m.shader.name : "(null shader)";
+                    }
                 }
             }
-            FlowTrace.Step("Structure",
-                $"'{id}': forced texture '{texPath}' onto {touched} material(s) (WO-707 texPath port).");
+            if (bound > 0)
+                FlowTrace.Step("Structure",
+                    $"'{id}': forced texture '{texPath}' onto {bound}/{touched} material(s) " +
+                    $"(WO-707 texPath port)" +
+                    (propless > 0
+                        ? $"; {propless} slot(s) declared neither _BaseMap nor _MainTex " +
+                          $"(first shader '{proplessShader}')."
+                        : "."));
+            else
+                FlowTrace.Fail("Structure",
+                    $"'{id}': forced texture '{texPath}' RESOLVED but bound onto ZERO of {touched} " +
+                    $"material slot(s) — none declares _BaseMap or _MainTex (first shader " +
+                    $"'{proplessShader ?? "(no materials at all)"}'). The structure will render " +
+                    "colorless. This is a SHADER PROPERTY mismatch, not a missing asset.");
         }
 
         /// <summary>The Resources visual path a structure shows at <paramref name="level"/>:

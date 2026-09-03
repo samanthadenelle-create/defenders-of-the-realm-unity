@@ -810,7 +810,99 @@ namespace DeNelle.Editor.Regression
                                  "NO EFFECT YET / a lock reason) and its colour is set once at build, so green " +
                                  "is not distinguishing states - it paints an affordable cue over lock copy. " +
                                  "The owner is red/green colourblind: the WORD carries the state (COLOURBLIND LAW)");
+
+                ConfirmEmphasisLaws(failures, notes, code);
             }
+        }
+
+        // =====================================================================
+        //  CASE 6 (b) - the CONFIRM button's SELECTED/available emphasis
+        //  (device capture 2026-09-03 shot4.png, owner: "see learn is selected
+        //   but that coloring")
+        // =====================================================================
+        // LEARN rendered as a flat opaque gold rectangle that covered its own ornate
+        // button-normal-empty plate, swamped its label (the word read as darker gold
+        // THROUGH the fill) and spilled 5 px past the button rect toward the popup
+        // frame's right edge. The cause was not a ColorBlock: "ConfirmRing" was a single
+        // full-rect Image with ElarionUiKit.ApplyRounded - a FILLED rounded 9-slice, not
+        // an outline - and SetAsFirstSibling does NOT put a child behind its parent's own
+        // Graphic (a uGUI parent draws before all of its children), so the "ring" painted
+        // over the plate instead of behind it.
+        //
+        // Three separately-pinnable laws come out of that:
+        //   [no-fill]   the emphasis may not be a full-rect graphic on the button. A
+        //               sprite/fill spanning 0..1 is a slab over the frame art whatever
+        //               colour it is - this is the mutation that reproduces the capture.
+        //   [no-spill]  the emphasis rect may not GROW outside the button (the -5/+5 that
+        //               reached the frame edge). Inset, never grown.
+        //   [not-hue]   selection must be carried by SHAPE + LUMINANCE, so all four edges
+        //               must be drawn. A single accent bar, or a recoloured fill, would be
+        //               hue-only and invisible to the owner (red/green colourblind).
+        private static void ConfirmEmphasisLaws(List<string> failures, List<string> notes, string code)
+        {
+            // Start at the CONSTRUCTION, not at the name literal: the typeof(Image) that
+            // caused the slab sits to the LEFT of the string, and a block that began at the
+            // literal would read as clean while the fill was still being created.
+            var ctor = Regex.Match(code, @"new\s+GameObject\s*\(\s*""ConfirmRing""");
+            int start = ctor.Success ? ctor.Index : code.IndexOf("\"ConfirmRing\"", StringComparison.Ordinal);
+            int end = start < 0 ? -1 : code.IndexOf("_popupConfirmRing = ring;", start, StringComparison.Ordinal);
+            if (start < 0 || end < 0)
+            {
+                failures.Add("[popup] the confirm button's emphasis marker (\"ConfirmRing\") is gone from " +
+                             "BuildSpendPopup - the affirmative action would look identical to CANCEL, and " +
+                             "WO-1340's FTUE highlights resolve that rect BY NAME");
+                return;
+            }
+            string block = code.Substring(start, end - start);
+
+            if (Regex.IsMatch(block, @"new\s+GameObject\s*\(\s*""ConfirmRing""\s*,\s*typeof\s*\(\s*Image\s*\)"))
+                failures.Add("[popup] \"ConfirmRing\" is built WITH an Image again. A uGUI parent's own Graphic " +
+                             "draws BEFORE its children, so a full-rect Image on the confirm button paints a flat " +
+                             "slab OVER MedievalUiSkin's ornate plate no matter what SetAsFirstSibling does - that " +
+                             "is verbatim the 2026-09-03 capture (\"see learn is selected but that coloring\": " +
+                             "LEARN as an opaque yellow rectangle with its label showing through). Emphasis is an " +
+                             "OUTLINE of edge bars, never a fill");
+            if (block.IndexOf("ApplyRounded", StringComparison.Ordinal) >= 0)
+                failures.Add("[popup] the confirm emphasis calls ElarionUiKit.ApplyRounded - that is the shared " +
+                             "FILLED rounded 9-slice, not an outline sprite, so it covers the whole button face");
+            if (Regex.IsMatch(block, @"\.sprite\s*=") ||
+                Regex.IsMatch(block, @"ringImg\s*\.\s*color"))
+                failures.Add("[popup] the confirm emphasis assigns a sprite/fill colour to a full-rect graphic " +
+                             "again - the frame art must stay visible in EVERY state");
+
+            // [no-spill] - the container rect must not be grown outward.
+            var minM = Regex.Match(block, @"ringRt\.offsetMin\s*=\s*([^;]+);");
+            var maxM = Regex.Match(block, @"ringRt\.offsetMax\s*=\s*([^;]+);");
+            if (!minM.Success || !maxM.Success)
+                failures.Add("[popup] the confirm emphasis rect no longer states its own offsets - the guard " +
+                             "against growing it past the button (and past the popup frame) is blind");
+            else if (minM.Groups[1].Value.IndexOf("Vector2.zero", StringComparison.Ordinal) < 0 ||
+                     maxM.Groups[1].Value.IndexOf("Vector2.zero", StringComparison.Ordinal) < 0)
+                failures.Add("[popup] the confirm emphasis rect is GROWN outside the button again " +
+                             "(offsetMin " + minM.Groups[1].Value.Trim() + " / offsetMax " +
+                             maxM.Groups[1].Value.Trim() + "). It must match the button rect exactly and inset " +
+                             "its bars inward; the retired -5/+5 overlay is what spilled past the popup frame's " +
+                             "right edge in the capture - emphasis is drawn INSIDE the control, never past it");
+
+            // [not-hue] - a border on all four edges: shape + luminance, not colour.
+            int bars = Regex.Matches(block, @"ConfirmEdgeBar\s*\(").Count;
+            if (bars < 4)
+                failures.Add("[popup] the confirm emphasis draws " + bars + " edge bar(s), not 4. Selection has " +
+                             "to be carried by SHAPE and BRIGHTNESS - a partial accent (or a recoloured fill) is " +
+                             "a hue-only cue and the owner is red/green colourblind (COLOURBLIND LAW)");
+
+            Type view = FindType(ViewType);
+            float thick = ConstFloat(view, "ConfirmOutlinePx", failures, "[popup]");
+            float inset = ConstFloat(view, "ConfirmOutlineInsetPx", failures, "[popup]");
+            if (thick <= 1f)
+                failures.Add("[popup] ConfirmOutlinePx is " + thick.ToString("F1") + " - a sub-2 px border is not " +
+                             "a visible emphasis at 2670x1200 on a phone");
+            if (inset <= 0f)
+                failures.Add("[popup] ConfirmOutlineInsetPx is " + inset.ToString("F1") + " - a zero/negative " +
+                             "inset puts the outline on (or past) the button's own edge, which is how the retired " +
+                             "overlay reached the popup frame");
+            notes.Add("confirm emphasis = " + bars + " edge bars, " + thick.ToString("F0") + " px inset " +
+                      inset.ToString("F0") + " px, no full-rect fill");
         }
 
         /// <summary>Fail on any codepoint above ASCII, naming file:line:col and the codepoint -
