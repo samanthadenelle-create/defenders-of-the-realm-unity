@@ -474,3 +474,307 @@ the shipped Pi build still lacks this crumb.
 `client-tunables` endpoint answers `readOk:false / NO_SQL_HANDLE` — no DB handle bound. The client
 pins the former (`RemoteTunablesService.cs:93`), so this is harmless at runtime and purely a trap for
 whoever verifies a flip by hand.
+
+---
+
+## OVERNIGHT SME PASS — 2026-09-02/03: the loop is now MEASURED, and two of the three candidate roots are DEAD
+
+**Scope:** Pi/WebGL template, the Pi Addressables policy, the tunables, `api/`. No `.cs` edited, no
+commit, no Android/APK lane, nothing under `Assets/_Modules/Village`.
+
+> ### ⭐ THE HEADLINE, BEFORE ANY THEORY
+> A **41-boot chain** landed in the database at **2026-09-03T00:21:52-00:28:05Z** — thirteen times
+> the evening pass's sample. In it, **40 consecutive deaths carry `previous.phase="unity-running"`,
+> `navigation=navigate`, and NOT ONE `pagehide` and NOT ONE `visibilitychange`** — while those very
+> handlers **fired six times in the same window, on the same build, on the same device**. That is a
+> real negative on a demonstrably working instrument, and it kills the "Pi Browser navigated the
+> page away" row outright.
+>
+> **The page is destroyed with no teardown event of any kind, a median 1.35 s after Unity finishes
+> loading, 40 times out of 40.**
+
+### 1. The capture — verbatim, and the arithmetic
+
+Read path: `GET https://defenders-of-the-realm-v2.vercel.app/api/admin/db?view=traces[&session=<id>]`,
+header `x-admin-key` = `ADMIN_DASH_KEY` from `.env.local` (never printed; len=32). 49 `wt-pi`
+sessions pulled, 61 rows. All rows `build: 2026.09.02.352005@echoes-of-elarion.vercel.app`.
+
+Three verbatim rows that carry the whole finding:
+
+```
+00:22:08.327Z  wt-pi7af66fa897
+  "[PiTemplate] log: [PiLifecycle] boot=mtks5y7g-kg4bw1 previous={\"id\":\"mtks5rbx-n522pe\",\"phase\":\"unity-running\",\"at\":1788394927076} navigation=navigate"
+
+00:28:02.114Z  wt-pi14a61d89ac
+  "[PiTemplate] log: [PiLifecycle] pagehide boot=mtksdefo-286awt persisted=true"
+
+02:05:18.413Z  wt-pi1a316b9a07
+  "[PiTemplate] log: [PiLifecycle] pagehide boot=mtkvudqf-024gu0 persisted=false"
+```
+
+`bootId` decodes to a wall clock (`Date.now().toString(36)`), and `previous.at` is the epoch-ms of
+the predecessor's last crumb, so the whole chain is measurable:
+
+| measure | n | value |
+|---|---|---|
+| consecutive boots in one unbroken chain | 41 | 00:21:51.239 - 00:28:05.252Z |
+| `previous.phase == "unity-running"` | **40 of 43** | the other 3 are `unity-loading` |
+| `navigation` | **49 of 49** | `navigate`. **Never `reload`. Never `back_forward`.** |
+| `pagehide` crumbs inside the 40-death chain | **0** | six landed elsewhere in the same window |
+| predecessor's `unity-running` -> successor's boot | 40 | min **0.85 s**, median **1.35 s**, max **4.21 s** |
+| boot -> boot cycle | 40 | min 8.22 s, median **8.71 s**, max 11.43 s |
+
+### 2. Which diagnostic row it matches — and the table row that has to be REWRITTEN
+
+| WO table row | verdict tonight | the measurement that decided it |
+|---|---|---|
+| jettison (`navigation=reload` + `previous=unity-running`) | **half-matched, and the `reload` half is now positively FALSIFIED** | `navigation=navigate` on 49/49. The predicted `reload` signature does not occur at all. |
+| navigated away (`previous=pagehide`) | ⛔ **DEAD** | A browser-initiated navigation *always* fires `pagehide`. 40 consecutive deaths fired none, on an instrument that fired 6 times in the same window. |
+| teardown during boot (never past `unity-loading`) | ⛔ **DEAD** (re-confirmed at 13x the sample) | 40/43 predecessors reached `unity-running`, which is written only inside `createUnityInstance().then()`. |
+
+⚠ **The `navigation=` column of the original table is not a reliable discriminator and should not be
+used as one.** It predicted `reload` for a jettison and `navigate`/`back_forward` for a navigation-away;
+we observe `navigate` for a death that is provably neither. What the host does *after* the page dies
+is the host app's choice — Pi Browser evidently issues a **fresh navigation**, which is exactly what an
+iOS host does from `webViewWebContentProcessDidTerminate`. **The presence or absence of `pagehide` is
+the load-bearing signal; `navigation=` is colour.**
+
+### 3. Hypotheses KILLED tonight, each with the measurement that killed it
+
+| # | Hypothesis | Killed by |
+|---|---|---|
+| 1 | Pi Browser navigated the page away | §1: zero `pagehide` across 40 deaths, six `pagehide` rows in the same window prove the handler and `sendBeacon` both work in Pi Browser. |
+| 2 | The page reloaded itself (`location.reload`, a JS-side restart) | Same zero-`pagehide` negative, plus `navigation=navigate` never `reload` on 49/49. |
+| 3 | bfcache / back-forward restore | `navigation=back_forward` occurred **zero** times in this window; the only `persisted=true` values sit on the **orderly** exits at 00:28 and 01:38 (the owner backgrounding the app), never inside the loop. |
+| 4 | Teardown during boot / asset residency | 40/43 predecessors reached `unity-running`. |
+| 5 | The payload is being JS-inflated, double-buffering ~200 MB | **Direct HEAD measurement**: all four `/Build/*` files answer `Content-Encoding: br` (loader.js, framework, wasm, and the 165,180,640-byte data file). Commit `3622e4d3c`'s fix is live and healthy; the browser decompresses natively. |
+| 6 | A blocking `WaitForCompletion` wedging the main thread in the Pi warmer | Source read: the Pi branch of `StructureContentWarmer.Boot` is fully async and contains no `WaitForCompletion`; the repo already lints for it in four regressions. **This is LOCATING, not concluding** — it excludes this file, not the whole runtime. |
+| 7 | "The shipped build has no tunables, so a flag flip cannot reach it" | Nearly written up as a finding, and **wrong**. The desktop session `wt-6b0185078310` (508 lines) contains **zero** `[Flow:Tunables]` lines — but a byte grep of the decompressed shipped payload finds `pi.disableRemoteStructureArt`, `client-tunables` and `tunables.cache.v1`. See §4. |
+
+### 4. ⚠ `[Flow:Tunables] CONFIG` NEVER REACHES THE DATABASE — the doc's felt-test instruction cannot be followed as written
+
+`docs/PROD022_TUNABLE_FLAGS.md` says *"Quote this line in any felt-test report — a run whose
+configuration cannot be reconstructed afterwards proves nothing."* **On the default path that line is
+unquotable.** `RemoteTunables.LogConfiguration("StructureContentWarmer.Boot")` is the first statement
+of a `RuntimeInitializeOnLoadMethod(AfterSceneLoad)` hook, and `WebTrace`'s sink activates in the same
+undefined-ordered `AfterSceneLoad` batch. In `wt-6b0185078310` the sink's own
+`[WebTrace] Remote trace sink active` is line 1 and `[Flow:StructureAssets] -> WarmRoutine` (a frame
+later, from the coroutine Boot starts) is present — so Boot ran, and its **synchronous** lines were
+emitted into a sink that was not yet listening.
+
+**What still works:** the `LogConfiguration("payload accepted, rows=N ...")` call fires after the
+network round trip, long after the sink is up. **So a session with a row set WILL show a
+`[Flow:Tunables] CONFIG (payload accepted, ...)` line, and a session at defaults will show nothing at
+all.** Presence of that line is the confirmation that a flip reached the device; absence is *not*
+evidence the build lacks tunables — row 7 above is the trap that nearly caught this pass.
+
+### 5. What was deployed — the instrument, and why it needed no rebuild of its own
+
+`Assets/WebGLTemplates/Pi/index.html` (template SOURCE; `Builds/WebGL/index.html` was never
+hand-patched) gains **PROD-022 Lane C**, validated before it shipped:
+
+- **A Worker-thread heartbeat.** The main thread stamps its liveness every 500 ms and does nothing
+  else; the worker owns all posting, at 1 s for the first 60 beats then 10 s forever. Line shape:
+  `[PiLifecycle] hb w=<workerBeat> m=<mainTick> mAgeMs=<age of the main stamp> vis=<state> upMs=<uptime>`.
+- **`webglcontextlost` / `webglcontextrestored`** on `#unity-canvas`, observational only
+  (`preventDefault` is never called, so the browser's own restore behaviour is unchanged). Context
+  loss is the door WebKit uses to reclaim GPU memory *before* it resorts to killing a process.
+- Plus the already-committed `pageshow persisted=` forwarding (`c35a1e037`), which had never reached
+  a device.
+
+**Why a worker.** Exactly two mechanisms produce "destroyed with no teardown event", and no crumb we
+capture separates them: **(a)** the content process is terminated from outside — nothing runs because
+there is no process left; **(b)** the **main thread** is wedged, so no handler *can* run, and the host
+tears the page down afterwards. (a) is a build/footprint problem. (b) is our code. **They have
+opposite fixes.** A worker has its own thread, so the last rows of a dead session decide it:
+
+| last heartbeat rows | root it names |
+|---|---|
+| `w` rising while `m` is **frozen** and `mAgeMs` climbing | **(b)** the main thread wedged first |
+| `w` and `m` stop in the same instant, `mAgeMs` small | **(a)** the whole content process died at once |
+
+**Validation before shipping** (a broken inline worker would blank the page): the substituted
+template parses (`node --check` → `NODE_SYNTAX_OK`); the worker source string was then extracted,
+re-parsed, and **executed** against a stubbed `fetch`, producing
+`[PiLifecycle] hb w=1 m=7 mAgeMs=2238 vis=visible upMs=1004` in the exact
+`{sessionId, buildId, entries[{utcMs,kind,tag,message,scene}]}` shape `api/trace.js` reads.
+
+**One known bound, stated now so nobody reads it as a death later.** The worker's beats use
+`fetch(..., {keepalive: true})`, and a document's keepalive quota is **64 KB**. At ~230 bytes a beat
+that is roughly **278 beats** - 60 at the 1 s cadence plus ~36 minutes at the 10 s one. A session that
+runs past about **37 minutes** may therefore stop emitting `hb` rows *while still alive*. The
+acceptance bar is 12 minutes so this does not bite tomorrow; the fix (drop `keepalive` from the worker,
+which does not need it - a beat lost to process death is lost either way) was deliberately NOT made
+tonight because the template was being read by an in-flight Unity build and a partial read would have
+shipped a corrupt page.
+
+**Cost, stated rather than hidden:** one worker (~1-2 MB) and one POST/sec, against a 165 MB data
+file. Too small to be the thing that tips a memory ceiling — but it is a real addition, and it is
+named here so nobody has to wonder later.
+
+**It needed no rebuild of its own.** The shipped `Builds/WebGL/index.html` differs from the template
+by exactly six macro substitutions and nothing else (verified by diff), so this is a pure page-layer
+change that pairs with an unchanged binary. In the event it rode the WebGL build inside the lead's
+`command-centre.ps1` production chain, which was already running when the edit landed.
+
+### 6. The flag armed for the morning, and the prediction — written BEFORE the run
+
+**`pi.disableRemoteStructureArt = 1`** (knob 3, the big hammer). One knob, not several, so the answer
+is unambiguous; and it is the only one decisive in *both* directions.
+
+> **PREDICTION, recorded in advance: this will NOT stop the loop.** The chain dies a median 1.35 s
+> after the first frame, and every trace line in these sessions is scoped `[Title]` — the app is dying
+> on the **title screen**, before the town scene where structure art is requested at all. If that
+> prediction holds, the entire asset-streaming lane (knobs 1, 2, 4, 5, 6) is exonerated in **one
+> session**, because knob 3 suppresses every remote structure request outright and therefore subsumes
+> them. If the prediction FAILS and the loop stops, streaming is implicated beyond argument and the
+> follow-up bisect is knob 2 (`pi.awaitInitBeforeFirstLoad`) against knob 4
+> (`assets.maxConcurrentRequests`).
+
+Either outcome is a good morning. One is a diagnosis; the other is a **playable game**.
+
+### 7. The two survivors, and the honest state of the root
+
+**ROOT IS STILL NOT PROVEN.** It is narrowed from three candidates to two, and the instrument that
+separates them is now on the device:
+
+- **(a) The content process is terminated from outside.** Consistent with everything measured. The
+  structural numbers that make it plausible, offered as **LOCATING and explicitly not as a
+  conclusion**: a **165,180,640-byte** compressed data file decompressing to **209,534,992 bytes**,
+  `webGLDataCaching: 1` (Unity mirrors that payload into IndexedDB and reads it back every boot),
+  `webGLMaximumMemorySize: 2048`, and a Unity heap that settles at 247 MB — every one of which peaks
+  at precisely the instant the deaths cluster.
+- **(b) The main thread wedges and the host tears the page down.** Not excluded. The Pi branch of
+  `StructureContentWarmer` is clean, but that is one file out of the whole boot path.
+
+⚠ **The `JetsamEvent` negative in §5 of the RCA does NOT cover this window.** That check was made at
+14:19 local against the **18:51-19:02Z** window. This chain is **00:21-00:28Z on 2026-09-03** — that
+is **19:21-19:28 local on 2026-09-02**, hours after the screenshot was taken, so its absence from that
+list proves nothing about it. A `JetsamEvent-2026-09-02-19*` would be decisive for (a).
+
+### 8. ⛔ A TOOLING HAZARD FOUND IN PASSING — `-Tunables` CLOBBERS THE SHIP CHAIN'S OWN LOG
+
+`tools/command-centre.ps1` opens with `Set-Content -LiteralPath $runLog` on
+`Builds\command-centre.log` **before** it branches into `-Maintenance` / `-Tunables`. Those two modes
+are documented as surfaces that "run and EXIT; never touch the ship chain below" — but they
+**destroy the ship chain's marker record** if one is running. Tonight the lead's chain held
+`STEP_1_OK`..`STEP_4_OK` in that file while a `-Tunables` flip was queued; running it would have
+erased the gate evidence for an in-flight production deploy. **The flag flip was deliberately held
+until the chain finished.** Worth a one-line fix (a separate log per mode) in whoever's lane owns that
+script — it is not this pass's lane and was not changed.
+
+### 9. Acceptance criteria — honest status
+
+- [x] **#1 `[PiLifecycle] boot= previous= navigation=` in the database, with the row it matches.** Met
+      at 41x the original sample. Row: **none of the three as written** — see §2, which explains why
+      the `navigation=` column cannot carry that job and `pagehide` can.
+- [ ] **#2 A Pi session survives >10 minutes.** **UNMET.** The longest page in tonight's chain lived
+      **~8.7 s**. This pass did not fix the crash; it measured it and killed two of the three
+      candidate roots.
+- [ ] **#3 Zero `model not found` lines.** Not evaluable: Unity's own sink produced nothing for the
+      loop window (WO-1324 — the RAM ring dies with the tab, and at 1.35 s of post-load life it never
+      reaches a flush).
+- [x] **Deployed** — the instrument rides the lead's `command-centre.ps1` production chain.
+- [ ] **PO felt-verifies and closes.** CLI does not close.
+
+### 10. ⭐ THE MORNING TEST — one action, and what each outcome proves
+
+**Do this and nothing else:**
+
+1. Open the game in Pi Browser.
+2. **Stand still for 12 minutes.** Do not tap anything. If it resets, let it keep resetting — every
+   reset writes a row. If it survives, just leave it sitting.
+3. Say "done" and hand it back. **Optional, five seconds, and genuinely decisive:** Settings → Privacy
+   & Security → Analytics & Improvements → Analytics Data → look for any file named
+   `JetsamEvent-2026-09-02-19…` or `JetsamEvent-2026-09-03-…`.
+
+**What comes back and what it proves** (read the LAST `hb` rows of the last dead session):
+
+| what the trace shows | what it proves | what happens next |
+|---|---|---|
+| `w` still rising while `m` is frozen, `mAgeMs` climbing past ~2000 | The **main thread wedged first** — this is OUR code, in the boot path. | Bisect the boot path; the fix is ours and is a code fix. |
+| `w` and `m` stop together, `mAgeMs` small | The **content process was killed outright** — a footprint problem, not a logic bug. | The lever is the 165 MB payload: strip/split content, turn off `webGLDataCaching`, cut texture budget. Not a flag; a build change. |
+| a `webglcontextlost` line before the last beat | **GPU/memory reclamation** named directly. | Same lever as above, with a concrete first target. |
+| `heartbeat worker unavailable: …` | Pi Browser refuses blob: workers. | The `w=NA` fallback still measured lifetime; the wedge-vs-kill split needs a different instrument. |
+| the loop **stops** and she plays past 12 minutes | Something in **{the new build, knob 3}** fixed it - ⚠ **NOT knob 3 alone**, because the deploy also moves the build from `352005` to `352921`. | She PLAYS. Then attribute it cheaply: `-Clear` the flag and retest. Still fine ⇒ it was the build. Loop returns ⇒ it was streaming, and the bisect is knob 2 vs knob 4. |
+| the loop continues, unchanged | **Asset streaming is exonerated** — knobs 1/2/4/5/6 with it. | Clear the flag, and all attention goes to the load-completion footprint. |
+
+**How to read it tomorrow, exactly** (the crumbs and the heartbeats share one session id, so one
+query returns both, oldest first):
+
+```
+# 1. list the sessions - the wt-pi* rows are the template's, newest first
+GET https://defenders-of-the-realm-v2.vercel.app/api/admin/db?view=traces&limit=60
+# 2. open the LAST wt-pi session that died, and read its final rows
+GET https://defenders-of-the-realm-v2.vercel.app/api/admin/db?view=traces&session=<id>&order=asc&limit=200
+     header  x-admin-key: <ADMIN_DASH_KEY from .env.local - never printed>
+```
+
+The line to look at is the **last `hb`** of a dead session. `w` is the worker's beat, `m` is the main
+thread's tick, `mAgeMs` is how long the main thread had been silent when the worker sent it.
+
+**To put the art back at any time — one word, and it is `-Clear`, not `-Value 0`:**
+
+```powershell
+tools\command-centre.ps1 -Tunables -Key pi.disableRemoteStructureArt -Clear
+```
+
+### 11. ⛔ URGENT, AND BIGGER THAN THIS TICKET — `command-centre.ps1` PUSHES TO R2 *BEFORE* IT BUILDS, SO EVERY WebGL DEPLOY SHIPS AN UNPUSHED CATALOG
+
+Found while waiting for the lead's chain, **measured, not inferred**, and it is the CLAUDE.md §16
+class wearing a new face — the one §16 warns about in capitals: *"EVERY content build needs ITS OWN
+push. A push from a previous build can never cover this one."*
+
+**The ordering defect.** In `tools/command-centre.ps1`:
+
+- **STEP 2** runs `tools\r2-ship.ps1` (push + verify) — the comment above it says *"every
+  command-centre run ships Builds/WebGL and api/, so it always touches shipped content."*
+- **STEP 5** runs `build-webgl.ps1`, and `AddressableAssetSettings.asset` carries
+  `m_BuildAddressablesWithPlayerBuild: 1`, so **the player build regenerates the Addressables
+  content** into `ServerData/`.
+
+So the push happens **three steps before** the content it is supposed to be pushing exists.
+
+**The consequence, and why it is silent.** `m_overridePlayerVersion:
+'[UnityEditor.PlayerSettings.bundleVersion]'` — the remote catalog is **named after
+`bundleVersion`**, which the Android lane bumped tonight to `2026.09.03.352921`. Measured on this
+run:
+
+```
+ServerData/WebGL/catalog_2026.09.03.352921.bin    written 21:31   (the build)
+ServerData/WebGL/catalog_2026.09.03.352921.hash   written 21:31
+Builds/r2-parity.log                              written 21:29   (the push, TWO MINUTES EARLIER)
+```
+
+```
+GET https://pub-ab6dfaf1b3d74ca78891876611ccb832.r2.dev/WebGL/catalog_2026.09.02.352005.hash -> 206  (the OLD, live build)
+GET https://pub-ab6dfaf1b3d74ca78891876611ccb832.r2.dev/WebGL/catalog_2026.09.03.352921.hash -> 404  (the build about to be promoted)
+GET https://pub-ab6dfaf1b3d74ca78891876611ccb832.r2.dev/WebGL/catalog_2026.09.03.352921.bin  -> 404
+```
+
+**The build now going to production cannot fetch its own catalog.** Per §16 it will install, launch
+and play — with placeholder art and no error on screen. `R2_PARITY_OK` was green at 21:29 and proved
+only that the *previous* build's content was intact.
+
+⭐ **The one mitigating detail, and it is why the fix is cheap:** the **bundles** were NOT re-emitted
+(newest bundle in `ServerData/WebGL` is 05:05) because their content is unchanged and their names are
+content-hashed. **Only the two catalog files are new.** So the whole gap is 136,547 bytes.
+
+**The remedy is the single sanctioned path, and it is safe to run after the deploy** — R2 is
+independent of the Vercel alias and the catalog is fetched at runtime, so pushing it repairs a
+already-promoted build immediately:
+
+```powershell
+tools\r2-ship.ps1        # judge R2_PUSH_OK + R2_PARITY_OK on a FRESH log, never the exit code
+```
+
+⚠ **THIS ALSO CONFOUNDS THE MORNING TEST IF IT IS NOT DONE.** A 404ing catalog produces *exactly* the
+same observable as `pi.disableRemoteStructureArt = 1` — no remote structure art. Run tonight's flag
+experiment against a 404ing catalog and its result is unreadable in **both** directions. The push must
+land before the owner opens the app, or the flag must be cleared and the session treated as a
+streaming-disabled run by accident rather than by design.
+
+**The structural fix (not made here — `command-centre.ps1` is not this pass's lane):** move the
+`r2-ship.ps1` call to **after** STEP 5's build, or call it twice. As written, *every* WebGL deploy
+this chain has ever made shipped an unpushed catalog; it only became visible tonight because the
+Android lane moved `bundleVersion` between the last content push and this build.
