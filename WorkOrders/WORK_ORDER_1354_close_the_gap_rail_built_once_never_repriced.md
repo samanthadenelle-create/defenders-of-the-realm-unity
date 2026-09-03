@@ -1,8 +1,9 @@
 # WORK ORDER 1354 - The "Close the Gap" rail is built once and never repriced
 
-**Status:** IMPLEMENTED, NOT SHIPPED - code is in the working tree, UNCOMMITTED and on NO device.
-⛔ **This is deliberately NOT marked FIXED.** Owner correction, this session: **FIXED means it is on her
-device to test** - not "code complete", not "committed". It becomes FIXED when it reaches her Seeker.
+**Status:** FIXED 2026-09-03 - ON HER DEVICE (installed, R2_PUSH_OK + R2_PARITY_OK). The "CLOSE THE GAP" rail is now rebuilt from `Render()` when quotes arrive, instead of being stamped once in `EnsureBuilt` BEFORE any quote existed and then skipped forever by `Render()`'s `continue` past `StoreBand.Gap`. Same root, two faces - a frozen UNAVAILABLE, or (if `PacksInBand(Gap)` was 0 on that one pass) no rows at all and never again - which is why it read as intermittent. The empty state now draws WORDS rather than vanishing. The server was healthy all along: my GET probe was the wrong call shape (the endpoint is POST-only, so a known-good SKU 400'd too), and my link to the Vercel-log 400s was wrong - those name /api/entitlements and /api/catalog/collection. Nav doors isolated from a catalogue failure. Gates COMPILE_GATE_OK + REGRESSION_OK 358/358; the oracle's mutation is HEAD itself. AWAITING HER FELT-VERIFY that all three catch-up offers show real prices - then Owner Validation closes it. Follow-up: banner-correct WO-1335's RESULT, whose "no server row" premise is disproven.
+*(This ticket sat at IMPLEMENTED, NOT SHIPPED until the install, under her correction this session:
+**FIXED means it is on her device to test** - not "code complete", not "committed". It became FIXED at
+the moment it reached her Seeker, and not before.)*
 **Silo / Lane:** Store / monetization surfacing
 **Type:** EXISTING surface, a build-order defect
 **Minted:** 2026-09-03 (CLI) on her report. ⚠ Minted AFTER the fix was written, which is the process
