@@ -2,7 +2,7 @@
 
 # WORK ORDER 1314 — The WebGL remote payload is shaped for a native client, against a 512 MB heap
 
-**Status:** READY TO IMPLEMENT - ⭐ PROMOTED 2026-09-03: PROVEN as the prime root of PROD-022 (deterministic 64% stall across two deployments with all tunables cleared; the .data payload is 165 MB COMPRESSED). See the PROVEN section at the end.
+**Status:** READY TO IMPLEMENT - ⛔ THE "PROVEN ROOT" CLAIM IS RETRACTED 2026-09-03. The owner loaded the same build in a NORMAL DESKTOP BROWSER and it fails at the SAME percentage, so a webview memory ceiling cannot be the mechanism. The oversized payload is still real and still worth reducing; it is NOT the root of PROD-022. Real signature is `t.subarray` on undefined in the Unity loader = a decompression/serve failure. See the RETRACTED banner at the end.
 **Silo:** Web / Content
 **Minted:** 2026-09-02 (CLI) while answering the owner's question about Pi breaking on the CDN.
 **Severity:** P2 pending proof — see "What is NOT proven" before acting on it.
@@ -121,6 +121,39 @@ was taken against a materially different, broken payload. **Re-observe before me
 the symptom may have changed or gone.
 
 ---
+
+> # ⛔ RETRACTED 2026-09-03, WITHIN HOURS, BY THE OWNER. READ THIS BEFORE THE SECTION BELOW.
+>
+> The "PROVEN" section that follows concluded the deterministic 64% stall was an **iOS webview memory
+> ceiling** exhausted by the 165 MB payload. **That conclusion is WRONG.**
+>
+> **The owner opened the same deployed build in a NORMAL DESKTOP BROWSER and it failed at the SAME
+> PERCENTAGE.** Her words: *"it's failing in the [normal] browser at the same percentage which tells
+> me that the web UI build is broken not just broken inside Pi."*
+>
+> A desktop browser has gigabytes of headroom. If the stall is identical there, **a per-process memory
+> limit cannot be the mechanism.** The payload is still oversized and still worth reducing — that part
+> of this ticket stands — but it is NOT the root of PROD-022.
+>
+> ⚠ **THE REAL SIGNATURE WAS ALREADY IN HER SCREENSHOT AND I READ PAST IT:**
+> `TypeError: undefined is not an object (evaluating 't.subarray')` inside `<hash>.loader.js`.
+> `t.subarray` on `undefined` is a **decompression / fetch failure** — the loader asked for bytes and
+> got something that is not a typed array. That is a broken BUILD or a broken SERVE. It is not, and
+> never looked like, an out-of-memory kill.
+>
+> **HOW THE ERROR WAS MADE, because the pattern is the point:** determinism was correctly identified
+> as the key fact, and then attached to the WRONG mechanism. "Exactly 64% every time" does rule out a
+> memory ceiling *as drift* — but instead of following that to "a specific instruction fails on a
+> specific byte", it was used to argue for a *hard* memory limit, which the desktop test then
+> refuted in one move. **The cheapest disproof — load it in another browser — was available the whole
+> time and was never run, because the theory already felt explanatory.**
+>
+> Everything the overnight lane KILLED remains killed (Addressables/structure-art, R2/CDN, bfcache,
+> navigated-away, teardown-during-boot). Only the positive conclusion is withdrawn.
+>
+> Investigation reopened under the real question: **why is the WebGL build broken in every browser?**
+
+## ⛔ SUPERSEDED — the section below is preserved unrewritten (CLAUDE.md §15) and its CONCLUSION is retracted above
 
 ## ⭐ PROVEN 2026-09-03 — THIS IS THE ROOT OF PROD-022, AND THE PROOF IS DETERMINISTIC
 
