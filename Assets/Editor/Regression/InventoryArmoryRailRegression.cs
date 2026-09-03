@@ -92,6 +92,7 @@ namespace DeNelle.Editor.Regression
             {
                 Case(failures, "canon-parity",   () => Case1_CanonParity(failures, notes));
                 Case(failures, "wo-1254-tabs",   () => Case1254TopTabs(failures, notes));
+                Case(failures, "wo-1293-peek",   () => Case1293_PeekStripOneLayoutGroup(failures, notes));
             }
             catch (Exception ex)
             {
@@ -196,6 +197,58 @@ namespace DeNelle.Editor.Regression
             notes.Add("exactly six canonical non-scrolling tabs; Talents/Map header chips; Gear landing; " +
                 "Off Hand split; landscape/portrait 40% peek + canonical word + kit permanent scrollbar; " +
                 "independent 2670x1200 touch arithmetic; Forge shelf reservation");
+        }
+
+        // =====================================================================
+        //  WO-1293 - the peek strip may own exactly ONE LayoutGroup.
+        //  INDEPENDENT AUTHORITY: UnityEngine's own [DisallowMultipleComponent] on
+        //  UnityEngine.UI.LayoutGroup, read by reflection - not a constant of ours. Device
+        //  capture seq 4077 threw an NRE inside BuildPeekStrip because the landscape branch
+        //  called AddComponent<HorizontalLayoutGroup>() on the kit scroll content that already
+        //  carried MakeScrollZone's VerticalLayoutGroup; Unity refuses and returns NULL, and the
+        //  next line dereferenced it. Disabling the first group does not remove it, so "column
+        //  .enabled = false then AddComponent" is the exact failing shape and is banned here.
+        // =====================================================================
+        private static void Case1293_PeekStripOneLayoutGroup(List<string> failures, List<string> notes)
+        {
+            bool disallowsMultiple = Attribute.IsDefined(
+                typeof(UnityEngine.UI.LayoutGroup), typeof(DisallowMultipleComponent), false);
+            if (!disallowsMultiple)
+            {
+                notes.Add("Unity no longer marks LayoutGroup [DisallowMultipleComponent] - " +
+                          "the WO-1293 law is moot on this engine version");
+                return;
+            }
+
+            string grid = ReadSrc(GridSrc);
+            if (grid == null) { failures.Add("[wo-1293-peek] cannot read " + GridSrc); return; }
+            string peek = SourceSlice(StripComments(grid), "private void BuildPeekStrip",
+                "private void BuildCellsFromVM");
+            if (string.IsNullOrEmpty(peek))
+            { failures.Add("[wo-1293-peek] BuildPeekStrip is not locatable in " + GridSrc); return; }
+
+            if (Regex.IsMatch(peek, @"AddComponent\s*<\s*(Horizontal|Vertical|Grid)LayoutGroup\s*>"))
+                failures.Add("[wo-1293-peek] BuildPeekStrip adds a second LayoutGroup to the kit scroll " +
+                             "content - LayoutGroup is DisallowMultipleComponent, so AddComponent returns " +
+                             "null there and the next dereference blanks the strip (device seq 4077)");
+
+            // The instrumentation that names this from data is PERMANENT (CLAUDE.md section 12).
+            if (!peek.Contains("GetComponents<LayoutGroup>") || !peek.Contains("layoutGroups="))
+                failures.Add("[wo-1293-peek] the LayoutGroup census probe was stripped - a repeat of this " +
+                             "defect would again arrive as an unattributable NRE");
+
+            // Every kit-handle dereference in the landscape branch stays guarded.
+            foreach (string guard in new[] { "if (column != null)", "if (fitter != null)",
+                                             "if (scrollbarRt != null)", "if (zone.scrollbar != null)" })
+                if (!peek.Contains(guard))
+                    failures.Add("[wo-1293-peek] an unguarded kit-handle dereference returned: missing '" +
+                                 guard + "'");
+
+            if (!Regex.IsMatch(peek, @"if\s*\(more\s*!=\s*null\)"))
+                failures.Add("[wo-1293-peek] the overflow tell label is dereferenced without a null guard");
+
+            notes.Add("peek strip owns one LayoutGroup (Unity's own DisallowMultipleComponent is the " +
+                      "authority); census probe + kit-handle guards intact");
         }
 
         private static void Case(List<string> failures, string name, Action body)

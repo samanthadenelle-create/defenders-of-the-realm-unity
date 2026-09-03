@@ -1,6 +1,6 @@
 # WO-1293 — Bag peek strip NRE blanks the rail (device, seq 4077)
 
-**Status:** READY TO IMPLEMENT
+**Status:** FIXED — root cause was NOT a kit-handle null: `AddComponent<HorizontalLayoutGroup>` on the kit scroll content (LayoutGroup is `[DisallowMultipleComponent]`) returned null and `row.spacing` threw; the explicit-X placement path is in, the remaining derefs are guarded, a LayoutGroup census probe + a regression case pin it.
 **Minted:** 2026-09-01 (CLI, main-line banner bumped 1293 -> 1294 in the same edit)
 **Silo:** Hero inventory UI. Disjoint from the WO-1289..1292 art lane and PROD-021.
 **Source:** F8 device capture seq 4077 (`SM02G4061955851`, 2026-08-31T07:15:04Z,

@@ -301,11 +301,23 @@ namespace DeNelle.Village
             var zone = ElarionUiKit.MakeScrollZone(scrollHost.transform, GridGapPx, (int)GridPadPx);
 
             // WO-1293 (device seq 4077): an NRE inside this method blanked the peek strip while
-            // SafeRun let the rest of the Bag survive. The stack could not say WHICH reference
-            // was null, so every kit-handle lookup is probed and named here BEFORE any
-            // dereference -- the next capture pinpoints the dead piece from data (CLAUDE.md
-            // section 12), and each use below is guarded so a missing piece degrades the strip
-            // instead of killing it.
+            // SafeRun let the rest of the Bag survive.
+            //
+            // ROOT CAUSE, RESOLVED: it was NEVER a kit-handle null. MakeScrollZone
+            // (ElarionUiKitObsidian.cs) unconditionally builds the viewport, the content, its
+            // VerticalLayoutGroup, its ContentSizeFitter and the scrollbar before it returns,
+            // so column/fitter/scrollbar/srt cannot be null -- the three static candidates the
+            // ticket listed were all impossible. The dead reference was `row`, from the OLD
+            // landscape branch's `zone.content.gameObject.AddComponent<HorizontalLayoutGroup>()`:
+            // UnityEngine.UI.LayoutGroup carries [DisallowMultipleComponent], the kit's
+            // VerticalLayoutGroup is already on that same object (disabling it does not remove
+            // it), so AddComponent REFUSES and RETURNS NULL, and the very next line
+            // (`row.spacing = ...`) threw. The explicit-X placement below is the fix: one
+            // LayoutGroup per GameObject, no component swap at all.
+            //
+            // The probes stay in (CLAUDE.md section 12 -- instrumentation is permanent) and now
+            // also census the LayoutGroups on the content, which is the line that would have
+            // named this in one read.
             if (zone == null || zone.content == null || zone.scroll == null)
             {
                 FlowTrace.Fail("Inventory",
@@ -321,13 +333,25 @@ namespace DeNelle.Village
             var column = zone.content.GetComponent<VerticalLayoutGroup>();
             var fitter = zone.content.GetComponent<ContentSizeFitter>();
             var scrollbarRt = zone.scrollbar != null ? zone.scrollbar.transform as RectTransform : null;
+            // THE WO-1293 LINE: how many LayoutGroups live on the content. LayoutGroup is
+            // [DisallowMultipleComponent], so a second AddComponent there returns null and the
+            // next dereference throws. One is correct; anything else names the defect from data.
+            var layoutGroups = zone.content.GetComponents<LayoutGroup>();
+            int layoutGroupCount = layoutGroups != null ? layoutGroups.Length : 0;
             FlowTrace.Step("Inventory",
                 "BuildPeekStrip probes: portrait=" + _portraitLayout +
                 " column=" + (column == null ? "NULL" : "ok") +
                 " fitter=" + (fitter == null ? "NULL" : "ok") +
                 " scrollbar=" + (zone.scrollbar == null ? "NULL" : "ok") +
                 " scrollbarRt=" + (scrollbarRt == null ? "NULL" : "ok") +
-                " viewport=" + (zone.viewport == null ? "NULL" : "ok"));
+                " viewport=" + (zone.viewport == null ? "NULL" : "ok") +
+                " layoutGroups=" + layoutGroupCount);
+            if (layoutGroupCount != 1)
+                FlowTrace.Warn("Inventory",
+                    "BuildPeekStrip: the kit scroll content carries " + layoutGroupCount +
+                    " LayoutGroup(s), not 1. LayoutGroup is DisallowMultipleComponent -- this is " +
+                    "the WO-1293 shape, where a second AddComponent returns null and the next " +
+                    "dereference blanks the strip.");
             if (column == null || fitter == null || zone.scrollbar == null || scrollbarRt == null || zone.viewport == null)
             {
                 FlowTrace.Warn("Inventory",
@@ -424,7 +448,11 @@ namespace DeNelle.Village
                 string key = _portraitLayout ? InventoryStrings.KeyMoreBelow : InventoryStrings.KeyMoreCount;
                 var more = AddLabel(stage, InventoryStrings.Format(key, overflow), 0.02f, 0.13f, Ink,
                     ElarionUi.FontMicro, TMPro.TextAlignmentOptions.MidlineLeft, 0.02f, 0.98f, bold: true);
-                more.raycastTarget = false;
+                // The last unguarded dereference in this method (WO-1293 sweep). A null label
+                // here would blank the whole strip again for the sake of one overflow word.
+                if (more != null) more.raycastTarget = false;
+                else FlowTrace.Warn("Inventory",
+                    "BuildPeekStrip: the overflow tell label failed to build; the strip stands without it.");
             }
             FlowTrace.Step("Inventory", $"Peek strip: axis={(_portraitLayout ? "vertical" : "horizontal")} " +
                 $"cards={_vm.Slots.Count}, visible={visible}, overflow={overflow}, peek=40%, " +
