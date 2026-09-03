@@ -49,10 +49,16 @@
 //      shortlist. If someone later adds an eighth prefab or drops one, this goes red
 //      rather than quietly shipping a stale hand-typed list.
 //
-//  (f) THE HELD SEATS STAY HELD. HeldVfxKeys.TreeOfLifeFootAura and
-//      HeldVfxKeys.BossDeath must remain EMPTY until she tags them. A future seat
-//      filling one in with a plausible key is the exact rule violation
-//      (memory vfx-map-owner-tags-no-creative-pick), and it would look like progress.
+//  (f) THE ONCE-HELD SEATS ARE BOUND TO WHAT SHE SAID. RE-POINTED 2026-09-03 - this
+//      clause used to require HeldVfxKeys.TreeOfLifeFootAura and HeldVfxKeys.BossDeath
+//      to be EMPTY. The invariant was never "these stay empty"; it was "no seat may be
+//      bound without her word" (memory vfx-map-owner-tags-no-creative-pick). The word
+//      now exists, so the same invariant is pinned from the other side: the tree-foot
+//      seat carries the key she re-tagged, the boss-death seat carries the key she
+//      named herself ("both get Elite_Death, name it BossDeath_Impact"), both resolve
+//      to HER prefabs via (a), the '_Impact' row the tagger invented stays deleted, and
+//      'EliteDeath_Impact' stays unconsumed because elite death already plays that same
+//      prefab through VFXType.Elite_Death. Each key has exactly ONE definition point.
 //
 //  (g) ONE SPAWN OWNER. Source lint: RealmStoreBeacon must contain exactly ONE
 //      VFXManager.PlayKey call, and NightStoreAuraSelector must contain NONE.
@@ -112,7 +118,38 @@ namespace DeNelle.Editor.Regression
             new KeyValuePair<string, string>(
                 "TreeofLifeAura_Aura",
                 "Assets/UnityTechnologies/ParticlePack/EffectExamples/Misc Effects/Prefabs/FireFlies.prefab"),
+
+            // -- BOUND 2026-09-03, the two formerly-held seats -------------------------------
+            // Pinned BY THE CONSTANT, not by a re-typed string: if a refactor re-points
+            // HeldVfxKeys.TreeOfLifeFootAura or HeldVfxKeys.BossDeath at some other key, the
+            // lookup below misses her row and this goes red - which is the whole purpose.
+
+            // Ask 1, her RE-TAG. The tree-foot aura she asked to go WITH the FireFlies loop.
+            new KeyValuePair<string, string>(
+                HeldVfxKeys.TreeOfLifeFootAura,
+                "Assets/Spells Pack/Particles/Prefabs/Auras/Aura_Nature.prefab"),
+
+            // The boss-death burst. Her ruling, verbatim: "both get Elite_Death, name it
+            // BossDeath_Impact" - elite death and boss death share the one effect on purpose.
+            new KeyValuePair<string, string>(
+                HeldVfxKeys.BossDeath,
+                "Assets/Resources/VFX/Death/Elite_Death.prefab"),
         };
+
+        /// <summary>
+        /// The keys the two formerly-held seats MUST carry. Separate from <see cref="PinnedTags"/>
+        /// because that table proves "the key still points at her prefab" while these prove "the
+        /// seat still uses the key she named" - a refactor that re-pointed the constant at some
+        /// other real row would satisfy the first and betray the second.
+        /// </summary>
+        private const string ExpectedTreeFootKey = "atfootprintoftree_Aura";
+        private const string ExpectedBossDeathKey = "BossDeath_Impact";
+
+        /// <summary>
+        /// The row the VFX Caster INVENTED in her name and she then DELETED. It must never come
+        /// back: a sibling _Impact under the tree-foot base name is the tagger defect, not a pick.
+        /// </summary>
+        private const string InventedTreeFootImpactKey = "atfootprintoftree_Impact";
 
         /// <summary>Standalone batch entry - prints the marker.</summary>
         public static void RunAll()
@@ -135,7 +172,7 @@ namespace DeNelle.Editor.Regression
                 Case(failures, "rotation-off", () => Case3_RotationShipsOff(failures));
                 Case(failures, "walk-order",   () => Case4_RotationWalkIsOrdered(failures));
                 Case(failures, "family-list",  () => Case5_FamilyIsADirectoryListing(failures));
-                Case(failures, "held-seats",   () => Case6_HeldSeatsStayHeld(failures));
+                Case(failures, "held-seats",   () => Case6_HeldSeatsStayHeld(failures, picks));
                 Case(failures, "one-owner",    () => Case7_OneSpawnOwner(failures));
             }
             catch (Exception ex)
@@ -151,11 +188,15 @@ namespace DeNelle.Editor.Regression
             if (failures.Count == 0)
             {
                 reason = "NIGHT STORE AURA OK - her tagged keys still resolve to the prefabs she tagged " +
-                         "(4 pinned), an EMPTY / MALFORMED / readOk=false tunables table all reproduce " +
-                         "this build exactly (mode=TaggedStarfall '" + NightStoreAuraSelector.OwnerTaggedKey +
+                         "(" + PinnedTags.Length + " pinned), an EMPTY / MALFORMED / readOk=false tunables " +
+                         "table all reproduce this build exactly (mode=TaggedStarfall '" +
+                         NightStoreAuraSelector.OwnerTaggedKey +
                          "', cadence 30 min, mask 127, burstRepeat 0), rotation ships OFF, the family " +
-                         "walk is ordered and one-at-a-time over the 7 prefabs actually on disk, both " +
-                         "held seats are still unbound, and there is exactly ONE spawn owner.";
+                         "walk is ordered and one-at-a-time over the 7 prefabs actually on disk, the two " +
+                         "once-held seats are BOUND to the keys she named ('" + ExpectedTreeFootKey +
+                         "' at the tree foot, '" + ExpectedBossDeathKey + "' on boss death) with the " +
+                         "invented '" + InventedTreeFootImpactKey + "' row still deleted and " +
+                         "'EliteDeath_Impact' still unconsumed, and there is exactly ONE spawn owner.";
                 return true;
             }
             reason = "night-store-aura FAIL x" + failures.Count + ": " + string.Join(" | ", failures);
@@ -494,29 +535,60 @@ namespace DeNelle.Editor.Regression
         }
 
         // =====================================================================
-        //  Case 6 - the held seats stay held
+        //  Case 6 - the once-held seats are BOUND, and bound to WHAT SHE SAID
         // =====================================================================
+        //
+        // RE-POINTED 2026-09-03, NOT DELETED. Until today this case asserted both constants were
+        // EMPTY. That was never the invariant - the invariant was "no seat may be bound without
+        // her word", and the empty-check was only how it was expressed while no word existed.
+        // She has now ruled, so the SAME invariant is pinned from the other side: the seats are
+        // bound, bound to the keys SHE named, and those keys still resolve to HER prefabs
+        // (the last part via PinnedTags / Case 1). Deleting the case would have thrown away the
+        // protection instead of moving it.
 
-        private static void Case6_HeldSeatsStayHeld(List<string> failures)
+        private static void Case6_HeldSeatsStayHeld(List<string> failures, string picks)
         {
-            if (!string.IsNullOrEmpty(HeldVfxKeys.TreeOfLifeFootAura))
-                failures.Add("[held-seats] HeldVfxKeys.TreeOfLifeFootAura is now '" +
-                             HeldVfxKeys.TreeOfLifeFootAura + "'. The tree-foot seat is HELD: the owner " +
-                             "tagged 'atfootprintoftree_Aura' -> Aura_Nature.prefab and the VFX Caster " +
-                             "then overwrote that row with Elite_Death.prefab while she was tagging a " +
-                             "BOSS DEATH. Binding either one from code is a creative pick. This goes " +
-                             "green again ONLY when she retags and the new key is written here WITH her " +
-                             "confirmation - at which point add it to PinnedTags above too.");
+            // (1) BOUND, AND BOUND TO HER KEY. An empty constant is now a REGRESSION - the seat
+            // silently stops playing and the hook traces "still held" for an effect she approved.
+            if (!string.Equals(HeldVfxKeys.TreeOfLifeFootAura, ExpectedTreeFootKey, StringComparison.Ordinal))
+                failures.Add("[held-seats] HeldVfxKeys.TreeOfLifeFootAura is '" +
+                             HeldVfxKeys.TreeOfLifeFootAura + "' but the owner's re-tag (2026-09-03) is '" +
+                             ExpectedTreeFootKey + "' -> Aura_Nature.prefab, seated at the FOOT of the " +
+                             "Heart of Elarion and ADDITIVE to the TreeofLifeAura_Aura FireFlies loop. " +
+                             "Empty means the seat went dark; a different key means somebody re-pointed " +
+                             "her aura. Either way ASK HER - do not edit this expectation to match.");
 
-            if (!string.IsNullOrEmpty(HeldVfxKeys.BossDeath))
-                failures.Add("[held-seats] HeldVfxKeys.BossDeath is now '" + HeldVfxKeys.BossDeath +
-                             "'. There is NO boss-death row in " + PicksPath + " - her \"added Elite " +
-                             "death to boss death\" pick landed on the 'atfootprintoftree' key instead. " +
-                             "Naming a key here is authoring her tag. Same rule: she tags, then this " +
-                             "constant is filled in and pinned.");
+            if (!string.Equals(HeldVfxKeys.BossDeath, ExpectedBossDeathKey, StringComparison.Ordinal))
+                failures.Add("[held-seats] HeldVfxKeys.BossDeath is '" + HeldVfxKeys.BossDeath +
+                             "' but the owner named '" + ExpectedBossDeathKey + "' herself, ruling " +
+                             "verbatim: \"both get Elite_Death, name it BossDeath_Impact\". Elite death " +
+                             "and boss death SHARE that one effect deliberately. ASK HER before changing " +
+                             "this expectation.");
 
-            // The spurious rows must NOT be wired anywhere. If a future seat starts reading them, the
-            // Heart of Elarion grows a death explosion at its foot and nobody meant that.
+            // (2) THE INVENTED ROW MUST STAY DELETED. The VFX Caster wrote an '_Impact' sibling under
+            // the tree-foot base name that she never authored, and she deleted it. If it reappears the
+            // tagger defect has recurred - and any seat that reads it seats a death burst at the tree.
+            if (picks != null && TryReadPick(picks, InventedTreeFootImpactKey, out string ghost))
+                failures.Add("[held-seats] the row '" + InventedTreeFootImpactKey + "' is BACK in " +
+                             PicksPath + " (-> '" + ghost + "'). The owner never authored it - the VFX " +
+                             "Caster invented it while she was tagging a boss death, and she DELETED it " +
+                             "on 2026-09-03. Its return means WriteManualPick has re-fired against a " +
+                             "stale free-typed base name. ASK HER; do not wire it.");
+
+            // (3) EliteDeath_Impact stays UNCONSUMED. Its row points at Elite_Death.prefab, but elite
+            // death ALREADY plays that prefab through VFXType.Elite_Death (EliteVFXController.
+            // DeathVfxFor -> VFXManager.Play), so binding the key would double-fire one burst on one
+            // corpse. Nothing consumes it and nothing should without her word.
+            //
+            // (4) ONE DEFINITION POINT FOR THE BOUND KEYS. Now that the seats ARE bound, the risk
+            // moves from "somebody binds a suspect row" to "somebody re-types the key at a call site",
+            // where a rename would leave a silent orphan. Every consumer goes through the HeldVfxKeys
+            // constants, so a BARE quoted literal in any of these files is the defect.
+            //
+            // The regex shape is unchanged and deliberate (see the 2026-09-03 narrowing below):
+            // StripComments does not strip STRING literals, so an earlier "is it mentioned" form fired
+            // on the seats' own FlowTrace prose. A binding is a complete literal whose ENTIRE content
+            // is the key, with or without its role suffix - that is the only shape the VFX layer takes.
             foreach (string src in new[] { SelectorSrc, BeaconSrc,
                                            "Assets/_Modules/Village/Heart/HeartAuraController.cs",
                                            "Assets/_Modules/Village/Enemies/EliteVFXController.cs" })
@@ -540,14 +612,21 @@ namespace DeNelle.Editor.Regression
                 // one a future seat adds, and it no longer passes-or-fails on prose. Re-point a pin,
                 // never soften it.
                 if (Regex.IsMatch(body, "\"atfootprintoftree[A-Za-z0-9_]*\""))
-                    failures.Add("[held-seats] " + src + " BINDS the key 'atfootprintoftree' as a bare " +
-                                 "string literal. That row currently points at Elite_Death.prefab because " +
-                                 "the tagger overwrote it; wiring it seats a death EXPLOSION at the base of " +
-                                 "the Heart of Elarion.");
+                    failures.Add("[held-seats] " + src + " writes an 'atfootprintoftree' key as a bare " +
+                                 "string literal. The key IS bound now, but it is bound in exactly ONE " +
+                                 "place - HeldVfxKeys.TreeOfLifeFootAura. A second hand-typed copy is how " +
+                                 "a re-tag silently reaches one seat and not the other, and how the " +
+                                 "invented '_Impact' sibling would find its way into the game. Use the " +
+                                 "constant.");
                 if (Regex.IsMatch(body, "\"EliteDeath_Impact\""))
                     failures.Add("[held-seats] " + src + " BINDS 'EliteDeath_Impact' as a bare string " +
-                                 "literal. The owner did NOT pick that row - the tagger wrote it in her " +
-                                 "name. It is held.");
+                                 "literal. That key is UNCONSUMED on purpose: elite death already plays " +
+                                 "Elite_Death.prefab through VFXType.Elite_Death, so a second binding " +
+                                 "double-fires one burst on one corpse. It stays unwired without her word.");
+                if (Regex.IsMatch(body, "\"BossDeath_Impact\""))
+                    failures.Add("[held-seats] " + src + " writes 'BossDeath_Impact' as a bare string " +
+                                 "literal. Same one-definition-point rule: the boss-death seat reads " +
+                                 "HeldVfxKeys.BossDeath and nothing else may re-type the key.");
             }
         }
 

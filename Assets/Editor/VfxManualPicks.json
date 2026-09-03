@@ -1,30 +1,9 @@
 {
     "rows": [
         {
-            "key": "ARcaneTower_Projectile",
-            "prefabPath": "Assets/Hovl Studio/RPG VFX Bundle/Random effect prefabs/Buff orange shot.prefab",
-            "isLoop": false,
-            "scale": 1.0,
-            "manual": true
-        },
-        {
             "key": "Aegis_Cast",
             "prefabPath": "Assets/Hovl Studio/Magic circles/Prefabs/Magic shield holy.prefab",
             "isLoop": false,
-            "scale": 1.0,
-            "manual": true
-        },
-        {
-            "key": "ArcaneTower-Baselevel_Projectile",
-            "prefabPath": "Assets/Hovl Studio/AAA Projectiles Vol 1/Prefabs/Projectiles 2D/2D Projectile 7 pink.prefab",
-            "isLoop": false,
-            "scale": 1.0,
-            "manual": true
-        },
-        {
-            "key": "ArcaneTower_Aura",
-            "prefabPath": "Assets/Lana Studio/Casual RPG VFX/Prefabs/Fog/Fog_electric.prefab",
-            "isLoop": true,
             "scale": 1.0,
             "manual": true
         },
@@ -50,6 +29,27 @@
             "manual": true
         },
         {
+            "key": "ArcaneTower-Baselevel_Projectile",
+            "prefabPath": "Assets/Hovl Studio/AAA Projectiles Vol 1/Prefabs/Projectiles 2D/2D Projectile 7 pink.prefab",
+            "isLoop": false,
+            "scale": 1.0,
+            "manual": true
+        },
+        {
+            "key": "ArcaneTower_Aura",
+            "prefabPath": "Assets/Lana Studio/Casual RPG VFX/Prefabs/Fog/Fog_electric.prefab",
+            "isLoop": true,
+            "scale": 1.0,
+            "manual": true
+        },
+        {
+            "key": "ARcaneTower_Projectile",
+            "prefabPath": "Assets/Hovl Studio/RPG VFX Bundle/Random effect prefabs/Buff orange shot.prefab",
+            "isLoop": false,
+            "scale": 1.0,
+            "manual": true
+        },
+        {
             "key": "ArcherTower-Fire_Projectile",
             "prefabPath": "Assets/Hovl Studio/AAA Projectiles Vol 1/Prefabs/Projectiles(Particle collision)/Projectile 16 fire.prefab",
             "isLoop": false,
@@ -59,6 +59,13 @@
         {
             "key": "ArcherTower-Ice_Projectile",
             "prefabPath": "Assets/Hovl Studio/AAA Projectiles Vol 1/Prefabs/Projectiles(Particle collision)/Projectile 14 blue rapid.prefab",
+            "isLoop": false,
+            "scale": 1.0,
+            "manual": true
+        },
+        {
+            "key": "ArcherTower_Projectile",
+            "prefabPath": "Assets/Hovl Studio/AAA Projectiles Vol 1/Prefabs/Projectiles(Particle collision)/Projectile 13 red laser.prefab",
             "isLoop": false,
             "scale": 1.0,
             "manual": true
@@ -78,15 +85,22 @@
             "manual": true
         },
         {
-            "key": "ArcherTower_Projectile",
-            "prefabPath": "Assets/Hovl Studio/AAA Projectiles Vol 1/Prefabs/Projectiles(Particle collision)/Projectile 13 red laser.prefab",
-            "isLoop": false,
+            "key": "atfootprintoftree_Aura",
+            "prefabPath": "Assets/Spells Pack/Particles/Prefabs/Auras/Aura_Nature.prefab",
+            "isLoop": true,
             "scale": 1.0,
             "manual": true
         },
         {
             "key": "AuraOverArcaneTower_Aura",
             "prefabPath": "Assets/Hovl Studio/AAA Projectiles Vol 1/Prefabs/Projectiles 2D/2D Projectile 18 nova orange.prefab",
+            "isLoop": false,
+            "scale": 1.0,
+            "manual": true
+        },
+        {
+            "key": "BossDeath_Impact",
+            "prefabPath": "Assets/Resources/VFX/Death/Elite_Death.prefab",
             "isLoop": false,
             "scale": 1.0,
             "manual": true
@@ -155,6 +169,13 @@
             "manual": true
         },
         {
+            "key": "Electricityimpact_Impact",
+            "prefabPath": "Assets/Hovl Studio/AAA Projectiles Vol 1/Prefabs/Projectiles with logic/Projectile 2 electro.prefab",
+            "isLoop": false,
+            "scale": 1.0,
+            "manual": true
+        },
+        {
             "key": "ElectricitySpell_Cast",
             "prefabPath": "Assets/Hovl Studio/AAA Projectiles Vol 1/Prefabs/Projectiles(Particle collision)/Projectile 2 electro.prefab",
             "isLoop": false,
@@ -169,15 +190,8 @@
             "manual": true
         },
         {
-            "key": "Electricityimpact_Impact",
-            "prefabPath": "Assets/Hovl Studio/AAA Projectiles Vol 1/Prefabs/Projectiles with logic/Projectile 2 electro.prefab",
-            "isLoop": false,
-            "scale": 1.0,
-            "manual": true
-        },
-        {
             "key": "EliteDeath_Impact",
-            "prefabPath": "Assets/Hovl Studio/AAA Projectiles Vol 1/Prefabs/Flash and hits/Dragon punch flash.prefab",
+            "prefabPath": "Assets/Resources/VFX/Death/Elite_Death.prefab",
             "isLoop": false,
             "scale": 1.0,
             "manual": true
@@ -211,43 +225,8 @@
             "manual": true
         },
         {
-            "key": "FTUEPointerofwheretogo_Aura",
-            "prefabPath": "Assets/Hovl Studio/Map track markers VFX/Prefabs/Marker 1 arrows Loop.prefab",
-            "isLoop": false,
-            "scale": 1.0,
-            "manual": true
-        },
-        {
-            "key": "FireFromTower-ArcaneTowerLevel3_Aura",
-            "prefabPath": "Assets/Hovl Studio/RPG VFX Bundle/Random effect prefabs/Buff orange shot.prefab",
-            "isLoop": false,
-            "scale": 1.0,
-            "manual": true
-        },
-        {
-            "key": "FireImpact_Impact",
-            "prefabPath": "Assets/Hovl Studio/AAA Projectiles Vol 1/Prefabs/Flash and hits/Hit 25 orange explosion.prefab",
-            "isLoop": false,
-            "scale": 1.0,
-            "manual": true
-        },
-        {
             "key": "Fire_Cast",
             "prefabPath": "Assets/Hovl Studio/AAA Projectiles Vol 1/Prefabs/Flash and hits/Hit 16 fire.prefab",
-            "isLoop": false,
-            "scale": 1.0,
-            "manual": true
-        },
-        {
-            "key": "FireballImpact_Impact",
-            "prefabPath": "Assets/Hovl Studio/AAA Projectiles Vol 1/Prefabs/Projectiles with logic/Projectile 25 orange explosion.prefab",
-            "isLoop": false,
-            "scale": 1.0,
-            "manual": true
-        },
-        {
-            "key": "FireballTower_Projectile",
-            "prefabPath": "Assets/Hovl Studio/AAA Projectiles Vol 1/Prefabs/Projectiles(Particle collision)/Projectile 25 orange explosion.prefab",
             "isLoop": false,
             "scale": 1.0,
             "manual": true
@@ -269,6 +248,41 @@
         {
             "key": "Fireball_Projectile",
             "prefabPath": "Assets/Hovl Studio/AAA Projectiles Vol 1/Prefabs/Projectiles(Particle collision)/Projectile 25 orange explosion.prefab",
+            "isLoop": false,
+            "scale": 1.0,
+            "manual": true
+        },
+        {
+            "key": "FireballImpact_Impact",
+            "prefabPath": "Assets/Hovl Studio/AAA Projectiles Vol 1/Prefabs/Projectiles with logic/Projectile 25 orange explosion.prefab",
+            "isLoop": false,
+            "scale": 1.0,
+            "manual": true
+        },
+        {
+            "key": "FireballTower_Projectile",
+            "prefabPath": "Assets/Hovl Studio/AAA Projectiles Vol 1/Prefabs/Projectiles(Particle collision)/Projectile 25 orange explosion.prefab",
+            "isLoop": false,
+            "scale": 1.0,
+            "manual": true
+        },
+        {
+            "key": "FireFromTower-ArcaneTowerLevel3_Aura",
+            "prefabPath": "Assets/Hovl Studio/RPG VFX Bundle/Random effect prefabs/Buff orange shot.prefab",
+            "isLoop": false,
+            "scale": 1.0,
+            "manual": true
+        },
+        {
+            "key": "FireImpact_Impact",
+            "prefabPath": "Assets/Hovl Studio/AAA Projectiles Vol 1/Prefabs/Flash and hits/Hit 25 orange explosion.prefab",
+            "isLoop": false,
+            "scale": 1.0,
+            "manual": true
+        },
+        {
+            "key": "firespell_Cast",
+            "prefabPath": "Assets/Spells Pack/Particles/Prefabs/Spells/Spell_Fire_9.prefab",
             "isLoop": false,
             "scale": 1.0,
             "manual": true
@@ -304,6 +318,13 @@
         {
             "key": "Frost_Projectile",
             "prefabPath": "Assets/Hovl Studio/AAA Projectiles Vol 1/Prefabs/Projectiles(Particle collision)/Projectile 14 blue rapid.prefab",
+            "isLoop": false,
+            "scale": 1.0,
+            "manual": true
+        },
+        {
+            "key": "FTUEPointerofwheretogo_Aura",
+            "prefabPath": "Assets/Hovl Studio/Map track markers VFX/Prefabs/Marker 1 arrows Loop.prefab",
             "isLoop": false,
             "scale": 1.0,
             "manual": true
@@ -351,6 +372,13 @@
             "manual": true
         },
         {
+            "key": "icebasedprojectile_Projectile",
+            "prefabPath": "Assets/UnityTechnologies/ParticlePack/EffectExamples/Magic Effects/Prefabs/IceLance.prefab",
+            "isLoop": true,
+            "scale": 1.0,
+            "manual": true
+        },
+        {
             "key": "IceWeaponAura_Aura",
             "prefabPath": "Assets/Resources/VFX/Projectiles/Explosion_Ice.prefab",
             "isLoop": false,
@@ -388,6 +416,13 @@
         {
             "key": "KnightWeaponskill_Impact",
             "prefabPath": "Assets/Hovl Studio/AOE Magic spells Vol.1/Prefabs/Energy explosion.prefab",
+            "isLoop": false,
+            "scale": 1.0,
+            "manual": true
+        },
+        {
+            "key": "lighteningOnSpellLand_Impact",
+            "prefabPath": "Assets/Hovl Studio/RPG VFX Bundle/Random effect prefabs/Electro splash.prefab",
             "isLoop": false,
             "scale": 1.0,
             "manual": true
@@ -444,6 +479,41 @@
         {
             "key": "NoneMageHealingCast_Cast",
             "prefabPath": "Assets/Hovl Studio/RPG VFX Bundle/Random effect prefabs/Buff white twist.prefab",
+            "isLoop": false,
+            "scale": 1.0,
+            "manual": true
+        },
+        {
+            "key": "onweaponskillmaybe_Impact",
+            "prefabPath": "Assets/Hovl Studio/AAA Projectiles Vol 1/Prefabs/Flash and hits/Hit 20 pink arrow.prefab",
+            "isLoop": false,
+            "scale": 1.0,
+            "manual": true
+        },
+        {
+            "key": "portal(rotate)_Aura",
+            "prefabPath": "Assets/Hovl Studio/Magic circles/Prefabs/Magic circle dark star.prefab",
+            "isLoop": false,
+            "scale": 1.0,
+            "manual": true
+        },
+        {
+            "key": "Portal_Threshold_Aura",
+            "prefabPath": "Assets/Mirza Beig/Particle Systems/Ultimate VFX/Prefabs/Loop/pf_vfx-ult_demo_psys_loop_portalBlue.prefab",
+            "isLoop": true,
+            "scale": 1.0,
+            "manual": true
+        },
+        {
+            "key": "Posion_Cast",
+            "prefabPath": "Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Nature/Spell_Nature_2_Green Variant.prefab",
+            "isLoop": false,
+            "scale": 1.0,
+            "manual": true
+        },
+        {
+            "key": "PosionCloud_Cast",
+            "prefabPath": "Assets/Hovl Studio/AAA Projectiles Vol 1/Prefabs/Flash and hits/Hit 24 green explosion.prefab",
             "isLoop": false,
             "scale": 1.0,
             "manual": true
@@ -806,27 +876,6 @@
             "manual": true
         },
         {
-            "key": "Portal_Threshold_Aura",
-            "prefabPath": "Assets/Mirza Beig/Particle Systems/Ultimate VFX/Prefabs/Loop/pf_vfx-ult_demo_psys_loop_portalBlue.prefab",
-            "isLoop": true,
-            "scale": 1.0,
-            "manual": true
-        },
-        {
-            "key": "PosionCloud_Cast",
-            "prefabPath": "Assets/Hovl Studio/AAA Projectiles Vol 1/Prefabs/Flash and hits/Hit 24 green explosion.prefab",
-            "isLoop": false,
-            "scale": 1.0,
-            "manual": true
-        },
-        {
-            "key": "Posion_Cast",
-            "prefabPath": "Assets/Spells Pack/Particles/Prefabs/Variations/Spells/Nature/Spell_Nature_2_Green Variant.prefab",
-            "isLoop": false,
-            "scale": 1.0,
-            "manual": true
-        },
-        {
             "key": "RangedAttack-DaggerThrow_Projectile",
             "prefabPath": "Assets/Hovl Studio/AAA Projectiles Vol 1/Prefabs/Projectiles 2D/2D Projectile 8 dagger.prefab",
             "isLoop": false,
@@ -848,15 +897,15 @@
             "manual": true
         },
         {
-            "key": "RangerTowerUpgraded_Projectile",
-            "prefabPath": "Assets/Hovl Studio/AAA Projectiles Vol 1/Prefabs/Projectiles with logic/Projectile 7 pink.prefab",
+            "key": "RangerTowerlevel2Projectile_Projectile",
+            "prefabPath": "Assets/Hovl Studio/AAA Projectiles Vol 1/Prefabs/Projectiles 2D/2D Projectile 14 blue rapid.prefab",
             "isLoop": false,
             "scale": 1.0,
             "manual": true
         },
         {
-            "key": "RangerTowerlevel2Projectile_Projectile",
-            "prefabPath": "Assets/Hovl Studio/AAA Projectiles Vol 1/Prefabs/Projectiles 2D/2D Projectile 14 blue rapid.prefab",
+            "key": "RangerTowerUpgraded_Projectile",
+            "prefabPath": "Assets/Hovl Studio/AAA Projectiles Vol 1/Prefabs/Projectiles with logic/Projectile 7 pink.prefab",
             "isLoop": false,
             "scale": 1.0,
             "manual": true
@@ -897,6 +946,13 @@
             "manual": true
         },
         {
+            "key": "softhealingaura_Aura",
+            "prefabPath": "Assets/Hovl Studio/RPG VFX Bundle/Random effect prefabs/Buff palladin.prefab",
+            "isLoop": false,
+            "scale": 1.0,
+            "manual": true
+        },
+        {
             "key": "Spear_Projectile",
             "prefabPath": "Assets/Hovl Studio/AAA Projectiles Vol 1/Prefabs/Projectiles 2D/2D Projectile 1 nature arrow.prefab",
             "isLoop": false,
@@ -918,6 +974,20 @@
             "manual": true
         },
         {
+            "key": "subtleHealinginarea(EnemySkill-Mage)_Cast",
+            "prefabPath": "Assets/Hovl Studio/RPG VFX Bundle/Random effect prefabs/Buff orange circle.prefab",
+            "isLoop": false,
+            "scale": 1.0,
+            "manual": true
+        },
+        {
+            "key": "targetforSpell_Impact",
+            "prefabPath": "Assets/Hovl Studio/Map track markers VFX/Prefabs/Marker 2 Pointer Loop.prefab",
+            "isLoop": false,
+            "scale": 1.0,
+            "manual": true
+        },
+        {
             "key": "Thunderbolt_Cast",
             "prefabPath": "Assets/Hovl Studio/AAA Projectiles Vol 1/Prefabs/Projectiles(Particle collision)/Projectile 2 electro.prefab",
             "isLoop": false,
@@ -934,6 +1004,20 @@
         {
             "key": "Thunderbolt_Projectile",
             "prefabPath": "Assets/Hovl Studio/AAA Projectiles Vol 1/Prefabs/Projectiles(Particle collision)/Projectile 2 electro.prefab",
+            "isLoop": false,
+            "scale": 1.0,
+            "manual": true
+        },
+        {
+            "key": "thundercast_Cast",
+            "prefabPath": "Assets/Hovl Studio/AAA Projectiles Vol 1/Prefabs/Projectiles with logic/Projectile 2 electro.prefab",
+            "isLoop": false,
+            "scale": 1.0,
+            "manual": true
+        },
+        {
+            "key": "thundercast_Projectile",
+            "prefabPath": "Assets/Hovl Studio/AAA Projectiles Vol 1/Prefabs/Projectiles with logic/Projectile 2 electro.prefab",
             "isLoop": false,
             "scale": 1.0,
             "manual": true
@@ -976,90 +1060,6 @@
         {
             "key": "Weaponskillsword_Impact",
             "prefabPath": "Assets/Hovl Studio/AAA Projectiles Vol 1/Prefabs/Flash and hits/Hit 5 red.prefab",
-            "isLoop": false,
-            "scale": 1.0,
-            "manual": true
-        },
-        {
-            "key": "atfootprintoftree_Aura",
-            "prefabPath": "Assets/Resources/VFX/Death/Elite_Death.prefab",
-            "isLoop": false,
-            "scale": 1.0,
-            "manual": true
-        },
-        {
-            "key": "atfootprintoftree_Impact",
-            "prefabPath": "Assets/Resources/VFX/Death/Elite_Death.prefab",
-            "isLoop": false,
-            "scale": 1.0,
-            "manual": true
-        },
-        {
-            "key": "firespell_Cast",
-            "prefabPath": "Assets/Spells Pack/Particles/Prefabs/Spells/Spell_Fire_9.prefab",
-            "isLoop": false,
-            "scale": 1.0,
-            "manual": true
-        },
-        {
-            "key": "icebasedprojectile_Projectile",
-            "prefabPath": "Assets/UnityTechnologies/ParticlePack/EffectExamples/Magic Effects/Prefabs/IceLance.prefab",
-            "isLoop": true,
-            "scale": 1.0,
-            "manual": true
-        },
-        {
-            "key": "lighteningOnSpellLand_Impact",
-            "prefabPath": "Assets/Hovl Studio/RPG VFX Bundle/Random effect prefabs/Electro splash.prefab",
-            "isLoop": false,
-            "scale": 1.0,
-            "manual": true
-        },
-        {
-            "key": "onweaponskillmaybe_Impact",
-            "prefabPath": "Assets/Hovl Studio/AAA Projectiles Vol 1/Prefabs/Flash and hits/Hit 20 pink arrow.prefab",
-            "isLoop": false,
-            "scale": 1.0,
-            "manual": true
-        },
-        {
-            "key": "portal(rotate)_Aura",
-            "prefabPath": "Assets/Hovl Studio/Magic circles/Prefabs/Magic circle dark star.prefab",
-            "isLoop": false,
-            "scale": 1.0,
-            "manual": true
-        },
-        {
-            "key": "softhealingaura_Aura",
-            "prefabPath": "Assets/Hovl Studio/RPG VFX Bundle/Random effect prefabs/Buff palladin.prefab",
-            "isLoop": false,
-            "scale": 1.0,
-            "manual": true
-        },
-        {
-            "key": "subtleHealinginarea(EnemySkill-Mage)_Cast",
-            "prefabPath": "Assets/Hovl Studio/RPG VFX Bundle/Random effect prefabs/Buff orange circle.prefab",
-            "isLoop": false,
-            "scale": 1.0,
-            "manual": true
-        },
-        {
-            "key": "targetforSpell_Impact",
-            "prefabPath": "Assets/Hovl Studio/Map track markers VFX/Prefabs/Marker 2 Pointer Loop.prefab",
-            "isLoop": false,
-            "scale": 1.0,
-            "manual": true
-        },
-        {
-            "key": "thundercast_Cast",
-            "prefabPath": "Assets/Hovl Studio/AAA Projectiles Vol 1/Prefabs/Projectiles with logic/Projectile 2 electro.prefab",
-            "isLoop": false,
-            "scale": 1.0,
-            "manual": true
-        },
-        {
-            "key": "thundercast_Projectile",
-            "prefabPath": "Assets/Hovl Studio/AAA Projectiles Vol 1/Prefabs/Projectiles with logic/Projectile 2 electro.prefab",
             "isLoop": false,
             "scale": 1.0,
             "manual": true

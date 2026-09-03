@@ -44,40 +44,54 @@ using DeNelle.Core.Diagnostics;
 namespace DeNelle.Village
 {
     /// <summary>
-    /// The named seats WO-1343 built but deliberately left UNBOUND, each waiting on exactly one
-    /// owner tag in the VFX Caster. Every constant here is EMPTY on purpose - filling one in from
-    /// this seat would be the creative pick the rule forbids.
+    /// The named seats WO-1343 built and deliberately left UNBOUND until the owner ruled.
+    /// <para>
+    /// (S) BOTH SEATS ARE NOW BOUND, AND THIS FILE IS THE ONE PLACE THEY ARE NAMED. She retagged
+    /// on 2026-09-03 and the rows in <c>Assets/Editor/VfxManualPicks.json</c> now carry her picks.
+    /// These constants are the SINGLE definition point for the two keys - nothing else in the game
+    /// may write either key as a bare literal, which is pinned by
+    /// <c>NightStoreAuraSelectionRegression</c> Case 6. Filling one in from this seat WITHOUT her
+    /// word would still be the creative pick the rule forbids
+    /// (memory vfx-map-owner-tags-no-creative-pick); the difference today is that the word exists.
+    /// </para>
     /// </summary>
     public static class HeldVfxKeys
     {
         /// <summary>
         /// THE FOOT OF THE TREE OF LIFE (WO-1343 Ask 1). Owner ask, verbatim: "one for the foot of
         /// the tree of life, to go with the other one" - ADDITIVE, alongside the existing
-        /// <c>TreeofLifeAura_Aura</c> FireFlies loop, which is untouched.
+        /// <c>TreeofLifeAura_Aura</c> FireFlies loop, which is untouched: BOTH play.
         /// <para>
-        /// (S) HELD, AND HELD FOR A SPECIFIC REASON. She tagged <c>atfootprintoftree_Aura</c> ->
-        /// <c>Aura_Nature.prefab</c>. Within the hour that row read
-        /// <c>Assets/Resources/VFX/Death/Elite_Death.prefab</c> instead, with a spurious sibling
-        /// <c>atfootprintoftree_Impact</c> pointing at the same death effect - written while she was
-        /// tagging a BOSS DEATH, not a tree. Wiring that row verbatim would seat a death EXPLOSION
-        /// at the base of the Heart of Elarion. Wiring <c>Aura_Nature</c> back in on her behalf
-        /// would be substituting a prefab for her, which is the same rule broken from the other
-        /// side. So the seat is built, the key is EMPTY, and she retags.
+        /// (S) BOUND 2026-09-03 TO HER RE-TAG. The row reads
+        /// <c>atfootprintoftree_Aura -> Assets/Spells Pack/Particles/Prefabs/Auras/Aura_Nature.prefab</c>,
+        /// <c>isLoop=true</c> (correct for an ambient aura). The seat was held because the VFX Caster
+        /// had silently overwritten that same row with <c>Elite_Death.prefab</c> while she was
+        /// tagging a BOSS DEATH, and had invented a sibling <c>_Impact</c> row she never authored.
+        /// She has since re-pointed the Aura row and DELETED the invented sibling, so the row is
+        /// hers again and the seat is wired to it verbatim - no prefab chosen here, no rescale
+        /// (the call site passes scale 0 = the catalog row's own DefaultScale).
         /// </para>
         /// </summary>
-        public const string TreeOfLifeFootAura = "";
+        public const string TreeOfLifeFootAura = "atfootprintoftree_Aura";
 
         /// <summary>
-        /// BOSS DEATH (WO-1343 follow-up). Owner ask, verbatim: "added Elite death to boss death",
-        /// intending <c>Assets/Resources/VFX/Death/Elite_Death.prefab</c>.
+        /// BOSS DEATH (WO-1343 follow-up). Owner ask, verbatim: "added Elite death to boss death";
+        /// ruling verbatim: "both get Elite_Death, name it BossDeath_Impact".
         /// <para>
-        /// (S) HELD BECAUSE THERE IS NO BOSS-DEATH KEY TO MAP. <c>VfxManualPicks.json</c> contains
-        /// no boss-death row at all: her intent landed on <c>atfootprintoftree_Aura</c> /
-        /// <c>atfootprintoftree_Impact</c> instead. Inventing a key name here and pointing it at
-        /// Elite_Death would be this seat authoring her tag. The hook is at the seam and waits.
+        /// (S) BOUND 2026-09-03 TO A KEY SHE NAMED HERSELF. The row reads
+        /// <c>BossDeath_Impact -> Assets/Resources/VFX/Death/Elite_Death.prefab</c>,
+        /// <c>isLoop=false</c> (correct for a death burst - do not "fix" it). Elite death and boss
+        /// death SHARE the one effect deliberately; that is her ruling, not a fallback.
+        /// </para>
+        /// <para>
+        /// COVERAGE, STATED NOT IMPLIED: this key is consumed by <c>EliteVFXController.OnEliteDeath</c>
+        /// under <c>isBoss</c>, which covers the Enemy-tier bosses (the <c>_def.Boss</c> stat block).
+        /// <c>DragonBoss</c> (Syndrath the Devourer) is a separate class with its own <c>Die()</c> and
+        /// does NOT route through that component; whether the apex boss shares the effect is HER
+        /// call and no second seat is added for it here.
         /// </para>
         /// </summary>
-        public const string BossDeath = "";
+        public const string BossDeath = "BossDeath_Impact";
     }
 
     /// <summary>

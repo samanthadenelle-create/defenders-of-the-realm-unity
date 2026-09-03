@@ -106,9 +106,10 @@ namespace DeNelle.Village
         private Light _light;
         private VFXHandle _handle;
         private VFXHandle _treeHandle;   // persistent Tree-of-Life ambient loop (TreeofLifeAura_Aura)
-        // WO-1343 Ask 1: the SECOND, ADDITIVE aura at the tree's FOOT. Null today and null on
-        // purpose - the seat is wired, the key is HELD (HeldVfxKeys.TreeOfLifeFootAura). Declared
-        // and torn down alongside _treeHandle so that binding the key later needs no lifecycle work.
+        // WO-1343 Ask 1: the SECOND, ADDITIVE aura at the tree's FOOT, BOUND 2026-09-03 to
+        // HeldVfxKeys.TreeOfLifeFootAura (her re-tagged Aura_Nature loop). It is ADDITIVE to the
+        // FireFlies crown loop above - both play. Declared and torn down alongside _treeHandle, so
+        // the two ambient loops share one lifecycle and there is no second spawner or pool.
         private VFXHandle _footHandle;
         private AuraTier _tier = AuraTier.Unknown;
         private float _pulsePhase;   // accumulated so a frequency change never snaps the wave
@@ -284,13 +285,18 @@ namespace DeNelle.Village
             // "To go with" means BOTH PLAY. The FireFlies loop above is untouched - not removed, not
             // re-pointed, not rescaled - and this is a SECOND, independent seat at the base.
             //
-            // (S) THE KEY IS DELIBERATELY UNBOUND. She tagged atfootprintoftree_Aura ->
-            // Aura_Nature.prefab; within the hour the VFX Caster had overwritten that same row with
-            // Assets/Resources/VFX/Death/Elite_Death.prefab (plus a spurious atfootprintoftree_Impact
-            // sibling) while she was tagging a BOSS DEATH. Wiring the row verbatim today would seat
-            // a death EXPLOSION at the base of the Heart of Elarion; wiring Aura_Nature back in
-            // would be substituting a prefab on her behalf. Both break the same rule from opposite
-            // sides, so the SEAT ships and the KEY waits (HeldVfxKeys.TreeOfLifeFootAura).
+            // (S) THE KEY IS NOW BOUND (2026-09-03). The seat shipped HELD because the VFX Caster
+            // had silently overwritten her Aura row with Elite_Death.prefab while she was tagging a
+            // BOSS DEATH, and had invented an '_Impact' sibling she never authored. She has since
+            // re-pointed the Aura row to Aura_Nature.prefab (isLoop=true) and DELETED the invented
+            // sibling, so the row is hers again. The key still lives in exactly ONE place -
+            // HeldVfxKeys.TreeOfLifeFootAura - and is never written as a bare literal here; that is
+            // pinned by NightStoreAuraSelectionRegression Case 6.
+            //
+            // Nothing here chooses or rescales a prefab: scale 0 means the catalog row's own
+            // DefaultScale. If the catalog has not been regenerated for this key the hook traces the
+            // unresolved seat by name and the remedy (Defenders/VFX/Generate Hovl VFX Catalog)
+            // rather than drawing nothing quietly.
             //
             // It rides the SAME lifecycle as the FireFlies seat above - built once in BuildAura,
             // seated off the same renderer-bounds scan - so there is no second spawner and no second
@@ -301,10 +307,10 @@ namespace DeNelle.Village
                 _hasTreeBody ? foot : transform.position,
                 transform,
                 0f,                     // catalog DefaultScale - nothing here rescales her prefab
-                "WO-1343 Ask 1: she tagged 'atfootprintoftree_Aura' -> Aura_Nature.prefab, but the " +
-                "VFX Caster overwrote that row with Elite_Death.prefab while she was tagging a boss " +
-                "death, so the tag is suspect and is HELD rather than guessed. One retag in the " +
-                "Caster binds this seat with no code change.");
+                "WO-1343 Ask 1: this seat WAS bound on 2026-09-03 to her re-tagged Aura row " +
+                "(Aura_Nature.prefab). An EMPTY key here means HeldVfxKeys.TreeOfLifeFootAura was " +
+                "blanked by a later edit - restore the constant; do not re-type the key at this " +
+                "call site.");
 
             // (C) WO-891 (adjacent, reported): THE HEART DID NOT FLINCH WHEN STRUCK.
             //
