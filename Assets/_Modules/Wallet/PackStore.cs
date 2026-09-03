@@ -1166,6 +1166,33 @@ namespace DeNelle.Wallet
             _cardHandles.Clear();
             _sharedOfferCards.Clear();
 
+            // ⛔ AND REBUILD THE CATCH-UP RAIL, BECAUSE IN LANDSCAPE IT IS THE GAP BAND (WO-1339).
+            //
+            // THE DEFECT, read at source: in the landscape composition the Gap band is NOT drawn on
+            // the shelf at all — the band walk below does `if (_utilityContent != null && band ==
+            // StoreBand.Gap) continue;` and the three "Close the Gap" rows live in the right-hand
+            // rail instead. That rail was built ONCE, in EnsureBuilt, and NOTHING ever rebuilt it.
+            //
+            // EnsureBuilt runs BEFORE the first RefreshQuotedPrices, so every gap row was stamped
+            // with the price string that existed when no server quote had arrived yet — which is the
+            // WORDS "Price unavailable" (SolanaPackPricing.AmountLabel returns them for a 0 amount,
+            // deliberately). When the quote list then landed, RefreshQuotedPrices called Render()
+            // and Render() repainted Basket and Patronage with real figures and SKIPPED the rail.
+            // The store host is spawned once and kept for the session, so EnsureBuilt never ran
+            // again either: the three impulse packs read "Price unavailable" for the whole session,
+            // beside packs showing real prices two inches away. Exactly the shape of the WO-1190 and
+            // WO-1334 defects this file already documents — a value resolved once and then kept is a
+            // stale measurement.
+            //
+            // The rail is rebuilt here, from the same PacksInBand(Gap) rows and the same
+            // StorePriceMajor call, so a returning quote repaints the catch-up offers with
+            // everything else. It is also what makes the rail recover if the catalogue was not
+            // readable at build time (rows.Count == 0 used to mean the heading never appeared
+            // again). ⚠ ONLY the gap column is cleared: _utilityContent (ACTIONS / REDEEM /
+            // MONTHLY LEDGER) is a SEPARATE transform and is deliberately untouched, because those
+            // are navigation doors that must survive a catalogue failure.
+            RebuildLandscapeGapOffers();
+
             StoreLegalFooter.RefreshDisclaimer(_legalFooter);
 
             // Shared ledger scale, computed ONCE per render over every browsable pack. Per GOOD, not
@@ -1552,11 +1579,41 @@ namespace DeNelle.Wallet
                 () => PanelRouter.Open(PanelId.MonthlyLedger), false);
         }
 
+        /// <summary>
+        /// Clears the landscape catch-up rail and rebuilds it from the CURRENT catalogue and the
+        /// CURRENT quoted prices. Called from <see cref="Render"/> — see the note there.
+        /// </summary>
+        /// <remarks>
+        /// ⛔ THIS IS THE GAP BAND'S REPAINT, and without it the band has none. Nothing persistent
+        /// lives in this column (its heading is rebuilt with the rows), so it is cleared whole —
+        /// unlike the shelf, whose first children are the Free band, and unlike the ACTIONS rail,
+        /// which is a different transform and is never touched here.
+        /// </remarks>
+        private void RebuildLandscapeGapOffers()
+        {
+            if (_gapUtilityContent == null) return;      // portrait: the Gap band is on the shelf
+            for (int i = _gapUtilityContent.childCount - 1; i >= 0; i--)
+                Destroy(_gapUtilityContent.GetChild(i).gameObject);
+            BuildLandscapeGapOffers();
+        }
+
         private void BuildLandscapeGapOffers()
         {
             if (_gapUtilityContent == null) return;
             var rows = PacksInBand(StoreBand.Gap);
-            if (rows.Count == 0) return;
+            if (rows.Count == 0)
+            {
+                // ⛔ WORDS, NEVER AN EMPTY RAIL. A silently missing band is invisible to every gate
+                // and was found only by the owner's eyes, twice (WO-1335, WO-1339). If the
+                // catalogue has no gap rows on this pass, the rail still names itself and says so
+                // in a sentence — no colour carries this, the owner is red/green colourblind.
+                FlowTrace.Warn("Store", "catch-up rail: PacksInBand(Gap) returned 0 rows — the " +
+                                        "catalogue is unreadable or no impulse row is storeVisible+shelfCurated. " +
+                                        "Drawing the worded empty state rather than an empty rail.");
+                BuildUtilityHeading(_gapUtilityContent, "CLOSE THE GAP", NightMarketPalette.For(StoreBand.Gap));
+                BuildGapUtilityRow(_gapUtilityContent, "Catch-up offers", "Unavailable right now", null);
+                return;
+            }
 
             BuildUtilityHeading(_gapUtilityContent, "CLOSE THE GAP", NightMarketPalette.For(StoreBand.Gap));
             foreach (var pack in rows)

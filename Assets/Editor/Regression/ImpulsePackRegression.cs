@@ -180,6 +180,9 @@ namespace DeNelle.Editor.Regression
                 CaseCompareIsArithmetic(failures, log);
                 CaseVisibleIsGrantable(failures, log);
                 CaseBandGreyscale(failures, log);
+
+                // ── WO-1339 the catch-up rail is the Gap band, and it must repaint ──
+                CaseGapBandReachesTheShelf(failures, log);
             }
             catch (Exception ex)
             {
@@ -981,6 +984,117 @@ namespace DeNelle.Editor.Regression
         //  ⛔ THIS IS ALSO WHY NOBODY ASKS HER TO APPROVE A PALETTE (memory
         //  `owner-colorblind-delegate-visual-creative`). The gate runs without her.
         // =====================================================================
+        // =====================================================================
+        //  CASE 13 [gap-reaches-shelf] -- WO-1339. THE "CLOSE THE GAP" BAND MUST
+        //  ACTUALLY REACH A PLAYER, AND ITS PRICES MUST REPAINT.
+        // ---------------------------------------------------------------------
+        //  THE DEFECT THIS PINS, twice reported by the owner's EYES and by nothing
+        //  else (WO-1335 "UNAVAILABLE", WO-1339 "back to not showing"):
+        //
+        //  In the landscape composition PackStore.Render() SKIPS StoreBand.Gap
+        //  (`if (_utilityContent != null && band == StoreBand.Gap) continue;`) because
+        //  those three rows live in the right-hand catch-up rail instead. That rail
+        //  was built ONCE in EnsureBuilt and NOTHING rebuilt it. EnsureBuilt runs
+        //  BEFORE the first quote list arrives, so each row was stamped with
+        //  AmountLabel's no-quote WORDS ("Price unavailable", rendered "UNAVAILABLE")
+        //  and kept them for the whole session, beside packs showing real prices.
+        //
+        //  ⛔ ASSERTED ON THE SOURCE, NOT ON A RENDER, and deliberately: the claim is
+        //  STRUCTURAL -- "the band the shelf walk skips is rebuilt by the same
+        //  Render() that repaints the bands it does not skip". A headless render
+        //  proves only what one pass happened to draw with one set of quotes.
+        //
+        //  ⛔ AND IT IS PINNED AS A PAIR. The `continue` and the rebuild are two
+        //  halves of one decision: whoever deletes the rail must delete the skip in
+        //  the same change, or the Gap band is drawn NOWHERE. Checking either alone
+        //  is how this came back.
+        // =====================================================================
+        private static void CaseGapBandReachesTheShelf(List<string> failures, StringBuilder log)
+        {
+            // ── (a) DATA: the band is not empty. ────────────────────────────────
+            PackCatalog.Reload();
+            int gapRows = 0, curated = 0;
+            foreach (var pack in PackCatalog.Packs)
+            {
+                if (pack == null) continue;
+                if (pack.Impulse && pack.StoreVisible && pack.ShelfCurated)
+                {
+                    curated++;
+                    if (PackCatalog.BandOf(pack) != StoreBand.Gap)
+                        failures.Add("[gap-reaches-shelf] '" + pack.Sku + "' is storeVisible+shelfCurated (an " +
+                                     "opted-in shelf row) but BandOf says " + PackCatalog.BandOf(pack) + ", not " +
+                                     "Gap. The landscape rail draws the Gap band ONLY, so this row would be " +
+                                     "curated onto a shelf and then rendered nowhere.");
+                    if (!PackCatalog.IsOnBrowsableShelf(pack))
+                        failures.Add("[gap-reaches-shelf] '" + pack.Sku + "' is storeVisible+shelfCurated but " +
+                                     "IsOnBrowsableShelf refuses it. The curation flag and the shelf filter are " +
+                                     "the same decision and cannot disagree.");
+                }
+                if (PackCatalog.IsOnBrowsableShelf(pack) && PackCatalog.BandOf(pack) == StoreBand.Gap) gapRows++;
+            }
+            if (gapRows == 0)
+                failures.Add("[gap-reaches-shelf] the Gap band has ZERO browsable rows. 'Close the Gap' would " +
+                             "render as nothing at all - the exact silent-empty-band state the owner had to " +
+                             "report by eye twice. One impulse tier per resource is the owner's 2026-08-21 " +
+                             "ruling; the shelf must carry it.");
+            log.AppendLine("  [gap-reaches-shelf] " + gapRows + " browsable Gap row(s), " + curated +
+                           " storeVisible+shelfCurated impulse row(s)");
+
+            // ── (b) SOURCE: the rail is the band, and Render() repaints it. ────
+            string path = Application.dataPath + "/_Modules/Wallet/PackStore.cs";
+            if (!File.Exists(path))
+            {
+                failures.Add("[gap-reaches-shelf] PackStore.cs not found at " + path +
+                             " - cannot verify the catch-up rail is repainted.");
+                return;
+            }
+            string src = File.ReadAllText(path);
+
+            bool skipsGapOnShelf = ContainsOutsideComments(src, "band == StoreBand.Gap) continue");
+            bool hasRail = ContainsOutsideComments(src, "BuildLandscapeGapOffers()");
+            bool rebuilds = ContainsOutsideComments(src, "RebuildLandscapeGapOffers()");
+
+            if (skipsGapOnShelf && !rebuilds)
+                failures.Add("[gap-reaches-shelf] PackStore.Render() SKIPS StoreBand.Gap on the shelf (the " +
+                             "landscape rail owns it) but nothing calls RebuildLandscapeGapOffers(). The rail is " +
+                             "built once in EnsureBuilt, BEFORE the first quote arrives, so every catch-up offer " +
+                             "keeps AmountLabel's no-quote words ('Price unavailable' -> 'UNAVAILABLE') for the " +
+                             "whole session while every other band repaints. That is WO-1335 and WO-1339, and it " +
+                             "is invisible to every other gate.");
+            if (rebuilds && !hasRail)
+                failures.Add("[gap-reaches-shelf] RebuildLandscapeGapOffers() is called but BuildLandscapeGapOffers() " +
+                             "is gone. RE-POINT THIS ORACLE IN THE SAME CHANGE - a renamed builder must never " +
+                             "read as a passing rail.");
+
+            // The rebuild must be reached from Render(), not from EnsureBuilt only: EnsureBuilt runs
+            // once per surface, and a quote that lands afterwards would never be drawn.
+            int render = src.IndexOf("public void Render()", StringComparison.Ordinal);
+            if (render < 0)
+                failures.Add("[gap-reaches-shelf] PackStore.Render() not found. If it was renamed, RE-POINT THIS " +
+                             "ORACLE IN THE SAME CHANGE - otherwise the repaint rule silently stops being checked.");
+            else if (skipsGapOnShelf && IndexOfOutsideComments(src.Substring(render), "RebuildLandscapeGapOffers()") < 0)
+                failures.Add("[gap-reaches-shelf] RebuildLandscapeGapOffers() exists but is not reached from " +
+                             "Render(). Only Render() runs again when RefreshQuotedPrices returns; a rebuild wired " +
+                             "anywhere else repaints the rail exactly as never as before.");
+
+            // ⛔ AND A QUOTE FAILURE MUST DEGRADE TO WORDS. An empty rail explains nothing and
+            // cannot be seen by a gate; a heading plus a readable sentence can. Never colour alone -
+            // the owner is red/green colourblind.
+            int builder = src.IndexOf("private void BuildLandscapeGapOffers()", StringComparison.Ordinal);
+            if (builder >= 0)
+            {
+                string body = src.Substring(builder, Math.Min(2600, src.Length - builder));
+                if (IndexOfOutsideComments(body, "rows.Count == 0") >= 0 &&
+                    IndexOfOutsideComments(body, "Unavailable right now") < 0)
+                    failures.Add("[gap-reaches-shelf] BuildLandscapeGapOffers bails on an empty catalogue without " +
+                                 "drawing anything. A band that silently vanishes is the failure mode of BOTH " +
+                                 "reports - it must draw its heading and say, in WORDS, that the offers are " +
+                                 "unavailable right now.");
+            }
+            log.AppendLine("  [gap-reaches-shelf] the shelf skip and the rail rebuild are paired, and " +
+                           "Render() repaints the rail when a quote returns");
+        }
+
         private static void CaseBandGreyscale(List<string> failures, StringBuilder log)
         {
             var bands = new[] { StoreBand.Free, StoreBand.Gap, StoreBand.Basket, StoreBand.Patronage };
