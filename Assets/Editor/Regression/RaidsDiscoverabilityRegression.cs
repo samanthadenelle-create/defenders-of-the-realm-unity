@@ -76,6 +76,15 @@ namespace DeNelle.Editor
             try
             {
                 CheckStableJourneyDoor(failures, log);
+                // WO-1357 re-registers D5. It was dropped from Run by WO-1286 alongside D1/D2
+                // (which WO-1286 genuinely INVERTED - the bar face was retired, so "Raids must be
+                // in Active" became "Raids must not be"), but D5 lints the VISIBILITY BRIDGE and
+                // WO-1286 never touched that. It has been dead code guarding nothing since; it is
+                // the guard that keeps the troop clause out of the very predicate WO-1357 extends.
+                // D1/D2/CheckReasonsSpeakInWords stay unregistered ON PURPOSE - they assert the
+                // retired bottom-bar face and would fail against correct WO-1286 behaviour.
+                CheckVisibilityPredicateSource(failures, log);
+                CheckJourneyRaidsLock(failures, log);
                 CheckUnderlyingGateUnchanged(failures, log);
             }
             catch (Exception ex)
@@ -119,6 +128,115 @@ namespace DeNelle.Editor
                 rawDeck.IndexOf("IllustratedCardSurface", StringComparison.Ordinal) < 0)
                 failures.Add("WO-1286: Journey Quests/Raids cards lost their locked wide-card artwork surfaces");
             log.AppendLine("  WO-1286 stable Journey door, no duplicate face, RaidEntryGate authority intact - OK");
+        }
+
+        // ── J1 (WO-1357): the Journey RAIDS card locks with a REASON, BOTH ways ──
+        //
+        // Owner 2026-09-03: "Raid button under journey should fail gracefully, it works
+        // great if there is a barracks but should show locked if doesnt have one yet or
+        // its destroyed".
+        //
+        // ⚠ BOTH DIRECTIONS ARE PINNED HERE ON PURPOSE. A fix that simply locked the card
+        // always would satisfy a one-sided "it locks" test while DELETING the feature the
+        // owner explicitly said works. So the offerable direction is asserted first.
+        private static void CheckJourneyRaidsLock(List<string> failures, StringBuilder log)
+        {
+            // The suite runs inside the editor process, where PostureSignals is a live global.
+            // Snapshot and restore so no later suite inherits a shut raid door.
+            bool wasCapable = PostureSignals.RaidCapable;
+            var wasLock = PostureSignals.RaidLock;
+            int events = 0;
+            Action counter = () => events++;
+            PostureSignals.RaidCapableChanged += counter;
+            try
+            {
+                // --- Direction 1: A BARRACKS EXISTS -> the card is offerable, exactly as today.
+                PostureSignals.SetRaidCapable(true);
+                if (!PostureSignals.RaidCapable)
+                    failures.Add("J1: a capable save did not leave the raid door open - the working path " +
+                                 "the owner fenced off ('it works great if there is a barracks') is broken");
+                if (PostureSignals.RaidLock != PostureSignals.RaidLockReason.None)
+                    failures.Add("J1: an OPEN raid door still reports lock reason '" + PostureSignals.RaidLock +
+                                 "' - an offerable card must carry no locked copy");
+                if (!string.IsNullOrEmpty(PostureSignals.RaidLockCopy(PostureSignals.RaidLockReason.None)))
+                    failures.Add("J1: RaidLockCopy(None) returned copy - the unlocked card would print a lock line");
+
+                // --- Direction 2a: NO BARRACKS YET -> locked, and it says to build one.
+                PostureSignals.SetRaidCapable(false, PostureSignals.RaidLockReason.NoBarracks);
+                if (PostureSignals.RaidCapable)
+                    failures.Add("J1: no barracks left the raid door OPEN - the Journey card would offer a raid " +
+                                 "that dead-ends (the exact 2026-09-03 report)");
+                string noBarracks = PostureSignals.RaidLockCopy(PostureSignals.RaidLock);
+                if (string.IsNullOrEmpty(noBarracks))
+                    failures.Add("J1: the NoBarracks lock carries no words - '[ LOCKED ]' alone is a dead end and " +
+                                 "the owner is red/green colourblind, so hue/dimming cannot carry the meaning");
+                else if (noBarracks.IndexOf("Barracks", StringComparison.OrdinalIgnoreCase) < 0)
+                    failures.Add("J1: the NoBarracks copy does not name the Barracks - it must say what to do");
+
+                // --- Direction 2b: BARRACKS DESTROYED -> locked, and it says something DIFFERENT.
+                int beforeReasonFlip = events;
+                PostureSignals.SetRaidCapable(false, PostureSignals.RaidLockReason.BarracksLost);
+                if (events == beforeReasonFlip)
+                    failures.Add("J1: NoBarracks -> BarracksLost raised no change event. The bool did not move, so " +
+                                 "an early-return on it alone strands the WRONG sentence on the card.");
+                string lost = PostureSignals.RaidLockCopy(PostureSignals.RaidLock);
+                if (string.IsNullOrEmpty(lost))
+                    failures.Add("J1: the BarracksLost lock carries no words");
+                else if (lost.IndexOf("Barracks", StringComparison.OrdinalIgnoreCase) < 0)
+                    failures.Add("J1: the BarracksLost copy does not name the Barracks");
+                if (string.Equals(noBarracks, lost, StringComparison.Ordinal))
+                    failures.Add("J1: 'never had a Barracks' and 'lost your Barracks' print the SAME line ('" +
+                                 noBarracks + "'). They are different situations with different remedies - " +
+                                 "build one vs rebuild the one you lost.");
+
+                AssertAscii(failures, "NoBarracks lock copy", noBarracks);
+                AssertAscii(failures, "BarracksLost lock copy", lost);
+                AssertAscii(failures, "FlagOff lock copy",
+                            PostureSignals.RaidLockCopy(PostureSignals.RaidLockReason.FlagOff));
+            }
+            finally
+            {
+                PostureSignals.RaidCapableChanged -= counter;
+                PostureSignals.SetRaidCapable(wasCapable, wasLock);
+            }
+
+            // --- The CARD must consult that ONE predicate. A second barracks check on this
+            //     surface would drift from the bridge's, and the drift IS the defect.
+            string deckPath = Path.Combine(Application.dataPath, "_Modules/HUD/PlayerDeckWorkspace.cs");
+            if (!File.Exists(deckPath)) { failures.Add("J1: PlayerDeckWorkspace.cs missing at " + deckPath); return; }
+            string deck = Squash(StripCommentsAndStrings(File.ReadAllText(deckPath)));
+            if (deck.IndexOf("Available=()=>PostureSignals.RaidCapable", StringComparison.Ordinal) < 0)
+                failures.Add("J1: the Journey RAIDS card no longer gates on PostureSignals.RaidCapable. It shipped " +
+                             "as `Available = () => true`, which offered a raid with no barracks while the action " +
+                             "bar honoured the predicate - one rule, two surfaces, one ignoring it.");
+            if (deck.IndexOf("LockReason=()=>PostureSignals.RaidLockCopy", StringComparison.Ordinal) < 0)
+                failures.Add("J1: the Journey RAIDS card supplies no LockReason - it would fall back to the generic " +
+                             "'Complete its requirement first', which does not tell the player WHICH requirement");
+            if (deck.IndexOf("StructureSingleton", StringComparison.Ordinal) >= 0 ||
+                deck.IndexOf("IsBuilt", StringComparison.Ordinal) >= 0)
+                failures.Add("J1: PlayerDeckWorkspace grew its OWN structure check. The barracks rule lives in " +
+                             "RaidCapabilityHudBridge and is mirrored through PostureSignals - exactly one owner.");
+            if (deck.IndexOf("spec.LockReason", StringComparison.Ordinal) < 0)
+                failures.Add("J1: BuildCard never renders spec.LockReason - the reason would be computed and dropped");
+
+            // The card stays VISIBLE and locked, never hidden (WO-1008: a raid door that hides
+            // itself reads as broken). The locked badge is the non-colour tell and must survive.
+            string rawDeck = File.ReadAllText(deckPath);
+            if (rawDeck.IndexOf("[ LOCKED ]", StringComparison.Ordinal) < 0)
+                failures.Add("J1: the worded [ LOCKED ] badge is gone - a gray tint is a hue-only signal");
+
+            log.AppendLine("  J1 Journey RAIDS card: offerable with a barracks, locked-and-worded without one, " +
+                           "distinct copy for lost-vs-never-had - OK");
+        }
+
+        /// <summary>Collapse ALL whitespace so a source assertion cannot be broken by a re-wrap.</summary>
+        private static string Squash(string s)
+        {
+            if (string.IsNullOrEmpty(s)) return string.Empty;
+            var sb = new StringBuilder(s.Length);
+            for (int i = 0; i < s.Length; i++)
+                if (!char.IsWhiteSpace(s[i])) sb.Append(s[i]);
+            return sb.ToString();
         }
 
         // ── D1/D2: visible-and-dimmed, never hidden ──────────────────────────

@@ -85,11 +85,16 @@ README = [
     "NOT build-scoped: a sign-off is a judgement about a fix, not about one APK.",
     "Each entry keeps 'build' and 'at' as provenance so staleness stays answerable.",
     "One ticket per line, keys sorted - so two seats merge without a human.",
-    "How a sign-off gets here from her phone: BOARD.html > Owner Validation >",
-    "  'Export for the CLI' > Copy, hand the text to the CLI, which runs",
+    "How a sign-off gets here: BOARD.html > Owner Validation > [Submit marks to",
+    "  the CLI]. The page is opened over file://, so it cannot write to the repo -",
+    "  Submit SAVES eoa-validations-<UTC stamp>.json, and the CLI then runs",
+    "  python tools/board_build.py --submit  (newest such file wins; that one run",
+    "  also closes the Passes and bounces the Fail / Needs Work back to READY).",
+    "  Fallback if the browser refuses the save: 'Export for the CLI' > Copy, then",
     "  python tools/board_build.py --ingest -   (paste)  or --ingest <file>.",
     "Closing is still HER act: a Pass+validated mark on a FIXED ticket is flipped",
-    "  to CLOSED by the next `python tools/board_build.py` (tools/board_close_pass.py).",
+    "  to CLOSED by the next `python tools/board_build.py` (tools/board_close_pass.py),",
+    "  and a Fail / Needs Work mark sends that ticket back to READY carrying her note.",
 ]
 
 VERDICTS = ("", "Pass", "Fail", "Needs Work")

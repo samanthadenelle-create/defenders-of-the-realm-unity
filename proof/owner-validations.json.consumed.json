@@ -1,0 +1,11 @@
+{
+ "_readme": "Drop files already folded into the owner-validation record. Identity is sha256; name/mtime/at are provenance. Safe to delete: the worst case is one no-op re-ingest.",
+ "consumed": [
+  {
+   "sha256": "ca83a75359c076332ff68584881034af5f1fa22f3d52569ad79b0cb12012a52e",
+   "name": "eoa-validations-20260903T230859Z.json",
+   "mtime": 1788476939.504,
+   "at": "2026-09-03T18:27:01"
+  }
+ ]
+}

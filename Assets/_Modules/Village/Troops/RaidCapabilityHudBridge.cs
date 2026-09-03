@@ -39,6 +39,25 @@
 //
 // WO-932 Phase 1: when the face HIDES (not capable), toast ONCE per session with
 // a concrete unlock line so a fresh save is not a silent empty HUD.
+//
+// WO-1357 (owner 2026-09-03: "Raid button under journey should fail gracefully...
+// should show locked if doesnt have one yet or its destroyed"): this bridge now also
+// publishes a PostureSignals.RaidLockReason so the Journey deck card can say WHY, and
+// the Journey card reads THIS predicate instead of the `Available = () => true` it
+// carried. ⛔ THE PREDICATE'S BOUNDARY DID NOT MOVE — WO-1357 added an out-parameter,
+// never a clause. Two documented boundaries, both deliberate, both LEFT ALONE:
+//   * UNDER CONSTRUCTION / QUEUED counts as CAPABLE. BuildModeController.Place spawns
+//     the structure and appends its BaseLayout record BEFORE the build timer starts
+//     (BuildModeController.cs:2071), so a barracks mid-build has always read IsBuilt.
+//     Locking it would change the working path the owner fenced off. Flagged to her as
+//     a design call, not silently altered.
+//   * A RESURFACED BAKED TWIN counts as CAPABLE. After a WO-753 destruction the WO-819
+//     stand-in barracks re-activates, so IsBuilt clause 2 can hold while the build card
+//     correctly reads BUILDABLE (StructureSingleton.IsPlayerBuilt). That asymmetry is
+//     ON PURPOSE here: a barracks is visibly STANDING in the world, and locking raids in
+//     front of it would be the more confusing outcome. Do NOT "fix" this to IsPlayerBuilt
+//     without the owner — on a pre-handover Default-Town save the founding barracks has
+//     no placement record yet, so IsPlayerBuilt would lock raids for a player who has one.
 // =============================================================================
 
 using UnityEngine;
@@ -58,6 +77,9 @@ namespace DeNelle.Village
 
         private float _timer;          // 0 on spawn/scene load -> first Update publishes immediately
         private bool _lastCapable;
+        // WO-1357: the edge is (capable, reason), not capable alone. NoBarracks -> BarracksLost
+        // never flips the bool, but the Journey card's sentence has to change with it.
+        private PostureSignals.RaidLockReason _lastLock = PostureSignals.RaidLockReason.None;
         private bool _haveLast;
         // WO-932: one teach toast per process for "why is Raids missing".
         private static bool s_unlockTeachToasted;
@@ -76,16 +98,18 @@ namespace DeNelle.Village
             if (_timer > 0f) return;
             _timer = PollInterval;
 
-            bool capable = ComputeCapable(out string refuseReason);
-            if (_haveLast && capable == _lastCapable) return;   // edge-triggered push
+            bool capable = ComputeCapable(out string refuseReason, out var lockReason);
+            if (_haveLast && capable == _lastCapable && lockReason == _lastLock) return;   // edge-triggered push
             bool wasCapable = _haveLast && _lastCapable;
             _lastCapable = capable;
+            _lastLock = lockReason;
             _haveLast = true;
             FlowTrace.Step("Raid", "capability edge -> " + (capable ? "CAPABLE" : "NOT CAPABLE") +
                            " (flag=" + FeatureFlags.Raid +
                            ", building=" + StructureSingleton.IsBuilt(RaidBuildingId) +
+                           ", lock=" + lockReason +
                            (string.IsNullOrEmpty(refuseReason) ? "" : ", why=" + refuseReason) + ")");
-            PostureSignals.SetRaidCapable(capable);   // Core static — cannot go stale
+            PostureSignals.SetRaidCapable(capable, lockReason);   // Core static — cannot go stale
 
             // WO-932: teach unlock when we first learn the player cannot raid (or lose capability).
             if (!capable && !s_unlockTeachToasted && !string.IsNullOrEmpty(refuseReason))
@@ -101,12 +125,22 @@ namespace DeNelle.Village
             }
         }
 
-        private static bool ComputeCapable() => ComputeCapable(out _);
+        private static bool ComputeCapable() => ComputeCapable(out _, out _);
 
-        /// <summary>WO-932: same predicate as header, with a player-facing refuse line.</summary>
-        private static bool ComputeCapable(out string refuseReason)
+        /// <summary>
+        /// WO-932: same predicate as header, with a player-facing refuse line.
+        /// WO-1357 adds the machine-readable <paramref name="lockReason"/> that travels with
+        /// it into Core, so EVERY surface (bar face, Journey card) explains the same shut door
+        /// in the same words. ⛔ THE CAPABLE/NOT-CAPABLE BOUNDARY IS BIT-IDENTICAL TO BEFORE
+        /// WO-1357 — the owner's fence is "it works great if there is a barracks", so this
+        /// method gained an out-parameter and NOT a clause. Anything that returned true still
+        /// returns true.
+        /// </summary>
+        private static bool ComputeCapable(out string refuseReason,
+                                           out PostureSignals.RaidLockReason lockReason)
         {
             refuseReason = null;
+            lockReason = PostureSignals.RaidLockReason.None;
             var gs = GameStateService.Instance;
             var st = gs != null ? gs.State : null;
             if (st == null || st.Army == null)
@@ -115,11 +149,33 @@ namespace DeNelle.Village
             if (!FeatureFlags.Raid)
             {
                 refuseReason = "Raids are turned off in this build.";
+                lockReason = PostureSignals.RaidLockReason.FlagOff;
                 return false;
             }
             if (!StructureSingleton.IsBuilt(RaidBuildingId))
             {
-                refuseReason = "Build a Barracks and train troops to unlock Raids.";
+                // WO-1357 — "doesnt have one yet" vs "or its destroyed" are DIFFERENT player
+                // situations with different remedies, and only the save can tell them apart.
+                //
+                // WHAT A DESTROYED STRUCTURE LOOKS LIKE AT RUNTIME (read at source, WO-753):
+                // it is GONE, not flagged. Destructible.NotifyBroken frees the footprint, calls
+                // BaseLayoutLoader.Forget, DROPS the persisted BaseLayout record, burns the
+                // free-build, and Destroy()s the GameObject. Building.IsDestroyed exists only
+                // for the single frame between hp0 and that Destroy, and IsBuilt clause 4 already
+                // demands IsAlive — so there is no lingering wreck for an existence check to
+                // trip over. IsBuilt therefore ALREADY goes false on destruction; what it cannot
+                // do is say WHY, because "never had one" looks identical to "had one, lost it".
+                //
+                // GameState.EverBuiltStructureIds (v36, WO-834) is the discriminator and it is
+                // MONOTONIC — selling or losing a structure never removes its id — which is
+                // exactly the "you have owned one before" question we need. No new state.
+                bool everHadOne = st.HasEverBuilt(RaidBuildingId);
+                lockReason = everHadOne
+                    ? PostureSignals.RaidLockReason.BarracksLost
+                    : PostureSignals.RaidLockReason.NoBarracks;
+                refuseReason = everHadOne
+                    ? "Your Barracks is gone - rebuild it at full cost to raid again."
+                    : "Build a Barracks and train troops to unlock Raids.";
                 return false;
             }
 

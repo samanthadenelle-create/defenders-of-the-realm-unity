@@ -159,15 +159,70 @@ namespace DeNelle.Core.HudModel
         /// door (the RaidEntryGate.ArmyStatus never-false-block precedent).</summary>
         public static bool RaidCapable { get; private set; } = true;
 
-        /// <summary>Raised when <see cref="RaidCapable"/> changes value.</summary>
+        // ── WO-1357: WHY the raid door is shut ───────────────────────────────
+        // Owner ruling 2026-09-03, verbatim: "Raid button under journey should fail
+        // gracefully, it works great if there is a barracks but should show locked if
+        // doesnt have one yet or its destroyed".
+        //
+        // ⛔ THIS ADDS A REASON, NOT A SECOND RULE. RaidCapable is still THE one
+        // predicate and its boundary is UNCHANGED by WO-1357 — the bar face and the
+        // Journey card now read the SAME bool, and the reason below only supplies the
+        // words. Never write a second barracks check on a surface: two checks drift,
+        // and the drift IS the defect this ticket closes (the Journey card carried
+        // `Available = () => true` while the bar honoured RaidCapable).
+
+        /// <summary>WHY <see cref="RaidCapable"/> is false. <see cref="RaidLockReason.None"/> when open.</summary>
+        public enum RaidLockReason
+        {
+            /// <summary>Not locked — the raid door is open.</summary>
+            None = 0,
+            /// <summary>FeatureFlags.Raid is off in this build.</summary>
+            FlagOff = 1,
+            /// <summary>No Barracks has ever stood on this save — build the first one.</summary>
+            NoBarracks = 2,
+            /// <summary>A Barracks stood on this save and is gone (destroyed = lost, WO-753) — rebuild it.</summary>
+            BarracksLost = 3,
+        }
+
+        /// <summary>Latest published lock reason (Village-published, WO-1357).</summary>
+        public static RaidLockReason RaidLock { get; private set; } = RaidLockReason.None;
+
+        /// <summary>
+        /// The ONE owner of the player-facing lock copy, so the Journey card, any future
+        /// surface and the regression oracle all read identical words.
+        /// ASCII-only (mobile font-atlas law) and it always says WHAT TO DO, never just
+        /// "Locked" — the owner is red/green colourblind, so the tell has to be words and
+        /// the words have to be actionable. "No Barracks" and "lost your Barracks" are
+        /// DIFFERENT player situations with different remedies; never collapse them.
+        /// </summary>
+        public static string RaidLockCopy(RaidLockReason reason)
+        {
+            switch (reason)
+            {
+                case RaidLockReason.FlagOff: return "Raids are turned off in this build";
+                case RaidLockReason.NoBarracks: return "Build a Barracks to raid";
+                case RaidLockReason.BarracksLost: return "Rebuild your lost Barracks to raid";
+                default: return null;
+            }
+        }
+
+        /// <summary>Raised when <see cref="RaidCapable"/> OR <see cref="RaidLock"/> changes.</summary>
         public static event Action RaidCapableChanged;
 
-        /// <summary>Producer-only (Village RaidCapabilityHudBridge).</summary>
-        public static void SetRaidCapable(bool capable)
+        /// <summary>
+        /// Producer-only (Village RaidCapabilityHudBridge). The event fires on a
+        /// REASON-only change too (NoBarracks -> BarracksLost never flips the bool, but the
+        /// card copy must repaint) — an early-return on the bool alone would strand the
+        /// wrong sentence on screen.
+        /// </summary>
+        public static void SetRaidCapable(bool capable, RaidLockReason reason = RaidLockReason.None)
         {
-            if (RaidCapable == capable) return;
+            if (capable) reason = RaidLockReason.None;   // an open door has no reason to give
+            if (RaidCapable == capable && RaidLock == reason) return;
             RaidCapable = capable;
-            FlowTrace.Step("HudKit", "raid capable -> " + capable);
+            RaidLock = reason;
+            FlowTrace.Step("HudKit", "raid capable -> " + capable +
+                           (capable ? "" : " (locked: " + reason + " -> \"" + RaidLockCopy(reason) + "\")"));
             RaidCapableChanged?.Invoke();
         }
     }

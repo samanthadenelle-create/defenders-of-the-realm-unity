@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using DeNelle.Core.Diagnostics;
+using DeNelle.Core.HudModel;   // WO-1357: PostureSignals.RaidCapable / RaidLock - the ONE raid predicate
 using DeNelle.Core.UI;
 using TMPro;
 using UnityEngine;
@@ -26,6 +27,13 @@ namespace DeNelle.HUD
             public string Concept;
             public string ArtKey;
             public Func<bool> Available;
+            /// <summary>
+            /// WO-1357 — the SPECIFIC reason this card is locked, evaluated at render. Null
+            /// (or a null/empty return) falls back to the generic "Complete its requirement
+            /// first" line below. A locked card that only says LOCKED is a dead end; one that
+            /// names its remedy teaches the next goal, which is why this exists.
+            /// </summary>
+            public Func<string> LockReason;
             public Action Open;
         }
 
@@ -226,8 +234,21 @@ namespace DeNelle.HUD
                 ElarionUiKit.FitSingleLine(badge, 14f, 24f);
             }
 
+            // WO-1357: when the card is locked, the purpose line becomes the REMEDY. The
+            // "[ LOCKED ]" badge above says THAT it is shut; this line says WHY and what to do,
+            // in words - the owner is red/green colourblind, so neither the gray face nor the
+            // badge alone may be the only carrier of meaning.
+            string lockLine = null;
+            if (!available && spec.LockReason != null)
+                lockLine = Guard.Try("HUD", "resolve deck card lock reason '" + spec.Title + "'",
+                                     spec.LockReason, null);
+            if (!available)
+                FlowTrace.Step("Navigation", "deck card '" + spec.Title + "' LOCKED - " +
+                    (string.IsNullOrEmpty(lockLine) ? "generic requirement line (no LockReason supplied)" : lockLine));
+
             var purpose = ElarionUiKit.Label(button.transform,
-                available ? spec.Purpose : "Complete its requirement first",
+                available ? spec.Purpose
+                          : (string.IsNullOrEmpty(lockLine) ? "Complete its requirement first" : lockLine),
                 0.26f, 0.52f, available ? ElarionUi.Parchment : ElarionUi.ParchmentDim,
                 (int)ElarionUi.FontMicro, TextAlignmentOptions.Center,
                 TextPlateX0(illustratedCard != null), 0.96f);
@@ -531,8 +552,25 @@ namespace DeNelle.HUD
                             Concept = "quest", ArtKey = "quests",
                             Available = () => PanelRouter.IsRegistered(PanelId.RumorBoard),
                             Open = () => PanelRouter.Open(PanelId.RumorBoard) },
+                        // WO-1357 (owner 2026-09-03: "Raid button under journey should fail
+                        // gracefully, it works great if there is a barracks but should show
+                        // locked if doesnt have one yet or its destroyed").
+                        //
+                        // This card used to carry `Available = () => true`, so it offered the raid
+                        // door unconditionally and dead-ended with no barracks - while the action
+                        // bar's Raids face had honoured PostureSignals.RaidCapable since WO-835.
+                        // ONE rule, TWO surfaces, one of them ignoring it: the duplicated-state
+                        // class this repo keeps getting burned by. The fix is to read the EXISTING
+                        // predicate, never to write a second barracks check here - a second check
+                        // would drift from the first, and the drift is the actual defect.
+                        //
+                        // The card stays VISIBLE and locked rather than hidden: WO-1008 already
+                        // settled that a raid door which hides itself reads as broken ("I do not
+                        // see a way to start a raid"). Locked-with-a-reason teaches the next goal.
                         new Card { Title = "Raids", Purpose = "Choose a camp and deploy your army", Concept = "raid",
-                            ArtKey = "raids", Available = () => true,
+                            ArtKey = "raids",
+                            Available = () => PostureSignals.RaidCapable,
+                            LockReason = () => PostureSignals.RaidLockCopy(PostureSignals.RaidLock),
                             Open = RaidEntryGate.RequestOpen }
                     };
                 default:
