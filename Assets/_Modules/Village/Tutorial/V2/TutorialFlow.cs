@@ -1904,6 +1904,7 @@ namespace DeNelle.Village
         {
             _townWaveArmed = false;
             _townWaveSpawnSettled = false;
+            _townWaveForcedClear = false;   // WO-1300: a fresh arm never inherits a forced settle
 
             if (_wave == null) _wave = FindAnyObjectByType<WaveManager>();
             var gate = NearestGateToHero();
@@ -1920,23 +1921,110 @@ namespace DeNelle.Village
             RunScriptedTownWave(gate).Forget();
         }
 
+        /// <summary>WO-1300: how long (in PLAYED seconds) the pre-fight dialogue may hold the
+        /// scripted band back before the arm proceeds anyway. The intro line is a BUFFER, not a
+        /// gate; a dialogue that never ends must not silently turn it into one. Deliberately far
+        /// under the watchdog bound so the band still has time to be fought and repelled - this
+        /// is NOT a watchdog change (WO-1300 forbids touching that bound).</summary>
+        private const float TownWaveDialogueHoldBoundSeconds = 30f;
+
+        /// <summary>WO-1300: cadence (PLAYED seconds) of the scripted-band arm trace.</summary>
+        private const float TownWaveTraceSeconds = 5f;
+
         private async UniTaskVoid RunScriptedTownWave(WaveSpawnPoint gate)
         {
-            // EnterStep arms this self-driving wave before it presents the step intro.
-            // Yield once so the dialogue can open, then treat that line as the authored
-            // pre-fight buffer. Spawning while Dialogue still owns Modal posture hides
-            // the combat HUD even though the enemies are already attacking.
-            await UniTask.Yield();
-            while (_townWaveArmed && CoreDialogue.DialogueService.IsRunning)
+            // ── WO-1300: THE ARM MUST NEVER GO QUIET, AND MUST NEVER WEDGE ────────────────
+            // This is a fire-and-forget UniTaskVoid. Before WO-1300 its whole await chain was
+            // UNGUARDED, so there were two ways for founding_defend to burn the full 120s
+            // watchdog and be rescued-as-SKIPPED without ONE [Flow:Tutorial] line saying why:
+            //   1. SpawnAt THREW (it awaits WaveManager.GetEnemyCatalogAsync -> WaveDataLoader,
+            //      which can fault) - the exception surfaced as an unobserved-task log with no
+            //      tutorial context, _townWaveSpawnSettled stayed false, and TickScriptedWave
+            //      never armed. The step then awaited a signal whose ONLY publisher was never
+            //      going to run.
+            //   2. The dialogue-hold loop below never released, so the band never spawned.
+            // Both now report themselves and both now fall back to the spawner's OWN documented
+            // "proceed, don't wedge" contract, so the beat completes instead of being silently
+            // skipped. PERMANENT instrumentation (CLAUDE.md sec.12) - never strip.
+            try
+            {
+                // EnterStep arms this self-driving wave before it presents the step intro.
+                // Yield once so the dialogue can open, then treat that line as the authored
+                // pre-fight buffer. Spawning while Dialogue still owns Modal posture hides
+                // the combat HUD even though the enemies are already attacking.
                 await UniTask.Yield();
-            if (!_townWaveArmed) return;
 
-            // SpawnAt awaits the enemy catalog before any enemy exists; IsCleared would
-            // read true (spawn-requested, none live) during that await — so the clear
-            // poll (TickScriptedWave) only arms once the spawn has actually settled.
-            await _tutorialWave.SpawnAt(gate, TownWaveCount);
+                float nextTraceAt = TownWaveTraceSeconds;
+                while (_townWaveArmed && CoreDialogue.DialogueService.IsRunning)
+                {
+                    if (_stepClock.Charged >= nextTraceAt)
+                    {
+                        nextTraceAt = _stepClock.Charged + TownWaveTraceSeconds;
+                        FlowTrace.Warn("Tutorial",
+                            $"scripted band HELD by the pre-fight dialogue for {_stepClock.Charged:0}s played " +
+                            $"(bound {TownWaveDialogueHoldBoundSeconds:0}s). Nothing has spawned yet, so " +
+                            $"'{TutorialSignals.TutorialBandRepelled}' cannot be raised while this holds.");
+                    }
+                    if (_stepClock.Charged >= TownWaveDialogueHoldBoundSeconds)
+                    {
+                        FlowTrace.Warn("Tutorial",
+                            $"scripted band PROCEEDING despite an open dialogue - the pre-fight line has held for " +
+                            $"{_stepClock.Charged:0}s played, past the {TownWaveDialogueHoldBoundSeconds:0}s buffer bound. " +
+                            "The intro is a buffer, not a gate; holding forever is how this beat used to be " +
+                            "rescued-and-SKIPPED with no fiction narrated (WO-1300).");
+                        break;
+                    }
+                    await UniTask.Yield();
+                }
+                if (!_townWaveArmed) return;
+                if (_tutorialWave == null)
+                {
+                    FlowTrace.Fail("Tutorial", "scripted band arm found NO TutorialWaveSpawner - nothing can spawn.");
+                    SettleScriptedWaveWithoutBand("no TutorialWaveSpawner");
+                    return;
+                }
+
+                // SpawnAt awaits the enemy catalog before any enemy exists; IsCleared would
+                // read true (spawn-requested, none live) during that await — so the clear
+                // poll (TickScriptedWave) only arms once the spawn has actually settled.
+                await _tutorialWave.SpawnAt(gate, TownWaveCount);
+                _townWaveSpawnSettled = true;
+                FlowTrace.Step("Tutorial",
+                    $"scripted band spawn SETTLED - the clear poll is armed and will raise " +
+                    $"'{TutorialSignals.TutorialBandRepelled}' when the last body dies.");
+            }
+            catch (System.Exception ex)
+            {
+                // A THROWN arm is the silent-stuck case. Say so, then settle the poll anyway:
+                // TutorialWaveSpawner's own contract is "a skipped spawn reads IsCleared=true so
+                // the tutorial proceeds rather than wedging" - honour it here too. The signal is
+                // still raised by the ONE publisher (TickScriptedWave), never from this catch.
+                FlowTrace.Fail("Tutorial",
+                    $"scripted band arm THREW before the spawn settled: {ex.GetType().Name}: {ex.Message}. " +
+                    $"Awaiting '{TutorialSignals.TutorialBandRepelled}' would never be satisfied, so the beat is " +
+                    "settled as an empty band (the player is not held at a fight that cannot start).");
+                SettleScriptedWaveWithoutBand("the arm threw");
+            }
+        }
+
+        /// <summary>
+        /// WO-1300: let the clear poll arm with NO live band, so the step completes down its
+        /// normal path instead of stranding until the watchdog rescues-and-SKIPS it. Reuses
+        /// <see cref="TutorialWaveSpawner"/>'s documented proceed-don't-wedge contract rather
+        /// than raising the completion signal here - <see cref="TickScriptedWave"/> stays the
+        /// ONE publisher of 'wave.tutorial_band_repelled'.
+        /// </summary>
+        private void SettleScriptedWaveWithoutBand(string reason)
+        {
+            if (!_townWaveArmed) return;
+            if (_tutorialWave != null) _tutorialWave.MarkClearedWithoutBand(reason);
+            _townWaveForcedClear  = true;
             _townWaveSpawnSettled = true;
         }
+
+        /// <summary>WO-1300: set when the scripted band could not be armed at all, so
+        /// <see cref="TickScriptedWave"/> may complete the beat without a live band.</summary>
+        private bool _townWaveForcedClear;
 
         /// <summary>
         /// The scripted wave bypasses WaveManager's wave loop (TutorialWaveSpawner owns
@@ -1949,7 +2037,11 @@ namespace DeNelle.Village
         private void TickScriptedWave()
         {
             if (!_townWaveArmed || !_townWaveSpawnSettled) return;
-            if (_tutorialWave == null || !_tutorialWave.IsCleared) return;
+            // WO-1300: a forced settle (the arm threw / no spawner) reads as cleared here, so a
+            // band that could never spawn completes the beat instead of stranding it. The
+            // spawner's own IsCleared still governs every normal run.
+            if (!_townWaveForcedClear && (_tutorialWave == null || !_tutorialWave.IsCleared)) return;
+            _townWaveForcedClear = false;
             _townWaveArmed = false;
             // WO-1012 P3: raise the id the LIVE step awaits — the arc's ENEMIES beat
             // completes on the band-scoped 'wave.tutorial_band_repelled' (so an ambient
@@ -2082,9 +2174,38 @@ namespace DeNelle.Village
                 !_awaitSignal.StartsWith(TutorialSignals.HeroReachedPrefix, StringComparison.OrdinalIgnoreCase))
                 return;
 
-            if (_hero == null) { _hero = FindAnyObjectByType<HeroLocomotion>(); if (_hero == null) return; }
-
             string anchorId = _awaitSignal.Substring(TutorialSignals.HeroReachedPrefix.Length);
+
+            // ── WO-1300: THE PROBE MUST NEVER GO QUIET ────────────────────────────────────
+            // Both preconditions below used to `return` in SILENCE. When either held for the
+            // whole beat the walk step produced ZERO walk-probe lines and then a bare
+            // STEP-STUCK 120s later - the F8 capture named the missing SIGNAL but could not
+            // name the missing PRECONDITION, which is the whole reason WO-1300 needed a
+            // second investigation (CLAUDE.md sec.12: a step that can go stuck and cannot
+            // report it is the bug repeating). They now report themselves on the SAME
+            // played-time cadence as the progress trace, so one capture separates:
+            //   * "no hero"      -> HeroLocomotion never resolved (probe never ran at all)
+            //   * "no anchor"    -> the gate/Heart never resolved, so there is nothing to
+            //                       walk to and no distance to shrink
+            //   * a walk-probe line with a distance -> the probe IS running; read the distance
+            // PERMANENT instrumentation (CLAUDE.md sec.12) - never strip.
+            if (_hero == null)
+            {
+                _hero = FindAnyObjectByType<HeroLocomotion>();
+                if (_hero == null)
+                {
+                    if (_stepClock.Charged >= _probeTraceAtCharged)
+                    {
+                        _probeTraceAtCharged = _stepClock.Charged + ProbeTraceSeconds;
+                        FlowTrace.Warn("Tutorial",
+                            $"walk-probe STALLED :: '{_awaitSignal}' - no HeroLocomotion in the scene, so the " +
+                            $"proximity check cannot run at all (played={_stepClock.Charged:0}s of the " +
+                            $"{WatchdogSecondsForCurrentStep():0}s bound). The beat CANNOT complete while this holds; " +
+                            "this is a hero-spawn/scene defect, not a walk-distance one.");
+                    }
+                    return;
+                }
+            }
 
             // WO-962: idempotent re-latch. EnterStep already latched this anchor; this call
             // returns immediately when it did, and only takes effect when the anchor was NOT
@@ -2092,7 +2213,20 @@ namespace DeNelle.Village
             // in which case the FIRST frame it resolves becomes the latch for the whole step.
             // It can never RE-target a latch that already took, which is the defect.
             TutorialWorldAnchors.LatchAnchor(anchorId);
-            if (!TutorialWorldAnchors.TryResolveAnchor(anchorId, out Vector3 pos)) return;
+            if (!TutorialWorldAnchors.TryResolveAnchor(anchorId, out Vector3 pos))
+            {
+                if (_stepClock.Charged >= _probeTraceAtCharged)
+                {
+                    _probeTraceAtCharged = _stepClock.Charged + ProbeTraceSeconds;
+                    FlowTrace.Warn("Tutorial",
+                        $"walk-probe STALLED :: '{_awaitSignal}' - anchor '{anchorId}' does not resolve this frame " +
+                        $"(no latch, and the live resolver answered nothing - for 'guide_gate' that means no " +
+                        $"WaveSpawnPoint and/or no HeartController was found). hero={_hero.transform.position} " +
+                        $"played={_stepClock.Charged:0}s of the {WatchdogSecondsForCurrentStep():0}s bound. " +
+                        "There is NOTHING to walk to: the beat cannot complete however far the player walks.");
+                }
+                return;
+            }
 
             // WO-1012 P2: the GUIDE (pet-Echo) LEADS every movement beat — re-asserted
             // each frame (the anchor can resolve late or move; the leash seam dedupes

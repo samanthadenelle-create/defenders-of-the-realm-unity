@@ -1,6 +1,6 @@
 # WORK ORDER 1300 — Founding tutorial STEP-STUCK: `founding_walk` and `founding_defend` completion signals never fire
 
-**Status:** READY TO IMPLEMENT
+**Status:** FIXED - the scripted-band arm's unguarded fire-and-forget await chain now catches, reports and settles (founding_defend can no longer await a signal whose only publisher never ran), the walk probe's two silent early-returns now name themselves, and a new regression pins one live publisher per founding completion signal. Awaiting owner felt-verify to CLOSE (AC 5).
 **Source:** F8 captures seq **4376** (`founding_walk`) and seq **4370** (`founding_defend`).
 Ledger: `docs/qa/F8_TRIAGE_2026-09-02.md` §4.
 **Silo:** Tutorial V2 (`Assets/_Modules/Village/Tutorial/V2/`)

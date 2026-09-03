@@ -91,6 +91,25 @@ namespace DeNelle.Village
         public void SetWaveManager(WaveManager wave) => _wave = wave;
 
         /// <summary>
+        /// WO-1300: declare the band CLEARED without one ever having spawned. This is the
+        /// explicit, LOGGED spelling of the contract the class header already states ("null-safe
+        /// - with no WaveManager / no spawn point / no enemy def it reports cleared so the
+        /// tutorial proceeds rather than wedging"); before WO-1300 that contract only held when
+        /// SpawnAt RETURNED, so an arm that THREW mid-await left _spawnRequested false, IsCleared
+        /// false forever, and the founding_defend beat awaiting a signal nothing would ever
+        /// publish. Never call this to shortcut a live band - only when nothing can spawn.
+        /// </summary>
+        public void MarkClearedWithoutBand(string reason)
+        {
+            FlowTrace.Warn("TutorialWave",
+                $"band marked CLEARED with NO enemies spawned ({reason}) - the FTUE proceeds rather than " +
+                "wedging on a fight that cannot start. This is the proceed-don't-wedge contract, not a win.");
+            _spawnRequested = true;
+            _spawned.Clear();
+            ClearCombatMusicIfDone();
+        }
+
+        /// <summary>
         /// Spawns <paramref name="count"/> enemies at <paramref name="spawnPoint"/>
         /// (the gate nearest the hero), marching the Heart. Reuses the wave loop's
         /// own instantiate/Configure path so they are real, killable wave enemies.

@@ -149,7 +149,21 @@ namespace DeNelle.Village
 
             _lastLiveSource = null;
             if (!TryResolveLive(anchorId, out Vector3 pos, out string sourceName))
+            {
+                // WO-1300: this failure used to be TOTALLY silent, and TutorialFlow.EnterStep
+                // discards the return value - so a walk beat whose anchor never resolved
+                // produced no line at all until the 120s STEP-STUCK, which names the missing
+                // SIGNAL and not the missing ANCHOR. Once per unresolvable anchor id (Once is
+                // keyed, so a later successful latch is unaffected and a hot loop cannot spam).
+                // PERMANENT instrumentation (CLAUDE.md sec.12) - never strip.
+                FlowTrace.Once("Tutorial", "anchor-latch-unresolved-" + anchorId,
+                    $"anchor '{anchorId}' could NOT be latched - the live resolver answered nothing. " +
+                    "For 'guide_gate' that means no WaveSpawnPoint and/or no HeartController was found in " +
+                    "the scene; for 'guide_anchor'/'hub_anchor' the guide body / Heart is missing. A " +
+                    "hero.reached step on this anchor has NOTHING to walk to and cannot complete until it " +
+                    "resolves (TutorialFlow.TickProximityProbe re-latches every frame and traces the stall).");
                 return false;
+            }
 
             _latchAnchorId = anchorId;
             _latchPos = pos;

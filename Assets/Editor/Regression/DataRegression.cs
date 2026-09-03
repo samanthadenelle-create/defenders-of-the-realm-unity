@@ -980,6 +980,13 @@ namespace DeNelle.Editor
             // committer registers it. ---
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "tutorial-anchor-latch suite", () => { if (!DeNelle.Editor.Regression.TutorialAnchorLatchRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[tutorial-anchor-latch] " + r); });
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "tutorial-watchdog-bound suite", () => { if (!DeNelle.Editor.Regression.TutorialWatchdogBoundRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[tutorial-watchdog-bound] " + r); });
+            // WO-1300 (2026-09-02): registered by the COMMITTER, per the fencing note above - the
+            // lane that authored the suite is deliberately kept out of this file. Pins the
+            // founding_defend publisher chain: TickScriptedWave is the SOLE publisher of
+            // wave.tutorial_band_repelled and refuses to poll until _townWaveSpawnSettled, which is
+            // set only AFTER an await that could fault - so an unguarded fault left the step waiting
+            // on a signal whose only publisher could never run. Also pins the forbidden fixes.
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "tutorial-completion-publisher suite", () => { if (!DeNelle.Editor.Regression.TutorialCompletionPublisherRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[tutorial-completion-publisher] " + r); });
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "build-carousel-order suite", () => { if (!DeNelle.Editor.Regression.BuildCarouselTutorialOrderRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[build-carousel-order] " + r); });
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "build-first-use-guide suite", () => { if (!DeNelle.Editor.Regression.BuildFirstUseGuideRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[build-first-use-guide] " + r); });
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "founding-guide-wolf suite", () => { if (!DeNelle.Editor.Regression.FoundingGuideWolfBodyRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[founding-guide-wolf] " + r); });
