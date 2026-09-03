@@ -80,6 +80,11 @@ param(
     # Print the registry and exit. For callers that need the host list.
     [switch]$ListSurfaces,
 
+    # Stage the store-compliance pages into Builds\WebGL and exit. For the
+    # release chain, which deploys Builds\WebGL itself and only needs the
+    # two legal pages present in the payload before it ships.
+    [switch]$StageOnly,
+
     # Additionally assert every production domain serves byte-identical
     # index.html and validation-key.txt to this local build directory.
     # Only meaningful immediately after a deploy: a later local rebuild
@@ -214,9 +219,23 @@ function Get-Public {
     } catch {
         $result.Error = $_.Exception.GetType().Name
         try {
-            $response = $_.Exception.Response
-            if ($null -ne $response) {
-                $result.Error = 'HTTP_' + [int]$response.StatusCode
+            # WebClient.DownloadData surfaces through PowerShell as a
+            # MethodInvocationException wrapping the WebException, so reading
+            # .Response off the OUTER exception yields nothing and the log says
+            # "MethodInvocationException" where it should say "HTTP_404".
+            # Walk the inner chain and name the real status.
+            $ex = $_.Exception
+            while ($null -ne $ex) {
+                if ($ex -is [System.Net.WebException]) {
+                    $response = $ex.Response
+                    if ($null -ne $response) {
+                        $result.Error = 'HTTP_' + [int]$response.StatusCode
+                    } else {
+                        $result.Error = 'WEB_' + $ex.Status
+                    }
+                    break
+                }
+                $ex = $ex.InnerException
             }
         } catch {
             # Keep the exception type name. A missing status is still a failure.
@@ -250,6 +269,61 @@ $production = @($Surfaces | Where-Object { $_.Role -eq 'production' })
 $dormant = @($Surfaces | Where-Object { $_.Role -eq 'dormant' })
 
 if ($production.Count -lt 1) { Deny 'REGISTRY_HAS_NO_PRODUCTION_SURFACE' 20 }
+
+# =============================================================================
+# PHASE 0 - STAGE the store-compliance pages into the deployed output.
+#
+# THE 2026-09-03 SOLANA DAPP STORE REJECTION. The reviewer rejected the app
+# because https://echoes-of-elarion.vercel.app/privacy and /terms both returned
+# HTTP 404. publishing/config.yaml (urls: license_url / copyright_url /
+# privacy_policy_url) names those two exact URLs as the listing's legal links,
+# so a 404 there is a hard store blocker, not a cosmetic miss.
+#
+# WHY THEY 404ed - proven, not inferred: the marketing/legal site lives in
+# site/ and was ITS OWN Vercel project (site/.vercel/project.json ->
+# echoes-of-elarion; site/vercel.json sets outputDirectory "." and
+# cleanUrls:true, which is what produced /privacy and /terms). On 2026-09-02
+# 17:30 THIS FILE deployed the REPO ROOT to that project id
+# (Builds/vercel-deploy-echoes-run.log: "Deploying .../echoes-of-elarion",
+# 221 files). The repo root serves outputDirectory Builds/WebGL, and
+# .vercelignore excludes /site entirely, so the Unity WebGL shell replaced the
+# landing site. Both production domains now serve byte-comparable Unity shells
+# and NEITHER carries privacy.html or terms.html.
+#
+# THE FIX, and why it is a copy rather than a second project: both production
+# domains serve Builds/WebGL, so the pages have to BE in Builds/WebGL. The
+# repo-root vercel.json rewrites /privacy -> /privacy.html and /terms ->
+# /terms.html. Staging happens HERE, in the one file that already owns web
+# shipping, so it can never drift from the verification below - re-inlining
+# either half into a chain is the duplication CLAUDE.md section 16 forbids.
+# =============================================================================
+$LegalSources = @(
+    [pscustomobject]@{ From = 'site\privacy.html'; To = 'privacy.html' },
+    [pscustomobject]@{ From = 'site\terms.html';   To = 'terms.html' },
+    [pscustomobject]@{ From = 'site\styles.css';   To = 'styles.css' }
+)
+$LegalPages = @(
+    [pscustomobject]@{ Path = '/privacy'; Expect = 'Privacy Policy' },
+    [pscustomobject]@{ Path = '/terms';   Expect = 'Terms of Use' }
+)
+
+if ((-not $VerifyOnly) -or $StageOnly) {
+    $stageDir = Join-Path $root 'Builds\WebGL'
+    if (-not (Test-Path -LiteralPath $stageDir)) { Deny 'STAGE_DIR_MISSING_Builds_WebGL' 20 }
+    $staged = New-Object System.Collections.Generic.List[string]
+    foreach ($f in $LegalSources) {
+        $src = Join-Path $root $f.From
+        if (-not (Test-Path -LiteralPath $src)) { Deny ('LEGAL_SOURCE_MISSING_' + $f.To) 20 }
+        $dst = Join-Path $stageDir $f.To
+        Copy-Item -LiteralPath $src -Destination $dst -Force
+        $stagedBytes = (Get-Item -LiteralPath $dst).Length
+        Write-Line ("WEB_STAGE file={0} bytes={1}" -f $f.To, $stagedBytes)
+        $staged.Add($f.To)
+    }
+    Write-Line ("WEB_STAGE_OK files={0} dir={1}" -f ($staged -join ','), $stageDir)
+}
+
+if ($StageOnly) { exit 0 }
 
 # =============================================================================
 # PHASE 1 - DEPLOY the production surfaces the release train does not cover.
@@ -408,6 +482,41 @@ foreach ($s in $dormant) {
         Deny ("DORMANT_SERVES_DIVERGENT_VALIDATION_KEY_" + $s.Name)
     }
 }
+
+# --- STORE COMPLIANCE: /privacy and /terms MUST be HTTP 200 on production ----
+# These two URLs are a Solana dApp Store SUBMISSION REQUIREMENT
+# (publishing/config.yaml urls:). Their absence was invisible to every gate in
+# this repo and surfaced only as a STORE REJECTION on 2026-09-03, a day after
+# the deploy that removed them. That is the exact silent-failure class this
+# file exists to end, so it is gated the same way: the check runs on every
+# public production surface, and WEB_PARITY_OK is withheld unless it passes.
+# Judged by the marker on a FRESH log, never by an exit code.
+$legalChecks = 0
+foreach ($s in $production) {
+    foreach ($page in $LegalPages) {
+        $legalUri = $s.Url.TrimEnd('/') + $page.Path
+        $legalKey = $page.Path.Trim('/')
+        $legalGot = Get-Public $legalUri $TimeoutSec
+        if (-not $legalGot.Ok) {
+            Write-Line ("WEB_LEGAL_FAIL name={0} uri={1} error={2}" -f $s.Name, $legalUri, $legalGot.Error)
+            Deny ('LEGAL_PAGE_UNREACHABLE_' + $s.Name + '_' + $legalKey)
+        }
+        $legalBody = [System.Text.Encoding]::UTF8.GetString($legalGot.Bytes)
+        # A rewrite that silently falls through to the Unity shell would still
+        # be a 200. Require the page's own heading text, so only the real
+        # document passes.
+        if ($legalBody -notmatch [regex]::Escape($page.Expect)) {
+            Write-Line ("WEB_LEGAL_FAIL name={0} uri={1} bytes={2} reason=EXPECTED_TEXT_ABSENT expect={3}" -f $s.Name, $legalUri, $legalGot.Length, $page.Expect)
+            Deny ('LEGAL_PAGE_WRONG_DOCUMENT_' + $s.Name + '_' + $legalKey)
+        }
+        Write-Line ("WEB_LEGAL name={0} uri={1} bytes={2} sha={3}" -f $s.Name, $legalUri, $legalGot.Length, $legalGot.Hash)
+        $legalChecks = $legalChecks + 1
+    }
+}
+if ($legalChecks -lt ($production.Count * $LegalPages.Count)) {
+    Deny ('LEGAL_CHECKS_INCOMPLETE_' + $legalChecks)
+}
+Write-Line ("WEB_LEGAL_OK checks={0} paths={1}" -f $legalChecks, (($LegalPages | ForEach-Object { $_.Path }) -join ','))
 
 Write-Line ("WEB_PARITY_OK surfaces={0} path={1} sha={2}" -f (($production | ForEach-Object { $_.Name }) -join ','), $ParityPath, $agreedIndex)
 exit 0
