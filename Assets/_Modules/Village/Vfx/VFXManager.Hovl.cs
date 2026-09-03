@@ -417,6 +417,13 @@ namespace DeNelle.Village
             // VFXType twin of this defect put a 10.3s fire on the caster after every Fireball).
             // A genuine IsLoop row keeps looping: it is excluded below.
             if (!row.IsLoop) EnforceOneshotEmission(go, "hovl:" + key);
+            // WO-1327 — THIS is the path the owner's fire spell takes. `firespell_Cast` resolves
+            // to Spell_Fire_9, whose Fireballs emitter is authored perfectly elastic (bounce 1.0,
+            // dampen 0, minKillSpeed 0) against all 32 layers, and whose two enabled LightsModules
+            // drive 25 concurrent real-time point lights per cast. Both numbers live in a
+            // GITIGNORED pack prefab, so they are clamped here instead. Unconditional: neither
+            // defect has anything to do with whether the row loops.
+            NormalizeSpawnedHost(go, "hovl:" + key);
             PlayAllParticles(go);
 
             // Follow a moving transform (projectile/trail) without parenting.

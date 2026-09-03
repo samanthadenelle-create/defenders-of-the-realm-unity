@@ -47,6 +47,7 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using DeNelle.Core.Diagnostics;
+using DeNelle.Core.Ops;
 
 namespace DeNelle.Village
 {
@@ -577,6 +578,10 @@ namespace DeNelle.Village
                     // played, so an ambient-looping prefab cannot emit for its whole pooled
                     // lifetime (owner F8 seq 4644). MUST precede DetectDuration + PlayAllParticles.
                     EnforceOneshotEmission(go, type.ToString());
+                    // WO-1327: clamp the art pack's world collision + real-time light bill BEFORE
+                    // the systems start. MUST precede PlayAllParticles or the first frame emits
+                    // with the authored values.
+                    NormalizeSpawnedHost(go, type.ToString());
                     PlayAllParticles(go);
                     float lifetime = entry.LifetimeOverride > 0f
                         ? entry.LifetimeOverride
@@ -670,6 +675,9 @@ namespace DeNelle.Village
                     if (parent != null) go.transform.SetParent(parent, true);
                     go.SetActive(true);
                     VerifyHasParticles(go, type, "loop");
+                    // WO-1327: a LOOP host bounces and lights exactly like a oneshot one, and for
+                    // longer. Same clamp, same reason, before anything emits.
+                    NormalizeSpawnedHost(go, type.ToString());
                     PlayAllParticles(go);
                     // WO-1057: registering IS the increment (the count is derived from the two loop
                     // registries) — there is no int left to bump out of step with the set.
@@ -1503,6 +1511,213 @@ namespace DeNelle.Village
                     "pooled lifetime - owner F8 seq 4644 'casts at me and stays at me'). Set IsLoop=1 " +
                     "on the row if a continuous effect was intended.");
             return fixedCount;
+        }
+
+        // ─────────────────────────────────────────────────────────────────────
+        // ── WO-1327 — THE ART PACK'S PHYSICS AND LIGHT BILL, CLAMPED HERE ────
+        //
+        // ⛔ WHY THIS IS CODE AND NOT A PREFAB EDIT. `Assets/Spells Pack/` is
+        //    GITIGNORED (.gitignore:430), exactly like the polyperfect and
+        //    Quaternius packs. A hand-edit to Spell_Fire_9.prefab therefore
+        //    cannot be committed, cannot be reviewed, does not reach another
+        //    machine or CI, and is erased by the next pack re-import — while
+        //    still silently changing what THIS machine builds. Tuning the
+        //    numbers where they are authored is not available to us, so the
+        //    clamp goes at the ONE spawn owner instead. That also fixes every
+        //    other pack prefab carrying the same misconfiguration rather than
+        //    the single instance somebody happened to notice.
+        //
+        // ⛔ BOTH DIALS ARE FEEL/PRESENTATION VALUES, so per the 2026-09-02
+        //    standing rule they ride the PROD-022 tunables rail
+        //    (docs/PROD022_TUNABLE_FLAGS.md) and move without a rebuild. The
+        //    numbers baked into the PREFAB are NOT reachable by that rail —
+        //    only these code-side clamps are, which is the second reason the
+        //    fix has to live here.
+        //
+        // ⛔ NEITHER TOUCHES THE LOOK. No colour, no material, no prefab swap,
+        //    no light PROTOTYPE deleted. The owner owns every creative VFX
+        //    call and is red/green colourblind; these change only WHETHER a
+        //    particle bounces and HOW MANY lights it lights.
+        // ─────────────────────────────────────────────────────────────────────
+
+        /// <summary>
+        /// Restitution ceiling, 0–100 percent, for world-colliding particles on a spawned VFX
+        /// host. Resolved per spawn (never cached) so a flip reaches a running client.
+        /// </summary>
+        public static int ParticleBouncePct =>
+            Mathf.Clamp(RemoteTunables.Int(RemoteTunables.KeyVfxParticleBouncePct), 0, 100);
+
+        /// <summary>
+        /// Concurrent particle-driven real-time lights ONE VFX host may carry, summed over its
+        /// emitters. Resolved per spawn. 0 = particle lights off.
+        /// </summary>
+        public static int MaxParticleLights =>
+            Mathf.Clamp(RemoteTunables.Int(RemoteTunables.KeyVfxMaxParticleLights), 0, 64);
+
+        /// <summary>
+        /// A PERFECTLY ELASTIC PARTICLE INSIDE A WALLED TOWN IS A PROJECTILE IN A BOX.
+        /// Clamps world collision on every ParticleSystem of a checked-out host so an impact
+        /// TERMINATES the particle instead of returning it to the caster.
+        /// </summary>
+        /// <remarks>
+        /// <para>THE MEASURED SETTINGS (read out of the prefab YAML, not inferred):
+        /// <c>Spell_Fire_9</c>'s <c>Fireballs</c> emitter — the prefab the owner tagged to
+        /// <c>firespell_Cast</c> — has world collision at <c>quality: 0</c> (High) against
+        /// <c>collidesWith = 0xFFFFFFFF</c> (ALL 32 LAYERS), with <c>m_Bounce</c> scalar
+        /// <b>1.0</b> (perfectly elastic), <c>m_Dampen</c> <b>0</b>, and <c>minKillSpeed</c>
+        /// <b>0</b> (no impact ever kills the particle). Six of its seven emitters have
+        /// collision DISABLED; this one does not.</para>
+        /// <para>⚠ HONEST ABOUT WHAT IS AND IS NOT PROVEN (CLAUDE.md §12). The above is a
+        /// mechanical reading of captured settings, NOT a captured runtime trace, and it is
+        /// NOT the proven root of the owner's two reports. Seq 4644 ("casts at me and stays at
+        /// me") was independently root-caused the same day to the ONESHOT-ROW-PLAYING-A-LOOPING-
+        /// PREFAB defect that <see cref="EnforceOneshotEmission"/> fixes, evidenced by
+        /// <c>[Flow:VFX] live systems=35</c>. What corroborates THIS defect is the owner's own
+        /// description of the prefab in her VFX Caster, quoted in <see cref="MarqueeSpellVfx"/>:
+        /// "a wind up directly into projectiles flying AND BOUNCING". So: a real
+        /// misconfiguration, a plausible contributor to the same felt symptom, and not a
+        /// substitute for her eyes on the result.</para>
+        /// <para>The clamp is DELIBERATELY ONE-WAY. Bounce is only ever lowered toward the cap;
+        /// dampen and lifetime-loss are only ever raised toward its complement. It can never make
+        /// an effect bouncier or longer-lived than its author made it, so
+        /// <c>vfx.particleBouncePct = 100</c> is a true no-op that hands the pack back its
+        /// authored behaviour in one flag flip.</para>
+        /// <para>Setting <c>bounce</c>/<c>dampen</c>/<c>lifetimeLoss</c> as CONSTANTS also
+        /// resolves an ambiguity in the authored YAML, where <c>m_EnergyLossOnCollision</c>
+        /// carries scalar 1 over a zero-valued curve. Whichever of those Unity would have
+        /// evaluated, after this the particle terminates at the first surface it touches.</para>
+        /// <para>Idempotent, and safe across pool cycles: a pooled host is only ever checked out
+        /// for the one key/type it was built for.</para>
+        /// </remarks>
+        private static int TameWorldCollision(GameObject go, string what)
+        {
+            if (go == null) return 0;
+
+            int pct = ParticleBouncePct;
+            if (pct >= 100)
+            {
+                FlowTrace.Once("VFXManager", "collision-clamp-off:" + what,
+                    $"world-collision clamp DISABLED for '{what}' (vfx.particleBouncePct=100) — the " +
+                    "art pack's authored collision is playing untouched. This is the escape hatch, " +
+                    "not a failure.");
+                return 0;
+            }
+
+            float bounceCap = pct / 100f;
+            float lossFloor = 1f - bounceCap;
+            int corrected = 0;
+
+            foreach (var ps in go.GetComponentsInChildren<ParticleSystem>(true))
+            {
+                if (ps == null) continue;
+                var col = ps.collision;
+                if (!col.enabled) continue;
+                if (col.type != ParticleSystemCollisionType.World) continue;
+
+                bool changed = false;
+                if (col.bounceMultiplier > bounceCap)       { col.bounce = bounceCap;       changed = true; }
+                if (col.dampenMultiplier < lossFloor)       { col.dampen = lossFloor;       changed = true; }
+                if (col.lifetimeLossMultiplier < lossFloor) { col.lifetimeLoss = lossFloor; changed = true; }
+                if (changed) corrected++;
+            }
+
+            if (corrected > 0)
+                FlowTrace.Once("VFXManager", "collision-clamp:" + what,
+                    $"WORLD-COLLISION CLAMPED on '{what}': {corrected} emitter(s) were authored to " +
+                    $"bounce off scene geometry with more than {pct}% restitution. Bounce <= {bounceCap:0.00}, " +
+                    $"dampen and lifetime-loss >= {lossFloor:0.00}, so an impact now TERMINATES the particle " +
+                    "instead of ricocheting it back at the caster (WO-1327; the authored values live in a " +
+                    "gitignored art pack, so the clamp lives here). Flip vfx.particleBouncePct to 100 to " +
+                    "hand the pack back its authored collision.");
+            return corrected;
+        }
+
+        /// <summary>
+        /// TWENTY-FIVE REAL-TIME POINT LIGHTS PER CAST IS A FRAME-RATE EVENT ON A PHONE.
+        /// Spends a fixed per-host budget of concurrent particle lights evenly across the host's
+        /// enabled <c>LightsModule</c>s and scales each module's <c>ratio</c> down with it.
+        /// </summary>
+        /// <remarks>
+        /// <para>THE MEASURED NUMBERS. <c>Spell_Fire_9</c>'s child <c>Point Light</c> has
+        /// <c>m_Enabled: 0</c> on its <c>Light</c> component, which LOOKS like an off switch and
+        /// is not — it is the PROTOTYPE the modules clone. Two emitters instantiate from it with
+        /// <c>ratio: 1</c>: <c>Fireballs</c> at <c>maxLights: 20</c> and the sub-emitter
+        /// <c>Explosion</c> at <c>maxLights: 5</c>. <b>25 concurrent real-time point lights per
+        /// cast</b>, intensity 5, range 5. At the shipped budget of 4 that becomes <b>2 + 2 = 4</b>.</para>
+        /// <para>⛔ THE PROTOTYPE IS NEVER DELETED OR DISABLED. It is what the module clones from;
+        /// removing it breaks the effect instead of tuning it. The dials are <c>maxLights</c> and
+        /// <c>ratio</c>, and only those are touched.</para>
+        /// <para>WHY <c>ratio</c> MOVES TOO. <c>maxLights</c> alone is a hard ceiling: leaving
+        /// <c>ratio</c> at 1 would attach the surviving lights to the FIRST few particles and leave
+        /// the rest of the effect dark. Scaling ratio by the same factor keeps the lights spread
+        /// across the burst, which is the closest the budget can stay to what the author drew. It
+        /// is a behaviour/perf change, not a restyle — no colour, intensity or range is touched.</para>
+        /// <para>A host whose authored total already fits the budget is left completely alone.</para>
+        /// </remarks>
+        private static int ClampParticleLights(GameObject go, string what)
+        {
+            if (go == null) return 0;
+
+            var modules = new List<ParticleSystem>();
+            int authored = 0;
+            foreach (var ps in go.GetComponentsInChildren<ParticleSystem>(true))
+            {
+                if (ps == null) continue;
+                var lights = ps.lights;
+                if (!lights.enabled) continue;
+                if (lights.light == null) continue;   // enabled with no prototype emits nothing
+                modules.Add(ps);
+                authored += Mathf.Max(0, lights.maxLights);
+            }
+            if (modules.Count == 0) return 0;
+
+            int budget = MaxParticleLights;
+            if (authored <= budget) return 0;         // already inside the budget — untouched
+
+            // Even share, at least one light each while any budget remains, so no single emitter
+            // is silently blacked out by integer division.
+            int share = budget <= 0 ? 0 : Mathf.Max(1, budget / modules.Count);
+            int granted = 0;
+
+            foreach (var ps in modules)
+            {
+                var lights = ps.lights;
+                int was = Mathf.Max(0, lights.maxLights);
+                int now = Mathf.Min(was, share);
+                if (budget <= 0)
+                {
+                    lights.enabled = false;           // the module, never the prototype
+                    continue;
+                }
+                if (now < was)
+                {
+                    // Keep the lights spread across the burst instead of stuck to the first
+                    // particles: scale the spawn probability by the same factor.
+                    float scale = was > 0 ? (float)now / was : 1f;
+                    lights.ratio = Mathf.Clamp(lights.ratio * scale, 0.02f, 1f);
+                    lights.maxLights = now;
+                }
+                granted += now;
+            }
+
+            FlowTrace.Once("VFXManager", "light-budget:" + what,
+                $"PARTICLE LIGHT BUDGET APPLIED to '{what}': {modules.Count} emitter(s) authored " +
+                $"{authored} concurrent real-time point light(s); capped to {granted} " +
+                $"(vfx.maxParticleLights={budget}). Prototypes are untouched — only maxLights and " +
+                "ratio moved (WO-1327: Spell_Fire_9 alone authored 25 per cast, on a phone).");
+            return authored - granted;
+        }
+
+        /// <summary>
+        /// The one place a checked-out VFX host is made safe to play: world collision clamped so a
+        /// particle dies where it lands, and the host's real-time light bill capped. Called from
+        /// EVERY spawn path (oneshot, loop, and the Hovl key path) because neither defect has
+        /// anything to do with whether a row loops.
+        /// </summary>
+        private static void NormalizeSpawnedHost(GameObject go, string what)
+        {
+            TameWorldCollision(go, what);
+            ClampParticleLights(go, what);
         }
 
         /// <summary>

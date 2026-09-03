@@ -1,6 +1,6 @@
 # WORK ORDER 1305 — Spell_Fire_9 as a marquee spell + the 27 duplicate Synty addresses
 
-**Status:** FIXED (part A — marquee seam wired 2026-09-02; two owner rulings still open, see the RESULT)
+**Status:** FIXED (part A — marquee seam wired 2026-09-02; awaiting two owner rulings, see the RESULT. Part B deliberately untouched: the Synty re-wrap duplicates are intentional per owner ruling and are never bulk-purged.)
 / **NOT STARTED — DELIBERATELY UNTOUCHED (part B)**
 
 > ⛔ **PART B WAS NOT WORKED AND MUST NOT BE BULK-WORKED.** Owner ruling 2026-09-02: the Synty
