@@ -1,3 +1,5 @@
+> **PARKED 2026-09-02 by owner ruling — the Android APK is the priority. Pi work resumes on her word.**
+
 # WORK ORDER 1314 — The WebGL remote payload is shaped for a native client, against a 512 MB heap
 
 **Status:** READY TO IMPLEMENT

@@ -1,5 +1,7 @@
 # WORK ORDER 1286 RESULT - Mobile-first Obsidian card navigation
 
+**Status:** FIXED — RESULT record for WO-1286; the navigation stack landed in 486cd7b17 `feat: finalize mobile UI combat art and Windows handover`. Awaiting the owner's felt-verification (PO closes, CLAUDE.md §13). *(Board status audit 2026-09-02: this RESULT file carried no canonical `**Status:**` keyword, so board_build.py bucketed it Unlabeled. Body unchanged; the `**Result:** DONE` line below is the author's own record and is left as written.)*
+
 **Result:** DONE - 2026-08-31
 
 ## Delivered

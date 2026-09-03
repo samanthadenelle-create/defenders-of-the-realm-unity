@@ -1,6 +1,8 @@
+> **PARKED 2026-09-02 by owner ruling — the Android APK is the priority. Pi work resumes on her word.**
+
 # WORK ORDER 1312 — Pi Browser will not rotate; render the game rotated instead of asking the player to
 
-**Status:** READY TO IMPLEMENT
+**Status:** FIXED — implemented by e6acd2935 `fix(pi): stop asking the player to rotate; render the game rotated (WO-1312/1313)`. Awaiting the owner's felt-verification (PO closes, CLAUDE.md §13). *(Board status audit 2026-09-02; body unchanged.)* *(Prior line:)* **Status:** READY TO IMPLEMENT
 **Silo:** Web / Pi
 **Minted:** 2026-09-02 (CLI) from a direct owner instruction.
 **Severity:** P1 — the game is unplayable in portrait, and this likely also fails Pi's app validator.

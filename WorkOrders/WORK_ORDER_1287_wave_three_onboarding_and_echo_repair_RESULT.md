@@ -1,5 +1,7 @@
 # WO-1287 result - Wave-three onboarding and Echo repair visibility
 
+**Status:** FIXED — RESULT record for WO-1287. Gates cited below: `COMPILE_GATE_OK` + `REGRESSION_OK 332/332 suites`. Awaiting the owner's felt-verification (PO closes, CLAUDE.md §13). *(Board status audit 2026-09-02: no canonical `**Status:**` keyword; body unchanged.)*
+
 Implemented 2026-08-31.
 
 - Plans now prefer a camera-visible seat 3.25 m ahead of the hero.

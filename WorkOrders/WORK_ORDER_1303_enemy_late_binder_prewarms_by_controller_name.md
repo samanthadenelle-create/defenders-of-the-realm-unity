@@ -1,6 +1,6 @@
 # WORK ORDER 1303 — `EnemyAnimatorLateBinder.Arm` prewarms by CONTROLLER name, so `enemyfam-skeletonhumanoid` never resolves
 
-**Status:** READY TO IMPLEMENT
+**Status:** FIXED — implemented by 95b75cf75 `fix: route enemy family resolution through the authored catalog` — diff touches `Assets/_Modules/Village/Enemies/EnemyAnimatorLateBinder.cs`. Awaiting the owner's felt-verification (PO closes, CLAUDE.md §13). *(Board status audit 2026-09-02; body unchanged.)* *(Prior line:)* **Status:** READY TO IMPLEMENT
 **Source:** F8 captures seq **4359, 4369, 4377** and — critically — seq **4639**, which fired *after* the
 PROD-021 R2 push landed. Ledger: `docs/qa/F8_TRIAGE_2026-09-02.md` §7.
 **Silo:** Enemy content warming (`DeNelle.Core` Addressables + `DeNelle.Village` enemies)

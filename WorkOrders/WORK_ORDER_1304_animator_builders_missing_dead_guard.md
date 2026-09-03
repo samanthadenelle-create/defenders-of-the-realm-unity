@@ -1,6 +1,6 @@
 # WORK ORDER 1304 — Animator builders missing the `Dead` guard (Knight package + enemy twin)
 
-**Status:** READY TO IMPLEMENT
+**Status:** FIXED — implemented by 34f86ebad `fix(anim): stop the death animation re-entering; guard every action on Dead` — `Dead == false` added to every non-death AnyState transition. Awaiting the owner's felt-verification (PO closes, CLAUDE.md §13). *(Board status audit 2026-09-02; body unchanged.)* *(Prior line:)* **Status:** READY TO IMPLEMENT
 **Silo:** Combat / Animation
 **Minted:** 2026-09-02 (CLI) — found while fixing the hero death-shake, NOT yet felt-reported.
 

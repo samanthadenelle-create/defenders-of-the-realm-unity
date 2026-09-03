@@ -1,6 +1,6 @@
 # WORK ORDER 1288 - Make the first session feel alive
 
-Status: DONE  
+**Status:** FIXED — implemented 2026-08-31; evidence in this file's Result section: `STARTER_SETTLEMENT_PROOF_OK` (`Builds/starter-settlement-proof-r4.log`), `Builds/starter-settlement-proof.png`, `COMPILE_GATE_OK` and a fresh post-proof `REGRESSION_OK`. Awaiting the owner's felt-verification (PO closes, CLAUDE.md §13). *(Board status audit 2026-09-02: the line carried no canonical marker and read as Unlabeled.)* *(Prior line:)* Status: DONE
 Source: `new-player-onboarding-work-order.md`, owner direction 2026-08-31
 
 ## Product decision

@@ -1,6 +1,6 @@
 # WORK ORDER 1309 — The wave-clear toast duplicates the modal, and lands outside its own reserved zone
 
-**Status:** READY TO IMPLEMENT
+**Status:** FIXED — implemented by d45608080 `fix: the wave-clear toast announced the player's crystal balance as a kill count` — the toast leg is cut at `WaveFeedbackDirector.cs:126`. Awaiting the owner's felt-verification (PO closes, CLAUDE.md §13). *(Board status audit 2026-09-02; body unchanged.)* *(Prior line:)* **Status:** READY TO IMPLEMENT
 **Silo:** HUD / Feedback
 **Minted:** 2026-09-02 (CLI) from an owner screenshot during a live felt-test.
 

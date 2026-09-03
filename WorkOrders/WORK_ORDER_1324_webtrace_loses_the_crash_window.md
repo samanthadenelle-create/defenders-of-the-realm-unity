@@ -1,3 +1,5 @@
+> **PARKED 2026-09-02 by owner ruling — the Android APK is the priority. Pi work resumes on her word.**
+
 # WORK ORDER 1324 — WebTrace discards the last 5 seconds, which is exactly the crash
 
 **Status:** READY TO IMPLEMENT

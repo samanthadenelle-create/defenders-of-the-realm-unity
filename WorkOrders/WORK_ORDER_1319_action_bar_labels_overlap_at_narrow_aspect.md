@@ -1,6 +1,6 @@
 # WORK ORDER 1319 — Action-bar face labels overlap into an unreadable run at narrow aspect
 
-**Status:** READY TO IMPLEMENT
+**Status:** FIXED — implemented by de5bb13a5 `fix(pi): the wallet gate, the SKR storefront, and the overlapping action bar` (body §WO-1319), with the measured RCA in bc62afa16. Awaiting the owner's felt-verification (PO closes, CLAUDE.md §13). *(Board status audit 2026-09-02; body unchanged.)* *(Prior line:)* **Status:** READY TO IMPLEMENT
 **Silo:** HUD / Layout
 **Minted:** 2026-09-02 (CLI) from an owner screenshot during a desktop web felt-test.
 **Severity:** P2 — legibility, not function. The bar still works.

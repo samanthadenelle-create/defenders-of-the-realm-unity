@@ -37,6 +37,33 @@
 > mistake is reading "purchases live + $0.04 revenue" as "the game is earning". It is not. It is
 > READY to earn, which is a different and still-good fact.
 
+> ## ⛔ OWNER RULING 2026-09-02 EVENING — THE ANDROID APK IS THE PRIORITY. PI IS PARKED.
+>
+> Owner, verbatim: *"we have spent most of today triaging and trying to get Pi to work, but have
+> made almost no progress"* / *"so we need to shift back to the apk. thats the real vision so that
+> needs to be the priority"*.
+>
+> **What that means, operationally:**
+> - The **Android APK / Seeker** path is the active lane. Player-felt gameplay defects and polish
+>   outrank every Pi/WebGL ticket.
+> - **PROD-022** (Pi Browser crash loop) drops from P0-active to a **quiet read-only triage lane** —
+>   it keeps collecting evidence, it does not consume the pipeline. The Lane A `[PiLifecycle]`
+>   instrumentation is deployed to production (17:30) and gathers data on its own.
+> - The Pi/WebGL ticket cluster is **PARKED, not cancelled**. Pi resumes on the owner's word.
+>
+> **The evidence behind the ruling, so nobody re-litigates it:** of the 27 commits made on 2026-09-02,
+> exactly ONE is gameplay (`d45608080`, the wave-clear toast) — and it landed nine minutes AFTER that
+> morning's APK was built, so it is not even in the artifact. Everything else was Pi, WebGL, or docs
+> about Pi. A day of triage produced no player-facing progress.
+>
+> ⭐ **The APK on disk is content-proven and was wrongly believed unshippable.** The 05:52 build
+> stamped `R2_PARITY_FAILED — DO NOT INSTALL OR DISTRIBUTE` in `Builds/overnight-apk-status.txt`, but
+> the 16:30 `r2-ship` run cured it: `Builds/r2-parity.log` verifies `catalog_2026.09.02.352005` — the
+> exact catalog that APK requests — plus every enemy and structure bundle it names, and reads
+> `R2_PARITY_OK targets=Android,StandaloneWindows64,WebGL objects=261`. **The stale FAILED verdict in
+> the status file is the trap** (the duplicated-state class, CLAUDE.md §16). Judge the APK by
+> `r2-parity.log`, not by a status stamp a later push made obsolete.
+
 # KEY FACTS — the living fact sheet (update IN PLACE, never snapshot)
 
 > **Rule (owner directive 2026-07-12):** this file is LIVING — when a fact changes, edit the line

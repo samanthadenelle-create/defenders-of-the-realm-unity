@@ -1,6 +1,6 @@
 # WORK ORDER 1307 — `FamilyOf` is a heuristic; the game's largest enemy family gets no pre-fetch
 
-**Status:** READY TO IMPLEMENT
+**Status:** FIXED — implemented by 95b75cf75 `fix: route enemy family resolution through the authored catalog` — `EnemyContentWarmer.FamilyOf` now resolves through `EnemyDef.Family`. Awaiting the owner's felt-verification (PO closes, CLAUDE.md §13). *(Board status audit 2026-09-02; body unchanged.)* *(Prior line:)* **Status:** READY TO IMPLEMENT
 **Silo:** Content / Addressables
 **Minted:** 2026-09-02 (CLI), found while fixing WO-1303. Not owner-reported — nothing on screen says this.
 

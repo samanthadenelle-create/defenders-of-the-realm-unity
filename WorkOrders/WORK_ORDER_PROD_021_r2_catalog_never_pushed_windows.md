@@ -1,6 +1,6 @@
 # PROD-021 — The R2 catalog for the shipped build was never pushed (occurrence FOUR)
 
-**Status:** READY TO IMPLEMENT — EMERGENCY / LIVE DEFECT
+**Status:** READY TO IMPLEMENT — EMERGENCY / LIVE DEFECT. ⚠ **CANDIDATE CLOSE — 2026-09-02 verification below says the gate defect this ticket was minted against is FIXED. NOT closed here: PO closes (CLAUDE.md §13).** *(Prior line:)* **Status:** READY TO IMPLEMENT — EMERGENCY / LIVE DEFECT
 **Minted:** 2026-09-01 (CLI, PROD banner bumped 021 -> 022 in the same edit)
 **Silo:** Content ship chain (CLAUDE.md §16). Disjoint from the WO-1289..1292 art lane.
 **Covers 93 of the 148 un-acked F8 captures** (seq 4081–4224 clusters A + B).
@@ -86,3 +86,40 @@ bytes it claims to prove*. It does not. The `.githooks/pre-push` guard exists an
 - Do not "fix" this by re-inlining a push into a chain, adding an override flag, or raising a timeout.
 - Do not conclude the parity log is empty because grep found nothing — it is UTF-16LE.
 - Do not treat a green `R2_PARITY_OK` as proof until it names every target.
+
+---
+
+## ⚠ VERIFICATION 2026-09-02 (board status audit — read before working this ticket)
+
+Verified against the tree and `Builds/r2-parity.log` today. **The gate defect in "THE WORK" item 2 is
+fixed, and the Windows catalog is present on R2.** Recorded here, not closed — the owner closes (§13).
+
+**PROVEN:**
+- **Item 2 (the widened verify) is implemented.** `tools/r2-ship.ps1` no longer names one target:
+  it enumerates the subdirectories of `ServerData/` that hold catalogs (`:177 foreach ($t in $targets)`,
+  verifying `ServerData/$name` at `:182`), rewrites each per-target pass to `R2_PARITY_TARGET_OK`, and
+  withholds the aggregate marker unless all pass. It also fails (`R2_PARITY_FAIL`, exit 16) when
+  `$targets.Count -eq 0` — "nothing to verify" is a FAILURE, not a pass.
+- **Acceptance line 1 is met on a fresh log.** `Builds/r2-parity.log` (2026-09-02 16:30:50, UTF-16LE —
+  decode before judging) ends with:
+  `R2_PARITY_OK targets=Android,StandaloneWindows64,WebGL objects=261`.
+  Three targets named, so the "green marker while the Windows catalog 404s" shape can no longer occur.
+- **The StandaloneWindows64 catalog exists and is current on disk:**
+  `ServerData/StandaloneWindows64/catalog_2026.09.02.352005.hash` (06:04), i.e. the 08-31 hash the
+  capture 404'd on has been superseded and its successor is covered by today's parity run.
+
+**NOT PROVEN by this audit — do not read the above as full acceptance:**
+- **Acceptance line 3 (the falsification run) is unproven.** Nobody has shown `R2_PARITY_OK` being
+  *withheld* when one target's catalog is removed. Per memory `prove-the-success-path-not-just-the-refusal`,
+  a pass-only proof is not acceptance — the widened loop is read at source, not exercised against a miss.
+- **Acceptance lines 4 and 5 (fresh device/exe run with zero `VisualFactory model not found` /
+  `StructureArtPending`, and the owner's felt-verify) are untouched.**
+- ⛔ **A §16 freshness violation is live RIGHT NOW.** `ServerData/WebGL/catalog_2026.09.02.352005.bin`
+  and `.hash` are stamped **16:31:40**, i.e. **50 seconds AFTER** the 16:30:50 parity proof. The §16
+  invariant is *the proof must postdate the bytes it claims to prove*, so `.githooks/pre-push` should
+  refuse a push that carries `ServerData/`. Clear it the one sanctioned way (`tools2-ship.ps1`) —
+  never with an override.
+
+**Recommendation to the owner:** this looks closeable on the gate defect, but close it only after the
+falsification run (line 3) and a fresh device/exe run (line 4). The WebGL freshness gap above is a
+separate, live item.

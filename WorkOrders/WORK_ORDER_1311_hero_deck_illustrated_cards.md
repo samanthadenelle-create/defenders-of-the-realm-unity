@@ -1,6 +1,6 @@
 # WORK ORDER 1311 — Wire the owner's illustrated hero cards, and retire the checkerboard compensation
 
-**Status:** READY TO IMPLEMENT
+**Status:** FIXED — implemented by 66d12f9bb `feat: wire the owner's illustrated hero-deck cards (WO-1311)`. Awaiting the owner's felt-verification (PO closes, CLAUDE.md §13). *(Board status audit 2026-09-02; body unchanged.)* *(Prior line:)* **Status:** READY TO IMPLEMENT
 **Silo:** UI / HeroDeck
 **Minted:** 2026-09-02 (CLI). Owner supplied the art directly and asked: *"can you use these for the hero screen ones?"*
 
