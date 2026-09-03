@@ -253,3 +253,192 @@ tunable on the rail can move it.
 **Related and still READY:** WO-1315 (WebGL built Windows content) - if a WebGL build has ever
 shipped desktop-shaped assets, that is a direct contributor to this file's size and should be checked
 FIRST, because it would be the cheapest win available.
+
+---
+
+# ADDENDUM 2026-09-03 (second pass) — THE PAYLOAD IS MEASURED. Top win = 40.2 MB in TWO FILES.
+
+**Who:** investigation agent, read-only. Nothing built, deployed, or committed. No Unity batchmode run.
+
+## 0. First, the two corrections this pass forces
+
+**(a) The "PROVEN" retraction above was RIGHT to fire but OVER-CORRECTED.** The owner then reported:
+*"the build does load on the PC but it sticks at 65% for a while — but on my phone it flat out denied
+it and crashed."* A build that **completes** on desktop is not a broken build. So:
+
+- RETRACTED and STAYS RETRACTED: "a hard iOS webview memory ceiling is the PROVEN root."
+- REINSTATED as the live hypothesis: the **oversized payload** is the mechanism. Desktop has the RAM
+  and the patience for the download+decompress stretch at 65%; the iPhone content process is reclaimed
+  part-way through it. Consistent with the heartbeat evidence (worker + main thread stopping in the
+  same instant, `mAgeMs` 450-500 ms = reclaimed while healthy, not wedged).
+- The `t.subarray` screenshot is a **SEPARATE artifact** and must not be conflated with the 65% stall.
+  Proven below: it is a stale cached `index.html` pointing at build hashes the rollback removed.
+
+**(b) Serve/brotli theories are DEAD. Measured, not reasoned:**
+
+| Check | Measurement | Verdict |
+|---|---|---|
+| Live `index.html` to `Build/*` hashes | index names `5466bb13....loader.js`, `e1e3fcce....data`, `64177f0b....framework`, `80780cf8....wasm`; all four return **HTTP 200** | **self-consistent pair. NOT mismatched.** |
+| Brotli actually decodes? | Fetched `64177f0b....framework.js.unityweb`, `brotli.decompress` gives **608,082 bytes**, begins `var unityFramework = (() => {` | **valid brotli, valid content** |
+| Unity marker present? | First bytes `6b 8d 00` then `UnityWeb Compressed Content (brotli)` | correct Unity brotli stream |
+| `Content-Encoding` | `br` on all four `/Build/*` responses, per `vercel.json` | **serve config is correct** |
+| Local `.data` decompresses? | 165,180,012 gives **209,582,571 bytes**, parses as `UnityWebData1.0` with an intact 8-entry table | **payload is NOT corrupt** |
+
+**Where `t.subarray` lives — read at source, not guessed.** Offset 116413 of the live `loader.js` is
+`e.decode(t.subarray(0,i.length))` inside the `UnityWebData1.0` header parser, where `t` is the
+resolved `dataUrl` promise. `t` being `undefined` means **the data fetch resolved with nothing** — a
+404. That is the stale-shell artifact, not a decompression fault.
+
+**The build is not broken and the edge is not misserving it. Close both lanes.**
+
+## 1. What is actually inside the 165 MB — ground truth, two independent sources
+
+**Source A — the `.data` container's own file table** (parsed from the decompressed bytes):
+
+```
+total decompressed        209,582,571
+    131,144,936  data.unity3d
+     50,954,842  resources.resource
+     24,213,084  Il2CppData/Metadata/global-metadata.dat
+      1,631,152  Resources/unity default resources
+      1,574,906  sharedassets0.resource
+```
+
+**Source B — Unity's own build report**, `Builds/webgl-build.log:17338`:
+
+```
+Textures      98.9 mb  33.5%      Sounds        48.6 mb  16.5%
+Meshes        68.7 mb  23.3%      Shaders       12.8 mb   4.3%
+Animations    11.5 mb   3.9%      Other Assets  53.0 mb  18.0%
+Total User Assets 295.1 mb        Complete build size 196.3 mb
+```
+
+### Top source folders (9,000 rows aggregated from the same report)
+
+| MB | files | folder |
+|---:|---:|---|
+| **47.4** | 88 | `Assets/Resources/Heroes` |
+| **44.1** | 20 | `Assets/Audio/Resources` |
+| **43.0** | 617 | `Assets/Resources/RpgUi` |
+| 30.4 | 759 | `Assets/Spells Pack/Particles` |
+| **9.5** | 482 | `Packages/com.unity.ai.inference` |
+| 9.4 | 69 | `Assets/Resources/UI` |
+| 8.7 | 45 | URP Shaders |
+
+## 2. THE SINGLE LARGEST WIN — 40.2 MB in TWO FILES, with a near-controlled experiment
+
+The two largest assets **in the entire build** are hero models:
+
+```
+26.90 MB  Assets/Resources/Heroes/Ranger.fbx     <- #1 asset in the build, 13.7% of user assets
+13.30 MB  Assets/Resources/Heroes/Mage.fbx       <- #2 asset, 6.8%
+ 1.30 MB  Assets/Resources/Heroes/KnightV3.fbx   <- a fully-featured shipping hero
+```
+
+**The controlled pair — this is the proving measurement.** `Mage.fbx` and `KnightV3.fbx` are within
+**4 KB of each other on disk** (8,565,536 vs 8,561,776 bytes — same vendor rig), yet differ **10.2x**
+in the build. The only differing importer flag:
+
+| file | source bytes | `meshCompression` | build size | ratio |
+|---|---:|---:|---:|---:|
+| `KnightV3.fbx` | 8,561,776 | **1** (on) | 1.30 MB | 0.15x |
+| `Mage.fbx` | 8,565,536 | **0** (OFF) | 13.30 MB | 1.55x |
+| `Ranger.fbx` | 13,946,976 | **0** (OFF) | 26.90 MB | 1.93x |
+| `Knight.fbx` / `knightV2.fbx` | — | **1** (on) | 0.27 / 0.69 MB | — |
+
+Every Knight variant ships with mesh compression **on**; Ranger and Mage are the only two heroes with
+it **off**, and they are the only two heroes that are enormous. All five also carry `isReadable: 1`
+(Read/Write Enabled keeps a second CPU-side copy) and `optimizeGameObjects: 0`.
+
+**Projected saving** at KnightV3's measured 0.152 ratio: Ranger 26.9 to ~2.1 MB, Mage 13.3 to ~1.3 MB
+= **~36.8 MB off 293.8 MB of user assets (12.5%)**.
+
+**HONEST CAVEAT, and the reason this is written as a next action and not a conclusion:**
+`meshCompression` is a **global ModelImporter setting with no per-platform override**, so it also
+affects the Android/Seeker build. It *shrinks* the APK and introduces no gameplay change, and it is
+already the project's norm for the Knights — but it is not WebGL-only, so it needs the owner's word.
+**The disproving test is cheap and must be run before anyone claims this:** set `meshCompression: 1`
+on those two `.fbx.meta`, reimport, rebuild WebGL, read the new build report. Numbers, not theory.
+
+## 3. Second win — 9.5 MB of a package NOTHING references
+
+`Packages/manifest.json:8` pulls **`com.unity.ai.inference` 2.6.1** (Sentis). It contributes
+**9.5 MB across 482 files**, including the **6.50 MB `ConvGeneric.compute`** — the **#3 largest asset
+in the whole build**, an ML convolution kernel in a tower-defense RPG.
+
+Measured references: **0** C# files (`grep -rl "Unity.Sentis|Unity.InferenceEngine"` over `Assets/`
+returns 0), **0** `.asmdef` references, and `packages-lock.json` lists it as a direct entry, not a
+transitive dependency of anything. It ships because its `Resources/` folder is unconditionally
+included.
+
+**This is the cleanest win available: 9.5 MB, zero quality cost, zero gameplay risk, all platforms.**
+
+## 4. What is ALREADY DONE — do not spend a session re-doing it
+
+**The WebGL texture pass HAS been run, and it is TIGHTER than Android's.** Parsed all 7,162 texture
+metas:
+
+- **7,054 of 7,162 carry `buildTarget: WebGL` with `overridden: 1`** — 5,604 capped at **512 px**,
+  1,211 at 128 px, all compressed.
+- Android by comparison: only **2,195 of 7,105** overridden, and mostly at 1024 px.
+
+Textures are still the largest *category* (98.9 MB) but that is 7,000+ already-shrunk files, not a
+missed pass. **That lever is spent. Report it closed.**
+
+## 5. WO-1315 — is it real? YES, but it is NOT a payload lever, and it is already DONE
+
+`WORK_ORDER_1315` is **Status: DONE** with a shipped regression
+(`ContentBuildTargetRegression.cs`, `CONTENT_BUILD_TARGET_OK`). It was real: a WebGL build emitted
+`ADDRESSABLES_CONTENT_OK ... target=StandaloneWindows64`, and fixing it took `ServerData/WebGL` from
+61 files to 112.
+
+**But it does not shrink the `.data` — it works the opposite way.** It governs which *remote R2
+catalog* the build resolves. Its fix **added** correct remote content; none of that content is inside
+the 165 MB. **WO-1315 is closed and is not a lever here. Do not reopen it for size.**
+
+## 6. Remaining levers, measured, cheapest last
+
+- **Audio — 48.6 MB (16.5%).** Only **36 of 132** audio assets carry a WebGL override; **96 files
+  (48.1 MB of source) inherit defaults**. The 36 that are overridden use `loadType: 0`
+  (DecompressOnLoad), `compressionFormat: 7` (AAC), `quality: 0.3`, **stereo at 44,100 Hz**
+  (`forceToMono: 0`). Audio importer settings **are per-platform** — mono + 22,050 Hz on the WebGL
+  override alone is Android-safe and plausibly halves this. `Assets/Audio/Resources` is **44.1 MB in
+  20 music files**, all in a `Resources/` folder, so all 20 ship in the first load whether or not the
+  track is ever played.
+- **`Resources/` is the structural problem.** Everything under any `Resources/` folder is included
+  unconditionally. `Assets/Resources` is **478 MB on disk**. All 47.4 MB of `Resources/Heroes` — every
+  class — downloads before the player picks one. The project already has a working Addressables/R2
+  remote path for enemies and structures; **heroes and music are the obvious next tenants**, and that
+  moves weight out of first load entirely rather than compressing it.
+
+## 7. Verdict + the single next action
+
+- **Is the build broken? NO.** It decompresses, parses, and completes on desktop.
+- **Is the serve broken? NO.** Headers, brotli, and the index/Build hash pair all verified correct.
+- **Surviving hypothesis:** the **payload size** is the mechanism; iOS loses the content process during
+  the 65% download+decompress stretch that desktop merely endures.
+- **WO-1314's "PROVEN" banner: keep it RETRACTED** (a hard heap ceiling is disproven by the desktop run
+  completing) **but reinstate the payload as the live cause.**
+
+**SINGLE NEXT ACTION — one Unity session, three edits, one rebuild, read the report:**
+1. `meshCompression: 1` on `Ranger.fbx.meta` + `Mage.fbx.meta` (owner sign-off: touches Android too).
+2. Remove `com.unity.ai.inference` from `Packages/manifest.json`.
+3. Rebuild WebGL (**never `-DevBuild`**) and diff the new `Build Report` against
+   `Textures 98.9 / Meshes 68.7 / Sounds 48.6 / Total 295.1 mb`.
+
+Expected combined: **~46 MB off 295.1 MB (~15.6%)**, taking the compressed `.data` from 165 MB toward
+~135 MB. That is a *projection from a measured ratio*, not a result. It is not proven until the new
+build report is read.
+
+After ANY rebuild, run `tools\r2-ship.ps1` — the build regenerates the catalog named after
+`bundleVersion` and the new one 404s until pushed (CLAUDE.md section 16).
+
+## 8. Method note — how these numbers were obtained (reproducible, no Unity)
+
+- `.data.unityweb` streamed through `brotli.Decompressor`, then its `UnityWebData1.0` header table
+  parsed directly (`u32` offset/size/pathLength triples) for the container breakdown.
+- `Builds/webgl-build.log` "Used Assets and files from the Resources folder" section parsed —
+  **9,000 rows, 293.8 MB** — and aggregated by folder and by extension.
+- All 7,162 texture `.meta` files parsed for per-`buildTarget` `overridden` / `maxTextureSize` /
+  `textureCompression`.
+- Live HTTP checks against `echoes-of-elarion.vercel.app` with explicit `Accept-Encoding`.
