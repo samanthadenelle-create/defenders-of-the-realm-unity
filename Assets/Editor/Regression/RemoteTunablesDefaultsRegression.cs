@@ -27,7 +27,7 @@
 // -----------------------------------------------------------------------------
 // THE FULL TABLE, NEVER A SAMPLE.
 // -----------------------------------------------------------------------------
-// All EIGHT knobs are asserted on EVERY failure path. A partial assertion would
+// All NINE knobs are asserted on EVERY failure path. A partial assertion would
 // let one knob drift unnoticed, and one drifted knob is the whole risk: the
 // build would quietly be running a configuration nobody chose.
 //
@@ -70,19 +70,20 @@
 // build machine is worth knowing about.
 //
 // Cases:
-//   1 [defaults]      With no table and no override, all 8 knobs resolve to the
+//   1 [defaults]      With no table and no override, all 9 knobs resolve to the
 //                     literal-pinned shipping defaults, and Registry agrees.
-//                     The registry shape is asserted too (8 entries, unique,
+//                     The registry shape is asserted too (9 entries, unique,
 //                     ASCII, no key colliding with the ff.* namespace).
 //   2 [failure-modes] Seven failure paths, each re-asserting the FULL table:
 //                     no table / readOk=false / malformed JSON / empty body /
 //                     corrupt device cache / values the server would refuse /
 //                     garbage arriving after a good payload.
 //   3 [consumers]     The REAL owners answer today's numbers with no table -
-//                     StructureContentWarmer.MaxRequestAttempts == 3 and
-//                     .PiRequestTimeoutSeconds == 20 - and neither consumer has
-//                     re-hardcoded a knob behind the seam.
-//   4 [key-domain]    The 8 keys are identical in RemoteTunables.Registry,
+//                     StructureContentWarmer.MaxRequestAttempts == 3,
+//                     .PiRequestTimeoutSeconds == 20 and HeroAbilities
+//                     .DrainReturnPct == 100 - and no consumer has re-hardcoded a
+//                     knob behind the seam.
+//   4 [key-domain]    The 9 keys are identical in RemoteTunables.Registry,
 //                     api/_lib/tunables.js and the docs table.
 //   5 [doc-parity]    The DEFAULT column in docs/PROD022_TUNABLE_FLAGS.md equals
 //                     Registry, so the owner-facing list cannot drift from code.
@@ -112,10 +113,11 @@ namespace DeNelle.Editor.Regression
         //  PINNED FACTS. Every one is a literal.
         // ---------------------------------------------------------------------
 
-        /// <summary>The domain is EIGHT knobs. Pinned as a literal, not as
+        /// <summary>The domain is NINE knobs (eight PROD-022 mitigations plus the WO-1306
+        /// balance knob). Pinned as a literal, not as
         /// Registry.Length - an oracle that measures the thing against itself
         /// certifies nothing.</summary>
-        private const int ExpectedKnobCount = 8;
+        private const int ExpectedKnobCount = 9;
 
         /// <summary>
         /// ⭐ THE CONTRACT, STATED INDEPENDENTLY OF THE CODE.
@@ -136,12 +138,20 @@ namespace DeNelle.Editor.Regression
             new KeyValuePair<string, int>("assets.maxRequestAttempts", 3),
             new KeyValuePair<string, int>("visuals.missLogCap", 3),
             new KeyValuePair<string, int>("trace.assetVerbosity", 2),
+            // WO-1306 - NOT a PROD-022 mitigation. The drain return rate, integer percent.
+            // 100 is what HeroAbilities.HealFromDrain hardcoded before it became tunable
+            // (heal == damage dealt, WO-861), so an empty table is that behaviour exactly.
+            new KeyValuePair<string, int>("combat.drainReturnPct", 100),
         };
 
         /// <summary>The two knobs whose resolved value is readable from the CONSUMER, so
         /// the seam can be proved end to end rather than only at the catalog. Literals.</summary>
         private const int ExpectedWarmerMaxAttempts = 3;
         private const int ExpectedWarmerPiTimeout = 20;
+
+        /// <summary>WO-1306. The drain return rate the shipped resolver hardcoded before the knob
+        /// existed: 100 percent, i.e. heal == damage DEALT. A literal, for the same reason.</summary>
+        private const int ExpectedDrainReturnPct = 100;
 
         /// <summary>The poll interval must stay inside these pinned bounds. A floor,
         /// because hammering the origin buys nothing; a ceiling, because the interval IS
@@ -154,6 +164,7 @@ namespace DeNelle.Editor.Regression
         private const string ServiceSrc = "Assets/_Modules/Core/Ops/RemoteTunablesService.cs";
         private const string WarmerSrc = "Assets/_Modules/Core/Addressables/StructureContentWarmer.cs";
         private const string FactorySrc = "Assets/_Modules/Village/VisualFactory.cs";
+        private const string AbilitiesSrc = "Assets/_Modules/Village/Hero/HeroAbilities.cs";
         private const string JsLibSrc = "api/_lib/tunables.js";
         private const string DocSrc = "docs/PROD022_TUNABLE_FLAGS.md";
 
@@ -219,7 +230,7 @@ namespace DeNelle.Editor.Regression
             string noteStr = notes.Count > 0 ? " [notes: " + string.Join("; ", notes) + "]" : "";
             if (failures.Count == 0)
             {
-                reason = "TUNABLE DEFAULTS OK - all " + ExpectedKnobCount + " PROD-022 knobs resolve to " +
+                reason = "TUNABLE DEFAULTS OK - all " + ExpectedKnobCount + " knobs (8 PROD-022 + the WO-1306 balance knob) resolve to " +
                          "their SHIPPING DEFAULTS (today's behaviour, byte for byte) on every failure " +
                          "path: no database row, server-reported readOk=false, malformed JSON, an empty " +
                          "body, a corrupt device cache, values the server would refuse, and garbage " +
@@ -317,7 +328,7 @@ namespace DeNelle.Editor.Regression
         }
 
         /// <summary>
-        /// THE ASSERTION EVERY CASE GOES THROUGH. All eight knobs, every time.
+        /// THE ASSERTION EVERY CASE GOES THROUGH. All nine knobs, every time.
         /// <para>
         /// It reads through <see cref="RemoteTunables.Int"/> - the same call the game makes -
         /// rather than inspecting the table, so it proves the RESOLVED answer and not merely
@@ -416,7 +427,11 @@ namespace DeNelle.Editor.Regression
                             "pi.eagerStructureWarm", "2",
                             "pi.requestTimeoutSeconds", "abc",
                             "assets.maxRequestAttempts", "",
-                            "trace.assetVerbosity", "yes-please"),
+                            "trace.assetVerbosity", "yes-please",
+                            // WO-1306: a FRACTION is the obvious mistake on a percent knob, and
+                            // the registry has no float kind on purpose - it must fall to 100,
+                            // not silently truncate to 12 and quietly nerf the mage's sustain.
+                            "combat.drainReturnPct", "12.5"),
                     "test-bad-values"))
                 failures.Add("[failure-modes] a well-formed payload carrying unusable VALUES was rejected " +
                              "wholesale. One bad row must not discard the good ones - it must fall to that " +
@@ -473,12 +488,28 @@ namespace DeNelle.Editor.Regression
                              "value is " + ExpectedWarmerPiTimeout + ". WO PROD-022 forbids tuning this as a " +
                              "'fix' - the root is not proven and a new constant would bake in a guess.");
 
+            // WO-1306 - the BALANCE knob's consumer. Same proof, same reason: the catalog
+            // answering 100 proves nothing if HeroAbilities stopped asking it, and an offline
+            // player must get the drain that shipped (heal == damage dealt, WO-861).
+            if (DeNelle.Village.HeroAbilities.DrainReturnPct != ExpectedDrainReturnPct)
+                failures.Add("[consumers] HeroAbilities.DrainReturnPct is " +
+                             DeNelle.Village.HeroAbilities.DrainReturnPct + " with no table; the shipping " +
+                             "value is " + ExpectedDrainReturnPct + " percent. That is the WO-861 pin - heal " +
+                             "== damage DEALT - and it is what an offline player, a 404 and an empty table " +
+                             "must all resolve to. Anything else means the mage's sustain silently depends " +
+                             "on the network.");
+
             // The clamps exist so a hostile or fat-fingered row cannot produce a value that
             // breaks the system outright. Prove them, because they are the difference
             // between a bad experiment and a bricked launch.
             RemoteTunables.ApplyPayload(
-                Payload(true, "assets.maxRequestAttempts", "0", "pi.requestTimeoutSeconds", "0"),
+                Payload(true, "assets.maxRequestAttempts", "0", "pi.requestTimeoutSeconds", "0",
+                        "combat.drainReturnPct", "-500"),
                 "test-clamp");
+            if (DeNelle.Village.HeroAbilities.DrainReturnPct < 0)
+                failures.Add("[consumers] a row of -500 drove DrainReturnPct negative. A negative return " +
+                             "rate makes a HEALING spell damage its own caster - the clamp exists so a " +
+                             "fat-fingered or hostile row cannot invert an ability.");
             if (StructureContentWarmer.MaxRequestAttempts < 1)
                 failures.Add("[consumers] a row of 0 drove MaxRequestAttempts below 1. A budget of zero " +
                              "retires every address on sight, and there is no diagnosis in a town with no " +
@@ -487,7 +518,30 @@ namespace DeNelle.Editor.Regression
                 failures.Add("[consumers] a row of 0 drove PiRequestTimeoutSeconds below 1. Zero means NO " +
                              "TIMEOUT to UnityWebRequest, which is the captive-portal hang this project has " +
                              "already been bitten by.");
+
+            // Upper clamp, and the SUCCESS PATH. A refusal-only proof certifies nothing: the
+            // owner's whole reason for this knob is that a legal value must actually MOVE the
+            // number without a rebuild, so a legal value is driven and read back too.
+            RemoteTunables.ApplyPayload(Payload(true, "combat.drainReturnPct", "999999"), "test-clamp-hi");
+            if (DeNelle.Village.HeroAbilities.DrainReturnPct > 1000)
+                failures.Add("[consumers] a row of 999999 drove DrainReturnPct to " +
+                             DeNelle.Village.HeroAbilities.DrainReturnPct + ", past the 1000 ceiling. An " +
+                             "unbounded return rate makes one drain a full heal from any chip damage.");
+
+            RemoteTunables.ApplyPayload(Payload(true, "combat.drainReturnPct", "50"), "test-override");
+            if (DeNelle.Village.HeroAbilities.DrainReturnPct != 50)
+                failures.Add("[consumers] a legal row of 50 resolved to " +
+                             DeNelle.Village.HeroAbilities.DrainReturnPct + ", not 50. The knob does NOT " +
+                             "actually move the drain, so the owner would flip it, see no change, and " +
+                             "conclude the build was wrong - the exact failure the whole rail exists to " +
+                             "avoid. A knob that only proves its refusals has proved nothing.");
+
             RemoteTunables.Clear();
+            if (DeNelle.Village.HeroAbilities.DrainReturnPct != ExpectedDrainReturnPct)
+                failures.Add("[consumers] after clearing the table DrainReturnPct is " +
+                             DeNelle.Village.HeroAbilities.DrainReturnPct + ", not the shipping " +
+                             ExpectedDrainReturnPct + ". -Clear must be the one-word way back to today's " +
+                             "behaviour; if it is not, an experiment can never be fully undone.");
 
             // --- source lint: the seam was not bypassed ----------------------
             // Comments EXCLUDED. Both files' headers deliberately quote the old hardcoded
@@ -531,8 +585,27 @@ namespace DeNelle.Editor.Regression
             // The same guarantee in the warmer, where the verbosity helper actually lives.
             if (warmer != null) AssertVerbosityNeverGatesFailures(failures, WarmerSrc, StripComments(warmer));
 
-            notes.Add("consumers proved MaxRequestAttempts=" + ExpectedWarmerMaxAttempts + " and " +
-                      "PiRequestTimeoutSeconds=" + ExpectedWarmerPiTimeout + " with no table, plus both clamps");
+            // WO-1306 - the balance knob's seam, linted the same way. HealFromDrain is private,
+            // so DrainReturnPct is the readable half; this proves the file still routes through
+            // the rail rather than having quietly gone back to a hardcoded 1.0 multiplier.
+            string abilities = ReadOrNull(AbilitiesSrc);
+            if (abilities == null) failures.Add("[consumers] " + AbilitiesSrc + " is MISSING");
+            else
+            {
+                string code = StripComments(abilities);
+                if (code.IndexOf("KeyCombatDrainReturnPct", StringComparison.Ordinal) < 0)
+                    failures.Add("[consumers] " + AbilitiesSrc + " no longer reads KeyCombatDrainReturnPct - " +
+                                 "the drain return rate has gone back to being frozen in the build, and the " +
+                                 "owner's 'tweakable from a db call' ruling is silently undone");
+                if (Regex.IsMatch(code, @"const\s+int\s+DrainReturnPct\s*="))
+                    failures.Add("[consumers] " + AbilitiesSrc + " has re-declared DrainReturnPct as a const - " +
+                                 "it must resolve through RemoteTunables or the knob does nothing");
+            }
+
+            notes.Add("consumers proved MaxRequestAttempts=" + ExpectedWarmerMaxAttempts + ", " +
+                      "PiRequestTimeoutSeconds=" + ExpectedWarmerPiTimeout + " and DrainReturnPct=" +
+                      ExpectedDrainReturnPct + " with no table, plus all three clamps, the drain " +
+                      "override success path, and the return to default on clear");
         }
 
         /// <summary>

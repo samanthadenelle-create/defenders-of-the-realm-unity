@@ -37,6 +37,7 @@ never blocks or delays boot.
 | 6 | `assets.maxRequestAttempts` | int | `3` | Async fetch attempts one address gets before it is retired for the launch. | That the retry budget is mis-sized: too high and the retry storm is itself the load that kills the tab; too low and one transient stall costs a building its art for the session. |
 | 7 | `visuals.missLogCap` | int | `3` | Full resolve-miss `Fail` lines `VisualFactory` emits per address before announcing its cap and dropping to a throttled line. **It never goes silent.** | That trace *volume* is a contributor — the observed final seconds were nothing but four addresses cycling, and every line is a remote trace POST from the suspect device. |
 | 8 | `trace.assetVerbosity` | int | `2` (= today) | Narration level for `[Flow:StructureAssets]` and `[Flow:VisualFactory]`. `2` = today (every Step, including the `-> Skin(...)` / `<- Skin(...)` pair). `1` = lifecycle Steps only. `0` = no Steps. | Same volume hypothesis as #7 but separable: silences the *success* narration while leaving every failure line intact, so a quiet session can be compared against a loud one. |
+| 9 | `combat.drainReturnPct` | int | `100` (= today) | Percent of the damage a **drainshot** ability actually deals that returns to the caster as healing. `100` = today (heal == damage dealt). Applies to **every** drainshot — `mage.siphon`, `mage.drain`, `ranger.healing-shot` — because `HeroAbilities.HealFromDrain` is the single owner of the drain heal. Clamped to `0..1000` at that consumer. | **Not a PROD-022 hypothesis — this is a BALANCE lever (WO-1306).** The owner ruled the mage's first talent point must buy a castable that *sustains* ("the blm needs to get some healing , like drain to stay balanced (early)"), then that its strength must move without a rebuild ("be smart, dont make it need a code change, make it tweakable from a db call"). It rides this rail rather than growing a second configuration mechanism. What it tests is whether the mage's early sustain is at the right level — a question only felt-testing answers, which is exactly why it must move in seconds rather than in a thirty-minute rebuild. |
 
 **⛔ `Warn` and `Fail` are emitted at every verbosity level and cannot be turned off.** CLAUDE.md §12
 is binding: instrumentation is permanent, and a failure line that stops being logged turns a logged
@@ -46,7 +47,15 @@ failure back into a silent one. Only the success narration is dimmable.
 
 Every flag is **independently togglable and independently meaningful**. None implies or requires
 another. Where a mitigation needs a value as well as an arm (#4), the value **is** the arm — a
-sentinel default of `0` means "today", so there is no second coupled flag.
+sentinel default of `0` means "today", so there is no second coupled flag. #9 is the same shape from
+the other end: its sentinel is `100`, because the quantity it scales is a percentage of what already
+happens, and `100%` *is* today.
+
+**#9 is a BALANCE knob, not a PROD-022 mitigation, and that is deliberate.** The owner ruled
+(2026-09-02) that balance must move without a rebuild too. It rides this rail because the rail already
+exists and works; building a parallel one for balance would be the second bespoke configuration
+mechanism this page's last section explains we do not want. The invariant at the top of the page binds
+it exactly as it binds the other eight.
 
 ---
 
@@ -79,6 +88,20 @@ tools\command-centre.ps1 -Tunables -Key pi.awaitInitBeforeFirstLoad -Value 1
 # Put it back. CLEAR, not -Value 0 - see below.
 tools\command-centre.ps1 -Tunables -Key pi.awaitInitBeforeFirstLoad -Clear
 ```
+
+The balance knob works identically. To halve the mage's early drain sustain:
+
+```powershell
+tools\command-centre.ps1 -Tunables -Key combat.drainReturnPct -Value 50
+
+# ...owner felt-tests, reports back...
+
+# Back to the shipped 100%. CLEAR, not -Value 100.
+tools\command-centre.ps1 -Tunables -Key combat.drainReturnPct -Clear
+```
+
+It is **not** a boot-time knob — `HeroAbilities.DrainReturnPct` is resolved at the moment each drain
+lands — so it reaches a running client on the ordinary ~40 s path below, mid-session, with no relaunch.
 
 Judge by the **marker on a fresh log** (`Builds\client-tunables.log`), never the exit code:
 `TUNABLES_LIST_OK` / `TUNABLES_SET_OK` / `TUNABLES_CLEAR_OK` / `TUNABLES_FAIL`.
@@ -115,7 +138,7 @@ afterwards proves nothing.
 Default build, nothing set (a `Step` line):
 
 ```
-[Flow:Tunables] CONFIG (StructureContentWarmer.Boot): generation=1 tableProvenance=default rows=0 | pi.eagerStructureWarm=OFF  pi.awaitInitBeforeFirstLoad=OFF  pi.disableRemoteStructureArt=OFF  assets.maxConcurrentRequests=0  pi.requestTimeoutSeconds=20  assets.maxRequestAttempts=3  visuals.missLogCap=3  trace.assetVerbosity=2 || EVERY knob is at its shipping default - this session is TODAY'S BEHAVIOUR, unchanged. Nothing was overridden by the database or by PlayerPrefs.
+[Flow:Tunables] CONFIG (StructureContentWarmer.Boot): generation=1 tableProvenance=default rows=0 | pi.eagerStructureWarm=OFF  pi.awaitInitBeforeFirstLoad=OFF  pi.disableRemoteStructureArt=OFF  assets.maxConcurrentRequests=0  pi.requestTimeoutSeconds=20  assets.maxRequestAttempts=3  visuals.missLogCap=3  trace.assetVerbosity=2  combat.drainReturnPct=100 || EVERY knob is at its shipping default - this session is TODAY'S BEHAVIOUR, unchanged. Nothing was overridden by the database or by PlayerPrefs.
 ```
 
 With the prime suspect armed (a `Warn` line — an overridden build is not the shipping build and must
@@ -167,6 +190,7 @@ Safety properties of that cache, all of them load-bearing:
 | Transport, poll, cache | `Assets/_Modules/Core/Ops/RemoteTunablesService.cs` |
 | Knobs 1–6, 8 consumed | `Assets/_Modules/Core/Addressables/StructureContentWarmer.cs` |
 | Knobs 7–8 consumed | `Assets/_Modules/Village/VisualFactory.cs` |
+| Knob 9 consumed | `Assets/_Modules/Village/Hero/HeroAbilities.cs` — `DrainReturnPct` / `HealFromDrain` |
 | Table | `api/schema.sql` — `client_tunables` |
 | Server read + validation + writer | `api/_lib/tunables.js` |
 | Public GET | `api/client-tunables.js` |
@@ -187,9 +211,9 @@ byte** — is the one every offline player depends on, and a break in it is *inv
 crashes, the build simply stops behaving the way this page says it does. So it is asserted, not
 assumed. `[tunable-defaults]` drives **seven** failure paths (no table · `readOk:false` · malformed
 JSON · empty body · corrupt device cache · values the server would refuse · garbage after a good
-payload) and re-asserts **all eight knobs on each one**. It also proves the real consumers still
-answer `3` and `20` with no table, that both clamps hold, that the key domain matches across the
-three sources, that the fetch still cannot block boot, and that no `Warn`/`Fail` was ever routed
+payload) and re-asserts **all nine knobs on each one**. It also proves the real consumers still
+answer `3`, `20` and `100` with no table, that all three clamps hold, that the key domain matches
+across the three sources, that the fetch still cannot block boot, and that no `Warn`/`Fail` was ever routed
 through the verbosity knob (CLAUDE.md §12). Zero network, zero database.
 
 ### Why a new table and not `maintenance_toggles`

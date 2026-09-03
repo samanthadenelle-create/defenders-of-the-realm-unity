@@ -28,6 +28,7 @@
 using System.Collections.Generic;
 using DeNelle.Core.Combat;
 using DeNelle.Core.Diagnostics; // WO3: FlowTrace self-reporting for the mana-over-time potion
+using DeNelle.Core.Ops;       // WO-1306: RemoteTunables - the db-tunable drain return rate
 using DeNelle.Core.State;     // WO-36: GameState backstop for hero class self-resolve
 using DeNelle.Village.Talents; // WO-36: talent -> ability-stat multipliers
 using UnityEngine;
@@ -1012,6 +1013,12 @@ namespace DeNelle.Village
             _currentCastKeyword = castVariant >= 0 && castVariant < CastVariantKeyword.Length
                 ? CastVariantKeyword[castVariant] : null;
 
+            // WO-1305 Part A: resolve MARQUEE-ness for this cast in the same breath as the
+            // keyword, from the same owner sources, so the projectile phase below cannot
+            // disagree with the cast beat about whose show this is. Recomputed per cast —
+            // it must never survive into the next one.
+            _currentCastIsMarquee = ResolveCastIsMarquee(def, _currentCastKeyword);
+
             // WO-875: every committed hero ability also gets the existing, semantically named
             // element flash (Fire/Frost/Arcane/Holy/Physical). RegistryOnlyMotionVfx governs the
             // owner's authored motion-bundle keys; it must not mask this element router. Keep the
@@ -1697,10 +1704,43 @@ namespace DeNelle.Village
         }
 
         /// <summary>
+        /// WO-1306 (owner ruling 2026-09-02, verbatim: "be smart, dont make it need a code change,
+        /// make it tweakable from a db call") - the drain RETURN RATE, as a percent of the damage
+        /// actually dealt, resolved through the PROD-022 remote-tunable rail.
+        /// <para>
+        /// ⛔ 100 IS TODAY'S BEHAVIOUR, EXACTLY. No row, no network, no server, no parse =&gt; this
+        /// answers <see cref="RemoteTunables.DrainReturnPctDefault"/> = 100, and 100/100f is a float
+        /// identity, so an offline player gets byte-for-byte the drain that shipped. The remote read
+        /// is an OVERRIDE, never a dependency, and it never blocks (RemoteTunables is transport-free;
+        /// the poll lives in RemoteTunablesService).
+        /// </para>
+        /// <para>
+        /// Clamped to 0..1000. A hostile or fat-fingered row must not be able to hand the caster a
+        /// NEGATIVE heal (which would read as damage from a healing spell) or an unbounded one. The
+        /// clamp is here, at the single consumer, exactly the way StructureContentWarmer clamps its
+        /// own knobs.
+        /// </para>
+        /// <para>
+        /// Public and static so <c>RemoteTunablesDefaultsRegression</c> can prove the seam end to end
+        /// with no scene, no PlayMode and no hero rig - the catalog answering 100 proves nothing if
+        /// this file stopped asking it.
+        /// </para>
+        /// </summary>
+        public static int DrainReturnPct =>
+            Mathf.Clamp(RemoteTunables.Int(RemoteTunables.KeyCombatDrainReturnPct), 0, 1000);
+
+        /// <summary>
         /// The drain heal. <paramref name="dealt"/> is the damage ACTUALLY dealt;
         /// <paramref name="nominal"/> is only logged so a mis-capture is one grep away.
         /// The heal is deliberately NOT scaled by <c>HealAmountMultiplier</c>: WO-861 pins
         /// "heal = damage dealt", and a class-wide heal talent would break that identity.
+        /// <para>
+        /// WO-1306: the ONE deliberate scalar is <see cref="DrainReturnPct"/>, the remote-tunable
+        /// return rate. At its shipping default of 100 this is an identity and the WO-861 pin holds
+        /// unchanged; it exists so the owner can retune the mage's early sustain from the database
+        /// instead of from a rebuild. This method stays the SINGLE OWNER of the drain heal - every
+        /// drainshot ability (mage.siphon, mage.drain, ranger.healing-shot) lands here.
+        /// </para>
         /// </summary>
         private void HealFromDrain(AbilityDef def, float dealt, float nominal)
         {
@@ -1711,11 +1751,25 @@ namespace DeNelle.Village
                     $"drainshot '{id}': 0 damage dealt (no target / already dead) -> no heal.");
                 return;
             }
+
+            int pct = DrainReturnPct;
+            float heal = dealt * (pct / 100f);
+            if (heal <= 0f)
+            {
+                // Only reachable when the owner has deliberately set the knob to 0. Say so out
+                // loud rather than silently not healing - a spell that stops sustaining with no
+                // line in the trace is the silent failure CLAUDE.md section 12 forbids.
+                FlowTrace.Warn("HeroAbility",
+                    $"drainshot '{id}': dealt {dealt:0.0} but combat.drainReturnPct={pct} -> healed 0. " +
+                    "This is an OVERRIDE of the shipping default (100); clear the row to restore it.");
+                return;
+            }
+
             if (_heroHealth == null) _heroHealth = TryGetComponent<HeroHealth>(out var hh) ? hh : HeroHealth.Instance;
-            _heroHealth?.Heal(dealt);
+            _heroHealth?.Heal(heal);
             FlowTrace.Step("HeroAbility",
-                $"drainshot '{id}': dealt {dealt:0.0} (nominal {nominal:0.0}) -> healed caster {dealt:0.0} " +
-                "(heal == damage DEALT, post-mitigation + HP-clamped).");
+                $"drainshot '{id}': dealt {dealt:0.0} (nominal {nominal:0.0}) -> healed caster {heal:0.0} " +
+                $"at combat.drainReturnPct={pct}% (post-mitigation + HP-clamped; 100% = heal == damage DEALT).");
         }
 
         /// <summary>
@@ -2271,6 +2325,26 @@ namespace DeNelle.Village
             // timing/damage path). No row / empty field = invisible travel, by design.
             if (RegistryOnlyMotionVfx)
                 projectileKey = TryGetBundleField(_currentCastKeyword, r => r.vfxProjectile);
+
+            // WO-1305 Part A — MARQUEE SUPPRESSION. The owner declared this cast's effect a
+            // self-contained show (MarqueeSpellVfx): the prefab already winds up, flies its
+            // own bodies and resolves its own impact. Spawning the engine's orb/arrow on top
+            // is the exact double-projectile the marquee ruling exists to prevent, so the
+            // travelling body is skipped here. Damage timing is UNCHANGED in shape: onArrive
+            // is invoked on the same beat the Knight's keyless thrown path already uses
+            // (immediate), so this adds no second timing model and no second spawner.
+            // Traced every cast (not Once) because a suppression with no line in the log is
+            // indistinguishable from a projectile that failed to spawn (§12).
+            if (_currentCastIsMarquee)
+            {
+                FlowTrace.Step("HeroAbility",
+                    $"marquee cast (keyword '{_currentCastKeyword ?? "<none>"}'): engine projectile " +
+                    $"SUPPRESSED toward {target} — the owner-declared marquee prefab owns cast, flight " +
+                    "and impact. Damage resolves on the immediate arrival beat.");
+                onArrive?.Invoke();
+                return;
+            }
+
             if (_rangedVfx == null)
             {
                 if (!TryGetComponent(out _rangedVfx)) _rangedVfx = gameObject.AddComponent<RangedAttackVFX>();
@@ -2499,10 +2573,17 @@ namespace DeNelle.Village
         private System.Collections.IEnumerator FireRegistryCastVfx(ActionBundleRow row)
         {
             if (row.vfxDelay > 0f) yield return new WaitForSeconds(row.vfxDelay);
+            // WO-1305 §5: name the RESOLVED spawn transform (world pos + yaw), not just the key —
+            // a marquee prefab owns its whole flight from this point, so where and which way it
+            // was spawned is the only thing that explains where the show went. VFXManager.PlayKey
+            // logs the pooled lifetime + release on the same key ("hovl-at:<key>"), which pairs
+            // this spawn line with its return.
+            Vector3 spawnPos = transform.position + Vector3.up * 1.2f;
             DeNelle.Core.Diagnostics.FlowTrace.Step("Vfx",
-                $"owner bundle vfx '{row.vfxKey}' fired (delay {row.vfxDelay:0.00}s, registry-only mode).");
-            VFXManager.PlayKey(row.vfxKey, transform.position + Vector3.up * 1.2f,
-                transform.rotation, null, null);
+                $"owner bundle vfx '{row.vfxKey}' fired (delay {row.vfxDelay:0.00}s, registry-only mode) " +
+                $"at {spawnPos} yaw={transform.eulerAngles.y:0}deg" +
+                (MarqueeSpellVfx.IsMarquee(row.vfxKey) ? " [MARQUEE — prefab owns cast+flight+impact]" : string.Empty));
+            VFXManager.PlayKey(row.vfxKey, spawnPos, transform.rotation, null, null);
         }
 
         /// <summary>Play the IMPACT (end-point) VFX at a hit / blast point. Registry-only
@@ -2543,6 +2624,56 @@ namespace DeNelle.Village
         // Phase-bundle state: the registry keyword of the cast currently resolving —
         // set in CastAbility, consumed by the projectile/impact phases of that cast.
         private string _currentCastKeyword;
+
+        // WO-1305 Part A: true while the cast currently resolving plays an owner-declared
+        // MARQUEE effect (MarqueeSpellVfx) — a prefab that owns cast, flight AND impact
+        // itself. Set in CastAbility beside _currentCastKeyword (same lifetime, same
+        // single writer); read by LaunchProjectile to SUPPRESS the engine's own
+        // projectile body so exactly one thing flies. Default false = today's behaviour
+        // for every other ability, byte-identical.
+        private bool _currentCastIsMarquee;
+
+        /// <summary>
+        /// WO-1305 Part A — does the cast about to resolve play an owner-declared marquee
+        /// effect? Checks the SAME two owner-authority sources the cast beat itself uses,
+        /// in the same order: the individually owner-tagged abilities.json VfxCast
+        /// (<see cref="OwnerPickedVfxKeys"/>), then the motion-castings row's vfxKey for
+        /// this cast keyword (registry-only mode). Never guesses: a key that is not
+        /// declared in <see cref="MarqueeSpellVfx"/> is not a marquee.
+        /// </summary>
+        private bool ResolveCastIsMarquee(AbilityDef def, string keyword)
+        {
+            if (def != null && IsOwnerPickedVfxKey(def.VfxCast) && MarqueeSpellVfx.IsMarquee(def.VfxCast))
+                return ConfirmMarqueePlayable(def.VfxCast, def.Id);
+
+            string rowKey = TryGetBundleField(keyword, r => r.vfxKey);
+            if (MarqueeSpellVfx.IsMarquee(rowKey))
+                return ConfirmMarqueePlayable(rowKey, def?.Id);
+
+            return false;
+        }
+
+        /// <summary>
+        /// WO-1305 Part A — a marquee only EARNS the projectile suppression if its effect can
+        /// actually draw. If the catalog has no row / no prefab for the key (pack not imported,
+        /// bake not re-run, key renamed), suppressing would leave the ability with NO visible
+        /// body at all — a spell that silently does nothing, which is precisely the failure §12
+        /// forbids. So: WARN loudly and fall back to the normal engine projectile.
+        /// </summary>
+        private bool ConfirmMarqueePlayable(string vfxKey, string abilityId)
+        {
+            if (VFXManager.CanPlayKey(vfxKey))
+            {
+                MarqueeSpellVfx.TraceRecognised(vfxKey, abilityId);
+                return true;
+            }
+            FlowTrace.Warn("HeroAbility",
+                $"marquee vfx '{vfxKey}' is declared for cast '{abilityId ?? "<unknown>"}' but the " +
+                "HovlVfxCatalog cannot play it (no row, or the row's Prefab is null) — NOT suppressing " +
+                "the engine projectile, so the ability still reads. Re-run Defenders/VFX/Generate Hovl " +
+                "VFX Catalog or check the key spelling.");
+            return false;
+        }
 
         /// <summary>Resolve one field off the current keyword's owner bundle row;
         /// null when there is no keyword / no row / empty field (silent phase).</summary>

@@ -630,6 +630,22 @@
           "range": 9,
           "vfxCast": "MageMeoteorAOE_Cast",
           "vfxImpact": "FireballImpact_Impact"
+        },
+        "siphon": {
+          "id": "mage.siphon",
+          "_comment": "WO-1306 (owner ruling 2026-09-02, verbatim: \"the blm needs to get some healing , like drain to stay balanced (early)\", under the retention lens \"we want them to unlocka few items that can go in the quick swap bar fast\"). THE MAGE'S COST-1 BASE-NODE GRANT - the spell hero-talents mage.t1n3 hands over for the player's FIRST Wisdom point, mirroring the knight's Thunderbolt base (commit 02f9b8a4f). NO NEW MECHANISM: the effect is 'drainshot', the SAME shipped resolver HeroAbilities.ResolveDrainshot already runs for mage.drain (the stock E) and ranger.healing-shot - it fires the strike and then heals the caster by the damage ACTUALLY DEALT. The drain RATIO is therefore NOT a free parameter and was NOT invented here: it is 100% of damage dealt, fixed by the resolver and PINNED by Assets/Tests/EditMode/HeroAbilityEffectTests.cs ('drainshot heal must equal the damage dealt', post-mitigation, clamped to the target's remaining HP). EVERY NUMBER BELOW IS COPIED VERBATIM FROM mage.drain (damage 28 / range 13 / cooldown 9 / manaCost 7 / castSeconds 0.35), the game's ONE authored mage drain, so this base grant introduces NO new balance point - it is exactly the sustain the owner already tuned under WO-1019, made OWNABLE and bar-assignable instead of living only as the stock E fallback. Those numbers are still <<DRAFT - owner tuning pass>> exactly as mage.drain's are; if she retunes the drain, retune both. WHY A SEPARATE ID rather than granting mage.drain itself: mage.drain is a DEFAULT (classes.mage.abilities.e) that every mage can already press on turn zero, so a talent granting it would satisfy the retention METRIC while giving the player nothing new to press - the knight's first point buys a spell that is NOT in his stock kit, and this mirrors that. One definition per id still holds: this is a distinct id with its own def, not a duplicate of mage.drain's. VFX fields are HELD EMPTY, exactly as mage.drain's are, pending an owner VFX tag - CLI never creative-picks a key. No concept-icons.json row is authored for the same reason (mage.drain is deliberately unauthored there too); it falls back like its sibling until she tags the art.",
+          "castSeconds": 0.35,
+          "slot": "e",
+          "key": "E",
+          "name": "Siphon",
+          "description": "Drink the life out of one foe - 28 dmg at 13m and heals you for the damage dealt (9s cd).",
+          "icon": "\u271a",
+          "color": "#8b5cf6",
+          "effect": "drainshot",
+          "cooldown": 9,
+          "manaCost": 7,
+          "damage": 28,
+          "range": 13
         }
       }
     },

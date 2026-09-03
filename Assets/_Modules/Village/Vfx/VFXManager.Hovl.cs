@@ -284,6 +284,27 @@ namespace DeNelle.Village
         // ── Public API ────────────────────────────────────────────────────────────
 
         /// <summary>
+        /// WO-1305: can this key actually PLAY? True only when the catalog is loaded, carries a
+        /// row for <paramref name="key"/>, and that row has a non-null Prefab — i.e. the same
+        /// three conditions <see cref="PlayKeyInternal"/> checks before it spawns anything.
+        /// <para>READ-ONLY: it resolves nothing, warms nothing and spawns nothing — there is
+        /// still exactly ONE spawn owner (<see cref="PlayKey"/>). It exists so a caller that
+        /// changes its BEHAVIOUR based on a key (the marquee projectile suppression in
+        /// HeroAbilities) can refuse to do so when that key could never have drawn: suppressing
+        /// a projectile for an effect that then fails to resolve is an invisible spell, and a
+        /// throttled miss-log inside PlayKey cannot undo a decision already taken (§12).</para>
+        /// </summary>
+        public static bool CanPlayKey(string key) => Instance != null && Instance.CanPlayKeyInternal(key);
+
+        private bool CanPlayKeyInternal(string key)
+        {
+            if (string.IsNullOrEmpty(key)) return false;
+            EnsureHovlCatalog();
+            // Row is a struct (HovlVfxCatalog.Row) — the only nullable half is its Prefab.
+            return _hovlCatalog != null && _hovlCatalog.TryGet(key, out var row) && row.Prefab != null;
+        }
+
+        /// <summary>
         /// Spawn a Hovl prefab by string key, routed through the shared pool. Null-safe —
         /// no-ops (returns null) if VFXManager or the catalog is not ready, or the key is
         /// unknown. Returns a <see cref="VFXHandle"/> for LOOP effects (call Stop() when

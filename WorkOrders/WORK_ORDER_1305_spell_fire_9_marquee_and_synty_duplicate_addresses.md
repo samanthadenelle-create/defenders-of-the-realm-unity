@@ -1,6 +1,14 @@
 # WORK ORDER 1305 — Spell_Fire_9 as a marquee spell + the 27 duplicate Synty addresses
 
-**Status:** READY TO IMPLEMENT (part A) / READY TO IMPLEMENT (part B — independent, do NOT bundle)
+**Status:** FIXED (part A — marquee seam wired 2026-09-02; two owner rulings still open, see the RESULT)
+/ **NOT STARTED — DELIBERATELY UNTOUCHED (part B)**
+
+> ⛔ **PART B WAS NOT WORKED AND MUST NOT BE BULK-WORKED.** Owner ruling 2026-09-02: the Synty
+> re-wrap duplicate addresses are **DELIBERATE**. The archer tower was the ONE sanctioned revert
+> (commit `9dbba0450`); any further change happens **one id at a time and only on her explicit
+> word**. No address in `Structure_Art.asset` was read, edited, re-pointed or "tidied" by the
+> part-A pass — and because nothing under Addressables changed, part A does **not** trigger the
+> §16 content-build / `r2-ship.ps1` gate below. That gate belongs to part B alone.
 **Silo:** VFX / Content addressing
 **Minted:** 2026-09-02 (CLI) from an owner browsing session in the VFX Caster.
 

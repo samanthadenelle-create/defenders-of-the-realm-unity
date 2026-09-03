@@ -156,6 +156,74 @@ namespace DeNelle.Core.Ops
         /// <summary>Int. Verbosity of the [Flow:StructureAssets] / [Flow:VisualFactory] families.</summary>
         public const string KeyTraceAssetVerbosity = "trace.assetVerbosity";
 
+        /// <summary>
+        /// Int, PERCENT. How much of the damage a "drainshot" ability actually deals comes
+        /// back to the caster as healing. 100 = today (heal == damage dealt).
+        /// <para>
+        /// ⭐ THIS ONE IS NOT A PROD-022 KNOB - it is a BALANCE knob, and it is here because
+        /// the owner ruled that balance must move without a rebuild too (2026-09-02, verbatim:
+        /// "be smart, dont make it need a code change, make it tweakable from a db call"). The
+        /// rail is reused end to end rather than a second configuration mechanism being built
+        /// - see the "no second bespoke mechanism" note in docs/PROD022_TUNABLE_FLAGS.md.
+        /// </para>
+        /// <para>
+        /// The domain is EVERY drainshot ability, because HeroAbilities.HealFromDrain is the
+        /// single owner of the drain heal - mage.siphon (the WO-1306 cost-1 base grant),
+        /// mage.drain (the mage's stock E) and ranger.healing-shot all pass through it. It is
+        /// therefore named combat.* and NOT mage.*: a mage-only knob would need a per-ability
+        /// branch inside that one owner, which is the second mechanism this rule forbids.
+        /// </para>
+        /// </summary>
+        public const int DrainReturnPctDefault = 100;
+
+        /// <summary>Int percent. Share of damage DEALT that a drainshot returns as healing.</summary>
+        public const string KeyCombatDrainReturnPct = "combat.drainReturnPct";
+
+        /// <summary>
+        /// Int, PERCENT. Restitution allowed on a WORLD-COLLIDING particle inside any VFX host
+        /// the pooled spawner checks out. 0 = THIS BUILD'S DEFAULT: a particle that hits scene
+        /// geometry stops there and terminates. 100 = leave the art pack's authored collision
+        /// completely alone.
+        /// <para>
+        /// ⭐ NOT a PROD-022 knob and NOT a balance knob - a FEEL/PERF knob (WO-1327). It exists
+        /// because the offending numbers live in a PREFAB inside a GITIGNORED art pack
+        /// (<c>Assets/Spells Pack/</c>), so a hand-edit to that prefab is unreviewable,
+        /// uncommittable, and erased by the next re-import. The clamp therefore lives at the ONE
+        /// spawn owner (<c>VFXManager</c>) and rides this rail, exactly as the 2026-09-02 standing
+        /// rule requires of a feel value.
+        /// </para>
+        /// <para>
+        /// The clamp only ever TIGHTENS: bounce is lowered toward the cap, dampen and lifetime-loss
+        /// are raised toward its complement. It can never make an effect bouncier than its author
+        /// made it, so setting 100 is a true "do nothing".
+        /// </para>
+        /// </summary>
+        public const int VfxParticleBouncePctDefault = 0;
+
+        /// <summary>Int percent. Restitution ceiling for world-colliding VFX particles.</summary>
+        public const string KeyVfxParticleBouncePct = "vfx.particleBouncePct";
+
+        /// <summary>
+        /// Int COUNT. Ceiling on the total concurrent real-time point lights ONE spawned VFX host
+        /// may drive through its ParticleSystem LightsModules, summed across every emitter on the
+        /// host. 4 = THIS BUILD'S DEFAULT. 0 turns particle lights off outright; a number at or
+        /// above a host's authored total leaves that host untouched.
+        /// <para>
+        /// ⭐ Also WO-1327, and for the same reason: <c>Spell_Fire_9</c> drives 20 lights from its
+        /// <c>Fireballs</c> emitter plus 5 from its <c>Explosion</c> sub-emitter - TWENTY-FIVE
+        /// real-time point lights per cast, on a phone - and the dial is baked into a gitignored
+        /// prefab. The budget is spent EVENLY across the host's enabled modules and each module's
+        /// <c>ratio</c> is scaled down with it, so the lights stay spread across the effect instead
+        /// of all sticking to the first few particles.
+        /// </para>
+        /// <para>⛔ This never deletes a light PROTOTYPE. The prototype is what the module clones
+        /// from; removing it breaks the effect instead of tuning it.</para>
+        /// </summary>
+        public const int VfxMaxParticleLightsDefault = 4;
+
+        /// <summary>Int count. Concurrent particle-driven real-time lights allowed per VFX host.</summary>
+        public const string KeyVfxMaxParticleLights = "vfx.maxParticleLights";
+
         // ---------------------------------------------------------------------
         //  Verbosity levels for KeyTraceAssetVerbosity.
         //
@@ -251,6 +319,19 @@ namespace DeNelle.Core.Ops
                 "Same volume hypothesis as the miss-log cap, but separable: this one silences the " +
                 "SUCCESS narration while leaving every failure line intact, so a quiet-but-still-" +
                 "diagnostic session can be compared against a loud one."),
+
+            new TunableSpec(KeyCombatDrainReturnPct, TunableKind.Int, DrainReturnPctDefault,
+                "Percent of the damage a drainshot ability ACTUALLY DEALS that comes back to the caster " +
+                "as healing. 100 = TODAY: heal == damage dealt, exactly. Applies to every drainshot - " +
+                "mage.siphon, mage.drain and ranger.healing-shot - because HeroAbilities.HealFromDrain " +
+                "is the single owner of the drain heal. Clamped to 0..1000 at the consumer.",
+                "NOT a PROD-022 hypothesis - this is the BALANCE lever for WO-1306. The owner ruled the " +
+                "mage's first talent point must buy a castable that SUSTAINS ('the blm needs to get some " +
+                "healing , like drain to stay balanced (early)') and then that the strength must move " +
+                "without a rebuild ('be smart, dont make it need a code change, make it tweakable from a " +
+                "db call'). 100 is the value the shipped resolver hardcoded, so an offline player, a 404 " +
+                "and an empty table all get exactly the drain that shipped; the knob only ever moves it " +
+                "on her word."),
         };
 
         // Swapped atomically by ApplyPayload. Never mutated in place.

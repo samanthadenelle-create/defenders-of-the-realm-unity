@@ -49,6 +49,16 @@
 //                  the RectMask2D), and the resolved board is no more than MaxScrollWide
 //                  viewports across / MaxScrollTall viewports down.
 //
+//   7 [first-point] (WO-1306) every CLASS tree's bottom row holds at least one node that
+//                  GRANTS A CASTABLE, and the ability id it names resolves in
+//                  AbilityCatalog. Owner ruling 2026-09-02: "we want them to unlocka few
+//                  items that can go in the quick swap bar fast, why because our retention
+//                  number is very low and people are not returning". Stated over EVERY tree
+//                  rather than pinned per class - the knight (02f9b8a4f) and the mage
+//                  (WO-1306) were each fixed on the same night, and two per-class pins
+//                  would have left the next class free to regress silently. The shared pool
+//                  is exempt: it is the universal strip, not a class identity.
+//
 // !! THE HEADER USED TO CLAIM, RIGHT HERE, that "the implied content height at
 // HeroSkillTreePanelMvvm.MinNodePitchPx" was "measured and logged, never failed - so the
 // 'does the tree fit the 493 px well' question is answered by a number on every gate run".
@@ -73,6 +83,7 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
+using DeNelle.Village;            // AbilityCatalog - rule 7 resolves the granted ability id
 using DeNelle.Village.Talents;
 using UnityEngine;
 
@@ -175,7 +186,8 @@ namespace DeNelle.Editor.Regression
                 reason = "TALENT TREE SHAPE OK - every tree (common and specialty) starts from at most " +
                          MaxBaseRowNodes + " simple roots and branches wider as it rises; all x/y authored " +
                          "inside 0..1; no orphan, no cycle, nothing unreachable, no visible node stranded " +
-                         "behind a hidden one; and every board resolves INSIDE the 1695x493 well - no plate " +
+                         "behind a hidden one; every CLASS tree's first point buys a CASTABLE that resolves " +
+                         "in the catalog; and every board resolves INSIDE the 1695x493 well - no plate " +
                          "inside the clearance inset, no board past the scroll budget" + noteStr;
                 return true;
             }
@@ -303,8 +315,97 @@ namespace DeNelle.Editor.Regression
                                  "' - no sequence of purchases can ever get the player to it");
             }
 
+            // ── 7 [first-point] the first Wisdom point must buy something to PRESS ──
+            CheckFirstPointIsCastable(name, baseRow, failures, notes);
+
             notes.Add(name + " rows " + string.Join("/", rows.Select(r => r.Count.ToString()).ToArray()) +
                       " (bottom first, " + nodes.Count + " nodes)");
+        }
+
+        // =====================================================================
+        //  7 [first-point] - EVERY CLASS TREE'S FIRST POINT BUYS A CASTABLE
+        // -----------------------------------------------------------------------------
+        //  Owner ruling 2026-09-02, verbatim, and it is a BUSINESS rule, not a taste one:
+        //    "we want them to unlocka few items that can go in the quick swap bar fast,
+        //     why because our retention number is very low and people are not returning"
+        //
+        //  A new player whose first talent point buys +2% of an invisible stat has nothing
+        //  to press, and the measured consequence is that they do not come back.
+        //
+        //  ⛔ THIS IS DELIBERATELY GENERAL, NOT A PER-CLASS LIST. The knight was fixed on
+        //  2026-09-02 (commit 02f9b8a4f, Thunderbolt promoted to the base row) and the mage
+        //  on the same night (WO-1306, mage.t1n3 re-authored into the drainshot 'Siphon
+        //  Ward'). Pinning either one BY ID would have made each fix its own special case and
+        //  left the NEXT class - or a future re-shuffle of an existing one - free to regress
+        //  silently, which is exactly how the mage came to be the only outlier in the first
+        //  place. The rule is stated once, over every tree, so a fourth class inherits it.
+        //
+        //  The shared pool is EXEMPT and it is exempt on purpose: it is not a class identity,
+        //  it is the universal strip, and it already satisfies the rule anyway (shared.n9
+        //  Arcane Bolt / n10 Mend / n11 Dash). Exempting it keeps the rule about the thing it
+        //  is actually about - the CLASS tree's first impression.
+        //
+        //  THREE THINGS ARE PROVEN, because two of them look identical from a distance and
+        //  only the third is what the player experiences:
+        //    (a) a base-row node GRANTS an ability at all (kind=skill / a non-empty
+        //        abilityId / an unlockAbility effect);
+        //    (b) the id it names RESOLVES in AbilityCatalog - a node that grants a spell the
+        //        catalog has never heard of leaves the loadout with nothing to equip, which
+        //        reads to the player exactly like a stat node;
+        //    (c) that ability is not a dead token. HeroLoadoutVM builds the hot-swap choices
+        //        from unlocked SKILL-kind nodes, so (a)+(b) IS reachability to the bar.
+        // =====================================================================
+        private static void CheckFirstPointIsCastable(string name, List<HeroTalentNodeDef> baseRow,
+                                                      List<string> failures, List<string> notes)
+        {
+            if (string.Equals(name, "shared", StringComparison.Ordinal)) return;
+            if (baseRow == null || baseRow.Count == 0) return;
+
+            var granting = new List<string>();
+            var dangling = new List<string>();
+
+            foreach (var n in baseRow)
+            {
+                string abilityId = n.AbilityId;
+                bool declaresSkill = !string.IsNullOrEmpty(abilityId)
+                                     || string.Equals(n.Kind, "skill", StringComparison.OrdinalIgnoreCase)
+                                     || (n.Effect != null && string.Equals(n.Effect.Type, "unlockAbility",
+                                                                           StringComparison.OrdinalIgnoreCase));
+                if (!declaresSkill) continue;
+
+                // An unlockAbility effect may name the id instead of the node-level field.
+                if (string.IsNullOrEmpty(abilityId) && n.Effect != null) abilityId = n.Effect.Ability;
+
+                if (string.IsNullOrEmpty(abilityId))
+                {
+                    dangling.Add(n.Id + " (declares kind=skill but names no ability)");
+                    continue;
+                }
+                if (AbilityCatalog.FindById(abilityId) == null)
+                {
+                    dangling.Add(n.Id + " -> '" + abilityId + "' (no such ability in AbilityCatalog)");
+                    continue;
+                }
+                granting.Add(n.Id + " -> " + abilityId);
+            }
+
+            foreach (var d in dangling)
+                failures.Add("[first-point] '" + name + "' base-row node " + d + ". A base node that " +
+                             "advertises a spell the catalog cannot resolve gives the loadout nothing to " +
+                             "equip, so the player's first point buys a name and no button - which is " +
+                             "indistinguishable, to them, from buying a stat.");
+
+            if (granting.Count == 0)
+                failures.Add("[first-point] '" + name + "' has NO castable on its bottom row (" +
+                             Ids(baseRow) + ") - a new player's FIRST Wisdom point in this tree buys a " +
+                             "passive stat and gives them nothing to press. Owner ruling 2026-09-02: " +
+                             "\"we want them to unlocka few items that can go in the quick swap bar fast, " +
+                             "why because our retention number is very low and people are not returning\". " +
+                             "Fix it the way the knight and the mage were fixed - by making a CHEAPEST-COST " +
+                             "ROOT grant an ability - never by dragging a pricier node down, which rule 2 " +
+                             "[base] will refuse.");
+            else
+                notes.Add(name + " first-point castable(s): " + string.Join(", ", granting.ToArray()));
         }
 
         // =====================================================================
