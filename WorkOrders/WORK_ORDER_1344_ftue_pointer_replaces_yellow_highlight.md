@@ -1,6 +1,6 @@
 # WORK ORDER 1344 - The FTUE points with an arrow instead of the yellow thing
 
-**Status:** READY TO IMPLEMENT
+**Status:** FIXED 2026-09-03 - shipped in 2026.09.03.353999. ONE code path served both step kinds: the registry returns a RectTransform OR a world Transform, and UiSpotlight projected the world case into a nominal 120px screen rect, drawing the same yellow cutout for both. Her marker now serves exactly the three world beats (founding_greet / founding_walk / founding_defend) and DECLINES for UI-rect beats rather than forcing a world composite into a Canvas, where it would render at the wrong scale or depth or not at all. Input transparency proven from the prefab YAML: class ids 1/4/198/199 only - zero colliders, canvases, graphics or raycasters. Her isLoop:false is CORRECT (rateOverTime 0 on all four systems). Its own oracle shipped a hollow pass that the ratchet caught; resolved to assert THROUGH the fallback.
 **Silo / Lane:** Tutorial presentation (FTUE highlight) + VFX wiring of an owner-tagged key
 **Type:** EXISTING system, presentation REPLACED by an owner-tagged effect
 **Minted:** 2026-09-03 (CLI) from an owner tag plus one sentence of intent.

@@ -180,7 +180,18 @@
 > fine as history. A copied number is the bug **even when it was right the day it was written** -
 > that is exactly how the retired 860-899 UI block kept re-seeding collisions from CLAUDE.md sec.2.
 
-> ## ⚠ RECONCILED 2026-09-03 (CLI, thirty-ninth pass): main line next free = **1349**.
+> ## ⚠ RECONCILED 2026-09-03 (CLI, fortieth pass): main line next free = **1354**.
+> *(CLI minted **WO-1353** on a direct owner ruling after a live felt-test caught the world clock at
+> **`timeScale=0.28`** in open town - 28% speed, no battle, no modal. Her words: *"I want a guard on all
+> time changes"* / *"every battle death victory"* / *"anything that steps into time slow needs to step
+> to time return"*. ⭐ THE DATA WAS IN THE LOG THE WHOLE TIME - `[Flow:HeroOwner]` prints `timeScale=`
+> on every line and the CLI read `fps=40` instead, theorised a frame-budget story, and stated it twice
+> as the answer. That is the banned inference-fix (memory `never-inference-fix`), and the owner caught
+> it: *"Why did you guess"*. Recorded here because the process failure is the more expensive half.
+> ⚠ ALSO RECONCILES A SLIP: an agent minted **WO-1352** for the damage-scuff tell while the banner still
+> read 1349, so 1349-1352 were consumed without a bump. Bumped 1349 -> 1354 in this SAME edit.)*
+>
+> ### superseded: RECONCILED 2026-09-03 (CLI, thirty-ninth pass): main line next free = **1349**.
 > *(CLI minted **WO-1348** on an owner ask: *"is it possible to tag those from the command center? and
 > then change pointer on next town load?"*, with her own namespace proposal `realm.vfx(set)`. ⭐ THE
 > ANSWER IS YES, and it is the natural end of the whole evening: `VfxManualPicks.json` is an EDITOR-time

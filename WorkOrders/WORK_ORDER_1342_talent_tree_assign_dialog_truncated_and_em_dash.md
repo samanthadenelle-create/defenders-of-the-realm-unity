@@ -1,6 +1,6 @@
 # WORK ORDER 1342 - The talent-tree assign dialog cuts its own sentence off, and ships an em dash
 
-**Status:** READY TO IMPLEMENT
+**Status:** FIXED 2026-09-03 - shipped in 2026.09.03.353999. Description wraps and reads in full ("Assignable to the hot-swap bar."); the frame now encloses the modal - content-panel.png alpha starts at row 94 so its whole 96px top slice is transparent, and insetting content by the painted margin was the fix (growing the popup never could be, it needed H >= ~582). 67 em dashes + 1 section sign removed from both hero-talents.json twins. State no longer hue-only. Gates COMPILE_GATE_OK + REGRESSION_OK 358/358. Owner felt-verified the frame and the sentence on device. FINDING NOT FIXED: the right-rail Echoes chip shows through a full-screen panel (HUD kit lane).
 **Silo / Lane:** HUD / talent tree - confirmation dialog text layout + canon strings
 **Type:** EXISTING (built and shipped; text layout + one authored string)
 **Minted:** 2026-09-03 (CLI) from a device screencap taken on the owner's ask.

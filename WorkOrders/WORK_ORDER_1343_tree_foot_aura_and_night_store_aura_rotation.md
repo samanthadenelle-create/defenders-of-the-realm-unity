@@ -1,6 +1,6 @@
 # WORK ORDER 1343 - The Tree of Life gets a second aura at its foot, and the Night Store's aura re-rolls in town
 
-**Status:** READY TO IMPLEMENT
+**Status:** FIXED 2026-09-03 - shipped in 2026.09.03.353999. Night Store aura replaced (old owner: store.beacon.near -> Marker8_SafeZoneLoop, kept reachable as mode 3 so undoing is one row). FOUR selectable modes on remote tunables - starfall (default) / loot flicker / Aura_* rotation / legacy ring - plus cadence and family mask, switchable with no rebuild. KnightShieldBash_Impact wired to knight.shield-bash per her direct confirmation. HELD pending her retag: atfootprintoftree_Aura, atfootprintoftree_Impact, EliteDeath_Impact - the tagger authored those without her. Tree-foot and boss-death hooks built UNBOUND. Tagger root cause found: VfxCasterWindow.TagSelected reads the key from a never-cleared TextField and the prefab from the live selection - two fields never captured together, and it overwrites an existing key with no diff, warning or confirmation.
 **Silo / Lane:** VFX wiring (owner-tagged keys -> named hooks) + a tunable selection policy
 **Type:** EXISTING VFX assets, NEWLY TAGGED by the owner. One new selection policy.
 **Minted:** 2026-09-03 (CLI) from three owner tags plus a follow-up creative question.

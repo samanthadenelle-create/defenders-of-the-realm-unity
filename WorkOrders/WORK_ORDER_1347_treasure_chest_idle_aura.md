@@ -1,6 +1,6 @@
 # WORK ORDER 1347 - The treasure chest shimmers while it waits to be opened
 
-**Status:** READY TO IMPLEMENT
+**Status:** FIXED 2026-09-03 - shipped in 2026.09.03.353999. Treasure_Aura on the dungeon cache (WORLD object) and DailyChestCollect_Aura on the daily modal (ScreenSpaceOverlay canvas) - they are TWO systems, which is exactly why the collect burst is seated UNPARENTED in world space with an explicit lifetime: Claim() destroys the modal on the very next statement, so parenting would have eaten the effect. Shimmer stops on open, claim, disable and destroy. The pulsing point Light was KEPT deliberately - it is the chest readability in a dark-mechanic dungeon. isLoop conflicts reported for both tags; neither tag edited. NOT wired and named for her: Loot_drop, Loot_flicker, Loot_pick_up, and the backlight_* _drop family (backlight_coin is an ambient backlight, not a collect burst).
 **Silo / Lane:** Loot / reward presentation + VFX wiring of an owner-tagged key
 **Type:** EXISTING object, ambient presentation ADDED
 **Minted:** 2026-09-03 (CLI) from an owner tag.

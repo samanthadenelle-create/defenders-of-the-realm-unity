@@ -1,4 +1,55 @@
-> ## ▶ LIVE ANCHOR = `CANON_GROUND_TRUTH_2026-08-23.md` — read it FIRST (re-stamped here 2026-08-23)
+> ## ▶ LIVE ANCHOR = `CANON_GROUND_TRUTH_2026-09-02.md` — read it FIRST (re-stamped here 2026-09-03)
+>
+> ⚠ **RE-STAMPED LATE, AND THAT IS THE THIRD TIME.** This line read `CANON_GROUND_TRUTH_2026-08-23.md`
+> while a 09-02 anchor sat on disk — exactly the failure the note at the foot of this block warns about
+> ("this pointer has twice sat days stale behind a newer anchor"). It is now three times. **Re-stamp it
+> in the SAME change as any new anchor, not in the next session's audit.** The 08-23 block below stays
+> because its subject (the pay path) is still true; it is simply no longer the anchor.
+>
+> ### 2026-09-03 session — recorded here because it has no dated anchor of its own yet
+> - ⛔ **THE WORLD CLOCK WAS MEASURED AT `timeScale=0.28` IN OPEN TOWN** — 28% speed, no battle, no
+>   modal, `inputSuppressed=False`. Every timer, cooldown, animation and the wave clock were wrong
+>   together and nothing on screen said so. WO-1353 gives `Time.timeScale` ONE owner with paired
+>   acquire/release — owner ruling: *"anything that steps into time slow needs to step to time return"*.
+>   ⭐ **The trace named it and the CLI read past it**, theorising a frame-budget story off `fps=40` and
+>   asserting it twice before checking the clock. `[Flow:HeroOwner]` prints `timeScale=` on EVERY line.
+>   **Read the captured data before forming the theory** (CLAUDE.md §12; memory `never-inference-fix`).
+> - ⛔ **THE dApp STORE REJECTED THE APP** — privacy + terms 404. Root: `echoes-of-elarion` was never a
+>   stale copy of the game, it was the **marketing and legal site** with its own project and
+>   `cleanUrls`, and a repo-root deploy replaced it with the Unity WebGL build. **WO-1316's parity
+>   premise was INVERTED** — that divergence was correct and deliberate, and enforcing it destroyed the
+>   compliance pages. Both URLs now verified HTTP 200. ⚠ **A gate can be worse than the drift it
+>   polices when its premise is wrong.**
+> - ⭐ **`publishing/config.yaml` names the listing URLs** (`privacy_policy_url` / `license_url` ->
+>   `echoes-of-elarion.vercel.app`). That answers the question WO-1316 was blocked on.
+> - ⛔ **THE PRIVACY POLICY IS CORRECT AND NEEDS NO REWRITE.** Canon's claim that
+>   `PRIVACY_POLICY.md:87-89` falsely states "no ads" is **STALE AND FALSE** — lines 85-96 are a
+>   complete, accurate Advertising section naming Unity LevelPlay, mediation partners, user-initiated
+>   rewarded ads only and consent handling, mirrored in `site/privacy.html`. **Do not hold a
+>   resubmission for a legal rewrite that is not needed.**
+> - **Hero decimation to 50k is REVERTED and PARKED** (owner: *"then we can play with them"*), not
+>   cancelled — the Mage deformed in motion. A T-pose render, a bone count, byte-identical `.meta` and
+>   a clean `COMPILE_GATE_OK` are ALL compatible with a broken character. **`COMPILE_GATE_OK` does not
+>   cover rig errors — grep `Rig Error` separately.** Backups + SHA256 at
+>   `Backups/mesh-decimation-2026-09-03/`.
+> - **The VFX Caster can author a tag SHE DID NOT MAKE.** `VfxCasterWindow.TagSelected` reads the key
+>   from a never-cleared TextField and the prefab from the live selection — two persistent fields never
+>   captured together — then overwrites an existing key with **no diff, no warning, no confirmation**.
+>   Four bad tags in one hour, including one attributed to her for a choice she did not make. Three keys
+>   are HELD pending her retag.
+> - **`Assets/Resources/Structures` DOES NOT EXIST** — the R2 migration deleted it. A `texPath` row
+>   pointing there resolves null and a Tripo FBX renders **pure WHITE with no error on screen**. And
+>   hub structures are **BAKED TWINS** re-skinned by `HubStructureVisualInjector`; they do NOT route
+>   through `StructureFactory`, so searching for that class's log lines will always come up empty
+>   for them.
+> - **`"Main_Castle_Overworld".StartsWith("MainCastle")` is FALSE** (underscore). That one character
+>   left `GroundZFightFixer` dead in the hub since the OuterWorld rename. **Allow-lists fail CLOSED and
+>   SILENTLY on a rename;** the gate is now an exclusion list.
+>
+> ---
+>
+> *(Superseded as the anchor, kept because its subject is still true:)*
+> ## ▶ was: LIVE ANCHOR = `CANON_GROUND_TRUTH_2026-08-23.md` (stamped 2026-08-23)
 >
 > ⛔ **THE PAY PATH IS ACTIVATED (owner explicit, 2026-08-23, WO-1159).** The single most repeated
 > line in this repo's canon — *"the game is published but nobody has ever bought anything"* — is now
