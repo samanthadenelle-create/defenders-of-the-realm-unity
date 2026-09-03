@@ -180,7 +180,29 @@
 > fine as history. A copied number is the bug **even when it was right the day it was written** -
 > that is exactly how the retired 860-899 UI block kept re-seeding collisions from CLAUDE.md sec.2.
 
-> ## ⚠ RECONCILED 2026-09-02 (CLI, twenty-sixth pass): main line next free = **1334**.
+> ## ⚠ RECONCILED 2026-09-03 (CLI, twenty-eighth pass): main line next free = **1337**.
+> *(CLI minted **WO-1336** from an owner felt-test: *"check the wolf when he runs to the gate, there is
+> a tower in his way so gets stuck and doesn't move"*. Aldwin (the Ice Echo, NOT Alduin the Necromancer
+> boss) latches during the `EchoWorldPresence` escort when a player-placed structure carves his route.
+> ⛔ The fix must be robust to ANY structure on the route, not a special case for this tower - the
+> player builds their own town and placement is movable, so a today-only fix will be re-reported.
+> Bumped 1336 -> 1337 in this SAME edit.)*
+>
+> ### superseded: RECONCILED 2026-09-03 (CLI, twenty-seventh pass): main line next free = **1336**.
+> *(CLI minted **WO-1334** and **WO-1335** from an owner device felt-test of the Night Market.
+> **1334** = the store's top-right wallet chip collides with itself; her ruling is to move it left,
+> drop the address entirely (*"they dont need address"*) and reduce it to **`SKR: <balance>`**.
+> **1335** = the Night Market CARD anchors smaller on the LEFT of the HUD as the permanent store door
+> (this SUPERSEDES 1334's proposal to re-point an action-bar ordinal), plus the "Close the Gap" packs
+> become ALWAYS BUYABLE - which deliberately OVERTURNS the WO-1037 shortfall gate. ⚠ Those packs were
+> never missing prices: all three ARE in `USD_ANCHORS` and the server quotes them today; only the
+> client-side gate hid them.
+> ⛔ **PROCESS NOTE, recorded because it is the rule that breaks most often:** WO-1334 was written to
+> disk WITHOUT bumping this banner - the mint-without-bump IS the collision (five in one day on
+> 2026-08-02). Caught within the hour and corrected here; 1334 and 1335 are both bumped in THIS edit.
+> Bumped 1334 -> 1336.)*
+>
+> ### superseded: RECONCILED 2026-09-02 (CLI, twenty-sixth pass): main line next free = **1334**.
 > *(CLI minted **WO-1333** - U+2014 EM DASHES in DISPLAYED strings (`lore-fragments.json:27`,
 > `healers-cottage.json:216`, `DungeonSceneBuilder.cs:995-1028`), which render as TOFU BOXES on the
 > device. Found as an adjacent finding during WO-1332's sweep; predates it. Same shape of gap WO-1332

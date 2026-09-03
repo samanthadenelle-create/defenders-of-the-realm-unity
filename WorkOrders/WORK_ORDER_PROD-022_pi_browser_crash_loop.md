@@ -778,3 +778,107 @@ streaming-disabled run by accident rather than by design.
 `r2-ship.ps1` call to **after** STEP 5's build, or call it twice. As written, *every* WebGL deploy
 this chain has ever made shipped an unpushed catalog; it only became visible tonight because the
 Android lane moved `bundleVersion` between the last content push and this build.
+
+### 11a. CORRECTION to §11, made the same night — the 404 closed itself, the ORDERING DEFECT DID NOT
+
+Honesty first: by the time `tools\r2-ship.ps1` was run at 21:56, both catalog files were **already on
+R2** — the push reported `R2_PUSH_OK 0 uploaded (0.0 MB), 732 unchanged`, and the URLs that answered
+**404** at ~21:40 answer **200** now (re-checked with a cache-buster). **I cannot attribute who put
+them there**; the most likely explanation is that another seat pushed between the build finishing and
+my run. The 404 measurement was real and timestamped; its repair was not mine.
+
+**What is NOT corrected, because it was verified in source rather than inferred:** the ordering defect
+stands. `tools\r2-ship.ps1` is invoked at **STEP 2 only**; `build-webgl.ps1`, `WebGLBuild.cs` and
+command-centre STEPs 5-6 contain **no** R2 push (grepped). So the chain still, by construction, pushes
+before it builds. Tonight it happened to be papered over by a manual push.
+
+Final verified state, on a fresh log:
+`R2_PARITY_OK targets=Android,StandaloneWindows64,WebGL objects=261` +
+`R2_CORS_OK`, with WebGL's line reading *"catalog the player will request:
+catalog_2026.09.03.352921"*. **R2 is correct right now.**
+
+⚠ Worth reading beside `Assets/Editor/WebGLBuild.cs:127-145`, which records **occurrence FIVE** of
+this same CLAUDE.md §16 class (Addressables built for the wrong active target, WebGL player shipped
+against a three-day-old catalog, every marker green). This is the same family in a new place: the
+gate is not wrong, it is **early**.
+
+---
+
+### 12. ⛔ THE FINDING THAT CHANGES THE CONCLUSION — THE DEPLOY DOES NOT REACH THE OWNER'S GAME
+
+**The instrument is live. It is live on the wrong host.**
+
+`tools/command-centre.ps1` completed and promoted cleanly:
+
+```
+STEP_5_OK marker=CANDIDATE_CONTENT_MATCH    id=dpl_8wWpXV633cpbnJFBx31NUfjdsB3W
+STEP_6_OK marker=PRODUCTION_ALIAS_MATCH     id=dpl_8wWpXV633cpbnJFBx31NUfjdsB3W
+STEP_7_OK marker=PRODUCTION_DB_WRITE_OK
+COMMAND_CENTRE_OK deployment=dpl_8wWpXV633cpbnJFBx31NUfjdsB3W rollback=dpl_C6PhR3T3GYV1JPoMDtJffDNBYW5d
+```
+
+Every marker green. Then measure the two hosts:
+
+```
+GET https://defenders-of-the-realm-v2.vercel.app/   -> 40100 bytes  productVersion "2026.09.03.352921"  Lane C instrument PRESENT
+GET https://echoes-of-elarion.vercel.app/           -> 32609 bytes  productVersion "2026.09.02.352005"  Lane C instrument ABSENT
+                                                       X-Vercel-Cache: HIT   Age: 10165   Last-Modified: 2026-09-03T00:04:59Z
+```
+
+**The owner plays on `echoes-of-elarion.vercel.app`.** That is not a guess — `WebTrace.MakeBuildId`
+stamps the serving host into every row, and all 61 crumb rows read
+`build: 2026.09.02.352005@echoes-of-elarion.vercel.app`.
+
+**Why the chain structurally cannot reach it.** `.vercel/project.json` links this repo to
+`projectName: "defenders-of-the-realm-v2"`. `echoes-of-elarion` is a **separate Vercel project**
+(`samanthadenelle-creates-projects/echoes-of-elarion`) — `Builds/vercel-deploy-echoes-run.log` (17:30
+today) shows it being deployed by its own `vercel deploy` run. `command-centre.ps1` defaults
+`-ProductionUrl https://defenders-of-the-realm-v2.vercel.app` and STEP 6's `PRODUCTION_ALIAS_MATCH`
+verifies **that** host. **It is a true marker about the wrong deployment.**
+
+This is the same shape as everything else this ticket has turned up: the gate is honest, and it is
+pointed one step off the thing that matters.
+
+> **CONSEQUENCE FOR THE MORNING, STATED PLAINLY:** the Lane C heartbeat **has not reached the
+> owner's device.** Until `echoes-of-elarion` is deployed, a Pi session will emit the old crumbs
+> (boot / pagehide / visibility) and **no `hb` rows at all**. The wedge-vs-kill question stays open
+> for one more deploy.
+
+**What DOES reach her tonight:** the remote tunables. `RemoteTunablesService` pins
+`https://defenders-of-the-realm-v2.vercel.app` as a `const` (`:93`) regardless of serving host, and a
+byte grep of the **shipped 352005 payload** finds `pi.disableRemoteStructureArt`, `client-tunables`
+and `tunables.cache.v1` (§3 row 7). **So the flag works on the build she already has.** That is why
+the flag was armed rather than held for the deploy — it is the only lever tonight that can actually
+touch her device.
+
+**Armed and verified:**
+
+```
+STEP_9_OK marker=TUNABLES_SET_OK log=D:\eoa\Builds\client-tunables.log     (fresh, 21:56:59)
+
+GET https://defenders-of-the-realm-v2.vercel.app/api/client-tunables   <- the host the CLIENT pins
+  {"ok":true,"version":1,"readOk":true,"reason":"OK","values":{"pi.disableRemoteStructureArt":"1"}}
+
+GET https://echoes-of-elarion.vercel.app/api/client-tunables           <- the host the GAME is served from
+  {"ok":true,"version":1,"readOk":false,"reason":"NO_SQL_HANDLE","values":{}}    (expected; see the Lane A addendum)
+```
+
+⚠ **One caveat on the flag reaching a crash-looping client, stated so a null result is not
+over-read.** Knob 3 is consumed at boot from the PlayerPrefs cache
+(`RemoteTunablesService` reads it at `BeforeSceneLoad`; the network payload is fetched at
+`AfterSceneLoad` and written with `PlayerPrefs.Save()`, which on WebGL flushes to IndexedDB). A page
+that dies **1.35 s after its first frame** may not survive long enough to persist the cache. It only
+has to win **once** across a 40-boot loop, and it then applies to every launch after — but if the
+morning trace shows no `[Flow:Tunables] CONFIG (payload accepted…)` line anywhere, **the knob never
+armed on the device and the run proves nothing about streaming.** Check for that line before reading
+the result either way.
+
+### 13. THE SINGLE NEXT ACTION FOR THE OWNER
+
+> ## Deploy `echoes-of-elarion`.
+> Everything else this pass produced is already in place and waiting on it. That host is still serving
+> `2026.09.02.352005` from 00:04Z; the build with the heartbeat is built, promoted and proven — on the
+> other project. One deploy of the right project puts the instrument on the phone, and the very next
+> crash writes the line that names the root.
+
+After that, the §10 morning test costs twelve minutes of standing still.
