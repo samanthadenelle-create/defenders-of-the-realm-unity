@@ -1103,6 +1103,14 @@ namespace DeNelle.Editor
             // duplicate-icon defect cannot return.
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "talent-icons suite", () => { if (!DeNelle.Editor.Regression.TalentIconMapRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[talent-icons] " + r); });
 
+            // --- WO-1294 ONE-ICON IDENTITY. [talent-icons] above guards the TREE side only, and
+            // concept-icons.json guards nothing at all -- so a skill could show one picture on its
+            // talent node and a DIFFERENT one in the hot-swap slot and combat HUD with both files
+            // individually clean. That is exactly what had happened to the shared/universal pool.
+            // This suite closes the gap BETWEEN the two files, and additionally pins the three-slot
+            // hot-swap rail and the nine canonical troop portraits.
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "concept-icons suite", () => { if (!DeNelle.Editor.Regression.ConceptIconIdentityRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[concept-icons] " + r); });
+
             // --- SHIPPED SURFACE GATE (2026-08-16): three surfaces that SHIPPED in the release
             // APK while believing they were dev-only, off, or wired up. (a) HeroGaitForensics
             // gated on a RAW PlayerPrefs key that DEFAULTED ON and was in no flag table, so a
