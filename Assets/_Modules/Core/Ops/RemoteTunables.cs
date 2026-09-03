@@ -31,6 +31,15 @@
 // asserted-in-a-comment: RemoteTunablesService never blocks, never awaits at a
 // call site, and every parse goes through Guard.
 //
+// ⚠ ONE HONEST EXCEPTION, STATED RATHER THAN HIDDEN (WO-1327): the two vfx.* knobs
+// are BUG FIXES, so their defaults are the CORRECTED values, not the broken ones.
+// An empty table gives you this build's fixed VFX collision and light budget, not
+// the art pack's perfectly-elastic fireballs and 25 concurrent point lights. The
+// invariant still holds in the form that matters - NO ROW => EXACTLY WHAT THIS
+// BUILD HARDCODES - and the previous behaviour is one flip away
+// (vfx.particleBouncePct=100, vfx.maxParticleLights=25) if the owner, who owns
+// every VFX call, judges the new feel wrong.
+//
 // -----------------------------------------------------------------------------
 // PRECEDENCE, and it composes with FeatureFlags rather than fighting it:
 //     LOCAL PlayerPrefs "ff.tun.<key>"   (most specific - a human at the device)
@@ -174,10 +183,69 @@ namespace DeNelle.Core.Ops
         /// branch inside that one owner, which is the second mechanism this rule forbids.
         /// </para>
         /// </summary>
-        public const int DrainReturnPctDefault = 100;
+        /// <remarks>
+        /// ⛔ 60, NOT 100, AND THAT IS A DELIBERATE DEPARTURE FROM THIS FILE'S OWN RULE.
+        /// Do NOT "correct" it back. Owner ruling 2026-09-02, verbatim: <i>"keep drain at
+        /// 60% for now"</i>, with the design intent she gave in the same breath: <i>"drain
+        /// should help stave off not run the show"</i>.
+        /// <para>
+        /// Every other Default in the Registry below is the value the shipping code
+        /// hardcoded, so that an empty table reproduces today's behaviour byte for byte.
+        /// This one is a RULED BALANCE VALUE, so an empty table gives the drain the OWNER
+        /// chose rather than the 100 percent WO-1306 shipped. Her ruling outranks the
+        /// convention - the convention exists to stop a default DRIFTING silently, and a
+        /// value she stated out loud is the opposite of drift. The invariant that still
+        /// binds unchanged: no row, no network, no parse => EXACTLY WHAT THIS BUILD
+        /// HARDCODES, with the remote read an override and never a dependency. The WO-861
+        /// identity "heal == damage dealt" is now reachable by setting the row to 100.
+        /// (Same shape as the two vfx.* knobs' exception, recorded in this file's header.)
+        /// </para>
+        /// </remarks>
+        public const int DrainReturnPctDefault = 60;
 
         /// <summary>Int percent. Share of damage DEALT that a drainshot returns as healing.</summary>
         public const string KeyCombatDrainReturnPct = "combat.drainReturnPct";
+
+        // ---------------------------------------------------------------------
+        //  WO-1330 - THE OVER-TIME BALANCE RAIL. Three knobs, not six.
+        //
+        //  The ticket named three levers - tick MAGNITUDE, tick INTERVAL and
+        //  DURATION - and required them tunable rather than hardcoded. They are
+        //  registered ONCE and SHARED by every over-time effect of EITHER sign,
+        //  because "how often does an over-time effect pulse" is the same concept
+        //  whether the pulse hurts or mends. Per-ability duplicates were explicitly
+        //  rejected by the work order ("Prefer ONE shared knob over per-ability
+        //  duplicates where it is genuinely the same concept") and would also have
+        //  had to be re-registered for every future DoT anyone authors.
+        //
+        //  ⭐ ALL THREE DEFAULTS ARE TODAY'S BEHAVIOUR, and this is checkable rather
+        //  than asserted: 1000 ms is exactly the "const float tick = 1f" that both
+        //  HeroAbilities.BurnDoT and HeroAbilities.PoisonDoT hardcoded before this
+        //  work, and 100 percent is identity on the other two. An empty table, a
+        //  404, a malformed row and an offline player therefore all reproduce the
+        //  shipped mage.poison and knight.emberbrand-throw numbers exactly.
+        //
+        //  The consumer is DeNelle.Core.Combat.OverTimeTuning, which owns the
+        //  clamps and is the ONLY reader - see that file for why each clamp exists.
+        // ---------------------------------------------------------------------
+
+        /// <summary>Milliseconds between over-time pulses. 1000 = today.</summary>
+        public const int OverTimeTickMsDefault = 1000;
+
+        /// <summary>Percent scale on every over-time pulse's magnitude. 100 = today.</summary>
+        public const int OverTimeMagnitudePctDefault = 100;
+
+        /// <summary>Percent scale on every over-time effect's duration. 100 = today.</summary>
+        public const int OverTimeDurationPctDefault = 100;
+
+        /// <summary>Int, MILLISECONDS between over-time pulses (both signs).</summary>
+        public const string KeyCombatOverTimeTickMs = "combat.overTimeTickMs";
+
+        /// <summary>Int, PERCENT scale on over-time pulse magnitude (both signs).</summary>
+        public const string KeyCombatOverTimeMagnitudePct = "combat.overTimeMagnitudePct";
+
+        /// <summary>Int, PERCENT scale on over-time effect duration (both signs).</summary>
+        public const string KeyCombatOverTimeDurationPct = "combat.overTimeDurationPct";
 
         /// <summary>
         /// Int, PERCENT. Restitution allowed on a WORLD-COLLIDING particle inside any VFX host
@@ -332,6 +400,68 @@ namespace DeNelle.Core.Ops
                 "db call'). 100 is the value the shipped resolver hardcoded, so an offline player, a 404 " +
                 "and an empty table all get exactly the drain that shipped; the knob only ever moves it " +
                 "on her word."),
+
+            new TunableSpec(KeyVfxParticleBouncePct, TunableKind.Int, VfxParticleBouncePctDefault,
+                "Percent restitution allowed on a WORLD-COLLIDING particle inside any VFX host the pooled " +
+                "spawner checks out. 0 = THIS BUILD: a particle that hits scene geometry stops there and " +
+                "terminates (bounce 0, dampen 1, lifetime-loss 1). 100 = leave the art pack's authored " +
+                "collision untouched. The clamp only ever tightens, so it can never make an effect bouncier " +
+                "than its author made it.",
+                "NOT a PROD-022 hypothesis - a FEEL knob (WO-1327). Spell_Fire_9's Fireballs emitter is " +
+                "authored bounce 1.0 / dampen 0 / minKillSpeed 0 against ALL 32 LAYERS at High quality: " +
+                "perfectly elastic, nothing ever kills the particle. Cast inside a walled town that is a " +
+                "projectile in a box, and the owner reported the fire spell 'casts at me and stays at me' " +
+                "twice (F8 seq 4152, 4644). Those numbers live in a GITIGNORED pack prefab, so the clamp " +
+                "has to live at the spawn owner; this knob is how the owner moves it without a rebuild, and " +
+                "how she puts the authored behaviour back in one word if the new feel is wrong."),
+
+            new TunableSpec(KeyVfxMaxParticleLights, TunableKind.Int, VfxMaxParticleLightsDefault,
+                "Ceiling on the total concurrent real-time point lights ONE spawned VFX host may drive " +
+                "through its ParticleSystem LightsModules, summed across every emitter on that host. 4 = " +
+                "THIS BUILD. 0 turns particle lights off outright. The budget is spent evenly across the " +
+                "host's enabled modules and each module's ratio is scaled down with it. It never deletes a " +
+                "light prototype.",
+                "NOT a PROD-022 hypothesis - a MOBILE PERF knob (WO-1327). Spell_Fire_9 drives 20 lights " +
+                "from Fireballs and 5 more from its Explosion sub-emitter: TWENTY-FIVE real-time point " +
+                "lights per cast, at intensity 5 and range 5, on the Seeker. That is a frame-rate event on " +
+                "every fireball. Like the bounce knob the dial is baked into a gitignored prefab, so the cap " +
+                "belongs at the spawn owner - and it must move on device evidence rather than on a number " +
+                "somebody picked."),
+
+            new TunableSpec(KeyCombatOverTimeTickMs, TunableKind.Int, OverTimeTickMsDefault,
+                "Milliseconds between the pulses of EVERY over-time effect, damage and healing alike - " +
+                "the mage's wither, the knight's regen, the shipped burn on knight.emberbrand-throw and " +
+                "mage.poison, and the Venombrand poison rider. 1000 = TODAY: exactly the 'const float " +
+                "tick = 1f' both shipped DoT coroutines hardcoded. Magnitude per pulse is derived as " +
+                "perSecond * interval, so moving this changes CADENCE ONLY - total delivery is invariant. " +
+                "Clamped to 50..60000 at the consumer.",
+                "NOT a PROD-022 hypothesis - a FEEL knob (WO-1330). How often a DoT ticks is the whole " +
+                "READ of the effect: at 1000ms it is four discrete thuds over four seconds, at 250ms it " +
+                "is a continuous drain. Which one communicates 'this is still hurting you' is a question " +
+                "only felt-testing answers, and the owner is red/green colourblind, so RHYTHM is carrying " +
+                "signal that colour cannot. It must move in seconds, not in a rebuild."),
+
+            new TunableSpec(KeyCombatOverTimeMagnitudePct, TunableKind.Int, OverTimeMagnitudePctDefault,
+                "Percent scale on the magnitude of every over-time pulse, both signs. 100 = TODAY: the " +
+                "dotDamage / healPerSecond authored in abilities.json, unscaled. 50 halves every DoT and " +
+                "every regen at once; 0 makes them inert without unauthoring anything. Clamped to 0..1000 " +
+                "at the consumer.",
+                "NOT a PROD-022 hypothesis - a BALANCE lever (WO-1330). It is ONE knob rather than one " +
+                "per ability because the ticket required exactly that ('Prefer ONE shared knob over " +
+                "per-ability duplicates where it is genuinely the same concept'): the first tuning " +
+                "question is always whether over-time damage as a CLASS of effect is pulling its weight " +
+                "against burst, and that is a single dial. Per-ability numbers stay in abilities.json."),
+
+            new TunableSpec(KeyCombatOverTimeDurationPct, TunableKind.Int, OverTimeDurationPctDefault,
+                "Percent scale on the duration of every over-time effect, both signs. 100 = TODAY: the " +
+                "authored dotSeconds / seconds, unscaled. Raising it lengthens the window and therefore " +
+                "adds pulses, so it moves TOTAL delivery where the magnitude knob moves per-pulse size. " +
+                "Clamped to 0..1000 at the consumer.",
+                "NOT a PROD-022 hypothesis - a BALANCE lever (WO-1330), and the one that decides whether " +
+                "an over-time ability is a commitment or a garnish. Separated from the magnitude knob on " +
+                "purpose: 'each tick hurts more' and 'it lasts longer' feel completely different at the " +
+                "same total damage, and collapsing them into one dial would make that distinction " +
+                "untestable."),
         };
 
         // Swapped atomically by ApplyPayload. Never mutated in place.

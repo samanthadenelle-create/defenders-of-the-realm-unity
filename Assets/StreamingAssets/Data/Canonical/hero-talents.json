@@ -61,19 +61,22 @@
           "tier": "tier1",
           "slot": 3,
           "cost": 1,
-          "kind": "stat",
+          "kind": "skill",
           "iconPath": "Talents/knight/knight_03",
-          "description": "+25% block chance. Passive chance to fully block a hit.",
+          "description": "Learn Ironblood - restores 4 HP/s for 12s (48 total, 20s cd); +25% block chance.",
           "effect": {
             "type": "blockChance",
-            "value": 0.25
+            "value": 0.25,
+            "ability": "knight.ironblood",
+            "note": "unlock rides kind=skill+abilityId; the effect payload carries the +25% block chance this node has always granted"
           },
-          "_note": "WO-retention 2026-09-02: prerequisite re-pointed knight.t1n1 -> knight.t1n2 (those two swapped seats). Still 2 Wisdom to reach. Position, cost, tier and effect UNCHANGED.",
+          "_note": "WO-retention 2026-09-02: prerequisite re-pointed knight.t1n1 -> knight.t1n2 (those two swapped seats). Still 2 Wisdom to reach. Position, cost, tier and effect UNCHANGED. || WO-1330 (owner ruling 2026-09-02: \"or a regen for knight\"). RE-POINTED, NOT MOVED AND NOT ADDED - same shape and same reasoning as mage.t1n4 in this change and as WO-1306's mage.t1n3. WHAT DID NOT MOVE: id, tier, slot, cost, iconPath, x, y and prerequisites are UNCHANGED. WHAT CHANGED: kind stat -> skill plus an abilityId; THE +25% BLOCK CHANCE THIS NODE HAS ALWAYS GRANTED IS KEPT in the effect payload, so the node gains a castable and loses nothing. The granted spell is knight.ironblood, an early low-rate long-window sustain regen. WARNING: knight.oathmend already exists as a tier-3 BURST mend - the two are deliberately different shapes, and the abilities.json _comment on knight.ironblood explains the split and names the one-word alternative (re-cost Oathmend instead) if the owner would rather not carry two mends.",
           "x": 0.18,
           "y": 0.52,
           "prerequisites": [
             "knight.t1n2"
-          ]
+          ],
+          "abilityId": "knight.ironblood"
         },
         {
           "id": "knight.t1n4",
@@ -1124,21 +1127,21 @@
         },
         {
           "id": "mage.t1n3",
-          "name": "Siphon Ward",
+          "name": "Syphon Essence",
           "tier": "tier1",
           "slot": 3,
           "cost": 1,
           "kind": "skill",
           "iconPath": "Talents/wizard/wizard_03",
           "abilityId": "mage.siphon",
-          "description": "Learn Siphon - 28 dmg at 13m that heals you for the damage dealt (9s cd); +20% max health.",
+          "description": "Learn Syphon Essence - 28 dmg at 13m that heals you for part of the damage dealt (9s cd); +20% max health.",
           "effect": {
             "type": "maxHpPct",
             "value": 0.2,
             "ability": "mage.siphon",
             "note": "unlock rides kind=skill+abilityId; the effect payload carries the +20% max HP this node has always granted"
           },
-          "_note": "WO-1306 (owner ruling 2026-09-02) - THE MAGE'S FIRST TALENT POINT NOW BUYS A CASTABLE, mirroring the knight (commit 02f9b8a4f). Owner, verbatim: \"the blm needs to get some healing , like drain to stay balanced (early)\", under the retention lens \"we want them to unlocka few items that can go in the quick swap bar fast, why because our retention number is very low and people are not returning\". The mage was the ONE class at 3 points to its first bar-equippable ability (knight 1, ranger 1, shared 1), and it was the one class with no cost-1 castable to promote - so the WO-1306 fix is DESIGN, changing what a base node DOES, not where it sits. WHAT DID NOT MOVE: id, tier, slot, cost, iconPath, x, y and prerequisites are all UNCHANGED, so the 2026-08-16 base-row law still holds byte for byte (this is still a 1-cost ROOT on the bottom row) and no save key is orphaned. Blink Mastery is NOT re-promoted - that reverted change stays reverted. WHAT CHANGED: kind stat -> skill plus an abilityId, which is EXACTLY the shape mage.t2n5 Blink Mastery already uses in this same tree (kind=skill+abilityId grants the spell; the effect payload still carries the stat), so the +20% max HP this node has always granted is KEPT, not traded away - the node gains a castable and loses nothing. The granted spell is mage.siphon, a drainshot: it heals the caster for the damage it deals, which is the sustain the owner asked for, and it reuses HeroAbilities.ResolveDrainshot - the resolver mage.drain and ranger.healing-shot already run - rather than adding a second healing mechanism. The RETURN RATE is remote-tunable (combat.drainReturnPct, default 100 = today's behaviour exactly) per her follow-up ruling \"dont make it need a code change, make it tweakable from a db call\"; see docs/PROD022_TUNABLE_FLAGS.md. The name and the numbers are flagged in the WO-1306 RESULT as awaiting her confirmation.",
+          "_note": "WO-1306 (owner ruling 2026-09-02) - THE MAGE'S FIRST TALENT POINT NOW BUYS A CASTABLE, mirroring the knight (commit 02f9b8a4f). Owner, verbatim: \"the blm needs to get some healing , like drain to stay balanced (early)\", under the retention lens \"we want them to unlocka few items that can go in the quick swap bar fast, why because our retention number is very low and people are not returning\". The mage was the ONE class at 3 points to its first bar-equippable ability (knight 1, ranger 1, shared 1), and it was the one class with no cost-1 castable to promote - so the WO-1306 fix is DESIGN, changing what a base node DOES, not where it sits. WHAT DID NOT MOVE: id, tier, slot, cost, iconPath, x, y and prerequisites are all UNCHANGED, so the 2026-08-16 base-row law still holds byte for byte (this is still a 1-cost ROOT on the bottom row) and no save key is orphaned. Blink Mastery is NOT re-promoted - that reverted change stays reverted. WHAT CHANGED: kind stat -> skill plus an abilityId, which is EXACTLY the shape mage.t2n5 Blink Mastery already uses in this same tree (kind=skill+abilityId grants the spell; the effect payload still carries the stat), so the +20% max HP this node has always granted is KEPT, not traded away - the node gains a castable and loses nothing. The granted spell is mage.siphon, a drainshot: it heals the caster for the damage it deals, which is the sustain the owner asked for, and it reuses HeroAbilities.ResolveDrainshot - the resolver mage.drain and ranger.healing-shot already run - rather than adding a second healing mechanism. The RETURN RATE is remote-tunable (combat.drainReturnPct, default 100 = today's behaviour exactly) per her follow-up ruling \"dont make it need a code change, make it tweakable from a db call\"; see docs/PROD022_TUNABLE_FLAGS.md. The name and the numbers are flagged in the WO-1306 RESULT as awaiting her confirmation. || WO-1330 OWNER NAME RULING 2026-09-02, verbatim: \"Syphon Essence\" - note her spelling, a Y not an I. It replaces BOTH names WO-1306 authored (the node \"Siphon Ward\" and the spell \"Siphon\"); they are ONE THING to the player, so they carry one name. ONLY THE DISPLAY NAME MOVED. The id mage.siphon is a LIVE SAVE KEY and was deliberately NOT renamed - a learned-talent ledger and an equipped-bar slot both persist that string, so renaming it would orphan every save that has the node. The same reasoning leaves the iconPath, the effect string and the ability id untouched. Any remaining lowercase \"siphon\"/\"siphoner\" in docs/NARRATIVE is the WORLDBUILDING noun (the aether siphon), a different word entirely, and was correctly left alone.",
           "x": 0.8,
           "y": 0.64,
           "prerequisites": []
@@ -1149,18 +1152,22 @@
           "tier": "tier1",
           "slot": 4,
           "cost": 1,
-          "kind": "stat",
+          "kind": "skill",
           "iconPath": "Talents/wizard/wizard_04",
-          "description": "-15% cooldowns.",
+          "description": "Learn Wither - 12 dmg at 14m then 8 dmg/s for 4s (10s cd); -15% ability cooldowns.",
           "effect": {
             "type": "cdReduction",
-            "value": 0.15
+            "value": 0.15,
+            "ability": "mage.wither",
+            "note": "unlock rides kind=skill+abilityId; the effect payload carries the -15% cooldown this node has always granted"
           },
           "x": 0.06,
           "y": 0.44,
           "prerequisites": [
             "mage.t1n1"
-          ]
+          ],
+          "abilityId": "mage.wither",
+          "_note": "WO-1330 (owner ruling 2026-09-02: \"have creative match a DoT would be nice\"). RE-POINTED, NOT MOVED AND NOT ADDED - exactly the shape WO-1306 used one node over at mage.t1n3, and for the same reason: adding a node changes the tree's SHAPE and would have to answer TalentTreeShapeRegression rules 2/3/4/6, while re-pointing changes only what a node DOES. WHAT DID NOT MOVE: id, tier, slot, cost, iconPath, x, y and prerequisites are UNCHANGED, so no row width, no base row, no prereq edge and no save key is disturbed, and rule 7 [first-point] still passes on mage.t1n3 rather than on this node. WHAT CHANGED: kind stat -> skill plus an abilityId, which is precisely the shape mage.t2n5 Blink Mastery and mage.t1n3 Siphon Ward already use in this same tree - the effect payload still carries the stat, so THE -15% COOLDOWN THIS NODE HAS ALWAYS GRANTED IS KEPT, not traded away. The node gains a castable and loses nothing. The granted spell is mage.wither, a 'dot': it is the mage's first ACQUIRABLE damage-over-time (mage.poison is the stock ultimate, pressable with no talent, so it gave the player nothing new to press), and it reuses the shipped HeroAbilities.ResolveDot rather than adding a mechanism. Its tick now runs on the one shared OverTimeEngine, the same engine the knight's Ironblood regen runs on with the sign flipped. Name and numbers are flagged in the WO-1330 RESULT as awaiting her confirmation."
         },
         {
           "id": "mage.t1n5",

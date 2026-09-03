@@ -101,6 +101,12 @@ namespace DeNelle.Editor.Regression
             // WO-1306 (2026-09-02): the mage's new cost-1 base grant. Its own JSON says the row is
             // held empty pending the owner's art tag, the same way its VFX keys are.
             { "mage.siphon", "WO-1306 holds the row for an owner art tag (abilities.json records it verbatim)" },
+            // WO-1330 (2026-09-02): the two new over-time abilities. Their VFX keys are held
+            // EMPTY by that ticket's own [owner-tag] rule for the same reason the icon row is
+            // held here -- the owner tags the art and this seat maps it verbatim, so picking an
+            // icon to make a suite green would be exactly the creative call that rule reserves.
+            { "mage.wither", "WO-1330 holds the row for an owner art tag (granted by node mage.t1n4; its VFX keys are held empty by the same ruling)" },
+            { "knight.ironblood", "WO-1330 holds the row for an owner art tag (granted by node knight.t1n3; its VFX keys are held empty by the same ruling)" },
         };
 
         [Serializable]

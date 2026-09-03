@@ -83,7 +83,7 @@
 //                     .PiRequestTimeoutSeconds == 20 and HeroAbilities
 //                     .DrainReturnPct == 100 - and no consumer has re-hardcoded a
 //                     knob behind the seam.
-//   4 [key-domain]    The 9 keys are identical in RemoteTunables.Registry,
+//   4 [key-domain]    The 14 keys are identical in RemoteTunables.Registry,
 //                     api/_lib/tunables.js and the docs table.
 //   5 [doc-parity]    The DEFAULT column in docs/PROD022_TUNABLE_FLAGS.md equals
 //                     Registry, so the owner-facing list cannot drift from code.
@@ -102,6 +102,7 @@ using System.IO;
 using System.Text;
 using System.Text.RegularExpressions;
 using DeNelle.Core;
+using DeNelle.Core.Combat;   // WO-1330: OverTimeTuning is the over-time knobs' single consumer.
 using DeNelle.Core.Ops;
 using UnityEngine;
 
@@ -113,11 +114,12 @@ namespace DeNelle.Editor.Regression
         //  PINNED FACTS. Every one is a literal.
         // ---------------------------------------------------------------------
 
-        /// <summary>The domain is NINE knobs (eight PROD-022 mitigations plus the WO-1306
-        /// balance knob). Pinned as a literal, not as
+        /// <summary>The domain is FOURTEEN knobs: eight PROD-022 mitigations, the WO-1306
+        /// balance knob, the three WO-1330 over-time levers, and the two WO-1327 VFX
+        /// feel/perf clamps. Pinned as a literal, not as
         /// Registry.Length - an oracle that measures the thing against itself
         /// certifies nothing.</summary>
-        private const int ExpectedKnobCount = 9;
+        private const int ExpectedKnobCount = 14;
 
         /// <summary>
         /// ⭐ THE CONTRACT, STATED INDEPENDENTLY OF THE CODE.
@@ -141,7 +143,25 @@ namespace DeNelle.Editor.Regression
             // WO-1306 - NOT a PROD-022 mitigation. The drain return rate, integer percent.
             // 100 is what HeroAbilities.HealFromDrain hardcoded before it became tunable
             // (heal == damage dealt, WO-861), so an empty table is that behaviour exactly.
-            new KeyValuePair<string, int>("combat.drainReturnPct", 100),
+            new KeyValuePair<string, int>("combat.drainReturnPct", 60),
+            // WO-1330 - NOT PROD-022 mitigations. The three levers of the one shared
+            // over-time engine. 1000ms is exactly the "const float tick = 1f" both
+            // shipped DoT coroutines hardcoded; 100 percent is identity on the other two.
+            new KeyValuePair<string, int>("combat.overTimeTickMs", 1000),
+            new KeyValuePair<string, int>("combat.overTimeMagnitudePct", 100),
+            new KeyValuePair<string, int>("combat.overTimeDurationPct", 100),
+            // WO-1327 - NOT PROD-022 mitigations either, and the ONE place in this table
+            // where "the default is today's behaviour" is deliberately NOT true: these two
+            // are BUG FIXES, so their defaults are the CORRECTED values. 0 percent bounce
+            // means a world-colliding VFX particle stops at the surface it hits and dies
+            // instead of ricocheting back to the caster; 4 is the concurrent particle-light
+            // ceiling per VFX host, against Spell_Fire_9's authored 25. The exception is
+            // written down in RemoteTunables' header and in the docs page, because the
+            // numbers being replaced live in a GITIGNORED art pack where a prefab edit
+            // cannot be committed or reviewed. The invariant that still binds: no row, no
+            // network, no parse => EXACTLY what this build hardcodes.
+            new KeyValuePair<string, int>("vfx.particleBouncePct", 0),
+            new KeyValuePair<string, int>("vfx.maxParticleLights", 4),
         };
 
         /// <summary>The two knobs whose resolved value is readable from the CONSUMER, so
@@ -149,9 +169,20 @@ namespace DeNelle.Editor.Regression
         private const int ExpectedWarmerMaxAttempts = 3;
         private const int ExpectedWarmerPiTimeout = 20;
 
-        /// <summary>WO-1306. The drain return rate the shipped resolver hardcoded before the knob
-        /// existed: 100 percent, i.e. heal == damage DEALT. A literal, for the same reason.</summary>
-        private const int ExpectedDrainReturnPct = 100;
+        /// <summary>The drain return rate. ⛔ 60, and NOT the 100 percent WO-1306 shipped -
+        /// owner ruling 2026-09-02, verbatim "keep drain at 60% for now", intent "drain should
+        /// help stave off not run the show". This is the ONE knob besides the two vfx.* ones
+        /// whose default is deliberately NOT the previously-shipped behaviour, because it is a
+        /// RULED BALANCE VALUE rather than a constant nobody chose. Do not "correct" it back to
+        /// 100. A literal here, independent of the Registry, for the usual reason.</summary>
+        private const int ExpectedDrainReturnPct = 60;
+
+        /// <summary>WO-1330. The pulse cadence both shipped DoT coroutines hardcoded as
+        /// <c>const float tick = 1f</c>, in milliseconds. A literal, same reason.</summary>
+        private const int ExpectedOverTimeTickMs = 1000;
+
+        /// <summary>WO-1330. Identity scale on over-time magnitude and duration.</summary>
+        private const int ExpectedOverTimePct = 100;
 
         /// <summary>The poll interval must stay inside these pinned bounds. A floor,
         /// because hammering the origin buys nothing; a ceiling, because the interval IS
@@ -165,6 +196,7 @@ namespace DeNelle.Editor.Regression
         private const string WarmerSrc = "Assets/_Modules/Core/Addressables/StructureContentWarmer.cs";
         private const string FactorySrc = "Assets/_Modules/Village/VisualFactory.cs";
         private const string AbilitiesSrc = "Assets/_Modules/Village/Hero/HeroAbilities.cs";
+        private const string OverTimeSrc = "Assets/_Modules/Core/Combat/OverTimeEffects.cs";
         private const string JsLibSrc = "api/_lib/tunables.js";
         private const string DocSrc = "docs/PROD022_TUNABLE_FLAGS.md";
 
@@ -230,7 +262,8 @@ namespace DeNelle.Editor.Regression
             string noteStr = notes.Count > 0 ? " [notes: " + string.Join("; ", notes) + "]" : "";
             if (failures.Count == 0)
             {
-                reason = "TUNABLE DEFAULTS OK - all " + ExpectedKnobCount + " knobs (8 PROD-022 + the WO-1306 balance knob) resolve to " +
+                reason = "TUNABLE DEFAULTS OK - all " + ExpectedKnobCount + " knobs (8 PROD-022 mitigations + the WO-1306 balance knob + the three " +
+                         "WO-1330 over-time levers + the two WO-1327 VFX feel/perf clamps) resolve to " +
                          "their SHIPPING DEFAULTS (today's behaviour, byte for byte) on every failure " +
                          "path: no database row, server-reported readOk=false, malformed JSON, an empty " +
                          "body, a corrupt device cache, values the server would refuse, and garbage " +
@@ -543,6 +576,85 @@ namespace DeNelle.Editor.Regression
                              ExpectedDrainReturnPct + ". -Clear must be the one-word way back to today's " +
                              "behaviour; if it is not, an experiment can never be fully undone.");
 
+            // WO-1330 - the OVER-TIME consumer, proved the same way and for the same reason.
+            // OverTimeTuning is the single reader of all three knobs; the Registry answering
+            // 1000/100/100 proves nothing if the engine stopped asking, and an offline player
+            // must get the one-second pulse both shipped DoT coroutines hardcoded.
+            if (Math.Abs(OverTimeTuning.TickSeconds - ExpectedOverTimeTickMs / 1000f) > 0.0001f)
+                failures.Add("[consumers] OverTimeTuning.TickSeconds is " + OverTimeTuning.TickSeconds +
+                             "s with no table; the shipping value is " + (ExpectedOverTimeTickMs / 1000f) +
+                             "s. That is the 'const float tick = 1f' BurnDoT and PoisonDoT each hardcoded " +
+                             "before the engine existed, so an empty table must reproduce the shipped " +
+                             "mage.poison and knight.emberbrand-throw burns exactly.");
+            if (Math.Abs(OverTimeTuning.MagnitudeScale - 1f) > 0.0001f)
+                failures.Add("[consumers] OverTimeTuning.MagnitudeScale is " + OverTimeTuning.MagnitudeScale +
+                             " with no table, not the identity 1.0. Every DoT and every regen in the game " +
+                             "is silently rescaled.");
+            if (Math.Abs(OverTimeTuning.DurationScale - 1f) > 0.0001f)
+                failures.Add("[consumers] OverTimeTuning.DurationScale is " + OverTimeTuning.DurationScale +
+                             " with no table, not the identity 1.0.");
+
+            // Clamps, both ends. A tick of 0 is a divide-by-zero and an unbounded pulse count
+            // in a single frame; a negative percent would invert a DoT into a heal, which is
+            // the one outcome the OverTimeKind design exists to make impossible.
+            RemoteTunables.ApplyPayload(
+                Payload(true, "combat.overTimeTickMs", "0",
+                        "combat.overTimeMagnitudePct", "-500",
+                        "combat.overTimeDurationPct", "-1"),
+                "test-ot-clamp-lo");
+            if (OverTimeTuning.TickSeconds <= 0f)
+                failures.Add("[consumers] a row of 0 drove OverTimeTuning.TickSeconds to " +
+                             OverTimeTuning.TickSeconds + ". A non-positive tick is a divide-by-zero in " +
+                             "PulseCountFor and an unbounded pulse loop in Advance - the clamp is the " +
+                             "difference between a bad experiment and a hung frame.");
+            if (OverTimeTuning.MagnitudeScale < 0f || OverTimeTuning.DurationScale < 0f)
+                failures.Add("[consumers] a negative percent row inverted an over-time scale " +
+                             "(magnitude=" + OverTimeTuning.MagnitudeScale + " duration=" +
+                             OverTimeTuning.DurationScale + "). A negative scale turns the knight's regen " +
+                             "into self-damage and the mage's wither into a heal for the enemy.");
+
+            RemoteTunables.ApplyPayload(
+                Payload(true, "combat.overTimeTickMs", "999999999",
+                        "combat.overTimeMagnitudePct", "999999"),
+                "test-ot-clamp-hi");
+            if (OverTimeTuning.TickSeconds > OverTimeTuning.TickMsMax / 1000f)
+                failures.Add("[consumers] an absurd row drove OverTimeTuning.TickSeconds past the " +
+                             (OverTimeTuning.TickMsMax / 1000f) + "s ceiling. A tick longer than any " +
+                             "effect's duration never fires, which is indistinguishable from a broken " +
+                             "ability and impossible to diagnose from a felt-test.");
+            if (OverTimeTuning.MagnitudeScale > OverTimeTuning.PctMax / 100f)
+                failures.Add("[consumers] an absurd row drove OverTimeTuning.MagnitudeScale past the " +
+                             (OverTimeTuning.PctMax / 100f) + "x ceiling.");
+
+            // THE SUCCESS PATH. A refusal-only proof certifies nothing (memory:
+            // prove-the-success-path-not-just-the-refusal). A legal value must actually move
+            // the number, or the owner flips it, sees nothing, and blames the build.
+            RemoteTunables.ApplyPayload(
+                Payload(true, "combat.overTimeTickMs", "250",
+                        "combat.overTimeMagnitudePct", "50",
+                        "combat.overTimeDurationPct", "200"),
+                "test-ot-override");
+            if (Math.Abs(OverTimeTuning.TickSeconds - 0.25f) > 0.0001f)
+                failures.Add("[consumers] a legal row of 250ms resolved TickSeconds to " +
+                             OverTimeTuning.TickSeconds + ", not 0.25. The cadence knob does not actually " +
+                             "move the beat.");
+            if (Math.Abs(OverTimeTuning.MagnitudeScale - 0.5f) > 0.0001f)
+                failures.Add("[consumers] a legal row of 50 resolved MagnitudeScale to " +
+                             OverTimeTuning.MagnitudeScale + ", not 0.5.");
+            if (Math.Abs(OverTimeTuning.DurationScale - 2f) > 0.0001f)
+                failures.Add("[consumers] a legal row of 200 resolved DurationScale to " +
+                             OverTimeTuning.DurationScale + ", not 2.0.");
+
+            RemoteTunables.Clear();
+            if (Math.Abs(OverTimeTuning.TickSeconds - ExpectedOverTimeTickMs / 1000f) > 0.0001f ||
+                Math.Abs(OverTimeTuning.MagnitudeScale - ExpectedOverTimePct / 100f) > 0.0001f ||
+                Math.Abs(OverTimeTuning.DurationScale - ExpectedOverTimePct / 100f) > 0.0001f)
+                failures.Add("[consumers] after clearing the table the over-time knobs did not return to " +
+                             "their shipping defaults (tick=" + OverTimeTuning.TickSeconds +
+                             "s magnitude=" + OverTimeTuning.MagnitudeScale +
+                             " duration=" + OverTimeTuning.DurationScale + "). -Clear must be the " +
+                             "one-word way back to today's behaviour.");
+
             // --- source lint: the seam was not bypassed ----------------------
             // Comments EXCLUDED. Both files' headers deliberately quote the old hardcoded
             // constants in prose in order to record what they used to be, and a
@@ -602,10 +714,32 @@ namespace DeNelle.Editor.Regression
                                  "it must resolve through RemoteTunables or the knob does nothing");
             }
 
+            // WO-1330 - same lint on the over-time engine's tuning owner. The clamps are
+            // authored there, so a re-hardcoded const would leave all three knobs inert
+            // while every other source still agreed they existed.
+            string overTime = ReadOrNull(OverTimeSrc);
+            if (overTime == null) failures.Add("[consumers] " + OverTimeSrc + " is MISSING");
+            else
+            {
+                string code = StripComments(overTime);
+                if (code.IndexOf("KeyCombatOverTimeTickMs", StringComparison.Ordinal) < 0 ||
+                    code.IndexOf("KeyCombatOverTimeMagnitudePct", StringComparison.Ordinal) < 0 ||
+                    code.IndexOf("KeyCombatOverTimeDurationPct", StringComparison.Ordinal) < 0)
+                    failures.Add("[consumers] " + OverTimeSrc + " no longer reads all three " +
+                                 "KeyCombatOverTime* keys - an over-time lever has gone back to being " +
+                                 "frozen in the build");
+                if (Regex.IsMatch(code, @"const\s+float\s+tick\s*=") ||
+                    Regex.IsMatch(code, @"const\s+float\s+TickSeconds\s*="))
+                    failures.Add("[consumers] " + OverTimeSrc + " has re-declared the tick as a const - " +
+                                 "that is exactly the 'const float tick = 1f' this engine replaced");
+            }
+
             notes.Add("consumers proved MaxRequestAttempts=" + ExpectedWarmerMaxAttempts + ", " +
-                      "PiRequestTimeoutSeconds=" + ExpectedWarmerPiTimeout + " and DrainReturnPct=" +
-                      ExpectedDrainReturnPct + " with no table, plus all three clamps, the drain " +
-                      "override success path, and the return to default on clear");
+                      "PiRequestTimeoutSeconds=" + ExpectedWarmerPiTimeout + ", DrainReturnPct=" +
+                      ExpectedDrainReturnPct + " and the three over-time levers (tick=" +
+                      ExpectedOverTimeTickMs + "ms, magnitude/duration=" + ExpectedOverTimePct +
+                      "%) with no table, plus every clamp, both override success paths, and the " +
+                      "return to default on clear");
         }
 
         /// <summary>

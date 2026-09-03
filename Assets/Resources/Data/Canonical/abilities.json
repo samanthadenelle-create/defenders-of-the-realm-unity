@@ -476,6 +476,23 @@
           "range": 4,
           "vfxCast": "KnightWeaponskill_Impact",
           "vfxImpact": "Cleave_Impact"
+        },
+        "ironblood": {
+          "id": "knight.ironblood",
+          "_comment": "WO-1330 (owner ruling 2026-09-02, verbatim: \"or a regen for knight\", \"lots of room to interprut\"). THE KNIGHT'S SUSTAIN REGEN, granted by hero-talents knight.t1n3 - reachable on the second Wisdom point. WARNING, READ BEFORE RETUNING: knight.oathmend ALREADY EXISTS and is also a heal-over-time. It is NOT a duplicate and the difference is deliberate and is the whole design - Oathmend is a tier-3 node (cost 3, five points down the prereq chain knight.t1n2 -> knight.t1n4 -> knight.t3n2) delivering a BURST mend, 10 HP/s for 5s; Ironblood is an EARLY, LOW-RATE, LONG-WINDOW sustain, 4 HP/s for 12s - press it and keep fighting, rather than press it and be topped up. Under the owner's retention lens (\"our retention number is very low and people are not returning\") the thing the knight lacked was not a regen, it was an EARLY one. THE ALTERNATIVE IS ONE WORD FROM HER: if she would rather simply re-cost Oathmend cheaper than carry two mends, drop this ability and this node re-point - that call is hers and is flagged in the WO-1330 RESULT. MECHANISM: effect is 'regen', a PULSED heal-over-time on DeNelle.Core.Combat.OverTimeEngine - the SAME engine, the SAME arithmetic and the SAME tunables as the mage's Wither DoT, with the sign flipped. That is the ticket's 'two abilities, one mechanism'. It is deliberately NOT the older 'healOverTime' shape, which is a CONTINUOUS per-frame drip that Oathmend and Warden's Grace are felt-verified against and which this ticket left untouched. NUMBERS: cooldown 20 / manaCost 4 / range 5 / castSeconds 0.4 are COPIED VERBATIM from knight.oathmend. AUTHORED FRESH and flagged in the RESULT: damage 4 (HP per second) and seconds 12 - derived so the TOTAL, 48 HP, sits within a couple of points of Oathmend's 50, i.e. the same budget spread over a longer window rather than a new one; plus the name 'Ironblood' and the description prose. color is INHERITED from oathmend, not chosen. Tick cadence, magnitude and duration are remote-tunable (combat.overTimeTickMs / combat.overTimeMagnitudePct / combat.overTimeDurationPct). VFX FIELDS ARE HELD EMPTY pending an owner tag - the RESULT carries a described shortlist, with loop status stated per candidate because a regen needs a SUSTAINED effect and that is a functional requirement, not a taste question.",
+          "castSeconds": 0.4,
+          "slot": "e",
+          "key": "E",
+          "name": "Ironblood",
+          "description": "Endurance sworn in iron - restores 4 HP per second for 12s (48 total, 20s cd).",
+          "icon": "\u271a",
+          "color": "#86efac",
+          "effect": "regen",
+          "cooldown": 20,
+          "manaCost": 4,
+          "damage": 4,
+          "range": 5,
+          "seconds": 12
         }
       }
     },
@@ -633,12 +650,12 @@
         },
         "siphon": {
           "id": "mage.siphon",
-          "_comment": "WO-1306 (owner ruling 2026-09-02, verbatim: \"the blm needs to get some healing , like drain to stay balanced (early)\", under the retention lens \"we want them to unlocka few items that can go in the quick swap bar fast\"). THE MAGE'S COST-1 BASE-NODE GRANT - the spell hero-talents mage.t1n3 hands over for the player's FIRST Wisdom point, mirroring the knight's Thunderbolt base (commit 02f9b8a4f). NO NEW MECHANISM: the effect is 'drainshot', the SAME shipped resolver HeroAbilities.ResolveDrainshot already runs for mage.drain (the stock E) and ranger.healing-shot - it fires the strike and then heals the caster by the damage ACTUALLY DEALT. The drain RATIO is therefore NOT a free parameter and was NOT invented here: it is 100% of damage dealt, fixed by the resolver and PINNED by Assets/Tests/EditMode/HeroAbilityEffectTests.cs ('drainshot heal must equal the damage dealt', post-mitigation, clamped to the target's remaining HP). EVERY NUMBER BELOW IS COPIED VERBATIM FROM mage.drain (damage 28 / range 13 / cooldown 9 / manaCost 7 / castSeconds 0.35), the game's ONE authored mage drain, so this base grant introduces NO new balance point - it is exactly the sustain the owner already tuned under WO-1019, made OWNABLE and bar-assignable instead of living only as the stock E fallback. Those numbers are still <<DRAFT - owner tuning pass>> exactly as mage.drain's are; if she retunes the drain, retune both. WHY A SEPARATE ID rather than granting mage.drain itself: mage.drain is a DEFAULT (classes.mage.abilities.e) that every mage can already press on turn zero, so a talent granting it would satisfy the retention METRIC while giving the player nothing new to press - the knight's first point buys a spell that is NOT in his stock kit, and this mirrors that. One definition per id still holds: this is a distinct id with its own def, not a duplicate of mage.drain's. VFX fields are HELD EMPTY, exactly as mage.drain's are, pending an owner VFX tag - CLI never creative-picks a key. No concept-icons.json row is authored for the same reason (mage.drain is deliberately unauthored there too); it falls back like its sibling until she tags the art.",
+          "_comment": "WO-1306 (owner ruling 2026-09-02, verbatim: \"the blm needs to get some healing , like drain to stay balanced (early)\", under the retention lens \"we want them to unlocka few items that can go in the quick swap bar fast\"). THE MAGE'S COST-1 BASE-NODE GRANT - the spell hero-talents mage.t1n3 hands over for the player's FIRST Wisdom point, mirroring the knight's Thunderbolt base (commit 02f9b8a4f). NO NEW MECHANISM: the effect is 'drainshot', the SAME shipped resolver HeroAbilities.ResolveDrainshot already runs for mage.drain (the stock E) and ranger.healing-shot - it fires the strike and then heals the caster by the damage ACTUALLY DEALT. The drain RATIO is therefore NOT a free parameter and was NOT invented here: it is 100% of damage dealt, fixed by the resolver and PINNED by Assets/Tests/EditMode/HeroAbilityEffectTests.cs ('drainshot heal must equal the damage dealt', post-mitigation, clamped to the target's remaining HP). EVERY NUMBER BELOW IS COPIED VERBATIM FROM mage.drain (damage 28 / range 13 / cooldown 9 / manaCost 7 / castSeconds 0.35), the game's ONE authored mage drain, so this base grant introduces NO new balance point - it is exactly the sustain the owner already tuned under WO-1019, made OWNABLE and bar-assignable instead of living only as the stock E fallback. Those numbers are still <<DRAFT - owner tuning pass>> exactly as mage.drain's are; if she retunes the drain, retune both. WHY A SEPARATE ID rather than granting mage.drain itself: mage.drain is a DEFAULT (classes.mage.abilities.e) that every mage can already press on turn zero, so a talent granting it would satisfy the retention METRIC while giving the player nothing new to press - the knight's first point buys a spell that is NOT in his stock kit, and this mirrors that. One definition per id still holds: this is a distinct id with its own def, not a duplicate of mage.drain's. VFX fields are HELD EMPTY, exactly as mage.drain's are, pending an owner VFX tag - CLI never creative-picks a key. No concept-icons.json row is authored for the same reason (mage.drain is deliberately unauthored there too); it falls back like its sibling until she tags the art. || WO-1330 OWNER NAME RULING 2026-09-02, verbatim: \"Syphon Essence\" - note her spelling, a Y not an I. It replaces BOTH names WO-1306 authored (the node \"Siphon Ward\" and the spell \"Siphon\"); they are ONE THING to the player, so they carry one name. ONLY THE DISPLAY NAME MOVED. The id mage.siphon is a LIVE SAVE KEY and was deliberately NOT renamed - a learned-talent ledger and an equipped-bar slot both persist that string, so renaming it would orphan every save that has the node. The same reasoning leaves the iconPath, the effect string and the ability id untouched. Any remaining lowercase \"siphon\"/\"siphoner\" in docs/NARRATIVE is the WORLDBUILDING noun (the aether siphon), a different word entirely, and was correctly left alone.",
           "castSeconds": 0.35,
           "slot": "e",
           "key": "E",
-          "name": "Siphon",
-          "description": "Drink the life out of one foe - 28 dmg at 13m and heals you for the damage dealt (9s cd).",
+          "name": "Syphon Essence",
+          "description": "Drink the life out of one foe - 28 dmg at 13m and heals you for part of the damage dealt (9s cd).",
           "icon": "\u271a",
           "color": "#8b5cf6",
           "effect": "drainshot",
@@ -646,6 +663,24 @@
           "manaCost": 7,
           "damage": 28,
           "range": 13
+        },
+        "wither": {
+          "id": "mage.wither",
+          "_comment": "WO-1330 (owner ruling 2026-09-02, verbatim: \"we have a ton of blink art and spells, have creative match a DoT would be nice\" / \"lots of room to interprut\", plus her correction of the CLI's first reading: \"it doesnt but it wouldnt be too challenging\"). THE MAGE'S ACQUIRABLE DAMAGE-OVER-TIME - granted by hero-talents mage.t1n4, so the mage's second Wisdom point buys a second pressable button (Siphon at 1 point, Wither at 2). WHY THE MAGE HAD NONE: mage.poison is the mage's only DoT and it is the stock ULTIMATE (classes.mage.abilities.r) - pressable with no talent at all, and therefore, by the same argument WO-1306 used against granting mage.drain, NOTHING NEW TO PRESS. The mage-skills pool contained no DoT at all, so a mage could not put one in the hot-swap bar. NO NEW MECHANISM: effect is 'dot', the SAME shipped resolver HeroAbilities.ResolveDot that knight.emberbrand-throw and mage.poison already run - projectile, impact damage, then a ticking burn. As of WO-1330 that tick runs on DeNelle.Core.Combat.OverTimeEngine, the ONE over-time engine, which replaced the two duplicate hardcoded coroutines; the mage's DoT and the knight's regen are that same engine with the sign flipped. NUMBERS: damage 12 / range 14 / cooldown 10 / dotDamage 8 / dotSeconds 4 / castSeconds 0.4 are COPIED VERBATIM from knight.emberbrand-throw, the game's one authored NON-ULTIMATE DoT, so this introduces no new balance point; manaCost 7 is COPIED VERBATIM from mage.drain because mana economy is class-specific and the knight's 3 is not a mage number. color is INHERITED from emberbrand-throw, not chosen - the CLI does not pick colour, and the owner is red/green colourblind. AUTHORED FRESH and flagged in the RESULT: the name 'Wither' and the description prose only. TICK CADENCE, MAGNITUDE AND DURATION are remote-tunable (combat.overTimeTickMs / combat.overTimeMagnitudePct / combat.overTimeDurationPct; defaults 1000ms/100/100 = today exactly) per the standing 2026-09-02 rule; see docs/PROD022_TUNABLE_FLAGS.md. VFX FIELDS ARE HELD EMPTY pending an owner tag - the CLI never creative-picks a key; the WO-1330 RESULT carries a described shortlist. No concept-icons.json row is authored, for the same reason mage.drain and mage.siphon have none.",
+          "castSeconds": 0.4,
+          "slot": "w",
+          "key": "F",
+          "name": "Wither",
+          "description": "A creeping blight on one foe - 12 dmg at 14m, then 8 dmg per second for 4s (10s cd).",
+          "icon": "\u2739",
+          "color": "#fb923c",
+          "effect": "dot",
+          "cooldown": 10,
+          "manaCost": 7,
+          "damage": 12,
+          "range": 14,
+          "dotDamage": 8,
+          "dotSeconds": 4
         }
       }
     },

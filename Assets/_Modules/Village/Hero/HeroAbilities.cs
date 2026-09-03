@@ -92,6 +92,50 @@ namespace DeNelle.Village
         private float _hpOverTimeUntil;    // Time.time at which the drip stops
         private HeroHealth _heroHealth;    // cached hero HP (WO-614 hooks 2 & 3)
 
+        // =====================================================================
+        //  WO-1330 - THE ONE OVER-TIME ENGINE, both signs.
+        // ---------------------------------------------------------------------
+        //  Before this ticket the game had FOUR unrelated ad-hoc over-time tick
+        //  loops, three of them in this file:
+        //      1. BurnDoT      - coroutine, "const float tick = 1f"
+        //      2. PoisonDoT    - a SECOND coroutine, byte-for-byte the same loop
+        //      3. _hpOverTime  - a per-FRAME continuous drip, below in Update
+        //      4. Enemy.DamageOverTimeRoutine - a THIRD copy, in Enemy.cs
+        //  ...and not one of them was tunable.
+        //
+        //  1 and 2 now run on DeNelle.Core.Combat.OverTimeEngine, whose arithmetic
+        //  reproduces their loop exactly (see the PULSE ARITHMETIC block in that
+        //  file: first pulse one interval late, CEIL pulse count, magnitude
+        //  perSecond*interval). The two new WO-1330 abilities are the same engine
+        //  with the sign flipped - "two abilities, one mechanism", which is the
+        //  line the work order put in bold.
+        //
+        //  ⛔ 3 IS DELIBERATELY LEFT ALONE and is reported as such. It is a
+        //  CONTINUOUS per-frame drip, not a pulsed one, and Oathmend + Warden's
+        //  Grace are felt-verified against that smoothness. Converting it would
+        //  have been a silent feel change to two shipped abilities in a ticket
+        //  that is supposed to add two - so it stays, and folding it in is a
+        //  follow-up the RESULT names. 4 lives in another file and another lane.
+        //
+        //  TWO CLOSED GENERIC TYPES, ONE BODY. The foe engine damages; the hero
+        //  engine heals. Neither is a second implementation.
+        // =====================================================================
+
+        // ⭐ The liveness test is bound HERE, at construction, and is no longer an
+        // argument to Advance. It used to be an optional Advance parameter; both of
+        // these call sites passed it, but a THIRD one written later would have
+        // compiled fine while ticking corpses (the [death] case in
+        // OverTimeEffectRegression caught exactly that). The engine now refuses to
+        // exist without it - see the LIVENESS block in OverTimeEffects.cs.
+
+        /// <summary>Over-time effects the hero has put ON FOES (DoTs). Ticked in Update.</summary>
+        private readonly DeNelle.Core.Combat.OverTimeEngine<IDamageable> _foeOverTime
+            = new DeNelle.Core.Combat.OverTimeEngine<IDamageable>(t => t != null && t.IsAlive);
+
+        /// <summary>Over-time effects on the HERO (regen). Same engine, opposite sign.</summary>
+        private readonly DeNelle.Core.Combat.OverTimeEngine<HeroHealth> _selfOverTime
+            = new DeNelle.Core.Combat.OverTimeEngine<HeroHealth>(h => h != null && h.IsAlive);
+
         private readonly float[] _cooldownRemaining = new float[4]; // indexed by AbilitySlot
 
         // WO-574: per-ability cooldowns for the player-assignable EXTRA skill bar
@@ -590,6 +634,11 @@ namespace DeNelle.Village
                 if (_heroHealth == null) _heroHealth = TryGetComponent<HeroHealth>(out var hh) ? hh : HeroHealth.Instance;
                 _heroHealth?.RegenTick(_hpOverTimeRate * dt);
             }
+
+            // WO-1330: drive THE over-time engine, both signs, from this one place.
+            // It is a no-op (a Count==0 early return) when nothing is in flight, so an
+            // ordinary frame with no DoT and no regen costs one branch.
+            TickOverTimeEffects(Time.time);
 
             for (int i = 0; i < _cooldownRemaining.Length; i++)
                 _cooldownRemaining[i] = Mathf.Max(0f, _cooldownRemaining[i] - dt);
@@ -1186,6 +1235,14 @@ namespace DeNelle.Village
                 case "blink":        ResolveBlink(def, origin);        return;
                 case "dot":          ResolveDot(def, origin);          return;   // WO-614 hook 1
                 case "healovertime": ResolveHealOverTime(def, origin); return;   // WO-614 hook 2
+                // WO-1330 - the PULSED regen. Deliberately a distinct shape from
+                // "healovertime" above, which is the pre-existing CONTINUOUS per-frame
+                // drip that Oathmend and Warden's Grace are felt-verified against. This
+                // one runs on the shared OverTimeEngine, so it is the SAME mechanism as
+                // the DoT with the sign flipped - which is what let this ticket add two
+                // abilities without adding a tick loop. Converging the older drip onto
+                // the engine is a follow-up, not this ticket's business.
+                case "regen":        ResolveRegen(def, origin);        return;   // WO-1330
                 case "invuln":       ResolveInvuln(def, origin);       return;   // WO-614 hook 3
                 case "gracebuff":    ResolveWardensGrace(def, origin); return;   // WO-750 Warden's Grace
                 // ── WO-861 (Sylas + Thrain) — the ONLY new combat code in that program. Each of
@@ -1826,7 +1883,7 @@ namespace DeNelle.Village
                 case "fire":
                     if (dps <= 0f || seconds <= 0f) return;
                     foe.ApplyStatus(StatusEffect.Burn, seconds);
-                    StartCoroutine(BurnDoT(foe, dps, seconds));
+                    ApplyBurnDoT(foe, dps, seconds);
                     applied = true;
                     break;
                 case "poison":
@@ -2020,7 +2077,7 @@ namespace DeNelle.Village
                 if (retribution)
                 {
                     target.ApplyStatus(StatusEffect.Burn, burnSecs);
-                    StartCoroutine(BurnDoT(target, burnDps, burnSecs));
+                    ApplyBurnDoT(target, burnDps, burnSecs);
                     burned++;
                 }
             }
@@ -2077,7 +2134,7 @@ namespace DeNelle.Village
                     if (burnDps > 0f)
                     {
                         hitFoe.ApplyStatus(StatusEffect.Burn, burnSecs);
-                        StartCoroutine(BurnDoT(hitFoe, burnDps, burnSecs));
+                        ApplyBurnDoT(hitFoe, burnDps, burnSecs);
                         // WO-VFX-003: the residual burn LOOP on the foe for the DoT duration.
                         PlayResidualLoop(hitDef, (hitFoe as MonoBehaviour)?.transform, burnSecs, hitFoe.WorldPosition);
                     }
@@ -2087,22 +2144,119 @@ namespace DeNelle.Village
             SpawnVfx(AimPointOverride ?? origin, def, 1.6f, foe?.WorldPosition);
         }
 
+        // =====================================================================
+        //  WO-1330 - THE ONE TICKER. Everything over-time in this file lands here.
+        // =====================================================================
+
         /// <summary>
-        /// WO-614: ticks <paramref name="dps"/> Flame damage per second on <paramref name="target"/>
-        /// for <paramref name="duration"/> seconds; stops early if the target dies. Same shape as
-        /// TowerCombat's EternalEmber burn DoT.
+        /// Advances both over-time engines and routes every pulse to the caller's OWN
+        /// damage / heal seam.
+        /// <para>
+        /// The engine owns timing and arithmetic ONLY - it never touches a health bar
+        /// itself. Damage still goes through <see cref="IDamageable.TakeDamage"/> (and so
+        /// through Enemy.TakeDamageFrom, keeping mitigation, damage numbers, attribution
+        /// and the death check); healing still goes through
+        /// <see cref="HeroHealth.RegenTick"/>, the same silent drip sink Oathmend uses. No
+        /// pulse bypasses anything a direct hit would have gone through.
+        /// </para>
         /// </summary>
-        private System.Collections.IEnumerator BurnDoT(IDamageable target, float dps, float duration)
+        private void TickOverTimeEffects(float now)
         {
-            float elapsed = 0f;
-            const float tick = 1f;
-            while (elapsed < duration)
+            if (_foeOverTime.ActiveCount > 0)
             {
-                yield return new WaitForSeconds(tick);
-                elapsed += tick;
-                if (target == null || !target.IsAlive) yield break;
-                target.TakeDamage(dps * tick, DamageElement.Flame);
+                _foeOverTime.Advance(now, p =>
+                {
+                    // Element is carried in the id so one engine serves burn (Flame) and
+                    // poison (None) without a second entry point - poison must NOT wear the
+                    // fire tell (WO-676), and that distinction is the element, not the loop.
+                    var element = p.Id.IndexOf("poison", System.StringComparison.OrdinalIgnoreCase) >= 0
+                        ? DamageElement.None
+                        : DamageElement.Flame;
+                    p.Target.TakeDamage(p.Amount, element);
+                });
             }
+
+            if (_selfOverTime.ActiveCount > 0)
+            {
+                _selfOverTime.Advance(now, p => p.Target.RegenTick(p.Amount));
+            }
+        }
+
+        /// <summary>
+        /// WO-614 / WO-1330: starts a ticking burn on <paramref name="target"/> at
+        /// <paramref name="dps"/> Flame damage per second for <paramref name="duration"/>
+        /// seconds, stopping early if the target dies.
+        /// <para>
+        /// ⭐ THIS WAS A COROUTINE WITH A HARDCODED <c>const float tick = 1f</c>. It is now
+        /// a one-line application to the shared engine. Behaviour is preserved exactly at
+        /// the shipping defaults - same first-pulse delay, same CEIL pulse count, same
+        /// per-pulse magnitude - which is the whole reason the engine reproduces that
+        /// arithmetic instead of tidying it. The difference is that the cadence, the
+        /// magnitude and the duration are now on the tunable rail, and that this is the
+        /// only burn loop left.
+        /// </para>
+        /// </summary>
+        private void ApplyBurnDoT(IDamageable target, float dps, float duration)
+            => _foeOverTime.Apply(target, "burn", dps, duration,
+                                  DeNelle.Core.Combat.OverTimeKind.Damage, Time.time);
+
+        /// <summary>
+        /// WO-1330 - "regen": a SELF-TARGETED, PULSED heal-over-time on the shared engine.
+        /// Heals <c>def.Damage</c> HP per second (scaled by heal talents, exactly as
+        /// Oathmend is) for <c>def.Seconds</c>, delivered as discrete pulses rather than a
+        /// per-frame drip.
+        /// <para>
+        /// This is the knight's sustain answer, and it is the DoT above with the sign
+        /// flipped - same <c>OverTimeEngine</c>, same arithmetic, same tunables, opposite
+        /// <c>OverTimeKind</c>. Nothing here is a second mechanism.
+        /// </para>
+        /// <para>
+        /// Capped at ONE concurrent copy per id: a regen you can stack by mashing the
+        /// button is not sustain, it is a burst heal with extra steps. Re-casting while it
+        /// runs is refused by the engine and traced, which is deliberately different from
+        /// the max/refresh semantics of the older continuous drip - a felt-test needs those
+        /// two shapes to be distinguishable.
+        /// </para>
+        /// </summary>
+        private void ResolveRegen(AbilityDef def, Vector3 origin)
+        {
+            if (_heroHealth == null)
+                _heroHealth = TryGetComponent<HeroHealth>(out var hh) ? hh : HeroHealth.Instance;
+
+            if (_heroHealth == null)
+            {
+                // Never silent. A regen that found no health component looks exactly like a
+                // regen that healed nothing, and only one of those is a bug (CLAUDE.md 12).
+                FlowTrace.Fail("HeroAbility",
+                    $"regen {def.Id}: no HeroHealth on the hero and no HeroHealth.Instance - " +
+                    "nothing to heal, the cast is lost. This is a rig problem, not a balance one.");
+                return;
+            }
+
+            float perSec = def.Damage * HeroTalentModifiers.HealAmountMultiplier(_heroClass);
+            float secs = def.Seconds > 0f ? def.Seconds : 8f;
+
+            int pulses = _selfOverTime.Apply(_heroHealth, def.Id, perSec, secs,
+                                             DeNelle.Core.Combat.OverTimeKind.Heal, Time.time,
+                                             maxStacks: 1);
+
+            // The HUD row is the LIVE CombatStatusTracker's job, not the engine's - the
+            // tracker stores when a status ends and the producer draws it. One owner each.
+            if (pulses > 0)
+                HeroCombatStatus.Current?.ApplyNamed(def.Id, def.Name ?? "Regen", secs, isBuff: true);
+
+            AbilityAudioBridge.PlayForClassAndKind(_heroClass, AbilityEffect.Heal);
+            VFXManager.Play(VFXType.Cast_Heal, origin + Vector3.up * 1.2f);
+
+            // The sustained loop VFX. def.VfxResidual is deliberately EMPTY on the shipped
+            // rows: the owner tags VFX keys and this seat maps them verbatim, so the key is
+            // the ONE open slot on this ability. PlayResidualLoop no-ops on an empty key,
+            // and the shortlist is attached to the WO RESULT.
+            PlayResidualLoop(def, transform, secs, origin + Vector3.up * 1.2f);
+
+            FlowTrace.Step("HeroAbility",
+                $"regen {def.Id}: {perSec:0.0} HP/s for {secs:0}s over {pulses} pulse(s) " +
+                $"({perSec * secs:0} total) on the shared over-time engine.");
         }
 
         // ── WO-676 Venombrand — the poison rider on Thunderbolt / Throwing Spear ──
@@ -2137,25 +2291,20 @@ namespace DeNelle.Village
                 return;
             }
             stamps.Add(Time.time + duration);
-            StartCoroutine(PoisonDoT(foe, dps, duration));
+            ApplyPoisonDoT(foe, dps, duration);
             FlowTrace.Step("HeroTalents",
                 $"Venombrand: poison stack {stamps.Count} applied — {dps:F0} dps for {duration:F0}s.");
         }
 
-        /// <summary>WO-676: one Venombrand stack — mirrors <see cref="BurnDoT"/> tick-for-tick
-        /// (1s ticks, stops on death) with plain None-element damage (poison, not fire).</summary>
-        private System.Collections.IEnumerator PoisonDoT(IDamageable target, float dps, float duration)
-        {
-            float elapsed = 0f;
-            const float tick = 1f;
-            while (elapsed < duration)
-            {
-                yield return new WaitForSeconds(tick);
-                elapsed += tick;
-                if (target == null || !target.IsAlive) yield break;
-                target.TakeDamage(dps * tick, DamageElement.None);
-            }
-        }
+        /// <summary>WO-676 / WO-1330: one Venombrand stack. Was a SECOND coroutine that
+        /// mirrored BurnDoT tick-for-tick; it is now the same shared engine with a
+        /// different id, so the plain None-element damage (poison, not fire — poison must
+        /// never wear the fire tell) is the only thing that differs. The stack CAP still
+        /// belongs to <see cref="_venomStacks"/>, which is untouched: the engine owns the
+        /// tick, the ledger owns the policy.</summary>
+        private void ApplyPoisonDoT(IDamageable target, float dps, float duration)
+            => _foeOverTime.Apply(target, "poison", dps, duration,
+                                  DeNelle.Core.Combat.OverTimeKind.Damage, Time.time);
 
         /// <summary>Drops venom-ledger entries whose stacks have all expired.</summary>
         private void PruneVenomLedger()
@@ -2467,6 +2616,10 @@ namespace DeNelle.Village
                 case "meteor":       return "skill2";                 // area/sweep -> Cast_w
                 case "dot":
                 case "healovertime": return "cast";                  // channel -> generic Cast
+                // WO-1330: the pulsed regen is a SELF-CAST SUPPORT beat, so it reads as the
+                // heal cast (Cast_e) exactly like "heal" / "gracebuff" / "shield" do - not
+                // as the generic channel the older drip uses. No new clip, no new state.
+                case "regen":        return "castHeal";
                 // WO-861: the three new shapes reuse the EXISTING baked cast variants —
                 // self-buff/support reads as the heal cast; the drain shot is a single-target
                 // strike, so it reads as skill1 (the same clip Quick Shot plays).
