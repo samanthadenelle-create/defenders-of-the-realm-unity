@@ -441,6 +441,40 @@ if (-not (Wait-ProductionDeployment $candidateId $promotionPollLog $AliasTimeout
 }
 Write-Run "STEP_6_OK marker=PRODUCTION_ALIAS_MATCH log=$promotionPollLog id=$candidateId"
 
+# Step 6b (WO-1316): PROVE THE COPY USERS HIT, NOT THE COPY WE TOUCHED.
+#
+# Steps 5 and 6 prove the CANDIDATE deployment's bytes and the production ALIAS
+# id - both scoped to the ONE project .vercel/project.json links. FOUR Vercel
+# projects serve this game, and TWO of them are public production domains. A
+# deploy from this repo updates `defenders-of-the-realm-v2` and nothing else,
+# so every marker above can go green while `echoes-of-elarion.vercel.app`
+# keeps serving an older build of the game. Measured 2026-09-03: 40,100 bytes
+# on one, 32,609 on the other, different Unity payload hashes.
+#
+# So this step fetches the PUBLIC production domains over plain HTTPS - not
+# `vercel curl`, not a preview URL (previews are SSO-gated and 302 to sso-api,
+# so they are not what a player or the Pi validator gets) - and refuses unless
+# every one of them serves byte-identical content.
+#
+# The surface list lives in tools\web-ship.ps1 and NOWHERE ELSE. Do not restate
+# a host, a project id or a role here; that duplication is the defect this step
+# exists to catch (CLAUDE.md section 16's account of the copy-pasted R2
+# push+verify pair, and section 2's stale WO-number block).
+#
+# -VerifyOnly is deliberate while the owner has not yet stated which domain the
+# Pi Developer Portal points at (WO-1316 criterion 1): until then, deploying to
+# the sibling production project is HER call, not the chain's. Once she answers,
+# drop -VerifyOnly and this same one call both deploys the sibling surface and
+# proves parity - one call, never "and also remember to do the other one".
+$parityLog = Join-Path $builds 'web-parity.log'
+$activeStep = 6; $activeMarker = 'WEB_PARITY_OK'; $activeLog = $parityLog
+$started = Get-Date
+Invoke-Captured {
+    powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot 'web-ship.ps1') `
+        -VerifyOnly -AgainstLocal (Join-Path $builds 'WebGL')
+} (Join-Path $builds 'web-parity-invoke.log') | Out-Null
+Assert-FreshMarker 6 'WEB_PARITY_OK' $parityLog $started
+
 # Step 7: this endpoint writes an auth_nonces row. A 200 therefore proves the
 # production function reached the live database, not merely that it booted.
 $proofLog = Join-Path $builds 'production-db-proof.log'

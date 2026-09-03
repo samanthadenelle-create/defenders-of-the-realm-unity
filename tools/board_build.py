@@ -11,7 +11,10 @@ Reads:  WorkOrders/*.md  (status line, title, RESULT markers)
         CLI_LANES_WO_NUMBERS.md  (next-free mint numbers per seat)
 Writes: BOARD.html (repo root) - open in any browser; links open the md files.
 """
-import os, re, glob, html, time, datetime, sys, subprocess
+import os, re, glob, html, json, time, datetime, sys, subprocess
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import owner_validations  # the DURABLE owner-validation record - see that module's header
 
 # Windows consoles default to cp1252, which cannot encode the characters this repo's
 # work orders actually use (the U+26D4 no-entry sign, box drawing, arrows). On
@@ -28,7 +31,9 @@ for _stream in (sys.stdout, sys.stderr):
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 WO_DIR = os.path.join(ROOT, "WorkOrders")
-OUT = os.path.join(ROOT, "BOARD.html")
+# Overridable so the validation round-trip self-check can run the REAL entry point
+# without overwriting the owner's live board with test data mid-run.
+OUT = os.environ.get("EOA_BOARD_OUT") or os.path.join(ROOT, "BOARD.html")
 
 # ── parser SCOPE: what in WorkOrders/ is actually a work order? (WO-937 A) ────
 # WorkOrders/ holds two kinds of file, and only one of them owes the board a status:
@@ -619,6 +624,16 @@ def build_html(rows):
     stamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
     apk_build, apk_source = apk_identity()
 
+    # ── the DURABLE validation record (proof/owner-validations.json) ─────────────
+    # READ ONLY. A board rebuild must never be able to lose a sign-off, so this
+    # function has no write path to the record at all - the only writer is
+    # `--ingest`, which is an explicit, separate act.
+    #
+    # An unreadable record raises rather than reading as empty: rendering "0 / 244
+    # verified" over a corrupt file would look completely normal and quietly invite
+    # the owner to re-do work she had already done.
+    disk_validation = owner_validations.entries()
+
     def row_html(r):
         # PROD tickets render as PROD-001 (post-launch, zero-padded so they sort as text
         # too); legacy pre-launch tickets keep WO-####. The two are deliberately visually
@@ -686,9 +701,15 @@ def build_html(rows):
     body_rows = "\n".join(row_html(r) for r in rows_sorted)
     fixed_rows = [r for r in rows_sorted if r["bucket"] == "Fixed" and r["is_wo"]]
     validation_groups = []
+    disk_done = 0
     for area in OWNER_AREAS:
         items = [r for r in fixed_rows if owner_area(r) == area]
         if not items: continue
+        # Validated tickets sink to the BOTTOM of their group. The owner is red/green
+        # colourblind, so a validated row is marked THREE ways that survive greyscale:
+        # the word "VALIDATED", the button label flipping to "Validated", and this
+        # POSITION. Never a hue swap alone. Stable sort, so untested order is unchanged.
+        items.sort(key=lambda r: 1 if disk_validation.get(r["file"], {}).get("validated") else 0)
         item_html = []
         for r in items:
             if r.get("prod") is not None: key = f"PROD-{r['prod']:03d}"
@@ -697,14 +718,32 @@ def build_html(rows):
             else: key = r["file"]
             # Filename is the durable unique state key. This repo has historical duplicate WO
             # numbers, so using the friendly label here would make two unrelated rows share a
-            # felt-test result in localStorage.
-            item_html.append(f'<div class="vitem" data-ticket="{html.escape(r["file"])}">'
-                f'<button class="validated" type="button">Validate</button>'
+            # felt-test result in the record.
+            st = disk_validation.get(r["file"], {})
+            vd = st.get("verdict") or ""
+            done = bool(st.get("validated"))
+            if done: disk_done += 1
+            # SERVER-SIDE RENDER of the disk state. This is the whole point of the fix:
+            # the sign-off is visible on a cold load, in another browser, on the CLI's
+            # screen, with JavaScript or site data blocked entirely.
+            # The badge span is ALWAYS emitted and shown/hidden by the .isvalidated
+            # class, so JS toggling a mark needs no DOM surgery and a no-JS load still
+            # shows the word.
+            badge = ' <span class="vok">[X] VALIDATED</span>'
+            opts = "".join(
+                f'<option{" selected" if vd == v else ""}>{v}</option>'
+                for v in ("Pass", "Fail", "Needs Work"))
+            item_html.append(
+                f'<div class="vitem{" isvalidated" if done else ""}" '
+                f'data-ticket="{html.escape(r["file"])}" '
+                f'data-disk="{html.escape(json.dumps(st, sort_keys=True))}">'
+                f'<button class="validated" type="button">{"Validated" if done else "Validate"}</button>'
                 f'<a href="WorkOrders/{html.escape(r["file"])}">{html.escape(key)}</a>'
-                f'<span class="vtitle">{html.escape(r["title"][:120])}</span>'
-                '<select class="verdict" aria-label="felt-test result"><option value="">Untested</option>'
-                '<option>Pass</option><option>Fail</option><option>Needs Work</option></select>'
-                '<input class="vnote" aria-label="validation notes" placeholder="Optional device notes"></div>')
+                f'<span class="vtitle">{html.escape(r["title"][:120])}{badge}</span>'
+                f'<select class="verdict" aria-label="felt-test result">'
+                f'<option value=""{"" if vd else " selected"}>Untested</option>{opts}</select>'
+                f'<input class="vnote" aria-label="validation notes" '
+                f'placeholder="Optional device notes" value="{html.escape(st.get("note") or "")}"></div>')
         # COLLAPSED BY DEFAULT (owner request 2026-08-27: "start with the validation
         # sections minimized. then i can expand as ready to test"). The summary still
         # carries the "<area> 0 / N" count, so a collapsed board still shows at a glance
@@ -714,8 +753,11 @@ def build_html(rows):
         # she expands STAY expanded across rebuilds - the board is regenerated constantly,
         # and re-collapsing an area she is actively testing on every regeneration would
         # make the feature worse than leaving them all open.
+        # The count is rendered FROM DISK, not seeded at 0 and fixed up by script: a
+        # collapsed board must show where felt-testing stands even with JS disabled.
+        gdone = sum(1 for r in items if disk_validation.get(r["file"], {}).get("validated"))
         validation_groups.append(f'<details class="vgroup" data-area="{html.escape(area)}"><summary>{html.escape(area)} '
-            f'<span class="gcount">0 / {len(items)}</span></summary>' + "".join(item_html) + '</details>')
+            f'<span class="gcount">{gdone} / {len(items)}</span></summary>' + "".join(item_html) + '</details>')
     validation_html = "".join(validation_groups)
     filters = "".join(
         f'<button class="fbtn" data-f="{b}" style="border-color:{BUCKET_COLOR[b]}">'
@@ -794,7 +836,21 @@ def build_html(rows):
  .vitem a{{color:#e0b341;text-decoration:none}} .vtitle{{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}}
  .validated,.verdict,.vnote{{background:#20232b;border:1px solid #484c59;color:#ddd;border-radius:5px;padding:5px}} .validated{{cursor:pointer}}
  .vitem.isvalidated .validated{{background:#24513d;border-color:#66bb88}} .vitem.isvalidated{{opacity:.72}}
- @media(max-width:850px){{.vitem{{grid-template-columns:82px 70px 1fr}}.verdict,.vnote{{grid-column:3}}}}
+ /* The owner is red/green colourblind: a validated row is marked by the WORD, the button
+    label and its POSITION (validated rows sink to the bottom of their group), never by hue
+    alone. The badge is always in the DOM and revealed by the class, so it also shows with
+    JavaScript off. */
+ .vok{{display:none}} .vitem.isvalidated .vok{{display:inline;color:#9fd6b4;border:1px solid #66bb88;border-radius:4px;padding:0 5px;font-size:11px;font-weight:700;letter-spacing:.4px}}
+ .vhint{{color:#9aa0ad;font-size:12px;margin:4px 0}} .vexport{{border-top:1px solid #30333d;padding:8px 0}}
+ .vexport summary{{cursor:pointer;font-size:14px;font-weight:650}}
+ #vjson{{width:100%;background:#171a21;border:1px solid #484c59;color:#cfd3dc;border-radius:6px;font:12px/1.4 monospace;padding:8px}}
+ #vcopy{{background:#242730;border:1px solid #4fb3c4;color:#ddd;border-radius:14px;padding:8px 16px;cursor:pointer}}
+ #vdl{{color:#e0b341}}
+ /* PHONE FIRST - she validates from a phone. 44px minimum tap target on every control. */
+ @media(max-width:850px){{.vitem{{grid-template-columns:1fr}}.verdict,.vnote{{grid-column:1}}
+  .validated,.verdict,.vnote,#vcopy,#needsFelt{{min-height:44px;font-size:15px}}
+  .vitem{{padding:10px 0;border-bottom:1px solid #262932}}.vtitle{{white-space:normal}}
+  .vgroup summary,.vexport summary{{padding:10px 0}}}}
 </style></head><body>
 <h1>Echoes of Elarion — Work Order Board</h1>
 <p style=\"margin:6px 0 16px\"><a href=\"PROOF.html\" style=\"color:#e0b341;font-weight:600\">&#9654; PROOF &mdash; screenshots and gate evidence for every completed item</a></p>
@@ -803,8 +859,21 @@ def build_html(rows):
  &nbsp;|&nbsp; {mint_html}</div>
 <div class="canon">{canon_links}</div>
 <section class="validation"><h2>Owner Validation</h2>
-<div class="vmeta">APK <b>{html.escape(apk_build)}</b> &middot; source commit <b>{html.escape(apk_source[:12])}</b>. Results stay in this browser for this exact APK and never change work-order status.</div>
-<div class="vtoolbar"><span id="vprogress">0 / {len(fixed_rows)} verified</span><button id="needsFelt" type="button">Needs Felt-Test</button></div>{validation_html}</section>
+<div class="vmeta">Sign-offs are kept in <b>proof/owner-validations.json</b> (committed) and are
+ <b>NOT</b> tied to a build - they survive every commit and every rebuild. Current APK
+ <b>{html.escape(apk_build)}</b> &middot; source commit <b>{html.escape(apk_source[:12])}</b> is recorded
+ as provenance on each mark. Marking never changes a work-order status; closing stays yours.</div>
+<div class="vtoolbar"><span id="vprogress">{disk_done} / {len(fixed_rows)} verified</span><button id="needsFelt" type="button">Needs Felt-Test</button></div>
+<div id="vmigrated" class="vhint"></div>
+<details class="vexport"><summary>Export for the CLI &mdash; tap Copy, then hand the text over</summary>
+<p class="vhint">A browser cannot write to the repo, so this is the hand-off: tap <b>Copy</b>, paste it
+ to the CLI, and it runs <b>python tools/board_build.py --ingest -</b> to fold your marks into
+ proof/owner-validations.json. Marks you have not exported yet live only in this browser.</p>
+<div class="vtoolbar"><button id="vcopy" type="button">Copy</button>
+ <a id="vdl" download="owner-validations.json" href="#">Save as file</a>
+ <span id="vcopystat" class="vhint"></span></div>
+<textarea id="vjson" readonly rows="8" aria-label="validation export JSON"></textarea>
+</details>{validation_html}</section>
 <input id="q" placeholder="Search number / title / status...">{filters}{lane_filters}{age_filters}
 <table><tbody id="tb">
 {body_rows}
@@ -828,10 +897,68 @@ document.querySelectorAll('.abtn').forEach(b=>b.addEventListener('click',()=>{{
  ageMax=(b.dataset.a==='all')?Infinity:+b.dataset.a;
  document.querySelectorAll('.abtn').forEach(x=>x.classList.remove('on'));
  b.classList.add('on'); apply()}}));
-const validationKey='eoa-owner-validation:{html.escape(apk_build)}:{html.escape(apk_source)}';
+/* ── DURABLE VALIDATION STATE ────────────────────────────────────────────────────
+   Full reasoning: tools/owner_validations.py header.
+
+   The RECORD is proof/owner-validations.json - committed, diffable, readable by
+   both seats - and it is already rendered into this page server-side (each .vitem
+   carries its disk state in data-disk). localStorage is now only the UNEXPORTED
+   OVERLAY: marks made on this device that have not reached the record yet.
+
+   ⛔ THE KEY IS DELIBERATELY UNVERSIONED. It used to be
+      'eoa-owner-validation:<apk build>:<commit sha>'
+   so every commit minted a fresh key and orphaned every sign-off she had made -
+   with the CLI committing hourly, the one person whose sign-off closes a ticket
+   was losing her work hourly. Never put a build id or a sha back into this key.
+   Provenance lives INSIDE each entry ('at' + 'build'), where it costs nothing. */
+const validationKey='eoa-owner-validation';
+const buildId={json.dumps(apk_build)};
+const disk={{}};
+document.querySelectorAll('.vitem').forEach(i=>{{try{{disk[i.dataset.ticket]=JSON.parse(i.dataset.disk||'{{}}')}}catch(_e){{disk[i.dataset.ticket]={{}}}}}});
 let validation={{}}; try{{validation=JSON.parse(localStorage.getItem(validationKey)||'{{}}')}}catch(_e){{validation={{}}}}
 let needsOnly=false;
-function saveValidation(){{localStorage.setItem(validationKey,JSON.stringify(validation));renderValidation()}}
+/* ONE-TIME MIGRATION of the orphaned per-commit keys. Every 'eoa-owner-validation:*'
+   key still in this browser is work she already did, stored where nothing reads it.
+   Sweep them into the durable overlay - only filling gaps, so a newer mark is never
+   overwritten by an older orphan - and leave the old keys in place rather than
+   deleting them, because a failed sweep must stay recoverable. Best effort by
+   nature: it can only reach keys in THIS browser and origin. */
+try{{
+ if(!localStorage.getItem('eoa-owner-validation-migrated')){{
+  let swept=0;
+  for(let i=0;i<localStorage.length;i++){{
+   const k=localStorage.key(i);
+   if(!k||k.indexOf('eoa-owner-validation:')!==0) continue;
+   let old={{}}; try{{old=JSON.parse(localStorage.getItem(k)||'{{}}')}}catch(_e){{continue}}
+   for(const t in old){{
+    const s=old[t]; if(!s||typeof s!=='object') continue;
+    const cur=validation[t]||{{}};
+    if(!cur.validated&&!cur.verdict&&(s.validated||s.verdict||s.note)){{
+     validation[t]=Object.assign({{}},s); swept++;}}
+   }}
+  }}
+  localStorage.setItem('eoa-owner-validation-migrated','1');
+  if(swept){{
+   localStorage.setItem(validationKey,JSON.stringify(validation));
+   const n=document.getElementById('vmigrated');
+   if(n) n.textContent='Recovered '+swept+' mark(s) from the old per-commit keys. '
+    +'Open "Export for the CLI" and hand them over so they reach the record.';}}
+ }}
+}}catch(_e){{}}
+/* Effective state = the committed record, overlaid with anything unexported here. */
+function eff(t){{return Object.assign({{}},disk[t]||{{}},validation[t]||{{}})}}
+function exportPayload(){{
+ const out={{}}; const keys={{}};
+ Object.keys(disk).forEach(k=>keys[k]=1); Object.keys(validation).forEach(k=>keys[k]=1);
+ Object.keys(keys).sort().forEach(t=>{{const s=eff(t);
+  if(s.validated||s.verdict||s.note) out[t]=s;}});
+ return JSON.stringify({{validations:out}},null,1);}}
+function saveValidation(){{
+ try{{localStorage.setItem(validationKey,JSON.stringify(validation))}}catch(_e){{}}
+ renderValidation();}}
+function mark(t,patch){{const s=Object.assign({{}},eff(t),patch);
+ s.at=new Date().toISOString().slice(0,19); s.build=buildId;
+ validation[t]=s; saveValidation();}}
 /* Which validation areas the owner has expanded. Groups render COLLAPSED; whatever
    she opens stays open across the constant board rebuilds. Deliberately keyed
    WITHOUT the build id, unlike validationKey - felt-test RESULTS belong to one APK,
@@ -845,18 +972,48 @@ document.querySelectorAll('.vgroup').forEach(g=>{{
  g.addEventListener('toggle',()=>{{vopen[a]=g.open;
   try{{localStorage.setItem(vopenKey,JSON.stringify(vopen))}}catch(_e){{}}}});}});
 function renderValidation(){{let done=0;
- document.querySelectorAll('.vitem').forEach(item=>{{const state=validation[item.dataset.ticket]||{{}};
+ document.querySelectorAll('.vitem').forEach(item=>{{const state=eff(item.dataset.ticket);
   item.querySelector('.verdict').value=state.verdict||'';item.querySelector('.vnote').value=state.note||'';
   item.classList.toggle('isvalidated',!!state.validated);item.style.display=(needsOnly&&state.validated)?'none':'';
   item.querySelector('.validated').textContent=state.validated?'Validated':'Validate';if(state.validated)done++;}});
- document.querySelectorAll('.vgroup').forEach(g=>{{const xs=[...g.querySelectorAll('.vitem')],n=xs.filter(x=>(validation[x.dataset.ticket]||{{}}).validated).length;g.querySelector('.gcount').textContent=`${{n}} / ${{xs.length}}`;}});
- document.getElementById('vprogress').textContent=`${{done}} / {len(fixed_rows)} verified`;}}
-document.querySelectorAll('.vitem').forEach(item=>{{
- item.querySelector('.validated').addEventListener('click',()=>{{const s=validation[item.dataset.ticket]||{{}};s.validated=!s.validated;validation[item.dataset.ticket]=s;saveValidation();}});
- item.querySelector('.verdict').addEventListener('change',e=>{{const s=validation[item.dataset.ticket]||{{}};s.verdict=e.target.value;validation[item.dataset.ticket]=s;saveValidation();}});
- item.querySelector('.vnote').addEventListener('change',e=>{{const s=validation[item.dataset.ticket]||{{}};s.note=e.target.value;validation[item.dataset.ticket]=s;saveValidation();}});}});
+ document.querySelectorAll('.vgroup').forEach(g=>{{const xs=[...g.querySelectorAll('.vitem')],n=xs.filter(x=>eff(x.dataset.ticket).validated).length;g.querySelector('.gcount').textContent=`${{n}} / ${{xs.length}}`;}});
+ document.getElementById('vprogress').textContent=`${{done}} / {len(fixed_rows)} verified`;
+ const ta=document.getElementById('vjson');
+ if(ta){{ta.value=exportPayload();
+  const dl=document.getElementById('vdl');
+  if(dl) dl.href='data:application/json;charset=utf-8,'+encodeURIComponent(ta.value);}}}}
+document.querySelectorAll('.vitem').forEach(item=>{{const t=item.dataset.ticket;
+ item.querySelector('.validated').addEventListener('click',()=>mark(t,{{validated:!eff(t).validated}}));
+ item.querySelector('.verdict').addEventListener('change',e=>mark(t,{{verdict:e.target.value}}));
+ item.querySelector('.vnote').addEventListener('change',e=>mark(t,{{note:e.target.value}}));}});
+/* Clipboard on a phone: navigator.clipboard needs a secure context and this board is
+   often opened over file://, so the execCommand path is the one that actually fires
+   there. Both are attempted, and the status line says which happened - a Copy button
+   that silently does nothing is worse than no button. */
+const vcopy=document.getElementById('vcopy');
+if(vcopy) vcopy.addEventListener('click',()=>{{
+ const ta=document.getElementById('vjson'), st=document.getElementById('vcopystat');
+ const say=m=>{{if(st) st.textContent=m;}};
+ ta.removeAttribute('readonly'); ta.focus(); ta.select(); ta.setSelectionRange(0,ta.value.length);
+ let ok=false; try{{ok=document.execCommand('copy')}}catch(_e){{ok=false}}
+ ta.setAttribute('readonly','');
+ if(ok){{say('Copied - paste it to the CLI.'); return;}}
+ if(navigator.clipboard&&navigator.clipboard.writeText){{
+  navigator.clipboard.writeText(ta.value).then(()=>say('Copied - paste it to the CLI.'),
+   ()=>say('Copy blocked - the text is selected above, copy it by hand or use Save as file.'));
+ }} else say('Copy blocked - the text is selected above, copy it by hand or use Save as file.');}});
 document.getElementById('needsFelt').addEventListener('click',e=>{{needsOnly=!needsOnly;e.currentTarget.classList.toggle('on',needsOnly);renderValidation();}});renderValidation();
 </script></body></html>"""
+
+def _record_label():
+    """Repo-relative path to the validation record, or the absolute path when it is
+    outside the repo (the self-check redirects it to a temp dir, which on Windows can
+    sit on a different DRIVE - relpath raises across mounts)."""
+    try:
+        rel = os.path.relpath(owner_validations.PATH, ROOT)
+    except ValueError:
+        return owner_validations.PATH
+    return rel.replace("\\", "/") if not rel.startswith("..") else owner_validations.PATH
 
 def main():
     # WO-1011: --check makes the vocabulary ENFORCEABLE. An Unlabeled row is a defect in the
@@ -865,6 +1022,54 @@ def main():
     # flag the check-in gate can reject the drift instead of drawing it. Report-only by default:
     # a plain run must never start failing builds because a WO file is sloppy.
     check = "--check" in sys.argv
+
+    # ── --ingest: the ONLY writer of the owner-validation record ─────────────────
+    # A browser cannot write to the repo, so this is the hand-off half of the loop:
+    # BOARD.html's "Export for the CLI" produces JSON, the owner taps Copy on her
+    # phone, and this folds it into proof/owner-validations.json. Deliberately an
+    # explicit, separate act from a rebuild - a rebuild must never be able to write
+    # (or lose) a sign-off. It does NOT touch any **Status:** line: closing a ticket
+    # is the owner's act (CLAUDE.md 13), and tools/board_close_validated.py is where
+    # that happens.
+    if "--ingest" in sys.argv:
+        i = sys.argv.index("--ingest")
+        src = sys.argv[i + 1] if len(sys.argv) > i + 1 else "-"
+        try:
+            raw = sys.stdin.read() if src == "-" else open(src, encoding="utf-8").read()
+            payload = json.loads(raw)
+        except Exception as e:
+            print(f"VALIDATIONS_INGEST_FAIL could not read {src}: {type(e).__name__}: {e}")
+            return 1
+        try:
+            changed, merged = owner_validations.ingest(payload)
+        except owner_validations.ValidationsUnreadable as e:
+            print(f"VALIDATIONS_PARSE_FAIL {e}")
+            print("    The existing record is corrupt. It has NOT been overwritten - "
+                  "repair or restore it (git checkout) before ingesting.")
+            return 1
+        rel = _record_label()
+        print(f"VALIDATIONS_INGEST_OK {len(changed)} changed, {len(merged)} total -> {rel}")
+        for k in changed:
+            s = merged[k]
+            # An entry naming a file that is not in WorkOrders/ is REPORTED, never
+            # dropped: a renamed or moved WO must not silently swallow a sign-off.
+            miss = "" if os.path.isfile(os.path.join(WO_DIR, k)) else "   <- NO SUCH WO FILE"
+            print(f"    {'[X]' if s.get('validated') else '[ ]'} "
+                  f"{s.get('verdict') or 'Untested':<11} {k}{miss}")
+        print("    Rebuild the board to render them: python tools/board_build.py")
+        return 0
+
+    # Loaded BEFORE anything is rendered. An unreadable record must ABORT the rebuild:
+    # writing a board that shows "0 verified" over a corrupt file looks completely
+    # normal and would invite the owner to redo work she had already signed off.
+    try:
+        _validations = owner_validations.entries()
+    except owner_validations.ValidationsUnreadable as e:
+        print(f"VALIDATIONS_PARSE_FAIL {e}")
+        print("    BOARD.html was NOT rebuilt, so no sign-off is hidden or lost. "
+              "Repair the record (git checkout proof/owner-validations.json) and re-run.")
+        print("BOARD_CHECK_FAIL owner-validation record unreadable")
+        return 1
 
     rows = parse_wos()
     # Parsed here as well as inside build_html so the MISS reaches the console (and the
@@ -996,6 +1201,15 @@ def main():
     # default is deliberate (a plain run must never start failing builds because a WO file
     # is sloppy); the check-in gate opts into rejection. The checks themselves are
     # unchanged and unweakened - a dirty board never prints OK.
+    # WO board validation record: the marker so ABSENCE is a failure signal, same
+    # contract as every other gate in this repo (CLAUDE.md 8/16 - judge the marker on
+    # a fresh log, never the exit code). It states the count that SURVIVED the
+    # rebuild, which is the whole property that used to be broken.
+    _rel = _record_label()
+    _vdone = sum(1 for s in _validations.values() if s.get("validated"))
+    print(f"VALIDATIONS_OK {len(_validations)} recorded, {_vdone} validated, "
+          f"preserved across rebuild - {_rel}")
+
     problems = []
     if unlabeled: problems.append(f"{len(unlabeled)} unlabeled")
     if contradictions: problems.append(f"{len(contradictions)} status contradiction(s)")

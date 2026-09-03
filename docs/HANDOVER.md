@@ -13,6 +13,17 @@
 > CANCELLED.** Verbatim in `KEY_FACTS.md`. PROD-022 drops to a quiet read-only triage lane. If you are
 > about to pick up a Pi ticket, you are working the parked lane — pick a player-felt APK defect instead.
 >
+> ⛔ **WO-1316 2026-09-03 — FOUR Vercel projects serve this game and TWO are public production.** A
+> `--prod` deploy from this repo updates only the project `.vercel/project.json` links and reports
+> success while the other production domain keeps serving an older build (measured 40,100 vs 32,609
+> bytes, different Unity payload hashes, one day after a hand patch). **The surface list, the project
+> ids and each project's purpose live ONLY in `tools/web-ship.ps1`'s `$Surfaces` registry — read them
+> with `-ListSurfaces`, never copy them into a doc.** The parity gate is `tools\web-ship.ps1`
+> (marker `WEB_PARITY_OK`, fresh `Builds\web-parity.log`, judge the marker not the exit code), wired
+> into `tools\command-centre.ps1` step 6b. Two owner decisions are still open — which URL Pi's
+> Developer Portal points at, and whether `defenders-webgl` is retired. See
+> `CANON_GROUND_TRUTH_2026-09-02.md`.
+>
 > ⛔ **STANDING RULE 2026-09-02 — A BALANCE VALUE IS A TUNABLE, NOT A CONSTANT. DEFAULT ANSWER: YES.**
 > Also verbatim in `KEY_FACTS.md`. The rail exists (`docs/PROD022_TUNABLE_FLAGS.md`); do not build a
 > second one. You ask for a ruling only in the reverse direction — if a value must NOT be tunable, say why.

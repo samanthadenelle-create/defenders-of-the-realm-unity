@@ -180,7 +180,122 @@
 > fine as history. A copied number is the bug **even when it was right the day it was written** -
 > that is exactly how the retired 860-899 UI block kept re-seeding collisions from CLAUDE.md sec.2.
 
-> ## ⚠ RECONCILED 2026-09-03 (CLI, thirtieth pass): main line next free = **1339**.
+> ## ⚠ RECONCILED 2026-09-03 (CLI, thirty-ninth pass): main line next free = **1349**.
+> *(CLI minted **WO-1348** on an owner ask: *"is it possible to tag those from the command center? and
+> then change pointer on next town load?"*, with her own namespace proposal `realm.vfx(set)`. ⭐ THE
+> ANSWER IS YES, and it is the natural end of the whole evening: `VfxManualPicks.json` is an EDITOR-time
+> file, so today every retag costs a ~30-minute rebuild - which is precisely the cost her standing
+> ruling exists to kill. Moving the PICK to a remote row (build-time file as fallback default) lets her
+> retag from her phone and see it on the next town load. ⛔ THE HARD LIMIT, stated up front so it is not
+> discovered as a bug: a remotely-chosen prefab MUST already be in the build or on R2 - CLAUDE.md s16's
+> exact lesson, where a missing push yields capsule enemies and NO error on screen. The picker must
+> therefore be constrained to SHIPPED/addressable prefabs, or she picks something and silently gets
+> nothing. **DISPATCH DELIBERATELY HELD** until the five live VFX agents land and gate: three of them
+> are already authoring tunables and a sixth agent in the same registry is the exact collision they were
+> each warned about. Bumped 1348 -> 1349 in this SAME edit.)*
+>
+> ### superseded: RECONCILED 2026-09-03 (CLI, thirty-eighth pass): main line next free = **1348**.
+> *(CLI minted **WO-1347** from an owner tag - `Treasure_Aura` ->
+> `Lana Studio/Casual RPG VFX/Prefabs/Loot/Loot_iddle.prefab` ("iddle" is the PACK'S OWN TYPO for idle),
+> tagged simply *"treasure chest"*. ⭐ MEASURED FROM THE PREFAB YAML: 10 ParticleSystems, **7 looping +
+> 3 one-shot accents**, all `scalingMode: 0` (Hierarchy) - i.e. a persistent shimmer punctuated by
+> sparkle bursts, exactly right for a chest waiting to be opened. ⚠ Her tag says `isLoop: false`, which
+> would kill it after its longest 4 s system and leave the chest DARK while still unopened - the FOURTH
+> loop mismatch of the evening (WO-1343 night store, WO-1344 FTUE pointer, WO-1345 AoE reticle).
+> Flagged, never silently changed. The pack also ships `Loot_drop`, `Loot_flicker` and `Loot_pick_up` -
+> named as AVAILABLE for the spawn and collect moments, NOT substituted; she picks. Dispatched to ONE
+> agent together with WO-1346 deliberately: both are state-gated ambient loops on a world object, and
+> a fifth concurrent agent in the VFX lane would race the same resolver.
+> Bumped 1347 -> 1348 in this SAME edit.)*
+>
+> ### superseded: RECONCILED 2026-09-03 (CLI, thirty-seventh pass): main line next free = **1347**.
+> *(CLI minted **WO-1346** from an owner tag plus two words of spec - `ArcaneTower_Aura` ->
+> `Lana Studio/Casual RPG VFX/Prefabs/Fog/Fog_electric.prefab`, `isLoop: TRUE` (the FIRST correct loop
+> flag of the evening), tagged as *"arcane tower vfx (after built) softly"*. Her parenthesis and her
+> adverb ARE the spec: **(after built)** = it must not play during construction, while the job sits in
+> the Obsidian queue, or on a scaffold - and it must TEAR DOWN when the tower is destroyed (a destroyed
+> structure is rebuilt fresh at full cost and its `Destructible` owner tears down its VFX; memory
+> `destroyed-items-no-rebuild-full-cost-and-vfx-cleanup`). **softly** = subdued intensity, authored as a
+> TUNABLE default so she can dial it without a rebuild rather than as a number baked in code - her
+> standing "make it a db call" ruling. ⛔ TWO ARCANE-TOWER VFX KEYS ALREADY EXIST in the file -
+> `AuraOverArcaneTower_Aura` and `FireFromTower-ArcaneTowerLevel3_Aura` - so the second-spawner risk is
+> REAL and named, not hypothetical; the WO forces the existing wiring to be found and REPLACED, never
+> doubled. Bumped 1346 -> 1347 in this SAME edit.)*
+>
+> ### superseded: RECONCILED 2026-09-03 (CLI, thirty-sixth pass): main line next free = **1346**.
+> *(CLI minted **WO-1345** from an owner tag plus a direct question - `DangercastAOERange_Cast` ->
+> `Hovl Studio/Map track markers VFX/Prefabs/Marker 7 Danger zone Loop.prefab`, asked as *"Danger cast
+> AOE Range for casting AoE target, does thios work"*. ⭐ ANSWERED FROM MEASURED PREFAB DATA, not from a
+> theory: both its ParticleSystems carry `looping: 1` and `scalingMode: 0` (**Hierarchy**), so it
+> persists natively while aiming AND scales with its transform - one prefab serves every spell radius.
+> The art is right. ⚠ THE RISK IS THE TWO NUMBERS BESIDE IT IN HER TAG: `isLoop: false` on a natively
+> looping prefab (a reticle that vanishes mid-aim), and `scale: 1.0`, which if applied literally PINS
+> the ring to one size and OVERRIDES the per-spell radius - a reticle that lies about where the damage
+> lands, which is worse than none. Third loop mismatch of the evening; flagged, never silently changed.
+> Bumped 1345 -> 1346 in this SAME edit.)*
+>
+> ### superseded: RECONCILED 2026-09-03 (CLI, thirty-fifth pass): main line next free = **1345**.
+> *(CLI minted **WO-1344** from an owner tag read verbatim: `FTUEPointerofwheretogo_Aura` ->
+> `Hovl Studio/Map track markers VFX/Prefabs/Marker 1 arrows Loop.prefab`, her words *"added FTUE vfx
+> for pointing instead of the yellow thing"* - i.e. the tutorial's yellow Glow highlight is REPLACED by
+> a pointing arrow marker. ⭐ Lands the same day WO-1340 rewrote the `ctx_talents` beat to complete on a
+> real spend and highlight `DeckCard_Skills`, so the two must not fight: the Glow mask is a UI overlay
+> on a rect and her tag is a WORLD-SPACE marker from a map-track pack, which is very likely the
+> "where to go" navigation pointer rather than the "tap this" card highlight - the WO forces that
+> distinction to be resolved from code, not assumed. ⚠ Her tag carries `isLoop: false` on a prefab named
+> "...Loop" - flagged, NOT silently changed (memory `vfx-map-owner-tags-no-creative-pick`). ⚠ The Glow
+> mask never blocks input; a pointer that eats taps would soft-lock the FTUE.
+> ⭐ NOTE: this tag is the FIRST of the evening the Caster wrote CORRECTLY - key and prefab both match
+> her stated intent. The four before it did not; see WO-1343's tagger investigation.
+> Bumped 1344 -> 1345 in this SAME edit.)*
+>
+> ### superseded: RECONCILED 2026-09-03 (CLI, thirty-fourth pass): main line next free = **1344**.
+> *(CLI minted **WO-1343** from THREE owner VFX tags read verbatim out of `VfxManualPicks.json`:
+> `atfootprintoftree_Aura` -> `Spells Pack/.../Auras/Aura_Nature.prefab` (the foot of the Tree of Life,
+> to sit WITH the existing `TreeofLifeAura_Aura` FireFlies, not replace it), and
+> `NightStoreoption_Aura` -> `Resources/VFX/Aura/top_down_starfall_line_blue.prefab` REPLACING the
+> Night Store's current aura, re-rolling at random roughly every 30 min in town. ⭐ She then asked
+> whether the seven-prefab `Aura_*` family (Arcane/Dark/Fire/Ice/Light/Nature/Storm) could cycle slowly
+> one after another *"if the other one doesnt look good"* - so the SELECTION IS AUTHORED AS A TUNABLE
+> (mode + cadence + list), which is her standing "make it a db call, not a code change" ruling applied
+> to a creative choice she has not made yet. ⚠ Her tag carries `isLoop: false` while both tree auras
+> loop - a one-shot on a 30-min cadence plays once and vanishes; flagged, not silently changed
+> (memory `vfx-map-owner-tags-no-creative-pick`). Bumped 1343 -> 1344 in this SAME edit.)*
+>
+> ### superseded: RECONCILED 2026-09-03 (CLI, thirty-third pass): main line next free = **1343**.
+> *(CLI minted **WO-1342** from a device screencap the CLI took on her ask ("screenshot of the skill
+> tree screen small ui bug"): the talent-tree ASSIGN CONFIRMATION dialog. FOUR defects in one capture,
+> and the two she cannot have meant are the expensive ones. (a) The description is CUT OFF MID-SENTENCE
+> with no ellipsis - "Assignable to" and then nothing - single-line, no wrap, so the sentence that
+> tells the player what the skill DOES is the part that is missing. (b) ⭐ An EM DASH ships in a
+> player-facing string - "Mend - a small self-heal" is authored with U+2014, which is exactly the tofu
+> class WO-1333 exists for, and it is on the FTUE route WO-1340 is about to teach. (c) "Owned - Active
+> skill" carries its state in GREEN, and the owner is red/green colourblind. (d) The dialog occludes
+> the tree behind it and a right-edge label ("hires 1/6") is clipped outside the content rect. (e) ⭐ THE
+> OWNER'S OWN CATCH, which the CLI under-reported and she named unprompted - the ornate FRAME does not
+> ENCLOSE the modal: it wraps only the button row while the black content plate juts out top and right.
+> Likely the SAME root as (a) - a plate auto-sizing to the overflowing single line while the frame is
+> sized from a constant or a pre-text measure. Bumped 1342 -> 1343 in this SAME edit.)*
+>
+> ### superseded: RECONCILED 2026-09-03 (CLI, thirty-second pass): main line next free = **1342**.
+> *(CLI minted **WO-1341** from an owner device screenshot: EVERY label on the Hero panel renders
+> TWICE, in two fonts, with DIFFERENT wording per pair - "SKILLS / Learn and equip abilities" drawn
+> over "SKILLS / Learn and improve hero talents", and "LOADOUT" over "LOAD OUT". ⭐ One string, TWO
+> PRODUCERS - the repo's signature failure, this time on a screen the owner just confirmed is the route
+> to the skill tree (Hero -> Skills), which makes it the first thing a new player reads on the path
+> WO-1340's FTUE is about to teach. Bumped 1341 -> 1342 in this SAME edit.)*
+>
+> ### superseded: RECONCILED 2026-09-03 (CLI, thirty-first pass): main line next free = **1341**.
+> *(CLI minted **WO-1339** and **WO-1340** on two owner asks in one message. **1339** = the board's
+> validations do not stick: `saveValidation()` writes `localStorage` under a key scoped to the BUILD
+> AND THE COMMIT SHA, so every commit orphans every sign-off she has made - and the CLI cannot read
+> them at all, so "close the ones I validated" is unanswerable. ⭐ The person whose sign-off is the ONLY
+> thing that closes a ticket (s13, PO closes) has her sign-off pinned to a hash that changes hourly.
+> **1340** = an FTUE beat teaching HOW TO SPEND a skill point after the first one is earned - her
+> retention lens: an unspent point is a pressable ability that never gets pressed.
+> Bumped 1339 -> 1341 in this SAME edit.)*
+>
+> ### superseded: RECONCILED 2026-09-03 (CLI, thirtieth pass): main line next free = **1339**.
 > *(CLI minted **WO-1338** RETROACTIVELY for the hero -> R2 migration, which SHIPPED in commit
 > `d706b430b` with **no ticket at all**. ⚠ That commit cites "WO-1187", which is WRONG - WO-1187 is
 > `ps1_encoding_class_has_no_gate`, CLOSED 2026-08-27. So for a few hours the board showed nothing for

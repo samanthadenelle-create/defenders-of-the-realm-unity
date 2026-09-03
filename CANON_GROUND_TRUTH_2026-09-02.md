@@ -10,6 +10,46 @@ Every session and every agent checks docs against THIS file (CLAUDE.md §15).
 
 ---
 
+## ⛔ FOUR Vercel projects serve this game. TWO of them are public production. (WO-1316, added 2026-09-03)
+
+**The surface list, the project ids and what each project is FOR live in ONE place:
+`tools/web-ship.ps1`'s `$Surfaces` registry. Read them there. Never copy a host, an id or a role
+into a doc, a chain or a work order** — that duplication is the exact defect this section records,
+and it is the same shape as CLAUDE.md §2's stale WO-number block and §16's copy-pasted R2 verify.
+
+> `powershell -NoProfile -File tools\web-ship.ps1 -ListSurfaces`
+
+**The defect:** `vercel deploy --target production` from this repo updates the ONE project
+`.vercel/project.json` links, and nothing else. It prints success and a ready deployment while the
+other public production domain keeps serving whatever it last got. **The success signal comes from
+the copy you touched, not the copy users hit.**
+
+**Measured 2026-09-02** (WO-1316): after a successful `--prod`, the two production domains served a
+7,396-byte and a 26,443-byte `index.html`. Both were then patched **by hand**. **Measured again
+2026-09-03, one day later: 40,100 bytes vs 32,609 bytes, with different Unity loader/data/wasm
+content hashes** — two different builds of the game live on two production domains. The hand patch
+decayed in a day; that is the argument for the gate, not a theory about it.
+
+**The gate:** `tools\web-ship.ps1` fetches the **public** production domains over plain HTTPS and
+refuses unless every one serves byte-identical `/index.html` and `/validation-key.txt`. Marker
+`WEB_PARITY_OK` on a fresh `Builds\web-parity.log`. **Judge by the marker, never the exit code**
+(§8). It is wired into `tools\command-centre.ps1` as **step 6b**, blocking, after promotion.
+⚠ It deliberately does **not** fetch a Vercel PREVIEW url: previews are SSO-gated, 302 to `sso-api`,
+and are not what a player or the Pi validator gets.
+
+**TWO owner decisions still gate this ticket — do not guess them:**
+1. **Which URL is registered in the Pi Developer Portal?** Not discoverable from this machine, and
+   both production domains currently serve the same validation key, so the key cannot discriminate.
+   That answer decides which project is genuinely production. Until it lands, step 6b runs
+   `-VerifyOnly` (it refuses on divergence but never deploys the sibling surface — deploying to a
+   second production project is her call).
+2. **`defenders-webgl` served the RETIRED July validation key for ~7 weeks** because nothing deploys
+   to it and nothing checks it. It is now gated (a dormant domain serving a divergent key withholds
+   the marker) and **proposed for retirement**. ⛔ Deleting or pausing a Vercel project is the
+   owner's call — never a script's, never a seat's.
+
+---
+
 ## THE HEADLINE — two owner rulings that change how every seat works
 
 ### 1. The Android APK is the priority. Pi is PARKED, not cancelled.

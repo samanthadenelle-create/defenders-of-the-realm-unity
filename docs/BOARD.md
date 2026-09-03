@@ -5,6 +5,8 @@
 ```
 python tools/board_build.py          # ~2 s — regenerate the view
 python tools/board_build.py --check  # same, but exits 1 if any WO is Unlabeled
+python tools/board_build.py --ingest -   # fold the owner's pasted validations into the record (§6d)
+python tools/board_validation_roundtrip_test.py   # prove a rebuild cannot lose a sign-off
 ```
 
 ---
@@ -189,6 +191,59 @@ priority session; when they disagree on *status*, the WO file’s `**Status:**` 
 
 ---
 
+## 6d. Owner validations — the DURABLE record (2026-09-03)
+
+The board's **Owner Validation** section is where the PO felt-tests a Fixed ticket and signs it
+off. Her sign-off is the only thing that closes a ticket (CLAUDE.md §13), so it is DATA, not
+view state.
+
+**The record: `proof/owner-validations.json`** — committed, human-readable, one ticket per line,
+keys sorted (so two seats validating different tickets merge without a human, and a same-ticket
+conflict is a real disagreement that should stop and be read). Keyed by work-order **filename**,
+because this repo has duplicate WO numbers and the friendly label would make two unrelated files
+share one sign-off. Full reasoning lives in the header of `tools/owner_validations.py`.
+
+**⛔ IT IS NOT BUILD-SCOPED, and never becomes so again.** The old code kept sign-offs in browser
+`localStorage` under `eoa-owner-validation:<apk build>:<commit sha>`, so **every commit minted a
+new key and orphaned every mark she had made** — with the CLI committing hourly, the one person
+whose sign-off closes a ticket was losing her work hourly, and the CLI could not see any of it
+(hence `tools/board_close_validated.py`, which scraped Chrome's LevelDB out of her user profile).
+A sign-off is a judgement about a **fix** ("the wolf routes correctly now"), not about a binary;
+it does not stop being true because a doc got committed. Provenance is kept *inside* each entry
+(`at` + `build`), so "was this signed off before the current APK?" stays answerable per ticket
+instead of being force-answered "all of it is stale" once an hour.
+
+**How a mark gets from her phone into the record** (a browser cannot write to the repo):
+
+```
+BOARD.html > Owner Validation > "Export for the CLI" > Copy   (or "Save as file")
+python tools/board_build.py --ingest -        # paste it; or --ingest <file>
+python tools/board_build.py                   # rebuild; the marks now render from disk
+```
+
+Tradeoff, stated plainly: **one manual hand-off**. It needs no server, no auth and no network, it
+works on a phone over `file://` or any static host, and it cannot lose a mark — which a write
+endpoint reachable from a phone browser could not match without new infrastructure to secure.
+Marks she has not exported yet live only in that browser, and the export block says so.
+
+- `--ingest` is the **only** writer of the record. A rebuild has **no write path** to it at all.
+- Newest `at` wins on merge, so a stale paste from a second device cannot overwrite a newer mark.
+- An **unreadable** record ABORTS the rebuild (`VALIDATIONS_PARSE_FAIL`) rather than rendering
+  "0 verified" over corrupt bytes — which would look normal and invite her to redo signed-off work.
+- Marker: every run prints `VALIDATIONS_OK <n> recorded, <m> validated, preserved across rebuild`.
+  Judge it by marker presence on a fresh log, never the exit code (CLAUDE.md §8/§16).
+- Self-check: `python tools/board_validation_roundtrip_test.py` → `VALIDATION_ROUNDTRIP_OK`. It
+  proves a rebuild preserves a sign-off **and** proves its own assertions have teeth by stubbing
+  the read path back to the old always-empty behaviour and requiring the failure to be caught.
+- A validated row is distinguishable **without colour** (the owner is red/green colourblind): the
+  word `[X] VALIDATED`, the button label flipping to `Validated`, and the row sinking to the
+  bottom of its group. All three are server-rendered, so they show with JavaScript off.
+- One-time in-page migration sweeps any leftover `eoa-owner-validation:*` key into the durable
+  overlay and reports what it recovered. Best effort by nature — it can only reach keys in the
+  same browser and origin, and it never deletes the old keys.
+- Marking still changes **no** `**Status:**` line. Closing remains the owner's act, applied by
+  `tools/board_close_validated.py`, which now reads the record first.
+
 ## 7. What this board is NOT
 
 - Not a service, not CI, not a database. It is one Python file and one HTML output.
@@ -201,5 +256,8 @@ priority session; when they disagree on *status*, the WO file’s `**Status:**` 
 - `BOARD_NOW.md` — prioritized pull list + recency supersession table
 - `CLI_LANES_WO_NUMBERS.md` — the **sole** numbering authority (bump the banner in the same edit as a mint)
 - `WorkOrders/` — the data
-- `tools/board_build.py` — the generator
+- `tools/board_build.py` — the generator (and `--ingest`, the record's only writer)
+- `proof/owner-validations.json` — the owner's durable felt-test sign-offs (§6d)
+- `tools/owner_validations.py` — the record's shape, merge rule and reasoning
+- `tools/board_validation_roundtrip_test.py` — proves a rebuild cannot lose a sign-off
 - `docs/HANDOVER.md`, `SESSION_CANON_LOADER.md` — session boot, which instructs the regen

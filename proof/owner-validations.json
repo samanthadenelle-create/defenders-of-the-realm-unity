@@ -1,0 +1,17 @@
+{
+  "_schema": 1,
+  "_readme": [
+    "OWNER FELT-TEST SIGN-OFFS. This file is DATA, not a derived view.",
+    "BOARD.html reads it; tools/board_build.py never rewrites it on a rebuild.",
+    "Keyed by work-order FILENAME (this repo has duplicate WO numbers).",
+    "NOT build-scoped: a sign-off is a judgement about a fix, not about one APK.",
+    "Each entry keeps 'build' and 'at' as provenance so staleness stays answerable.",
+    "One ticket per line, keys sorted - so two seats merge without a human.",
+    "How a sign-off gets here from her phone: BOARD.html > Owner Validation >",
+    "  'Export for the CLI' > Copy, hand the text to the CLI, which runs",
+    "  python tools/board_build.py --ingest -   (paste)  or --ingest <file>.",
+    "Closing a ticket is still the owner's act: tools/board_close_validated.py."
+  ],
+  "validations": {
+  }
+}

@@ -166,6 +166,26 @@ if ($python) {
     Add-Result 'Board check' 'FAIL' 'no python on PATH'
 }
 
+# --- 1c) owner-validation round trip (2026-09-03) ----------------------------
+# Proves a board REBUILD cannot lose the owner's felt-test sign-offs. Her sign-off is
+# the only thing that closes a ticket (CLAUDE.md 13), and it used to be pinned to a
+# per-commit localStorage key that orphaned it hourly. The record now lives in
+# proof/owner-validations.json; this stage keeps the read path from silently rotting
+# back to "always empty". ~3 seconds, no Unity, and it touches neither the live record
+# nor the live BOARD.html. Judged by the MARKER, not the exit code.
+if ($python) {
+    Write-Host "`n[gate] owner-validation round trip..."
+    $vOut = & $python.Source (Join-Path $proj 'toolsoard_validation_roundtrip_test.py') 2>&1
+    $vOut | Select-Object -Last 4 | ForEach-Object { Write-Host $_ }
+    if ($vOut -match 'VALIDATION_ROUNDTRIP_OK') {
+        Add-Result 'Owner validations' 'PASS' 'VALIDATION_ROUNDTRIP_OK rebuild preserves sign-offs'
+    } else {
+        Add-Result 'Owner validations' 'FAIL' 'no VALIDATION_ROUNDTRIP_OK marker (a rebuild may be losing owner sign-offs)'
+    }
+} else {
+    Add-Result 'Owner validations' 'FAIL' 'no python on PATH'
+}
+
 # --- 2) compile gate ---------------------------------------------------------
 $compileOk = $false
 if ($staticOk) {

@@ -1,12 +1,20 @@
 #!/usr/bin/env python3
-"""Close owner Pass-validated FIXED tickets from Chrome localStorage.
+"""Close owner Pass-validated FIXED tickets.
 
-Reads BOARD.html's live validationKey, copies Chrome LevelDB (best-effort),
-salvages verdicts, closes FIXED+Pass, bounces FIXED+Fail/Needs Work, rebuilds
-BOARD.html. Prints CLOSED/BOUNCED/SKIP lines. Does not git commit.
+PRIMARY SOURCE: proof/owner-validations.json - the durable, committed record (see
+tools/owner_validations.py). Closes FIXED+Pass, bounces FIXED+Fail/Needs Work,
+rebuilds BOARD.html. Prints CLOSED/BOUNCED/SKIP lines. Does not git commit.
+
+FALLBACK, kept only for marks that never made it into the record: copy Chrome's
+LevelDB out of the user profile and regex-salvage JSON fragments from the raw bytes.
+That hack existed because the board's sign-offs lived in browser localStorage under a
+per-commit key and the CLI had no other way to see them. It works on exactly one
+desktop browser and never on the phone the owner actually validates from, which is
+why the record now exists. Do not extend it; extend the record.
 """
 from __future__ import annotations
 
+import datetime
 import glob
 import os
 import re
@@ -14,6 +22,9 @@ import shutil
 import subprocess
 import sys
 from collections import Counter
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import owner_validations
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 WO_DIR = os.path.join(ROOT, "WorkOrders")
@@ -100,9 +111,26 @@ def salvage(key: str) -> dict[str, tuple[str, str]]:
     return found
 
 
+def durable() -> dict[str, tuple[str, str]]:
+    """Verdicts from the committed record. This is the source that survives a commit."""
+    out: dict[str, tuple[str, str]] = {}
+    try:
+        entries = owner_validations.entries()
+    except owner_validations.ValidationsUnreadable as e:
+        print("VALIDATIONS_PARSE_FAIL", e)
+        return out
+    for name, state in sorted(entries.items()):
+        verdict = (state or {}).get("verdict")
+        if verdict in ("Pass", "Fail", "Needs Work"):
+            out[name] = (verdict, (state or {}).get("note") or "")
+    print("record verdicts", len(out), dict(Counter(v for v, _ in out.values())))
+    return out
+
+
 def apply(found: dict[str, tuple[str, str]]) -> tuple[list[str], list[str]]:
     closed, bounced = [], []
-    stamp_close = "CLOSED 2026-08-27 — owner Pass (felt-validated)."
+    today = datetime.date.today().isoformat()
+    stamp_close = f"CLOSED {today} — owner Pass (felt-validated)."
     for name, (verdict, note) in sorted(found.items()):
         path = os.path.join(WO_DIR, name)
         if not os.path.isfile(path):
@@ -130,7 +158,7 @@ def apply(found: dict[str, tuple[str, str]]) -> tuple[list[str], list[str]]:
             if len(note_s) > 160:
                 note_s = note_s[:157] + "..."
             stamp = (
-                f"READY TO IMPLEMENT — owner felt-test 2026-08-27 {verdict}"
+                f"READY TO IMPLEMENT — owner felt-test {today} {verdict}"
                 + (f': "{note_s}"' if note_s else ".")
                 + " Bounced from Fixed."
             )
@@ -142,12 +170,17 @@ def apply(found: dict[str, tuple[str, str]]) -> tuple[list[str], list[str]]:
 
 def main() -> int:
     os.chdir(ROOT)
-    copy_ls()
-    key = live_key()
-    if not key:
-        print("NO_VALIDATION_KEY")
-        return 2
-    found = salvage(key)
+    # The durable record first. The LevelDB scrape runs ONLY when the record is empty,
+    # so a normal run never depends on a browser profile being present.
+    found = durable()
+    if not found:
+        print("RECORD_EMPTY - falling back to the Chrome LevelDB salvage")
+        copy_ls()
+        key = live_key()
+        if not key:
+            print("NO_VALIDATION_KEY")
+            return 2
+        found = salvage(key)
     closed, bounced = apply(found)
     subprocess.check_call([sys.executable, os.path.join(ROOT, "tools", "board_build.py")])
     print("BOARD_PASS_OK closed", len(closed), "bounced", len(bounced))
