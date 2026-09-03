@@ -664,12 +664,74 @@ namespace DeNelle.Pets
                     var petFixer = visual.AddComponent<DeNelle.Core.TripoMaterialFixer>();
                     if (petFixer != null && def != null)
                     {
-                        // The shipped ice wolf is already a textured URP asset. Pin its authored
-                        // albedo before the generic runtime rebuild: Android can expose different
-                        // shader aliases on the source material, and losing that lookup produced
-                        // a solid pale-white Aldwin even though wolf_color.png was in the build.
-                        if (string.Equals(def.Species, "ice-wolf", StringComparison.Ordinal))
-                            petFixer.SetForcedSourceTexture(FindFirstAlbedo(visual));
+                        // ============ WO-1326 — FLAT COAT (owner ruling 2026-09-02) ============
+                        // Owner's words, verbatim: "flat coat".
+                        //
+                        // WHAT THE MEASUREMENT FOUND (do not re-theorise it — it is proven; the
+                        // receipts are in the WO-1326 RESULT §2). Across the three shipped payloads
+                        // of ONE tree, the authored coat map `wolf_color` is PRESENT in
+                        // Builds/Windows/.../resources.assets and in the APK's
+                        // assets/bin/Data/df1e97358d9ba6b44b9c740deae49e55, and ABSENT from the
+                        // WebGL .data payload. So the exe and the APK bound a near-greyscale coat
+                        // map (measured mean saturation 0.091) and multiplied the #cfe9ff species
+                        // tint down into grey, while Pi — having no map to bind — painted the body
+                        // with the tint alone and looked clean. The owner reported the exe and the
+                        // APK as broken; in fact the HEALTHY-LOOKING TARGET WAS THE DEGRADED ONE,
+                        // and which look you got was decided purely by what reached the payload.
+                        //
+                        // THE RULING RESOLVES THAT BY CHOOSING, RATHER THAN BY REPAIRING: the flat
+                        // body IS the wolf. So suppress the base map on EVERY target and let the
+                        // species tint be the whole albedo — the Pi look, on purpose, everywhere.
+                        // Zero art work, no texture deleted, no material re-authored, and the
+                        // normal map is still preserved by the fixer so the mesh keeps its relief.
+                        //
+                        // ⚠ NOT A SPECIES CHECK. This reads `def.FlatCoat`, authored on the
+                        // species row in pets.json (default false = today for every other body).
+                        // The previous line here was a hardcoded `Species == "ice-wolf"` string,
+                        // and a second body wanting the same treatment would have grown a second
+                        // one. TripoMaterialFixer.SuppressBaseMap() is the single owner of what
+                        // the choice DOES; this line only reports what the data SAYS.
+                        //
+                        // ⛔ The Fail below is the WO-1326 instrumentation and it STAYS (CLAUDE.md
+                        // §12). Its meaning is now inverted-and-narrowed: it fires only when a body
+                        // that is NOT flat-coated pins nothing, i.e. the authored map failed to
+                        // reach this platform's payload. That case is still a silent look-change
+                        // with no error on screen, so it must still self-report in one line.
+                        // Cross-target presence itself is pinned by tools/payload-texture-parity.py.
+                        if (def.FlatCoat)
+                        {
+                            petFixer.SuppressBaseMap();
+                            FlowTrace.Step("Pets",
+                                $"SpawnPet: '{def.Species}' is authored flatCoat — base map SUPPRESSED on every " +
+                                "slot; the species tint alone paints the body (WO-1326 owner ruling 'flat coat'). " +
+                                "This is why the exe, the APK and the WebGL build now agree.");
+                        }
+                        else
+                        {
+                            // ⚠ `!= null`, never a pattern match: UnityEngine.Object overloads ==
+                            // so a DESTROYED object reports as null, and `is Texture` would call
+                            // that corpse a live texture and pin it.
+                            Texture pinnedAlbedo = FindFirstAlbedo(visual);
+                            if (pinnedAlbedo != null)
+                            {
+                                FlowTrace.Step("Pets",
+                                    $"SpawnPet: '{def.Species}' pinned authored albedo '{pinnedAlbedo.name}' " +
+                                    "before the runtime rebuild (WO-961 / WO-1326 parity pin).");
+                                petFixer.SetForcedSourceTexture(pinnedAlbedo);
+                            }
+                            else
+                            {
+                                FlowTrace.Fail("Pets",
+                                    $"SpawnPet: '{def.Species}' pinned NO authored albedo — every material on " +
+                                    "the loaded body resolved a null _BaseMap/_MainTex, and this species is " +
+                                    "NOT authored flatCoat. The body still renders, tinted by the species " +
+                                    "colour alone, so this NEVER shows as an error on screen — it shows as a " +
+                                    "DIFFERENT-LOOKING body than the other build targets (WO-1326). The " +
+                                    "authored map did not reach THIS platform's payload: run " +
+                                    "`python tools/payload-texture-parity.py` against the built players to " +
+                                    "name which target dropped it.");
+                            }
+                        }
                         // OPTIONAL (owner F8 2026-07-02): the Resources/Textures/<species>.png
                         // basecolors were purged for size in 2774fb50 (flame-pup.png alone was a
                         // 16.4MB LFS asset; the 208MB->3.4MB WebGL win). The pets' real look comes

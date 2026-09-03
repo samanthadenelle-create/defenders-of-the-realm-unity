@@ -33,7 +33,7 @@
     { "id": "phrase_20", "category": "status",    "text": "Ready when you are." },
     { "id": "phrase_21", "category": "status",    "text": "Falling back." },
     { "id": "phrase_22", "category": "status",    "text": "We held the line!",         "emoji": "⚔️" },
-    { "id": "phrase_23", "category": "status",    "text": "Need help — big wave.",     "emoji": "🆘" },
+    { "id": "phrase_23", "category": "status",    "text": "Need help - big wave.",     "emoji": "🆘" },
     { "id": "phrase_24", "category": "status",    "text": "Conserve your shards." }
   ]
 }

@@ -1,9 +1,13 @@
 # WORK ORDER 1326 - The wolf is correctly coloured in the Pi/WebGL build and GREY in the APK and the exe
 
 **Status:** FIXED
-> RCA INVERTED the premise: `wolf_color` is ABSENT from the WebGL payload and PRESENT in the Windows
+> Owner ruling 2026-09-02, verbatim: *"flat coat"* (and *"alduin is the wolf"*) — the coat map is now
+> suppressed for this species on every target via an authored `flatCoat` row in `pets.json`, so all
+> three builds paint the body with the species tint alone and agree; no art, no texture touched.
+> RCA (unchanged) INVERTED the premise: `wolf_color` is ABSENT from the WebGL payload and PRESENT in the Windows
 > and Android ones, so Pi looks right only because the (near-greyscale) coat map never shipped there —
 > 26 base maps diverge; instrumentation + a parity oracle landed, the colour itself is an owner ruling.
+> ⚠ The other **25** diverging maps remain OPEN and untouched: the owner has ruled on the wolf alone.
 **Silo / Lane:** Content Delivery + Art pipeline (Addressables / platform texture overrides)
 **Type:** EXISTING (built, renders correctly on ONE target)
 **Minted:** 2026-09-02 (CLI) from a live owner observation across three builds.

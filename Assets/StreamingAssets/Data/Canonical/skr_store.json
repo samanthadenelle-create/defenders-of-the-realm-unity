@@ -94,7 +94,7 @@
     {
       "id": "skr_pack_lanternlight",
       "name": "Lanternlight Coffer",
-      "tagline": "The value coffer — an outfit, a pet skin, and a little of everything, paid in token.",
+      "tagline": "The value coffer - an outfit, a pet skin, and a little of everything, paid in token.",
       "tier": 4,
       "category": "premium_pack",
       "costSkr": 180,
@@ -127,7 +127,7 @@
         ]
       },
       "iconId": "ItemIcons/skr/pack_lanternlight",
-      "earnableHint": "This is the SKR-priced twin of the Keeper's Satchel pack (formerly 'Lanternlight') — buyable with real money in the Realm Store too.",
+      "earnableHint": "This is the SKR-priced twin of the Keeper's Satchel pack (formerly 'Lanternlight') - buyable with real money in the Realm Store too.",
       "repeatable": false
     },
     {

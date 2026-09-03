@@ -6,7 +6,7 @@
       "level": 0,
       "name": "Wooden Fence",
       "emoji": "🪵",
-      "effect": "A simple palisade — no protection yet.",
+      "effect": "A simple palisade - no protection yet.",
       "heartDamageMultiplier": 1.0,
       "targetHeight": 3.0,
       "meshStraight": "kaykit/medieval/walls/fence_wood_straight.gltf",

@@ -50,7 +50,7 @@
         { "id": "aether_catalyst", "count": 1 }
       ],
       "requiresQuestId": "forgemasters_act4",
-      "saga": "Borin, Halvard, Pell, and Wren — one workshop again — reforge the Knight's greatblade."
+      "saga": "Borin, Halvard, Pell, and Wren - one workshop again - reforge the Knight's greatblade."
     },
     {
       "id": "aegis_longbow_legendary",
@@ -84,7 +84,7 @@
         { "id": "aether_catalyst", "count": 1 }
       ],
       "requiresQuestId": "forgemasters_act4",
-      "saga": "Wren's quench bonded the crystal head to Pell's Heartwood — the Mage's Aetherstaff reborn."
+      "saga": "Wren's quench bonded the crystal head to Pell's Heartwood - the Mage's Aetherstaff reborn."
     },
     {
       "id": "aegis_censer_legendary",
@@ -101,7 +101,7 @@
         { "id": "aether_catalyst", "count": 1 }
       ],
       "requiresQuestId": "forgemasters_act4",
-      "saga": "Halvard's Oathweld bound to Pell's Heartwood — the Cleric's Hallowed Censer."
+      "saga": "Halvard's Oathweld bound to Pell's Heartwood - the Cleric's Hallowed Censer."
     },
     {
       "id": "aegis_plate_legendary",
@@ -118,7 +118,7 @@
         { "id": "aether_catalyst", "count": 1 }
       ],
       "requiresQuestId": "forgemasters_act4",
-      "saga": "The Oathweld set — worn with a full Aegis weapon, a portion of damage taken returns as a ward on the Heart."
+      "saga": "The Oathweld set - worn with a full Aegis weapon, a portion of damage taken returns as a ward on the Heart."
     }
   ]
 }

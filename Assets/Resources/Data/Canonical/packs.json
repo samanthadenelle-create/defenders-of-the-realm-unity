@@ -31,8 +31,8 @@
       "tier": 1,
       "storeSection": "featured",
       "name": "Hearth Spark",
-      "tagline": "A tiny welcome — the Heart kindles a spark for a new tender.",
-      "theme": "Tiny welcome — beginner cosmetic + small economy bump.",
+      "tagline": "A tiny welcome - the Heart kindles a spark for a new tender.",
+      "theme": "Tiny welcome - beginner cosmetic + small economy bump.",
       "pricing": {
         "usd": 4.99,
         "usdc": 4.99,
@@ -59,8 +59,8 @@
       "tier": 2,
       "storeSection": "essentials",
       "name": "Keeper's Satchel",
-      "tagline": "Light carried forward — the value tier most tenders choose.",
-      "theme": "The \"value\" tier — what most players who buy something will buy.",
+      "tagline": "Light carried forward - the value tier most tenders choose.",
+      "theme": "The \"value\" tier - what most players who buy something will buy.",
       "pricing": {
         "usd": 4.99,
         "usdc": 4.99,
@@ -89,7 +89,7 @@
       "storeVisible": true,
       "name": "Folk's Thanks",
       "tagline": "The Folk send a small thanks for tending the Heart.",
-      "theme": "The supporter-edition slot — themed cosmetic set + named seasonal recognition.",
+      "theme": "The supporter-edition slot - themed cosmetic set + named seasonal recognition.",
       "pricing": {
         "usd": 9.99,
         "usdc": 9.99,
@@ -124,7 +124,7 @@
       "tier": 4,
       "storeVisible": true,
       "name": "Resource Pack I",
-      "tagline": "A patron's gift to Elarion — a meaningful headstart for the Heart.",
+      "tagline": "A patron's gift to Elarion - a meaningful headstart for the Heart.",
       "theme": "Heavyweight cosmetic suite + meaningful economy headstart.",
       "pricing": {
         "usd": 19.99,
@@ -159,8 +159,8 @@
       "tier": 5,
       "storeVisible": true,
       "name": "Resource Pack II",
-      "tagline": "A thank-you to early believers — a vow kept, not a flex.",
-      "theme": "One-time only, available v1 launch only — special founder cosmetic + permanent in-village banner.",
+      "tagline": "A thank-you to early believers - a vow kept, not a flex.",
+      "theme": "One-time only, available v1 launch only - special founder cosmetic + permanent in-village banner.",
       "founderOnly": true,
       "pricing": {
         "usd": 49.99,
@@ -194,7 +194,7 @@
       "tier": 6,
       "storeSection": "style",
       "name": "Frostfall Bundle",
-      "tagline": "Winter comes to Elarion — armour the Heart in pale frost and rime.",
+      "tagline": "Winter comes to Elarion - armour the Heart in pale frost and rime.",
       "theme": "Seasonal cosmetic-forward bundle (winter): Frostfall Knight regalia + Glacierborn companion + Frozen Hearth palette.",
       "founderOnly": false,
       "pricing": {
@@ -232,7 +232,7 @@
       "tier": 7,
       "storeSection": "style",
       "name": "Embergrove Bundle",
-      "tagline": "Autumn embers drift through the grove — warm the village in banked-forge gold.",
+      "tagline": "Autumn embers drift through the grove - warm the village in banked-forge gold.",
       "theme": "Seasonal cosmetic-forward bundle (autumn): Embergrove Mage vestments + Emberkin companion + Embergrove palette.",
       "founderOnly": false,
       "pricing": {
@@ -270,7 +270,7 @@
       "tier": 8,
       "storeSection": "style",
       "name": "Spring Awakening",
-      "tagline": "The first thaw greens the realm — raise the Bloomtide banners and welcome the season.",
+      "tagline": "The first thaw greens the realm - raise the Bloomtide banners and welcome the season.",
       "theme": "Seasonal cosmetic bundle (spring), value-priced: Bloomtide Ranger garb + Bloomtide banners + first-thaw palette.",
       "founderOnly": false,
       "pricing": {
@@ -311,7 +311,7 @@
       "storeSection": "featured",
       "storeBadge": "BEST START",
       "name": "Starter's Hand",
-      "tagline": "A steady hand for a new tender — everything you need to get the Heart growing.",
+      "tagline": "A steady hand for a new tender - everything you need to get the Heart growing.",
       "theme": "Onboarding value pack: economy-heavy headstart + early instant-build/repair + one welcome cosmetic. The 'best first buy'.",
       "founderOnly": false,
       "pricing": {
@@ -345,7 +345,7 @@
       "tier": 10,
       "storeSection": "featured",
       "name": "Echo Patron Pack",
-      "tagline": "Patron of the echoes — set the harvest loop humming and let the workforce roll.",
+      "tagline": "Patron of the echoes - set the harvest loop humming and let the workforce roll.",
       "theme": "Harvest-loop economy headstart: heavy resources + harvest-auto-collect tokens + workshop palette. Built around the echo workforce.",
       "founderOnly": false,
       "pricing": {
@@ -391,7 +391,7 @@
       "tier": 11,
       "storeSection": "style",
       "name": "Hero Wardrobe Pack",
-      "tagline": "A full wardrobe for the Knight — four ways to wear the watch over Elarion.",
+      "tagline": "A full wardrobe for the Knight - four ways to wear the watch over Elarion.",
       "theme": "Cosmetic-forward Knight wardrobe set (ties into Wardrobe/Dressable): four swappable outfit pieces, light economy.",
       "founderOnly": false,
       "pricing": {
@@ -429,7 +429,7 @@
       "tier": 12,
       "storeSection": "style",
       "name": "Realm Defender Bundle",
-      "tagline": "Bear the colours of the realm — flair for blade and shield, no edge but the eye's.",
+      "tagline": "Bear the colours of the realm - flair for blade and shield, no edge but the eye's.",
       "theme": "Visual weapon/shield flair (cosmetic only, zero combat power per the covenant) + a defender's banner.",
       "founderOnly": false,
       "pricing": {
@@ -467,7 +467,7 @@
       "tier": 13,
       "storeVisible": false,
       "name": "Builder's Cache",
-      "tagline": "For the tender who builds without pause — skip the queue, raise the realm.",
+      "tagline": "For the tender who builds without pause - skip the queue, raise the realm.",
       "theme": "Convenience-forward (needs the token tray): large instant-build/repair stacks + xp-weekends + a master-builder palette.",
       "founderOnly": false,
       "pricing": {

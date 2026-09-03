@@ -130,6 +130,14 @@ namespace DeNelle.Core
         // flat stone instead of bright untextured white — the "white ballista" symptom.
         [SerializeField] private Color _missTint = new Color(0.60f, 0.58f, 0.54f, 1f);
         [SerializeField] private bool _hasMissTint;
+        // FLAT COAT (owner ruling WO-1326, 2026-09-02: "flat coat"). Opt-in, off by default.
+        // When set, EVERY slot this fixer rebuilds resolves its base map to NOTHING — source
+        // _MainTex/_BaseMap, the fallback texture and the forced texture are all discarded — so
+        // the registered tint alone paints the body. This is the ONE owner of "this body is
+        // deliberately untextured"; call sites must not re-express it by nulling their own
+        // texture argument, or the choice scatters across the callers again.
+        // Non-destructive elsewhere: no caller that omits SuppressBaseMap() changes by one byte.
+        [SerializeField] private bool _suppressBaseMap;
         [SerializeField] private float _smoothness = 0.15f;
         [SerializeField] private float _metallic = 0f;
         [SerializeField] private bool _forceRebuild;
@@ -173,6 +181,22 @@ namespace DeNelle.Core
         /// valid model dependency could be rebuilt as a flat white/tint-only material).
         /// </summary>
         public void SetForcedSourceTexture(Texture texture) => _forcedSourceTexture = texture;
+
+        /// <summary>
+        /// WO-1326 (owner ruling 2026-09-02, verbatim: <c>"flat coat"</c>): rebuild every slot on
+        /// this model with NO base map at all, so the registered tint is the whole albedo and the
+        /// body reads as one flat, evenly-shaded surface with no painted markings.
+        ///
+        /// WHY THIS EXISTS AS A SEAM RATHER THAN AS A DELETED ASSET: the measured defect was that
+        /// the SAME tree produced two different-looking wolves because the authored coat map
+        /// reached two payloads and not the third (WO-1326 §2). The look was being decided by an
+        /// accident of packaging. Suppressing the map HERE makes the flat look the deliberate,
+        /// identical outcome on every build target, without touching, deleting or re-authoring one
+        /// texture — the normal map is still preserved, so the mesh keeps its shading relief.
+        ///
+        /// Opt-in and one-way: only callers that ask for it are affected.
+        /// </summary>
+        public void SuppressBaseMap() => _suppressBaseMap = true;
 
         /// <summary>
         /// Forces a solid fallback colour on every material rebuilt by this
@@ -284,7 +308,7 @@ namespace DeNelle.Core
             }
 
             FlowTrace.Step("TripoMatFix",
-                $"{gameObject.name}: fallbackPath='{_fallbackTextureName}', loaded={fallbackTex != null}, forced={forcedTex != null}, tintActive={_hasFallbackTint}");
+                $"{gameObject.name}: fallbackPath='{_fallbackTextureName}', loaded={fallbackTex != null}, forced={forcedTex != null}, tintActive={_hasFallbackTint}, flatCoat={_suppressBaseMap}");
 
             int renderers = 0, slotsRebuilt = 0;
             foreach (var r in GetComponentsInChildren<Renderer>(true))
@@ -330,6 +354,11 @@ namespace DeNelle.Core
                     // WO-719: forced albedo WINS over source + fallback (the extracted arcane-tower
                     // source map renders white). Baked into this shared rebuild -> sticks in the build.
                     if (forcedTex != null) tex = forcedTex;
+                    // WO-1326 FLAT COAT: last word on the base map, after source/fallback/forced,
+                    // so no earlier resolution can sneak a map back in. tex == null here means the
+                    // tint below IS the albedo — the identical result the WebGL payload produced
+                    // by accident, now produced on purpose on all three targets.
+                    if (_suppressBaseMap) tex = null;
                     // Owner 2026-05-20 ("still grey"): the fallback tint was
                     // only applied when tex == null, but Tripo's source
                     // material often has a _MainTex reference pointing at a
@@ -345,7 +374,11 @@ namespace DeNelle.Core
                     // (gitignored .fbm / untextured embedded material). Degrade the would-be white to the
                     // registered neutral stone MISS-tint. Textured slots (tex != null) never reach here,
                     // so they are byte-unchanged; an explicit _fallbackTint still wins when both are set.
-                    if (tex == null && _hasMissTint) col = _missTint;
+                    // ⚠ `!_suppressBaseMap`: the miss-tint rescues an ACCIDENTAL texture miss. A
+                    // flat coat is a DELIBERATE one, so its registered tint must not be replaced
+                    // by the neutral stone colour — that would silently repaint the very look the
+                    // owner chose. Nothing ships both today; the guard states the precedence anyway.
+                    if (tex == null && _hasMissTint && !_suppressBaseMap) col = _missTint;
 
                     // Preserve the normal map always (non-destructive).
                     Texture nrm = (src != null && src.HasProperty("_BumpMap")) ? src.GetTexture("_BumpMap") : null;

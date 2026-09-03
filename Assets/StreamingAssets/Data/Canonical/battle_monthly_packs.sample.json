@@ -13,8 +13,8 @@
       "sku": "battle-crown-emberforged",
       "tier": 2,
       "name": "Emberforged Crown",
-      "tagline": "Wear your victories in living ember — the crown the arena remembers.",
-      "theme": "Battle cosmetic — victory-crown skin (swaps crown_tier1/2/3 + perfect art). Presentation only.",
+      "tagline": "Wear your victories in living ember - the crown the arena remembers.",
+      "theme": "Battle cosmetic - victory-crown skin (swaps crown_tier1/2/3 + perfect art). Presentation only.",
       "pricing": {
         "usd": 4.99,
         "usdc": 4.99,
@@ -39,8 +39,8 @@
       "sku": "battle-arena-ashen-coliseum",
       "tier": 2,
       "name": "Ashen Coliseum",
-      "tagline": "Fight where the old fires burned — an arena dressed in ash and gold.",
-      "theme": "Battle cosmetic — arena ground/ambiance reskin for the BattleArena. No gameplay change.",
+      "tagline": "Fight where the old fires burned - an arena dressed in ash and gold.",
+      "theme": "Battle cosmetic - arena ground/ambiance reskin for the BattleArena. No gameplay change.",
       "pricing": {
         "usd": 4.99,
         "usdc": 4.99,
@@ -65,8 +65,8 @@
       "sku": "battle-vfx-emberglow",
       "tier": 1,
       "name": "Emberglow Spellwork",
-      "tagline": "Recolor your craft — the same skills, lit in ember.",
-      "theme": "Battle cosmetic — spell-VFX colorway for the Knight's skills. Shader/particle TINT only; no damage/scale change.",
+      "tagline": "Recolor your craft - the same skills, lit in ember.",
+      "theme": "Battle cosmetic - spell-VFX colorway for the Knight's skills. Shader/particle TINT only; no damage/scale change.",
       "pricing": {
         "usd": 1.99,
         "usdc": 1.99,
@@ -91,8 +91,8 @@
       "sku": "battle-armor-emberward",
       "tier": 3,
       "name": "Emberward Regalia",
-      "tagline": "A champion's dress — gleaming, static, earned-looking. No edge but the eye's.",
-      "theme": "Battle cosmetic — static weapon + armor cosmetic reskin (single-Knight pivot). Zero stat delta.",
+      "tagline": "A champion's dress - gleaming, static, earned-looking. No edge but the eye's.",
+      "theme": "Battle cosmetic - static weapon + armor cosmetic reskin (single-Knight pivot). Zero stat delta.",
       "pricing": {
         "usd": 9.99,
         "usdc": 9.99,
@@ -118,8 +118,8 @@
       "sku": "season-01-emberwake-pass",
       "tier": 3,
       "name": "Emberwake Season Pass",
-      "tagline": "Unlock the premium path — every battle you fight now pays in ember.",
-      "theme": "Battle Pass premium-lane UNLOCK SKU. Buying it flips the premium lane + retro-grants earned premium tiers. Does NOT buy tiers/power — you still climb by playing.",
+      "tagline": "Unlock the premium path - every battle you fight now pays in ember.",
+      "theme": "Battle Pass premium-lane UNLOCK SKU. Buying it flips the premium lane + retro-grants earned premium tiers. Does NOT buy tiers/power - you still climb by playing.",
       "pricing": {
         "usd": 9.99,
         "usdc": 9.99,
@@ -142,7 +142,7 @@
     {
       "seasonId": "season-01-emberwake",
       "name": "Emberwake",
-      "tagline": "The first season — the Heart's embers stir, and the arena answers.",
+      "tagline": "The first season - the Heart's embers stir, and the arena answers.",
       "startUtc": "2026-07-01T00:00:00Z",
       "endUtc": "2026-08-05T00:00:00Z",
       "lengthDays": 35,
@@ -300,7 +300,7 @@
       "sku": "monthly-wayfarer",
       "tier": 1,
       "name": "Wayfarer's Ledger",
-      "tagline": "A month of small kindnesses — a little something each day you return.",
+      "tagline": "A month of small kindnesses - a little something each day you return.",
       "pricing": {
         "usd": 4.99,
         "usdc": 4.99,
@@ -460,7 +460,7 @@
       "sku": "monthly-keeper",
       "tier": 2,
       "name": "Keeper's Ledger",
-      "tagline": "The patron's month — richer daily gifts, a little ember in every return.",
+      "tagline": "The patron's month - richer daily gifts, a little ember in every return.",
       "pricing": {
         "usd": 9.99,
         "usdc": 9.99,

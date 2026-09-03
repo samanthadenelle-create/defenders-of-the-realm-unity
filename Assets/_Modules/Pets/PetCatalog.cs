@@ -75,6 +75,20 @@ namespace DeNelle.Pets
         [JsonProperty("attackRange")] public float AttackRange = 2.7f;
         /// <summary>Seconds between attacks — petData.ts PET_ATTACK_CD.</summary>
         [JsonProperty("attackCooldown")] public float AttackCooldown = 0.75f;
+        /// <summary>
+        /// WO-1326 (owner ruling 2026-09-02, verbatim: <c>"flat coat"</c>). When true this
+        /// species' body is rebuilt with NO base-colour map: <see cref="TintColor"/> alone paints
+        /// it, so it reads as one flat, evenly-shaded surface with no painted coat markings.
+        ///
+        /// ⚠ DEFAULT false = TODAY'S BEHAVIOUR FOR EVERY SPECIES. A row that omits the key, an
+        /// older pets.json, or a parse that fails resolves to the authored-map look exactly as it
+        /// shipped — the choice is additive and opt-in, never a migration.
+        ///
+        /// It is authored HERE, on the species row, rather than as a runtime tunable, because it
+        /// is a per-species content fact about one body's look — not a value the owner bisects at
+        /// the device. See the WO-1326 RESULT §9 for that reasoning written out.
+        /// </summary>
+        [JsonProperty("flatCoat")] public bool FlatCoat;
         /// <summary>Index of this pet's home deploy slot ringing the Heart (0,1,2).</summary>
         [JsonProperty("slotIndex")] public int SlotIndex;
         /// <summary>The five Bond-rank rows (ranks 0–4).</summary>

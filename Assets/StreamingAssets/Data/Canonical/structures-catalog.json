@@ -160,7 +160,7 @@
    "id": "tower_siege_tower",
    "displayName": "Sky Ballista (Anti-Air)",
    "_heightNote": "SIEGE-ENGINE group, 0.75 (3.0 m), kept in the 2026-08-05 cadence pass. This one is also the only mustSitOn WallWalk row: it sits ON TOP of a wall, so holding it under the house line is what keeps the stacked wall-plus-engine silhouette from out-topping the 4.8 m towers.",
-   "description": "Wall-mounted spear thrower — fires spears at flying creatures; ignores ground. The strategic counter to the sky dragon.",
+   "description": "Wall-mounted spear thrower - fires spears at flying creatures; ignores ground. The strategic counter to the sky dragon.",
    "type": "Tower",
    "kind": "Cell",
    "visualPrefabPath": "Structures/Ballista",

@@ -117,7 +117,7 @@
       "category": "hero",
       "appliesTo": "knight",
       "displayName": "Frostfall Knight Regalia",
-      "description": "Plate rimed with the breath of the high passes — winter's own watch.",
+      "description": "Plate rimed with the breath of the high passes - winter's own watch.",
       "unlockMethod": "achievement",
       "previewColor": "#7fb4d4"
     },
@@ -225,7 +225,7 @@
       "category": "village",
       "appliesTo": "emblem",
       "displayName": "Tender's First Token",
-      "description": "A small token from the Heart to every new tender — the first mark of the watch.",
+      "description": "A small token from the Heart to every new tender - the first mark of the watch.",
       "unlockMethod": "achievement",
       "previewColor": "#d9c27a"
     },
@@ -243,7 +243,7 @@
       "category": "village",
       "appliesTo": "emblem",
       "displayName": "Echo Patron Sigil",
-      "description": "The sigil of a patron of the harvest — worn by those who keep the workforce humming.",
+      "description": "The sigil of a patron of the harvest - worn by those who keep the workforce humming.",
       "unlockMethod": "achievement",
       "previewColor": "#b88a2e"
     },
@@ -288,7 +288,7 @@
       "category": "hero",
       "appliesTo": "weapon",
       "displayName": "Heartsteel Blade Flair",
-      "description": "A purely cosmetic blade finish — Heartwood-green steel with a faint glow. No edge but the eye's.",
+      "description": "A purely cosmetic blade finish - Heartwood-green steel with a faint glow. No edge but the eye's.",
       "unlockMethod": "achievement",
       "previewColor": "#6fae8e"
     },
@@ -297,7 +297,7 @@
       "category": "hero",
       "appliesTo": "shield",
       "displayName": "Aegis of Elarion Shield Flair",
-      "description": "A cosmetic shield facing bearing the world-tree crest. Cosmetic only — zero combat power, per the covenant.",
+      "description": "A cosmetic shield facing bearing the world-tree crest. Cosmetic only - zero combat power, per the covenant.",
       "unlockMethod": "achievement",
       "previewColor": "#c2a24a"
     },
@@ -333,7 +333,7 @@
       "category": "village",
       "appliesTo": "emblem",
       "displayName": "Builder's Cache Sigil",
-      "description": "The sigil of a master builder of Elarion — flown by those who raised the realm.",
+      "description": "The sigil of a master builder of Elarion - flown by those who raised the realm.",
       "unlockMethod": "achievement",
       "previewColor": "#977f5f"
     }

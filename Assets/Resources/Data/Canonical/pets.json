@@ -39,9 +39,9 @@
       "slotIndex": 1,
       "bondRanks": [
         { "rank": 0, "stage": "Wandering", "maxHp": 80, "attackDamage": 9, "perk": "", "perkDescription": "" },
-        { "rank": 1, "stage": "Kindled", "maxHp": 105, "attackDamage": 14, "perk": "Emberbite", "perkDescription": "Attacks set enemies alight — a burn that lingers." },
+        { "rank": 1, "stage": "Kindled", "maxHp": 105, "attackDamage": 14, "perk": "Emberbite", "perkDescription": "Attacks set enemies alight - a burn that lingers." },
         { "rank": 2, "stage": "Attuned", "maxHp": 130, "attackDamage": 19, "perk": "Roaring Hearth", "perkDescription": "Attacks 25% faster." },
-        { "rank": 3, "stage": "Warden", "maxHp": 155, "attackDamage": 24, "perk": "Cinder Trail", "perkDescription": "Burns the ground it fights on — nearby enemies smoulder." },
+        { "rank": 3, "stage": "Warden", "maxHp": 155, "attackDamage": 24, "perk": "Cinder Trail", "perkDescription": "Burns the ground it fights on - nearby enemies smoulder." },
         { "rank": 4, "stage": "Heartsworn", "maxHp": 180, "attackDamage": 29, "perk": "Pyre Bond", "perkDescription": "On a kill, the pet bursts into flame, hitting nearby foes." }
       ]
     },
@@ -52,6 +52,8 @@
       "element": "ice",
       "archetype": "Frost-Warden",
       "tint": "#cfe9ff",
+      "_flatCoatNote": "WO-1326, owner ruling 2026-09-02 verbatim: 'flat coat'. The authored wolf_color coat map reached the Windows and Android payloads and NOT the WebGL one, so one tree rendered two different wolves. flatCoat suppresses the base map on every target: the tint above is the whole albedo, the normal map still gives the fur its relief, and all three builds agree. Omitting the key = the authored-map look, unchanged, for every other species.",
+      "flatCoat": true,
       "glowColor": "#7dd3fc",
       "particleColor": "#e6f5ff",
       "huntSpeed": 4.4,
@@ -61,7 +63,7 @@
       "bondRanks": [
         { "rank": 0, "stage": "Wandering", "maxHp": 100, "attackDamage": 9, "perk": "", "perkDescription": "" },
         { "rank": 1, "stage": "Kindled", "maxHp": 130, "attackDamage": 14, "perk": "Frostbite", "perkDescription": "Attacks briefly slow the enemy." },
-        { "rank": 2, "stage": "Attuned", "maxHp": 160, "attackDamage": 19, "perk": "Frostguard Hide", "perkDescription": "Sturdier hide — its cold presence slows enemies near it." },
+        { "rank": 2, "stage": "Attuned", "maxHp": 160, "attackDamage": 19, "perk": "Frostguard Hide", "perkDescription": "Sturdier hide - its cold presence slows enemies near it." },
         { "rank": 3, "stage": "Warden", "maxHp": 190, "attackDamage": 24, "perk": "Biting Cold", "perkDescription": "Enemies near the Heart are chilled while this pet defends." },
         { "rank": 4, "stage": "Heartsworn", "maxHp": 220, "attackDamage": 29, "perk": "Glacial Bond", "perkDescription": "Every few seconds, freezes the nearest enemy solid." }
       ]

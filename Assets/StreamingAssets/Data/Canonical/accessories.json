@@ -14,7 +14,7 @@
       "req": { "level": 1 },
       "buyIron": 60,
       "iconPath": "ItemIcons/ring_iron",
-      "flavor": "Plain iron, no gem, no guild mark — what a smith makes when someone needs a ring and can't say why."
+      "flavor": "Plain iron, no gem, no guild mark - what a smith makes when someone needs a ring and can't say why."
     },
     {
       "id": "ring_steadfast",
@@ -29,7 +29,7 @@
       "buyIron": 120,
       "buyCrystals": 5,
       "iconPath": "ItemIcons/ring_steadfast",
-      "flavor": "A silver band set with a chip of Oathweld-treated iron — steady as a promise made in front of witnesses."
+      "flavor": "A silver band set with a chip of Oathweld-treated iron - steady as a promise made in front of witnesses."
     },
     {
       "id": "ring_embercoil",
@@ -62,7 +62,7 @@
       "buyCrystals": 80,
       "makersMark": "Last-Pressing",
       "iconPath": "ItemIcons/ring_heartward",
-      "flavor": "A Last-Pressing crystal seal cut flush to silver — the stone is said to dim slightly every time it stops a blow."
+      "flavor": "A Last-Pressing crystal seal cut flush to silver - the stone is said to dim slightly every time it stops a blow."
     },
     {
       "id": "ring_firstlight",
@@ -79,7 +79,7 @@
       "buyCrystals": 250,
       "makersMark": "Last-Pressing",
       "iconPath": "ItemIcons/ring_firstlight",
-      "saga": "One of the First-Light wonders — older than Elarion's name. The stone at its centre was pressed before the Heart was planted; it does not reflect light, it remembers it."
+      "saga": "One of the First-Light wonders - older than Elarion's name. The stone at its centre was pressed before the Heart was planted; it does not reflect light, it remembers it."
     },
     {
       "id": "amulet_travelers",
@@ -94,7 +94,7 @@
       "buyWood": 20,
       "buyFood": 40,
       "iconPath": "ItemIcons/amulet_travelers",
-      "flavor": "A road-luck charm carved from the first tree past Elarion's outer gate — carried out and never carried back."
+      "flavor": "A road-luck charm carved from the first tree past Elarion's outer gate - carried out and never carried back."
     },
     {
       "id": "amulet_oathward",
@@ -111,7 +111,7 @@
       "buyCrystals": 8,
       "makersMark": "Oathweld",
       "iconPath": "ItemIcons/amulet_oathward",
-      "flavor": "An Oathweld medallion sealed at a sworn-binding — the ward holds because the smith believed in what it was sealing."
+      "flavor": "An Oathweld medallion sealed at a sworn-binding - the ward holds because the smith believed in what it was sealing."
     },
     {
       "id": "amulet_lastpressing",
@@ -127,7 +127,7 @@
       "buyCrystals": 40,
       "makersMark": "Last-Pressing",
       "iconPath": "ItemIcons/amulet_lastpressing",
-      "flavor": "A Last-Pressing teardrop crystal in silver filigree — the aether it carries was pressed when the Heart still sang openly."
+      "flavor": "A Last-Pressing teardrop crystal in silver filigree - the aether it carries was pressed when the Heart still sang openly."
     },
     {
       "id": "amulet_elarion",
@@ -144,7 +144,7 @@
       "buyCrystals": 100,
       "makersMark": "Oathweld",
       "iconPath": "ItemIcons/amulet_elarion",
-      "flavor": "City-mark work from the Bright Centuries — the rune on the reverse is the old glyph for the Heart, before anyone thought it needed protecting."
+      "flavor": "City-mark work from the Bright Centuries - the rune on the reverse is the old glyph for the Heart, before anyone thought it needed protecting."
     },
     {
       "id": "amulet_heartstone",

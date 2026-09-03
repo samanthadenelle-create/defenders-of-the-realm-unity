@@ -18,7 +18,7 @@
       "buyCrystals": 200,
       "setId": "aegis",
       "makersMark": "Oathweld",
-      "saga": "The reforged Aegis — Borin's steel, Halvard's Oathweld plating, Pell's Heartwood core, Wren's Last Pressing. Worn with a full Aegis weapon, the Oathweld returns a portion of damage taken as a ward on the Heart."
+      "saga": "The reforged Aegis - Borin's steel, Halvard's Oathweld plating, Pell's Heartwood core, Wren's Last Pressing. Worn with a full Aegis weapon, the Oathweld returns a portion of damage taken as a ward on the Heart."
     },
     {
       "id": "armor_chain",
@@ -35,7 +35,7 @@
       "buyFood": 50,
       "buyIron": 400,
       "buyCrystals": 10,
-      "flavor": "Each ring closed by an Oathweld hand. A ward that turned a killing blow — power you could carry.",
+      "flavor": "Each ring closed by an Oathweld hand. A ward that turned a killing blow - power you could carry.",
       "makersMark": "Oathweld"
     },
     {
@@ -69,7 +69,7 @@
       "buyIron": 70,
       "buyFood": 20,
       "iconPath": "ItemIcons/armor_knight_common",
-      "flavor": "Iron plates fitted for a soldier, not a knight — good enough to keep you standing through the first charge."
+      "flavor": "Iron plates fitted for a soldier, not a knight - good enough to keep you standing through the first charge."
     },
     {
       "id": "armor_knight_epic",
@@ -109,7 +109,7 @@
       "setId": "oathplate",
       "iconPath": "ItemIcons/armor_knight_legendary",
       "makersMark": "Oathweld",
-      "saga": "The plate of the first defenders — dark iron sealed with Oathweld runes that glow gold and orange. It remembers every oath sworn over it. The runes are not decoration; they are the oaths themselves, still binding."
+      "saga": "The plate of the first defenders - dark iron sealed with Oathweld runes that glow gold and orange. It remembers every oath sworn over it. The runes are not decoration; they are the oaths themselves, still binding."
     },
     {
       "id": "armor_knight_rare",
@@ -129,7 +129,7 @@
       "buyCrystals": 15,
       "iconPath": "ItemIcons/armor_knight_rare",
       "makersMark": "Oathweld",
-      "flavor": "Named for the knights who kept the night watch at the four gates — they wore this and were still standing at dawn."
+      "flavor": "Named for the knights who kept the night watch at the four gates - they wore this and were still standing at dawn."
     },
     {
       "id": "armor_knight_uncommon",
@@ -147,7 +147,7 @@
       "buyIron": 250,
       "buyFood": 50,
       "iconPath": "ItemIcons/armor_knight_uncommon",
-      "flavor": "Heavy rivets, layered shoulderguards — the kind of plate that says you expect to be hit more than once."
+      "flavor": "Heavy rivets, layered shoulderguards - the kind of plate that says you expect to be hit more than once."
     },
     {
       "id": "armor_leather",
@@ -202,7 +202,7 @@
       "buyCrystals": 80,
       "iconPath": "ItemIcons/armor_mage_epic",
       "makersMark": "Last-Pressing",
-      "flavor": "Dark as the space between stars, sewn with constellation patterns in silver-blue thread — what you wear when the sky is what you're drawing power from."
+      "flavor": "Dark as the space between stars, sewn with constellation patterns in silver-blue thread - what you wear when the sky is what you're drawing power from."
     },
     {
       "id": "armor_mage_legendary",
@@ -223,7 +223,7 @@
       "setId": "aethercloak",
       "iconPath": "ItemIcons/armor_mage_legendary",
       "makersMark": "Last-Pressing",
-      "saga": "The Keeper's robe from the Bright Centuries — deep void-black lined with living aether, constellation patterns that shift as the wearer moves. It was the master's. She wore it into the dark. It came back; she didn't."
+      "saga": "The Keeper's robe from the Bright Centuries - deep void-black lined with living aether, constellation patterns that shift as the wearer moves. It was the master's. She wore it into the dark. It came back; she didn't."
     },
     {
       "id": "armor_mage_rare",
@@ -243,7 +243,7 @@
       "buyCrystals": 30,
       "iconPath": "ItemIcons/armor_mage_rare",
       "makersMark": "Last-Pressing",
-      "flavor": "The sigils were pressed into the cloth — orange runes that run across every panel. The vest does not look like armor. It looks like a warning."
+      "flavor": "The sigils were pressed into the cloth - orange runes that run across every panel. The vest does not look like armor. It looks like a warning."
     },
     {
       "id": "armor_mage_uncommon",
@@ -262,7 +262,7 @@
       "buyFood": 40,
       "buyCrystals": 8,
       "iconPath": "ItemIcons/armor_mage_uncommon",
-      "flavor": "Woven with aether thread — purple-trimmed, rune-edged, the kind of thing a mage wears when they want to be taken seriously."
+      "flavor": "Woven with aether thread - purple-trimmed, rune-edged, the kind of thing a mage wears when they want to be taken seriously."
     },
     {
       "id": "armor_plate",
@@ -299,7 +299,7 @@
       "buyWood": 20,
       "buyIron": 15,
       "iconPath": "ItemIcons/armor_ranger_common",
-      "flavor": "The gear of those who range ahead and come back to report — light enough to run, tough enough to matter."
+      "flavor": "The gear of those who range ahead and come back to report - light enough to run, tough enough to matter."
     },
     {
       "id": "armor_ranger_epic",
@@ -319,7 +319,7 @@
       "buyCrystals": 55,
       "iconPath": "ItemIcons/armor_ranger_epic",
       "makersMark": "Heartwood",
-      "flavor": "A long coat of dark treated leather, silver swirls worked into the lining — built by a scout who survived every patrol she was sent on."
+      "flavor": "A long coat of dark treated leather, silver swirls worked into the lining - built by a scout who survived every patrol she was sent on."
     },
     {
       "id": "armor_ranger_legendary",
@@ -340,7 +340,7 @@
       "setId": "leafcloak",
       "iconPath": "ItemIcons/armor_ranger_legendary",
       "makersMark": "Heartwood",
-      "saga": "The first scout who came back from the outer paths wore this. It was grown for her by the Tree itself — the leaves are not attached, they are part of the armor. It has never been fully still."
+      "saga": "The first scout who came back from the outer paths wore this. It was grown for her by the Tree itself - the leaves are not attached, they are part of the armor. It has never been fully still."
     },
     {
       "id": "armor_ranger_rare",
@@ -360,7 +360,7 @@
       "buyCrystals": 12,
       "iconPath": "ItemIcons/armor_ranger_rare",
       "makersMark": "Heartwood",
-      "flavor": "Heartwood-grown leather with living leaf overlays — the forest remembers who wore it and which way they were running."
+      "flavor": "Heartwood-grown leather with living leaf overlays - the forest remembers who wore it and which way they were running."
     },
     {
       "id": "armor_ranger_uncommon",
@@ -379,7 +379,7 @@
       "buyWood": 60,
       "buyIron": 40,
       "iconPath": "ItemIcons/armor_ranger_uncommon",
-      "flavor": "Cured in dark oils to cut the gleam — what you wear when being seen is the real danger."
+      "flavor": "Cured in dark oils to cut the gleam - what you wear when being seen is the real danger."
     },
     {
       "id": "blink_armor_basic1",

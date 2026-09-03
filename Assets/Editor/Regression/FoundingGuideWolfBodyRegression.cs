@@ -73,6 +73,9 @@ namespace DeNelle.Editor.Regression
         private const string WolfFbx        = "Assets/Animals/Low Poly Animals/Simple Wolf/wolf.fbx";
         private const string RetiredFox     = "Assets/Art/Retired/Pets/ice-wolf-fox-legacy.fbx";
         private const string PetDeployerSrc = "Assets/_Modules/Pets/PetDeployer.cs";
+        // WO-1326 "flat coat": the authored data row + the single owner of what the flag does.
+        private const string PetsJson       = "Assets/Resources/Data/Canonical/pets.json";
+        private const string FixerSrc       = "Assets/_Modules/Core/TripoMaterialFixer.cs";
         private const string TutorialFlowSrc = "Assets/_Modules/Village/Tutorial/V2/TutorialFlow.cs";
         private const string AnchorsSrc      = "Assets/_Modules/Village/Tutorial/V2/TutorialWorldAnchors.cs";
         // WO-1108 Lane B: the SINGLE owner of the Echo's appear/vanish/reappear transitions.
@@ -519,19 +522,50 @@ namespace DeNelle.Editor.Regression
                 !presence.Contains("GameObject.FindGameObjectWithTag(\"Player\")"))
                 failures.Add("[device-spawn-look] safe escort staging lost its Player-distance or NavMesh validity check.");
 
-            if (!deployer.Contains("SetForcedSourceTexture(FindFirstAlbedo(visual))"))
-                failures.Add("[device-spawn-look] ice-wolf no longer pins its authored source albedo before the Android material rebuild; it can degrade to flat white again.");
+            // ⚠ REPOINTED 2026-09-02 BY THE WO-1326 OWNER RULING ("flat coat"). This used to pin
+            // the literal `SetForcedSourceTexture(FindFirstAlbedo(visual))`, i.e. "the wolf must
+            // bind its authored coat map or it degrades to flat white". The measurement inverted
+            // that: binding the map is what made the exe and the APK grey, and the owner chose the
+            // FLAT body as the wolf. So the invariant to pin is no longer "a map is bound" — it is
+            // "the choice is authored in DATA, the fixer is the one thing that acts on it, and the
+            // body can still never render pure white". A source-literal pin that survives its own
+            // ruling is worse than no pin, so it is rewritten rather than deleted.
+            if (!deployer.Contains("def.FlatCoat") || !deployer.Contains("petFixer.SuppressBaseMap()"))
+                failures.Add("[device-spawn-look] " + PetDeployerSrc + " no longer reads the authored " +
+                             "`flatCoat` species flag into TripoMaterialFixer.SuppressBaseMap(). The wolf's " +
+                             "look would go back to being decided by whether the coat map happened to reach " +
+                             "that build target's payload — the WO-1326 defect exactly.");
 
-            var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(BodyPrefab);
-            var renderer = prefab != null ? prefab.GetComponentInChildren<Renderer>(true) : null;
-            bool hasAlbedo = false;
-            if (renderer != null)
-                foreach (var mat in renderer.sharedMaterials)
-                    if (mat != null && ((mat.HasProperty("_BaseMap") && mat.GetTexture("_BaseMap") != null) ||
-                                        (mat.HasProperty("_MainTex") && mat.GetTexture("_MainTex") != null)))
-                        { hasAlbedo = true; break; }
-            if (!hasAlbedo)
-                failures.Add("[device-spawn-look] shipped ice-wolf prefab has no authored albedo for SetForcedSourceTexture to preserve.");
+            // The instrumentation that made WO-1326 visible at all. CLAUDE.md §12: it is permanent.
+            if (!deployer.Contains("FindFirstAlbedo(visual)") || !deployer.Contains("FlowTrace.Fail"))
+                failures.Add("[device-spawn-look] " + PetDeployerSrc + " lost the null-albedo FlowTrace.Fail. " +
+                             "A body whose authored map never reached this platform's payload would go back to " +
+                             "failing SILENTLY — no error, no magenta, just a different-looking body, with the " +
+                             "owner's eyes as the only detector (CLAUDE.md §12/§14).");
+
+            // A flat body is painted by its species tint ALONE, so losing the tint would not read as
+            // "no coat" — it would read as the SOLID WHITE wolf this case was opened for in the
+            // first place (2026-08-29). Under the ruling this line is the whole white-guard.
+            if (!deployer.Contains("SetFallbackTint(def.TintColor)"))
+                failures.Add("[device-spawn-look] ice-wolf no longer registers its species tint; with the base " +
+                             "map suppressed the rebuilt material would have no albedo at all and render solid white.");
+
+            // The data half of the ruling, asserted at the authored row rather than in code.
+            string petsJson = File.ReadAllText(PetsJson);
+            int wolfRow = petsJson.IndexOf("\"species\": \"" + Species + "\"", StringComparison.Ordinal);
+            int flatKey = petsJson.IndexOf("\"flatCoat\": true", StringComparison.Ordinal);
+            if (wolfRow < 0 || flatKey < 0 || flatKey < wolfRow)
+                failures.Add("[device-spawn-look] " + PetsJson + " no longer authors `\"flatCoat\": true` on the " +
+                             "'" + Species + "' row. The owner ruled 'flat coat' (WO-1326, 2026-09-02); with the " +
+                             "key gone the body silently reverts to the authored coat map and the three build " +
+                             "targets disagree again.");
+
+            // And the single owner of what the flag DOES.
+            string fixer = StripComments(File.ReadAllText(FixerSrc));
+            if (!fixer.Contains("SuppressBaseMap") || !fixer.Contains("if (_suppressBaseMap) tex = null;"))
+                failures.Add("[device-spawn-look] " + FixerSrc + " no longer suppresses the base map after " +
+                             "source/fallback/forced resolution. Flat coat must be the LAST word on the map, or " +
+                             "an earlier resolution puts the coat back on one target and not another.");
         }
 
         /// <summary>Strip // line and /* */ block comments so a lint never matches doc text.</summary>

@@ -22,7 +22,7 @@
     "id": "avalon",
     "title": "Elarion",
     "epithet": "the last green sanctuary",
-    "description": "The home base — the village the Keeper tends and the Heart, Elarion, at its centre. Not a region: it has no gate and is never cleared. All persistent buildings, the economy, towers, walls and pets live here, and the player always returns. The Realm Map is the world Elarion sits inside, reached from the village Wayshrine.",
+    "description": "The home base - the village the Keeper tends and the Heart, Elarion, at its centre. Not a region: it has no gate and is never cleared. All persistent buildings, the economy, towers, walls and pets live here, and the player always returns. The Realm Map is the world Elarion sits inside, reached from the village Wayshrine.",
     "mapPoint": { "x": 50, "y": 50 },
     "isRegion": false
   },
@@ -30,7 +30,7 @@
     {
       "id": "thornwood",
       "title": "The Thornwood",
-      "description": "Region 1 — the first region beyond Elarion. A deep, choked forest whose canopy keeps out the sun; its enemy mix skews nature and poison. A low bestWave gate means a player who has held the village for a few waves discovers the road out early. The Thornwood's main objective is a five-wave forest defense of a young Heart-sapling.",
+      "description": "Region 1 - the first region beyond Elarion. A deep, choked forest whose canopy keeps out the sun; its enemy mix skews nature and poison. A low bestWave gate means a player who has held the village for a few waves discovers the road out early. The Thornwood's main objective is a five-wave forest defense of a young Heart-sapling.",
       "biome": "forest",
       "propSet": "forest-thicket",
       "waveCount": 5,
@@ -45,7 +45,7 @@
     {
       "id": "mirewood",
       "title": "The Mirewood",
-      "description": "Region 2 — a drowned, venomous swamp downriver of the Thornwood. Stagnant water and creeping rot; the mire itself is venomous and its denizens wear that venom as a weapon. Discovered only after the Thornwood is cleared. A six-wave defense.",
+      "description": "Region 2 - a drowned, venomous swamp downriver of the Thornwood. Stagnant water and creeping rot; the mire itself is venomous and its denizens wear that venom as a weapon. Discovered only after the Thornwood is cleared. A six-wave defense.",
       "biome": "swamp",
       "propSet": "swamp-mire",
       "waveCount": 6,
@@ -60,7 +60,7 @@
     {
       "id": "hollowfrost",
       "title": "Hollowfrost Vale",
-      "description": "Region 3 — a glacier-locked hollow past the Mirewood, where the cold never breaks. Its creatures move slow and certain, like the slow grind of the ice itself. Discovered only after the Mirewood is cleared. A seven-wave defense.",
+      "description": "Region 3 - a glacier-locked hollow past the Mirewood, where the cold never breaks. Its creatures move slow and certain, like the slow grind of the ice itself. Discovered only after the Mirewood is cleared. A seven-wave defense.",
       "biome": "ice",
       "propSet": "ice-hollow",
       "waveCount": 7,
@@ -75,7 +75,7 @@
     {
       "id": "emberwastes",
       "title": "The Emberwastes",
-      "description": "Region 4 — cracked, magma-veined badlands beyond the frost. Black earth bleeding magma; the things here treat heat the way other creatures treat air. The hard region. Discovered only after Hollowfrost Vale is cleared. An eight-wave defense.",
+      "description": "Region 4 - cracked, magma-veined badlands beyond the frost. Black earth bleeding magma; the things here treat heat the way other creatures treat air. The hard region. Discovered only after Hollowfrost Vale is cleared. An eight-wave defense.",
       "biome": "fire",
       "propSet": "fire-waste",
       "waveCount": 8,
@@ -90,7 +90,7 @@
     {
       "id": "starfall-reach",
       "title": "The Starfall Reach",
-      "description": "Region 5 — the far frontier, where the sky tore open and the stars fell through. Reality is thin here, and what crosses over wears starlight like armour. The last and hardest region. Discovered only after the Emberwastes is cleared. A ten-wave defense.",
+      "description": "Region 5 - the far frontier, where the sky tore open and the stars fell through. Reality is thin here, and what crosses over wears starlight like armour. The last and hardest region. Discovered only after the Emberwastes is cleared. A ten-wave defense.",
       "biome": "cosmic",
       "propSet": "cosmic-rift",
       "waveCount": 10,

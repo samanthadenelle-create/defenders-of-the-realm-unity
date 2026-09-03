@@ -213,9 +213,9 @@
       "roomId": "entrance-room",
       "position": { "x": -12, "y": 0.8, "z": 0 },
       "assetKey": "table_small",
-      "title": "Alduin's journal — entry 1",
+      "title": "Alduin's journal - entry 1",
       "body": [
-        "The folk came again today. The well at Carrow's edge is going bad. Crystals work on the early signs but the late ones — I don't know yet. I came here to learn the green ways. I am still learning."
+        "The folk came again today. The well at Carrow's edge is going bad. Crystals work on the early signs but the late ones - I don't know yet. I came here to learn the green ways. I am still learning."
       ]
     },
     {
@@ -223,7 +223,7 @@
       "roomId": "main-room",
       "position": { "x": 6, "y": 0.85, "z": 0 },
       "assetKey": "table_long_decorated_A",
-      "title": "Alduin's journal — entry 2",
+      "title": "Alduin's journal - entry 2",
       "body": [
         "The Folk who came from the village this week: Wren's boy, the miller's wife, the two children of Carrow. I told them what I had. The well is poisoned, I know that now. It is not anything I can name. It is older than the names I have."
       ]
@@ -233,10 +233,10 @@
       "roomId": "loft-bedroom",
       "position": { "x": 3, "y": 6.8, "z": -3 },
       "assetKey": "table_small_decorated_B",
-      "title": "Alduin's journal — entry 3",
+      "title": "Alduin's journal - entry 3",
       "body": [
         "The dreams are back. The Wound, calling. I am not the same in the mornings. Mira would have known what to say. I miss her hands.",
-        "If anyone reads this — I am going to the Wound. I am going to try one more thing. The Heart will hold while I am gone. The Heart always holds.",
+        "If anyone reads this - I am going to the Wound. I am going to try one more thing. The Heart will hold while I am gone. The Heart always holds.",
         "Forgive me."
       ]
     },
@@ -245,9 +245,9 @@
       "roomId": "workshop",
       "position": { "x": 36, "y": 0.8, "z": 4 },
       "assetKey": "table_small",
-      "title": "Alduin's journal — entry 4 (the last one)",
+      "title": "Alduin's journal - entry 4 (the last one)",
       "body": [
-        "I am going. The Wound is louder than the Heart now. I have left a thing in the cellar for whoever is next — a seed. Plant it at the Folk's table, if there is anyone to plant it. It will grow into something old and quiet. The Folk used to say there were trees like it once, before any of us. Maybe one of them will remember the song.",
+        "I am going. The Wound is louder than the Heart now. I have left a thing in the cellar for whoever is next - a seed. Plant it at the Folk's table, if there is anyone to plant it. It will grow into something old and quiet. The Folk used to say there were trees like it once, before any of us. Maybe one of them will remember the song.",
         "The Heart will hold. The Heart always holds.",
         "Tend it, Keeper. I am sorry I could not."
       ]
@@ -338,7 +338,7 @@
     "facingY": 90,
     "speakRadius": 6,
     "loreFragmentId": "bryn-cottage-entry",
-    "firstEncounterLine": "The path opens easy, Keeper. But mind the rocks — they remember you. And don't walk it dark. The cottage keeps her shadows close."
+    "firstEncounterLine": "The path opens easy, Keeper. But mind the rocks - they remember you. And don't walk it dark. The cottage keeps her shadows close."
   },
   "lanternPosts": [
     { "id": "lantern-post-garden", "roomId": "garden-approach", "position": { "x": -33, "y": 0, "z": -4 }, "assetKey": "lantern_post" }

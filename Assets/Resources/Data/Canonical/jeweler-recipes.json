@@ -10,7 +10,7 @@
       "outputAccessoryId": "ring_steadfast",
       "cost": { "wood": 0, "food": 0, "iron": 150, "crystals": 0 },
       "requiresQuestId": "",
-      "saga": "Sable seats two ember crystals in a plain iron band — and it remembers a purpose."
+      "saga": "Sable seats two ember crystals in a plain iron band - and it remembers a purpose."
     },
     {
       "id": "jewel_ring_embercoil",
@@ -30,7 +30,7 @@
       "outputAccessoryId": "ring_heartward",
       "cost": { "wood": 0, "food": 0, "iron": 500, "crystals": 120 },
       "requiresQuestId": "",
-      "saga": "A heartstone shard cut flush to silver — it dims slightly every time it turns a blow."
+      "saga": "A heartstone shard cut flush to silver - it dims slightly every time it turns a blow."
     },
     {
       "id": "jewel_amulet_oathward",
@@ -40,7 +40,7 @@
       "outputAccessoryId": "amulet_oathward",
       "cost": { "wood": 0, "food": 0, "iron": 200, "crystals": 0 },
       "requiresQuestId": "",
-      "saga": "An Oathweld medallion set with ember crystal — the ward holds because the smith believed in it."
+      "saga": "An Oathweld medallion set with ember crystal - the ward holds because the smith believed in it."
     },
     {
       "id": "jewel_amulet_lastpressing",
@@ -50,7 +50,7 @@
       "outputAccessoryId": "amulet_lastpressing",
       "cost": { "wood": 0, "food": 0, "iron": 0, "crystals": 100 },
       "requiresQuestId": "",
-      "saga": "A teardrop of pressed aether in silver filigree — the light inside was caught before the Heart went quiet."
+      "saga": "A teardrop of pressed aether in silver filigree - the light inside was caught before the Heart went quiet."
     },
     {
       "id": "jewel_amulet_elarion",
@@ -60,7 +60,7 @@
       "outputAccessoryId": "amulet_elarion",
       "cost": { "wood": 0, "food": 0, "iron": 400, "crystals": 200 },
       "requiresQuestId": "",
-      "saga": "City-mark work of the Bright Centuries, bound around a heartstone — the old glyph for the Heart, before anyone thought it needed protecting."
+      "saga": "City-mark work of the Bright Centuries, bound around a heartstone - the old glyph for the Heart, before anyone thought it needed protecting."
     }
   ]
 }

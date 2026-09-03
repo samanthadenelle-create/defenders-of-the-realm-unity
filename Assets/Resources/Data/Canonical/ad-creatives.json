@@ -47,7 +47,7 @@
       "id": "tmpl.pack.value.square",
       "format": "square_1080",
       "subjectType": "pack",
-      "headlinePattern": "{name} — {tagline}",
+      "headlinePattern": "{name} - {tagline}",
       "bodyPattern": "{contents.cosmetics.count} cosmetics + a resource headstart. From ${pricing.usd}.",
       "ctaPattern": "Open the Store",
       "screenshotRecipe": {
@@ -135,7 +135,7 @@
       "templateId": "tmpl.pack.value.square",
       "subjectId": "keepers-satchel",
       "format": "square_1080",
-      "headline": "Lanternlight — Light carried forward, the value tier most tenders choose.",
+      "headline": "Lanternlight - Light carried forward, the value tier most tenders choose.",
       "body": "2 cosmetics + a resource headstart. From $4.99.",
       "cta": "Open the Store",
       "screenshot": {

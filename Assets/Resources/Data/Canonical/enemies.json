@@ -65,7 +65,7 @@
       "xpReward": 24,
       "coinReward": 10,
       "rewardVariance": 0.15,
-      "flavor": "Armored bone in a weighted march — a wall of the dead that does not hurry and does not break."
+      "flavor": "Armored bone in a weighted march - a wall of the dead that does not hurry and does not break."
     },
     {
       "id": "hollow-rogue",
@@ -105,7 +105,7 @@
       "xpReward": 18,
       "coinReward": 8,
       "rewardVariance": 0.15,
-      "flavor": "A robed thing that hums the dirge of the Wound — it mends the bone of its kin faster than you can break it. Cut it down first."
+      "flavor": "A robed thing that hums the dirge of the Wound - it mends the bone of its kin faster than you can break it. Cut it down first."
     },
     {
       "id": "hollow-mage",
@@ -125,7 +125,7 @@
       "xpReward": 18,
       "coinReward": 8,
       "rewardVariance": 0.15,
-      "flavor": "A staff-bearing skeleton wreathed in Withering violet — it looses bolts of grief from the back of the march."
+      "flavor": "A staff-bearing skeleton wreathed in Withering violet - it looses bolts of grief from the back of the march."
     },
     {
       "id": "hollow-reaper",
@@ -145,7 +145,7 @@
       "xpReward": 55,
       "coinReward": 28,
       "rewardVariance": 0.15,
-      "flavor": "A tall, dark-tinted Warrior with the scythe — the Hollow Ones' executioner. When it wades in, the line is in trouble."
+      "flavor": "A tall, dark-tinted Warrior with the scythe - the Hollow Ones' executioner. When it wades in, the line is in trouble."
     },
     {
       "id": "hollow-brute",
@@ -205,7 +205,7 @@
       "xpReward": 150,
       "coinReward": 80,
       "rewardVariance": 0.15,
-      "flavor": "A skeleton in a stained healer's apron, a glass vial clutched in one hand. It still performs the motions of healing — it does not know it is dead."
+      "flavor": "A skeleton in a stained healer's apron, a glass vial clutched in one hand. It still performs the motions of healing - it does not know it is dead."
     },
     {
       "id": "necromancer",

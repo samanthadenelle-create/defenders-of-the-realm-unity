@@ -13,7 +13,7 @@
     "skrRebateGateNote": "Option (b) SKR rebate ships ONLY after the monetization-v2-spec.md sec/sweepstakes legal sign-off. Cosmetics (a) + store-discount (c) ship first with no gate. When false, tiers grant perks only and skr_rebate_share perks are skipped.",
     "displayCopy": {
       "lockModalTitle": "Take the Keeper's Vow",
-      "framing": "Loyalty rewards for supporting Elarion — cosmetic and convenience only.",
+      "framing": "Loyalty rewards for supporting Elarion - cosmetic and convenience only.",
       "forbiddenLanguage": ["APY", "passive income", "returns", "yield", "interest", "guaranteed"],
       "forbiddenLanguageNote": "Security-optics discipline (WO Part A §A4). Never advertise a rate for the GAME reward; the protocol's native staking APY is Solana Mobile's, shown in their wallet, not ours."
     }

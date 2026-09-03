@@ -14,7 +14,7 @@
   "rewardsDistributor": {
     "label": "Rewards Distributor",
     "address": "2JRmEmrqUbhTiHX3u5bes5kHYZeZkJ2V1cMWubxwnmNi",
-    "provider": "Solana Seeker — Seed Vault (hardware secure element)",
+    "provider": "Solana Seeker - Seed Vault (hardware secure element)",
     "holder": "Samantha Denelle / DeNelle Studios",
     "purpose": "SKR rewards distribution to players (Streams A/B/C).",
     "public": true,

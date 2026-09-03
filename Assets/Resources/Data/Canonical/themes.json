@@ -3,7 +3,7 @@
   "themes": {
     "midnight-luxe": {
       "name": "Midnight Luxe",
-      "description": "Dark navy with gold accents — refined and elegant",
+      "description": "Dark navy with gold accents - refined and elegant",
       "radius": "0.5rem",
       "font": {
         "family": "'Playfair Display', serif",
@@ -55,7 +55,7 @@
     },
     "neon-brutalist": {
       "name": "Neon Brutalist",
-      "description": "Black and white with neon accents — raw and impactful",
+      "description": "Black and white with neon accents - raw and impactful",
       "radius": "0px",
       "font": {
         "family": "'Space Mono', monospace",
@@ -107,7 +107,7 @@
     },
     "warm-earth": {
       "name": "Warm Earth",
-      "description": "Organic earth tones — sage, terracotta, and warm cream",
+      "description": "Organic earth tones - sage, terracotta, and warm cream",
       "radius": "0.75rem",
       "font": {
         "family": "'Fraunces', serif",
@@ -159,7 +159,7 @@
     },
     "cyberpunk": {
       "name": "Cyberpunk",
-      "description": "Deep purple with electric cyan and hot pink — futuristic and bold",
+      "description": "Deep purple with electric cyan and hot pink - futuristic and bold",
       "radius": "0.25rem",
       "font": {
         "family": "'Sora', sans-serif",
@@ -211,7 +211,7 @@
     },
     "soft-pastels": {
       "name": "Soft Pastels",
-      "description": "Muted and playful — dusty rose, lavender, and mint",
+      "description": "Muted and playful - dusty rose, lavender, and mint",
       "radius": "1rem",
       "font": {
         "family": "'Outfit', sans-serif",
@@ -263,7 +263,7 @@
     },
     "arctic-clean": {
       "name": "Arctic Clean",
-      "description": "Cool whites and blues — crisp, minimal, and professional",
+      "description": "Cool whites and blues - crisp, minimal, and professional",
       "radius": "0.375rem",
       "font": {
         "family": "'Hanken Grotesk', sans-serif",
@@ -315,7 +315,7 @@
     },
     "sunset-warm": {
       "name": "Sunset Warm",
-      "description": "Coral and amber on warm cream — inviting and energetic",
+      "description": "Coral and amber on warm cream - inviting and energetic",
       "radius": "0.625rem",
       "font": {
         "family": "'DM Serif Display', serif",

@@ -44,203 +44,203 @@
       "id": "combat.clear-waves.skirmish",
       "slot": "combat",
       "target": 1,
-      "label": "Quick skirmish — clear {target} wave",
+      "label": "Quick skirmish - clear {target} wave",
       "weight": 1
     },
     {
       "id": "combat.clear-waves.first-horn",
       "slot": "combat",
       "target": 1,
-      "label": "Answer the first horn — clear {target} wave",
+      "label": "Answer the first horn - clear {target} wave",
       "weight": 1
     },
     {
       "id": "combat.clear-waves.warm-up",
       "slot": "combat",
       "target": 2,
-      "label": "Warm up the blade — clear {target} waves",
+      "label": "Warm up the blade - clear {target} waves",
       "weight": 0.95
     },
     {
       "id": "combat.clear-waves.repel-orcs",
       "slot": "combat",
       "target": 2,
-      "label": "Repel the orc raid — clear {target} waves",
+      "label": "Repel the orc raid - clear {target} waves",
       "weight": 0.95
     },
     {
       "id": "combat.clear-waves.hold-the-gate",
       "slot": "combat",
       "target": 3,
-      "label": "Hold the gate — clear {target} waves",
+      "label": "Hold the gate - clear {target} waves",
       "weight": 0.85
     },
     {
       "id": "combat.clear-waves.dawn-watch",
       "slot": "combat",
       "target": 3,
-      "label": "Keep the dawn watch — clear {target} waves",
+      "label": "Keep the dawn watch - clear {target} waves",
       "weight": 0.8
     },
     {
       "id": "combat.clear-waves.hollow-tide",
       "slot": "combat",
       "target": 3,
-      "label": "Turn back the Hollow tide — clear {target} waves",
+      "label": "Turn back the Hollow tide - clear {target} waves",
       "weight": 0.8
     },
     {
       "id": "combat.clear-waves.warband",
       "slot": "combat",
       "target": 4,
-      "label": "Break the orc warband — clear {target} waves",
+      "label": "Break the orc warband - clear {target} waves",
       "weight": 0.7
     },
     {
       "id": "combat.clear-waves.troll-rampage",
       "slot": "combat",
       "target": 4,
-      "label": "Stop the troll rampage — clear {target} waves",
+      "label": "Stop the troll rampage - clear {target} waves",
       "weight": 0.65
     },
     {
       "id": "combat.clear-waves.echo-cover",
       "slot": "combat",
       "target": 4,
-      "label": "Cover the echoes while they harvest — clear {target} waves",
+      "label": "Cover the echoes while they harvest - clear {target} waves",
       "weight": 0.65
     },
     {
       "id": "combat.clear-waves.heart-guard",
       "slot": "combat",
       "target": 5,
-      "label": "Guard the Heart of Elarion — clear {target} waves",
+      "label": "Guard the Heart of Elarion - clear {target} waves",
       "weight": 0.65
     },
     {
       "id": "combat.clear-waves.night-siege",
       "slot": "combat",
       "target": 5,
-      "label": "Survive the night siege — clear {target} waves",
+      "label": "Survive the night siege - clear {target} waves",
       "weight": 0.55
     },
     {
       "id": "combat.clear-waves.necromancer-van",
       "slot": "combat",
       "target": 6,
-      "label": "Scatter the necromancer's vanguard — clear {target} waves",
+      "label": "Scatter the necromancer's vanguard - clear {target} waves",
       "weight": 0.45
     },
     {
       "id": "combat.clear-waves.acolyte-ritual",
       "slot": "combat",
       "target": 6,
-      "label": "Disrupt the Hollow acolytes — clear {target} waves",
+      "label": "Disrupt the Hollow acolytes - clear {target} waves",
       "weight": 0.45
     },
     {
       "id": "combat.clear-waves.dragon-shadow",
       "slot": "combat",
       "target": 7,
-      "label": "Stand against Syndrath's shadow — clear {target} waves",
+      "label": "Stand against Syndrath's shadow - clear {target} waves",
       "weight": 0.3
     },
     {
       "id": "combat.clear-waves.relentless",
       "slot": "combat",
       "target": 8,
-      "label": "Relentless defense — clear {target} waves",
+      "label": "Relentless defense - clear {target} waves",
       "weight": 0.3
     },
     {
       "id": "combat.clear-waves.endless-vigil",
       "slot": "combat",
       "target": 10,
-      "label": "Endless vigil — clear {target} waves",
+      "label": "Endless vigil - clear {target} waves",
       "weight": 0.2
     },
     {
       "id": "explore.visit-gate.quick-check",
       "slot": "exploration",
       "target": 1,
-      "label": "Quick gate check — pass {target} gate",
+      "label": "Quick gate check - pass {target} gate",
       "weight": 1
     },
     {
       "id": "explore.visit-gate.scout",
       "slot": "exploration",
       "target": 1,
-      "label": "Scout a gate — pass {target} gate",
+      "label": "Scout a gate - pass {target} gate",
       "weight": 1
     },
     {
       "id": "explore.visit-gate.patrol",
       "slot": "exploration",
       "target": 2,
-      "label": "Patrol the gates — pass {target} gates",
+      "label": "Patrol the gates - pass {target} gates",
       "weight": 0.95
     },
     {
       "id": "explore.visit-gate.echo-escort",
       "slot": "exploration",
       "target": 2,
-      "label": "Escort an echo to a gate — pass {target} gates",
+      "label": "Escort an echo to a gate - pass {target} gates",
       "weight": 0.85
     },
     {
       "id": "explore.visit-gate.heart-to-wall",
       "slot": "exploration",
       "target": 2,
-      "label": "From the Heart to the wall — pass {target} gates",
+      "label": "From the Heart to the wall - pass {target} gates",
       "weight": 0.85
     },
     {
       "id": "explore.visit-gate.dawn-rounds",
       "slot": "exploration",
       "target": 3,
-      "label": "Make the dawn rounds — pass {target} gates",
+      "label": "Make the dawn rounds - pass {target} gates",
       "weight": 0.85
     },
     {
       "id": "explore.visit-gate.dusk-rounds",
       "slot": "exploration",
       "target": 3,
-      "label": "Make the dusk rounds — pass {target} gates",
+      "label": "Make the dusk rounds - pass {target} gates",
       "weight": 0.85
     },
     {
       "id": "explore.visit-gate.warden-route",
       "slot": "exploration",
       "target": 4,
-      "label": "Walk the warden's route — pass {target} gates",
+      "label": "Walk the warden's route - pass {target} gates",
       "weight": 0.75
     },
     {
       "id": "explore.visit-gate.full-circuit",
       "slot": "exploration",
       "target": 4,
-      "label": "Complete a full gate circuit — pass {target} gates",
+      "label": "Complete a full gate circuit - pass {target} gates",
       "weight": 0.75
     },
     {
       "id": "explore.visit-gate.perimeter",
       "slot": "exploration",
       "target": 4,
-      "label": "Walk the full perimeter — pass all {target} gates",
+      "label": "Walk the full perimeter - pass all {target} gates",
       "weight": 0.7
     },
     {
       "id": "explore.visit-gate.watchful",
       "slot": "exploration",
       "target": 5,
-      "label": "Stay watchful — pass {target} gates",
+      "label": "Stay watchful - pass {target} gates",
       "weight": 0.55
     },
     {
       "id": "explore.visit-gate.long-march",
       "slot": "exploration",
       "target": 6,
-      "label": "The long march — pass {target} gates",
+      "label": "The long march - pass {target} gates",
       "weight": 0.4
     },
     {
@@ -254,21 +254,21 @@
       "id": "wildcard.learn-talent.grow-wiser",
       "slot": "wildcard",
       "target": 1,
-      "label": "Spend wisdom — learn a talent",
+      "label": "Spend wisdom - learn a talent",
       "weight": 0.85
     },
     {
       "id": "wildcard.learn-talent.sharpen",
       "slot": "wildcard",
       "target": 1,
-      "label": "Sharpen your craft — learn a talent",
+      "label": "Sharpen your craft - learn a talent",
       "weight": 0.8
     },
     {
       "id": "wildcard.learn-talent.heart-wisdom",
       "slot": "wildcard",
       "target": 1,
-      "label": "Heed the Heart's wisdom — learn a talent",
+      "label": "Heed the Heart's wisdom - learn a talent",
       "weight": 0.7
     },
     {

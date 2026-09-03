@@ -16,21 +16,21 @@
     {
       "id": "dry-reed",
       "displayName": "Dry Reed",
-      "description": "A bundle of brittle marsh reed from the garden's edge — the torch's haft.",
+      "description": "A bundle of brittle marsh reed from the garden's edge - the torch's haft.",
       "glyph": "|",
       "tint": "c9a86a"
     },
     {
       "id": "oil-soaked-cloth",
       "displayName": "Oil-Soaked Cloth",
-      "description": "A strip of linen steeped in lantern oil — it will hold a flame.",
+      "description": "A strip of linen steeped in lantern oil - it will hold a flame.",
       "glyph": "~",
       "tint": "d8b15a"
     },
     {
       "id": "ember-resin",
       "displayName": "Ember Resin",
-      "description": "Hardened sap that catches at a spark — the heart of any torch.",
+      "description": "Hardened sap that catches at a spark - the heart of any torch.",
       "glyph": "*",
       "tint": "e2683a"
     },
@@ -39,35 +39,35 @@
       "_comment": "WO-749 floor-scatter ingredients. ids are materials.json larder keys so the scatter -> larder bridge (DungeonLootGrant.DepositDungeonInventory) deposits them 1:1. These have no scene-authored pickup; DungeonController runtime-authors a tinted mote per placement (no scene bake).",
       "id": "ing_moonbloom",
       "displayName": "Moonbloom Herb",
-      "description": "A pale night-blooming herb — its petals glow faintly in the dark.",
+      "description": "A pale night-blooming herb - its petals glow faintly in the dark.",
       "glyph": "*",
       "tint": "a9c4ff"
     },
     {
       "id": "ing_spring_water",
       "displayName": "Spring Water",
-      "description": "Clear water drawn from the garden spring — the base of every tincture.",
+      "description": "Clear water drawn from the garden spring - the base of every tincture.",
       "glyph": "~",
       "tint": "6fd6e8"
     },
     {
       "id": "ing_cloth_scrap",
       "displayName": "Cloth Scrap",
-      "description": "A torn strip of homespun — bandages and wick alike.",
+      "description": "A torn strip of homespun - bandages and wick alike.",
       "glyph": "=",
       "tint": "d8cbb0"
     },
     {
       "id": "ing_shadowcap",
       "displayName": "Shadowcap Mushroom",
-      "description": "A dusk-grey fungus from the cellar dark — bitter, potent.",
+      "description": "A dusk-grey fungus from the cellar dark - bitter, potent.",
       "glyph": "T",
       "tint": "6b5a86"
     },
     {
       "id": "ing_quickfoot",
       "displayName": "Quickfoot Mushroom",
-      "description": "A spry little cap that quickens the blood — reagent for haste draughts.",
+      "description": "A spry little cap that quickens the blood - reagent for haste draughts.",
       "glyph": "T",
       "tint": "9ad06b"
     },
@@ -81,28 +81,28 @@
     {
       "id": "ing_ironroot",
       "displayName": "Ironroot",
-      "description": "A woody root laced with metal — grit for tonics that toughen the flesh.",
+      "description": "A woody root laced with metal - grit for tonics that toughen the flesh.",
       "glyph": "Y",
       "tint": "8a6a3a"
     },
     {
       "id": "ing_oil_flask",
       "displayName": "Oil Flask",
-      "description": "A small flask of pressed lamp oil — fuel and firestarter.",
+      "description": "A small flask of pressed lamp oil - fuel and firestarter.",
       "glyph": "b",
       "tint": "caa14a"
     },
     {
       "id": "ing_elarion_petal",
       "displayName": "Elarion Petal",
-      "description": "A single petal shed from the Heart-tree — faintly warm to the touch.",
+      "description": "A single petal shed from the Heart-tree - faintly warm to the touch.",
       "glyph": "*",
       "tint": "ff9ec4"
     },
     {
       "id": "HealthHerb",
       "displayName": "Health Herb",
-      "description": "A common wound-herb — the first thing any healer learns to pick.",
+      "description": "A common wound-herb - the first thing any healer learns to pick.",
       "glyph": "*",
       "tint": "6fd07a"
     }
@@ -111,14 +111,14 @@
     {
       "id": "torch",
       "displayName": "Torch",
-      "description": "A hand-held torch — steady light that never runs dry. Bind reed, cloth and resin at the pedestal.",
+      "description": "A hand-held torch - steady light that never runs dry. Bind reed, cloth and resin at the pedestal.",
       "resultGlyph": "T",
       "ingredients": [
         { "ingredientId": "dry-reed", "count": 1 },
         { "ingredientId": "oil-soaked-cloth", "count": 1 },
         { "ingredientId": "ember-resin", "count": 1 }
       ],
-      "craftedToast": "The torch catches. Its light is yours, Keeper — and it will not fade."
+      "craftedToast": "The torch catches. Its light is yours, Keeper - and it will not fade."
     }
   ],
   "ingredientPlacements": [

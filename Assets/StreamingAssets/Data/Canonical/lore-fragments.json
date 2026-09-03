@@ -14,20 +14,20 @@
       "id": "bryn-cottage-entry",
       "kind": "dialogue",
       "speaker": "Bryn the Wanderer",
-      "title": "Bryn — at the Garden Approach",
+      "title": "Bryn - at the Garden Approach",
       "placeholder": false,
       "body": [
-        "The path opens easy, Keeper. But mind the rocks — they remember you. And don't walk it dark. The cottage keeps her shadows close."
+        "The path opens easy, Keeper. But mind the rocks - they remember you. And don't walk it dark. The cottage keeps her shadows close."
       ]
     },
     {
       "id": "journal-1",
       "kind": "lore-stone",
       "speaker": "Alduin the Mournful",
-      "title": "Alduin's journal — entry 1",
+      "title": "Alduin's journal - entry 1",
       "placeholder": false,
       "body": [
-        "The folk came again today. The well at Carrow's edge is going bad. Crystals work on the early signs but the late ones — I don't know yet.",
+        "The folk came again today. The well at Carrow's edge is going bad. Crystals work on the early signs but the late ones - I don't know yet.",
         "I came here to learn the green ways. I am still learning."
       ]
     },
@@ -35,7 +35,7 @@
       "id": "journal-2",
       "kind": "lore-stone",
       "speaker": "Alduin the Mournful",
-      "title": "Alduin's journal — entry 2",
+      "title": "Alduin's journal - entry 2",
       "placeholder": false,
       "body": [
         "The Folk who came from the village this week: Wren's boy, the miller's wife, the two children of Carrow. I told them what I had.",
@@ -46,11 +46,11 @@
       "id": "journal-3",
       "kind": "lore-stone",
       "speaker": "Alduin the Mournful",
-      "title": "Alduin's journal — entry 3",
+      "title": "Alduin's journal - entry 3",
       "placeholder": false,
       "body": [
         "The dreams are back. The Wound, calling. I am not the same in the mornings. Mira would have known what to say. I miss her hands.",
-        "If anyone reads this — I am going to the Wound. I am going to try one more thing. The Heart will hold while I am gone. The Heart always holds.",
+        "If anyone reads this - I am going to the Wound. I am going to try one more thing. The Heart will hold while I am gone. The Heart always holds.",
         "Forgive me."
       ]
     },
@@ -58,10 +58,10 @@
       "id": "journal-4",
       "kind": "lore-stone",
       "speaker": "Alduin the Mournful",
-      "title": "Alduin's journal — entry 4 (the last one)",
+      "title": "Alduin's journal - entry 4 (the last one)",
       "placeholder": false,
       "body": [
-        "I am going. The Wound is louder than the Heart now. I have left a thing in the cellar for whoever is next — a seed. Plant it at the Folk's table, if there is anyone to plant it.",
+        "I am going. The Wound is louder than the Heart now. I have left a thing in the cellar for whoever is next - a seed. Plant it at the Folk's table, if there is anyone to plant it.",
         "It will grow into something old and quiet. The Folk used to say there were trees like it once, before any of us. Maybe one of them will remember the song.",
         "The Heart will hold. The Heart always holds.",
         "Tend it, Keeper. I am sorry I could not."
@@ -76,7 +76,7 @@
       "placeholderNote": "Paragraph 1 (the carving) is canon-verbatim from design §4 Beat 5 line 206. Paragraph 2 is NOT canon — it is a Unity layout-spec expansion (dungeons-3d-unity-layout-spec.md §9.3 Hidden Vault) with no verbatim narrative-bible source. Replace paragraph 2 with sourced prose or cut the Hidden Vault stone before ship.",
       "body": [
         "M.M. + A.M., 31st of Honeymonth",
-        "[PLACEHOLDER — NOT CANON] The struck-through draft text. The Hidden Vault is a Unity-side expansion room; this fragment has no verbatim source in the narrative bible. Source from the narrative team before ship, or cut the journal-vault stone."
+        "[PLACEHOLDER - NOT CANON] The struck-through draft text. The Hidden Vault is a Unity-side expansion room; this fragment has no verbatim source in the narrative bible. Source from the narrative team before ship, or cut the journal-vault stone."
       ]
     }
   ]
