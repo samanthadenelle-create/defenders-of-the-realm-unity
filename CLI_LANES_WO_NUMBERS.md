@@ -180,7 +180,27 @@
 > fine as history. A copied number is the bug **even when it was right the day it was written** -
 > that is exactly how the retired 860-899 UI block kept re-seeding collisions from CLAUDE.md sec.2.
 
-> ## ⚠ RECONCILED 2026-09-02 (CLI, twenty-fourth pass): main line next free = **1331**.
+> ## ⚠ RECONCILED 2026-09-02 (CLI, twenty-sixth pass): main line next free = **1334**.
+> *(CLI minted **WO-1333** - U+2014 EM DASHES in DISPLAYED strings (`lore-fragments.json:27`,
+> `healers-cottage.json:216`, `DungeonSceneBuilder.cs:995-1028`), which render as TOFU BOXES on the
+> device. Found as an adjacent finding during WO-1332's sweep; predates it. Same shape of gap WO-1332
+> just closed for names: the ASCII-only rule existed and a tofu oracle existed, but these specific
+> files were unguarded. Bumped 1333 -> 1334 in this SAME edit.)*
+>
+> ### superseded: RECONCILED 2026-09-02 (CLI, twenty-fifth pass): main line next free = **1333**.
+> *(CLI minted **WO-1331** and **WO-1332**. **1331** = connect `CanonicalJson.Source`, the remote
+> catalog seam that already exists and is assigned NOWHERE. The `TUNABLE_LEVER_INVENTORY` sweep found
+> the root cause of a months-old owner complaint: **"data-driven" in this repo does NOT mean "tunable
+> without a rebuild"** - `LocalJsonCatalogSource` resolves `Resources.Load<TextAsset>` FIRST on every
+> platform and `Assets/Resources/` is compiled into the player, so editing any of the 71 canonical
+> JSONs costs a full build and editing the StreamingAssets twin does nothing. Five canonical files
+> advertise "retunes with NO recompile" in their own notes - literally true, and false in the only
+> sense she cares about. Connecting the seam converts **5,224 numeric leaves** into remotely updatable
+> content with no call-site change. MUST ship flag-gated OFF. **1332** = the repo cannot spell the
+> wolf's name: **34 `Alduin` vs 30 `Aldwin`** across canonical data and code. Owner ruled 2026-09-02:
+> *"alduin is the wolf"*. Bumped 1331 -> 1333 in this SAME edit.)*
+>
+> ### superseded: RECONCILED 2026-09-02 (CLI, twenty-fourth pass): main line next free = **1331**.
 > *(CLI minted **WO-1330** - a mage DoT and a knight regen, art matched from the Blink library. Owner
 > verbatim: *"we have a ton of blink art and spells, have creative match a DoT would be nice"* / *"or a
 > regen for knight"* / *"lots of room to interprut"*. ⚠ THE CORRECTION THAT DEFINES THIS TICKET: the
