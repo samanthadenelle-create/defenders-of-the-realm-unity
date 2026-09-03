@@ -59,7 +59,11 @@ namespace DeNelle.HUD
         private Button _sendBtn;
         private TextMeshProUGUI _sendLabel;
         private TMP_InputField _noteInput;
+        // Kept for the trace line below only: WorldHold owns the restore now (WO-1353).
         private float _prevTimeScale = 1f;
+
+        /// <summary>The world-clock hold that freezes the game while the form is up (WO-1353).</summary>
+        private DeNelle.Core.UI.WorldHold.Handle _worldHold;
         private bool _closing;
 
         /// <summary>Open the bug-report form (no-op when one is already open).</summary>
@@ -78,8 +82,13 @@ namespace DeNelle.HUD
             _panelHandle = PanelManager.Register("BugReport", Close, () => _canvasRoot != null && !_closing);
 
             // Freeze so typing the note can't drive the hero (same trick as the F8 note box).
+            // ⛔ WO-1353 — a HOLD, not a bare write. The pair here was already correct (Awake
+            // captures, OnDestroy restores); expressing it as a hold means a teardown path nobody
+            // has written yet cannot strand the world frozen behind a closed bug-report form, and
+            // the watchdog can name this view if one ever does.
             _prevTimeScale = Time.timeScale;
-            Time.timeScale = 0f;
+            _worldHold = DeNelle.Core.UI.WorldHold.AcquireScale(
+                "bug-report-form", 0f, DeNelle.Core.UI.WorldHold.StuckHoldSeconds);
 
             StartCoroutine(OpenRoutine());
         }
@@ -88,7 +97,9 @@ namespace DeNelle.HUD
         {
             Guard.Try("BugReport", "view teardown", () =>
             {
-                Time.timeScale = _prevTimeScale;
+                var hold = _worldHold;
+                _worldHold = null;
+                hold?.Dispose();
                 if (_vm != null) _vm.Changed -= Repaint;
                 PanelManager.NotifyClosed(_panelHandle);
                 if (_thumbTex != null) Destroy(_thumbTex);

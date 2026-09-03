@@ -417,23 +417,37 @@ namespace DeNelle.Core.Combat
                 }
             }
 
-            // THE ONE RESTORE. Unsurvivable and unambiguous: there is no legitimate reason for the
-            // world clock to sit at anything but 1 once every battle system has finished. Reported
-            // FIRST (above) and announced here, so the leaking owner is still named rather than
-            // masked — the whole reason the 2026-08-20 defect went three minutes unexplained is
-            // that something silently tolerated it.
+            // ⭐ WO-1353 — THIS GATE STAYS AN OBSERVER. IT DOES NOT WRITE Time.timeScale.
+            // The line here used to be a bare `Time.timeScale = 1f` — a blunt last-resort stamp. It
+            // is deleted, and deleting it is the point: this file's own header says it "OBSERVES
+            // and REPORTS", and that "a gate that quietly fixes things trains" the wrong habit. A
+            // gate that ALSO writes the world clock is, by definition, one of the N owners whose
+            // collision is the defect it is watching for.
             //
-            // ⚠ Runs AFTER the self-heal on purpose. HitStopManager.EndStopNow unwinds the clock
-            // by NAME and refuses to stamp over a scale it does not own; this blunt write is the
-            // last resort behind it, so the attributable restore always gets first refusal.
+            // What it does instead is HAND THE LEAK BACK TO THE OWNER and report. WorldHold is the
+            // one writer; RestoreIfDrifted corrects the clock only in the case that is provably
+            // wrong (a non-1 scale with ZERO live holds), names the last hold to release, and emits
+            // its own FlowTrace.Fail. If holds ARE outstanding, the clock is CORRECT by definition
+            // and the gate's finding above is the whole verdict — which is more than the old stamp
+            // could say, because the old stamp could not tell the two cases apart.
+            //
+            // ⚠ Runs AFTER the self-heal on purpose. HitStopManager.EndStopNow (and every other
+            // battle-end unwind on the BattleSessionEnd ladder) disposes its hold by NAME first, so
+            // the attributable release always gets first refusal and this is only ever reached by a
+            // leak nobody owned.
             if (Mathf.Abs(Time.timeScale - 1f) > ScaleEpsilon)
             {
                 float leaked = Time.timeScale;
-                Time.timeScale = 1f;
+                bool corrected = DeNelle.Core.UI.WorldHold.RestoreIfDrifted("battle quiescence gate");
                 FlowTrace.Warn(Sys,
-                    $"timeScale RESTORED to 1.00 by the quiescence gate (was {leaked:F2}). This is a " +
-                    "SAFETY NET, not a fix: something above still leaked the world clock and the " +
-                    "FAIL line above names when. Fix the owner, do not rely on this.");
+                    $"timeScale was {leaked:F2} at battle quiescence, not 1.00. The gate did NOT write " +
+                    $"the clock (it observes and reports; WO-1353). It asked the ONE owner, which " +
+                    (corrected
+                        ? "corrected it and named the leak in its own FlowTrace.Fail above. "
+                        : $"left it at {Time.timeScale:F2} because holds are still outstanding " +
+                          $"[{DeNelle.Core.UI.WorldHold.Describe()}] - so the clock is CORRECT and the " +
+                          "owner of those holds is who to read next. ") +
+                    "Either way the FAIL line above names when. Fix the owner, do not rely on this.");
             }
         }
 

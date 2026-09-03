@@ -232,14 +232,31 @@ namespace DeNelle.Editor.Regression
             }
 
             // BreakCaptureHarness: same contract on the F8 note freeze.
+            // ⛔ RE-POINTED 2026-09-03 (WO-1353) - THE INVARIANT MOVED AGAIN, THE SAME WAY IT MOVED
+            // FOR PauseController ABOVE. The F8 freeze is no longer a bare Time.timeScale write with
+            // its own '> 0f' guard on either end; it takes a HOLD from WorldHold, which owns that
+            // guard for every caller (it never restores a non-positive scale, and it refuses to
+            // restore a STALE non-1 baseline - a strictly stronger contract than the two regexes
+            // this case used to run). Left as it was, this case would go RED ON A CORRECT TREE, and
+            // the obvious way to "fix" that red is to put a second Time.timeScale writer back into
+            // the diagnostic harness - the exact defect the case exists to prevent.
+            //
+            // The capture is still asserted, because the trace line that reports "F8 pressed while
+            // the world was ALREADY frozen" is read off it.
             if (!Regex.IsMatch(brk, @"_prevTimeScale\s*=\s*[A-Za-z_][A-Za-z0-9_.]*\s*>\s*0f\s*\?"))
                 failures.Add("[world-clock] " + BreakSrc + " captures Time.timeScale for the F8 note " +
                              "freeze without a '> 0f' guard. F8 pressed while the app is background-paused " +
-                             "captures 0 and CommitFlag restores the freeze forever.");
+                             "captures 0, and the capture is what the 'already frozen' trace reports.");
 
-            if (!Regex.IsMatch(brk, @"Time\s*\.\s*timeScale\s*=\s*_prevTimeScale\s*>\s*0f\s*\?"))
-                failures.Add("[world-clock] " + BreakSrc + " restores _prevTimeScale without a '> 0f' " +
-                             "guard on commit.");
+            if (Regex.IsMatch(brk, @"Time\s*\.\s*timeScale\s*="))
+                failures.Add("[world-clock] " + BreakSrc + " assigns Time.timeScale directly. Since " +
+                             "WO-1353 there is exactly ONE writer (" + WorldHoldSrc + "); the F8 note " +
+                             "freeze must take a WorldHold hold and dispose it on commit.");
+
+            if (!brk.Contains("WorldHold.AcquireScale"))
+                failures.Add("[world-clock] " + BreakSrc + " no longer takes a WorldHold hold for the " +
+                             "F8 note freeze. F8 is the owner's primary bug-reporting path; if it stops " +
+                             "freezing, typing a note drives the hero.");
 
             // The observability half. CLAUDE.md S12: instrumentation is PERMANENT - the missing
             // timeScale field is precisely why the 08-10 capture could not be read.

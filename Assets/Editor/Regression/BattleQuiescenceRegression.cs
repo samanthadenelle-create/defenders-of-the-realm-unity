@@ -92,6 +92,15 @@ namespace DeNelle.Editor
                 DespawnRevokesPursuitAtSource(failures, log);
                 RetreatClosesEveryPanelHandle(failures, log);
                 RetreatWaitsOutItsOwnDefeatBanner(failures, log);
+
+                // WO-1353 — the world clock has ONE owner and every step into slow pairs with a
+                // step out. Four invariants, pinned as invariants rather than as instances.
+                WorldClockHasExactlyOneWriter(failures, log);
+                ZeroHoldsMeansFullSpeed(failures, log);
+                EveryHoldPathReleasesOnEveryExit(failures, log);
+                AnOverrunHoldSelfReleasesAndReports(failures, log);
+                TodaysCapturedDriftIsCorrected(failures, log);
+                TheGateObservesAndDoesNotWriteTheClock(failures, log);
             }
             finally
             {
@@ -124,7 +133,12 @@ namespace DeNelle.Editor
                      "battle resolve; a RETREAT releases every battle-lock holder, the wave " +
                      "loop's latched phase included (WO-1308); and a retreat both releases the " +
                      "pursuit pulse of every body it despawns and closes every panel handle, " +
-                     "naming the panel and healing only an invisible ghost (WO-1337).";
+                     "naming the panel and healing only an invisible ghost (WO-1337); and the WORLD " +
+                     "CLOCK has exactly ONE writer, zero live holds always reads 1.00, every exit " +
+                     "(battle win/loss/retreat/scene-change, death, victory) releases, an overrun " +
+                     "hold self-releases and reports, the 2026-09-03 capture (timeScale 0.28 with " +
+                     "zero holds) is corrected and NAMED while a live 0.28 hold is left alone, and " +
+                     "the quiescence gate still OBSERVES rather than writing the clock (WO-1353).";
             Debug.Log(log + MarkerOk);
             return true;
         }
@@ -1116,6 +1130,508 @@ namespace DeNelle.Editor
             for (int i = 0; i < index; i++)
                 if (line[i] == '"' && (i == 0 || line[i - 1] != '\\')) q = !q;
             return q;
+        }
+
+        // =====================================================================
+        //  WO-1353 — THE WORLD CLOCK HAS ONE OWNER, AND EVERY SLOW PAIRS
+        // -----------------------------------------------------------------------------
+        //  CAPTURED DEFECT (owner felt-test 2026-09-03, Main_Castle_Overworld):
+        //      [Flow:HeroOwner] ... animSpeed=0.00 timeScale=0.28 dt=0.0046
+        //      inputSuppressed=False autoWalk=False
+        //  28% speed in open town with no battle, no modal and input not suppressed.
+        //
+        //  These cases pin the INVARIANT, not the instance. Pinning "0.28 never happens"
+        //  would be worthless: the next leak is 0.30, or 0.05, or a lerp that stopped
+        //  halfway at a number nobody authored. What is pinned instead is that there is
+        //  exactly ONE writer, that zero live holds always means 1.00, that every exit
+        //  releases, and that a hold which overruns is force-released and NAMED.
+        // =====================================================================
+
+        /// <summary>Directories whose Time.timeScale writes are deliberately NOT ours to convert.
+        /// EXPLICIT, per WO-1353 §4: a lint with accidental exemptions becomes noise everyone
+        /// learns to skip, and then the one write that matters is invisible.</summary>
+        private static readonly string[] WorldClockLintExemptDirs =
+        {
+            // VENDOR PACK DEMO SCRIPTS. Converting third-party demo code means re-doing the work on
+            // every pack update and taking ownership of code we did not write.
+            "Assets/Mirza Beig/",
+            "Assets/UnityTechnologies/",
+            // EDITOR AND TEST CODE sets the clock DELIBERATELY, to drive the very paths these
+            // suites assert (this file does it a dozen times, and TransactionWorldHoldRegression
+            // measures the global after driving a real hold). A regression that cannot stage a
+            // known-bad clock cannot prove a gate catches one.
+            "Assets/Editor/",
+        };
+
+        /// <summary>The ONE file allowed to write the world clock.</summary>
+        private const string WorldClockOwnerSrc = "Assets/_Modules/Core/UI/WorldHold.cs";
+
+        /// <summary>
+        /// Blanks the CONTENTS of double-quoted string literals, leaving the quotes.
+        ///
+        /// <para>⛔ NOT OPTIONAL, AND IT COST A FALSE RED TO LEARN. <c>ReadCode</c> blanks comments
+        /// but NOT string contents, and <c>HeroLocomotion</c> legitimately prints
+        /// <c>"WORLD CLOCK FROZEN: Time.timeScale={Time.timeScale:F2}"</c> — the diagnostic line
+        /// CLAUDE.md sec.12 requires it to keep. Matched raw, that instrumentation reads as a
+        /// twelfth writer of the clock, and this suite's own header is explicit that a gate which
+        /// fails a CLEAN state is worse than useless: it becomes a permanent red, everyone learns
+        /// to skip it, and the one time it means something nobody looks.</para>
+        /// </summary>
+        private static string BlankStringLiterals(string code)
+        {
+            if (string.IsNullOrEmpty(code)) return code;
+            var sb = new StringBuilder(code.Length);
+            bool inString = false, inChar = false;
+            for (int i = 0; i < code.Length; i++)
+            {
+                char ch = code[i];
+                bool escaped = i > 0 && code[i - 1] == '\\' && (i < 2 || code[i - 2] != '\\');
+
+                if (!inChar && ch == '"' && !escaped) { inString = !inString; sb.Append(ch); continue; }
+                if (!inString && ch == '\'' && !escaped) { inChar = !inChar; sb.Append(ch); continue; }
+                if (inString || inChar)
+                {
+                    // Newlines are preserved so any later line-based reading stays aligned.
+                    sb.Append(ch == '\n' ? '\n' : ' ');
+                    continue;
+                }
+                sb.Append(ch);
+            }
+            return sb.ToString();
+        }
+
+        /// <summary>
+        /// INVARIANT 1 — no <c>Time.timeScale =</c> outside the one owner.
+        /// <para>Reads CODE ONLY (comments and string-literal contents blanked by ReadCode), the
+        /// project's standing lint discipline, so the many tombstone comments this refactor left
+        /// behind ("it used to be a bare Time.timeScale = 1f") cannot match their own rule.</para>
+        /// </summary>
+        private static void WorldClockHasExactlyOneWriter(List<string> failures, StringBuilder log)
+        {
+            string root = Path.GetFullPath("Assets");
+            if (!Directory.Exists(root))
+            {
+                failures.Add("[one-writer] Assets/ not found from the working directory - the lint " +
+                             "cannot run, which is a FAILURE and not a pass. A lint that silently " +
+                             "scans nothing is the shape of the bug it exists to catch.");
+                return;
+            }
+
+            var offenders = new List<string>();
+            int scanned = 0;
+
+            foreach (string full in Directory.EnumerateFiles(root, "*.cs", SearchOption.AllDirectories))
+            {
+                string rel = full.Replace('\\', '/');
+                int idx = rel.IndexOf("Assets/", StringComparison.OrdinalIgnoreCase);
+                if (idx >= 0) rel = rel.Substring(idx);
+
+                if (rel.Equals(WorldClockOwnerSrc, StringComparison.OrdinalIgnoreCase)) continue;
+                if (rel.IndexOf("Regression", StringComparison.OrdinalIgnoreCase) >= 0) continue;
+
+                bool exempt = false;
+                for (int i = 0; i < WorldClockLintExemptDirs.Length; i++)
+                    if (rel.StartsWith(WorldClockLintExemptDirs[i], StringComparison.OrdinalIgnoreCase))
+                    { exempt = true; break; }
+                if (exempt) continue;
+
+                scanned++;
+                string code = BlankStringLiterals(ReadCode(rel));
+                if (string.IsNullOrEmpty(code)) continue;
+
+                // An ASSIGNMENT, not a comparison: `= x` but never `==`. The owner's own file is the
+                // only place the left-hand side may appear.
+                if (System.Text.RegularExpressions.Regex.IsMatch(
+                        code, @"Time\s*\.\s*timeScale\s*=(?!=)"))
+                    offenders.Add(rel);
+            }
+
+            if (scanned == 0)
+            {
+                failures.Add("[one-writer] the lint scanned ZERO files. Every path was excluded, so it " +
+                             "proved nothing while reporting green - re-derive the exemptions.");
+                return;
+            }
+
+            if (offenders.Count > 0)
+            {
+                failures.Add("[one-writer] " + offenders.Count + " file(s) write Time.timeScale outside " +
+                             "the one owner (" + WorldClockOwnerSrc + "): " + string.Join(", ", offenders) +
+                             ". Every additional writer is another party to the collision that stranded " +
+                             "the world at 0.28 in open town on 2026-09-03: when two owners each " +
+                             "correctly decline to stamp over the other, the residue is left on the " +
+                             "engine global with nobody holding it. Take a WorldHold.AcquireScale hold " +
+                             "and dispose it instead.");
+                return;
+            }
+
+            log.AppendLine($"  [one-writer] {scanned} source files scanned; Time.timeScale is assigned " +
+                           $"ONLY in {WorldClockOwnerSrc}. Exempt by design: vendor demo dirs (" +
+                           string.Join(", ", WorldClockLintExemptDirs) + ") and *Regression*.");
+        }
+
+        /// <summary>
+        /// INVARIANT 2 — zero live holds implies 1.00, and overlapping holds compose slowest-wins
+        /// rather than fighting. Driven for real against WorldHold; the clock is MEASURED.
+        /// </summary>
+        private static void ZeroHoldsMeansFullSpeed(List<string> failures, StringBuilder log)
+        {
+            try
+            {
+                DeNelle.Core.UI.WorldHold.ResetForTests();
+
+                // (a) a single cosmetic hold applies its scale and gives it all back.
+                using (DeNelle.Core.UI.WorldHold.AcquireScale("wo1353-dip", 0.28f, 5f))
+                {
+                    if (!Mathf.Approximately(Time.timeScale, 0.28f))
+                        failures.Add("[zero-holds] a 0.28 hold did not reach the clock (read " +
+                                     Time.timeScale.ToString("0.00") + "). A cosmetic beat that cannot " +
+                                     "slow the world is not the fix - the effect must be unchanged.");
+                }
+                if (DeNelle.Core.UI.WorldHold.Count != 0 || !Mathf.Approximately(Time.timeScale, 1f))
+                    failures.Add("[zero-holds] after the last hold released the clock read " +
+                                 Time.timeScale.ToString("0.00") + " with " +
+                                 DeNelle.Core.UI.WorldHold.Count + " hold(s) [" +
+                                 DeNelle.Core.UI.WorldHold.Describe() + "]. ZERO HOLDS MUST ALWAYS MEAN " +
+                                 "1.00 - that single invariant is the whole of WO-1353.");
+
+                // (b) SLOWEST WINS, and it is order-independent. This is the case the old N-owner
+                //     code could not express: a hit stop landing inside a wave-clear dip used to make
+                //     one of the two abandon the clock, and whichever abandoned left the residue.
+                DeNelle.Core.UI.WorldHold.ResetForTests();
+                var dip  = DeNelle.Core.UI.WorldHold.AcquireScale("wo1353-dip", 0.28f, 5f);
+                var stop = DeNelle.Core.UI.WorldHold.AcquireScale("wo1353-stop", 0.04f, 5f);
+
+                if (!Mathf.Approximately(Time.timeScale, 0.04f))
+                    failures.Add("[zero-holds] two overlapping holds (0.28 and 0.04) produced " +
+                                 Time.timeScale.ToString("0.00") + ", not the slowest (0.04). " +
+                                 "Slowest-wins is what lets a freeze outrank a cosmetic dip; " +
+                                 "last-wins would let a hit stop thaw a live purchase.");
+
+                // Release the STRICTER one first - the order that used to strand a residue.
+                stop.Dispose();
+                if (!Mathf.Approximately(Time.timeScale, 0.28f))
+                    failures.Add("[zero-holds] releasing the stricter hold left the clock at " +
+                                 Time.timeScale.ToString("0.00") + " instead of falling back to the " +
+                                 "0.28 hold that is STILL LIVE. A release must recompute from the " +
+                                 "remaining holds, never stamp a fixed value.");
+
+                dip.Dispose();
+                if (DeNelle.Core.UI.WorldHold.Count != 0 || !Mathf.Approximately(Time.timeScale, 1f))
+                    failures.Add("[zero-holds] both holds released and the clock read " +
+                                 Time.timeScale.ToString("0.00") + " with holds [" +
+                                 DeNelle.Core.UI.WorldHold.Describe() + "].");
+
+                // (c) double-dispose must not double-release under a live hold.
+                DeNelle.Core.UI.WorldHold.ResetForTests();
+                var outer = DeNelle.Core.UI.WorldHold.AcquireScale("wo1353-outer", 0f, 5f);
+                var twice = DeNelle.Core.UI.WorldHold.AcquireScale("wo1353-twice", 0.5f, 5f);
+                twice.Dispose();
+                twice.Dispose();
+                if (DeNelle.Core.UI.WorldHold.Count != 1 || !Mathf.Approximately(Time.timeScale, 0f))
+                    failures.Add("[zero-holds] a double-dispose unfroze the world under a live hold " +
+                                 "(count " + DeNelle.Core.UI.WorldHold.Count + ", clock " +
+                                 Time.timeScale.ToString("0.00") + ").");
+                outer.Dispose();
+
+                log.AppendLine("  [zero-holds] a hold applies its scale; overlapping holds compose " +
+                               "slowest-wins in either release order; zero holds always reads 1.00.");
+            }
+            finally
+            {
+                DeNelle.Core.UI.WorldHold.ResetForTests();
+            }
+        }
+
+        /// <summary>
+        /// INVARIANT 3 — every hold path releases on EVERY exit. The owner named the moments:
+        /// *"every battle death victory"*. Battle is asserted through all four of its exits (win,
+        /// loss, RETREAT and a scene change mid-battle), then death and victory.
+        ///
+        /// <para>The clock half is DRIVEN. The wiring half is a SOURCE LINT, because the owners are
+        /// scene MonoBehaviours that cannot be instantiated here — and the wiring is exactly what
+        /// went wrong: a coroutine killed by deactivation fires neither a finally nor OnDestroy, so
+        /// OnDisable is load-bearing and its absence is invisible at runtime until it leaks.</para>
+        /// </summary>
+        private static void EveryHoldPathReleasesOnEveryExit(List<string> failures, StringBuilder log)
+        {
+            // ── the DRIVEN half: each named exit, with a cosmetic hold live ──────
+            string[] exits = { "arena win", "arena loss", "retreat", "death", "victory" };
+            foreach (string exit in exits)
+            {
+                try
+                {
+                    DeNelle.Core.UI.WorldHold.ResetForTests();
+                    var beat = DeNelle.Core.UI.WorldHold.AcquireScale("wo1353-beat", 0.28f, 5f);
+                    BattleSessionEnd.Release(exit);
+                    beat.Dispose();
+
+                    if (DeNelle.Core.UI.WorldHold.Count != 0 || !Mathf.Approximately(Time.timeScale, 1f))
+                        failures.Add($"[exit/{exit}] the battle ended, the beat released, and the clock " +
+                                     "reads " + Time.timeScale.ToString("0.00") + " with holds [" +
+                                     DeNelle.Core.UI.WorldHold.Describe() + "]. Every exit must land at 1.00.");
+                    else
+                        log.AppendLine($"  [exit/{exit}] a live 0.28 beat releases and the clock reads 1.00");
+                }
+                finally { DeNelle.Core.UI.WorldHold.ResetForTests(); }
+            }
+
+            // ── a SCENE CHANGE mid-battle: the exit with no host left to release ──
+            try
+            {
+                DeNelle.Core.UI.WorldHold.ResetForTests();
+                DeNelle.Core.UI.WorldHold.AcquireScale("wo1353-abandoned-dip", 0.28f, 5f);
+                DeNelle.Core.UI.WorldHold.AcquireScale("wo1353-abandoned-stop", 0.04f, 5f);
+                DeNelle.Core.UI.WorldHold.ReleaseAllForSceneLoad("wo1353-next-scene");
+
+                if (DeNelle.Core.UI.WorldHold.Count != 0 || !Mathf.Approximately(Time.timeScale, 1f))
+                    failures.Add("[exit/scene-change] a scene load left " +
+                                 DeNelle.Core.UI.WorldHold.Count + " hold(s) [" +
+                                 DeNelle.Core.UI.WorldHold.Describe() + "] and a clock of " +
+                                 Time.timeScale.ToString("0.00") + ". Time.timeScale is an ENGINE " +
+                                 "GLOBAL and SceneManager.LoadScene does NOT reset it: the hosts that " +
+                                 "took those holds are gone, so the load itself has to be the release.");
+                else
+                    log.AppendLine("  [exit/scene-change] a scene load drops every hold and starts at 1.00");
+            }
+            finally { DeNelle.Core.UI.WorldHold.ResetForTests(); }
+
+            // ── the WIRING half: every converted owner steps out on every lifecycle exit ──
+            var owners = new (string src, string sys, bool needsLadder)[]
+            {
+                ("Assets/_Modules/Village/Vfx/HitStopManager.cs",           "hit stop",       true),
+                ("Assets/_Modules/Village/Vfx/CombatFeedbackManager.cs",    "kill slow-mo",   true),
+                ("Assets/_Modules/Village/Waves/WaveCelebrationManager.cs", "wave-clear dip", true),
+                ("Assets/_Modules/Village/Hero/HeroHitReaction.cs",         "death slow-mo",  true),
+                ("Assets/_Modules/Village/Arena/ArenaDeathCam.cs",          "arena death cam", false),
+            };
+
+            foreach (var owner in owners)
+            {
+                string code = ReadCode(owner.src);
+                if (string.IsNullOrEmpty(code))
+                {
+                    failures.Add($"[wiring/{owner.sys}] {owner.src} is missing or unreadable.");
+                    continue;
+                }
+
+                if (code.IndexOf("WorldHold.AcquireScale", StringComparison.Ordinal) < 0 &&
+                    code.IndexOf("WorldHold.SetScale", StringComparison.Ordinal) < 0)
+                    failures.Add($"[wiring/{owner.sys}] {owner.src} no longer takes a WorldHold hold. " +
+                                 "If it went back to writing Time.timeScale it is an Nth owner again.");
+
+                // ⛔ OnDisable IS THE ONE THAT MATTERS, AND ONLY OnDisable IS REQUIRED.
+                // A coroutine dies on deactivation and OnDestroy does NOT fire for it, which is the
+                // hole the 0.28 leaked through. OnDisable covers destruction too — Unity runs it
+                // before OnDestroy for any enabled component, and a component that was already
+                // disabled has already run it. Requiring BOTH would fail HeroHitReaction, which has
+                // only OnDisable and is CORRECT; this suite's own header is explicit that a gate
+                // which fails a clean state is worse than useless.
+                if (code.IndexOf("OnDisable", StringComparison.Ordinal) < 0)
+                    failures.Add($"[wiring/{owner.sys}] {owner.src} has no OnDisable step-out. A " +
+                                 "coroutine dies on deactivation and OnDestroy does NOT fire for it, " +
+                                 "so without OnDisable a mid-beat SetActive(false) strands the hold " +
+                                 "until the watchdog ceiling. This is the hole the 0.28 leaked through.");
+
+                if (owner.needsLadder &&
+                    code.IndexOf("BattleSessionEnd.RegisterUnwind", StringComparison.Ordinal) < 0)
+                    failures.Add($"[wiring/{owner.sys}] {owner.src} is not on the BattleSessionEnd " +
+                                 "unwind ladder. A cosmetic beat must never outlive the fight that " +
+                                 "produced it, and every other step-out it has is keyed to the HOST's " +
+                                 "lifetime rather than the BATTLE's.");
+            }
+
+            // The death and victory screens hold the clock at 0 and must pair explicitly.
+            string over = ReadCode("Assets/_Modules/Village/Heart/GameOverScreen.cs");
+            if (string.IsNullOrEmpty(over))
+                failures.Add("[wiring/death] GameOverScreen.cs is missing or unreadable.");
+            else
+            {
+                if (over.IndexOf("WorldHold.AcquireScale", StringComparison.Ordinal) < 0)
+                    failures.Add("[wiring/death] GameOverScreen no longer takes a WorldHold hold for the " +
+                                 "death freeze. A bare Time.timeScale=0 there can strand the world frozen " +
+                                 "behind a dismissed screen with nothing on-screen saying why.");
+                if (System.Text.RegularExpressions.Regex.IsMatch(
+                        BlankStringLiterals(over), @"Time\s*\.\s*timeScale\s*=(?!=)"))
+                    failures.Add("[wiring/death] GameOverScreen assigns Time.timeScale directly again.");
+                if (over.IndexOf("DeathTrace.TimeScaleFroze", StringComparison.Ordinal) < 0 ||
+                    over.IndexOf("DeathTrace.TimeScaleRestored", StringComparison.Ordinal) < 0)
+                    failures.Add("[wiring/death] GameOverScreen lost its DeathTrace step-in/step-out " +
+                                 "pair. WO-1353 folded the death freeze into the ONE owner and kept the " +
+                                 "reporting deliberately - CLAUDE.md sec.12: instrumentation is PERMANENT.");
+            }
+
+            log.AppendLine("  [wiring] every converted clock owner takes a hold and steps out on " +
+                           "OnDisable, OnDestroy and (for the combat beats) battle end.");
+        }
+
+        /// <summary>
+        /// INVARIANT 4 — a hold that overruns its maximum self-releases and REPORTS. A paired
+        /// contract still breaks: the pairing covers every branch a compiler can see, and nothing
+        /// at all when the host is destroyed mid-beat.
+        /// </summary>
+        private static void AnOverrunHoldSelfReleasesAndReports(List<string> failures, StringBuilder log)
+        {
+            try
+            {
+                DeNelle.Core.UI.WorldHold.ResetForTests();
+
+                // A cosmetic hold with a half-second ceiling, abandoned (never disposed) - exactly
+                // what a coroutine killed by deactivation leaves behind.
+                DeNelle.Core.UI.WorldHold.AcquireScale("wo1353-abandoned", 0.28f, 0.5f);
+                if (!Mathf.Approximately(Time.timeScale, 0.28f))
+                    failures.Add("[overrun] the abandoned hold never reached the clock, so this case is " +
+                                 "not testing what it claims to.");
+
+                // Well inside the ceiling: it must NOT be force-released. A watchdog that fires early
+                // would cut every legitimate beat short, which IS a game-feel change.
+                DeNelle.Core.UI.WorldHold.WatchdogTick(Time.unscaledTime + 0.2f);
+                if (DeNelle.Core.UI.WorldHold.Count != 1)
+                    failures.Add("[overrun] the watchdog force-released a hold 0.2s into its 0.5s " +
+                                 "ceiling. That truncates a live cosmetic beat - the ticket changes " +
+                                 "ownership and guarantees, never tuning.");
+
+                // Past the ceiling: it MUST be force-released and the world returned to full speed.
+                DeNelle.Core.UI.WorldHold.WatchdogTick(Time.unscaledTime + 2f);
+                if (DeNelle.Core.UI.WorldHold.Count != 0 || !Mathf.Approximately(Time.timeScale, 1f))
+                    failures.Add("[overrun] a hold 2s past its 0.5s ceiling was NOT force-released " +
+                                 "(count " + DeNelle.Core.UI.WorldHold.Count + ", clock " +
+                                 Time.timeScale.ToString("0.00") + "). The failsafe exists precisely " +
+                                 "because the paired contract cannot cover a host destroyed mid-beat.");
+                else
+                    log.AppendLine("  [overrun] a hold survives inside its ceiling and self-releases " +
+                                   "past it, returning the world to 1.00");
+
+                // A LONG-LIVED hold (a chain settlement) must not be caught by a cosmetic ceiling.
+                DeNelle.Core.UI.WorldHold.ResetForTests();
+                var purchase = DeNelle.Core.UI.WorldHold.Acquire(DeNelle.Core.UI.WorldHold.ReasonPurchase);
+                DeNelle.Core.UI.WorldHold.WatchdogTick(Time.unscaledTime + 30f);
+                if (DeNelle.Core.UI.WorldHold.Count != 1)
+                    failures.Add("[overrun] a purchase hold was force-released after 30s. Its ceiling is " +
+                                 DeNelle.Core.UI.WorldHold.StuckHoldSeconds.ToString("0") + "s because a " +
+                                 "real chain settlement legitimately takes many seconds, and thawing the " +
+                                 "world mid-payment is how 'paid but not granted' gets manufactured.");
+                purchase.Dispose();
+
+                log.AppendLine("  [overrun] the long-lived transaction ceiling is separate from the " +
+                               "cosmetic one and is not tripped by it.");
+            }
+            finally
+            {
+                DeNelle.Core.UI.WorldHold.ResetForTests();
+            }
+        }
+
+        /// <summary>
+        /// THE CAPTURED DEFECT, REPRODUCED EXACTLY. 2026-09-03: timeScale 0.28 in open town with
+        /// ZERO live holds and input not suppressed. That state is now detectable and self-correcting,
+        /// and — the part that actually cost the session — it NAMES itself instead of leaving the
+        /// next capture to start from zero.
+        /// </summary>
+        private static void TodaysCapturedDriftIsCorrected(List<string> failures, StringBuilder log)
+        {
+            try
+            {
+                DeNelle.Core.UI.WorldHold.ResetForTests();
+
+                // Stage the exact capture: the wave-clear dip's 0.28, stranded, nobody holding it.
+                Time.timeScale = 0.28f;
+
+                // First tick only OBSERVES the drift (a foreign one-frame write must not be reported
+                // as a leak on the frame it happens); the second, past the grace, corrects it.
+                DeNelle.Core.UI.WorldHold.WatchdogTick(Time.unscaledTime);
+                DeNelle.Core.UI.WorldHold.WatchdogTick(
+                    Time.unscaledTime + DeNelle.Core.UI.WorldHold.DriftGraceSeconds + 0.1f);
+
+                if (!Mathf.Approximately(Time.timeScale, 1f))
+                    failures.Add("[captured-2026-09-03] the exact measured defect (timeScale 0.28, ZERO " +
+                                 "live holds, open town) was NOT corrected - the clock still reads " +
+                                 Time.timeScale.ToString("0.00") + ". This is the state the owner " +
+                                 "played in: every timer, animation, cooldown and the wave clock all " +
+                                 "wrong together, with nothing on screen saying so.");
+                else
+                    log.AppendLine("  [captured-2026-09-03] timeScale 0.28 with zero holds is detected, " +
+                                   "restored to 1.00 and reported by name");
+
+                // The same path must ALSO be reachable on demand, which is how the quiescence gate
+                // hands a leak back to the owner instead of writing the clock itself.
+                DeNelle.Core.UI.WorldHold.ResetForTests();
+                Time.timeScale = 0.28f;
+                if (!DeNelle.Core.UI.WorldHold.RestoreIfDrifted("wo1353-suite"))
+                    failures.Add("[captured-2026-09-03] RestoreIfDrifted did not report correcting a " +
+                                 "0.28 clock with zero holds. That is the seam BattleQuiescenceGate " +
+                                 "uses to stay an OBSERVER; if it no-ops, the gate reports a leak it " +
+                                 "cannot hand to anyone.");
+                if (!Mathf.Approximately(Time.timeScale, 1f))
+                    failures.Add("[captured-2026-09-03] RestoreIfDrifted left the clock at " +
+                                 Time.timeScale.ToString("0.00") + ".");
+
+                // ...and it must NOT overreach: with holds live, a non-1 clock is CORRECT.
+                DeNelle.Core.UI.WorldHold.ResetForTests();
+                using (DeNelle.Core.UI.WorldHold.AcquireScale("wo1353-legit", 0.28f, 5f))
+                {
+                    DeNelle.Core.UI.WorldHold.WatchdogTick(Time.unscaledTime + 0.1f);
+                    if (!Mathf.Approximately(Time.timeScale, 0.28f))
+                        failures.Add("[captured-2026-09-03] the drift watchdog stamped 1.00 over a " +
+                                     "LEGITIMATE live 0.28 hold. A watchdog that cannot tell a leak " +
+                                     "from a live beat deletes the game feel it was built to protect.");
+                    else
+                        log.AppendLine("  [captured-2026-09-03] the same 0.28 with a LIVE hold is left " +
+                                       "alone - the discriminator is the hold, not the value");
+                }
+            }
+            finally
+            {
+                DeNelle.Core.UI.WorldHold.ResetForTests();
+            }
+        }
+
+        /// <summary>
+        /// The gate OBSERVES AND REPORTS; it never became the fixer. Its own header says a gate that
+        /// quietly fixes things trains the wrong habit — and a gate that writes the world clock is,
+        /// by definition, one of the N owners whose collision it is watching for.
+        /// </summary>
+        private static void TheGateObservesAndDoesNotWriteTheClock(List<string> failures, StringBuilder log)
+        {
+            const string src = "Assets/_Modules/Core/Combat/BattleQuiescenceGate.cs";
+            string code = ReadCode(src);
+            if (string.IsNullOrEmpty(code))
+            {
+                failures.Add("[observer] " + src + " is missing or unreadable.");
+                return;
+            }
+
+            if (System.Text.RegularExpressions.Regex.IsMatch(
+                    BlankStringLiterals(code), @"Time\s*\.\s*timeScale\s*=(?!=)"))
+                failures.Add("[observer] " + src + " assigns Time.timeScale. This gate OBSERVES and " +
+                             "REPORTS by explicit design; a gate that also writes the clock is another " +
+                             "owner in the collision it exists to detect. Hand the leak to " +
+                             "WorldHold.RestoreIfDrifted and report instead.");
+
+            if (code.IndexOf("WorldHold.RestoreIfDrifted", StringComparison.Ordinal) < 0)
+                failures.Add("[observer] " + src + " no longer hands a drifted clock back to the one " +
+                             "owner. Reporting without a route to recovery leaves the player in the " +
+                             "slow world the gate just described.");
+
+            // It must still REPORT the finding - the half that names the value.
+            float saved = Time.timeScale;
+            try
+            {
+                DeNelle.Core.UI.WorldHold.ResetForTests();
+                Time.timeScale = 0.28f;
+                var found = BattleQuiescenceGate.Evaluate(rewardScreenOpen: false);
+                if (!found.Any(f => f.StartsWith("timeScale:")))
+                    failures.Add("[observer] the gate produced NO timeScale finding for a 0.28 clock. " +
+                                 "Observing without reporting is the silence that made the 2026-09-03 " +
+                                 "capture unattributable.");
+                else
+                    log.AppendLine("  [observer] the gate names a 0.28 clock and does not write it");
+            }
+            finally
+            {
+                DeNelle.Core.UI.WorldHold.ResetForTests();
+                Time.timeScale = saved > 0f ? saved : 1f;
+            }
         }
 
         /// <summary>Standalone entry point (run-unity-method).</summary>

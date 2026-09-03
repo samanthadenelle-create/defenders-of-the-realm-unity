@@ -47,6 +47,7 @@ using System.Collections;
 using UnityEngine;
 using DeNelle.Core.Combat;   // WO-285: ActorAnimator hit-reaction driver
 using DeNelle.Core.Diagnostics;
+using DeNelle.Core.UI;       // WO-1353: WorldHold is the ONE writer of Time.timeScale
 
 namespace DeNelle.Village
 {
@@ -166,11 +167,30 @@ namespace DeNelle.Village
 
         private Coroutine _deathSlowMoRoutine;
 
-        /// <summary>Apply a scale and RECORD it as ours in the same breath, so the record of who
-        /// owns the global can never drift from the write that created it.</summary>
+        /// <summary>Reason token this class's holds carry — the owner's "death" case, named.</summary>
+        private const string HoldReason = WorldHold.ReasonCosmeticPrefix + "death-slowmo";
+
+        /// <summary>Watchdog ceiling for one death ramp. The ramp is 1.2 s, the longest deliberate
+        /// beat in the project, so four seconds is more than three times it.</summary>
+        private const float HoldMaxSeconds = 4f;
+
+        /// <summary>The live world-clock hold, or null. STATIC for the same reason
+        /// <see cref="s_ourScale"/> is: the clock is an engine global, so ownership is class state
+        /// and the HERO is the object most likely to be destroyed inside this exact window.</summary>
+        private static WorldHold.Handle s_hold;
+
+        /// <summary>
+        /// Apply a scale and RECORD it as ours in the same breath, so the record of who owns the
+        /// global can never drift from the write that created it.
+        ///
+        /// <para>⛔ WO-1353 — THIS NO LONGER WRITES <c>Time.timeScale</c>. It takes a hold from
+        /// WorldHold, the one owner. The death beat's scale (<c>_deathTimeScale</c>) and length
+        /// (<c>_deathSlowMoSeconds</c>) are untouched.</para>
+        /// </summary>
         private void ApplyOurClock(float scale)
         {
-            Time.timeScale = scale;
+            if (s_hold != null && s_hold.IsHeld) WorldHold.SetScale(s_hold, scale);
+            else s_hold = WorldHold.AcquireScale(HoldReason, scale, HoldMaxSeconds);
             s_ourScale   = scale;
             s_clockOwner = this;
         }
@@ -189,39 +209,34 @@ namespace DeNelle.Village
         /// </summary>
         private static void ReleaseOurClock(string why)
         {
-            if (s_ourScale < 0f) { s_clockOwner = null; return; }
+            var hold = s_hold;
+            s_hold = null;
 
-            float ours     = s_ourScale;
-            float observed = Time.timeScale;
+            if (s_ourScale < 0f)
+            {
+                s_clockOwner = null;
+                if (hold != null && hold.IsHeld)
+                {
+                    hold.Dispose();
+                    FlowTrace.Warn("HitReact",
+                        $"death slow-mo released - {why} - with NO beat recorded but a live world hold " +
+                        "outstanding. Disposed it; the two records had drifted apart.");
+                }
+                return;
+            }
 
+            float ours = s_ourScale;
             s_ourScale = -1f;
             s_deathDeadlineUnscaled = 0f;
             s_clockOwner = null;
+            hold?.Dispose();
 
-            if (Mathf.Abs(observed - ours) < ScaleMatchEpsilon)
-            {
-                Time.timeScale = 1f;
-                FlowTrace.Step("HitReact",
-                    $"death slow-mo ({ours:F2}) released - {why}. timeScale restored to 1.00.");
-                return;
-            }
-
-            if (Mathf.Abs(observed - 1f) < ScaleMatchEpsilon)
-            {
-                FlowTrace.Step("HitReact",
-                    $"death slow-mo ({ours:F2}) released - {why}. The clock was already back at " +
-                    "1.00; another owner restored it first.");
-                return;
-            }
-
-            FlowTrace.Warn("HitReact",
-                $"death slow-mo ({ours:F2}) released - {why} - but the clock reads {observed:F2} " +
-                $"({observed * 100f:F0}% speed), which is NOT the value we wrote. We deliberately do NOT " +
-                "stamp 1.00 over another owner's live slow-mo, so the remaining restore for this clock " +
-                $"belongs to whoever wrote {observed:F2}. If the world is still slow after this line, " +
-                "that owner is the leak - not the hit reaction. Non-1 writers in the tree: " +
-                "HitStopManager, CombatFeedbackManager (hit stop 0.05 / kill slow-mo 0.30), " +
-                "WaveCelebrationManager (wave-clear dip 0.28), ArenaDeathCam, WorldHold.");
+            // DeathTrace keeps its own step-out record (TimeScaleRestored) — the owner's "death"
+            // case is reported by BOTH the clock owner and the death flow on purpose, because a
+            // death that leaves the world slow has to be findable from either trace.
+            FlowTrace.Step("HitReact",
+                $"death slow-mo ({ours:F2}) released - {why}. World holds now " +
+                $"[{WorldHold.Describe()}], timeScale {Time.timeScale:F2}.");
         }
 
         /// <summary>
@@ -258,10 +273,8 @@ namespace DeNelle.Village
             if (s_ourScale < 0f) return;
             if (Time.unscaledTime <= s_deathDeadlineUnscaled + DeadlineGraceSeconds) return;
 
-            float ours      = s_ourScale;
-            float leaked    = Time.timeScale;
-            float overdue   = Time.unscaledTime - s_deathDeadlineUnscaled;
-            bool  stillOurs = Mathf.Abs(leaked - ours) < ScaleMatchEpsilon;
+            float ours    = s_ourScale;
+            float overdue = Time.unscaledTime - s_deathDeadlineUnscaled;
 
             var owner = s_clockOwner;
             if (owner != null && owner._deathSlowMoRoutine != null)
@@ -270,31 +283,16 @@ namespace DeNelle.Village
                 owner._deathSlowMoRoutine = null;
             }
 
-            s_ourScale = -1f;
-            s_deathDeadlineUnscaled = 0f;
-            s_clockOwner = null;
+            // ⛔ WO-1353 — unconditional release; see ReleaseOurClock. The death case is the one the
+            // owner named explicitly ("every battle death victory"), so it gets the same structural
+            // step-out as every other beat rather than a comparison it can lose.
+            ReleaseOurClock($"deadline sweep - the death beat is {overdue:F2}s past its deadline and " +
+                            "its ramp never completed (the hero was deactivated, respawned or destroyed)");
 
-            if (stillOurs)
-            {
-                Time.timeScale = 1f;
-                FlowTrace.Fail("HitReact",
-                    $"DEATH SLOW-MO LEAK RECOVERED: timeScale was still {leaked:F2} {overdue:F2}s past " +
-                    "its deadline - the ramp never completed (the hero was almost certainly deactivated, " +
-                    "respawned or destroyed, which kills coroutines without firing OnDestroy and without " +
-                    $"throwing). Restored to 1.00. The world was running at {leaked * 100f:F0}% speed, " +
-                    "which reads to the player as everything slowed.");
-                return;
-            }
-
-            if (Mathf.Abs(leaked - 1f) < ScaleMatchEpsilon) return;   // benign: already back to normal
-
-            FlowTrace.Warn("HitReact",
-                $"DEATH SLOW-MO SUPERSEDED, NOT RESTORED: our {ours:F2} beat is {overdue:F2}s past its " +
-                $"deadline but the clock reads {leaked:F2} ({leaked * 100f:F0}% speed), which is NOT our " +
-                "value. We release ownership WITHOUT stamping 1.00, because that scale belongs to " +
-                "another owner. READ THIS AS A LEAD, NOT AS OUR LEAK: if the world is still slow after " +
-                $"this line, whoever wrote {leaked:F2} failed to restore it. Non-1 writers: " +
-                "HitStopManager, CombatFeedbackManager, WaveCelebrationManager, ArenaDeathCam, WorldHold.");
+            FlowTrace.Fail("HitReact",
+                $"DEATH SLOW-MO LEAK RECOVERED: our {ours:F2} beat ran {overdue:F2}s past its deadline " +
+                "and its ramp never completed. The world-clock hold has been released; live holds now " +
+                $"[{WorldHold.Describe()}], timeScale {Time.timeScale:F2}.");
         }
 
         /// <summary>LateUpdate driver for the sweep. Covers headless batchmode, which renders
@@ -323,6 +321,7 @@ namespace DeNelle.Village
             s_deathDeadlineUnscaled = 0f;
             s_clockOwner  = null;
             s_ladderOwner = null;
+            s_hold = null;   // WO-1353: the hold handle is class state - never carry one across play mode
         }
 
         /// <summary>Arm the host-independent driver once per play session. Idempotent (-= before +=)
@@ -389,14 +388,15 @@ namespace DeNelle.Village
             {
                 t += Time.unscaledDeltaTime;
 
-                // Ownership re-check on EVERY frame of the ramp. A hit stop or a wave-clear dip
-                // landing mid-ramp would otherwise be fought frame-by-frame by this lerp, and the
-                // loser is whichever owner writes last. If the clock is no longer ours we hand it
-                // over and stop writing, rather than becoming an Nth writer of the global.
-                if (Mathf.Abs(Time.timeScale - s_ourScale) > ScaleMatchEpsilon)
+                // ⛔ WO-1353 — the per-frame comparison against the engine global is DELETED. A hit
+                // stop or wave-clear dip landing mid-ramp no longer forces this beat to abandon the
+                // clock at whatever value the lerp had reached (which is how a residue was stranded);
+                // WorldHold composes the overlapping holds slowest-wins and this ramp resumes
+                // underneath. Bail only if OUR hold was taken away (watchdog force-release).
+                if (s_hold == null || !s_hold.IsHeld)
                 {
                     _deathSlowMoRoutine = null;
-                    ReleaseOurClock("another owner took the clock mid death ramp");
+                    ReleaseOurClock("our world-clock hold was force-released mid death ramp");
                     yield break;
                 }
 

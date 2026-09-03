@@ -142,42 +142,102 @@ namespace DeNelle.Village.Arena
             IsHolding = false;
         }
 
+        // =====================================================================
+        //  WORLD CLOCK — WO-1353. This class WROTE Time.timeScale in four places (an
+        //  ease-in lerp, its terminal snap, a restore and an OnDestroy safety) and was
+        //  the ONLY writer that saved and restored a CAPTURED value rather than 1.00.
+        //  ⚠ THAT CAPTURE IS THE SHAPE OF "A VALUE NOBODY AUTHORED": with N writers, a
+        //  lerp mid-flight reads whatever another owner had just written, saves it as the
+        //  scale to come back to, and restores a number that appears in no source file.
+        //  It now owns a single WorldHold hold and MOVES it (SetScale) as the ease runs,
+        //  so the ramp is one hold that changes rather than a stream of global writes,
+        //  and there is no captured baseline to launder. Scale (KillSlowMoScale) and ease
+        //  length (SlowMoEaseSeconds) are UNCHANGED.
+        // =====================================================================
+
+        private DeNelle.Core.UI.WorldHold.Handle _hold;
+
+        /// <summary>Reason token this class's hold carries.</summary>
+        private const string HoldReason = DeNelle.Core.UI.WorldHold.ReasonCosmeticPrefix + "arena-death-cam";
+
         private void ApplySlowMo()
         {
             if (_slowMoApplied) return;
             _savedTimeScale = Time.timeScale;
             _slowMoApplied = true;
-            // Ease into slow-mo over a few frames (no hard snap). Unscaled wait so it lands fast.
+
+            // The hold opens at the CURRENT effective scale so the ease-in starts from where the
+            // world already is (no hard snap) and then walks to KillSlowMoScale. The ceiling is the
+            // linger length plus generous margin: the cam holds for `seconds`, not milliseconds.
+            _hold = DeNelle.Core.UI.WorldHold.AcquireScale(HoldReason, Mathf.Max(0.0001f, _savedTimeScale),
+                                                           DeathCamHoldMaxSeconds);
             StartCoroutine(EaseTimeScale(_savedTimeScale, KillSlowMoScale, SlowMoEaseSeconds));
-            FlowTrace.Step("BattleArena", "ArenaDeathCam: kill slow-mo engaged.");
+            FlowTrace.Step("BattleArena",
+                $"ArenaDeathCam: kill slow-mo engaged - world hold '{HoldReason}' taken, easing " +
+                $"{_savedTimeScale:F2} -> {KillSlowMoScale:F2} over {SlowMoEaseSeconds:F2}s unscaled.");
         }
+
+        /// <summary>Unscaled ceiling on the death-cam hold. The linger is a couple of seconds; this
+        /// is the watchdog's last resort if the cam host dies mid-hold.</summary>
+        private const float DeathCamHoldMaxSeconds = 15f;
 
         private void RestoreSlowMo()
         {
             if (!_slowMoApplied) return;
             _slowMoApplied = false;
-            // Snap back to the saved scale (a lingering ease would race the teardown).
-            Guard.Try("BattleArena", "restore time scale", () => { Time.timeScale = _savedTimeScale; });
-            FlowTrace.Step("BattleArena", "ArenaDeathCam: time scale restored.");
+            ReleaseHold("death-cam linger complete");
+        }
+
+        /// <summary>
+        /// The ONE step-out. Every exit of this class routes here: the normal linger end, a
+        /// teardown mid-hold, and a disable. Idempotent.
+        /// </summary>
+        private void ReleaseHold(string why)
+        {
+            var hold = _hold;
+            _hold = null;
+            if (hold == null) return;
+            hold.Dispose();
+            FlowTrace.Step("BattleArena",
+                $"ArenaDeathCam: world hold released - {why}. Live holds now " +
+                $"[{DeNelle.Core.UI.WorldHold.Describe()}], timeScale {Time.timeScale:F2}.");
         }
 
         private IEnumerator EaseTimeScale(float from, float to, float dur)
         {
             float e = 0f;
-            while (e < dur && _slowMoApplied)
+            while (e < dur && _slowMoApplied && _hold != null && _hold.IsHeld)
             {
                 e += Time.unscaledDeltaTime;
-                Time.timeScale = Mathf.Lerp(from, to, Mathf.Clamp01(e / dur));
+                DeNelle.Core.UI.WorldHold.SetScale(_hold, Mathf.Lerp(from, to, Mathf.Clamp01(e / dur)));
                 yield return null;
             }
-            if (_slowMoApplied) Time.timeScale = to;
+            if (_slowMoApplied && _hold != null && _hold.IsHeld)
+                DeNelle.Core.UI.WorldHold.SetScale(_hold, to);
+        }
+
+        private void OnDisable()
+        {
+            // A coroutine dies on deactivation and OnDestroy does NOT fire for it, so a mid-ease
+            // SetActive(false) would otherwise leave this hold outstanding until the watchdog
+            // ceiling. Same guard, same reasoning, as HitStopManager.OnDisable.
+            if (_slowMoApplied || _hold != null)
+            {
+                _slowMoApplied = false;
+                ReleaseHold("death-cam host DISABLED mid-hold; the deactivation has just killed the " +
+                            "ease coroutine and OnDestroy will not fire");
+            }
         }
 
         private void OnDestroy()
         {
-            // Safety: never leave the camera suspended or time frozen if torn down mid-hold.
+            // Safety: never leave the camera suspended or the world slow if torn down mid-hold.
             if (_suspendedCam != null) { _suspendedCam.enabled = true; _suspendedCam = null; }
-            if (_slowMoApplied) { Time.timeScale = _savedTimeScale; _slowMoApplied = false; }
+            if (_slowMoApplied || _hold != null)
+            {
+                _slowMoApplied = false;
+                ReleaseHold("death-cam host DESTROYED mid-hold");
+            }
         }
     }
 }

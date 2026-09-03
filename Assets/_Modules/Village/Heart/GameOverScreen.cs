@@ -33,6 +33,7 @@ using UnityEngine;
 using UnityEngine.SceneManagement;
 using DeNelle.Core;
 using DeNelle.Core.Diagnostics;
+using DeNelle.Core.UI;      // WO-1353: WorldHold is the ONE writer of Time.timeScale
 using DeNelle.Village.UI;   // EndStateView/VM (the shared template) + LevelUpSkillPopup
 
 namespace DeNelle.Village
@@ -85,6 +86,36 @@ namespace DeNelle.Village
         {
             if (Instance == this) Instance = null;
             SceneManager.sceneLoaded -= OnSceneLoaded;
+            ReleaseWorldHold("game-over screen host DESTROYED while the death freeze was held");
+        }
+
+        // =====================================================================
+        //  WORLD CLOCK — WO-1353. The death freeze used to be three bare writes of
+        //  Time.timeScale (Show -> 0, OnRetry -> 1, OnSceneLoaded -> 1). It is a correct
+        //  PAIR and it stays a pair; what changes is that the pair is now expressed as a
+        //  HOLD on the one owner, so a fourth exit nobody has written yet cannot strand
+        //  the world frozen, and the watchdog can name this screen if one does.
+        //  ⭐ DeathTrace.TimeScaleFroze / TimeScaleRestored are KEPT VERBATIM alongside
+        //  the hold, per WO-1353 §3: the death flow's own step-in/step-out reporting is
+        //  the trace an F8 capture is read from, and folding it into the owner means
+        //  sharing the mechanism, not losing the report.
+        // =====================================================================
+
+        /// <summary>Reason token the death-freeze hold carries.</summary>
+        private const string HoldReason = "game-over";
+
+        private WorldHold.Handle _worldHold;
+
+        /// <summary>The ONE step-out for the death freeze. Idempotent - every exit calls it.</summary>
+        private void ReleaseWorldHold(string why)
+        {
+            var hold = _worldHold;
+            _worldHold = null;
+            if (hold == null) return;
+            hold.Dispose();
+            FlowTrace.Step("EndState",
+                $"game-over world hold released - {why}. Live holds now [{WorldHold.Describe()}], " +
+                $"timeScale {Time.timeScale:F2}.");
         }
 
         private void OnSceneLoaded(Scene scene, LoadSceneMode mode)
@@ -92,7 +123,8 @@ namespace DeNelle.Village
             // The end-state view tears itself down on sceneLoaded (its own hook);
             // this class only resets its trigger state for the incoming scene.
             _shown = false;
-            Time.timeScale = 1f;
+            ReleaseWorldHold($"scene '{scene.name}' loaded (raid-evac / route out of the paused " +
+                             "defeat screen)");
             // F8-15: freeze STEP-OUT on the scene-swap restore path (raid-evac / route out of the
             // paused defeat screen re-runs time here). Pairs with GameOverScreen.Show's freeze.
             DeathTrace.TimeScaleRestored("GameOverScreen.OnSceneLoaded('" + scene.name + "')");
@@ -229,7 +261,7 @@ namespace DeNelle.Village
             // F8-15 death forensic window: the hub game-over PAUSES time here — anything queued
             // after this (respawn coroutine, warps) freezes until Retry. Freeze STEP-IN: records
             // the pending freeze so DeathTrace.PollFreezeStuck self-reports if it is never restored.
-            Time.timeScale = 0f;
+            _worldHold = WorldHold.AcquireScale(HoldReason, 0f, WorldHold.StuckHoldSeconds);
             DeathTrace.TimeScaleFroze("GameOverScreen.Show",
                 $"'{title}' in '{_defeatScene}' — scaled-time respawn/down-beat coroutines freeze until Retry/sceneLoaded");
 
@@ -245,7 +277,7 @@ namespace DeNelle.Village
         /// caller-supplied retry (WO-320) when present, else reload the defeat scene.</summary>
         private void OnRetry()
         {
-            Time.timeScale = 1f;
+            ReleaseWorldHold("the player chose Retry");
             // F8-15: freeze STEP-OUT — the player chose Retry, unpausing the death flow. This is the
             // continue path out of the paused game-over; pairs with GameOverScreen.Show's freeze.
             DeathTrace.TimeScaleRestored("GameOverScreen.OnRetry");

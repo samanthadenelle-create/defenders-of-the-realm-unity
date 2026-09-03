@@ -47,6 +47,7 @@
 using System.Collections;
 using UnityEngine;
 using DeNelle.Core.Diagnostics;
+using DeNelle.Core.UI;      // WO-1353: WorldHold is the ONE writer of Time.timeScale
 
 namespace DeNelle.Village
 {
@@ -99,6 +100,10 @@ namespace DeNelle.Village
             Application.onBeforeRender -= HostIndependentWatchdog;
             s_frozenScaleApplied = -1f;
             s_hitStopEndTime     = 0f;
+            // WO-1353: the world-clock hold is class state too. A stale handle carried across a
+            // play-mode restart would make ApplyOurClock re-point a hold WorldHold no longer knows,
+            // so the next stop would silently never reach the clock.
+            s_hold = null;
         }
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
@@ -245,48 +250,62 @@ namespace DeNelle.Village
         /// <param name="why">Why we are letting go — quoted verbatim into the trace line.</param>
         private static void ReleaseOurClock(string why)
         {
-            if (s_frozenScaleApplied < 0f) return;
+            var hold = s_hold;
+            s_hold = null;
 
-            float ours     = s_frozenScaleApplied;
-            float observed = Time.timeScale;
+            if (s_frozenScaleApplied < 0f)
+            {
+                // A stray hold with no recorded stop should be impossible; dispose it anyway rather
+                // than leave the world slow on a state we cannot explain.
+                if (hold != null && hold.IsHeld)
+                {
+                    hold.Dispose();
+                    FlowTrace.Warn("HitStop",
+                        $"hit stop released - {why} - with NO stop recorded but a live world hold " +
+                        "outstanding. Disposed it; the two records had drifted apart.");
+                }
+                return;
+            }
 
+            float ours = s_frozenScaleApplied;
             s_frozenScaleApplied = -1f;
             s_hitStopEndTime     = 0f;
+            hold?.Dispose();
 
-            if (Mathf.Abs(observed - ours) < ScaleMatchEpsilon)
-            {
-                Time.timeScale = 1f;
-                FlowTrace.Step("HitStop",
-                    $"hit stop ({ours:F2}) released - {why}. timeScale restored to 1.00.");
-                return;
-            }
-
-            if (Mathf.Abs(observed - 1f) < ScaleMatchEpsilon)
-            {
-                // Benign: somebody already put the clock back. Nothing to do and nothing to warn about.
-                FlowTrace.Step("HitStop",
-                    $"hit stop ({ours:F2}) released - {why}. The clock was already back at 1.00; " +
-                    "another owner restored it first.");
-                return;
-            }
-
-            FlowTrace.Warn("HitStop",
-                $"hit stop ({ours:F2}) released - {why} - but the clock reads {observed:F2} " +
-                $"({observed * 100f:F0}% speed), which is NOT the value we wrote. We deliberately do " +
-                "NOT stamp 1.00 over another owner's live slow-mo, so the ONLY remaining restore for " +
-                "this clock now belongs to whoever wrote " + $"{observed:F2}" + ". If the world is still " +
-                "slow after this line, that owner is the leak - not the hit stop. Candidates that write " +
-                "a non-1 scale: CombatFeedbackManager (kill slow-mo / its own hit stop), ArenaDeathCam, " +
-                "WaveCelebrationManager, HeroHitReaction, GameOverScreen, WorldHold.");
+            FlowTrace.Step("HitStop",
+                $"hit stop ({ours:F2}) released - {why}. World holds now [{WorldHold.Describe()}], " +
+                $"timeScale {Time.timeScale:F2}.");
         }
 
-        /// <summary>Apply a stop and RECORD it as ours in the same breath, so the record of who owns
-        /// the global can never drift from the write that created it.</summary>
+        /// <summary>
+        /// Apply a stop and RECORD it as ours in the same breath, so the record of who owns the
+        /// global can never drift from the write that created it.
+        ///
+        /// <para>⛔ WO-1353 — THIS NO LONGER WRITES <c>Time.timeScale</c>. It takes a HOLD from
+        /// WorldHold, the one owner, at the requested scale. The three-case "is the clock still
+        /// mine" dance this class used to perform on release is GONE because it cannot arise: with
+        /// one owner and slowest-wins composition there is no foreign value to decline to stamp
+        /// over. That dance was individually correct and collectively the defect — see the WO-1353
+        /// block in WorldHold.cs. The stop's SCALE and DURATION are untouched.</para>
+        /// </summary>
         private static void ApplyOurClock(float scale)
         {
-            Time.timeScale = scale;
+            if (s_hold != null && s_hold.IsHeld) WorldHold.SetScale(s_hold, scale);
+            else s_hold = WorldHold.AcquireScale(HoldReason, scale, HoldMaxSeconds);
             s_frozenScaleApplied = scale;
         }
+
+        /// <summary>Reason token this class's holds carry. Read it straight out of a capture.</summary>
+        private const string HoldReason = WorldHold.ReasonCosmeticPrefix + "hit-stop";
+
+        /// <summary>Watchdog ceiling for one stop. A hit stop is milliseconds (the longest this
+        /// class arms is well under 0.2 s), so two seconds is four times any legitimate stop and
+        /// still far below the point a player would call the world "slow".</summary>
+        private const float HoldMaxSeconds = 2f;
+
+        /// <summary>The live world-clock hold, or null. STATIC for the same reason
+        /// <see cref="s_frozenScaleApplied"/> is: the clock is an engine global.</summary>
+        private static WorldHold.Handle s_hold;
 
         /// <summary>How close the observed clock must be to our recorded value to still count as ours.</summary>
         private const float ScaleMatchEpsilon = 0.001f;
@@ -496,10 +515,8 @@ namespace DeNelle.Village
             if (s_frozenScaleApplied < 0f) return;
             if (Time.unscaledTime <= s_hitStopEndTime + DeadlineGraceSeconds) return;
 
-            float ours     = s_frozenScaleApplied;
-            float leaked   = Time.timeScale;
-            float overdue  = Time.unscaledTime - s_hitStopEndTime;
-            bool  stillOurs = Mathf.Abs(leaked - ours) < ScaleMatchEpsilon;
+            float ours    = s_frozenScaleApplied;
+            float overdue = Time.unscaledTime - s_hitStopEndTime;
 
             var host = Instance;
             if (host != null && host._hitStopRoutine != null)
@@ -508,40 +525,24 @@ namespace DeNelle.Village
                 host._hitStopRoutine = null;
             }
 
-            s_frozenScaleApplied = -1f;
-            s_hitStopEndTime     = 0f;
+            // ⛔ WO-1353 — THE THREE-CASE DANCE IS GONE, AND THAT IS THE FIX.
+            // This sweep used to compare the engine global against our record and take one of three
+            // branches: restore 1.00 if it still read our value, stay quiet if somebody had already
+            // restored it, or release WITHOUT stamping when it read a FOREIGN value. Every branch was
+            // individually right and the set of them was the defect: when two dips overlapped, both
+            // owners correctly declined to restore and the residue stayed on the global with nobody
+            // left holding it. That is the 0.28 the owner measured in open town on 2026-09-03.
+            // There is now ONE owner and ONE hold, so releasing is unconditional and cannot stamp
+            // over anybody: WorldHold recomputes the effective scale from whatever holds remain.
+            ReleaseOurClock($"deadline sweep - the stop is {overdue:F2}s past its deadline and its " +
+                            "restore never ran (the host was almost certainly deactivated or destroyed, " +
+                            "which kills a coroutine without firing OnDestroy and without throwing)");
 
-            if (stillOurs)
-            {
-                Time.timeScale = 1f;
-                FlowTrace.Fail("HitStop",
-                    $"HIT-STOP LEAK RECOVERED: timeScale was still {leaked:F2} {overdue:F2}s past its " +
-                    "deadline - the restore never completed (the host was almost certainly deactivated " +
-                    "or destroyed, which kills coroutines without firing OnDestroy). Restored to 1. The " +
-                    $"world was running at {leaked * 100f:F0}% speed, which reads to the player as " +
-                    "frozen controls.");
-                return;
-            }
-
-            if (Mathf.Abs(leaked - 1f) < ScaleMatchEpsilon) return;   // benign: already back to normal
-
-            // ⛔ THE BRANCH THAT USED TO SAY NOTHING. It is still right not to stamp — writing 1.00
-            // over a live slow-mo would make this class an Nth owner of the global, which is the
-            // shape of the defect, not the fix. It was catastrophically wrong to do it MUTE: this
-            // sweep is the only every-frame unscaled observer of the world clock in the project, so
-            // it is the one witness present when a FOREIGN owner leaks, and it was built to look
-            // away. The owner's 2026-09-02 "in town everything slowed to .1" is precisely this:
-            // 0.1 is not a value this class ever writes, so our silence is why the capture could
-            // not name an owner. Now it names the number, and the gate/next capture can name who.
-            FlowTrace.Warn("HitStop",
-                $"HIT-STOP SUPERSEDED, NOT RESTORED: our {ours:F2} stop is {overdue:F2}s past its " +
-                $"deadline but the clock reads {leaked:F2} ({leaked * 100f:F0}% speed), which is NOT " +
-                "our value. We release ownership WITHOUT stamping 1.00, because that scale belongs to " +
-                "another owner and overwriting it would make this class an Nth writer of the global. " +
-                "READ THIS AS A LEAD, NOT AS OUR LEAK: if the world is still slow after this line, the " +
-                $"owner that wrote {leaked:F2} failed to restore it. Non-1 writers in the tree: " +
-                "CombatFeedbackManager (kill slow-mo 0.30 / hit stop 0.05), ArenaDeathCam, " +
-                "WaveCelebrationManager, HeroHitReaction, GameOverScreen, WorldHold.");
+            FlowTrace.Fail("HitStop",
+                $"HIT-STOP LEAK RECOVERED: our {ours:F2} stop ran {overdue:F2}s past its deadline and " +
+                "its restore never completed. The world-clock hold has been released; live holds now " +
+                $"[{WorldHold.Describe()}], timeScale {Time.timeScale:F2}. A stop that reaches this " +
+                "line is a real defect in this class's own lifecycle - the recovery is not the fix.");
         }
 
         /// <summary>How far past the deadline to wait before calling it a leak. Generous enough that

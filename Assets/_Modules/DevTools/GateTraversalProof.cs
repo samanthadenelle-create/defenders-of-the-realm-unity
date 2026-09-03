@@ -102,7 +102,11 @@ namespace DeNelle.DevTools
             foreach (var route in routes)
             {
                 PanelManager.CloseAll();
-                Time.timeScale = 1f;
+                // ⛔ WO-1353 — a proof harness must not be a second writer of Time.timeScale. It
+                // asks the ONE owner to drop everything instead, which is louder AND correct: any
+                // hold still outstanding here is reported by name rather than silently stamped over.
+                DeNelle.Core.UI.WorldHold.ForceReleaseAll("GateTraversalProof route setup");
+                DeNelle.Core.UI.WorldHold.RestoreIfDrifted("GateTraversalProof route setup");
                 Vector3 requested = route.outward * StartRadius;
                 if (!NavMesh.SamplePosition(requested, out NavMeshHit seat, 8f, NavMesh.AllAreas))
                 {

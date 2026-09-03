@@ -72,6 +72,7 @@
 using System.Collections;
 using UnityEngine;
 using DeNelle.Core.Diagnostics;
+using DeNelle.Core.UI;         // WO-1353: WorldHold is the ONE writer of Time.timeScale
 using DeNelle.Village.Arena;   // BattleArena — gate home-scene combat feel during a staged battle
 
 namespace DeNelle.Village
@@ -212,6 +213,7 @@ namespace DeNelle.Village
             Application.onBeforeRender -= HostIndependentWatchdog;
             s_ourScale = -1f;
             s_dipDeadlineUnscaled = 0f;
+            s_hold = null;   // WO-1353: the hold handle is class state - never carry one across play mode
         }
 
         private void Awake()
@@ -289,59 +291,69 @@ namespace DeNelle.Village
         /// <summary>Grace past the deadline before a still-applied scale is called a leak.</summary>
         private const float DeadlineGraceSeconds = 0.25f;
 
-        /// <summary>Apply a scale and RECORD it as ours in the same breath, so the record of who
-        /// owns the global can never drift from the write that created it.</summary>
+        /// <summary>Reason token this class's holds carry. Read it straight out of a capture.</summary>
+        private const string HoldReason = WorldHold.ReasonCosmeticPrefix + "combat-dip";
+
+        /// <summary>Watchdog ceiling for one dip. The longest this class arms is the 0.45 s kill
+        /// slow-mo, so three seconds is six times any legitimate beat.</summary>
+        private const float HoldMaxSeconds = 3f;
+
+        /// <summary>The live world-clock hold, or null. STATIC because the clock is a global.</summary>
+        private static WorldHold.Handle s_hold;
+
+        /// <summary>
+        /// Apply a scale and RECORD it as ours in the same breath, so the record of who owns the
+        /// global can never drift from the write that created it.
+        ///
+        /// <para>⛔ WO-1353 — THIS NO LONGER WRITES <c>Time.timeScale</c>. It takes a hold from
+        /// WorldHold, the one owner. Scales and durations are untouched: the hit stop is still
+        /// <c>_hitStopTimescale</c> for <c>_hitStopDurationSeconds</c> and the kill slow-mo still
+        /// <c>_killSloMoTimescale</c> for <c>_killSloMoDurationSeconds</c>.</para>
+        /// </summary>
         private static void ApplyOurClock(float scale)
         {
-            Time.timeScale = scale;
+            if (s_hold != null && s_hold.IsHeld) WorldHold.SetScale(s_hold, scale);
+            else s_hold = WorldHold.AcquireScale(HoldReason, scale, HoldMaxSeconds);
             s_ourScale = scale;
         }
 
         /// <summary>
-        /// Give up ownership of the world clock, restoring 1.00 ONLY if the clock still reads the
-        /// value THIS class wrote. Three cases, and the third is the whole point:
-        ///   * clock still reads our value -> restore 1.00;
-        ///   * clock already reads 1.00    -> somebody restored it first, nothing to do;
-        ///   * clock reads someone ELSE's  -> release WITHOUT stamping, and NAME the value.
-        /// The old unconditional `Time.timeScale = 1f` in both finallys performed case three as a
-        /// stamp: a dip ending while another owner held the clock wiped out that owner's live
-        /// slow-mo. Stamping makes this class an Nth writer of the global, which is the shape of
-        /// the defect; doing it in silence is how the 0.28 leak went unexplained (CLAUDE.md §12).
+        /// Give up this class's claim on the world clock by disposing its hold.
+        ///
+        /// <para>⛔ WO-1353 — THE THREE-CASE DANCE IS GONE. This used to restore 1.00 only when the
+        /// engine global still read the value THIS class wrote, and otherwise release without
+        /// stamping so as not to become an Nth writer. Correct in isolation; collectively it is the
+        /// defect, because when this class's dip overlapped HitStopManager's stop (Enemy.cs fires
+        /// both on the same kill frame, twelve lines apart) BOTH owners correctly declined and the
+        /// residue stayed on the global. With one owner and slowest-wins composition, disposing is
+        /// unconditional and cannot stamp on anybody — WorldHold recomputes from the holds that
+        /// remain.</para>
         /// </summary>
         private static void ReleaseOurClock(string why)
         {
-            if (s_ourScale < 0f) return;
+            var hold = s_hold;
+            s_hold = null;
 
-            float ours     = s_ourScale;
-            float observed = Time.timeScale;
+            if (s_ourScale < 0f)
+            {
+                if (hold != null && hold.IsHeld)
+                {
+                    hold.Dispose();
+                    FlowTrace.Warn("CombatFeedback",
+                        $"combat dip released - {why} - with NO dip recorded but a live world hold " +
+                        "outstanding. Disposed it; the two records had drifted apart.");
+                }
+                return;
+            }
 
+            float ours = s_ourScale;
             s_ourScale = -1f;
             s_dipDeadlineUnscaled = 0f;
+            hold?.Dispose();
 
-            if (Mathf.Abs(observed - ours) < ScaleMatchEpsilon)
-            {
-                Time.timeScale = 1f;
-                FlowTrace.Step("CombatFeedback",
-                    $"combat dip ({ours:F2}) released - {why}. timeScale restored to 1.00.");
-                return;
-            }
-
-            if (Mathf.Abs(observed - 1f) < ScaleMatchEpsilon)
-            {
-                FlowTrace.Step("CombatFeedback",
-                    $"combat dip ({ours:F2}) released - {why}. The clock was already back at 1.00; " +
-                    "another owner restored it first.");
-                return;
-            }
-
-            FlowTrace.Warn("CombatFeedback",
-                $"combat dip ({ours:F2}) released - {why} - but the clock reads {observed:F2} " +
-                $"({observed * 100f:F0}% speed), which is NOT the value we wrote. We deliberately do NOT " +
-                "stamp 1.00 over another owner's live slow-mo, so the remaining restore for this clock " +
-                $"belongs to whoever wrote {observed:F2}. If the world is still slow after this line, " +
-                "that owner is the leak - not the combat feedback. Non-1 writers in the tree: " +
-                "HitStopManager, WaveCelebrationManager (wave-clear dip 0.28), HeroHitReaction " +
-                "(death 0.30), ArenaDeathCam, WorldHold.");
+            FlowTrace.Step("CombatFeedback",
+                $"combat dip ({ours:F2}) released - {why}. World holds now [{WorldHold.Describe()}], " +
+                $"timeScale {Time.timeScale:F2}.");
         }
 
         /// <summary>
@@ -380,10 +392,8 @@ namespace DeNelle.Village
             if (s_ourScale < 0f) return;
             if (Time.unscaledTime <= s_dipDeadlineUnscaled + DeadlineGraceSeconds) return;
 
-            float ours      = s_ourScale;
-            float leaked    = Time.timeScale;
-            float overdue   = Time.unscaledTime - s_dipDeadlineUnscaled;
-            bool  stillOurs = Mathf.Abs(leaked - ours) < ScaleMatchEpsilon;
+            float ours    = s_ourScale;
+            float overdue = Time.unscaledTime - s_dipDeadlineUnscaled;
 
             var host = Instance;
             if (host != null)
@@ -392,30 +402,16 @@ namespace DeNelle.Village
                 if (host._killSloMoRoutine != null) { host.StopCoroutine(host._killSloMoRoutine); host._killSloMoRoutine = null; }
             }
 
-            s_ourScale = -1f;
-            s_dipDeadlineUnscaled = 0f;
+            // ⛔ WO-1353 — unconditional release. See ReleaseOurClock for why the old three-case
+            // comparison against the engine global was individually right and collectively the bug.
+            ReleaseOurClock($"deadline sweep - the dip is {overdue:F2}s past its deadline and its " +
+                            "restore never ran (host deactivated or destroyed mid-dip)");
 
-            if (stillOurs)
-            {
-                Time.timeScale = 1f;
-                FlowTrace.Fail("CombatFeedback",
-                    $"COMBAT DIP LEAK RECOVERED: timeScale was still {leaked:F2} {overdue:F2}s past its " +
-                    "deadline - the restore never completed (the host was almost certainly deactivated " +
-                    "or destroyed, which kills coroutines without firing OnDestroy and without throwing, " +
-                    $"so the finally could not have caught it). Restored to 1.00. The world was running " +
-                    $"at {leaked * 100f:F0}% speed, which reads to the player as everything slowed.");
-                return;
-            }
-
-            if (Mathf.Abs(leaked - 1f) < ScaleMatchEpsilon) return;   // benign: already back to normal
-
-            FlowTrace.Warn("CombatFeedback",
-                $"COMBAT DIP SUPERSEDED, NOT RESTORED: our {ours:F2} dip is {overdue:F2}s past its " +
-                $"deadline but the clock reads {leaked:F2} ({leaked * 100f:F0}% speed), which is NOT our " +
-                "value. We release ownership WITHOUT stamping 1.00, because that scale belongs to " +
-                "another owner. READ THIS AS A LEAD, NOT AS OUR LEAK: if the world is still slow after " +
-                $"this line, whoever wrote {leaked:F2} failed to restore it. Non-1 writers: " +
-                "HitStopManager, WaveCelebrationManager, HeroHitReaction, ArenaDeathCam, WorldHold.");
+            FlowTrace.Fail("CombatFeedback",
+                $"COMBAT DIP LEAK RECOVERED: our {ours:F2} dip ran {overdue:F2}s past its deadline and " +
+                "its restore never completed. The world-clock hold has been released; live holds now " +
+                $"[{WorldHold.Describe()}], timeScale {Time.timeScale:F2}. Reaching this line is a real " +
+                "defect in this class's lifecycle - the recovery is not the fix.");
         }
 
         /// <summary>LateUpdate driver for the sweep. Covers headless batchmode, which renders

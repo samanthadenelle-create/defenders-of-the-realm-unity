@@ -105,6 +105,10 @@ namespace DeNelle.Core.Diagnostics
         string _noteBuffer = "";
         int _noteShowFrame;
         float _prevTimeScale = 1f;
+
+        /// <summary>The F8 note freeze, held on the ONE world-clock owner (WO-1353). The observed
+        /// scale above is still captured for the trace; the RESTORE is this hold's disposal.</summary>
+        DeNelle.Core.UI.WorldHold.Handle _worldHold;
 #endif
 
         // ---- bootstrap (zero setup) -------------------------------------------
@@ -516,9 +520,19 @@ namespace DeNelle.Core.Diagnostics
             // line captured 0 and CommitFlag restored 0 — the world never restarts, and the only
             // visible symptom is "the hero will not move" with the camera and build mode still fine.
             // A captured freeze is never worth restoring, so it degrades to 1.
+            //
+            // ⛔ WO-1353 — THE FREEZE IS NOW A HOLD ON THE ONE OWNER, AND F8 STILL WORKS.
+            // The save/restore pair here was already CORRECT (that is why the '> 0f' guard above
+            // and its twin in CommitFlag are pinned by TownMovementFloorRegression Case3), so this
+            // is not a bug fix - it is the last bare writer of Time.timeScale in shipping code
+            // moving to the owner so the lint can say "exactly one" without an exemption. The
+            // observed-scale capture and its guard are KEPT because they are what the trace line
+            // below reports; the RESTORE is now the hold's disposal, which additionally means F8
+            // pressed during a purchase or a modal no longer thaws the world on commit.
             float observedScale = Time.timeScale;
             _prevTimeScale = observedScale > 0f ? observedScale : 1f;
-            Time.timeScale = 0f;                                   // freeze so typing can't drive the hero
+            _worldHold = DeNelle.Core.UI.WorldHold.AcquireScale(
+                "f8-note-capture", 0f, DeNelle.Core.UI.WorldHold.StuckHoldSeconds);
             if (observedScale <= 0f)
                 DeNelle.Core.Diagnostics.FlowTrace.Warn("BreakCapture",
                     "F8 pressed while the world was ALREADY frozen (timeScale 0 — another owner, " +
@@ -539,7 +553,18 @@ namespace DeNelle.Core.Diagnostics
         void CommitFlag()
         {
             _noteMode = false;
-            try { Time.timeScale = _prevTimeScale > 0f ? _prevTimeScale : 1f; } catch { Time.timeScale = 1f; }
+            // WO-1353: the step-out is the hold's disposal. The '> 0f' intent that used to live in
+            // this line now lives in WorldHold (it never restores a non-positive scale, and it
+            // refuses to restore a STALE non-1 baseline), so a diagnostic commit can no longer
+            // re-arm a freeze or launder a leaked slow-mo. Guarded: a diagnostic must never throw.
+            try
+            {
+                var hold = _worldHold;
+                _worldHold = null;
+                hold?.Dispose();
+                DeNelle.Core.UI.WorldHold.RestoreIfDrifted("F8 note commit");
+            }
+            catch { }
             string note = string.IsNullOrWhiteSpace(_noteBuffer) ? "(no note)" : _noteBuffer.Trim();
             Record("flagged", $"[{SafeScene()}] {note}", null, screenshot: false);  // shot already taken
             _flagCount++;

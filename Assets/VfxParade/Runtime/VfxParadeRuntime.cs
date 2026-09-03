@@ -168,23 +168,45 @@ namespace VfxParade
             BuildUi();
         }
 
+        // =====================================================================
+        //  WORLD CLOCK — WO-1353. This curation overlay froze the game with a bare
+        //  Time.timeScale write and restored a captured value on two exits. It is now a
+        //  HOLD on the one owner (DeNelle.Core.UI.WorldHold), for two reasons:
+        //    1. one owner means one writer - this tool is dev-only but it ships in the
+        //       tree, so an exemption here would be an exemption a lint has to carry;
+        //    2. WorldHold's drift watchdog restores 1.00 whenever the clock is non-1 with
+        //       ZERO live holds, so a bare freeze here would be corrected out from under
+        //       the tool within half a second. Taking a hold is what keeps it working.
+        //  The freeze itself is unchanged: the world stops while curating.
+        // =====================================================================
+
+        private DeNelle.Core.UI.WorldHold.Handle _worldHold;
+
         private void OnEnable()
         {
             _savedTimeScale = Time.timeScale;
-            Time.timeScale = 0f; // freeze the game while curating
+            _worldHold = DeNelle.Core.UI.WorldHold.AcquireScale(
+                "vfx-parade-curation", 0f, DeNelle.Core.UI.WorldHold.StuckHoldSeconds);
             SpawnCurrent();
         }
 
         private void OnDisable()
         {
-            Time.timeScale = _savedTimeScale;
+            ReleaseWorldHold();
             DestroySpawn();
         }
 
         private void OnDestroy()
         {
-            Time.timeScale = _savedTimeScale;
+            ReleaseWorldHold();
             DestroySpawn();
+        }
+
+        private void ReleaseWorldHold()
+        {
+            var hold = _worldHold;
+            _worldHold = null;
+            hold?.Dispose();
         }
 
         // =====================================================================

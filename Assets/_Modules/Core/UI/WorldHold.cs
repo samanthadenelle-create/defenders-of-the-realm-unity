@@ -80,6 +80,58 @@
 //
 // Every transition traces with the reason name, so a stuck clock is diagnosable in one
 // read of the log rather than by bisecting the purchase path (CLAUDE.md §12).
+//
+// =============================================================================
+// WO-1353 (2026-09-03) — THE FREEZE OWNER BECAME THE WORLD CLOCK OWNER.
+// -----------------------------------------------------------------------------
+// CAPTURED DEFECT (owner felt-test, Main_Castle_Overworld, no battle, no modal):
+//     [Flow:HeroOwner] ... animSpeed=0.00 timeScale=0.28 dt=0.0046
+//     inputSuppressed=False autoWalk=False
+// 28% speed in open town. Every timer, animation, cooldown and the wave clock all wrong
+// together, and nothing on screen said so. The hero read velSelf=0.00 because the clock
+// was nearly stopped, which is why it also presented as "frozen in place".
+//
+// ⛔ THE 0.28 IS WaveCelebrationManager._slowMoScale, AND IT IS THE ONLY 0.28 IN THE TREE.
+// But naming that writer is NOT the fix, because the leak was never one class's bug. As of
+// 2026-09-02 there were FIVE separate per-class ownership mechanisms (HitStopManager,
+// CombatFeedbackManager, WaveCelebrationManager, HeroHitReaction, ArenaDeathCam), each with
+// its own s_ourScale + deadline sweep, and each ending in the same branch: "the clock does
+// not read MY value, so release WITHOUT stamping and say so". That branch is individually
+// CORRECT — stamping would make each class an Nth writer — and collectively it is the
+// defect: when two dips overlap, BOTH correctly decline to restore and the residue is left
+// on the engine global with every owner having honourably walked away. Five right decisions
+// producing one wrong clock. The documented collision is in Enemy.cs, where a hero kill
+// starts CombatFeedbackManager's 0.30 kill slow-mo and TWELVE LINES LATER HitStopManager
+// stamps 0.04 over it on the same frame.
+//
+// THE OWNER'S RULING, verbatim: *"I want a guard on all time changes"* / *"every battle
+// death victory"* / *"anything that steps into time slow needs to step to time return"*.
+//
+// So this class stops being the freeze owner and becomes THE world clock owner. Nothing
+// else in shipping code writes Time.timeScale; a cosmetic dip takes a HOLD at its scale
+// (AcquireScale) and releases it, exactly as a modal takes a hold at 0. There is no longer
+// any such thing as a foreign value to decline to stamp over, because there is no second
+// writer to produce one.
+//
+//   CONFLICT RULE = SLOWEST WINS (minimum over live holds). Argued in full on AcquireScale:
+//   a freeze is a REQUIREMENT and a dip is a PREFERENCE, and minimum is MONOTONE, so
+//   releasing any hold can only move the world toward 1.00. That is what makes the whole
+//   ticket's invariant — ZERO LIVE HOLDS IMPLIES 1.00 — provable instead of hoped for.
+//
+//   THREE FAILSAFES, because a paired contract still breaks:
+//     1. every hold carries a MAXIMUM duration on the UNSCALED clock and self-releases with
+//        a FlowTrace.Fail naming its overrun (CosmeticHoldSeconds 5 s for a beat whose
+//        longest legitimate form is 1.2 s; StuckHoldSeconds 180 s for a chain settlement);
+//     2. a SCENE LOAD releases every hold and resets the clock — Time.timeScale is an
+//        ENGINE GLOBAL and SceneManager.LoadScene does NOT reset it, and the hosts that
+//        took those holds are gone;
+//     3. a DRIFT WATCHDOG on the unscaled clock restores the baseline and FAILS loudly when
+//        the scale is wrong with zero live holds. That is precisely the state measured on
+//        2026-09-03, and it is the one this ticket exists to make impossible to ship silently.
+//
+// ⭐ GAME FEEL IS UNCHANGED. Not one scale, duration, curve or trigger moved: 0.28 is still
+// 0.28 for 0.9 s + 0.3 s of ease, the hit stop is still 0.02-0.05, the death ramp is still
+// 0.30 over 1.2 s. This changed OWNERSHIP and GUARANTEES, never tuning (WO-1353 constraint).
 // =============================================================================
 
 using System;
@@ -125,12 +177,43 @@ namespace DeNelle.Core.UI
         /// </summary>
         public const float SuspectBaselineGraceSeconds = 2f;
 
+        /// <summary>
+        /// Reason token for a cosmetic slow-motion beat (hit stop, kill slow-mo, wave-clear dip,
+        /// death ramp, arena death cam). Callers pass their own descriptive name; this is the
+        /// prefix convention so a capture reads the CLASS of hold before the instance.
+        /// </summary>
+        public const string ReasonCosmeticPrefix = "fx:";
+
+        /// <summary>
+        /// Default maximum UNSCALED seconds a COSMETIC (non-freeze) hold may live. The longest
+        /// deliberate beat in the tree is HeroHitReaction's 1.2 s death ramp, so 5 s clears every
+        /// legitimate one by 4x while still catching a stranded dip within a breath rather than
+        /// within the 180 s a transaction is allowed. Callers may pass their own.
+        /// </summary>
+        public const float CosmeticHoldSeconds = 5f;
+
+        /// <summary>
+        /// Unscaled seconds the clock may sit away from 1.00 with ZERO live holds before the
+        /// watchdog restores it and reports. Non-zero only so a foreign one-frame write (vendor
+        /// demo code, an editor tool) is not reported as a leak on the frame it happens.
+        /// </summary>
+        public const float DriftGraceSeconds = 0.5f;
+
         /// <summary>Disposable hold token. Idempotent: double-dispose is a no-op, never a
         /// double-release that could unfreeze the world while another hold is outstanding.</summary>
         public sealed class Handle : IDisposable
         {
             internal readonly string Reason;
             internal float AcquiredUnscaled;
+
+            /// <summary>The scale THIS hold requests. 0 for a freeze; a cosmetic dip requests its
+            /// own value. The world runs at the MINIMUM across every live hold.</summary>
+            internal float Scale;
+
+            /// <summary>Unscaled seconds this hold may live before the watchdog force-releases it
+            /// with a FlowTrace.Fail.</summary>
+            internal float MaxSeconds;
+
             private bool _released;
 
             internal Handle(string reason, float acquiredUnscaled)
@@ -138,6 +221,9 @@ namespace DeNelle.Core.UI
                 Reason = string.IsNullOrEmpty(reason) ? "unnamed" : reason;
                 AcquiredUnscaled = acquiredUnscaled;
             }
+
+            /// <summary>The scale this hold is asking the world to run at.</summary>
+            public float RequestedScale => Scale;
 
             /// <summary>True while this particular hold is still outstanding.</summary>
             public bool IsHeld => !_released;
@@ -160,6 +246,17 @@ namespace DeNelle.Core.UI
         // non-1; it is what turns "is this scale still plausibly live?" into an answerable
         // question instead of a guess. See SuspectBaselineGraceSeconds.
         private static float s_capturedAtUnscaled;
+
+        // Unscaled time the zero-hold drift watchdog first SAW a wrong clock. 0 means "no drift in
+        // flight". A grace window exists only so a foreign one-frame write is not reported as a
+        // leak on the frame it happens; a real leak is reported within half a second.
+        private static float s_lastDriftSeenUnscaled;
+
+        // The last hold to release, kept purely so a drift report can name what ran just before it.
+        // That one field is the difference between "the clock is 0.28" and "the clock is 0.28 and
+        // the wave-clear dip released 40 ms ago" - which is the whole cost of the 2026-09-03 P0.
+        private static string s_lastReleasedReason = "none";
+        private static float s_lastReleasedAtUnscaled;
 
         private static bool s_frozen;
         private static bool s_applicationBackgrounded;
@@ -198,7 +295,36 @@ namespace DeNelle.Core.UI
         /// </summary>
         public static Handle Acquire(string reason)
         {
-            var handle = new Handle(reason, Time.unscaledTime);
+            return AcquireScale(reason, 0f, StuckHoldSeconds);
+        }
+
+        /// <summary>
+        /// Acquires a hold that asks the world to run at <paramref name="scale"/> — the general
+        /// form behind <see cref="Acquire"/>, which is simply this at scale 0.
+        ///
+        /// <para><b>THE CONFLICT RULE IS SLOWEST-WINS (minimum across live holds), and it is not a
+        /// taste call.</b> A freeze is a hard REQUIREMENT — a purchase or a modal must stop the
+        /// world — while a dip is a cosmetic PREFERENCE, so last-writer-wins would let a hit stop
+        /// starting mid-purchase un-freeze live gameplay under a Paused screen (the WO-1016 shape
+        /// the reassert tick exists to patch). Minimum is also MONOTONE: releasing any hold can only
+        /// move the world toward 1.00, never further from it, which is what makes "zero live holds
+        /// implies 1.00" provable rather than hoped for.</para>
+        ///
+        /// <para>⛔ ALWAYS inside a <c>using</c>, or paired with an explicit Dispose on every exit
+        /// of the owner's lifecycle (OnDisable AND OnDestroy — a coroutine killed by deactivation
+        /// fires neither a finally nor OnDestroy; that is the 2026-09-02 leak).</para>
+        /// </summary>
+        /// <param name="reason">Named in every trace line. This is what a future capture reads.</param>
+        /// <param name="scale">Requested world scale. Clamped to >= 0.</param>
+        /// <param name="maxUnscaledSeconds">Watchdog ceiling on the UNSCALED clock.</param>
+        public static Handle AcquireScale(string reason, float scale, float maxUnscaledSeconds)
+        {
+            float want = Mathf.Max(0f, scale);
+            var handle = new Handle(reason, Time.unscaledTime)
+            {
+                Scale = want,
+                MaxSeconds = maxUnscaledSeconds > 0f ? maxUnscaledSeconds : CosmeticHoldSeconds,
+            };
             s_holds.Add(handle);
 
             if (s_holds.Count == 1)
@@ -206,10 +332,9 @@ namespace DeNelle.Core.UI
                 float observed = Time.timeScale;
                 s_scaleBeforeHold = observed > 0f ? observed : 1f;
                 s_capturedAtUnscaled = Time.unscaledTime;
-                Time.timeScale = 0f;
-                s_frozen = true;
+                ApplyEffective();
                 FlowTrace.Step("Pause",
-                    $"WorldHold ACQUIRE '{handle.Reason}' -> timeScale 0 (captured {observed:F2}" +
+                    $"WorldHold ACQUIRE '{handle.Reason}' -> timeScale {EffectiveScale:F2} (captured {observed:F2}" +
                     (observed > 0f ? "" : " <= 0, ALREADY FROZEN by another owner - restoring to 1 instead") +
                     $"). Full release will restore {s_scaleBeforeHold:F2}.");
 
@@ -234,12 +359,57 @@ namespace DeNelle.Core.UI
             }
             else
             {
+                ApplyEffective();
                 FlowTrace.Step("Pause",
-                    $"WorldHold ACQUIRE '{handle.Reason}' -> already frozen, {s_holds.Count} holds outstanding " +
-                    $"[{Describe()}]. The world stays frozen until the LAST one releases.");
+                    $"WorldHold ACQUIRE '{handle.Reason}' @ {want:F2} -> effective timeScale " +
+                    $"{EffectiveScale:F2} (slowest wins), {s_holds.Count} holds outstanding " +
+                    $"[{Describe()}]. The world runs at 1.00 again only when the LAST one releases.");
+                EnsureWatchdog();
             }
 
             return handle;
+        }
+
+        /// <summary>
+        /// Re-points a LIVE hold at a new scale — the seam a RAMP needs (an ease-back, a lerp into
+        /// slow-mo). The hold keeps its identity and its watchdog deadline, so a ramp is one hold
+        /// that moves, never a stream of acquire/release pairs that could interleave with someone
+        /// else's and leave a residue. A dead or foreign handle is ignored.
+        /// </summary>
+        public static void SetScale(Handle handle, float scale)
+        {
+            if (handle == null || !handle.IsHeld || !s_holds.Contains(handle)) return;
+            float want = Mathf.Max(0f, scale);
+            if (Mathf.Approximately(handle.Scale, want)) return;
+            handle.Scale = want;
+            ApplyEffective();
+        }
+
+        /// <summary>
+        /// The scale the world SHOULD be running at right now: the minimum across every live hold,
+        /// or the restorable baseline when there are none. This is the only value written to
+        /// <see cref="Time.timeScale"/> anywhere in shipping code.
+        /// </summary>
+        public static float EffectiveScale
+        {
+            get
+            {
+                if (s_holds.Count == 0) return RestorableBaseline();
+                float min = float.MaxValue;
+                for (int i = 0; i < s_holds.Count; i++)
+                    if (s_holds[i].Scale < min) min = s_holds[i].Scale;
+                return min >= float.MaxValue ? 1f : min;
+            }
+        }
+
+        /// <summary>THE ONE WRITE. Every path that changes the world clock funnels here, which is
+        /// what makes "who slowed the clock" answerable from one grep of one file.</summary>
+        private static void ApplyEffective()
+        {
+            float want = EffectiveScale;
+            Time.timeScale = want;
+            s_frozen = want <= 0f;
+            s_lastDriftSeenUnscaled = 0f;
         }
 
         /// <summary>
@@ -294,6 +464,9 @@ namespace DeNelle.Core.UI
             s_frozen = false;
             s_applicationBackgrounded = false;
             s_backgroundedAtUnscaled = 0f;
+            s_lastDriftSeenUnscaled = 0f;
+            s_lastReleasedReason = "none";
+            s_lastReleasedAtUnscaled = 0f;
             Time.timeScale = 1f;
         }
 
@@ -305,18 +478,39 @@ namespace DeNelle.Core.UI
         {
             s_holds.Remove(handle);
 
+            float heldFor = Mathf.Max(0f, Time.unscaledTime - handle.AcquiredUnscaled);
+            s_lastReleasedReason = handle.Reason;
+            s_lastReleasedAtUnscaled = Time.unscaledTime;
+
             if (s_holds.Count > 0)
             {
+                ApplyEffective();
                 FlowTrace.Step("Pause",
-                    $"WorldHold RELEASE '{handle.Reason}' -> STILL FROZEN, {s_holds.Count} hold(s) remain " +
-                    $"[{Describe()}]. Restoring now would unfreeze the world under them.");
+                    $"WorldHold RELEASE '{handle.Reason}' @ {handle.Scale:F2} after {heldFor:F2}s unscaled " +
+                    $"-> STILL HELD, {s_holds.Count} hold(s) remain [{Describe()}], effective timeScale " +
+                    $"{Time.timeScale:F2}. Restoring 1.00 now would unfreeze the world under them.");
                 return;
             }
 
             RestoreScale();
             FlowTrace.Step("Pause",
-                $"WorldHold RELEASE '{handle.Reason}' -> last hold gone, timeScale {Time.timeScale:F2} " +
-                $"(captured {s_scaleBeforeHold:F2}).");
+                $"WorldHold RELEASE '{handle.Reason}' @ {handle.Scale:F2} after {heldFor:F2}s unscaled " +
+                $"-> LAST hold gone, timeScale {Time.timeScale:F2} (captured {s_scaleBeforeHold:F2}). " +
+                "Zero live holds means the world runs at 1.00.");
+        }
+
+        /// <summary>
+        /// The scale a FULL release lands on: normally 1.00, and the captured pre-hold baseline
+        /// only while that capture can still plausibly be a LIVE beat owned by something outside
+        /// this class (vendor demo code, an editor tool, an unconverted writer). Pure — it logs
+        /// nothing and mutates nothing, so <see cref="EffectiveScale"/> can ask it every frame.
+        /// </summary>
+        private static float RestorableBaseline()
+        {
+            float restore = s_scaleBeforeHold > 0f ? s_scaleBeforeHold : 1f;
+            if (Mathf.Approximately(restore, 1f)) return 1f;
+            float heldFor = Mathf.Max(0f, Time.unscaledTime - s_capturedAtUnscaled);
+            return heldFor > SuspectBaselineGraceSeconds ? 1f : restore;
         }
 
         private static void RestoreScale()
@@ -351,8 +545,7 @@ namespace DeNelle.Core.UI
                 }
             }
 
-            Time.timeScale = restore;
-            s_frozen = false;
+            ApplyEffective();
         }
 
         private static WorldHoldWatchdog s_watchdog;
@@ -383,31 +576,174 @@ namespace DeNelle.Core.UI
         internal static void ReassertTick()
         {
             if (s_holds.Count == 0) return;
-            if (Mathf.Approximately(Time.timeScale, 0f)) return;
+            float want = EffectiveScale;
+            if (Mathf.Approximately(Time.timeScale, want)) return;
 
             float stolen = Time.timeScale;
-            Time.timeScale = 0f;
+            ApplyEffective();
             FlowTrace.Warn("Pause",
                 $"WORLD HOLD CLOCK REASSERTED: another owner wrote timeScale {stolen:F2} while " +
-                $"{s_holds.Count} hold(s) [{Describe()}] were outstanding. Restored 0; the full release " +
-                $"still restores the captured {CapturedScale:F2}.");
+                $"{s_holds.Count} hold(s) [{Describe()}] were outstanding. Restored {want:F2} (slowest " +
+                "of the live holds). Anything that writes Time.timeScale outside this class is a " +
+                "SECOND OWNER and the lint in BattleQuiescenceRegression will name it.");
         }
 
-        internal static void WatchdogTick()
+        internal static void WatchdogTick() => WatchdogTick(Time.unscaledTime);
+
+        /// <summary>
+        /// Explicit-clock overload — the deterministic ORACLE SEAM, matching the one
+        /// <see cref="NotifyApplicationPause(bool, float)"/> already provides. Public because the
+        /// regression suite lives in the DeNelle.Editor assembly and this class's InternalsVisibleTo
+        /// names only DeNelle.Core.Tests; a failsafe nothing can drive is a failsafe nobody has
+        /// proven. Production always goes through the no-argument form above.
+        /// </summary>
+        public static void WatchdogTick(float nowUnscaled)
         {
-            if (s_holds.Count == 0) return;
-            float now = Time.unscaledTime;
+            float now = nowUnscaled;
+
+            if (s_holds.Count == 0)
+            {
+                // ⛔ THE INVARIANT, ENFORCED: zero live holds means the world runs at the restorable
+                // baseline (normally 1.00). Anything else is somebody's leak - which is EXACTLY the
+                // state measured on 2026-09-03 (timeScale 0.28 in open town, no battle, no modal,
+                // input not suppressed). Corrected, and NAMED - never silently.
+                float want = RestorableBaseline();
+                if (Mathf.Approximately(Time.timeScale, want)) { s_lastDriftSeenUnscaled = 0f; return; }
+
+                if (s_lastDriftSeenUnscaled <= 0f) { s_lastDriftSeenUnscaled = now; return; }
+                if (now - s_lastDriftSeenUnscaled < DriftGraceSeconds) return;
+
+                float drifted = Time.timeScale;
+                float driftedFor = now - s_lastDriftSeenUnscaled;
+                s_lastDriftSeenUnscaled = 0f;
+                Time.timeScale = want;
+                FlowTrace.Fail("Pause",
+                    $"⛔ WORLD CLOCK DRIFT: timeScale read {drifted:F2} ({drifted * 100f:F0}% speed) for " +
+                    $"{driftedFor:F2}s with ZERO live holds. Restored {want:F2}. Zero holds ALWAYS means " +
+                    "1.00, so this is a second writer of Time.timeScale, not a hold that failed to " +
+                    $"release. Last hold to release was '{s_lastReleasedReason}' at unscaled " +
+                    $"{s_lastReleasedAtUnscaled:F2} ({now - s_lastReleasedAtUnscaled:F2}s ago). If that " +
+                    "reason is 'none' nothing of ours ever held the clock and the writer is outside " +
+                    "WorldHold entirely - vendor demo code or an unconverted owner.");
+                return;
+            }
+
             for (int i = s_holds.Count - 1; i >= 0; i--)
             {
-                if (now - s_holds[i].AcquiredUnscaled < StuckHoldSeconds) continue;
+                float age = now - s_holds[i].AcquiredUnscaled;
+                float limit = s_holds[i].MaxSeconds > 0f ? s_holds[i].MaxSeconds : StuckHoldSeconds;
+                if (age < limit) continue;
                 FlowTrace.Fail("Pause",
-                    $"⛔ STUCK WORLD HOLD: '{s_holds[i].Reason}' has been outstanding for " +
-                    $"{now - s_holds[i].AcquiredUnscaled:F0}s (limit {StuckHoldSeconds:F0}s). Its owner never " +
-                    "disposed it - the most likely cause is the app being backgrounded mid-flight and an " +
-                    "await that never resumed. Force-releasing so the player is not left in a frozen game.");
+                    $"⛔ STUCK WORLD HOLD: '{s_holds[i].Reason}' (scale {s_holds[i].Scale:F2}) has been " +
+                    $"outstanding for {age:F1}s, past its {limit:F1}s ceiling. It OVERRAN by " +
+                    $"{age - limit:F1}s. Its owner never disposed it - for a cosmetic beat that means the " +
+                    "host was deactivated or destroyed mid-dip (which kills a coroutine without firing " +
+                    "OnDestroy and without throwing, so no try/finally could have caught it); for a " +
+                    "transaction it means the app was backgrounded and an await never resumed. " +
+                    "Force-releasing so the world is not left slow.");
                 s_holds.RemoveAt(i);
             }
+
             if (s_holds.Count == 0) RestoreScale();
+            else ApplyEffective();
+        }
+
+        /// <summary>
+        /// Corrects the clock IF and only if it has drifted with zero live holds, and says so.
+        /// The seam an OBSERVER (BattleQuiescenceGate) uses to hand a leak back to the owner
+        /// instead of writing <see cref="Time.timeScale"/> itself and becoming a second writer.
+        /// Returns true when it actually corrected something.
+        /// </summary>
+        public static bool RestoreIfDrifted(string why)
+        {
+            if (s_holds.Count > 0)
+            {
+                float want = EffectiveScale;
+                if (Mathf.Approximately(Time.timeScale, want)) return false;
+                float stolen = Time.timeScale;
+                ApplyEffective();
+                FlowTrace.Warn("Pause",
+                    $"WorldHold corrected timeScale {stolen:F2} -> {want:F2} at the request of '{why}' " +
+                    $"while {s_holds.Count} hold(s) [{Describe()}] were live.");
+                return true;
+            }
+
+            float baseline = RestorableBaseline();
+            if (Mathf.Approximately(Time.timeScale, baseline)) return false;
+
+            float drifted = Time.timeScale;
+            s_lastDriftSeenUnscaled = 0f;
+            Time.timeScale = baseline;
+            FlowTrace.Fail("Pause",
+                $"⛔ WORLD CLOCK DRIFT corrected at the request of '{why}': timeScale was {drifted:F2} " +
+                $"({drifted * 100f:F0}% speed) with ZERO live holds; restored {baseline:F2}. The last " +
+                $"hold to release was '{s_lastReleasedReason}'. Zero holds always means 1.00, so a " +
+                "non-1 reading here is a second writer of Time.timeScale - find it, do not rely on this.");
+            return true;
+        }
+
+        /// <summary>
+        /// ⚠ <see cref="Time.timeScale"/> IS AN ENGINE GLOBAL AND A SCENE LOAD DOES NOT RESET IT.
+        /// A dip that was live when a scene changed has no host left to release it, so the load
+        /// itself is the release. Wired once per play session below.
+        /// </summary>
+        private static void OnSceneLoadedReleaseAll(
+            UnityEngine.SceneManagement.Scene scene, UnityEngine.SceneManagement.LoadSceneMode mode)
+        {
+            if (mode != UnityEngine.SceneManagement.LoadSceneMode.Single) return;
+            ReleaseAllForSceneLoad(scene.name);
+        }
+
+        /// <summary>
+        /// The scene-load release, by NAME rather than by <c>Scene</c> struct — so the oracle can
+        /// drive it without loading a scene. Production reaches it through the sceneLoaded hook.
+        /// </summary>
+        public static void ReleaseAllForSceneLoad(string sceneName)
+        {
+            if (s_holds.Count > 0)
+            {
+                FlowTrace.Warn("Pause",
+                    $"WorldHold scene-load release: scene '{sceneName}' loaded with {s_holds.Count} " +
+                    $"hold(s) still outstanding [{Describe()}]. Time.timeScale is an ENGINE GLOBAL and " +
+                    "SceneManager.LoadScene does NOT reset it, so the hosts that took these holds are " +
+                    "gone and nothing else would ever release them. Dropping all of them.");
+                s_holds.Clear();
+            }
+
+            // The baseline cannot survive a scene change either: whatever cosmetic beat it captured
+            // belonged to the scene that just went away.
+            s_scaleBeforeHold = 1f;
+            s_capturedAtUnscaled = 0f;
+            s_lastDriftSeenUnscaled = 0f;
+
+            if (!Mathf.Approximately(Time.timeScale, 1f))
+            {
+                float carried = Time.timeScale;
+                Time.timeScale = 1f;
+                FlowTrace.Warn("Pause",
+                    $"WorldHold scene-load release: timeScale carried {carried:F2} " +
+                    $"({carried * 100f:F0}% speed) across the load into '{sceneName}'. Restored 1.00. " +
+                    "A new scene always starts at full speed.");
+            }
+            else
+            {
+                FlowTrace.Step("Pause",
+                    $"WorldHold scene-load release: '{sceneName}' starts with 0 holds at timeScale 1.00.");
+            }
+        }
+
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
+        private static void WireSceneLoadRelease()
+        {
+            UnityEngine.SceneManagement.SceneManager.sceneLoaded -= OnSceneLoadedReleaseAll;
+            UnityEngine.SceneManagement.SceneManager.sceneLoaded += OnSceneLoadedReleaseAll;
+
+            // ⛔ ARM THE DRIFT WATCHDOG AT BOOT, NOT ON THE FIRST HOLD. The state this ticket was
+            // minted from had ZERO live holds - a leaked 0.28 with nothing outstanding - so a
+            // watchdog installed lazily by Acquire() would not have been running at the moment it
+            // was needed. The one net that catches an UNCONVERTED writer must not depend on a
+            // converted one having run first.
+            EnsureWatchdog();
         }
 
         /// <summary>
@@ -459,6 +795,9 @@ namespace DeNelle.Core.UI
             s_watchdog = null;
             s_applicationBackgrounded = false;
             s_backgroundedAtUnscaled = 0f;
+            s_lastDriftSeenUnscaled = 0f;
+            s_lastReleasedReason = "none";
+            s_lastReleasedAtUnscaled = 0f;
         }
     }
 }

@@ -2,6 +2,7 @@
     "name": "VfxParade.Runtime",
     "rootNamespace": "VfxParade",
     "references": [
+        "DeNelle.Core",
         "UnityEngine.UI",
         "Unity.TextMeshPro"
     ],

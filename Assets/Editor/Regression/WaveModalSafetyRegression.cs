@@ -114,9 +114,45 @@ namespace DeNelle.Editor.Regression
                 failures.Add("[pause-owner] the WorldHold watchdog is not ordered late enough to defend the clock lease.");
             if (!Regex.IsMatch(watchdogSrc, @"void\s+LateUpdate\s*\(\s*\)[\s\S]{0,200}?ReassertTick"))
                 failures.Add("[pause-owner] no LATE reassertion tick exists; a frozen UI can outlive its zero timeScale.");
+            // ⚠ REPOINTED 2026-09-03 (WO-1353), NOT WEAKENED - THE SECOND RE-POINT OF THIS CASE.
+            // This used to require the LITERAL `Time.timeScale = 0f` inside ReassertTick's body.
+            // WO-1353 made WorldHold the owner of the whole world clock rather than only of
+            // freezes: cosmetic slow-motion (hit stop, kill slow-mo, wave-clear dip, death ramp,
+            // arena death cam) now takes a HOLD at its own scale instead of writing the global, and
+            // the composed scale is the MINIMUM across live holds ("slowest wins"). So the reassert
+            // no longer writes a hardcoded 0 - it writes EffectiveScale through the single writer,
+            // ApplyEffective().
+            //
+            // ⛔ AND THE OLD SPELLING IS NOW ACTIVELY WRONG, WHICH IS WHY IT MUST NOT BE RESTORED.
+            // With cosmetic dips held rather than stamped, a literal `Time.timeScale = 0f` in
+            // ReassertTick would FREEZE THE GAME OUTRIGHT any time only a wave-clear dip was live -
+            // a hard softlock in place of a 0.9 s celebration. The property to pin is "a stolen
+            // clock is restored to what the live holds require", and for a pause hold that value is
+            // provably 0: Acquire() delegates to AcquireScale(reason, 0f, ...), scales are clamped
+            // with Mathf.Max(0f, scale), and EffectiveScale takes the MINIMUM - so a live pause hold
+            // pins the composed scale to exactly 0 no matter what else is held.
+            //
+            // The four links of that chain are pinned separately below, so a break names its link.
             if (!Regex.IsMatch(holdSrc,
-                    @"ReassertTick\s*\(\s*\)[\s\S]{0,800}?Time\.timeScale\s*=\s*0f"))
-                failures.Add("[pause-owner] WorldHold.ReassertTick no longer re-zeroes a stolen clock.");
+                    @"ReassertTick\s*\(\s*\)[\s\S]{0,800}?ApplyEffective\s*\(\s*\)"))
+                failures.Add("[pause-owner] WorldHold.ReassertTick no longer re-asserts the clock. A " +
+                             "stolen lease is never taken back, so a frozen UI outlives its freeze " +
+                             "and the player sees a Paused screen over running gameplay.");
+            if (!Regex.IsMatch(holdSrc,
+                    @"ApplyEffective\s*\(\s*\)[\s\S]{0,400}?Time\.timeScale\s*=\s*want\s*;"))
+                failures.Add("[pause-owner] ApplyEffective is no longer the single writer of " +
+                             "Time.timeScale. Every reassert and every release routes through it; if " +
+                             "it stops writing the clock, nothing does.");
+            if (!Regex.IsMatch(holdSrc, @"if\s*\(\s*s_holds\[i\]\.Scale\s*<\s*min\s*\)"))
+                failures.Add("[pause-owner] EffectiveScale no longer composes holds by MINIMUM. " +
+                             "Slowest-wins is what makes a pause hold outrank a cosmetic dip; under " +
+                             "last-wins a hit stop starting mid-pause would thaw the world under a " +
+                             "Paused screen - the WO-1016 shape by another road.");
+            if (!Regex.IsMatch(holdSrc,
+                    @"Handle\s+Acquire\s*\(\s*string\s+reason\s*\)[\s\S]{0,300}?AcquireScale\s*\(\s*reason\s*,\s*0f"))
+                failures.Add("[pause-owner] a pause/transaction hold is no longer acquired at scale 0, " +
+                             "so the minimum across live holds is not pinned to 0 and a 'freeze' may " +
+                             "leave the world running.");
             // ⚠ REPOINTED 2026-09-02 (owner flag 4656, the 0.28 clock leak), NOT WEAKENED.
             // This used to require the literal `Time.timeScale = s_scaleBeforeHold > 0f ? ... : 1f`
             // as ONE adjacent expression. The 0.28 fix hoisted the guard into a local `restore` and
@@ -129,9 +165,39 @@ namespace DeNelle.Editor.Regression
                 failures.Add("[pause-restore] the release no longer restores the captured positive scale safely. " +
                              "Some branch of the release can now write a non-positive timeScale, which is the " +
                              "WO-1016 permanent-invisible-freeze shape.");
-            if (!Regex.IsMatch(holdSrc, @"Time\.timeScale\s*=\s*restore\s*;"))
-                failures.Add("[pause-restore] the guarded 'restore' local is no longer what feeds Time.timeScale, " +
-                             "so the positive guard above may be computed and then bypassed.");
+            // ⚠ REPOINTED 2026-09-03 (WO-1353), NOT WEAKENED - AND THIS FORM IS STRICTLY STRONGER.
+            // This used to require the literal `Time.timeScale = restore;`, i.e. that ONE named
+            // local fed the clock. WO-1353 moved the guard into RestorableBaseline(), which is now
+            // the ONLY producer of a zero-hold scale and whose FIRST statement is the positive
+            // guard; the release path reaches the clock through ApplyEffective() instead.
+            //
+            // The old pin checked ONE of the writes. This checks ALL of them: every assignment to
+            // Time.timeScale in the owner must take its value from the guarded baseline, from the
+            // composed EffectiveScale, or from the literal 1f. That is the spelling-independent
+            // form of "the guard cannot be computed and then bypassed" - a new unguarded write
+            // anywhere in the file fails this, which the old single-line regex could not catch.
+            var writes = Regex.Matches(holdSrc, @"Time\.timeScale\s*=\s*([^;]+);");
+            var unguarded = new List<string>();
+            foreach (Match m in writes)
+            {
+                string rhs = m.Groups[1].Value.Trim();
+                // want     <- ApplyEffective / WatchdogTick, = EffectiveScale (guarded when 0 holds)
+                // baseline <- RestoreIfDrifted, = RestorableBaseline() (guarded)
+                // 1f       <- literal, trivially positive
+                if (rhs == "want" || rhs == "baseline" || rhs == "1f") continue;
+                unguarded.Add(rhs);
+            }
+            if (unguarded.Count > 0)
+                failures.Add("[pause-restore] " + unguarded.Count + " assignment(s) to Time.timeScale in " +
+                             WorldHoldSrc + " take an UNGUARDED value (" + string.Join(", ", unguarded) +
+                             "). Every write must come from the guarded RestorableBaseline (via " +
+                             "'want'/'baseline') or the literal 1f, or the positive guard can be " +
+                             "computed and then bypassed - the WO-1016 permanent-invisible-freeze shape.");
+            if (!Regex.IsMatch(holdSrc,
+                    @"s_holds\.Count\s*==\s*0\s*\)\s*return\s+RestorableBaseline\s*\(\s*\)"))
+                failures.Add("[pause-restore] EffectiveScale no longer routes the ZERO-HOLD case through " +
+                             "RestorableBaseline, so the positive guard is no longer the only producer " +
+                             "of a restored scale and a release can write a non-positive clock.");
 
             // ADDED 2026-09-02: pin the leak fix itself. WaveCelebrationManager's SlowMoDip was an
             // untracked coroutine that Unity dropped on host deactivation, stranding timeScale at

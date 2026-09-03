@@ -57,6 +57,7 @@ using System.Collections;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 using DeNelle.Core.Diagnostics;
+using DeNelle.Core.UI;      // WO-1353: WorldHold is the ONE writer of Time.timeScale
 
 #if UNITY_POST_PROCESSING_STACK_V2
 // URP Bloom is accessed below via conditional compilation; no hard PPv2 dep.
@@ -203,11 +204,32 @@ namespace DeNelle.Village
 
         private Coroutine _slowMoRoutine;
 
-        /// <summary>Apply a scale and RECORD it as ours in the same breath, so the record of who
-        /// owns the global can never drift from the write that created it.</summary>
+        /// <summary>Reason token this class's holds carry. When a future capture shows a slow town,
+        /// THIS string is what names the owner in one line instead of by elimination.</summary>
+        private const string HoldReason = WorldHold.ReasonCosmeticPrefix + "wave-clear-dip";
+
+        /// <summary>Watchdog ceiling for one dip. The beat is 0.9 s plus a 0.3 s ease, so four
+        /// seconds is more than three times any legitimate celebration.</summary>
+        private const float HoldMaxSeconds = 4f;
+
+        /// <summary>The live world-clock hold, or null. STATIC because the clock is a global.</summary>
+        private static WorldHold.Handle s_hold;
+
+        /// <summary>
+        /// Apply a scale and RECORD it as ours in the same breath, so the record of who owns the
+        /// global can never drift from the write that created it.
+        ///
+        /// <para>⛔ WO-1353 — THIS NO LONGER WRITES <c>Time.timeScale</c>. It takes a hold from
+        /// WorldHold, the one owner. <b>The 0.28 the owner measured in open town on 2026-09-03 is
+        /// this class's <c>_slowMoScale</c> and the only 0.28 in the tree</b> — but the value is not
+        /// the bug and it has NOT been changed. The bug is that a dip could outlive its host with
+        /// nothing holding the clock; a hold cannot, because zero live holds means 1.00 and the
+        /// watchdog says so out loud.</para>
+        /// </summary>
         private static void ApplyOurClock(float scale)
         {
-            Time.timeScale = scale;
+            if (s_hold != null && s_hold.IsHeld) WorldHold.SetScale(s_hold, scale);
+            else s_hold = WorldHold.AcquireScale(HoldReason, scale, HoldMaxSeconds);
             s_ourScale = scale;
         }
 
@@ -223,38 +245,29 @@ namespace DeNelle.Village
         /// </summary>
         private static void ReleaseOurClock(string why)
         {
-            if (s_ourScale < 0f) return;
+            var hold = s_hold;
+            s_hold = null;
 
-            float ours     = s_ourScale;
-            float observed = Time.timeScale;
+            if (s_ourScale < 0f)
+            {
+                if (hold != null && hold.IsHeld)
+                {
+                    hold.Dispose();
+                    FlowTrace.Warn("WaveCelebration",
+                        $"wave-clear slow-mo released - {why} - with NO dip recorded but a live world " +
+                        "hold outstanding. Disposed it; the two records had drifted apart.");
+                }
+                return;
+            }
 
+            float ours = s_ourScale;
             s_ourScale = -1f;
             s_dipDeadlineUnscaled = 0f;
+            hold?.Dispose();
 
-            if (Mathf.Abs(observed - ours) < ScaleMatchEpsilon)
-            {
-                Time.timeScale = 1f;
-                FlowTrace.Step("WaveCelebration",
-                    $"wave-clear slow-mo ({ours:F2}) released - {why}. timeScale restored to 1.00.");
-                return;
-            }
-
-            if (Mathf.Abs(observed - 1f) < ScaleMatchEpsilon)
-            {
-                FlowTrace.Step("WaveCelebration",
-                    $"wave-clear slow-mo ({ours:F2}) released - {why}. The clock was already back at " +
-                    "1.00; another owner restored it first.");
-                return;
-            }
-
-            FlowTrace.Warn("WaveCelebration",
-                $"wave-clear slow-mo ({ours:F2}) released - {why} - but the clock reads {observed:F2} " +
-                $"({observed * 100f:F0}% speed), which is NOT the value we wrote. We deliberately do NOT " +
-                "stamp 1.00 over another owner's live slow-mo, so the remaining restore for this clock " +
-                $"belongs to whoever wrote {observed:F2}. If the world is still slow after this line, " +
-                "that owner is the leak - not the wave celebration. Non-1 writers in the tree: " +
-                "HitStopManager, CombatFeedbackManager (hit stop 0.05 / kill slow-mo 0.30), " +
-                "HeroHitReaction (death 0.30), ArenaDeathCam, WorldHold.");
+            FlowTrace.Step("WaveCelebration",
+                $"wave-clear slow-mo ({ours:F2}) released - {why}. World holds now " +
+                $"[{WorldHold.Describe()}], timeScale {Time.timeScale:F2}.");
         }
 
         /// <summary>
@@ -292,10 +305,8 @@ namespace DeNelle.Village
             if (s_ourScale < 0f) return;
             if (Time.unscaledTime <= s_dipDeadlineUnscaled + DeadlineGraceSeconds) return;
 
-            float ours      = s_ourScale;
-            float leaked    = Time.timeScale;
-            float overdue   = Time.unscaledTime - s_dipDeadlineUnscaled;
-            bool  stillOurs = Mathf.Abs(leaked - ours) < ScaleMatchEpsilon;
+            float ours    = s_ourScale;
+            float overdue = Time.unscaledTime - s_dipDeadlineUnscaled;
 
             var host = Instance;
             if (host != null && host._slowMoRoutine != null)
@@ -304,31 +315,19 @@ namespace DeNelle.Village
                 host._slowMoRoutine = null;
             }
 
-            s_ourScale = -1f;
-            s_dipDeadlineUnscaled = 0f;
+            // ⛔ WO-1353 — unconditional release. The old "superseded, not restored" branch was the
+            // path that stranded 0.28: this class correctly declined to stamp over a foreign scale
+            // and, having declined, nothing restored anything. With one owner there is no foreign
+            // scale, so there is nothing to decline.
+            ReleaseOurClock($"deadline sweep - the dip is {overdue:F2}s past its deadline and its " +
+                            "ease-back never completed (host deactivated or destroyed mid-dip)");
 
-            if (stillOurs)
-            {
-                Time.timeScale = 1f;
-                FlowTrace.Fail("WaveCelebration",
-                    $"WAVE-CLEAR SLOW-MO LEAK RECOVERED: timeScale was still {leaked:F2} {overdue:F2}s " +
-                    "past its deadline - the ease-back never completed (the host was almost certainly " +
-                    "deactivated or destroyed, which kills coroutines without firing OnDestroy and " +
-                    "without throwing, so no try/finally could have caught it). Restored to 1.00. The " +
-                    $"world was running at {leaked * 100f:F0}% speed, which is the owner's 'in town " +
-                    "everything slowed' (F8 seq 4656 captured this exact value at 0.28).");
-                return;
-            }
-
-            if (Mathf.Abs(leaked - 1f) < ScaleMatchEpsilon) return;   // benign: already back to normal
-
-            FlowTrace.Warn("WaveCelebration",
-                $"WAVE-CLEAR SLOW-MO SUPERSEDED, NOT RESTORED: our {ours:F2} dip is {overdue:F2}s past " +
-                $"its deadline but the clock reads {leaked:F2} ({leaked * 100f:F0}% speed), which is NOT " +
-                "our value. We release ownership WITHOUT stamping 1.00, because that scale belongs to " +
-                "another owner. READ THIS AS A LEAD, NOT AS OUR LEAK: if the world is still slow after " +
-                $"this line, whoever wrote {leaked:F2} failed to restore it. Non-1 writers: " +
-                "HitStopManager, CombatFeedbackManager, HeroHitReaction, ArenaDeathCam, WorldHold.");
+            FlowTrace.Fail("WaveCelebration",
+                $"WAVE-CLEAR SLOW-MO LEAK RECOVERED: our {ours:F2} dip ran {overdue:F2}s past its " +
+                "deadline and its ease-back never completed. The world-clock hold has been released; " +
+                $"live holds now [{WorldHold.Describe()}], timeScale {Time.timeScale:F2}. This value " +
+                "is the owner's 'in town everything slowed' - F8 seq 4656 and the 2026-09-03 " +
+                "felt-test both captured it at exactly 0.28.");
         }
 
         /// <summary>LateUpdate driver for the sweep. Covers headless batchmode, which renders
@@ -356,6 +355,7 @@ namespace DeNelle.Village
             Application.onBeforeRender -= HostIndependentWatchdog;
             s_ourScale = -1f;
             s_dipDeadlineUnscaled = 0f;
+            s_hold = null;   // WO-1353: the hold handle is class state - never carry one across play mode
         }
 
         // ── Called by WaveManager (via OnWaveCleared listener) ───────────────
@@ -527,14 +527,19 @@ namespace DeNelle.Village
             {
                 elapsed += Time.unscaledDeltaTime;
 
-                // Ownership re-check on EVERY frame of the ramp. A hit stop or kill slow-mo landing
-                // mid-ease would otherwise be fought frame-by-frame by this lerp, and the loser is
-                // whichever owner writes last. If the clock is no longer ours we hand it over and
-                // stop writing, rather than becoming an Nth writer of the global.
-                if (Mathf.Abs(Time.timeScale - s_ourScale) > ScaleMatchEpsilon)
+                // ⛔ WO-1353 — THE OWNERSHIP RE-CHECK IS DELETED, AND DELETING IT IS THE FIX.
+                // It used to compare the engine global against our record every frame and ABANDON
+                // the ramp when a hit stop or kill slow-mo landed mid-ease. That abandonment is
+                // exactly how 0.28 got stranded: this class stopped writing at whatever value the
+                // lerp had reached, the other owner restored only its own, and the residue stayed.
+                // A hold does not need the check - WorldHold composes overlapping holds by
+                // slowest-wins, so a hit stop landing mid-ease simply wins while it lasts and this
+                // ramp resumes underneath it. Bail only if OUR hold has been taken away from us
+                // (the watchdog force-released it), which is a real reason to stop.
+                if (s_hold == null || !s_hold.IsHeld)
                 {
                     _slowMoRoutine = null;
-                    ReleaseOurClock("another owner took the clock mid ease-back");
+                    ReleaseOurClock("our world-clock hold was force-released mid ease-back");
                     yield break;
                 }
 
