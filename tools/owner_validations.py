@@ -88,7 +88,8 @@ README = [
     "How a sign-off gets here from her phone: BOARD.html > Owner Validation >",
     "  'Export for the CLI' > Copy, hand the text to the CLI, which runs",
     "  python tools/board_build.py --ingest -   (paste)  or --ingest <file>.",
-    "Closing a ticket is still the owner's act: tools/board_close_validated.py.",
+    "Closing is still HER act: a Pass+validated mark on a FIXED ticket is flipped",
+    "  to CLOSED by the next `python tools/board_build.py` (tools/board_close_pass.py).",
 ]
 
 VERDICTS = ("", "Pass", "Fail", "Needs Work")

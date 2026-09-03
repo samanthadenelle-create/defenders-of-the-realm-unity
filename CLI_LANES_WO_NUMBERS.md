@@ -180,7 +180,22 @@
 > fine as history. A copied number is the bug **even when it was right the day it was written** -
 > that is exactly how the retired 860-899 UI block kept re-seeding collisions from CLAUDE.md sec.2.
 
-> ## ⚠ RECONCILED 2026-09-03 (CLI, fortieth pass): main line next free = **1354**.
+> ## ⚠ RECONCILED 2026-09-03 (CLI, forty-first pass): main line next free = **1356**.
+> *(CLI minted **WO-1354** - the "CLOSE THE GAP" rail is built ONCE in `EnsureBuilt`, BEFORE any server
+> quote exists, so it stamps "UNAVAILABLE" and `Render()` then explicitly `continue`s past
+> `StoreBand.Gap` when real prices land; the store host survives the session so it never rebuilds. Same
+> root, two faces - stale price, or (if `PacksInBand(Gap)` is 0 on that one pass) no rows at all and
+> never again - which is why she reported it as intermittent and "back to". ⚠ MY OWN 400s WERE CALL
+> SHAPE, NOT A DEFECT: `api/purchases/quote.js` is POST-only, and called correctly all four impulse
+> mediums quote at 156 SKR. I linked them to the Vercel-log 400s; that link was WRONG.
+> And **WO-1355** - the board's close pass runs on every `board_build`, so Passed+Validated flips to
+> CLOSED without the CLI remembering (owner: *"when you do board next you flip all passed and validated
+> to closed"*).
+> ⭐ ALSO RECORDED: **FIXED means IT IS ON HER DEVICE TO TEST** (owner correction, this session). Not
+> "code complete", not "committed". A committed-but-unshipped ticket is NOT FIXED - I had marked one
+> that way. Bumped 1354 -> 1356 in this SAME edit.)*
+>
+> ### superseded: RECONCILED 2026-09-03 (CLI, fortieth pass): main line next free = **1354**.
 > *(CLI minted **WO-1353** on a direct owner ruling after a live felt-test caught the world clock at
 > **`timeScale=0.28`** in open town - 28% speed, no battle, no modal. Her words: *"I want a guard on all
 > time changes"* / *"every battle death victory"* / *"anything that steps into time slow needs to step

@@ -173,6 +173,12 @@ if ($python) {
 # proof/owner-validations.json; this stage keeps the read path from silently rotting
 # back to "always empty". ~3 seconds, no Unity, and it touches neither the live record
 # nor the live BOARD.html. Judged by the MARKER, not the exit code.
+#
+# WO-1355 widened it: the board build now also FLIPS Pass+validated FIXED tickets to
+# CLOSED, i.e. a plain board build REWRITES **Status:** lines from a data file. Stages
+# 5-9 of the same test pin that pass (both-signals-required, idempotent, a CLOSED or a
+# non-FIXED ticket never touched, the status body preserved, abort on a corrupt record)
+# against a throwaway WorkOrders/ via EOA_WO_DIR. Same one marker still judges it.
 if ($python) {
     Write-Host "`n[gate] owner-validation round trip..."
     $vOut = & $python.Source (Join-Path $proj 'toolsoard_validation_roundtrip_test.py') 2>&1

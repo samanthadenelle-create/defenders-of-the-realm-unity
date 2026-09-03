@@ -15,6 +15,7 @@ import os, re, glob, html, json, time, datetime, sys, subprocess
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import owner_validations  # the DURABLE owner-validation record - see that module's header
+import board_close_pass    # WO-1355: the owner-Pass -> CLOSED pass, run BELOW inside main()
 
 # Windows consoles default to cp1252, which cannot encode the characters this repo's
 # work orders actually use (the U+26D4 no-entry sign, box drawing, arrows). On
@@ -30,7 +31,11 @@ for _stream in (sys.stdout, sys.stderr):
         pass  # older Python, or a stream that is not reconfigurable; prints degrade, not die
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-WO_DIR = os.path.join(ROOT, "WorkOrders")
+# EOA_WO_DIR is overridable for the same reason EOA_BOARD_OUT is: the self-checks must
+# be able to exercise the real code against a throwaway WorkOrders/ - and since WO-1355 a
+# board build REWRITES status lines, so a test pointed at the live tree could destroy the
+# very record it is proving safe.
+WO_DIR = os.environ.get("EOA_WO_DIR") or os.path.join(ROOT, "WorkOrders")
 # Overridable so the validation round-trip self-check can run the REAL entry point
 # without overwriting the owner's live board with test data mid-run.
 OUT = os.environ.get("EOA_BOARD_OUT") or os.path.join(ROOT, "BOARD.html")
@@ -862,13 +867,17 @@ def build_html(rows):
 <div class="vmeta">Sign-offs are kept in <b>proof/owner-validations.json</b> (committed) and are
  <b>NOT</b> tied to a build - they survive every commit and every rebuild. Current APK
  <b>{html.escape(apk_build)}</b> &middot; source commit <b>{html.escape(apk_source[:12])}</b> is recorded
- as provenance on each mark. Marking never changes a work-order status; closing stays yours.</div>
+ as provenance on each mark. Marking here never changes a work-order status by itself: once your
+ mark is exported and ingested, the NEXT board build flips every <b>Pass + Validated</b> ticket
+ from Fixed to <b>CLOSED</b> (WO-1355) - so closing is still your act, just no longer a second
+ command someone has to remember.</div>
 <div class="vtoolbar"><span id="vprogress">{disk_done} / {len(fixed_rows)} verified</span><button id="needsFelt" type="button">Needs Felt-Test</button></div>
 <div id="vmigrated" class="vhint"></div>
 <details class="vexport"><summary>Export for the CLI &mdash; tap Copy, then hand the text over</summary>
 <p class="vhint">A browser cannot write to the repo, so this is the hand-off: tap <b>Copy</b>, paste it
  to the CLI, and it runs <b>python tools/board_build.py --ingest -</b> to fold your marks into
- proof/owner-validations.json. Marks you have not exported yet live only in this browser.</p>
+ proof/owner-validations.json - and the board build after that closes the Passed ones.
+ Marks you have not exported yet live only in this browser.</p>
 <div class="vtoolbar"><button id="vcopy" type="button">Copy</button>
  <a id="vdl" download="owner-validations.json" href="#">Save as file</a>
  <span id="vcopystat" class="vhint"></span></div>
@@ -1022,6 +1031,10 @@ def main():
     # flag the check-in gate can reject the drift instead of drawing it. Report-only by default:
     # a plain run must never start failing builds because a WO file is sloppy.
     check = "--check" in sys.argv
+    # --no-close is an OPT-OUT (so is EOA_BOARD_CLOSE=0). The close runs by default; an
+    # opt-IN flag would rebuild the "a human remembers a second command" hole WO-1355 shut.
+    if "--no-close" in sys.argv:
+        os.environ["EOA_BOARD_CLOSE"] = "0"
 
     # ── --ingest: the ONLY writer of the owner-validation record ─────────────────
     # A browser cannot write to the repo, so this is the hand-off half of the loop:
@@ -1069,6 +1082,25 @@ def main():
         print("    BOARD.html was NOT rebuilt, so no sign-off is hidden or lost. "
               "Repair the record (git checkout proof/owner-validations.json) and re-run.")
         print("BOARD_CHECK_FAIL owner-validation record unreadable")
+        return 1
+
+    # ── WO-1355: THE CLOSE PASS, run BEFORE the rows are parsed ─────────────────
+    # Owner ruling 2026-09-03: "i test and sign off in the owner validation section when
+    # you do board next you flip all passed and validated to closed". It lives INSIDE the
+    # board build - not in a second script a seat has to remember - because CLAUDE.md 16
+    # settles that shape: a gate whose remedy is "a human remembers a second command" is
+    # not a gate, and this one was being forgotten often enough that she had to ask twice.
+    #
+    # BEFORE parse_wos() so the page written by THIS run already shows the tickets it just
+    # closed. Running it after would print a close and render a board that still says Fixed.
+    #
+    # Only verdict Pass AND validated, only on a FIXED ticket, never re-stamping a CLOSED
+    # one, and the old status body is preserved after "PRIOR STATUS:". Full rules and the
+    # reasoning: tools/board_close_pass.py. `_validations` is passed in rather than re-read
+    # so the rebuild and the close can never act on two different reads of the record.
+    _close_ok, _close_res = board_close_pass.run(entries=_validations, wo_dir=WO_DIR)
+    if not _close_ok and _close_res is None:
+        print("BOARD_CHECK_FAIL close pass aborted on an unreadable validation record")
         return 1
 
     rows = parse_wos()

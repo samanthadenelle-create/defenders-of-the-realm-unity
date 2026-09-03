@@ -1,9 +1,20 @@
 #!/usr/bin/env python3
-"""Close owner Pass-validated FIXED tickets.
+"""Bounce owner Fail / Needs Work marks, and (legacy) salvage marks from Chrome.
+
+⛔ THE CLOSE HALF OF THIS SCRIPT NO LONGER LIVES HERE (WO-1355, owner ruling 2026-09-03).
+    "when you do board next you flip all passed and validated to closed" - so the
+    Pass -> CLOSED pass is now part of `python tools/board_build.py` itself, in
+    tools/board_close_pass.py, and this script CALLS that one module rather than keeping a
+    second copy of the rules. There is exactly ONE implementation of a status rewrite; a
+    second copy would drift, and a drifted copy rewrites the owner's tickets.
+
+WHAT IS STILL THIS SCRIPT'S OWN JOB
+    The BOUNCE: a FIXED ticket the owner marked Fail / Needs Work goes back to READY with
+    her note on the status line. That is a routing act, not a close, and it stays an
+    explicit command.
 
 PRIMARY SOURCE: proof/owner-validations.json - the durable, committed record (see
-tools/owner_validations.py). Closes FIXED+Pass, bounces FIXED+Fail/Needs Work,
-rebuilds BOARD.html. Prints CLOSED/BOUNCED/SKIP lines. Does not git commit.
+tools/owner_validations.py).
 
 FALLBACK, kept only for marks that never made it into the record: copy Chrome's
 LevelDB out of the user profile and regex-salvage JSON fragments from the raw bytes.
@@ -25,9 +36,10 @@ from collections import Counter
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import owner_validations
+import board_close_pass
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-WO_DIR = os.path.join(ROOT, "WorkOrders")
+WO_DIR = board_close_pass.WO_DIR   # honours EOA_WO_DIR, same as the board build
 LS_DST = os.path.join(ROOT, "tmp", "chrome-ls")
 CHROME_LS = os.path.join(
     os.path.expanduser("~"),
@@ -35,18 +47,9 @@ CHROME_LS = os.path.join(
 )
 
 
-def first_status(text: str) -> str:
-    m = re.search(r"^\*\*Status:\*\*\s*(.+)$", text, re.M)
-    return m.group(1).strip() if m else ""
-
-
-def set_status(path: str, new: str) -> bool:
-    t = open(path, encoding="utf-8", errors="replace").read()
-    t2, n = re.subn(r"(?m)^(\*\*Status:\*\*\s*).+$", r"\1" + new, t, count=1)
-    if n != 1:
-        return False
-    open(path, "w", encoding="utf-8", newline="\n").write(t2)
-    return True
+# NOTE: first_status/set_status used to live here. They are now board_close_pass
+# .read_status/.write_status - one implementation of "rewrite a **Status:** line", shared
+# with the board build. Two copies would drift, and a drifted copy rewrites live tickets.
 
 
 def live_key() -> str:
@@ -127,45 +130,36 @@ def durable() -> dict[str, tuple[str, str]]:
     return out
 
 
-def apply(found: dict[str, tuple[str, str]]) -> tuple[list[str], list[str]]:
-    closed, bounced = [], []
+def apply(found: dict[str, tuple[str, str]]) -> list[str]:
+    """Bounce Fail / Needs Work. The Pass -> CLOSED half is board_close_pass.run()."""
+    bounced = []
     today = datetime.date.today().isoformat()
-    stamp_close = f"CLOSED {today} — owner Pass (felt-validated)."
     for name, (verdict, note) in sorted(found.items()):
+        if verdict not in ("Fail", "Needs Work"):
+            continue  # Pass (and anything unrecognised) is board_close_pass's business
         path = os.path.join(WO_DIR, name)
         if not os.path.isfile(path):
             print("missing", name)
             continue
-        t = open(path, encoding="utf-8", errors="replace").read()
-        st = first_status(t)
+        st = board_close_pass.read_status(path)
         up = st.upper()
-        if verdict == "Pass":
-            if up.startswith("CLOSED"):
-                continue
-            if not up.startswith("FIXED"):
-                print("skip not-fixed Pass", name, st[:50])
-                continue
-            if set_status(path, stamp_close):
-                closed.append(name)
-                print("CLOSED", name)
-        elif verdict in ("Fail", "Needs Work"):
-            if up.startswith("READY"):
-                continue
-            if not up.startswith("FIXED"):
-                print("skip not-fixed", verdict, name, st[:50])
-                continue
-            note_s = (note or "").replace("\n", " ").strip()
-            if len(note_s) > 160:
-                note_s = note_s[:157] + "..."
-            stamp = (
-                f"READY TO IMPLEMENT — owner felt-test {today} {verdict}"
-                + (f': "{note_s}"' if note_s else ".")
-                + " Bounced from Fixed."
-            )
-            if set_status(path, stamp):
-                bounced.append(name)
-                print("BOUNCED", name, verdict, note_s[:80])
-    return closed, bounced
+        if up.startswith("READY"):
+            continue
+        if not up.startswith("FIXED"):
+            print("skip not-fixed", verdict, name, st[:50])
+            continue
+        note_s = " ".join((note or "").split()).strip()
+        if len(note_s) > 160:
+            note_s = note_s[:157] + "..."
+        stamp = (
+            f"READY TO IMPLEMENT - owner felt-test {today} {verdict}"
+            + (f': "{note_s}"' if note_s else ".")
+            + f" Bounced from Fixed. PRIOR STATUS: {st}"
+        )
+        if board_close_pass.write_status(path, stamp):
+            bounced.append(name)
+            print("BOUNCED", name, verdict, note_s[:80])
+    return bounced
 
 
 def main() -> int:
@@ -181,9 +175,11 @@ def main() -> int:
             print("NO_VALIDATION_KEY")
             return 2
         found = salvage(key)
-    closed, bounced = apply(found)
+    bounced = apply(found)
+    # The close is deliberately NOT re-implemented here: board_build.py runs
+    # board_close_pass itself, so this subprocess both closes and redraws.
     subprocess.check_call([sys.executable, os.path.join(ROOT, "tools", "board_build.py")])
-    print("BOARD_PASS_OK closed", len(closed), "bounced", len(bounced))
+    print("BOARD_PASS_OK bounced", len(bounced), "- closes are reported by BOARD_CLOSE_OK above")
     return 0
 
 

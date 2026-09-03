@@ -241,8 +241,63 @@ Marks she has not exported yet live only in that browser, and the export block s
 - One-time in-page migration sweeps any leftover `eoa-owner-validation:*` key into the durable
   overlay and reports what it recovered. Best effort by nature — it can only reach keys in the
   same browser and origin, and it never deletes the old keys.
-- Marking still changes **no** `**Status:**` line. Closing remains the owner's act, applied by
-  `tools/board_close_validated.py`, which now reads the record first.
+- Marking in the browser still changes **no** `**Status:**` line. The board build applies it — see
+  §6e.
+
+## 6e. The CLOSE pass — Pass + Validated becomes CLOSED, on the next board build (WO-1355)
+
+Owner ruling 2026-09-03: *"i test and sign off in the owner validation section when you do board
+next you flip all passed and validated to closed"* — and, defining the state she signs off FROM:
+*"once you move to device for testing gets moved to fixed"*.
+
+```
+new issue -> ticket -> assign an SME -> check in when complete
+          -> ON HER DEVICE = FIXED            (not "code complete", not "committed")
+          -> she signs off in Owner Validation (Passed + Validated)
+          -> the NEXT board build flips those to CLOSED
+```
+
+**It runs inside `python tools/board_build.py` itself** (`tools/board_close_pass.py`, called before
+the work orders are parsed, so the page that run writes already shows the closes). It is not a
+second command, because it kept being forgotten and she had to ask twice — CLAUDE.md §16 settles
+that shape: *a gate whose remedy is "a human remembers a second command" is not a gate*.
+
+The pass REWRITES `**Status:**` lines from a data file, so the rules are the design:
+
+1. **Both signals or nothing** — `verdict == "Pass"` **and** `validated == true`. Fail, Needs Work,
+   a blank verdict, a Pass never validated, and a validated entry with no verdict all close
+   nothing and are counted as *held*. An **unrecognised** verdict cannot even reach the pass:
+   `owner_validations.normalize()` coerces anything it does not know to `""`.
+2. **Only a FIXED ticket is eligible** — Fixed means "it reached her device", the only state a
+   felt-test sign-off can validly follow. READY / SPEC / BLOCKED / DONE are never closed by a
+   stale mark. Eligibility is read through `board_build.classify_status`, the board's own status
+   vocabulary, so the closer and the Fixed bucket can never disagree.
+3. **Never resurrect, never re-stamp** — an already-CLOSED ticket is left alone. Ten runs produce
+   the same bytes as one.
+4. **The existing status text survives verbatim** — the stamp is prepended and the old line is
+   carried after `PRIOR STATUS:` (already this repo's convention for historical status prose, and
+   the marker `status_contradiction` splits on, so preserving the body cannot manufacture a false
+   defect). Those FIXED lines hold the real engineering record; erasing them would destroy exactly
+   what the board exists to keep.
+5. **Auditable** — the stamp carries the entry's `at` and `build`, so which sign-off on which build
+   closed a ticket is readable off the status line.
+6. **A malformed record ABORTS the pass** — `VALIDATIONS_PARSE_FAIL` + `BOARD_CLOSE_FAIL`, nothing
+   written. Never a partial close, never a silent zero reported as success.
+7. **A validation naming a missing WO file is reported**, never dropped.
+
+- Marker: `BOARD_CLOSE_OK closed <n>, held <n>, already-closed <n>, missing <n>` (or
+  `BOARD_CLOSE_FAIL ...`). Judge it on a fresh log, never by the exit code.
+- Opt-out for tests and emergencies only: `--no-close`, or `EOA_BOARD_CLOSE=0`, which prints
+  `BOARD_CLOSE_SKIPPED`. It is deliberately an opt-OUT; an opt-IN would restore the forgotten-
+  second-command hole.
+- `tools/board_close_validated.py` is now only the **bounce** (Fail / Needs Work back to READY,
+  with her note) plus the legacy Chrome-LevelDB salvage. It calls the same one close module rather
+  than keeping a second copy of the rules — a drifted copy of a status rewriter rewrites live
+  tickets.
+- Covered by `tools/board_validation_roundtrip_test.py` stages 5-9 against a throwaway
+  `WorkOrders/` (`EOA_WO_DIR`): both-signals, idempotency across three runs, a CLOSED ticket
+  untouched, a non-FIXED ticket never closed, the body preserved, abort on a corrupt record — and
+  four source mutations that each must be caught.
 
 ## 7. What this board is NOT
 
@@ -258,6 +313,7 @@ Marks she has not exported yet live only in that browser, and the export block s
 - `WorkOrders/` — the data
 - `tools/board_build.py` — the generator (and `--ingest`, the record's only writer)
 - `proof/owner-validations.json` — the owner's durable felt-test sign-offs (§6d)
+- `tools/board_close_pass.py` — the Pass+Validated -> CLOSED pass the board build runs (§6e)
 - `tools/owner_validations.py` — the record's shape, merge rule and reasoning
 - `tools/board_validation_roundtrip_test.py` — proves a rebuild cannot lose a sign-off
 - `docs/HANDOVER.md`, `SESSION_CANON_LOADER.md` — session boot, which instructs the regen
