@@ -851,9 +851,16 @@ def build_html(rows):
  #vjson{{width:100%;background:#171a21;border:1px solid #484c59;color:#cfd3dc;border-radius:6px;font:12px/1.4 monospace;padding:8px}}
  #vcopy{{background:#242730;border:1px solid #4fb3c4;color:#ddd;border-radius:14px;padding:8px 16px;cursor:pointer}}
  #vdl{{color:#e0b341}}
+ /* SUBMIT - the primary control of the whole section, so it is the one button that
+    is filled rather than outlined. min-height 44px UNCONDITIONALLY (not only under
+    the phone media query): she may submit from either device and a 30px target is a
+    miss on a phone. */
+ #vsubmit{{background:#3a3f2a;border:1px solid #e0b341;color:#f0e4c0;border-radius:14px;
+          padding:10px 18px;min-height:44px;font-size:15px;font-weight:700;cursor:pointer}}
+ #vsubmitstat{{display:block;margin-top:6px}}
  /* PHONE FIRST - she validates from a phone. 44px minimum tap target on every control. */
  @media(max-width:850px){{.vitem{{grid-template-columns:1fr}}.verdict,.vnote{{grid-column:1}}
-  .validated,.verdict,.vnote,#vcopy,#needsFelt{{min-height:44px;font-size:15px}}
+  .validated,.verdict,.vnote,#vcopy,#needsFelt,#vsubmit{{min-height:44px;font-size:15px}}
   .vitem{{padding:10px 0;border-bottom:1px solid #262932}}.vtitle{{white-space:normal}}
   .vgroup summary,.vexport summary{{padding:10px 0}}}}
 </style></head><body>
@@ -864,20 +871,28 @@ def build_html(rows):
  &nbsp;|&nbsp; {mint_html}</div>
 <div class="canon">{canon_links}</div>
 <section class="validation"><h2>Owner Validation</h2>
-<div class="vmeta">Sign-offs are kept in <b>proof/owner-validations.json</b> (committed) and are
- <b>NOT</b> tied to a build - they survive every commit and every rebuild. Current APK
- <b>{html.escape(apk_build)}</b> &middot; source commit <b>{html.escape(apk_source[:12])}</b> is recorded
- as provenance on each mark. Marking here never changes a work-order status by itself: once your
- mark is exported and ingested, the NEXT board build flips every <b>Pass + Validated</b> ticket
- from Fixed to <b>CLOSED</b> (WO-1355) - so closing is still your act, just no longer a second
- command someone has to remember.</div>
+<div class="vmeta">
+ <b>A mark you make here is NOT saved yet.</b> It lives only in this browser until you tap
+ <b>Submit</b> - that is the step that writes a file the CLI can read. Once submitted and taken
+ in, it is stored in <b>proof/owner-validations.json</b>, which is committed, survives every
+ commit and every rebuild, and is <b>NOT</b> tied to a build.
+ <br>This page shows <b>{disk_done}</b> mark(s) already in that record (rendered from disk, no
+ JavaScript needed) plus anything you have marked on this device since.
+ <br>What your verdict does on the next board build: <b>Pass + Validated</b> flips the ticket from
+ Fixed to <b>CLOSED</b> (WO-1355); <b>Fail</b> or <b>Needs Work</b> sends it back to <b>READY</b>
+ carrying your note into the ticket (WO-1356). Current APK <b>{html.escape(apk_build)}</b>
+ &middot; source commit <b>{html.escape(apk_source[:12])}</b> is recorded as provenance on each mark.
+</div>
 <div class="vtoolbar"><span id="vprogress">{disk_done} / {len(fixed_rows)} verified</span><button id="needsFelt" type="button">Needs Felt-Test</button></div>
+<div class="vtoolbar"><button id="vsubmit" type="button">Submit marks to the CLI</button></div>
+<div id="vsubmitstat" class="vhint">Not submitted yet on this device.</div>
 <div id="vmigrated" class="vhint"></div>
-<details class="vexport"><summary>Export for the CLI &mdash; tap Copy, then hand the text over</summary>
-<p class="vhint">A browser cannot write to the repo, so this is the hand-off: tap <b>Copy</b>, paste it
+<details class="vexport"><summary>Export for the CLI &mdash; the manual fallback, if Submit did not produce a file</summary>
+<p class="vhint">This is the older hand-off and it still works: tap <b>Copy</b>, paste the text
  to the CLI, and it runs <b>python tools/board_build.py --ingest -</b> to fold your marks into
- proof/owner-validations.json - and the board build after that closes the Passed ones.
- Marks you have not exported yet live only in this browser.</p>
+ proof/owner-validations.json. Use it only when <b>Submit</b> above did not save a file - Submit
+ does the same thing with one tap instead of a paste. Either way, marks that have not reached the
+ record live only in this browser.</p>
 <div class="vtoolbar"><button id="vcopy" type="button">Copy</button>
  <a id="vdl" download="owner-validations.json" href="#">Save as file</a>
  <span id="vcopystat" class="vhint"></span></div>
@@ -1011,8 +1026,138 @@ if(vcopy) vcopy.addEventListener('click',()=>{{
   navigator.clipboard.writeText(ta.value).then(()=>say('Copied - paste it to the CLI.'),
    ()=>say('Copy blocked - the text is selected above, copy it by hand or use Save as file.'));
  }} else say('Copy blocked - the text is selected above, copy it by hand or use Save as file.');}});
-document.getElementById('needsFelt').addEventListener('click',e=>{{needsOnly=!needsOnly;e.currentTarget.classList.toggle('on',needsOnly);renderValidation();}});renderValidation();
+document.getElementById('needsFelt').addEventListener('click',e=>{{needsOnly=!needsOnly;e.currentTarget.classList.toggle('on',needsOnly);renderValidation();}});
+/* ── SUBMIT (WO-1356) ────────────────────────────────────────────────────────────
+   Owner ruling 2026-09-03: "add a submit button so you run a script to close the ones
+   passed". The step being removed is the PASTE: Export > Copy > hand the text to the
+   CLI. A mechanism with friction is one that stops getting used, and the proof it was
+   already failing is that the board read 43/78 verified while the record held ZERO.
+
+   ⛔ THE CONSTRAINT: this page is opened over file://. There is no server to POST to,
+   and a file:// page cannot write into the repo. What it CAN do is hand the browser a
+   file to save. So Submit triggers a DOWNLOAD to a known, sortable filename, and the
+   CLI picks the newest one up with `python tools/board_build.py --submit`.
+
+   Blob first, data: URI as the fallback - both are download paths a file:// page is
+   allowed to take, and the data: form is the one the existing "Save as file" link has
+   been using here all along.
+
+   ⚠ THE STATUS LINE IS PART OF THE FEATURE, not decoration. A control that looks like
+   it worked and did not is the exact failure this whole rework exists to kill, and the
+   browser gives no completion callback for a download - so the message says the COUNT,
+   the exact FILENAME to look for, the command the CLI runs next, and what to do if no
+   file appeared. Success and failure are carried by the WORDS 'SUBMITTED' and 'NOT
+   SUBMITTED' (the owner is red/green colourblind - never by hue). */
+const vsubmit=document.getElementById('vsubmit');
+if(vsubmit) vsubmit.addEventListener('click',()=>{{
+ const st=document.getElementById('vsubmitstat');
+ const say=m=>{{if(st) st.textContent=m;}};
+ const payload=exportPayload();
+ let n=0; try{{n=Object.keys((JSON.parse(payload)||{{}}).validations||{{}}).length}}catch(_e){{n=0}}
+ if(!n){{say('NOTHING TO SUBMIT - no ticket carries a mark yet. Set a verdict or tap Validate first.');return;}}
+ const d=new Date(), p=x=>String(x).padStart(2,'0');
+ const name='eoa-validations-'+d.getUTCFullYear()+p(d.getUTCMonth()+1)+p(d.getUTCDate())
+  +'T'+p(d.getUTCHours())+p(d.getUTCMinutes())+p(d.getUTCSeconds())+'Z.json';
+ let url='', revoke=false;
+ try{{url=URL.createObjectURL(new Blob([payload],{{type:'application/json'}}));revoke=true;}}
+ catch(_e){{url='data:application/json;charset=utf-8,'+encodeURIComponent(payload);}}
+ try{{
+  const a=document.createElement('a');a.href=url;a.download=name;a.rel='noopener';
+  a.style.display='none';document.body.appendChild(a);a.click();
+  setTimeout(()=>{{a.remove();if(revoke){{try{{URL.revokeObjectURL(url)}}catch(_e){{}}}}}},4000);
+  say('SUBMITTED '+n+' mark'+(n===1?'':'s')+' as '+name+' - check your Downloads folder. '
+   +'Next: the CLI runs  python tools/board_build.py --submit  which reads the newest '
+   +'eoa-validations-*.json, folds it into proof/owner-validations.json, CLOSES the '
+   +'Pass+Validated tickets and sends the Fail / Needs Work ones back to READY with your note. '
+   +'IF NO FILE APPEARED IN DOWNLOADS, this did NOT work - open "Export for the CLI" below instead.');
+ }}catch(err){{
+  say('NOT SUBMITTED - the browser refused to save the file ('+((err&&err.name)||'unknown error')
+   +'). Nothing left this page. Open "Export for the CLI" below and hand the text over.');
+ }}}});
+renderValidation();
 </script></body></html>"""
+
+# ── WO-1356: WHERE A BROWSER "Submit" LANDS ─────────────────────────────────────
+# BOARD.html is opened over file://. It has no server to POST to and cannot write into
+# the repo, so the ONE thing it can do to get bytes onto disk is hand the browser a file
+# to save. The button downloads eoa-validations-<UTC stamp>.json; this is the other end.
+#
+# The stamp is in the NAME rather than trusting mtime alone: a browser that re-downloads
+# an identical name appends " (1)", and a name that sorts is the difference between "the
+# newest submission" being a fact and being a guess. Both are used - newest mtime wins,
+# and the name is printed so the seat can see WHICH file was taken.
+SUBMIT_GLOB = "eoa-validations-*.json"
+
+
+def submit_dirs():
+    """Directories a Submit could have landed in, most specific first."""
+    # EOA_SUBMIT_DIR is EXCLUSIVE, not additive. The self-check runs against a throwaway
+    # drop directory, and a stray eoa-validations-*.json sitting in the real Downloads
+    # folder would otherwise decide which file the test ingested - a test whose input
+    # depends on the operator's Downloads folder proves nothing.
+    env = os.environ.get("EOA_SUBMIT_DIR")
+    if env:
+        dirs = [p for p in env.split(os.pathsep) if p]
+    else:
+        dirs = [os.path.join(ROOT, "inbox")]   # a deliberate drop spot, if one is made
+        home = os.path.expanduser("~")
+        dirs.append(os.path.join(home, "Downloads"))
+        dirs.append(os.path.join(home, "OneDrive", "Downloads"))  # redirected Downloads
+    seen, out = set(), []
+    for d in dirs:
+        k = os.path.normcase(os.path.abspath(d))
+        if k in seen:
+            continue
+        seen.add(k)
+        out.append(d)
+    return out
+
+
+def newest_submission():
+    """The most recently modified eoa-validations-*.json across submit_dirs(), or None."""
+    best = None
+    for d in submit_dirs():
+        if not os.path.isdir(d):
+            continue
+        for p in glob.glob(os.path.join(d, SUBMIT_GLOB)):
+            if not os.path.isfile(p):
+                continue
+            m = os.path.getmtime(p)
+            if best is None or m > best[0]:
+                best = (m, p)
+    return best
+
+
+def _ingest_path(src_path):
+    """Read + fold one payload into the record. Returns (rc, changed, merged).
+
+    Shared by --ingest and --submit so the two entry points can never disagree about
+    what an ingest is; only where the bytes came from differs.
+    """
+    try:
+        raw = sys.stdin.read() if src_path == "-" else open(src_path, encoding="utf-8").read()
+        payload = json.loads(raw)
+    except Exception as e:
+        print(f"VALIDATIONS_INGEST_FAIL could not read {src_path}: {type(e).__name__}: {e}")
+        return 1, [], {}
+    try:
+        changed, merged = owner_validations.ingest(payload)
+    except owner_validations.ValidationsUnreadable as e:
+        print(f"VALIDATIONS_PARSE_FAIL {e}")
+        print("    The existing record is corrupt. It has NOT been overwritten - "
+              "repair or restore it (git checkout) before ingesting.")
+        return 1, [], {}
+    print(f"VALIDATIONS_INGEST_OK {len(changed)} changed, {len(merged)} total -> "
+          f"{_record_label()}")
+    for k in changed:
+        s = merged[k]
+        # An entry naming a file that is not in WorkOrders/ is REPORTED, never dropped:
+        # a renamed or moved WO must not silently swallow a sign-off.
+        miss = "" if os.path.isfile(os.path.join(WO_DIR, k)) else "   <- NO SUCH WO FILE"
+        print(f"    {'[X]' if s.get('validated') else '[ ]'} "
+              f"{s.get('verdict') or 'Untested':<11} {k}{miss}")
+    return 0, changed, merged
+
 
 def _record_label():
     """Repo-relative path to the validation record, or the absolute path when it is
@@ -1046,31 +1191,37 @@ def main():
     # that happens.
     if "--ingest" in sys.argv:
         i = sys.argv.index("--ingest")
-        src = sys.argv[i + 1] if len(sys.argv) > i + 1 else "-"
-        try:
-            raw = sys.stdin.read() if src == "-" else open(src, encoding="utf-8").read()
-            payload = json.loads(raw)
-        except Exception as e:
-            print(f"VALIDATIONS_INGEST_FAIL could not read {src}: {type(e).__name__}: {e}")
+        rc, _changed, _merged = _ingest_path(
+            sys.argv[i + 1] if len(sys.argv) > i + 1 else "-")
+        if rc == 0:
+            print("    Rebuild the board to render them: python tools/board_build.py")
+        return rc
+
+    # ── WO-1356: --submit, the other end of the board's Submit button ───────────
+    # The owner taps Submit on BOARD.html (file://, no server), the browser saves
+    # eoa-validations-<stamp>.json into Downloads, and this reads the newest one, folds
+    # it into the record, and then FALLS THROUGH to an ordinary build - so the same one
+    # command closes the Passed tickets and bounces the Fail / Needs Work ones. That
+    # fall-through is the point: a second command a human has to remember is not a
+    # mechanism (CLAUDE.md 16), and remembering one was the friction being removed.
+    if "--submit" in sys.argv:
+        found = newest_submission()
+        if not found:
+            print("VALIDATIONS_SUBMIT_FAIL no " + SUBMIT_GLOB + " found in: "
+                  + ", ".join(submit_dirs()))
+            print("    Nothing was ingested and no **Status:** line was touched. Ask her "
+                  "to tap Submit on BOARD.html (the button names the file it saved), or "
+                  "use the Export/Copy fallback with --ingest -.")
             return 1
-        try:
-            changed, merged = owner_validations.ingest(payload)
-        except owner_validations.ValidationsUnreadable as e:
-            print(f"VALIDATIONS_PARSE_FAIL {e}")
-            print("    The existing record is corrupt. It has NOT been overwritten - "
-                  "repair or restore it (git checkout) before ingesting.")
-            return 1
-        rel = _record_label()
-        print(f"VALIDATIONS_INGEST_OK {len(changed)} changed, {len(merged)} total -> {rel}")
-        for k in changed:
-            s = merged[k]
-            # An entry naming a file that is not in WorkOrders/ is REPORTED, never
-            # dropped: a renamed or moved WO must not silently swallow a sign-off.
-            miss = "" if os.path.isfile(os.path.join(WO_DIR, k)) else "   <- NO SUCH WO FILE"
-            print(f"    {'[X]' if s.get('validated') else '[ ]'} "
-                  f"{s.get('verdict') or 'Untested':<11} {k}{miss}")
-        print("    Rebuild the board to render them: python tools/board_build.py")
-        return 0
+        mtime, path = found
+        age_min = (time.time() - mtime) / 60.0
+        print(f"VALIDATIONS_SUBMIT_FILE {path}  (saved {age_min:.0f} min ago)")
+        rc, _changed, _merged = _ingest_path(path)
+        if rc != 0:
+            print("VALIDATIONS_SUBMIT_FAIL the submitted file could not be ingested")
+            return rc
+        print("VALIDATIONS_SUBMIT_OK ingested; continuing into the board build, which "
+              "closes the Pass+Validated tickets and bounces the Fail / Needs Work ones")
 
     # Loaded BEFORE anything is rendered. An unreadable record must ABORT the rebuild:
     # writing a board that shows "0 verified" over a corrupt file looks completely
@@ -1101,6 +1252,24 @@ def main():
     _close_ok, _close_res = board_close_pass.run(entries=_validations, wo_dir=WO_DIR)
     if not _close_ok and _close_res is None:
         print("BOARD_CHECK_FAIL close pass aborted on an unreadable validation record")
+        return 1
+
+    # ── WO-1356: THE BOUNCE, the other half of the very same sign-off ───────────
+    # Owner ruling 2026-09-03: "move the needs work and failed back to ready with a
+    # note". It runs HERE, immediately after the close and off the SAME `_validations`
+    # read, for the identical reason the close moved in: a routing step that only
+    # happens when a seat remembers a second script is a routing step that does not
+    # happen. Her note travels into the ticket, so the next seat reads why it failed in
+    # the file rather than hunting a screenshot.
+    #
+    # Order matters and is not arbitrary: close first, bounce second. The two verdict
+    # sets are disjoint (Pass vs Fail/Needs Work) so neither can see the other's
+    # rewrite, but running the bounce first would leave a freshly-READY ticket in front
+    # of a close pass that would then have to reason about it. Disjoint AND ordered is
+    # cheaper to keep true than disjoint alone.
+    _bounce_ok, _bounce_res = board_close_pass.run_bounce(entries=_validations, wo_dir=WO_DIR)
+    if not _bounce_ok and _bounce_res is None:
+        print("BOARD_CHECK_FAIL bounce pass aborted on an unreadable validation record")
         return 1
 
     rows = parse_wos()

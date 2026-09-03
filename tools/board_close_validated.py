@@ -8,10 +8,19 @@
     second copy of the rules. There is exactly ONE implementation of a status rewrite; a
     second copy would drift, and a drifted copy rewrites the owner's tickets.
 
+⛔ AND THE BOUNCE HALF LEFT TOO (WO-1356, owner ruling 2026-09-03).
+    "move the needs work and failed back to ready with a note" - so the bounce is ALSO
+    part of `python tools/board_build.py` now, implemented once in
+    tools/board_close_pass.py (bounce_pass / run_bounce). The header above said the
+    bounce "stays an explicit command"; that stopped being true the moment the same
+    reasoning that moved the close applied to it - a routing step that only happens when
+    a seat remembers a second script is a routing step that does not happen.
+
 WHAT IS STILL THIS SCRIPT'S OWN JOB
-    The BOUNCE: a FIXED ticket the owner marked Fail / Needs Work goes back to READY with
-    her note on the status line. That is a routing act, not a close, and it stays an
-    explicit command.
+    Nothing but the LEGACY Chrome-LevelDB salvage below, plus a thin adapter (apply())
+    from the salvage's (verdict, note) tuples onto that one bounce implementation. If the
+    durable record has the marks - which it does, once she taps Submit - you never need
+    this script at all: just run `python tools/board_build.py --submit`.
 
 PRIMARY SOURCE: proof/owner-validations.json - the durable, committed record (see
 tools/owner_validations.py).
@@ -25,7 +34,6 @@ why the record now exists. Do not extend it; extend the record.
 """
 from __future__ import annotations
 
-import datetime
 import glob
 import os
 import re
@@ -131,35 +139,21 @@ def durable() -> dict[str, tuple[str, str]]:
 
 
 def apply(found: dict[str, tuple[str, str]]) -> list[str]:
-    """Bounce Fail / Needs Work. The Pass -> CLOSED half is board_close_pass.run()."""
-    bounced = []
-    today = datetime.date.today().isoformat()
-    for name, (verdict, note) in sorted(found.items()):
-        if verdict not in ("Fail", "Needs Work"):
-            continue  # Pass (and anything unrecognised) is board_close_pass's business
-        path = os.path.join(WO_DIR, name)
-        if not os.path.isfile(path):
-            print("missing", name)
-            continue
-        st = board_close_pass.read_status(path)
-        up = st.upper()
-        if up.startswith("READY"):
-            continue
-        if not up.startswith("FIXED"):
-            print("skip not-fixed", verdict, name, st[:50])
-            continue
-        note_s = " ".join((note or "").split()).strip()
-        if len(note_s) > 160:
-            note_s = note_s[:157] + "..."
-        stamp = (
-            f"READY TO IMPLEMENT - owner felt-test {today} {verdict}"
-            + (f': "{note_s}"' if note_s else ".")
-            + f" Bounced from Fixed. PRIOR STATUS: {st}"
-        )
-        if board_close_pass.write_status(path, stamp):
-            bounced.append(name)
-            print("BOUNCED", name, verdict, note_s[:80])
-    return bounced
+    """Bounce Fail / Needs Work back to READY, carrying her note into the ticket.
+
+    THIS IS NOT A SECOND BOUNCER (WO-1356). The rules, the note sanitising, the
+    idempotency and the PRIOR STATUS: preservation all live in ONE place -
+    board_close_pass.bounce_pass - beside the close, because both are the same
+    dangerous act: rewriting a **Status:** line from a data file. This function only
+    ADAPTS the legacy (verdict, note) tuple shape that durable()/salvage() produce
+    into the record's entry shape and hands it over. The `board_build.py` run at the
+    end of main() performs the same bounce itself for the normal path, so a seat that
+    never runs this script still gets the routing.
+    """
+    entries = {name: {"verdict": verdict, "note": note}
+               for name, (verdict, note) in found.items()}
+    _ok, res = board_close_pass.run_bounce(entries=entries)
+    return [name for name, _verdict, _note in (res or {}).get("bounced", [])]
 
 
 def main() -> int:

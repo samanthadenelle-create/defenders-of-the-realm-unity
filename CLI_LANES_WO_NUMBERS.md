@@ -180,7 +180,20 @@
 > fine as history. A copied number is the bug **even when it was right the day it was written** -
 > that is exactly how the retired 860-899 UI block kept re-seeding collisions from CLAUDE.md sec.2.
 
-> ## ⚠ RECONCILED 2026-09-03 (CLI, forty-first pass): main line next free = **1356**.
+> ## ⚠ RECONCILED 2026-09-03 (CLI, forty-second pass): main line next free = **1357**.
+> *(CLI minted **WO-1356** on a direct owner ruling: *"add a submit button so you run a script to close
+> the ones passed. move the needs work and failed back to ready with a note"*. Two halves - a SUBMIT
+> control on `BOARD.html` that gets her sign-offs off the browser and into
+> `proof/owner-validations.json` **without a copy/paste step** (the current Export -> Copy -> hand-over
+> is the friction, and a mechanism with friction is one she stops using), and the BOUNCE: Needs
+> Work / Fail go back to **READY carrying her device note**, so the next seat reads why in the ticket
+> instead of hunting a screenshot. ⚠ The board is opened over `file://`, so the button CANNOT write to
+> disk - the design must respect that rather than pretend otherwise. Live proof it is needed: her board
+> reads **43/78 verified** with seven Pass+Validated rows, while the record on disk holds ZERO, so
+> `BOARD_CLOSE_OK closed 0`. ⚠ WO-1184 is Validated + **Needs Work** with a note - it MUST bounce, not
+> close, and is the acceptance case. Bumped 1356 -> 1357 in this SAME edit.)*
+>
+> ### superseded: RECONCILED 2026-09-03 (CLI, forty-first pass): main line next free = **1356**.
 > *(CLI minted **WO-1354** - the "CLOSE THE GAP" rail is built ONCE in `EnsureBuilt`, BEFORE any server
 > quote exists, so it stamps "UNAVAILABLE" and `Render()` then explicitly `continue`s past
 > `StoreBand.Gap` when real prices land; the store host survives the session so it never rebuilds. Same

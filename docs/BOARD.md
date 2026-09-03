@@ -213,7 +213,32 @@ it does not stop being true because a doc got committed. Provenance is kept *ins
 (`at` + `build`), so "was this signed off before the current APK?" stays answerable per ticket
 instead of being force-answered "all of it is stale" once an hour.
 
-**How a mark gets from her phone into the record** (a browser cannot write to the repo):
+**How a mark gets from her phone into the record** (a browser cannot write to the repo).
+**The SUBMIT button is the path** (WO-1356, owner ruling *"add a submit button so you run a script
+to close the ones passed"*):
+
+```
+BOARD.html > Owner Validation > [ Submit marks to the CLI ]      # one tap; saves a file
+python tools/board_build.py --submit    # takes the newest eoa-validations-*.json, ingests it,
+                                        # then closes the Passes and bounces the rest, in ONE run
+```
+
+⛔ **The constraint that shapes this: she opens the board over `file://` and there is no server.**
+A `file://` page cannot write into the repo and has nothing to POST to. What it *can* do is hand
+the browser a file to save — so Submit downloads `eoa-validations-<UTC stamp>.json`, and `--submit`
+picks up the newest one from `EOA_SUBMIT_DIR`, then `<repo>/inbox/`, then `~/Downloads` and
+`~/OneDrive/Downloads`. **Verified, not assumed:** driven through real Chrome over CDP against a
+real `file:///D:/eoa/...` page, the anchor download reported `Browser.downloadProgress
+state=completed` and a 397-byte payload landed on disk (an `http://` control behaved identically,
+so nothing about `file://` refuses it).
+
+The button **says what it did** — the count, the exact filename, the command the CLI runs next, and
+what to do if no file appeared. Success and failure read as the WORDS `SUBMITTED` / `NOT SUBMITTED`
+/ `NOTHING TO SUBMIT`, never as a colour (the owner is red/green colourblind). The browser gives no
+completion callback for a download, so the message never claims more than it knows.
+
+**The Export/Copy path is KEPT as the fallback**, unchanged, for the case where the browser refuses
+the save:
 
 ```
 BOARD.html > Owner Validation > "Export for the CLI" > Copy   (or "Save as file")
@@ -221,12 +246,14 @@ python tools/board_build.py --ingest -        # paste it; or --ingest <file>
 python tools/board_build.py                   # rebuild; the marks now render from disk
 ```
 
-Tradeoff, stated plainly: **one manual hand-off**. It needs no server, no auth and no network, it
-works on a phone over `file://` or any static host, and it cannot lose a mark — which a write
-endpoint reachable from a phone browser could not match without new infrastructure to secure.
-Marks she has not exported yet live only in that browser, and the export block says so.
+Tradeoff, stated plainly: **the marks still travel as a file, not over a wire.** It needs no server,
+no auth and no network, it works over `file://` or any static host, and it cannot lose a mark —
+which a write endpoint reachable from a phone browser could not match without new infrastructure to
+secure. Marks that have not reached the record live only in that browser, and the page says so in
+those words: *"A mark you make here is NOT saved yet."*
 
-- `--ingest` is the **only** writer of the record. A rebuild has **no write path** to it at all.
+- `--ingest` (and `--submit`, which calls it) is the **only** writer of the record. A rebuild has
+  **no write path** to it at all.
 - Newest `at` wins on merge, so a stale paste from a second device cannot overwrite a newer mark.
 - An **unreadable** record ABORTS the rebuild (`VALIDATIONS_PARSE_FAIL`) rather than rendering
   "0 verified" over corrupt bytes — which would look normal and invite her to redo signed-off work.
@@ -290,14 +317,58 @@ The pass REWRITES `**Status:**` lines from a data file, so the rules are the des
 - Opt-out for tests and emergencies only: `--no-close`, or `EOA_BOARD_CLOSE=0`, which prints
   `BOARD_CLOSE_SKIPPED`. It is deliberately an opt-OUT; an opt-IN would restore the forgotten-
   second-command hole.
-- `tools/board_close_validated.py` is now only the **bounce** (Fail / Needs Work back to READY,
-  with her note) plus the legacy Chrome-LevelDB salvage. It calls the same one close module rather
-  than keeping a second copy of the rules — a drifted copy of a status rewriter rewrites live
-  tickets.
+- `tools/board_close_validated.py` keeps only the legacy Chrome-LevelDB salvage; its `apply()` is
+  now a thin adapter onto `board_close_pass.bounce_pass`. Both status rewriters live in one module —
+  a drifted copy of a status rewriter rewrites live tickets.
 - Covered by `tools/board_validation_roundtrip_test.py` stages 5-9 against a throwaway
   `WorkOrders/` (`EOA_WO_DIR`): both-signals, idempotency across three runs, a CLOSED ticket
   untouched, a non-FIXED ticket never closed, the body preserved, abort on a corrupt record — and
   four source mutations that each must be caught.
+
+## 6f. The BOUNCE pass — Fail / Needs Work go back to READY, with her note (WO-1356)
+
+Owner ruling 2026-09-03: *"move the needs work and failed back to ready with a note"*.
+
+The other half of the same sign-off, run by the same `python tools/board_build.py` immediately
+after the close, off the same read of the record (`tools/board_close_pass.py`, `run_bounce`). Her
+note is the most valuable artefact in the whole loop — it is *why* the ticket failed, in her
+words — so it lands **in the ticket**, not in a screenshot someone has to go find.
+
+Resulting status line, the live acceptance case (WO-1184, Validated **and** "Needs Work"):
+
+```
+**Status:** READY TO IMPLEMENT - owner felt-test 2026-09-03 Needs Work
+ (marked 2026-09-03T22:08:02, build 2026.09.03.354093) - "right now its a red d".
+ Bounced from Fixed. PRIOR STATUS: FIXED 2026-08-27 — implemented; awaiting owner felt-verify to CLOSE.
+```
+
+1. **Verdict alone bounces** — `validated` is *not* required, deliberately unlike the close. A close
+   is terminal so it demands two signals; a bounce is the recoverable direction and is fully
+   reversible from the `PRIOR STATUS:` text it preserves. Requiring the extra tap would leave a
+   ticket she marked Fail sitting silently in Fixed forever.
+2. **Only a FIXED ticket bounces**, read through the same `board_build.classify_status` as the
+   close, so the two passes can never disagree about what "Fixed" means. A DONE/CLOSED/SPEC row is
+   held and reported.
+3. **Idempotent.** A bounce writes a status leading with READY, which the next run classifies Ready
+   and skips (`already-ready <n>`). Three runs = one run's bytes; no stacked notes, no nested
+   `PRIOR STATUS:` chains. Consequence stated plainly: editing a note *after* a bounce does not
+   re-stamp the ticket — the ticket is already back in the queue, so a person edits it.
+4. **The existing status body survives verbatim** after `PRIOR STATUS:`, same as the close.
+5. **An empty note is legitimate.** She may mark Needs Work having typed nothing; it bounces anyway
+   and the stamp simply carries no quote. A reason is never invented.
+6. **Her words are not reworded.** `sanitize_note()` only makes a note safe for a single-line ASCII
+   status field, and every transformation is printed on the log: smart punctuation folded to ASCII,
+   any remaining non-ASCII/control character replaced with a space, line breaks flattened, a literal
+   `PRIOR STATUS:` inside the note written `PRIOR STATUS -` so the marker cannot be forged, and a
+   160-character truncation. No rewording, re-ordering, capitalising or summarising.
+7. **A corrupt record aborts** and a mark naming a missing WO file is reported — same as the close.
+
+- Marker: `BOARD_BOUNCE_OK bounced <n>, already-ready <n>, held <n>, missing <n>` (or
+  `BOARD_BOUNCE_FAIL ...`). `EOA_BOARD_CLOSE=0` / `--no-close` skips it too
+  (`BOARD_BOUNCE_SKIPPED`).
+- Covered by the round-trip test stages 5b, 6, 7, 8, 9b and 10 — including four bounce-source
+  mutations that each must be caught, and the live acceptance case: **WO-1184 bounces and must not
+  close, while the seven Pass+Validated rows close.**
 
 ## 7. What this board is NOT
 
