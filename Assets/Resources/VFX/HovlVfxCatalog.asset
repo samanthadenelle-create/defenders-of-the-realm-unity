@@ -160,6 +160,13 @@ MonoBehaviour:
     DefaultLifetime: 0
     Recolorable: 1
     IsLoop: 0
+  - Key: ArcaneTower_Aura
+    Prefab: {fileID: 7042460137364555477, guid: ecabc7a4007a8ad43be3e17217dd9057, type: 3}
+    PoolSize: 6
+    DefaultScale: 1
+    DefaultLifetime: 0
+    Recolorable: 1
+    IsLoop: 1
   - Key: Arcane_Cast
     Prefab: {fileID: 1673707391571236, guid: f326479f7cef0794d95f29731f4bbdb3, type: 3}
     PoolSize: 6
@@ -251,6 +258,20 @@ MonoBehaviour:
     DefaultLifetime: 0
     Recolorable: 1
     IsLoop: 0
+  - Key: DailyChestCollect_Aura
+    Prefab: {fileID: 7027973725108082282, guid: 9d8d5bbde881e7140bd74d4605203dfc, type: 3}
+    PoolSize: 6
+    DefaultScale: 1
+    DefaultLifetime: 0
+    Recolorable: 1
+    IsLoop: 0
+  - Key: DangercastAOERange_Cast
+    Prefab: {fileID: 1639234178565322, guid: 8df1e45cda2d3fe408e1644747052e0e, type: 3}
+    PoolSize: 6
+    DefaultScale: 1
+    DefaultLifetime: 0
+    Recolorable: 1
+    IsLoop: 0
   - Key: DefenseUp-Offhand(Shield)_Aura
     Prefab: {fileID: 1341365785022538, guid: 49f4a2628a72b0846afe42d196c02e6c, type: 3}
     PoolSize: 6
@@ -293,6 +314,13 @@ MonoBehaviour:
     DefaultLifetime: 0
     Recolorable: 1
     IsLoop: 0
+  - Key: EliteDeath_Impact
+    Prefab: {fileID: 6400084191083594748, guid: ccc22a316744f104eb233bd6122a3ec3, type: 3}
+    PoolSize: 6
+    DefaultScale: 1
+    DefaultLifetime: 0
+    Recolorable: 1
+    IsLoop: 0
   - Key: EndGameCAstingAnimation_Impact
     Prefab: {fileID: 31835927839385643, guid: 82430a8cbe341974ca88fc0319c48f72, type: 3}
     PoolSize: 6
@@ -316,6 +344,13 @@ MonoBehaviour:
     IsLoop: 0
   - Key: Explosion_Impact
     Prefab: {fileID: 1121192042590650, guid: b6c1d911bb5ed8643b204f96eef95ae5, type: 3}
+    PoolSize: 6
+    DefaultScale: 1
+    DefaultLifetime: 0
+    Recolorable: 1
+    IsLoop: 0
+  - Key: FTUEPointerofwheretogo_Aura
+    Prefab: {fileID: 1167685827400720, guid: 860a00df38bb45747863505b9e88f7fd, type: 3}
     PoolSize: 6
     DefaultScale: 1
     DefaultLifetime: 0
@@ -468,6 +503,13 @@ MonoBehaviour:
     DefaultLifetime: 0
     Recolorable: 1
     IsLoop: 0
+  - Key: KnightShieldBash_Impact
+    Prefab: {fileID: 6400084191083594748, guid: ccc22a316744f104eb233bd6122a3ec3, type: 3}
+    PoolSize: 6
+    DefaultScale: 1
+    DefaultLifetime: 0
+    Recolorable: 1
+    IsLoop: 0
   - Key: KnightThrust_Impact
     Prefab: {fileID: 1873886433987638, guid: fb2df51e77abde1429eb83c0317784af, type: 3}
     PoolSize: 6
@@ -512,6 +554,13 @@ MonoBehaviour:
     IsLoop: 0
   - Key: Melee_Slash
     Prefab: {fileID: 1873886433987638, guid: fb2df51e77abde1429eb83c0317784af, type: 3}
+    PoolSize: 6
+    DefaultScale: 1
+    DefaultLifetime: 0
+    Recolorable: 1
+    IsLoop: 0
+  - Key: NightStoreoption_Aura
+    Prefab: {fileID: 5637757207944978291, guid: 16330db11d2f4e74a8530fb5ab81cb47, type: 3}
     PoolSize: 6
     DefaultScale: 1
     DefaultLifetime: 0
@@ -993,6 +1042,13 @@ MonoBehaviour:
     DefaultLifetime: 0
     Recolorable: 1
     IsLoop: 0
+  - Key: Store_Aura
+    Prefab: {fileID: 8667563144328412088, guid: de297f7b79b61e647973ef5c1b02b39d, type: 3}
+    PoolSize: 6
+    DefaultScale: 1
+    DefaultLifetime: 0
+    Recolorable: 1
+    IsLoop: 0
   - Key: Thunderbolt_Cast
     Prefab: {fileID: 1012013889074000, guid: 6dc968b09945e3845bdbf41de444f21c, type: 3}
     PoolSize: 6
@@ -1009,6 +1065,13 @@ MonoBehaviour:
     IsLoop: 0
   - Key: Thunderbolt_Projectile
     Prefab: {fileID: 1012013889074000, guid: 6dc968b09945e3845bdbf41de444f21c, type: 3}
+    PoolSize: 6
+    DefaultScale: 1
+    DefaultLifetime: 0
+    Recolorable: 1
+    IsLoop: 0
+  - Key: Treasure_Aura
+    Prefab: {fileID: 7851882727209530665, guid: 778a811f899c1964aa279ac3d5a2cb06, type: 3}
     PoolSize: 6
     DefaultScale: 1
     DefaultLifetime: 0
@@ -1044,6 +1107,20 @@ MonoBehaviour:
     IsLoop: 0
   - Key: Weaponskillsword_Impact
     Prefab: {fileID: 1120835270511274, guid: 33cfc2755a55b7e4c86c9d7018efbaaa, type: 3}
+    PoolSize: 6
+    DefaultScale: 1
+    DefaultLifetime: 0
+    Recolorable: 1
+    IsLoop: 0
+  - Key: atfootprintoftree_Aura
+    Prefab: {fileID: 1329845292236604, guid: 901ec373f1d778f45824e386ccf6eb71, type: 3}
+    PoolSize: 6
+    DefaultScale: 1
+    DefaultLifetime: 0
+    Recolorable: 1
+    IsLoop: 0
+  - Key: atfootprintoftree_Impact
+    Prefab: {fileID: 1329845292236604, guid: 901ec373f1d778f45824e386ccf6eb71, type: 3}
     PoolSize: 6
     DefaultScale: 1
     DefaultLifetime: 0

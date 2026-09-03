@@ -293,6 +293,74 @@ namespace DeNelle.Core.Ops
         public const string KeyVfxMaxParticleLights = "vfx.maxParticleLights";
 
         // ---------------------------------------------------------------------
+        //  WO-1343 - THE NIGHT STORE'S AURA. Four knobs, and they exist because
+        //  the owner asked a QUESTION SHE HAS EXPLICITLY NOT ANSWERED.
+        //
+        //  She tagged NightStoreoption_Aura (top_down_starfall_line_blue) for the
+        //  Night Store; then tagged a SECOND candidate, Store_Aura (Loot_flicker),
+        //  saying verbatim "i added another option for REalm store, not sure which
+        //  will be best"; and separately asked "can we use these [the seven Aura_*
+        //  spells] slowly one after another instead at the night store IF THE OTHER
+        //  ONE DOESNT LOOK GOOD". Every one of those is a creative call conditional
+        //  on device feel, so ALL of it ships in one build and the choice is a row,
+        //  per her standing 2026-09-02 ruling: "be smart, dont make it need a code
+        //  change, make it tweakable from a db call" / "i have been screaming this
+        //  for months."
+        //
+        //  (S) HER FIRST PICK IS THE DEFAULT AND ROTATION SHIPS OFF. Mode 0 = the
+        //  first key she tagged, played verbatim, pulsed every 30 minutes. An empty
+        //  table, a 404, a malformed row and an offline player therefore all get
+        //  exactly that. Nothing here promotes her second candidate or the family -
+        //  choosing between them is the decision she reserved for herself.
+        //
+        //  (!) THE CADENCE MEANS TWO DIFFERENT THINGS, because the candidates are
+        //  two different KINDS of effect (MEASURED, not assumed): both of her store
+        //  tags are one-shot BURSTS (all ParticleSystems looping:0) while the Aura_*
+        //  family is CONTINUOUS (looping:1). So in a burst mode the cadence RE-FIRES
+        //  the burst, and in rotate mode it ADVANCES to the next aura. The consumer
+        //  reports which meaning is live on every trace line.
+        //
+        //  The rotation membership is a BITMASK rather than a string list on
+        //  purpose: it rides the existing integer rail instead of growing the
+        //  tunables a new value kind, and "take that one out of the rotation" is
+        //  still a single number with no code change and no schema change.
+        //
+        //  The consumer is DeNelle.Village.NightStoreAuraSelector, which owns the
+        //  clamps and is the ONLY reader. Nothing here picks a prefab: the family
+        //  names are a directory listing of the folder she screenshotted, and an
+        //  untagged member is SKIPPED BY NAME rather than substituted.
+        // ---------------------------------------------------------------------
+
+        /// <summary>0 = TaggedStarfall (SHIPPED, her first pick). 1 = TaggedLootFlicker
+        /// (her second candidate). 2 = RotateFamily. 3 = LegacyBeaconRing.</summary>
+        public const int VfxNightStoreAuraModeDefault = 0;
+
+        /// <summary>Minutes between night-store aura cadence ticks. Her "every 30~min".</summary>
+        public const int VfxNightStoreAuraCadenceMinDefault = 30;
+
+        /// <summary>Bitmask over the seven Aura_* prefabs, folder order. 127 = all seven.
+        /// Written in DECIMAL deliberately: tools/gen-tunable-manifest.mjs resolves a default
+        /// const with a decimal-only regex, so a hex literal here would fail the generator.</summary>
+        public const int VfxNightStoreAuraFamilyMaskDefault = 127;
+
+        /// <summary>Seconds between EXTRA burst re-fires inside one cadence period.
+        /// 0 = OFF, which is her spec read literally: one burst per cadence tick.</summary>
+        public const int VfxNightStoreAuraBurstRepeatSecDefault = 0;
+
+        /// <summary>Int enum. What drives the Night Store's aura seat:
+        /// 0 tagged-starfall / 1 tagged-lootflicker / 2 rotate-family / 3 legacy-ring.</summary>
+        public const string KeyVfxNightStoreAuraMode = "vfx.nightStoreAuraMode";
+
+        /// <summary>Int minutes. Cadence of the night-store aura tick.</summary>
+        public const string KeyVfxNightStoreAuraCadenceMin = "vfx.nightStoreAuraCadenceMin";
+
+        /// <summary>Int bitmask. Which Aura_* family members the rotation may select.</summary>
+        public const string KeyVfxNightStoreAuraFamilyMask = "vfx.nightStoreAuraFamilyMask";
+
+        /// <summary>Int seconds. Extra burst re-fire period inside one cadence. 0 = off.</summary>
+        public const string KeyVfxNightStoreAuraBurstRepeatSec = "vfx.nightStoreAuraBurstRepeatSec";
+
+        // ---------------------------------------------------------------------
         //  Verbosity levels for KeyTraceAssetVerbosity.
         //
         //  ⛔ THERE IS NO "OFF". CLAUDE.md section 12 is binding: instrumentation is
@@ -462,6 +530,59 @@ namespace DeNelle.Core.Ops
                 "purpose: 'each tick hurts more' and 'it lasts longer' feel completely different at the " +
                 "same total damage, and collapsing them into one dial would make that distinction " +
                 "untestable."),
+
+            new TunableSpec(KeyVfxNightStoreAuraMode, TunableKind.Int, VfxNightStoreAuraModeDefault,
+                "What the Night Store's aura seat plays. 0 = THIS BUILD: her FIRST tagged key " +
+                "NightStoreoption_Aura (top_down_starfall_line_blue), a one-shot burst re-fired on the " +
+                "cadence. 1 = her SECOND tagged candidate Store_Aura (Loot_flicker), also a burst. " +
+                "2 = walk the seven continuous Aura_* spell prefabs, one at a time in folder order, " +
+                "advancing on the cadence. 3 = the Marker8 safe-zone ring this build replaced. Any " +
+                "other number is ignored and resolves to 0.",
+                "NOT a PROD-022 hypothesis - a PURE CREATIVE CHOICE the owner has explicitly not made. " +
+                "She tagged one store aura, then a second ('i added another option for REalm store, not " +
+                "sure which will be best'), then asked whether the Aura_* family could cycle 'slowly one " +
+                "after another instead ... IF THE OTHER ONE DOESNT LOOK GOOD'. Three candidates and a " +
+                "conditional. Building one and discarding the rest would either pick for her or cost a " +
+                "30-minute rebuild per opinion; this knob makes it a 40-second flip on the device with " +
+                "the thing in front of her. Her first pick ships as the default and nothing promotes " +
+                "the others (memory vfx-map-owner-tags-no-creative-pick)."),
+
+            new TunableSpec(KeyVfxNightStoreAuraCadenceMin, TunableKind.Int, VfxNightStoreAuraCadenceMinDefault,
+                "Minutes between Night Store aura cadence ticks. 30 = TODAY, and it is her number " +
+                "verbatim ('its to be random when in town every 30~min'). What a tick DOES depends on " +
+                "the mode: in a burst mode it re-fires the burst, in rotate mode it advances to the " +
+                "next aura, and against the continuous legacy ring it does nothing. Clamped to " +
+                "1..1440 at the consumer. The clock ticks in TOWN only - never during a raid, a battle " +
+                "or a dungeon.",
+                "NOT a PROD-022 hypothesis - a FEEL knob (WO-1343). Whether a half-hourly pulse reads " +
+                "as 'the store just caught my eye' or as 'nothing ever happens there' is a question " +
+                "only felt-testing on the device answers, and the owner is red/green colourblind, so " +
+                "RHYTHM is carrying signal that colour cannot. It has to move in seconds."),
+
+            new TunableSpec(KeyVfxNightStoreAuraFamilyMask, TunableKind.Int, VfxNightStoreAuraFamilyMaskDefault,
+                "Bitmask of which Aura_* prefabs the rotation may select, in the folder's own " +
+                "alphabetical order: 1 Arcane, 2 Dark, 4 Fire, 8 Ice, 16 Light, 32 Nature, 64 Storm. " +
+                "127 = THIS BUILD: all seven eligible. INERT unless the mode knob is 2. A member the " +
+                "owner has not yet tagged in the VFX Caster does not resolve, is skipped BY NAME in " +
+                "the trace, and is never substituted for. A mask that enables nothing falls back to " +
+                "her first tagged key rather than leaving the store bare.",
+                "NOT a PROD-022 hypothesis - the WO-1343 requirement that 'a prefab she dislikes comes " +
+                "out without a code change'. A bitmask rather than a string list because that rides the " +
+                "existing integer rail: adding a new tunable VALUE KIND for one feature is the second " +
+                "configuration mechanism this whole rail exists to avoid."),
+
+            new TunableSpec(KeyVfxNightStoreAuraBurstRepeatSec, TunableKind.Int, VfxNightStoreAuraBurstRepeatSecDefault,
+                "Seconds between EXTRA re-fires of the burst INSIDE one cadence period. 0 = THIS " +
+                "BUILD: off, exactly one burst per cadence tick, which is her spec read literally. " +
+                "Set it to a few seconds to turn the half-hourly pulse into a slow heartbeat. Clamped " +
+                "to 0..600. Ignored entirely in the two CONTINUOUS modes (rotate-family and the legacy " +
+                "ring), where there is no burst to repeat.",
+                "NOT a PROD-022 hypothesis - the escape hatch for the one number in this feature that " +
+                "was measured rather than chosen. BOTH of her store tags were verified one-shot (every " +
+                "ParticleSystem looping:0 on top_down_starfall_line_blue and Loot_flicker), so her " +
+                "isLoop:false is CORRECT and a burst is what she authored. But '30~min' was a rough " +
+                "number said in passing, and if one pulse per half hour turns out to read as nothing " +
+                "at all, this fixes it without a rebuild and without anyone re-tagging her prefab."),
         };
 
         // Swapped atomically by ApplyPayload. Never mutated in place.

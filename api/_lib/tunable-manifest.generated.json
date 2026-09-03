@@ -71,6 +71,26 @@
             "key": "combat.overTimeDurationPct",
             "kind": "int",
             "default": 100
+        },
+        {
+            "key": "vfx.nightStoreAuraMode",
+            "kind": "int",
+            "default": 0
+        },
+        {
+            "key": "vfx.nightStoreAuraCadenceMin",
+            "kind": "int",
+            "default": 30
+        },
+        {
+            "key": "vfx.nightStoreAuraFamilyMask",
+            "kind": "int",
+            "default": 127
+        },
+        {
+            "key": "vfx.nightStoreAuraBurstRepeatSec",
+            "kind": "int",
+            "default": 0
         }
     ]
 }

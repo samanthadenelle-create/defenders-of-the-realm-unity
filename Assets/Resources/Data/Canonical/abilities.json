@@ -334,7 +334,7 @@
           "damage": 22,
           "range": 3.6,
           "vfxCast": "KnightThrust_Impact",
-          "vfxImpact": "Weaponskillsword_Impact"
+          "vfxImpact": "KnightShieldBash_Impact"
         },
         "thunderbolt": {
           "id": "knight.thunderbolt",

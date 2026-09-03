@@ -195,6 +195,66 @@ const PRESENTATION = {
               'spells prettier and the frame rate worse.',
     },
 
+    // ---- WO-1343. The Night Store's aura. These four exist so that a choice YOU
+    // said you were not ready to make does not cost a rebuild each time you look at
+    // it: "i added another option for REalm store, not sure which will be best",
+    // and "can we use these slowly one after another instead ... if the other one
+    // doesnt look good". All the candidates are in the build; this is where you pick.
+    'vfx.nightStoreAuraMode': {
+        area: 'spells',
+        label: 'Night Store: which aura',
+        what: 'Which effect the Realm Store wears. 0 is the one the game ships with: the ' +
+              'blue starfall you tagged first. 1 is the loot flicker you added as a second ' +
+              'option. 2 cycles slowly through the seven Aura spell effects, one at a time. ' +
+              '3 puts back the plain ground ring the store used to have, if you want the ' +
+              'old look again. Change it, walk up to the store, and look - nothing needs ' +
+              'rebuilding.',
+        min: 0,
+        max: 3,
+        risk: 'Options 0 and 1 are single bursts that fire on the timer below. Option 2 is ' +
+              'a set of continuous glows, so the timer changes WHICH one is showing rather ' +
+              'than re-firing it. Option 3 never changes at all.',
+    },
+
+    'vfx.nightStoreAuraCadenceMin': {
+        area: 'spells',
+        label: 'Night Store: minutes between changes',
+        what: 'How many minutes pass between the store aura firing again, or switching to ' +
+              'the next one if you are cycling. The game ships at 30, which is the number ' +
+              'you asked for. Only counts while you are in town - it never runs during a ' +
+              'raid, a battle or a dungeon.',
+        min: 1,
+        max: 1440,
+    },
+
+    'vfx.nightStoreAuraFamilyMask': {
+        area: 'spells',
+        label: 'Night Store: which Aura effects may appear',
+        what: 'Only matters when the aura choice above is set to 2 (cycle). Add up the ones ' +
+              'you want and enter the total: Arcane 1, Dark 2, Fire 4, Ice 8, Light 16, ' +
+              'Nature 32, Storm 64. The game ships at 127, which is all seven. Drop one you ' +
+              'do not like by leaving its number out - for example 127 minus 4 is 123, ' +
+              'which is everything except Fire.',
+        min: 0,
+        max: 127,
+        risk: 'An Aura effect only appears once you have tagged it in the VFX Caster. Any ' +
+              'that you have not tagged are skipped by name in the log, never swapped for ' +
+              'something else, and the store falls back to the aura you tagged.',
+    },
+
+    'vfx.nightStoreAuraBurstRepeatSec': {
+        area: 'spells',
+        label: 'Night Store: extra pulses between changes',
+        what: 'Seconds between extra repeats of the burst inside one waiting period. The ' +
+              'game ships at 0, which means it fires once and then waits the full time ' +
+              'again - exactly what you asked for. If one flash every half hour turns out ' +
+              'to read as nothing happening, set this to a few seconds to make it a slow ' +
+              'heartbeat instead. Ignored when you are cycling the Aura effects, since ' +
+              'those glow continuously.',
+        min: 0,
+        max: 600,
+    },
+
     // ---- the PROD-022 loading knobs. Not balance. They live under Misc because
     // they are numbers that ship, and the owner asked for "almost anything (misc)",
     // but every one of them says out loud that it is a bug-hunting lever.

@@ -251,6 +251,71 @@ namespace DeNelle.Dungeons
         private string _roomId = string.Empty;
         private DungeonTreasureBeacon _beacon;
 
+        // =====================================================================
+        //  WO-1347 - THE OWNER-TAGGED IDLE SHIMMER
+        // ---------------------------------------------------------------------
+        //  HER TAG, VERBATIM (Assets/Editor/VfxManualPicks.json):
+        //      Treasure_Aura -> Lana Studio/Casual RPG VFX/Prefabs/Loot/Loot_iddle.prefab
+        //      isLoop false, scale 1.0        her words: "treasure chest"
+        //
+        //  'iddle' is the PACK'S OWN TYPO for idle. That is the real filename and it is
+        //  never corrected in a path string, or the load fails. Nothing here reads a
+        //  prefab path at all - the key is mapped VERBATIM and VFXManager resolves it
+        //  from the catalog. No prefab is picked, substituted or rescaled here (memory
+        //  vfx-map-owner-tags-no-creative-pick), and Loot_iddle.prefab is NOT modified
+        //  on disk: it is a shared pack asset and editing it would silently change
+        //  every other user of it.
+        //
+        //  WHERE THIS CHEST LIVES, ANSWERED FROM CODE: this is a WORLD object built from
+        //  primitives by BuildVisual below, in world space, in the deepest room of a
+        //  composed dungeon. It is NOT a UI element, so a world-space particle composite
+        //  seats correctly here (parented to this transform, scale untouched). The
+        //  daily-login chest is a DIFFERENT system and a UI modal - see
+        //  DeNelle.Village.Monetization.DailyChestController, which carries her separate
+        //  DailyChestCollect_Aura tag.
+        //
+        //  LIFECYCLE, AND ITS ONE OWNER: this component. spawn -> IDLE (_opened false,
+        //  shimmer on) -> Open -> panel -> Claim -> shimmer OFF, beacon extinguished,
+        //  prop deactivated. A shimmer still playing over an emptied chest reads as a bug
+        //  and invites a second tap, so the stop is asserted on the claim path AND on
+        //  OnDisable/OnDestroy rather than trusted to one of them.
+        //
+        //  (!) THE isLoop CONFLICT, HONOURED RATHER THAN FIXED. Her tag says isLoop:false
+        //  while 7 of the prefab's 10 ParticleSystems are authored looping (measured from
+        //  the prefab YAML, longest system 4s). Read literally, false means the shimmer
+        //  dies after ~4 seconds and the chest sits DARK while it is still unopened -
+        //  the opposite of what an idle loot effect is for. Her flag is NOT edited (this
+        //  file never writes VfxManualPicks.json). Instead the LIFETIME is driven by the
+        //  chest's own unopened state, which is the right owner of that lifetime whichever
+        //  way the flag reads:
+        //      * catalog row is a ONE-SHOT (today) -> PlayKey returns null, and the burst
+        //        is re-fired every RefireSeconds while the chest is unopened.
+        //      * catalog row is a LOOP (if she retags) -> PlayKey returns a handle, it is
+        //        held, and nothing re-fires. No code change needed either way.
+        //  Reported to her in one sentence in the WO-1347 RESULT so she can retag in
+        //  seconds if she prefers the loop.
+        // =====================================================================
+
+        /// <summary>Her key, verbatim. The catalog owns the key -> prefab mapping.</summary>
+        private const string ShimmerKey = "Treasure_Aura";
+
+        /// <summary>FlowTrace tag for the shimmer decisions (shares the cache's system tag).</summary>
+        private const string ShimmerSys = "TreasureVfx";
+
+        /// <summary>Metres above the chest origin to seat the shimmer - just over the lid
+        /// (body 0.45 + lid 0.95 in BuildVisual), so it reads as coming OFF the chest.</summary>
+        private const float ShimmerHeight = 1.0f;
+
+        /// <summary>Seconds between one-shot re-fires. MEASURED, not chosen: the prefab's
+        /// longest lengthInSec is 4, so this re-arms just before the previous burst ends and
+        /// the shimmer is continuous with no double-density overlap.</summary>
+        private const float RefireSeconds = 3.9f;
+
+        private VFXHandle _shimmer;        // non-null only when the row resolved as a LOOP
+        private bool _shimmerIsOneShot;    // true when the row resolved as a one-shot burst
+        private bool _shimmerStarted;      // a spawn has been attempted at least once
+        private float _nextShimmerRefire;
+
         /// <summary>Create the cache at <paramref name="position"/> and build its visual.</summary>
         public static DungeonTreasureCache Spawn(Vector3 position, string dungeonId, string roomId)
         {
@@ -400,6 +465,69 @@ namespace DeNelle.Dungeons
 
             _beacon = gameObject.AddComponent<DungeonTreasureBeacon>();
             _beacon.Bind(light);
+
+            StartShimmer("cache built");
+        }
+
+        /// <summary>
+        /// WO-1347: spawn her tagged idle shimmer over the UNOPENED chest. Idempotent, and a
+        /// hard no-op once the chest is opened - the gate is the chest's own state, not a
+        /// timer and not the build event.
+        /// <para>Null-safe end to end: VFXManager.PlayKey no-ops (returns null) when the
+        /// manager or the catalog row is not ready, so an un-regenerated catalog costs the
+        /// shimmer and nothing else. That is exactly why the trace below states whether the
+        /// prefab RESOLVED - a missing effect and a deliberately subtle one are otherwise
+        /// indistinguishable (CLAUDE.md section 12).</para>
+        /// </summary>
+        private void StartShimmer(string why)
+        {
+            if (_opened) return;
+            if (_shimmer != null && _shimmer.IsAlive) return;
+
+            bool resolves = VFXManager.CanPlayKey(ShimmerKey);
+            Vector3 at = transform.position + Vector3.up * ShimmerHeight;
+
+            Guard.Try(ShimmerSys, "spawn treasure idle shimmer", () =>
+            {
+                // Her scale is 1.0 and it is passed as 0 = "use the catalog row's DefaultScale",
+                // i.e. nothing here rescales her effect. Parented to this transform so it tracks
+                // the chest; no tint is passed, so no hue is imposed on a colourblind-safe read.
+                _shimmer = VFXManager.PlayKey(ShimmerKey, at, Quaternion.identity, transform);
+            });
+
+            _shimmerStarted = true;
+            _shimmerIsOneShot = _shimmer == null;
+            _nextShimmerRefire = Time.unscaledTime + RefireSeconds;
+
+            FlowTrace.Step(ShimmerSys,
+                $"idle shimmer '{ShimmerKey}' ({why}): prefabResolved={resolves} " +
+                $"handle={(_shimmer != null ? "LOOP (held)" : "null -> ONE-SHOT (re-fired while unopened)")} " +
+                $"space=WORLD pos={at} chest='{_dungeonId}'/'{_roomId}' opened={_opened}. " +
+                (resolves
+                    ? "Her isLoop:false makes this a burst; the chest's UNOPENED state owns the lifetime."
+                    : "Key not in the runtime catalog yet - regenerate it (Defenders/VFX/Generate Hovl " +
+                      "VFX Catalog) or the shimmer stays absent. Nothing else is affected."));
+        }
+
+        /// <summary>
+        /// WO-1347: stop the shimmer. Called from the claim path AND from OnDisable/OnDestroy,
+        /// because a shimmer outliving its chest is the exact failure the ticket names. Safe to
+        /// call any number of times and on a chest that never had one.
+        /// </summary>
+        private void StopShimmer(string why)
+        {
+            bool had = _shimmerStarted;
+            if (_shimmer != null)
+            {
+                _shimmer.Stop(immediate: true);
+                _shimmer = null;
+            }
+            _shimmerStarted = false;
+            _shimmerIsOneShot = false;
+            if (had)
+                FlowTrace.Step(ShimmerSys,
+                    $"idle shimmer '{ShimmerKey}' STOPPED ({why}) - chest '{_dungeonId}'/'{_roomId}' " +
+                    $"opened={_opened}. Nothing is left playing over an emptied chest.");
         }
 
         private GameObject AddDecor(PrimitiveType type, Vector3 localPos, Vector3 scale, Color color)
@@ -438,6 +566,21 @@ namespace DeNelle.Dungeons
         {
             if (_opened) return;
 
+            // WO-1347: her isLoop:false resolves as a BURST, so the idle shimmer is re-armed
+            // from the chest's own unopened state rather than left to die after ~4s. When the
+            // row resolves as a LOOP instead (a retag), _shimmerIsOneShot is false and this
+            // never runs. Cheap: one float compare per frame in the common case.
+            if (_shimmerIsOneShot && Time.unscaledTime >= _nextShimmerRefire)
+            {
+                _nextShimmerRefire = Time.unscaledTime + RefireSeconds;
+                Guard.Try(ShimmerSys, "re-fire treasure idle shimmer", () =>
+                    VFXManager.PlayKey(ShimmerKey, transform.position + Vector3.up * ShimmerHeight,
+                                       Quaternion.identity, transform));
+                FlowTrace.Throttle(ShimmerSys, "refire", 30f,
+                    $"idle shimmer '{ShimmerKey}' re-fired (isLoop:false burst, chest still UNOPENED) " +
+                    $"at {transform.position + Vector3.up * ShimmerHeight} space=WORLD.");
+            }
+
             if (!_heroFound)
             {
                 var tagged = GameObject.FindGameObjectWithTag("Player");
@@ -471,7 +614,15 @@ namespace DeNelle.Dungeons
             MobileInteractButton.Release(this);
         }
 
-        private void OnDisable() => ReleasePrompt();
+        private void OnDisable()
+        {
+            ReleasePrompt();
+            // WO-1347: Claim deactivates this GameObject, so this is the belt to the claim
+            // path's braces - and it also covers a scene teardown that never reaches Claim.
+            StopShimmer("cache disabled");
+        }
+
+        private void OnDestroy() => StopShimmer("cache destroyed");
 
         // =====================================================================
         //  OPEN -> PANEL -> GRANT
@@ -482,6 +633,11 @@ namespace DeNelle.Dungeons
             if (_opened) return;
             _opened = true;
             ReleasePrompt();
+            // WO-1347: OPENED is the state change the shimmer is gated on, so it stops HERE -
+            // at the tap - not at the later grant. That also covers the case where her tag is
+            // retagged to isLoop:true and a held loop would otherwise keep playing under the
+            // reward panel.
+            StopShimmer("cache opened");
 
             bool firstClear = !FirstClearTaken(_dungeonId);
             FlowTrace.Step(Sys, $"cache opened in '{_dungeonId}' room '{_roomId}' (firstClear={firstClear})");
@@ -525,6 +681,12 @@ namespace DeNelle.Dungeons
 
             // Retire the prop so the deepest room reads as looted. Extinguish first so the
             // point light is off even if something re-enables this GameObject later.
+            //
+            // WO-1347: the owner-tagged idle shimmer dies on the SAME beat and for the same
+            // reason - "unopened" is the state that owns its lifetime, and this is the moment
+            // that state ends. Asserted here as well as in OnDisable so the order can never
+            // leave a shimmer over an emptied chest.
+            StopShimmer("cache claimed");
             if (_beacon != null) _beacon.Extinguish();
             gameObject.SetActive(false);
         }

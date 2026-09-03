@@ -56,6 +56,30 @@ namespace DeNelle.Village
         private VFXHandle _handle;
         private bool _started;
 
+        // ── WO-1346: "(after built)" + "softly" ────────────────────────────────────
+        // Owner tag ArcaneTower_Aura, spec verbatim: "arcane tower vfx (after built) softly".
+        // BOTH fields are OPT-IN and ship INERT (false / 1.0), so every OTHER caller of this
+        // component - the Cathedral of Magic, the baked hub landmark - behaves byte-for-byte
+        // as it did before this work. Only ArcaneTower.Awake opts in.
+        //
+        // ⭐ THE GATE IS DRIVEN FROM STATE, NOT FROM THE BUILD-COMPLETION EVENT. That is the
+        // case most likely to be missed: an event-only wiring gives an aura that vanishes on
+        // every relaunch until the player happens to build ANOTHER tower. Start() asks
+        // UnderConstructionVisual.IsUnderConstruction - which is DERIVED (a live scaffold whose
+        // job the Obsidian queue still reports in flight) and never stored - so a tower that
+        // was already standing when the save loaded answers "built" and lights immediately.
+        //
+        // The poll below is EDGE-DRIVEN, never a retry loop: it acts on a TRANSITION only, so
+        // a key that fails to resolve logs once at the transition instead of once every 0.5s
+        // forever. Both edges are handled, which is what covers a scaffold attached AFTER our
+        // Start in the same frame (built -> building STOPS the aura), and the upgrade case
+        // where a structure is re-scaffolded for its upgrade timer and then revealed again.
+        private bool  _requireBuilt;                 // false = legacy behaviour, spawn regardless
+        private float _softEmissionMul = 1f;         // 1 = the pack's authored density
+        private bool  _wasUnderConstruction;         // last observed gate state (edge detection)
+        private bool  _gateInitialised;              // _wasUnderConstruction carries a real reading
+        private float _gateTimer;                    // throttle for the gate poll
+
         // ── Tier escalation (owner felt-test 2026-07-17: "more/better VFX at higher tower
         // levels" — upgrading must FEEL rewarding). The idle aura visibly ESCALATES with the
         // tower's level: a bigger ring at L2, and a bigger ring PLUS a slow rising idle PULSE
@@ -129,6 +153,11 @@ namespace DeNelle.Village
 
         private void Update()
         {
+            // WO-1346: the built-state gate runs BEFORE the orphan walk, because it is the
+            // half that can START an aura that is not yet playing (the orphan walk below can
+            // only ever stop one, and bails on a null handle).
+            if (_requireBuilt) TickBuiltGate();
+
             // Only a live handle can be orphaned; skip the walk entirely otherwise.
             if (_handle == null || !_handle.IsAlive) return;
 
@@ -157,6 +186,69 @@ namespace DeNelle.Village
             }
         }
 
+        /// <summary>
+        /// WO-1346 - the "(after built)" gate, polled on both edges.
+        ///
+        /// <para>UNDER CONSTRUCTION means exactly what the build system means by it:
+        /// <see cref="UnderConstructionVisual.IsUnderConstruction"/> - a live scaffold on this
+        /// host whose job the Obsidian queue still reports in flight. That single derived
+        /// predicate covers a RUNNING job and one still WAITING in the FIFO pending queue
+        /// alike, so "sitting in the queue" needs no second notion here. A build-mode ghost
+        /// never reaches this code at all: GhostPreview only calls VisualFactory.Skin and
+        /// attaches no behaviour, so no ArcaneTower and therefore no ArcaneAura exists on a
+        /// preview.</para>
+        ///
+        /// <para>Acts on TRANSITIONS ONLY. Nothing here retries a failed spawn on a timer:
+        /// a key that does not resolve logs once at the falling edge, exactly like every
+        /// other StartAura path.</para>
+        /// </summary>
+        private void TickBuiltGate()
+        {
+            _gateTimer -= Time.deltaTime;
+            if (_gateInitialised && _gateTimer > 0f) return;
+            _gateTimer = OwnerCheckInterval;
+
+            bool building = UnderConstructionVisual.IsUnderConstruction(gameObject);
+            bool first = !_gateInitialised;
+            bool wasBuilding = _wasUnderConstruction;
+            _gateInitialised = true;
+            _wasUnderConstruction = building;
+
+            // ── STOP is RECONCILING, not edge-driven ──────────────────────────────────
+            // Stopping is idempotent and cheap, so it is safe to assert every poll rather
+            // than only on an edge - and asserting it closes the load-order race head on:
+            // if Start() lit the aura in the same frame that a scaffold was still being
+            // attached, there is no "built -> building" EDGE to catch, only a standing
+            // disagreement between what is playing and what the queue says. Reconciling
+            // resolves that; edge detection alone would leave the aura burning through the
+            // whole build timer, which is precisely the failure the owner's "(after built)"
+            // is about.
+            if (building)
+            {
+                if (_handle != null)
+                {
+                    FlowTrace.Step(ArcaneTowerAuraTuning.Sys,
+                        $"'{name}' aura '{_auraKey}' WITHHELD: structure is UNDER CONSTRUCTION " +
+                        $"(scaffold live, Obsidian job in flight; firstPoll={first}). Owner spec " +
+                        "'after built' - it returns on the reveal.");
+                    StopAura(immediate: true);
+                }
+                return;
+            }
+
+            // ── START is EDGE-DRIVEN ──────────────────────────────────────────────────
+            // Only on a real building -> built TRANSITION, so a key that fails to resolve
+            // logs once at the reveal instead of once every poll forever. The already-built
+            // case needs nothing here: Start() lit it from the same predicate on load.
+            if (first || !wasBuilding) return;
+
+            FlowTrace.Step(ArcaneTowerAuraTuning.Sys,
+                $"'{name}' BUILD COMPLETE -> starting ambient aura '{_auraKey}' " +
+                $"(soft={_softEmissionMul:0.00}x authored emission).");
+            StartAura();
+            RestartPulse(TierFor(_level));
+        }
+
         /// <summary>True when a non-particle body renderer (the tower mesh) is live under this
         /// structure. ParticleSystemRenderers are excluded so the aura's OWN VFX (and any other
         /// effect) never counts as the body.</summary>
@@ -175,6 +267,21 @@ namespace DeNelle.Village
         private void StartAura()
         {
             if (_handle != null) return;   // already holding the loop
+
+            // WO-1346 "(after built)". Opt-in and OFF for every legacy caller, so the Cathedral
+            // and the baked hub landmark are unaffected. Deliberately STATE-driven: this same
+            // question is asked on a cold load, which is what makes an already-built tower light
+            // on relaunch instead of waiting for the next build-completion event.
+            if (_requireBuilt && UnderConstructionVisual.IsUnderConstruction(gameObject))
+            {
+                _gateInitialised = true;
+                _wasUnderConstruction = true;
+                FlowTrace.Step(ArcaneTowerAuraTuning.Sys,
+                    $"'{name}' aura '{_auraKey}' NOT started: structure is UNDER CONSTRUCTION " +
+                    "(live scaffold, Obsidian job in flight). Owner spec 'after built'. " +
+                    "The gate polls both edges, so it starts on the reveal.");
+                return;
+            }
 
             // BODY-DERIVED FOOT POINT (owner F8 2026-07-30 "under the cathedral not beside
             // it - I've seen it every time"; PROVEN by the seating trace: the Cathedral's
@@ -206,6 +313,21 @@ namespace DeNelle.Village
 
             // SEATING PROOF: the anchor now IS the body foot point, so deltaXZ must read
             // 0.00 for every structure - a non-zero here means new off-pivot art regressed.
+            // WO-1346 "softly" - applied to the SPAWNED INSTANCE, never to the prefab on disk.
+            // VfxLoopModulator captures a pristine baseline on first touch and is Restored from
+            // BOTH pool-return ends (VFXHandle.Stop and VFXManager.ReturnToPool), so a softened
+            // instance can never hand a dimmed effect to the next user of that pool slot.
+            // Density rather than hue: the owner is red/green colourblind and "fewer particles"
+            // reads identically in greyscale (CLAUDE.md section 7).
+            if (_handle != null && !Mathf.Approximately(_softEmissionMul, 1f))
+            {
+                Guard.Try(ArcaneTowerAuraTuning.Sys, $"soften aura '{_auraKey}'",
+                    () => _handle.Modulator?.SetEmissionScale(_softEmissionMul));
+                FlowTrace.Step(ArcaneTowerAuraTuning.Sys,
+                    $"'{name}' aura '{_auraKey}' softened to {_softEmissionMul * 100f:0}% of the pack's " +
+                    "authored emission density (instance-level VfxLoopModulator; the prefab is untouched).");
+            }
+
             if (_handle != null)
             {
                 float dxz = hasBody
@@ -367,6 +489,34 @@ namespace DeNelle.Village
             if (root == null) return;
             var aura = root.GetComponentInChildren<ArcaneAura>(true);
             if (aura == null) aura = root.AddComponent<ArcaneAura>();
+            aura.SetAuraKey(auraKey);
+        }
+
+        /// <summary>
+        /// WO-1346 - <see cref="Ensure(GameObject,string)"/> plus the owner's two extra
+        /// conditions for the Arcane Tower: gate the aura on the BUILT state, and play it
+        /// SOFTLY.
+        ///
+        /// <para>⭐ THIS IS AN OVERLOAD, NOT A SECOND OWNER. It reuses the one ambient-aura
+        /// component every arcane surface already has, which is why the tower still gets - for
+        /// free and unchanged - the destruction teardown (Destructible.TeardownVfx calls
+        /// StopAndDisable on every ArcaneAura under the root), the orphan liveness guard, the
+        /// max-level crown, and the per-level escalation that restarts ONE aura instead of
+        /// stacking one per level. Adding a separate component here would have produced exactly
+        /// the two-ambient-auras failure the ticket forbids, because
+        /// StructureFactory.ReskinForLevel re-Ensures an ArcaneAura on every arcane/spire id at
+        /// each level change.</para>
+        ///
+        /// <para><paramref name="requireBuilt"/> false and <paramref name="softEmissionMul"/> 1
+        /// reproduce the legacy overload exactly, so nothing that does not opt in can change.</para>
+        /// </summary>
+        public static void Ensure(GameObject root, string auraKey, bool requireBuilt, float softEmissionMul)
+        {
+            if (root == null) return;
+            var aura = root.GetComponentInChildren<ArcaneAura>(true);
+            if (aura == null) aura = root.AddComponent<ArcaneAura>();
+            aura._requireBuilt = requireBuilt;
+            aura._softEmissionMul = Mathf.Max(0.01f, softEmissionMul);
             aura.SetAuraKey(auraKey);
         }
     }

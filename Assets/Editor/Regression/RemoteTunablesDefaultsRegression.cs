@@ -114,12 +114,12 @@ namespace DeNelle.Editor.Regression
         //  PINNED FACTS. Every one is a literal.
         // ---------------------------------------------------------------------
 
-        /// <summary>The domain is FOURTEEN knobs: eight PROD-022 mitigations, the WO-1306
-        /// balance knob, the three WO-1330 over-time levers, and the two WO-1327 VFX
-        /// feel/perf clamps. Pinned as a literal, not as
-        /// Registry.Length - an oracle that measures the thing against itself
-        /// certifies nothing.</summary>
-        private const int ExpectedKnobCount = 14;
+        /// <summary>The domain is EIGHTEEN knobs: eight PROD-022 mitigations, the WO-1306
+        /// balance knob, the three WO-1330 over-time levers, the two WO-1327 VFX
+        /// feel/perf clamps, and the four WO-1343 night-store aura knobs. Pinned as a
+        /// literal, not as Registry.Length - an oracle that measures the thing against
+        /// itself certifies nothing.</summary>
+        private const int ExpectedKnobCount = 18;
 
         /// <summary>
         /// ⭐ THE CONTRACT, STATED INDEPENDENTLY OF THE CODE.
@@ -162,6 +162,17 @@ namespace DeNelle.Editor.Regression
             // network, no parse => EXACTLY what this build hardcodes.
             new KeyValuePair<string, int>("vfx.particleBouncePct", 0),
             new KeyValuePair<string, int>("vfx.maxParticleLights", 4),
+            // WO-1343 - THE NIGHT STORE'S AURA. Not a mitigation and not balance: a CREATIVE
+            // choice the owner has explicitly not made yet ("not sure which will be best" /
+            // "if the other one doesnt look good"). All four defaults ARE today's behaviour in
+            // the strict sense - mode 0 is her FIRST tagged key, rotation is OFF, 30 is her own
+            // number, 127 is the whole family (inert unless mode is 2) and 0 burst-repeat is her
+            // spec read literally. The one that matters most is the mode: a default that drifts
+            // to 1 or 2 would be this repo choosing between her candidates on her behalf.
+            new KeyValuePair<string, int>("vfx.nightStoreAuraMode", 0),
+            new KeyValuePair<string, int>("vfx.nightStoreAuraCadenceMin", 30),
+            new KeyValuePair<string, int>("vfx.nightStoreAuraFamilyMask", 127),
+            new KeyValuePair<string, int>("vfx.nightStoreAuraBurstRepeatSec", 0),
         };
 
         /// <summary>The two knobs whose resolved value is readable from the CONSUMER, so
@@ -263,7 +274,8 @@ namespace DeNelle.Editor.Regression
             if (failures.Count == 0)
             {
                 reason = "TUNABLE DEFAULTS OK - all " + ExpectedKnobCount + " knobs (8 PROD-022 mitigations + the WO-1306 balance knob + the three " +
-                         "WO-1330 over-time levers + the two WO-1327 VFX feel/perf clamps) resolve to " +
+                         "WO-1330 over-time levers + the two WO-1327 VFX feel/perf clamps + the four " +
+                         "WO-1343 night-store aura knobs) resolve to " +
                          "their SHIPPING DEFAULTS (today's behaviour, byte for byte) on every failure " +
                          "path: no database row, server-reported readOk=false, malformed JSON, an empty " +
                          "body, a corrupt device cache, values the server would refuse, and garbage " +

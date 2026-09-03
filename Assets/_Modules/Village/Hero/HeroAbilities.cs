@@ -184,6 +184,14 @@ namespace DeNelle.Village
         // presentation only; untargeted/self casts get no marker (traced branch).
         private GameObject _windupTargetMarkerVfx;
 
+        // WO-1345 (owner tag "DangercastAOERange_Cast" -> Marker 7 Danger zone Loop): for
+        // BLAST-shaped casts the point pointer above is REPLACED by a ground RING whose
+        // radius is driven by the ability's own def.Range - the same number Blast() sweeps.
+        // A pointer says WHERE; a ring says HOW FAR, which is the thing an AoE reticle
+        // exists to teach. Exactly ONE marker runs per cast: the blast branch below hands
+        // the whole window to the reticle and leaves _windupTargetMarkerVfx null.
+        private AoeCastReticle _aoeReticle;
+
         /// <summary>Raised when a hero cast wind-up begins: (caster, abilityName, windupSeconds).
         /// Consumed by the HUD CastProducer, which shows the cast BAR only when the
         /// VFX telegraph did not spawn (the load-bearing fallback rule).</summary>
@@ -235,8 +243,26 @@ namespace DeNelle.Village
                 case AbilityEffect.Aoe:
                 case AbilityEffect.Cleave:
                 case AbilityEffect.Meteor:
-                    point = ResolveBlastCentre(atk, origin);
+                {
+                    // WO-1345: the blast shapes get the RING, not the pointer. Same centre the
+                    // committed effect uses (ResolveBlastCentre), and def.Range is the very radius
+                    // ResolveEffect passes to Blast() - so the ring cannot drift from the damage.
+                    Vector3 centre = ResolveBlastCentre(atk, origin);
+                    _aoeReticle = AoeCastReticle.Ensure(gameObject);
+                    if (_aoeReticle != null)
+                    {
+                        _aoeReticle.Show(def.Name, def.Range, centre, def.CastSeconds);
+                        _windupTargetMarkerVfx = null;   // one marker, never two
+                        return;
+                    }
+                    // Reticle could not install (host gone) - fall back to the pointer rather
+                    // than leaving the cast with no target feedback at all.
+                    FlowTrace.Warn("HeroAbility",
+                        "AoeCastReticle.Ensure returned null for '" + def.Name +
+                        "' - falling back to the point pointer for this cast.");
+                    point = centre;
                     break;
+                }
                 default:   // Strike / Snare - single-target reach gate (mirrors FaceCastTarget)
                 {
                     float maxR = def.Range + _enemyHitRadius;
@@ -262,6 +288,10 @@ namespace DeNelle.Village
             _windupTelegraphVfx = null;
             CastingTelegraphVfx.EndTargetMarker(_windupTargetMarkerVfx, reason);
             _windupTargetMarkerVfx = null;
+            // WO-1345: the AIMING WINDOW owns the reticle's lifetime - it goes the instant the
+            // cast commits, is interrupted or is cancelled, which is the correct owner whatever
+            // the tag's isLoop flag says. Idempotent, so a non-blast cast costs nothing here.
+            if (_aoeReticle != null) _aoeReticle.Hide(reason);
             CastWindupEnded?.Invoke(this);
         }
 
@@ -2560,6 +2590,22 @@ namespace DeNelle.Village
         {
             "KnightShieldBuff_Aura",
             "SpecialAbilityMage_Cast",
+            // WO-1343 (owner tag 2026-09-03, CONFIRMED BY HER as deliberate): KnightShieldBash_Impact
+            // -> Hovl Studio/AAA Projectiles Vol 1/Prefabs/Flash and hits/Dragon punch flash.prefab.
+            // Mapped VERBATIM to knight.shield-bash's vfxImpact in abilities.json.
+            //
+            // ⚠ DO NOT CONFLATE WITH THE ROW ABOVE. 'KnightShieldBuff_Aura' is a different key for a
+            // different thing - the defensive shield BUFF aura on knight.eternal-aegis. This one is
+            // the BASH IMPACT. The names differ by one word and they are not related.
+            //
+            // ⚠ AND THE ID CHOICE IS MECHANICAL, NOT A TASTE CALL, because TWO abilities are named
+            // "Shield Bash" to the player: knight.w (the stock W, renamed from 'Shield Charge' by
+            // owner ruling 2026-08-21) and knight.shield-bash (the knight-skills pool entry). The
+            // key was bound to the one whose ID matches the key token letter for letter -
+            // KnightShieldBash <-> knight.shield-bash - which is the same baseName+"_"+role
+            // derivation the VFX Caster itself writes. If she meant the stock W, moving the key is
+            // ONE LINE in abilities.json and this set does not change. Flagged in the WO-1343 RESULT.
+            "KnightShieldBash_Impact",
         };
 
         /// <summary>True when <paramref name="key"/> is an owner-tagged ability VFX pick -

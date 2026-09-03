@@ -22,6 +22,13 @@
             "manual": true
         },
         {
+            "key": "ArcaneTower_Aura",
+            "prefabPath": "Assets/Lana Studio/Casual RPG VFX/Prefabs/Fog/Fog_electric.prefab",
+            "isLoop": true,
+            "scale": 1.0,
+            "manual": true
+        },
+        {
             "key": "Arcane_Cast",
             "prefabPath": "Assets/Hovl Studio/AAA Projectiles Vol 1/Prefabs/Flash and hits/Flash 16 fire.prefab",
             "isLoop": false,
@@ -113,6 +120,20 @@
             "manual": true
         },
         {
+            "key": "DailyChestCollect_Aura",
+            "prefabPath": "Assets/Lana Studio/Casual RPG VFX/Prefabs/Backlight_resources/backlight_coin.prefab",
+            "isLoop": false,
+            "scale": 1.0,
+            "manual": true
+        },
+        {
+            "key": "DangercastAOERange_Cast",
+            "prefabPath": "Assets/Hovl Studio/Map track markers VFX/Prefabs/Marker 7 Danger zone Loop.prefab",
+            "isLoop": false,
+            "scale": 1.0,
+            "manual": true
+        },
+        {
             "key": "DefenseUp-Offhand(Shield)_Aura",
             "prefabPath": "Assets/Hovl Studio/Magic circles/Prefabs/Magic shield holy.prefab",
             "isLoop": false,
@@ -155,6 +176,13 @@
             "manual": true
         },
         {
+            "key": "EliteDeath_Impact",
+            "prefabPath": "Assets/Hovl Studio/AAA Projectiles Vol 1/Prefabs/Flash and hits/Dragon punch flash.prefab",
+            "isLoop": false,
+            "scale": 1.0,
+            "manual": true
+        },
+        {
             "key": "EndGameCAstingAnimation_Impact",
             "prefabPath": "Assets/Lana Studio/Casual RPG VFX/Prefabs/Range_attack/Hit_light.prefab",
             "isLoop": false,
@@ -178,6 +206,13 @@
         {
             "key": "Explosion_Impact",
             "prefabPath": "Assets/UnityTechnologies/ParticlePack/EffectExamples/Fire & Explosion Effects/Prefabs/BigExplosion.prefab",
+            "isLoop": false,
+            "scale": 1.0,
+            "manual": true
+        },
+        {
+            "key": "FTUEPointerofwheretogo_Aura",
+            "prefabPath": "Assets/Hovl Studio/Map track markers VFX/Prefabs/Marker 1 arrows Loop.prefab",
             "isLoop": false,
             "scale": 1.0,
             "manual": true
@@ -330,6 +365,13 @@
             "manual": true
         },
         {
+            "key": "KnightShieldBash_Impact",
+            "prefabPath": "Assets/Hovl Studio/AAA Projectiles Vol 1/Prefabs/Flash and hits/Dragon punch flash.prefab",
+            "isLoop": false,
+            "scale": 1.0,
+            "manual": true
+        },
+        {
             "key": "KnightShieldBuff_Aura",
             "prefabPath": "Assets/Resources/VFX/Projectiles/Buff_Light.prefab",
             "isLoop": false,
@@ -381,6 +423,13 @@
         {
             "key": "Melee_Slash",
             "prefabPath": "Assets/Hovl Studio/RPG VFX Bundle/Random effect prefabs/Dragon punch.prefab",
+            "isLoop": false,
+            "scale": 1.0,
+            "manual": true
+        },
+        {
+            "key": "NightStoreoption_Aura",
+            "prefabPath": "Assets/Resources/VFX/Aura/top_down_starfall_line_blue.prefab",
             "isLoop": false,
             "scale": 1.0,
             "manual": true
@@ -862,6 +911,13 @@
             "manual": true
         },
         {
+            "key": "Store_Aura",
+            "prefabPath": "Assets/Lana Studio/Casual RPG VFX/Prefabs/Loot/Loot_flicker.prefab",
+            "isLoop": false,
+            "scale": 1.0,
+            "manual": true
+        },
+        {
             "key": "Thunderbolt_Cast",
             "prefabPath": "Assets/Hovl Studio/AAA Projectiles Vol 1/Prefabs/Projectiles(Particle collision)/Projectile 2 electro.prefab",
             "isLoop": false,
@@ -878,6 +934,13 @@
         {
             "key": "Thunderbolt_Projectile",
             "prefabPath": "Assets/Hovl Studio/AAA Projectiles Vol 1/Prefabs/Projectiles(Particle collision)/Projectile 2 electro.prefab",
+            "isLoop": false,
+            "scale": 1.0,
+            "manual": true
+        },
+        {
+            "key": "Treasure_Aura",
+            "prefabPath": "Assets/Lana Studio/Casual RPG VFX/Prefabs/Loot/Loot_iddle.prefab",
             "isLoop": false,
             "scale": 1.0,
             "manual": true
@@ -913,6 +976,20 @@
         {
             "key": "Weaponskillsword_Impact",
             "prefabPath": "Assets/Hovl Studio/AAA Projectiles Vol 1/Prefabs/Flash and hits/Hit 5 red.prefab",
+            "isLoop": false,
+            "scale": 1.0,
+            "manual": true
+        },
+        {
+            "key": "atfootprintoftree_Aura",
+            "prefabPath": "Assets/Resources/VFX/Death/Elite_Death.prefab",
+            "isLoop": false,
+            "scale": 1.0,
+            "manual": true
+        },
+        {
+            "key": "atfootprintoftree_Impact",
+            "prefabPath": "Assets/Resources/VFX/Death/Elite_Death.prefab",
             "isLoop": false,
             "scale": 1.0,
             "manual": true

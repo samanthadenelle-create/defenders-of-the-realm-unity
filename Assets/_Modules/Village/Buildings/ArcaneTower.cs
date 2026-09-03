@@ -210,15 +210,44 @@ namespace DeNelle.Village
             // Owner 2026-07-24: the combat Arcane Spire gets its OWN subtle, DISTINCT aura
             // ("Aura_HeartPulse" — gentle pulse) so it no longer shares the one "Magic circle sun
             // loop" prefab with the harvest nodes + the Cathedral of Magic. SWAPPABLE default.
-            ArcaneAura.Ensure(gameObject, "Aura_HeartPulse");
-            // TODO(owner 2026-07-24): a DEDICATED owner-tagged arcane-tower-aura key is not yet
-            // tagged in the VFX Caster. When she supplies it, wire a persistent striking loop here
-            // through the ONE pool, e.g.:
-            //   var _arcaneAuraHandle = VFXManager.PlayKey("<owner-tagged arcane aura key>",
-            //       transform.position + Vector3.up * 0.5f, Quaternion.identity, transform);
-            //   Destructible.For(gameObject)?.RegisterHandle(_arcaneAuraHandle);   // torn down on death/sell
-            // Do NOT pick a key here - leave the existing ArcaneAura (Arcane_Aura) as the current
-            // aura until the owner-tagged WOW key arrives.
+            //
+            // ⭐ WO-1346 - THE OWNER-TAGGED KEY ARRIVED, AND THIS IS THE TODO IT CLOSES.
+            // The 2026-07-24 note that used to sit here said, verbatim: "a DEDICATED
+            // owner-tagged arcane-tower-aura key is not yet tagged in the VFX Caster. When she
+            // supplies it, wire a persistent striking loop here through the ONE pool ... Do NOT
+            // pick a key here." She has now supplied it. Assets/Editor/VfxManualPicks.json:
+            //     ArcaneTower_Aura -> Lana Studio/Casual RPG VFX/Prefabs/Fog/Fog_electric.prefab
+            //     isLoop true, scale 1.0    her words: "arcane tower vfx (after built) softly"
+            // The key is mapped VERBATIM. Nothing here picks, substitutes or rescales a prefab
+            // (memory vfx-map-owner-tags-no-creative-pick), and Fog_electric.prefab is NOT
+            // modified on disk - it is a shared pack asset.
+            //
+            // ⛔ THIS REPLACES "Aura_HeartPulse" ON THIS TOWER - IT DOES NOT JOIN IT. Two ambient
+            // auras on one structure is "one owner, one lifecycle" broken (CLAUDE.md section 7)
+            // and reads as a muddy double effect that no amount of "softly" fixes. The single
+            // ArcaneAura component is retargeted rather than a second component added, which is
+            // also what keeps the destruction teardown, the orphan guard, the max-level crown and
+            // the per-level escalation working unchanged - and what stops
+            // StructureFactory.ReskinForLevel's ArcaneAura.EscalateTo(ensure:true) from
+            // re-Ensuring a SECOND aura at the next upgrade.
+            //
+            // "(after built)": requireBuilt gates the aura on UnderConstructionVisual's derived
+            // built state, so it does not play on a scaffold or while the Obsidian job is in
+            // flight, and - the case most likely to be missed - it IS present on a reload of an
+            // already-built tower, because the gate reads STATE and not the completion event.
+            // Teardown on destruction is already owned by Destructible.TeardownVfx below.
+            //
+            // "softly": an instance-level emission-density dial, defaulted subdued and readable
+            // from a database row (ArcaneTowerAuraTuning). Density and not hue - the owner is
+            // red/green colourblind.
+            //
+            // ⚠ THE KEY IS PASSED AS A STRING LITERAL ON PURPOSE. VfxAuraDifferentiationRegression
+            // source-lints it back out of this file with the regex
+            // ArcaneAura\.Ensure\(\s*gameObject\s*,\s*"([^"]+)" - a const would read as a missing
+            // spire aura key and red the build gate.
+            ArcaneAura.Ensure(gameObject, "ArcaneTower_Aura",
+                requireBuilt: true,
+                softEmissionMul: ArcaneTowerAuraTuning.SoftEmissionMul());
             // WO-753: compose the ONE-owner VFX-teardown lifecycle so the aura (and any held effect)
             // is torn down WITH the spire on break / destroy — in one place, no orphans.
             Destructible.Ensure(gameObject);

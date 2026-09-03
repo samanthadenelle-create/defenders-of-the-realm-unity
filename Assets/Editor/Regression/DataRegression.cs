@@ -875,6 +875,30 @@ namespace DeNelle.Editor
             // surface resolution against her defaults rather than restating a table ---
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "surface-impact-vfx suite", () => { if (!DeNelle.Editor.Regression.SurfaceImpactVfxRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[surface-impact-vfx] " + r); });
 
+            // --- WO-1344: the FTUE "where to go" pointer. Pins the code key against the
+            // owner's VfxManualPicks row (key AND the prefab she tagged it to, so a refactor
+            // cannot silently re-point her tag), and pins the pointer's INPUT TRANSPARENCY --
+            // the FocusMask it replaces never blocks on a world target, and a pointer that
+            // swallowed a tap would soft-lock the FTUE on the step it is teaching ---
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "ftue-pointer-vfx suite", () => { if (!DeNelle.Editor.Regression.FtuePointerVfxRegression.Run(out var r)) failures.Add(r); else log.AppendLine("[ftue-pointer-vfx] " + r); });
+
+            // --- AOE RETICLE RADIUS (WO-1345, 2026-09-03): the reticle's ground radius is
+            // DERIVED from the ability's own Range -- the same value Blast() sweeps for damage --
+            // scaled against the prefab's measured 2.42m authored ring radius, with the owner's
+            // tag `scale` applied only as a multiplier ON TOP. The defect this pins is a reticle
+            // pinned to a CONSTANT: it looks correct on one spell and silently lies about every
+            // other, and the player aims by it. Registered HERE by the committer, never by the
+            // lane that wrote the suite, so two agents cannot both append to this file. ---
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "aoe-reticle-radius suite", () => { if (!DeNelle.Editor.AoeReticleRadiusRegression.Run(out var rAoe)) failures.Add(rAoe); else log.AppendLine("[aoe-reticle-radius] " + rAoe); });
+
+            // --- OWNER-TAGGED AURA + CHEST WIRING (WO-1346/1347, 2026-09-03): pins the arcane
+            // tower aura's BUILT-STATE gate INSIDE StartAura (an event-only gate loses the reload
+            // case -- an already-built tower would go dark on every relaunch), the chest shimmer
+            // stopping on open, the collect burst staying unparented + time-bounded (its modal is
+            // destroyed on the next statement), and the no-row invariant answering the built-in
+            // 45% rather than 0, because a 0 emission multiplier is an INVISIBLE aura. ---
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "owner-aura-chest suite", () => { if (!DeNelle.Editor.OwnerTaggedAuraChestWiringRegression.Run(out var rOac)) failures.Add(rOac); else log.AppendLine("[owner-aura-chest] " + rOac); });
+
             // --- VFX SELF-CONTAINMENT (2026-08-05): the shipped Resources/VFX prefabs
             // were committed with a message claiming the tracked copy is what ships.
             // FALSE: AssetDatabase.CopyAsset duplicates the PREFAB ONLY, so all 28
@@ -1395,6 +1419,14 @@ namespace DeNelle.Editor
             // DEFAULTS, i.e. today's behaviour byte for byte. A break here is INVISIBLE
             // (nothing crashes; the build just stops behaving the way it says it does).
             DeNelle.Core.Diagnostics.Guard.Try("Regression", "tunable-defaults suite", () => { if (!DeNelle.Editor.Regression.RemoteTunablesDefaultsRegression.Run(out var rTun)) failures.Add(rTun); else log.AppendLine("[tunable-defaults] " + rTun); });
+            // WO-1343 - THE OWNER'S VFX TAGS, AND THE NIGHT STORE'S AURA CHOICE. Two things
+            // that fail SILENTLY and have both already happened once: the VFX Caster can
+            // overwrite an existing tag's prefabPath with no warning (it did, to her
+            // tree-foot pick, within an hour of her making it), and "no row = today's
+            // behaviour" is asserted only in prose everywhere else. This suite reads her
+            // Assets/Editor/VfxManualPicks.json at run time and goes red on a re-point, and
+            // it drives the selector with an empty, a corrupt and a readOk=false table.
+            DeNelle.Core.Diagnostics.Guard.Try("Regression", "night-store-aura suite", () => { if (!DeNelle.Editor.Regression.NightStoreAuraSelectionRegression.Run(out var rNsa)) failures.Add(rNsa); else log.AppendLine("[night-store-aura] " + rNsa); });
             // WO-1330 - THE PROOF THAT AN OVER-TIME EFFECT ACTUALLY TICKS. Not a data
             // lint: it drives DeNelle.Core.Combat.OverTimeEngine with a fake clock and
             // COUNTS the pulses (applied -> N ticks -> expires), on both signs. An
@@ -1614,6 +1646,9 @@ namespace DeNelle.Editor
                     s == DeNelle.Core.Tutorial.TutorialSignals.EchoBornSecond ||
                     s == DeNelle.Core.Tutorial.TutorialSignals.FirstGearAdded ||
                     s == DeNelle.Core.Tutorial.TutorialSignals.FirstSkillPoint ||
+                    // WO-1340: a talent actually LEARNED - the completion of the spend teach.
+                    // The companion to FirstSkillPoint above (earned) is this one (spent).
+                    s == DeNelle.Core.Tutorial.TutorialSignals.FirstTalentLearned ||
                     // WO-1012 P3: the scripted teaching band's repelled signal (ENEMIES beat).
                     s == DeNelle.Core.Tutorial.TutorialSignals.TutorialBandRepelled ||
                     s.StartsWith(DeNelle.Core.Tutorial.TutorialSignals.DialogueEndedPrefix) ||

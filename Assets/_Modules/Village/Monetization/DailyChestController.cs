@@ -378,6 +378,27 @@ namespace DeNelle.Village.Monetization
                 msg = raw;
             }
 
+            // ── WO-1347 (second owner tag) - THE COLLECT FLOURISH ────────────────────────
+            // HER TAG, VERBATIM (Assets/Editor/VfxManualPicks.json):
+            //     DailyChestCollect_Aura -> Lana Studio/Casual RPG VFX/Prefabs/
+            //                               Backlight_resources/backlight_coin.prefab
+            //     isLoop false, scale 1.0        her words: "daily chest collect"
+            // The key is mapped VERBATIM. Nothing here picks, substitutes or rescales a
+            // prefab (memory vfx-map-owner-tags-no-creative-pick) and backlight_coin.prefab
+            // is NOT modified on disk - it is a shared pack asset.
+            //
+            // WHY IT IS RAISED IN WORLD SPACE AND NOT IN THIS MODAL: this chest is a
+            // ScreenSpaceOverlay UI panel, and her tagged effect is a world-space particle
+            // composite. Parented into an overlay Canvas it would render at the wrong scale
+            // or depth or not at all - which looks exactly like the tag failing. CollectBurstVfx
+            // seats it unparented in world space in front of the camera and time-bounds it, so
+            // the Close() on the next statement cannot take it with it. See that file's header.
+            //
+            // ADDITIVE, exactly like the WO-1225 raise below it: the grant, the canon sentence,
+            // the toast and their traces are untouched. This is a flourish, never a receipt -
+            // if it fails to resolve the player still gets the toast and the counting gold chip.
+            CollectBurstVfx.Raise("DailyChestCollect_Aura", "daily chest claimed path=" + path);
+
             ToastCount++;
             LastToastMessage = msg;
             // Tone is DECORATION only (owner is red/green colourblind, CLAUDE.md section 7) -

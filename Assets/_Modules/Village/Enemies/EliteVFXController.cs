@@ -292,6 +292,43 @@ namespace DeNelle.Village
 
             PlayDeathShake(isBoss, isElite);
             // AudioService.Instance?.PlaySfx(SfxId.BossDeath);  // wired when SfxId lands
+
+            // ── WO-1343 follow-up: THE BOSS-DEATH SEAT, wired and DELIBERATELY UNBOUND ────────
+            //
+            // Owner ask, verbatim: "added Elite death to boss death", meaning
+            // Assets/Resources/VFX/Death/Elite_Death.prefab on a boss's death.
+            //
+            // (S) THERE IS NO BOSS-DEATH KEY IN Assets/Editor/VfxManualPicks.json. Her tag landed
+            // on 'atfootprintoftree_Aura' / 'atfootprintoftree_Impact' instead - the VFX Caster
+            // reuses a stale, free-typed base name, so the row she wrote was named after an EARLIER
+            // action. Naming a key here and pointing it at Elite_Death would be this file authoring
+            // her tag, which is the exact creative pick the rule forbids
+            // (memory vfx-map-owner-tags-no-creative-pick). So the SEAT ships and the KEY waits.
+            //
+            // (S) THIS IS THE RIGHT SEAM, AND IT IS NOT A FENCED FILE. Enemy.Die() already calls
+            // OnEliteDeath() unconditionally for every boss/elite (the component is attached by
+            // Enemy.Configure -> EnsureEliteVfx whenever _def.Boss or role=="elite"), so the fenced
+            // Enemy.cs needed NO edit. It is also gated on isBoss, not isElite: she said BOSS death.
+            //
+            // ⚠ COVERAGE, STATED RATHER THAN IMPLIED: this covers the Enemy-tier bosses (the
+            // _def.Boss stat-block flag - e.g. Alduin's Necromancer). DragonBoss (Syndrath the
+            // Devourer) is a SEPARATE class with its own Die() and its own _deathVfx and does NOT
+            // route through this component at all. A second seat there is deliberately NOT added
+            // under this ticket: one seat, one owner, and whether the apex boss shares the effect
+            // is her call, not an assumption. Flagged in the RESULT.
+            if (isBoss)
+            {
+                HeldVfxHook.Play(
+                    "boss death",
+                    HeldVfxKeys.BossDeath,
+                    transform.position,
+                    null,
+                    0f,     // catalog DefaultScale - nothing here rescales her prefab
+                    "WO-1343 follow-up: she asked for Elite_Death on boss death, but the VFX Caster " +
+                    "wrote that pick under the stale key 'atfootprintoftree' and there is NO boss-" +
+                    "death row in VfxManualPicks.json at all. Naming a key here would be authoring " +
+                    "her tag. One tag in the Caster binds this seat with no code change.");
+            }
         }
 
         // ── Attack ────────────────────────────────────────────────────────────

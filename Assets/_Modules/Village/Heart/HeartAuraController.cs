@@ -106,6 +106,10 @@ namespace DeNelle.Village
         private Light _light;
         private VFXHandle _handle;
         private VFXHandle _treeHandle;   // persistent Tree-of-Life ambient loop (TreeofLifeAura_Aura)
+        // WO-1343 Ask 1: the SECOND, ADDITIVE aura at the tree's FOOT. Null today and null on
+        // purpose - the seat is wired, the key is HELD (HeldVfxKeys.TreeOfLifeFootAura). Declared
+        // and torn down alongside _treeHandle so that binding the key later needs no lifecycle work.
+        private VFXHandle _footHandle;
         private AuraTier _tier = AuraTier.Unknown;
         private float _pulsePhase;   // accumulated so a frequency change never snaps the wave
 
@@ -198,6 +202,11 @@ namespace DeNelle.Village
             _handle = null;
             _treeHandle?.Stop(immediate: true);
             _treeHandle = null;
+            // WO-1343: the foot seat's teardown ships with the seat, not later. It is null today
+            // (the key is held) and this line is a no-op - which is exactly the point: binding the
+            // key becomes a data change with no lifecycle work left to remember.
+            _footHandle?.Stop(immediate: true);
+            _footHandle = null;
         }
 
         // -- Aura construction ---------------------------------------------------
@@ -210,7 +219,7 @@ namespace DeNelle.Village
             // anchor)? Compute the crown FIRST -- before any pivot/particle is created -- so the
             // renderer scan sees only the tree. When a tree exists the white swirl is withheld and
             // both auras seat on the crown; otherwise the legacy anchor+offset seat is kept.
-            _hasTreeBody = TryComputeCrown(out Vector3 crown, out Vector3 canopy);
+            _hasTreeBody = TryComputeCrown(out Vector3 crown, out Vector3 canopy, out Vector3 foot);
             _suppressWhiteSwirl = _hasTreeBody;
 
             // WO-1002 + owner F8 seq 2306 ("i do not want that vfx used at all"): the GREEN/gold
@@ -268,6 +277,34 @@ namespace DeNelle.Village
                     $" (treeBody={_hasTreeBody}, anchorPos={transform.position:F2}) -- combat/raid Hearts unaffected.");
             else
                 StartGreenTreeAura(_hasTreeBody ? crown : transform.position + _auraOffset);
+
+            // (B2) WO-1343 Ask 1 - THE FOOT OF THE TREE, and it is ADDITIVE.
+            //
+            // Owner ask, verbatim: "one for the foot of the tree of life, TO GO WITH THE OTHER ONE".
+            // "To go with" means BOTH PLAY. The FireFlies loop above is untouched - not removed, not
+            // re-pointed, not rescaled - and this is a SECOND, independent seat at the base.
+            //
+            // (S) THE KEY IS DELIBERATELY UNBOUND. She tagged atfootprintoftree_Aura ->
+            // Aura_Nature.prefab; within the hour the VFX Caster had overwritten that same row with
+            // Assets/Resources/VFX/Death/Elite_Death.prefab (plus a spurious atfootprintoftree_Impact
+            // sibling) while she was tagging a BOSS DEATH. Wiring the row verbatim today would seat
+            // a death EXPLOSION at the base of the Heart of Elarion; wiring Aura_Nature back in
+            // would be substituting a prefab on her behalf. Both break the same rule from opposite
+            // sides, so the SEAT ships and the KEY waits (HeldVfxKeys.TreeOfLifeFootAura).
+            //
+            // It rides the SAME lifecycle as the FireFlies seat above - built once in BuildAura,
+            // seated off the same renderer-bounds scan - so there is no second spawner and no second
+            // pool (CLAUDE.md s7).
+            _footHandle = HeldVfxHook.Play(
+                "tree-of-life foot",
+                HeldVfxKeys.TreeOfLifeFootAura,
+                _hasTreeBody ? foot : transform.position,
+                transform,
+                0f,                     // catalog DefaultScale - nothing here rescales her prefab
+                "WO-1343 Ask 1: she tagged 'atfootprintoftree_Aura' -> Aura_Nature.prefab, but the " +
+                "VFX Caster overwrote that row with Elite_Death.prefab while she was tagging a boss " +
+                "death, so the tag is suspect and is HELD rather than guessed. One retag in the " +
+                "Caster binds this seat with no code change.");
 
             // (C) WO-891 (adjacent, reported): THE HEART DID NOT FLINCH WHEN STRUCK.
             //
@@ -404,9 +441,9 @@ namespace DeNelle.Village
         /// renderer bounds. ParticleSystemRenderers are excluded so the aura's OWN FireFlies never
         /// count. Returns false when the Heart has no visible tree centerpiece (a bare combat/raid
         /// Heart) -> callers fall back to the legacy anchor+offset seat.</summary>
-        private bool TryComputeCrown(out Vector3 crown, out Vector3 canopy)
+        private bool TryComputeCrown(out Vector3 crown, out Vector3 canopy, out Vector3 foot)
         {
-            crown = default; canopy = default;
+            crown = default; canopy = default; foot = default;
             var rends = GetComponentsInChildren<Renderer>(false);
             bool have = false; Bounds b = default;
             for (int i = 0; i < rends.Length; i++)
@@ -421,6 +458,12 @@ namespace DeNelle.Village
             // Canopy centre = the enveloping glow seat; crown = high in the canopy for the FireFlies.
             canopy = new Vector3(b.center.x, Mathf.Lerp(b.center.y, b.max.y, 0.5f), b.center.z);
             crown  = new Vector3(b.center.x, Mathf.Lerp(b.center.y, b.max.y, 0.8f), b.center.z);
+            // WO-1343 Ask 1: the FOOT / base footprint. Her key is literally "atfootprintoftree" -
+            // GROUND LEVEL at the base radius, not the canopy and not the trunk mid-point. Taken
+            // from the SAME live renderer bounds the crown comes from (b.min.y is the lowest drawn
+            // point of the tree body), so the foot cannot drift away from the crown as the art
+            // changes. Derived here rather than at the call site so there is one bounds scan.
+            foot   = new Vector3(b.center.x, b.min.y, b.center.z);
             return true;
         }
 
@@ -643,10 +686,11 @@ namespace DeNelle.Village
             if (_crownTrackTimer > 0f) return;
             _crownTrackTimer = CrownTrackInterval;
 
-            if (!TryComputeCrown(out Vector3 crown, out Vector3 canopy)) return;
+            if (!TryComputeCrown(out Vector3 crown, out Vector3 canopy, out Vector3 foot)) return;
 
             if (_pivot != null) _pivot.position = canopy;   // glow follows the canopy centre
             _treeHandle?.SetPosition(crown);                // FireFlies follow the crown
+            _footHandle?.SetPosition(foot);                 // WO-1343: foot seat tracks the base
 
             // §12: prove the tether -- anchor vs crown, and that the white swirl is suppressed.
             if (!_crownReported)
