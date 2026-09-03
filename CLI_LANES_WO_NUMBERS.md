@@ -180,7 +180,24 @@
 > fine as history. A copied number is the bug **even when it was right the day it was written** -
 > that is exactly how the retired 860-899 UI block kept re-seeding collisions from CLAUDE.md sec.2.
 
-> ## ⚠ RECONCILED 2026-09-03 (CLI, twenty-eighth pass): main line next free = **1337**.
+> ## ⚠ RECONCILED 2026-09-03 (CLI, thirtieth pass): main line next free = **1339**.
+> *(CLI minted **WO-1338** RETROACTIVELY for the hero -> R2 migration, which SHIPPED in commit
+> `d706b430b` with **no ticket at all**. ⚠ That commit cites "WO-1187", which is WRONG - WO-1187 is
+> `ps1_encoding_class_has_no_gate`, CLOSED 2026-08-27. So for a few hours the board showed nothing for
+> the single largest change of the day, and a mis-citation pointed at an unrelated closed ticket.
+> Minted on the owner's instruction to bring the board up to date for testing. The commit message
+> stands; WO-1338's provenance note is the pointer. Bumped 1338 -> 1339 in this SAME edit.)*
+>
+> ### superseded: RECONCILED 2026-09-03 (CLI, twenty-ninth pass): main line next free = **1338**.
+> *(CLI minted **WO-1337** from device capture seq=4677: `BATTLE_QUIESCENCE_FAIL (retreat)` with TWO
+> invariants unrestored - the battle-lock still held by `PursuitBattleProbe.Probe`, and a modal panel
+> handle still open after the reward screen closed. ⭐ THE HOLDER LIST IS THE FINDING: earlier captures
+> (seq 4664/4675) named `PursuitBattleProbe.Probe, WaveManager.<OnEnable>b__116_0`; this one names
+> ONLY the probe. **WO-1336/1308's WaveManager unwind WORKS** - one owner released, one remains, and
+> the remaining one is a DIFFERENT owner that WO-1233 fixed for the arena case but evidently not for
+> retreat. Bumped 1337 -> 1338 in this SAME edit.)*
+>
+> ### superseded: RECONCILED 2026-09-03 (CLI, twenty-eighth pass): main line next free = **1337**.
 > *(CLI minted **WO-1336** from an owner felt-test: *"check the wolf when he runs to the gate, there is
 > a tower in his way so gets stuck and doesn't move"*. Aldwin (the Ice Echo, NOT Alduin the Necromancer
 > boss) latches during the `EchoWorldPresence` escort when a player-placed structure carves his route.

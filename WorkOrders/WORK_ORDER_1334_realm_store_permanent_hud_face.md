@@ -1,6 +1,6 @@
 # WORK ORDER 1334 - The Realm Store needs a PERMANENT face on the action bar
 
-**Status:** READY TO IMPLEMENT
+**Status:** FIXED 2026-09-03 - the balance chip landed (top-left, `Balance: 3,817 SKR`, gold on a 0.66-alpha ground plate, no address, disconnected states in words, live non-mainnet network word). Built and INSTALLED on the Seeker in `2026.09.03.353742`. ⚠ The HUD-face half of this ticket was SUPERSEDED by WO-1335 (the owner ruled a left-anchored Night Market card instead of an action-bar ordinal). Detail-panel art clipping deliberately NOT fixed - her ruling: *"nobody is using the store at all, so half an image I will take"*. AWAITING HER FELT-VERIFY; PO closes. *(Prior line:)* **Status:** READY TO IMPLEMENT
 **Silo / Lane:** HUD / action bar + monetization surface
 **Type:** EXISTING store, MISSING door
 **Minted:** 2026-09-03 (CLI) on a direct owner ruling, with device screenshots as evidence.

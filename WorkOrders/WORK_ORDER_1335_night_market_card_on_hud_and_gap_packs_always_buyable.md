@@ -1,6 +1,6 @@
 # WORK ORDER 1335 - The Night Market card anchors on the HUD, and the gap packs become always-buyable
 
-**Status:** READY TO IMPLEMENT
+**Status:** FIXED 2026-09-03 - Night Market card seated top-left of the (empty) Minimap mount, measured clear of the movement stick, gear, Heart bar and hero plate at 2670x1200 / 2400x1080 / 1920x1080; opens the SAME `PackStore` as the walk-up vendor. Gap-pack authoring notes rewritten. ⭐ AND THE INVESTIGATION CORRECTED THE PREMISE: there is no client-side shortfall gate to remove - all three packs already pass `IsOnBrowsableShelf` and `PurchaseGate.CanBuy` has no impulse clause. The `UNAVAILABLE` she photographed is `Price unavailable` from the QUOTE service holding no server row on that pass - her original words were literally accurate. Separate ticket. Built and INSTALLED in `2026.09.03.353742`. AWAITING HER FELT-VERIFY; PO closes. *(Prior line:)* **Status:** READY TO IMPLEMENT
 **Silo / Lane:** HUD / store entry + monetization surfacing
 **Type:** EXISTING assets, RE-SITED + a ruled design change
 **Minted:** 2026-09-03 (CLI) on two direct owner rulings, from a device felt-test.
