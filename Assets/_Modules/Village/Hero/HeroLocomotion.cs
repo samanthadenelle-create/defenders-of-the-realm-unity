@@ -418,6 +418,29 @@ namespace DeNelle.Village
         }
 
         /// <summary>
+        /// <para>WO-1298 — the animator feed for the ONE frame-shape the function above cannot see:
+        /// <see cref="InputSuppressed"/> is raised (a dialogue / tutorial beat owns the player) and
+        /// the root moves ANYWAY, driven by something that is neither this component nor a
+        /// CharacterController.</para>
+        /// <para>⚠ THE OLD CODE DID NOT MERELY FAIL TO UPDATE THE ANIMATOR — IT ACTIVELY WROTE A
+        /// DEAD ZERO into Speed every frame of the suppression and returned. That is the owner's
+        /// F8 seq 4362 capture verbatim: <c>velSelf=0.00 velRoot=14.49 animFeed=velSelf
+        /// animSpeed=0.00 inputSuppressed=True autoWalk=False ownerCC=none</c> — the hero gliding
+        /// west out of the castle gate in an idle pose. Suppressing INPUT is not the same claim as
+        /// "the hero is stationary", and the branch conflated the two.</para>
+        /// <para>Pure so the rule is regression-testable with no scene and no play session
+        /// (DungeonMoverOwnershipRegression Case 2). Below the stall threshold it publishes a hard
+        /// 0 — a suppressed, genuinely stationary hero must settle to idle exactly as before, which
+        /// is the whole point of the WO-377 hold. Clamped to the run tier so a large single-frame
+        /// displacement cannot drive the blend tree past its authored top child.</para>
+        /// </summary>
+        public static float ResolveSuppressedAnimatorFeed(float measuredRootSpeed, float runSpeedCap)
+        {
+            if (measuredRootSpeed <= AnimStallRootSpeed) return 0f;
+            return Mathf.Min(measuredRootSpeed, runSpeedCap);
+        }
+
+        /// <summary>
         /// The named defect of WO-1016, as a predicate: the root travelled but the animator is
         /// holding ~idle (the hero slides through the dungeon playing a single idle clip). NaN
         /// animSpeed = "no Speed parameter on this controller", which is a different fault and is
@@ -498,6 +521,14 @@ namespace DeNelle.Village
                     "HeroLocomotion.WarpTo explicit warp", always: true);
 
             _isTeleporting = true;   // clamp/movement skips this frame
+
+            // WO-1298: a TELEPORT IS NOT TRAVEL. The root-speed measurement is a raw
+            // delta-position/dt sample, so a warp across a seam publishes a single enormous
+            // velRoot — which both trips the ANIMATION-VELOCITY STALL trace with a false positive
+            // and (now that the suppression branch feeds the measured value) would flash one frame
+            // of run clip on arrival. Rebase the sample on the landed pose instead of measuring
+            // across the jump. One frame, one bool; the honest reading is "0 m/s this frame".
+            _rootMeasureRebase = true;
 
             // §12 ticket #2: prove ground-side vs hero-side at the garrison warp. A MISS (or a large
             // sample distance) means the destination navmesh isn't online yet / isn't there — the agent
@@ -920,10 +951,36 @@ namespace DeNelle.Village
 
             if (InputSuppressed && !probeDriving)
             {
+                // WO-1298 — THE SUPPRESSION BRANCH IS MOVER-AGNOSTIC TOO.
+                // Velocity stays zeroed: this component is genuinely not the mover while the
+                // dialogue holds the player. But the ANIMATOR must be fed what the ROOT did, not
+                // what this component did — the two are only the same thing while nothing else is
+                // pushing the hero. When something else IS (the tutorial pointing her at the west
+                // gate in the owner's seq 4362 capture), the old hard `SetFloat(Speed, 0f)` +
+                // `SetLocomotion(0f)` did not merely leave the animator stale, it OVERWROTE a live
+                // walk cycle with a dead zero every frame — the glide the owner flagged.
+                // Below AnimStallRootSpeed this is byte-identical to the old behaviour (0f), so the
+                // WO-377 "hold the hero still during a story beat" contract is untouched.
+                float suppressedFeed = ResolveSuppressedAnimatorFeed(_measuredRootSpeed, OverworldRunSpeed);
                 Velocity = Vector3.zero;
                 ResolveAnimator();
-                if (_animator != null && _hasSpeedParam) _animator.SetFloat(AnimSpeed, 0f);
-                _actor?.SetLocomotion(0f);
+                if (_animator != null && _hasSpeedParam) _animator.SetFloat(AnimSpeed, suppressedFeed);
+                _actor?.SetLocomotion(suppressedFeed);
+
+                // §12 — the situation names ITSELF from now on. A hero travelling while her input
+                // is taken away is never intended: either a mover is un-owned (the defect) or a
+                // scripted beat is moving her and should be saying so. Throttled to 1 Hz; the whole
+                // block is gated so it costs nothing with tracing off.
+                if (_measuredRootSpeed > AnimStallRootSpeed && DeNelle.Core.Diagnostics.FlowTrace.Enabled)
+                    DeNelle.Core.Diagnostics.FlowTrace.Throttle("HeroOwner", "suppressed-but-moving", 1f,
+                        $"INPUT SUPPRESSED BUT THE ROOT IS MOVING: velRoot={_measuredRootSpeed:F2} m/s " +
+                        $"velSelf=0.00 (zeroed here by design) autoWalk={IsAutoWalking} " +
+                        $"ownerCC={(ForeignMoverOwnsTransform() ? "LIVE" : "none")} " +
+                        $"pos={transform.position:F2} rootYaw={transform.eulerAngles.y:F1} " +
+                        $"scene='{gameObject.scene.name}'. The animator is now fed {suppressedFeed:F2} " +
+                        "(the MEASURED root speed, clamped to the run tier) so the walk cycle plays " +
+                        "through the beat instead of freezing — but an UNCLAIMED mover here is still a " +
+                        "defect upstream of this component (WO-1298).");
                 return;
             }
 
@@ -1610,6 +1667,14 @@ namespace DeNelle.Village
         private float _measuredRootSpeed;
 
         /// <summary>
+        /// WO-1298: set by <see cref="WarpTo"/> so the next sample is REBASED on the landed pose
+        /// rather than measured across the teleport. Without it every seam warp publishes a
+        /// one-frame velRoot in the hundreds — a false ANIMATION-VELOCITY STALL and, with the
+        /// mover-agnostic suppression feed, a one-frame run clip on arrival.
+        /// </summary>
+        private bool _rootMeasureRebase;
+
+        /// <summary>
         /// The hero root's measured planar speed (m/s) last frame, regardless of which component
         /// wrote the transform. This — not <see cref="Velocity"/> — is what the animator is fed
         /// whenever a foreign mover owns the rig.
@@ -1620,7 +1685,13 @@ namespace DeNelle.Village
         {
             Vector3 pos = transform.position;
             float now = Time.time;
-            if (_ownerTraceHasLastPos)
+            if (_rootMeasureRebase)
+            {
+                // A warp landed this frame — do not measure across the jump (WO-1298).
+                _rootMeasureRebase = false;
+                _measuredRootSpeed = 0f;
+            }
+            else if (_ownerTraceHasLastPos)
             {
                 float dt = Mathf.Max(1e-4f, now - _ownerTraceLastAt);
                 Vector3 d = pos - _ownerTraceLastPos; d.y = 0f;
@@ -1656,7 +1727,11 @@ namespace DeNelle.Village
                 $"ownerAgent={agentState} scriptedMove={(ScriptedMoveActive ? "ZEROED(dungeon neutralize ON)" : "off")} " +
                 $"velSelf={Velocity.magnitude:F2} velRoot={velRoot:F2} " +
                 // WO-968 F1: which of the two the animator is actually being fed.
-                $"animFeed={(ccLive ? "velRoot(measured)" : "velSelf")} animSpeed={animSpeed:F2} " +
+                // WO-1298: suppression is a THIRD feed source. Printing "velSelf" while the
+                // suppression branch publishes the measured root would make this heartbeat lie —
+                // the exact failure mode that makes a capture unreadable.
+                $"animFeed={(ccLive ? "velRoot(measured)" : InputSuppressed ? "velRoot(measured,suppressed)" : "velSelf")} " +
+                $"animSpeed={animSpeed:F2} " +
                 $"rootYaw={transform.eulerAngles.y:F1} " +
                 $"basis={basisSrc} basisYaw={basisYaw:F1} " +
                 // P0 2026-08-10 (owner F8 seq 2319, "No locomotioonj in town? Works in builder mode

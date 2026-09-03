@@ -187,6 +187,41 @@ namespace DeNelle.Editor.Regression
                 failures.Add("[speed-source] NaN animSpeed (= the controller declares no Speed param) was " +
                              "flagged as a stall - that is a different fault and must not be conflated.");
 
+            // ── WO-1298: the SUPPRESSED feed (the owner's F8 seq 4362 gate glide) ────────────
+            // Shape: InputSuppressed is raised by a dialogue/tutorial beat, no CharacterController
+            // is present, and the root moves anyway. The old branch wrote a hard 0 into Speed every
+            // frame and returned - the hero glided through the west gate in an idle pose.
+            const float suppressedRunCap = 6f;   // HeroLocomotion.OverworldRunSpeed
+
+            float suppressed = HeroLocomotion.ResolveSuppressedAnimatorFeed(14.49f, suppressedRunCap);
+            if (HeroLocomotion.IsAnimationStalled(rootSpeed: 14.49f, animSpeed: suppressed))
+                failures.Add("[suppressed-feed] the owner's captured state (velRoot=14.49 while input is " +
+                             "suppressed) still feeds the animator " + suppressed.ToString("0.00") +
+                             " - IsAnimationStalled is STILL true, i.e. the hero slides through the gate " +
+                             "in an idle pose exactly as in F8 seq 4362 (WO-1298).");
+            if (suppressed > suppressedRunCap + 0.001f)
+                failures.Add("[suppressed-feed] the suppressed feed (" + suppressed.ToString("0.00") +
+                             ") exceeds the run tier - a single large displacement would drive the blend " +
+                             "tree past its authored top child.");
+
+            // A moving-but-suppressed hero anywhere above the stall threshold must animate.
+            if (HeroLocomotion.ResolveSuppressedAnimatorFeed(1.01f, suppressedRunCap) <
+                HeroLocomotion.AnimStallAnimSpeed)
+                failures.Add("[suppressed-feed] velRoot=1.01 m/s under suppression still feeds an idle " +
+                             "animator - the acceptance bar for WO-1298 is that velRoot > 1 m/s can never " +
+                             "coexist with animSpeed == 0.");
+
+            // ...and the WO-377 contract is untouched: a genuinely STATIONARY suppressed hero must
+            // still settle to a hard 0, or every story beat gains a twitching walk cycle.
+            if (!Mathf.Approximately(HeroLocomotion.ResolveSuppressedAnimatorFeed(0f, suppressedRunCap), 0f))
+                failures.Add("[suppressed-feed] a stationary suppressed hero is no longer fed 0 - the " +
+                             "WO-377 dialogue hold has regressed.");
+            if (!Mathf.Approximately(
+                    HeroLocomotion.ResolveSuppressedAnimatorFeed(HeroLocomotion.AnimStallRootSpeed,
+                                                                suppressedRunCap), 0f))
+                failures.Add("[suppressed-feed] sub-threshold drift under suppression now drives the " +
+                             "animator - noise would read as walking during a story beat.");
+
             // ONE Speed writer: DungeonHero yields whenever an ActorAnimator owns the parameter.
             if (DungeonHero.ShouldWriteSpeed(actorAnimatorPresent: true, animatorResolved: true, hasSpeedParam: true))
                 failures.Add("[speed-source] DungeonHero still writes Speed while an ActorAnimator owns it - " +
@@ -254,6 +289,19 @@ namespace DeNelle.Editor.Regression
                 failures.Add("[wiring] " + LocoSrc + " no longer feeds ActorAnimator through " +
                              "ResolveAnimatorFeed - the mover-agnostic feed has been reverted and " +
                              "this suite's Case 2 would pass over dead code.");
+
+            // (2b) WO-1298: the suppression branch feeds the animator through the tested function
+            // rather than re-hardcoding a zero. Without this the Case-2 assertions above would pass
+            // over dead code while the shipped branch still froze the rig mid-glide.
+            if (!loco.Contains("ResolveSuppressedAnimatorFeed("))
+                failures.Add("[wiring] " + LocoSrc + " no longer feeds the InputSuppressed branch through " +
+                             "ResolveSuppressedAnimatorFeed - a hero moved by anything else during a " +
+                             "dialogue beat is back to sliding in an idle pose (WO-1298 / F8 seq 4362).");
+            if (Regex.IsMatch(loco, @"_actor\?\.SetLocomotion\(\s*0f\s*\)"))
+                failures.Add("[wiring] " + LocoSrc + " has re-introduced an unconditional " +
+                             "SetLocomotion(0f) - that literal IS the WO-1298 defect: it does not merely " +
+                             "leave the animator stale, it OVERWRITES a live walk cycle with a dead zero " +
+                             "every frame of the suppression.");
 
             // (3) The basis degradation that WAS the bug must not come back.
             if (Regex.IsMatch(loco, @"_smartCamera\s*!=\s*null\s*\?\s*_smartCamera\.CameraYaw\s*:\s*0f"))

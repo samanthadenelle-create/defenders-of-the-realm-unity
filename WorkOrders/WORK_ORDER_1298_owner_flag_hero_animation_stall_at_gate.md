@@ -1,6 +1,6 @@
 # WORK ORDER 1298 — Owner flag: the hero slides through the castle gate with a dead animator
 
-**Status:** READY TO IMPLEMENT
+**Status:** FIXED (2026-09-02) — the `InputSuppressed` early-return wrote a hard `Speed=0` into the animator every frame regardless of whether the root was moving; it now publishes the MEASURED root speed. ⚠ NEEDS THE OWNER'S EYES TO CLOSE — an animation stall is a felt defect and no headless gate can see it (§13). See `WORK_ORDER_1298_owner_flag_hero_animation_stall_at_gate.RESULT.md`.
 **Source:** F8 capture seq **4362** + **4363** (the owner's own flag). Ledger: `docs/qa/F8_TRIAGE_2026-09-02.md` §2.
 **Silo:** Hero locomotion / castle gate seam
 **Severity:** P0 — this is the owner's own flag, the highest-priority item in the 2026-09-01 backlog.
