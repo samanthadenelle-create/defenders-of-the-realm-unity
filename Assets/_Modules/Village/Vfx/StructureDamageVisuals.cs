@@ -14,6 +14,16 @@
 // system only READS each structure's damage surface (HpFraction / IsBroken /
 // RepairTarget.DamageFraction) and drives world tells from data thresholds:
 //
+//   hp <= scuffOnset    : WO-1352 SCUFF — the surface itself darkens and goes matte
+//                         in discrete steps, through a MaterialPropertyBlock. NO
+//                         particle, no GameObject, no pooled loop. This rung exists
+//                         because the repair predicate is `DamageFraction > 0.0001`
+//                         while the first visible tell used to be the smolder at 0.5,
+//                         so 50%..99.99% HP was PRISTINE to the player and DAMAGED to
+//                         the code — and Repair-All charged for it ("Repaired 1
+//                         structures for Wood 35, Iron 7" on a building with no visible
+//                         damage at all). The visual moved to meet the logic; the
+//                         predicate, the pricing and Repair-All membership are UNTOUCHED.
 //   hp <= smolder (0.5) : Damage_Smolder — a thin, slow smoke wisp. No flame.
 //   hp <= fire    (0.25): Damage_Fire — MediumFlames + a merged SmokeEffect layer,
 //                         so the step up is a FLAME APPEARING plus roughly double
@@ -118,6 +128,33 @@ namespace DeNelle.Village
             // bounds this system's total loop footprint at maxBurnLoops + this, which
             // matters against VFXManager's global 20-loop cap.
             public int maxCriticalBeacons = 3;
+
+            // ── WO-1352 SCUFF BAND (owner ruling 2026-09-02) ─────────────────────
+            // THE BUG THIS CLOSES: RepairTarget.NeedsRepair is `DamageFraction > 0.0001`,
+            // so a structure at 99.99% HP is REPAIR-ELIGIBLE and Repair-All CHARGES for it -
+            // while the first visible tell in this whole file was the smolder at 0.5. The
+            // owner's device toast read "Repaired 1 structures for Wood 35, Iron 7" against
+            // a building she could see nothing wrong with. Her ruling: move the VISUAL to
+            // meet the logic (a tell from the FIRST point of damage), never the reverse -
+            // suppressing the affordance would make a 60%-HP structure unrepairable.
+            //
+            // scuffOnset is the HP at/below which the surface tell starts. It MUST stay at
+            // or above 1 - (the repair predicate's epsilon) or the silent band re-opens;
+            // StructureScuffOracle in StructureBurnRegression pins exactly that.
+            public float scuffOnset = 0.9999f;
+            // Discrete steps across (smolder .. scuffOnset]. STEPS, not a continuous ramp,
+            // on purpose: a linear fade from 0 at 100% HP is a 4% change at 95% HP, which
+            // the eye adapts straight past. A step lands as an event - "this took a hit".
+            public int scuffSteps = 3;
+            // How far the surface is darkened at step 1 and at the last step, as a fraction
+            // of its own albedo. Step 1 is deliberately a visible-but-calm scuff; the last
+            // step hands off to the smolder already dirty, so smoke ARRIVES on a battered
+            // building rather than popping onto a pristine one.
+            public float scuffMinDarken = 0.12f;
+            public float scuffMaxDarken = 0.34f;
+            // Smoothness multiplier at the last step - the second, non-colour channel:
+            // the surface goes matte/dulled as well as darker.
+            public float scuffGlossFloor = 0.40f;
         }
 
         [Serializable]
@@ -128,6 +165,7 @@ namespace DeNelle.Village
             public float? fire;
             public float? criticalBeacon;
             public float? barOffset;
+            public float? scuffOnset;
         }
 
         [Serializable]
@@ -140,6 +178,11 @@ namespace DeNelle.Village
 
         private static DefaultsDef _defaults;
         private static Dictionary<string, TypeOverrideDef> _perType;
+
+        // WO-1352: one-shot probe of whether the scuff-onset knob exists in the static
+        // RemoteTunables.Registry (see ScuffOnset for why it is memoised).
+        private static bool _scuffKnobProbed;
+        private static bool _scuffKnobRegistered;
 
         /// <summary>Force a fresh reload on next access (e.g. after an editor JSON edit).</summary>
         public static void Invalidate()
@@ -180,6 +223,88 @@ namespace DeNelle.Village
         public static int MaxCriticalBeacons
         {
             get { EnsureLoaded(); return Mathf.Max(1, _defaults.maxCriticalBeacons); }
+        }
+
+        // ── WO-1352: the scuff band's dials ─────────────────────────────────────
+
+        /// <summary>
+        /// WO-1352: HP fraction at/below which the surface scuff tell begins. This is the
+        /// number that closes the silent band, so it is also the one most likely to want a
+        /// felt-tune, which is why it carries a remote-tunable seam (see
+        /// <see cref="ScuffOnsetTunableKey"/>).
+        /// </summary>
+        public static float ScuffOnset(string typeKey)
+        {
+            float authored = Resolve(typeKey, o => o.scuffOnset, _d().scuffOnset);
+
+            // ⭐ TUNABLE SEAM, owner standing ruling ("make it tweakable from a db call").
+            // ASK, do not assume: RemoteTunables.Int on an UNREGISTERED key answers 0 and
+            // logs a caller bug - and an onset of 0 would mean the tell never shows at all,
+            // i.e. exactly the defect this band exists to fix. So the spec probe is the
+            // guard, not a nicety, and the key deliberately is NOT yet added to
+            // RemoteTunables.Registry (that file is another WO's single-owner edit and the
+            // six sources move together). NO ROW / NO NETWORK / BAD PARSE => the authored
+            // damage-states.json value, exactly. Same idiom as ArcaneTowerAuraTuning.
+            try
+            {
+                // The Registry is a static compile-time array, so whether the key EXISTS can
+                // never change within a session - probe it once. (The VALUE can still change
+                // when a payload lands, so the Int read below stays live.) This matters
+                // because ScuffOnset is called once per tracked structure per 0.3 s eval,
+                // i.e. for the whole town, and a per-structure string scan of the Registry
+                // is exactly the kind of quiet cost this band must not introduce.
+                if (!_scuffKnobProbed)
+                {
+                    _scuffKnobProbed = true;
+                    _scuffKnobRegistered = DeNelle.Core.Ops.RemoteTunables.SpecFor(ScuffOnsetTunableKey) != null;
+                }
+                if (_scuffKnobRegistered)
+                {
+                    int pct = DeNelle.Core.Ops.RemoteTunables.Int(ScuffOnsetTunableKey);
+                    // Clamped to a band that can never re-open the silent gap (a value below
+                    // the smolder threshold would) and can never exceed full HP.
+                    float v = Mathf.Clamp(pct / 100f, 0.5f, 1f);
+                    if (!Mathf.Approximately(v, pct / 100f))
+                        FlowTrace.Warn("DamageVis",
+                            $"scuffOnset row {pct}% is outside the safe band 50..100 - clamped to {v:0.###}. " +
+                            "Below the smolder threshold would re-open the silent repair-eligible band.");
+                    return v;
+                }
+            }
+            catch (Exception ex)
+            {
+                FlowTrace.Warn("DamageVis",
+                    $"scuffOnset tunable read threw ({ex.Message}) - authored value {authored:0.####} in effect.");
+            }
+            return authored;
+        }
+
+        /// <summary>
+        /// Wire key for the scuff onset, INT PERCENT of full HP (100 = "from the first
+        /// point of damage"). NOT yet registered in RemoteTunables.Registry - see
+        /// <see cref="ScuffOnset"/> for why, and the no-row invariant it preserves.
+        /// </summary>
+        public const string ScuffOnsetTunableKey = "vfx.structureScuffOnsetPct";
+
+        /// <summary>WO-1352: how many discrete scuff steps span the band (>= 1).</summary>
+        public static int ScuffSteps { get { EnsureLoaded(); return Mathf.Clamp(_defaults.scuffSteps, 1, 8); } }
+
+        /// <summary>WO-1352: albedo darkening at scuff step 1 (0..1).</summary>
+        public static float ScuffMinDarken
+        {
+            get { EnsureLoaded(); return Mathf.Clamp(_defaults.scuffMinDarken, 0f, 0.9f); }
+        }
+
+        /// <summary>WO-1352: albedo darkening at the last scuff step (0..1).</summary>
+        public static float ScuffMaxDarken
+        {
+            get { EnsureLoaded(); return Mathf.Clamp(_defaults.scuffMaxDarken, ScuffMinDarken, 0.9f); }
+        }
+
+        /// <summary>WO-1352: smoothness multiplier at the last scuff step (matte-off).</summary>
+        public static float ScuffGlossFloor
+        {
+            get { EnsureLoaded(); return Mathf.Clamp01(_defaults.scuffGlossFloor); }
         }
 
         private static DefaultsDef _d() { EnsureLoaded(); return _defaults; }
@@ -286,6 +411,99 @@ namespace DeNelle.Village
         private const float BeaconGlyphScaleMin = 0.85f;
         private const float BeaconGlyphScaleMax = 1.35f;
 
+        // ── WO-1352: THE SCUFF TELL — shader parameters, not particles ───────────
+        // Owner ruling 2026-09-02: show a visible damage tell from the FIRST point of
+        // damage, escalating INTO the existing smolder at 0.5 rather than popping in at it.
+        //
+        // WHY A MATERIAL PARAMETER AND NOT AN EFFECT. Smolder/fire/beacon only ever ran on
+        // the handful of structures below 50%, capped at 8 + 3 loops. THIS band covers
+        // EVERY structure in a player-built town at once, and the device already reports
+        // [Flow:VfxPerfGate] hitches against a 16.7 ms budget on a 29.5 ms baseline. A
+        // per-structure particle system here would cost more frames than the bug costs
+        // trust. This tell allocates NO GameObject, NO particle, NO pooled loop and NO
+        // per-frame work: it is a MaterialPropertyBlock write that happens ONLY on a step
+        // change, and an undamaged structure never receives a block at all.
+        //
+        // ⛔ IT IS NOT CARRIED BY HUE (the owner is red/green colourblind). The albedo is
+        // multiplied by a SCALAR - R, G and B by the identical factor - so the hue and the
+        // saturation ratio are mathematically unchanged and only the VALUE moves. Any
+        // greyscale conversion is a weighted sum of R,G,B, so it scales by that same
+        // factor: the tell survives desaturation exactly intact, which is the strongest
+        // form of the colourblind guarantee available. The second channel is SMOOTHNESS
+        // (a matte, dulled surface), which is a texture read and not a colour read at all.
+        //
+        // ⚠ IT IS DELIBERATELY QUIETER THAN EVERY EXISTING RUNG, so the ladder still
+        // escalates: scuff is a STATIC SURFACE change (no motion, no new element), smolder
+        // adds MOTION and a new element (smoke), fire adds a FLAME, critical adds RHYTHM
+        // plus a glyph, broken changes the SHAPE. At 95% HP a building reads "this took a
+        // hit"; nothing about it reads as burning.
+        private const string ScuffLabel = "scuff";
+        // Both albedo property names, because this project mixes URP/Lit (_BaseColor) with
+        // legacy/unlit materials (_Color). Setting a property a shader does not declare is
+        // a harmless no-op in a MaterialPropertyBlock, so writing both is cheaper and far
+        // more robust than branching per shader family.
+        private static readonly int ScuffBaseColorId = Shader.PropertyToID("_BaseColor");
+        private static readonly int ScuffLegacyColorId = Shader.PropertyToID("_Color");
+        private static readonly int ScuffSmoothnessId = Shader.PropertyToID("_Smoothness");
+        // Two submesh materials whose base colours differ by more than this cannot share one
+        // property block without recolouring one of them wrongly - such a renderer is SKIPPED
+        // and said so, never silently mis-tinted.
+        private const float ScuffMultiMatEpsilon = 0.02f;
+
+        /// <summary>
+        /// WO-1352 — THE PURE BAND FUNCTION, and the one the oracle binds to. Returns the
+        /// scuff step for an HP fraction: 0 = no surface tell, 1..<see cref="DamageStatesCatalog.ScuffSteps"/>
+        /// = progressively dirtier. Held at the last step below the smolder threshold, so a
+        /// burning building never visually cleans itself up.
+        /// </summary>
+        /// <remarks>
+        /// This is the shipping code path (Evaluate calls it), NOT a copy of it - an oracle
+        /// that binds to a duplicated threshold proves only that the duplicate is intact.
+        /// </remarks>
+        public static int ScuffStepFor(float hp, string typeKey)
+        {
+            hp = Mathf.Clamp01(hp);
+            float onset = DamageStatesCatalog.ScuffOnset(typeKey);
+            if (hp > onset) return 0;                       // pristine: no tell, and none is owed
+
+            int steps = DamageStatesCatalog.ScuffSteps;
+            float smolder = DamageStatesCatalog.Smolder(typeKey);
+            if (hp <= smolder) return steps;                // held dirty under the smoke
+
+            // Progress across the band, 0 at the onset -> 1 at the smolder handoff. The
+            // FIRST point of damage already lands in step 1 (ceil), which is the whole point.
+            float span = Mathf.Max(0.0001f, onset - smolder);
+            float t = Mathf.Clamp01((onset - hp) / span);
+            return Mathf.Clamp(Mathf.CeilToInt(t * steps), 1, steps);
+        }
+
+        /// <summary>
+        /// WO-1352 — the burn tier for an HP fraction, lifted out of Evaluate verbatim so
+        /// the oracle can read the WHOLE ladder from one place. 0 none / 1 smolder /
+        /// 2 fire-or-ruin.
+        /// </summary>
+        public static int BurnTierFor(float hp, bool broken, string typeKey)
+        {
+            if (broken) return 2;
+            hp = Mathf.Clamp01(hp);
+            if (hp <= DamageStatesCatalog.Fire(typeKey)) return 2;
+            if (hp <= DamageStatesCatalog.Smolder(typeKey)) return 1;
+            return 0;
+        }
+
+        /// <summary>
+        /// WO-1352 — the whole visible ladder as one monotonic ordinal, for the oracle and
+        /// the trace. 0 = VISUALLY SILENT (and nothing above 0 may ever be silent while the
+        /// structure is repair-eligible); 1..N = scuff steps; N+1 = smolder; N+2 = fire/ruin.
+        /// </summary>
+        public static int TellOrdinalFor(float hp, bool broken, string typeKey)
+        {
+            int steps = DamageStatesCatalog.ScuffSteps;
+            int tier = BurnTierFor(hp, broken, typeKey);
+            if (tier > 0) return steps + tier;
+            return ScuffStepFor(hp, typeKey);
+        }
+
         /// <summary>One observed structure (read-only view; presentation never mutates it).</summary>
         private sealed class Tracked
         {
@@ -315,6 +533,14 @@ namespace DeNelle.Village
             public bool WantsBeacon;    // this eval's desired state (pre-cap)
             public float BeaconPhase;   // blink accumulator (radians)
             public Transform BeaconTag; // the billboarded "!" glyph, built on demand
+
+            // -- WO-1352 scuff band ---------------------------------------------
+            public int ScuffStep;             // 0 = clean surface, 1..N = progressively dirtier
+            public Renderer[] ScuffRenderers; // the VISIBLE, single-albedo renderers we drive
+            public Color[] ScuffBaseColors;   // captured baseline albedo, for an exact restore
+            public float[] ScuffBaseGloss;    // captured baseline smoothness
+            public int ScuffChildCount;       // host childCount when the list was resolved
+            public bool ScuffUnreachable;     // no eligible renderer - warned once, never spammed
         }
 
         private readonly Dictionary<GameObject, Tracked> _tracked =
@@ -389,6 +615,11 @@ namespace DeNelle.Village
                 rec.BurnKey = null;
                 if (rec.Beacon != null) { rec.Beacon.Stop(immediate: true); rec.Beacon = null; loops++; }
                 DestroyBeaconTag(rec);
+                // WO-1352: the scuff holds no pooled loop, but it DOES hold a property block
+                // on somebody else's renderer - which is exactly the kind of thing that
+                // survives a scene swap and reads as "the art is broken". Restore it here
+                // for the same reason the loops are released here.
+                RestoreScuffBaselines(rec);
             }
             _beaconLive.Clear();
             if (loops > 0)
@@ -571,6 +802,12 @@ namespace DeNelle.Village
                     rec.BurnTier = 0;
                     rec.BurnKey = null;
                     StopBeacon(rec, "host destroyed");
+                    // The renderers went with the host; drop our references so the arrays
+                    // cannot keep a destroyed Renderer alive in the tracked record.
+                    rec.ScuffRenderers = null;
+                    rec.ScuffBaseColors = null;
+                    rec.ScuffBaseGloss = null;
+                    rec.ScuffStep = 0;
                     _dead.Add(kv.Key);
                     continue;
                 }
@@ -643,11 +880,20 @@ namespace DeNelle.Village
                 rec.WasBroken = broken;
                 rec.Observed = true;
 
+                // ── WO-1352: the SCUFF band — the rung below the smolder ─────────
+                // Driven every eval for every tracked structure, because this band covers
+                // the whole town rather than the damaged few. The cost of that breadth is
+                // exactly one float compare here: ApplyScuff returns immediately unless the
+                // STEP changed, so an undamaged town does no work and holds no property
+                // block at all.
+                int scuffStep = ScuffStepFor(hp, rec.TypeKey);
+                // Gated so a pristine structure allocates NOTHING - not even the Guard
+                // closure. In a full untouched town this whole band is one int compare each.
+                if (scuffStep > 0 || rec.ScuffStep > 0)
+                    Guard.Try("DamageVis", "scuff band", () => ApplyScuff(rec, scuffStep));
+
                 // Desired burn tier from the data thresholds.
-                int wantTier = broken ? 2
-                    : hp <= DamageStatesCatalog.Fire(rec.TypeKey) ? 2
-                    : hp <= DamageStatesCatalog.Smolder(rec.TypeKey) ? 1
-                    : 0;
+                int wantTier = BurnTierFor(hp, broken, rec.TypeKey);
                 rec.PendingTier = wantTier;
                 if (wantTier > 0)
                 {
@@ -915,6 +1161,207 @@ namespace DeNelle.Village
             }
 
             rec.BeaconTag = go.transform;
+        }
+
+        // ── WO-1352: the scuff band's apply / restore ────────────────────────────
+
+        /// <summary>
+        /// Drive one structure's surface to <paramref name="step"/> (0 = pristine). A no-op
+        /// unless the step actually changed or the host's visible renderer set changed, so
+        /// the steady-state cost of this whole band across a full town is one integer
+        /// compare per structure per 0.3 s eval.
+        /// </summary>
+        private void ApplyScuff(Tracked rec, int step)
+        {
+            if (rec == null || rec.Host == null) return;
+
+            // ⛔ THE PERFORMANCE GUARD, AND IT IS THE FIRST LINE ON PURPOSE. A pristine
+            // structure that has never been damaged must never be resolved, never be
+            // written to, and never receive a MaterialPropertyBlock at all - a renderer
+            // carrying an MPB drops OUT of the SRP batcher, so touching every building in a
+            // full town "just to set it back to its own colour" would cost draw calls
+            // permanently, on the exact device that already reports [Flow:VfxPerfGate]
+            // hitches against a 16.7 ms budget. Everything below this line therefore runs
+            // only for a structure that is damaged now or was damaged earlier in the
+            // session; for the whole rest of the town this method is one integer compare.
+            if (step <= 0 && rec.ScuffStep <= 0) return;
+
+            // ⚠ THE BAKED-TWIN CASE (proven 2026-09-02): hub structures are BAKED TWINS
+            // re-skinned by HubStructureVisualInjector and never route through
+            // StructureFactory. SkinStorefront hides the baked model with `r.enabled = false`
+            // and PARENTS a LightSkin_ child under the same host - and that child can arrive
+            // AFTER we first resolved. So the resolve is (a) filtered on `enabled`, so the
+            // hidden baked mesh is never the thing we tint, and (b) re-run whenever the
+            // host's childCount moves, so a late skin picks the tell up on the next eval.
+            // Without both halves the tell would work everywhere except the town she is
+            // looking at.
+            bool structureChanged = rec.ScuffRenderers == null || rec.Host.transform.childCount != rec.ScuffChildCount;
+            if (!structureChanged && rec.ScuffRenderers != null)
+                for (int i = 0; i < rec.ScuffRenderers.Length; i++)
+                    if (rec.ScuffRenderers[i] == null) { structureChanged = true; break; }
+
+            if (step == rec.ScuffStep && !structureChanged) return;
+
+            if (structureChanged)
+            {
+                // Restore whatever the OLD list still holds before dropping it, so a swapped
+                // skin never strands a darkened renderer we no longer track.
+                RestoreScuffBaselines(rec);
+                ResolveScuffRenderers(rec);
+            }
+
+            rec.ScuffStep = step;
+
+            if (rec.ScuffRenderers == null || rec.ScuffRenderers.Length == 0)
+            {
+                if (step > 0 && !rec.ScuffUnreachable)
+                {
+                    rec.ScuffUnreachable = true;
+                    // NO SILENT FAILURE (CLAUDE.md section 12): a structure that is
+                    // repair-eligible but cannot show the tell names ITSELF here, rather
+                    // than the owner discovering it as another surprise charge.
+                    FlowTrace.Warn("DamageVis",
+                        $"scuff UNREACHABLE: '{rec.Name}' ({rec.TypeKey}) step={step} - no visible " +
+                        "single-albedo renderer under this host (all disabled, all particle systems, " +
+                        "or multi-material with differing base colours). This structure is " +
+                        "repair-eligible with NO surface tell; the health bar and the burn ladder " +
+                        "are unaffected.");
+                }
+                return;
+            }
+
+            if (step <= 0)
+            {
+                RestoreScuffBaselines(rec);
+                FlowTrace.Step("DamageVis",
+                    $"scuff CLEARED: '{rec.Name}' ({rec.TypeKey}) - repaired to pristine, " +
+                    $"{rec.ScuffRenderers.Length} renderer(s) restored to their captured albedo.");
+                return;
+            }
+
+            int steps = Mathf.Max(1, DamageStatesCatalog.ScuffSteps);
+            float t = steps <= 1 ? 1f : (step - 1) / (float)(steps - 1);
+            float darken = Mathf.Lerp(DamageStatesCatalog.ScuffMinDarken, DamageStatesCatalog.ScuffMaxDarken, t);
+            float mul = Mathf.Clamp01(1f - darken);
+            float glossMul = Mathf.Lerp(1f, DamageStatesCatalog.ScuffGlossFloor, t);
+
+            var block = new MaterialPropertyBlock();
+            int applied = 0;
+            for (int i = 0; i < rec.ScuffRenderers.Length; i++)
+            {
+                var r = rec.ScuffRenderers[i];
+                if (r == null) continue;
+                Color b = rec.ScuffBaseColors[i];
+                // SCALAR multiply on R, G and B alike - the hue and the saturation ratio are
+                // untouched and only the VALUE moves, so the tell reads identically in
+                // greyscale. Alpha is preserved verbatim (a transparent material must not
+                // become opaque because it took a hit).
+                var c = new Color(b.r * mul, b.g * mul, b.b * mul, b.a);
+                r.GetPropertyBlock(block);
+                block.SetColor(ScuffBaseColorId, c);
+                block.SetColor(ScuffLegacyColorId, c);
+                block.SetFloat(ScuffSmoothnessId, rec.ScuffBaseGloss[i] * glossMul);
+                r.SetPropertyBlock(block);
+                applied++;
+            }
+
+            FlowTrace.Step("DamageVis",
+                $"scuff step {step}/{steps}: '{rec.Name}' ({rec.TypeKey}) hp={(rec.Hp != null ? rec.Hp() : 1f):0.000} " +
+                $"damageFraction={(1f - (rec.Hp != null ? rec.Hp() : 1f)):0.000} band=SCUFF " +
+                $"applied albedo x{mul:0.00} (VALUE only, no hue shift) + smoothness x{glossMul:0.00} " +
+                $"to {applied} renderer(s). Smolder hands over at hp<={DamageStatesCatalog.Smolder(rec.TypeKey):0.00}.");
+        }
+
+        /// <summary>
+        /// Collect the renderers this structure's surface tell may drive, and capture their
+        /// baseline albedo + smoothness for an exact restore. VISIBLE renderers only
+        /// (`enabled`, which is precisely what separates an injected hub skin from the baked
+        /// mesh it hides); never a ParticleSystemRenderer (that is an effect, not the
+        /// building); and never a multi-material renderer whose submesh albedos differ,
+        /// because one property block cannot recolour two submeshes correctly and a
+        /// mis-tinted submesh is worse than a missing tell.
+        /// </summary>
+        private void ResolveScuffRenderers(Tracked rec)
+        {
+            rec.ScuffRenderers = null;
+            rec.ScuffBaseColors = null;
+            rec.ScuffBaseGloss = null;
+            rec.ScuffChildCount = rec.Host != null ? rec.Host.transform.childCount : 0;
+            if (rec.Host == null) return;
+
+            var all = rec.Host.GetComponentsInChildren<Renderer>(false);
+            var keep = new List<Renderer>();
+            var cols = new List<Color>();
+            var gloss = new List<float>();
+            int skippedMulti = 0;
+
+            foreach (var r in all)
+            {
+                if (r == null || !r.enabled) continue;
+                if (r is ParticleSystemRenderer) continue;
+
+                var mats = r.sharedMaterials;
+                if (mats == null || mats.Length == 0 || mats[0] == null) continue;
+
+                Color baseCol;
+                if (mats[0].HasProperty(ScuffBaseColorId)) baseCol = mats[0].GetColor(ScuffBaseColorId);
+                else if (mats[0].HasProperty(ScuffLegacyColorId)) baseCol = mats[0].GetColor(ScuffLegacyColorId);
+                else baseCol = Color.white;
+
+                bool uniform = true;
+                for (int m = 1; m < mats.Length && uniform; m++)
+                {
+                    var mm = mats[m];
+                    if (mm == null) continue;
+                    Color c2 = mm.HasProperty(ScuffBaseColorId) ? mm.GetColor(ScuffBaseColorId)
+                             : mm.HasProperty(ScuffLegacyColorId) ? mm.GetColor(ScuffLegacyColorId)
+                             : Color.white;
+                    uniform = Mathf.Abs(c2.r - baseCol.r) <= ScuffMultiMatEpsilon
+                           && Mathf.Abs(c2.g - baseCol.g) <= ScuffMultiMatEpsilon
+                           && Mathf.Abs(c2.b - baseCol.b) <= ScuffMultiMatEpsilon;
+                }
+                if (!uniform) { skippedMulti++; continue; }
+
+                float g = mats[0].HasProperty(ScuffSmoothnessId) ? mats[0].GetFloat(ScuffSmoothnessId) : 0.5f;
+
+                keep.Add(r);
+                cols.Add(baseCol);
+                gloss.Add(g);
+            }
+
+            rec.ScuffRenderers = keep.ToArray();
+            rec.ScuffBaseColors = cols.ToArray();
+            rec.ScuffBaseGloss = gloss.ToArray();
+            if (keep.Count > 0) rec.ScuffUnreachable = false;
+
+            FlowTrace.Throttle("DamageVis", "scuff-resolve:" + rec.TypeKey, 5f,
+                $"scuff renderers resolved for '{rec.Name}' ({rec.TypeKey}): {keep.Count} eligible of " +
+                $"{all.Length} (skipped {skippedMulti} multi-albedo; disabled/baked-twin meshes and " +
+                "particle renderers are excluded by rule).");
+        }
+
+        /// <summary>
+        /// Put every driven renderer back exactly as it was found. Idempotent, safe with
+        /// nothing captured, and called from every exit path - repaired to pristine, a
+        /// re-skin, OnDisable and OnDestroy - so this component can never leave a town
+        /// permanently darkened.
+        /// </summary>
+        private void RestoreScuffBaselines(Tracked rec)
+        {
+            if (rec == null || rec.ScuffRenderers == null) return;
+            var block = new MaterialPropertyBlock();
+            for (int i = 0; i < rec.ScuffRenderers.Length; i++)
+            {
+                var r = rec.ScuffRenderers[i];
+                if (r == null) continue;
+                Color b = rec.ScuffBaseColors[i];
+                r.GetPropertyBlock(block);
+                block.SetColor(ScuffBaseColorId, b);
+                block.SetColor(ScuffLegacyColorId, b);
+                block.SetFloat(ScuffSmoothnessId, rec.ScuffBaseGloss[i]);
+                r.SetPropertyBlock(block);
+            }
+            rec.ScuffStep = 0;
         }
 
         /// <summary>Tear the "!" glyph down. Safe when there is none, and when the host is

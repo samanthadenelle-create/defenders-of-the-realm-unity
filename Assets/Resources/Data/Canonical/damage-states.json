@@ -1,13 +1,18 @@
 {
-  "_note": "WO-672 Slice D + WO-892 - structure damage-state thresholds for StructureDamageVisuals. HP-fraction thresholds: <= smolder = thin smoke wisp (Damage_Smolder); <= fire = flame + smoke volume (Damage_Fire); <= criticalBeacon = an ADDITIONAL fast-strobing alarm loop plus a '!' glyph (Damage_CriticalBeacon) meaning 'repair me NOW before it is destroyed'; broken (hp==0) = one-shot Damage_BreakBurst at the break transition + a persistent Damage_Ruin column, and the beacon STOPS (a destroyed structure cannot be saved - WO-753: destroyed is gone, it returns only via a full-cost rebuild). WO-892 moved these off Ember_Burn/Raid_Explosion: Ember_Burn pointed at a Hovl path that does not exist so it never reached the catalog and never rendered, and Raid_Explosion pointed into the gitignored Hovl pack. The four states read in GREYSCALE by smoke density, flame presence, pulse rhythm and layer count - never by tint (the owner is red/green colourblind). maxBurnLoops and maxCriticalBeacons are SEPARATE worst-first caps on top of VFXManager's global 20-loop cap; a structure holds at most one burn/ruin loop AND at most one beacon, so the worst case this system can hold is maxBurnLoops + maxCriticalBeacons. perType keys are lowercase structure kinds; optOut skips the shared tells for types with bespoke damage presentation (gate force-field collapse, heart crystal states). Dual-copy rule: keep Assets/StreamingAssets/Data/Canonical/damage-states.json byte-identical.",
-  "version": 2,
+  "_note": "WO-672 Slice D + WO-892 + WO-1352 - structure damage-state thresholds for StructureDamageVisuals. HP-fraction thresholds: <= scuffOnset = the WO-1352 SCUFF band, a shader-parameter surface tell (albedo darkened by a SCALAR, plus smoothness dropped to matte) applied in scuffSteps discrete steps between scuffOnset and smolder; <= smolder = thin smoke wisp (Damage_Smolder); <= fire = flame + smoke volume (Damage_Fire); <= criticalBeacon = an ADDITIONAL fast-strobing alarm loop plus a '!' glyph (Damage_CriticalBeacon) meaning 'repair me NOW before it is destroyed'; broken (hp==0) = one-shot Damage_BreakBurst at the break transition + a persistent Damage_Ruin column, and the beacon STOPS (a destroyed structure cannot be saved - WO-753: destroyed is gone, it returns only via a full-cost rebuild). WO-892 moved these off Ember_Burn/Raid_Explosion: Ember_Burn pointed at a Hovl path that does not exist so it never reached the catalog and never rendered, and Raid_Explosion pointed into the gitignored Hovl pack. WO-1352 (owner ruling 2026-09-02) exists because RepairTarget.NeedsRepair is DamageFraction > 0.0001 while the first visible tell was the smolder at 0.5 - so 50%..99.99% HP was PRISTINE to the player and DAMAGED to the code, and Repair-All charged for it. scuffOnset MUST stay at or above 1 - that epsilon or the silent repair-eligible band re-opens; StructureBurnRegression's scuff oracle pins it. The five states read in GREYSCALE by surface value, smoke density, flame presence, pulse rhythm and layer count - never by tint (the owner is red/green colourblind); the scuff multiplies R, G and B by the IDENTICAL factor so hue and saturation are mathematically unchanged and only value moves. maxBurnLoops and maxCriticalBeacons are SEPARATE worst-first caps on top of VFXManager's global 20-loop cap; a structure holds at most one burn/ruin loop AND at most one beacon, so the worst case this system can hold is maxBurnLoops + maxCriticalBeacons. The scuff holds NO loop, NO particle and NO GameObject, so it needs no cap. perType keys are lowercase structure kinds; optOut skips the shared tells for types with bespoke damage presentation (gate force-field collapse, heart crystal states). Dual-copy rule: keep Assets/StreamingAssets/Data/Canonical/damage-states.json byte-identical.",
+  "version": 3,
   "defaults": {
     "smolder": 0.5,
     "fire": 0.25,
     "criticalBeacon": 0.25,
     "barOffset": 2.2,
     "maxBurnLoops": 8,
-    "maxCriticalBeacons": 3
+    "maxCriticalBeacons": 3,
+    "scuffOnset": 0.9999,
+    "scuffSteps": 3,
+    "scuffMinDarken": 0.12,
+    "scuffMaxDarken": 0.34,
+    "scuffGlossFloor": 0.4
   },
   "perType": {
     "gate": { "optOut": true },

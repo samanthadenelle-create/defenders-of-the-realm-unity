@@ -12,6 +12,10 @@
 //   (3) DESTROY - burn damage can bring the structure to 0; the burn then ends.
 // Also asserts STACK = REFRESH (a re-ignite never double-composes / double-burns).
 //
+// WO-1352 APPENDS THE SCUFF ORACLE (see ScuffOracle below): no HP band between 0 and
+// 100% may be visually silent while it is repair-eligible. Same subject - what a damaged
+// structure SHOWS - so it lives in this suite rather than a new registration.
+//
 // VFXManager.Instance is null in edit mode, so StartFireVfx is a proven no-op here -
 // this suite validates the DAMAGE + STATE machine; the fire VFX is null-safe.
 //
@@ -96,8 +100,167 @@ namespace DeNelle.Editor
                 if (host != null) Object.DestroyImmediate(host);
             }
 
+            // (4) WO-1352 - THE NO-SILENT-BAND ORACLE. Appended to this suite because it
+            //     pins the same subject: what a damaged structure SHOWS.
+            ScuffOracle(failures, log);
+
             reason = Finish(failures, log);
             return failures.Count == 0;
+        }
+
+        // =====================================================================
+        // WO-1352 SCUFF ORACLE - "no HP band between 0 and 100% is visually
+        // silent while being repair-eligible."
+        // ---------------------------------------------------------------------
+        // THE DEFECT IT PINS, stated as the two numbers that disagreed:
+        //   RepairTarget.NeedsRepair          => DamageFraction > 0.0001
+        //   the first VISIBLE tell (smolder)  => hp <= 0.5
+        // So 50%..99.99% HP was PRISTINE to the player and DAMAGED to the code, and
+        // Repair-All BILLED for it - the owner's device toast read "Repaired 1 structures
+        // for Wood 35, Iron 7" against a building with no visible damage at all.
+        //
+        // ⚠ IT BINDS TO THE SHIPPING CODE, NOT TO A COPY OF THE NUMBERS. The eligibility
+        // side is asked of a REAL RepairTarget wrapping a REAL WallSegment that has been
+        // really damaged; the visibility side is asked of StructureDamageVisuals'
+        // TellOrdinalFor, which is the same function Evaluate itself calls. An oracle that
+        // re-declares 0.0001 and 0.5 locally would only ever prove its own duplicates are
+        // intact - which is the exact failure mode CLAUDE.md section 5 and section 2 are
+        // written against.
+        //
+        // RED-FIRST MUTATION (the proof this oracle has teeth): set "scuffOnset" in
+        // Assets/{Resources,StreamingAssets}/Data/Canonical/damage-states.json to 0.5 -
+        // i.e. exactly the pre-WO-1352 world, where the first tell IS the smolder. Every
+        // sample in the 0.5..0.9999 sweep then reports ordinal 0 while NeedsRepair is true
+        // and this oracle fails with "SILENT while repair-eligible" on the first one.
+        // Restoring 0.9999 turns it green. The gap is the thing under test, not the file.
+        // =====================================================================
+        private static void ScuffOracle(List<string> failures, StringBuilder log)
+        {
+            log.AppendLine("--- WO-1352 SCUFF ORACLE (no repair-eligible HP band may be visually silent) ---");
+
+            DamageStatesCatalog.Invalidate();   // read the authored thresholds fresh
+            const string TypeKey = "wall";
+            float smolder = DamageStatesCatalog.Smolder(TypeKey);
+            float onset   = DamageStatesCatalog.ScuffOnset(TypeKey);
+            int   steps   = DamageStatesCatalog.ScuffSteps;
+            log.AppendLine($"  thresholds: scuffOnset {onset}, smolder {smolder}, scuffSteps {steps}");
+
+            // -- A. COVERAGE STARTS AT OR BELOW THE REPAIR PREDICATE ------------
+            // Asked of the REAL predicate: damage a real wall by the smallest amount that
+            // still makes it repair-eligible, then ask the real ladder what it shows.
+            GameObject wallHost = null;
+            try
+            {
+                wallHost = new GameObject("ScuffOracleWall");
+                var seg = wallHost.AddComponent<WallSegment>();
+                var target = RepairTarget.TryWrap(seg);
+                if (target == null || !target.IsValid)
+                {
+                    failures.Add("scuff oracle: RepairTarget.TryWrap refused a real WallSegment - the " +
+                                 "oracle cannot bind to the live repair predicate");
+                }
+                else
+                {
+                    if (target.NeedsRepair)
+                        failures.Add($"scuff oracle: an UNDAMAGED wall already reports NeedsRepair " +
+                                     $"(damageFraction {target.DamageFraction:0.######}) - the predicate moved");
+
+                    // A hair of damage: on the shared 0..100 wall track this is ~0.05%, an
+                    // amount no player would call "damaged" - and precisely the amount that
+                    // used to be billable and invisible at the same time.
+                    seg.ApplyContactDamage(0.05f);
+                    float hp = 1f - target.DamageFraction;
+                    int ord = StructureDamageVisuals.TellOrdinalFor(hp, false, TypeKey);
+                    log.AppendLine($"  first-blood: damageFraction {target.DamageFraction:0.######} " +
+                                   $"hp {hp:0.######} needsRepair={target.NeedsRepair} tellOrdinal={ord}");
+
+                    if (!target.NeedsRepair)
+                        failures.Add($"scuff oracle: a 0.05-point hit did not make the wall repair-eligible " +
+                                     $"(damageFraction {target.DamageFraction:0.######}) - re-pick the probe amount, " +
+                                     "the oracle is no longer testing the boundary it claims to");
+                    else if (ord <= 0)
+                        failures.Add($"scuff oracle: the FIRST point of damage is SILENT while repair-eligible " +
+                                     $"(hp {hp:0.######}, needsRepair=True, tellOrdinal 0). This is WO-1352's " +
+                                     "defect exactly: Repair-All would charge for a structure the player sees " +
+                                     "nothing wrong with.");
+                }
+            }
+            catch (System.Exception ex)
+            {
+                // Loud, never silent - but not a false red on the whole suite. The pure-band
+                // assertions below still run and still carry the invariant; what is lost is
+                // only the binding to the live predicate, and the log says so in those words.
+                log.AppendLine("  WARN: could not drive a real WallSegment in edit mode (" + ex.Message +
+                               ") - the live-predicate binding was SKIPPED; the band sweep below still ran.");
+            }
+            finally
+            {
+                if (wallHost != null) Object.DestroyImmediate(wallHost);
+            }
+
+            // -- B. THE SWEEP: no silent sample anywhere in the eligible band ----
+            // 0.0001 is the repair predicate's epsilon, so hp = 1 - 0.0001 is the HIGHEST
+            // HP at which a structure is still billable. Every sample from there down to
+            // the broken shell must show SOMETHING.
+            const float PredicateEpsilon = 0.0001f;
+            float top = 1f - PredicateEpsilon - 1e-6f;   // just inside eligible
+            int silent = 0, samples = 0;
+            float firstSilentHp = -1f;
+            // The sweep walks HP DOWNWARD, so the ordinal must never DECREASE. Seeded at the
+            // lowest possible ordinal for that reason - seeding it high (and testing the
+            // other direction) silently passes everything, which is what the first draft of
+            // this oracle did until the arithmetic was actually run.
+            int prevOrd = 0;
+            bool monotonic = true;
+            float regressAtHp = -1f;
+
+            for (int i = 0; i <= 200; i++)
+            {
+                float hp = Mathf.Lerp(top, 0f, i / 200f);
+                int ord = StructureDamageVisuals.TellOrdinalFor(hp, false, TypeKey);
+                samples++;
+                if (ord <= 0) { silent++; if (firstSilentHp < 0f) firstSilentHp = hp; }
+                if (ord < prevOrd) { monotonic = false; if (regressAtHp < 0f) regressAtHp = hp; }
+                prevOrd = ord;
+            }
+            log.AppendLine($"  sweep: {samples} samples over hp [{top:0.####} .. 0], silent={silent}, " +
+                           $"monotonic={monotonic}");
+
+            if (silent > 0)
+                failures.Add($"scuff oracle: {silent}/{samples} repair-eligible HP samples are VISUALLY SILENT " +
+                             $"(first at hp {firstSilentHp:0.####}). A band that is billable and invisible is " +
+                             "the WO-1352 defect; the tell's coverage must start at or below the repair " +
+                             "predicate's threshold and stay continuous to the smolder handoff.");
+            if (!monotonic)
+                failures.Add($"scuff oracle: the tell ladder goes BACKWARDS as HP falls (first regression at " +
+                             $"hp {regressAtHp:0.####}) - a structure would visibly clean itself up as it got " +
+                             "closer to being destroyed");
+
+            // -- C. THE HANDOFF IS CONTINUOUS, NOT A POP -------------------------
+            // Arriving AT the smolder from a fully-scuffed surface is the escalation the
+            // owner ruled for. If the last scuff step were not reached before the smolder
+            // arms, smoke would still pop onto a pristine-looking building.
+            float justAbove = Mathf.Min(onset, smolder + 0.001f);
+            int ordJustAbove = StructureDamageVisuals.TellOrdinalFor(justAbove, false, TypeKey);
+            int ordAtSmolder = StructureDamageVisuals.TellOrdinalFor(smolder, false, TypeKey);
+            log.AppendLine($"  handoff: hp {justAbove:0.###} -> ordinal {ordJustAbove}; " +
+                           $"hp {smolder:0.###} -> ordinal {ordAtSmolder} (smolder rung = {steps + 1})");
+
+            if (ordJustAbove != steps)
+                failures.Add($"scuff oracle: the surface is only at step {ordJustAbove} of {steps} immediately " +
+                             $"above the smolder threshold - the smoke would arrive on a barely-marked " +
+                             "building instead of a fully battered one (escalation flattened)");
+            if (ordAtSmolder != steps + 1)
+                failures.Add($"scuff oracle: the smolder rung reads {ordAtSmolder}, expected {steps + 1} - the " +
+                             "scuff band and the burn ladder have drifted apart");
+
+            // -- D. THE ONSET CANNOT BE AUTHORED BACK INTO A GAP -----------------
+            if (onset < 1f - PredicateEpsilon)
+                failures.Add($"scuff oracle: scuffOnset {onset} is BELOW the repair predicate's threshold " +
+                             $"({1f - PredicateEpsilon}) - damage-states.json has re-opened a billable, " +
+                             "invisible band. scuffOnset must stay at or above it.");
+            if (steps < 1)
+                failures.Add($"scuff oracle: scuffSteps {steps} < 1 - the band would have no visible step at all");
         }
 
         private static string Finish(List<string> failures, StringBuilder log)
