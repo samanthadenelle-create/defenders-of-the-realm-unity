@@ -1,6 +1,6 @@
 # WORK ORDER 1310 — The talent tree panel clips its content, truncates node names, and wastes half its width
 
-**Status:** FIXED - the axis rotation fed lanes to the rows and progression to the columns (a tall board in a short landscape well), the solver used the norms for sort order only, and the type badge was ellipsised over the icon by FitSingleLine's FontFloor(30) default; all four are corrected and `TalentTreeShapeRegression` rule 6 `[viewport]` now measures AND fails. NEEDS A SCREENSHOT TO CLOSE.
+**Status:** CLOSED 2026-09-03 - owner felt-test PASS. PRIOR STATUS: FIXED - the axis rotation fed lanes to the rows and progression to the columns (a tall board in a short landscape well), the solver used the norms for sort order only, and the type badge was ellipsised over the icon by FitSingleLine's FontFloor(30) default; all four are corrected and `TalentTreeShapeRegression` rule 6 `[viewport]` now measures AND fails. NEEDS A SCREENSHOT TO CLOSE.
 **Silo:** UI / Talents
 **Minted:** 2026-09-02 (CLI) from an owner screenshot, felt-test of the 03:33 Windows build.
 **Severity:** P1 — this is the screen the retention work funnels players into.

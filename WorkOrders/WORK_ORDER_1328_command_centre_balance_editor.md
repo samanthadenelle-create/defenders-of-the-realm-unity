@@ -1,6 +1,6 @@
 # WORK ORDER 1328 - Balance editing belongs in the Command Center, behind a simple UI driven by JSON
 
-**Status:** FIXED - Balance tab shipped in the Command Center, driven by a manifest whose spine is GENERATED from RemoteTunables.Registry and pinned by test/tunables-manifest.test.js (23 cases). Needs a phone-width screenshot a human opened, then PO close.
+**Status:** CLOSED 2026-09-03 - owner felt-test PASS. PRIOR STATUS: FIXED - Balance tab shipped in the Command Center, driven by a manifest whose spine is GENERATED from RemoteTunables.Registry and pinned by test/tunables-manifest.test.js (23 cases). Needs a phone-width screenshot a human opened, then PO close.
 **Silo / Lane:** Ops / Command Center console (`api/admin/console`) + the remote tunables rail
 **Type:** EXISTING rail, MISSING surface
 **Minted:** 2026-09-02 (CLI) from a direct owner ruling.

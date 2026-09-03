@@ -1,6 +1,6 @@
 ﻿# WO-1114 â€” Dungeon Status: a remotely-flippable, in-world door state
 
-**Status:** FIXED 2026-08-29 — production endpoint now returns all six authored dungeon rows, including `dg_folks_granary=open` and `dg_healers_cottage=sealed`; live schema parity and current dungeon-status regression are green. Awaiting owner Seeker verification of the sealed-door presentation before Closed. *(The stale blocker history is preserved below.)*
+**Status:** CLOSED 2026-09-03 - owner felt-test PASS. PRIOR STATUS: FIXED 2026-08-29 — production endpoint now returns all six authored dungeon rows, including `dg_folks_granary=open` and `dg_healers_cottage=sealed`; live schema parity and current dungeon-status regression are green. Awaiting owner Seeker verification of the sealed-door presentation before Closed. *(The stale blocker history is preserved below.)*
 >  PRIOR: **Status:** BLOCKED ON DEPLOY — BUILT, NOT DEPLOYED (reconciled 2026-08-22; ⚠ re-checked 2026-08-24 — the `api/` production promotion (`e2e07f1c0`) does NOT clear this: items 1 and 3 below (schema.sql never run against Neon; the two real-dungeon seed rows still absent) are unaffected by it). R1-R6 landed and the oracle is registered; nothing further is owed in the Unity tree. *(Was: READY - PARTIAL - 2026-08-21 CLI, gate-green (COMPILE_GATE_OK + REGRESSION_OK 234/234).)*
 
 > ### VERIFIED AT SOURCE 2026-08-22 — what is done, and the exact three things that are not

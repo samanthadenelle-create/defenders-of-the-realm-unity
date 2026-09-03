@@ -1,6 +1,6 @@
 # WORK ORDER 1273 - Build collections: readable cards, category icons, and safe pause
 
-**Status:** FIXED — implementation/regressions complete; awaiting final Seeker Done -> tutorial -> re-enter persistence/singleton felt verification (2026-08-30).
+**Status:** CLOSED 2026-09-03 - owner felt-test PASS. PRIOR STATUS: FIXED — implementation/regressions complete; awaiting final Seeker Done -> tutorial -> re-enter persistence/singleton felt verification (2026-08-30).
 **Owner missing-art follow-up (2026-08-29):** DEVICE-PRESENT in Seeker APK 2026.08.29.346849; owner test pending. Originated from
 `Logs/device/stone-gate-missing-art.png`. `gate_stone` is now presentation-gated out of both
 local and remote collection projections until finished art is approved; its catalog,

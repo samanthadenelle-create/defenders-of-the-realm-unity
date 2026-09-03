@@ -1,6 +1,6 @@
 # WORK ORDER 1336 - Aldwin gets stuck on a tower on his way to the gate and never moves again
 
-**Status:** FIXED - the guide-lead carrot is now NAVMESH-ROUTED (shape 1: a carving structure closed the route and Pet.MoveToward has no pathfinding), so it walks around ANY blocking structure; owner felt-verifies and closes.
+**Status:** CLOSED 2026-09-03 - owner felt-test PASS. PRIOR STATUS: FIXED - the guide-lead carrot is now NAVMESH-ROUTED (shape 1: a carving structure closed the route and Pet.MoveToward has no pathfinding), so it walks around ANY blocking structure; owner felt-verifies and closes.
 **Silo / Lane:** Echo presence / navmesh + escort pathing
 **Type:** EXISTING (built, blocked by world geometry)
 **Minted:** 2026-09-03 (CLI) from an owner felt-test on the Seeker, build `2026.09.03.352921`.

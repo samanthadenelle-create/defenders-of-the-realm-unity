@@ -1,6 +1,6 @@
 # WORK ORDER 1265 — Gate local Clan Chat until multiplayer backend is real
 
-**Status:** FIXED 2026-08-28 — player-build gate compiled and regression-proven; backend/social implementation remains separately deferred.
+**Status:** CLOSED 2026-09-03 - owner felt-test PASS. PRIOR STATUS: FIXED 2026-08-28 — player-build gate compiled and regression-proven; backend/social implementation remains separately deferred.
 **Minted:** 2026-08-28 by Codex CLI from the owner's unnumbered direction; banner bumped 1265 → 1266 in the same edit.
 **Lane:** Social/backend readiness. Not PROD.
 

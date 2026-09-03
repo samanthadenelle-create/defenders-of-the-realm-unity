@@ -1,4 +1,4 @@
-**Status:** FIXED — D-LAYOUT/D-SHELF/Trade implemented and regression-gated; D-SEAT cause instrumentation added without changing approved offsets. Awaiting final Seeker town/battle/cave captures and owner felt verification (2026-08-30).
+**Status:** CLOSED 2026-09-03 - owner felt-test PASS. PRIOR STATUS: FIXED — D-LAYOUT/D-SHELF/Trade implemented and regression-gated; D-SEAT cause instrumentation added without changing approved offsets. Awaiting final Seeker town/battle/cave captures and owner felt verification (2026-08-30).
 **Jeweler progression follow-up (2026-08-29):** DEVICE-PRESENT in Seeker APK 2026.08.29.346849; owner test pending, including
 first real dungeon-return proof. The persistent `EverAcquiredItemIds` ledger is now written only
 by `VillageInventory.AddEarned`; the authoritative dungeon payout uses that seam, while ordinary

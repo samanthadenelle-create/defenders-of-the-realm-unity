@@ -1,6 +1,6 @@
 # WORK ORDER 1287 - Wave-three onboarding and Echo repair visibility
 
-**Status:** FIXED — implemented 2026-08-31; evidence in `WORK_ORDER_1287_..._RESULT.md`: `COMPILE_GATE_OK` (`Builds/compilegate-wo1287.log`) + `REGRESSION_OK 332/332 suites` (`Builds/data-regression-wo1287-final.log`). Awaiting the owner's felt-verification (PO closes, CLAUDE.md §13). *(Board status audit 2026-09-02: the line carried no canonical marker and read as Unlabeled.)* *(Prior line:)* Status: DONE
+**Status:** CLOSED 2026-09-03 - owner felt-test PASS. PRIOR STATUS: FIXED — implemented 2026-08-31; evidence in `WORK_ORDER_1287_..._RESULT.md`: `COMPILE_GATE_OK` (`Builds/compilegate-wo1287.log`) + `REGRESSION_OK 332/332 suites` (`Builds/data-regression-wo1287-final.log`). Awaiting the owner's felt-verification (PO closes, CLAUDE.md §13). *(Board status audit 2026-09-02: the line carried no canonical marker and read as Unlabeled.)* *(Prior line:)* Status: DONE
 Owner feedback: 2026-08-31
 
 ## Problem

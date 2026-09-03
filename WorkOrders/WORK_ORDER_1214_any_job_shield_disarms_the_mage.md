@@ -1,6 +1,6 @@
 # WORK ORDER 1214 - A dropped shield PERMANENTLY DISARMS the Mage. Drops go to inventory; ineligible gear is held and sellable, never equipped.
 
-**Status:** FIXED 2026-08-26 - `COMPILE_GATE_OK` + `REGRESSION_OK 292/292`; post-fix owner device verification queued
+**Status:** CLOSED 2026-09-03 - owner felt-test PASS. PRIOR STATUS: FIXED 2026-08-26 - `COMPILE_GATE_OK` + `REGRESSION_OK 292/292`; post-fix owner device verification queued
 **Silo:** Gear / equip logic + inventory
 **Severity:** P0 - unrecoverable loss of the player's only weapon, on a LIVE build that takes real money.
 **Origin:** Owner felt-test, Seeker build `2026.08.26.341419`, 2026-08-26.

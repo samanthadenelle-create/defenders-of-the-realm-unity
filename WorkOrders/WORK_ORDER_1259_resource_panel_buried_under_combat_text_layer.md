@@ -1,6 +1,6 @@
 # WORK ORDER 1259 — Resource-panel expand buried under CombatTextLayer
 
-**Status:** FIXED — CODE + FULL REGRESSION PASS; DEVICE UI_CAPTURE OWED
+**Status:** CLOSED 2026-09-03 - owner felt-test PASS. PRIOR STATUS: FIXED — CODE + FULL REGRESSION PASS; DEVICE UI_CAPTURE OWED
 **Minted:** 2026-08-28 (CLI, F8 device triage seq 3623)
 **Silo:** HUD
 **Evidence (captured, not theorized):** device `SM02G4061955851`, scene `Main_Castle_Overworld`,

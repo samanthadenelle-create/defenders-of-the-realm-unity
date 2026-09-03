@@ -1,6 +1,6 @@
 # WORK ORDER 1261 — Pursuit arena: failed warp-in + battle-lock still held after retreat
 
-**Status:** FIXED — COMPILE + FOCUSED + FULL REGRESSION PASS; DEVICE RETREAT OWED
+**Status:** CLOSED 2026-09-03 - owner felt-test PASS. PRIOR STATUS: FIXED — COMPILE + FOCUSED + FULL REGRESSION PASS; DEVICE RETREAT OWED
 **Minted:** 2026-08-28 (CLI, F8 device triage seq 3629 + 3630)
 **Silo:** Combat/Arena
 **Evidence (captured):** device `SM02G4061955851`, `Main_Castle_Overworld`, 2026-08-27 ~20:37Z,

@@ -1,6 +1,6 @@
 # WORK ORDER 1272 - Generic card and database-driven collection foundation
 
-**Status:** FIXED 2026-08-29 — shared card/collection/modal, packaged fallback, remote validation/cache, and server entitlement restore foundation implemented and headless-verified; awaiting owner device test.
+**Status:** CLOSED 2026-09-03 - owner felt-test PASS. PRIOR STATUS: FIXED 2026-08-29 — shared card/collection/modal, packaged fallback, remote validation/cache, and server entitlement restore foundation implemented and headless-verified; awaiting owner device test.
 **Minted:** 2026-08-28 by Codex CLI under WO-1271.
 **Lane:** Shared UI presentation + catalog/backend contract. Coordinate Wallet, Village, Core Data, and API boundaries without duplicating them.
 

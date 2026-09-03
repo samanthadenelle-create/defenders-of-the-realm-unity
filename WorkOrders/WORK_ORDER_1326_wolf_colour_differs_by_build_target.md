@@ -1,6 +1,6 @@
 # WORK ORDER 1326 - The wolf is correctly coloured in the Pi/WebGL build and GREY in the APK and the exe
 
-**Status:** FIXED
+**Status:** CLOSED 2026-09-03 - owner felt-test PASS. PRIOR STATUS: FIXED
 > Owner ruling 2026-09-02, verbatim: *"flat coat"* (and *"alduin is the wolf"*) — the coat map is now
 > suppressed for this species on every target via an authored `flatCoat` row in `pets.json`, so all
 > three builds paint the body with the species tint alone and agree; no art, no texture touched.

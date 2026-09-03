@@ -1,6 +1,6 @@
 # WORK ORDER 1331 - Connect the remote catalog seam that already exists, so canonical data stops needing a rebuild
 
-**Status:** FIXED (2026-09-02) - see WORK_ORDER_1331_canonical_json_remote_source_seam.RESULT.md. Awaiting the gate + PO felt-verify.
+**Status:** CLOSED 2026-09-03 - owner felt-test PASS. PRIOR STATUS: FIXED (2026-09-02) - see WORK_ORDER_1331_canonical_json_remote_source_seam.RESULT.md. Awaiting the gate + PO felt-verify.
 **Silo / Lane:** Core / catalog loading + the remote tunables rail
 **Type:** EXISTING seam, NEVER CONNECTED
 **Minted:** 2026-09-02 (CLI) from the WO-1328 lever inventory.

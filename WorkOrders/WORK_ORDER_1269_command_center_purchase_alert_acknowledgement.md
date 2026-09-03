@@ -3,7 +3,7 @@
 **Minted:** 2026-08-28 by Codex CLI from Samantha's unnumbered request; banner bumped 1269 → 1270 in the same edit.
 **Lane:** Work Order, not PROD. **Seat:** Codex CLI.
 
-**Status:** FIXED — production deployed and live-smoked 2026-08-28
+**Status:** CLOSED 2026-09-03 - owner felt-test PASS. PRIOR STATUS: FIXED — production deployed and live-smoked 2026-08-28
 
 ## Problem
 

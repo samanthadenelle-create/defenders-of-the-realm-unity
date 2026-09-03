@@ -1,6 +1,6 @@
 # WORK ORDER 1279 - Harvest overflow result modal
 
-**Status:** FIXED 2026-08-29 - the framed harvest-overflow result is present in Seeker tester APK 2026.08.29.346849; awaiting owner device test.
+**Status:** CLOSED 2026-09-03 - owner felt-test PASS. PRIOR STATUS: FIXED 2026-08-29 - the framed harvest-overflow result is present in Seeker tester APK 2026.08.29.346849; awaiting owner device test.
 
 **Minted:** 2026-08-29 after collision reconciliation; WO-1278 was already claimed by the earlier post-wave victory modal. CLI banner bumped from 1279 to 1280 in the same edit.
 

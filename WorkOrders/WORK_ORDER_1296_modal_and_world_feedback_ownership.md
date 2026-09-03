@@ -1,6 +1,6 @@
 # WORK ORDER 1296 — Modal and World Feedback Ownership
 
-**Status:** FIXED — implemented by a8811ec73 `fix(feedback): modal sequencing, silent intact-tap, burn seated from renderer bounds` — covers all three reported items (DailyChest OfferWhenUiClear, silent intact tap, StructureBurn seated from renderer bounds). Awaiting the owner's felt-verification (PO closes, CLAUDE.md §13). *(Board status audit 2026-09-02; body unchanged.)* *(Prior line:)* **Status:** IN PROGRESS — 2026-09-01
+**Status:** CLOSED 2026-09-03 - owner felt-test PASS. PRIOR STATUS: FIXED — implemented by a8811ec73 `fix(feedback): modal sequencing, silent intact-tap, burn seated from renderer bounds` — covers all three reported items (DailyChest OfferWhenUiClear, silent intact tap, StructureBurn seated from renderer bounds). Awaiting the owner's felt-verification (PO closes, CLAUDE.md §13). *(Board status audit 2026-09-02; body unchanged.)* *(Prior line:)* **Status:** IN PROGRESS — 2026-09-01
 
 ## Player reports
 

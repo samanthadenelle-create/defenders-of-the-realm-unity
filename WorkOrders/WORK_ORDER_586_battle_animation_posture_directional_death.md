@@ -7,7 +7,7 @@
 
 # WORK ORDER 586 — Battle Animation Posture, Directional Death, Orc Cadence
 
-**Status:** FIXED — CONTROLLER REBUILT + REGRESSION PASS; DEVICE DEATH FELT-VERIFY OWED
+**Status:** CLOSED 2026-09-03 - owner felt-test PASS. PRIOR STATUS: FIXED — CONTROLLER REBUILT + REGRESSION PASS; DEVICE DEATH FELT-VERIFY OWED
 **Lane:** Combat/Animation (code + editor controller bake) — no scene files
 **Serves:** Senior animation assessment (2026-07-04/05) — high-ROI battle feel before WO-585 ability expansion
 **Related:** WO-491 (orc locomotion base), WO-585 (animation-driven actives — separate, design-only)

@@ -1,6 +1,6 @@
 # WORK ORDER 1274 - Night Market on shared cards with purchase-safe pause
 
-**Status:** FIXED 2026-08-29 — Night Market consumes the shared card/collection/modal contracts with packaged fallback, channel-preserving price behavior, deterministic paging, and nested pause ownership; awaiting owner Seeker test.
+**Status:** CLOSED 2026-09-03 - owner felt-test PASS. PRIOR STATUS: FIXED 2026-08-29 — Night Market consumes the shared card/collection/modal contracts with packaged fallback, channel-preserving price behavior, deterministic paging, and nested pause ownership; awaiting owner Seeker test.
 **Minted:** 2026-08-28 by Codex CLI under WO-1271.
 **Lane:** Wallet/Night Market presentation. No payment activation or economy rebalance.
 

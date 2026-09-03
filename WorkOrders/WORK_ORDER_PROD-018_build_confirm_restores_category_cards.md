@@ -1,6 +1,6 @@
 # PROD-018 — After confirm placement, Build category cards must return
 
-**Status:** FIXED — implementation and regression present; awaiting clean-build + Seeker verification (2026-08-30)  
+**Status:** CLOSED 2026-09-03 - owner felt-test PASS. PRIOR STATUS: FIXED — implementation and regression present; awaiting clean-build + Seeker verification (2026-08-30)
 **Minted:** 2026-08-29 (CLI seat) — banner bumped PROD-018 → PROD-021 in the same edit (with 019, 020)  
 **Priority:** HIGH — leaves the player in Build with a blank shop after every place  
 **Provenance:** owner, 2026-08-29: *"when the user is in the build menu and selects the gathering card it loads the row of cards, when the user selects the building it all hides so they can place, after clicking the confirm placement button, the category row should return"* / *"the screen should return the category cards"* (including when that category is now fully placed)

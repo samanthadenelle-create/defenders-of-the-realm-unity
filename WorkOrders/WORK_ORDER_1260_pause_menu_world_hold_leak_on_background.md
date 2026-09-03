@@ -1,6 +1,6 @@
 # WORK ORDER 1260 — 'pause-menu' WorldHold leaks when the app is backgrounded
 
-**Status:** FIXED 2026-08-28 — foreground-age accounting implemented and regression-proven; owner device felt-check remains before CLOSE.
+**Status:** CLOSED 2026-09-03 - owner felt-test PASS. PRIOR STATUS: FIXED 2026-08-28 — foreground-age accounting implemented and regression-proven; owner device felt-check remains before CLOSE.
 **Minted:** 2026-08-28 (CLI, F8 device triage seq 3627 + 3631)
 **Silo:** Core/UI
 **Evidence (captured):** device `SM02G4061955851`, `Main_Castle_Overworld` — TWICE in one evening:

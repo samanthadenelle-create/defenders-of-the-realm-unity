@@ -1,6 +1,6 @@
 # WORK ORDER 1006 — Manage becomes a LAUNCHER; the upgrade catalog moves into per-category browser panels
 
-**Status:** FIXED 2026-08-29 - progressive disclosure and the Defense build route are present in Seeker tester APK 2026.08.29.346849; awaiting owner device test. *(Prior: DONE — owner-confirmed 2026-08-21.)*
+**Status:** CLOSED 2026-09-03 - owner felt-test PASS. PRIOR STATUS: FIXED 2026-08-29 - progressive disclosure and the Defense build route are present in Seeker tester APK 2026.08.29.346849; awaiting owner device test. *(Prior: DONE — owner-confirmed 2026-08-21.)*
 
 **2026-08-29 correction:** Manage categories now derive from authoritative current-town placements;
 empty/locked categories are absent until the first relevant structure is placed. Only actionable
