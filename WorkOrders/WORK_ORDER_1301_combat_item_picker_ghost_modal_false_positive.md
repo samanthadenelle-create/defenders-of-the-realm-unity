@@ -1,6 +1,6 @@
 # WORK ORDER 1301 — 'Combat Item Picker' reports itself a ghost modal on every open (verify-before-assign)
 
-**Status:** READY TO IMPLEMENT
+**Status:** FIXED — `OpenItemPicker` now builds the modal and assigns `_itemPicker` BEFORE calling `PanelManager.NotifyOpened` so the registered probe can answer (a failed build still routes through the same verify and is still reported); the sweep found and fixed one sibling, `TownShowcaseVisitPanel`. See `WORK_ORDER_1301_combat_item_picker_ghost_modal_false_positive.RESULT.md`.
 **Source:** F8 captures seq **4360**, **4361**. Ledger: `docs/qa/F8_TRIAGE_2026-09-02.md` §5.
 **Silo:** HUD kit / Core UI arbiter
 **Severity:** P2 — **not** a player-visible defect. It is a false alarm that fires on *every* combat

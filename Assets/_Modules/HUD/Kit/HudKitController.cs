@@ -1809,12 +1809,39 @@ namespace DeNelle.HUD.Kit
             if (_itemPickerPanelHandle == null)
                 _itemPickerPanelHandle = PanelManager.RegisterBattleAllowed(
                     "Combat Item Picker", CloseItemPicker, () => _itemPicker != null);
-            if (!PanelManager.NotifyOpened(_itemPickerPanelHandle)) return;
 
+            // ⛔ BUILD FIRST, ANNOUNCE LAST — THE PROBE MUST BE ANSWERABLE WHEN THE VERIFY RUNS.
+            // WO-1301: NotifyOpened used to be called HERE, three lines before `_itemPicker` was
+            // assigned. Its WO-465 visibility verify runs SYNCHRONOUSLY inside that call and invokes
+            // the probe registered just above — `() => _itemPicker != null` — which was therefore
+            // false BY CONSTRUCTION on every open (the guard on the first line of this method proves
+            // `_itemPicker` is null on entry, so there was no path where it reported correctly).
+            // Result: a FlowTrace.Fail -> LogError -> a new F8 error capture on every single picker
+            // open, burying the owner's real flags. The arbiter was right to ask; the caller asked
+            // it too early. The detector is NOT weakened — see the null-build branch below, which
+            // still routes a genuinely blank picker through the same verify.
             _itemPickerHold = WorldHold.Acquire(WorldHold.ReasonCombatItemPicker);
             _itemPicker = ElarionUiKit.BuildObsidianModal("CombatItemPicker", "CHOOSE AN ITEM",
                 new Vector2(0.25f, 0.18f), new Vector2(0.75f, 0.82f), CloseItemPicker,
                 sortingOrder: 31500);
+
+            if (_itemPicker == null || _itemPicker.chrome == null)
+            {
+                // THE GENUINE GHOST MODAL. The build failed (null handle, or a handle with no
+                // chrome — a shell with nothing in it), so there is nothing usable on screen.
+                // Announce anyway so the arbiter's IsOpen verify runs and REPORTS the ghost: this
+                // is exactly the WO-465 case the check exists for and it must still fire.
+                // `_itemPicker` is cleared FIRST so the probe answers truthfully — a half-built
+                // handle would otherwise report open and hide the very failure we are surfacing.
+                var stillborn = _itemPicker;
+                _itemPicker = null;
+                PanelManager.NotifyOpened(_itemPickerPanelHandle);
+                if (stillborn != null && stillborn.canvas != null) Destroy(stillborn.canvas);
+                // Tear down so no world hold and no half-built canvas leaks on this path.
+                CloseItemPicker();
+                return;
+            }
+
             MedievalUiSkin.ApplyShell(_itemPicker.chrome, compact: true);
 
             var body = _itemPicker.chrome.layout.body;
@@ -1865,6 +1892,18 @@ namespace DeNelle.HUD.Kit
             if (_itemHealLabel != null) { _itemHealLabel.enableAutoSizing = false; _itemHealLabel.fontSize = 34f; }
             if (_itemManaLabel != null) { _itemManaLabel.enableAutoSizing = false; _itemManaLabel.fontSize = 34f; }
             RefreshItemPicker();
+
+            // ANNOUNCE. The picker is fully built, so the probe `() => _itemPicker != null` can
+            // answer truthfully and the arbiter's synchronous verify sees IsOpen=true.
+            if (!PanelManager.NotifyOpened(_itemPickerPanelHandle))
+            {
+                // Refused (battle-lock). PanelManager already invoked handle.Close for us; call it
+                // again — CloseItemPicker is idempotent (every field is null-checked then nulled) —
+                // so the world hold is released and the canvas destroyed on this path too.
+                CloseItemPicker();
+                return;
+            }
+
             FlowTrace.Step("HudKit", "combat Item picker opened; world hold acquired");
         }
 

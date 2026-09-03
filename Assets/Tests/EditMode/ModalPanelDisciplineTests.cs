@@ -25,6 +25,8 @@
 
 using System.IO;
 using NUnit.Framework;
+using UnityEngine;
+using UnityEngine.TestTools;
 using DeNelle.Core.UI;
 
 namespace DeNelle.Tests.EditMode
@@ -161,6 +163,81 @@ namespace DeNelle.Tests.EditMode
             Assert.IsTrue(src.Contains("void Update"),
                 "HeroEquipHud must re-attempt the wire each frame until bound (Update self-heal), " +
                 "matching the working BUILD/TALK bridges.");
+        }
+
+        // ── 3. WO-1301: the IsOpen probe must be ANSWERABLE when the verify runs ──
+        //
+        // PanelManager.NotifyOpened runs the WO-465 visibility verify SYNCHRONOUSLY inside the
+        // call. A caller that announces the open BEFORE it has built the thing the probe reads
+        // gets a FlowTrace.Fail -> Debug.LogError on EVERY open: a detector that cries wolf on
+        // every healthy case, which trains readers to ignore it on the day it is right.
+        //
+        // Both directions are pinned here. Deleting either half hollows the guard.
+
+        [Test]
+        public void NotifyOpened_StillReportsAGenuineGhostModal()
+        {
+            // NEGATIVE CONTROL — the detector must keep firing. This is the real WO-465 case:
+            // the panel was recorded open but nothing was actually built, so the probe says false.
+            bool built = false; // the modal FAILED to build
+            var ghost = PanelManager.Register("Ghost Modal", () => { }, () => built);
+
+            LogAssert.Expect(LogType.Error,
+                new System.Text.RegularExpressions.Regex("masquerading as open"));
+            PanelManager.NotifyOpened(ghost);
+        }
+
+        [Test]
+        public void NotifyOpened_IsCleanWhenTheProbeCanAnswer()
+        {
+            // POSITIVE CONTROL — a caller that builds BEFORE announcing must produce no error.
+            bool built = true; // the modal was built first, exactly as OpenItemPicker now does
+            var real = PanelManager.Register("Built Modal", () => built = false, () => built);
+
+            PanelManager.NotifyOpened(real);
+            LogAssert.NoUnexpectedReceived();
+            Assert.IsTrue(PanelManager.AnyOpen);
+        }
+
+        [Test]
+        public void CombatItemPicker_BuildsBeforeItAnnouncesTheOpen()
+        {
+            // The WO-1301 offender, pinned by call ORDER rather than by presence. The probe
+            // registered for this panel is `() => _itemPicker != null`, so `_itemPicker` must be
+            // assigned before NotifyOpened runs or the verify is false by construction.
+            string src = ReadModuleSource("HUD/Kit/HudKitController.cs");
+            int assign = src.IndexOf("_itemPicker = ElarionUiKit.BuildObsidianModal",
+                System.StringComparison.Ordinal);
+            int announce = src.IndexOf("PanelManager.NotifyOpened(_itemPickerPanelHandle)",
+                System.StringComparison.Ordinal);
+
+            Assert.Greater(assign, -1, "OpenItemPicker must still build the picker modal.");
+            Assert.Greater(announce, -1, "OpenItemPicker must still announce the open to the arbiter.");
+            Assert.Less(assign, announce,
+                "OpenItemPicker must ASSIGN _itemPicker before it calls PanelManager.NotifyOpened. " +
+                "Announcing first makes the registered probe `() => _itemPicker != null` false on " +
+                "every open, which fired a FlowTrace.Fail / F8 error capture on a working picker " +
+                "(WO-1301). Build first, announce last.");
+        }
+
+        [Test]
+        public void TownShowcaseVisit_ShowsBeforeItAnnouncesTheOpen()
+        {
+            // The sibling the WO-1301 sweep turned up. Its probe is `() => IsOpen`, backed by
+            // `_modal.canvas.activeSelf` — and both EnsureBuilt and Close leave that canvas
+            // INACTIVE, so announcing before the SetActive(true) made the verify false on every
+            // open. Same shape, same pin.
+            string src = ReadModuleSource("HUD/TownShowcaseVisitPanel.cs");
+            int show = src.IndexOf("_modal.canvas.SetActive(true)", System.StringComparison.Ordinal);
+            int announce = src.IndexOf("if (!PanelManager.NotifyOpened(_panelHandle))",
+                System.StringComparison.Ordinal);
+
+            Assert.Greater(show, -1, "TownShowcaseVisitPanel.Open must still activate its canvas.");
+            Assert.Greater(announce, -1, "TownShowcaseVisitPanel.Open must still announce the open.");
+            Assert.Less(show, announce,
+                "TownShowcaseVisitPanel must activate its canvas before PanelManager.NotifyOpened — " +
+                "the probe reads _modal.canvas.activeSelf, and EnsureBuilt/Close both leave it " +
+                "inactive, so announcing first cries wolf on every open (WO-1301 sibling).");
         }
 
         // ── helpers ──────────────────────────────────────────────────────────────

@@ -52,10 +52,32 @@ namespace DeNelle.HUD
             int index = Find(top, showcaseId);
             if (index < 0 || !TownShowcaseIds.IsShowcaseId(showcaseId)) return;
             EnsureBuilt();
+
+            // ⛔ SHOW FIRST, ANNOUNCE LAST — THE PROBE MUST BE ANSWERABLE WHEN THE VERIFY RUNS.
+            // WO-1301 (sibling sweep): NotifyOpened runs its WO-465 visibility verify SYNCHRONOUSLY
+            // and invokes this panel's probe, `() => IsOpen`, which reads
+            // `_modal.canvas.activeSelf`. EnsureBuilt deliberately ENDS with SetActive(false), and
+            // Close also leaves the canvas inactive — so announcing before the SetActive(true)
+            // below made the probe false BY CONSTRUCTION on every open (first open: just
+            // deactivated by EnsureBuilt; every later open: still deactivated by Close), firing a
+            // FlowTrace.Fail / F8 error capture on a working panel. Activating first lets the probe
+            // answer truthfully. The arbiter is untouched.
+            if (_modal == null || _modal.canvas == null)
+            {
+                // THE GENUINE GHOST: the build failed, so there is nothing on screen. Announce
+                // anyway so the verify runs and REPORTS it — that is the case the check exists for
+                // — then clear the arbiter slot.
+                PanelManager.NotifyOpened(_panelHandle);
+                Close();
+                return;
+            }
+
+            _modal.canvas.SetActive(true);
+            // A refusal (battle-lock) invokes this panel's Close on its way out, which deactivates
+            // the canvas again and clears the arbiter slot — nothing is left visible.
             if (!PanelManager.NotifyOpened(_panelHandle)) return;
             _onReturn = onReturn;
             _navigation = new TownVisitNavigation(top, index, leaderboardRow, leaderboardScrollPosition);
-            _modal.canvas.SetActive(true);
             Load(top[index]).Forget();
         }
 

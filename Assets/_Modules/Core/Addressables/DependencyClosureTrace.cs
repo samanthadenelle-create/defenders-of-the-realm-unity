@@ -98,9 +98,16 @@ namespace DeNelle.Core
                     }
                     if (!seen.Add(mat.GetInstanceID())) continue;
 
-                    Texture albedo = null;
-                    if (mat.HasProperty("_BaseMap")) albedo = mat.GetTexture("_BaseMap");
-                    if (albedo == null && mat.HasProperty("_MainTex")) albedo = mat.GetTexture("_MainTex");
+                    // ⛔ ASK THE SHADER WHAT ITS ALBEDO SLOT IS CALLED — DO NOT ASSUME URP/Lit.
+                    // WO-1302: this used to probe ONLY "_BaseMap" and "_MainTex", so every Synty
+                    // shader-graph material (albedo slot "_Albedo_Map", tint left white) landed in
+                    // the `missing` branch while being fully textured — 13 F8 error captures on one
+                    // working watchtower. The project is mid-retheme onto Synty, so that surface was
+                    // growing with every prefab swapped over. The fix is NOT a list of known material
+                    // names (a hand-maintained exception list rots); it is to enumerate the shader's
+                    // own texture properties and CLASSIFY them by token, so a shader nobody has
+                    // written yet is handled correctly the first time it loads.
+                    Texture albedo = FindAlbedo(mat, out _);
 
                     // A null albedo is only a defect when the material is ALSO untinted — the
                     // Polyperfect flat-colour materials legitimately carry no map. That distinction
@@ -116,8 +123,13 @@ namespace DeNelle.Core
                     else
                     {
                         missing++;
+                        // Name the shader and every texture slot we looked at. A real miss then reads
+                        // as one line ("the slot exists and is empty") instead of a hunt, and a NEW
+                        // false positive would be self-evident ("the slot it lives in is not listed").
                         FlowTrace.Fail(system, $"dep MISS on '{address}': material '{mat.name}' has NO albedo and NO tint " +
-                                               "— renders as an untextured grey blob.");
+                                               "— renders as an untextured grey blob. " +
+                                               $"shader='{(mat.shader != null ? mat.shader.name : "<null>")}' " +
+                                               $"albedo slots scanned: {DescribeAlbedoSlots(mat)}");
                     }
                 }
             }
@@ -157,6 +169,152 @@ namespace DeNelle.Core
             // the device, and "deps 6/7" names a partial closure that a top-level "loaded OK" hides.
             FlowTrace.Step(system, $"resolve '{address}' deps {ok}/{ok + missing} ok");
             return missing == 0;
+        }
+
+        // =====================================================================
+        // ALBEDO SLOT RESOLUTION (WO-1302)
+        // ---------------------------------------------------------------------
+        // The question "is this material textured?" is shader-relative: URP/Lit
+        // calls the slot _BaseMap, the built-in pipeline _MainTex, Synty's
+        // Generic_Basic shader graph _Albedo_Map, Synty's newer graphs _Base_Map
+        // or _Base_Texture, and a triplanar graph splits it three ways. There is
+        // no fixed name to probe, so we ASK THE SHADER for its texture properties
+        // and classify each by TOKEN.
+        //
+        // ⛔ THIS IS DELIBERATELY NOT A LIST OF KNOWN MATERIALS OR SHADERS.
+        // An allowlist of names is one fact written twice and it rots the day a
+        // new pack lands — which is the failure mode this whole file exists to
+        // avoid ("an oracle that cries wolf gets ignored on the day it is right").
+        // A token classifier generalises instead: it accepts an albedo slot it
+        // has never seen, and it still REJECTS normal/emission/mask/detail maps,
+        // so a material whose only populated texture is a normal map is still
+        // correctly reported as a grey blob.
+        // =====================================================================
+
+        /// <summary>Substrings that mark a texture slot as NOT the base colour map. Checked first.</summary>
+        private static readonly string[] NotAlbedoTokens =
+        {
+            "detail", "normal", "bump", "mask", "emission", "emissive", "occlusion",
+            "metallic", "specular", "gloss", "smoothness", "rough", "height",
+            "parallax", "lightmap", "shadow", "noise", "displacement", "opacity",
+            "overlay", "curvature", "flow", "matcap"
+        };
+
+        /// <summary>Substrings that mark a texture slot as the base colour (albedo) map.</summary>
+        private static readonly string[] AlbedoTokens =
+        {
+            "albedo", "basemap", "basetexture", "basecolor", "basecolour",
+            "maintex", "maintexture", "diffuse", "colormap", "colourmap",
+            "triplanartexture"
+        };
+
+        /// <summary>Lower-cases and strips separators so "_Albedo_Map" and "_AlbedoMap" compare equal.</summary>
+        private static string Normalize(string propertyName)
+        {
+            if (string.IsNullOrEmpty(propertyName)) return string.Empty;
+            var sb = new System.Text.StringBuilder(propertyName.Length);
+            for (int i = 0; i < propertyName.Length; i++)
+            {
+                char c = propertyName[i];
+                if (c == '_' || c == ' ' || c == '-') continue;
+                sb.Append(char.ToLowerInvariant(c));
+            }
+            return sb.ToString();
+        }
+
+        /// <summary>
+        /// Public so the regression suite can pin BOTH directions of the classifier
+        /// (`StructureNullMaterialSlotRegression`): an albedo slot name must be accepted, and a
+        /// normal/emission/mask/detail slot name must still be rejected. A detector proven only in
+        /// the "stops complaining" direction is how a real defect walks through.
+        /// </summary>
+        public static bool IsAlbedoSlot(string shaderPropertyName) => IsAlbedoSlotName(shaderPropertyName);
+
+        /// <summary>
+        /// True when <paramref name="mat"/> carries a populated base-colour texture in ANY slot its
+        /// shader exposes. Public for the same both-directions regression reason as above.
+        /// </summary>
+        public static bool HasAlbedo(Material mat) => FindAlbedo(mat, out _) != null;
+
+        /// <summary>Public evidence line: which albedo-classified slots exist and which are populated.</summary>
+        public static string DescribeAlbedo(Material mat) => DescribeAlbedoSlots(mat);
+
+        /// <summary>True when this shader property name names a base-colour (albedo) texture slot.</summary>
+        private static bool IsAlbedoSlotName(string propertyName)
+        {
+            string n = Normalize(propertyName);
+            if (n.Length == 0) return false;
+            for (int i = 0; i < NotAlbedoTokens.Length; i++)
+                if (n.Contains(NotAlbedoTokens[i])) return false;
+            for (int i = 0; i < AlbedoTokens.Length; i++)
+                if (n.Contains(AlbedoTokens[i])) return true;
+            return false;
+        }
+
+        /// <summary>
+        /// Returns the first POPULATED base-colour texture on <paramref name="mat"/>, or null when the
+        /// material genuinely carries no albedo. <paramref name="slot"/> names the property it came
+        /// from (or the last empty albedo slot inspected), so the trace can say WHERE it looked.
+        /// </summary>
+        private static Texture FindAlbedo(Material mat, out string slot)
+        {
+            slot = null;
+            if (mat == null) return null;
+
+            // Fast path: the two names that cover URP/Lit and the built-in pipeline, i.e. most of
+            // the project. Kept explicit so the common case costs no shader reflection at all.
+            if (mat.HasProperty("_BaseMap"))
+            {
+                var t = mat.GetTexture("_BaseMap");
+                slot = "_BaseMap";
+                if (t != null) return t;
+            }
+            if (mat.HasProperty("_MainTex"))
+            {
+                var t = mat.GetTexture("_MainTex");
+                slot = "_MainTex";
+                if (t != null) return t;
+            }
+
+            var shader = mat.shader;
+            if (shader == null) return null;
+
+            int count = shader.GetPropertyCount();
+            for (int i = 0; i < count; i++)
+            {
+                if (shader.GetPropertyType(i) != UnityEngine.Rendering.ShaderPropertyType.Texture) continue;
+                string name = shader.GetPropertyName(i);
+                if (!IsAlbedoSlotName(name)) continue;
+
+                slot = name;
+                var t = mat.GetTexture(name);
+                if (t != null) return t;
+            }
+            return null;
+        }
+
+        /// <summary>
+        /// Lists the albedo-classified texture slots on this material and whether each is populated —
+        /// the evidence line that makes a genuine miss readable and a future false positive obvious.
+        /// </summary>
+        private static string DescribeAlbedoSlots(Material mat)
+        {
+            if (mat == null) return "<null material>";
+            var shader = mat.shader;
+            if (shader == null) return "<null shader>";
+
+            var parts = new List<string>();
+            int count = shader.GetPropertyCount();
+            for (int i = 0; i < count; i++)
+            {
+                if (shader.GetPropertyType(i) != UnityEngine.Rendering.ShaderPropertyType.Texture) continue;
+                string name = shader.GetPropertyName(i);
+                if (!IsAlbedoSlotName(name)) continue;
+                parts.Add(name + "=" + (mat.GetTexture(name) != null ? "set" : "EMPTY"));
+            }
+            return parts.Count == 0
+                ? "<none — this shader exposes no base-colour texture slot>"
+                : string.Join(", ", parts);
         }
     }
 }

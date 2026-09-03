@@ -138,6 +138,10 @@ namespace DeNelle.Editor.Regression
                 InspectGameObject(go, key, failures, ref inspected, ref slotsChecked);
             }
 
+            // WO-1302: the albedo ORACLE itself, pinned in BOTH directions.
+            int albedoChecks = 0;
+            CheckAlbedoOracle(failures, partials, ref albedoChecks);
+
             if (!catalogReadable && settings == null)
             {
                 FlowTrace.Warn(FlowSys, "could not enumerate the structure set");
@@ -166,11 +170,125 @@ namespace DeNelle.Editor.Regression
 
             string extra = partials.Count > 0 ? " " + string.Join(" ", partials.ToArray()) : "";
             FlowTrace.Step(FlowSys, "clean: assets=" + inspected + " slots=" + slotsChecked +
-                                    " catalogKeys=" + catalogKeys + " partials=" + partials.Count);
+                                    " catalogKeys=" + catalogKeys + " albedoOracleChecks=" + albedoChecks +
+                                    " partials=" + partials.Count);
             reason = Tag + " OK - " + inspected + " structure asset(s), " + slotsChecked +
-                     " MeshRenderer/SkinnedMeshRenderer slot(s), no null material slot." + extra;
+                     " MeshRenderer/SkinnedMeshRenderer slot(s), no null material slot; " +
+                     albedoChecks + " albedo-oracle assertion(s)." + extra;
             Debug.Log(MarkerOk + " - " + reason);
             return true;
+        }
+
+        // =====================================================================
+        // WO-1302 -- THE ALBEDO ORACLE, PINNED IN BOTH DIRECTIONS
+        // ---------------------------------------------------------------------
+        // DependencyClosureTrace used to probe only "_BaseMap" and "_MainTex", so
+        // every Synty shader-graph material (albedo slot "_Albedo_Map", tint left
+        // white) reported as a "dep MISS ... untextured grey blob" while being
+        // fully textured -- 13 F8 error captures on one WORKING watchtower. The
+        // Synty re-wraps are deliberate; the checker was wrong about them.
+        //
+        // A detector fixed only in the "stops complaining" direction is how a real
+        // defect walks through, so this asserts BOTH:
+        //   POSITIVE: a real Synty material with a populated _Albedo_Map is CLEAN.
+        //   NEGATIVE: the same shader with that slot CLEARED is still a MISS, and
+        //             normal / emission / detail / mask slot names are still
+        //             rejected as albedo candidates.
+        // The negative half is the permanent mutation -- it lives in the suite so
+        // nobody has to re-mutate by hand to trust the green.
+        // =====================================================================
+        private const string SyntyProbeMaterial =
+            "Assets/Synty/PolygonFantasyKingdom/Materials/Walls/Castle_Wall_01.mat";
+
+        private static void CheckAlbedoOracle(List<string> failures, List<string> partials, ref int checks)
+        {
+            // --- Direction 2, name classifier: these must NEVER read as an albedo slot. ---
+            string[] notAlbedo =
+            {
+                "_Normal_Map", "_BumpMap", "_Emission_Map", "_EmissionMap", "_DetailAlbedoMap",
+                "_DetailNormalMap", "_DetailMask", "_MetallicGlossMap", "_OcclusionMap",
+                "_ParallaxMap", "_SpecGlossMap", "_Hair_Mask", "_Skin_Mask",
+                "_Metallic_Smoothness_Map", "_AO_Texture", "unity_Lightmaps"
+            };
+            for (int i = 0; i < notAlbedo.Length; i++)
+            {
+                checks++;
+                if (!DependencyClosureTrace.IsAlbedoSlot(notAlbedo[i])) continue;
+                failures.Add("[albedo-oracle] '" + notAlbedo[i] + "' was classified as a base-colour " +
+                             "slot -- the oracle would pass a material whose ONLY texture is a " +
+                             "normal/emission/mask map, i.e. a real grey blob walks through");
+            }
+
+            // --- Direction 1, name classifier: every albedo slot name in the shipped art must pass. ---
+            string[] isAlbedo =
+            {
+                "_BaseMap", "_MainTex", "_Albedo_Map", "_Base_Map", "_Base_Texture",
+                "_BaseColorMap", "_DiffuseMap", "_Triplanar_Texture_Top"
+            };
+            for (int i = 0; i < isAlbedo.Length; i++)
+            {
+                checks++;
+                if (DependencyClosureTrace.IsAlbedoSlot(isAlbedo[i])) continue;
+                failures.Add("[albedo-oracle] '" + isAlbedo[i] + "' was NOT classified as a base-colour " +
+                             "slot -- a fully textured material using it would be reported as a " +
+                             "'dep MISS ... untextured grey blob' (the WO-1302 false positive)");
+            }
+
+            // --- Both directions against the REAL asset on disk, not a synthetic stand-in. ---
+            var probe = AssetDatabase.LoadAssetAtPath<Material>(SyntyProbeMaterial);
+            if (probe == null || probe.shader == null)
+            {
+                partials.Add(RegressionOutcome.PartialSkip("albedo-oracle",
+                    SyntyProbeMaterial + " not present (gitignored/absent pack) -- " +
+                    "the live-material half of the albedo oracle asserted nothing"));
+                return;
+            }
+
+            checks++;
+            if (!DependencyClosureTrace.HasAlbedo(probe))
+            {
+                failures.Add("[albedo-oracle] the shipped Synty material '" + probe.name +
+                             "' reads as having NO albedo. It is textured; the oracle is wrong. slots: " +
+                             DependencyClosureTrace.DescribeAlbedo(probe));
+            }
+
+            // NEGATIVE CONTROL: same shader, every albedo slot deliberately EMPTIED.
+            // If this reads clean, the fix silenced the detector instead of correcting it.
+            Material mutant = null;
+            try
+            {
+                mutant = new Material(probe) { name = probe.name + "__albedo_cleared_mutant" };
+                var shader = mutant.shader;
+                int count = shader.GetPropertyCount();
+                int cleared = 0;
+                for (int i = 0; i < count; i++)
+                {
+                    if (shader.GetPropertyType(i) != UnityEngine.Rendering.ShaderPropertyType.Texture) continue;
+                    string name = shader.GetPropertyName(i);
+                    if (!DependencyClosureTrace.IsAlbedoSlot(name)) continue;
+                    mutant.SetTexture(name, null);
+                    cleared++;
+                }
+
+                checks++;
+                if (cleared == 0)
+                {
+                    failures.Add("[albedo-oracle] could not build the negative control: shader '" +
+                                 shader.name + "' exposed 0 albedo-classified texture slots, yet the " +
+                                 "material is textured -- the classifier and the probe disagree");
+                }
+                else if (DependencyClosureTrace.HasAlbedo(mutant))
+                {
+                    failures.Add("[albedo-oracle] NEGATIVE CONTROL FAILED: a material with all " +
+                                 cleared + " albedo slot(s) emptied still reads as textured. The " +
+                                 "detector has been silenced, not fixed -- a genuine grey blob would " +
+                                 "now ship unreported (WO-465 / WO-1138 hollow-pass class)");
+                }
+            }
+            finally
+            {
+                if (mutant != null) UnityEngine.Object.DestroyImmediate(mutant);
+            }
         }
 
         private static HashSet<string> CollectCatalogKeys(List<string> partials, out bool catalogReadable)
