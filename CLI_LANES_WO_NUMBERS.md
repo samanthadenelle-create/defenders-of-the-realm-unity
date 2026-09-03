@@ -180,7 +180,52 @@
 > fine as history. A copied number is the bug **even when it was right the day it was written** -
 > that is exactly how the retired 860-899 UI block kept re-seeding collisions from CLAUDE.md sec.2.
 
-> ## ⚠ RECONCILED 2026-09-02 (CLI, twentieth pass): main line next free = **1326**.
+> ## ⚠ RECONCILED 2026-09-02 (CLI, twenty-fourth pass): main line next free = **1331**.
+> *(CLI minted **WO-1330** - a mage DoT and a knight regen, art matched from the Blink library. Owner
+> verbatim: *"we have a ton of blink art and spells, have creative match a DoT would be nice"* / *"or a
+> regen for knight"* / *"lots of room to interprut"*. ⚠ THE CORRECTION THAT DEFINES THIS TICKET: the
+> CLI grepped, found `CombatStatusTracker` + damage-over-time in `DeNelle.BattleATB`, and reported the
+> mechanic as EXISTING. The owner corrected it - *"it doesnt but it wouldnt be too challenging"* - and
+> she is right: BattleATB is the SUPERSEDED turn-based path, so a DoT living only there is one the
+> shipping game cannot cast. The `dot`/`burn`/`poison`/`bleed` tokens already in `abilities.json` are
+> the same trap: authored data with no proven runtime consumer. Her creative latitude covers the
+> DESIGN and does NOT transfer her VFX-tag authority - the ticket builds everything mechanical and
+> leaves the art key as the one open slot. Bumped 1330 -> 1331 in this SAME edit.)*
+>
+> ### superseded: RECONCILED 2026-09-02 (CLI, twenty-third pass): main line next free = **1330**.
+> *(CLI minted **WO-1328** and **WO-1329** from two owner rulings in one exchange. **1328** = balance
+> editing moves into the Command Center behind a simple JSON-driven UI, grouped Skills/Tiers/Spells/
+> Misc - owner verbatim *"should be in command center so you dont need to be a rocket scientist"*, in
+> the same breath as *"i have been screaming this for months"*. The rail and the `tunable.set` /
+> `tunable.clear` writes already exist; `docs/PROD022_TUNABLE_FLAGS.md` states in its OWN words that
+> the console was never given buttons for them - that sentence IS the ticket. **1329** = the marquee
+> fire spell belongs to the MAGE (her pick, over binding it to the knight tonight), blocked on
+> `RegistryTarget` being hardcoded `"knight"` while the mage has zero `motion-castings.json` rows.
+> Bumped 1328 -> 1330 in this SAME edit.)*
+>
+> ### superseded: RECONCILED 2026-09-02 (CLI, twenty-second pass): main line next free = **1328**.
+> *(CLI minted **WO-1327** from a WO-1305 side-finding, corroborated by TWO owner captures that had
+> both been filed as animation complaints: seq 4644 *"the fire spell is wrong. casts at me and stays
+> at me"* and seq 4152 *"fireball when i cast spins at me after casting"*. The `Fireballs`
+> CollisionModule reads bounce **1.0**, dampen **0**, `minKillSpeed` **0**, `collidesWith` **all 32
+> layers**, quality High - a perfectly elastic projectile that no impact ever kills, cast inside a
+> walled town. Same prefab also drives ~**25** concurrent real-time point lights per cast via two
+> LightsModules (`maxLights` 20 + 5, ratio 1); the `m_Enabled: 0` on the child Light is a PROTOTYPE,
+> not an off switch, so deleting it breaks the effect instead of tuning it. Bumped 1327 -> 1328 in
+> this SAME edit.)*
+>
+> ### superseded: RECONCILED 2026-09-02 (CLI, twenty-first pass): main line next free = **1327**.
+> *(CLI minted **WO-1326** from a live owner observation: *"in the Pi build the wolf is perfectly
+> colored, not in the apk or exe"*. A DIFFERENTIAL across three build targets from ONE source tree,
+> which is worth more than most tickets carry - it exonerates the mesh, the prefab, the material
+> assignment and the catalog wiring in a single sentence, and leaves only a per-target divergence
+> (platform texture overrides, bundle content, or shader-variant stripping). Leading candidate is the
+> "conservative Android texture pass" recorded in docs/releases/GOOGLE_PLAY_RC_2026-08-30.md, which
+> reduced 65 eligible overrides. Same family as the un-acked captures seq 4666 "no color" and "The
+> Echo hollow lost its color", so the blast radius must be measured before anything is fixed.
+> Bumped 1326 -> 1327 in this SAME edit.)*
+>
+> ### superseded: RECONCILED 2026-09-02 (CLI, twentieth pass): main line next free = **1326**.
 > *(CLI minted **WO-1325** on the owner's direct statement **"im on testnet"** — the portal badges the
 > app `Testnet` and the ONE outstanding checklist item is "process a transaction", which must settle
 > on Testnet. `PiEnvironment.Sandbox` was build-driven (mainnet in a ship build, WO-1317) and is now a

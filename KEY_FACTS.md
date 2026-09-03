@@ -64,6 +64,44 @@
 > the status file is the trap** (the duplicated-state class, CLAUDE.md §16). Judge the APK by
 > `r2-parity.log`, not by a status stamp a later push made obsolete.
 
+> ## ⛔ STANDING RULE 2026-09-02 — A BALANCE VALUE IS A TUNABLE, NOT A CONSTANT. DEFAULT ANSWER: YES.
+>
+> Owner, verbatim: *"be smart, dont make it need a code change, make it tweakable from a db call"* —
+> followed by *"i have been screaming this for months."*
+>
+> **Read that second sentence as the actual defect.** The idea was never rejected; it kept being
+> agreed to in conversation and never written to disk, which is the failure mode this canon already
+> named on 08-23: *a ruling recorded but not applied is indistinguishable from no ruling.* It is now
+> written down, so no seat needs to be told again.
+>
+> **THE RULE.** When you are about to hardcode a number that exists to be TUNED — a drain ratio, a
+> cooldown, a cost, a rate, a threshold, a duration, a drop chance — you register it on the remote
+> tunables rail instead. You do not ask whether it is worth it; the answer is yes by default. You ask
+> for a ruling only in the reverse direction: if you believe a value must NOT be tunable, say why.
+>
+> **THE RAIL ALREADY EXISTS — DO NOT BUILD A SECOND ONE.** It shipped 2026-09-02 for PROD-022.
+> Contract and worked example: `docs/PROD022_TUNABLE_FLAGS.md`. Registry/defaults
+> `Assets/_Modules/Core/Ops/RemoteTunables.cs` · transport/poll/cache `RemoteTunablesService.cs` ·
+> server allowlist `TUNABLE_KEYS` in `api/_lib/tunables.js` · operator surface
+> `tools/command-centre.ps1 -Tunables` (and the phone, via `POST /api/admin/ops`) · oracle
+> `Assets/Editor/Regression/RemoteTunablesDefaultsRegression.cs`. **All four sources change in the
+> SAME commit**; the `[tunable-defaults]` oracle goes red naming which two disagree.
+>
+> **THE INVARIANT THAT OUTRANKS THE FEATURE:** *no row, no network, no server, no parse => TODAY'S
+> BEHAVIOUR, EXACTLY.* The registered default must equal the value the constant would have had. The
+> remote read is an OVERRIDE, never a dependency, and never blocks or delays boot. An empty
+> `client_tunables` table is the correct resting state and is what ships.
+>
+> **WHY THIS IS WORTH REAL EFFORT, in the owner's own economics:** a WebGL rebuild costs ~30 minutes
+> and an APK ~10. A knob reaches a running client in ~40 seconds (10s edge cache + 30s poll), and a
+> boot-time knob on the next launch. Every balance value left hardcoded converts one of her felt-tests
+> into a half-hour round trip — and she is the ONLY person who can judge feel, so that cost lands
+> entirely on the one resource the project cannot buy more of.
+>
+> ⚠ Scope honestly: this is for BALANCE and PRESENTATION levers. It is NOT for anything
+> server-authoritative (prices, entitlements, grants) — those stay on the quote/verify rail, where the
+> SERVER is the authority and a client-side override would be an exploit.
+
 # KEY FACTS — the living fact sheet (update IN PLACE, never snapshot)
 
 > **Rule (owner directive 2026-07-12):** this file is LIVING — when a fact changes, edit the line
