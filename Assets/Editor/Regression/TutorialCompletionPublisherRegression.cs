@@ -56,6 +56,21 @@
 //                              "What NOT to touch"): WatchdogSeconds stays 120f and the
 //                              SKIPPED-rescue trace stays in TickWatchdog.
 //
+//   Case 6 [teach-spend]     WO-1340. The SPEND teach (ctx_talents) completes on a talent
+//                            genuinely LEARNED, not on its own dialogue closing; its signal has
+//                            exactly ONE publisher (WisdomCurrencyService.Unlock, raised only
+//                            after the Wisdom debit and the unlocked-set insert land); it names
+//                            both hops of the Hero -> Skills route in WORDS as well as lighting
+//                            them; it gates nothing; and TickContextual releases it on a finite
+//                            bound with a self-naming CTX-STUCK line. The defect it is shaped
+//                            around SHIPPED: the beat used to complete on
+//                            "dialogue.ended:tut_ctx_talents" - the instant the player closed the
+//                            text box - and then marked itself seen forever, so a player who
+//                            never found the talent screen was taught nothing and could never be
+//                            told again. Every layer was individually correct; only the
+//                            RELATIONSHIP between the completion signal and the taught action was
+//                            wrong, which is why no other suite could see it.
+//
 //   NOT provable here: that a real FTUE run walks the hero to the gate and repels the
 //   band. That is the AutoPilot / owner felt-verify; the PO closes (CLAUDE.md sec.13).
 //
@@ -114,6 +129,7 @@ namespace DeNelle.Editor.Regression
                 Case(failures, "signal-family", () => Case3_EveryFamilyHasARule(failures, mandatory));
                 Case(failures, "stuck-reports", () => Case4_StuckStepsReportThemselves(failures));
                 Case(failures, "forbidden-fixes", () => Case5_ForbiddenFixesNotTaken(failures));
+                Case(failures, "teach-spend", () => Case6_SpendTeachCompletesOnASpend(failures, sites));
             }
             catch (Exception ex)
             {
@@ -126,7 +142,11 @@ namespace DeNelle.Editor.Regression
                          "live runtime publisher, the two WO-1300 signals (hero.reached:* and wave.tutorial_band_repelled) " +
                          "have exactly one raise site each in the expected method, every authored signal family has a " +
                          "publisher rule here, a stuck walk beat and a faulted scripted-band arm both report themselves, " +
-                         "and the 120s bound plus the SKIPPED-rescue path are untouched.";
+                         "and the 120s bound plus the SKIPPED-rescue path are untouched. WO-1340: the spend teach " +
+                         "(ctx_talents) completes on a talent genuinely LEARNED rather than on its own text box closing, " +
+                         "its sole publisher is WisdomCurrencyService.Unlock and raises only after the debit lands, it " +
+                         "names both route hops in words, it gates nothing, and TickContextual releases it with a " +
+                         "self-naming CTX-STUCK line if the spend never comes.";
                 return true;
             }
             reason = "tutorial-completion-publisher FAIL x" + failures.Count + ": " + string.Join(" | ", failures);
@@ -299,6 +319,9 @@ namespace DeNelle.Editor.Regression
                     return sites.Where(s => s.Arg.Contains("ArenaWin") || s.Arg.Contains("ArenaLoss")).ToList();
                 case "echo.born":
                     return sites.Where(s => s.Arg.Contains("EchoBornSecond")).ToList();
+                // WO-1340: a talent actually LEARNED - the completion of the spend teach.
+                case "talent.learned":
+                    return sites.Where(s => s.Arg.Contains("FirstTalentLearned")).ToList();
                 default:
                     return null;   // no rule - Case 3 reports it
             }
@@ -368,6 +391,223 @@ namespace DeNelle.Editor.Regression
                                  "change that authored the beat - an unruled family is an orphan waiting to happen, which " +
                                  "is the whole reason WO-1300 exists.");
             }
+        }
+
+        // =====================================================================
+        //  Case 6 - the SPEND teach completes on a SPEND, and cannot wedge (WO-1340)
+        // =====================================================================
+        //
+        // THE DEFECT THIS CASE IS SHAPED AROUND (not a hypothetical - it shipped):
+        // ctx_talents existed since WO-T1 and taught nothing. Its completion signal was
+        // "dialogue.ended:tut_ctx_talents", so the beat completed the moment the player
+        // CLOSED THE TEXT BOX - the first thing anyone does - and then marked itself seen
+        // FOREVER (oneShot persistence). A player who never found the talent screen got the
+        // hint exactly once, spent nothing, and could never be told again.
+        //
+        // That is invisible to every other suite in the repo, because at every layer the
+        // beat is correct: the step parses, the dialogue exists, the signal has a publisher,
+        // the one-shot persists. Only the RELATIONSHIP between the completion signal and the
+        // thing being taught is wrong. This case tests that relationship.
+        //
+        // Retention is the owner's stated business problem and WO-1306 made the mage's first
+        // point buy a CASTABLE rather than a stat - work that is wasted if the point is never
+        // spent. So the pin is structural, not advisory.
+
+        private const string TeachStepId = "ctx_talents";
+        private const string TeachCompletionSignal = "talent.learned:first";
+        private const string TeachFirstHighlight = "hud.hero_button";
+        private const string WisdomSrc = "Assets/_Modules/Village/Talents/WisdomCurrencyService.cs";
+
+        private static void Case6_SpendTeachCompletesOnASpend(List<string> failures, List<RaiseSite> sites)
+        {
+            // ── the authored beat ────────────────────────────────────────────────
+            JObject step = LoadStepById(TeachStepId, failures);
+            if (step == null)
+            {
+                failures.Add("[teach-spend] step '" + TeachStepId + "' is absent from tutorial-steps.json, so this case " +
+                             "checked NOTHING. A FAILURE, not a pass (WO-1138 hollow-pass class): the fixture's absence " +
+                             "is exactly the state in which the spend teach silently stops existing.");
+                return;
+            }
+
+            string sig = step["completion"] != null ? (string)step["completion"]["signal"] : null;
+            if (!string.Equals(sig, TeachCompletionSignal, StringComparison.Ordinal))
+                failures.Add("[teach-spend] '" + TeachStepId + "' completes on '" + (sig ?? "<none>") + "' but must " +
+                             "complete on '" + TeachCompletionSignal + "'. THIS IS THE ORIGINAL DEFECT: completing on " +
+                             "dialogue.ended:* means the beat ends when the player closes the text box, which proves only " +
+                             "that they closed a box. Completion must be a point genuinely SPENT.");
+
+            // It teaches; it must never gate. A contextual one-shot that paused pressure or
+            // became non-skippable would be a blocking beat wearing a hint's clothes.
+            if (!string.Equals((string)step["flowId"], "contextual", StringComparison.OrdinalIgnoreCase))
+                failures.Add("[teach-spend] '" + TeachStepId + "' is no longer flowId 'contextual'. As a mandatory step it " +
+                             "would BLOCK the FTUE chain until a talent is spent - the owner's brief forbids gating " +
+                             "anything behind this beat.");
+            if ((bool?)step["pausePressure"] == true)
+                failures.Add("[teach-spend] '" + TeachStepId + "' sets pausePressure - a teach hint must never hold the game.");
+            if ((bool?)step["skippable"] != true)
+                failures.Add("[teach-spend] '" + TeachStepId + "' is not skippable.");
+            if ((bool?)step["oneShot"] != true)
+                failures.Add("[teach-spend] '" + TeachStepId + "' is not oneShot - it would re-fire on every talent point " +
+                             "the player ever earns.");
+
+            var hl = step["highlight"] as JArray;
+            if (hl == null || hl.Count == 0 || !string.Equals((string)hl[0], TeachFirstHighlight, StringComparison.Ordinal))
+                failures.Add("[teach-spend] '" + TeachStepId + "' must open its spotlight on '" + TeachFirstHighlight +
+                             "' (hop 1 of the owner-confirmed Hero -> Skills route, 2026-09-03). A contextual hint shows " +
+                             "only highlight[0], so an empty or re-ordered list points the player at nothing.");
+
+            var route = step["route"] as JArray;
+            if (route == null || route.Count == 0)
+                failures.Add("[teach-spend] '" + TeachStepId + "' has no 'route' - the spotlight would sit on the Hero bar " +
+                             "face for the whole beat and never point at the SKILLS card, so the second half of the taught " +
+                             "path is untaught.");
+
+            // The route is named in WORDS as well as lit: the owner is red/green colourblind,
+            // and the lazy highlight resolvers degrade to nothing when a rect is absent.
+            string objective = step["objective"] != null ? (string)step["objective"]["text"] : null;
+            if (string.IsNullOrEmpty(objective) ||
+                objective.IndexOf("Hero", StringComparison.OrdinalIgnoreCase) < 0 ||
+                objective.IndexOf("Skills", StringComparison.OrdinalIgnoreCase) < 0)
+                failures.Add("[teach-spend] '" + TeachStepId + "' objective text must NAME both hops ('Hero', 'Skills'). " +
+                             "The owner is red/green colourblind and the spotlight resolvers degrade to nothing when a " +
+                             "rect is missing, so the words are the affordance that always survives - never the glow alone.");
+
+            // ── the publisher: exactly one, at the choke point ──────────────────
+            var matched = sites.Where(s => s.Arg.Contains("FirstTalentLearned")).ToList();
+            AssertSolePublisher(failures, TeachCompletionSignal, "Unlock", matched,
+                                "WisdomCurrencyService.Unlock is the ONE choke point every learn path funnels through " +
+                                "(the legacy immediate HeroSkillTreeVM.Unlock and the node-graph plan/CONFIRM Commit both " +
+                                "call it). A second publisher - especially one hung off SkillSystem.SpendPoint, which is " +
+                                "the unrelated CRAFT skill economy - would complete this beat without the player ever " +
+                                "touching the talent tree");
+
+            if (matched.Count == 1 &&
+                matched[0].File.IndexOf("WisdomCurrencyService", StringComparison.OrdinalIgnoreCase) < 0)
+                failures.Add("[teach-spend] '" + TeachCompletionSignal + "' is published from " + matched[0].File +
+                             ", not WisdomCurrencyService. The signal must be raised where the Wisdom debit and the " +
+                             "unlocked-set insert actually land, or it can claim a spend that did not happen.");
+
+            // Raised only AFTER the state change, never before it.
+            string wisdom = ReadText(WisdomSrc, failures);
+            if (wisdom == null)
+            {
+                failures.Add("[teach-spend] fixture absent: " + WisdomSrc + " could not be read, so the publisher's " +
+                             "position relative to the debit checked NOTHING. A FAILURE, not a pass.");
+            }
+            else
+            {
+                string code = StripComments(wisdom);
+                string unlock = ExtractMethod(code, "Unlock");
+                if (unlock == null)
+                    failures.Add("[teach-spend] WisdomCurrencyService.Unlock not found - the spend teach has no publisher.");
+                else
+                {
+                    int debit = unlock.IndexOf("_unlocked.Add", StringComparison.Ordinal);
+                    int raise = unlock.IndexOf("FirstTalentLearned", StringComparison.Ordinal);
+                    if (raise < 0)
+                        failures.Add("[teach-spend] WisdomCurrencyService.Unlock no longer raises FirstTalentLearned.");
+                    else if (debit < 0 || raise < debit)
+                        failures.Add("[teach-spend] WisdomCurrencyService.Unlock raises FirstTalentLearned BEFORE the node " +
+                                     "is added to the unlocked set. The signal would announce a spend that a later guard " +
+                                     "could still reject - it must be raised only after the debit and the insert have landed.");
+                }
+            }
+
+            // ── the escape: it can never wedge (owner brief, CLAUDE.md sec.12) ──
+            string flow = ReadText(FlowSrc, failures);
+            if (flow == null)
+            {
+                failures.Add("[teach-spend] fixture absent: " + FlowSrc + " could not be read, so the escape path " +
+                             "checked NOTHING. A FAILURE, not a pass - an unreadable fixture is precisely when a " +
+                             "wedged teach beat goes unnoticed.");
+                return;
+            }
+
+            string flowCode = StripComments(flow);
+
+            if (!flowCode.Contains("ContextualAwaitSeconds"))
+                failures.Add("[teach-spend] TutorialFlow has no ContextualAwaitSeconds bound. A teach beat waits on a " +
+                             "GAMEPLAY signal and deliberately outlives its dialogue, so the 10s no-dialogue auto-close " +
+                             "does not apply to it. Without a finite bound its spotlight can point forever - 'a tutorial " +
+                             "step that can wedge is worse than no tutorial step'.");
+
+            string tick = ExtractMethod(flowCode, "TickContextual");
+            if (tick == null)
+                failures.Add("[teach-spend] TutorialFlow.TickContextual not found - the contextual escape path is gone.");
+            else
+            {
+                if (!tick.Contains("ContextualAwaitSeconds"))
+                    failures.Add("[teach-spend] TutorialFlow.TickContextual does not spend the ContextualAwaitSeconds " +
+                                 "bound, so nothing ever releases a teach beat whose completion signal never arrives.");
+                if (!tick.Contains("CTX-STUCK"))
+                    failures.Add("[teach-spend] TutorialFlow.TickContextual does not emit a CTX-STUCK line on expiry. " +
+                                 "WO-1300 exists because two stuck beats emitted NOTHING and cost two investigations; a " +
+                                 "teach beat that quietly stopped pointing is the same defect in a cheaper coat. Do NOT " +
+                                 "strip this (CLAUDE.md sec.12 - instrumentation is permanent).");
+                if (!tick.Contains("timeout"))
+                    failures.Add("[teach-spend] TutorialFlow.TickContextual never completes the beat on timeout, so the " +
+                                 "spotlight is not released and the one-shot is not marked seen.");
+            }
+
+            // The teach beat must NOT be completable by its own dialogue ending - the very
+            // thing that made the old hint hollow. The guard lives in OnSignal.
+            // ⚠ ASSERTED ON THE BRANCH CONDITION, NOT ON THE WHOLE METHOD - and that precision is
+            // the point. The first version of this check asked only whether OnSignal MENTIONED
+            // _ctxAwaitSignal anywhere, and it passed the mutation that deletes the guard from the
+            // dialogue-ended branch: the teach-completion branch above still mentions the field, so
+            // the method-wide search stayed satisfied while the defect was fully restored. A
+            // hollow assertion that cannot fail is worse than no assertion, because it reports
+            // green. Scope the read to the condition that actually decides.
+            string onSignal = ExtractMethod(flowCode, "OnSignal");
+            if (onSignal == null)
+            {
+                failures.Add("[teach-spend] TutorialFlow.OnSignal not found.");
+            }
+            else
+            {
+                const string DlgBranchMark = "DialogueEndedPrefix + _activeCtx.Dialogue.Intro";
+                int branch = onSignal.IndexOf(DlgBranchMark, StringComparison.Ordinal);
+                if (branch < 0)
+                {
+                    failures.Add("[teach-spend] TutorialFlow.OnSignal no longer contains the contextual dialogue-ended " +
+                                 "branch in its expected shape, so this oracle cannot prove the teach beat is protected " +
+                                 "from being completed by its own text box. Re-point this assertion in the same change.");
+                }
+                else
+                {
+                    int ifStart = onSignal.LastIndexOf("if (", branch, StringComparison.Ordinal);
+                    string cond = ifStart >= 0 ? onSignal.Substring(ifStart, branch - ifStart) : string.Empty;
+                    if (cond.IndexOf("_ctxAwaitSignal", StringComparison.Ordinal) < 0)
+                        failures.Add("[teach-spend] the contextual dialogue-ended branch in TutorialFlow.OnSignal is NOT " +
+                                     "guarded on _ctxAwaitSignal. Without that guard the beat completes the moment the " +
+                                     "player closes the text box - which is the ENTIRE hollow-hint defect WO-1340 removed " +
+                                     "(the hint was then marked seen forever, so a player who never found the talent " +
+                                     "screen could never be told again).");
+                }
+            }
+        }
+
+        /// <summary>Reads one authored step object out of tutorial-steps.json by id (any flow).</summary>
+        private static JObject LoadStepById(string id, List<string> failures)
+        {
+            string json = ReadText(StepsRes, failures);
+            if (json == null) return null;
+            try
+            {
+                var arr = JObject.Parse(json)["steps"] as JArray;
+                if (arr == null) return null;
+                foreach (var t in arr)
+                {
+                    var o = t as JObject;
+                    if (o != null && string.Equals((string)o["id"], id, StringComparison.Ordinal)) return o;
+                }
+            }
+            catch (Exception ex)
+            {
+                failures.Add("[teach-spend] tutorial-steps.json unreadable: " + ex.Message);
+            }
+            return null;
         }
 
         // =====================================================================

@@ -50,6 +50,27 @@ namespace DeNelle.Core.Tutorial
         [JsonProperty("signal")] public string Signal;
     }
 
+    /// <summary>
+    /// WO-1340 — ONE hop of a contextual teach step's ROUTE: while the hint is live, the
+    /// spotlight/pointer RE-POINTS to <see cref="Highlight"/> the moment
+    /// <see cref="Signal"/> is raised. This is what lets a single hint walk a player down
+    /// a multi-tap path (bar face -> deck -> panel) without a chain of separate one-shots,
+    /// each of which would have to guess a trigger and could fire out of order.
+    ///
+    /// An EMPTY/absent Highlight means "stop pointing" — the player has arrived and the
+    /// spotlight should get out of the way of the screen they now need to read.
+    ///
+    /// Purely presentational: a hop that never fires costs nothing and can never hold the
+    /// step, because completion is the step's own completion.signal and the escape bound
+    /// runs regardless (TutorialFlow.TickContextual).
+    /// </summary>
+    [Serializable]
+    public sealed class TutorialRouteHop
+    {
+        [JsonProperty("signal")] public string Signal;
+        [JsonProperty("highlight")] public string Highlight;
+    }
+
     /// <summary>Kit objective-banner text + optional progress count.</summary>
     [Serializable]
     public sealed class TutorialObjective
@@ -101,6 +122,35 @@ namespace DeNelle.Core.Tutorial
         /// <summary>Contextual steps only: fire once per save, ever (persisted via the
         /// SeenTutorials key "tutorial_ctx:&lt;stepId&gt;").</summary>
         [JsonProperty("oneShot")] public bool OneShot;
+        /// <summary>WO-1340 — contextual teach steps only: ordered spotlight hand-offs that
+        /// follow the player along the route to the thing being taught. Null/empty for every
+        /// existing step (the hint just lights <c>highlight[0]</c> and stays there).</summary>
+        [JsonProperty("route")] public List<TutorialRouteHop> Route;
+
+        /// <summary>
+        /// WO-1340 — TRUE when this contextual hint waits on a REAL GAMEPLAY completion
+        /// signal rather than on its own dialogue closing. That distinction is the whole
+        /// difference between a hint that says a thing and a beat that teaches it: the
+        /// ordinary contextual completes the instant the player dismisses the text box,
+        /// which proves only that they closed a box.
+        ///
+        /// Detected rather than authored as a second flag so the two fields can never
+        /// disagree: a contextual step whose completion.signal is anything OTHER than its
+        /// own <c>dialogue.ended:&lt;intro&gt;</c> is by definition waiting on the world.
+        /// </summary>
+        public bool AwaitsGameplayCompletion
+        {
+            get
+            {
+                if (!IsContextual) return false;
+                string sig = Completion != null ? Completion.Signal : null;
+                if (string.IsNullOrEmpty(sig)) return false;
+                string intro = Dialogue != null ? Dialogue.Intro : null;
+                if (string.IsNullOrEmpty(intro)) return true;
+                return !string.Equals(sig, "dialogue.ended:" + intro,
+                                      StringComparison.OrdinalIgnoreCase);
+            }
+        }
 
         public bool IsContextual =>
             string.Equals(FlowId, "contextual", StringComparison.OrdinalIgnoreCase);

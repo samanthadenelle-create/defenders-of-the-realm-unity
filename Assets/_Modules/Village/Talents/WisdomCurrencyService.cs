@@ -156,6 +156,14 @@ namespace DeNelle.Village.Talents
             Changed?.Invoke();
             // WO-558: wildcard daily-quest progress — one tick per talent learned.
             DailyQuestService.Instance?.Report("wildcard.learn-talent", 1);
+            // WO-1340 — THE SPEND TEACH'S COMPLETION SIGNAL, raised from the one choke point
+            // every learn path funnels through (the legacy HeroSkillTreeVM.Unlock and the
+            // node-graph plan/CONFIRM Commit both land here). Raised only AFTER the debit and
+            // the set insert have landed, so the signal can never claim a spend that did not
+            // happen. TutorialSignals.Raise swallows subscriber throws by contract, so a
+            // tutorial-side fault can never fail the player's talent purchase.
+            DeNelle.Core.Tutorial.TutorialSignals.Raise(
+                DeNelle.Core.Tutorial.TutorialSignals.FirstTalentLearned);
             return true;
         }
 

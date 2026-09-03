@@ -95,6 +95,21 @@ namespace DeNelle.Village
 
         private const float ReachedRadius = 6f;         // hero.reached:<anchor> proximity (m)
         private const float ContextualAutoCloseSeconds = 10f; // hint without dialogue: auto-dismiss
+        /// <summary>
+        /// WO-1340 — THE ESCAPE BOUND for a contextual TEACH step (one that waits on a real
+        /// gameplay completion signal instead of on its own text box closing). Generous,
+        /// because the player is meant to wander off, open other screens and come back: this
+        /// is not a gate and nothing waits on it. But it is FINITE and it always ticks
+        /// (TickContextual runs every frame in every phase), which is what makes a stuck
+        /// teach beat impossible.
+        ///
+        /// ⚠ THIS IS NOT THE MANDATORY-CHAIN WATCHDOG AND MUST NOT BE CONFUSED WITH IT.
+        /// WatchdogSeconds (120f) is a bound on a step that BLOCKS the FTUE, and WO-962 §3
+        /// forbids lengthening it. This bound governs a hint that blocks nothing, so a longer
+        /// value is not a softlock risk - the failure mode it prevents is a spotlight that
+        /// never lets go, not a player who cannot proceed.
+        /// </summary>
+        private const float ContextualAwaitSeconds = 240f;
 
         // F8 seq 632 ROOT CAUSE 3 (2026-08-02): a step may author SEVERAL highlights
         // (founding_defend = ["hud.wave_button", "world.gate_direction"]) but UiSpotlight is a
@@ -493,6 +508,11 @@ namespace DeNelle.Village
         // Contextual runtime state.
         private TutorialStepDef _activeCtx;
         private float _ctxEnteredAt;
+        /// <summary>WO-1340 — the gameplay signal the live contextual TEACH step waits on
+        /// (null for an ordinary hint, which completes on its own dialogue ending).</summary>
+        private string _ctxAwaitSignal;
+        /// <summary>WO-1340 — one CTX-STUCK line per contextual teach, never a per-frame spam.</summary>
+        private bool _ctxStuckTraced;
 
         private static bool s_ranThisSession;
 
@@ -614,8 +634,7 @@ namespace DeNelle.Village
             // the pieces are DontDestroyOnLoad singletons and would otherwise outlive the flow.
             if (_phase != Phase.Idle && _phase != Phase.Finished)
             {
-                UiSpotlight.Hide();
-                GuidePointer.Hide();
+                HideHighlight();
                 GuideLineUi.Hide();
                 ObjectiveStripUi.Hide();
                 TutorialSkipUi.Hide();
@@ -1054,8 +1073,7 @@ namespace DeNelle.Village
 
             if (_highlightIds.Count == 0)
             {
-                UiSpotlight.Hide();
-                GuidePointer.Hide();
+                HideHighlight();
                 return;
             }
 
@@ -1063,12 +1081,48 @@ namespace DeNelle.Village
             // WO-1012 §2b: FocusMask style follows the beat kind (tap = Focus dim+block,
             // gesture/movement = lighter Gesture, combat = Glow), and the ONE gold chevron
             // (GuidePointer) rides the same highlight id.
-            UiSpotlight.Show(_highlightIds[0], MaskStyleForCurrentStep());
-            GuidePointer.Show(_highlightIds[0]);
+            ShowHighlight(_highlightIds[0], MaskStyleForCurrentStep());
             if (_highlightIds.Count > 1)
                 FlowTrace.Step("Tutorial", $"step '{step.Id}' authors {_highlightIds.Count} highlights " +
                     $"[{string.Join(", ", _highlightIds)}] - the ONE spotlight rotates across all of them every " +
                     $"{HighlightCycleSeconds:0}s (F8 seq 632: only Highlight[0] used to render).");
+        }
+
+        // ─────────────────────────────────────────────────────────────────────
+        //  WO-1344 — ONE door for "point at this id", so the owner-tagged marker
+        //  and the yellow FocusMask glow can never both be drawn on the same beat.
+        //
+        //  FtueWorldPointer.TryShow answers TRUE only for a WORLD-anchored highlight
+        //  ("world.guide", "world.gate_direction") whose key can actually draw. For
+        //  every UI-rect highlight ("hud.*", "build.card.*", "deck.card.skills") it
+        //  answers FALSE and these two lines run EXACTLY as they always did — this is
+        //  a presentation swap on the navigation beats only, not a behaviour change:
+        //  same ids, same styles, same rotation, same completion signals.
+        // ─────────────────────────────────────────────────────────────────────
+
+        /// <summary>Point at <paramref name="highlightId"/> with whichever cue owns it:
+        /// the owner-tagged world marker when the id resolves to a world anchor, else the
+        /// FocusMask + chevron at <paramref name="style"/> (the pre-WO-1344 behaviour).</summary>
+        private static void ShowHighlight(string highlightId, UiSpotlight.MaskStyle style)
+        {
+            if (FtueWorldPointer.TryShow(highlightId))
+            {
+                // The marker serves this beat now — stand the yellow glow down so the
+                // player is shown ONE cue, not two.
+                UiSpotlight.Hide();
+                GuidePointer.Hide();
+                return;
+            }
+            UiSpotlight.Show(highlightId, style);
+            GuidePointer.Show(highlightId);
+        }
+
+        /// <summary>Stop pointing, whichever cue was doing it.</summary>
+        private static void HideHighlight()
+        {
+            FtueWorldPointer.Hide();
+            UiSpotlight.Hide();
+            GuidePointer.Hide();
         }
 
         /// <summary>Rotates the single spotlight across every authored highlight id so none is
@@ -1079,8 +1133,7 @@ namespace DeNelle.Village
             if (Time.unscaledTime < _nextHighlightAt) return;
             _nextHighlightAt = Time.unscaledTime + HighlightCycleSeconds;
             _highlightIndex = (_highlightIndex + 1) % _highlightIds.Count;
-            UiSpotlight.Show(_highlightIds[_highlightIndex], MaskStyleForCurrentStep());
-            GuidePointer.Show(_highlightIds[_highlightIndex]);
+            ShowHighlight(_highlightIds[_highlightIndex], MaskStyleForCurrentStep());
         }
 
         /// <summary>WO-1012 §2b: the FocusMask style for the LIVE step, keyed on its
@@ -1270,8 +1323,7 @@ namespace DeNelle.Village
             if (_highlightIds.Count == 0) return;
             _highlightIndex = 0;
             _nextHighlightAt = Time.unscaledTime + HighlightCycleSeconds;
-            UiSpotlight.Show(_highlightIds[0], MaskStyleForCurrentStep());
-            GuidePointer.Show(_highlightIds[0]);
+            ShowHighlight(_highlightIds[0], MaskStyleForCurrentStep());
         }
 
         /// <summary>
@@ -1439,8 +1491,29 @@ namespace DeNelle.Village
                 return;
             }
 
+            // WO-1340 — a live TEACH beat: completion is the AUTHORED gameplay signal.
+            if (_activeCtx != null && !string.IsNullOrEmpty(_ctxAwaitSignal) &&
+                SignalSatisfies(_ctxAwaitSignal, id))
+            {
+                FlowTrace.Step("Tutorial", $"CTX-TAUGHT :: {_activeCtx.Id} - '{id}' observed after " +
+                    $"{Time.unscaledTime - _ctxEnteredAt:0}s. The player DID the thing, not just read about it.");
+                CompleteContextual("complete");
+                return;
+            }
+
+            // WO-1340 — route hand-off: follow the player along the taught path by re-pointing
+            // the spotlight. Presentation only; never completes or holds the beat.
+            if (_activeCtx != null) TryAdvanceCtxRoute(id);
+
             // Contextual completion: the hint's own dialogue ended.
-            if (_activeCtx != null && _activeCtx.Dialogue != null &&
+            //
+            // ⚠ A TEACH BEAT DELIBERATELY DOES NOT COMPLETE HERE. Closing the text box is the
+            // player agreeing to go and do it, not the doing - and it is the very first thing
+            // they do, so completing on it is what made the old ctx_talents hint teach nothing.
+            // The beat stays live (spotlight following the route) until the real signal lands or
+            // the escape bound expires.
+            if (_activeCtx != null && string.IsNullOrEmpty(_ctxAwaitSignal) &&
+                _activeCtx.Dialogue != null &&
                 !string.IsNullOrEmpty(_activeCtx.Dialogue.Intro) &&
                 string.Equals(id, TutorialSignals.DialogueEndedPrefix + _activeCtx.Dialogue.Intro,
                               StringComparison.OrdinalIgnoreCase))
@@ -1622,8 +1695,7 @@ namespace DeNelle.Village
 
             _highlightIds.Clear();   // ROOT CAUSE 3: never rotate a dead step's walk
             _highlightIndex = 0;
-            UiSpotlight.Hide();
-            GuidePointer.Hide();
+            HideHighlight();
             GuideLineUi.Hide();      // WO-1012: a guide one-liner never outlives its beat
             ObjectiveStripUi.Hide();
             PressureHeld = false;
@@ -1645,8 +1717,7 @@ namespace DeNelle.Village
         {
             _phase = Phase.Finished;
             _step = null;
-            UiSpotlight.Hide();
-            GuidePointer.Hide();
+            HideHighlight();
             GuideLineUi.Hide();
             ObjectiveStripUi.Hide();
             TutorialSkipUi.Hide();   // the ONE skip leaves with the flow
@@ -2429,7 +2500,18 @@ namespace DeNelle.Village
 
                 _activeCtx = ctx;
                 _ctxEnteredAt = Time.unscaledTime;
-                FlowTrace.Step("Tutorial", $"CTX-ENTER :: {ctx.Id} (trigger '{signalId}').");
+                // WO-1340 — a TEACH step waits on the world (a talent actually LEARNED), not on
+                // its own text box closing. Clear the latch FIRST: the bus latches, so a stale
+                // raise from earlier in the session would otherwise complete this beat the instant
+                // it armed and teach nothing (the same latch-before-await contract the mandatory
+                // chain uses).
+                _ctxAwaitSignal = ctx.AwaitsGameplayCompletion ? ctx.Completion.Signal : null;
+                _ctxStuckTraced = false;
+                if (_ctxAwaitSignal != null) TutorialSignals.Clear(_ctxAwaitSignal);
+                FlowTrace.Step("Tutorial", $"CTX-ENTER :: {ctx.Id} (trigger '{signalId}')" +
+                    (_ctxAwaitSignal != null
+                        ? $" - TEACH beat, awaiting '{_ctxAwaitSignal}' with a {ContextualAwaitSeconds:0}s escape bound."
+                        : "."));
                 DeNelle.Core.Analytics.EventTracker.Track("contextual_step_enter", new
                 {
                     stepId = ctx.Id,
@@ -2441,8 +2523,7 @@ namespace DeNelle.Village
                 // and ride the same chevron cue as the mandatory chain.
                 if (ctx.Highlight != null && ctx.Highlight.Count > 0)
                 {
-                    UiSpotlight.Show(ctx.Highlight[0], UiSpotlight.MaskStyle.Glow);
-                    GuidePointer.Show(ctx.Highlight[0]);
+                    ShowHighlight(ctx.Highlight[0], UiSpotlight.MaskStyle.Glow);
                 }
                 if (ctx.Dialogue != null && !string.IsNullOrEmpty(ctx.Dialogue.Intro))
                 {
@@ -2453,9 +2534,68 @@ namespace DeNelle.Village
             }
         }
 
+        /// <summary>
+        /// WO-1340 — re-point the live contextual hint's spotlight when the player reaches the
+        /// next hop of its authored route. A hop with an empty highlight HIDES the spotlight:
+        /// the player has arrived and the screen they now need to read must not be masked.
+        /// Presentation only — never completes, never holds, never gates.
+        /// </summary>
+        private void TryAdvanceCtxRoute(string signalId)
+        {
+            var route = _activeCtx.Route;
+            if (route == null || route.Count == 0) return;
+
+            foreach (var hop in route)
+            {
+                if (hop == null || string.IsNullOrEmpty(hop.Signal)) continue;
+                if (!string.Equals(hop.Signal, signalId, StringComparison.OrdinalIgnoreCase)) continue;
+
+                if (string.IsNullOrEmpty(hop.Highlight))
+                {
+                    HideHighlight();
+                    FlowTrace.Step("Tutorial", $"CTX-ROUTE :: {_activeCtx.Id} - '{signalId}' reached; " +
+                        "spotlight released (the player is on the screen the beat was pointing at).");
+                }
+                else
+                {
+                    ShowHighlight(hop.Highlight, UiSpotlight.MaskStyle.Glow);
+                    FlowTrace.Step("Tutorial", $"CTX-ROUTE :: {_activeCtx.Id} - '{signalId}' reached; " +
+                        $"spotlight now on '{hop.Highlight}'.");
+                }
+                return;
+            }
+        }
+
         private void TickContextual()
         {
             if (_activeCtx == null) return;
+
+            // WO-1340 — a TEACH beat outlives its dialogue on purpose (the spotlight has to
+            // survive the text box so it can point at the route), so the 10s no-dialogue
+            // auto-dismiss below must NOT apply to it. Its bound is ContextualAwaitSeconds,
+            // and it ALWAYS ticks - this method runs every frame in every phase.
+            //
+            // §12: the beat NAMES ITSELF on expiry. WO-1300 exists because two stuck beats
+            // emitted nothing and cost two investigations; a teach beat that quietly stopped
+            // pointing would be the same defect in a cheaper coat.
+            if (!string.IsNullOrEmpty(_ctxAwaitSignal))
+            {
+                if (Time.unscaledTime - _ctxEnteredAt >= ContextualAwaitSeconds)
+                {
+                    if (!_ctxStuckTraced)
+                    {
+                        _ctxStuckTraced = true;
+                        FlowTrace.Warn("Tutorial", $"CTX-STUCK :: {_activeCtx.Id} - no " +
+                            $"'{_ctxAwaitSignal}' after {ContextualAwaitSeconds:0}s. RELEASING the hint " +
+                            "(spotlight cleared, marked seen) so it can never linger. The player was " +
+                            "NOT blocked at any point - this beat gates nothing - but the teach did " +
+                            "not land, so the route it points at is the thing to check.");
+                    }
+                    CompleteContextual("timeout");
+                }
+                return;
+            }
+
             // No dialogue (or it never opened) — auto-dismiss after a short beat so a
             // contextual hint can never linger like a gate.
             if (Time.unscaledTime - _ctxEnteredAt >= ContextualAutoCloseSeconds &&
@@ -2467,6 +2607,11 @@ namespace DeNelle.Village
         {
             var ctx = _activeCtx;
             _activeCtx = null;
+            // WO-1340 — clear the await state on EVERY exit path (complete / timeout / skip /
+            // dismiss), not just the happy one. A surviving _ctxAwaitSignal would make the NEXT
+            // ordinary hint behave like a teach beat and refuse to close on its own dialogue.
+            _ctxAwaitSignal = null;
+            _ctxStuckTraced = false;
             if (ctx == null) return;
 
             FlowTrace.Step("Tutorial", $"CTX-{outcome.ToUpperInvariant()} :: {ctx.Id}.");
@@ -2483,13 +2628,11 @@ namespace DeNelle.Village
             // the singletons — hand them back, don't leave the ctx target lit).
             if (_phase != Phase.AwaitCompletion)
             {
-                UiSpotlight.Hide();
-                GuidePointer.Hide();
+                HideHighlight();
             }
             else if (_highlightIds.Count > 0)
             {
-                UiSpotlight.Show(_highlightIds[_highlightIndex % _highlightIds.Count], MaskStyleForCurrentStep());
-                GuidePointer.Show(_highlightIds[_highlightIndex % _highlightIds.Count]);
+                ShowHighlight(_highlightIds[_highlightIndex % _highlightIds.Count], MaskStyleForCurrentStep());
             }
         }
 

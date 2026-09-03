@@ -134,6 +134,11 @@ namespace DeNelle.Core.UI
             "build.card.collector_lumbermill",// founding_stores — the Lumbermill card (the collector that actually harvests)
             "hud.pets",             // FTUE-04 — the persistent "Pets" pet-box button (EchoUnlockFeedback EchoPetBoxButton); resolved lazily below
             "hud.builders_chip",    // WO-1012 P3 — the Builders/queue status chip (HudKitController.BuildQueueStatusChip) the TIMERS beat spotlights ("Work takes time, Keeper. Watch the ledger.")
+            // WO-1340 — the two hops of the SPEND-A-TALENT-POINT route, owner-confirmed
+            // 2026-09-03 on build 2026.09.03.353742: "the path to the skills tree is fixed,
+            // it's Hero then Skills". Bar HERO face -> the SKILLS card on the Hero deck.
+            "hud.hero_button",      // HudKitController bar face (ActionBarButtonId.Bag, labelled "Hero") -> PanelId.HeroDeck
+            "deck.card.skills",     // PlayerDeckWorkspace "DeckCard_Skills" -> PanelId.HeroSkillTree; resolved lazily below
         };
 
         // FTUE-04: the founding_echo tutorial step spotlights the Pets button, but that
@@ -148,6 +153,25 @@ namespace DeNelle.Core.UI
             RegisterResolver("hud.pets", () =>
             {
                 var go = GameObject.Find("EchoPetBoxButton");
+                if (go == null) return default;
+                return go.transform is RectTransform rt ? new HighlightTarget(rt) : default;
+            });
+
+            // WO-1340 — the SKILLS card on the Hero deck (PlayerDeckWorkspace.BuildCard names
+            // every card "DeckCard_<Title>"). A LAZY resolver for the same reason hud.pets is
+            // one: the deck's cards are built per RenderPage, only once the player opens the
+            // Hero panel, so there is no build-time rect to Register and no eager hook that
+            // would not be dead most of the session.
+            //
+            // ⚠ RESOLVES THE CARD'S OWN RECT, DELIBERATELY — NOT A LABEL INSIDE IT. Every
+            // label on that panel is currently drawn TWICE by two different owners in two
+            // fonts with two different wordings (WO-1341, another lane's fix), so label
+            // geometry there is ambiguous and a label-anchored spotlight would sit on
+            // whichever producer happened to win. The card rect is unambiguous and is also
+            // the actual touch target. This adds NO third label producer.
+            RegisterResolver("deck.card.skills", () =>
+            {
+                var go = GameObject.Find("DeckCard_Skills");
                 if (go == null) return default;
                 return go.transform is RectTransform rt ? new HighlightTarget(rt) : default;
             });

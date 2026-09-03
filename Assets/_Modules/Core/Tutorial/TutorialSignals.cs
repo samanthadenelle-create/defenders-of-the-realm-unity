@@ -73,6 +73,26 @@ namespace DeNelle.Core.Tutorial
         public const string EchoBornSecond   = "echo.born:2";
         public const string FirstGearAdded   = "inventory.gear_added:first";
         public const string FirstSkillPoint  = "skillpoint.earned:first";
+        /// <summary>WO-1340 (the SPEND teach): a hero talent node was actually LEARNED -
+        /// Wisdom debited and the node added to the unlocked set. Raised by
+        /// <c>DeNelle.Village.Talents.WisdomCurrencyService.Unlock</c>, which is the SINGLE
+        /// choke point every learn path funnels through (the legacy immediate
+        /// <c>HeroSkillTreeVM.Unlock</c> AND the node-graph plan/CONFIRM flow's
+        /// <c>Commit</c> both call it), so this signal cannot be raised from a path that
+        /// did not move the player's tree.
+        ///
+        /// ⚠ THIS IS THE COMPANION TO, NOT A DUPLICATE OF, <see cref="FirstSkillPoint"/>.
+        /// That one fires when a point is EARNED (hero level-up); this one fires when one
+        /// is SPENT. The FTUE beat that teaches spending needs BOTH: earned is its trigger,
+        /// spent is its completion. Raised on EVERY learn; the contextual one-shot's
+        /// tutorial_ctx persistence dedupes to the first (same contract as FirstSkillPoint).
+        ///
+        /// ⚠ The talent tree's currency is WISDOM (WisdomCurrencyService), NOT
+        /// SkillSystem.AvailablePoints - those are the separate CRAFT skills
+        /// (Blacksmith/Woodworking/Arcane) that the panel merely displays alongside. A
+        /// publisher hung off SkillSystem.SpendPoint would complete this beat without the
+        /// player ever touching the talent tree.</summary>
+        public const string FirstTalentLearned = "talent.learned:first";
 
         private static readonly HashSet<string> _fired =
             new HashSet<string>(StringComparer.OrdinalIgnoreCase);

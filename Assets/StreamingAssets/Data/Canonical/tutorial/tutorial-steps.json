@@ -1,6 +1,6 @@
 {
-  "version": 4,
-  "_note": "v4 (WO-1014, 2026-08-10): (a) the founding_ack note now records that the guide's UTILITY line moved to beat 1/8 - see the dialogues.json v8 note; (b) four EM DASHES (U+2014) were replaced with ASCII hyphens in the ctx_* objective texts. Those four were PLAYER-VISIBLE strings and every non-ASCII glyph renders as TOFU on device (binding project rule) - they predate this WO and were caught while editing this file.",
+  "version": 5,
+  "_note": "v5 (WO-1340, 2026-09-03): ctx_talents became a real TEACH beat - it now completes on 'talent.learned:first' (a talent actually learned) instead of on its own dialogue closing, gained a two-hop 'route' spotlight hand-off along the owner-confirmed Hero -> Skills path, and points at hud.hero_button. NEW SCHEMA FIELD: 'route' (TutorialRouteHop[]), optional and absent on every other step. See that step's own _note for the full why. PRIOR: v4 (WO-1014, 2026-08-10): (a) the founding_ack note now records that the guide's UTILITY line moved to beat 1/8 - see the dialogues.json v8 note; (b) four EM DASHES (U+2014) were replaced with ASCII hyphens in the ctx_* objective texts. Those four were PLAYER-VISIBLE strings and every non-ASCII glyph renders as TOFU on device (binding project rule) - they predate this WO and were caught while editing this file.",
   "flowId": "ftue_v2",
   "steps": [
     {
@@ -185,11 +185,16 @@
       "trigger": { "type": "signal", "signal": "skillpoint.earned:first" },
       "pausePressure": false,
       "dialogue": { "intro": "tut_ctx_talents" },
-      "highlight": [],
-      "completion": { "signal": "dialogue.ended:tut_ctx_talents" },
+      "highlight": ["hud.hero_button"],
+      "route": [
+        { "signal": "panel.opened:HeroDeck", "highlight": "deck.card.skills" },
+        { "signal": "panel.opened:HeroSkillTree", "highlight": "" }
+      ],
+      "completion": { "signal": "talent.learned:first" },
       "skippable": true,
       "oneShot": true,
-      "objective": { "text": "A talent point earned - shape how you fight" }
+      "objective": { "text": "Spend your talent point: open Hero, then Skills" },
+      "_note": "WO-1340 (owner ask 2026-09-03, 'can we add a FTUE for learning how to apply a skill point after getting first one'). THIS BEAT ALREADY EXISTED AND TAUGHT NOTHING: it completed on 'dialogue.ended:tut_ctx_talents', i.e. the instant the player CLOSED THE TEXT BOX, which is the first thing they do. So the hint said 'open your talents' and was marked seen forever one tap later, whether or not the player ever found the screen. THE FIX IS THE COMPLETION SIGNAL: 'talent.learned:first', raised by WisdomCurrencyService.Unlock - the one choke point both the legacy immediate unlock and the node-graph plan/CONFIRM Commit funnel through - so this beat now completes ONLY when a talent is genuinely LEARNED (Wisdom debited, node added). Retention lens (owner): the point of WO-1306 making the mage's first point buy a CASTABLE is wasted if the player never spends the point. ROUTE (owner-confirmed 2026-09-03 on build 2026.09.03.353742, verbatim 'the path to the skills tree is fixed, it is Hero then Skills'): the spotlight starts on the bar HERO face and hands off to the SKILLS card when the Hero deck opens, then releases entirely on the tree so the panel is never masked. The route is ALSO named in WORDS in the copy and the objective, because the owner is red/green colourblind and a hue-only affordance is unreadable - and because the spotlight resolvers degrade gracefully to nothing if a rect is absent. NEVER GATES: contextual one-shots are pausePressure false by construction, and TutorialFlow.TickContextual releases this beat after ContextualAwaitSeconds (240s) with a self-naming CTX-STUCK line. THE HIGHLIGHT ANCHORS TO THE SKILLS CARD RECT, NOT A LABEL: every label on that panel is currently drawn twice by two owners (WO-1341, another lane), so label geometry there is ambiguous. STRINGS ARE DRAFTS AWAITING THE OWNER'S WORDING."
     }
   ]
 }
