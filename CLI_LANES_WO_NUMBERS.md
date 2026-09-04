@@ -180,7 +180,20 @@
 > fine as history. A copied number is the bug **even when it was right the day it was written** -
 > that is exactly how the retired 860-899 UI block kept re-seeding collisions from CLAUDE.md sec.2.
 
-> ## ⚠ RECONCILED 2026-09-04 (CLI, forty-ninth pass): main line next free = **1366**.
+> ## ⚠ RECONCILED 2026-09-04 (CLI, fiftieth pass): main line next free = **1367**.
+> *(CLI minted **WO-1366** after the owner refined the Arena ruling twice inside one exchange:
+> Arena is NOT cut from Play (it ships) -> the Play build wagers **Crystals** -> ***"both to use same
+> logic just different curency for wagers"***. That last clause is the design: **ONE Arena code path,
+> the wager currency injected per channel** - Play=Crystals, Seeker=SKR - never a forked Arena.
+> It was SPLIT OUT of WO-1363 because it stopped being a string purge and became a real balance
+> change touching `GameState.Resources.Crystals`, the existing `CurrencySkinResolver`/
+> `PaymentChannelResolver` channel seam, and the remote tunables rail. ⛔ The 50/100/200 tiers and the
+> 2x purse are hardcoded at `ArenaCatalog.cs:87/:101/:114/:48` and are about to price a REAL currency,
+> so the 2026-09-02 standing rule binds: **a balance value is a TUNABLE, default answer YES.** Two
+> traps recorded in the ticket: the free 500-seed PlayerPrefs stub must NOT become 500 real Crystals,
+> and the Seeker stub must NOT be promoted to on-chain SKR. Bumped 1366 -> 1367 in this SAME edit.)*
+>
+> ### superseded: RECONCILED 2026-09-04 (CLI, forty-ninth pass): main line next free = **1366**.
 > *(CLI minted **WO-1363, WO-1364, WO-1365** on three owner rulings in one breath: ***"build a fresh
 > aab at 354315"***, ***"180 stays on wallet"***, ***"Nothing Crypto goes in the aab build"***, plus
 > the follow-up rulings ARENA IS CUT FROM PLAY and FIX FIRST, BUILD ONCE (no throwaway AAB).

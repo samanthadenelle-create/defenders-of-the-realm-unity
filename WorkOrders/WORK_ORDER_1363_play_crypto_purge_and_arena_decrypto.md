@@ -117,67 +117,22 @@ add the key to the rewrite.
 days.** Prefer a rule the drift cannot outrun (e.g. reject-on-token at author time) over a longer
 allowlist. If you extend the allowlist anyway, say why in the code.
 
-### PART 3 - de-crypto Arena. ⭐ FAR CHEAPER THAN WO-1362 ESTIMATED - READ WHY.
+### PART 3 - Arena: SPLIT OUT TO WO-1366. NOT THIS TICKET.
 
-> ## ⛔ WO-1362 SAID THIS WAS "1-2 WEEKS, AND IT IS DESIGN WORK". THAT ESTIMATE IS WRONG.
->
-> It rested on the premise that Arena wagers real SKR, so removing SKR meant designing a new
-> economy. **The premise is false.** Measured at source 2026-09-04:
->
-> `Assets/_Modules/Village/Arena/ArenaWalletService.cs`
-> - `:2` - `// ArenaWalletService - CLIENT-SIDE SKR WAGER STUB (ARENA MVP).`
-> - `:19` - `// SCOPE (MVP): client-stub SKR - NOT real on-chain custody, NOT a backend-escrowed`
-> - `:38` - `private const string PrefBalanceKey = "dotr-arena-skr-balance";`
-> - `:41` - `private const long SeedBalance = 500L;`
->
-> **The wager is a number in PlayerPrefs seeded to 500.** It has never touched a wallet, a chain, a
-> backend or a real balance. And the file's own header states the containment:
-> *"the seam is deliberately confined to this one file: ArenaMode calls Debit/Credit/Balance and
-> nothing else."*
->
-> **So there is no economy to redesign. The word "SKR" is the only crypto in Arena.** This is a
-> rename plus a PlayerPrefs migration, not a design job. ⚠ **Verify that containment claim yourself
-> before relying on it** - a header comment is a comment, and CLAUDE.md's founding lesson is that
-> comments lie. `grep -rn "ArenaWalletService" Assets/` and confirm `ArenaMode` really is the only
-> caller.
+Owner ruled 2026-09-04, in three steps: Arena is **not** cut from Play (it ships) - the Play build
+wagers **Crystals** - and ***"both to use same logic just different curency for wagers"***, i.e. ONE
+Arena code path with the currency as the only per-channel difference.
 
-**What actually has to change:**
+That turned Arena from a string-purge into a **real balance change** touching `GameState.Crystals`,
+the channel seam and the remote tunables rail. It is therefore **`WorkOrders/WORK_ORDER_1366_arena_wager_currency_per_channel.md`**,
+file-disjoint from Parts 1-2 above so the two run in parallel.
 
-1. **The literals.** `ArenaMode.cs:163`, `:164`, `:167`, `:193`, `:382`, `:431`, `:435`, `:452`
-   (traces and logs: *"cannot afford {0} SKR wager"*, *"forfeiting staked {1} SKR (no refund)"*,
-   *"crediting purse {purse} SKR"*), `ArenaVM.cs:191` (the `"SKR"` currency label on every opponent
-   row), and the doc comments in `ArenaCatalog.cs:10`, `:42`, `:47` plus the whole header of
-   `ArenaWalletService.cs`. ⚠ **Doc comments matter here** - they are stripped from the binary, but
-   they are what makes the next reader think Arena is on-chain. Fix them in the same pass.
-2. **The PlayerPrefs key** `dotr-arena-skr-balance` (`ArenaWalletService.cs:38`). ⛔ **Changing it
-   ORPHANS every existing player's Arena balance** - it is persisted state, and a renamed key reads
-   as a fresh 500-seed while the old value sits unreachable. **Read-migrate**: on first read, if the
-   new key is absent and the old key exists, carry the value across and then write the new key.
-   Same defensive rule as a save-schema field (CLAUDE.md §5).
-3. **The wager's NAME.** ⛔ **OWNER DESIGN CALL - DO NOT PICK ONE.** Creative naming is hers
-   (`SAMANTHA.md` rule 8: *"Names, art, music, balance intent... You may implement a ruling; you may
-   not invent one and bury it in a commit."*). The ticket is blocked on this one word and on nothing
-   else.
+⛔ **Do not touch `Assets/_Modules/Village/Arena/*` in this ticket.** Its SKR literals leave as a
+consequence of WO-1366's currency abstraction, not by a find-and-replace here - a rename that left
+the wager pointing at the stub would satisfy a grep and ship the wrong economy.
 
-**Two shapes the answer could take, and they cost very differently:**
-- **(a) Rename the stub's currency only** - the balance stays its own isolated PlayerPrefs pot,
-  seeded 500, just called something else. **Behaviour is byte-identical**; this is the cheap,
-  low-risk path and it matches *"just needs to remove crypto"* literally.
-- **(b) Wire the wager to a REAL in-game currency** (Coins, Crystals) via `GameState`. **This is a
-  balance change, not a rename** - Arena would start consuming a currency the player earns
-  elsewhere, the 50/100/200 tiers and the 2x purse would need re-tuning against real earn rates, and
-  it crosses the WO-947 cost-basket ruling. **Do not drift into (b) while implementing (a).**
-
-4. **What stays untouched:** the mode, `ArenaMode`'s loop, `ArenaVM`, the opponent tiers, the 2x
-   purse, `arenaDefense` (save v19), `ArenaProgress` (save v34), every UI route, the realm-map pin,
-   the `OpenArena` dialogue verb. ⛔ **Nothing is compiled out.** If you find yourself adding an
-   `#if GOOGLE_PLAY` around Arena, you are implementing the superseded ruling - stop and re-read the
-   banner at the top of this file.
-
-⚠ **The Seeker/dApp build:** the owner has NOT said Arena keeps SKR branding there. The cheapest and
-most consistent outcome is ONE de-cryptoed Arena on both channels - a second variant is the
-duplicated-state defect this repo keeps paying for (§2 WO numbers, §5 the dependency table, §16 the
-R2 verify). **Ask before building two.**
+⚠ **The two tickets share one acceptance test** - the `global-metadata.dat` scan below. Neither can
+claim a clean artifact alone; run it once, after both have landed.
 
 ## ACCEPTANCE
 
@@ -186,12 +141,10 @@ R2 verify). **Ask before building two.**
       `jupiter`, and the USDC mint `EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v`. **Quote the counts
       before and after.** Source-level greps do not close this ticket - a source grep is exactly what
       `GooglePlayPackagingRegression` already does, and it certified the dirty artifact.
-- [ ] Zero `SKR` strings in Arena in the artifact, and **Arena still fully playable in the Play
-      build** - enter, wager, win, lose, and see the purse. ⛔ A Play build where Arena is present
-      but broken is a Google broken-functionality rejection, which is worse than the string.
-- [ ] An existing player's Arena balance SURVIVES the PlayerPrefs key rename (read-migrated, not
-      re-seeded to 500). Prove it with a before/after value.
-- [ ] `arenaDefense` (save v19) and `ArenaProgress` (save v34) untouched and still round-tripping.
+- [ ] ⛔ **Arena is still fully playable in the Play build** - enter, wager, win, lose, see the purse.
+      A Play build where Arena is present but broken is a Google broken-functionality rejection,
+      which is worse than the string. (Arena's own work is WO-1366; this box is the guard that this
+      ticket did not break it.)
 - [ ] The Seeker/dApp artifact is UNCHANGED - Arena still present, SKR wagering intact. Prove it:
       build both, diff the behaviour claim, do not assume the define did what you meant.
 - [ ] `COMPILE_GATE_OK` + `REGRESSION_OK n/n` on fresh logs, and `error CS` count zero
@@ -203,9 +156,8 @@ R2 verify). **Ask before building two.**
 
 - ⛔ Tier 1. The asmdef constraints and the MWA/SDK exclusions are working. Leave them.
 - ⛔ Do NOT compile Arena out, gate it behind `#if GOOGLE_PLAY`, or remove any route into it. That
-      was the SUPERSEDED ruling. Arena ships.
-- ⛔ Do not re-point the wager at Coins/Crystals without an explicit owner ruling - that is a balance
-      change wearing a rename's clothes.
+      was the SUPERSEDED ruling. Arena ships on both channels.
+- ⛔ Do not touch `Assets/_Modules/Village/Arena/*` at all - that is WO-1366's lane.
 - ⛔ Do not "fix" the drift by deleting a persisted save field or by re-seeding a PlayerPrefs balance.
 - ⛔ Do not cut a Play AAB as a throwaway measurement - owner ruled fix-first-build-once. The one
       build in the acceptance criteria above is the verification build, and it is the point of the

@@ -244,24 +244,40 @@
 > **So "nothing crypto" = convert tier 2 from runtime guards to compile-out, AND make the gate able
 > to see it, AND deal with Arena.**
 >
-> ### ⛔ OWNER RULING 2026-09-04 — ARENA SHIPS TO GOOGLE PLAY. IT ONLY LOSES THE CRYPTO.
-> Owner, verbatim: ***"the arena will go to the google play store, just needs to remove crypto"***.
-> ⚠ **THIS SUPERSEDES A CUT-ARENA RULING MADE EARLIER IN THE SAME SESSION** (which said Arena would
-> be compiled out of Play). Nothing is compiled out; no UI route is removed; no save field is
-> touched. The SKR *branding* leaves, the mode stays.
+> ### ⛔ OWNER RULING 2026-09-04 — ARENA SHIPS ON BOTH CHANNELS. ONE CODE PATH, CURRENCY PER CHANNEL.
+> Ruled in three steps inside one exchange, each superseding the last — **read all three, the first
+> two are stale on their own**:
+> 1. ***"the arena will go to the google play store, just needs to remove crypto"*** — ⛔ supersedes an
+>    earlier CUT-ARENA ruling from the same session. Arena is **not** compiled out of Play.
+> 2. The Play build wagers **Crystals**.
+> 3. ***"both to use same logic just different curency for wagers"*** — ⛔ **ONE Arena code path.** The
+>    wager currency is INJECTED per channel, never branched on: **Play = Crystals
+>    (`GameState.Resources.Crystals`), Seeker/dApp = SKR as it behaves today.** A forked Arena is
+>    forbidden — that is the duplicated-state defect of §2/§5/§16 and WO-1137 all over again.
 >
-> ⭐ **AND IT IS CHEAP, BECAUSE WO-1362's "1-2 WEEKS, AND IT IS DESIGN WORK" ESTIMATE RESTED ON A
-> FALSE PREMISE.** That estimate assumed Arena wagers real SKR. Measured at source 2026-09-04:
-> `Assets/_Modules/Village/Arena/ArenaWalletService.cs:2` declares itself a **"CLIENT-SIDE SKR WAGER
-> STUB"**, `:19` **"NOT real on-chain custody, NOT a backend-escrowed"**, `:38` persists to
-> PlayerPrefs key `dotr-arena-skr-balance`, `:41` seeded to **500**. **The wager is a number in
-> PlayerPrefs.** There is no economy to redesign — the word "SKR" is the only crypto in Arena, so
-> this is a rename plus a PlayerPrefs read-migration.
-> ⛔ **Two traps:** renaming the PlayerPrefs key without read-migrating **orphans every existing
-> player's Arena balance**; and re-pointing the wager at Coins/Crystals is a **balance change wearing
-> a rename's clothes** — it needs its own ruling. The wager's new NAME is an owner call (SAMANTHA.md
-> rule 8). Detail in `WorkOrders/WORK_ORDER_1363_play_crypto_purge_and_arena_decrypto.md` PART 3.
+> ⭐ **The seam already exists — extend it, never greenfield:** `CurrencySkinResolver.cs` (`#if
+> GOOGLE_PLAY` at `:96/:239/:267`), `CurrencySkin.cs:130`, `PaymentChannelResolver.cs:18/:21/:27`.
 >
+> ⭐ **WO-1362's "1-2 WEEKS, AND IT IS DESIGN WORK" RESTED ON A FALSE PREMISE.** It assumed Arena
+> wagers real SKR. Measured at source: `ArenaWalletService.cs:2` declares itself a **"CLIENT-SIDE SKR
+> WAGER STUB"**, `:19` **"NOT real on-chain custody"**, `:38` PlayerPrefs key
+> `dotr-arena-skr-balance`, `:41` seeded **500**. The Seeker wager is a number in PlayerPrefs and
+> always has been.
+>
+> ⛔ **THREE TRAPS, all recorded in `WorkOrders/WORK_ORDER_1366_arena_wager_currency_per_channel.md`:**
+> - The free **500-seed stub balance must NOT become 500 real Crystals** — that grants premium
+>   currency to everyone who ever opened Arena.
+> - The Seeker stub must **NOT be promoted to real on-chain SKR**. "Different currency" is not
+>   "make it real money"; that is a money-path change needing its own ruling.
+> - `GameState.AetherCrystals` is **DEPRECATED** (folded at save v18, `GameState.cs:54-58`) and
+>   nothing writes it. Use `Resources.Crystals`, through the existing spend seam — never inline.
+>
+> ⛔ **AND THE TIERS BECOME TUNABLES.** 50/100/200 and the 2x purse are hardcoded
+> (`ArenaCatalog.cs:87/:101/:114/:48`) and are about to price a REAL currency, so the 2026-09-02
+> standing rule binds directly: **a balance value is a TUNABLE, default answer YES.** They were
+> authored against a free 500-seed stub, so they carry **no information** about correct Crystal
+> pricing — register them with today's values as defaults and hand her the knob; do not re-pick them.
+
 > ### ⛔ OWNER RULING 2026-09-04 — NO THROWAWAY AAB. FIX FIRST, BUILD ONCE.
 > A fresh AAB was NOT cut from the current tree. The Play artifact is built once, after the purge and
 > the size work, and it is expected to be shippable when it is built. **Do not cut a Play AAB "just
