@@ -180,7 +180,19 @@
 > fine as history. A copied number is the bug **even when it was right the day it was written** -
 > that is exactly how the retired 860-899 UI block kept re-seeding collisions from CLAUDE.md sec.2.
 
-> ## ⚠ RECONCILED 2026-09-04 (CLI, fifty-first pass): main line next free = **1368**.
+> ## ⚠ RECONCILED 2026-09-04 (CLI, fifty-second pass): main line next free = **1369**.
+> *(CLI minted **WO-1368** live off her device while she played: **the Manage/Queues screen builds
+> ZERO queue ROWS, so there is no Finish Now and no Watch Ad on a queued job.** Owner: *"i dont see
+> the watch ad or pay crtystals to complete early stuff"*. ⭐ PROVING LINE, same session, same
+> instrument: `[Flow:Manage] row bands: ... queueRows=0 browseRows=4` at 09:35:12 with two jobs
+> genuinely queued - and **`queueRows=2` at 07:51:20 THE SAME MORNING**, so it worked and regressed.
+> The cards she can see are `QueueRailView` (`[Flow:QueueUi] QueueRailView built for Builder`), which
+> is display-only BY DESIGN (§7 calls the rail a status glance). ⛔ The ad flag is NOT the cause -
+> `FeatureFlags.RewardedAdSkip` is `defaultOn: true`; the rows that would host the button are simply
+> not built. MONEY PATH: this is the crystal sink and the rewarded-ad surface, both unreachable.
+> Bumped 1368 -> 1369 in this SAME edit.)*
+>
+> ### superseded: RECONCILED 2026-09-04 (CLI, fifty-first pass): main line next free = **1368**.
 > *(CLI minted **WO-1367** - finish the Android texture pass on `Resources/RpgUi`, which is the whole
 > Play upload blocker. ⭐ MEASURED, not estimated: `bundletool get-size total` on the on-disk AAB reads
 > **510,443,276-510,523,099 bytes vs a 500,000,000-byte ceiling - OVER by ~10.5 MB**. The owner named
