@@ -381,6 +381,62 @@ Other sessions write + signal "ready"; the one committer reconciles. This is non
 
 ---
 
+## 11B. ⛔ NEVER GUESS. PROVE IT, OR SAY YOU HAVEN'T. (owner directive 2026-09-03, BINDING)
+
+> Owner, verbatim: ***"we never Guess, always must be proven to be true. Documention is the same is
+> must be proven followed not gone off script without explicit permission"***
+
+Two halves. Both are hard rules, not aspirations.
+
+### A. A CLAIM WITHOUT EVIDENCE IS NOT A CLAIM
+
+**Every factual statement must be traceable to something read or measured THIS SESSION** — a captured
+log line, an HTTP response, a file opened at source, a marker on a fresh log, a hash. Not to a memory,
+not to a doc's summary of the code, not to what was true last week, and *never* to a plausible
+inference.
+
+- **State the evidence with the claim.** "R2 is fine" is worthless; `HTTP 200, 143738 bytes,
+  catalog_2026.09.04.354266.bin` is a fact.
+- ⛔ **"Probably", "should be", "I believe", "it looks like" are ADMISSIONS OF A GUESS.** If those words
+  fit, the honest sentence is **"I have not proven this"** — say that instead, and say what would prove
+  it. An unproven thing named as unproven is useful. An unproven thing stated as fact is a lie that
+  costs someone a day.
+- **When something CANNOT be proven from here, that is a finding to record, not a box to tick.** The
+  live signing certificate had never been captured, so a "matches the live release" tick would have
+  been fiction; it is written down as unprovable, with the one cheap way to close it.
+- ⛔ **A number, a filename, a line number or a version copied from a doc is HEARSAY** until re-read at
+  source. This repo's most expensive bugs are all copied state that went stale (§2, §5, §16).
+
+*Forged 2026-09-03, twice in one evening:* `fps=40` was read from a log and turned into a frame-budget
+theory, asserted twice, while `timeScale=0.28` sat unread in the same output — the owner asked *"Why
+did you guess"*. Hours later a `GET` against a POST-only endpoint returned 400 and was reported as a
+server defect; it was the wrong call shape. Both times a real measurement was used to support a
+conclusion it did not support. **Measuring something is not the same as measuring the right thing.**
+
+### B. FOLLOW THE DOCUMENTED PROCEDURE, AND PROVE YOU FOLLOWED IT
+
+When a checklist, runbook or SOP exists — `PREFLIGHT_GATE.md`, `START_HERE.md`,
+`publishing/SUBMIT_CHECKLIST.md`, `docs/TICKET_PIPELINE.md`, the skill runbooks — **read it to the end
+and execute it as written.**
+
+- ⛔ **Reading the top and improvising the rest is going off script.** *(2026-09-03: 45 lines of the
+  submission checklist were read, then apksigner was invoked ad hoc — while the document itself
+  specified the gate, the fields to record, and the stop rules. The owner: "did you read how to do or
+  guess?")*
+- ⛔ **Deviating requires the owner's EXPLICIT permission, asked for in advance** — not a deviation
+  explained afterwards.
+- **Fill the record in as you go.** A checklist with blank fields has not been executed, however much
+  work happened alongside it.
+- **If the procedure is wrong or stale, SAY SO and get a ruling** — then fix the document in the same
+  change (§15). Silently doing something better is still going off script, and the next seat inherits a
+  doc that lies.
+
+⚠ **This does NOT license bouncing solvable problems back.** Fixing something yourself and reporting
+it afterwards is *required* (memory `fix-it-silently-dont-bring-me-the-problem`); what is forbidden is
+**claiming** it without proof, or **skipping** a written procedure without asking.
+
+---
+
 ## 12. Debugging Directive — INSTRUMENT, don't guess (BINDING)
 
 > ### ★ THE HARD GATE (owner 2026-06-21 — BINDING on EVERY agent + CLI, forever) ★

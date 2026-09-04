@@ -89,17 +89,17 @@ Devnet infrastructure readiness does not discharge the final APK/device matrix.
 
 ## Gate A — final build identity and provenance
 
-- [ ] CLI regression is green. Record log: `________________`.
-- [ ] Final production APK built from commit: `________________`.
-- [ ] Final APK path: `________________`.
-- [ ] Final APK SHA-256: `________________`.
-- [ ] Final `versionName`: `________________`.
-- [ ] Final `versionCode`: `________________`.
-- [ ] Both version values exceed the live release values.
-- [ ] `apksigner verify --print-certs` passes.
-- [ ] Signing certificate SHA-256: `________________`.
-- [ ] Certificate matches the existing live dApp Store release.
-- [ ] `aapt2 dump badging` confirms the preserved package ID and declared version.
+- [x] CLI regression is green. Record log: `Builds/regression.log` - `REGRESSION_OK 358/358 suites, 0 red, 0 skipped` (2026-09-03 19:23).
+- [x] Final production APK built from commit: `32c9630f5` (branch feat/synty-art-retheme, pushed).
+- [x] Final APK path: `Builds/Android/DefendersOfTheRealm.apk` (459.3 MB, built 2026-09-03 19:31).
+- [x] Final APK SHA-256: `8bd67ff3108d349d81e0bddfa07f425fa3bd010924d1b3a28bcbf8cc22950f1b`.
+- [x] Final `versionName`: `2026.09.04.354266`.
+- [x] Final `versionCode`: `354266`.
+- [x] Both version values exceed the live release values (live observed `2026.08.17.328845` / `328845`; this build `2026.09.04.354266` / `354266`).
+- [x] `apksigner verify --print-certs` passes. Signer #1 DN `CN=DeNelle Studios, OU=Games, O=DeNelle Studios, L=NA, ST=NA, C=US`. (JAVA_HOME must be set to the Unity OpenJDK at `<UnityEditor>/Data/PlaybackEngines/AndroidPlayer/OpenJDK` - apksigner fails without it.)
+- [x] Signing certificate SHA-256: `733666ce4ce2c872ab6530eb28d6dbf1e19de26d88ed59d1b5c0209c3da62443`.
+- [ ] ⛔ Certificate matches the existing live dApp Store release - **CANNOT BE PROVEN FROM THIS REPO, and that is a gap in the record, not a pass.** The live release's certificate SHA-256 was never captured (this file still reads `PENDING` for it at the evidence table), so there is nothing to compare against. What IS true: this APK is signed by `dotr-release.keystore`, the keystore configured in `ProjectSettings.asset` (`androidUseCustomKeystore: 1`, alias `dotr`), which is the key this project has always used. The one cheap way to CLOSE it rather than assume it: install this APK over the LIVE store build on a device - Android refuses an update signed by a different key, so a successful in-place update IS the proof. Record the live value here once observed so this is never PENDING again.
+- [x] `aapt2 dump badging` confirms the preserved package ID and declared version: `package: name='com.denellestudios.echoesofelarion' versionCode='354266' versionName='2026.09.04.354266'`, `application-label:'Echoes of Elarion'`, `minSdkVersion:'26'`, `targetSdkVersion:'36'`.
 - [ ] APK is ARM64/IL2CPP and uses the intended production Android configuration.
 - [ ] No local-test defines, Development Build, Devnet endpoints/mint, mock provider,
       or LevelPlay Test Suite activation is present.
@@ -207,7 +207,7 @@ recipient/mint/amount assertions on the production-configured build.
 | APK versionName | `PENDING` |
 | APK versionCode | `PENDING` |
 | APK SHA-256 | `PENDING` |
-| Signing certificate SHA-256 | `PENDING` |
+| Signing certificate SHA-256 | `733666ce4ce2c872ab6530eb28d6dbf1e19de26d88ed59d1b5c0209c3da62443` (THIS build; the LIVE value remains unrecorded) |
 | Ad device evidence | `PENDING` |
 | SKR transaction signature | `PENDING` |
 | Entitlement/fulfillment evidence | `PENDING` |
