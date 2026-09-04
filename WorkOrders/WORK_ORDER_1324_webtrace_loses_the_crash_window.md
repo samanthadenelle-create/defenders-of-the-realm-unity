@@ -2,7 +2,7 @@
 
 # WORK ORDER 1324 — WebTrace discards the last 5 seconds, which is exactly the crash
 
-**Status:** READY TO IMPLEMENT
+**Status:** DONE
 **Silo:** Diagnostics / Web
 **Minted:** 2026-09-02 (CLI) after an owner crash that the trace could not explain.
 **Severity:** P1 diagnostic — every web crash is currently unexplainable by construction.

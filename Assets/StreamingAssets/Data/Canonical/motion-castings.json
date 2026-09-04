@@ -354,7 +354,21 @@
       }
     },
     "mage": {
-      "inherits": "humanoid"
+      "inherits": "humanoid",
+      "_comment": "WO-1329: Mage casting registry, wired for marquee spell binding. cast = fire spell (Spell_Fire_9, firespell_Cast). The vfxKey is owner-tagged verbatim (VfxManualPicks.json); do not pick or substitute. Unwired hooks awaiting owner tags: vfxProjectile (travel), vfxImpact (landing), sfxImpact (landing sound) — these are optional and the cast can remain silent-by-design until the owner tags them.",
+      "cast": {
+        "clip": "",
+        "guid": "",
+        "vfxKey": "firespell_Cast",
+        "sfxId": "",
+        "vfxDelay": 0.0,
+        "attachBone": "",
+        "playOneShot": false,
+        "manual": true,
+        "pickedUtc": "2026-09-04T00:00:00Z",
+        "source": "wo-1329-marquee-bind",
+        "vfxNote": "WO-1329: cast-beat VFX only (firespell_Cast = Spell_Fire_9, marquee spell). Unwired optional hooks: vfxProjectile/vfxImpact/sfxImpact — awaiting owner tags if needed."
+      }
     },
     "ranger": {
       "inherits": "humanoid"

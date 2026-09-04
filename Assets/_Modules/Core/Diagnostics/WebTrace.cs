@@ -250,6 +250,24 @@ namespace DeNelle.Core.Diagnostics
             }
         }
 
+        /// <summary>
+        /// WO-1324: Force an immediate flush from a critical event (hitch detection).
+        /// Public so VfxPerformanceGate can invoke it when frame time exceeds budget.
+        /// Does nothing if a flush is already in flight (no buffering of forced flushes).
+        /// </summary>
+        public static void ForceFlush()
+        {
+            Guard.Try("WebTrace", "force-flush", () =>
+            {
+                if (s_instance != null && !s_instance._posting && s_instance._ring.Count > 0)
+                {
+                    FlowTrace.Step("WebTrace", "force-flush triggered: " + s_instance._ring.Count +
+                        " buffered entries will post immediately");
+                    s_instance.StartCoroutine(s_instance.Flush());
+                }
+            });
+        }
+
         private IEnumerator Flush()
         {
             _posting = true;
@@ -268,6 +286,9 @@ namespace DeNelle.Core.Diagnostics
                 _posting = false;
                 yield break;
             }
+
+            int batchCount = batch.Count;
+            int remainingInRing = _ring.Count;
 
 #if UNITY_WEBGL && !UNITY_EDITOR
             // The remote path is WebGL-only — standalone/editor already have break-log.jsonl.
@@ -296,10 +317,21 @@ namespace DeNelle.Core.Diagnostics
                 {
                     yield return req.SendWebRequest();
 
-                    // On failure: DROP the batch (already dequeued) — no retry-storm.
+                    // WO-1324: Report every batch outcome, not just failures.
                     if (req.result != UnityWebRequest.Result.Success)
-                        FlowTrace.Throttle("WebTrace", "post-fail", 30f,
-                            $"trace POST failed ({req.responseCode}): {req.error} — batch dropped");
+                    {
+                        // On failure: DROP the batch (already dequeued) — no retry-storm.
+                        // REPORT THE DROP so it is not silently lost in the logs.
+                        FlowTrace.Warn("WebTrace", "post-fail",
+                            $"trace POST failed ({req.responseCode}): {req.error} — batch of {batchCount} " +
+                            $"entries dropped (session={_sessionId}, {remainingInRing} remain buffered)");
+                    }
+                    else
+                    {
+                        // Successful POST: trace it so the window is visible in the capture.
+                        FlowTrace.Throttle("WebTrace", "post-ok", 5f,
+                            $"trace batch posted: {batchCount} entries sent, {remainingInRing} remain buffered");
+                    }
 
                     Guard.Try("WebTrace", "dispose", () => req.Dispose());
                 }
@@ -307,6 +339,9 @@ namespace DeNelle.Core.Diagnostics
 #else
             // Off-WebGL: nothing to send. The batch is intentionally dropped (local
             // capture already covers standalone/editor via BreakCaptureHarness).
+            FlowTrace.Throttle("WebTrace", "non-webgl", 60f,
+                $"WebTrace off-WebGL: batch of {batchCount} entries dropped (local capture via " +
+                "BreakCaptureHarness covers this platform)");
             yield return null;
 #endif
 

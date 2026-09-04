@@ -1,6 +1,6 @@
 # WORK ORDER 1329 - The marquee fire spell belongs to the MAGE, so give the mage a casting registry
 
-**Status:** READY TO IMPLEMENT
+**Status:** DONE
 **Silo / Lane:** VFX / abilities / motion registry
 **Type:** EXISTING mechanism, MISSING plumbing
 **Minted:** 2026-09-02 (CLI) on a direct owner ruling.

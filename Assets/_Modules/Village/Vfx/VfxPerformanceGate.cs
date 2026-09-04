@@ -523,6 +523,12 @@ namespace DeNelle.Village
                         : "The loop count did not rise - a stall from outside the VFX pool. " +
                           "Excluded from the shed window.") +
                     " Session hitches " + HitchCount + " (" + DemandWarmHitchCount + " demand-warm).");
+
+                // WO-1324: Force an immediate flush on hitch. The window before a crash is exactly
+                // what we need to diagnose, and a hitch frame often precedes a kill. Post immediately
+                // so the buffer doesn't die with the tab.
+                DeNelle.Core.Diagnostics.WebTrace.ForceFlush();
+
                 _lastOccupancy = occupancy;
                 return;
             }

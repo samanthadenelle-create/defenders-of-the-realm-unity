@@ -2718,9 +2718,21 @@ namespace DeNelle.Village
             }
         }
 
-        /// <summary>The registry casting target for this hero. Combat pivot canon = single
-        /// Knight north star; revisit when a second playable class ships.</summary>
-        private const string RegistryTarget = "knight";
+        /// <summary>The registry casting target for this hero. Resolves from the hero class
+        /// (knight / mage / ranger / cleric) so each class's motion-castings rows are addressable
+        /// by the same registry reader without hardcoding. Defaults to "knight" pre-class-resolve.</summary>
+        private string RegistryTarget
+        {
+            get
+            {
+                // WO-1329: resolve from the acting class, never hardcoded. If class is empty
+                // (early resolve, before SetHeroClass), default to knight for backward compat.
+                string target = string.IsNullOrWhiteSpace(_heroClass) ? "knight" : _heroClass.Trim().ToLowerInvariant();
+                FlowTrace.Once("Action", "registry-target-" + target,
+                    $"casting registry target resolved to '{target}' (heroClass='{_heroClass}').");
+                return target;
+            }
+        }
 
         /// <summary>The world point a Knight's thrown projectile spawns from (chest height, slightly ahead).</summary>
         private Vector3 ProjectileMuzzle() => transform.position + Vector3.up * 1.2f + transform.forward * 0.6f;
