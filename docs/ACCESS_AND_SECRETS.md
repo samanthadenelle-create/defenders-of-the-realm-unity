@@ -19,7 +19,7 @@ Treating it as one just blocks the seat that needs it.
 | Where that is pinned | `EventTracker.cs:52`, `WebTrace.cs:76`, `MaintenanceService.cs:76`, `BenefactorsService.cs:59` — all `const` |
 | Backend location | `api/` **in this repo** (Vercel serverless). Not a separate project. |
 | Repo | `github.com/samanthadenelle-create/defenders-unity` |
-| Working branch | `wip/village2-and-f8-tickets` (`master` is stale) |
+| Working branch | ⛔ **STALE - do not use this row.** Read it off `git branch --show-current`. *(It read `wip/village2-and-f8-tickets` while the live branch had been `feat/synty-art-retheme` since ~2026-08-28; a branch name copied into a doc is the same duplicated-state defect as CLAUDE.md §2's WO block and §5's dependency table.)* |
 | Firebase project | `defenders-of-the-realm-echos` |
 | Database | Neon Postgres, host `ep-royal-hall-ap0rhvyb-pooler.c-7.us-east-1.aws.neon.tech` |
 | Store listing | Solana dApp Store — `solanadappstore://details` (there is **no web URL**) |

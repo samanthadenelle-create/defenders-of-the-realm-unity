@@ -189,6 +189,25 @@ UI a hard step-out on its own lifecycle the way PauseController now has.
 
 **No behaviour on the money path changed in this ticket.**
 
+### ⛔ OWNER RULING 2026-09-04 - THE 180s CEILING STAYS ON WALLET SIGNING. CLOSED.
+
+Owner, verbatim: ***"180 stays on wallet"***.
+
+**The recommended follow-up above is DECLINED and this item is no longer an open owner call.**
+`PackStore.cs:3075` keeps `WorldHold.Acquire(ReasonPurchase)` at `StuckHoldSeconds`. The purchase
+hold is NOT split, and it is NOT converted to `AcquirePlayerOwned`.
+
+**This ruling is a decision to accept a known, documented exposure - not a claim that the exposure
+is absent.** Everything in section 4 above stays true and stays readable: a foreground-but-slow
+signing leg can still reach the ceiling, and if it does the world thaws under a live payment. The
+suspend-exclusion (`NotifyApplicationPause`, WO-1260) remains the mitigation that makes the
+backgrounded case - the common one - safe.
+
+⛔ **Do not re-open this as a defect, and do not "helpfully" convert the purchase hold in a later
+sweep.** A future seat reading section 4 cold will find a persuasive argument for conversion; the
+argument was read, and the owner ruled the other way. If the exposure is ever OBSERVED in a capture
+rather than reasoned about, that is new evidence and a new ticket - cite the captured line.
+
 ---
 
 ## 5. THE ORACLE - `BattleQuiescenceRegression.APlayerOwnedHoldOutlivesEveryCeiling`

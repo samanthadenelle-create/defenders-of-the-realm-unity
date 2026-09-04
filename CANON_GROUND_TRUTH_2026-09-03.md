@@ -119,7 +119,19 @@ persisted `BaseLayout` record when a structure is destroyed - so a legitimate de
 `persisted`, it does not raise it. `persisted` **exceeding** `live` is therefore the opposite of the
 sanctioned path and cannot be explained by destruction.
 
-### 2. ⛔ THE 180s HOLD CEILING STILL APPLIES TO WALLET TRANSACTIONS. MONEY IS ATTACHED.
+### 2. ✅ RULED 2026-09-04 - THE 180s CEILING STAYS ON WALLET SIGNING. NO LONGER OPEN.
+
+Owner, verbatim: ***"180 stays on wallet"***. `PackStore.cs:3075` keeps `WorldHold.Acquire`; the hold
+is NOT split and NOT converted to `AcquirePlayerOwned`. **No code changed - the ruling was to leave
+it.** This is an accepted, documented exposure, not a claim the exposure is absent: everything below
+stays true, and `NotifyApplicationPause` (WO-1260) remains the mitigation covering the common
+backgrounded case. ⛔ Do not re-open it from the argument below - that argument was read and ruled
+against. An OBSERVED occurrence in a capture would be new evidence and a new ticket.
+Recorded in `WorkOrders/WORK_ORDER_1360_a_user_pause_has_no_ceiling.md` §4.
+
+*(The original open-call text is kept below, unrewritten, per CLAUDE.md §15.)*
+
+### 2b. (was open) THE 180s HOLD CEILING STILL APPLIES TO WALLET TRANSACTIONS. MONEY IS ATTACHED.
 
 Flagged, not changed, in commit `3e6ae4274` (WO-1360) - quoting the commit body verbatim:
 

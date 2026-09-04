@@ -199,6 +199,65 @@
 > server-authoritative (prices, entitlements, grants) — those stay on the quote/verify rail, where the
 > SERVER is the authority and a client-side override would be an exploit.
 
+> ## ⛔ OWNER RULING 2026-09-04 — THE 180s CEILING STAYS ON WALLET SIGNING. THE CALL IS CLOSED.
+>
+> Owner, verbatim: ***"180 stays on wallet"***.
+>
+> `PackStore.cs:3075` keeps `WorldHold.Acquire(ReasonPurchase)` at `StuckHoldSeconds`. The purchase
+> hold is **NOT** split into signing-vs-settlement and **NOT** converted to `AcquirePlayerOwned`.
+> **No code changed — the ruling was to leave it alone.**
+>
+> ⚠ **Read this as an ACCEPTED exposure, not an absent one.** WO-1360 §4's analysis stands: a
+> foreground-but-slow signing leg can still reach the ceiling, and if it fires the world thaws under
+> a live payment. `NotifyApplicationPause` (WO-1260) excludes OS-suspended time, which covers the
+> common backgrounded case; the residual is the foreground-slow case, and the owner has priced it.
+>
+> ⛔ **Do not re-open this from WO-1360 §4's own recommendation.** That recommendation is persuasive
+> and it was READ and ruled against — a later seat rediscovering the argument has found nothing new.
+> Only an **observed** occurrence in a capture is new evidence, and that is a new ticket citing the
+> captured line. Recorded in WO-1360 §4 and `CANON_GROUND_TRUTH_2026-09-03.md` §3 item 2.
+
+> ## ⛔ OWNER RULING 2026-09-04 — NOTHING CRYPTO GOES IN THE GOOGLE PLAY AAB.
+>
+> Owner, verbatim: ***"Nothing Crypto goes in the aab build"***, alongside ***"build a fresh aab at
+> 354315"***.
+>
+> ⚠ **THIS IS NOT A BUILD FLAG, AND THE CURRENT GATE CANNOT SEE THE VIOLATION.** Recon in
+> `WorkOrders/WORK_ORDER_1362_google_play_aab_program.md` §2 establishes the shape:
+> - **Tier 1 (assembly exclusion) is genuinely clean** — `DeNelle.Wallet.asmdef:22` and
+>   `DeNelle.Web3.asmdef:17` carry `"!GOOGLE_PLAY"`, and the merged dex proves no MWA/Solana.
+> - **Tier 2 (runtime `#if` guards inside shipping assemblies) does NOT remove strings.**
+>   `SkrShowcasePanel.cs:68` guards `Open()`, but the SKR copy at `:77`, `:154`, `:172` sits OUTSIDE
+>   the guard and compiles into `global-metadata.dat` regardless. **A runtime guard does not remove a
+>   literal from the binary** — only compiling it out or excluding the assembly does.
+> - **Arena has no gating at all.** `grep -c GOOGLE_PLAY` = **0** in `ArenaMode.cs`, `ArenaVM.cs`,
+>   `GameState.cs`; `DeNelle.Village.asmdef:35` has `"defineConstraints": []`. The **SKR wager loop
+>   compiles into and runs in a Play build.**
+> - **The gate is blind on purpose.** `GooglePlayPackagingGate.cs:167-176` routes only
+>   `.json/.txt/.html/.xml/.uxml` + `Data/Canonical/` to the strict token list; everything else,
+>   including `global-metadata.dat`, gets `OpaqueExecutableTokens` (`:36-45`) which **deliberately
+>   drops** `solana`, `skr`, `usdc`, `jupiter`, `blockchain`, `crypto`, `web3` to avoid matching
+>   `System.Security.Cryptography`. Consequence, proven: `Builds/ui-reskin-final-google-play-aab-v2.log`
+>   emitted **`PLAY_ARTIFACT_CLEAN_OK`** on an artifact carrying the USDC mint address and four SKR
+>   marketing sentences.
+>
+> **So "nothing crypto" = convert tier 2 from runtime guards to compile-out, AND make the gate able
+> to see it, AND deal with Arena.**
+>
+> ### ⛔ OWNER RULING 2026-09-04 (same breath) — ARENA IS CUT FROM PLAY BUILDS.
+> Arena is compiled out behind `GOOGLE_PLAY` and **every UI route that points at it is removed with
+> it**. The Play build simply does not have the mode; the Seeker/dApp build keeps SKR wagering
+> unchanged. The soft-currency Arena variant (a 1-2 week design job) is **NOT** being built.
+> ⚠ **The removal must be THOROUGH, and that is the whole risk:** a dangling Arena entry point in a
+> Play build is a Google broken-functionality rejection in its own right — worse than the crypto
+> string it was meant to remove. Cutting the mode is the easy half; finding every door into it is the
+> job.
+>
+> ### ⛔ OWNER RULING 2026-09-04 — NO THROWAWAY AAB. FIX FIRST, BUILD ONCE.
+> A fresh AAB was NOT cut from the current tree. The Play artifact is built once, after the purge and
+> the size work, and it is expected to be shippable when it is built. **Do not cut a Play AAB "just
+> to measure" without asking.**
+
 # KEY FACTS — the living fact sheet (update IN PLACE, never snapshot)
 
 > **Rule (owner directive 2026-07-12):** this file is LIVING — when a fact changes, edit the line

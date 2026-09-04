@@ -57,7 +57,7 @@ At every arrow, **log the hand-off** (who → who, why) for observability.
 | Pipeline element | Concrete tool |
 |---|---|
 | **Queue** | F8 `break-log.jsonl` flags (the F8 watcher feeds new ones in) + reported bugs |
-| **Shared ticket board** | The Task list (`TaskCreate`/`TaskUpdate`). One task per ticket; metadata `{ticket, type, silo, stage, handoffLog}` IS the hand-off log |
+| **Shared ticket board** | ⛔ **STALE 2026-09-04 - THE TASK LIST IS RETIRED** (owner ruling 2026-08-09), as are Notion (08-08) and Linear (08-09). The live board is **`BOARD.html`, DERIVED from `WorkOrders/*.md` via `python tools/board_build.py`** - the repo IS the source of truth and the board cannot drift. The hand-off log is the WO markdown itself: stage + silo + who-has-it live in the file, so the record and the work are the same artifact. See `CLAUDE.md` §13 and `docs/BOARD.md`. *(Original row, kept per §15: "The Task list (`TaskCreate`/`TaskUpdate`). One task per ticket; metadata `{ticket, type, silo, stage, handoffLog}` IS the hand-off log".)* |
 | **QA Triage + RCA** | Read-only agents fanned out in parallel (Explore / general-purpose, no Edit/gate/commit) |
 | **CLI** | This orchestrator seat: Write/Edit + `DeNelle.Editor.CompileGate.Run` + `run-autopilot-fleet.ps1` + git |
 | **PO** | The owner: intake/route + felt-verify-after-deploy + close |
@@ -80,7 +80,7 @@ At every arrow, **log the hand-off** (who → who, why) for observability.
 1. **Role separation — no overlap.** QA doesn't write; CLI doesn't triage-classify; PO doesn't RCA.
 2. **Read-only early triage.** QA/RCA agents are gate-free and never mutate the tree.
 3. **New-vs-old gate is mandatory.** Classify before any fix. New function → feature WO, not a patch.
-4. **Hand-offs go through the board** (the Task list) and are **logged** (metadata `handoffLog`).
+4. **Hand-offs go through the board** (⛔ **NOT the Task list - retired 2026-08-09; the board is `BOARD.html`, derived from the WO markdown**) and are **logged** in the WO file itself.
 5. **Headless-verify before PO.** Gate + fleet/regression where possible; never "works on my machine."
 6. **PO closes, not CLI.** A felt-dependent ticket is CLOSED only on the owner's post-deploy confirm.
 7. **One committer** (CLI). Push only on owner OK.

@@ -180,7 +180,34 @@
 > fine as history. A copied number is the bug **even when it was right the day it was written** -
 > that is exactly how the retired 860-899 UI block kept re-seeding collisions from CLAUDE.md sec.2.
 
-> ## ⚠ RECONCILED 2026-09-03 (CLI, forty-seventh pass): main line next free = **1362**.
+> ## ⚠ RECONCILED 2026-09-04 (CLI, forty-ninth pass): main line next free = **1366**.
+> *(CLI minted **WO-1363, WO-1364, WO-1365** on three owner rulings in one breath: ***"build a fresh
+> aab at 354315"***, ***"180 stays on wallet"***, ***"Nothing Crypto goes in the aab build"***, plus
+> the follow-up rulings ARENA IS CUT FROM PLAY and FIX FIRST, BUILD ONCE (no throwaway AAB).
+> **1363** = the crypto purge - convert tier-2 runtime `#if` guards to compile-out so the literals
+> leave `global-metadata.dat`, and cut Arena from Play including every UI route into it.
+> **1364** = make the Play gate able to SEE a dirty artifact - it currently cannot, and
+> `GooglePlayPackagingRegression.cs:112-116` **actively fails the build if the gate is made stricter**,
+> so 1364 must move the oracle WITH the gate. **1365** = THE AAB LANE HAS NO SHIP CHAIN - no
+> wrapper script invokes `BuildGooglePlayAab` at all (the 09-01 AAB was a hand-typed `Unity.exe`
+> command line with NO `-ExpectMarker`), the lane NEVER calls `tools/r2-ship.ps1` so an AAB's own content-hashed catalog is never pushed (s16 occurrence FIVE waiting to happen), and nothing asserts size - which is how it drifted to 514,062,537 bytes past a 500 MB ceiling with every marker green. ⭐ THE PROVING LINE FOR ALL THREE:
+> `Builds/ui-reskin-final-google-play-aab-v2.log:38188` emitted **`PLAY_ARTIFACT_CLEAN_OK`** on the
+> exact artifact that carries the USDC mint address and four SKR marketing sentences. Bumped
+> 1363 -> 1366 in this SAME edit.)*
+>
+> ### superseded: RECONCILED 2026-09-03 (CLI, forty-eighth pass): main line next free = **1363**.
+> *(CLI minted **WO-1362** on the owner's ask *"can you manage the aab?"* - the Google Play AAB as a
+> PROGRAM, not a build. `AndroidBuild.BuildGooglePlayAab` exists and produces a file, but
+> `docs/GOOGLE_PLAY_READINESS_AUDIT_2026-08-30.md` measured that file at **493 MiB against Play's
+> 200 MB limit - THE CONSOLE REFUSES THE UPLOAD**, plus four more release blockers (crypto-contaminated
+> metadata, an unconditional dead wallet section, `PackStore` ABSENT from the AAB so there is no buy
+> surface at all, and no in-app account deletion). ⭐ FIRST MOVE IS RE-VERIFICATION, NOT WORK: that
+> audit is four days old and predates the whole 09-01..09-03 wave, and one of its findings is already
+> stale - the web `/delete-account` route went live tonight when the marketing site was restored.
+> Acting on a stale audit is the exact failure s11B was written for. Bumped 1362 -> 1363 in this SAME
+> edit.)*
+>
+> ### superseded: RECONCILED 2026-09-03 (CLI, forty-seventh pass): main line next free = **1362**.
 > *(CLI minted **WO-1361** - ⛔ **PLAYER STRUCTURES VANISH FROM THE SAVE**, and it is the biggest
 > unworked defect known. Her live capture: `[Flow:BaseLayout] Enter build mode CENSUS: live
 > PlacedStructure(s) in scene=9, loader.Loaded=9, persisted BaseLayout=17` - **eight structures gone**,
