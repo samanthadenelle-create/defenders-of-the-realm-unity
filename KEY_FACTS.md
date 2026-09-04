@@ -134,6 +134,35 @@
 > mistake is reading "purchases live + $0.04 revenue" as "the game is earning". It is not. It is
 > READY to earn, which is a different and still-good fact.
 
+> ## ⛔ OWNER RULING 2026-09-04 — THE APK IS IN PRODUCTION. **THE AAB IS THE LANE NOW.**
+>
+> Owner, verbatim: ***"the idea is we are working on the AAB. I just pushed the APK to production, so
+> now we go back to dev and work issues and fix stuff"***.
+>
+> ⚠ **THIS REFINES — DOES NOT CANCEL — THE 09-02 "APK IS THE PRIORITY" RULING BELOW.** That ruling
+> moved the project off Pi/WebGL and onto Android; **it is now satisfied.** The APK shipped to the
+> dApp Store on 2026-09-04. The Android lane continues, but its target has moved from the **APK** to
+> the **Google Play AAB**, and the posture is **dev-and-fix**, not ship.
+>
+> **WHERE THE AAB ACTUALLY STANDS (measured 2026-09-04, never restate — re-measure):**
+> - ✅ **SIZE IS SOLVED.** `bundletool get-size total --modules=base` reads **469,122,568-469,202,267
+>   bytes** after WO-1367's texture pass, down from 510,443,276 — **~30.8 MB under the 500,000,000
+>   ceiling**, and under on the *binary* reading too, so the undocumented MB-vs-MiB ambiguity can no
+>   longer decide anything.
+> - ⛔ **CRYPTO IS THE REMAINING BLOCKER, and it is TWO problems.** WO-1363: `#if` guards wrap
+>   BEHAVIOUR, not STRINGS, so SKR copy compiles into `global-metadata.dat` whether the panel can open
+>   or not — a reviewer runs `strings`, not the game. WO-1364: **the gate cannot SEE it** —
+>   `OpaqueExecutableTokens` deliberately drops `solana`/`usdc`/`jupiter`, the USDC mint is in NEITHER
+>   token list, and there is no bare `skr` token anywhere. ⭐ **Fix the GATE first or the purge just
+>   produces another green marker nobody can trust — which is how we got here.**
+> - ⛔ **THE AAB LANE HAS NO SHIP CHAIN** (WO-1365): no script invokes `BuildGooglePlayAab`, it never
+>   calls `tools2-ship.ps1` (so its own content-hashed catalog is never pushed — §16 occurrence FIVE
+>   waiting), and nothing asserts size.
+> - ⚠ **THE AAB CANNOT CARRY A CHOSEN VERSION.** `AndroidBuild.ApplyVersionStamp` (`:350-365`) is
+>   parameterless, called unconditionally, and computes the code from `DateTime.UtcNow`. A fresh build
+>   stamps a NEW higher code. Fine for Play (it requires monotonic) — but it will not match the APK
+>   on her phone, and no amount of asking will make it.
+
 > ## ⛔ OWNER RULING 2026-09-02 EVENING — THE ANDROID APK IS THE PRIORITY. PI IS PARKED.
 >
 > Owner, verbatim: *"we have spent most of today triaging and trying to get Pi to work, but have
