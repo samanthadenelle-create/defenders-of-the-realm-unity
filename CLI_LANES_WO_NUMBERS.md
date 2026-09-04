@@ -185,7 +185,10 @@
 > aab at 354315"***, ***"180 stays on wallet"***, ***"Nothing Crypto goes in the aab build"***, plus
 > the follow-up rulings ARENA IS CUT FROM PLAY and FIX FIRST, BUILD ONCE (no throwaway AAB).
 > **1363** = the crypto purge - convert tier-2 runtime `#if` guards to compile-out so the literals
-> leave `global-metadata.dat`, and cut Arena from Play including every UI route into it.
+> leave `global-metadata.dat`, and **de-crypto Arena (owner reversed the cut same-session: Arena
+> SHIPS to Play, it only loses the SKR branding)** - which is cheap, because `ArenaWalletService.cs:2`
+> declares itself a client-side PlayerPrefs stub seeded to 500, so WO-1362's "1-2 weeks of design
+> work" rested on a false premise.
 > **1364** = make the Play gate able to SEE a dirty artifact - it currently cannot, and
 > `GooglePlayPackagingRegression.cs:112-116` **actively fails the build if the gate is made stricter**,
 > so 1364 must move the oracle WITH the gate. **1365** = THE AAB LANE HAS NO SHIP CHAIN - no

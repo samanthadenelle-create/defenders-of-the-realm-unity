@@ -244,14 +244,23 @@
 > **So "nothing crypto" = convert tier 2 from runtime guards to compile-out, AND make the gate able
 > to see it, AND deal with Arena.**
 >
-> ### ⛔ OWNER RULING 2026-09-04 (same breath) — ARENA IS CUT FROM PLAY BUILDS.
-> Arena is compiled out behind `GOOGLE_PLAY` and **every UI route that points at it is removed with
-> it**. The Play build simply does not have the mode; the Seeker/dApp build keeps SKR wagering
-> unchanged. The soft-currency Arena variant (a 1-2 week design job) is **NOT** being built.
-> ⚠ **The removal must be THOROUGH, and that is the whole risk:** a dangling Arena entry point in a
-> Play build is a Google broken-functionality rejection in its own right — worse than the crypto
-> string it was meant to remove. Cutting the mode is the easy half; finding every door into it is the
-> job.
+> ### ⛔ OWNER RULING 2026-09-04 — ARENA SHIPS TO GOOGLE PLAY. IT ONLY LOSES THE CRYPTO.
+> Owner, verbatim: ***"the arena will go to the google play store, just needs to remove crypto"***.
+> ⚠ **THIS SUPERSEDES A CUT-ARENA RULING MADE EARLIER IN THE SAME SESSION** (which said Arena would
+> be compiled out of Play). Nothing is compiled out; no UI route is removed; no save field is
+> touched. The SKR *branding* leaves, the mode stays.
+>
+> ⭐ **AND IT IS CHEAP, BECAUSE WO-1362's "1-2 WEEKS, AND IT IS DESIGN WORK" ESTIMATE RESTED ON A
+> FALSE PREMISE.** That estimate assumed Arena wagers real SKR. Measured at source 2026-09-04:
+> `Assets/_Modules/Village/Arena/ArenaWalletService.cs:2` declares itself a **"CLIENT-SIDE SKR WAGER
+> STUB"**, `:19` **"NOT real on-chain custody, NOT a backend-escrowed"**, `:38` persists to
+> PlayerPrefs key `dotr-arena-skr-balance`, `:41` seeded to **500**. **The wager is a number in
+> PlayerPrefs.** There is no economy to redesign — the word "SKR" is the only crypto in Arena, so
+> this is a rename plus a PlayerPrefs read-migration.
+> ⛔ **Two traps:** renaming the PlayerPrefs key without read-migrating **orphans every existing
+> player's Arena balance**; and re-pointing the wager at Coins/Crystals is a **balance change wearing
+> a rename's clothes** — it needs its own ruling. The wager's new NAME is an owner call (SAMANTHA.md
+> rule 8). Detail in `WorkOrders/WORK_ORDER_1363_play_crypto_purge_and_arena_decrypto.md` PART 3.
 >
 > ### ⛔ OWNER RULING 2026-09-04 — NO THROWAWAY AAB. FIX FIRST, BUILD ONCE.
 > A fresh AAB was NOT cut from the current tree. The Play artifact is built once, after the purge and
