@@ -84,6 +84,115 @@ one day later, by the owner, on the production candidate.
 defect. The ceiling was removed for a good reason (WO-1353's regression force-released a legitimate
 8-minute pause). **Fix the ownership, not the ceiling.**
 
+## ⭐ RCA COMPLETE 2026-09-04 - ROOT CAUSE FOUND, PLUS A BIGGER ONE UNDERNEATH
+
+### The scene is the whole story: `dg_folks_granary`, a composed DUNGEON
+
+```
+09:38:25.058 [Flow:Death] lethal hit ... scene='dg_folks_granary' ...
+             OnDeath listeners=[GameOverScreen.ShowHeroFell, HeroDeathEndState.OnHeroDeath]
+09:38:29.070 W [Flow:DeathTrace] TIMESCALE STILL 0 after 4.0s - GameOverScreen.Show froze time
+             and it has NOT been restored within the death flow
+```
+
+`GameOverScreen` fired inside a dungeon it has no business owning.
+
+### 1. WHY: it never UNSUBSCRIBES
+
+`GameOverScreen.OnSceneLoaded` (`:131-132`) does `_heart = null; _hero = null;` - **it nulls the
+references WITHOUT `-= ShowHeroFell`**. Compare `HeroDeathEndState.Unhook()` (`:88`), which does it
+correctly. The hero is `DontDestroyOnLoad` and is CARRIED into composed dungeons, so the same
+`HeroHealth` crosses the boundary still carrying the stale delegate. Its two stand-downs cover arena
+and overworld - **neither covers a dungeon** - and there is no `IsDefeatScene` re-check inside the
+handler. Hence TWO end-states 9ms apart.
+
+### 2. WHY THE RELEASE NEVER RAN - all three paths failed for one reason
+
+`ReleaseWorldHold` (`:110`) is correct and idempotent. Its three callers:
+
+| Caller | Ran? | Why not |
+|---|---|---|
+| `OnRetry()` `:283` | NO | the view carrying that delegate was destroyed 10ms later without firing |
+| `OnSceneLoaded()` `:126` | NO | no scene could load - **the world was frozen** |
+| `OnDestroy()` `:89` | NO | `GameOverScreen` is a `DontDestroyOnLoad` singleton (`:79`) - never destroyed |
+
+⛔ **Not a coincidence: all three are downstream of "the player pressed the button", and the button
+was destroyed.**
+
+### 3. ⛔ IT IS *NOT* THE WO-1360 "DISABLED NOT DESTROYED" SHAPE. IT IS WORSE.
+
+`PauseController` owns its hold AND the UI that releases it, so `OnDisable` was a sufficient net.
+**`GameOverScreen` does not own its UI** - it hands the release to `EndStateView` as a delegate
+(`:276`), and `EndStateView` is a separate destructible object any modal can kill. `GameOverScreen`
+cannot detect that death: no `OnDestroy` hook on the view, no `PanelHandle`, no probe.
+
+**So adding `OnDisable` would fix NOTHING** - the component was enabled the entire 2m07s. The defect
+is *a PlayerOwned hold whose release is delegated to an object the holder does not own and cannot
+outlive-detect.* ⭐ `EndStateView.cs:2124-2140` already names this class in its own comment:
+*"Whoever owns a route that matters must not delegate it to a UI object other systems can destroy."*
+
+⚠ Secondary: `_shown` (`:246`) only resets in `OnRetry`/`OnSceneLoaded`, so it is **still true** - a
+subsequent death would have been swallowed too.
+
+### 4. Why `HeroDeath primary fired` at 26.511 did not help
+Different view, different VM. `FromGameOver` -> `PrimaryRoute="retry"` (destroyed, never fired);
+`FromHeroDeath` -> `PrimaryRoute="respawn"` (fired). **Nothing in the respawn chain references
+`GameOverScreen`.** Release is coupled to one delegate on one destroyed object, not to the primary.
+
+### 5. THE SEVEN-HOLD AUDIT - 2 guilty, 2 partial, 3 clean
+
+| Hold | Verdict |
+|---|---|
+| `pause-menu` | CLEAN (WO-1360 fixed it) |
+| **`game-over`** | ⛔ **GUILTY - this ticket** |
+| `wave-results` | CLEAN (holder IS the UI; `OnDestroy` is a real catch-all) |
+| `combat-item-picker` | ⚠ PARTIAL - `HudKitController` has **no `OnDisable`**; a disabled HUD strands it |
+| `bug-report-form` | ⚠ PARTIAL - no `OnDisable`; a component disabled without `Close()` strands it |
+| **`f8-note-capture`** | ⛔ **GUILTY** - `OnDestroy` does NOT dispose the hold; the note box is `OnGUI` so a disabled harness can never commit; **no cancel/escape path**. Guarded by `UNITY_EDITOR \|\| DEVELOPMENT_BUILD` - **reachable in the dev APK she plays** |
+| `vfx-parade-curation` | CLEAN (paired `OnEnable`/`OnDisable`/`OnDestroy`) |
+
+### 6. ⛔⛔ THE FINDING THAT OUTRANKS THIS TICKET: THE PROMISED SAFETY NET IS NOT WIRED
+
+`WorldHold.AcquirePlayerOwned`'s own XML doc (`Core/UI/WorldHold.cs:369-372`) reassures every future
+author that removing the ceiling is safe:
+
+> *"What still catches this hold: `ReleaseAllForSceneLoad` (a scene change drops every hold - quit to
+> title cannot land frozen), `ForceReleaseAll` on teardown paths..."*
+
+**`ReleaseAllForSceneLoad` HAS ZERO RUNTIME CALLERS.** `grep -rn` finds it only in
+`Editor/Regression/BattleQuiescenceRegression.cs:1386,:1619` - the harness that proves it works.
+`ForceReleaseAll` has two runtime callers (`PauseController.cs:357`, `DevTools/GateTraversalProof.cs:108`).
+
+⛔ **The "scene change drops every hold" net exists only in prose and in the test that proves it
+works in isolation. It is not installed.** Rows 3-5 of the audit lean on it for at least one exit
+path, and that lean is unsupported. **This is the §16 duplicated-state class: a guarantee asserted in
+a comment, tested in a harness, and never wired.**
+
+### 7. THE FIX SHAPE - four changes, none restores a ceiling
+
+- **(a) THE ORACLE, and the only one that prevents the NEXT occurrence:** make a liveness probe a
+  **REQUIRED argument** of `AcquirePlayerOwned` that THROWS on null - the exact
+  `OverTimeEffects.cs:302-307` shape (WO-1330), so a PlayerOwned hold *cannot be constructed without
+  saying how to test whether its owner still exists*. The watchdog then polls the probe and
+  force-releases with a `FlowTrace.Fail` the moment it answers false. ⭐ **This asks "does its owner
+  exist", never "is this too old"** - so a legitimate 8-minute pause with a live `PauseController` is
+  untouched, which is precisely the WO-1353 regression this ticket forbids re-creating.
+  ⭐ **The probe type already exists and is already authored at these call sites:** `PanelHandle`'s
+  `Func<bool> IsOpen` (`PanelManager.cs:42`), e.g. `() => view != null` (`EndStateView.cs:201`),
+  `() => _itemPicker != null` (`HudKitController.cs:1993`). **Reuse it. Do not invent a second
+  liveness concept.** This alone would have thawed the world at 09:38:25.081 - the frame the view died.
+- **(b)** `GameOverScreen` stops delegating the release: bind the hold's lifetime to the object that
+  can die, or register a `PanelHandle` so the arbiter can reach it. Reset `_shown` on the same path.
+- **(c)** Add the missing `Unhook()` to `OnSceneLoaded` (`-= ShowHeroFell` / `-= ShowHeartFell`),
+  matching `HeroDeathEndState.cs:88`, **and** re-check `IsDefeatScene` at the top of the handler - the
+  delegate rides a DDOL hero across every scene boundary in the game.
+- **(d)** Wire `ReleaseAllForSceneLoad` to a real `SceneManager.sceneLoaded` hook, **or delete the
+  sentence from the doc.** A written guarantee with no implementation is worse than none.
+
+⚠ **(b) and (c) each independently prevent THIS capture. Only (a) prevents the next one, and only (a)
+can be asserted by an oracle** - which this ticket requires, because `REGRESSION_OK 358/358` was green
+on the build that froze her twice.
+
 ## THE WORK
 
 1. **Find why the `game-over` release does not run.** Read `Village/Heart/GameOverScreen.cs:264` and
