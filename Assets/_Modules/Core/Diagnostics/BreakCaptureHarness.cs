@@ -531,8 +531,10 @@ namespace DeNelle.Core.Diagnostics
             // pressed during a purchase or a modal no longer thaws the world on commit.
             float observedScale = Time.timeScale;
             _prevTimeScale = observedScale > 0f ? observedScale : 1f;
-            _worldHold = DeNelle.Core.UI.WorldHold.AcquireScale(
-                "f8-note-capture", 0f, DeNelle.Core.UI.WorldHold.StuckHoldSeconds);
+            // WO-1360: PLAYER-OWNED. The owner is typing a bug note; a ceiling here would resume
+            // the game under the note box, which is exactly the input-steals-the-hero failure the
+            // freeze exists to prevent.
+            _worldHold = DeNelle.Core.UI.WorldHold.AcquirePlayerOwned("f8-note-capture");
             if (observedScale <= 0f)
                 DeNelle.Core.Diagnostics.FlowTrace.Warn("BreakCapture",
                     "F8 pressed while the world was ALREADY frozen (timeScale 0 — another owner, " +

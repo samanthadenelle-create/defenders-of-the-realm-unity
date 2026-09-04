@@ -159,6 +159,49 @@ namespace DeNelle.Core.UI
         public const string ReasonCombatItemPicker = "combat-item-picker";
 
         /// <summary>
+        /// WHAT KIND OF HOLD THIS IS. The distinction is CATEGORICAL, not a bigger number
+        /// (WO-1360, owner F8 seq 4679).
+        ///
+        /// <para><b>A ceiling can only judge a hold whose length the CODE owns.</b> A hit stop is
+        /// milliseconds, a celebration under a second, a death cam fifteen  -  for those, "still
+        /// outstanding well past the longest legitimate run" really does mean the owner died
+        /// without disposing (a coroutine killed by a deactivated host fires no OnDestroy and
+        /// throws nothing, so nothing else can catch it) and force-releasing is right.</para>
+        ///
+        /// <para><b>A hold whose length the PLAYER owns has no such number.</b> A pause menu, a
+        /// death screen, a bug-report form, a modal the player is reading  -  a human can leave any
+        /// of them open for hours, and backgrounding the app is the normal way to do it. Judging
+        /// those by elapsed time is a category error, and the consequence is worse than the leak
+        /// the ceiling guards: on 2026-09-03 the 180 s ceiling force-released 'pause-menu' after
+        /// 507 s and the world ran underneath a PAUSED screen  -  the exact WO-1016 shape the
+        /// slowest-wins rule exists to prevent (screenshot:
+        /// logs/f8-inbox/device/SM02G4061955851/break_01_error.png).</para>
+        ///
+        /// <para>STOP: RAISING THE NUMBER IS NOT THE FIX. It reproduces the same bug at a longer
+        /// timeout. <see cref="BoundedBeat"/> stays the DEFAULT for every existing and future
+        /// caller; an unbounded hold must be ASKED for by name
+        /// (<see cref="AcquirePlayerOwned"/>), so an author cannot get it wrong by accident.</para>
+        /// </summary>
+        public enum HoldKind
+        {
+            /// <summary>The code owns the duration. The watchdog ceiling applies. THE DEFAULT.</summary>
+            BoundedBeat = 0,
+
+            /// <summary>The PLAYER owns the duration. No ceiling; never force-released by age.
+            /// Still reported once, loudly, so a capture can read it.</summary>
+            PlayerOwned = 1,
+        }
+
+        /// <summary>
+        /// Unscaled seconds after which an open PLAYER-OWNED hold names itself in the trace  -  ONCE,
+        /// as a Warn, and it is NOT force-released. This is observability, not a deadline: a capture
+        /// taken during a long pause must still say what is holding the world, or CLAUDE.md sec.12 has
+        /// no data to read. Deliberately the old ceiling value so a trace read against tonight's
+        /// logs lines up.
+        /// </summary>
+        public const float PlayerOwnedReportSeconds = 180f;
+
+        /// <summary>
         /// Unscaled seconds after which an outstanding hold is force-released with a loud
         /// FlowTrace.Fail. Deliberately generous: a real chain settlement legitimately takes
         /// many seconds and some of it is outside our control, so this is a LAST RESORT for
@@ -211,8 +254,17 @@ namespace DeNelle.Core.UI
             internal float Scale;
 
             /// <summary>Unscaled seconds this hold may live before the watchdog force-releases it
-            /// with a FlowTrace.Fail.</summary>
+            /// with a FlowTrace.Fail. Meaningless for a <see cref="HoldKind.PlayerOwned"/> hold,
+            /// which has no ceiling at all.</summary>
             internal float MaxSeconds;
+
+            /// <summary>Bounded beat (ceiling applies) vs player-owned open state (no ceiling).
+            /// See <see cref="HoldKind"/>  -  the distinction is categorical, not a duration.</summary>
+            internal HoldKind Kind;
+
+            /// <summary>Set once a player-owned hold has named itself in the trace, so a long
+            /// pause reports one line rather than one per watchdog tick.</summary>
+            internal bool OpenReported;
 
             private bool _released;
 
@@ -224,6 +276,10 @@ namespace DeNelle.Core.UI
 
             /// <summary>The scale this hold is asking the world to run at.</summary>
             public float RequestedScale => Scale;
+
+            /// <summary>True when the PLAYER owns how long this hold lasts, so no elapsed-time
+            /// ceiling may judge it stuck. Exposed for oracles and captures.</summary>
+            public bool IsPlayerOwned => Kind == HoldKind.PlayerOwned;
 
             /// <summary>True while this particular hold is still outstanding.</summary>
             public bool IsHeld => !_released;
@@ -299,6 +355,37 @@ namespace DeNelle.Core.UI
         }
 
         /// <summary>
+        /// Freezes the world for an OPEN STATE THE PLAYER OWNS  -  a pause menu, a death screen, a
+        /// form the player is typing into. <b>No watchdog ceiling: this hold is never
+        /// force-released because time passed.</b>
+        ///
+        /// <para>STOP: THIS IS THE ONE YOU MUST ASK FOR BY NAME, and that is deliberate. Every other
+        /// entry point stays bounded, so a new caller who does not think about the distinction gets
+        /// the safe, leak-detecting default. Reach for this ONLY when a human, not the code,
+        /// decides when the hold ends (WO-1360).</para>
+        ///
+        /// <para>Removing the ceiling removes ONE net, not all of them. What still catches this
+        /// hold: <see cref="ReleaseAllForSceneLoad"/> (a scene change drops every hold  -  quit to
+        /// title cannot land frozen), <see cref="ForceReleaseAll"/> on teardown paths, the
+        /// zero-holds drift watchdog once it IS released, and  -  the one that actually matters  - 
+        /// the owning UI's own OnDisable/OnDestroy step-out. A player-owned hold whose UI can die
+        /// without disposing is a real hole; the owner closes it, not a timer.</para>
+        /// </summary>
+        public static Handle AcquirePlayerOwned(string reason)
+        {
+            return AcquireKind(reason, 0f, 0f, HoldKind.PlayerOwned);
+        }
+
+        /// <summary>
+        /// <see cref="AcquirePlayerOwned"/> at a scale other than 0  -  a player-owned state that
+        /// slows the world rather than stopping it. Same rules: no ceiling, must be asked for.
+        /// </summary>
+        public static Handle AcquirePlayerOwnedScale(string reason, float scale)
+        {
+            return AcquireKind(reason, scale, 0f, HoldKind.PlayerOwned);
+        }
+
+        /// <summary>
         /// Acquires a hold that asks the world to run at <paramref name="scale"/> — the general
         /// form behind <see cref="Acquire"/>, which is simply this at scale 0.
         ///
@@ -319,11 +406,24 @@ namespace DeNelle.Core.UI
         /// <param name="maxUnscaledSeconds">Watchdog ceiling on the UNSCALED clock.</param>
         public static Handle AcquireScale(string reason, float scale, float maxUnscaledSeconds)
         {
+            return AcquireKind(reason, scale, maxUnscaledSeconds, HoldKind.BoundedBeat);
+        }
+
+        /// <summary>
+        /// The one construction path behind every Acquire form. <paramref name="kind"/> is what
+        /// decides whether elapsed time may judge this hold stuck  -  see <see cref="HoldKind"/>.
+        /// Private on purpose: the public surface makes the unbounded case a named request.
+        /// </summary>
+        private static Handle AcquireKind(string reason, float scale, float maxUnscaledSeconds, HoldKind kind)
+        {
             float want = Mathf.Max(0f, scale);
             var handle = new Handle(reason, Time.unscaledTime)
             {
                 Scale = want,
-                MaxSeconds = maxUnscaledSeconds > 0f ? maxUnscaledSeconds : CosmeticHoldSeconds,
+                Kind = kind,
+                MaxSeconds = kind == HoldKind.PlayerOwned
+                    ? 0f
+                    : (maxUnscaledSeconds > 0f ? maxUnscaledSeconds : CosmeticHoldSeconds),
             };
             s_holds.Add(handle);
 
@@ -366,6 +466,13 @@ namespace DeNelle.Core.UI
                     $"[{Describe()}]. The world runs at 1.00 again only when the LAST one releases.");
                 EnsureWatchdog();
             }
+
+            if (kind == HoldKind.PlayerOwned)
+                FlowTrace.Step("Pause",
+                    $"WorldHold '{handle.Reason}' is PLAYER-OWNED: the player decides when it ends, " +
+                    "so NO watchdog ceiling applies and it will never be force-released for being " +
+                    $"old. It names itself once after {PlayerOwnedReportSeconds:F0}s so a capture can " +
+                    "still read it. Its release is owned by the UI that took it (WO-1360).");
 
             return handle;
         }
@@ -631,6 +738,30 @@ namespace DeNelle.Core.UI
             for (int i = s_holds.Count - 1; i >= 0; i--)
             {
                 float age = now - s_holds[i].AcquiredUnscaled;
+
+                // STOP: A PLAYER-OWNED HOLD IS NEVER STUCK BECAUSE IT IS OLD (WO-1360). A human can
+                // leave a pause menu, a death screen or a bug-report form open for hours, and
+                // backgrounding the app is the normal way to do it. Force-releasing one unfreezes
+                // live gameplay UNDERNEATH a modal that still says PAUSED - which is strictly worse
+                // than the leak a ceiling guards, and is what shipped tonight (owner F8 seq 4679:
+                // 'pause-menu' killed at 507.3s past a 180.0s ceiling with the menu still on
+                // screen). It still names itself ONCE so sec.12 has data to read.
+                if (s_holds[i].Kind == HoldKind.PlayerOwned)
+                {
+                    if (!s_holds[i].OpenReported && age >= PlayerOwnedReportSeconds)
+                    {
+                        s_holds[i].OpenReported = true;
+                        FlowTrace.Warn("Pause",
+                            $"OPEN PLAYER-OWNED HOLD: '{s_holds[i].Reason}' (scale " +
+                            $"{s_holds[i].Scale:F2}) has been outstanding for {age:F1}s. This is " +
+                            "NOT a leak and it will NOT be force-released - the player owns how " +
+                            "long it lasts, and unfreezing the world under an open modal is the " +
+                            "worse failure. Logged once so a capture taken during a long pause can " +
+                            $"still say what holds the clock. Outstanding: [{Describe()}].");
+                    }
+                    continue;
+                }
+
                 float limit = s_holds[i].MaxSeconds > 0f ? s_holds[i].MaxSeconds : StuckHoldSeconds;
                 if (age < limit) continue;
                 FlowTrace.Fail("Pause",

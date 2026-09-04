@@ -99,6 +99,7 @@ namespace DeNelle.Editor
                 ZeroHoldsMeansFullSpeed(failures, log);
                 EveryHoldPathReleasesOnEveryExit(failures, log);
                 AnOverrunHoldSelfReleasesAndReports(failures, log);
+                APlayerOwnedHoldOutlivesEveryCeiling(failures, log);
                 TodaysCapturedDriftIsCorrected(failures, log);
                 TheGateObservesAndDoesNotWriteTheClock(failures, log);
             }
@@ -1447,7 +1448,10 @@ namespace DeNelle.Editor
                 failures.Add("[wiring/death] GameOverScreen.cs is missing or unreadable.");
             else
             {
-                if (over.IndexOf("WorldHold.AcquireScale", StringComparison.Ordinal) < 0)
+                // WO-1360: the death screen is PLAYER-OWNED (it ends when the player taps Retry),
+                // so AcquirePlayerOwned satisfies this too. The assertion is that it takes a hold.
+                if (over.IndexOf("WorldHold.AcquireScale", StringComparison.Ordinal) < 0 &&
+                    over.IndexOf("WorldHold.AcquirePlayerOwned", StringComparison.Ordinal) < 0)
                     failures.Add("[wiring/death] GameOverScreen no longer takes a WorldHold hold for the " +
                                  "death freeze. A bare Time.timeScale=0 there can strand the world frozen " +
                                  "behind a dismissed screen with nothing on-screen saying why.");
@@ -1515,6 +1519,143 @@ namespace DeNelle.Editor
 
                 log.AppendLine("  [overrun] the long-lived transaction ceiling is separate from the " +
                                "cosmetic one and is not tripped by it.");
+            }
+            finally
+            {
+                DeNelle.Core.UI.WorldHold.ResetForTests();
+            }
+        }
+
+        /// <summary>
+        /// INVARIANT 4b (WO-1360)  -  A USER-DRIVEN PAUSE HAS NO CEILING, AND A BOUNDED BEAT STILL
+        /// HAS ONE. Both directions, deliberately: a "fix" that simply disabled the watchdog would
+        /// pass the first half and must fail the second.
+        ///
+        /// <para>THE CAPTURE THIS PINS (owner F8 seq 4679, 2026-09-03, on device): 'pause-menu' was
+        /// force-released after 507.3s past a 180.0s ceiling while the PAUSED menu was still on
+        /// screen (logs/f8-inbox/device/SM02G4061955851/break_01_error.png), so the world ran
+        /// underneath a modal that said the game was stopped  -  the WO-1016 shape. A player can
+        /// pause for hours; backgrounding the app is the normal way to do it. Elapsed time cannot
+        /// judge an intentional, player-owned state stuck.</para>
+        /// </summary>
+        private static void APlayerOwnedHoldOutlivesEveryCeiling(List<string> failures, StringBuilder log)
+        {
+            try
+            {
+                // ---- DIRECTION 1: the player-owned hold survives, arbitrarily long. ----
+                DeNelle.Core.UI.WorldHold.ResetForTests();
+                var pause = DeNelle.Core.UI.WorldHold.AcquirePlayerOwned(
+                    DeNelle.Core.UI.WorldHold.ReasonPauseMenu);
+                if (!Mathf.Approximately(Time.timeScale, 0f))
+                    failures.Add("[player-owned] the pause hold never froze the clock, so this case is " +
+                                 "not testing what it claims to.");
+                if (!pause.IsPlayerOwned)
+                    failures.Add("[player-owned] AcquirePlayerOwned returned a hold that does not report " +
+                                 "IsPlayerOwned. The kind is what the watchdog reads; without it the " +
+                                 "ceiling still applies and tonight's defect is unchanged.");
+
+                // The exact overrun from the capture, then an hour, then most of a day. NONE of them
+                // may drop it. 507s is the observed number; the others prove it is not a bigger
+                // ceiling wearing a new name.
+                foreach (float t in new[] { 507.3f, 3600f, 60000f })
+                {
+                    DeNelle.Core.UI.WorldHold.WatchdogTick(Time.unscaledTime + t);
+                    if (DeNelle.Core.UI.WorldHold.Count != 1 || !Mathf.Approximately(Time.timeScale, 0f))
+                        failures.Add("[player-owned] the pause hold was force-released after " +
+                                     t.ToString("0") + "s (count " + DeNelle.Core.UI.WorldHold.Count +
+                                     ", clock " + Time.timeScale.ToString("0.00") + "). A user-driven " +
+                                     "pause has NO natural ceiling - a player can pause for hours and " +
+                                     "backgrounding the app is the normal way to do it. Unfreezing the " +
+                                     "world under an open PAUSED menu is worse than the leak a ceiling " +
+                                     "guards (owner F8 seq 4679).");
+                }
+
+                // And it still releases normally when its owner says so.
+                pause.Dispose();
+                if (DeNelle.Core.UI.WorldHold.Count != 0 || !Mathf.Approximately(Time.timeScale, 1f))
+                    failures.Add("[player-owned] disposing the pause hold did not return the world to " +
+                                 "1.00 (count " + DeNelle.Core.UI.WorldHold.Count + ", clock " +
+                                 Time.timeScale.ToString("0.00") + ").");
+                else
+                    log.AppendLine("  [player-owned] a user-driven pause survives 507s / 1h / ~17h of " +
+                                   "watchdog ticks and releases only when its owner disposes it");
+
+                // ---- DIRECTION 2: a BOUNDED BEAT still expires. Without this half, a fix that ----
+                // ---- simply switched the watchdog off would pass.                            ----
+                DeNelle.Core.UI.WorldHold.ResetForTests();
+                DeNelle.Core.UI.WorldHold.AcquireScale("wo1360-abandoned-beat", 0.28f, 0.5f);
+                DeNelle.Core.UI.WorldHold.WatchdogTick(Time.unscaledTime + 2f);
+                if (DeNelle.Core.UI.WorldHold.Count != 0 || !Mathf.Approximately(Time.timeScale, 1f))
+                    failures.Add("[player-owned] a BOUNDED beat 2s past its 0.5s ceiling was NOT " +
+                                 "force-released (count " + DeNelle.Core.UI.WorldHold.Count + ", clock " +
+                                 Time.timeScale.ToString("0.00") + "). Exempting player-owned holds must " +
+                                 "not disable the watchdog: a coroutine killed by a deactivated host " +
+                                 "fires no OnDestroy and throws nothing, so the ceiling is the only net " +
+                                 "left for a cosmetic dip.");
+                else
+                    log.AppendLine("  [player-owned] a bounded beat still expires at its ceiling and " +
+                                   "reports - the exemption is categorical, not a global off switch");
+
+                // ---- DIRECTION 3: the default is still bounded. An author who does NOT ask for ----
+                // ---- an unbounded hold must not get one by accident.                          ----
+                DeNelle.Core.UI.WorldHold.ResetForTests();
+                var byDefault = DeNelle.Core.UI.WorldHold.AcquireScale("wo1360-default", 0f, 1f);
+                if (byDefault.IsPlayerOwned)
+                    failures.Add("[player-owned] AcquireScale produced a PLAYER-OWNED hold. Unbounded " +
+                                 "must be asked for by name (AcquirePlayerOwned); if it is the default " +
+                                 "then every future leak goes undetected.");
+                DeNelle.Core.UI.WorldHold.WatchdogTick(Time.unscaledTime + 5f);
+                if (DeNelle.Core.UI.WorldHold.Count != 0)
+                    failures.Add("[player-owned] the DEFAULT acquire form outlived its ceiling. The " +
+                                 "ceiling must remain the default for everything that is not " +
+                                 "explicitly player-owned.");
+                else
+                    log.AppendLine("  [player-owned] the ceiling remains the default; unbounded is opt-in");
+
+                // ---- DIRECTION 4: a player-owned hold is still dropped by the paths that MUST ----
+                // ---- drop it. Removing the ceiling removes one net, not all of them.          ----
+                DeNelle.Core.UI.WorldHold.ResetForTests();
+                DeNelle.Core.UI.WorldHold.AcquirePlayerOwned(DeNelle.Core.UI.WorldHold.ReasonPauseMenu);
+                DeNelle.Core.UI.WorldHold.ReleaseAllForSceneLoad("wo1360-next-scene");
+                if (DeNelle.Core.UI.WorldHold.Count != 0 || !Mathf.Approximately(Time.timeScale, 1f))
+                    failures.Add("[player-owned] a scene load did not drop the player-owned hold (count " +
+                                 DeNelle.Core.UI.WorldHold.Count + ", clock " +
+                                 Time.timeScale.ToString("0.00") + "). Time.timeScale is an ENGINE " +
+                                 "GLOBAL and a load does not reset it, so quit-to-title would land in a " +
+                                 "frozen scene with no menu left to resume it.");
+
+                DeNelle.Core.UI.WorldHold.ResetForTests();
+                DeNelle.Core.UI.WorldHold.AcquirePlayerOwned(DeNelle.Core.UI.WorldHold.ReasonPauseMenu);
+                DeNelle.Core.UI.WorldHold.ForceReleaseAll("wo1360-teardown");
+                if (DeNelle.Core.UI.WorldHold.Count != 0 || !Mathf.Approximately(Time.timeScale, 1f))
+                    failures.Add("[player-owned] ForceReleaseAll did not drop the player-owned hold. " +
+                                 "Quit-to-title and teardown paths must always be able to thaw the world.");
+                else
+                    log.AppendLine("  [player-owned] scene load and ForceReleaseAll still drop it - the " +
+                                   "remaining nets are intact");
+
+                // ---- DIRECTION 5: the OWNING UI is the net that replaces the ceiling. ----
+                string pauseSrc = ReadCode("Assets/_Modules/Settings/PauseController.cs");
+                if (string.IsNullOrEmpty(pauseSrc))
+                    failures.Add("[player-owned] PauseController.cs is missing or unreadable.");
+                else
+                {
+                    if (pauseSrc.IndexOf("WorldHold.AcquirePlayerOwned", StringComparison.Ordinal) < 0)
+                        failures.Add("[player-owned] PauseController no longer takes a PLAYER-OWNED hold. " +
+                                     "A bounded one force-releases the freeze under an open PAUSED menu " +
+                                     "(owner F8 seq 4679).");
+                    if (pauseSrc.IndexOf("OnDisable", StringComparison.Ordinal) < 0)
+                        failures.Add("[player-owned] PauseController has no OnDisable step-out. With no " +
+                                     "ceiling, the owning UI's own lifecycle IS the net: a controller " +
+                                     "deactivated while paused cannot process Resume, and OnDestroy does " +
+                                     "NOT fire for a merely-disabled component, so the hold would strand " +
+                                     "the world frozen forever.");
+                    if (pauseSrc.IndexOf("OnDestroy", StringComparison.Ordinal) < 0)
+                        failures.Add("[player-owned] PauseController lost its OnDestroy step-out.");
+                    else
+                        log.AppendLine("  [player-owned] PauseController takes the player-owned hold and " +
+                                       "steps out on Resume, OnDisable AND OnDestroy");
+                }
             }
             finally
             {

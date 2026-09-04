@@ -104,6 +104,21 @@ namespace DeNelle.Settings
         {
             PauseGate.PauseToggleRequested -= OnPauseToggleRequested;
             if (_settings != null) _settings.SettingsClosed.RemoveListener(OnSettingsClosed);
+
+            // STOP: THE HOLE THE CEILING USED TO PAPER OVER (WO-1360). The pause hold is now
+            // PLAYER-OWNED and no timer will ever drop it, so THIS is the net: a controller that
+            // is deactivated while paused can no longer process Resume, and OnDestroy does NOT
+            // fire for a merely-disabled component. Release the hold AND hide the panel together
+            // so the world and the screen never disagree - an orphaned PAUSED panel over a
+            // running world is the WO-1016 shape.
+            if (!_paused) return;
+            _paused = false;
+            if (_hold != null) { _hold.Dispose(); _hold = null; }
+            if (_modal != null && _modal.canvas != null) _modal.canvas.SetActive(false);
+            DeNelle.Core.Diagnostics.FlowTrace.Warn("Pause",
+                "PauseController was DISABLED while paused. Released the player-owned pause hold " +
+                "and hid the panel - a disabled controller cannot Resume, and nothing else would " +
+                $"ever drop this hold. Remaining holds [{WorldHold.Describe()}].");
         }
 
         private void OnPauseToggleRequested() => TogglePause();
@@ -257,7 +272,11 @@ namespace DeNelle.Settings
             // guard — "capture the pre-pause scale, but NEVER capture a FROZEN one", the fix for the
             // permanent-invisible-freeze the owner hit on 2026-08-10 when the OS backgrounded the app
             // over an F8 note box — moved into WorldHold.Acquire verbatim and still applies here.
-            _hold = WorldHold.Acquire(WorldHold.ReasonPauseMenu);
+            // WO-1360: PLAYER-OWNED. A pause is an open state the human ends, not a beat the code
+            // times, so no watchdog ceiling may judge it stuck. The 180s ceiling force-released
+            // this hold after 507s on the owner's device (F8 seq 4679) and the world ran under a
+            // screen that still said PAUSED. Release is owned by Resume/OnDisable/OnDestroy below.
+            _hold = WorldHold.AcquirePlayerOwned(WorldHold.ReasonPauseMenu);
             _paused = true;
             DeNelle.Core.Diagnostics.FlowTrace.Step("Pause",
                 $"PAUSE MENU -> WorldHold taken. Outstanding: [{WorldHold.Describe()}]. " +

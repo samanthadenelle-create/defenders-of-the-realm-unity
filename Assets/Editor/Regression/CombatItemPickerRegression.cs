@@ -14,7 +14,7 @@ namespace DeNelle.Editor.Regression
                 string hud = File.ReadAllText("Assets/_Modules/HUD/Kit/HudKitController.cs");
                 Require(hud, "Register(\"itemSlot\"");
                 Require(hud, "SetCaption(\"ITEM\")");
-                Require(hud, "WorldHold.Acquire(WorldHold.ReasonCombatItemPicker)");
+                Require(hud, "WorldHold.AcquirePlayerOwned(WorldHold.ReasonCombatItemPicker)");
                 Require(hud, "Gameplay is paused while you choose.");
                 Require(hud, "HudCommands.HasPotion && c.HpCooldownRemaining <= 0f");
                 Require(hud, "HudCommands.HasManaPotion && c.ManaCooldownRemaining <= 0f");

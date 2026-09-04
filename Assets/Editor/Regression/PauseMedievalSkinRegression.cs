@@ -18,7 +18,7 @@ namespace DeNelle.Editor.Regression
                 Require(pause, "\"Settings\"");
                 Require(pause, "\"Quit to Title\"");
                 Require(pause, "MedievalUiSkin.ApplyButton(resume, primary: true)");
-                Require(pause, "WorldHold.Acquire(WorldHold.ReasonPauseMenu)");
+                Require(pause, "WorldHold.AcquirePlayerOwned(WorldHold.ReasonPauseMenu)");
                 Forbid(pause, "BuildButtonColumn(body");
 
                 string skin = File.ReadAllText("Assets/_Modules/Core/UI/MedievalUiSkin.cs");

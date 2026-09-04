@@ -261,7 +261,10 @@ namespace DeNelle.Village
             // F8-15 death forensic window: the hub game-over PAUSES time here — anything queued
             // after this (respawn coroutine, warps) freezes until Retry. Freeze STEP-IN: records
             // the pending freeze so DeathTrace.PollFreezeStuck self-reports if it is never restored.
-            _worldHold = WorldHold.AcquireScale(HoldReason, 0f, WorldHold.StuckHoldSeconds);
+            // WO-1360: PLAYER-OWNED. The death screen ends when the player taps Retry, which can
+            // be hours (or a backgrounded app). A ceiling here would unfreeze the world behind a
+            // Game Over card. Release stays paired to Retry / sceneLoaded / OnDestroy below.
+            _worldHold = WorldHold.AcquirePlayerOwned(HoldReason);
             DeathTrace.TimeScaleFroze("GameOverScreen.Show",
                 $"'{title}' in '{_defeatScene}' — scaled-time respawn/down-beat coroutines freeze until Retry/sceneLoaded");
 

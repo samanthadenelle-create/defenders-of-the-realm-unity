@@ -18,7 +18,7 @@ namespace DeNelle.Editor.Regression
             Need(vm, "Compact = false", "wave result is not the full Obsidian modal", failures);
             Need(vm, "Prepare for Wave {waveNumber + 1}", "next action is missing", failures);
             Need(vm, "HoldWorld = true", "wave result does not hold the countdown", failures);
-            Need(view, "WorldHold.Acquire(\"wave-results\")", "shared hold is not acquired", failures);
+            Need(view, "WorldHold.AcquirePlayerOwned(\"wave-results\")", "shared hold is not acquired", failures);
             Need(view, "_worldHold?.Dispose()", "shared hold is not released", failures);
             Need(vm, "TryGetWaveUnlockFor", "authoritative unlock is not reported", failures);
             Need(wave, "AwardWaveClearUnlocks(cleared)", "unlock is not persisted before presentation", failures);

@@ -185,8 +185,8 @@ namespace VfxParade
         private void OnEnable()
         {
             _savedTimeScale = Time.timeScale;
-            _worldHold = DeNelle.Core.UI.WorldHold.AcquireScale(
-                "vfx-parade-curation", 0f, DeNelle.Core.UI.WorldHold.StuckHoldSeconds);
+            // WO-1360: PLAYER-OWNED. Curation runs at a human's pace, not the code's.
+            _worldHold = DeNelle.Core.UI.WorldHold.AcquirePlayerOwned("vfx-parade-curation");
             SpawnCurrent();
         }
 

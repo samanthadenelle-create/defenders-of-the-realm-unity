@@ -180,7 +180,58 @@
 > fine as history. A copied number is the bug **even when it was right the day it was written** -
 > that is exactly how the retired 860-899 UI block kept re-seeding collisions from CLAUDE.md sec.2.
 
-> ## ⚠ RECONCILED 2026-09-03 (CLI, forty-third pass): main line next free = **1358**.
+> ## ⚠ RECONCILED 2026-09-03 (CLI, forty-sixth pass): main line next free = **1361**.
+> *(CLI minted **WO-1360** on a regression WE SHIPPED TONIGHT, caught on her device. Owner F8 seq
+> 4679, 19:08: `STUCK WORLD HOLD: 'pause-menu' ... 507.3s, past its 180.0s ceiling ... Force-releasing`
+> — and the screenshot `logs/f8-inbox/device/SM02G4061955851/break_01_error.png` shows the **PAUSED
+> menu still open on screen**. The hold was NOT stuck; she had paused for eight minutes. WO-1353's
+> per-hold ceiling force-released the freeze **while the modal was up**, so the world ran underneath a
+> screen that said the game was stopped — the WO-1016 shape the slowest-wins rule exists to prevent.
+> ⛔ THE FIX IS CATEGORICAL, NOT A BIGGER NUMBER: a **bounded beat** (hit stop 2s, combat dip 3s,
+> wave/death 4s, death-cam 15s) is code-owned and elapsed time can judge it stuck; a **player-owned
+> open state** (pause, death screen, a form being typed into) has no natural ceiling at all — a player
+> can pause for hours and backgrounding the app is the normal way to do it. New `WorldHold.HoldKind`
+> + `AcquirePlayerOwned`, with the **ceiling as the DEFAULT** so unbounded must be asked for by name;
+> 7 surfaces converted. ⚠ AND IT NAMED A REAL HOLE: `PauseController` disposed on OnDestroy but NOT
+> OnDisable, and a merely-DISABLED component gets no OnDestroy — with the ceiling gone that would
+> strand the world frozen forever, so the ceiling had been papering over it. Closed in the same edit.
+> ⚠ THE 180s PURCHASE HOLD IS FLAGGED, NOT CHANGED (money implications; the wallet-app signing leg is
+> also user-paced) — see the ticket §4. Oracle pins BOTH directions, so "just disable the watchdog"
+> fails. Bumped 1360 -> 1361 in this SAME edit.)*
+>
+> ### superseded: RECONCILED 2026-09-03 (CLI, forty-fifth pass): main line next free = **1360**.
+> *(CLI minted **WO-1359** on owner-supplied art: *"icons for the hud"* - five finished circular
+> emblems for the calm dock's BUILD/TALK/HERO/JOURNEY/MANAGE faces, delivered as one sheet
+> (`Assets/Resources/UI/ElarionMedieval/actionbar/actionbar-emblems.png`). ⭐ TWO TRAPS, BOTH
+> already precedented in this repo. (1) Her FIRST sheet baked the WORD under each emblem - the
+> dock draws that word as LIVE text, so mounting it is **WO-1341 verbatim**, the defect that
+> printed every Hero deck label twice in two fonts on build 2026.09.03.353742. She re-generated
+> without the words; the guard is now permanent. (2) The sheet's reading order and the BAR's order
+> **already disagreed on the first delivery** (sheet: BUILD/TALK/HERO/MANAGE with JOURNEY beneath;
+> bar: ...JOURNEY/MANAGE), so a position-indexed slice transposes two faces and BOTH still look
+> plausible. Faces are therefore keyed BY NAME end to end: caption -> concept row -> manifest
+> slice. Adopting a new sheet = drop the .png + run Elarion/UI/Re-slice Action Bar Emblems (rects
+> derived from the sheet's own alpha, stored NORMALIZED so a downscale cannot break them); a
+> re-ordered sheet = one line, `ActionBarEmblemSlicer.FaceOrder`. Oracle = HudLabelFitRegression
+> Case 8 `[bar-face-icons]`, proven RED on five mutations. ⚠ Also flagged, not fixed:
+> `HudActionBarModel.MaxVisibleFaces` is **4**, not the 6 CLAUDE.md §7 states.
+> Bumped 1359 -> 1360 in this SAME edit.)*
+>
+> ### superseded: RECONCILED 2026-09-03 (CLI, forty-fourth pass): main line next free = **1359**.
+> *(CLI minted **WO-1358** on an owner observation that is really a design gap: *"can we add the offer
+> to have the pets passively repair? i dont know if we ever tell the user outside the FTUE that there
+> is a passive ability"*. ⭐ THE MECHANIC ALREADY EXISTS AND SHIPS - `EchoBonusCalculator
+> .RepairFractionsPerSecond()` sums EVERY OWNED Echo (count x level) and mends structures with no
+> assignment (WO-1108, canon s7, her own ruling: *"the number of pets that we have just passively takes
+> towards healing"*). **The defect is that nothing ever tells the player**, so a real, paid-for,
+> already-working benefit is invisible. ⭐ AND IT LANDS EXACTLY WHERE TODAY'S OTHER DEFECT IS: the
+> repair prompt currently only ever offers the BILL ("Repaired 1 structures for Wood 35, Iron 7") when
+> the honest line is "your Echoes are already mending this - or finish it now for X". ⛔ It must be
+> described as PASSIVE and COUNT-DRIVEN, never as an assignment - the WO-811 "Repair structures" picker
+> chip is RETIRED and re-describing it as a choice would walk back her ruling. Bumped 1358 -> 1359 in
+> this SAME edit.)*
+>
+> ### superseded: RECONCILED 2026-09-03 (CLI, forty-third pass): main line next free = **1358**.
 > *(CLI minted **WO-1357** on an owner felt-test ruling: *"Raid button under journey should fail
 > gracefully, it works great if there is a barracks but should show locked if doesnt have one yet or
 > its destroyed"*. ⭐ STRONG LEAD, not a conclusion: `HudActionBarModel.ComputeMask` already gates the

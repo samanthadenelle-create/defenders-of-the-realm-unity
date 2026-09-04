@@ -202,7 +202,9 @@ namespace DeNelle.Village.UI
                 PanelManager.NotifyOpened(view._panelHandle);
             }
             if (vm.HoldWorld)
-                view._worldHold = DeNelle.Core.UI.WorldHold.Acquire("wave-results");
+                // WO-1360: PLAYER-OWNED. The end-state card is the decision node  -  it stands until
+                // the player chooses. No elapsed-time ceiling may judge it stuck.
+                view._worldHold = DeNelle.Core.UI.WorldHold.AcquirePlayerOwned("wave-results");
 
             // P23 (HUD_OBSIDIAN A4.6): the end-state is the DECISION NODE — while it is
             // up the posture is hostile(postbattle) and the HUD kit stands down.

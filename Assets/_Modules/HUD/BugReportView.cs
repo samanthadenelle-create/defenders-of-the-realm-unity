@@ -87,8 +87,8 @@ namespace DeNelle.HUD
             // has written yet cannot strand the world frozen behind a closed bug-report form, and
             // the watchdog can name this view if one ever does.
             _prevTimeScale = Time.timeScale;
-            _worldHold = DeNelle.Core.UI.WorldHold.AcquireScale(
-                "bug-report-form", 0f, DeNelle.Core.UI.WorldHold.StuckHoldSeconds);
+            // WO-1360: PLAYER-OWNED. The player is typing; a form has no code-owned duration.
+            _worldHold = DeNelle.Core.UI.WorldHold.AcquirePlayerOwned("bug-report-form");
 
             StartCoroutine(OpenRoutine());
         }

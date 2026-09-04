@@ -253,7 +253,10 @@ namespace DeNelle.Editor.Regression
                              "WO-1353 there is exactly ONE writer (" + WorldHoldSrc + "); the F8 note " +
                              "freeze must take a WorldHold hold and dispose it on commit.");
 
-            if (!brk.Contains("WorldHold.AcquireScale"))
+            // WO-1360: the note box is a PLAYER-OWNED hold now (the owner is typing, so no
+            // elapsed-time ceiling may judge it stuck), so either acquire form satisfies this.
+            // What is asserted is that it takes a WorldHold at all.
+            if (!brk.Contains("WorldHold.AcquireScale") && !brk.Contains("WorldHold.AcquirePlayerOwned"))
                 failures.Add("[world-clock] " + BreakSrc + " no longer takes a WorldHold hold for the " +
                              "F8 note freeze. F8 is the owner's primary bug-reporting path; if it stops " +
                              "freezing, typing a note drives the hero.");

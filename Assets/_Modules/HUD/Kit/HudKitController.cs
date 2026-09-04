@@ -1678,22 +1678,30 @@ namespace DeNelle.HUD.Kit
             _peacefulDockLayout.Configure(rootRt, PeacefulDockSlotY0, PeacefulDockSlotY1,
                 HudAreasHost.ActionBarRightHeadroomRatio, HudDockLayout.GapFraction);
 
-            BuildPeacefulDockSlot(0, "BUILD", UiStyle.Icon("build", "hammer"), () =>
+            // WO-1359 — THE FACE'S ICON IS KEYED BY ITS OWN CAPTION, never by its slot index.
+            // BuildPeacefulDockSlot resolves UiStyle.Icon(caption.ToLowerInvariant(), ...) itself,
+            // so "MANAGE" can only ever draw the 'manage' art. That is not tidiness: the sheet the
+            // owner authors reads BUILD/TALK/HERO/MANAGE across the top with JOURNEY beneath, while
+            // the bar shows BUILD/TALK/HERO/JOURNEY/MANAGE — a position-indexed slice silently
+            // swaps the last two, and both faces still look plausible, so nobody catches it.
+            // The extra ids below are the LEGACY pack fallbacks, kept so a face whose authored art
+            // has not landed yet renders exactly what it renders today.
+            BuildPeacefulDockSlot(0, "BUILD", new[] { "hammer" }, () =>
             {
                 if (_owner != null) _owner.BuildRequested?.Invoke();
             });
-            BuildPeacefulDockSlot(1, "TALK", UiStyle.Icon("talk", "speech", "dialogue"), () =>
+            BuildPeacefulDockSlot(1, "TALK", new[] { "speech", "dialogue" }, () =>
             {
                 HudCommands.Talk();
                 if (_owner != null) _owner.TalkRequested?.Invoke();
             });
-            BuildPeacefulDockSlot(2, "HERO", UiStyle.Icon("hero", "helmet", "sword"), () =>
+            BuildPeacefulDockSlot(2, "HERO", new[] { "helmet", "sword" }, () =>
             {
                 if (!PanelRouter.Open(PanelId.HeroDeck))
                     FlowTrace.Warn("HudKit", "Hero workspace opener not registered");
             });
-            BuildPeacefulDockSlot(3, "JOURNEY", UiStyle.Icon("journey", "compass", "quest"), OnQuestsAction);
-            BuildPeacefulDockSlot(4, "MANAGE", UiStyle.Icon("manage", "banner", "shield"), OnManageAction);
+            BuildPeacefulDockSlot(3, "JOURNEY", new[] { "compass", "quest" }, OnQuestsAction);
+            BuildPeacefulDockSlot(4, "MANAGE", new[] { "banner", "shield" }, OnManageAction);
 
             Register("peacefulDock", WrapAsWidget("peacefulDock", _peacefulDockRoot));
         }
@@ -1706,8 +1714,29 @@ namespace DeNelle.HUD.Kit
         private const float PeacefulDockSlotY1 = 0.94f;
         private HudDockSlotLayout _peacefulDockLayout;
 
-        private void BuildPeacefulDockSlot(int index, string caption, Sprite icon, Action command)
+        /// <summary>
+        /// One calm-dock medallion. WO-1359: the caption is the ICON KEY as well as the printed
+        /// word — the slot resolves its own art from <paramref name="caption"/> lower-cased, so the
+        /// face's name and the face's art cannot be given to different slots. <paramref
+        /// name="iconFallbacks"/> are the older pack concepts, tried in order only when the
+        /// caption's own art is absent, which is what keeps the bar looking exactly as it does
+        /// today until authored art is dropped in. A null icon is NOT an error and never blanks the
+        /// face: the kit's medallion keeps its own look and the live caption still names it.
+        /// </summary>
+        private void BuildPeacefulDockSlot(int index, string caption, string[] iconFallbacks, Action command)
         {
+            string iconKey = (caption ?? string.Empty).ToLowerInvariant();
+            // The authored emblem sheet is asked FIRST and by name; the pack fallbacks below are
+            // only reached when her art cannot be resolved. Which one answered decides how the
+            // medallion is dressed, so the two lookups stay separate.
+            var authored = UiStyle.AuthoredIcon(iconKey);
+            var icon = authored != null
+                ? authored
+                : UiStyle.Icon(iconKey, iconFallbacks ?? System.Array.Empty<string>());
+            if (icon == null)
+                FlowTrace.Throttle("HudKit", "dock-icon-miss:" + iconKey, 30f,
+                    "calm dock face '" + caption + "' resolved NO icon art (key '" + iconKey +
+                    "') - the medallion keeps its kit look and the live caption still names it");
             // Build-time seed only: an equal share of the mount, so a dock that somehow never
             // gets a layout pass still renders in a sane shape. HudDockSlotLayout overwrites
             // these x anchors with absolute reference-pixel positions on the first LateUpdate
@@ -1723,6 +1752,12 @@ namespace DeNelle.HUD.Kit
             // on the same point and the last one (MANAGE) visually covers the others.
             ElarionUiKit.StyleAsRoundMedallion(slot);
             slot.SetIcon(icon);
+            // WO-1359 — her emblems ARE medallions (own socket, own gold ring, four diamond points
+            // proud of the circle). Dressing one in the kit's medallion too would draw a second
+            // ring around hers, clip the points at the round stencil and stretch a 386x411 emblem
+            // square. Only when authored art actually answered does the kit step back; a pack
+            // fallback keeps the kit medallion it has always had.
+            if (authored != null) ElarionUiKit.PresentAuthoredEmblem(slot);
             slot.SetCaption(caption);
             // WO-1319 acceptance 2 — the caption's degradation is AUTHORED, not incidental.
             // SetCaption leaves the kit default (word-wrap on, autosize floor 6f), so a caption
@@ -1968,7 +2003,8 @@ namespace DeNelle.HUD.Kit
             // open, burying the owner's real flags. The arbiter was right to ask; the caller asked
             // it too early. The detector is NOT weakened — see the null-build branch below, which
             // still routes a genuinely blank picker through the same verify.
-            _itemPickerHold = WorldHold.Acquire(WorldHold.ReasonCombatItemPicker);
+            // WO-1360: PLAYER-OWNED. The picker is open until the player picks or backs out.
+            _itemPickerHold = WorldHold.AcquirePlayerOwned(WorldHold.ReasonCombatItemPicker);
             _itemPicker = ElarionUiKit.BuildObsidianModal("CombatItemPicker", "CHOOSE AN ITEM",
                 new Vector2(0.25f, 0.18f), new Vector2(0.75f, 0.82f), CloseItemPicker,
                 sortingOrder: 31500);
