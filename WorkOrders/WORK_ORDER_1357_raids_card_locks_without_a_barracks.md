@@ -1,6 +1,6 @@
-# WORK ORDER 1357 — Journey RAIDS card locks (with a reason) when there is no barracks
+# WORK ORDER 1357 â€” Journey RAIDS card locks (with a reason) when there is no barracks
 
-**Status:** DONE
+**Status:** FIXED 2026-09-03 - ON HER DEVICE. The Journey RAIDS card reads the ONE existing `RaidCapable` predicate instead of `Available = () => true`, and says WHICH barracks problem it is - "Build a Barracks to raid" vs "Rebuild your lost Barracks to raid" vs the flag-off line - discriminated by the v36 `HasEverBuilt` ledger with no new state and no schema bump. A destroyed structure is GONE entirely rather than flagged, so detection was never the gap; saying why was. Her locked-state art is mounted (cropped, de-texted and alpha-restored by the CLI), and the engine's DOUBLE gray-wash on locked illustrated cards is dropped so her darkened padlocked scene is not buried - measured contrast 9.05:1 title / 10.21:1 reason / 15.91:1 badge. Two boundaries flagged not chosen: a barracks under construction still unlocks raids, and a resurfaced baked twin stays capable. Gates COMPILE_GATE_OK + REGRESSION_OK 358/358. AWAITING HER FELT-VERIFY on the Journey panel; then Owner Validation closes it.
 **Silo:** HUD / Raids
 **Seat:** CLI (edit-only agent; lead gates + commits)
 **Date:** 2026-09-03
@@ -18,7 +18,7 @@
 
 ---
 
-## 2. RCA — one rule, two surfaces, one of them ignoring it
+## 2. RCA â€” one rule, two surfaces, one of them ignoring it
 
 `PostureSignals.RaidCapable` has been the single raid-door predicate since WO-835, published
 by `RaidCapabilityHudBridge` (`Assets/_Modules/Village/Troops/RaidCapabilityHudBridge.cs`)
@@ -37,7 +37,7 @@ Assets/_Modules/HUD/PlayerDeckWorkspace.cs:534   (pre-fix)
 `Available = () => true`. The card was always offerable. Tapping it fires
 `RaidEntryGate.RequestOpen` -> `RaidEntryBridge` -> `RaidSelectionScreen.Open`
 (`Assets/_Modules/Village/Hero/RaidSelectionScreen.cs:82`), which gates on **army readiness
-only** — there is no barracks check anywhere on that path. With no barracks the player got a
+only** â€” there is no barracks check anywhere on that path. With no barracks the player got a
 generic "No troops yet - train troops at the Barracks" toast and a dead end, not a locked door.
 
 This is the duplicated-state class the repo keeps getting burned by (stale WO number block,
@@ -46,14 +46,14 @@ It does not add a second barracks check.**
 
 ---
 
-## 3. What a destroyed structure looks like at runtime — it is GONE, not flagged
+## 3. What a destroyed structure looks like at runtime â€” it is GONE, not flagged
 
 Read at source, `Assets/_Modules/Village/Vfx/Destructible.cs:150-193` (`NotifyBroken`):
 
 1. VFX torn down (`TeardownVfx`).
 2. Bound vendor NPC destroyed.
 3. `PlacementGrid.Free(cell, footprint)`; `BaseLayoutLoader.Forget(placed)`;
-   `RemovePersistedLayoutRecord(itemId, cell)` — **the persisted `GameState.BaseLayout` record
+   `RemovePersistedLayoutRecord(itemId, cell)` â€” **the persisted `GameState.BaseLayout` record
    is dropped**; `BurnFreeBuild(itemId)`; `StructureSingletonBootstrap.NotifyRemovedDeferred`.
 4. `Destroy(gameObject)`.
 
@@ -61,12 +61,12 @@ So **the object does not persist in a destroyed state.** `Building.IsDestroyed`
 (`Buildings/Building.cs:132`) is live only for the single frame between hp0 and that
 `Destroy`, and `StructureSingleton.IsBuilt` clause 4 already requires `b.IsAlive`
 (`BuildMode/StructureSingleton.cs:144`). There is no zombie for an existence check to trip on:
-**`IsBuilt("barracks")` already flips false on destruction.** What it cannot do is say *why* —
+**`IsBuilt("barracks")` already flips false on destruction.** What it cannot do is say *why* â€”
 "never had one" and "had one, lost it" are indistinguishable to it.
 
 **Discriminator used: `GameState.HasEverBuilt("barracks")`** (`Core/State/GameState.cs:646`,
-the v36 `everBuiltStructureIds` ledger, WO-834). It is **monotonic** — selling or losing a
-structure never removes the id — which is exactly the "have you owned one before" question.
+the v36 `everBuiltStructureIds` ledger, WO-834). It is **monotonic** â€” selling or losing a
+structure never removes the id â€” which is exactly the "have you owned one before" question.
 No new state, no schema bump.
 
 ### Two boundaries deliberately LEFT ALONE (both documented in-code)
@@ -76,13 +76,13 @@ No new state, no schema bump.
   (`BuildMode/BuildModeController.cs:2071`) **before** the build timer starts, so a barracks
   mid-build has always read `IsBuilt` and has always been raid-capable. Locking it would
   change the path the owner fenced as working. **Chosen: unchanged.**
-  ⚠ **Flagged for the owner** — this is a genuine design call, not an obvious one. Ask:
+  âš  **Flagged for the owner** â€” this is a genuine design call, not an obvious one. Ask:
   *should a barracks still under construction unlock raids, or only a finished one?*
 - **A resurfaced WO-819 baked twin counts as raid-capable.** After a destruction the stand-in
   `CastleBarracks` re-activates, so `IsBuilt` clause 2 can hold while the build palette
   correctly reads BUILDABLE (`StructureSingleton.IsPlayerBuilt`, WO-843). Kept capable on
   purpose: a barracks is *visibly standing*, and locking raids in front of it is the more
-  confusing outcome. **Do not "fix" this to `IsPlayerBuilt`** — on a pre-handover Default-Town
+  confusing outcome. **Do not "fix" this to `IsPlayerBuilt`** â€” on a pre-handover Default-Town
   save the founding barracks has no placement record yet, so `IsPlayerBuilt` would lock raids
   for a player who plainly has one.
 
@@ -95,9 +95,9 @@ gained an `out` parameter, never a clause. "It works great if there is a barrack
 
 ### `Core/HudModel/PostureSignals.cs`
 - New `PostureSignals.RaidLockReason { None, FlagOff, NoBarracks, BarracksLost }`.
-- New `RaidLock` property + `RaidLockCopy(reason)` — **the one owner of the lock wording**,
+- New `RaidLock` property + `RaidLockCopy(reason)` â€” **the one owner of the lock wording**,
   so card, any future surface, and the oracle read identical strings.
-- `SetRaidCapable(bool capable, RaidLockReason reason = None)` — one method with an optional
+- `SetRaidCapable(bool capable, RaidLockReason reason = None)` â€” one method with an optional
   parameter (not an overload, so `HudActionBarRegression`'s `GetMethod("SetRaidCapable")`
   stays unambiguous). It now fires `RaidCapableChanged` on a **reason-only** change:
   `NoBarracks -> BarracksLost` never moves the bool, and an early-return on the bool alone
@@ -119,7 +119,7 @@ gained an `out` parameter, never a clause. "It works great if there is a barrack
   `LockReason = () => PostureSignals.RaidLockCopy(PostureSignals.RaidLock)`.
 
 ### Locked presentation
-The deck already had the right treatment and it is reused, not reinvented — the card stays
+The deck already had the right treatment and it is reused, not reinvented â€” the card stays
 **visible**, grays, and gets the existing worded `[ LOCKED ]` badge on a dark plate
 (`PlayerDeckWorkspace.cs:216-227`, authored for exactly this reason under WO-1311: the owner
 is red/green colourblind, so hue and dimming may never be the only carrier). Hiding is **not**
@@ -128,7 +128,7 @@ broken. This ticket adds the missing half: **the reason**.
 
 | Situation | Badge | Line under the title |
 |---|---|---|
-| Barracks stands (any troop count) | none — card live | "Choose a camp and deploy your army" |
+| Barracks stands (any troop count) | none â€” card live | "Choose a camp and deploy your army" |
 | Never built a Barracks | `[ LOCKED ]` | **"Build a Barracks to raid"** |
 | Barracks destroyed / lost | `[ LOCKED ]` | **"Rebuild your lost Barracks to raid"** |
 | `FeatureFlags.Raid` off | `[ LOCKED ]` | **"Raids are turned off in this build"** |
@@ -139,7 +139,7 @@ from today's earlier edits were read first and are **not** modified.
 
 ---
 
-## 5. Oracle — `RaidsDiscoverabilityRegression` (extended, not a new suite)
+## 5. Oracle â€” `RaidsDiscoverabilityRegression` (extended, not a new suite)
 
 New `CheckJourneyRaidsLock` ("J1"), registered in `Run`. **Both directions are pinned**, the
 offerable one first, precisely because a fix that just locked the card always would pass a
@@ -159,14 +159,14 @@ Live globals are snapshotted and restored in a `finally` so no later suite inher
 **Also re-registered: `CheckVisibilityPredicateSource` (D5).** WO-1286 dropped three checks
 from `Run` when it retired the bottom-bar Raids face; D1/D2/`CheckReasonsSpeakInWords` were
 genuinely inverted by that change and stay unregistered on purpose, but **D5 lints the
-visibility bridge, which WO-1286 never touched** — it has been dead code guarding nothing
+visibility bridge, which WO-1286 never touched** â€” it has been dead code guarding nothing
 since commit `486cd7b17`, and it is the guard that keeps the troop clause out of the very
 predicate this ticket extends. Its preconditions were verified to hold at HEAD before
 re-registering (`RaidsFaceLabel` x3 in `HudKitController`; every `ArmyReadiness` /
 `DeployableSlots` occurrence in the bridge is inside a comment, and the lint strips comments).
 
 ### Mutation (RED proof)
-⚠ **Designed, not executed** — this was an edit-only pass; no Unity gate was run (lead owns
+âš  **Designed, not executed** â€” this was an edit-only pass; no Unity gate was run (lead owns
 the gate). The mutations to run:
 
 | # | Mutation | Expected failure |
@@ -183,7 +183,7 @@ M5 is the one that matters: it is the fix that would pass a one-sided test.
 
 ## 6. Gate evidence (edit-only pass)
 
-Brace / NUL check per touched file — `python -c "... count('{')==count('}') ... chr(0) ..."`:
+Brace / NUL check per touched file â€” `python -c "... count('{')==count('}') ... chr(0) ..."`:
 
 | File | Result |
 |---|---|
@@ -192,7 +192,7 @@ Brace / NUL check per touched file — `python -c "... count('{')==count('}') ..
 | `Assets/_Modules/HUD/PlayerDeckWorkspace.cs` | BALANCED clean |
 | `Assets/Editor/Regression/RaidsDiscoverabilityRegression.cs` | BALANCED clean |
 
-No Unity gate, no build, no commit — the lead owns all three.
+No Unity gate, no build, no commit â€” the lead owns all three.
 No `.unity` scene touched. No `DataRegression.cs` edit (existing suite extended).
 Fenced files (`HeartAuraController`, `EliteVFXController`, `HeldVfxHook`,
 `NightStoreAuraSelectionRegression`, `HeroContent`, `tutorial-steps.json`, board tooling,
@@ -214,7 +214,7 @@ ship scripts, `PackStore.cs`, `VfxManualPicks.json`, `WorldHold.cs`, scenes) unt
 
 # FOLLOW-UP - 2026-09-03 (later the same day): the owner's LOCKED face for the RAIDS card
 
-**Status:** DONE (edit-only; the lead gates, builds and commits)
+**Status:** FIXED 2026-09-03 - ON HER DEVICE. The Journey RAIDS card reads the ONE existing `RaidCapable` predicate instead of `Available = () => true`, and says WHICH barracks problem it is - "Build a Barracks to raid" vs "Rebuild your lost Barracks to raid" vs the flag-off line - discriminated by the v36 `HasEverBuilt` ledger with no new state and no schema bump. A destroyed structure is GONE entirely rather than flagged, so detection was never the gap; saying why was. Her locked-state art is mounted (cropped, de-texted and alpha-restored by the CLI), and the engine's DOUBLE gray-wash on locked illustrated cards is dropped so her darkened padlocked scene is not buried - measured contrast 9.05:1 title / 10.21:1 reason / 15.91:1 badge. Two boundaries flagged not chosen: a barracks under construction still unlocks raids, and a resurfaced baked twin stays capable. Gates COMPILE_GATE_OK + REGRESSION_OK 358/358. AWAITING HER FELT-VERIFY on the Journey panel; then Owner Validation closes it.
 **Silo:** HUD / Raids
 **Files:** `Assets/_Modules/HUD/PlayerDeckWorkspace.cs`,
 `Assets/Editor/Regression/HudLabelFitRegression.cs`,
