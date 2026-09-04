@@ -78,6 +78,84 @@ RC's own AAB-to-download ratio estimates **~510 MB, roughly 10 MB OVER the ceili
 Console is authoritative. **31 MB appeared in two days with every marker green, because no marker
 measures size.**
 
+## ⭐ MEASURED 2026-09-04 - WHERE THE BYTES ACTUALLY ARE. READ BEFORE PROPOSING PAD.
+
+Measured directly off `Builds/Android/EchoesOfElarion-GooglePlay.aab` with `zipfile` (compressed
+sizes - the only ones that count against the ceiling):
+
+| Compressed | Category |
+|---|---|
+| **418.40 MiB** | `base/assets/bin/Data` serialized + resource - **scenes + `Assets/Resources/`** |
+|  33.93 MiB | native `.so` (`libil2cpp.so` 21.42 · `libunity.so` 10.38) |
+|  **15.87 MiB** | `base/assets/aa/` - **ALL local Addressables** (gear 12.61, dungeon 3.12, rest ~0) |
+|   8.33 MiB | all three `.dex` |
+|   5.54 MiB | `bin/Data/Managed` (`global-metadata.dat` 5.40) |
+
+⛔ **THE CDN IS WORKING, AND IT IS NOT THE ANSWER TO THIS TICKET.** Addressables ships only
+**15.87 MiB** locally - `Enemy_Art` and `Structure_Art` really are remote (§16). But the remote
+groups only ever covered ~84 MiB of art. **The 418 MiB is scenes + `Assets/Resources/`, which
+Addressables never touches and which is compiled into the player by construction**
+(`LocalJsonCatalogSource.Read` resolves `Resources.Load` FIRST on every platform;
+`Assets/Resources/` ships unconditionally).
+
+**`Assets/Resources` measured on disk: 388.4 MiB**, and it is dominated by UI art:
+
+| On disk | Folder |
+|---|---|
+| 96.58 MiB | `RpgUi` |
+| 89.70 MiB | `VFX` |
+| 69.81 MiB | `UI` |
+| 25.32 MiB | `Portraits` |
+| 21.25 MiB | `Heroes` |
+| 20.95 MiB | `HudIcons` |
+| 15.34 MiB | `ItemIcons` |
+
+**RpgUi + UI + HudIcons + ItemIcons + Portraits ~ 228 MiB of UI/icon textures.**
+⚠ Those are SOURCE bytes; what lands in `bin/Data` depends on import settings - **which is exactly
+the lever**. The RC doc credits its 20.6 MB margin to *"a conservative Android texture pass, 65
+eligible overrides"*, and 31 MB reappeared within two days. ⭐ **So item 2 below is very likely
+"the texture pass was lost, or new art landed in `Resources/` after it" - a settings problem, not
+an architecture problem. Establish that before anyone proposes PAD.**
+
+⚠ `Resources/VFX` is **89.70 MiB**. Canon records ~23.85 MB deliberately mirrored to
+`Assets/Resources/VFX/_Shared/` (the 2026-08-06 gitignored-art fix). It is now roughly four times
+that. **Worth an explicit look** - that mirror was a correctness fix, not a licence to grow.
+
+### ⛔ TWO CODE-SIZE LEVERS - both smaller than they look. Do not chase these first.
+
+**R8 / ProGuard is switched OFF entirely** (`Library/Bee/Android/Prj/IL2CPP/Gradle/launcher/build.gradle:68`
+`minifyEnabled false`; `ProjectSettings/ProjectSettings.asset:292` `AndroidMinifyRelease: 0`;
+`:268` `useCustomProguardFile: 0`). Enabling it is a genuine open question nobody had raised before
+2026-09-04. **But the arithmetic caps it: all three DEX files total 8.33 MiB compressed**, so
+deleting 100% of our Java bytecode saves less than the gap. Realistic 20-40% trim = **1.7-3.3 MiB**,
+against real risk (IL2CPP/JNI and ad-SDK reflection are invisible to R8; Unity ships
+`proguard-unity.txt` keeps precisely because of it). ⛔ **And R8 is USELESS for WO-1363** - it shrinks
+Java bytecode into `classes*.dex`; our SKR literals live in `global-metadata.dat`, produced by
+IL2CPP from C# and packaged as an ASSET. R8 never opens it.
+
+**Managed stripping is ALREADY at Medium and deliberately defanged.**
+`Assets/Editor/MobileSettings.cs:216-222` raises Android managed stripping Low -> Medium, and
+`Assets/link.xml` carries `preserve="all"` on **every** runtime assembly - because Newtonsoft
+deserialises every catalog by reflection and the cross-asmdef bridges resolve by name (183 files
+under `Assets/_Modules` use reflection APIs; **zero** `[Preserve]` attributes). That preserve list is
+load-bearing and correct: narrowing it produces the classic works-in-editor / silently-empty-in-build
+failure. **This is why `libil2cpp.so` is 21.42 MiB and why there is little left to strip.**
+⚠ `SESSION_CANON_LOADER.md:477` says *"Android stripping is at Low"* - **STALE**, corrected here.
+⚠ `ProjectSettings.asset:891-893` `managedStrippingLevel:` lists only `WebGL: 4` because
+`MobileSettings` applies Android at build time via the PlayerSettings API, not as persisted state -
+**do not read the absence of an Android row as "unset"**.
+
+### HONEST RANKING
+
+| Lever | Realistic saving | Risk |
+|---|---|---|
+| **Android texture import pass over `Resources/`** | **10-40 MB** | Low - needs a visual check, owner's eyes |
+| Enable R8 | 1.7-3.3 MiB | Moderate - JNI / ad-SDK reflection |
+| Narrow the `link.xml` preserve list | small | ⛔ High - silent build-only breakage |
+| Play Asset Delivery | large | ⛔ High - moves 423.94 MiB of `bin/Data` out of the base module and collides with our custom R2 remote `LoadPath`, which has NO local fallback |
+
+**The texture pass alone plausibly closes the gap. Prove that before committing to PAD.**
+
 ## THE WORK
 
 1. **A size guard in the build chain.** Emit the measured artifact size and a download estimate, and
