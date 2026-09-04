@@ -74,9 +74,32 @@ Verified by grep across `Assets/Editor/` and `tools/` for `Length` / byte thresh
 482,843,623-byte candidate measuring 479.4 MB download - a 20.6 MB margin under Play's 500 MB
 ceiling. The AAB on disk today is **514,062,537 bytes, +31.2 MB**, built two days later. Applying the
 RC's own AAB-to-download ratio estimates **~510 MB, roughly 10 MB OVER the ceiling.**
-⚠ That last number is an ESTIMATE - `GOOGLE_PLAY_RC_2026-08-30.md:15-16, :59-60` insists only Play
-Console is authoritative. **31 MB appeared in two days with every marker green, because no marker
-measures size.**
+**31 MB appeared in two days with every marker green, because no marker measures size.**
+
+### ⭐ NO LONGER AN ESTIMATE - MEASURED 2026-09-04 WITH bundletool
+
+```
+$ java -jar bundletool-all-1.17.2.jar build-apks --bundle=EchoesOfElarion-GooglePlay.aab        --output=aab-size-measure.apks --mode=default
+$ java -jar bundletool-all-1.17.2.jar get-size total --apks=aab-size-measure.apks
+MIN,MAX
+510443276,510523099
+```
+
+**510,443,276 - 510,523,099 bytes against a 500,000,000-byte ceiling = OVER BY ~10.5 MB.**
+This closes the estimate/ratio argument: the RC's AAB-to-download ratio was accurate, and the
+artifact on disk cannot be uploaded.
+
+⭐ **AND THE TOOLING WAS ALREADY ON THIS MACHINE** - no install needed, which is why item 1 of THE
+WORK is cheap:
+- `<UnityEditor>/Data/PlaybackEngines/AndroidPlayer/Tools/bundletool-all-1.17.2.jar`
+- `<UnityEditor>/Data/PlaybackEngines/AndroidPlayer/OpenJDK/bin/java.exe` (OpenJDK 17.0.18)
+
+⚠ `java` is **NOT on PATH** - the wrapper must invoke Unity's bundled JDK by full path, and must
+resolve the editor root rather than hardcoding a version (the pinned editor is `6000.4.8f1`; a
+hardcoded path breaks on the next upgrade, and the repo root is machine-dependent per CLAUDE.md §0).
+⚠ `build-apks` writes a ~1.4 GB `.apks` intermediate. **Delete it after measuring** - three stale
+ones already sit in `Builds/Android/` (`EchoesOfElarion-GooglePlay.apks` and `-policy.apks`, 1.49 GB
+each, dated 08-30). The size guard must clean up after itself or it becomes its own disk problem.
 
 ## ⭐ MEASURED 2026-09-04 - WHERE THE BYTES ACTUALLY ARE. READ BEFORE PROPOSING PAD.
 
