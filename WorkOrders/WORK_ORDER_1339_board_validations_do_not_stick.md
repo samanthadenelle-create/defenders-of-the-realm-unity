@@ -1,6 +1,6 @@
 # WORK ORDER 1339 - Owner validations do not survive a rebuild
 
-**Status:** FIXED 2026-09-03 - committed. The record now lives in `proof/owner-validations.json`,
+**Status:** CLOSED 2026-09-04 - owner felt-test PASS (validated 2026-09-04T14:32:02, build 2026.09.04.354315). PRIOR STATUS: FIXED 2026-09-03 - committed. The record now lives in `proof/owner-validations.json`,
 keyed by WO FILENAME (this repo has duplicate WO numbers, so a friendly label would make two unrelated
 files share one sign-off), one ticket per line with keys sorted so two seats marking different tickets
 merge without a human. `--ingest` is the ONLY writer; a rebuild has no write path to the record at all,

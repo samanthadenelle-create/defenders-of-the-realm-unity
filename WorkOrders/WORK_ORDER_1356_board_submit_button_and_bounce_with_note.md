@@ -1,6 +1,6 @@
 # WORK ORDER 1356 — Board: a Submit button, and Fail / Needs Work bounce back to READY with her note
 
-**Status:** FIXED 2026-09-03 - Submit button + `--submit` ingest + the bounce pass are implemented and proven (VALIDATION_ROUNDTRIP_OK, 49/49 assertions, 8 mutations caught; the `file://` download verified in real Chrome over CDP). Awaiting owner felt-verify to CLOSE.
+**Status:** CLOSED 2026-09-04 - owner felt-test PASS (validated 2026-09-04T13:25:21, build 2026.09.04.354315). PRIOR STATUS: FIXED 2026-09-03 - Submit button + `--submit` ingest + the bounce pass are implemented and proven (VALIDATION_ROUNDTRIP_OK, 49/49 assertions, 8 mutations caught; the `file://` download verified in real Chrome over CDP). Awaiting owner felt-verify to CLOSE.
 
 **Owner ruling (verbatim, 2026-09-03):**
 > "add a submit button so you run a script to close the ones passed. move the needs work and failed back to ready with a note"

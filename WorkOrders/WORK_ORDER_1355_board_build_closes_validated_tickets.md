@@ -1,6 +1,6 @@
 # WO-1355 — The board build closes what she validated
 
-**Status:** FIXED 2026-09-03 - the close pass is inside `python tools/board_build.py`
+**Status:** CLOSED 2026-09-04 - owner felt-test PASS (validated 2026-09-04T14:31:51, build 2026.09.04.354315). PRIOR STATUS: FIXED 2026-09-03 - the close pass is inside `python tools/board_build.py`
 (`tools/board_close_pass.py`); marker `BOARD_CLOSE_OK`; pinned by
 `tools/board_validation_roundtrip_test.py` stages 5-9 (4 mutations proven RED); check-in gate 1b/1c
 green under PS 5.1. Not yet exercised against a real sign-off because the record is still empty -
