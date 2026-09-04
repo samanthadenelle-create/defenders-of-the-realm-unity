@@ -19,7 +19,13 @@
 // re-import (including a fresh checkout / Library rebuild).
 //
 // SCOPE GUARD: every callback first checks the asset path is under
-// Assets/Models/KayKit/. Assets anywhere else in the project are left untouched.
+// Assets/Models/KayKit/. Assets anywhere else in the project are left untouched,
+// with TWO deliberate exceptions in OnPreprocessTexture:
+//   • WO-408 — a WebGL maxTextureSize cap for the shipping art roots.
+//   • WO-1367 — the ANDROID ASTC override for Assets/Resources/RpgUi/** (the
+//     whole game's UI art). The format split is owned by RpgUiImporter, not
+//     duplicated here; this hook exists so art added LATER inherits it by
+//     construction instead of needing another hand sweep.
 //
 // ── Model settings (spec Part 7) ─────────────────────────────────────────────
 //   • Optimize Mesh ............ ON
@@ -228,6 +234,20 @@ namespace DeNelle.Editor
             if (!IsKayKitAsset(assetPath))
             {
                 ApplyShipWebGLCap(tex0);
+                // WO-1367: Resources/RpgUi is the whole game's UI art (568 PNGs).
+                // Its ANDROID override is owned by RpgUiImporter — ONE table, and
+                // it is applied HERE so art added later inherits it by
+                // construction. ⛔ The previous pass was a hand sweep and decayed
+                // (65 overrides in the 08-30 RC -> 163 by 09-04, 405 missing);
+                // this hook is what stops that recurring. Do not duplicate the
+                // format choice here — call the owner.
+                if (RpgUiImporter.IsRpgUiTexturePath(assetPath))
+                {
+                    if (RpgUiImporter.ApplyAndroidPlatformSettings(tex0))
+                        Debug.Log("[RpgUiAndroidPass] import-time Android override applied: " + assetPath +
+                                  " (role=" + RpgUiImporter.ResolveRpgUiRole(assetPath) +
+                                  ", " + RpgUiImporter.ResolveAndroidFormat(RpgUiImporter.ResolveRpgUiRole(assetPath)) + ")");
+                }
                 return;
             }
 

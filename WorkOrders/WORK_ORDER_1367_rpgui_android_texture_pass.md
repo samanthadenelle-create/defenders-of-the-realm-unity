@@ -116,6 +116,114 @@ rule still stands for every OTHER creative call in this ticket.
 ⚠ **The owner is red/green colourblind** - ask about **crispness, edge artifacts and banding**, never
 about hue shift. And she is the only one who can judge it.
 
+## EXECUTION LOG - 2026-09-04
+
+### ⛔ THE LEAD'S 4x4/6x6 SPLIT WAS WRONG AND WAS REVERSED BEFORE IT SHIPPED
+
+The implementing agent flagged it rather than quietly building it, and re-measurement confirmed it.
+**The WO never checked WHICH files already carried an override.** They are almost exactly the roles
+the lead ruled "sharp", and they are **already ASTC 6x6 today**:
+
+| role | total | already overridden | current format |
+|---|---|---|---|
+| `frame` | 17 | **17** | ASTC_6x6 |
+| `panel` | 11 | **11** | ASTC_6x6 |
+| `bars` | 6 | **6** | ASTC_6x6 |
+| `hud` | 39 | **33** | ASTC_6x6 |
+| `button` | 50 | **35** | ASTC_6x6 |
+| `slot` | 22 | **14** | ASTC_6x6 |
+| `spellicons` | **280** | **0** | *(none - the actual mass)* |
+
+**116 of the 173 "sharp" files already ship at 6x6, and the owner has been looking at that UI and
+accepted it.** So 6x6 there is the STATUS QUO, not a regression - while promoting them to 4x4
+(3.56 -> 8 bpp) would have **doubled the heaviest art in the folder**: estimated 80.68 -> 86.19 MiB,
+**+5.5 MiB on a ticket whose entire purpose is to remove ~10 MB.**
+
+⭐ **CORRECTED RULING: ASTC 6x6 uniformly.** Unchanged for everything already shipping, internally
+consistent per role, and the full saving. `SharpAndroidRoles` is deliberately EMPTY and carries the
+measurement in a comment; adding a role name back is still a one-line change and still the only
+place the tier is decided.
+
+⚠ **The transferable lesson:** the lead reasoned about compression from first principles and never
+asked what the files were doing TODAY. Sound abstract reasoning, wrong context - the §11B failure
+shape exactly, caught only because the agent measured instead of complying.
+
+### ⛔ AND THE FIRST RUN LOOSENED 159 CAPS - CAUGHT IN THE DIFF, NOT BY A GATE
+
+The pass took `maxTextureSize` from each importer's DEFAULT platform and wrote it onto Android.
+That lowered most files nicely but **RAISED caps that had been deliberately hand-tightened**:
+
+```
+LOWERED  2048 -> 256 : 289 files      RAISED  1024 -> 2048 : 115 files
+LOWERED  2048 -> 512 :  53 files      RAISED  1024 -> 4096 :  43 files
+```
+
+**A size pass that loosens a limit is a regression wearing a fix's clothes**, and no marker would
+have caught it - `RPGUI_TEXTURE_PASS_OK` was green on that run. Fixed with a **monotonic rule**: when
+an Android override is genuinely active, take `Min(existing, default)`, so the pass can only ever
+shrink. An `overridden: 0` block is correctly ignored - its value was never being applied.
+
+### RESULT OF THE CORRECTED RUN
+
+```
+COMPILE_GATE_OK                              Builds/wo1367-compile2.log      (error CS count: 0)
+RPGUI_TEXTURE_PASS_OK 0 applied, 568 already correct, 7 skipped
+REGRESSION_OK 358/358 suites                 Builds/wo1367-regression.log
+```
+
+⚠ *"0 applied, 568 already correct"* is the **postprocessor working as designed**, not a no-op: the
+metas had been reverted to their original state, Unity re-imported them, and
+`AssetImportPostprocessor.OnPreprocessTexture` applied the settings during that import - which is the
+structural half that stops this pass decaying. The disk effect is real: **405 `.meta` changed** -
+exactly the count that had no Android override.
+
+**Diff verified by hand, not by marker:**
+- **0 GUID lines changed** across all 405 metas.
+- **0 genuine cap raises.** (One file shows `2048 -> 4096`; its block was `overridden: 0`, i.e. inert,
+  so the file was already effectively at its 4096 default. Format `-1 -> 50` is a large win there.)
+- **342 caps lowered** - 289 to 256px, 53 to 512px.
+- The 7 skips are TMP font `.asset` files, each named in the log. No silent skips.
+
+## ⭐ MEASURED RESULT - THE GAP IS CLOSED
+
+```
+                        MIN              MAX
+BEFORE          510,443,276      510,523,099
+AFTER           469,122,568      469,202,267
+                -----------      -----------
+SAVING                              41.3 MB
+
+AAB file:  514,062,537 -> 472,637,397 bytes  (-41.4 MB)
+```
+
+**Under the 500,000,000-byte ceiling by ~30.8 MB.** ⭐ And under the *binary* reading (524,288,000)
+too - so **the undocumented MB-vs-MiB ambiguity no longer matters.** That was the reason for refusing
+to ship on the favourable interpretation, and it paid off.
+
+Beat the 26.9 MiB projection by ~14 MB, because the projection assumed dimensions were untouched
+while the pass also legitimately **lowered 342 caps** (289 to 256px, 53 to 512px) - those files'
+default platform settings were already tighter than the 2048 the Android override was inheriting.
+
+Gates on fresh logs: `COMPILE_GATE_OK` (`error CS` 0) - `RPGUI_TEXTURE_PASS_OK` -
+`REGRESSION_OK 358/358 suites` - `PLAY_SOURCE_ISOLATION_OK` - `ANDROID_CATALOG_OK`.
+
+## ⛔ THE ARTIFACT IS NOT SHIPPABLE YET - AND THE REASON IS WO-1363, NOT THIS TICKET
+
+```
+[GooglePlayPackagingGate] PLAY_ARTIFACT_DIRTY:
+ - content:base/assets/Data/Canonical/canon-strings.json token:solana
+[AndroidBuild] PLAY_ARTIFACT_REJECTED - the AAB contains a forbidden crypto/wallet surface.
+```
+
+⭐ **This is the exact drift WO-1363 PART 2 predicted this morning, before any build ran** -
+`canon-strings.json:231` `_storePiSkinNote`, authored 2026-09-02, containing *"Solana Mobile's
+governance token"*, absent from `GooglePlayContentExclusion`'s hardcoded 3-key rewrite allowlist.
+
+**Read it as good news twice over:** the `.json` tier of the gate genuinely works (it is the BINARY
+tier that is blind - WO-1364), and WO-1363 now has a **proven, reproducible failing gate** to work
+against instead of a theory. ⛔ Deliberately NOT fixed here - it is a different ticket and a different
+lane, and folding it in would hide a real finding inside a size commit.
+
 ## ACCEPTANCE
 
 - [ ] ⛔ **Proven by a REBUILD + `bundletool get-size total`, quoting MIN,MAX before and after.**

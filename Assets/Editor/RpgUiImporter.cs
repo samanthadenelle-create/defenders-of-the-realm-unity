@@ -32,6 +32,7 @@
 // so a partial pack still imports whatever it can. Re-run after editing the map.
 // =============================================================================
 
+using System;
 using System.Collections.Generic;
 using System.IO;
 using UnityEditor;
@@ -282,6 +283,299 @@ namespace DeNelle.Editor
             }
             EditorUtility.SetDirty(importer);
             importer.SaveAndReimport();
+        }
+
+        // =====================================================================
+        //  WO-1367 — ANDROID TEXTURE PASS (the Play-upload ceiling)
+        // ---------------------------------------------------------------------
+        // Assets/Resources/RpgUi ships 568 PNGs. Before this, 405 carried NO
+        // Android platform override at all and 202 of those imported
+        // UNCOMPRESSED (RGBA32) — ~85.8 MiB of build footprint, which put the
+        // AAB ~10.5 MB OVER Google Play's 500,000,000-byte ceiling.
+        //
+        // ⛔ WHY THIS LIVES IN THE IMPORTER, NOT IN A HAND PASS. The previous
+        // attempt was a one-off sweep: 65 overrides in the 08-30 RC, 163 by
+        // 09-04, 405 still missing. Art added after the sweep never inherited
+        // it, so the pass DECAYED. Here the split is owned by ONE table and has
+        // TWO entry points that cannot drift apart:
+        //   1. AssetImportPostprocessor.OnPreprocessTexture calls
+        //      ApplyAndroidPlatformSettings on EVERY texture imported under
+        //      Resources/RpgUi — so NEW art inherits it by construction, on
+        //      first import and on every re-import.
+        //   2. ApplyAndroidTexturePass() (menu + batchmode) sweeps what is
+        //      already on disk, idempotently.
+        // ⚠ Do NOT re-inline this format choice anywhere else — a second copy
+        // is how the last pass went stale (CLAUDE.md §2 / §5 / §16).
+        //
+        // THE QUALITY SPLIT — owner-approved, implemented VERBATIM:
+        //   ASTC 4x4 — roles where sharp edges + 9-slicing matter and block
+        //              artifacts would read as damage:
+        //              frame, panel, slot, button, classslot, bars, hud
+        //   ASTC 6x6 — illustrative roles (forgiving), and ANY role not listed
+        //              above (so a brand-new role folder gets the safe-for-size
+        //              default rather than silently getting no override).
+        //
+        // ⛔ maxTextureSize IS NOT TOUCHED. The override inherits the asset's
+        // own default-platform maxTextureSize, so authored dimensions are
+        // preserved exactly (WO-1367 "Option A": no resize, no source edit).
+        //
+        // ⚠⚠ MEASURED 2026-09-04, BEFORE ANY OF THIS RAN — the split as ruled
+        // makes the build BIGGER, and the reason is not obvious:
+        //   THE 163 FILES THAT ALREADY CARRY AN ANDROID OVERRIDE ARE ALL ASTC
+        //   6x6, AND THEY ARE ALMOST ENTIRELY THE BIG CHROME — frame 17/17,
+        //   panel 11/11, hud 33/39, bars 6/6, button 35/50, slot 14/22.
+        // Promoting those from 6x6 (3.56 bpp) to 4x4 (8 bpp) more than doubles
+        // the heaviest art in the folder. Estimated from PNG dimensions x format,
+        // clamped at the authored maxTextureSize 2048:
+        //   today .......................... 80.68 MiB
+        //   this 4x4/6x6 split ............. 86.19 MiB   (+5.5 MiB — WORSE)
+        //   ASTC 6x6 on all 568 ............ 53.58 MiB   (-27.1 MiB)
+        // The blow-ups: frame 12.48 -> 28.08, panel 6.86 -> 15.43, hud 3.72 ->
+        // 8.18, bars 0.46 -> 1.04.
+        // ⚠ ESTIMATE, not a built artifact — only a rebuild + `bundletool
+        // get-size total` proves it (WO-1367 ACCEPTANCE, CLAUDE.md §11B). It is
+        // recorded here because the AAB is ~10.5 MB OVER the Play ceiling and
+        // this split moves it the wrong way.
+        // TO SWITCH A ROLE: move its name out of SharpAndroidRoles below — that
+        // array is the ONLY place the tier is decided (owner's call, not ours).
+        // =====================================================================
+
+        internal const string AndroidPlatform = "Android";
+
+        /// Quality 50 = "Normal" — the same ASTC quality the KayKit path uses
+        /// (AssetImportPostprocessor.AstcCompressionQuality). Kept identical so
+        /// the two mobile paths do not diverge in look.
+        private const int AndroidAstcQuality = 50;
+
+        /// Roles that get ASTC 4x4 (sharp edges / 9-slice). Everything else in
+        /// Resources/RpgUi gets ASTC 6x6 — see the header block.
+        /// ==================================================================
+        /// CORRECTED 2026-09-04 - THIS ARRAY IS DELIBERATELY EMPTY. 6x6 EVERYWHERE.
+        ///
+        /// The lead originally ruled ASTC 4x4 for frame/panel/slot/button/
+        /// classslot/bars/hud, reasoning that 9-sliced chrome shows block
+        /// artifacts as damage. Sound in the abstract, WRONG HERE - the
+        /// measurement is why:
+        ///
+        ///   role    total  already-overridden  current format
+        ///   frame      17                  17  ASTC_6x6
+        ///   panel      11                  11  ASTC_6x6
+        ///   bars        6                   6  ASTC_6x6
+        ///   hud        39                  33  ASTC_6x6
+        ///   button     50                  35  ASTC_6x6
+        ///   slot       22                  14  ASTC_6x6
+        ///
+        /// 116 of those 173 files ALREADY SHIP AT 6x6. The owner has been looking
+        /// at that UI and accepted it, so 6x6 there is the STATUS QUO, not a
+        /// regression - while promoting them to 4x4 (3.56 -> 8 bpp) would DOUBLE
+        /// the heaviest art in the folder. Estimated net effect of the original
+        /// ruling: 80.68 -> 86.19 MiB, i.e. +5.5 MiB on a ticket whose whole
+        /// purpose is to remove ~10 MB.
+        ///
+        /// The un-overridden mass is illustrative art that 6x6 suits:
+        /// spellicons 280 (zero overrides), classslot 28, emblem 25, troop 9.
+        ///
+        /// 6x6 everywhere is therefore unchanged for everything already shipping,
+        /// internally consistent per role, and the full ~27 MiB saving.
+        ///
+        /// TO RAISE A ROLE'S QUALITY: add its name here. Still a one-line change,
+        /// still the ONLY place the tier is decided. If the owner sees block
+        /// artifacts on a specific role, this is the lever.
+        /// ==================================================================
+        private static readonly string[] SharpAndroidRoles =
+        {
+        };
+
+        /// True when the asset path is a texture under Assets/Resources/RpgUi/.
+        internal static bool IsRpgUiTexturePath(string assetPath)
+        {
+            return !string.IsNullOrEmpty(assetPath)
+                && assetPath.Replace('\\', '/')
+                            .StartsWith(ResRoot + "/", StringComparison.OrdinalIgnoreCase);
+        }
+
+        /// The role folder directly under Resources/RpgUi (e.g. "spellicons" for
+        /// RpgUi/spellicons/Warrior/Guardian/x.png). Empty for a file sitting at
+        /// the RpgUi root — those are reported, never silently skipped.
+        internal static string ResolveRpgUiRole(string assetPath)
+        {
+            if (!IsRpgUiTexturePath(assetPath)) return string.Empty;
+            string rel = assetPath.Replace('\\', '/').Substring(ResRoot.Length + 1);
+            int slash = rel.IndexOf('/');
+            return slash <= 0 ? string.Empty : rel.Substring(0, slash);
+        }
+
+        /// The owner-approved format for a role. Unlisted / unknown roles fall to
+        /// ASTC 6x6 by design (see header) — never to "no override".
+        internal static TextureImporterFormat ResolveAndroidFormat(string role)
+        {
+            foreach (var r in SharpAndroidRoles)
+                if (string.Equals(r, role, StringComparison.OrdinalIgnoreCase))
+                    return TextureImporterFormat.ASTC_4x4;
+            return TextureImporterFormat.ASTC_6x6;
+        }
+
+        /// <summary>
+        /// Applies the Android platform override to one RpgUi texture importer.
+        /// Returns TRUE when it actually CHANGED something (so the caller knows
+        /// whether a SaveAndReimport is warranted), FALSE when the importer was
+        /// already correct. Does NOT call SaveAndReimport itself — the import
+        /// pipeline (OnPreprocessTexture) must never re-enter the importer.
+        /// Every other import setting is preserved untouched.
+        /// </summary>
+        internal static bool ApplyAndroidPlatformSettings(TextureImporter importer)
+        {
+            if (importer == null) return false;
+            string role = ResolveRpgUiRole(importer.assetPath);
+            var format  = ResolveAndroidFormat(role);
+
+            var settings = importer.GetPlatformTextureSettings(AndroidPlatform);
+            // ⛔ NEVER RAISE A CAP. A size pass that loosens a limit is a
+            // regression wearing a fix's clothes.
+            //
+            // Measured 2026-09-04 on the first run of this pass: taking
+            // importer.maxTextureSize (the DEFAULT platform's value) and writing
+            // it onto Android lowered 342 files nicely (2048 -> 256 on 289,
+            // 2048 -> 512 on 53) but RAISED 159 whose Android override was
+            // deliberately TIGHTER than their default:
+            //     1024 -> 2048 : 115 files
+            //     1024 -> 4096 :  43 files
+            //     2048 -> 4096 :   1 file
+            // Someone had already hand-tightened those and this pass would have
+            // undone it silently. So: when an Android override already carries a
+            // maxTextureSize, take the SMALLER of it and the default. The result
+            // is monotonic - this pass can only ever shrink.
+            int defaultSize = importer.maxTextureSize;
+            int size = settings.overridden && settings.maxTextureSize > 0
+                     ? System.Math.Min(settings.maxTextureSize, defaultSize)
+                     : defaultSize;
+
+            bool alreadyCorrect = settings.overridden
+                                  && settings.format == format
+                                  && settings.maxTextureSize == size
+                                  && settings.textureCompression == TextureImporterCompression.Compressed;
+            if (alreadyCorrect) return false;
+
+            settings.name               = AndroidPlatform;
+            settings.overridden         = true;
+            settings.format             = format;
+            settings.maxTextureSize     = size;
+            settings.textureCompression = TextureImporterCompression.Compressed;
+            settings.compressionQuality = AndroidAstcQuality;
+            importer.SetPlatformTextureSettings(settings);
+            return true;
+        }
+
+        [MenuItem("Defenders/Art/Apply RpgUi Android Texture Pass")]
+        public static void ApplyAndroidTexturePassMenu() { ApplyAndroidTexturePass(); }
+
+        /// <summary>
+        /// Batch sweep over Assets/Resources/RpgUi/** — idempotent. Menu entry
+        /// above; batchmode:
+        ///   -executeMethod DeNelle.Editor.RpgUiImporter.ApplyAndroidTexturePass
+        /// Judge by the MARKER, never the exit code (CLAUDE.md §16):
+        ///   RPGUI_TEXTURE_PASS_OK &lt;n&gt; applied, &lt;n&gt; already correct, &lt;n&gt; skipped
+        ///   RPGUI_TEXTURE_PASS_FAIL &lt;reason&gt;
+        /// </summary>
+        public static void ApplyAndroidTexturePass()
+        {
+            int applied = 0, alreadyCorrect = 0, skipped = 0;
+            var perRoleTotal   = new Dictionary<string, int>();
+            var perRoleApplied = new Dictionary<string, int>();
+
+            try
+            {
+                if (!AssetDatabase.IsValidFolder(ResRoot))
+                {
+                    Debug.LogError("RPGUI_TEXTURE_PASS_FAIL missing folder " + ResRoot);
+                    return;
+                }
+
+                var guids = AssetDatabase.FindAssets("t:Texture", new[] { ResRoot });
+                Debug.Log("[RpgUiAndroidPass] scanning " + guids.Length + " texture asset(s) under " + ResRoot);
+
+                AssetDatabase.StartAssetEditing();
+                try
+                {
+                    foreach (var guid in guids)
+                    {
+                        string path = AssetDatabase.GUIDToAssetPath(guid);
+                        if (string.IsNullOrEmpty(path))
+                        {
+                            // Never silently skip (CLAUDE.md §12).
+                            Debug.LogWarning("[RpgUiAndroidPass] SKIPPED: guid resolved to no path: " + guid);
+                            skipped++;
+                            continue;
+                        }
+
+                        var importer = AssetImporter.GetAtPath(path) as TextureImporter;
+                        if (importer == null)
+                        {
+                            Debug.LogWarning("[RpgUiAndroidPass] SKIPPED: no TextureImporter (not a raw texture asset): " + path);
+                            skipped++;
+                            continue;
+                        }
+
+                        string role = ResolveRpgUiRole(path);
+                        if (string.IsNullOrEmpty(role))
+                        {
+                            // A texture sitting at the RpgUi root has no role folder;
+                            // it still gets the 6x6 default, but say so out loud.
+                            role = "(root)";
+                            Debug.LogWarning("[RpgUiAndroidPass] no role folder for " + path + " — defaulting to ASTC_6x6");
+                        }
+
+                        perRoleTotal.TryGetValue(role, out int t); perRoleTotal[role] = t + 1;
+
+                        bool changed;
+                        try
+                        {
+                            changed = ApplyAndroidPlatformSettings(importer);
+                        }
+                        catch (Exception exOne)
+                        {
+                            // One bad asset logs and is skipped — it never kills the pass.
+                            Debug.LogWarning("[RpgUiAndroidPass] SKIPPED (threw): " + path + " — " + exOne.Message);
+                            skipped++;
+                            continue;
+                        }
+
+                        if (!changed) { alreadyCorrect++; continue; }
+
+                        // ⚠ .meta files are GUID-bearing: SaveAndReimport REWRITES the
+                        // import-settings block IN PLACE. Nothing here creates, deletes
+                        // or regenerates a .meta, so no GUID changes (WO-1367).
+                        importer.SaveAndReimport();
+                        applied++;
+                        perRoleApplied.TryGetValue(role, out int a); perRoleApplied[role] = a + 1;
+                    }
+                }
+                finally
+                {
+                    AssetDatabase.StopAssetEditing();
+                }
+
+                AssetDatabase.Refresh();
+
+                foreach (var kv in perRoleTotal)
+                {
+                    perRoleApplied.TryGetValue(kv.Key, out int a);
+                    Debug.Log("[RpgUiAndroidPass] role=" + kv.Key +
+                              " format=" + ResolveAndroidFormat(kv.Key) +
+                              " total=" + kv.Value +
+                              " applied=" + a +
+                              " alreadyCorrect=" + (kv.Value - a));
+                }
+
+                Debug.Log("RPGUI_TEXTURE_PASS_OK " + applied + " applied, " +
+                          alreadyCorrect + " already correct, " + skipped + " skipped");
+            }
+            catch (Exception ex)
+            {
+                Debug.LogError("RPGUI_TEXTURE_PASS_FAIL " + ex.GetType().Name + ": " + ex.Message +
+                               " (after " + applied + " applied, " + alreadyCorrect +
+                               " already correct, " + skipped + " skipped)");
+            }
         }
 
         // ── Folder helpers (create the Resources/RpgUi/<role> tree as needed) ──
