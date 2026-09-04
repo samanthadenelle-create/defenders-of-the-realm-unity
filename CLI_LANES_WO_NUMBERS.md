@@ -180,7 +180,21 @@
 > fine as history. A copied number is the bug **even when it was right the day it was written** -
 > that is exactly how the retired 860-899 UI block kept re-seeding collisions from CLAUDE.md sec.2.
 
-> ## ⚠ RECONCILED 2026-09-04 (CLI, fiftieth pass): main line next free = **1367**.
+> ## ⚠ RECONCILED 2026-09-04 (CLI, fifty-first pass): main line next free = **1368**.
+> *(CLI minted **WO-1367** - finish the Android texture pass on `Resources/RpgUi`, which is the whole
+> Play upload blocker. ⭐ MEASURED, not estimated: `bundletool get-size total` on the on-disk AAB reads
+> **510,443,276-510,523,099 bytes vs a 500,000,000-byte ceiling - OVER by ~10.5 MB**. The owner named
+> the cause herself (*"that new weight you mentioned was the UI redo"*), which matches the record: every
+> 09-01 build log is `ui-reskin-*` and the AAB grew +31.2 MB over the 08-30 RC. ⛔ AND SHE ASKED THE
+> RIGHT QUESTION ABOUT `Resources/RpgUi` (96.58 MiB) - *is it still used since we switched to a custom
+> kit?* **YES, and deleting it would break the whole UI**: `BlinkUiImporter.cs:3-4` says sprites land
+> there *"so the EXISTING sprite-first UI kit (RpgUiCatalog / ElarionUiKit) re-skins the ENTIRE game
+> UI"*. ElarionUiKit is the code-built LAYOUT; RpgUi is its ART. So the fix is IMPORT SETTINGS, not
+> deletion: 568 PNGs, **202 importing UNCOMPRESSED**, **405 with no Android override**, all 568 at
+> maxTextureSize 2048. ASTC with dimensions untouched projects **85.81 -> 58.88 MiB, a 26.9 MiB saving,
+> 2.5x the gap** - so PAD is unnecessary. Bumped 1367 -> 1368 in this SAME edit.)*
+>
+> ### superseded: RECONCILED 2026-09-04 (CLI, fiftieth pass): main line next free = **1367**.
 > *(CLI minted **WO-1366** after the owner refined the Arena ruling twice inside one exchange:
 > Arena is NOT cut from Play (it ships) -> the Play build wagers **Crystals** -> ***"both to use same
 > logic just different curency for wagers"***. That last clause is the design: **ONE Arena code path,
