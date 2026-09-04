@@ -145,16 +145,58 @@ namespace DeNelle.Village
             // Discrete steps across (smolder .. scuffOnset]. STEPS, not a continuous ramp,
             // on purpose: a linear fade from 0 at 100% HP is a 4% change at 95% HP, which
             // the eye adapts straight past. A step lands as an event - "this took a hit".
-            public int scuffSteps = 3;
+            //
+            // WO-1352 FOLLOW-UP (owner ruling 2026-09-02, measured on device: an Archer Tower
+            // at hp 0.960 took step 1 and she could not see it): 3 -> 4. With the band
+            // spanning (0.5 .. 0.9999], three steps make step 1 cover a SEVENTEEN-point HP
+            // range on its own, so that one rung has to be both "something happened here"
+            // AND the whole top third's resolution. Four rungs cut each to ~12.5 points,
+            // which is what lets step 1 be authored as a LOUD jump (below) while steps 2..4
+            // still approach the smolder in even, gentler increments - a front-loaded ladder
+            // instead of a linear one. Cost is unchanged: the step is an int and the write
+            // happens only when it CHANGES, so a full drain now costs 4 property-block
+            // writes per structure instead of 3.
+            public int scuffSteps = 4;
             // How far the surface is darkened at step 1 and at the last step, as a fraction
             // of its own albedo. Step 1 is deliberately a visible-but-calm scuff; the last
             // step hands off to the smolder already dirty, so smoke ARRIVES on a battered
             // building rather than popping onto a pristine one.
-            public float scuffMinDarken = 0.12f;
-            public float scuffMaxDarken = 0.34f;
-            // Smoothness multiplier at the last step - the second, non-colour channel:
-            // the surface goes matte/dulled as well as darker.
-            public float scuffGlossFloor = 0.40f;
+            //
+            // ⚠ THESE ARE FRONT-LOADED ON PURPOSE, AND THE OLD 0.12/0.34 PAIR WAS THE BUG.
+            // 0.12 spread linearly over 3 steps gave jumps of 0.12 / 0.11 / 0.11 - an almost
+            // perfectly EVEN ladder, which spends its budget discriminating 83% HP from 67%
+            // (a distinction no player ever reads off a wall) and starves the only transition
+            // that carries meaning: pristine -> touched. 0.20 -> 0.38 over 4 steps gives
+            // 0.200 / 0.060 / 0.060 / 0.060: step 1 is 3.3x the jump of any rung after it.
+            // That is deliberate and it is the whole fix. The FIRST rung has no neighbour to
+            // be compared against (there is no tell above it at all), while every later rung
+            // is read against the rung before it AND is converging on the smolder, which
+            // brings an entirely new channel (motion + smoke) of its own.
+            // The CEILING is a real constraint, not a formality: most structures in a town
+            // sit near full HP most of the time, so step 1 is what a healthy town looks like
+            // after a raid grazes it. It must read on INSPECTION, never at a glance. 0.20 is
+            // chosen against that ceiling - the extra visibility comes from the SECOND
+            // channel arriving at step 1 (scuffGlossStep1), not from a bigger colour hit.
+            // StructureBurnRegression's scuff oracle section E pins both the floor and the
+            // ceiling, so neither end can drift back.
+            public float scuffMinDarken = 0.20f;
+            public float scuffMaxDarken = 0.38f;
+            // Smoothness multiplier at step 1 and at the last step - the second, non-colour
+            // channel: the surface goes matte/dulled as well as darker.
+            //
+            // ⛔ scuffGlossStep1 EXISTS BECAUSE THE RAMP MATHEMATICALLY COULD NOT MOVE GLOSS
+            // AT STEP 1. The ramp interpolates on t = (step-1)/(steps-1), so t is 0 at step 1
+            // by construction and the old single-ended gloss knob was pinned to x1.00 there -
+            // no authored value could ever have changed it. Her device line said so in as
+            // many words: "applied albedo x0.88 ... + smoothness x1.00". So step 1 was a
+            // ONE-channel tell of 12%, and this is the field that makes it two.
+            // Killing the specular sheen is the strongest cue available here for the price:
+            // it removes the sun's highlight off the roof/timber, it is a texture read rather
+            // than a colour read (so it is entirely outside the colourblind risk surface),
+            // and it costs the same single float in the same property block that was already
+            // being written.
+            public float scuffGlossStep1 = 0.55f;
+            public float scuffGlossFloor = 0.25f;
         }
 
         [Serializable]
@@ -299,6 +341,17 @@ namespace DeNelle.Village
         public static float ScuffMaxDarken
         {
             get { EnsureLoaded(); return Mathf.Clamp(_defaults.scuffMaxDarken, ScuffMinDarken, 0.9f); }
+        }
+
+        /// <summary>
+        /// WO-1352 follow-up: smoothness multiplier at scuff step 1. The ramp's t is 0 at
+        /// step 1 by construction, so without a step-1 endpoint of its own the gloss channel
+        /// was pinned at x1.00 there and step 1 was a one-channel tell. Clamped at or below
+        /// 1 (a damaged surface may never become SHINIER) and at or above the floor.
+        /// </summary>
+        public static float ScuffGlossStep1
+        {
+            get { EnsureLoaded(); return Mathf.Clamp(_defaults.scuffGlossStep1, ScuffGlossFloor, 1f); }
         }
 
         /// <summary>WO-1352: smoothness multiplier at the last scuff step (matte-off).</summary>
@@ -502,6 +555,42 @@ namespace DeNelle.Village
             int tier = BurnTierFor(hp, broken, typeKey);
             if (tier > 0) return steps + tier;
             return ScuffStepFor(hp, typeKey);
+        }
+
+        /// <summary>
+        /// WO-1352 follow-up — THE STRENGTH RAMP, lifted out of <see cref="ApplyScuff"/> so
+        /// the oracle can pin HOW HARD the tell hits, not merely THAT it exists. Returns the
+        /// albedo darkening for a scuff step as a fraction of the surface's own colour
+        /// (0 = untouched, 0.20 = 20% darker). Step &lt;= 0 is pristine and darkens nothing.
+        /// </summary>
+        /// <remarks>
+        /// Extracted, not duplicated: ApplyScuff calls THIS. The original oracle proved the
+        /// band was non-silent and the tell still could not be seen on a real device, because
+        /// "non-silent" and "visible" are different claims and only the first one was pinned.
+        /// </remarks>
+        public static float ScuffDarkenFor(int step)
+        {
+            if (step <= 0) return 0f;
+            int steps = Mathf.Max(1, DamageStatesCatalog.ScuffSteps);
+            step = Mathf.Clamp(step, 1, steps);
+            float t = steps <= 1 ? 1f : (step - 1) / (float)(steps - 1);
+            return Mathf.Lerp(DamageStatesCatalog.ScuffMinDarken, DamageStatesCatalog.ScuffMaxDarken, t);
+        }
+
+        /// <summary>
+        /// WO-1352 follow-up — the SECOND channel's ramp: the smoothness multiplier for a
+        /// scuff step. 1 = the surface's own gloss, lower = duller/matte. Interpolates from
+        /// <see cref="DamageStatesCatalog.ScuffGlossStep1"/> to
+        /// <see cref="DamageStatesCatalog.ScuffGlossFloor"/>, so step 1 already drops the
+        /// specular sheen instead of sitting at x1.00 as it did before this follow-up.
+        /// </summary>
+        public static float ScuffGlossMulFor(int step)
+        {
+            if (step <= 0) return 1f;
+            int steps = Mathf.Max(1, DamageStatesCatalog.ScuffSteps);
+            step = Mathf.Clamp(step, 1, steps);
+            float t = steps <= 1 ? 1f : (step - 1) / (float)(steps - 1);
+            return Mathf.Lerp(DamageStatesCatalog.ScuffGlossStep1, DamageStatesCatalog.ScuffGlossFloor, t);
         }
 
         /// <summary>One observed structure (read-only view; presentation never mutates it).</summary>
@@ -1221,9 +1310,11 @@ namespace DeNelle.Village
                     // repair-eligible but cannot show the tell names ITSELF here, rather
                     // than the owner discovering it as another surprise charge.
                     FlowTrace.Warn("DamageVis",
-                        $"scuff UNREACHABLE: '{rec.Name}' ({rec.TypeKey}) step={step} - no visible " +
-                        "single-albedo renderer under this host (all disabled, all particle systems, " +
-                        "or multi-material with differing base colours). This structure is " +
+                        $"scuff UNREACHABLE: '{rec.Name}' ({rec.TypeKey}) step={step} - no drivable " +
+                        "single-albedo body renderer under this host (every one is hidden, an effect " +
+                        "renderer, mesh-less, or the all-or-nothing gate forfeited the structure because " +
+                        "one visible body mesh could not be driven - see the ABSTAINS line above for " +
+                        "which). This structure is " +
                         "repair-eligible with NO surface tell; the health bar and the burn ladder " +
                         "are unaffected.");
                 }
@@ -1240,10 +1331,11 @@ namespace DeNelle.Village
             }
 
             int steps = Mathf.Max(1, DamageStatesCatalog.ScuffSteps);
-            float t = steps <= 1 ? 1f : (step - 1) / (float)(steps - 1);
-            float darken = Mathf.Lerp(DamageStatesCatalog.ScuffMinDarken, DamageStatesCatalog.ScuffMaxDarken, t);
-            float mul = Mathf.Clamp01(1f - darken);
-            float glossMul = Mathf.Lerp(1f, DamageStatesCatalog.ScuffGlossFloor, t);
+            // The two channels' ramps live in ScuffDarkenFor / ScuffGlossMulFor so the
+            // regression oracle can pin the STRENGTH against the shipping code rather than
+            // against a copy of the arithmetic. Do not re-inline them here.
+            float mul = Mathf.Clamp01(1f - ScuffDarkenFor(step));
+            float glossMul = ScuffGlossMulFor(step);
 
             var block = new MaterialPropertyBlock();
             int applied = 0;
@@ -1274,13 +1366,47 @@ namespace DeNelle.Village
 
         /// <summary>
         /// Collect the renderers this structure's surface tell may drive, and capture their
-        /// baseline albedo + smoothness for an exact restore. VISIBLE renderers only
-        /// (`enabled`, which is precisely what separates an injected hub skin from the baked
-        /// mesh it hides); never a ParticleSystemRenderer (that is an effect, not the
-        /// building); and never a multi-material renderer whose submesh albedos differ,
-        /// because one property block cannot recolour two submeshes correctly and a
-        /// mis-tinted submesh is worse than a missing tell.
+        /// baseline albedo + smoothness for an exact restore.
         /// </summary>
+        /// <remarks>
+        /// WO-1352 FOLLOW-UP — THIS METHOD NOW ANSWERS TWO SEPARATE QUESTIONS, and conflating
+        /// them is what made a correct result look like a defect on the owner's device. Her
+        /// trace read "1 eligible of 2" on an Archer Tower, which reads as "half the building
+        /// is being tinted". It was not: the second renderer was
+        /// <see cref="DefenseTower"/>'s AimBeam LineRenderer - the lock-on laser, a child of
+        /// the tower host, created with `enabled = false` until a target is locked. It is not
+        /// part of the building at all, and dropping it was right. The line just could not
+        /// say so, because every skip reason shared one counter.
+        ///
+        /// So the two questions are now asked separately:
+        ///   1. IS THIS RENDERER THE BUILDING'S BODY? Only a MeshRenderer or a
+        ///      SkinnedMeshRenderer with an actual mesh is. A LineRenderer, TrailRenderer,
+        ///      SpriteRenderer or ParticleSystemRenderer under the host is an EFFECT the
+        ///      structure owns, never its surface - it is ignored outright and is NOT a
+        ///      coverage hole. This is also a real bug fix and not only a clearer log: the
+        ///      old `enabled` filter dropped the aim beam only WHILE IT WAS OFF, so the first
+        ///      resolve of a tower that had already locked a target - i.e. any tower damaged
+        ///      during a raid, which is when towers get damaged - would have captured the
+        ///      laser and darkened it as though it were masonry.
+        ///   2. AMONG THE BODY RENDERERS THAT ARE ACTUALLY VISIBLE, CAN WE DRIVE THEM ALL?
+        ///      ⛔ ALL-OR-NOTHING (owner-delegated ruling 2026-09-02). A half-tinted building
+        ///      reads as PATCHY - a rendering artefact - while an untinted one merely reads
+        ///      as undamaged, and only one of those two costs the player trust in the whole
+        ///      surface. So if even one visible body renderer cannot be driven correctly
+        ///      (submesh albedos that differ by more than <see cref="ScuffMultiMatEpsilon"/>,
+        ///      so one property block would recolour one of them wrongly; or no material at
+        ///      all), the WHOLE structure abstains and says so through the existing
+        ///      "scuff UNREACHABLE" warning. Partial coverage is never shipped.
+        ///
+        /// ⚠ `enabled` STAYS THE VISIBILITY TEST AND MUST NOT BECOME A COVERAGE HOLE.
+        /// HubStructureVisualInjector.SkinStorefront hides the BAKED TWIN with
+        /// `r.enabled = false` (never SetActive), so a hub structure legitimately carries a
+        /// disabled body mesh that draws nothing. Counting that as a hole would make every
+        /// hub structure in her town abstain - the exact town she is looking at. It is
+        /// ignored, like an effect renderer, and only VISIBLE body geometry can trip the
+        /// all-or-nothing abort. The childCount re-resolve in ApplyScuff stays untouched for
+        /// the same reason: a late-arriving LightSkin_ child must still pick the tell up.
+        /// </remarks>
         private void ResolveScuffRenderers(Tracked rec)
         {
             rec.ScuffRenderers = null;
@@ -1293,15 +1419,41 @@ namespace DeNelle.Village
             var keep = new List<Renderer>();
             var cols = new List<Color>();
             var gloss = new List<float>();
-            int skippedMulti = 0;
+            int notBody = 0;        // effects + mesh-less: never the surface, never a hole
+            int hiddenBody = 0;     // baked twins and the like: invisible, never a hole
+            int undrivable = 0;     // VISIBLE body we cannot drive - this is what aborts
+            string undrivableWhy = null;
 
             foreach (var r in all)
             {
-                if (r == null || !r.enabled) continue;
-                if (r is ParticleSystemRenderer) continue;
+                if (r == null) continue;
+
+                // (1) Body or effect? Whitelist, not blacklist - a blacklist has to be
+                // extended every time a new Renderer subclass appears under a structure,
+                // and the cost of missing one is tinting an effect as though it were stone.
+                // This subsumes the old explicit ParticleSystemRenderer skip.
+                bool isBody = r is MeshRenderer || r is SkinnedMeshRenderer;
+                if (isBody)
+                {
+                    if (r is SkinnedMeshRenderer smr) isBody = smr.sharedMesh != null;
+                    else
+                    {
+                        var mf = r.GetComponent<MeshFilter>();
+                        isBody = mf != null && mf.sharedMesh != null;
+                    }
+                }
+                if (!isBody) { notBody++; continue; }
+
+                // (2) Visible? A disabled body mesh draws nothing (the hidden baked twin).
+                if (!r.enabled) { hiddenBody++; continue; }
 
                 var mats = r.sharedMaterials;
-                if (mats == null || mats.Length == 0 || mats[0] == null) continue;
+                if (mats == null || mats.Length == 0 || mats[0] == null)
+                {
+                    undrivable++;
+                    undrivableWhy = undrivableWhy ?? $"'{r.name}' has no material to read a base colour from";
+                    continue;
+                }
 
                 Color baseCol;
                 if (mats[0].HasProperty(ScuffBaseColorId)) baseCol = mats[0].GetColor(ScuffBaseColorId);
@@ -1320,7 +1472,14 @@ namespace DeNelle.Village
                            && Mathf.Abs(c2.g - baseCol.g) <= ScuffMultiMatEpsilon
                            && Mathf.Abs(c2.b - baseCol.b) <= ScuffMultiMatEpsilon;
                 }
-                if (!uniform) { skippedMulti++; continue; }
+                if (!uniform)
+                {
+                    undrivable++;
+                    undrivableWhy = undrivableWhy ??
+                        $"'{r.name}' is multi-material with submesh base colours further apart than " +
+                        $"{ScuffMultiMatEpsilon:0.###}, so one property block cannot recolour them both";
+                    continue;
+                }
 
                 float g = mats[0].HasProperty(ScuffSmoothnessId) ? mats[0].GetFloat(ScuffSmoothnessId) : 0.5f;
 
@@ -1329,15 +1488,36 @@ namespace DeNelle.Village
                 gloss.Add(g);
             }
 
+            // ⛔ THE ALL-OR-NOTHING GATE. One undrivable VISIBLE body renderer forfeits the
+            // whole structure's tell rather than tinting the rest of it. ApplyScuff's
+            // existing empty-list path then emits the "scuff UNREACHABLE" warning, so the
+            // abstention is loud (CLAUDE.md section 12: no silent failures).
+            int drivable = keep.Count;
+            if (undrivable > 0 && drivable > 0)
+            {
+                keep.Clear();
+                cols.Clear();
+                gloss.Clear();
+                FlowTrace.Warn("DamageVis",
+                    $"scuff ABSTAINS on '{rec.Name}' ({rec.TypeKey}): {undrivable} of {drivable + undrivable} " +
+                    $"VISIBLE body renderer(s) cannot be driven ({undrivableWhy}). Tinting the other " +
+                    $"{drivable} would leave the building visibly PATCHY, which reads as a rendering fault " +
+                    "rather than as wear - so the whole structure keeps its pristine surface. The health " +
+                    "bar and the smolder/fire/beacon ladder are unaffected.");
+            }
+
             rec.ScuffRenderers = keep.ToArray();
             rec.ScuffBaseColors = cols.ToArray();
             rec.ScuffBaseGloss = gloss.ToArray();
             if (keep.Count > 0) rec.ScuffUnreachable = false;
 
             FlowTrace.Throttle("DamageVis", "scuff-resolve:" + rec.TypeKey, 5f,
-                $"scuff renderers resolved for '{rec.Name}' ({rec.TypeKey}): {keep.Count} eligible of " +
-                $"{all.Length} (skipped {skippedMulti} multi-albedo; disabled/baked-twin meshes and " +
-                "particle renderers are excluded by rule).");
+                $"scuff renderers resolved for '{rec.Name}' ({rec.TypeKey}): driving {keep.Count} of " +
+                $"{all.Length} renderer(s) under the host - {notBody} are effects or mesh-less (line/trail/" +
+                $"sprite/particle: NOT the building, not a coverage hole), {hiddenBody} are hidden body " +
+                $"meshes (baked twins behind an injected skin: invisible, not a coverage hole), " +
+                $"{undrivable} are visible body meshes we cannot drive (ALL-OR-NOTHING: any one of these " +
+                "forfeits the whole structure's tell).");
         }
 
         /// <summary>

@@ -16,6 +16,12 @@
 // 100% may be visually silent while it is repair-eligible. Same subject - what a damaged
 // structure SHOWS - so it lives in this suite rather than a new registration.
 //
+// ITS FOLLOW-UP APPENDS THE STRENGTH ORACLE (ScuffStrengthOracle, section E): the first
+// rung must be loud enough to NOTICE and the last quiet enough not to pre-empt the
+// smolder. Sections A-D shipped green while the tell was still invisible on the owner's
+// device, because "the band has a rung here" and "a player can see that rung" are two
+// different claims and only the first was pinned.
+//
 // VFXManager.Instance is null in edit mode, so StartFireVfx is a proven no-op here -
 // this suite validates the DAMAGE + STATE machine; the fire VFX is null-safe.
 //
@@ -261,6 +267,182 @@ namespace DeNelle.Editor
                              "invisible band. scuffOnset must stay at or above it.");
             if (steps < 1)
                 failures.Add($"scuff oracle: scuffSteps {steps} < 1 - the band would have no visible step at all");
+
+            ScuffStrengthOracle(failures, log, steps);
+        }
+
+        // =====================================================================
+        // (E) WO-1352 FOLLOW-UP - THE STRENGTH ORACLE. "Non-silent" and "visible"
+        // are DIFFERENT CLAIMS, and until this section existed only the first one
+        // was pinned - which is exactly how a green suite shipped a tell the owner
+        // could not see. Sections A-D prove the ladder has a rung at every eligible
+        // HP; this section proves the FIRST rung is loud enough to notice and the
+        // LAST rung is still quiet enough not to pre-empt the smolder.
+        // ---------------------------------------------------------------------
+        // THE MEASURED DEFECT IT PINS, in the owner's own device trace:
+        //   [Flow:DamageVis] scuff step 1/3: hp=0.960 band=SCUFF
+        //       applied albedo x0.88 (VALUE only, no hue shift) + smoothness x1.00
+        // Two things are wrong on that line and both are now assertions here:
+        //   1. x0.88 is a 12% one-channel value drop on a sunlit building - under
+        //      the noticeability floor.
+        //   2. smoothness x1.00 means the SECOND channel did nothing at all, and it
+        //      could not have: the ramp interpolated from a hardcoded 1.0 on
+        //      t = (step-1)/(steps-1), which is 0 at step 1 BY CONSTRUCTION. No
+        //      authored value could have moved it. That is why the fix needed a
+        //      step-1 endpoint of its own (DamageStatesCatalog.ScuffGlossStep1) and
+        //      not merely a re-tune.
+        //
+        // ⚠ IT BINDS TO THE SHIPPING RAMP. StructureDamageVisuals.ScuffDarkenFor /
+        // ScuffGlossMulFor are the exact functions ApplyScuff calls to build the
+        // property block; they were extracted out of it for this reason. Re-deriving
+        // lerp(min,max,t) locally here would prove only that the copy is intact.
+        //
+        // RED-FIRST MUTATION (the proof this section has teeth) - restore the
+        // pre-follow-up values in BOTH damage-states.json twins:
+        //     "scuffSteps": 3, "scuffMinDarken": 0.12, "scuffMaxDarken": 0.34,
+        //     "scuffGlossFloor": 0.40, and DELETE "scuffGlossStep1".
+        // Deleting the key makes ScuffGlossStep1 fall back to its C# initializer, so
+        // to reproduce the ORIGINAL one-channel behaviour exactly, author
+        // "scuffGlossStep1": 1.0 instead. That state fails E1 (step-1 darkening 0.120
+        // < the 0.18 floor), E3 (step-1 gloss 1.000 is not below 0.95 - the second
+        // channel is inert) and E4 (the gloss ladder's first jump is 0.000 while a
+        // later jump is 0.300, i.e. back-loaded). Restoring 4 / 0.20 / 0.38 / 0.55 /
+        // 0.25 turns it green. The GAP between billable and noticeable is the thing
+        // under test, not the file.
+        // =====================================================================
+        private static void ScuffStrengthOracle(List<string> failures, StringBuilder log, int steps)
+        {
+            log.AppendLine("--- WO-1352 STRENGTH ORACLE (the first rung must be noticeable, the last must not pre-empt the smolder) ---");
+
+            // The noticeability floor. Below this the tell is a rounding error on a
+            // sunlit surface with no undamaged twin beside it to compare against.
+            const float Step1DarkenFloor = 0.18f;
+            // The "do not make her town a slum" ceiling. Most structures sit near full
+            // HP most of the time, so step 1 is what a HEALTHY town looks like after a
+            // graze: it must read on inspection, never at a glance.
+            const float Step1DarkenCeiling = 0.25f;
+            // The last scuff rung hands off to smoke. Past this the surface alone would
+            // read as ruined and the smolder would stop being an escalation.
+            const float LastDarkenCeiling = 0.45f;
+            // Step 1 must engage the SECOND (non-colour) channel, not just darken.
+            const float Step1GlossMustBeBelow = 0.95f;
+
+            var darken = new float[steps + 1];
+            var gloss = new float[steps + 1];
+            darken[0] = StructureDamageVisuals.ScuffDarkenFor(0);
+            gloss[0] = StructureDamageVisuals.ScuffGlossMulFor(0);
+            for (int s = 1; s <= steps; s++)
+            {
+                darken[s] = StructureDamageVisuals.ScuffDarkenFor(s);
+                gloss[s] = StructureDamageVisuals.ScuffGlossMulFor(s);
+                log.AppendLine($"  step {s}/{steps}: albedo x{1f - darken[s]:0.000} (darken {darken[s]:0.000}) " +
+                               $"gloss x{gloss[s]:0.000}");
+            }
+
+            // E0. PRISTINE IS PRISTINE. Step 0 must touch neither channel, or an
+            // undamaged structure would be written to - which is also the SRP-batcher
+            // cost guard the whole band is built around.
+            if (darken[0] != 0f || gloss[0] != 1f)
+                failures.Add($"strength oracle: step 0 is not a no-op (darken {darken[0]:0.###}, gloss {gloss[0]:0.###}) - " +
+                             "an undamaged structure would take a property block and drop out of the SRP batcher");
+
+            // E1. THE FIRST RUNG IS LOUD ENOUGH TO SEE.
+            if (darken[1] < Step1DarkenFloor)
+                failures.Add($"strength oracle: scuff step 1 darkens by only {darken[1]:0.###} (albedo x{1f - darken[1]:0.###}), " +
+                             $"below the {Step1DarkenFloor:0.###} noticeability floor. This is the WO-1352 follow-up defect " +
+                             "exactly: the band is non-silent and the player still cannot see it, so she is still being " +
+                             "charged to repair a building that looks pristine.");
+
+            // E2. AND NOT SO LOUD THAT A HEALTHY TOWN READS AS A SLUM.
+            if (darken[1] > Step1DarkenCeiling)
+                failures.Add($"strength oracle: scuff step 1 darkens by {darken[1]:0.###}, above the {Step1DarkenCeiling:0.###} " +
+                             "ceiling. Most structures sit near full HP most of the time, so this is what an ordinary town " +
+                             "would look like at a glance - the tell must read on INSPECTION, not turn the skyline grim.");
+            if (darken[steps] > LastDarkenCeiling)
+                failures.Add($"strength oracle: the last scuff step darkens by {darken[steps]:0.###}, above the " +
+                             $"{LastDarkenCeiling:0.###} ceiling - the surface alone would read as ruined and the smolder " +
+                             "at hp<=0.5 would stop being an escalation.");
+
+            // E3. STEP 1 ENGAGES BOTH CHANNELS. The colour channel alone is the thing
+            // that was measured as invisible; the gloss channel is free (same float, same
+            // block) and is entirely outside the colourblind risk surface.
+            if (!(gloss[1] < Step1GlossMustBeBelow))
+                failures.Add($"strength oracle: scuff step 1 leaves smoothness at x{gloss[1]:0.###} - the SECOND, " +
+                             "non-colour channel is inert at first blood, so the whole tell rests on one 20%-ish value " +
+                             "drop. Her device line read 'smoothness x1.00' for precisely this reason: the ramp's t is 0 " +
+                             "at step 1, so the gloss endpoint at step 1 must be authored (scuffGlossStep1), not inherited.");
+
+            // E4. THE LADDER IS FRONT-LOADED, IN BOTH CHANNELS. pristine -> step 1 is the
+            // only transition that changes CATEGORY (untouched -> worn) and the only one
+            // with no rung above it to be compared against, so it must be the biggest
+            // jump. Every later rung is read against its predecessor AND is converging on
+            // the smolder, which brings a whole new channel (motion + smoke) of its own.
+            float firstDarkenJump = darken[1] - darken[0];
+            float firstGlossJump = gloss[0] - gloss[1];
+            for (int s = 2; s <= steps; s++)
+            {
+                float dj = darken[s] - darken[s - 1];
+                float gj = gloss[s - 1] - gloss[s];
+                if (dj > firstDarkenJump + 1e-4f)
+                    failures.Add($"strength oracle: the albedo ladder is BACK-loaded - the step {s - 1}->{s} jump " +
+                                 $"({dj:0.###}) is larger than the pristine->step 1 jump ({firstDarkenJump:0.###}). " +
+                                 "The budget is being spent telling 83% HP apart from 67%, which no player reads off a " +
+                                 "building, instead of on the one transition that carries meaning.");
+                if (gj > firstGlossJump + 1e-4f)
+                    failures.Add($"strength oracle: the gloss ladder is BACK-loaded - the step {s - 1}->{s} jump " +
+                                 $"({gj:0.###}) is larger than the pristine->step 1 jump ({firstGlossJump:0.###}).");
+            }
+
+            // E5. STRICT MONOTONICITY ON BOTH CHANNELS. A structure may never get
+            // brighter or shinier as it gets closer to destruction.
+            for (int s = 2; s <= steps; s++)
+            {
+                if (!(darken[s] > darken[s - 1]))
+                    failures.Add($"strength oracle: darkening does not increase from step {s - 1} " +
+                                 $"({darken[s - 1]:0.###}) to step {s} ({darken[s]:0.###}) - a rung that shows nothing " +
+                                 "new is a rung the ladder does not need");
+                if (!(gloss[s] < gloss[s - 1]))
+                    failures.Add($"strength oracle: smoothness does not fall from step {s - 1} " +
+                                 $"({gloss[s - 1]:0.###}) to step {s} ({gloss[s]:0.###}) - the surface would get SHINIER " +
+                                 "as it got closer to being destroyed");
+            }
+
+            // E6. THE COLOURBLIND GUARANTEE, PROVEN RATHER THAN ASSERTED IN A COMMENT.
+            // The owner is red/green colourblind, so the tell is a SCALAR multiply on R,
+            // G and B alike - never a tint. Reproduce ApplyScuff's exact colour maths on a
+            // reference albedo with three DIFFERENT channel values (a flat grey would pass
+            // this test no matter how badly the code tinted) and prove three things:
+            // hue is unchanged, saturation is unchanged, and the Rec.709 greyscale luma
+            // scales by exactly the multiplier - i.e. the tell survives full desaturation
+            // at full strength, which is the strongest form of the guarantee available.
+            var reference = new Color(0.62f, 0.41f, 0.23f, 0.77f);   // warm timber, alpha != 1 on purpose
+            Color.RGBToHSV(reference, out float h0, out float s0, out float v0);
+            float refLuma = 0.2126f * reference.r + 0.7152f * reference.g + 0.0722f * reference.b;
+            for (int s = 1; s <= steps; s++)
+            {
+                float mul = Mathf.Clamp01(1f - darken[s]);
+                var tinted = new Color(reference.r * mul, reference.g * mul, reference.b * mul, reference.a);
+                Color.RGBToHSV(tinted, out float h1, out float s1, out float v1);
+                float luma = 0.2126f * tinted.r + 0.7152f * tinted.g + 0.0722f * tinted.b;
+
+                if (Mathf.Abs(h1 - h0) > 1e-4f)
+                    failures.Add($"strength oracle: step {s} SHIFTED HUE ({h0:0.#####} -> {h1:0.#####}). The scuff must " +
+                                 "multiply R, G and B by the identical factor; the owner is red/green colourblind and a " +
+                                 "hue-carried tell is unreadable to her.");
+                if (Mathf.Abs(s1 - s0) > 1e-4f)
+                    failures.Add($"strength oracle: step {s} CHANGED SATURATION ({s0:0.#####} -> {s1:0.#####}) - the tell " +
+                                 "is no longer a pure value change.");
+                if (Mathf.Abs(luma - refLuma * mul) > 1e-4f)
+                    failures.Add($"strength oracle: step {s} greyscale luma {luma:0.#####} != base {refLuma:0.#####} x " +
+                                 $"{mul:0.###} - the tell does NOT survive desaturation intact.");
+                if (!Mathf.Approximately(tinted.a, reference.a))
+                    failures.Add($"strength oracle: step {s} altered ALPHA ({reference.a:0.###} -> {tinted.a:0.###}) - a " +
+                                 "transparent material must not become opaque because it took a hit.");
+                if (s == steps)
+                    log.AppendLine($"  desaturation proof at the strongest step ({s}): hue {h0:0.####}->{h1:0.####}, " +
+                                   $"sat {s0:0.####}->{s1:0.####}, value {v0:0.####}->{v1:0.####}, " +
+                                   $"greyscale luma {refLuma:0.####}->{luma:0.####} (= base x{mul:0.###}).");
+            }
         }
 
         private static string Finish(List<string> failures, StringBuilder log)
