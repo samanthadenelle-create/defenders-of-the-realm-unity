@@ -1,6 +1,8 @@
 # WORK ORDER 952 — EndState (wave-clear) panel compresses its body below content size
 
-**Status:** REOPENED 2026-09-04 - RECURRED ON HER DEVICE, on a DIFFERENT entry point. Was
+**Status:** READY TO IMPLEMENT - ⛔ **P0. THE VICTORY PANEL RENDERS EMPTY ON HER DEVICE** (owner
+confirmed 2026-09-04, *"screenshot bug"*). REOPENED, and the severity is NOT the 7% compression the
+log line describes. Was
 "DONE - audit-verified as shipped (2026-08-21 backlog audit)"; that close rested on an AUDIT, not on
 device evidence, which is the same shape as PROD-019's reopen ("closed on EDITOR-ONLY evidence;
 still broken on device").
@@ -45,7 +47,40 @@ deliverable is the reason the recurrence reached her eyes instead of a gate's.**
 
 ⛔ **The oracle is not optional this time.** A fix without it puts us right back here.
 
-### ⚠ WHAT THE SCREENSHOT DOES AND DOES NOT SHOW
+### ⛔ OWNER CONFIRMED 2026-09-04: THE EMPTY BODY IS THE BUG, NOT A CAPTURE ARTIFACT
+
+Owner, on being shown `break_01_error.png`: ***"screenshot bug"***.
+
+**She was looking at the screen. That is primary evidence and it outranks the lead's caution below**
+(memory: `owner-statements-are-ground-truth`; `screenshots-are-primary-evidence-for-visual-defects`).
+The hedge that follows was written BEFORE she confirmed, and is kept only so the reasoning is
+auditable - ⛔ **do not act on it, act on her statement.**
+
+**SO THE DEFECT IS RESTATED:**
+
+> On an ARENA VICTORY the EndState panel draws its title and frame and **renders NO BODY** - no
+> rewards, no stats, and **no visible Continue/Claim control**. The world is visible through the
+> empty frame.
+
+⛔ **THE `COMPRESSED` LINE IS A SYMPTOM, NOT THE DEFECT - AND CHASING IT IS THE TRAP.** A 0.933 scale
+squashes bands to 93%; it does **not** make them disappear. Something else empties the body, and the
+compression warning is merely the loudest thing in the log. **Do not spend the session tuning the
+fit solver.** Split it first (CLAUDE.md §12):
+- **data-empty** - `EndStateVM` handed `BuildBody` no rows for the arena path (the VM is built by
+  `BattleArenaHud.ShowResult`, a DIFFERENT producer from the wave-clear path that works).
+- **built-but-invisible** - bands built at zero/clipped size, or off-screen, or behind. ⭐
+  `UiSurfaceProbe` (WO-976) reports `SURFACE_ZERO_SIZE` / `SURFACE_TRANSPARENT` / `SURFACE_OFFSCREEN`
+  / `SURFACE_BEHIND` as four separate classes and measures AFTER layout settles. Use it.
+- **threw-and-skipped** - a `build(host)` delegate throwing per band. ⚠ Note the stack shows
+  `Guard.Try` wrapping `ShowResult`, so a throw would be caught and logged - **check the device log
+  around 14:35:49Z for a Guard/Fail line before assuming this one.**
+
+⛔ **AND CHECK FOR A SOFTLOCK FIRST, BEFORE ANYTHING ELSE.** If there is no reachable dismiss control
+on that panel, an arena victory strands the player - and this is the **2026.09.04.354315 PRODUCTION
+CANDIDATE**. Establish whether she could get out of it. If she could not, this outranks every other
+item on the board including the Play submission.
+
+### ⚠ (SUPERSEDED BY HER CONFIRMATION ABOVE) WHAT THE LEAD THOUGHT THE SCREENSHOT SHOWED
 
 `logs/f8-inbox/device/SM02G4061955851/break_01_error.png` (09:35:50) shows the VICTORY! title and the
 panel frame drawn, with **the body area empty** and the world visible through it.
