@@ -180,7 +180,21 @@
 > fine as history. A copied number is the bug **even when it was right the day it was written** -
 > that is exactly how the retired 860-899 UI block kept re-seeding collisions from CLAUDE.md sec.2.
 
-> ## ⚠ RECONCILED 2026-09-04 (CLI, fifty-eighth pass): main line next free = **1378**.
+> ## ⚠ RECONCILED 2026-09-04 (CLI, fifty-ninth pass): main line next free = **1381**.
+> *(CLI minted **WO-1378 / 1379 / 1380** to execute the owner's creative direction of 2026-09-04,
+> recorded as canon in `docs/CREATIVE_CANON_ELARION_2026-09-04.md`. That direction arrived in TWO
+> passes and the author revised her own first pass - **1378** is the fiction/copy/naming lane (target
+> names + the empty `description` fields, the Guide's payroll sentence, teaching beats, victory as a
+> homecoming, failure as a failed reclamation, Journey subtitles, Realm Vigil, Mirelle + the
+> Rough->Cut->Refined->Radiant->**Echoed** ladder); **1379** is Heartfire, which retires "Raid Orders"
+> and re-skins the 3-charge/4h gate as the Heart's strength - ⛔ a CHARGE, never a currency;
+> **1380** is Echo Guides, which gives the ALREADY-BUILT `EchoWorldPresence` escort a voice.
+> ⛔ **The Echo names in the direction (Sylas/Thrain/Grom/Elara) DO NOT EXIST** - owner ruled
+> *"Whatever we have use those"*, so the roster is Aldwin/Elowen/Corvin/Bran/Doran/Maren per
+> `EchoRosterCatalog.cs:149-222`. ⭐ None of this changes ONE economy number. Bumped 1378 -> 1381 in
+> this SAME edit.)*
+>
+> ### superseded: RECONCILED 2026-09-04 (CLI, fifty-eighth pass): main line next free = **1378**.
 > *(CLI minted **WO-1377** on a finding the WO-1363 purge surfaced and could not fix:
 > ⛔ **GUARDING STRING LITERALS CANNOT DRIVE `solana` / `jupiter` / `usdc` TO ZERO, BECAUSE IL2CPP
 > METADATA CARRIES TYPE AND MEMBER NAMES TOO.** Still shipping in `DeNelle.Core` as IDENTIFIERS,

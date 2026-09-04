@@ -1,0 +1,437 @@
+# CREATIVE CANON — Elarion, and what lies beyond the Heart (2026-09-04)
+
+> # ⭐ THIS IS THE CREATIVE NORTH STAR. IT TAKES PRECEDENCE ON FICTION, NAMING AND COPY.
+>
+> Owner ruling 2026-09-04, delivered as a full creative direction and then **revised by its own author
+> into a stronger second version**, which she closed with ***"That is the version I'd build around."***
+> The second version is what this file records. See §2 for exactly what it superseded, so nobody
+> implements the first draft by accident.
+>
+> **Its relationship to the economy map is clean and worth stating once:**
+> `docs/PROGRAM_RAID_ECONOMY_2026-09-04.md` rules **numbers, ladders and release order**. This file
+> rules **fiction, naming and copy**. Neither overrides the other, because they do not overlap — and
+> the whole point of this direction is that it **changes no economy ruling whatsoever**. Every number
+> in the map survives intact.
+>
+> ⚠ **Load-bearing, per CLAUDE.md §15.** Joins the read-first canon set. Any change to the premise, a
+> name, or a shipped string updates this file IN THE SAME COMMIT.
+
+**Status:** CANONICAL · takes precedence on fiction/naming/copy
+**Minted:** 2026-09-04 (CLI, from the owner's creative direction)
+
+---
+
+## §0. THE IDENTITY — the locked paragraph
+
+> *Elarion is a realm that has forgotten itself.*
+>
+> *The Heart, an ancient world tree at the centre of your settlement, preserves the Echoes of those who
+> came before. But its memories were shattered when the Realm fell.*
+>
+> *Rebuild beneath its branches. Awaken the Echoes it still remembers. Raise armies and carry Heartfire
+> beyond its fading reach. Reclaim forgotten lands, recover what was lost, and piece together the truth
+> of what happened to Elarion.*
+>
+> *Because beyond the Heart lie places it cannot remember.*
+>
+> **And some of them remember you.**
+
+⭐ **The three-word spine, and the thing to test every future system against:**
+
+| Element | Is |
+|---|---|
+| The Heart | **light** |
+| The Echoes | **memory** |
+| The player | **reclamation** |
+
+**Progression is not** *get stuff → get stronger → get more stuff*. It is:
+
+> ## The stronger Elarion becomes, the farther from the Heart you can go.
+
+---
+
+## §1. THE PREMISE
+
+The Heart does not merely protect souls. **The Heart remembers Elarion.** When someone dies within its
+reach their essence can remain as an Echo. When the Realm fell, the Heart itself was damaged, and
+pieces of its memory scattered.
+
+**The hook:** *the world outside the settlement is forgetting what it used to be.* Places distort.
+People lose themselves. Old guardians turn hostile. Fortresses repeat the final days before the fall.
+The farther from the Heart you travel, the less stable reality becomes.
+
+So the enemy is not a cartoon villain sitting on 1,800 wood. **Raids are reclamation expeditions into
+fractured territory** — you recover the physical resources Elarion needs to survive, and you push the
+Heart's influence back into land it has forgotten.
+
+> **At home you restore. Beyond the Heart you reclaim.**
+> And the Echoes are the bridge between the two.
+
+⛔ **This settles the question the whole brief was built around** (*"why do I raid?"*) without making
+the player a cheerful village pillager, and without a lore bible: the answer is one premise that every
+existing system was already reaching for.
+
+---
+
+## §2. ⚠ WHAT THE SECOND VERSION SUPERSEDED — read before implementing anything
+
+The direction arrived in two passes. The second is canon. **Implementing a first-pass name is a defect,
+not a preference**, so the table is explicit:
+
+| Item | First pass | ⭐ CANON (second pass) |
+|---|---|---|
+| Premise | darkness spread beyond the protective light | **the world beyond is FORGETTING what it was** |
+| Raid charges | "Marches" | **Heartfire** — self-reconsidered: *"Mechanically good. Fictionally still a little administrative."* |
+| Target 1 | The Splinter Camp | **The Forsaken Camp** |
+| Target 2 | Ironwatch Garrison | **The Broken Garrison** |
+| Target 3 | The Ashen Enclave | **The Veiled Enclave** |
+| Target 4 | The Blackiron Bastion | **The Iron Bastion** — *"Keep that name. It's strong."* |
+| Failure screen | FORCED RETREAT | **THE HEART'S REACH FAILED** |
+| Victory screen | a recovered chest arriving home | **MEMORY RECLAIMED**, then the supplies |
+| Echoes in raids | a companion who recognises old roads | **an Echo GUIDE chosen before each expedition** |
+
+**Survives from the first pass, unchanged and still canon** (the second pass revised, it did not
+replace): Realm Vigil (§5), mercenaries as the same unit (§6), the Journey subtitles (§8.4), Season I
+(§11), the jewelry chain (§12), and the manual-retreat screen (§8.3).
+
+⚠ **One reconciliation the owner did not have to make, recorded as an assumption she can overturn in a
+word:** the charge is **Heartfire**, but **"march" survives as the verb**. You spend Heartfire; you
+march. So `MARCH AGAIN` stays a button and `MARCHES` never appears as a noun for the resource.
+
+---
+
+## §3. THE FOUR RAID TARGETS
+
+Escalation must be readable at a glance, and the sequence tells a story that gets quietly worse:
+
+| # | Name | Line on the target card |
+|---|---|---|
+| 1 | **The Forsaken Camp** | Scavengers strip an abandoned settlement the Heart can no longer reach. |
+| 2 | **The Broken Garrison** | Its soldiers still guard their post, though no living commander remains to give the order. |
+| 3 | **The Veiled Enclave** | Something inside has learned to bend fractured memories into magic. |
+| 4 | **The Iron Bastion** | **The Heart remembers no fortress here.** |
+
+⭐ **That fourth line is the engine of the game's mystery, and it should be treated as such.** If the
+Heart remembers Elarion, why does it not remember the Bastion? The Bastion is also the **evergreen
+enemy** — the player is meant to eventually realise *we are not destroying the darkness, we are pushing
+it back*, which is what makes an endless difficulty ladder feel like a story instead of a number going
+up.
+
+> ⛔ **IMPLEMENTATION RULE — display names only.** The stable ids `raider_camp_small`,
+> `fortified_garrison`, `mage_enclave` are **live save keys and must NOT be renamed** (memory
+> `structure-role-enum-and-format-normalization`). Change `displayName` and fill the **empty
+> `description` field** in `Assets/Resources/Data/Canonical/scene-configs.json` — verified empty on all
+> three this session, which is why the target card has a slot and nothing in it. Keep the
+> StreamingAssets twin byte-identical; **Resources wins at runtime**.
+
+---
+
+## §4. HEARTFIRE — the charge, and the timer that stops feeling like a timer
+
+**"Raid Orders" is dead.** The player is the ruler; nobody is issuing them orders.
+
+**Heartfire** is the Heart's ability to sustain an expedition beyond its own reach. Three charges. One
+rekindles every four hours. Stacks to three, so sleeping or working is not punished.
+
+```
+🔥 🔥 🔥        HEARTFIRE
+
+🔥 🔥 ◌         Heartfire rekindles in 3:42:18
+```
+
+> The same integer, and a completely different experience. Not *you may not raid because TIMER*, but
+> **the Heart is not ready to send you back yet.**
+
+⛔ **Heartfire is a CHARGE, not a currency.** It is never earned, traded, stored, gifted or bought.
+Economy map §3 (*do not add another currency*) is **not** violated and must not be read as licence to
+add one.
+
+### ⚠ CONFLICT — three gates would stack, and someone must rule
+
+Two pacing gates already ship, and Heartfire is a third:
+
+| Gate | Where | Shape |
+|---|---|---|
+| **Per-camp cooldown** | `scene-configs.json` `raidCooldownSeconds` — 4h regular / 8h hard / 12h extreme | *that camp* is broken for now |
+| **Crystals once per UTC day** | `RaidClaimService.CrystalsPaidToday` | further clears pay reduced ordinary resources and zero crystals |
+| **Heartfire** (NEW) | global | *the Heart* can only sustain three expeditions |
+
+**Recommendation, not a ruling:** keep all three, because under the new fiction each has its own true
+reason — Heartfire is the Heart's strength, the camp cooldown is that foothold being broken, and the
+daily crystal stamp is the monetisation guard. They only become punishing if a player is ever blocked
+by two at once with no third target available, so **the acceptance criterion is that a player holding
+Heartfire always has somewhere to spend it.** ⛔ Do NOT shorten `raidCooldownSeconds` to make room —
+that file's own authoring note explains at length why those hours are not the lever.
+
+---
+
+## §5. REALM VIGIL — resolving the "threat" collision
+
+**Threat** stays with the endless Iron Bastion ladder (Threat I / II / III…, +8% enemy strength and
++5% loot per level).
+
+The weekly 1–10 climb becomes the **Realm Vigil** — Vigil I → Vigil X, reset weekly, and a reset is
+*the beginning of a new Vigil*. Thematically the kingdom keeps a vigil against what lies beyond the
+Heart; conversationally it passes the only test that matters for a weekly ladder:
+
+> *"What Vigil did you reach this week?"*
+
+---
+
+## §6. MERCENARIES — the same unit, and nothing more
+
+> ⛔ **NO second roster system. No upkeep, contracts, expiration, mercenary inventory, or Mercenary
+> Management Simulator 2026.**
+
+Gold fills the remaining ranks *immediately* with battle-ready outsiders who are, mechanically, the
+same Footman/Archer/etc. The button says:
+
+```
+HIRE REINFORCEMENTS — 300 Gold
+Fill the remaining ranks immediately with battle-ready mercenaries.
+```
+
+not `Skip Training — 300 Gold`. **Flavour wins; scope stays dead.** This closes the fork that was
+blocking implementation — the ruling is the cheap half, deliberately.
+
+---
+
+## §7. ECHO GUIDES — ⛔ USE THE SIX WE HAVE
+
+> ## ⛔ THE ECHO NAMES IN THE CREATIVE DIRECTION DO NOT EXIST IN THIS GAME.
+> Sylas, Thrain, Grom and Elara were illustrative. Owner, asked directly: ***"Whatever we have use
+> those."*** The real roster is **Aldwin, Elowen, Corvin, Bran, Doran, Maren**, verified this session
+> at `Assets/_Modules/Village/Harvest/EchoRosterCatalog.cs:149-222` (identity lives in that CODE table,
+> never in JSON — `echoes-balance.json` holds numbers only). ⚠ A seat implementing the illustrative
+> names would ship four characters the game has never had.
+
+**The mechanic:** before each expedition the player chooses an **Echo Guide**. The Echo does not fight.
+**It remembers.** The Heart cannot see clearly beyond its protection; an Echo can recognise fragments
+of the world that existed before.
+
+⭐ **This is not new work.** `EchoWorldPresence` already escorts the player to the gate and returns once
+after the battle (WO-1108 Lane B, one owner, one lifecycle). **Make the existing behaviour canon and
+give it a voice** — do not build a second spawner.
+
+**The recognition domains are derived from each Echo's SHIPPING lore, not invented** — every one is a
+quotation from the roster catalog:
+
+| Echo | Shipping lore | Recognises |
+|---|---|---|
+| **Corvin**, the Void Echo | *"the scout who ranged the far dark for Elarion and never came home… mapping the dark so others need not fear it"* | **roads and far paths — the natural first Guide, and the only Echo who has already been out there** |
+| **Elowen**, the Nature Echo | *"the grove-warden who once walked Elarion's every furrow"* | land, growth, what the wild has taken back |
+| **Bran**, the Storm Echo | *"the watchman who held Elarion's wall through every gale… calling every alarm in time"* | fortifications, garrisons, defensive works |
+| **Doran**, the Earth Echo | *"the mason who raised Elarion's stones… laid the first stones of Elarion's walls"* | masonry — **who built this, and whether Elarion hands built it** |
+| **Maren**, the Fire Echo | *"the hearth-keeper whose forge never went cold"* | forges and hearths — the domestic remains; *someone lived here* |
+| **Aldwin**, the Ice Echo | *"a keeper of the old light… the first it kept"* | the old light's boundary, and Elarion's former holdings |
+
+**The payoff, in the owner's own framing:** you do not need forty cinematics, you need **little
+memories**. Two lines, same road, different Guide:
+
+> **Corvin:** *"Wait. I've walked this road."*
+> **Bran:** *"Road? This was a defensive trench."*
+
+⭐ **THE HOOK THIS ROSTER MAKES POSSIBLE, and the reason using our own six is better than the
+illustrative names:** send **Doran** — the mason who laid Elarion's first stones — to the Iron Bastion,
+the one place *the Heart remembers no fortress*. He recognises the stonework. Nobody has to explain why
+that is frightening.
+
+Later, the line that stops the player thinking about gold:
+
+> **Aldwin:** *"…there's someone here."*
+>
+> **RULED** (owner: *"Map however you like"*, 2026-09-04). Aldwin carries it because he is the FIRST
+> soul the Heart kept and a keeper of the old light — so he is the one Echo whose recognition of a
+> person out there implies the Heart's memory is incomplete rather than merely distant. The player
+> stops thinking about 2,200 gold and starts wondering **who**.
+
+⚠ The illustrative line addressed the player by first name. **Verify the game knows it before writing
+any string that uses it** — flagged OPEN in §14.
+
+---
+
+## §8. THE COPY SET
+
+### 8.1 Teaching the loop — the beats that do not exist today
+
+⛔ **Nothing in the shipping game ever tells a player that raiding is how they get richer.** Verified
+this session across the tutorial beats, `guide-content.json`, the daily quests and the Journey screen.
+The Guide's opening line is *"Raids are where your trained troops earn their keep"* — a sentence about
+payroll — and it must be rewritten along with everything below.
+
+| Moment | String |
+|---|---|
+| Barracks completed | *Your Barracks stands ready. Elarion can now raise soldiers to venture beyond the Heart's protection.* |
+| First army granted | *Three Footmen answer the call. Your first company is ready to march.* |
+| First raid prompt | *Beyond the Heart lie hostile camps holding resources Elarion needs. Break their defences and bring those resources home.* |
+| Target screen | *Choose your target. Stronger footholds carry greater risk and richer spoils.* |
+| The loop, in six words | **Every victory opens the road farther.** |
+
+### 8.2 Victory — a homecoming, not a receipt
+
+Combat ends. The Echo approaches the focal object. **The Heart symbol pulses. A little colour and
+warmth return to the environment.** Then:
+
+```
+        MEMORY RECLAIMED
+    The Heart remembers this place.
+
+        RECLAIMED
+        Wood   +1,800
+        Iron   +1,100
+        Gold   +2,200
+        ⭐ ⭐ ⭐
+
+        REALM VIGIL ↑
+        Elarion grows stronger.
+
+    [ RETURN HOME ]   [ MARCH AGAIN ]
+```
+
+Performance stars are **three stamped campaign seals**, not mobile-game gold stars.
+
+> The numbers become the consequence of the adventure instead of being the adventure.
+
+### 8.3 Failure — you do not lose the memory, you fail to reclaim it
+
+**Lost raid:**
+```
+    THE HEART'S REACH FAILED
+Your Echo held the path long enough for the survivors to escape.
+
+        Brought Home
+        Wood +270 · Iron +135 · Gold +330
+        Nothing carried home is wasted.
+
+    [ REBUILD RANKS ]   [ RETURN HOME ]
+```
+
+**Manual retreat** (survives from the first pass, and is a different thing — the player made a
+decision):
+```
+    TACTICAL WITHDRAWAL
+You called your soldiers home before the battle was lost.
+Survivors and recovered supplies have returned to Elarion.
+```
+
+⭐ This makes the map's deliberately generous 15–20% failure payout **diegetic** — the number was
+always right and never had a reason attached to it. Now it does.
+
+### 8.4 Journey — five fantasies, not five mechanics
+
+| Card | Subtitle |
+|---|---|
+| QUESTS | Answer the needs of Elarion. |
+| RAIDS | March beyond the Heart. Reclaim what was lost. |
+| DUNGEONS | Descend into forgotten places. Return with what survived. |
+| REALM MAP | Explore the lands beyond the Heart's light. |
+| SEASON | Face the challenge shaping the Realm now. |
+
+**"Journey" stays** — it is stronger once the cards are filled.
+
+---
+
+## §9. THE HEART AS THE MASTER PROGRESSION VISUAL
+
+The recovering → thriving tree artwork already exists. **Do not let the Heart merely level up. Let it
+remember.**
+
+Early: damaged, quiet, sparse Echoes. As the player builds, quests, raids and explores — more leaves,
+more particles, more Echoes visible around it, old inscriptions illuminating, branches extending, and
+eventually the settlement behind it growing warmer.
+
+> Account progression becomes *"I am bringing Elarion back"* rather than *Town Hall Level 17.*
+
+---
+
+## §10. SEASON I — *Beyond the Heart*
+
+Do not open with cosmic apocalypse fireworks. **The first season's job is to teach this fiction.**
+
+> *For the first time since Elarion began rebuilding, scouts have found old roads beyond the Heart's
+> protection. Something has occupied them. The settlement must venture outward.*
+
+Visually the season moves from warm Heart-lit Elarion into colder ruined territory. Rewards share
+motifs: old expedition gear, recovered Elarion heraldry, weathered banners, reclaimed armour, ancient
+maps, lanterns, forgotten symbols.
+
+---
+
+## §11. JEWELRY — dungeons get the identity
+
+⛔ **Otherwise raids become the vending machine that dispenses everything.** The activity split:
+
+| Activity | Pays |
+|---|---|
+| **Raids** | economy resources |
+| **Dungeons** | rare materials / artifacts |
+| **Quests** | directed progression |
+| **Seasons** | cosmetics / status / special rewards |
+
+**Rough Stones are primarily a DUNGEON drop**, with extremely rare high-tier raid drops later if
+crossover is wanted. Jeweler NPC: **Mirelle the Facetkeeper**; the building stays plain *Jeweler*.
+
+**Rarity ladder:** Rough → Cut → Refined → Radiant → **Echoed**
+
+⭐ *Echoed* as the top tier belongs to this game instead of Generic Fantasy Rarity™.
+
+⚠ Must not double-pay against the economy map's §1 reward table (map §12.3).
+
+---
+
+## §12. ⭐ THE PROOF THIS IS NOT A RETROFIT
+
+The direction closed with *"most of the pieces were already pointing here, they just weren't holding
+hands yet."* **That is literally true, and it is verifiable in the shipping data.** Recorded here
+because it is the strongest argument for adopting this premise, and because a future seat will
+otherwise assume the fiction was bolted on:
+
+| Already shipping | Says |
+|---|---|
+| `canon-strings.json:53` — the game's tagline since 2026-07-24 | **"Echoes of a Forgotten Civilization"** |
+| `glossary.json:34` — the definition of an Echo | *"**The world tree remembers every soul it has kept**, and wakes one to work beside you."* |
+| `EchoRosterCatalog.cs:178` — Corvin's lore, written months ago | *"mapping the dark so others need not fear it… **His Echo reaches what no other can**"* |
+| `EchoWorldPresence` (WO-1108) | already escorts the player to the gate and returns after the battle |
+| `RaidBase_IronBastion.unity` | baked, tooled, and never switched on |
+
+The premise **"a realm that has forgotten itself"** and the tagline **"a forgotten civilization"** are
+the same sentence. This direction did not invent an identity; it named the one the project already had.
+
+---
+
+## §13. WHAT THIS CHANGES IN THE ECONOMY
+
+> ## ⛔ NOTHING. NOT ONE NUMBER.
+> Every ruling in `docs/PROGRAM_RAID_ECONOMY_2026-09-04.md` survives: the reward table, the
+> performance ladder, gold at 125–140% of designed army-replacement cost, crystals decreasing, the free
+> starter army, the 3/10/20 unlock ladder, no new currency, no PvP, troops-defend deferred.
+> The charge count is still 3 and the regen is still four hours.
+>
+> **This file changes what those numbers MEAN to the player, and nothing else.** That is why it is
+> cheap and why it should be built now rather than "after the economy lands" — the strings ship in the
+> same release as the numbers they explain.
+
+---
+
+## §14. ⚠ OPEN — not decided, and deliberately not guessed
+
+Per CLAUDE.md §11B, an unproven thing named as unproven is useful; an unproven thing stated as fact
+costs someone a day.
+
+1. ~~Which Echo says *"…there's someone here"*~~ — **RULED: Aldwin.** See §7.
+2. **Does the game know the player's first name?** The illustrative line used it. **NOT VERIFIED** — no
+   string may use it until someone reads the code and says where it comes from.
+3. **The three-gate stack** (§4). Recommendation given; the acceptance criterion — *a player holding
+   Heartfire always has somewhere to spend it* — needs owner sign-off.
+4. ~~Echo Guide selection: narrative-only at launch?~~ — **RULED: NARRATIVE ONLY at launch.** The
+   direction is explicit that differences start narrative *"so we don't explode scope"*. ⛔ A Guide
+   grants NO mechanical bonus in V1; adding one later is a deliberate design decision, never a quiet
+   one. This also keeps §6's scope discipline consistent — flavour wins, scope stays dead.
+5. ~~How many memory lines per target~~ — **RULED: all 24 ship, or the feature does not.** Six Echoes
+   × four targets, one line each. A recognition system that fires for two Guides and stays silent for
+   four does not read as depth; it reads as broken, and it teaches the player to stop noticing. 24
+   short lines is an afternoon of writing and it is the whole payoff.
+6. **Does the Heart's visual state have authored stages, or is it continuous?** §9 needs art direction
+   before anyone wires a progression signal to it.
+7. **Where the "why was the Heart damaged" mystery is allowed to go.** Flagged only so nobody answers
+   it accidentally in a tooltip.

@@ -18,6 +18,21 @@
 > loop, the reward table or the release order updates it IN THE SAME COMMIT, or adds a dated `STALE:`
 > banner naming what is now wrong.
 
+> ## ⭐ COMPANION CANON — the fiction that makes these numbers mean something (added 2026-09-04)
+>
+> `docs/CREATIVE_CANON_ELARION_2026-09-04.md` records the owner's creative direction of the same day.
+> **The division is clean: this file rules NUMBERS, ladders and release order; that file rules FICTION,
+> naming and copy.** They do not overlap, and the direction **changes not one economy ruling here.**
+>
+> ⛔ **But it DOES rename things this document names**, so read it before implementing any string:
+> "Raid Orders" is retired in favour of **Heartfire** (a CHARGE, never a currency — §3 is not
+> violated); the weekly ladder becomes the **Realm Vigil**, leaving `Threat` to the Iron Bastion
+> ladder; the camps become **The Forsaken Camp / The Broken Garrison / The Veiled Enclave / The Iron
+> Bastion**; and §2's free starter army is announced with authored copy instead of a placeholder.
+>
+> ⭐ It also supplies the reason §1's deliberately generous **15–20% failure payout** exists, which
+> this document never had a fiction for: **you do not lose the memory, you fail to reclaim it.**
+
 **Status:** CANONICAL · NORTH STAR · takes precedence. This document is the single home for the
 design; WO-1374 / 1375 / 1376 execute it and **point at this file rather than restating it**
 (CLAUDE.md §2/§5/§16 — a number copied into a second doc is a defect waiting for a date).
