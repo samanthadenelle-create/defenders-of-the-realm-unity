@@ -89,6 +89,30 @@ Devnet infrastructure readiness does not discharge the final APK/device matrix.
 
 ## Gate A — final build identity and provenance
 
+> ## STALE 2026-09-03 - THE IDENTITY FIELDS BELOW DESCRIBE THE WRONG APK. DO NOT SUBMIT AGAINST THEM.
+>
+> Gate A was filled in on 2026-09-03 (commit `f1104a5fd`) against APK **`2026.09.04.354266`**.
+> **The build that shipped and installed on the device is `2026.09.04.354315`**
+> (`ProjectSettings/ProjectSettings.asset:148,177`; the accompanying `Builds/r2-push.log` names
+> `Android/catalog_2026.09.04.354315.bin`). The bundle was bumped `354266 -> 354315` in commit
+> `0a15744c9` for the final build of the night.
+>
+> **Therefore STALE, every one of them:** the final APK SHA-256, `versionName`, `versionCode`, the
+> source commit, the APK path and its recorded size, and the `aapt2 dump badging` line - each one
+> names or hashes a file that is not the submission candidate.
+>
+> ⛔ **They were NOT re-derived here, deliberately.** The lead re-records this whole block against
+> whichever APK actually ships, in one pass, at the moment of submission. Re-deriving them now would
+> produce a third set of numbers with no build behind it.
+>
+> ⚠ **This is the copied-state trap CLAUDE.md §11B exists for, and it is left VISIBLE rather than
+> quietly patched.** The values were true and measured when written; the build moved on forty minutes
+> later. A recorded identity is only ever true of one file.
+>
+> **Still valid below, because they are not APK-specific:** the `apksigner` DN, the JAVA_HOME note,
+> and the unticked certificate-match item at the end of this gate (see the note in that item - the
+> cheap close is an in-place update over the live store build).
+
 - [x] CLI regression is green. Record log: `Builds/regression.log` - `REGRESSION_OK 358/358 suites, 0 red, 0 skipped` (2026-09-03 19:23).
 - [x] Final production APK built from commit: `32c9630f5` (branch feat/synty-art-retheme, pushed).
 - [x] Final APK path: `Builds/Android/DefendersOfTheRealm.apk` (459.3 MB, built 2026-09-03 19:31).

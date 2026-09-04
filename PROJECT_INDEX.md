@@ -1,5 +1,18 @@
 # PROJECT_INDEX — Root File Map
 
+> ## > CORRECTED 2026-09-03 - this file's own banner below is STALE and is kept as history
+>
+> **Branch is `feat/synty-art-retheme`, pushed** - read it off `git status`, never off a doc. The
+> single live anchor is **`CANON_GROUND_TRUTH_2026-09-03.md`**; the session narrative is
+> **`docs/HANDOVER_2026-09-03_production_build.md`**. The banner beneath this one still says branch
+> `wip/village2-and-f8-tickets` and anchor `CANON_GROUND_TRUTH_2026-08-16.md` - both wrong since, and
+> frozen per CLAUDE.md §15 rather than rewritten in place.
+>
+> ⚠ **The `REGRESSION_OK 120/120 suites` figure below is likewise frozen history** - the marker on a
+> fresh log now reads a different count. **Read it off the marker; that is what the line beneath already
+> tells you to do.**
+
+
 How to navigate the markdown files at project root without reading them all
 (**118 as counted 2026-08-16 evening** — the number drifts every week; count it, do not quote it).
 Code map: `Assets/_Modules/README.md`. Assets map: `Assets/README.md`.

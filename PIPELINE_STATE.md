@@ -1,5 +1,8 @@
 > # THIS FILE IS A FROZEN HISTORICAL LEDGER. IT IS NOT A LIVE STATE DOC.
-> ## Read `CANON_GROUND_TRUTH_2026-08-21.md` (repo root) for current reality.
+> ## Read `CANON_GROUND_TRUTH_2026-09-03.md` (repo root) for current reality.
+> *(Re-stamped 2026-09-03. This line read `CANON_GROUND_TRUTH_2026-08-21.md` while the 08-23, 09-02
+> and 09-03 anchors landed - the same stale-pointer failure `KEY_FACTS.md` warns about. Session
+> narrative: `docs/HANDOVER_2026-09-03_production_build.md`.)*
 > *(Re-scoped 2026-08-21, verified at source. Supersedes the 2026-08-16 STALE flag.)*
 >
 > **CLAUDE.md sec.8 says this file LAGS. It does, structurally, and it always will.** Every block

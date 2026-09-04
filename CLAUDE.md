@@ -245,20 +245,30 @@ hardcoded repo root (§0). **Do not restore a hand-maintained dependency table h
     PlayerPrefs `ff.maptab`) because realm travel is a WO-827 stub and the areas do not connect yet.
     `ActionBarButtonId.Map` stays **dormant at ordinal 4** — never renumber it, the face arrays are
     indexed by ordinal.
-  - **calm(town) bar = FOUR always-on faces (Build, Bag, Quests, Manage) + TWO CONDITIONAL ones.**
-    ⚠ **CORRECTED 2026-08-26 — the old line here said "SIX faces" flat, and that is FALSE.** `Talk`
-    is added only `if (_source.TalkAvailable)` (`HudActionBarModel.ComputeMask`), which
-    `TalkHudBridge.cs:69` sets from `TalkPromptRegistry.Count > 0` — i.e. **only while a talkable NPC
-    is in range**. `Raids` is likewise gated on `RaidCapable`. So the bar is normally **FIVE in open
-    town** and six only when standing at an NPC. **`MaxVisibleFaces = 6` is the MAXIMUM, never the
-    count** — a five-face bar in open ground is the feature working, not a missing face. *(This line
-    cost a felt-test report and an RCA on 2026-08-26: the owner correctly saw five faces, canon said
-    six, and the CLI opened a defect against working code. The same conditional shape applies to
-    `calm(explore)`.)* `ButtonCount` stays 7. *(The old "6 faces" line
-    here was stale for a different reason — it was 7 once `upgradeButton` landed. Six is now correct
-    for the new membership.)* `HudActionBarModel.ButtonCount` stays **7** (enum-identity / array bound);
-    the number that went 7 → 6 is `HudActionBarModel.MaxVisibleFaces`, which the View's slot geometry
-    derives from.
+  - ⛔ **`HudActionBarModel.MaxVisibleFaces` IS `4`. STOP RESTATING IT HERE - READ THE CONSTANT.**
+    `Assets/_Modules/Core/HudModel/HudActionBarModel.cs:121`. It is pinned by TWO suites:
+    `Assets/Editor/Regression/HudLabelFitRegression.cs:266-269` (`Case0_BoxesStillAuthored`) **FAILS**
+    if it is not 4 - *"adaptive peaceful HUD is locked to Build/Hero/Journey/Manage"* - and
+    `Assets/Editor/Regression/SessionShapeRegression.cs:232` pins it too. `HudKitController.cs:199-202`
+    derives the slot width from the constant, so the View's geometry follows the code.
+    **THE CODE AND THE SUITES ARE THE AUTHORITY. This file is not.**
+    ⚠ **THIS IS THE SECOND TIME THIS LINE WENT STALE, AND THAT PATTERN IS THE REAL FINDING.** It said
+    "SIX faces" flat, was corrected on 2026-08-26 at the cost of a felt-test report and an RCA opened
+    against working code, and by 2026-09-03 the corrected version was wrong again - it still asserted
+    `MaxVisibleFaces = 6` while the constant read 4 (measured 2026-09-03; flagged in commit
+    `a17dfa126`: *"The doc is stale, not the code."*). A hand-maintained count in canon tracking a live
+    constant is **duplicated state**, and it fails exactly like §2's stale WO-number block, §5's
+    retired dependency table and §16's copy-pasted R2 verify. The cure is not a better copy - it is
+    deleting the copy. **Do not write a face count back into this file.**
+    *(Frozen, because its reasoning is still true and only its number was wrong: the 2026-08-26
+    correction established that the bar's membership is CONDITIONAL, not flat - `Talk` is added only
+    `if (_source.TalkAvailable)` (`HudActionBarModel.ComputeMask`), which `TalkHudBridge.cs:69` sets
+    from `TalkPromptRegistry.Count > 0`, i.e. only while a talkable NPC is in range, and `Raids` is
+    likewise gated on `RaidCapable`. So a bar showing FEWER faces than the maximum is the feature
+    working, not a missing face. `MaxVisibleFaces` has always been the MAXIMUM, never the count. The
+    same conditional shape applies to `calm(explore)`.)*
+    `HudActionBarModel.ButtonCount` stays **7** (enum-identity / array bound) - a different axis from
+    `MaxVisibleFaces`, and the one that must not be renumbered.
   - The right-column **Builders chip SURVIVES as a STATUS GLANCE ONLY** (count/timer + the inline peek
     rail). Its old **double-tap door is retired**, so the bar face is the single entry.
 - **Echo harvest affinity is a MATCH BONUS, NEVER a lock** (owner ruling WO-830, 2026-08-02): each of the

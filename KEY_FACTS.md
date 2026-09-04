@@ -1,4 +1,8 @@
-> ## ▶ LIVE ANCHOR = `CANON_GROUND_TRUTH_2026-09-02.md` — read it FIRST (re-stamped here 2026-09-03)
+> ## > LIVE ANCHOR = `CANON_GROUND_TRUTH_2026-09-03.md` - read it FIRST (re-stamped 2026-09-03 night, IN THE SAME CHANGE AS THE ANCHOR)
+>
+> *(The 09-02 pointer this replaces, and the stale-re-stamp warning it carried, are kept below as history - the warning is still the rule.)*
+>
+> ▶ LIVE ANCHOR = `CANON_GROUND_TRUTH_2026-09-02.md` — read it FIRST (re-stamped here 2026-09-03)
 >
 > ⚠ **RE-STAMPED LATE, AND THAT IS THE THIRD TIME.** This line read `CANON_GROUND_TRUTH_2026-08-23.md`
 > while a 09-02 anchor sat on disk — exactly the failure the note at the foot of this block warns about
@@ -6,7 +10,8 @@
 > in the SAME change as any new anchor, not in the next session's audit.** The 08-23 block below stays
 > because its subject (the pay path) is still true; it is simply no longer the anchor.
 >
-> ### 2026-09-03 session — recorded here because it has no dated anchor of its own yet
+> ### 2026-09-03 session - the DAY half. It NOW HAS a dated anchor: `CANON_GROUND_TRUTH_2026-09-03.md`.
+> *(This block was written when it did not. The EVENING half is appended at the end of it.)*
 > - ⛔ **THE WORLD CLOCK WAS MEASURED AT `timeScale=0.28` IN OPEN TOWN** — 28% speed, no battle, no
 >   modal, `inputSuppressed=False`. Every timer, cooldown, animation and the wave clock were wrong
 >   together and nothing on screen said so. WO-1353 gives `Time.timeScale` ONE owner with paired
@@ -45,6 +50,47 @@
 > - **`"Main_Castle_Overworld".StartsWith("MainCastle")` is FALSE** (underscore). That one character
 >   left `GroundZFightFixer` dead in the hub since the OuterWorld rename. **Allow-lists fail CLOSED and
 >   SILENTLY on a rename;** the gate is now an exclusion list.
+>
+> ### 2026-09-03 EVENING - the production candidate, appended to the block above
+> - **`2026.09.04.354315` IS THE PRODUCTION CANDIDATE and it is on her Seeker.** Version read off
+>   `ProjectSettings/ProjectSettings.asset:148,177`. Gates, markers on fresh logs (never an exit code):
+>   `COMPILE_GATE_OK` `Builds/compile-gate.log` 20:10; `REGRESSION_OK 358/358 suites -- 358 green, 0 red,
+>   0 skipped` `Builds/regression.log` 20:13; `R2_PUSH_OK` + `R2_PARITY_OK
+>   targets=Android,StandaloneWindows64,WebGL objects=266` 20:21. ⭐ The push log names
+>   `Android/catalog_2026.09.04.354315.bin` - which is the §16 proof that the CDN carries THIS build's
+>   content-hashed bundles, not a previous build's. Branch `feat/synty-art-retheme`, pushed.
+> - ⛔ **SAVE DATA LOSS, AND NO TICKET EXISTS.** `[Flow:BaseLayout] Enter build mode CENSUS: live
+>   PlacedStructure(s) in scene=9, loader.Loaded=9, persisted BaseLayout=17` - **eight structures gone**,
+>   and the trace names it as an earlier vanish. Emitter
+>   `Assets/_Modules/Village/BuildMode/BuildModeController.cs:513-523`. ⚠ Tonight's raw capture is not on
+>   disk (unverified from the repo); what IS in the repo is the same shape at **0 of 8**, twice, in
+>   `logs/device/*.log` on 2026-08-19/20 - so it is not new and it was never worked. Destruction does not
+>   explain it: `Destructible.NotifyBroken` DROPS the persisted record, so a real destruction LOWERS
+>   `persisted`. **This is the biggest known defect in the game.**
+> - ⛔ **`HudActionBarModel.MaxVisibleFaces` IS 4, NOT 6 - CLAUDE.md §7 was wrong AGAIN.**
+>   `Assets/_Modules/Core/HudModel/HudActionBarModel.cs:121`; `HudLabelFitRegression` Case 0
+>   (`:266-269`) FAILS if it is not 4, and `SessionShapeRegression:232` pins it too. **The constant and
+>   the suites are the authority.** ⚠ That line already carried a 2026-08-26 correction banner about the
+>   face count and drifted again within eight days - the PATTERN is the finding, not the number.
+> - ⛔ **`publishing/SUBMIT_CHECKLIST.md` Gate A is STALE.** It was filled in tonight (`f1104a5fd`)
+>   against APK `2026.09.04.354266`; the shipped build is `354315`. The APK sha256, versionName,
+>   versionCode, source commit and path all describe the wrong file. **Marked, not re-derived** - the
+>   lead re-records against whichever APK ships.
+> - **The 180s hold ceiling still applies to WALLET SIGNING.** Flagged not changed in WO-1360
+>   (`3e6ae4274`): signing is user-paced, and if the ceiling fires the world thaws under a live payment -
+>   a route into "paid but not granted". **Owner call.** The mechanism already exists:
+>   `HoldKind { BoundedBeat, PlayerOwned }` + `AcquirePlayerOwned`, with the ceiling kept as the DEFAULT.
+> - **The signing certificate cannot be proven to match the live release** - the live cert's sha256 was
+>   never captured (`publishing/SUBMIT_CHECKLIST.md:101`). Cheap close: install over the live store build;
+>   Android refuses a mismatched key, so a successful in-place update IS the proof.
+> - **The VFX Caster tool is still unfixed.** Her four bad tags were retagged and bound (`7437942c6`), but
+>   `VfxCasterWindow.TagSelected` (`Assets/Editor/VfxCasterWindow.cs:1223`) still reads a stale key from a
+>   never-cleared field and overwrites with no confirmation. It will do it again.
+> - **Two silent server-side 400s, unticketed** (`9d0294c5e`): `/api/entitlements` rejects every guest
+>   (53 of 66) - ⛔ do NOT fix by widening `isProvenValueId`; and `/api/catalog/collection` fails 11 of 11,
+>   all build-carousel collections.
+> - ⛔ **CLAUDE.md §11B (`f1104a5fd`) - never guess, prove it; follow the documented procedure.** Forged
+>   twice in one evening, both times a REAL measurement supporting a conclusion it did not support.
 >
 > ---
 >

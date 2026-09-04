@@ -1,3 +1,35 @@
+> ## > REFRESHED 2026-09-03 - read `docs/HANDOVER_2026-09-03_production_build.md` FIRST
+>
+> **The live anchor is `CANON_GROUND_TRUTH_2026-09-03.md` (repo root).** The 09-02 banner below is
+> history now, kept, not guidance.
+>
+> **`2026.09.04.354315` IS THE PRODUCTION CANDIDATE.** On her Seeker; gates green on fresh logs -
+> `COMPILE_GATE_OK` (`Builds/compile-gate.log` 20:10), `REGRESSION_OK 358/358 suites -- 358 green,
+> 0 red, 0 skipped` (`Builds/regression.log` 20:13), `R2_PUSH_OK` and
+> `R2_PARITY_OK targets=Android,StandaloneWindows64,WebGL objects=266` (20:21). Branch
+> `feat/synty-art-retheme`, pushed. Version read off `ProjectSettings/ProjectSettings.asset:148,177`.
+>
+> **THE OPEN ITEM THAT MATTERS MOST HAS NO TICKET: SAVE DATA LOSS.**
+> `[Flow:BaseLayout] Enter build mode CENSUS: live PlacedStructure(s) in scene=9, loader.Loaded=9,
+> persisted BaseLayout=17` - eight structures gone, and the same shape (0 of 8) sits in
+> `logs/device/*.log` from 2026-08-19/20, unworked. Emitter:
+> `Assets/_Modules/Village/BuildMode/BuildModeController.cs:513-523`. Read the handover before
+> picking anything else up.
+>
+> **Also open:** the 180s hold ceiling still applies to wallet signing (owner call, money attached,
+> WO-1360 / `3e6ae4274`); the signing certificate cannot be proven to match the live release
+> (`publishing/SUBMIT_CHECKLIST.md:101`, and its Gate A identity fields are now **STALE** - filled in
+> against APK `354266`, shipped `354315`); the VFX Caster tool that authored four wrong tags is still
+> unfixed; two silent API 400s are unticketed; textures at 98.9 MB remain the largest payload block.
+>
+> ⛔ **CLAUDE.md §11B landed today (`f1104a5fd`): never guess, prove it, and follow the documented
+> procedure.** Every claim in the 09-03 handover names a commit, marker, log line or file:line.
+>
+> ⛔ **CLAUDE.md §7's action-bar face count was WRONG AGAIN and is corrected:**
+> `HudActionBarModel.MaxVisibleFaces` is **4** (`Assets/_Modules/Core/HudModel/HudActionBarModel.cs:121`),
+> pinned by `HudLabelFitRegression` Case 0 and `SessionShapeRegression`. The code and the suites are
+> the authority; that line had already been corrected once, on 2026-08-26.
+
 > ## ▶ REFRESHED 2026-09-02 — read `CANON_GROUND_TRUTH_2026-09-02.md` FIRST
 >
 > The **★★ SESSION HANDOVER — 2026-09-02 ★★** block below is the current one. Every banner and block

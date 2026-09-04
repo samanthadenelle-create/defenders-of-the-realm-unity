@@ -180,7 +180,19 @@
 > fine as history. A copied number is the bug **even when it was right the day it was written** -
 > that is exactly how the retired 860-899 UI block kept re-seeding collisions from CLAUDE.md sec.2.
 
-> ## ⚠ RECONCILED 2026-09-03 (CLI, forty-sixth pass): main line next free = **1361**.
+> ## ⚠ RECONCILED 2026-09-03 (CLI, forty-seventh pass): main line next free = **1362**.
+> *(CLI minted **WO-1361** - ⛔ **PLAYER STRUCTURES VANISH FROM THE SAVE**, and it is the biggest
+> unworked defect known. Her live capture: `[Flow:BaseLayout] Enter build mode CENSUS: live
+> PlacedStructure(s) in scene=9, loader.Loaded=9, persisted BaseLayout=17` - **eight structures gone**,
+> the trace naming it as an earlier vanish. ⭐ AND THE CANON SWEEP PROVED IT IS A FORTNIGHT OLD, not
+> new: `logs/device/*.log` carries the same census reading **0 live / 0 loaded / 8 persisted** on
+> 2026-08-19 20:01 and 2026-08-20 09:04. Nobody has ever worked it. ⚠ DESTRUCTION CANNOT EXPLAIN IT -
+> per WO-1357, `Destructible.NotifyBroken` DROPS the persisted record, so a real destruction LOWERS
+> `persisted`; here persisted stays high while live falls, which is the opposite signature.
+> This is player progress disappearing and it outranks every cosmetic item on the board.
+> Bumped 1361 -> 1362 in this SAME edit.)*
+>
+> ### superseded: RECONCILED 2026-09-03 (CLI, forty-sixth pass): main line next free = **1361**.
 > *(CLI minted **WO-1360** on a regression WE SHIPPED TONIGHT, caught on her device. Owner F8 seq
 > 4679, 19:08: `STUCK WORLD HOLD: 'pause-menu' ... 507.3s, past its 180.0s ceiling ... Force-releasing`
 > — and the screenshot `logs/f8-inbox/device/SM02G4061955851/break_01_error.png` shows the **PAUSED

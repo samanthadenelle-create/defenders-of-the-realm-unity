@@ -1,3 +1,35 @@
+> ## > REFRESHED 2026-09-03 - the live anchor is `CANON_GROUND_TRUTH_2026-09-03.md`
+>
+> Read that anchor, then `docs/HANDOVER_2026-09-03_production_build.md`. The 09-02 banner below is
+> history, kept, not guidance. Per CLAUDE.md §15 the newest `CANON_GROUND_TRUTH_<date>.md` wins on any
+> conflict with this file.
+>
+> **BUILD `2026.09.04.354315` IS THE PRODUCTION CANDIDATE**, installed on her Seeker. Branch
+> `feat/synty-art-retheme`, pushed. Gates on fresh logs: `COMPILE_GATE_OK`,
+> `REGRESSION_OK 358/358 suites -- 358 green, 0 red, 0 skipped`, `R2_PUSH_OK`,
+> `R2_PARITY_OK targets=Android,StandaloneWindows64,WebGL objects=266`.
+> ⚠ **Read the suite count off the marker, never off this line.**
+>
+> ⛔ **NEW BINDING RULE - CLAUDE.md §11B (`f1104a5fd`): NEVER GUESS, PROVE IT; and FOLLOW THE
+> DOCUMENTED PROCEDURE.** Every factual statement must trace to something read or measured this
+> session. Deviating from a written procedure needs her explicit permission in advance. It does NOT
+> license bouncing solvable problems back.
+>
+> ⛔ **THE BIGGEST OPEN DEFECT HAS NO TICKET: SAVE DATA LOSS.** `[Flow:BaseLayout] Enter build mode
+> CENSUS: live PlacedStructure(s) in scene=9, loader.Loaded=9, persisted BaseLayout=17` - eight
+> structures gone. Emitter `Assets/_Modules/Village/BuildMode/BuildModeController.cs:513-523`; the same
+> shape at 0 of 8 is in `logs/device/*.log` from 2026-08-19/20, unworked.
+>
+> ⛔ **CLAUDE.md §7's action-bar face count is CORRECTED: `HudActionBarModel.MaxVisibleFaces` is 4**
+> (`Assets/_Modules/Core/HudModel/HudActionBarModel.cs:121`), pinned by `HudLabelFitRegression` Case 0
+> and `SessionShapeRegression`. That line had already been corrected once on 2026-08-26 and drifted
+> again - **stop restating the number, read the constant.**
+>
+> **Also open, with evidence, in the 09-03 handover:** the 180s hold ceiling vs wallet signing (owner
+> call, money attached); the signing certificate that cannot be proven to match the live release;
+> `publishing/SUBMIT_CHECKLIST.md` Gate A now STALE (recorded against APK `354266`, shipped `354315`);
+> the VFX Caster tool still unfixed; two silent API 400s; textures at 98.9 MB.
+
 > ## ▶ REFRESHED 2026-09-02 — the live anchor is `CANON_GROUND_TRUTH_2026-09-02.md`
 >
 > The **09-02 LIVE THREAD** below is current; every thread under it is SUPERSEDED and kept as history.
