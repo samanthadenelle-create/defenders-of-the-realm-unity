@@ -180,7 +180,29 @@
 > fine as history. A copied number is the bug **even when it was right the day it was written** -
 > that is exactly how the retired 860-899 UI block kept re-seeding collisions from CLAUDE.md sec.2.
 
-> ## ⚠ RECONCILED 2026-09-04 (CLI, fifty-fifth pass): main line next free = **1372**.
+> ## ⚠ RECONCILED 2026-09-04 (CLI, fifty-sixth pass): main line next free = **1374**.
+> *(⛔ **THIS PASS ALSO REPAIRS A BANNER MISS BY THIS SEAT.** `WORK_ORDER_1372` was written to disk
+> while the banner still offered 1372 - a mint without a same-edit bump, which is the EXACT collision
+> CLAUDE.md §2 names as the cause of five two-seat collisions on 2026-08-02. Caught before any other
+> seat minted. Both numbers are recorded here now.*
+>
+> ***1372** = troops cost TIME not gold, gold BUYS time, surplus resources SELL for gold. Owner:
+> *"maybe troop building takes time no resources? gold can speed up"* + *"paying gold is like saying
+> we hired mercenaries"*. That frame is the design, not decoration: money does not accelerate
+> training, it buys someone already trained. ⛔ HARD DEPENDENCY on WO-1368.*
+>
+> ***1373** = raid rewards + the rough-stone chain. Owner: *"we can add high percentage of rewards for
+> successful raids, and higher tiers off rough stone drop"* / *"its used to take to jeweler"* / *"the
+> make rings of power and necklace"*. ⭐ CLOSES THE CoC SPINE WITH AN RPG PAYOFF - raid -> rough stone
+> -> Jeweler -> rings/amulets of power -> stronger hero -> harder raids - and everything downstream
+> ALREADY EXISTS: `jeweler-recipes.json` is a TIER-UP model (base accessory + gems -> higher rarity),
+> `accessories.json` has 10 rows, `JewelPolishService` polishes, `equippedRingId`/`equippedAmuletId`
+> persist since save v26. ⛔ ONE COLLISION NEEDS HER EXPLICIT WORD: `DungeonExclusiveItems.cs:42-44`
+> declares rough stone may enter inventory ONLY by descending, and `DungeonGemExclusivityRegression.cs`
+> ENFORCES it. Raids dropping it REVERSES a prior design invariant. Bumped 1372 -> 1374 in this SAME
+> edit.)*
+>
+> ### superseded: RECONCILED 2026-09-04 (CLI, fifty-fifth pass): main line next free = **1372**.
 > *(CLI minted **WO-1371** - ⛔ **A NEW GAME INHERITS THE PREVIOUS SAVE'S COLLECTOR FILL.** Owner:
 > *"how did i manage to acquire 3000 stone when this game is about 25 minutes old"*. **11 seconds
 > after a new game** the log reads `collector status -> full=2/3 maxFill=100% pending=14089`, then

@@ -1,11 +1,93 @@
 # WORK ORDER 1368 - Manage/Queues builds ZERO queue rows: no Finish Now, no Watch Ad, on the money path
 
-**Status:** READY TO IMPLEMENT
+**Status:** READY TO IMPLEMENT - ⛔ **THE ORIGINAL DIAGNOSIS BELOW IS REFUTED. READ §0 FIRST.**
 **Silo / Lane:** Village/UI Manage - `ManageScreenPanel` / `ManageScreenVM` / `Core/Jobs`
 **Type:** EXISTING system, REGRESSION (it worked earlier the same morning)
 **Minted:** 2026-09-04 (CLI), live from her device while she played
 **Severity:** ⛔ **P1, and it is the MONEY PATH.** The crystal sink and the rewarded-ad surface are
 both unreachable from the queue.
+
+## §0. ⛔ THE LEAD'S "REGRESSION" NARRATIVE WAS WRONG. THE REAL CAUSE IS ONE MISSING CALL.
+
+**I minted this ticket claiming `queueRows` went 2 -> 0 within one session and told the RCA to bisect
+that window. That was a false trail and it would have cost a session.** Two facts kill it:
+
+1. **07:51 and 09:34 are DIFFERENT PROCESSES** - `I/Unity (22805)` vs `I/Unity (28972)`, with
+   `[Flow:Manage] ManageScreenPanel installed` at 09:30:53 under the new pid. The app had restarted.
+2. **Nothing was queued at 09:34/09:35.** No `notice: Upgrade queued.` between 09:30:53 and 09:35:17.
+   **`queueRows=0` was CORRECT.**
+
+And when she DID queue the two jobs at **09:45:05 / 09:45:07**, `queueRows` read **2**:
+
+```
+09:45:05.636 queueRows=1 browseRows=4   <- "notice: Upgrade queued." tower_ground_archer
+09:45:07.715 queueRows=2 browseRows=4   <- "notice: Upgrade queued." lumberyard
+09:45:33.220 queueRows=2 browseRows=4   <- the state in her screenshot
+09:46:05.021 queueRows=0                <- both jobs completed
+```
+
+⭐ **`queueRows` tracked the real job count perfectly all morning. It is a WORKING INSTRUMENT, not the
+defect** - which is exactly why the acceptance criterion I first wrote ("an oracle asserts
+`queueRows > 0` whenever the queue is non-empty") **would have passed all morning and proven nothing.**
+
+⚠ **The transferable lesson:** I compared two log lines without checking they came from the same
+PROCESS. A pid changed between them. *Two numbers from one file are not two numbers from one run.*
+
+### ⭐ THE ACTUAL ROOT CAUSE - `AddQueueRow` HAS ZERO CALLERS
+
+`ManageScreenPanel.cs:1737` defines `private void AddQueueRow(QueueRowVM r)` - the method that builds
+`Finish Now` (`:1832`), `Ad` (`:1872`), `Cancel` and `Move up`. A repo-wide search finds exactly two
+hits: **the definition**, and a **string literal in a regression that FAILS if the call is restored**.
+
+`_vm.QueueRows` is read at exactly ONE place in the panel - `:1274`, inside a FlowTrace format string.
+**The VM computes the rows; the View logs their count and renders none of them.** The verbs have no
+build site in any tab, any channel, at any queue depth.
+
+The removal is documented in-file (`:1250-1255`): queue actions were moved to *"the explicit header
+Queue drawer"*. But `BuildQueueDrawer` (`:911-943`) contains only the display-only rail
+(`Drawer_QueueRail` -> `QueueRailView.Build`) and the Buy-Builder offer. **`MountRail`'s own comment
+states the contradiction** (`:1185-1186`): *"The rail is DECORATION here: its cards are raycast-off
+... Every action lives on the rows."* **The rows it defers to were deleted in the same change.**
+
+⛔ **Queue actions were moved to a surface that never rendered them.**
+
+`ToggleQueueDrawer` (`:950`) completes the picture: opening QUEUE also **hides the entire list band**
+(`_operationalListBand.SetActive(!_queueDrawerOpen)`), which is why her screenshot shows only two
+raycast-off cards and no browse list.
+
+### ⛔ AND AN ORACLE ENFORCES THE ABSENCE - reconcile it IN THE SAME CHANGE
+
+`Assets/Editor/Regression/ManageQueueDrawerRegression.cs:27-29` fails the build if
+`AddQueueRow(_vm.QueueRows` is restored as written:
+
+```csharp
+if (panel.Contains("AddSectionHeader(\"IN QUEUE - \"") ||
+    panel.Contains("AddQueueRow(_vm.QueueRows"))
+    failures.Add("queue jobs are duplicated inline beneath the primary upgrade catalogue");
+```
+
+Suite header: *"F8 2026-08-31: tower browsing leads; queue administration is opt-in."* **That is a real
+owner-felt ruling** - inline queue rows made the browse list overflow at landscape height. ⛔ **Do not
+simply delete the suite.** The verbs must return somewhere that does not re-create the overflow -
+most likely INSIDE the drawer, next to the rail, which is where `MountRail` already says they live.
+⚠ **That is a UI design question and it is the owner's.**
+
+### Hypotheses from the original ticket, all settled
+
+| # | Hypothesis | Verdict |
+|---|---|---|
+| 1 | Bisect 07:51 -> 09:34 | **REFUTED** - different process, queue genuinely empty |
+| 3 | `ManageScreenVM:489` aggregate `FinishPrice = 0` | **REFUTED** - `StackKeyOf` (`:534-540`) keys on `job.StructureId`, so those two never stack; `run <= 1` -> real price at `:508`. Moot anyway: no row renders |
+| 4 | Coupled to the browse tab | Coupled, but not causal - Defense->Builder is correct and produced 2 rows |
+
+⚠ **A SECOND, INDEPENDENT GAP that will still bite after the rows return:**
+`BuildTimerService.CanWatchAdToSkip` (`:1068-1100`) also requires
+`AdGateService.IsOffered(BuildSkipPlacementId)` **and** `RewardedAdManager.Instance != null &&
+mgr.IsAdReady`. **NOT PROVEN** whether either held on her device. So restoring the rows may bring back
+`Finish Now` without `Ad`.
+
+⚠ The stale `:1863-1866` comment about the ad flag is still worth fixing - but note it sits **inside
+dead code**.
 
 ## THE REPORT
 
