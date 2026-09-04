@@ -290,6 +290,34 @@
 > assumed. If a doc contradicts a line here, the doc is stale. Dated anchors
 > (`CANON_GROUND_TRUTH_*`) remain the session snapshots; THIS file is the always-current card.
 
+> ## ⭐⭐ THE NORTH STAR MAP (owner ruling 2026-09-04) — `docs/PROGRAM_RAID_ECONOMY_2026-09-04.md`
+>
+> Owner, verbatim: ***"these findings take presedence"*** / ***"this is the north star map"***.
+>
+> ⛔ **THAT DOCUMENT OUTRANKS EVERY EARLIER RULING, INCLUDING HERS FROM THE SAME DAY.** The 25/50/70
+> raid payout ladder she gave hours earlier is formally SUPERSEDED (bannered in place in WO-1373 §5.1,
+> not deleted — a deleted ruling cannot correct anyone).
+>
+> **THE TARGET LOOP:**
+> `Collect -> Train -> Raid -> Get richer -> Upgrade -> Unlock harder raid -> Get stronger -> Repeat`
+>
+> **THE THESIS:** *"You don't have a 'my game has nothing to do' problem. You have a 'the game isn't
+> connecting the things it already has' problem."* Raids, troops, buildings, research, waves, dungeons,
+> quests, Season Pass, Realm Map and timers ALL EXIST. **Several gears spin independently. Connect them.**
+>
+> ⭐ **A ticket that does not serve that loop is not on the critical path** and should be able to say
+> why it is being worked anyway.
+>
+> **Executed by WO-1374 (P0 economy) -> WO-1375 (P1 progression) -> WO-1376 (P2 retention), in order.**
+> ⛔ Read the MAP for every number. The tickets deliberately do not restate them.
+>
+> **The measured problem it answers** (loops audit, 2026-09-04): raids pay food+crystals only, zero
+> wood/iron/gold, while troops cost gold and upgrades cost wood+iron — `RaidCooldownService.cs:84-87`'s
+> own comment says *"the raid loop structurally cannot fund its own input"*. Passive income beats a
+> perfect raid **120x** over that raid's own cooldown, and `BuildTimerConfig.cs:85-93` measures the
+> whole content ladder at **4-7 days** against an 8-12 week target.
+> Audit: `https://claude.ai/code/artifact/af7d0e34-4fb0-42a7-86df-2a61967d5cdd`
+
 ## ⭐ NORTH STAR — the state we are building toward
 - **The product:** "Echoes of Elarion" (chapter) in the "Defenders of the Realm" series — "Echoes of
   a Forgotten Civilization" (retired tagline "Hold the last light" noted in canon-strings.json).

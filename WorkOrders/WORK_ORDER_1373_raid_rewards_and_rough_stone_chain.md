@@ -157,7 +157,15 @@ hers. Do not implement until she has picked.**
 
 ## §5. THE OTHER OPEN RULINGS - ASK, DO NOT ANSWER
 
-1. ✅ **RULED 2026-09-04 - THE RAID PAYOUT LADDER IS 25 / 50 / 70.**
+1. ⛔ **SUPERSEDED SAME DAY - DO NOT IMPLEMENT THE LADDER BELOW.**
+   The owner delivered `docs/PROGRAM_RAID_ECONOMY_2026-09-04.md` and ruled ***"these findings take
+   presedence"*** / ***"this is the north star map"***. **The live reward model is that document's
+   §1** - absolute per-camp targets plus a performance ladder - **NOT** the percentages below.
+   The block is kept unrewritten (CLAUDE.md §15) because the reasoning that produced it is still
+   useful history, and because a reader who half-remembers "25/50/70" needs to find the line that
+   retires it. ⛔ **A deleted ruling cannot correct anyone.**
+
+   *(superseded)* **RULED 2026-09-04 - THE RAID PAYOUT LADDER IS 25 / 50 / 70.**
    Owner, verbatim: ***"25% normal run 50% hard 70% hardest"***.
 
    | Camp | difficulty mult | ruled payout |

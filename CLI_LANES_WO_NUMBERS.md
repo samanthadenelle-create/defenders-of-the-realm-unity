@@ -180,7 +180,22 @@
 > fine as history. A copied number is the bug **even when it was right the day it was written** -
 > that is exactly how the retired 860-899 UI block kept re-seeding collisions from CLAUDE.md sec.2.
 
-> ## ⚠ RECONCILED 2026-09-04 (CLI, fifty-sixth pass): main line next free = **1374**.
+> ## ⚠ RECONCILED 2026-09-04 (CLI, fifty-seventh pass): main line next free = **1377**.
+> *(CLI minted **WO-1374 / 1375 / 1376** for the owner's ⭐ **NORTH STAR MAP** -
+> `docs/PROGRAM_RAID_ECONOMY_2026-09-04.md`. She ruled ***"these findings take presedence"*** and
+> ***"this is the north star map"***, so that document **outranks every earlier ruling including her
+> own from the same day** - the 25/50/70 payout ladder in WO-1373 §5.1 is formally SUPERSEDED and
+> bannered in place rather than deleted. THE THESIS: *"you don't have a 'my game has nothing to do'
+> problem, you have a 'the game isn't connecting the things it already has' problem."* Target loop
+> `Collect -> Train -> Raid -> Get richer -> Upgrade -> Unlock harder raid -> Get stronger -> Repeat`.
+> **1374 = P0** close the economy loop (raids pay wood/iron/GOLD, crystals DOWN, free starter army,
+> plus the six-event funnel that makes the whole programme measurable). **1375 = P1** raid progression
+> (Iron Bastion, clear-count ladder, raid charges STACK to 3, Season XP). **1376 = P2** retention
+> (weekly Threat ladder, Journey's five cards, dungeons unsealed, troops defend).
+> ⭐ The tickets are deliberately THIN and point AT the map - a reward table copied into a WO is the
+> defect this repo has paid for four times. Bumped 1374 -> 1377 in this SAME edit.)*
+>
+> ### superseded: RECONCILED 2026-09-04 (CLI, fifty-sixth pass): main line next free = **1374**.
 > *(⛔ **THIS PASS ALSO REPAIRS A BANNER MISS BY THIS SEAT.** `WORK_ORDER_1372` was written to disk
 > while the banner still offered 1372 - a mint without a same-edit bump, which is the EXACT collision
 > CLAUDE.md §2 names as the cause of five two-seat collisions on 2026-08-02. Caught before any other
